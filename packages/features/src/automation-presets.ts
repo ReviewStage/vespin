@@ -37,10 +37,8 @@ export { AUTOMATION_PRESET, type AutomationPresetName } from "./automation-prese
  *
  * Triage a red main has an agent find why a check failed on the default
  * branch and post it as one Inbox thread, with a fix where it is small and
- * clear. A GitHub trigger keeps to branches by their names alone
- * (`automation-github.ts`'s `triggerMatches`), and the editor neither shows
- * nor writes them, so the preset names the two a default branch is almost
- * always called, and its agent stops on any other. Every run goes to the
+ * clear. Its trigger keeps to each repository's default branch, whatever
+ * it is called (`automation-github.ts`'s `triggerMatches`). Every run goes to the
  * one agent, which holds the threads it posted (an agent posts on its own
  * threads alone), so a check that fails again is a message on the thread
  * that reported it rather than a thread of its own.
@@ -53,15 +51,15 @@ export { AUTOMATION_PRESET, type AutomationPresetName } from "./automation-prese
 
 /**
  * What fires a preset's automation: a schedule, as five-field cron read in
- * the member's own zone; a GitHub event, on the branches it names; or an
- * integration's event, unfiltered.
+ * the member's own zone; a GitHub event, kept to the repository's default
+ * branch where it says so; or an integration's event, unfiltered.
  */
 export type AutomationPresetTrigger =
   | { readonly kind: typeof AUTOMATION_TRIGGER.SCHEDULE; readonly cron: string }
   | {
       readonly kind: typeof AUTOMATION_TRIGGER.GITHUB;
       readonly event: GitHubTriggerEvent;
-      readonly branches: readonly string[];
+      readonly defaultBranch: boolean;
     }
   | IntegrationTrigger;
 
@@ -84,9 +82,6 @@ export interface AutomationPreset {
 /** The days a digest looks back over, as its weekly schedule spaces its runs. */
 const DIGEST_DAYS = 7;
 
-/** The names a repository's default branch is almost always given, which Triage a red main keeps to. */
-const DEFAULT_BRANCH_NAMES: readonly string[] = ["main", "master"];
-
 /** What the Memory digest's agent is told: the week's memories posted as one thread, and the ones the member marks forgotten. */
 const MEMORY_DIGEST_PROMPT = `Post the memories this workspace kept or corrected in the last ${DIGEST_DAYS} days as one Inbox thread, so its members see what the agents learned, and delete the ones they mark.
 
@@ -101,12 +96,11 @@ Change no memory but the ones a member chose to delete, and post nothing else.`;
 /** What Triage a red main's agent is told: the failure's cause found and posted once, a repeat said on the thread that reported it. */
 const RED_MAIN_TRIAGE_PROMPT = `A check failed on this repository's default branch. Find out why and tell the workspace once.
 
-1. If the branch this run names is not the repository's default branch, stop here and post nothing.
-2. Read the failed check's logs at the commit this run names. If the check has since passed on a newer commit of the branch, stop here and post nothing.
-3. Call \`${INBOX_TOOL.LIST}\` for your own threads. If one already reports this check failing for the same cause, post nothing new: where a newer commit or a new finding changes what it says, post it under that thread's key, and otherwise post nothing at all.
-4. Find the cause: the commit that broke the check and the lines involved. Say plainly when it looks flaky, such as a timeout or a test that passes on a rerun of the same commit, and why you think so.
-5. Where the fix is small and clear, open a pull request with it. Otherwise open none and change nothing.
-6. Post one thread with \`${INBOX_TOOL.POST}\`, titled with the check's name and the branch, such as "Unit tests failing on main", saying the cause, the commit that broke it, whether it looks flaky, and the pull request if you opened one.
+1. Read the failed check's logs at the commit this run names. If the check has since passed on a newer commit of the branch, stop here and post nothing.
+2. Call \`${INBOX_TOOL.LIST}\` for your own threads. If one already reports this check failing for the same cause, post nothing new: where a newer commit or a new finding changes what it says, post it under that thread's key, and otherwise post nothing at all.
+3. Find the cause: the commit that broke the check and the lines involved. Say plainly when it looks flaky, such as a timeout or a test that passes on a rerun of the same commit, and why you think so.
+4. Where the fix is small and clear, open a pull request with it. Otherwise open none and change nothing.
+5. Post one thread with \`${INBOX_TOOL.POST}\`, titled with the check's name and the branch, such as "Unit tests failing on main", saying the cause, the commit that broke it, whether it looks flaky, and the pull request if you opened one.
 
 Post nothing else.`;
 
@@ -145,7 +139,7 @@ function redMainTriagePreset(): AutomationPreset {
     trigger: {
       kind: AUTOMATION_TRIGGER.GITHUB,
       event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
-      branches: DEFAULT_BRANCH_NAMES,
+      defaultBranch: true,
     },
     prompt: RED_MAIN_TRIAGE_PROMPT,
     target: AUTOMATION_TARGET.SAME_AGENT,

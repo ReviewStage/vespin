@@ -26,7 +26,7 @@ import { type ReactElement, type ReactNode, useState } from "react";
 import type { MarkLook } from "./glyph.js";
 import { dropLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
-import { RowOpenContext } from "./row-open.js";
+import { RowOpenContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -106,7 +106,9 @@ export function RowList({ look, selected, onSelect, onRefresh, children }: RowLi
         ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
       ]}
     >
-      <RowOpenContext value={onSelect}>{children}</RowOpenContext>
+      <RowOpenContext value={onSelect}>
+        <RowSelectedContext value={selected}>{children}</RowSelectedContext>
+      </RowOpenContext>
     </List>
   );
 }

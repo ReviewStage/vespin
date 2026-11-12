@@ -15,6 +15,7 @@ import {
 } from "@repo/features";
 import { type ClientIdentity, clientNamedOnService } from "@repo/features/client-identity";
 import { HostedInstalledSkillClient } from "@repo/features/installed-skill-client";
+import { INTEGRATION_LANDING } from "@repo/features/integration-wire";
 import {
   carried,
   GATEWAY_EVENT,
@@ -265,10 +266,13 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
           serviceBaseUrl: kernel.hostedServiceBaseUrl,
           credential: account.credential,
         }),
-        // Note that a refusal's reason is not reported, because it may carry the address.
+        // Note that a refusal's reason is not reported, because it may carry the address, and that a sign-in names the page it lands on, where the iOS app's sheet closes.
         openExternal: (url) =>
           Effect.map(
-            kernel.nodes.invoke(HOST_NODE_CAPABILITY.OPEN_EXTERNAL, { url }),
+            kernel.nodes.invoke(HOST_NODE_CAPABILITY.OPEN_EXTERNAL, {
+              url,
+              landing: `${kernel.hostedServiceBaseUrl}${INTEGRATION_LANDING.PATH}`,
+            }),
             (result) => result.status === NODE_CAPABILITY_STATUS.OK,
           ),
       }),

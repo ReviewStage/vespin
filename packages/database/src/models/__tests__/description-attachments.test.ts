@@ -1,7 +1,12 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { DESCRIPTION_ATTACHMENT_BOUNDS } from "@repo/features/description-attachment-wire";
+import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import {
+  DESCRIPTION_ATTACHMENT_BOUNDS,
+  DESCRIPTION_FILE_TYPE,
+  type DescriptionFile,
+} from "@repo/features/description-attachment-wire";
 import {
   PICTURE_BOUNDS,
   PICTURE_MEDIA_TYPE,
@@ -167,6 +172,31 @@ it.layer(getTestDB())("a description's pictures", (it) => {
           Exit.isFailure(yield* Effect.exit(keepDescriptionAttachment(owner, taskId, large))),
         );
       }),
+  );
+
+  it.effect("a PDF is kept up to a PDF's bound, past a picture's, and read back as a PDF", () =>
+    Effect.gen(function* () {
+      const { owner, teammate, taskId } = yield* openSharedTask;
+      const head = new TextEncoder().encode("%PDF-1.7\n");
+
+      const pdf: DescriptionFile = {
+        contentType: DESCRIPTION_FILE_TYPE.PDF,
+        bytes: paddedTo(head, AGENT_BOUNDS.MAX_PDF_BYTES),
+      };
+
+      const id = keptId(yield* keepDescriptionAttachment(owner, taskId, pdf));
+
+      const read = yield* readDescriptionAttachment(teammate, taskId, id);
+      assert.ok(Option.isSome(read));
+      assert.equal(read.value.contentType, DESCRIPTION_FILE_TYPE.PDF);
+      assert.equal(read.value.bytes.length, AGENT_BOUNDS.MAX_PDF_BYTES);
+
+      const tooLong = { ...pdf, bytes: paddedTo(head, AGENT_BOUNDS.MAX_PDF_BYTES + 1) };
+
+      assert.ok(
+        Exit.isFailure(yield* Effect.exit(keepDescriptionAttachment(owner, taskId, tooLong))),
+      );
+    }),
   );
 
   it.effect(

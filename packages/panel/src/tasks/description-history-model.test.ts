@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { revisionSummary } from "@repo/features/description-history-words";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
   DESCRIPTION_ACTOR,
@@ -21,7 +22,6 @@ import {
   revisionAuthorOf,
   revisionOfSave,
   revisionSource,
-  revisionSummary,
   sourceLabel,
   VERSION_CHANGE,
   versionDiff,

@@ -45,10 +45,10 @@ import {
   type AgentPullRequest,
   type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
-  type PullRequestState,
 } from "@repo/features/agent-wire";
 import { fileName } from "@repo/features/code-ref-words";
 import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { callHeading, WORKING_LINE, workedForText } from "@repo/features/time-format";
 import {
   BLOCK_TITLE,
@@ -193,7 +193,8 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly title: string;
       /** Its own page on GitHub. */
       readonly url: string;
-      readonly state: PullRequestState;
+      /** Where its mark says it stands: queued where it is open and the merge queue holds it. */
+      readonly state: PullRequestMarkState;
       /** The lines it adds and removes, where the task list holds it. */
       readonly additions: number | undefined;
       readonly deletions: number | undefined;
@@ -247,12 +248,20 @@ function pieceOf(place: TranscriptPlace, piece: TranscriptPiece): TranscriptPlac
   return { ...place, piece };
 }
 
-/** A call's body as its cards draw it: a command and what it printed as one terminal, or what it was given and what it answered; then the error it ended in. */
+/**
+ * A call's body as its cards draw it: a command and what it printed as one
+ * terminal, or what it was given and what it answered; then the error it
+ * ended in. What it answered is cut to the lines a card draws unless it is
+ * `whole`, as an answer its page carried cut is drawn once read whole, and
+ * its two ends where that read failed.
+ */
 function callBody(
   input: ToolBlock,
   output: ToolBlock | undefined,
   errorText: string | undefined,
+  whole = false,
 ): readonly CallBodyBlock[] {
+  const answered = whole ? (text: string) => text.trimEnd() : cutLines;
   const error = errorText === undefined ? [] : [{ title: ERROR_TITLE, text: errorText }];
 
   if (input.kind === TOOL_BLOCK.COMMAND) {
@@ -262,7 +271,7 @@ function callBody(
     return [
       {
         title: BLOCK_TITLE.TERMINAL,
-        text: cutLines(printed === "" ? prompt : `${prompt}\n${printed}`),
+        text: answered(printed === "" ? prompt : `${prompt}\n${printed}`),
       },
       ...error,
     ];
@@ -277,7 +286,7 @@ function callBody(
       : [
           {
             title: BLOCK_TITLE.OUTPUT,
-            text: shown.text.trim() === "" ? NO_OUTPUT : cutLines(shown.text),
+            text: shown.text.trim() === "" ? NO_OUTPUT : answered(shown.text),
           },
         ];
 
@@ -379,7 +388,8 @@ function openedPullRequest(
   const held = pullRequests.find((each) => each.number === number && each.url === url);
 
   if (held !== undefined) {
-    const { title, state, additions, deletions } = held;
+    const { title, additions, deletions } = held;
+    const state = pullRequestMarkState(held);
     const kind = TRANSCRIPT_ITEM.PULL_REQUEST;
 
     return [{ ...base, place, kind, number, title, url, state, additions, deletions }];
@@ -511,7 +521,9 @@ function callItems(
     runOn: callPlace(view.kind, view.server),
     standing: standingOf(part.state),
     open,
-    body: open ? callBody(view.input, read?.output ?? view.output, drawn.errorText) : [],
+    body: open
+      ? callBody(view.input, read?.output ?? view.output, drawn.errorText, read !== undefined)
+      : [],
     cut: read?.reading === true ? part.cut : undefined,
   };
 

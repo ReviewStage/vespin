@@ -1,4 +1,4 @@
-// workspace-switcher.tsx -- a workspace's tile, and the switcher a tab's root bar names the workspace with: its tile and name, opening the menu of every workspace, the account opening Settings, New workspace, and Workspace settings.
+// workspace-switcher.tsx -- a workspace's tile, and the switcher a tab's root bar names the workspace with: its tile and name, opening the menu of every workspace, the account opening Settings, New workspace, and the chosen workspace's Settings… under its name.
 
 import {
   Divider,
@@ -7,6 +7,7 @@ import {
   Image,
   Menu,
   RoundedRectangle,
+  Section,
   Button as SwiftUIButton,
   Text,
   Toggle,
@@ -78,6 +79,9 @@ export type SwitcherAccount = {
 /** What the account's row says under its name: where it goes. */
 const SETTINGS = "Settings";
 
+/** What opens the chosen workspace's settings, under its name: short, so a menu as narrow as the system's keeps it to one line, where the panel's "Workspace settings" wrapped. Note that it is heard as the panel's words, so VoiceOver, which may not read the section's name, never takes it for the account's Settings. */
+const WORKSPACE_SETTINGS = "Settings…";
+
 /** The account's row's image. Note that a menu draws its rows' images as templates in one ink, so a photo would stand as a flat silhouette; the system's person stands in its place. */
 const ACCOUNT_SYMBOL = "person.crop.circle";
 
@@ -96,8 +100,10 @@ type WorkspaceSwitcherProps = {
   readonly onChoose: (id: string) => void;
   /** The signed-in account, whose row under the workspaces opens Settings; none while nobody is signed in. */
   readonly account?: SwitcherAccount | undefined;
-  /** The acts after the account: New workspace, then Workspace settings. */
+  /** The acts after the account, such as New workspace. */
   readonly actions: readonly SwitcherAction[];
+  /** Opens the chosen workspace's settings, its Settings… standing last in a section under its name; none where it has no settings page. */
+  readonly onWorkspaceSettings?: (() => void) | undefined;
   /** How its button stands; the tile and the name where none is given. */
   readonly look?: SwitcherLook | undefined;
   /** How large the tile stands where the look is the tile alone; the bar's face where none is given. */
@@ -177,8 +183,9 @@ function heardAs(chosen: SwitcherWorkspace): string {
  * chosen workspace's tile and name and a chevron, which open the system's
  * menu of every workspace by its letter, its name, and who shares it, the
  * chosen one checked as the system checks a choice, then under a rule the
- * account by its name, opening Settings, and the acts, as Notion's one
- * workspace button holds the account and its settings. Note that a menu's
+ * account by its name, opening Settings, and the acts, and last a section
+ * headed by the chosen workspace's name holding its Settings…, as Notion's
+ * one workspace button holds the account and its settings. Note that a menu's
  * row takes the system's image and words alone, so each workspace leads
  * with its letter's symbol rather than its tile, and the account with the
  * system's person rather than its photo.
@@ -189,6 +196,7 @@ export function WorkspaceSwitcherMenu({
   onChoose,
   account,
   actions,
+  onWorkspaceSettings,
   look = SWITCHER_LOOK.NAMED,
   tileSize = MARK_SIZE.BAR_FACE,
 }: WorkspaceSwitcherProps) {
@@ -251,6 +259,16 @@ export function WorkspaceSwitcherMenu({
           onPress={action.onPress}
         />
       ))}
+      {onWorkspaceSettings === undefined ? null : (
+        <Section title={chosen.name}>
+          <SwiftUIButton
+            label={WORKSPACE_SETTINGS}
+            systemImage="building.2"
+            onPress={onWorkspaceSettings}
+            modifiers={[accessibilityLabel(WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS)]}
+          />
+        </Section>
+      )}
     </Menu>
   );
 }
@@ -277,9 +295,4 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
 /** The menu's act that makes a workspace, as the panel words it. */
 export function newWorkspaceAction(onPress: () => void): SwitcherAction {
   return { label: WORKSPACE_SWITCHER_WORDS.NEW_WORKSPACE, symbol: "plus", onPress };
-}
-
-/** The menu's act that opens the chosen workspace's settings, as the panel words it, by a workspace's glyph so it stands apart from Settings' gear. */
-export function workspaceSettingsAction(onPress: () => void): SwitcherAction {
-  return { label: WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS, symbol: "building.2", onPress };
 }

@@ -2,6 +2,7 @@
 
 import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
@@ -113,6 +114,7 @@ import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, type SidebarTasks, useAppSidebar } from "./app-sidebar.js";
+import { HISTORY_ROUTE } from "./history-screens.js";
 
 /** The Tasks tab's name, at its head and on its back button. */
 const TASKS_TITLE = "Tasks";
@@ -149,7 +151,7 @@ const WORDS = {
   NEW_SUB_TASK: "New sub-task",
   COMMENTS: "Comments",
   DELETE: "Permanently delete",
-  NO_TASKS: "No tasks to do",
+  NO_TASKS: "No tasks",
   UNLISTED_TASK: "Task",
   STOP: "Stop",
   ARCHIVE: "Archive",
@@ -680,6 +682,9 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
     );
   }
 
+  // Note that an empty workspace draws the system's empty view, as the Inbox's does, rather than a bare list.
+  if (treeEmpty(tree)) return <EmptyState title={WORDS.NO_TASKS} symbol="checklist" />;
+
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
       {tree.pinned === undefined ? null : <GroupSection group={tree.pinned} listing={listing} />}
@@ -689,7 +694,6 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
       {tree.tasks.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} />
       ))}
-      {treeEmpty(tree) ? <ListSection footer={WORDS.NO_TASKS}>{[]}</ListSection> : null}
     </RowList>
   );
 }
@@ -722,11 +726,30 @@ export function useSidebarTasks(): SidebarTasks {
 interface TaskMenuDoors {
   readonly askDelete: (task: TaskSummary) => void;
   readonly newSubTask: (task: TaskSummary) => void;
+  /** Opens the description's version history; none where the workspace's descriptions stand off, as the panel's ⋯ offers it only where they stand on. */
+  readonly history: ((task: TaskSummary) => void) | undefined;
+}
+
+/** Version history as a task's ⋯ offers it, none where the workspace's descriptions stand off. */
+function historyActions(
+  task: TaskSummary,
+  open: ((task: TaskSummary) => void) | undefined,
+): BarMenu["actions"] {
+  if (open === undefined) return [];
+
+  return [
+    {
+      label: VERSION_HISTORY_WORDS.TITLE,
+      symbol: "clock.arrow.circlepath",
+      onPress: () => open(task),
+    },
+  ];
 }
 
 /**
- * What a task's ⋯ holds, in the panel's order: Copy link, Rename, New
- * sub-task, Open in browser, and Permanently delete, red, which asks first;
+ * What a task's ⋯ holds, in the panel's order: Copy link, Rename, Version
+ * history where the workspace's descriptions stand on, New sub-task, Open
+ * in browser, and Permanently delete, red, which asks first;
  * then its Status, each status checked where it stands, Move to section,
  * and its repository.
  */
@@ -743,6 +766,7 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
         onPress: () => shareTaskLink(task, overview.workspace),
       },
       { label: WORDS.RENAME, symbol: "pencil", onPress: () => askRename(task, overview.rename) },
+      ...historyActions(task, doors.history),
       {
         label: WORDS.NEW_SUB_TASK,
         symbol: "plus.square.on.square",
@@ -766,6 +790,22 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
       ...placingSubmenus(task, overview.placing).map(barSubmenu),
     ],
   };
+}
+
+/** Opens a task's version history where its workspace's descriptions stand on, as the panel's Version history opens it; none where they stand off. */
+function useHistoryDoor(
+  workspaceId: string | undefined,
+): ((task: TaskSummary) => void) | undefined {
+  const router = useRouter();
+
+  const { data: descriptions = false } = useQuery({
+    ...appStateQuery,
+    select: selectWorkspaceExperiment(workspaceId, EXPERIMENT.DESCRIPTIONS),
+  });
+
+  if (!descriptions) return undefined;
+
+  return (task) => router.push({ pathname: HISTORY_ROUTE, params: { id: task.id } });
 }
 
 /** Opens New task as a sub-task of the task, as the panel's New sub-task opens its card. */
@@ -979,6 +1019,7 @@ export function TaskAgentRow({
           : {
               number: pullRequest.number,
               state: pullRequest.state,
+              queued: pullRequest.queued,
               onPress: () => router.push(iosPullRequestRoute(agent.id, pullRequest.number)),
             }
       }
@@ -1228,6 +1269,7 @@ function TasksSplitScreen({
   const newSubTask = useNewSubTask();
   const held = useTaskOverview(selected);
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
+  const history = useHistoryDoor(overview?.task.workspaceId);
   const read = useTasksRead();
   const sidebar = useAppSidebar(SIDEBAR_PLACE.TASKS, useSidebarTasks(), selected);
   const archiveAsk = useAgentArchiveAsk();
@@ -1273,7 +1315,11 @@ function TasksSplitScreen({
             overview === undefined
               ? undefined
               : {
-                  menu: taskMenu(overview, { askDelete: listing.askDelete, newSubTask }),
+                  menu: taskMenu(overview, {
+                    askDelete: listing.askDelete,
+                    newSubTask,
+                    history,
+                  }),
                   path: {
                     path: taskPath(overview.task, overview.workspace),
                     status: overview.task.status,
@@ -1322,11 +1368,12 @@ export function TaskScreen() {
   const { refreshTasks } = useInboxActs();
   const archiveAsk = useAgentArchiveAsk();
   const read = useTasksRead();
+  const history = useHistoryDoor(overview?.task.workspaceId);
 
   const menu =
     overview === undefined
       ? undefined
-      : taskMenu(overview, { askDelete: deletion.askDelete, newSubTask });
+      : taskMenu(overview, { askDelete: deletion.askDelete, newSubTask, history });
 
   const handed = useHandToSplit(SPLIT_TAB.TASKS, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);

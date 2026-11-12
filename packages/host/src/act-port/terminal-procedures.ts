@@ -83,6 +83,40 @@ function answeredOr<Answer, E>(
   );
 }
 
+/** The acts a client that draws no Terminal tab still asks: an agent's shells listed, and its sandbox resumed. */
+type ShellReadKind =
+  | typeof TERMINAL_ACT_KIND.TERMINAL_LIST
+  | typeof TERMINAL_ACT_KIND.TERMINAL_RESUME;
+
+/**
+ * An agent's shells listed and its sandbox resumed, which carry no shell's
+ * bytes and need no port, so a client with no Terminal tab answers them
+ * too: the iOS app, whose run actions read which of them run off the shells
+ * and resume a stopped sandbox before a run.
+ */
+export function shellReadProcedures<Sender>(
+  host: Pick<HostOperator, "terminalList" | "terminalResume">,
+): Pick<PlatformActProcedures<Sender>, ShellReadKind> {
+  const terminalPort = actPortFor<Sender>();
+
+  return {
+    [TERMINAL_ACT_KIND.TERMINAL_LIST]: terminalPort[TERMINAL_ACT_KIND.TERMINAL_LIST].effect(
+      function* ({ input, context, errors }) {
+        yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
+
+        return yield* answeredOr(host.terminalList(input), () => errors.REFUSED());
+      },
+    ),
+    [TERMINAL_ACT_KIND.TERMINAL_RESUME]: terminalPort[TERMINAL_ACT_KIND.TERMINAL_RESUME].effect(
+      function* ({ input, context, errors }) {
+        yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
+
+        return yield* answeredOr(host.terminalResume(input), () => errors.REFUSED());
+      },
+    ),
+  };
+}
+
 export function terminalProcedures<Sender>(
   dependencies: TerminalActsDependencies<Sender>,
 ): Pick<PlatformActProcedures<Sender>, TerminalActKind> {
@@ -149,13 +183,7 @@ export function terminalProcedures<Sender>(
   };
 
   return {
-    [TERMINAL_ACT_KIND.TERMINAL_LIST]: terminalPort[TERMINAL_ACT_KIND.TERMINAL_LIST].effect(
-      function* ({ input, context, errors }) {
-        yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
-
-        return yield* answeredOr(host.terminalList(input), () => errors.REFUSED());
-      },
-    ),
+    ...shellReadProcedures<Sender>(host),
     [TERMINAL_ACT_KIND.TERMINAL_CREATE]: terminalPort[TERMINAL_ACT_KIND.TERMINAL_CREATE].effect(
       function* ({ input, context, errors }) {
         yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
@@ -175,13 +203,6 @@ export function terminalProcedures<Sender>(
         yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
 
         return yield* answeredOr(host.terminalKill(input), () => errors.REFUSED());
-      },
-    ),
-    [TERMINAL_ACT_KIND.TERMINAL_RESUME]: terminalPort[TERMINAL_ACT_KIND.TERMINAL_RESUME].effect(
-      function* ({ input, context, errors }) {
-        yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
-
-        return yield* answeredOr(host.terminalResume(input), () => errors.REFUSED());
       },
     ),
     [TERMINAL_ACT_KIND.TERMINAL_ATTACH]: terminalPort[TERMINAL_ACT_KIND.TERMINAL_ATTACH].effect(

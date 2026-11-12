@@ -14,6 +14,7 @@
  */
 
 import { PRODUCT_NAME } from "./product-name.js";
+import { skillWord } from "./skill-word.js";
 import { TASK_FILE_REFUSAL, type TaskFileRefusal, type TaskSkill } from "./task-wire.js";
 import type { TasksSkillsAnswer } from "./tasks-view.js";
 import { noMatchWords, TERM } from "./words.js";
@@ -192,6 +193,38 @@ export function matchingSkills(
   );
 
   return [...starts, ...holds, ...describes];
+}
+
+/** One skill a `/` being typed offers: its name, the word a pick writes, and what it is for. */
+export interface OfferedSkill {
+  readonly name: string;
+  readonly word: string;
+  readonly detail: string;
+}
+
+/** The skills a `/` being typed offers, and what stands in their place where none is offered. */
+export interface SkillOffer {
+  readonly skills: readonly OfferedSkill[];
+  readonly empty: string | undefined;
+}
+
+/** The skills offered for a `/` word's query from the read as it stands: still reading, why none were read, none at all, or those the query matches. */
+export function skillOffer(read: SkillsRead | undefined, query: string): SkillOffer {
+  if (read === undefined) return { skills: [], empty: SKILL_LIST_NOTE.READING };
+
+  if ("unread" in read) return { skills: [], empty: read.unread };
+
+  if (read.skills.length === 0) return { skills: [], empty: SKILL_LIST_NOTE.NONE };
+  const found = matchingSkills(read.skills, query);
+
+  return {
+    skills: found.map((skill) => ({
+      name: skill.name,
+      word: skillWord(skill.name),
+      detail: skill.description,
+    })),
+    empty: found.length === 0 ? SKILL_LIST_NOTE.NO_MATCH : undefined,
+  };
 }
 
 /** Every chosen skill the message names, as `/name` words of the skills given, in order. */

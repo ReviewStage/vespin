@@ -1,0 +1,78 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index d7bc26c3d857ee36af9662b7edd9f4691498bfb2..60f381fcbbf11cd65cf981ac1297018589f4406a 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -878,7 +878,7 @@ function collectOrderedListItems(lines) {
+ 				nextLineIndex += 1;
+ 			} else if (nextLine.match(INDENTED_LINE_REGEX)) {
+ 				const leadingWhitespace = nextLine.length - nextLine.trimStart().length;
+-				const contentIndent = indentLevel + marker.length + 1;
++				const contentIndent = line.length - content.length;
+ 				itemLines.push(nextLine);
+ 				itemContentLines.push(nextLine.slice(Math.min(leadingWhitespace, contentIndent)));
+ 				nextLineIndex += 1;
+diff --git a/dist/index.js b/dist/index.js
+index 6c8031ff98dc8419e895ad6e7a1e03d9cdd15743..74accf3eaa1c11b39bdd7695dcd5cf677cbbdd07 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -866,7 +866,7 @@ function collectOrderedListItems(lines) {
+ 				nextLineIndex += 1;
+ 			} else if (nextLine.match(INDENTED_LINE_REGEX)) {
+ 				const leadingWhitespace = nextLine.length - nextLine.trimStart().length;
+-				const contentIndent = indentLevel + marker.length + 1;
++				const contentIndent = line.length - content.length;
+ 				itemLines.push(nextLine);
+ 				itemContentLines.push(nextLine.slice(Math.min(leadingWhitespace, contentIndent)));
+ 				nextLineIndex += 1;
+diff --git a/dist/kit/index.cjs b/dist/kit/index.cjs
+index aea99783693df7fecdf0f25d7bd132d91779fb7a..c57e3dc70db2bfee4a69a7d2d0940ab9d679323c 100644
+--- a/dist/kit/index.cjs
++++ b/dist/kit/index.cjs
+@@ -820,7 +820,7 @@ function collectOrderedListItems(lines) {
+ 				nextLineIndex += 1;
+ 			} else if (nextLine.match(INDENTED_LINE_REGEX)) {
+ 				const leadingWhitespace = nextLine.length - nextLine.trimStart().length;
+-				const contentIndent = indentLevel + marker.length + 1;
++				const contentIndent = line.length - content.length;
+ 				itemLines.push(nextLine);
+ 				itemContentLines.push(nextLine.slice(Math.min(leadingWhitespace, contentIndent)));
+ 				nextLineIndex += 1;
+diff --git a/dist/kit/index.js b/dist/kit/index.js
+index d53a655cd299711fce0e6d10f7ede97c5a682ebf..ca9e7bf53960a1053d727b8102bc243dcc46c99a 100644
+--- a/dist/kit/index.js
++++ b/dist/kit/index.js
+@@ -819,7 +819,7 @@ function collectOrderedListItems(lines) {
+ 				nextLineIndex += 1;
+ 			} else if (nextLine.match(INDENTED_LINE_REGEX)) {
+ 				const leadingWhitespace = nextLine.length - nextLine.trimStart().length;
+-				const contentIndent = indentLevel + marker.length + 1;
++				const contentIndent = line.length - content.length;
+ 				itemLines.push(nextLine);
+ 				itemContentLines.push(nextLine.slice(Math.min(leadingWhitespace, contentIndent)));
+ 				nextLineIndex += 1;
+diff --git a/dist/ordered-list/index.cjs b/dist/ordered-list/index.cjs
+index c24ddec9cc77b4cb72e5be36fa6f0b0edeefb50f..b79534d418dd49be705c94f10de6be22236b13a4 100644
+--- a/dist/ordered-list/index.cjs
++++ b/dist/ordered-list/index.cjs
+@@ -276,7 +276,7 @@ function collectOrderedListItems(lines) {
+ 				nextLineIndex += 1;
+ 			} else if (nextLine.match(INDENTED_LINE_REGEX)) {
+ 				const leadingWhitespace = nextLine.length - nextLine.trimStart().length;
+-				const contentIndent = indentLevel + marker.length + 1;
++				const contentIndent = line.length - content.length;
+ 				itemLines.push(nextLine);
+ 				itemContentLines.push(nextLine.slice(Math.min(leadingWhitespace, contentIndent)));
+ 				nextLineIndex += 1;
+diff --git a/dist/ordered-list/index.js b/dist/ordered-list/index.js
+index ecc0efa7e872661d5d6e7b4c0c20475e99e1d611..aa5ff42495f03c85d4c16ae7e72470289fd272ea 100644
+--- a/dist/ordered-list/index.js
++++ b/dist/ordered-list/index.js
+@@ -275,7 +275,7 @@ function collectOrderedListItems(lines) {
+ 				nextLineIndex += 1;
+ 			} else if (nextLine.match(INDENTED_LINE_REGEX)) {
+ 				const leadingWhitespace = nextLine.length - nextLine.trimStart().length;
+-				const contentIndent = indentLevel + marker.length + 1;
++				const contentIndent = line.length - content.length;
+ 				itemLines.push(nextLine);
+ 				itemContentLines.push(nextLine.slice(Math.min(leadingWhitespace, contentIndent)));
+ 				nextLineIndex += 1;

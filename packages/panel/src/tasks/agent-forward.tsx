@@ -1,3 +1,9 @@
+import {
+  AGENT_PORTS_WORDS,
+  hostedPorts,
+  PORTS_LOOK_EVERY_MS,
+  type SharedPort,
+} from "@repo/features/agent-ports-model";
 import { AGENT_MACHINE, type AgentSummary } from "@repo/features/agent-wire";
 import {
   type AgentSharedPortAnswerView,
@@ -22,7 +28,6 @@ import {
 } from "@repo/ui";
 import { CopyIcon, GlobeIcon, LinkIcon, PlugIcon, UnlinkIcon } from "@repo/ui/icons";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Duration } from "effect";
 import { useEffect, useRef } from "react";
 import { askAct, pressAct } from "../act.js";
 import { appPlatform } from "../app-platform.js";
@@ -82,38 +87,18 @@ import { appStateQuery, selectCapability, selectPortForwarding } from "../use-ap
 /** What an agent forwarding is off for reads. */
 const OFF: PortForwardingAnswer = { on: false, running: false, ports: [] };
 
-/** How often a host that forwards nothing asks the service for the ports while the plug's menu stands open, as often as the desktop's host looks. */
-const PORTS_LOOK_EVERY = Duration.seconds(3);
-
-/** What the plug, its menu, and the toast say. */
+/** What the plug, its menu, and the toast say, beyond what every list of the ports says (`AGENT_PORTS_WORDS`). */
 const WORDS = {
+  ...AGENT_PORTS_WORDS,
   SWITCH: "Forward to localhost",
   OFF: "Ports not forwarded",
   FORWARDING: "Forwarding to this Mac",
   FORWARDING_TO: "Forwarding to",
-  PORTS: "Ports",
-  SHARING: "Sharing",
-  WAITING: "Waiting for a port to listen",
-  READING: "Looking for ports",
-  NOT_READ: "Couldn't read the ports",
-  STOPPED: "Sandbox not running",
   BUSY: "Port busy on this Mac",
   FORWARDED: "Forwarded",
   FROM_SANDBOX: "From the agent's sandbox",
   OPEN: "Open",
-  SHARE: "Share",
-  OPEN_LINK: "Open link",
-  COPY_LINK: "Copy link",
-  STOP_SHARING: "Stop sharing",
-  NOT_SHARED: "Couldn't share this port.",
-  NOT_UNSHARED: "Couldn't stop sharing this port.",
 } as const;
-
-/** The port shared by public link and its link. */
-interface SharedPort {
-  readonly port: number;
-  readonly url: string;
-}
 
 /** One port the plug lists: the sandbox's, the local port this Mac reaches it at where it was forwarded to one, and what serves it where that was read. */
 interface PlugPort {
@@ -230,7 +215,7 @@ function agentPortsQuery(agentId: string, open: boolean) {
     queryKey: [QUERY_ROOT.AGENT_PORTS, agentId],
     queryFn: () => askAct(ACT_KIND.AGENTS_PORTS, { agentId }),
     enabled: open,
-    refetchInterval: open ? Duration.toMillis(PORTS_LOOK_EVERY) : false,
+    refetchInterval: open ? PORTS_LOOK_EVERY_MS : false,
     retry: false,
   });
 }
@@ -241,7 +226,7 @@ function agentSharedPortQuery(agentId: string, drawn: boolean, open: boolean) {
     queryKey: [QUERY_ROOT.AGENT_SHARED_PORT, agentId],
     queryFn: () => askAct(ACT_KIND.AGENTS_PORT_SHARED, { agentId }),
     enabled: drawn,
-    refetchInterval: open ? Duration.toMillis(PORTS_LOOK_EVERY) : false,
+    refetchInterval: open ? PORTS_LOOK_EVERY_MS : false,
     retry: false,
   });
 }
@@ -290,25 +275,17 @@ function useHostedPorts(agentId: string, asked: boolean, open: boolean): PlugPor
   const queryClient = useQueryClient();
   const listed = useQuery(agentPortsQuery(agentId, asked && open)).data;
   const linked = useQuery(agentSharedPortQuery(agentId, asked, asked && open)).data;
-  const read = listed === undefined || "failure" in listed ? undefined : listed;
-  const labels = new Map((read?.labels ?? []).map(({ port, label }) => [port, label]));
+  const hosted = hostedPorts(listed, linked);
 
   return {
-    ports: (read?.ports ?? []).map((port) => ({
+    ports: hosted.ports.map(({ port, label }) => ({
       port,
       localPort: undefined,
-      label: labels.get(port),
+      label,
       busy: false,
     })),
-    shared: linked === undefined || "failure" in linked ? undefined : (linked.shared ?? undefined),
-    none:
-      listed === undefined
-        ? WORDS.READING
-        : read === undefined
-          ? WORDS.NOT_READ
-          : read.running
-            ? WORDS.WAITING
-            : WORDS.STOPPED,
+    shared: hosted.shared,
+    none: hosted.none,
     share: (port) => void shareAsked(queryClient, agentId, port),
   };
 }

@@ -92,11 +92,11 @@ const WORDS = {
 
 /** What turning each workspace experiment on or off changes for everyone in `workspace`, as its question says it. */
 const FLIP_WORDS = {
-  [EXPERIMENT.REWIND_FILES]: {
+  [EXPERIMENT.REPLY_BUTTONS]: {
     on: (workspace: string) =>
-      `Offers everyone in ${workspace} a choice, on Rewind and Edit, to put the agent's files back to how they stood before that message.`,
+      `Lets agents in ${workspace} put buttons in their replies, each starting a new agent or messaging a running one with a brief the agent wrote, once someone presses it.`,
     off: (workspace: string) =>
-      `Takes that choice off Rewind and Edit for everyone in ${workspace}; a rewind then takes back the conversation alone.`,
+      `Stops agents in ${workspace} from adding buttons, draws the buttons already in replies as plain links, and stops any from being pressed.`,
   },
   [EXPERIMENT.RUN_ACTIONS]: {
     on: (workspace: string) =>
@@ -115,12 +115,6 @@ const FLIP_WORDS = {
       `Lets agents in ${workspace} keep settled facts about how your team works and recall them in later work, reviewed in Settings › Memory.`,
     off: (workspace: string) =>
       `Stops agents in ${workspace} from keeping or recalling memories, and hides Settings › Memory for everyone.`,
-  },
-  [EXPERIMENT.TURN_END]: {
-    on: (workspace: string) =>
-      `Has agents in ${workspace} end each turn with a short summary, and shows over each agent's box what it needs from you, or that it's done, with follow-ups to send.`,
-    off: (workspace: string) =>
-      `Stops agents in ${workspace} from ending turns with a summary and follow-ups, and puts the Inbox row back over each agent's box.`,
   },
 } as const satisfies Record<
   WorkspaceExperiment,

@@ -159,3 +159,19 @@ it("a placeholder swap is a rule on its domain matching its header at the placeh
     },
   });
 });
+
+it("a batch's clones each carry their own read token, on their own repository's git endpoint alone", () => {
+  const other = { token: Redacted.make("ghs_other_fixture"), fullName: "Acme/Ledger", access: APP };
+
+  assert.deepEqual(composePolicy({ clones: [read, other] }, new Map()), {
+    hosts: {
+      "github.com": [
+        CLONE_RULE,
+        {
+          path: { startsWith: "/Acme/Ledger.git/" },
+          set: { authorization: basic("ghs_other_fixture") },
+        },
+      ],
+    },
+  });
+});

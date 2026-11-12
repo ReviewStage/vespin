@@ -1,4 +1,5 @@
-import { CHIP_LOOK, CHIP_SIZE, Chip, ChipName, pullRequestMarkState, Tooltip } from "@repo/ui";
+import { pullRequestMarkState } from "@repo/features/pull-request-model";
+import { CHIP_LOOK, CHIP_SIZE, Chip, ChipName, Tooltip } from "@repo/ui";
 import { useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { appPlatform } from "../app-platform.js";

@@ -1,4 +1,4 @@
-// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, a notice's Got it, the composer that sends them with a note or replies, and Remind me and Resolve.
+// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, a notice's Got it, the composer that sends them with a note, replies, or starts a new thread with the agent, and Remind me, New thread, and Resolve.
 
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
@@ -176,8 +176,9 @@ export function OpenAskCard({
   readonly answer: ThreadAnswer;
   readonly doors: OptionMediaDoors;
 }): ReactNode {
-  const { draft, onDraft, note, send, nods, acknowledge } = answer;
-  const ask = openAsk(item);
+  const { draft, onDraft, note, send, nods, acknowledge, asNew } = answer;
+  // Note that the ask's controls step aside while the box starts a new thread, since nothing picked there goes with it, and come back as they were.
+  const ask = asNew ? undefined : openAsk(item);
   const said = note === undefined ? null : <AskNote words={note} />;
 
   if (ask === undefined && nods) {
@@ -283,42 +284,75 @@ export function OpenAskCard({
  * The box under a thread: the composer, its line asking for a note while an
  * ask's controls stand over it and a reply otherwise, Send lit once an answer
  * is picked; docked in a compact window, or at a split view column's foot.
+ * Its + holds the panel's "Send as a new thread to" the thread's agent,
+ * which turns the next send into a new thread's first message, its line
+ * asking to start one.
  */
 export function ThreadComposer({
   item,
   answer,
+  agentName,
   inColumn = false,
 }: {
   readonly item: InboxItem;
   readonly answer: ThreadAnswer;
+  /** The thread's agent's name, which the new thread's switch names. */
+  readonly agentName: string;
   /** Whether it stands at a SwiftUI column's foot, a split view's detail, rather than docked over the screen. */
   readonly inColumn?: boolean;
 }) {
-  const { draft, onDraft, answerReady, send } = answer;
+  const { draft, onDraft, answerReady, send, asNew, setAsNew, start } = answer;
+
+  const placeholder = asNew
+    ? INBOX_BOX_WORDS.NEW_THREAD_PLACEHOLDER
+    : controlsStand(item)
+      ? INBOX_BOX_WORDS.NOTE_PLACEHOLDER
+      : INBOX_BOX_WORDS.REPLY_PLACEHOLDER;
 
   const props = {
-    placeholder: controlsStand(item)
-      ? INBOX_BOX_WORDS.NOTE_PLACEHOLDER
-      : INBOX_BOX_WORDS.REPLY_PLACEHOLDER,
+    placeholder,
     words: draft.note,
     onWords: (note: string) => onDraft({ ...draft, note }),
-    sendable: answerReady,
-    onSend: () => send(),
+    // Note that a new thread starts from words alone, so no picked answer lights Send for one.
+    sendable: !asNew && answerReady,
+    onSend: () => (asNew ? start() : send()),
+    addMenu: {
+      actions: [],
+      switches: [
+        {
+          label: `${INBOX_BOX_WORDS.SEND_AS_NEW} ${agentName}`,
+          on: asNew,
+          onPress: () => setAsNew(!asNew),
+        },
+      ],
+    },
   };
 
   return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
 }
 
-/** The thread's ⋯ menu: Remind me, on any thread, open or settled, as the panel's menu offers it, and Resolve while it stands open. */
+/** What the ⋯ menu's act that turns the box to a new thread with the agent says. */
+const NEW_THREAD = "New thread";
+
+/**
+ * The thread's ⋯ menu: Remind me, on any thread, open or settled, as the
+ * panel's menu offers it; New thread, which turns the box's next send into a
+ * new thread with the agent while it replies; and Resolve while it stands
+ * open.
+ */
 export function threadMenu(item: InboxItem, answer: ThreadAnswer, onRemind: () => void): BarMenu {
   const resolve =
     item.status === INBOX_STATUS.OPEN
       ? [{ label: RESOLVE, symbol: "checkmark.circle", onPress: answer.resolve } as const]
       : [];
 
+  const newThread = answer.asNew
+    ? []
+    : [{ label: NEW_THREAD, symbol: "plus.bubble", onPress: () => answer.setAsNew(true) } as const];
+
   return {
     ...THREAD_MORE,
     choices: [],
-    actions: [{ ...REMIND_ME, onPress: onRemind }, ...resolve],
+    actions: [{ ...REMIND_ME, onPress: onRemind }, ...newThread, ...resolve],
   };
 }

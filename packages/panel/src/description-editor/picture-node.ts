@@ -18,7 +18,7 @@ import {
 } from "@tiptap/pm/state";
 import { insertPoint } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
-import { imageFiles } from "../picture-files.js";
+import { descriptionFiles, isPdfUpload } from "../picture-files.js";
 import type {
   DescriptionEditorPictures,
   PictureLanding,
@@ -31,7 +31,8 @@ import { inTableCell } from "./writing-keys.js";
  * picture-node.ts -- a picture in the description's text: TipTap's image held inline in its own paragraph, written back escaped, drawn by the panel, and laid in from a paste, a drop, or a file chosen.
  *
  * A picture stands in the description's Markdown as `![alt](address "caption")`
- * (`@repo/features/description-attachment-link`). The editor keeps it as TipTap's
+ * (`@repo/features/description-attachment-link`), and so does a PDF, its
+ * alt its file's name, which the panel draws as the file's chip. The editor keeps it as TipTap's
  * image node, inline, in a paragraph of its own, and writes it back with
  * its alt text's brackets, its address's parentheses, and its caption's
  * quotes escaped, which TipTap's own writer does not. A picture laid in from
@@ -174,8 +175,9 @@ function uploadName(): string {
   return crypto.randomUUID();
 }
 
-/** What a picture laid in from a file is called: its name without its type, or "Screenshot" for a paste that has none worth keeping. */
+/** What a picture laid in from a file is called: a PDF its whole name, which its chip shows; any other its name without its type, or "Screenshot" for a paste that has none worth keeping. */
 function altOf(file: File): string {
+  if (isPdfUpload(file) && file.name.trim() !== "") return file.name.trim();
   const stem = file.name.replace(/\.[^.]*$/u, "").trim();
 
   return stem === "" || stem === "image" ? PASTED_ALT : stem;
@@ -368,13 +370,13 @@ export function removedPicture(view: EditorView, upload: string): void {
   if (pos !== undefined) removedAt(view, pos);
 }
 
-/** A paste of image files laid in as pictures at the caret's line; answers whether it was one. */
+/** A paste of image files or PDFs laid in as pictures at the caret's line; answers whether it was one. */
 export function pastedPictures(
   view: EditorView,
   event: ClipboardEvent,
   pictures: DescriptionEditorPictures,
 ): boolean {
-  const files = imageFiles(event.clipboardData?.files);
+  const files = descriptionFiles(event.clipboardData?.files);
 
   if (files.length === 0) return false;
   laidInPictures(view, files, pictures);
@@ -382,14 +384,14 @@ export function pastedPictures(
   return true;
 }
 
-/** A drop of image files from outside the editor laid in as pictures at the line they landed on; answers whether it was one. */
+/** A drop of image files or PDFs from outside the editor laid in as pictures at the line they landed on; answers whether it was one. */
 export function droppedPictures(
   view: EditorView,
   event: DragEvent,
   moved: boolean,
   pictures: DescriptionEditorPictures,
 ): boolean {
-  const files = imageFiles(event.dataTransfer?.files);
+  const files = descriptionFiles(event.dataTransfer?.files);
 
   if (moved || files.length === 0) return false;
   const landed = view.posAtCoords({ left: event.clientX, top: event.clientY });

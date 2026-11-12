@@ -150,6 +150,15 @@ patchedDependencies:
 # copy, as upstream's react-native-screens#4851 does. Delete it when a
 # react-native-screens release carries #4851.
   react-native-screens@4.30.1: patches/react-native-screens@4.30.1.patch
+#
+# `@tiptap/extension-list` 3.33.1 strips an ordered list item's continuation
+# lines by the marker's width less its `.` or `)`, so each line of a code
+# block in a numbered item opens with a stray space, one more on every save,
+# and a code block after a second paragraph in the item is dropped. The patch
+# makes upstream's one-line change in ueberdosis/tiptap#8405 (#8404): strip the
+# width the item's first line actually gives its words. Delete it when a
+# TipTap release carries #8405.
+  "@tiptap/extension-list@3.33.1": patches/@tiptap__extension-list@3.33.1.patch
 
 # Transitive versions raised past a published advisory, each within the major
 # its dependents already take. Delete a line once nothing resolves below it.

@@ -19,6 +19,7 @@ import {
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
+import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -31,6 +32,7 @@ import {
   CodeEditor,
   CodePreview,
   ConfirmDialog,
+  EditActions,
   GAP,
   GlyphSlot,
   INLINE_REF_LOOK,
@@ -138,18 +140,25 @@ const PLACEHOLDER = {
 const REPOSITORY_SECTION = {
   [REPOSITORY_SCRIPT_KIND.SETUP]: {
     title: "Setup scripts",
+    anchor: SETTINGS_SEARCH_ROW.ENVIRONMENT_SETUP,
     caption: "Run in each new cloud sandbox after its repository is checked out.",
     empty: "No setup scripts yet.",
   },
   [REPOSITORY_SCRIPT_KIND.ARCHIVE]: {
     title: "Archive scripts",
+    anchor: SETTINGS_SEARCH_ROW.ENVIRONMENT_ARCHIVE,
     caption:
       "Run when an agent is archived, before its sandbox is deleted. Stopped after 90 seconds.",
     empty: "No archive scripts yet.",
   },
 } as const satisfies Record<
   RepositoryScriptKind,
-  { readonly title: string; readonly caption: string; readonly empty: string }
+  {
+    readonly title: string;
+    readonly anchor: string;
+    readonly caption: string;
+    readonly empty: string;
+  }
 >;
 
 /** How many lines a script's editor stands while it holds fewer, so its placeholder and the first lines typed have room, and an empty one does not shrink as it is typed in. */
@@ -390,33 +399,6 @@ function LastRun({
         {`, exited ${run.exitCode}`}
       </Text>
     </OneLine>
-  );
-}
-
-/** A row's way out of an edit and its Save, at the row's end. */
-function EditActions({
-  leave,
-  saving,
-  canSave,
-  onLeave,
-  onSave,
-}: {
-  /** What letting the edit go says: Discard for a saved script, Cancel for a new one. */
-  leave: string;
-  saving: boolean;
-  canSave: boolean;
-  onLeave: () => void;
-  onSave: () => void;
-}): React.JSX.Element {
-  return (
-    <Inline gap={GAP.CONTROL}>
-      <Button variant={BUTTON_VARIANT.QUIET} disabled={saving} onClick={onLeave}>
-        {leave}
-      </Button>
-      <Button variant={BUTTON_VARIANT.PRIMARY} disabled={!canSave || saving} onClick={onSave}>
-        {saving ? "Saving" : "Save"}
-      </Button>
-    </Inline>
   );
 }
 
@@ -679,6 +661,7 @@ function RepositoryScriptsSection({
   return (
     <SettingsSection
       title={words.title}
+      anchor={words.anchor}
       caption={words.caption}
       action={
         manages ? (
@@ -1306,6 +1289,7 @@ function RunActionsSection({
   return (
     <SettingsSection
       title="Run actions"
+      anchor={SETTINGS_SEARCH_ROW.ENVIRONMENT_RUN_ACTIONS}
       caption="Listed in each agent's Run menu, the default on its button. Each runs when pressed: in a cloud agent's sandbox, or on the Mac a local agent runs on."
       action={
         manages ? (
@@ -1477,6 +1461,7 @@ export function CloudSetupSections({ workspace }: { workspace: Workspace }): Rea
     <>
       <SettingsSection
         title="Install software"
+        anchor={SETTINGS_SEARCH_ROW.ENVIRONMENT_INSTALL}
         caption="Installs tools in every new cloud sandbox. Runs with sudo."
       >
         {read ??

@@ -37,19 +37,17 @@ import {
   Text,
   TIME_LOOK,
   Time,
-  useConfirmDialog,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
-import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
 import { actMutation } from "../act-mutations.js";
-import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
-import { confirmFailure, refusedShown } from "../failure-report.js";
+import { refusedShown } from "../failure-report.js";
 import { mcpClientsQuery, mcpClientsRetryMutation } from "../live-reads.js";
 import { appStateQuery, selectAccount, selectCapability } from "../use-app-state.js";
 import { ReadFailed } from "./marks.js";
+import { useMcpClientRevoke } from "./mcp-clients-section.js";
 
 /**
  * cli-section.tsx -- Settings › our MCP & CLI's CLI section: the `vespin` command's sign-in, with Sign out everywhere once it holds one, and its install, to copy and, in the desktop app, run here as VS Code installs `code`.
@@ -313,51 +311,12 @@ function SignedInRow({
   grant: McpClient;
   onSignedOut: () => void;
 }): React.JSX.Element {
-  const { mutateAsync: sendMcpClientsRevoke, ...revoking } = useMutation(
-    actMutation(ACT_KIND.MCP_CLIENTS_REVOKE),
-  );
-
-  const [rejection, setRejection] = useState<string | undefined>(undefined);
-
-  const refused: ActionResult = {
-    status: ACTION_RESULT_STATUS.REJECTED,
-    reason: PAGE_LINE.SIGN_OUT_REFUSED,
-  };
-
-  const signOut = (): Promise<ActionResult> => {
-    setRejection(undefined);
-
-    return sendMcpClientsRevoke({ clientId: grant.clientId }).then(
-      (answer): ActionResult => {
-        if ("failure" in answer) {
-          setRejection(refused.reason);
-
-          return refused;
-        }
-
-        onSignedOut();
-
-        return { status: ACTION_RESULT_STATUS.ACCEPTED };
-      },
-      () => {
-        setRejection(refused.reason);
-
-        return refused;
-      },
-    );
-  };
-
-  const confirmAct = useConfirmAct(revoking, {
-    send: signOut,
-    answered: (answer): ActionResult =>
-      "failure" in answer ? refused : { status: ACTION_RESULT_STATUS.ACCEPTED },
-    failed: () => refused,
-  });
-
-  const confirm = useConfirmDialog(
-    { subject: true, surfaceOpen: true },
-    confirmAct,
-    confirmFailure(FAILURE_SURFACE.MCP_CLIENT_REVOKE),
+  // Note that the row is never drawn revoked: it leaves the section once its grant does.
+  const { rejection, confirm } = useMcpClientRevoke(
+    grant.clientId,
+    PAGE_LINE.SIGN_OUT_REFUSED,
+    onSignedOut,
+    false,
   );
 
   return (

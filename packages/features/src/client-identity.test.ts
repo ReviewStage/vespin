@@ -6,10 +6,21 @@ import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import { expect } from "vitest";
 import {
   CLIENT_PLATFORM,
+  clientHeaders,
   clientNamedOnService,
   HOSTED_API_VERSION,
   presentedClient,
 } from "./client-identity.js";
+
+it("a build naming no version names itself a development build, which the service reads", () => {
+  const headers = new Headers(clientHeaders({ platform: CLIENT_PLATFORM.WEB, version: "" }));
+
+  expect(presentedClient(headers)).toEqual({
+    platform: CLIENT_PLATFORM.WEB,
+    version: "development",
+    apiVersion: HOSTED_API_VERSION,
+  });
+});
 
 it.effect(
   "a named client sends its platform, version, and API version to the service's origin and nothing to another, and the service reads them back",

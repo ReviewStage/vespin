@@ -32,7 +32,7 @@ import {
   PLACEMENT_END,
   type PlacedWords,
 } from "../description-editor/contract.js";
-import { imageFiles } from "../picture-files.js";
+import { descriptionFiles } from "../picture-files.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { UNIT_ATTRIBUTED_CLASS } from "./description-unit-look.js";
 import { useEditorPictures } from "./editor-pictures.js";
@@ -115,13 +115,13 @@ function useTypingPause(): UseTypingPauseResult {
   };
 }
 
-/** Whether a click lands on words to edit: not on a link, a button bar a picture's, a video's player, a task's checkbox or the label around it, or the section's byline. */
+/** Whether a click lands on words to edit: not on a link, a button bar a picture's, a video's player, a PDF's chip, a task's checkbox or the label around it, or the section's byline. */
 function pressesWords(target: EventTarget): boolean {
-  // Note that a mention's chip is its own, a link's or a folder's that opens nothing alike, and so is the byline's row, whose writer and ⋯ are presses of their own, a button in the words, a diagram's Show code say, and a task's checkbox, which ticks its item, and the label around it, whose press a finger takes beside the box and hands to it; a comment's marked words open its thread and the editor at them alike. A picture's press is a button that hands on only the press it does not take, a diagram's under a mouse in a wide room, which is the words' as the bare picture's was. A video's player is its own whole, its frame and every control in it, whatever they are drawn as, since a press there plays, seeks, or enlarges it; its caption is the words'.
+  // Note that a mention's chip is its own, a link's or a folder's that opens nothing alike, and so is the byline's row, whose writer and ⋯ are presses of their own, a button in the words, a diagram's Show code say, and a task's checkbox, which ticks its item, and the label around it, whose press a finger takes beside the box and hands to it; a comment's marked words open its thread and the editor at them alike. A picture's press is a button that hands on only the press it does not take, a diagram's under a mouse in a wide room, which is the words' as the bare picture's was. A video's player is its own whole, its frame and every control in it, whatever they are drawn as, since a press there plays, seeks, or enlarges it, and so is a PDF's chip, whose press opens it; its caption is the words'.
   return !(
     target instanceof Element &&
     target.closest(
-      "a, button:not(.ui-picture-tile), input, label, [data-mention-ref], .description-unit-row, .picture-block[data-video] > :not(.picture-caption)",
+      "a, button:not(.ui-picture-tile), input, label, [data-mention-ref], .description-unit-row, .picture-block:is([data-video], [data-file]) > :not(.picture-caption)",
     ) !== null
   );
 }
@@ -276,14 +276,14 @@ interface FileDrop {
 
 /**
  * Where pictures dropped on the text put the caret: at the words they
- * landed on, as a click's caret is, with the image files among those
- * dropped, which the editor lays in there; none where none is a picture.
+ * landed on, as a click's caret is, with the image files and PDFs among
+ * those dropped, which the editor lays in there; none where none is either.
  */
 function dropPlacement(
   { files, x, y, landing }: FileDrop,
   place: (range: Range) => PlacedWords | undefined,
 ): DescriptionEditorPlacement | undefined {
-  const pictures = imageFiles(files);
+  const pictures = descriptionFiles(files);
 
   if (pictures.length === 0) return undefined;
   const range = rangeAt(x, y);

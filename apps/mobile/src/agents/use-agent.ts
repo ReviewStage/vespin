@@ -273,13 +273,19 @@ export function useWholeParts(agentId: string): WholeParts {
         setDrawn({ agentId, parts: held.current.parts });
       };
 
+      // Note that an answer lands only while the part is still asked at the size it was asked at, so an older read never overwrites a newer one.
+      const land = (cut: AgentPartCut, read: WholePartRead) => {
+        if (held.current.parts.get(cut.messageId)?.get(cut.index)?.bytes !== cut.bytes) return;
+        settle(cut, read);
+      };
+
       for (const cut of cuts) {
         if (held.current.parts.get(cut.messageId)?.get(cut.index)?.bytes === cut.bytes) continue;
         settle(cut, { state: WHOLE_PART.READING });
 
         acts[ACT_KIND.AGENTS_PART]({ agentId, messageId: cut.messageId, index: cut.index }).then(
           (answer) =>
-            settle(
+            land(
               cut,
               "part" in answer
                 ? { state: WHOLE_PART.WHOLE, part: answer.part }
@@ -287,7 +293,7 @@ export function useWholeParts(agentId: string): WholeParts {
             ),
           (cause: unknown) => {
             refused("A part of the transcript")(cause);
-            settle(cut, { state: WHOLE_PART.FAILED });
+            land(cut, { state: WHOLE_PART.FAILED });
           },
         );
       }

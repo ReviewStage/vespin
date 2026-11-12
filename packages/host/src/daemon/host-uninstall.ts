@@ -37,6 +37,9 @@ export interface BundledHostUninstallInput {
   readonly removeAgentFolders: boolean;
 }
 
+/** How many times more the state's removal is tried where a file landed in it as it emptied. */
+const STATE_REMOVAL_TRIES = 3;
+
 /** The folder given removed where it stands empty, and left as it is otherwise. */
 const removedIfEmpty = (folder: string) =>
   Effect.gen(function* () {
@@ -63,7 +66,10 @@ export const uninstallBundledHost = Effect.fnUntraced(function* (input: BundledH
     yield* removedIfEmpty(path.dirname(agents));
   }
 
-  yield* fileSystem.remove(input.stateRoot, { recursive: true, force: true });
+  // Note that the state's removal is tried again where it fails, because the app hands the host its keep-awake choice each time the state folder moves (`compose-this-mac-host.ts`), and one landing as the folder empties fails its removal as not empty.
+  yield* fileSystem
+    .remove(input.stateRoot, { recursive: true, force: true })
+    .pipe(Effect.retry({ times: STATE_REMOVAL_TRIES }));
   const stood = removals.find(Exit.isFailure);
 
   if (stood !== undefined) return yield* Effect.failCause(stood.cause);

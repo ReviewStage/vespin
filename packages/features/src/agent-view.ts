@@ -606,13 +606,15 @@ export type AllowedCommandsAnswerView = typeof allowedCommandsAnswerViewSchema.T
 
 /**
  * One write of the account's always-allowed commands, as Settings asks it:
- * a command's first words added by hand (`add`), or one removed by its
- * first words (`remove`), which the host finds on the list it holds, so a
- * removal taken back and asked again names the command rather than an id
- * the take-back replaced.
+ * a command's first words added by hand (`add`), one's first words
+ * replaced by others typed by hand (`edit`, to `to`), or one removed by its
+ * first words (`remove`). The host finds an edited or removed command on
+ * the list it holds by its words, so a removal taken back and asked again
+ * names the command rather than an id the take-back replaced.
  */
 export const allowedCommandWriteParamsSchema = EffectSchema.Union([
   EffectSchema.Struct({ add: CommandPrefixSchema }),
+  EffectSchema.Struct({ edit: CommandPrefixSchema, to: CommandPrefixSchema }),
   EffectSchema.Struct({ remove: CommandPrefixSchema }),
 ]);
 

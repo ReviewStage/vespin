@@ -8,6 +8,7 @@
 
 import { DESCRIPTION_MARKDOWN_MAX_CHARS } from "@repo/features/description-markdown";
 import { type FeedbackSubmission, feedbackSubmission } from "@repo/features/feedback";
+import { handoffActivitySchema } from "@repo/features/ios-system-activity";
 import {
   LID_STATE,
   MICROPHONE_STATUS,
@@ -195,6 +196,17 @@ export const windowSurfaceActsContract = {
       exactInput(
         EffectSchema.Struct({
           commands: EffectSchema.Array(EffectSchema.Literals(Object.values(APP_COMMAND))),
+        }),
+      ),
+    )
+    .output(EffectSchema.Void),
+  [WINDOW_SURFACE_ACT_KIND.WINDOW_HANDOFF]: actProcedure(
+    "Could not tell the Mac what this window shows.",
+  )
+    .input(
+      exactInput(
+        EffectSchema.Struct({
+          activity: EffectSchema.NullOr(handoffActivitySchema),
         }),
       ),
     )

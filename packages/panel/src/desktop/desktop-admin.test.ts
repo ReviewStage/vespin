@@ -153,6 +153,7 @@ test("a section stands under the place's own toolbar, titled Admin, with Open in
     { name: "Reliability", chosen: false },
     { name: "Workspaces", chosen: false },
     { name: "Users", chosen: true },
+    { name: "Limits", chosen: false },
   ]);
 });
 

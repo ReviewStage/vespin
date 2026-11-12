@@ -17,15 +17,15 @@ export const GLYPH_STATE = {
 
 export type GlyphState = (typeof GLYPH_STATE)[keyof typeof GLYPH_STATE];
 
-/** What a reader is told of each state; nothing at rest. */
-const GLYPH_STATE_WORDS = {
+/** What a reader is told of each state, wherever an agent's or a task's working or failed mark is drawn or heard; nothing at rest. */
+export const GLYPH_STATE_WORDS = {
   [GLYPH_STATE.WORKING]: "Working",
   [GLYPH_STATE.FAILED]: "Failed",
   [GLYPH_STATE.REST]: undefined,
 } as const satisfies Record<GlyphState, string | undefined>;
 
 /** What a piece of work at rest is called once it was stopped, which its glyph at rest does not tell from a finish. */
-const STOPPED_WORDS = "Stopped";
+export const STOPPED_WORDS = "Stopped";
 
 /** What a card or a tab says of where its work stands beyond its glyph: the state's own word, or Stopped for work at rest that was `stopped`. */
 export function glyphStateWords(state: GlyphState, stopped: boolean): string | undefined {

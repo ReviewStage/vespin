@@ -23,6 +23,8 @@ export const WORKSPACE_DRIVE_FILL = {
    * cut off by its function's bound, whatever the workspace's size.
    */
   STEP: Duration.minutes(4),
+  /** How many repositories a fill syncs in one run, their tokens minted at once and standing at the firewall together. */
+  BATCH: 16,
   /** How long a step whose run failed waits before it comes again. */
   FAILED_AGAIN: Duration.minutes(1),
   /** How long a step's message is kept, so a step that keeps failing is given up. */
