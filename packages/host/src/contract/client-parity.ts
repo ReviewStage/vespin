@@ -2,54 +2,10 @@
  * client-parity.ts -- whether the desktop, the web, and the iOS app each offer what an act does, and why where one does not, so a client's gap is chosen rather than left by accident.
  *
  * The three clients run the one host (`compose-host.ts`) and answer the one
- * act port, but each offers its member a different share of it: the desktop
- * all of it, the web all but what only an app on the Mac can carry, and the
- * iOS app what its screens have been built for: today its sign-in and
- * sign-out; the Inbox: its list, which the host reads from the account
- * gate opening with no act of the app's, its read marks, its reminders, its
- * retry, its pictures, a thread's answer, reply, and resolve, a notice's Got
- * it, and the Undo of either, a new thread started with a thread's agent,
- * and a thread its link names that the feed does not hold, found where it
- * stands and read from its task's own inbox; the Tasks
- * tab: its tree, read from the same list with the agents on each task, a
- * task's status set, pin, read mark, rename, and delete, a task moved into a section from its menu or
- * dragged into one on an iPad, its repository changed, moved to another of
- * the account's workspaces by its owner, its parent, sub-tasks,
- * and blocks added, changed, and taken away, the task followed or
- * unfollowed and the account's machines switch on it set, and a task's
- * description, its pictures read, the state of the pull requests and
- * issues its links name followed, pages, and comment threads followed,
- * and read again where they could not be, with a thread started
- * on one block of the description and a reply on a thread, and a task
- * its link names by number that the list does not hold, found and opened
- * from its own read; an agent's page,
- * one the task list doesn't hold read by its id, and Archive reading it
- * afresh before it asks: a message sent or
- * queued, its queue steered, its turn stopped, its model, effort, Fast,
- * permission mode, and MCP servers changed, the account's integrations
- * followed for those servers, its task's skills read for a `/`, a part of
- * its transcript carried cut read whole as its call opens, the run of an
- * automation that started it followed for the card its transcript opens on,
- * read again where it could not be, a cloud agent's
- * listening ports listed and shared by a public link, opened in Safari or
- * no longer shared, its repository's run actions run and stopped in its
- * sandbox, and the agent renamed, pinned, archived, and deleted; New agent
- * on a task and New task, a sub-task or a related task among it, or one
- * filed for later with no agent, with the models and the repositories they
- * pick among followed, and read again where they could not be;
- * Settings' Account page: Share usage data, support access, and the
- * account's deletion; Settings' Integrations page: each server connected,
- * its sign-in waited on or canceled, a connected server's tools read to say
- * whether it works and read again where they could not be, an account
- * renamed, and Disconnect; Settings' Send feedback, its words and pictures
- * sent as the panel's form sends them; a workspace made from the switcher, which New
- * workspace names; Settings' Workspace page: the rename, the members read
- * and their roles changed or removed, the invitations read, sent, and
- * canceled, and Leave; its Agents page: the default model and the settings
- * it writes; and the phone's own push registration,
- * which no other client has a place for. Nothing else says which share, so
- * this table is what keeps the gaps known: every kind in `PORT_ACT_KIND` has
- * a row, and a kind added without one, or a row whose act is gone, does not
+ * act port, but each offers its member a different share of it; the rows
+ * below hold what each client offers. Nothing else says which share, so this
+ * table is what keeps the gaps known: every kind in `PORT_ACT_KIND` has a
+ * row, and a kind added without one, or a row whose act is gone, does not
  * build. A client offers an act where a member can do what the act does
  * there, though the client may reach it another way; a client that does not
  * names why. `NOT_YET` is the backlog, a row a client's next screen
