@@ -101,6 +101,30 @@ it.layer(getTestDB())("a reply button", (it) => {
       }),
   );
 
+  it.effect(
+    "keeps the landing of its presser's earlier attempt after a later attempt of theirs was refused and released",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openAccount;
+        const workspace = yield* openWorkspace(owner);
+        const agentId = yield* openAgentOnOwnTask(owner, workspace);
+        const reached = yield* openAgentOnOwnTask(owner, workspace);
+        const buttonId = yield* makeReplyButton(agentId, "Wire up the invite email", START, NOW);
+
+        const earlier = yield* claimReplyButtonPress(buttonId, owner, NOW);
+        const later = yield* claimReplyButtonPress(buttonId, owner, NOW);
+        assert.ok(earlier !== undefined && later !== undefined);
+        yield* releaseReplyButtonPress(buttonId, later);
+        yield* settleReplyButtonPress(buttonId, owner, reached, NOW);
+
+        assert.deepEqual(yield* pressOf(owner, buttonId), {
+          pressedBy: owner,
+          reachedAgentId: reached,
+          landedAt: NOW,
+        });
+      }),
+  );
+
   it.effect("is read and pressed by a member of its workspace, and by no one outside it", () =>
     Effect.gen(function* () {
       const owner = yield* openAccount;

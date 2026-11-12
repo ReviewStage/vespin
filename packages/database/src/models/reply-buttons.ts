@@ -8,11 +8,13 @@
  * the same member's own or one whose presser's account is gone, so a
  * second press from anyone else reads the first rather than running again,
  * and the presser's retry runs again under the same key, which the start or
- * the send it runs answers once (`@repo/service`'s `reply-button-press.ts`).
+ * the send it runs answers once (`@repo/service`'s `reply-buttons/press.ts`).
  * Each claim is its own attempt, which alone releases it, so an attempt
  * refused after its presser's retry claimed again leaves the retry's claim
- * standing. A press that landed keeps the agent it reached; one refused is
- * released, so the button may be pressed again.
+ * standing. A press that landed keeps the agent it reached, and an attempt
+ * that ran lands even where a later attempt of the same member's was refused
+ * and released the claim; one refused is released, so the button may be
+ * pressed again.
  */
 
 import { type ReplyButtonAction, replyButtonActionSchema } from "@repo/features/reply-button-wire";
@@ -127,9 +129,21 @@ const settlePress = SqlSchema.void({
     Database.use((db) =>
       db
         .update(button)
-        .set({ reachedAgentId, landedAt: now })
-        // Note that a press landed is kept as it landed, so a late settle of the same press changes nothing.
-        .where(and(eq(button.id, buttonId), eq(button.pressedBy, userId), isNull(button.landedAt))),
+        .set({
+          pressedBy: userId,
+          pressedAt: sql`coalesce(${button.pressedAt}, ${now})`,
+          reachedAgentId,
+          landedAt: now,
+        })
+        .where(
+          and(
+            eq(button.id, buttonId),
+            // Note that a press landed is kept as it landed, so a late settle of the same press changes nothing.
+            isNull(button.landedAt),
+            // Note that a claim a later attempt of the member's released still lands, since this attempt ran.
+            or(eq(button.pressedBy, userId), isNull(button.pressedBy)),
+          ),
+        ),
     ),
 });
 
@@ -190,7 +204,7 @@ export function claimReplyButtonPress(
   return Effect.map(claimPress({ buttonId, userId, now }), (rows) => rows[0]?.attempt);
 }
 
-/** The member's press settled on the agent it started or sent to, landed for good. */
+/** The member's press settled on the agent it started or sent to, landed for good, where it has not landed and no other member's press holds it. */
 export function settleReplyButtonPress(
   buttonId: string,
   userId: string,
