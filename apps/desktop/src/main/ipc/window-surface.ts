@@ -9,7 +9,6 @@ import {
 } from "@repo/features/analytics";
 import type { FeedbackResult, FeedbackSubmission } from "@repo/features/feedback";
 import type { HandoffActivity } from "@repo/features/ios-system-activity";
-import { readLink } from "@repo/features/link-grammar";
 import { actPortFor, type PlatformActProcedures } from "@repo/host/act-port";
 import { CONTACT_MAILTO, WINDOW_SURFACE_ACT_KIND } from "@repo/host/contract";
 import {
@@ -195,12 +194,8 @@ export function windowSurfaceProcedures(
     [WINDOW_SURFACE_ACT_KIND.WINDOW_HANDOFF]: surfacePort[
       WINDOW_SURFACE_ACT_KIND.WINDOW_HANDOFF
     ].handler(({ input, context, errors }) => {
-      // Note that only a page of ours is handed off, so a window can never offer the phone another site.
-      const { activity } = input;
-      const ours = activity === null || readLink(activity.webpageUrl) !== undefined;
-
-      if (!context.actor.panel || !ours) throw errors.REFUSED();
-      dependencies.tellHandoff(context.actor.sender, activity);
+      if (!context.actor.panel) throw errors.REFUSED();
+      dependencies.tellHandoff(context.actor.sender, input.activity);
     }),
     [WINDOW_SURFACE_ACT_KIND.FEEDBACK_SEND]: surfacePort[
       WINDOW_SURFACE_ACT_KIND.FEEDBACK_SEND

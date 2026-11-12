@@ -105,7 +105,7 @@ function fixture() {
       tellUnsavedWork: (sender, holding) =>
         heard.push(`unsaved:${sender === panelContents ? "panel" : "other"}:${holding}`),
       tellMenuOffers: (_sender, commands) => heard.push(`offers:${commands.join()}`),
-      tellHandoff: () => undefined,
+      tellHandoff: (_sender, activity) => heard.push(`handoff:${activity?.webpageUrl ?? "none"}`),
     }),
   );
 
@@ -198,6 +198,36 @@ it("words are copied, a mail and the settings opened, and feedback carried", asy
     "open:x-apple.systempreferences:com.apple.Notifications-Settings.extension",
     "feedback:The panel is lovely.",
   ]);
+});
+
+// Note that the regression this catches is a window handing the phone a page of another site, or one the app's scheme names, which macOS refuses as a browsing activity's page.
+it("a panel hands off a page of ours, or none, and another site's or the app scheme's is refused", async () => {
+  const { port, panel, heard } = fixture();
+  const refused = { refused: "Could not tell the Mac what this window shows." };
+  const page = "https://vespin.dev/acme/task/task-1";
+
+  assert.deepEqual(
+    await port.call(panel, KIND.WINDOW_HANDOFF, { activity: { webpageUrl: page } }),
+    {
+      answer: undefined,
+    },
+  );
+  assert.deepEqual(await port.call(panel, KIND.WINDOW_HANDOFF, { activity: null }), {
+    answer: undefined,
+  });
+  assert.deepEqual(
+    await port.call(panel, KIND.WINDOW_HANDOFF, {
+      activity: { webpageUrl: "https://example.com/acme/task/task-1" },
+    }),
+    refused,
+  );
+  assert.deepEqual(
+    await port.call(panel, KIND.WINDOW_HANDOFF, {
+      activity: { webpageUrl: "vespin://vespin.dev/acme/task/task-1" },
+    }),
+    refused,
+  );
+  assert.deepEqual(heard, [`handoff:${page}`, "handoff:none"]);
 });
 
 it("a picture is copied as its PNG, and one the system draws nothing of, or bytes that are not base64, are refused", async () => {

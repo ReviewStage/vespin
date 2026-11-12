@@ -8,6 +8,7 @@
 
 import { DESCRIPTION_MARKDOWN_MAX_CHARS } from "@repo/features/description-markdown";
 import { type FeedbackSubmission, feedbackSubmission } from "@repo/features/feedback";
+import { handoffActivitySchema } from "@repo/features/ios-system-activity";
 import {
   LID_STATE,
   MICROPHONE_STATUS,
@@ -205,7 +206,7 @@ export const windowSurfaceActsContract = {
     .input(
       exactInput(
         EffectSchema.Struct({
-          activity: EffectSchema.NullOr(EffectSchema.Struct({ webpageUrl: EffectSchema.String })),
+          activity: EffectSchema.NullOr(handoffActivitySchema),
         }),
       ),
     )

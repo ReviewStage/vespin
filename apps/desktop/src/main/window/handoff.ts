@@ -6,7 +6,7 @@
 // advertised again whenever the focus moves between windows. While no panel
 // is focused the last one stands, since macOS hands off only the frontmost
 // app's activity and the window the member left is still what they were
-// looking at; once that window is gone, its page goes with it.
+// looking at; once that window closes, its page goes with it.
 //
 // It is advertised as a browser advertises its page
 // (`NSUserActivityTypeBrowsingWeb`), never as an activity of the app's own
@@ -55,23 +55,31 @@ export function handoff(advertise: (activity: HandoffActivity | null) => void): 
   let advertised: { readonly from: WebContents; readonly activity: HandoffActivity } | undefined;
 
   const show = (from: WebContents, activity: HandoffActivity | null) => {
-    if (sameActivity(activity, advertised?.activity ?? null)) return;
+    const same = sameActivity(activity, advertised?.activity ?? null);
+
     advertised = activity === null ? undefined : { from, activity };
-    advertise(activity);
+
+    if (!same) advertise(activity);
+  };
+
+  // Note that a closed window lets its page go as its page is destroyed, since its window's blur comes before that, while the window still stands.
+  const gone = (sender: WebContents) => {
+    held.delete(sender);
+
+    if (advertised?.from === sender) show(sender, null);
   };
 
   return {
     tell: (sender, activity) => {
+      if (!held.has(sender)) sender.once("destroyed", () => gone(sender));
       held.set(sender, activity);
 
       if (focusedPage() === sender) show(sender, activity);
     },
     focusMoved: () => {
-      for (const sender of held.keys()) if (sender.isDestroyed()) held.delete(sender);
       const focused = focusedPage();
 
       if (focused !== undefined) show(focused, held.get(focused) ?? null);
-      else if (advertised?.from.isDestroyed() === true) show(advertised.from, null);
     },
   };
 }

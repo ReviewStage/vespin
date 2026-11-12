@@ -18,6 +18,7 @@
  * lists the document holds (`spotlightChanges`), each change sent alone.
  */
 
+import { Schema as EffectSchema } from "effect";
 import { type InboxListed, inboxMemberName, inboxPreview } from "./inbox-list-model.js";
 import { iosAppRouteOf, iosPullRequestRoute } from "./ios-app-links.js";
 import {
@@ -29,6 +30,7 @@ import {
   readLink,
   taskLinkStep,
 } from "./link-grammar.js";
+import { LINK_ORIGIN } from "./link-home.js";
 import { cardTitle } from "./plain-words.js";
 import { TASK_STATUS_WORDS } from "./task-standing-words.js";
 import type { TaskSummary } from "./task-wire.js";
@@ -150,10 +152,17 @@ export function pullRequestActivity(
   };
 }
 
-/** What a desktop window advertises for Handoff: the vespin.dev page it shows, as a browser would. */
-export interface HandoffActivity {
-  readonly webpageUrl: string;
+/** Whether `url` is a page of ours a link names, on the home host over HTTPS, which is all Handoff may offer from a window. */
+function isOurPage(url: string): boolean {
+  return url.startsWith(`${LINK_ORIGIN}/`) && readLink(url) !== undefined;
 }
+
+/** What a desktop window advertises for Handoff: the vespin.dev page it shows, as a browser would, and never another site's. */
+export const handoffActivitySchema = EffectSchema.Struct({
+  webpageUrl: EffectSchema.String.check(EffectSchema.makeFilter(isOurPage)),
+});
+
+export type HandoffActivity = typeof handoffActivitySchema.Type;
 
 /** What the window holds that a link names only by its number: its tasks and their workspaces. */
 export interface HandoffReads {
