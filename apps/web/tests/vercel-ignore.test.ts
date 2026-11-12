@@ -4,6 +4,7 @@ import { chmodSync, copyFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { delimiter, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { temporaryDirectory } from "@repo/runtime/testing";
+import type { WireRecord } from "@repo/wire";
 import { type TestContext, test } from "vitest";
 
 const ROOT = fileURLToPath(new URL("../../../", import.meta.url));
@@ -37,7 +38,7 @@ const PREVIEW = { VERCEL_ENV: "preview", VERCEL_GIT_COMMIT_REF: "feat/branch" } 
  * names, the web one reaching `service` and, through its devDependencies,
  * `wire`; and a desktop app reaching `host`, which no service does.
  */
-const WORKSPACE: Readonly<Record<string, unknown>> = {
+const WORKSPACE: WireRecord = {
   "pnpm-workspace.yaml": 'packages:\n  - "apps/*"\n  - "packages/*"\n\ncatalog:\n  effect: 4.0.4\n',
   "vercel.json": { services: { web: { root: "apps/web" }, dev: { root: "apps/dev" } } },
   "apps/web/package.json": { name: "@repo/web", dependencies: { "@repo/service": "workspace:*" } },

@@ -37,7 +37,7 @@
 
 import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
-import { Option, Schema, SchemaTransformation } from "effect";
+import { Option, Predicate, Schema, SchemaTransformation } from "effect";
 import { ANY_PROCEDURE_REFUSALS, declaredProcedure, refuses } from "./contract/base.js";
 import type { HOSTED_ERRORS } from "./contract/errors.js";
 import { LIVE_POLL, sealedLiveQuerySchema } from "./live-wire.js";
@@ -441,13 +441,13 @@ export function orderedLiveRows<Part extends AnyLiveRows>(
   rows: readonly LiveRowOf<Part>[],
 ): readonly LiveRowOf<Part>[] {
   return rows.toSorted((a, b) => {
-    // SAFETY: a part's row is a struct, whose ordered fields its declaration names.
-    const left = a as Readonly<Record<string, unknown>>;
-    // SAFETY: a part's row is a struct, whose ordered fields its declaration names.
-    const right = b as Readonly<Record<string, unknown>>;
-
+    // Note that a part's row is a struct, whose ordered fields its declaration names.
     for (const [field, order] of part.order) {
-      const compared = comparedBy(left[field], right[field], order);
+      const compared = comparedBy(
+        Predicate.isObject(a) ? a[field] : undefined,
+        Predicate.isObject(b) ? b[field] : undefined,
+        order,
+      );
 
       if (compared !== 0) return compared;
     }

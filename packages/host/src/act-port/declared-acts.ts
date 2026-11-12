@@ -99,7 +99,7 @@ export function declaredActProcedures<
   const Acts extends Readonly<Record<string, AnyHostAct | AnyLiveFollow>>,
   const Handlers extends Partial<HostActTable<Acts>>,
 >(acts: Acts, handlers: Handlers): DeclaredProcedures<Acts, keyof Handlers & keyof Acts> {
-  const procedures: Record<string, unknown> = {};
+  const procedures = new Map<string, unknown>();
 
   for (const [name, handler] of Object.entries(handlers)) {
     const act = acts[name];
@@ -111,16 +111,19 @@ export function declaredActProcedures<
       act.kind as keyof typeof actPort
     ] as unknown as DeclaredProcedureBuilder;
 
-    procedures[act.kind] = builder.effect(function* ({ input }) {
-      // SAFETY: the port read `input` with the act's own input schema before this body runs, and the handler is the act's own.
-      return yield* declaredAnswer(
-        act,
-        handler as ActHandler<typeof act>,
-        input as ActInput<typeof act>,
-      );
-    });
+    procedures.set(
+      act.kind,
+      builder.effect(function* ({ input }) {
+        // SAFETY: the port read `input` with the act's own input schema before this body runs, and the handler is the act's own.
+        return yield* declaredAnswer(
+          act,
+          handler as ActHandler<typeof act>,
+          input as ActInput<typeof act>,
+        );
+      }),
+    );
   }
 
   // SAFETY: the loop above built each handed act's procedure under its own kind.
-  return procedures as DeclaredProcedures<Acts, keyof Handlers & keyof Acts>;
+  return Object.fromEntries(procedures) as DeclaredProcedures<Acts, keyof Handlers & keyof Acts>;
 }

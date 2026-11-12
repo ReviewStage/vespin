@@ -2726,7 +2726,7 @@ test("where nothing of the pull request is held and its reads fail, the line und
     cause: { _tag: FAILURE_FACT.HOSTED_UNANSWERED, fault: "timeout" },
   } as const;
 
-  const reported: Readonly<Record<string, unknown>>[] = [];
+  const reported: Parameters<ShownFailureSentry["logger"]["warn"]>[1][] = [];
 
   const recording: ShownFailureSentry = {
     captureException: () => "",

@@ -57,6 +57,7 @@ import {
   UNREAD,
 } from "./app-state.js";
 import { TX_WAIT_TIMEOUT } from "./live-follow.js";
+import type { ReadonlyRecord } from "effect/Record";
 
 /** Every row a collection, or a live query, shows now, what a standing write drew among them. */
 export function rowsOf<Row extends object>(collection: {
@@ -515,7 +516,7 @@ function withKeyLaid<Read extends object>(
   const [id, ...below] = path;
 
   if (id === undefined) return keyed;
-  const next: Record<string, unknown> = { ...keyed };
+  const next: { [id: string]: SliceLevel[string] } = { ...keyed };
 
   if (below.length > 0) {
     const level = Object.hasOwn(next, id) ? next[id] : undefined;
@@ -526,8 +527,8 @@ function withKeyLaid<Read extends object>(
   return next;
 }
 
-/** A level of a held slice: its keys by id, each holding a level below or a key's read. */
-type SliceLevel = Readonly<Record<string, unknown>>;
+/** A level of a held slice: its keys by id, each holding a level below or a key's read, as Effect's record reads it. */
+type SliceLevel = ReadonlyRecord<string, unknown>;
 
 /** Whether `value` is a level whose keys can be read by id, rather than a primitive or nothing. */
 function isSliceLevel(value: unknown): value is SliceLevel {

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import type { WireRecord } from "@repo/wire";
 import { test } from "vitest";
 import {
   calledPicturesOf,
@@ -87,7 +88,7 @@ test("an integration's answer names its kept pictures and the ones it left out, 
 });
 
 test("a browser call's screenshots are named by their place among its steps, each as the transcript kept it, and a screenshot from before they were kept names none", () => {
-  const shot = (extra: Record<string, unknown>) => ({
+  const shot = (extra: WireRecord) => ({
     action: "screenshot",
     status: "done",
     tab: "tab-1",

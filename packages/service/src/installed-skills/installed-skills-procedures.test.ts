@@ -297,7 +297,7 @@ function readAnswer<S extends Schema.ConstraintDecoder<unknown>>(
   return read.success;
 }
 
-const install = (body: Record<string, unknown>) => ({ method: "POST", body });
+const install = (body: Readonly<Record<string, WireBoundaryInput>>) => ({ method: "POST", body });
 
 const preview = (workspaceId: string, text: string) => ({
   method: "POST",
@@ -510,14 +510,14 @@ it.layer(getTestDB())("the installed skills routes", (it) => {
         const workspace = yield* openWorkspace(owner);
         const ask = yield* routes(githubReaching([]));
 
-        const installText = (body: Record<string, unknown>) =>
+        const installText = (body: Readonly<Record<string, WireBoundaryInput>>) =>
           ask(
             SKILLS,
             owner,
             install({ workspaceId: workspace, scope: INSTALLED_SKILL_SCOPE.PERSONAL, ...body }),
           );
 
-        const madeText = (body: Record<string, unknown>) =>
+        const madeText = (body: Readonly<Record<string, WireBoundaryInput>>) =>
           Effect.gen(function* () {
             const [made] = readAnswer(
               installedSkillInstallAnswerSchema,

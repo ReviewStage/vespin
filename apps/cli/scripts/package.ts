@@ -40,6 +40,7 @@ import { cliTarballName } from "@repo/features/cli-release";
 import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { HOST_TARGET, type HostTarget } from "@repo/features/host-release";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import type { Metafile } from "esbuild";
 
 const APP = join(import.meta.dirname, "..");
 const REPOSITORY = join(APP, "..", "..");
@@ -103,10 +104,8 @@ function shippedBundle(): string {
  * own words where its folder carries them, in name order.
  */
 function thirdPartyNotices(): string {
-  // SAFETY: esbuild's metafile keys every bundled file under `inputs`.
-  const meta = JSON.parse(readFileSync(join(DIST, "meta.json"), "utf8")) as {
-    inputs: Record<string, unknown>;
-  };
+  // SAFETY: esbuild writes its metafile in its own `Metafile` shape.
+  const meta = JSON.parse(readFileSync(join(DIST, "meta.json"), "utf8")) as Metafile;
 
   const folders = new Map<string, string>();
 

@@ -90,8 +90,8 @@ import {
   OWN_TRANSCRIPT,
   READ_KEYS,
 } from "@repo/host/app-state";
-import { type Query, type QueryClient, queryOptions, useQueryClient } from "@tanstack/react-query";
-import { Effect, Schema } from "effect";
+import { type Query, type QueryClient, type QueryMeta, queryOptions, useQueryClient } from "@tanstack/react-query";
+import { Effect, Predicate, Schema } from "effect";
 import { useEffect } from "react";
 import { askAct } from "./act.js";
 import { actMutation } from "./act-mutations.js";
@@ -129,7 +129,7 @@ const readHolder = Schema.decodeUnknownSync(agentInboxScopeSchema);
 /** A follow, a stream on the act port that carries nothing and that the host keeps the read followed for, by the read's ids and what its query carries on `meta`. */
 type LiveFollow = (
   ids: readonly LiveReadId[],
-  meta: Readonly<Record<string, unknown>> | undefined,
+  meta: QueryMeta | undefined,
 ) => Promise<AsyncIteratorObject<unknown, unknown, unknown>>;
 
 /** Whose comments a surface reads: a task's plan's own, or one of its pages', by the task and the page. */
@@ -369,14 +369,6 @@ function isLiveReadId(id: unknown): id is LiveReadId {
   return typeof id === "string" || typeof id === "number";
 }
 
-/** A record of a read's document: its fields by name, each a record below or a value. */
-type DocumentRecord = Readonly<Record<string, unknown>>;
-
-/** Whether `value` is a record whose fields can be read by name, rather than a primitive or nothing. */
-function isDocumentRecord(value: unknown): value is DocumentRecord {
-  return typeof value === "object" && value !== null;
-}
-
 /**
  * What the document holds of `read` at `ids`, record by record; none before
  * the first read, or where it holds nothing there.
@@ -389,7 +381,11 @@ function heldAt<Read extends LiveReadName>(
   let at: unknown = document?.[read];
 
   for (const segment of ids.map(String)) {
-    at = isDocumentRecord(at) && Object.hasOwn(at, segment) ? at[segment] : undefined;
+    // Note that a record of the document is an object or an array (`Predicate.isObjectOrArray`), read by its own field alone.
+    at =
+      Predicate.isObjectOrArray(at) && Object.hasOwn(at, segment) && Predicate.hasProperty(at, segment)
+        ? at[segment]
+        : undefined;
   }
 
   // SAFETY: what a read's slice holds at its whole path of ids is that read (`@repo/host`'s `HOST_READ_SLICE`).
@@ -469,7 +465,7 @@ function firstAnswer<Read extends LiveReadName>(
 function liveReadQuery<Read extends LiveReadName>(
   read: Read,
   ids: readonly LiveReadId[] | undefined,
-  meta?: Readonly<Record<string, unknown>>,
+  meta?: QueryMeta,
 ) {
   const queryKey: LiveReadKey<Read> = ids === undefined ? [read] : [read, ...ids];
 

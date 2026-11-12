@@ -303,7 +303,7 @@ test("a worker's reply is said once whole, under the worker's name", async () =>
 });
 
 test("a failed turn's end line reports the service's word for why, and the agent and task it is about, once, a refused own key as a refusal", async () => {
-  const reported: Readonly<Record<string, unknown>>[] = [];
+  const reported: Parameters<ShownFailureSentry["logger"]["warn"]>[1][] = [];
 
   const recording: ShownFailureSentry = {
     captureException: () => "",

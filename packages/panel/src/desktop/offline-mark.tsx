@@ -34,7 +34,7 @@ const LIVE_MARK_GLYPH = {
   [LIVE_MARK.MAC_OFFLINE]: WifiOffIcon,
   [LIVE_MARK.SERVICE_OFFLINE]: WifiOffIcon,
   [LIVE_MARK.CATCHING_UP]: RefreshCwIcon,
-} as const satisfies Record<LiveMark, unknown>;
+} as const satisfies Record<LiveMark, typeof WifiOffIcon>;
 
 /** The pill, or nothing while the Mac is online and live updates are current. */
 export function OfflineMark(): React.JSX.Element | null {

@@ -25,6 +25,7 @@ import { INBOX_ASK, INBOX_ASK_STATUS, INBOX_MESSAGE_AUTHOR } from "@repo/feature
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { TASK_STATUS, UNTITLED_TASK_NAME } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
+import type { WireRecord } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { Clock, DateTime, Effect, Layer, Option, Result } from "effect";
 import { HttpRouter } from "effect/http";
@@ -268,7 +269,7 @@ function press(
   button: { readonly action_id: string; readonly value: string },
   slackUserId: string,
   bearer: string | undefined,
-  state: Record<string, unknown> = {},
+  state: WireRecord = {},
 ): Request {
   const payload = {
     type: "block_actions",

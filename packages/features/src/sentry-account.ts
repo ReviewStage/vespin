@@ -16,7 +16,7 @@ const USER_ID_ATTRIBUTE = "user.id";
 
 /** A log line as `beforeSendLog` is handed it. */
 interface SentLog {
-  readonly attributes?: Record<string, unknown>;
+  readonly attributes?: object;
 }
 
 /** An event as `beforeSend` is handed it. */

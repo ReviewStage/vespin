@@ -15,7 +15,13 @@
  * written unless the turn has ended.
  */
 
-import { MESSAGE_ROLE } from "@repo/wire";
+import {
+  isRecord,
+  MESSAGE_ROLE,
+  type UnparsedWireValue,
+  type WireRecord,
+  type WireValue,
+} from "@repo/wire";
 import { TOOL_PART_STATE } from "@repo/wire/ui-messages";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 
@@ -50,11 +56,15 @@ type PrintedPart =
   | undefined;
 
 /** A stored part, or a call's input, as a terminal reads it: its fields by name, each still to be read. */
-type PartFields = Readonly<Record<string, unknown>>;
+type PartFields = WireRecord;
 
-/** Whether `value` is an object whose fields can be read by name, rather than a primitive or nothing. */
-function isPartFields(value: unknown): value is PartFields {
-  return typeof value === "object" && value !== null;
+/**
+ * Whether `value` is an object whose fields can be read by name, rather than
+ * a primitive or nothing. Note that an array, which a stored part never is,
+ * reads as no part, as it printed nothing when its fields were read.
+ */
+function isPartFields(value: UnparsedWireValue): value is PartFields {
+  return isRecord(value);
 }
 
 function stringField(part: PartFields, key: string): string | undefined {
@@ -64,7 +74,7 @@ function stringField(part: PartFields, key: string): string | undefined {
 }
 
 /** What a call acted on, as one short line, from the first input key that names it. */
-function subjectOf(input: unknown): string | undefined {
+function subjectOf(input: UnparsedWireValue): string | undefined {
   if (!isPartFields(input)) return undefined;
 
   for (const key of SUBJECT_KEYS) {
@@ -170,7 +180,7 @@ function callWords(value: unknown): string {
 }
 
 /** One call read whole as a terminal prints it: its tool and where it stands, its input, and its output or its error, each whole. */
-export function wholeCallLines(stored: unknown): readonly string[] {
+export function wholeCallLines(stored: WireValue): readonly string[] {
   const part = isPartFields(stored) ? stored : {};
   const printed = printedPart(part);
   const tool = printed !== undefined && "tool" in printed ? printed.tool : "call";

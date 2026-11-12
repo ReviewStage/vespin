@@ -56,6 +56,7 @@ import {
 import type { Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
+import type { WireRecord } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
@@ -288,9 +289,7 @@ function sessionsFor(userId: string, sequence: { next: number } = { next: 0 }) {
 /** What the newest policy the sandbox's firewall was sent sets on the host given: OpenAI's API, unless another is named. */
 const openAiRules = (api: ReturnType<typeof runnerSandboxApi>, host = "api.openai.com") => {
   // SAFETY: the fake keeps each network policy as the service sent it, whose rules are listed by host under `allow`.
-  const policy = api.policies.at(-1)?.policy as
-    | { readonly allow?: Readonly<Record<string, unknown>> }
-    | undefined;
+  const policy = api.policies.at(-1)?.policy as { readonly allow?: WireRecord } | undefined;
 
   return policy?.allow?.[host];
 };

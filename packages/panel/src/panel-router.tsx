@@ -31,6 +31,7 @@
 import type { PANEL_PATH } from "@repo/features/link-home";
 import { SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { ReloadState } from "@repo/ui/error-boundary";
+import type { WireBoundaryInput } from "@repo/wire";
 import type { QueryClient } from "@tanstack/react-query";
 import {
   createRootRouteWithContext,
@@ -85,7 +86,7 @@ function readSearch(search: string): Record<string, string> {
 }
 
 /** A query written as `linkOf` writes one, through `URLSearchParams`, with its `?` where it holds anything. */
-function writeSearch(search: Record<string, unknown>): string {
+function writeSearch(search: Readonly<Record<string, WireBoundaryInput>>): string {
   const written = new URLSearchParams(
     Object.entries(search).flatMap(([key, value]) =>
       value === undefined ? [] : [[key, String(value)]],

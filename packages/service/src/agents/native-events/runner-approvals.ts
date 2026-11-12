@@ -140,7 +140,7 @@ function cutValue(value: unknown, depth: number): WireBoundaryInput {
  * stands whole in the transcript.
  */
 export function keptApprovalInput(
-  input: Readonly<Record<string, unknown>>,
+  input: (typeof RunnerApprovalRequestedSchema.Type)["input"],
 ): AgentPendingApproval["input"] {
   const cut = readInput(cutValue(input, 0));
 

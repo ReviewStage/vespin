@@ -29,7 +29,7 @@ export const PULL_REQUEST_GLYPH = {
   [PULL_REQUEST_STATE.MERGED]: GitMergeIcon,
   [PULL_REQUEST_STATE.CLOSED]: GitPullRequestClosedIcon,
   [PULL_REQUEST_MARK_QUEUED]: GitMergeIcon,
-} as const satisfies Record<PullRequestMarkState, unknown>;
+} as const satisfies Record<PullRequestMarkState, typeof GitMergeIcon>;
 
 /** Where a pull request's mark says it stands: queued where it is open and the merge queue holds it, else where it stands. */
 export function pullRequestMarkState(pullRequest: {

@@ -215,28 +215,64 @@ interface ShotResult {
 }
 
 // Playwright's surface this script touches, typed here because the package is not installed beside it.
+interface RoleOptions {
+  readonly name: string;
+  readonly exact?: boolean;
+}
+
+interface TimeoutOptions {
+  readonly timeout: number;
+}
+
+interface ClickOptions extends TimeoutOptions {
+  readonly button?: "right";
+}
+
+interface ScreenshotOptions {
+  readonly path: string;
+  readonly animations: "disabled";
+  readonly caret: "hide";
+}
+
+interface MediaOptions {
+  readonly colorScheme: Theme;
+  readonly reducedMotion: "reduce";
+}
+
+interface ContextOptions extends MediaOptions {
+  readonly viewport: { readonly width: number; readonly height: number };
+  readonly hasTouch?: boolean;
+  readonly isMobile?: boolean;
+}
+
+interface ElectronLaunchOptions extends TimeoutOptions {
+  readonly executablePath: string;
+  readonly args: readonly string[];
+  readonly env: Readonly<Record<string, string | undefined>>;
+}
+
 interface PlaywrightLocator {
   first(): PlaywrightLocator;
-  getByRole(role: string, options: Record<string, unknown>): PlaywrightLocator;
-  click(options: Record<string, unknown>): Promise<void>;
-  hover(options: Record<string, unknown>): Promise<void>;
-  waitFor(options: Record<string, unknown>): Promise<void>;
+  getByRole(role: string, options: RoleOptions): PlaywrightLocator;
+  click(options: ClickOptions): Promise<void>;
+  hover(options: TimeoutOptions): Promise<void>;
+  waitFor(options: TimeoutOptions): Promise<void>;
   isVisible(): Promise<boolean>;
-  screenshot(options: Record<string, unknown>): Promise<Buffer>;
+  screenshot(options: ScreenshotOptions): Promise<Buffer>;
 }
 
 interface PlaywrightPage {
   url(): string;
-  goto(url: string, options?: Record<string, unknown>): Promise<void>;
-  waitForSelector(selector: string, options?: Record<string, unknown>): Promise<void>;
+  goto(url: string, options?: TimeoutOptions): Promise<void>;
+  waitForSelector(selector: string, options?: TimeoutOptions): Promise<void>;
   waitForTimeout(ms: number): Promise<void>;
   waitForFunction(script: string, arg?: unknown, options?: { timeout: number }): Promise<void>;
   evaluate<Result>(script: string): Promise<Result>;
-  emulateMedia(options: Record<string, unknown>): Promise<void>;
-  screenshot(options: Record<string, unknown>): Promise<Buffer>;
+  emulateMedia(options: MediaOptions): Promise<void>;
+  screenshot(options: ScreenshotOptions): Promise<Buffer>;
   on(event: "pageerror", listener: (error: Error) => void): void;
   on(event: "crash", listener: () => void): void;
-  getByRole(role: string, options: Record<string, unknown>): PlaywrightLocator;
+  getByRole(role: string, options: RoleOptions): PlaywrightLocator;
   getByText(text: string): PlaywrightLocator;
   locator(selector: string): PlaywrightLocator;
   keyboard: { press(keys: string): Promise<void>; type(text: string): Promise<void> };
@@ -249,7 +285,7 @@ interface PlaywrightContext {
 }
 
 interface PlaywrightBrowser {
-  newContext(options: Record<string, unknown>): Promise<PlaywrightContext>;
+  newContext(options: ContextOptions): Promise<PlaywrightContext>;
   close(): Promise<void>;
 }
 
@@ -264,7 +300,7 @@ interface PlaywrightHandle {
 interface ElectronApplication {
   windows(): PlaywrightPage[];
   browserWindow(page: PlaywrightPage): Promise<PlaywrightHandle>;
-  waitForEvent(event: "window", options: Record<string, unknown>): Promise<PlaywrightPage>;
+  waitForEvent(event: "window", options: TimeoutOptions): Promise<PlaywrightPage>;
   evaluate<Arg, Result>(
     script: (electron: never, arg: Arg) => Result,
     arg: Arg,
@@ -274,7 +310,7 @@ interface ElectronApplication {
 
 interface Playwright {
   chromium: { launch(): Promise<PlaywrightBrowser> };
-  _electron: { launch(options: Record<string, unknown>): Promise<ElectronApplication> };
+  _electron: { launch(options: ElectronLaunchOptions): Promise<ElectronApplication> };
 }
 
 /** A development server this run stood up: its address and how to stop it. */

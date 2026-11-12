@@ -1291,11 +1291,7 @@ function cardHead(card: HTMLElement): HTMLElement {
 }
 
 /** A GitHub line the agent was told, as the service steers one in. */
-function githubLine(
-  id: string,
-  text: string,
-  metadata: Record<string, unknown>,
-): AgentTranscriptMessage {
+function githubLine(id: string, text: string, metadata: WireRecord): AgentTranscriptMessage {
   return {
     id,
     role: MESSAGE_ROLE.USER,

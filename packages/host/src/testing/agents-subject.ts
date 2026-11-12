@@ -69,7 +69,7 @@ import {
 import { type EntityPool, entityPool } from "@repo/sync";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
-import { Duration, Effect, Exit, Scope } from "effect";
+import { Duration, Effect, Exit, Predicate, Scope } from "effect";
 import { TestClock } from "effect/testing";
 import { type AppTranscript, type AppTranscripts, OWN_TRANSCRIPT } from "../app-state.js";
 import { type AccountAsksClient, composeAccountAsks } from "../compose-account-asks.js";
@@ -1164,17 +1164,10 @@ type ItemsAnswer = Exclude<
   { failure: string }
 >;
 
-/** A row of a read as the fake holds it: its fields by name, each still to be read. */
-type RowFields = Readonly<Record<string, unknown>>;
-
-/** Whether `row` is a row whose fields can be read by name, rather than a primitive or nothing. */
-function isRow(row: unknown): row is RowFields {
-  return typeof row === "object" && row !== null;
-}
-
 /** A row's text field `name`; none where it carries none. */
 function textOf(row: unknown, name: string): string | undefined {
-  const value = isRow(row) ? row[name] : undefined;
+  const value =
+    Predicate.isObjectOrArray(row) && Predicate.hasProperty(row, name) ? row[name] : undefined;
 
   return typeof value === "string" ? value : undefined;
 }
@@ -1218,7 +1211,11 @@ function bySyncId(
       const row = id === undefined ? undefined : items.rows.get(id);
 
       if (id === undefined || typeof row !== "object" || row === null) return [];
-      const unread = isRow(stamp) ? stamp.unread : undefined;
+
+      const unread =
+        Predicate.isObjectOrArray(stamp) && Predicate.hasProperty(stamp, "unread")
+          ? stamp.unread
+          : undefined;
 
       return [[id, { stamp, row: { ...row, unread } }] as const];
     }),

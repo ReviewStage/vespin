@@ -47,6 +47,9 @@ import {
 import { type StartAsk, startAgent } from "./start.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 
+/** The attributes an error reporter is handed beside the failure it reports. */
+type ReportedAttributes = Parameters<Parameters<typeof ErrorReporter.make>[0]>[0]["attributes"];
+
 /** What every case runs over: the store, and sandboxes kept in memory. */
 const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
 
@@ -401,7 +404,7 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
     () =>
       Effect.gen(function* () {
         const { owner, workspaceId } = yield* openConnectedWorkspace;
-        const reported: Readonly<Record<string, unknown>>[] = [];
+        const reported: ReportedAttributes[] = [];
 
         const reporting = ErrorReporter.layer([
           ErrorReporter.make(({ attributes }) => {

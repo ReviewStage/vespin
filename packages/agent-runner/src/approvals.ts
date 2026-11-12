@@ -64,10 +64,11 @@ export interface Approvals {
 /** What the SDK hands `canUseTool` beside the call. */
 type AskOptions = Parameters<CanUseTool>[2];
 
+/** A call's input as the CLI hands it over. */
+type ToolInput = Parameters<CanUseTool>[1];
+
 /** A call's input as its ask is posted: each string and list in it cut to `APPROVAL_INPUT`'s bounds. */
-export function cutInput(
-  input: Readonly<Record<string, unknown>>,
-): Record<string, WireBoundaryInput> {
+export function cutInput(input: Readonly<ToolInput>): Record<string, WireBoundaryInput> {
   return Object.fromEntries(Object.entries(input).map(([key, value]) => [key, cut(value)]));
 }
 
@@ -119,7 +120,7 @@ function suggestedPrefix(
 /** The ask as the service is told of it. */
 function requested(
   toolName: string,
-  input: Record<string, unknown>,
+  input: ToolInput,
   options: AskOptions,
 ): RunnerApprovalRequested {
   const prefix = suggestedPrefix(toolName, options.suggestions ?? []);
@@ -144,7 +145,7 @@ function requested(
  * checkout's settings would outlive the agent and could be committed.
  */
 function answerOf(
-  input: Record<string, unknown>,
+  input: ToolInput,
   suggestions: readonly PermissionUpdate[],
   decision: ApprovalDecision,
   message: string | undefined,
@@ -284,7 +285,7 @@ export function holdAsk<A>(
 const ask = Effect.fn("agent-runner/ask")(function* (
   approvals: Approvals,
   toolName: string,
-  input: Record<string, unknown>,
+  input: ToolInput,
   options: AskOptions,
 ) {
   const suggestions = options.suggestions ?? [];

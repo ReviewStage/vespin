@@ -63,7 +63,7 @@ import {
   PUSH_FAILURE_REASON,
   type PushEnvironment,
 } from "@repo/features/push-device-wire";
-import { isRecord, text, unparsedWire } from "@repo/wire";
+import { isRecord, text, unparsedWire, type WireRecord, type WireValue } from "@repo/wire";
 import {
   Clock,
   Config,
@@ -193,20 +193,20 @@ export interface ApnsAps {
   readonly timestamp?: number;
   readonly event?: ApnsLiveActivityEvent;
   /** A Live Activity's content state, as its widget decodes it. */
-  readonly "content-state"?: Readonly<Record<string, unknown>>;
+  readonly "content-state"?: WireRecord;
   /** When a Live Activity's content is out of date unless a later push says otherwise. */
   readonly "stale-date"?: number;
   /** When an ended Live Activity leaves the lock screen. */
   readonly "dismissal-date"?: number;
   /** A push-to-start's activity type, as the app's Swift names it, and its static attributes. */
   readonly "attributes-type"?: string;
-  readonly attributes?: Readonly<Record<string, unknown>>;
+  readonly attributes?: WireRecord;
 }
 
 /** The JSON Apple delivers: its `aps`, and the app's own keys at the top level. */
 export interface ApnsPayload {
   readonly aps: ApnsAps;
-  readonly [key: string]: unknown;
+  readonly [key: string]: WireValue | ApnsAps;
 }
 
 /** One notification to one phone: who, what kind, what Apple delivers, and how Apple routes it. */

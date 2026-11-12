@@ -269,7 +269,7 @@ it.effect.each(CALLER_TRACES)(
   "a procedure's span and log lines continue the caller's trace and sampling from $carried",
   ({ headers, traceId, sampled }) =>
     Effect.gen(function* () {
-      const annotations: Array<Readonly<Record<string, unknown>>> = [];
+      const annotations: Array<{ readonly traceId?: unknown }> = [];
       const spans: Array<{ readonly traceId: string; readonly sampled: boolean }> = [];
 
       const recorded = Logger.make(({ fiber }) => {

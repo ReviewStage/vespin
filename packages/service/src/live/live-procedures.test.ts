@@ -107,7 +107,13 @@ import {
   WORKSPACES_READ,
 } from "@repo/features/workspace-live";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
-import { MESSAGE_ROLE, TURN_ORIGIN, TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
+import {
+  MESSAGE_ROLE,
+  TURN_ORIGIN,
+  TURN_STATUS,
+  type WireBoundaryInput,
+  type WireRecord,
+} from "@repo/wire";
 import { eq, sql } from "drizzle-orm";
 import {
   Clock,
@@ -796,12 +802,17 @@ it.layer(getTestDB())("a task's live reads", (it) => {
 });
 
 /** A row a statement answered, column by column. */
-type KeptRow = Readonly<Record<string, unknown>>;
+type KeptRow = WireRecord;
 
-/** The database client's members by key, as the keeping client forwards each one it leaves alone. */
-type ClientMembers = { readonly [key: PropertyKey]: unknown };
+/** A member of `members` by a key known only at run time, as the keeping client forwards each one it leaves alone. */
+function memberAt<Member>(
+  members: { readonly [key: PropertyKey]: Member },
+  key: PropertyKey,
+): Member | undefined {
+  return members[key];
+}
 
-/** The database client's members as their own types, which read as `ClientMembers` with each one unknown. */
+/** The database client's members as their own types, which `memberAt` reads with each one unknown. */
 type TypedMembers = { readonly [Key in keyof SqlClient.SqlClient]: SqlClient.SqlClient[Key] };
 
 /**
@@ -811,7 +822,6 @@ type TypedMembers = { readonly [Key in keyof SqlClient.SqlClient]: SqlClient.Sql
  */
 function keepingRows(sql: SqlClient.SqlClient, kept: KeptRow[]): SqlClient.SqlClient {
   const typed: TypedMembers = sql;
-  const members: ClientMembers = typed;
 
   return new Proxy(sql, {
     get: (target, key) =>
@@ -820,7 +830,7 @@ function keepingRows(sql: SqlClient.SqlClient, kept: KeptRow[]): SqlClient.SqlCl
             Effect.tap(target.unsafe<KeptRow>(text, params), (rows) =>
               Effect.sync(() => kept.push(...rows)),
             )
-        : members[key],
+        : memberAt<unknown>(typed, key),
   });
 }
 

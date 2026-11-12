@@ -11,6 +11,7 @@ import { HOSTED_SERVICE_PATH } from "@repo/features";
 import { hostedContract } from "@repo/features/contract";
 import { LIVE_MODE, LIVE_PARAM, liveRead, liveRows, ORDER } from "@repo/features/live-read";
 import { liveDigestOf } from "@repo/features/live-wire";
+import type { WireRecord } from "@repo/wire";
 import { pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { Clock, Duration, Effect, Fiber, Layer, Option, Queue, Schema } from "effect";
 import { SqlClient } from "effect/sql";
@@ -95,7 +96,7 @@ const PROBE_READ = probeQuery(
 );
 
 /** One node of an explained plan, as its JSON writes it, the nodes under it among its `Plans`. */
-type PlanNode = Readonly<Record<string, unknown>>;
+type PlanNode = WireRecord;
 
 /** A node of the plan, and whether it is a root: the statement's top node, or a subquery's. */
 interface PlannedNode {

@@ -949,7 +949,7 @@ test("a message refused because the member's token is not authorized for the org
 });
 
 test("a message refused for want of a connected credential is reported as the service's refusal, by its word, and opens no issue", async () => {
-  const reported: [string, Readonly<Record<string, unknown>>][] = [];
+  const reported: Parameters<ShownFailureSentry["logger"]["warn"]>[] = [];
   let issues = 0;
 
   const recording: ShownFailureSentry = {

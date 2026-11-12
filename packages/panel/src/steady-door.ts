@@ -7,7 +7,9 @@
  * handed does (`memo`) is handed the steady door instead.
  */
 
+import { Predicate } from "effect";
 import { useCallback, useRef } from "react";
+import type { ReadonlyRecord } from "effect/Record";
 
 /**
  * The door handed over, standing across draws and calling the newest one;
@@ -63,10 +65,8 @@ interface KeptDoor {
 /** A door's name: `onOpen`, `onChoose`, the press handlers a part is handed, whose identity no reader keys a read on. */
 const DOOR_NAME = /^on[A-Z]/;
 
-/** An object `useSteadyDoors` looks into: one made of plain fields, not a React element, a class's instance, or a collection. */
-function isPlainRecord(value: unknown): value is Readonly<Record<string, unknown>> {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
-
+/** Whether an object (`Predicate.isObject`) is one `useSteadyDoors` looks into: made of plain fields, not a React element, a class's instance, or a collection. */
+function isPlainRecord(value: ReadonlyRecord<string, unknown>): boolean {
   if ("$$typeof" in value) return false;
   const proto: unknown = Object.getPrototypeOf(value);
 
@@ -117,19 +117,22 @@ function keptPlace(
     return { handed, steady: same ? last : steady, door: undefined, within };
   }
 
-  if (isPlainRecord(handed)) {
+  if (Predicate.isObject(handed) && isPlainRecord(handed)) {
     const within = new Map<string, KeptPlace>();
-    const steady: Record<string, unknown> = {};
 
-    for (const [key, item] of Object.entries(handed)) {
-      const place = keptPlace(kept?.within?.get(key), item, isDoor(key), isDoor);
-      within.set(key, place);
-      steady[key] = place.steady;
-    }
+    const steady = Object.fromEntries(
+      Object.entries(handed).map(([key, item]) => {
+        const place = keptPlace(kept?.within?.get(key), item, isDoor(key), isDoor);
+        within.set(key, place);
+
+        return [key, place.steady];
+      }),
+    );
 
     const last = kept?.steady;
 
     const same =
+      Predicate.isObject(last) &&
       isPlainRecord(last) &&
       Object.keys(last).length === within.size &&
       Object.entries(steady).every(([key, item]) => key in last && last[key] === item);

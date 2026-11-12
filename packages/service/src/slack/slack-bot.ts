@@ -51,6 +51,7 @@ import {
   workspaceSlackInstallation,
 } from "@repo/database/models/slack-installation-store";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import type { WireRecord } from "@repo/wire";
 import { getToken } from "@vercel/connect";
 import {
   Config,
@@ -105,7 +106,7 @@ const SLACK_USERS_NOT_FOUND = "users_not_found";
 const SLACK_CODE_PATTERN = /^[a-z][a-z0-9_]{0,62}$/;
 
 /** One Block Kit block, as Slack's own docs spell it. */
-export type SlackBlock = Readonly<Record<string, unknown>>;
+export type SlackBlock = WireRecord;
 
 /** What the bot writes: Block Kit blocks, and the plain text Slack shows in a notification and wherever blocks are not drawn. */
 export interface SlackMessageContent {

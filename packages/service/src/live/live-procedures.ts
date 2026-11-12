@@ -174,7 +174,7 @@ import {
   liveDigestOn,
   type SealedLiveQueryWire,
 } from "@repo/features/live-wire";
-import { Duration, Effect, Option } from "effect";
+import { Duration, Effect, Option, Predicate } from "effect";
 import { SqlClient } from "effect/sql";
 import { pluginWriteOrUnavailable } from "../accounts/workspace-create.js";
 import { heldUntil } from "../http/held-read.js";
@@ -598,11 +598,7 @@ function syncedParts<Part extends string>(
 function rowIds(sealed: SealedLiveQueryWire, key: string): ReadonlySet<string> {
   return new Set(
     (sealed.rows ?? []).flatMap((row) => {
-      // SAFETY: the guard below admits only an object, which is read by its own keys.
-      const id =
-        typeof row === "object" && row !== null
-          ? (row as Readonly<Record<string, unknown>>)[key]
-          : undefined;
+      const id = Predicate.isObject(row) ? row[key] : undefined;
 
       return id === undefined ? [] : [String(id)];
     }),
