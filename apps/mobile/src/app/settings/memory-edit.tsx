@@ -7,6 +7,7 @@ import {
   memorySaveRefusal,
 } from "@repo/features/memory-settings-words";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
+import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaceMemories, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
@@ -48,6 +49,11 @@ export default function MemoryEditScreen() {
 
   // Note that the page is drawn anew for each workspace, so a draft never carries into another.
   return <MemoryEditor key={chosen.id} workspaceId={chosen.id} memoryId={memory} />;
+}
+
+/** Says on the console a read asked again that did not go; the page still says the read failed. */
+function retryLost(cause: unknown): void {
+  console.error("Reading the memories again did not go.", cause);
 }
 
 /**
@@ -92,6 +98,8 @@ function MemoryEditor({
 
   // An edit waits on the memories' read, which the page follows itself, since it may be opened before Memory read them.
   const reading = memoryId !== undefined && rows === undefined;
+  // A read that failed before any rows came says so, with Try again, as Memory does, rather than reading forever.
+  const failed = reading && held?.failed === true;
 
   const gone =
     memoryId !== undefined &&
@@ -115,7 +123,8 @@ function MemoryEditor({
   const text = (words ?? saved).trim();
   const tooLong = text.length > MEMORY_BOUNDS.MAX_CHARS;
   const changed = !reading && !gone && text !== saved.trim();
-  const kept = useKeptWords(changed);
+  // Note that words typed before the memory was deleted still ask before they are left, and that nothing asks while a save is out, since leaving then discards nothing: the save goes on, and a refusal says why in the failure notice.
+  const kept = useKeptWords(!reading && !saving && text !== saved.trim());
 
   const save = () => {
     if (out.current || saving || !changed || text === "" || tooLong) return;
@@ -183,7 +192,16 @@ function MemoryEditor({
         onDismiss={kept.stay}
       />
       <Screen>
-        {reading ? (
+        {failed ? (
+          <EmptyState
+            title={MEMORY_PAGE_WORDS.FAILED}
+            symbol="exclamationmark.triangle"
+            action={{
+              label: VERB.RETRY,
+              onPress: () => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost),
+            }}
+          />
+        ) : reading ? (
           <EmptyState title={MEMORY_PAGE_WORDS.READING} symbol={MEMORY_SYMBOL} loading />
         ) : gone ? (
           <EmptyState title={MEMORY_EDITOR_WORDS.GONE} symbol={MEMORY_SYMBOL} />
