@@ -18,7 +18,7 @@
 import { listBaseDriveWorkspaces } from "@repo/database/models/base-drive-repositories";
 import { causeKind } from "@repo/runtime/effect";
 import { Sandbox } from "@repo/sandbox";
-import { Cause, Clock, Effect } from "effect";
+import { Cause, Effect } from "effect";
 import { AgentImage } from "./coder-host/agent-image.js";
 import type { SandboxRunner } from "./machine/sandbox-machine.js";
 import {
@@ -55,9 +55,7 @@ const driveWanted = (workspaceId: string) =>
 
     if (!(yield* api.driveStands(name))) return true;
 
-    return (
-      readOf(yield* api.get(name), yield* Clock.currentTimeMillis).state === DRIVE_STATE.WANTED
-    );
+    return readOf(yield* api.get(name)).state === DRIVE_STATE.WANTED;
   });
 
 /** One workspace's drive filled where it wants one, as what the refresh counts it. */
