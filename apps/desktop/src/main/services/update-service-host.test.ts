@@ -96,45 +96,54 @@ it.effect(
     }).pipe(Effect.scoped),
 );
 
-it.effect("an install Squirrel refuses on a read-only volume is told as that failure", () =>
-  Effect.gen(function* () {
-    const told: UpdateSnapshot[] = [];
-    let heard: UpdaterEngineEvents | undefined;
+it.effect(
+  "an install Squirrel refuses on a read-only volume is told as that failure, and counted once by its kind",
+  () =>
+    Effect.gen(function* () {
+      const told: UpdateSnapshot[] = [];
+      const counted: unknown[] = [];
+      let heard: UpdaterEngineEvents | undefined;
 
-    const state: Pick<AppStateStore, "update"> = {
-      update: ({ update }: { update: UpdateSnapshot }) => told.push(update),
-    };
+      const state: Pick<AppStateStore, "update"> = {
+        update: ({ update }: { update: UpdateSnapshot }) => told.push(update),
+      };
 
-    yield* createUpdateServiceHost({
-      config: CONFIG,
-      recordProductEvent: () => undefined,
-      engine: {
-        wire: (events) => {
-          heard = events;
+      yield* createUpdateServiceHost({
+        config: CONFIG,
+        recordProductEvent: (name, properties) => counted.push({ name, properties }),
+        engine: {
+          wire: (events) => {
+            heard = events;
+          },
+          checkForUpdates: async () => undefined,
+          quitAndInstall: () => undefined,
+          clearCachedUpdate: async () => undefined,
         },
-        checkForUpdates: async () => undefined,
-        quitAndInstall: () => undefined,
-        clearCachedUpdate: async () => undefined,
-      },
-      beforeRestart: async () => undefined,
-      askBeforeRestart: async () => true,
-      state,
-      showSettings: () => undefined,
-      moveToApplications: () => undefined,
-    });
+        beforeRestart: async () => undefined,
+        askBeforeRestart: async () => true,
+        state,
+        showSettings: () => undefined,
+        moveToApplications: () => undefined,
+      });
 
-    heard?.onAvailable("2.0.0");
-    // Squirrel.Mac's own words, as electron-updater hands them on.
-    heard?.onError(
-      "Cannot update while running on a read-only volume. The application is on a read-only volume. Please move the application and try again.",
-    );
+      heard?.onAvailable("2.0.0");
+      // Squirrel.Mac's own words, as electron-updater hands them on.
+      heard?.onError(
+        "Cannot update while running on a read-only volume. The application is on a read-only volume. Please move the application and try again.",
+      );
 
-    assert.deepEqual(told.at(-1), {
-      status: UPDATE_STATUS.ERROR,
-      currentVersion: "1.0.0",
-      installSupported: true,
-      latestVersion: "2.0.0",
-      failure: UPDATE_FAILURE.READ_ONLY_VOLUME,
-    });
-  }).pipe(Effect.scoped),
+      assert.deepEqual(told.at(-1), {
+        status: UPDATE_STATUS.ERROR,
+        currentVersion: "1.0.0",
+        installSupported: true,
+        latestVersion: "2.0.0",
+        failure: UPDATE_FAILURE.READ_ONLY_VOLUME,
+      });
+      assert.deepEqual(counted, [
+        {
+          name: "update:fail",
+          properties: { update_failure: "read_only_volume", app_version: "1.0.0" },
+        },
+      ]);
+    }).pipe(Effect.scoped),
 );
