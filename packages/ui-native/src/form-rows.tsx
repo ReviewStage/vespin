@@ -35,6 +35,8 @@ type WordsFieldProps = {
   readonly autoFocus?: boolean | undefined;
   /** The name a flow finds the field by. */
   readonly testId?: string | undefined;
+  /** What VoiceOver hears the field as, where its placeholder alone would not say what it holds once words are typed. */
+  readonly label?: string | undefined;
 };
 
 /**
@@ -49,6 +51,7 @@ export function WordsField({
   initialWords = "",
   autoFocus = false,
   testId,
+  label,
 }: WordsFieldProps) {
   const colors = useColors();
   const text = useNativeState(initialWords);
@@ -65,6 +68,7 @@ export function WordsField({
         lineLimit(WORDS_LINES),
         listRowBackground(colors.SURFACE),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+        ...(label === undefined ? [] : [accessibilityLabel(label)]),
       ]}
     />
   );

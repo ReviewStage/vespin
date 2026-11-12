@@ -208,8 +208,11 @@ export function useAttachedPictures(
     drop,
     opening,
     reading: reads > 0,
+    // Note that the held pictures are written at once, as `add` writes them, so a drop landing before the next render adds after what stays rather than bringing back what was taken off.
     detach: (id) => {
-      setPictures((held) => held.filter((picture) => picture.id !== id));
+      const next = held.current.filter((picture) => picture.id !== id);
+      held.current = next;
+      setPictures(next);
       onNote(undefined);
     },
     take: () => {

@@ -30,8 +30,10 @@ import {
 import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { CONTACT_MAILTO } from "@repo/host/contract";
 import { BUZZ, ConfirmAsk } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { openURL } from "expo-linking";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -378,8 +380,19 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         return;
       case MENU_COMMAND.HELP:
         return openInSafari(LINK_PAGE.DOCS);
+      // Note that the form needs an account, so a signed-out app, or one the service refuses as too old, writes the contact mail as it always did.
       case MENU_COMMAND.FEEDBACK:
-        return openSettings(SETTINGS_ROUTE.FEEDBACK);
+        if (!signedIn) {
+          openURL(CONTACT_MAILTO).catch((cause: unknown) =>
+            console.error("The feedback mail did not open.", cause),
+          );
+
+          return;
+        }
+
+        if (!standing(SETTINGS_ROUTE.FEEDBACK)) openSettings(SETTINGS_ROUTE.FEEDBACK);
+
+        return;
       // Note that Remind Me's presets were set above, by the time each sets.
       case MENU_COMMAND.REMIND_HOUR:
       case MENU_COMMAND.REMIND_TOMORROW:

@@ -438,7 +438,7 @@ export function FeedbackDialog({
       <div className="feedback-dialog flex min-h-0 flex-col gap-block-gap">
         {shown.about === undefined ? (
           <ChoiceBar<FeedbackKind>
-            label="Kind of note"
+            label={FEEDBACK_WORDS.KIND}
             items={FEEDBACK_KIND_CHOICES}
             value={shown.kind}
             look={CHOICE_BAR_LOOK.SEGMENTED}

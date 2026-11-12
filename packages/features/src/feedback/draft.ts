@@ -19,6 +19,8 @@ import {
 /** What the form and its parts are called, whichever client draws it. */
 export const FEEDBACK_WORDS = {
   TITLE: "Send feedback",
+  /** What the choice of kind at the form's head is heard as. */
+  KIND: "Kind of note",
   SIGN: "Include my name and email",
   /** What the signature's line says while the note goes unsigned. */
   UNSIGNED: "Sent without your name or email",
@@ -29,6 +31,8 @@ export const FEEDBACK_WORDS = {
   SEND_REFUSAL: "Could not send that. Try again.",
   UNREADABLE: "That file could not be attached.",
   FULL: `You can attach up to ${FEEDBACK_LIMITS.MAX_IMAGES} screenshots.`,
+  /** What a note past the endpoint's bound says, which a send would only have refused. */
+  TOO_LONG: `A note can be up to ${FEEDBACK_LIMITS.MESSAGE_MAX_LENGTH.toLocaleString("en-US")} characters.`,
 } as const;
 
 /**

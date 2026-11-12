@@ -44,9 +44,6 @@ import { useWrite } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
-/** What the kinds' control is heard as, before the kind chosen. */
-const KIND_LABEL = "Kind";
-
 /** The names a flow finds the field and the + by. */
 const TEST_IDS = { WORDS: "feedback-words", ATTACH: "feedback-attach" } as const;
 
@@ -107,6 +104,8 @@ export default function FeedbackScreen() {
   const [signed, setSigned] = useState(true);
   const [note, setNote] = useState<string | undefined>(undefined);
   const [sending, setSending] = useState(false);
+  // Whether a send is out, read at the press itself.
+  const out = useRef(false);
   // How many notes went, by which the field is drawn afresh once the words it held were sent.
   const [sends, setSends] = useState(0);
   const feedbackPictures = useAttachedPictures(setNote, undefined, FEEDBACK_PICTURES);
@@ -133,7 +132,15 @@ export default function FeedbackScreen() {
   });
 
   const send = () => {
-    if (sending || pictures.reading || message.trim() === "") return;
+    // Note that a second press before the first one's render is turned away by the ref, which state would not yet say.
+    if (out.current || pictures.reading || message.trim() === "") return;
+
+    if (message.trim().length > FEEDBACK_LIMITS.MESSAGE_MAX_LENGTH) {
+      setNote(FEEDBACK_WORDS.TOO_LONG);
+      buzz(BUZZ.WARNING);
+
+      return;
+    }
 
     if (pictures.refusal !== undefined) {
       setNote(pictures.refusal);
@@ -145,6 +152,7 @@ export default function FeedbackScreen() {
     const draft = { message, images: screenshotsOf(pictures), signed };
     const sent = new Set(pictures.attached.map((picture) => picture.id));
     const detach = pictures.detach;
+    out.current = true;
     setSending(true);
     setNote(undefined);
 
@@ -159,6 +167,7 @@ export default function FeedbackScreen() {
         went: BUZZ.SUCCESS,
       },
     ).then((went) => {
+      out.current = false;
       setSending(false);
 
       if (!went) return;
@@ -213,7 +222,7 @@ export default function FeedbackScreen() {
         onDismiss={kept.stay}
       />
       <Screen>
-        <ScopePicker label={KIND_LABEL} scopes={scopes}>
+        <ScopePicker label={FEEDBACK_WORDS.KIND} scopes={scopes}>
           <SettingsForm>
             <ListSection footer={note}>
               {/* Note that each kind's field stands apart, so a change of kind shows that kind's own words, and is drawn afresh once its words were sent. */}
@@ -221,6 +230,7 @@ export default function FeedbackScreen() {
                 <WordsField
                   key={kind}
                   placeholder={FEEDBACK_COPY[kind].placeholder}
+                  label={FEEDBACK_COPY[kind].field}
                   initialWords={message}
                   onWords={(typed) => setWords((held) => ({ ...held, [kind]: typed }))}
                   autoFocus
