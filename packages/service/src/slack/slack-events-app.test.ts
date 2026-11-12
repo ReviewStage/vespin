@@ -66,8 +66,8 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * thread is posted on that thread as theirs, bringing its archived agent back as a press
  * in the DM does, and starts no agent; a press of an ask the agent's archive withdrew
  * answers nothing; and a
- * direct message sharing an image and no words starts an agent handed the
- * image.
+ * direct message sharing images and a PDF and no words starts an agent
+ * handed them.
  *
  * Synthetic accounts, workspaces, tokens, and Slack ids throughout.
  */
@@ -115,7 +115,10 @@ const PNG = Buffer.from(
   "base64",
 );
 
-/** A Slack whose every private file is the PNG, writing down each address read. */
+/** A PDF's opening, as a member shares a document. */
+const PDF = Buffer.from("%PDF-1.7\n");
+
+/** A Slack whose every private file is the PNG, or the PDF where its address names one, writing down each address read. */
 function fakeFiles(read: string[]): SlackFileTransfer {
   return {
     send: () => Effect.void,
@@ -123,7 +126,7 @@ function fakeFiles(read: string[]): SlackFileTransfer {
       Effect.sync(() => {
         read.push(url);
 
-        return new Uint8Array(PNG);
+        return new Uint8Array(url.endsWith(".pdf") ? PDF : PNG);
       }),
   };
 }
@@ -907,7 +910,7 @@ it.layer(SUITE)("our Slack route", (it) => {
     },
   );
   it.effect(
-    "a direct message sharing images and no words starts an agent handed them, a HEIC one as Slack's thumbnail, and leaves the PDF beside them out",
+    "a direct message sharing images and a PDF and no words starts an agent handed them, a HEIC one as Slack's thumbnail",
     () => {
       const calls: SlackCall[] = [];
       const read: string[] = [];
@@ -936,6 +939,7 @@ it.layer(SUITE)("our Slack route", (it) => {
         assert.deepEqual(read, [
           "https://files.slack.com/files-pri/T0001-F0001/download/screen.png",
           "https://files.slack.com/files-tmb/T0001-F0002/mac_720.png",
+          "https://files.slack.com/files-pri/T0001-F0001/download/notes.pdf",
         ]);
 
         const [first] = yield* (yield* Database)
@@ -952,6 +956,7 @@ it.layer(SUITE)("our Slack route", (it) => {
         assert.deepEqual(files, [
           { filename: "screen.png", mediaType: "image/png" },
           { filename: "mac.heic", mediaType: "image/png" },
+          { filename: "notes.pdf", mediaType: "application/pdf" },
         ]);
       });
     },
