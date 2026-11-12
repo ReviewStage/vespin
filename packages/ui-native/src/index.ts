@@ -244,6 +244,7 @@ export {
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
+  withSending,
 } from "./transcript-model.js";
 
 export {

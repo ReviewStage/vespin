@@ -1,5 +1,6 @@
 import { type AgentBoot, bootHolds } from "@repo/features/agent-boot";
 import type { AgentQueue } from "@repo/features/agent-queue-wire";
+import type { SendingMessage } from "@repo/features/agent-view";
 import {
   type AgentMessagesAnswerView,
   type AgentMessagesParams,
@@ -124,6 +125,8 @@ export interface AgentTranscriptControl {
   subagents: ReadonlyMap<string, AgentSubagentStanding>;
   /** The messages queued behind the agent's turn and the queue's pause, as the last page said; none while none is queued, and on a worker's. */
   queue: AgentQueue | undefined;
+  /** The member's messages on their way and those the service refused, as the host draws them until each one's row lands; none while none is, and on a worker's. */
+  sending: readonly SendingMessage[];
   /** The agent's first launch while it stands, as the last page said: its machine booting, its setup scripts running, its first message going, or the boot failed; none once its first turn settled, and on a worker's. */
   boot: AgentBoot | undefined;
   /** Where the launch of a failed local agent its host settled unstarted stopped, as the last page said; nothing for any other failure. */
@@ -141,6 +144,9 @@ export interface AgentTranscriptControl {
 
 /** No messages, for a transcript not read yet. */
 const NO_MESSAGES: readonly AgentTranscriptMessage[] = [];
+
+/** No message on its way, as a transcript stands before the member sends one. */
+const NO_SENDING: readonly SendingMessage[] = [];
 
 /**
  * One hold, as it is timed: when it was taken, the pages the transcript had
@@ -349,6 +355,7 @@ export function useAgentTranscript(input: {
     delegations,
     subagents,
     queue: word?.queue,
+    sending: held?.sending ?? NO_SENDING,
     boot: word?.boot,
     // Note that the page's one launch word is read only once the agent failed, as where its start stopped, so a launch's steps never reach the working line.
     launchStopped:

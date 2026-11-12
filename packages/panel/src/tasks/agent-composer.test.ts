@@ -34,12 +34,16 @@ import {
 } from "../testing/composer.js";
 import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { AgentComposer } from "./agent-composer.js";
 import { type RepositoryRemedyDoors, RepositoryRemedyProvider } from "./repository-remedy.js";
 import type { SkillSource } from "./skill-picker.js";
 import { type MessageSender, useAgentComposer } from "./use-agent-composer.js";
 import type { AgentModelControl } from "./use-agent-model.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * The agent's message box as the developer works it, on the editor bundle's
@@ -119,10 +123,12 @@ function Box({
   messages?: readonly AgentTranscriptMessage[];
 }): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages,
-    send: sender,
+    send: outboxed(sender),
   });
 
   return createElement(
@@ -151,7 +157,7 @@ async function mounted(
 ) {
   const sent: { text: string; clientKey: string }[] = [];
 
-  const sender: MessageSender = (_agentId, text, clientKey) => {
+  const sender: MessageSender = (_agentId, { text, clientKey }) => {
     sent.push({ text, clientKey });
 
     return answer();
@@ -321,29 +327,6 @@ async function answeredInTurn() {
     },
   };
 }
-
-test("a message sent while one is out goes once the one before it answers, so the agent hears them in order", async () => {
-  const box = await answeredInTurn();
-  typeInComposer(box.container, "First");
-  pressInComposer(box.container, "Enter");
-  await settle();
-  typeInComposer(box.container, "Second");
-  pressInComposer(box.container, "Enter");
-  await settle();
-  assert.equal(box.shown(), "", "both left the box at once");
-  assert.deepEqual(
-    box.sent.map((each) => each.text),
-    ["First"],
-    "the second waits for the first's answer",
-  );
-
-  await box.answer(0, TAKEN);
-  assert.deepEqual(
-    box.sent.map((each) => each.text),
-    ["First", "Second"],
-  );
-  assert.notEqual(box.sent[0]?.clientKey, box.sent[1]?.clientKey);
-});
 
 test("a message sent with Send hands the caret to the box as it opens again", async () => {
   const box = await answeredLater();
@@ -798,7 +781,7 @@ async function mountedRefusedForMove() {
   const sent: { text: string; clientKey: string }[] = [];
   const moves: { resolve: (moved: boolean) => void }[] = [];
 
-  const sender: MessageSender = (_agentId, text, clientKey) => {
+  const sender: MessageSender = (_agentId, { text, clientKey }) => {
     sent.push({ text, clientKey });
 
     return Promise.resolve(
@@ -1000,7 +983,7 @@ test("a message refused for want of a connected credential is reported as the se
   assert.equal(issues, 0);
 });
 
-test("messages still waiting to go as the agent refuses one for good are all kept for Continue, in the order sent", async () => {
+test("every message refused as the agent ends for good is kept for Continue, in the order sent", async () => {
   const box = await answeredInTurn();
   typeInComposer(box.container, "Fix tests");
   pressInComposer(box.container, "Enter");
@@ -1010,11 +993,7 @@ test("messages still waiting to go as the agent refuses one for good are all kep
   await settle();
 
   await box.answer(0, { failure: AGENT_CALL_FAILURE.AGENT_RETIRED });
-  assert.deepEqual(
-    box.sent.map((each) => each.text),
-    ["Fix tests"],
-    "the one behind it is not sent",
-  );
+  await box.answer(1, { failure: AGENT_CALL_FAILURE.AGENT_RETIRED });
   assert.equal(box.container.querySelector("output")?.dataset.unsent, "Fix tests\n\nUpdate docs");
 });
 
@@ -1042,10 +1021,12 @@ test("while the agent's turn is starting, its status not yet running, a box that
   /** The box while a turn starts: the tab says it works, as a line the box sent still on its way does, while the agent's status still reads the turn before. */
   function Starting(): ReactNode {
     const composer = useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
       agentId: "agent-1",
       taskId: "plan-1",
       messages: [],
-      send: () => new Promise(ignore),
+      send: outboxed(() => new Promise(ignore)),
     });
 
     return createElement(AgentComposer, {
@@ -1082,14 +1063,16 @@ test("while the agent's turn runs, a touch held on Send sends the other way: a b
   /** The box while a turn runs, Enter steering, each way a message leaves recorded. */
   function Running(): ReactNode {
     const composer = useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
       agentId: "agent-1",
       taskId: "plan-1",
       messages: [],
-      send: (_agentId, text) => {
+      send: outboxed((_agentId, { text }) => {
         done.push(`sent ${text}`);
 
         return new Promise(ignore);
-      },
+      }),
     });
 
     return createElement(AgentComposer, {

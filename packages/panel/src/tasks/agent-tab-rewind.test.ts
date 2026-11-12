@@ -201,7 +201,16 @@ async function drawnTab(
 
       return Promise.resolve(REWOUND);
     },
-    onMessage: (_agentId, text) => {
+    // The host takes the agent back before a line sent in another's place, then sends it.
+    onMessage: (_agentId, { text, rewinds }) => {
+      if (rewinds !== undefined) {
+        calls.push(
+          rewinds.restoreFiles === true
+            ? `rewind:${rewinds.messageId}:files`
+            : `rewind:${rewinds.messageId}`,
+        );
+      }
+
       calls.push(`send:${text}`);
 
       // A send held never answers, so its line stays sent and not yet read back.

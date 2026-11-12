@@ -59,6 +59,7 @@ import {
   agentTranscriptOlderParamsSchema,
   agentTurnChangesAnswerViewSchema,
   agentTurnChangesParamsSchema,
+  agentUnsendParamsSchema,
   agentWarmAnswerViewSchema,
   agentWorkspaceListParamsSchema,
   chaptersProviderAnswerViewSchema,
@@ -322,6 +323,14 @@ export const AGENT_ACTS = declaredActs({
     panelOnly: true,
     door: ACT.REMOTE_WORK,
     unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_UNSEND: hostAct({
+    input: agentUnsendParamsSchema,
+    output: EffectSchema.Void,
+    refusal: "Could not let the message go on this system.",
+    panelOnly: true,
+    door: ACT.LOCAL_WRITE,
+    unanswered: undefined,
   }),
   AGENTS_WARM: hostAct({
     input: agentStopParamsSchema,

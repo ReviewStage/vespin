@@ -33,6 +33,7 @@ import {
 import { GATEWAY_METHOD } from "@repo/gateway";
 import { entityPool } from "@repo/sync";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
+import { sentLineId } from "@repo/wire/host-ids";
 import { Deferred, Duration, Effect, Exit, Fiber, Predicate, Scope, SubscriptionRef } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppTranscript } from "./app-state.js";
@@ -790,6 +791,140 @@ it.effect(
       live.transcript.set({ queueRevision: [{ revision: 3 }] });
       yield* nextPoll;
       assert.deepEqual(queuedTexts(held), ["Run the tests, then open the pull request"]);
+    }),
+);
+
+/** The key a message sent from a window goes under. */
+const SENT_KEY = "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
+
+/** A message sent to the agent, as the window asks it. */
+const SENT = { agentId: AGENT_ID, text: "Deploy to staging", clientKey: SENT_KEY };
+
+/** Where the message saying `text` stands in each transcript laid from the `from`th on: queued, sending, both, or neither. */
+function placesOf(
+  held: () => readonly (AppTranscript | undefined)[],
+  from: number,
+  text: string,
+): readonly string[] {
+  return held()
+    .slice(from)
+    .map((transcript) => {
+      const queued = transcript?.word?.queue?.messages.some((each) => each.text === text) === true;
+      const sending = transcript?.sending?.some((each) => each.text === text) === true;
+
+      return queued && sending ? "both" : queued ? "queued" : sending ? "sending" : "neither";
+    });
+}
+
+/** The places a message stood in, each once, in the order it stood in them. */
+function placesIn(places: readonly string[]): readonly string[] {
+  return places.filter((place, at) => places[at - 1] !== place);
+}
+
+it.effect(
+  "a message the service holds in the queue while the agent boots moves from the transcript into the queue in one draw, never in both nor in neither",
+  () =>
+    Effect.gen(function* () {
+      const { acts, held, answerMessage } = yield* queueFollowed();
+      const from = held().length;
+      const answered = yield* Deferred.make<void>();
+
+      const queued = {
+        id: "6b1e0c9d-2a3f-4b5c-8d7e-9f0a1b2c3d4e",
+        text: SENT.text,
+        queuedBy: "user-dana",
+        sendKey: SENT_KEY,
+      };
+
+      answerMessage(
+        {
+          agent: AGENT,
+          queued: { messages: [...queueOf("Run the tests", 1).messages, queued], revision: 2 },
+        },
+        Deferred.await(answered),
+      );
+
+      const sent = yield* Effect.forkChild(acts.AGENTS_MESSAGE(SENT));
+      yield* settled;
+      yield* Deferred.succeed(answered, undefined);
+      yield* Fiber.join(sent);
+      yield* settled;
+
+      assert.deepEqual(placesIn(placesOf(held, from, SENT.text)), ["sending", "queued"]);
+    }),
+);
+
+it.effect(
+  "a queued message steered moves out of the queue and into the transcript as the member's line in one draw, before the service answers",
+  () =>
+    Effect.gen(function* () {
+      const { acts, held, answerQueue } = yield* queueFollowed();
+      const from = held().length;
+      const answered = yield* Deferred.make<void>();
+      answerQueue({ queue: { messages: [], revision: 2 } }, Deferred.await(answered));
+
+      const steer = yield* Effect.forkChild(
+        acts.AGENTS_QUEUE({
+          agentId: AGENT_ID,
+          change: { change: QUEUE_CHANGE.STEER, messageId: QUEUED_ID },
+        }),
+      );
+
+      yield* settled;
+      assert.deepEqual(
+        held()
+          .at(-1)
+          ?.sending?.map((each) => each.id),
+        [sentLineId(QUEUED_ID)],
+        "it stands under the id its row lands under",
+      );
+
+      yield* Deferred.succeed(answered, undefined);
+      yield* Fiber.join(steer);
+      yield* settled;
+      assert.deepEqual(placesIn(placesOf(held, from, "Run the tests")), ["sending"]);
+    }),
+);
+
+it.effect(
+  "a message the service refused stands where it went, marked with why, until it is sent again under its key, which draws it on its way in its place, or let go",
+  () =>
+    Effect.gen(function* () {
+      const { acts, held, answerMessage } = yield* queueFollowed();
+      answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+      yield* acts.AGENTS_MESSAGE(SENT);
+      yield* settled;
+      const refused = () => held().at(-1)?.sending ?? [];
+      assert.deepEqual(
+        refused().map((each) => each.refused?.failure),
+        [AGENT_CALL_FAILURE.UNANSWERED],
+      );
+
+      // Sent again under its key, it stands once, on its way.
+      const from = held().length;
+      const answered = yield* Deferred.make<void>();
+      answerMessage({ agent: AGENT }, Deferred.await(answered));
+      const again = yield* Effect.forkChild(acts.AGENTS_MESSAGE(SENT));
+      yield* settled;
+      assert.deepEqual(
+        refused().map((each) => each.refused?.failure),
+        [undefined],
+      );
+      assert.ok(
+        held()
+          .slice(from)
+          .every((transcript) => transcript?.sending?.length === 1),
+        "the line never leaves the transcript, nor stands twice",
+      );
+
+      // Refused once more, and let go.
+      answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+      yield* Deferred.succeed(answered, undefined);
+      yield* Fiber.join(again);
+      yield* acts.AGENTS_MESSAGE(SENT);
+      yield* acts.AGENTS_UNSEND({ agentId: AGENT_ID, lineId: sentLineId(SENT_KEY) });
+      yield* settled;
+      assert.deepEqual(refused(), []);
     }),
 );
 

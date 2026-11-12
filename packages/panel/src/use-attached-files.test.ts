@@ -23,7 +23,11 @@ import {
   typeInComposer,
 } from "./testing/composer.js";
 import { testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "./testing/outbox.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * The agent's box takes files: a picture dropped on the card is held under
@@ -41,10 +45,12 @@ const ignore = () => undefined;
 /** The agent's box on its own control, whose sends never answer. */
 function AgentBox(): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
-    send: () => new Promise<AgentAgentAnswer>(ignore),
+    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
   });
 
   return createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined });
@@ -53,10 +59,12 @@ function AgentBox(): ReactNode {
 /** The agent's box while a turn runs, its Enter queueing, the queue taking its message as the queue does: out of the box. */
 function QueueingBox(): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
-    send: () => new Promise<AgentAgentAnswer>(ignore),
+    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
   });
 
   const queued = () => {
@@ -83,10 +91,12 @@ function QueueingBox(): ReactNode {
 /** The agent's box editing a queued message, whose Save the queue refuses, so its words stay standing. */
 function RefusedEditBox(): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
-    send: () => new Promise<AgentAgentAnswer>(ignore),
+    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
   });
 
   return createElement(AgentComposer, {
@@ -108,10 +118,12 @@ function RefusedEditBox(): ReactNode {
 /** The agent's box opening on a draft kept with a picture its words name, as a draft kept from before, or a message opened for editing. */
 function KeptDraftBox(): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
-    send: () => new Promise<AgentAgentAnswer>(ignore),
+    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
   });
 
   const [kept, setKept] = useState(false);

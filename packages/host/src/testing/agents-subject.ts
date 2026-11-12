@@ -11,6 +11,7 @@ import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
 import {
   AGENT_CALL_FAILURE,
   type AgentAgentAnswer,
+  type AgentMessageAnswerView,
   type AgentQueueAnswerView,
   type DevicePresenceAnswerView,
   type HostDoneAnswerView,
@@ -337,6 +338,9 @@ function fakeService() {
   let queueAnswer: AgentQueueAnswerView = { queue: { messages: [], revision: 1 } };
   /** What a change of an agent's queue waits on before the service answers it; nothing from the start. */
   let queueGate: Effect.Effect<void> = Effect.void;
+  // What a message sent answers once its gate lets it; none answers the agent as it stands.
+  let messageAnswer: AgentMessageAnswerView | undefined;
+  let messageSendGate: Effect.Effect<void> = Effect.void;
   /** What a forget answers, once its gate lets it; the memories left, with no transaction, from the start. */
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
@@ -595,14 +599,19 @@ function fakeService() {
         return { messages: SAID.messages, before: "3" };
       }),
     message: (agentId, request) =>
-      Effect.sync(() => {
-        const files = (request.attachments ?? []).map((file) => file.name).join(",");
-        asked.push(
-          `message:${agentId}:${request.clientKey}:${request.text}${files === "" ? "" : `:files ${files}`}`,
-        );
+      Effect.andThen(
+        Effect.suspend(() => messageSendGate),
+        Effect.sync((): AgentMessageAnswerView => {
+          const files = (request.attachments ?? []).map((file) => file.name).join(",");
+          asked.push(
+            `message:${agentId}:${request.clientKey}:${request.text}${files === "" ? "" : `:files ${files}`}`,
+          );
 
-        return sentTxid === undefined ? { agent: AGENT } : { agent: AGENT, txid: sentTxid };
-      }),
+          if (messageAnswer !== undefined) return messageAnswer;
+
+          return sentTxid === undefined ? { agent: AGENT } : { agent: AGENT, txid: sentTxid };
+        }),
+      ),
     choose: (agentId, choice) =>
       Effect.map(changeGate, () => {
         asked.push(`choose:${agentId}:${choice.model}:${choice.effort}`);
@@ -1049,6 +1058,11 @@ function fakeService() {
     holdMessages: (gate: Effect.Effect<void>) => {
       messageGate = gate;
     },
+    /** What a message sent to an agent answers from now on, once `gate` lets it. */
+    answerMessage: (answer: AgentMessageAnswerView, gate: Effect.Effect<void> = Effect.void) => {
+      messageAnswer = answer;
+      messageSendGate = gate;
+    },
     /** What a change of an agent's queue answers from now on, once `gate` lets it. */
     answerQueue: (answer: AgentQueueAnswerView, gate: Effect.Effect<void> = Effect.void) => {
       queueAnswer = answer;
@@ -1427,6 +1441,7 @@ export function subject(
       holdChanges: service.holdChanges,
       holdMessages: service.holdMessages,
       answerQueue: service.answerQueue,
+      answerMessage: service.answerMessage,
       sealScope: service.sealScope,
       sealAccount: service.sealAccount,
       sealItems: service.sealItems,

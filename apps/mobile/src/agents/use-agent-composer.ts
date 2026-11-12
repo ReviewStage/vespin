@@ -7,9 +7,13 @@
  * behind it (`AGENTS_QUEUE`'s `add`), as the panel's Enter does. The queue
  * rides on the agent's own transcript (`AppTranscript.word.queue`), which
  * the host draws each change over at once and takes back where the service
- * refused it. A send not yet answered stands over the field as Sending, and
- * one refused hands its words and pictures back to the field, the refusal
- * said over it in the panel's words, and the phone buzzes as a refusal does.
+ * refused it. A message on its way stands in the transcript as the member's
+ * own line, as the host draws it from the moment it is sent
+ * (`AppTranscript.sending`), and one queued in the queue over the field, so
+ * the phone draws the one record every window draws. One refused hands its
+ * words and pictures back to the field, the refusal said over it in the
+ * panel's words, its line let go (`AGENTS_UNSEND`), and the phone buzzes as
+ * a refusal does.
  * Stop is offered while the agent may still write (`agentStillWriting`),
  * starting or awaiting its turn included, as the panel offers it. A `/`
  * offers the skills of the agent's task's repository (`use-skill-offer.ts`).
@@ -37,6 +41,7 @@ import {
 } from "@repo/host/app-state-reads";
 import { AGENT_ENTER } from "@repo/settings";
 import { type AttachedPicture, BUZZ, buzz, type QueuedLine } from "@repo/ui-native";
+import { sentLineId } from "@repo/wire/host-ids";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
 import { useEffect, useState } from "react";
@@ -49,8 +54,8 @@ import { useWrite } from "../use-write.js";
 /** What the field says before anything is typed, as the panel's box says it to a started agent. */
 const PLACEHOLDER = "Send a follow-up";
 
-/** A send out on the act port, not yet answered: what it carries, so a refusal hands it back. */
-interface Sending {
+/** A send out on the act port: what it carries, so a refusal hands it back. */
+interface Sent {
   readonly id: string;
   readonly words: string;
   readonly pictures: readonly HeldPicture[];
@@ -118,7 +123,6 @@ export function useAgentComposer(
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const [words, setWords] = useState("");
-  const [sending, setSending] = useState<readonly Sending[]>([]);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const [stopping, setStopping] = useState(false);
@@ -140,15 +144,10 @@ export function useAgentComposer(
   }, [writing]);
 
   // A send refused: its words and pictures back in the field, ahead of anything typed since, and the refusal said.
-  const handBack = (sent: Sending, refusal: string) => {
-    setSending((out) => out.filter(({ id }) => id !== sent.id));
+  const handBack = (sent: Sent, refusal: string) => {
     setWords((typed) => (typed.trim() === "" ? sent.words : `${sent.words}\n${typed}`));
     pictures.putBack(sent.pictures);
     setNote(refusal);
-  };
-
-  const settled = (sent: Sending) => {
-    setSending((out) => out.filter(({ id }) => id !== sent.id));
   };
 
   const send = () => {
@@ -166,8 +165,7 @@ export function useAgentComposer(
     const attachments =
       pictures.files === undefined ? undefined : { attachments: [...pictures.files] };
 
-    const sent: Sending = { id: randomUUID(), words: text, pictures: pictures.take() };
-    setSending((out) => [...out, sent]);
+    const sent: Sent = { id: randomUUID(), words: text, pictures: pictures.take() };
     setWords("");
     setNote(undefined);
 
@@ -184,8 +182,6 @@ export function useAgentComposer(
         refused: (answer) =>
           "failure" in answer ? queueRefusalWords(change.change, answer.failure) : undefined,
         unanswered: queueRefusalWords(change.change, AGENT_CALL_FAILURE.UNANSWERED),
-      }).then((went) => {
-        if (went) settled(sent);
       });
 
       return;
@@ -196,6 +192,8 @@ export function useAgentComposer(
       text,
       clientKey: sent.id,
       ...attachments,
+      steers: writing,
+      ...(planId === undefined ? undefined : { taskId: planId }),
     });
 
     onMessage?.(
@@ -206,10 +204,15 @@ export function useAgentComposer(
     );
     write(() => message, {
       ...saying,
+      // A refused message's words come back to the field, so its line in the host's record is let go.
+      inPlace: (words: string) => {
+        handBack(sent, words);
+        void acts[ACT_KIND.AGENTS_UNSEND]({ agentId, lineId: sentLineId(sent.id) }).catch(
+          () => undefined,
+        );
+      },
       refused: (answer) => ("failure" in answer ? messageFailureWords(answer.failure) : undefined),
       unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
-    }).then((went) => {
-      if (went) settled(sent);
     });
   };
 
@@ -251,21 +254,13 @@ export function useAgentComposer(
   const queue = transcript?.word?.queue;
   const held = queue?.messages ?? [];
 
-  const queued: readonly QueuedLine[] = [
-    ...held.map((message) => ({
-      id: message.id,
-      words: message.text,
-      sending: false,
-    })),
-    // A queued send the queue already carries stands once, as queued.
-    ...sending
-      .filter(({ id }) => !held.some((message) => message.id === id))
-      .map(({ id, words: sent, pictures: carried }) => ({
-        id,
-        words: sent === "" ? carried.map(({ file }) => file.name).join(", ") : sent,
-        sending: true,
-      })),
-  ];
+  const queued: readonly QueuedLine[] = held.map((message) => ({
+    id: message.id,
+    words:
+      message.text === ""
+        ? (message.files ?? []).map((file) => file.name).join(", ")
+        : message.text,
+  }));
 
   return {
     placeholder: PLACEHOLDER,

@@ -6,10 +6,14 @@ import { AGENT_STATUS, type AgentTranscriptMessage } from "@repo/features/agent-
 import { MESSAGE_ROLE } from "@repo/wire";
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, test } from "vitest";
+import { afterEach, beforeEach, test } from "vitest";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { RevertMessageAction, RewindProvider, rewindPoints } from "./rewind-action.js";
 import { type HeldComposer, useAgentComposer } from "./use-agent-composer.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * A coding agent taken back to an earlier point of its transcript, as its
@@ -105,14 +109,25 @@ async function box(rewound: AgentAgentAnswer, sent: AgentAgentAnswer = REWOUND) 
 
   function Box(): ReactNode {
     held.composer = useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
       agentId: "agent-1",
       taskId: "plan-1",
       messages: TRANSCRIPT,
-      send: (_agentId, text) => {
+      // The host takes the agent back first where the line goes in another's place, and sends nothing where that did not go.
+      send: outboxed((_agentId, { text, rewinds }) => {
+        if (rewinds !== undefined) {
+          calls.push(`rewind:${rewinds.messageId}`);
+
+          if ("failure" in rewound) return Promise.resolve(rewound);
+        }
+
         calls.push(`send:${text}`);
 
-        return Promise.resolve(sent);
-      },
+        return Promise.resolve(
+          rewinds !== undefined && "failure" in sent ? { ...sent, rewound: true as const } : sent,
+        );
+      }),
       rewind: (_agentId, messageId) => {
         calls.push(`rewind:${messageId}`);
 
@@ -151,7 +166,7 @@ const REWOUND: AgentAgentAnswer = {
   },
 };
 
-test("an edit's send takes the agent back to just before the line, then sends the new words, leaving the box as it was and rewinding no longer once both answered", async () => {
+test("an edit's send takes the agent back to just before the line, then sends the new words, leaving the box as it was and rewinding while its line is on its way", async () => {
   const { calls, composer } = await box(REWOUND);
 
   await act(async () => composer().setDraft("Also update the tests."));
@@ -161,11 +176,7 @@ test("an edit's send takes the agent back to just before the line, then sends th
   const pressedAt = composer().rewoundAt;
   await settle();
 
-  assert.equal(
-    meanwhile,
-    false,
-    "a rewind holds the tab only until its calls answer, the turn the send queued taking over",
-  );
+  assert.equal(meanwhile, true, "the tab rewinds while the edit's line is on its way");
   assert.ok(pressedAt !== undefined && Date.now() - pressedAt < 5_000, "it counts from the press");
   assert.deepEqual(calls, ["rewind:second-line", "send:second line, again"]);
   assert.equal(composer().editing, undefined);

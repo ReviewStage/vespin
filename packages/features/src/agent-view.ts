@@ -5,6 +5,7 @@ import {
   agentPermissionModeRequestSchema,
   approvalAnswerRequestSchema,
 } from "./agent-approval-wire.js";
+import type { QueuedMessage } from "./agent-queue-wire.js";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
@@ -697,10 +698,47 @@ export const agentAgentAnswerSchema = EffectSchema.Union([
     /** That a message sent waits in the agent's queue while its first launch boots, rather than in its transcript; absent for every other answer. */
     queued: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   }),
-  failedReaching,
+  EffectSchema.Struct({
+    ...failedReaching.fields,
+    /** That a message sent in place of a line took the agent back to just before it, but was not delivered, so sending it again only sends; absent for every other answer. */
+    rewound: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+  }),
 ]);
 
 export type AgentAgentAnswer = typeof agentAgentAnswerSchema.Type;
+
+/** Why the service did not take a message sent to an agent, as the window hears it. */
+export type AgentMessageRefusal = Extract<AgentAgentAnswer, { readonly failure: unknown }>;
+
+/**
+ * A message of the member's to an agent, as the host draws it from the
+ * moment it is sent until the service's row for it lands in the transcript,
+ * or, refused, until the member sends it again or lets it go: the one record
+ * every window draws the line from (`@repo/host`'s `agent-queue-writes.ts`),
+ * so a message stands in exactly one place, its queue or its transcript,
+ * through every step between.
+ */
+export interface SendingMessage {
+  /** The id the service writes its row under (`sentLineId` of its send key), which the line is drawn under, so the row lands in its place. */
+  readonly id: string;
+  /** The key it went under, which Retry sends it under again, so it reaches the agent once. */
+  readonly clientKey: string;
+  readonly text: string;
+  /** Its files, by the ids the window keeps their bytes under, as a queued message's are. */
+  readonly files?: QueuedMessage["files"];
+  /** Epoch milliseconds it was sent, drawn under it at once. */
+  readonly sentAt: number;
+  /** Whether a turn ran as it went, so it steers that turn rather than opening one. */
+  readonly steers: boolean;
+  /** The member's line it went in place of, by its message id, which the agent is taken back to just before first; none for a line sent after the rest. */
+  readonly rewinds?: string;
+  /** Whether the agent's files go back too as it is taken back. */
+  readonly restoresFiles?: boolean;
+  /** The agent's task, whose row is marked while it stands refused; none for an agent with no task. */
+  readonly taskId?: string;
+  /** Why the service did not take it, where it did not; none while it is on its way. */
+  readonly refused?: AgentMessageRefusal;
+}
 
 /** A message handed to an agent, as the host hears the service answer it: the agent, and the transaction that wrote its row where one did; or why there is none. */
 const agentMessageAnswerViewSchema = answerView(messagesContract.send);
@@ -835,11 +873,35 @@ export const agentTranscriptOlderAnswerSchema = EffectSchema.Union([
 
 export type AgentTranscriptOlderAnswer = typeof agentTranscriptOlderAnswerSchema.Type;
 
-/** Messaging an agent, as the window asks it: the agent, and the message request the service takes, its key the window's own. */
+/**
+ * Messaging an agent, as the window asks it: the agent, and the message
+ * request the service takes, its key the window's own; and what the host
+ * draws the message by while it is on its way, which the service is never
+ * sent: the ids the window keeps each file's bytes under, in order, whether
+ * a turn runs that it steers, the agent's task, which marks the task's row
+ * while the message stands refused, and the member's line it goes in place of,
+ * which the host takes the agent back to just before first, its files back
+ * too where `restoreFiles` says.
+ */
 export const agentMessageParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   ...agentMessageRequestSchema.fields,
+  pictures: EffectSchema.optionalKey(
+    EffectSchema.Array(wireUuidSchema).check(
+      EffectSchema.isMaxLength(AGENT_BOUNDS.MAX_ATTACHMENTS),
+    ),
+  ),
+  steers: EffectSchema.optionalKey(EffectSchema.Boolean),
+  taskId: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
+  rewinds: EffectSchema.optionalKey(
+    EffectSchema.Struct({
+      messageId: EffectSchema.NonEmptyString,
+      restoreFiles: EffectSchema.optionalKey(EffectSchema.Boolean),
+    }),
+  ),
 });
+
+export type AgentMessageParams = typeof agentMessageParamsSchema.Type;
 
 /** One agent's model and effort changed for its next step, as the window asks it: the agent and the choice. */
 export const agentChooseParamsSchema = EffectSchema.Struct({
@@ -910,6 +972,16 @@ export const agentRewindParamsSchema = EffectSchema.Struct({
   /** Whether the agent's files go back too, to the snapshot its runner took before the turn the line opened. */
   restoreFiles: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
+
+export type AgentRewindParams = typeof agentRewindParamsSchema.Type;
+
+/** A message of the member's the service refused, let go, as the window names it: the agent, and the id its line is drawn under. */
+export const agentUnsendParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  lineId: EffectSchema.NonEmptyString,
+});
+
+export type AgentUnsendParams = typeof agentUnsendParamsSchema.Type;
 
 /** One agent, as the window asks to read it whole by its id. */
 export const agentPageParamsSchema = EffectSchema.Struct({

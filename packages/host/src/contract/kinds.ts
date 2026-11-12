@@ -258,6 +258,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_BOOT: "agents.boot",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
+  /** A message of the member's the service refused let go, from its Delete or its Edit, which took its words back into the box (`agent-queue-writes.ts`). */
+  AGENTS_UNSEND: "agents.unsend",
   /** The ports listened on in an agent's cloud sandbox, asked of the service as the plug's menu stands open, on a host that forwards none. */
   AGENTS_PORTS: "agents.ports",
   /** The agent's port shared by public link now, asked of the service beside its ports. */
@@ -1018,6 +1020,7 @@ export const PORT_ACT_USE = {
   AGENTS_CLEAR: ACT_USE.WRITE,
   AGENTS_BOOT: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
+  AGENTS_UNSEND: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,
   AGENTS_PORT_SHARED: ACT_USE.FETCH,
   AGENTS_PORT_SHARE: ACT_USE.WRITE,

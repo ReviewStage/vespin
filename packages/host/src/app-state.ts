@@ -18,6 +18,7 @@ import {
   type InboxScopeKind,
   PULL_REQUEST_PART,
   type PullRequestPart,
+  type SendingMessage,
 } from "@repo/features/agent-view";
 import type {
   AgentMessagesAnswer,
@@ -323,6 +324,12 @@ export interface AppTranscript {
   /** How many readable pages were told, which an ask counts from to know a page landed after it. */
   readonly pages: number;
   readonly failure?: AppTranscriptFailure;
+  /**
+   * The messages on their way to the agent, oldest first, from the moment
+   * each was sent until its row lands in `messages`, as the host draws them
+   * (`agent-queue-writes.ts`); none on a worker's transcript.
+   */
+  readonly sending?: readonly SendingMessage[];
 }
 
 /**

@@ -100,11 +100,8 @@ export interface AgentQueueControl {
   /** The messages the queue lists now, by id. */
   readonly listed: ReadonlySet<string>;
   readonly paused: AgentQueue["paused"];
-  /** One change, drawn by the host at once and answered as the service answered it, asked once `after` settles where one is given. */
-  readonly change: (
-    change: AgentQueueChange,
-    after?: Promise<unknown>,
-  ) => Promise<AgentQueueAnswerView>;
+  /** One change, drawn by the host at once, sent after every write of the agent's asked before it, and answered as the service answered it. */
+  readonly change: (change: AgentQueueChange) => Promise<AgentQueueAnswerView>;
   /** The message at `from` put at `to`, as a drag drops it. */
   readonly move: (from: number, to: number) => void;
   /** One message deleted, answered as a confirm reads it. */
@@ -126,7 +123,7 @@ export function useAgentQueue(agentId: string, queue: AgentQueue | undefined): A
   const messages = queue?.messages ?? NO_MESSAGES;
   const listed = useMemo(() => new Set(messages.map((message) => message.id)), [messages]);
 
-  const change = (next: AgentQueueChange, after?: Promise<unknown>) => {
+  const change = (next: AgentQueueChange) => {
     const files = filesOf(next);
     const messageId = messageOf(next);
 
@@ -143,10 +140,8 @@ export function useAgentQueue(agentId: string, queue: AgentQueue | undefined): A
       ...(drawnAs.length === 0 ? undefined : { pictures: drawnAs }),
     };
 
-    // Note that a message queued behind the box's own sends is asked only once they settle, so it never reaches the service ahead of them.
-    const asked = after === undefined ? sendQueue(params) : after.then(() => sendQueue(params));
-
-    return asked
+    // Note that the host sends a change after every message the box sent before it, so it never reaches the service ahead of them.
+    return sendQueue(params)
       .catch(() => UNANSWERED)
       .then((answer) => {
         // Note that the files are kept under the service's ids as it answers, ahead of the page that carries its queue.
@@ -232,7 +227,7 @@ interface Stashed {
 export interface QueueEditing {
   /** The message the box is editing, by its id; none while none is. */
   readonly editing: string | undefined;
-  /** The box's message queued behind the turn, after every line the box sent before it, the box emptied for the next. */
+  /** The box's message queued behind the turn, the box emptied for the next. */
   readonly queue: () => void;
   /** The message's words and files taken into the box to edit, the box's own kept aside, and the message marked, which stops the hand-off at it. */
   readonly edit: (message: QueuedMessage) => void;
@@ -268,7 +263,7 @@ export interface QueueEditing {
 export function useQueueEditing(
   composer: Pick<
     HeldComposer,
-    "draft" | "setDraft" | "attachments" | "setAttachments" | "sendsSettled" | "updateHeld"
+    "draft" | "setDraft" | "attachments" | "setAttachments" | "updateHeld"
   >,
   queue: Pick<AgentQueueControl, "change" | "listed">,
   files: AgentPictureDoor,
@@ -331,15 +326,12 @@ export function useQueueEditing(
       refused.current = undefined;
       composer.setDraft("");
       composer.setAttachments(() => []);
-      void change(
-        {
-          change: QUEUE_CHANGE.ADD,
-          id,
-          text,
-          ...(attachments.length === 0 ? undefined : { attachments }),
-        },
-        composer.sendsSettled(),
-      ).then((answer) => {
+      void change({
+        change: QUEUE_CHANGE.ADD,
+        id,
+        text,
+        ...(attachments.length === 0 ? undefined : { attachments }),
+      }).then((answer) => {
         if (!("failure" in answer)) return;
         // A message the queue did not take comes back into the box ahead of what was written there meanwhile.
         putBackRefused({

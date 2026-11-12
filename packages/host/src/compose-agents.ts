@@ -66,7 +66,7 @@ import {
   ROW_GONE,
   type WriteDeclaration,
 } from "@repo/sync";
-import { Effect, FiberHandle, Option, RcMap, Schema, type Scope, Stream } from "effect";
+import { Clock, Effect, FiberHandle, Option, RcMap, Schema, type Scope, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import {
   type AccountGateDependencies,
@@ -84,7 +84,7 @@ import {
   chaptersProviderWritten,
   heldAccountPreferences,
 } from "./account-preferences-follow.js";
-import { type AgentQueues, agentQueues, type QueueWrite } from "./agent-queue-writes.js";
+import { type AgentQueues, agentQueues, type OutboxSends } from "./agent-queue-writes.js";
 import {
   type AppAccountPreferences,
   type AppHostRead,
@@ -773,8 +773,22 @@ function composed(
       ),
   );
 
+  /** How the agent's messages on their way reach the service: each write of the row goes through the one client. */
+  const outboxSends: OutboxSends = {
+    queue: (agentId, change) => asked(client.changeQueue(agentId, change)),
+    message: (agentId, request) => asked(client.message(agentId, request)),
+    rewind: (agentId, messageId, restoreFiles) =>
+      asked(client.rewind(agentId, messageId, restoreFiles)),
+  };
+
   /** A change of an agent's queue, drawn over its own transcript's queue at once and standing until a page carries it. */
-  const queued = queues.write((agentId, change) => asked(client.changeQueue(agentId, change)));
+  const queued = queues.queue(outboxSends);
+
+  /** A message sent, drawn on its way at once and standing until its row, or the queue the service holds it in, lands. */
+  const sent = queues.message(outboxSends);
+
+  /** A rewind, sent after every write of the agent's asked before it. */
+  const rewound = queues.rewind(outboxSends);
 
   /**
    * An agent deleted once its question was answered, drawn gone from the
@@ -1076,16 +1090,10 @@ function composed(
 
         return { landed: laid !== undefined };
       }),
-    AGENTS_MESSAGE: ({ agentId, ...request }) =>
-      Effect.map(asked(client.message(agentId, request)), (answer) =>
-        // Note that a send answers at once rather than once its row reaches the followed transcript,
-        // because the window draws the line under the row's id until that row lands, so no page from
-        // before the write can take it away, and the next send waits on this answer.
-        // A message the agent's first launch holds waits in its queue, which its next page carries.
-        "agent" in answer
-          ? { agent: answer.agent, ...(answer.queued === undefined ? undefined : { queued: true }) }
-          : answer,
-      ),
+    // Note that a send answers as the service does, while the line stands drawn on its way until its row lands.
+    AGENTS_MESSAGE: declaredWrite(dependencies.pool, sent, {
+      read: (read) => Effect.map(Clock.currentTimeMillis, (sentAt) => ({ ...read, sentAt })),
+    }),
     AGENTS_CHOOSE: declaredWrite(dependencies.pool, chosen),
     AGENTS_RENAME: declaredWrite(dependencies.pool, renamed),
     AGENTS_SERVERS: declaredWrite(dependencies.pool, switched),
@@ -1095,17 +1103,19 @@ function composed(
       asked(client.answerApproval(agentId, approvalId, request)),
     AGENTS_QUEUE: declaredWrite(dependencies.pool, queued, {
       read: (read) =>
-        Effect.sync((): QueueWrite => ({ ...read, queuedBy: dependencies.accountId() ?? "" })),
+        Effect.map(Clock.currentTimeMillis, (sentAt) =>
+          queues.queuedWrite({ ...read, queuedBy: dependencies.accountId() ?? "" }, sentAt),
+        ),
     }),
     AGENTS_ARCHIVE: declaredWrite(dependencies.pool, archived),
     AGENTS_PIN: declaredWrite(dependencies.pool, pinned),
     // Note that a repository added draws nothing on the agent's row, which lists no repositories, so it is asked and answered alone.
     AGENTS_STOP: ({ agentId }) => asked(client.stop(agentId)),
-    AGENTS_REWIND: ({ agentId, messageId, restoreFiles }) =>
-      asked(client.rewind(agentId, messageId, restoreFiles === true)),
+    AGENTS_REWIND: declaredWrite(dependencies.pool, rewound),
     AGENTS_CLEAR: ({ agentId }) => asked(client.clear(agentId)),
     AGENTS_BOOT: ({ agentId }) => asked(client.boot(agentId)),
     AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
+    AGENTS_UNSEND: (params) => queues.unsend(params),
     // Note that an agent's ports and its link are asked of the service on each act and held nowhere here, because the plug reads them again while its menu stands open.
     AGENTS_PORTS: ({ agentId }) => asked(dependencies.ports.list(agentId)),
     AGENTS_PORT_SHARED: ({ agentId }) => asked(dependencies.ports.shared(agentId)),

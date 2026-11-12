@@ -17,19 +17,16 @@ import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
-/** The panel's words for a queued message's acts and its sending. */
+/** The panel's words for a queued message's acts. */
 const WORDS = {
   STEER: "Steer",
   DELETE: "Delete",
-  SENDING: "Sending",
 } as const;
 
-/** One message waiting behind the turn: queued, which its starter may steer or delete, or on its way. */
+/** One message waiting behind the turn, which its starter may steer or delete. */
 export type QueuedLine = {
   readonly id: string;
   readonly words: string;
-  /** Whether it is on its way rather than waiting in the queue, so it offers nothing. */
-  readonly sending: boolean;
 };
 
 type QueuedLinesProps = {
@@ -103,7 +100,7 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
       {lines.map((line) => (
         <HStack key={line.id} spacing={SPACE.ROW} modifiers={[frame({ minHeight: PRESS_SIZE })]}>
           <Image
-            systemName={line.sending ? "arrow.up.circle" : "clock"}
+            systemName="clock"
             size={MARK_SIZE.GLYPH}
             color={colors.TEXT_MUTED}
             modifiers={[accessibilityHidden()]}
@@ -118,21 +115,11 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
           >
             {line.words}
           </Text>
-          {line.sending ? (
-            <Text
-              modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(colors.TEXT_MUTED)]}
-            >
-              {WORDS.SENDING}
-            </Text>
-          ) : (
-            <>
-              {onSteer === undefined ? null : (
-                <LineAct label={WORDS.STEER} onPress={() => onSteer(line.id)} />
-              )}
-              {onDelete === undefined ? null : (
-                <LineAct label={WORDS.DELETE} symbol="trash" onPress={() => onDelete(line.id)} />
-              )}
-            </>
+          {onSteer === undefined ? null : (
+            <LineAct label={WORDS.STEER} onPress={() => onSteer(line.id)} />
+          )}
+          {onDelete === undefined ? null : (
+            <LineAct label={WORDS.DELETE} symbol="trash" onPress={() => onDelete(line.id)} />
           )}
         </HStack>
       ))}

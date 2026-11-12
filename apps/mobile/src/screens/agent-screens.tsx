@@ -62,6 +62,7 @@ import {
   toggledAt,
   transcriptItems,
   useColors,
+  withSending,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
@@ -388,11 +389,13 @@ export function AgentScreen() {
   const transcript = held?.rows;
   const status = agent?.status ?? transcript?.word?.status;
   const messages = transcript?.messages;
+  const sending = transcript?.sending;
   const whole = useWholeParts(id);
 
+  // The member's messages on their way stand as their own lines at the end, as the host draws them.
   const items = useMemo(
     () =>
-      transcriptItems(messages ?? [], {
+      transcriptItems(withSending(messages ?? [], sending ?? []), {
         writing: status !== undefined && agentStillWriting(status),
         readerId,
         toggles,
@@ -400,7 +403,7 @@ export function AgentScreen() {
         pullRequests,
         wholePart: whole.read,
       }),
-    [messages, status, readerId, toggles, pullRequests, whole.read],
+    [messages, sending, status, readerId, toggles, pullRequests, whole.read],
   );
 
   // A call opened on an answer its page carried cut reads it whole.

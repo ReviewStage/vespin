@@ -41,6 +41,7 @@ import {
   shownPicturesOf,
 } from "@repo/features/agent-pictures-model";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
+import type { SendingMessage } from "@repo/features/agent-view";
 import {
   type AgentPullRequest,
   type AgentTranscriptMessage,
@@ -596,6 +597,33 @@ function rowItems(
 
     return [line, ...held];
   });
+}
+
+/**
+ * The transcript with the member's messages on their way at its end, each
+ * as their own line under the id its row lands under, so the row takes its
+ * place, as the host draws them (`AppTranscript.sending`); a message the
+ * service refused is the composer's to give back, and stands nowhere here.
+ */
+export function withSending(
+  messages: readonly AgentTranscriptMessage[],
+  sending: readonly SendingMessage[],
+): readonly AgentTranscriptMessage[] {
+  const going = sending.filter((message) => message.refused === undefined);
+
+  if (going.length === 0) return messages;
+
+  return [
+    ...messages,
+    ...going.map(
+      (message): AgentTranscriptMessage => ({
+        id: message.id,
+        role: MESSAGE_ROLE.USER,
+        parts: [{ type: AGENT_PART.TEXT, text: message.text }],
+        sentAt: message.sentAt,
+      }),
+    ),
+  ];
 }
 
 /**

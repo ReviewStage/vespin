@@ -15,10 +15,14 @@ import {
 } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { keyPressed, reportEventTiming } from "../testing/event-timing.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { onSideBundles, standInBundles } from "../testing/side-bundles.js";
 import { AgentComposer } from "./agent-composer.js";
 import { useAgentComposer } from "./use-agent-composer.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * A box drawn before the editor bundle has landed: its field stands inert at
@@ -49,10 +53,12 @@ async function settle(): Promise<void> {
 
 function Box(): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
-    send: () => new Promise(() => undefined),
+    send: outboxed(() => new Promise(() => undefined)),
   });
 
   return createElement(AgentComposer, { ...QUIET_COMPOSER, composer });
