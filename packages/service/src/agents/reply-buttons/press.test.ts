@@ -57,6 +57,7 @@ const openAccount = Effect.gen(function* () {
   const db = yield* Database;
   const id = `user-${randomUUID()}`;
   yield* db.insert(user).values({ id, name: "Ada Lovelace", email: `${id}@app.test` });
+
   return id;
 });
 
@@ -71,6 +72,7 @@ it.layer(SUITE)("a button in an agent's reply", (it) => {
         yield* joinWorkspace(task.workspaceId, teammate);
         const agentId = yield* openTaskAgent(owner, task.workspaceId, task.id);
         const reached = yield* openTaskAgent(owner, task.workspaceId, task.id);
+
         const buttonId = yield* makeReplyButton(
           agentId,
           "Wire up the invite email",
@@ -84,6 +86,7 @@ it.layer(SUITE)("a button in an agent's reply", (it) => {
         yield* experimentInTestWorkspace(owner, EXPERIMENT.REPLY_BUTTONS);
         assert.ok((yield* claimReplyButtonPress(buttonId, owner, NOW)) !== undefined);
         yield* settleReplyButtonPress(buttonId, owner, reached, NOW);
+
         const again = yield* pressReplyButton(
           writer,
           teammate,
@@ -92,6 +95,7 @@ it.layer(SUITE)("a button in an agent's reply", (it) => {
           { words: "Send the invite email." },
           noSummary,
         );
+
         assert.deepEqual(
           {
             by: again.pressed?.by,
@@ -111,12 +115,14 @@ it.layer(SUITE)("a button in an agent's reply", (it) => {
         const task = yield* startTask(owner, { name: "Digest", repository: "acme/relay" });
         const agentId = yield* openTaskAgent(owner, task.workspaceId, task.id);
         const target = yield* openTaskAgent(owner, task.workspaceId, task.id);
+
         const buttonId = yield* makeReplyButton(
           agentId,
           "Tell the digest agent",
           { kind: REPLY_BUTTON_ACTION.SEND, agentId: target, text: "Count invites apart." },
           NOW,
         );
+
         yield* experimentInTestWorkspace(owner, EXPERIMENT.REPLY_BUTTONS);
 
         const refused = yield* Effect.flip(
@@ -129,6 +135,7 @@ it.layer(SUITE)("a button in an agent's reply", (it) => {
             noSummary,
           ),
         );
+
         assert.equal(refused, HOSTED_REFUSAL.INVALID_REQUEST);
         assert.equal((yield* readReplyButtonView(owner, agentId, buttonId)).pressed, null);
       }),

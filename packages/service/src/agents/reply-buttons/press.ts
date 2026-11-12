@@ -58,6 +58,7 @@ const namedAgent = (userId: string, agentId: string | null) =>
   Effect.gen(function* () {
     if (agentId === null) return null;
     const agent = yield* hostedStoreOrUnavailable(readVisibleAgent(userId, agentId));
+
     return Option.match(agent, {
       onNone: () => null,
       onSome: (found: Agent) => ({ id: found.id, taskId: found.taskId, title: agentName(found) }),
@@ -68,12 +69,15 @@ const namedAgent = (userId: string, agentId: string | null) =>
 const viewOf = (userId: string, button: ReplyButton, made: Agent) =>
   Effect.gen(function* () {
     const { action } = button;
+
     const sendTo =
       action.kind === REPLY_BUTTON_ACTION.SEND ? yield* namedAgent(userId, action.agentId) : null;
+
     const by =
       button.pressedBy === null
         ? new Map<string, string>()
         : yield* hostedStoreOrUnavailable(readAccountNames([button.pressedBy]));
+
     const pressed =
       button.pressedAt === null
         ? null
@@ -83,6 +87,7 @@ const viewOf = (userId: string, button: ReplyButton, made: Agent) =>
             byReader: button.pressedBy === userId,
             agent: yield* namedAgent(userId, button.reachedAgentId),
           };
+
     const view: ReplyButtonView = {
       id: button.id,
       agentId: button.agentId,
@@ -92,6 +97,7 @@ const viewOf = (userId: string, button: ReplyButton, made: Agent) =>
       sendTo,
       pressed,
     };
+
     return view;
   });
 
@@ -101,12 +107,15 @@ const reachedButton = (userId: string, agentId: string, buttonId: string) =>
     const { agent } = yield* reachedAgentById(userId, agentId);
     const id = yield* pathUuid(buttonId);
     const read = yield* hostedStoreOrUnavailable(readReplyButton(userId, id));
+
     if (Option.isNone(read) || read.value.agentId !== agent.id) {
       return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     }
+
     if (!(yield* experimentOnIn(read.value.organizationId, EXPERIMENT.REPLY_BUTTONS))) {
       return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
     }
+
     return { button: read.value, agent };
   });
 
@@ -117,15 +126,18 @@ export const readReplyButtonView = /* @__PURE__ */ Effect.fnUntraced(function* (
   buttonId: string,
 ) {
   const { button, agent } = yield* reachedButton(userId, agentId, buttonId);
+
   return yield* viewOf(userId, button, agent);
 });
 
 /** Whether what the member sent fits what the suggestion sets off: a send names no title, branch, or model, and a model goes with its effort. */
 function sentFits(button: ReplyButton, sent: ReplyButtonSent): boolean {
   const { title, branch, model, effort } = sent;
+
   if (button.action.kind === REPLY_BUTTON_ACTION.SEND) {
     return [title, branch, model, effort].every((each) => each === undefined);
   }
+
   return (model === undefined) === (effort === undefined);
 }
 
@@ -154,6 +166,7 @@ const runPressed = (
     const words = suggestionLine(mention, sent.words);
     const suggestedBy: SuggestedBy = { agent_id: made.id, name, button_id: button.id };
     const files = sent.attachments === undefined ? undefined : { attachments: sent.attachments };
+
     if (action.kind === REPLY_BUTTON_ACTION.SEND) {
       const { agent } = yield* reachedAgentById(userId, action.agentId);
       yield* steerMemberWords(writer, userId, agent, {
@@ -162,8 +175,10 @@ const runPressed = (
         ...files,
         metadata: { channel: MESSAGE_CHANNEL.SUGGESTION, suggested_by: suggestedBy },
       });
+
       return agent.id;
     }
+
     const started = yield* startRequestedAgent(
       routedSessions<TypedTurn>(userId),
       userId,
@@ -183,6 +198,7 @@ const runPressed = (
       undefined,
       suggestedBy,
     );
+
     return started.agent.id;
   });
 
@@ -203,19 +219,24 @@ export const pressReplyButton = /* @__PURE__ */ Effect.fnUntraced(function* (
   summaryModel: SummaryModelOf,
 ) {
   const { button, agent } = yield* reachedButton(userId, agentId, buttonId);
+
   if (!sentFits(button, sent)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   const now = yield* DateTime.nowAsDate;
   const claimed = yield* hostedStoreOrUnavailable(claimReplyButtonPress(button.id, userId, now));
+
   if (claimed !== undefined) {
     const reached = yield* runPressed(writer, userId, button, agent, sent, summaryModel).pipe(
       Effect.tapError(() =>
         hostedStoreOrUnavailable(releaseReplyButtonPress(button.id, claimed)).pipe(Effect.ignore),
       ),
     );
+
     yield* hostedStoreOrUnavailable(settleReplyButtonPress(button.id, userId, reached, now));
   }
+
   // Note that the button is read again either way, since a press unclaimed is another's that landed or runs since the first read.
   const settled = yield* hostedStoreOrUnavailable(readReplyButton(userId, button.id));
+
   return yield* viewOf(
     userId,
     Option.getOrElse(settled, () => button),

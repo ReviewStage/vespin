@@ -125,8 +125,8 @@ import { continuedByOf, standingsOf, stoppedAgent, summaryOf } from "./coder-hos
 import { startedFromBefore } from "./coder-host/takeover.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { turnChangesOf } from "./coder-host/turn-changes.js";
-import { ranRunAction, stoppedRunAction } from "./run-actions.js";
 import { pressReplyButton, readReplyButtonView } from "./reply-buttons/press.js";
+import { ranRunAction, stoppedRunAction } from "./run-actions.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
 import { AgentSandbox } from "./terminal/agent-sandbox.js";

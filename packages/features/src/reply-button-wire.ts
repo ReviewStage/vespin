@@ -137,6 +137,7 @@ export function suggestionLine(mention: string, words: string): string {
 /** A suggestion line's words as the transcript shows them under its head: the member's alone, the lead left out. */
 export function suggestionWords(text: string): string {
   const end = text.indexOf(LEAD_END);
+
   return text.startsWith(`${SUGGESTION_LEAD} `) && end >= 0
     ? text.slice(end + LEAD_END.length)
     : text;
