@@ -355,9 +355,9 @@ const COMPOSER_CHIP = "fileChip";
 /** The file a message box's copied chip carried, by its marker's name and its data address: a picture's image carries it in its source, another file's chip beside its words. */
 function chipFile(element: HTMLElement) {
   const picture = element.tagName === "IMG";
-  const name = fileMarkers(picture ? (element.getAttribute("alt") ?? "") : element.textContent)[0]
-    ?.name;
+  const words = picture ? (element.getAttribute("alt") ?? "") : element.textContent;
   const address = element.getAttribute(picture ? "src" : "data-file");
+  const name = fileMarkers(words)[0]?.name;
   const file = copiedFileOf(address);
 
   return name === undefined || file === undefined
