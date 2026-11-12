@@ -1,6 +1,5 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
-import { Host } from "@expo/ui/swift-ui";
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
 import type { CallKind } from "@repo/features/turn-rows";
@@ -32,6 +31,7 @@ import { useDockRoom } from "./glass-bar.js";
 import { isLucideSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
+import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
 import { ToneGlyph } from "./marks.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
@@ -271,9 +271,9 @@ function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
   }
 
   return (
-    <Host style={styles.callGlyph}>
+    <InlineHost style={styles.callGlyph}>
       <ToneGlyph glyph={glyph} tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} hidden />
-    </Host>
+    </InlineHost>
   );
 }
 
@@ -366,9 +366,9 @@ function CallRow({
       {held === undefined ? null : (
         <View style={styles.body}>
           {/* Note that the presses are SwiftUI's, hosted in the row at the height they draw. */}
-          <Host matchContents={{ vertical: true }}>
+          <InlineHost matchContents={{ vertical: true }}>
             <HeldCallBody held={held} />
-          </Host>
+          </InlineHost>
         </View>
       )}
       {item.open ? (
@@ -599,7 +599,7 @@ function TranscriptRow({
       return (
         <View style={[styles.row, inset(item.depth), { paddingVertical: SPACE.TIGHT + 2 }]}>
           {/* Note that the card is SwiftUI's, hosted in the row at the height it draws. */}
-          <Host matchContents={{ vertical: true }}>
+          <InlineHost matchContents={{ vertical: true }}>
             <PullRequestCard
               state={item.state}
               number={item.number}
@@ -616,7 +616,7 @@ function TranscriptRow({
                   : () => drawing.onOpenPullRequest?.(item)
               }
             />
-          </Host>
+          </InlineHost>
         </View>
       );
     default: {
@@ -793,9 +793,9 @@ function OlderRow({ older }: { readonly older: OlderPages }) {
       <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
         {OLDER_WORDS.FAILED}
       </Text>
-      <Host matchContents>
+      <InlineHost matchContents>
         <Button label={OLDER_WORDS.RETRY} look={BUTTON_LOOK.BORDERED} onPress={older.onRetry} />
-      </Host>
+      </InlineHost>
     </View>
   );
 }
@@ -893,9 +893,9 @@ export function AgentTranscript({
         // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app.
         ListEmptyComponent={
           empty === undefined ? undefined : (
-            <Host matchContents={{ vertical: true }}>
+            <InlineHost matchContents={{ vertical: true }}>
               <EmptyState {...empty} />
-            </Host>
+            </InlineHost>
           )
         }
         ListFooterComponent={<View style={{ height: foot }} />}
