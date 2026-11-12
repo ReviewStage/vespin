@@ -1,9 +1,19 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "116feed5-4900-4b68-8e7c-0dc7e863cd5e",
-  "prevIds": ["b5f65010-d564-4bcf-97ac-e3addd9a9b6c"],
+  "id": "27adb115-b997-4ade-9430-debbd66d49ec",
+  "prevIds": [
+    "368bde3f-1327-4e4c-aedb-579c08a4c1c7",
+    "6e399965-bc27-49e4-9a88-31a697bc82fb",
+    "be3bfbac-51c0-4044-935d-eb521be34c94"
+  ],
   "ddl": [
+    {
+      "isRlsEnabled": false,
+      "name": "account_allowed_command",
+      "entityType": "tables",
+      "schema": "public"
+    },
     {
       "isRlsEnabled": false,
       "name": "account_chatgpt_device_login",
@@ -462,6 +472,12 @@
     },
     {
       "isRlsEnabled": false,
+      "name": "reply_button",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
       "name": "repository_pin",
       "entityType": "tables",
       "schema": "public"
@@ -564,6 +580,12 @@
     },
     {
       "isRlsEnabled": false,
+      "name": "task_follower",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
       "name": "task_page_version",
       "entityType": "tables",
       "schema": "public"
@@ -651,6 +673,71 @@
       "name": "write_receipt",
       "entityType": "tables",
       "schema": "public"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 1,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "prefix",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "agent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_allowed_command"
     },
     {
       "type": "text",
@@ -999,6 +1086,19 @@
       "generated": null,
       "identity": null,
       "name": "usage_asked_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_provider_key"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "reset_credits",
       "entityType": "columns",
       "schema": "public",
       "table": "account_provider_key"
@@ -5713,6 +5813,19 @@
       "table": "automation"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "preset",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "automation"
+    },
+    {
       "type": "timestamp with time zone",
       "typeSchema": null,
       "notNull": true,
@@ -6818,14 +6931,14 @@
       "table": "device"
     },
     {
-      "type": "boolean",
+      "type": "text",
       "typeSchema": null,
       "notNull": false,
       "dimensions": 0,
       "default": null,
       "generated": null,
       "identity": null,
-      "name": "commands_allowed",
+      "name": "command_mode",
       "entityType": "columns",
       "schema": "public",
       "table": "device"
@@ -6904,6 +7017,19 @@
       "generated": null,
       "identity": null,
       "name": "last_seen_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "device"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "away_at",
       "entityType": "columns",
       "schema": "public",
       "table": "device"
@@ -10376,6 +10502,136 @@
       "table": "push_device"
     },
     {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "agent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "label",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "action",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "pressed_by",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "pressed_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "press_attempt",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "landed_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "reached_agent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
       "type": "text",
       "typeSchema": null,
       "notNull": true,
@@ -11980,6 +12236,19 @@
       "table": "turns"
     },
     {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "files",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "turns"
+    },
+    {
       "type": "bigint",
       "typeSchema": null,
       "notNull": true,
@@ -12446,6 +12715,58 @@
       "entityType": "columns",
       "schema": "public",
       "table": "task_block"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "task_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "task_follower"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "task_follower"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "machines",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "task_follower"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "now()",
+      "generated": null,
+      "identity": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "task_follower"
     },
     {
       "type": "uuid",
@@ -13210,6 +13531,45 @@
       "generated": null,
       "identity": null,
       "name": "command",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "type": "jsonb",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "icon",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "type": "boolean",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "false",
+      "generated": null,
+      "identity": null,
+      "name": "is_default",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "'both'",
+      "generated": null,
+      "identity": null,
+      "name": "available_in",
       "entityType": "columns",
       "schema": "public",
       "table": "workspace_repository_run_action"
@@ -16370,6 +16730,27 @@
           "asc": true,
           "nullsFirst": false,
           "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "reply_button_agent",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "agent_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
         },
         {
           "value": "seq",
@@ -16974,6 +17355,27 @@
       "nameExplicit": true,
       "columns": [
         {
+          "value": "user_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "task_follower_user",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "task_follower"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
           "value": "task_id",
           "isExpression": false,
           "asc": true,
@@ -17238,6 +17640,34 @@
           "asc": true,
           "nullsFirst": false,
           "opclass": null
+        }
+      ],
+      "isUnique": true,
+      "where": "\"is_default\"",
+      "with": "",
+      "method": "btree",
+      "concurrently": false,
+      "name": "workspace_repository_run_action_repository_default",
+      "entityType": "indexes",
+      "schema": "public",
+      "table": "workspace_repository_run_action"
+    },
+    {
+      "nameExplicit": true,
+      "columns": [
+        {
+          "value": "organization_id",
+          "isExpression": false,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
+        },
+        {
+          "value": "lower(\"repository\")",
+          "isExpression": true,
+          "asc": true,
+          "nullsFirst": false,
+          "opclass": null
         },
         {
           "value": "kind",
@@ -17284,6 +17714,32 @@
       "entityType": "indexes",
       "schema": "public",
       "table": "workspace_token_repository"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["user_id"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "account_allowed_command_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["agent_id"],
+      "schemaTo": "public",
+      "tableTo": "agent",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "account_allowed_command_agent_id_agent_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "account_allowed_command"
     },
     {
       "nameExplicit": false,
@@ -19146,6 +19602,45 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["agent_id"],
+      "schemaTo": "public",
+      "tableTo": "agent",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "reply_button_agent_id_agent_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["pressed_by"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "reply_button_pressed_by_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["reached_agent_id"],
+      "schemaTo": "public",
+      "tableTo": "agent",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "SET NULL",
+      "name": "reply_button_reached_agent_id_agent_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "reply_button"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["user_id"],
       "schemaTo": "public",
       "tableTo": "user",
@@ -19572,6 +20067,32 @@
       "entityType": "fks",
       "schema": "public",
       "table": "task_block"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["task_id"],
+      "schemaTo": "public",
+      "tableTo": "task",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "task_follower_task_id_task_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "task_follower"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["user_id"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "task_follower_user_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "task_follower"
     },
     {
       "nameExplicit": false,
@@ -20030,6 +20551,14 @@
       "table": "task_block"
     },
     {
+      "columns": ["task_id", "user_id"],
+      "nameExplicit": false,
+      "name": "task_follower_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "task_follower"
+    },
+    {
       "columns": ["user_id", "task_id"],
       "nameExplicit": false,
       "name": "plan_pin_pkey",
@@ -20076,6 +20605,14 @@
       "entityType": "pks",
       "schema": "public",
       "table": "write_receipt"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "account_allowed_command_pkey",
+      "schema": "public",
+      "table": "account_allowed_command",
+      "entityType": "pks"
     },
     {
       "columns": ["login_id"],
@@ -20600,6 +21137,14 @@
     {
       "columns": ["id"],
       "nameExplicit": false,
+      "name": "reply_button_pkey",
+      "schema": "public",
+      "table": "reply_button",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
       "name": "runner_line_pkey",
       "schema": "public",
       "table": "runner_line",
@@ -20743,6 +21288,15 @@
     },
     {
       "nameExplicit": true,
+      "columns": ["user_id", "prefix"],
+      "nullsNotDistinct": false,
+      "name": "account_allowed_command_prefix",
+      "entityType": "uniques",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
+      "nameExplicit": true,
       "columns": ["user_id", "id"],
       "nullsNotDistinct": false,
       "name": "account_sound_user_id",
@@ -20877,6 +21431,13 @@
       "entityType": "uniques"
     },
     {
+      "value": "cardinality(\"prefix\") between 1 and 8",
+      "name": "account_allowed_command_prefix_bound",
+      "entityType": "checks",
+      "schema": "public",
+      "table": "account_allowed_command"
+    },
+    {
       "value": "octet_length(\"bytes\") <= 3300000 and octet_length(\"bytes\") = \"byte_count\"",
       "name": "account_sound_bytes_bound",
       "entityType": "checks",
@@ -20905,7 +21466,7 @@
       "table": "attachment"
     },
     {
-      "value": "(\"conversation_id\" is null or octet_length(\"bytes\") <= 4000000) and (not (\"task_id\" is not null and num_nonnulls(\"inbox_item_id\", \"conversation_id\", \"description_comment_id\") = 0) or octet_length(\"bytes\") <= 1500000 or (\"content_type\" = 'video/webm' and octet_length(\"bytes\") <= 4000000))",
+      "value": "(\"conversation_id\" is null or octet_length(\"bytes\") <= 4000000) and (not (\"task_id\" is not null and num_nonnulls(\"inbox_item_id\", \"conversation_id\", \"description_comment_id\") = 0) or octet_length(\"bytes\") <= 1500000 or (\"content_type\" = 'video/webm' and octet_length(\"bytes\") <= 4000000) or (\"content_type\" = 'application/pdf' and octet_length(\"bytes\") <= 3000000))",
       "name": "attachment_bytes_bound",
       "entityType": "checks",
       "schema": "public",

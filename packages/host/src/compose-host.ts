@@ -16,6 +16,7 @@ import {
 import { type ClientIdentity, clientNamedOnService } from "@repo/features/client-identity";
 import { HostedInstalledSkillClient } from "@repo/features/installed-skill-client";
 import { INTEGRATION_LANDING } from "@repo/features/integration-wire";
+import { MAC_COMMAND_MODE } from "@repo/features/mac-command-wire";
 import {
   carried,
   GATEWAY_EVENT,
@@ -28,7 +29,6 @@ import {
   APP_SETTING_SCHEMA,
   computerUseAppsOf,
   computerUseAppsWith,
-  MAC_COMMAND_MODE,
 } from "@repo/settings";
 import { entityPool } from "@repo/sync";
 import { Effect, Exit, Layer, Option, Scope, Stream } from "effect";

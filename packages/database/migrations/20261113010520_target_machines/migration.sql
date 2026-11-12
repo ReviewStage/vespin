@@ -16,7 +16,7 @@ CREATE TABLE "mac_command_device_listener" (
 );
 --> statement-breakpoint
 ALTER TABLE "agent" ADD COLUMN "target_device_id" uuid;--> statement-breakpoint
-ALTER TABLE "device" ADD COLUMN "commands_allowed" boolean;--> statement-breakpoint
+ALTER TABLE "device" ADD COLUMN "command_mode" text;--> statement-breakpoint
 ALTER TABLE "device" ADD COLUMN "always_allowed_apps" jsonb;--> statement-breakpoint
 ALTER TABLE "mac_command" ADD COLUMN "device_id" uuid;--> statement-breakpoint
 ALTER TABLE "agent" ADD CONSTRAINT "agent_target_device_id_device_id_fkey" FOREIGN KEY ("target_device_id") REFERENCES "device"("id") ON DELETE SET NULL;--> statement-breakpoint
@@ -75,7 +75,7 @@ $app_sync$;
 --> statement-breakpoint
 CREATE TRIGGER "app_sync_write" AFTER INSERT OR DELETE ON "device" FOR EACH ROW EXECUTE FUNCTION "app_sync_device"();
 --> statement-breakpoint
-CREATE TRIGGER "app_sync_update" AFTER UPDATE ON "device" FOR EACH ROW WHEN (OLD."id" IS DISTINCT FROM NEW."id" OR OLD."user_id" IS DISTINCT FROM NEW."user_id" OR OLD."name" IS DISTINCT FROM NEW."name" OR OLD."platform" IS DISTINCT FROM NEW."platform" OR OLD."machine_id" IS DISTINCT FROM NEW."machine_id" OR OLD."model" IS DISTINCT FROM NEW."model" OR OLD."update_phase" IS DISTINCT FROM NEW."update_phase" OR OLD."commands_allowed" IS DISTINCT FROM NEW."commands_allowed" OR OLD."always_allowed_apps" IS DISTINCT FROM NEW."always_allowed_apps" OR OLD."version" IS DISTINCT FROM NEW."version" OR OLD."removed_at" IS DISTINCT FROM NEW."removed_at") EXECUTE FUNCTION "app_sync_device"();
+CREATE TRIGGER "app_sync_update" AFTER UPDATE ON "device" FOR EACH ROW WHEN (OLD."id" IS DISTINCT FROM NEW."id" OR OLD."user_id" IS DISTINCT FROM NEW."user_id" OR OLD."name" IS DISTINCT FROM NEW."name" OR OLD."platform" IS DISTINCT FROM NEW."platform" OR OLD."machine_id" IS DISTINCT FROM NEW."machine_id" OR OLD."model" IS DISTINCT FROM NEW."model" OR OLD."home" IS DISTINCT FROM NEW."home" OR OLD."setup" IS DISTINCT FROM NEW."setup" OR OLD."update_phase" IS DISTINCT FROM NEW."update_phase" OR OLD."command_mode" IS DISTINCT FROM NEW."command_mode" OR OLD."always_allowed_apps" IS DISTINCT FROM NEW."always_allowed_apps" OR OLD."version" IS DISTINCT FROM NEW."version" OR OLD."removed_at" IS DISTINCT FROM NEW."removed_at" OR OLD."created_at" IS DISTINCT FROM NEW."created_at" OR OLD."away_at" IS DISTINCT FROM NEW."away_at") EXECUTE FUNCTION "app_sync_device"();
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "app_sync_agent"() RETURNS trigger LANGUAGE plpgsql AS $app_sync$
 DECLARE

@@ -510,6 +510,27 @@ export const macCommandSettledAnswerSchema = EffectSchema.Struct({
   settled: EffectSchema.Literal(true),
 });
 
+/**
+ * Whether an agent's command runs on a Mac: never, after the developer
+ * allows it, or always. The Mac's own setting and the service's copy for
+ * its device name the same three. Note that the order is the menu's, from
+ * least freedom to most.
+ */
+export const MAC_COMMAND_MODE = {
+  /** The Mac takes no commands. */
+  NEVER: "never",
+  /** Each command is shown to the developer first, and runs only once they allow it. */
+  ASK: "ask",
+  /** Any command from any of the account's agents runs without asking. */
+  ALWAYS: "always",
+} as const;
+
+export type MacCommandMode = (typeof MAC_COMMAND_MODE)[keyof typeof MAC_COMMAND_MODE];
+
+export const MAC_COMMAND_MODE_LIST: readonly MacCommandMode[] = Object.values(MAC_COMMAND_MODE);
+
+export const macCommandModeSchema = EffectSchema.Literals(MAC_COMMAND_MODE_LIST);
+
 /** One command the Mac heard of over Realtime, claimed by its id (POST). */
 export const macCommandClaimRequestSchema = EffectSchema.Struct({
   id: wireUuidSchema,

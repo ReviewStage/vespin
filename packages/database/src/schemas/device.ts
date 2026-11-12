@@ -5,8 +5,9 @@ import type {
   DeviceSetup,
   HostUpdate,
 } from "@repo/features/device-agent-wire";
+import type { MacCommandMode } from "@repo/features/mac-command-wire";
 import { sql } from "drizzle-orm";
-import { boolean, index, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { index, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { createdAt, timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 
@@ -108,12 +109,13 @@ export const device = pgTable(
     /** The host's own words for why its update failed, naming no secret; null unless `update_phase` is failed. */
     updateFailure: text("update_failure"),
     /**
-     * Whether the member lets us use this machine for terminal commands
-     * and computer use, its one opt-in, kept here so any device of theirs can
+     * How agents' terminal commands run on this machine (`MAC_COMMAND_MODE`):
+     * never, after the member allows each, or always, the same three the
+     * machine's own setting names, kept here so any device of theirs can
      * change it. Null until the machine first carries its own setting up,
      * which it does once, and for a host that never ran the app.
      */
-    commandsAllowed: boolean("commands_allowed"),
+    commandMode: text("command_mode").$type<MacCommandMode>(),
     /** The apps on this machine the member answered Always allow for, by bundle id; null until the machine first carries its own list up. */
     alwaysAllowedApps: jsonb("always_allowed_apps").$type<readonly string[]>(),
     /** The device's secret as its SHA-256 in hex, never the secret; null for a device that never enrolled, which the service no longer takes a call from, and for a removed one. */
