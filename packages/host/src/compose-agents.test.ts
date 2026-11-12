@@ -991,6 +991,30 @@ it.effect(
 );
 
 it.effect(
+  "a poll refused as signed out while the account it was read for still stands is asked again, and the transcript reads on once the service answers",
+  () =>
+    Effect.gen(function* () {
+      const { acts, held, sealTranscript, live } = yield* subject();
+      sealTranscript(LIVE_ANSWERED);
+      yield* acts.AGENTS_TRANSCRIPT.hold(FOLLOWED);
+      yield* settled;
+      transcriptRows(live, 1);
+      yield* nextPoll;
+
+      // The hourly access token lapsed and its renewal did not land, so the service refuses the poll's session.
+      live.transcript.refuse(LIVE_SIGNED_OUT);
+      yield* TestClock.adjust("10 seconds");
+      yield* settled;
+      live.transcript.refuse(undefined);
+      yield* TestClock.adjust("10 seconds");
+      yield* settled;
+
+      assert.equal(held().at(-1)?.failure, undefined, "the transcript is never laid unread");
+      assert.deepEqual(ids(held().at(-1)), ["m-1"]);
+    }),
+);
+
+it.effect(
   "a newest page the service keeps not answering is asked for a bounded number of times, then the follow ends on the failure laid",
   () =>
     Effect.gen(function* () {
