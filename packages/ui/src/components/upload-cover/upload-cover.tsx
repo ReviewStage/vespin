@@ -61,7 +61,7 @@ const WORDS = {
 
 /** The veil over the caller's box, following its corners; a block's lays its wait or its failure out in a column at its middle. */
 const COVER =
-  "ui-upload-cover pointer-events-none absolute inset-0 flex flex-col items-center justify-center rounded-[inherit] bg-veil text-on-veil";
+  "ui-upload-cover pointer-events-none absolute inset-0 flex flex-col items-center justify-center rounded-held bg-veil text-on-veil";
 
 /** A block's failure stands inside the veil's edge, so its card never meets the picture's. */
 const BLOCK_FAILED = "p-ui-12";
