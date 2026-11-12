@@ -40,7 +40,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
-import { type ReactElement, type ReactNode, useContext, useState } from "react";
+import { type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dragLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
@@ -181,6 +181,9 @@ type ListRowProps = RowActs & {
   readonly due?: number | undefined;
 };
 
+/** Whether a parent task's sub-tasks stand open under it, and what turns them. */
+export type TaskFold = { readonly open: boolean; readonly onToggle: () => void };
+
 type TaskRowProps = RowActs & {
   readonly id: string;
   readonly name: string;
@@ -195,8 +198,8 @@ type TaskRowProps = RowActs & {
   readonly agents?: TaskAgentsStatus | undefined;
   /** Its key, `ACME-42`, which ends the line. */
   readonly taskKey?: string | undefined;
-  /** Its sub-tasks' rows, folded under it until its chevron opens them, as the panel folds them. */
-  readonly subRows?: ReactNode | undefined;
+  /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its chevron's press does. Its caller holds it, since a recycled row holds no state (`RowForEach`). */
+  readonly fold?: TaskFold | undefined;
   /** How deep it stands under the tasks above it, which sets it in from the list's edge. */
   readonly depth?: number | undefined;
 };
@@ -606,8 +609,8 @@ function agentsHeard(agents: TaskAgentsStatus | undefined): string | undefined {
 }
 
 /** What a task row is heard as: its name, then unread, its status, a thread that needs you, its agents, its key, and whether its sub-tasks are open. */
-function taskHeard(props: TaskRowProps, open: boolean): RowHeard {
-  const { name, status, unread = false, needsYou = false, agents, taskKey, subRows } = props;
+function taskHeard(props: TaskRowProps): RowHeard {
+  const { name, status, unread = false, needsYou = false, agents, taskKey, fold } = props;
 
   return {
     label: name,
@@ -617,7 +620,7 @@ function taskHeard(props: TaskRowProps, open: boolean): RowHeard {
       needsYou && NEEDS_YOU.LABEL,
       agentsHeard(agents),
       taskKey,
-      subRows !== undefined && (open ? SUB_TASKS_SHOWN : SUB_TASKS_HIDDEN),
+      fold !== undefined && (fold.open ? SUB_TASKS_SHOWN : SUB_TASKS_HIDDEN),
     ],
   };
 }
@@ -683,14 +686,13 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
  * One task on a single line, as Linear's rows stand: the dot while it has
  * news, its status ring, its name in 15 pt, and at the line's end what its
  * agents say and its key. A task with sub-tasks leads with the panel's fold
- * in its ring's place, which opens them under it a level deeper. Note that
- * SwiftUI's disclosure is not used, because a press on its row folds it
- * rather than picking the row.
+ * in its ring's place, whose press opens them; its caller draws them as rows
+ * of their own under it, a level deeper. Note that SwiftUI's disclosure is
+ * not used, because a press on its row folds it rather than picking the row.
  */
 export function TaskRow(props: TaskRowProps) {
-  const { id, name, status, unread = false, finished = false, taskKey, subRows, depth = 0 } = props;
+  const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
   const colors = useColors();
-  const [open, setOpen] = useState(false);
 
   const row: ReactElement = (
     <HStack modifiers={[padding({ leading: depth * SUB_TASK_INDENT })]}>
@@ -698,10 +700,10 @@ export function TaskRow(props: TaskRowProps) {
         unread={unread}
         faded={finished}
         lead={
-          subRows === undefined ? (
+          fold === undefined ? (
             <TaskStatusMark status={status} />
           ) : (
-            <SubTaskFold open={open} onPress={() => setOpen(!open)} />
+            <SubTaskFold open={fold.open} onPress={fold.onToggle} />
           )
         }
         title={name}
@@ -727,34 +729,25 @@ export function TaskRow(props: TaskRowProps) {
   );
 
   // Note that the fold stands in the row's menu too, so a person who reaches the row as one element, through VoiceOver or Voice Control, still opens its sub-tasks.
-  const fold: readonly RowAction[] =
-    subRows === undefined
+  const folding: readonly RowAction[] =
+    fold === undefined
       ? []
       : [
           {
-            label: open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS,
-            symbol: open ? "chevron.down" : "chevron.right",
+            label: fold.open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS,
+            symbol: fold.open ? "chevron.down" : "chevron.right",
             tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => setOpen(!open),
+            onPress: fold.onToggle,
           },
         ];
 
-  const framed = (
+  return (
     <RowFrame
       {...props}
       id={id}
       row={row}
-      menuActions={[...fold, ...(props.menuActions ?? [])]}
-      heard={props.heard ?? taskHeard(props, open)}
+      menuActions={[...folding, ...(props.menuActions ?? [])]}
+      heard={props.heard ?? taskHeard(props)}
     />
-  );
-
-  if (subRows === undefined || !open) return framed;
-
-  return (
-    <>
-      {framed}
-      {subRows}
-    </>
   );
 }
