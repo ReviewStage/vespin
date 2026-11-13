@@ -11,6 +11,7 @@ import { readingWords, showMoreWords, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   BUZZ,
+  DetailPage,
   EmptyState,
   GLYPH,
   glyphSymbol,
@@ -26,6 +27,7 @@ import {
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
+import { PUSHED_PAGE, useDetailLeave, useDetailPush, useHandToDetail } from "../detail-stack.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
@@ -69,11 +71,29 @@ function versionLine(line: DescriptionRevisionLine, newest: boolean, now: number
  * version under its writer, what it did and when, the newest marked
  * Current, and Show more under them while older versions stand unread. A
  * press opens the version whole. The host follows the history while the
- * screen stands, so a save lands at its head as it lands.
+ * screen stands, so a save lands at its head as it lands. In a window wide
+ * enough for three columns it stands pushed over the split view's detail
+ * instead, and a version opens over it there.
  */
 export function HistoryScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
+  const handed = useHandToDetail({ kind: PUSHED_PAGE.HISTORY, taskId: id });
+
+  if (handed) return null;
+
+  return <History taskId={id} />;
+}
+
+/** A task description's version history, as `HistoryScreen` describes it; `inColumn` pushed over a split view's detail. */
+export function History({
+  taskId: id,
+  inColumn = false,
+}: {
+  readonly taskId: string;
+  readonly inColumn?: boolean | undefined;
+}) {
   const router = useRouter();
+  const toDetail = useDetailPush();
   const onOwnTab = useOnOwnTab();
   const history = useTaskHistory(id);
   const now = Date.now();
@@ -105,7 +125,16 @@ export function HistoryScreen() {
               symbol={VERSION_SYMBOL}
               label={revisionWriterName(line.lastEdit, history.readerId)}
               detail={versionLine(line, line.seq === newest, now)}
-              onPress={() =>
+              onPress={() => {
+                const version = {
+                  kind: PUSHED_PAGE.VERSION,
+                  taskId: id,
+                  seq: line.seq,
+                  at: line.lastEdit.at,
+                  newest,
+                } as const;
+
+                if (toDetail(version)) return;
                 router.push({
                   pathname: onOwnTab(VERSION_ROUTE),
                   params: {
@@ -114,8 +143,8 @@ export function HistoryScreen() {
                     at: String(line.lastEdit.at),
                     newest: String(newest),
                   },
-                })
-              }
+                });
+              }}
             />
           ))}
           {earlier === undefined ? null : (
@@ -133,6 +162,8 @@ export function HistoryScreen() {
         </ListSection>
       </RowList>
     );
+
+  if (inColumn) return <DetailPage bar={{ name: VERSION_HISTORY_WORDS.TITLE }}>{body}</DetailPage>;
 
   return (
     <>
@@ -159,6 +190,17 @@ export function VersionScreen() {
   } = useLocalSearchParams<{ id: string; seq?: string; at?: string; newest?: string }>();
 
   const seq = versionNumber(spelled);
+  const savedAt = Number(at);
+  const newest = versionNumber(spelledNewest);
+  const opened = Number.isFinite(savedAt) && at !== undefined ? savedAt : undefined;
+
+  const handed = useHandToDetail(
+    seq === undefined
+      ? undefined
+      : { kind: PUSHED_PAGE.VERSION, taskId: id, seq, at: opened, newest },
+  );
+
+  if (handed && seq !== undefined) return null;
 
   if (seq === undefined) {
     return (
@@ -168,31 +210,24 @@ export function VersionScreen() {
     );
   }
 
-  const savedAt = Number(at);
-  const newest = versionNumber(spelledNewest);
-
-  return (
-    <Version
-      taskId={id}
-      seq={seq}
-      at={Number.isFinite(savedAt) && at !== undefined ? savedAt : undefined}
-      newest={newest}
-    />
-  );
+  return <Version taskId={id} seq={seq} at={opened} newest={newest} />;
 }
 
-/** One version and its restore; `at` its latest save, which titles it, and `newest` the description as it stands, which a restore's Undo puts back, each none where the route did not carry it. */
-function Version({
+/** One version and its restore; `at` its latest save, which titles it, and `newest` the description as it stands, which a restore's Undo puts back, each none where the route did not carry it; `inColumn` pushed over a split view's detail, where a restore that went goes back in its column. */
+export function Version({
   taskId,
   seq,
   at,
   newest,
+  inColumn = false,
 }: {
   readonly taskId: string;
   readonly seq: number;
   readonly at: number | undefined;
   readonly newest: number | undefined;
+  readonly inColumn?: boolean | undefined;
 }) {
+  const detail = useDetailLeave();
   const colors = useColors();
   const router = useRouter();
   const navigation = useNavigation();
@@ -245,7 +280,10 @@ function Version({
       notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo });
 
       // Note that a link pressed in the version while its restore was out stands in front of it, and is left where it is.
-      if (standing.current && navigation.isFocused()) router.back();
+      if (!standing.current) return;
+
+      if (detail !== undefined) detail.leave();
+      else if (navigation.isFocused()) router.back();
     });
   };
 
@@ -270,11 +308,22 @@ function Version({
     </RowList>
   );
 
+  const name = at === undefined ? VERSION_HISTORY_WORDS.TITLE : dayAndTimeText(at);
+
+  if (inColumn) {
+    const restoreAct = {
+      label: VERSION_HISTORY_WORDS.RESTORE,
+      symbol: GLYPH.RESTORE,
+      disabled: read === undefined || restoring,
+      onPress: restore,
+    };
+
+    return <DetailPage bar={{ name, acts: current ? [] : [restoreAct] }}>{body}</DetailPage>;
+  }
+
   return (
     <>
-      <Stack.Screen
-        options={{ title: at === undefined ? VERSION_HISTORY_WORDS.TITLE : dayAndTimeText(at) }}
-      />
+      <Stack.Screen options={{ title: name }} />
       {current ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button

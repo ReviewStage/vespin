@@ -9,6 +9,8 @@ import {
   AskNote,
   BAR_TITLE,
   Composer,
+  ComposerFoot,
+  DetailPage,
   EmptyState,
   GLYPH,
   GlassDock,
@@ -18,7 +20,8 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
+import { PUSHED_PAGE, useDetailLeave, useHandToDetail } from "../detail-stack.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
@@ -67,10 +70,28 @@ function quoteOf(quote: string, anchored: boolean): string {
  * field docked over its foot, which answers it whether it stands open or
  * resolved, as the panel's thread does, what a reply that did not land
  * said standing in the field's head. The task's path stands small in
- * the bar, as a page of the task's does.
+ * the bar, as a page of the task's does. In a window wide enough for three
+ * columns it stands pushed over the split view's detail instead.
  */
 export function CommentThreadScreen() {
   const { id = "", task: taskId = "" } = useLocalSearchParams<{ id: string; task: string }>();
+  const handed = useHandToDetail({ kind: PUSHED_PAGE.COMMENTS, threadId: id, taskId });
+
+  if (handed) return null;
+
+  return <CommentThread threadId={id} taskId={taskId} />;
+}
+
+/** One thread of a task's description, as `CommentThreadScreen` describes it; `inColumn` pushed over a split view's detail, its reply field at the column's foot. */
+export function CommentThread({
+  threadId: id,
+  taskId,
+  inColumn = false,
+}: {
+  readonly threadId: string;
+  readonly taskId: string;
+  readonly inColumn?: boolean | undefined;
+}) {
   const colors = useColors();
   const openLink = useOpenLink();
   const overview = useTaskOverview(taskId);
@@ -86,6 +107,40 @@ export function CommentThreadScreen() {
   const task = overview?.task;
   const path = commentPath(overview);
 
+  const composer = {
+    placeholder: WORDS.REPLY,
+    words: reply.words,
+    onWords: reply.onWords,
+    sendable: reply.sendable,
+    onSend: reply.send,
+    head: reply.note === undefined ? undefined : <AskNote words={reply.note} />,
+  };
+
+  const page = (foot?: ReactNode) =>
+    thread === undefined ? undefined : (
+      <ThreadPage
+        path={path}
+        status={task?.status}
+        title={quoteOf(thread.quote, thread.anchor !== undefined)}
+        messages={threadMessages(thread, agentNames, pictureOf)}
+        repository={task?.repository}
+        onOpenLink={openLink}
+        standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
+        foot={foot}
+      />
+    );
+
+  // Note that the thread's page draws its own path in a column's bar, so the column's bar names it only while no thread stands.
+  if (inColumn) {
+    return (
+      <DetailPage bar={thread === undefined ? { path: { path, status: task?.status } } : {}}>
+        {page(<ComposerFoot {...composer} />) ?? (
+          <EmptyState title={WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
+        )}
+      </DetailPage>
+    );
+  }
+
   return (
     <>
       <Stack.Screen
@@ -99,29 +154,8 @@ export function CommentThreadScreen() {
           <EmptyState title={WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         </Screen>
       ) : (
-        <GlassDock
-          bar={
-            <Composer
-              placeholder={WORDS.REPLY}
-              words={reply.words}
-              onWords={reply.onWords}
-              sendable={reply.sendable}
-              onSend={reply.send}
-              head={reply.note === undefined ? undefined : <AskNote words={reply.note} />}
-            />
-          }
-        >
-          <Screen>
-            <ThreadPage
-              path={path}
-              status={task?.status}
-              title={quoteOf(thread.quote, thread.anchor !== undefined)}
-              messages={threadMessages(thread, agentNames, pictureOf)}
-              repository={task?.repository}
-              onOpenLink={openLink}
-              standing={threadOpen(thread) ? undefined : WORDS.RESOLVED}
-            />
-          </Screen>
+        <GlassDock bar={<Composer {...composer} />}>
+          <Screen>{page()}</Screen>
         </GlassDock>
       )}
     </>
@@ -139,7 +173,9 @@ export function CommentThreadScreen() {
  * words and says why in the field's head. The block is kept as it stood
  * when the screen first found it, so an edit elsewhere in the description
  * never takes the field away; where the route names no block of the
- * description as read, it says so.
+ * description as read, it says so. In a window wide enough for three
+ * columns it stands pushed over the split view's detail instead, and the
+ * thread it starts takes its place there.
  */
 export function NewCommentScreen() {
   const {
@@ -149,7 +185,29 @@ export function NewCommentScreen() {
     quote = "",
   } = useLocalSearchParams<{ task: string; from: string; to: string; quote: string }>();
 
+  const handed = useHandToDetail({ kind: PUSHED_PAGE.NEW_COMMENT, taskId, from, to, quote });
+
+  if (handed) return null;
+
+  return <NewComment taskId={taskId} from={from} to={to} quote={quote} />;
+}
+
+/** A new thread on one block of a task's description, as `NewCommentScreen` describes it; `inColumn` pushed over a split view's detail, its field at the column's foot. */
+export function NewComment({
+  taskId,
+  from,
+  to,
+  quote,
+  inColumn = false,
+}: {
+  readonly taskId: string;
+  readonly from: string;
+  readonly to: string;
+  readonly quote: string;
+  readonly inColumn?: boolean | undefined;
+}) {
   const router = useRouter();
+  const detail = useDetailLeave();
   const onOwnTab = useOnOwnTab();
   const colors = useColors();
   const openLink = useOpenLink();
@@ -176,12 +234,61 @@ export function NewCommentScreen() {
   const send = () => {
     void start.send().then((threadId) => {
       if (threadId === undefined) return;
+      const opened = overview?.task.id ?? taskId;
+
+      if (detail !== undefined) {
+        detail.replace({ kind: PUSHED_PAGE.COMMENTS, threadId, taskId: opened });
+
+        return;
+      }
+
       router.replace({
         pathname: onOwnTab("/tasks/comments/[id]"),
         params: { id: threadId, task: overview?.task.id ?? taskId },
       });
     });
   };
+
+  const composer = {
+    placeholder: WORDS.ADD_COMMENT,
+    autoFocus: true,
+    words: start.words,
+    onWords: start.onWords,
+    sendable: start.sendable,
+    onSend: send,
+    head: start.note === undefined ? undefined : <AskNote words={start.note} />,
+  };
+
+  const empty = (
+    <EmptyState
+      title={overview?.document === undefined ? READING_DESCRIPTION : COMMENT_NOTE.NO_WORDS}
+      symbol={GLYPH.COMMENT}
+    />
+  );
+
+  const page = (foot?: ReactNode) =>
+    block === undefined ? undefined : (
+      <ThreadPage
+        path={path}
+        status={overview?.task.status}
+        title={quoteOf(block.quote ?? "", true)}
+        messages={[]}
+        repository={overview?.task.repository}
+        onOpenLink={openLink}
+        foot={foot}
+      />
+    );
+
+  // Note that the thread's page draws its own path in a column's bar, so the column's bar names it only while no block stands.
+  if (inColumn) {
+    return (
+      <DetailPage
+        bar={block === undefined ? { path: { path, status: overview?.task.status } } : {}}
+      >
+        {page(<ComposerFoot {...composer} />) ?? empty}
+      </DetailPage>
+    );
+  }
 
   return (
     <>
@@ -192,36 +299,10 @@ export function NewCommentScreen() {
         }}
       />
       {block === undefined ? (
-        <Screen>
-          <EmptyState
-            title={overview?.document === undefined ? READING_DESCRIPTION : COMMENT_NOTE.NO_WORDS}
-            symbol={GLYPH.COMMENT}
-          />
-        </Screen>
+        <Screen>{empty}</Screen>
       ) : (
-        <GlassDock
-          bar={
-            <Composer
-              placeholder={WORDS.ADD_COMMENT}
-              autoFocus
-              words={start.words}
-              onWords={start.onWords}
-              sendable={start.sendable}
-              onSend={send}
-              head={start.note === undefined ? undefined : <AskNote words={start.note} />}
-            />
-          }
-        >
-          <Screen>
-            <ThreadPage
-              path={path}
-              status={overview?.task.status}
-              title={quoteOf(block.quote ?? "", true)}
-              messages={[]}
-              repository={overview?.task.repository}
-              onOpenLink={openLink}
-            />
-          </Screen>
+        <GlassDock bar={<Composer {...composer} />}>
+          <Screen>{page()}</Screen>
         </GlassDock>
       )}
     </>

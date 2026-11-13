@@ -16,6 +16,8 @@ export type PlaceColumns = {
   readonly contentBar?: ColumnBar | undefined;
   readonly detail: ReactNode;
   readonly detailBar?: ColumnBar | undefined;
+  /** What the detail stands for, such as the picked thread's id, so the pages pushed over it (`detail-stack.ts`) go as another row is picked; none with nothing picked. */
+  readonly root?: string | undefined;
 };
 
 /**
@@ -64,6 +66,11 @@ export function useHandColumns(place: SidebarPlace, columns: PlaceColumns | unde
 /** A place's columns as its root last handed them; none before it has. */
 export function usePlaceColumns(place: SidebarPlace): PlaceColumns | undefined {
   return useSyncExternalStore(subscribe, () => held.get(place));
+}
+
+/** What a place's detail stands for now, as its root last handed it (`PlaceColumns`' `root`). */
+export function placeRoot(place: SidebarPlace): string | undefined {
+  return held.get(place)?.root;
 }
 
 /** Stands what it holds in front, or behind, for the hooks under it that ask (`useInFront`). */

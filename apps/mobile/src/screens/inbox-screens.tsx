@@ -80,6 +80,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { PUSHED_PAGE, useDetailPush } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
@@ -582,6 +583,7 @@ function ThreadDetail({
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const onTab = useOnTab();
+  const toDetail = useDetailPush();
 
   // Whether this thread still stands, so a start that answers after the reader left it opens nothing over where they went.
   const shown = useRef(false);
@@ -633,18 +635,23 @@ function ThreadDetail({
   // Note that a split view's detail bar stands the thread's main acts as glyphs, as Mail's stands Reply and Trash, and ⋯ keeps the rest; a compact window's stack keeps them all in ⋯.
   const acts = threadActs(item, answer, doors);
 
-  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them; a compact window's stack names the path as its plain title, which can hold no menu, so there they lead the ⋯ menu instead.
+  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them, inside the detail's own column beside the list where the window stands three; a compact window's stack names the path as its plain title, which can hold no menu, so there they lead the ⋯ menu instead.
   const pathActions = [
     {
       label: PATH_OPENS.TASK,
       symbol: GLYPH.TASK,
-      onPress: () =>
-        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: holder.task.id }))),
+      onPress: () => {
+        if (toDetail({ kind: PUSHED_PAGE.TASK, taskId: holder.task.id })) return;
+        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: holder.task.id })));
+      },
     },
     {
       label: PATH_OPENS.AGENT,
       symbol: GLYPH.AGENT,
-      onPress: () => router.push(onTab(iosAgentRoute(item.agentId))),
+      onPress: () => {
+        if (toDetail({ kind: PUSHED_PAGE.AGENT, agentId: item.agentId })) return;
+        router.push(onTab(iosAgentRoute(item.agentId)));
+      },
     },
   ] as const;
 
@@ -841,7 +848,7 @@ function ThreadNotDrawn({
  * pushed screen reads it, so a link to a thread of a workspace the list does
  * not show still opens it, and one still read, refused, or missing says so.
  */
-function ThreadColumn({
+export function ThreadColumn({
   id,
   onRemind,
   onOpen,
@@ -1087,7 +1094,9 @@ function InboxSplitScreen({
   const first = useListColumn(list);
   useHandColumns(
     SIDEBAR_PLACE.INBOX,
-    threeColumns ? { content: list.view, contentBar: list.bar, detail, detailBar } : undefined,
+    threeColumns
+      ? { content: list.view, contentBar: list.bar, detail, detailBar, root: selected }
+      : undefined,
   );
 
   return (

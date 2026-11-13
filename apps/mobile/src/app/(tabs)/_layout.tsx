@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
+import { isStackedRoute } from "../../detail-stack.js";
 import { useInboxChoosingOn } from "../../inbox/inbox-choosing.js";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
@@ -24,12 +25,15 @@ type TabStanding = { readonly tab: IosTab | undefined; readonly atRoot: boolean 
  * the sheet keeps its place and its layer. Note that a tab's own item route
  * stands at its root too, since a wide window hands it straight back to the
  * split view (`useHandToSplit`), while an item pushed onto another tab's
- * stack, a thread's task on the Inbox's, is a page over it.
+ * stack, a thread's task on the Inbox's, is a page over it. With three
+ * columns a page the detail's own stack stands, such as an agent's, stands
+ * at its root too, since it pushes itself there (`useHandToDetail`).
  */
-function useTabStanding(segments: readonly string[]): TabStanding {
+function useTabStanding(segments: readonly string[], threeColumns: boolean): TabStanding {
   const [, group, first, ...rest] = segments;
   const tab = iosTabOfGroup(group);
-  const atRoot = tab !== undefined && first === tab && rest.length <= 1;
+  const stacked = threeColumns && first !== undefined && isStackedRoute([first, ...rest]);
+  const atRoot = tab !== undefined && ((first === tab && rest.length <= 1) || stacked);
   const [kept, keep] = useState<TabStanding>({ tab, atRoot });
 
   useEffect(() => {
@@ -90,7 +94,7 @@ export default function TabsLayout() {
   const appSidebar = useThreeColumns();
   const pathname = usePathname();
   const conversation = iosRouteHidesTabs(pathname);
-  const { tab: standing, atRoot } = useTabStanding(useSegments());
+  const { tab: standing, atRoot } = useTabStanding(useSegments(), appSidebar);
   // Note that a tab under the split view leaves its content clear, because NativeTabs paints each tab in the navigation theme's light ground, which flashed over the split as a page pushed.
   const underSplit = appSidebar ? UNDER_SPLIT_SCREEN.contentStyle : undefined;
 
