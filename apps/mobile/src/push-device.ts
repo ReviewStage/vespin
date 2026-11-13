@@ -21,6 +21,7 @@
  * this module's.
  */
 
+import { signedInAccountId } from "@repo/credentials/snapshot";
 import { PUSH_NOTIFY_REFUSED } from "@repo/features/push-device-model";
 import {
   PUSH_ENVIRONMENT,
@@ -31,11 +32,11 @@ import {
 } from "@repo/features/push-device-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { ActPortClient } from "@repo/host/contract";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useMutationState, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import Constants from "expo-constants";
 import { getDevicePushTokenAsync } from "expo-notifications";
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs } from "./host/host-provider.js";
 import {
@@ -246,107 +247,85 @@ type UsePushDeviceStandingResult = {
   readonly choose: (notify: PushNotify) => void;
 };
 
+/** Where the phone's standing is kept among the app's queries, and its "Notify me" writes among its mutations. */
+const PUSH_STANDING_QUERY = "push-device-standing";
+
 /**
- * The phone's standing as last read or chosen, one for the launch, so a
- * choice made on Settings' Notifications page reads at once on the list
- * still mounted beneath it.
+ * The phone's standing as Settings draws it, none until the service
+ * answers, and the "Notify me" choice made from it, as the panel's
+ * `useFavoriteMutation` keeps a starred row. One query, kept under the
+ * account signed in, is shared by Settings' list and its Notifications
+ * page, so a choice made on the page reads at once on the list beneath it.
+ * The choices share one scope, so they reach the service in the order they
+ * were made; the newest still out is drawn over what the service last held,
+ * so a refused one falls back to the choice the service took, and a landed
+ * one is laid into the query once any read still out is let go.
  */
-let standingHeld: PushDeviceStatusAnswer | undefined;
-
-/** The choice the service last held, read or taken, which a refusal puts back. */
-let notifyConfirmed: PushNotify | undefined;
-
-/** Which choice was made last, so an earlier one's refusal never puts back what a later one drew. */
-let picksMade = 0;
-
-/** The pick `notifyConfirmed` stands for, so an older answer, a read or a write, never replaces a newer one. */
-let confirmedPick = 0;
-
-/** How many choices are still being written, so a read never answers for one the service may not hold yet. */
-let writesPending = 0;
-
-const standingListeners = new Set<() => void>();
-
-function subscribeStanding(listener: () => void): () => void {
-  standingListeners.add(listener);
-
-  return () => {
-    standingListeners.delete(listener);
-  };
-}
-
-function holdStanding(standing: PushDeviceStatusAnswer | undefined): void {
-  standingHeld = standing;
-
-  for (const listener of standingListeners) listener();
-}
-
-/** The phone's standing as Settings draws it, none until the service answers, and the "Notify me" choice made from it. */
 export function usePushDeviceStanding(key: PushDeviceKey | undefined): UsePushDeviceStandingResult {
   const acts = useHostActs();
   const write = useWrite();
-  const standing = useSyncExternalStore(subscribeStanding, () => standingHeld);
-  useEffect(() => {
-    if (key === undefined) return undefined;
-    let live = true;
-    // Note that a read answers only where no choice was being written as it began and none was made while it ran, so it never stands over a pick.
-    const readAt = picksMade;
-    const settledAtRead = writesPending === 0;
-    registeredPushDevice(acts, key)
-      .then(() => acts[ACT_KIND.PUSH_DEVICE_STATUS](key))
-      .then(
-        (answer) => {
-          // A phone the service does not hold yet, or a read it did not answer, draws no standing.
-          if (!live || !settledAtRead || readAt !== picksMade) return;
-          confirmedPick = readAt;
-          notifyConfirmed = "failure" in answer ? undefined : answer.notify;
-          holdStanding("failure" in answer ? undefined : answer);
-        },
-        (cause: unknown) => console.error("The phone's notifications could not be read.", cause),
+  const queries = useQueryClient();
+
+  const { data: accountId } = useQuery({
+    ...appStateQuery,
+    select: (state) => signedInAccountId(state.account),
+  });
+
+  const queryKey = [PUSH_STANDING_QUERY, accountId, key?.token];
+  const mutationKey = [PUSH_STANDING_QUERY, accountId];
+
+  // A phone the service does not hold yet, or a read it did not answer, draws no standing.
+  const { data: read } = useQuery({
+    queryKey,
+    enabled: key !== undefined,
+    retry: false,
+    queryFn: () =>
+      key === undefined
+        ? null
+        : registeredPushDevice(acts, key)
+            .then(() => acts[ACT_KIND.PUSH_DEVICE_STATUS](key))
+            .then((answer) => ("failure" in answer ? null : answer)),
+  });
+
+  const { mutate } = useMutation({
+    mutationKey,
+    scope: { id: PUSH_STANDING_QUERY },
+    // Note that a pick offers no Try again, which could replay an older choice over a newer one; picking again is the retry.
+    mutationFn: (notify: PushNotify) =>
+      key === undefined
+        ? Promise.resolve(false)
+        : write(() => acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }), {
+            refused: (answer) => ("failure" in answer ? PUSH_NOTIFY_REFUSED : undefined),
+          }),
+    onMutate: () => queries.cancelQueries({ queryKey }),
+    onSuccess: async (went, notify) => {
+      if (!went) return;
+      await queries.cancelQueries({ queryKey });
+      queries.setQueryData<PushDeviceStatusAnswer | null>(
+        queryKey,
+        (held) => held && { ...held, notify },
       );
-
-    return () => {
-      live = false;
-    };
-  }, [acts, key]);
-
-  const choose = useCallback(
-    (notify: PushNotify) => {
-      if (key === undefined || standingHeld === undefined) return;
-      picksMade += 1;
-      const pick = picksMade;
-      // Note that the choice is drawn at once and put back where the service did not take it, unless a later choice stands by then.
-      holdStanding({ ...standingHeld, notify });
-
-      const putBack = () => {
-        const held = notifyConfirmed;
-
-        if (pick === picksMade && held !== undefined && standingHeld !== undefined) {
-          holdStanding({ ...standingHeld, notify: held });
-        }
-      };
-
-      writesPending += 1;
-      write(() => acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }), {
-        // Note that a pick offers no Try again, which could replay an older choice over a newer one; picking again is the retry.
-        refused: (answer) => ("failure" in answer ? PUSH_NOTIFY_REFUSED : undefined),
-      }).then((went) => {
-        writesPending -= 1;
-
-        if (went && pick > confirmedPick) {
-          confirmedPick = pick;
-          notifyConfirmed = notify;
-        } else if (!went) putBack();
-      });
     },
-    [acts, write, key],
-  );
+  });
+
+  const picked = useMutationState({
+    filters: { mutationKey, status: "pending" },
+    select: (mutation) => mutation.state.variables,
+  }).findLast(isPushNotify);
+
+  const standing =
+    read == null ? undefined : picked === undefined ? read : { ...read, notify: picked };
 
   // A phone iOS no longer lets notify draws no standing, whatever was read before.
-  return { standing: key === undefined ? undefined : standing, choose };
+  return {
+    standing: key === undefined ? undefined : standing,
+    choose: (notify) => {
+      if (standing !== undefined) mutate(notify);
+    },
+  };
 }
 
 /** Whether the choice named is one of "Notify me"'s, as a picker hands it back by its id. */
-export function isPushNotify(id: string): id is PushNotify {
+export function isPushNotify(id: unknown): id is PushNotify {
   return Object.values(PUSH_NOTIFY).some((notify) => notify === id);
 }
