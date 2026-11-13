@@ -54,6 +54,7 @@ import {
   LIST_LOOK,
   type ListLook,
   ListRow,
+  type ListScopes,
   type MarkdownVideo,
   PATH_PART,
   previewMessages,
@@ -159,6 +160,8 @@ type InboxRowsProps = {
   readonly onResolve: (item: InboxItem) => void;
   /** The list's Select mode, while it stands in one. */
   readonly choosing?: RowChoosing | undefined;
+  /** The Inbox's scopes, standing as the list's first row. */
+  readonly scopes: ListScopes;
 };
 
 /**
@@ -180,6 +183,7 @@ function InboxRows({
   onRemind,
   onResolve,
   choosing,
+  scopes,
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
   const pictureOf = useMemberPictures();
@@ -191,6 +195,7 @@ function InboxRows({
       onSelect={onSelect}
       onRefresh={onRefresh}
       choosing={choosing}
+      scopes={scopes}
     >
       <InboxItemRows
         listed={listed}
@@ -960,32 +965,33 @@ function InboxStackList(words: InboxSearch) {
         </Stack.Toolbar>
       )}
       <Screen>
-        <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-          {listing.listed.length === 0 ? (
+        {listing.listed.length === 0 ? (
+          <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
             <InboxEmpty
               show={show}
               search={search}
               feed={listing.feed}
               onRetry={() => void acts.refresh()}
             />
-          ) : (
-            <InboxRows
-              look={LIST_LOOK.PLAIN}
-              listed={listing.listed}
-              readerId={listing.readerId}
-              onSelect={(id) =>
-                router.push(
-                  onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
-                )
-              }
-              onRefresh={acts.refresh}
-              onMark={acts.mark}
-              onRemind={remind.open}
-              onResolve={acts.resolve}
-              choosing={choosing?.rows}
-            />
-          )}
-        </ScopePicker>
+          </ScopePicker>
+        ) : (
+          <InboxRows
+            scopes={{ label: SCOPE_LABEL, scopes }}
+            look={LIST_LOOK.PLAIN}
+            listed={listing.listed}
+            readerId={listing.readerId}
+            onSelect={(id) =>
+              router.push(
+                onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
+              )
+            }
+            onRefresh={acts.refresh}
+            onMark={acts.mark}
+            onRemind={remind.open}
+            onResolve={acts.resolve}
+            choosing={choosing?.rows}
+          />
+        )}
       </Screen>
       {remind.sheet}
     </>
@@ -1020,31 +1026,31 @@ function InboxSplitScreen({
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
   const list = {
-    view: (
-      <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
-        {listing.listed.length === 0 ? (
+    view:
+      listing.listed.length === 0 ? (
+        <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
           <InboxEmpty
             show={show}
             search={search}
             feed={listing.feed}
             onRetry={() => void acts.refresh()}
           />
-        ) : (
-          <InboxRows
-            look={look}
-            listed={listing.listed}
-            readerId={listing.readerId}
-            selected={selected}
-            onSelect={select}
-            onRefresh={acts.refresh}
-            onMark={acts.mark}
-            onRemind={remind.open}
-            onResolve={acts.resolve}
-            choosing={choosing?.rows}
-          />
-        )}
-      </ScopePicker>
-    ),
+        </ScopePicker>
+      ) : (
+        <InboxRows
+          scopes={{ label: SCOPE_LABEL, scopes, look: SCOPE_LOOK.MENU }}
+          look={look}
+          listed={listing.listed}
+          readerId={listing.readerId}
+          selected={selected}
+          onSelect={select}
+          onRefresh={acts.refresh}
+          onMark={acts.mark}
+          onRemind={remind.open}
+          onResolve={acts.resolve}
+          choosing={choosing?.rows}
+        />
+      ),
     // Note that Select mode names how many are chosen in the column's title, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
     bar:
       choosing === undefined

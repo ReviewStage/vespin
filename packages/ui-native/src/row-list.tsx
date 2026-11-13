@@ -15,6 +15,9 @@ import {
   font,
   foregroundStyle,
   frame,
+  listRowBackground,
+  listRowInsets,
+  listRowSeparator,
   listSectionMargins,
   listStyle,
   monospacedDigit,
@@ -27,6 +30,7 @@ import {
 import { searchTokens } from "@repo/features/search-tokens";
 import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useMemo, useState } from "react";
+import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
@@ -81,6 +85,8 @@ type RowListProps = {
   readonly choosing?: RowChoosing | undefined;
   /** What a search typed, whose words each row's title sets in bold; none for a list no search found. */
   readonly searched?: string | undefined;
+  /** The scopes it lists under, standing as its first row so they scroll away with the rows; none where it has none. */
+  readonly scopes?: ListScopes | undefined;
   readonly children: ReactNode;
 };
 
@@ -101,6 +107,27 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
 }
 
 /**
+ * A list's scopes as its first row: the system's control on the list's own
+ * ground, edge to edge with no hairline, so the rows scroll up under the bar
+ * with it, as Mail's categories do, and a pull reads again from above it.
+ */
+function ScopeRow({ scopes }: { readonly scopes: ListScopes }) {
+  const colors = useColors();
+
+  return (
+    <HStack
+      modifiers={[
+        listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
+        listRowBackground(colors.GROUND),
+        listRowSeparator("hidden"),
+      ]}
+    >
+      <ScopeControl {...scopes} />
+    </HStack>
+  );
+}
+
+/**
  * A list of `ListRow`s, each picked by its id. Note that a list on a screen
  * of its own keeps no selection, since a pick pushes the row's own screen and
  * the row should not stand selected on the way back. A plain list wider than
@@ -118,6 +145,7 @@ export function RowList({
   onRefresh,
   choosing,
   searched,
+  scopes,
   children,
 }: RowListProps) {
   const colors = useColors();
@@ -157,6 +185,8 @@ export function RowList({
     >
       <RowOpenContext value={onSelect}>
         <RowSelectedContext value={choosing === undefined ? selected : undefined}>
+          {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
+          {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
           <RowSearchedContext value={searchedWords}>{children}</RowSearchedContext>
         </RowSelectedContext>
       </RowOpenContext>
