@@ -2769,6 +2769,15 @@ a 60-second duration (`MAINTENANCE_SWEEP.MAX_DURATION_SECONDS` in
 `src/maintenance/maintenance-app.ts`, hands it the deployment's seams. A static
 schedule runs only on production unless it is enabled on a Preview branch by hand.
 
+Once a day, at 08:00 UTC, the `workspace-drive-cleanup` schedule calls
+`apps/web/server/routes/maintenance/workspace-drives.ts` under the same
+`CRON_SECRET`. It only publishes: one cleanup message on the
+`workspace-drive-builds` queue for each workspace whose drive holds a
+repository no agent of the workspace started in for 30 days
+(`src/agents/workspace-drive-cleanup.ts`). The queue's consumer
+(`src/agents/workspace-drive-builds.ts`) prunes that drive, and comes again
+shortly where a fill holds it.
+
 The sweep ends what no request will. `MaintenanceSweeps`
 (`src/maintenance/maintenance-sweep.ts`) runs its sweeps in turn and
 answers what each did; one that fails is logged and answered as failed while

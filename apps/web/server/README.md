@@ -438,6 +438,21 @@ function's bundle may reach the module: `localOnlyReach`
 (`server/function-bundles.ts`) fails `tests/vercel-functions.test.ts` and the
 deploy's bundle step on one that does.
 
+To run the web app over the demo's acme world on one machine:
+
+1. Start the throwaway database, `node tools/demo-postgres/demo-postgres.ts
+   --url-file <path>`, which migrates it, runs `auth:seed`, and writes its URL
+   to `<path>`.
+2. Seed it: `pnpm --filter @repo/web demo:seed` with `DATABASE_URL` set to
+   that URL (`server/demo-seed.ts`).
+3. Start the local server with `DATABASE_URL` and `DATABASE_URL_UNPOOLED` set
+   to that URL; `BETTER_AUTH_SECRET` and `CRON_SECRET` set to fresh random
+   strings; `PROVIDER_KEY_ENCRYPTION_KEYS` set to `1:` and 32 random bytes in
+   base64 (the same ring the seed was given, where it was given a credential);
+   and `BETTER_AUTH_URL` and `APP_DEPLOYMENT_ORIGIN` set to the server's own
+   origin.
+4. Open `/sign-in`, which signs in as Dean and lands on `/app`.
+
 ## The data layer
 
 Drizzle is the statement layer and nothing else. A query module builds its

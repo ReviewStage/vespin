@@ -71,6 +71,7 @@
   --spacing-column-inset: var(--ui-space-12);
   --spacing-attention-mark: 14px; /* off-scale: the attention disc, a row glyph's size */
   --spacing-find-field: 240px; /* off-scale: the find bar's field, one width whatever is typed */
+  --spacing-call-window-card: 248px; /* off-scale: the floating call window's card, kept wider than the call bar's stacking width, since the window's height is fixed */
   --radius-disc: 50%; /* off-scale: a circle, whose corner what it holds inherits */
   --radius-held: inherit; /* a layer laid over a box, following the box's own corner (`UploadCover`) */
   --font-weight-ui-regular: var(--ui-weight-regular);
@@ -82,6 +83,12 @@
     ui-menu-arrive var(--ui-duration-quick) var(--ui-motion-exit) both,
     ui-card-grow var(--ui-duration-fast) var(--ui-spring-fast) both;
   --animate-edit-composer-out:
+    ui-menu-leave var(--ui-duration-exit) var(--ui-motion-exit) both,
+    ui-card-shrink var(--ui-duration-exit) var(--ui-motion-exit) both;
+  --animate-call-card-in:
+    ui-menu-arrive var(--ui-duration-quick) var(--ui-motion-exit) both,
+    ui-card-grow var(--ui-duration-fast) var(--ui-spring-fast) both;
+  --animate-call-card-out:
     ui-menu-leave var(--ui-duration-exit) var(--ui-motion-exit) both,
     ui-card-shrink var(--ui-duration-exit) var(--ui-motion-exit) both;
   --radius-ui-6: var(--ui-radius-6);
