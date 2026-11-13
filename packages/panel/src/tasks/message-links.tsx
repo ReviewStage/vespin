@@ -84,11 +84,22 @@ export const MessageRevealProvider = MessageRevealContext.Provider;
  * transcript lands page by page, and that a read that failed leaves the ask
  * standing for the tab's Retry.
  */
+/** Each message drawn under `root`, by its id: the first element drawing it. */
+export function drawnMessages(root: ParentNode): ReadonlyMap<string, HTMLElement> {
+  const drawn = new Map<string, HTMLElement>();
+
+  for (const each of root.querySelectorAll<HTMLElement>(`[${MESSAGE_ID_ATTRIBUTE}]`)) {
+    const id = each.getAttribute(MESSAGE_ID_ATTRIBUTE);
+
+    if (id !== null && !drawn.has(id)) drawn.set(id, each);
+  }
+
+  return drawn;
+}
+
 /** The element under `root` drawing the message with `messageId`, where it is drawn. */
 export function messageElement(root: ParentNode, messageId: string): HTMLElement | undefined {
-  return [...root.querySelectorAll<HTMLElement>(`[${MESSAGE_ID_ATTRIBUTE}]`)].find(
-    (each) => each.getAttribute(MESSAGE_ID_ATTRIBUTE) === messageId,
-  );
+  return drawnMessages(root).get(messageId);
 }
 
 export function useMessageReveal(input: {

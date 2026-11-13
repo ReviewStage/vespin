@@ -11,10 +11,11 @@
  * does, bringing its row in where the log has not drawn it and lighting it
  * once it lands (`message-links.tsx`).
  *
- * A mark is lit while its line stands in the view, read off where the log's
- * rows stand (`rowSpans`) and, among the rows drawn, where the line itself
- * stands, as the log scrolls or it or its rows change size, the rail drawn
- * again only when which lines stand there changes.
+ * A mark is lit while its line stands in the view, read off the rows the
+ * log has drawn as it scrolls or it or its rows change size, the rail drawn
+ * again only when which lines stand there changes. The rail marks the lines
+ * of the pages the log holds and reads no page of its own: an older page's
+ * lines join it as the log reads that page (`use-agent-transcript.ts`).
  */
 
 import {
@@ -49,7 +50,7 @@ import {
 } from "../actor-ref.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { usePhoneRoom } from "../stage-room.js";
-import { messageElement } from "./message-links.js";
+import { drawnMessages, messageElement } from "./message-links.js";
 import type { SentLine } from "./sent-lines.js";
 
 /** What the rail names the reader by where their own name is not known. */
@@ -74,33 +75,25 @@ function standsIn(element: HTMLElement, view: DOMRect): boolean {
 }
 
 /**
- * The messages of `lines` standing in `box`'s view: those whose row stands
- * there, by where `rows` says it stands, and, where the row is drawn, whose
- * own element stands there too, since a line that reached a turn while it
- * ran shares the turn's row and may stand far from the turn's part on screen.
+ * The messages of `lines` standing in `box`'s view, each by where its own
+ * element stands, since a line that reached a turn while it ran shares the
+ * turn's row and may stand far from the turn's part on screen. Note that a
+ * row out of view is never drawn, so only the drawn rows are read, and a
+ * line drawn by no element of its own, a continue's note, stands where its
+ * row does.
  */
 function linesInView(
   box: HTMLElement,
   rows: VirtualRowsHandle,
   lines: readonly RailLine[],
 ): readonly string[] {
-  const top = box.scrollTop;
-  const bottom = top + box.clientHeight;
-
-  const rowsShown = new Set(
-    rows
-      .rowSpans()
-      .filter((span) => span.start < bottom && span.start + span.size > top)
-      .map((span) => span.key),
-  );
-
   const view = box.getBoundingClientRect();
+  const drawn = drawnMessages(box);
 
   return lines.flatMap(({ rowKey, line }) => {
-    if (!rowsShown.has(rowKey)) return [];
-    const element = messageElement(box, line.messageId);
+    const element = drawn.get(line.messageId) ?? rows.rowElement(rowKey);
 
-    return element === undefined || standsIn(element, view) ? [line.messageId] : [];
+    return element !== undefined && standsIn(element, view) ? [line.messageId] : [];
   });
 }
 

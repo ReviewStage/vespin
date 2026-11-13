@@ -300,7 +300,6 @@ export function ConversationRows({
       keys: () => now()?.keys() ?? [],
       scrollToEnd: () => now()?.scrollToEnd(),
       scrollBy: (delta) => now()?.scrollBy(delta),
-      rowSpans: () => now()?.rowSpans() ?? [],
     };
   }, []);
   // Note that the lines changing may leave the box unfilled, which no scroll would say.
