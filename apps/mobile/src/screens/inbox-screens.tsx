@@ -794,7 +794,7 @@ function ThreadDetail({
         }}
       />
       <Stack.Toolbar placement="right">
-        {/* Note that an arrow at the list's end stands dimmed rather than gone, so the other one never moves under the thumb, as Mail's do. */}
+        {/* Note that the arrows and ⋯ stand in one bar, since a screen's last `Stack.Toolbar` of a placement replaces the ones before it, and an arrow at the list's end stands dimmed rather than gone, so the other one never moves under the thumb, as Mail's do. */}
         <Stack.Toolbar.Button
           accessibilityLabel={STEP_WORDS.PREVIOUS}
           disabled={place.steps.previous === undefined}
@@ -809,8 +809,6 @@ function ThreadDetail({
         >
           <Stack.Toolbar.Icon xcasset={GLYPH.NEXT_ITEM} renderingMode="template" />
         </Stack.Toolbar.Button>
-      </Stack.Toolbar>
-      <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
           <Stack.Toolbar.Menu inline>
             {pathActions.map((action) => (
@@ -1129,13 +1127,19 @@ function InboxSplitScreen({
  * The threads either side of an open one: in the order the list held as it
  * was opened, or, for a thread that order doesn't hold, in the kept scope's
  * live rows, the open thread kept among them, as the panel's list keeps the
- * item its pane shows.
+ * item its pane shows, which are then held for the arrows' next steps.
  */
 function useThreadSteps(id: string): ThreadSteps {
   const { show } = useInboxScope();
   const listing = useInboxListing({ show, search: "", chosen: id });
-  const order = heldOrder.includes(id) ? heldOrder : listing.listed.map(({ item }) => item.id);
+  const held = heldOrder.includes(id);
+  const order = held ? heldOrder : listing.listed.map(({ item }) => item.id);
   const at = order.indexOf(id);
+
+  // Note that a thread the held order doesn't hold starts a run of its own on the live rows, held from then on, so a step to a thread an older order also holds keeps to this run's order rather than jumping to that one's.
+  useEffect(() => {
+    if (!held) heldOrder = order;
+  }, [held, order]);
 
   return at < 0 ? {} : { previous: order[at - 1], next: order[at + 1] };
 }
