@@ -514,6 +514,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         listed: tasks.listed,
         pullRequestListings: tasks.pullRequestListings,
         openedOutside: tasks.openedOutside,
+        inboxNamed: tasks.inboxNamed,
         pool,
         agentListed,
       }),
