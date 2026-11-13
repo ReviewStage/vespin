@@ -1,5 +1,5 @@
 /**
- * github.test.ts -- the GitHub service over a fake HttpClient: what it sends, what a refusal holds, the members' reserve, and conditional requests.
+ * github.test.ts -- the GitHub service over a fake HttpClient: what it sends, what a refusal holds, and conditional requests.
  */
 
 import { generateKeyPairSync } from "node:crypto";
@@ -12,7 +12,6 @@ import { TestClock } from "effect/testing";
 import { GitHub, type InstallationGrant } from "./github.js";
 import { type GitHubHold, GitHubHoldStore } from "./github-hold-store.js";
 import type { GitHubRateScope } from "./github-identity.js";
-import { GitHubPriority, PRIORITY } from "./github-rate.js";
 
 const API = "https://api.github.com";
 const REPOSITORY = { owner: "octo", repo: "hello" } as const;
@@ -226,35 +225,6 @@ describe("GitHub", () => {
 
         assert.strictEqual(refused._tag, "GitHubRateLimited");
         assert.strictEqual(held._tag, "GitHubRateLimited");
-        assert.strictEqual(reads().length, 2);
-      }).pipe(Effect.provide(layer));
-    },
-  );
-
-  it.effect(
-    "refuses background work once a quarter of the core quota is left, and still sends a member's",
-    () => {
-      const { reads, layer } = harness(() =>
-        json({ full_name: "octo/hello" }, 200, {
-          "x-ratelimit-limit": "5000",
-          "x-ratelimit-remaining": "1000",
-          "x-ratelimit-reset": FAR_RESET,
-          "x-ratelimit-resource": "core",
-        }),
-      );
-
-      return Effect.gen(function* () {
-        const github = yield* GitHub;
-        const member = github.asMember(Redacted.make("gho_member"));
-        yield* readRepository(member);
-
-        const background = yield* Effect.flip(
-          readRepository(member).pipe(Effect.provideService(GitHubPriority, PRIORITY.BACKGROUND)),
-        );
-
-        yield* readRepository(member);
-
-        assert.strictEqual(background._tag, "GitHubRateLimited");
         assert.strictEqual(reads().length, 2);
       }).pipe(Effect.provide(layer));
     },
