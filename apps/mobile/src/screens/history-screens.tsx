@@ -25,7 +25,7 @@ import {
   WordsRow,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
@@ -205,15 +205,6 @@ function Version({
   // The version that stands now, as the history beneath this screen follows it, else as the list stood when it was left.
   const standingNow = useNewestVersion(taskId) ?? newest;
   const current = standingNow === seq;
-  // Whether the screen still stands, since a restore that lands after it was left must not go back from the screen in front.
-  const standing = useRef(true);
-  useEffect(() => {
-    standing.current = true;
-
-    return () => {
-      standing.current = false;
-    };
-  }, []);
   const answer = version.data;
   const read = answer === undefined || "failure" in answer ? undefined : answer.revision;
   const { pictureSource, videoAt } = useDescriptionPictures(read?.document.body);
@@ -241,12 +232,12 @@ function Version({
     }).then((went) => {
       setRestoring(false);
 
-      if (!went) return;
-      notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo });
-
-      // Note that a link pressed in the version while its restore was out stands in front of it, and is left where it is.
-      if (standing.current && navigation.isFocused()) router.back();
+      if (went)
+        notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo });
     });
+
+    // Note that the screen goes back as the restore is sent rather than once it lands, which waits on the service and then on the change reaching the app: the description takes the version as it arrives, Restored stands with its Undo then, and a refusal says why in the failure notice.
+    if (navigation.isFocused()) router.back();
   };
 
   const body = version.isPending ? (

@@ -16,16 +16,14 @@ import {
   EmptyState,
   GLYPH,
   ListSection,
-  NOTICE_KIND,
   Screen,
   SettingsForm,
   useColors,
-  useFailureNotices,
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
@@ -79,7 +77,6 @@ function MemoryEditor({
   const router = useRouter();
   const acts = useHostActs();
   const write = useWrite();
-  const notices = useFailureNotices();
 
   const { data: held } = useQuery({
     ...appStateQuery,
@@ -93,7 +90,6 @@ function MemoryEditor({
 
   if (memory === undefined && live !== undefined) setMemory(live);
   const [words, setWords] = useState<string | undefined>(undefined);
-  const [note, setNote] = useState<string | undefined>(undefined);
   // Whether a save is out, or went and the page is leaving.
   const [saving, setSaving] = useState(false);
 
@@ -109,15 +105,6 @@ function MemoryEditor({
 
   // Whether a save is out, read at the press itself.
   const out = useRef(false);
-  // Whether the page still stands, since a save that lands after it was left must not go back from the screen in front.
-  const standing = useRef(true);
-  useEffect(() => {
-    standing.current = true;
-
-    return () => {
-      standing.current = false;
-    };
-  }, []);
   useLiveFollow(workspaceId, (id) => acts[ACT_KIND.MEMORIES_FOLLOW]({ workspaceId: id }));
 
   const saved = memory?.text ?? "";
@@ -131,7 +118,6 @@ function MemoryEditor({
     if (out.current || saving || !changed || text === "" || tooLong) return;
     out.current = true;
     setSaving(true);
-    setNote(undefined);
 
     void write(
       () =>
@@ -143,26 +129,17 @@ function MemoryEditor({
       {
         refused: memorySaveRefusal,
         unanswered: MEMORY_SAVE_FAILED,
-        // Note that a refusal landing after the page was left says why in the failure notice, since its words have nowhere else to stand.
-        inPlace: (refusal) => {
-          if (standing.current) setNote(refusal);
-          else notices.say({ kind: NOTICE_KIND.REFUSED, words: refusal });
-        },
         went: BUZZ.SUCCESS,
       },
     ).then((went) => {
       out.current = false;
 
-      if (!went) {
-        setSaving(false);
-
-        return;
-      }
-
-      if (!standing.current) return;
-      kept.release();
-      router.back();
+      if (!went) setSaving(false);
     });
+
+    // Note that the page goes back as the save is sent rather than once it lands, as the panel's declared writes act at once: a correction draws over its memory at once, and a refusal says why in the failure notice, with Try again.
+    kept.release();
+    router.back();
   };
 
   const title = memoryId === undefined ? MEMORY_EDITOR_WORDS.ADD : MEMORY_EDITOR_WORDS.EDIT;
@@ -185,11 +162,7 @@ function MemoryEditor({
         act={DISCARD_WORDS.DISCARD}
         destructive
         presented={kept.asking}
-        onAct={() => {
-          // Note that the page stands no longer from the discard itself, since it stays mounted through its exit.
-          standing.current = false;
-          kept.discard();
-        }}
+        onAct={kept.discard}
         onDismiss={kept.stay}
       />
       <Screen>
@@ -210,7 +183,7 @@ function MemoryEditor({
           <SettingsForm>
             <ListSection
               // Note that the words' length is said over an earlier refusal, since it is what holds Save now.
-              footer={tooLong ? MEMORY_EDITOR_WORDS.TOO_LONG : note}
+              footer={tooLong ? MEMORY_EDITOR_WORDS.TOO_LONG : undefined}
             >
               <WordsField
                 placeholder={MEMORY_EDITOR_WORDS.PLACEHOLDER}
