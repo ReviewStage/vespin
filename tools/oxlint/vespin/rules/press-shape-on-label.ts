@@ -63,7 +63,8 @@ export const pressShapeOnLabelRule = defineRule({
         const tag = node.name.name;
 
         for (const attribute of node.attributes) {
-          if (attribute.type !== "JSXAttribute" || attributeName(attribute) !== "modifiers") continue;
+          if (attribute.type !== "JSXAttribute" || attributeName(attribute) !== "modifiers")
+            continue;
           for (const call of modifierCalls(attribute.value)) {
             if (calleeName(call.callee) !== PRESS_SHAPE_MODIFIER) continue;
             context.report({ node: call, messageId: "shapeOnControl", data: { tag } });

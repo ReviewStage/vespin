@@ -23,9 +23,9 @@ import {
   PRESS_GUARD_RULE,
 } from "./shared/press-guard.ts";
 import { PRESS_LISTENER_GUARD_RULE } from "./shared/press-listener-guard.ts";
+import { PRESS_SHAPE_GUARD_RULE } from "./shared/press-shape-guard.ts";
 import { TYPESCRIPT_SOURCE } from "./shared/repository-path.ts";
 import { namesRetired, RETIRED_GUARD_RULE } from "./shared/retired.ts";
-import { PRESS_SHAPE_GUARD_RULE } from "./shared/press-shape-guard.ts";
 import { ROW_BEHAVIOR_GUARD_RULE } from "./shared/row-behavior-guard.ts";
 import { namesSandboxDelete, SANDBOX_DELETE_GUARD_RULE } from "./shared/sandbox-delete-guard.ts";
 import { SETTINGS_ROW_END_GUARD_RULE } from "./shared/settings-row-end-guard.ts";

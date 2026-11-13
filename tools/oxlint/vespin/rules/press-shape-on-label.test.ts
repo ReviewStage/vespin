@@ -21,9 +21,13 @@ const IMPORTS =
 tester.run("press-shape-on-label", pressShapeOnLabelRule, {
   valid: [
     // The shape stands on the label, so the whole frame takes the press.
-    tsx(`${IMPORTS} function A() { return <SwiftButton onPress={go}><HStack modifiers={[M.frame({ minHeight: 44 }), M.contentShape(M.shapes.rectangle())]} /></SwiftButton>; }`),
+    tsx(
+      `${IMPORTS} function A() { return <SwiftButton onPress={go}><HStack modifiers={[M.frame({ minHeight: 44 }), M.contentShape(M.shapes.rectangle())]} /></SwiftButton>; }`,
+    ),
     // A frame on a bordered button is its press, as Send's circle is.
-    tsx(`${IMPORTS} function A() { return <SwiftButton onPress={go} modifiers={[M.buttonStyle("borderedProminent"), M.frame({ width: 32, height: 32 })]} />; }`),
+    tsx(
+      `${IMPORTS} function A() { return <SwiftButton onPress={go} modifiers={[M.buttonStyle("borderedProminent"), M.frame({ width: 32, height: 32 })]} />; }`,
+    ),
     // A button of another library is its own.
     tsx(
       'import { Button } from "@repo/ui-native"; function A() { return <Button modifiers={[contentShape(r)]} />; }',
