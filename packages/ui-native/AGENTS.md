@@ -25,7 +25,8 @@ builds a control of its own.
   detail alone, `detailOnly`) and compose,
   a path, a page's main acts as glyphs in the bar's one glass before its ⋯
   (two or three, dimmed rather than gone with nothing picked, the rest left
-  in ⋯ by `menuWithout`), a `BarMenu` such as the ⋯ menu, an
+  in ⋯ by `menuWithout`), a list's scopes as Mail's filter button
+  (`scopeMenu`, beside the app sidebar only), a `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says, and `SplitOverTabs`, the one split view a window wide enough
   for three columns stands over the hidden tabs, in front of a tab's root and
