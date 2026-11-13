@@ -252,20 +252,22 @@ export function signalRunAction(terminalId: string, signal: RunActionSignal): Co
 }
 
 /**
- * Attaches a terminal's PTY to a shell that stands, read-only where it is a
- * run action's, so a key typed there never reaches the action; one that
- * does not stand is never started here, which only the shell route does.
- * Note that the read-only client still sizes the window, as `-r` would not.
+ * Attaches a terminal's PTY to its shell, read-only where it is a run
+ * action's, so a key typed there never reaches the action; a shell that
+ * does not stand, as after its sandbox stopped, is made afresh in the
+ * agent's checkout under the tab's id and attached (`new-session -A`), so a
+ * tab always connects to a live shell. Note that the read-only client still
+ * sizes the window, as `-r` would not.
  */
 export function attachTerminal(terminalId: string): CommandAsk {
   return script(
     [
-      `if [ -n "$(tmux show-options -qv -t "$2" ${TMUX.RUN_ACTION_OPTION})" ]; then`,
+      `if [ -n "$(tmux show-options -qv -t "$2" ${TMUX.RUN_ACTION_OPTION} 2>/dev/null)" ]; then`,
       `  exec tmux attach-session -f read-only -t "$1"`,
       "fi",
-      `exec tmux attach-session -t "$1"`,
+      `exec tmux new-session -A -s "$3" -c "$4"`,
     ].join("\n"),
-    [targetOf(terminalId), optionTargetOf(terminalId)],
+    [targetOf(terminalId), optionTargetOf(terminalId), sessionOf(terminalId), TMUX.START_DIRECTORY],
   );
 }
 

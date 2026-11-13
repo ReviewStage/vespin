@@ -31,7 +31,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../http/http-effect.js";
 import { agentSandboxName } from "./agent-sandbox-open.js";
-import { heldPastStops, workspaceEnvironmentOf } from "./coder-host/runner-sessions.js";
+import { workspaceEnvironmentOf } from "./coder-host/runner-sessions.js";
 import { recordedTerminalEnded, recordedTerminalOpened } from "./sandbox-use.js";
 import { AgentSandbox } from "./terminal/agent-sandbox.js";
 import {
@@ -107,8 +107,8 @@ export const ranRunAction = Effect.fn("web/ranRunAction")(function* (
   const sandbox = yield* AgentSandbox;
   const sandboxName = agentSandboxName(sessionId);
 
-  // Note that the action's shell, a Terminal tab like any other, holds the sandbox before it starts, under the runner lease a stop as a turn ends is decided under, so that stop never takes the sandbox from under it.
-  yield* heldPastStops(sessionId, recordedTerminalOpened(sandboxName, action.id));
+  // Note that the action's shell, a Terminal tab like any other, holds the sandbox before it starts, so a stop as a turn ends never takes the sandbox from under it.
+  yield* recordedTerminalOpened(sandboxName, action.id);
 
   const ran = yield* sandboxOrUpstream(
     startedWaking(

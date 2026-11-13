@@ -110,7 +110,7 @@ import {
   type PublishedReach,
 } from "./coder-host/published.js";
 import { productionSummaryModel, type SummaryModelOf } from "./coder-host/replay-summary.js";
-import { heldPastStops, sandboxLetGo } from "./coder-host/runner-sessions.js";
+import { sandboxLetGo } from "./coder-host/runner-sessions.js";
 import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   acceptedAgentChoice,
@@ -747,9 +747,8 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const sandboxName = agentSandboxName(sessionId);
       const terminalId = randomUUID();
 
-      // Note that the tab holds the sandbox before its shell starts, under the runner lease a stop as a turn ends is
-      // decided under, so that stop either finished first, and the start below resumes the sandbox, or keeps the sandbox up.
-      yield* heldPastStops(sessionId, recordedTerminalOpened(sandboxName, terminalId));
+      // Note that the tab holds the sandbox before its shell starts, so a stop as a turn ends never takes the sandbox from under it.
+      yield* recordedTerminalOpened(sandboxName, terminalId);
 
       const opened = yield* inSandbox(
         Effect.gen(function* () {

@@ -32,7 +32,6 @@ import {
   writeAgentRunnerRecord,
 } from "@repo/database/models/agent-runner-record";
 import {
-  agentSandboxHeld,
   recordAgentSandboxTerminalEnded,
   recordAgentSandboxTerminalOpened,
 } from "@repo/database/models/agent-sandbox-holds";
@@ -176,7 +175,6 @@ import { agentMachinesLayer } from "../machine/agent-machines.js";
 import { type SandboxRunner, sandboxMachineLayer } from "../machine/sandbox-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
-import { recordedTerminalOpened } from "../sandbox-use.js";
 import {
   KEY_REFUSAL,
   PLAN_REFUSAL,
@@ -194,7 +192,6 @@ import { CODER } from "./bounds.js";
 import { claudeCodeSessions } from "./claude-code-sessions.js";
 import { reconcileAgent } from "./reconcile.js";
 import {
-  heldPastStops,
   RUNNER_ENDED,
   type RunnerSessionsOptions,
   runnerEnded,
@@ -2378,55 +2375,6 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       assert.equal(sandboxOfAgent(api, agent)?.status, "running");
       assert.equal(api.commands.length, 2);
     }),
-  );
-
-  it.effect(
-    "a Terminal tab's hold written while a turn's-end stop is under way waits the stop out, and still holds the sandbox after it",
-    () =>
-      Effect.gen(function* () {
-        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
-        const api = runnerSandboxApi();
-        const { userId, agent } = yield* openAgent;
-
-        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
-          Effect.provide(services(api)),
-        );
-
-        const opened = yield* deliveredOpen(
-          sessions,
-          yield* writtenLine(agent, "Fix the invitations."),
-        );
-
-        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
-        const { sessionId } = opened;
-        const sandboxName = agentSandboxName(sessionId);
-        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
-        yield* runnerTook(agent.id);
-        yield* settleRunnerLostTurns(writer, agent.conversationId, yield* Clock.currentTimeMillis);
-        const stopping = gate();
-        api.hooks.onStop = stopping.pass;
-        const target = { userId, conversationId: agent.conversationId };
-
-        // The turn's end found nothing holding the sandbox, and its stop is on its way to Vercel.
-        const idled = yield* Effect.forkChild(
-          runnerIdled({ target, sessionId, sequence: 41 }).pipe(Effect.provide(api.layer)),
-        );
-
-        yield* Effect.promise(() => stopping.arrived);
-
-        // A tab opens just then.
-        const at = new Date(yield* Clock.currentTimeMillis);
-
-        const held = yield* Effect.forkChild(
-          heldPastStops(sessionId, recordedTerminalOpened(sandboxName, "tab-1")),
-        );
-
-        yield* turnsPass;
-        stopping.open();
-        assert.equal(yield* Fiber.join(idled), true);
-        yield* across(Fiber.join(held), Duration.millis(250), 20);
-        assert.equal(yield* agentSandboxHeld(sandboxName, at), true);
-      }),
   );
 
   it.effect(

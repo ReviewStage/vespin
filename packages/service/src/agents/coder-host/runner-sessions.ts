@@ -3329,33 +3329,6 @@ export const sandboxLetGo = (sessionId: string) =>
     }),
   );
 
-/**
- * A member's hold on the session's sandbox written under its agent's runner
- * lease, which a stop decides and makes under (`stoppedHolding`), so a stop
- * either finished before the hold, and the caller finds the sandbox stopped
- * and says so, or reads the hold and leaves the sandbox up: a Terminal
- * tab opening as a turn ends never starts its shell in a run on its way
- * down. A lease held past `CODER.RUNNER_LEASE.SEND_WAIT`, by a launch rather
- * than a stop, which is quick, is waited no longer, nor is a store that
- * could not be asked: the hold is written anyway, said in the log. Nothing
- * is waited for where no open recorded the sandbox.
- */
-export const heldPastStops = <R>(sessionId: string, hold: Effect.Effect<void, never, R>) =>
-  Effect.gen(function* () {
-    const row = yield* agentSandboxRelease(agentSandboxName(sessionId));
-
-    if (Option.isNone(row)) return yield* hold;
-    yield* holdingRunner(row.value.agentId, hold, CODER.RUNNER_LEASE.SEND_WAIT);
-  }).pipe(
-    // Note that the lease waited past its bound, or a store that could not be asked, still holds the sandbox.
-    Effect.catch((failure) =>
-      Effect.andThen(
-        Effect.logWarning(`a hold was written past the runner lease: ${failure._tag}`),
-        hold,
-      ),
-    ),
-  );
-
 /** How a launch's end left its place. */
 export const RUNNER_ENDED = {
   /** No message waits: the place left as it stands, or a sandbox stopped where nothing holds it. */
