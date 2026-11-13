@@ -190,6 +190,8 @@ test("one sidebar lists the measures", async () => {
     "Cost",
     "Reliability",
     "Agents",
+    "Tools",
+    "Prompts",
     "Workspaces",
     "Users",
     "Limits",

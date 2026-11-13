@@ -62,6 +62,7 @@ export default defineConfig({
         about: resolveEntry("./about.html"),
         privacy: resolveEntry("./privacy.html"),
         changelog: resolveEntry("./changelog.html"),
+        guides: resolveEntry("./guides.html"),
         "sign-in": resolveEntry("./sign-in.html"),
         consent: resolveEntry("./consent.html"),
         "github-installed": resolveEntry("./github-installed.html"),

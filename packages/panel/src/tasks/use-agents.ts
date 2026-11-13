@@ -28,6 +28,7 @@ import {
 } from "@repo/features/pull-request-chapters-view";
 import { SENTRY_SEND_SPAN } from "@repo/features/sentry-tracing";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { type DraftSuggestion, sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { ListedPullRequest } from "@repo/features/task-wire";
 import type { TranscriptReader } from "@repo/features/transcript-copy";
@@ -62,7 +63,6 @@ import { actMutation, sendMutation } from "../act-mutations.js";
 import {
   DRAFT_PLACE,
   type Draft,
-  type DraftSuggestion,
   type KeptDraft,
   type NewAgentPlace,
   useDraftWriter,
@@ -112,7 +112,7 @@ import { type AgentFork, continueFork, forkStart } from "./fork-model.js";
 import { type ByPullRequestTab, pullRequestAsked } from "./pull-request-number.js";
 import { keptSkills } from "./repository-skills.js";
 import type { SkillSource } from "./skill-picker.js";
-import { sentOf, useSuggestionSender } from "./suggestion-send.js";
+import { useSuggestionSender } from "./suggestion-send.js";
 import type { MessageSender } from "./use-agent-composer.js";
 import type { ChoiceWriter } from "./use-agent-model.js";
 import { useListedPullRequests } from "./use-agent-pull-request.js";

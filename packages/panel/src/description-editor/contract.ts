@@ -350,6 +350,8 @@ export interface DescriptionEditorPictures {
   ) => PictureDrawing;
   readonly take: (taken: readonly PictureTaken[]) => void;
   readonly copies: (src: string) => boolean;
+  /** A picture copied or cut alone, by its address and the words the copy wrote; the panel puts its image beside them, so it pastes as the picture where a field takes only pictures. */
+  readonly copiedAlone: (src: string, words: CopiedWords) => void;
 }
 
 /**
@@ -618,6 +620,36 @@ export interface ComposerChip {
   readonly command: boolean;
 }
 
+/** A file as a copy of its chip carries it: its type, and its bytes as base64, as a message carries them. */
+export interface CopiedFile {
+  readonly mediaType: string;
+  readonly data: string;
+}
+
+/** The words a copy wrote to the clipboard: its HTML, and its plain text. */
+export interface CopiedWords {
+  readonly html: string;
+  readonly text: string;
+}
+
+/** A description's picture a paste carried in by its address, and what the description calls it. */
+export interface LinkedPicture {
+  readonly address: string;
+  readonly alt: string;
+}
+
+/** How a file's chip carries its file through the clipboard, so a chip copied into another box comes with its file. */
+export interface ComposerFileCopies {
+  /** The file the box knows by the name, held or taken off with its chip, which a copy of its chip carries. */
+  readonly copied: (name: string) => CopiedFile | undefined;
+  /** Files pasted chips carried in, taken as files handed to the box are; answers the name each is taken under, in order, or nothing where the box takes none now. */
+  readonly pasted: (files: readonly File[]) => readonly string[] | undefined;
+  /** A description's pictures pasted in, each read and taken as a file handed to the box is, its chip standing from the paste; answers the name each is taken under, in order, or nothing where the box takes none now. */
+  readonly linked: (pictures: readonly LinkedPicture[]) => readonly string[] | undefined;
+  /** A file's chip copied or cut alone, by its name and the words the copy wrote; the owner puts a picture's image beside them, so it pastes as the picture where a field takes only pictures. */
+  readonly copiedAlone: (name: string, words: CopiedWords) => void;
+}
+
 /** What the message box hands its editor as it mounts it. */
 export interface ComposerEditorProps {
   /** The words it opens on, each `/name` of a known skill a chip. */
@@ -652,6 +684,8 @@ export interface ComposerEditorProps {
   readonly files?: ReadonlySet<string> | undefined;
   /** Draws a file's chip into the element its node stands as, handed the file's name; answers what takes the drawing down. Where none is given, its marker is drawn as the words it is. */
   readonly drawFile?: ((element: HTMLElement, name: string) => () => void) | undefined;
+  /** How a file's chip carries its file through the clipboard; where none is given, a chip copied out carries its marker alone. */
+  readonly fileCopies?: ComposerFileCopies | undefined;
   /** What the box's mentions are picked and drawn with: an `@` word reported as `/` words are, and each mention drawn into its node's element; none where the box takes no mentions. */
   readonly mentions?: ComposerMentions | undefined;
   /** The format toolbar's doors, the selection told to it and ⌘K over words handed to it, where one stands over the box. */

@@ -15,7 +15,7 @@ import type { Cause, Effect, Queue, Redacted } from "effect";
 import { Data } from "effect";
 import type { EventSink } from "./events.js";
 import { SANDBOX_TOOL_ENV } from "./pins.js";
-import { RUNNER_ENV, RUNNER_PLACE, type RunnerEnd } from "./protocol.js";
+import { RUNNER_ENV, RUNNER_PLACE, type RunnerEnd, type TurnFilesSummary } from "./protocol.js";
 import type { LaunchTrace } from "./trace.js";
 
 /** Whether the runner runs on a host its member added (`RUNNER_PLACE.HOST`), as the environment it was started with says. */
@@ -90,6 +90,8 @@ export interface LaunchContext<Config> {
 export interface LaunchOutcome {
   readonly end: RunnerEnd;
   readonly failure: string;
+  /** The files the turn the launch's end ended changed, where one was under way with its checkout recorded and it changed any; its END carries them. */
+  readonly files?: TurnFilesSummary | undefined;
 }
 
 /**

@@ -10,7 +10,9 @@ import {
   CircleDollarSignIcon,
   GaugeIcon,
   LayoutDashboardIcon,
+  ScrollTextIcon,
   UsersIcon,
+  WrenchIcon,
 } from "@repo/ui/icons";
 import { EntityGlyph } from "../../entities/entity-glyph.js";
 import { ADMIN_TAB, type AdminTab } from "../routing.js";
@@ -28,6 +30,8 @@ const PLACE_BY_TAB = {
   [ADMIN_TAB.COST]: { label: "Cost", icon: <CircleDollarSignIcon /> },
   [ADMIN_TAB.RELIABILITY]: { label: "Reliability", icon: <ActivityIcon /> },
   [ADMIN_TAB.AGENTS]: { label: "Agents", icon: <EntityGlyph kind={ENTITY_KIND.AGENT} /> },
+  [ADMIN_TAB.TOOLS]: { label: "Tools", icon: <WrenchIcon /> },
+  [ADMIN_TAB.PROMPTS]: { label: "Prompts", icon: <ScrollTextIcon /> },
   [ADMIN_TAB.WORKSPACES]: { label: "Workspaces", icon: <Building2Icon /> },
   [ADMIN_TAB.USERS]: { label: "Users", icon: <UsersIcon /> },
   [ADMIN_TAB.LIMITS]: { label: "Limits", icon: <GaugeIcon /> },

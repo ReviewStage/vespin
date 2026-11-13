@@ -2,6 +2,7 @@ import type { AgentAttachment, AgentSummary } from "@repo/features/agent-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { ModelChoice } from "@repo/features/models-wire";
 import { SUGGESTION_LEAD } from "@repo/features/reply-button-wire";
+import type { DraftSuggestion } from "@repo/features/suggestion-model";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import {
   CARD_CORNER,
@@ -22,7 +23,6 @@ import { ArrowRightIcon, SplitIcon, XIcon } from "lucide-react";
 import { createContext, Fragment, type ReactNode, useContext } from "react";
 import { ActorRef } from "../actor-ref.js";
 import { MessageAction } from "../ai-elements/message.js";
-import type { DraftSuggestion } from "../composer-drafts.js";
 import { agentActor, agentName } from "./agent-model.js";
 import type { TranscriptCards } from "./agent-tab.js";
 import { type AgentFork, FORK_WORDS, type ForkCut, forksOf, messageOpening } from "./fork-model.js";

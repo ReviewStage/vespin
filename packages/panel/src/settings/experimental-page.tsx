@@ -49,8 +49,8 @@ import { SwitchRow } from "./switch-row.js";
 /**
  * experimental-page.tsx -- Settings › Experimental: the features not yet finished, in two groups that each say whom a switch reaches and who may flip it, or the empty state between them.
  *
- * Each group lists its experiments in the registry's order, alphabetical by
- * name.
+ * Each group lists its experiments alphabetically by name, sorted here so
+ * the page never depends on the order the registry keeps.
  *
  * The first group is the workspace Settings shows: the experiments its
  * owners and admins choose for every member and agent in it (Dean,
@@ -296,6 +296,11 @@ function AccountExperimentRow({
   );
 }
 
+/** Two entries by name, alphabetically: the order each group lists them in. */
+function byName(one: ExperimentEntry, other: ExperimentEntry): number {
+  return one.name.localeCompare(other.name, "en");
+}
+
 /** Whether an entry is a workspace experiment's, which narrows its key to one. */
 function isWorkspaceEntry(
   entry: ExperimentEntry,
@@ -311,7 +316,7 @@ export function ExperimentalPage({
   workspace,
   readerId,
 }: {
-  /** The experiments standing, alphabetical by name: `EXPERIMENTS`, as the registry lists them. */
+  /** The experiments standing, in any order: `EXPERIMENTS`, which each group lists alphabetically by name. */
   entries: readonly ExperimentEntry[];
   /** The account's own choices, as the settings carry them. */
   experiments: ExperimentChoices;
@@ -337,8 +342,11 @@ export function ExperimentalPage({
     );
   }
 
-  const workspaceEntries = entries.filter(isWorkspaceEntry);
-  const accountEntries = entries.filter((entry) => !isWorkspaceExperiment(entry.key));
+  const workspaceEntries = entries.filter(isWorkspaceEntry).toSorted(byName);
+
+  const accountEntries = entries
+    .filter((entry) => !isWorkspaceExperiment(entry.key))
+    .toSorted(byName);
 
   return (
     <>

@@ -62,6 +62,7 @@ import {
   type FailureAbout,
 } from "@repo/features/shown-failure";
 import { skillWord } from "@repo/features/skill-word";
+import { sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { workingTime } from "@repo/features/time-format";
@@ -279,6 +280,7 @@ import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { AgentTabSkeleton, TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { ArchivedComposerNote } from "./archived-note.js";
+import { ComputerDock } from "./computer-dock.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
 import {
   ContinueAgent,
@@ -317,7 +319,7 @@ import { ShownPage } from "./shown-page.js";
 import { SentWords, useSkill } from "./skill-chip.js";
 import type { SkillSource } from "./skill-picker.js";
 import { SkillCard } from "./skill-ref.js";
-import { sentOf, useSuggestionSender } from "./suggestion-send.js";
+import { useSuggestionSender } from "./suggestion-send.js";
 import { PlanGlyph } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
 import { type AgentThreads, ThreadsDock, type TurnDone } from "./threads-dock.js";
@@ -3570,6 +3572,12 @@ function AgentTabView({
           readerId={readerId}
         />
         <AgentPicturesProvider value={pictures}>
+          <ComputerDock
+            agentId={agent.id}
+            messages={lines}
+            working={standing.working}
+            onStop={offersStop(agent) ? onStop : undefined}
+          />
           <AgentQueueDock
             messages={queue.messages}
             controls={controlsQueue}

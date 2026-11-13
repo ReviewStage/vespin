@@ -2492,8 +2492,9 @@ function TabContent({
  * beside the document, full screen, or still sliding, so a press lands on
  * it however fast the presses come. Where the room holds the panel only full
  * screen, a narrow one's, it reads Close panel while the panel is open, since the
- * panel covers everything else. It stands on every task's page, so it
- * is also what offers the panel's shortcut. ⌘T is the task's page's, which hands it to the column
+ * panel covers everything else. It stands on every task's page but its
+ * details, which take the panel's room, so it is also what offers the
+ * panel's shortcut. ⌘T is the task's page's, which hands it to the column
  * holding the window's focus (desktop-tasks.tsx). While the task is not
  * drawn there is no panel to show, so it is disabled and offers none. On a
  * task's page it stands at the end of the agents' tabs' row instead, with the

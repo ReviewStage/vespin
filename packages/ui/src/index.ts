@@ -14,6 +14,8 @@ export * from "./components/app-ask/app-ask.js";
 
 export * from "./components/app-icon/app-icon.js";
 
+export * from "./components/app-window-stack/app-window-stack.js";
+
 export * from "./components/approval-actions/approval-actions.js";
 
 export * from "./components/arrival/arrival.js";
@@ -61,6 +63,10 @@ export * from "./components/breadcrumbs/crumb.js";
 export * from "./components/button/button.js";
 
 export * from "./components/calendar/calendar.js";
+
+export * from "./components/call/call-card.js";
+
+export * from "./components/call/call-controls.js";
 
 export * from "./components/caption-field/caption-field.js";
 

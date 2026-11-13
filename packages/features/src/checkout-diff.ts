@@ -20,6 +20,7 @@
  * ends the script with `CHECKOUT_DIFF_EXIT.MISSING` before it diffs anything.
  */
 
+import { CHECKOUT_DIFF_BOUNDS } from "@repo/agent-runner/checkout-diff";
 import {
   type AgentChangedFile,
   CHANGED_FILE_STATUS,
@@ -28,63 +29,6 @@ import {
   PATCH_OMITTED,
 } from "./agent-wire.js";
 import { isSecretFile } from "./task-wire.js";
-
-/** The variables the script reads the two sides from: the commit before the turn, and the commit after it, empty for the working tree as it stands. */
-export const CHECKOUT_DIFF_VARIABLE = {
-  FROM: "APP_DIFF_FROM",
-  TO: "APP_DIFF_TO",
-} as const;
-
-/** How the script ends where it diffs nothing: a commit it was handed is not in the checkout. */
-export const CHECKOUT_DIFF_EXIT = {
-  MISSING: 3,
-} as const;
-
-export const CHECKOUT_DIFF_BOUNDS = {
-  /** The most bytes of diff the script prints; a diff cut here loses its last file, which the reading says. */
-  MAX_BYTES: 4 * 1024 * 1024,
-} as const;
-
-const { FROM, TO } = CHECKOUT_DIFF_VARIABLE;
-
-/**
- * The diff, run with the checkout as its working directory. Note that the
- * working tree is read as a snapshot reads it, the index copied and the
- * tree added to the copy, so untracked files are among the changes and
- * ignored ones are not; that the copy and the diff stand in a folder of
- * this run's own, removed as it ends however it ends, so two diffs of one
- * checkout at once never read each other's; and that the diff is written
- * to a file before it is bounded, so a git that fails ends the script
- * rather than printing a diff cut short.
- */
-export const CHECKOUT_DIFF_SCRIPT = [
-  "set -eu",
-  "umask 0002",
-  `if ! git cat-file -e "$${FROM}^{commit}" 2>/dev/null; then exit ${CHECKOUT_DIFF_EXIT.MISSING}; fi`,
-  "git_dir=$(git rev-parse --git-dir)",
-  'run=$(mktemp -d "$git_dir/vespin-diff.XXXXXX")',
-  "trap 'rm -rf \"$run\"' EXIT",
-  `to="$${TO}"`,
-  'if [ -n "$to" ]; then',
-  `  if ! git cat-file -e "$to^{commit}" 2>/dev/null; then exit ${CHECKOUT_DIFF_EXIT.MISSING}; fi`,
-  "else",
-  '  if [ -f "$git_dir/index" ]; then cp "$git_dir/index" "$run/index"; fi',
-  "  to=$(GIT_INDEX_FILE=\"$run/index\" sh -c 'git add -A -- . >/dev/null && git write-tree')",
-  "fi",
-  `git -c core.quotepath=false diff --no-color --no-ext-diff --no-textconv --find-renames "$${FROM}" "$to" > "$run/out"`,
-  `head -c ${CHECKOUT_DIFF_BOUNDS.MAX_BYTES} "$run/out"`,
-].join("\n");
-
-/** The two sides a diff stands between, as the turn's rows keep them: the snapshot before the turn, and the one after it, or null for the working tree. */
-export interface CheckoutDiffRange {
-  readonly from: string;
-  readonly to: string | null;
-}
-
-/** The script's variables for the range given. */
-export function checkoutDiffEnv(range: CheckoutDiffRange) {
-  return { [FROM]: range.from, [TO]: range.to ?? "" } satisfies Readonly<Record<string, string>>;
-}
 
 /** The files a diff names, as the Changes view draws them, and whether the diff was cut short of some. */
 export interface CheckoutDiffFiles {
