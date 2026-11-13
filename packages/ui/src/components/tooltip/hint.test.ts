@@ -541,6 +541,23 @@ test("a key, a scroll, or the window losing the keyboard while the pointer rests
   }
 });
 
+test("a box scrolling beside a control, as a log beside its rail, leaves its hint waiting and standing; one scrolling around it takes it down", () => {
+  waiting();
+  const press = drawRows(["Alpha"]);
+  const beside = document.body.appendChild(document.createElement("div"));
+  const scroll = (box: Element) => act(() => box.dispatchEvent(new Event("scroll")));
+  move(undefined, press("Alpha"));
+  pass(MOTION_DELAY_MS.HINT / 2);
+  scroll(beside);
+  pass(MOTION_DELAY_MS.HINT);
+  assert.deepEqual(cards(), ["Alpha's card"], "the wait runs out through a scroll beside it");
+  scroll(beside);
+  assert.deepEqual(cards(), ["Alpha's card"], "the card stands through a scroll beside it");
+  scroll(document.body);
+  pass(2 * MOTION_DELAY_MS.HINT);
+  assert.deepEqual(cards(), [], "a scroll around the control takes the card down");
+});
+
 test("a modifier held alone, as a screenshot's chord begins, neither calls a waiting card off nor takes a standing one down; the key it begins does", () => {
   waiting();
   const press = drawRows(["Alpha"]);
