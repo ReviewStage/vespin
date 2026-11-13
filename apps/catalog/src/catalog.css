@@ -295,6 +295,14 @@ body {
   gap: var(--ui-space-12);
 }
 
+/* A page's column an intro card heads, its card as wide as the column. */
+.catalog-intro-room {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-12);
+  width: 100%;
+}
+
 /* A row of attachment chips, with room above for the discs on their corners. */
 .catalog-attachments {
   display: flex;
