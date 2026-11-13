@@ -124,8 +124,10 @@ test("a draft is left out where drafts are, and a guide naming a related guide t
 
   assert.throws(() => parseGuides([FILES[0]], true), /related.*review-agents/);
 
-  // A link in the body to a guide the build leaves out fails it too, in Markdown or raw HTML.
-  const linked = FILES[0].words.replace("related: [review-agents]\n", "");
+  // A link in the body to a guide the build leaves out fails it too, in Markdown or raw HTML: each case's one link.
+  const linked = FILES[0].words
+    .replace("related: [review-agents]\n", "")
+    .replace("[reviewing](review-agents.md)", "reviewing");
 
   const anchored = linked.replace(
     "[how fast](review-agents.md#how-fast)",
