@@ -175,6 +175,7 @@ test("a call connects in the default voice, goes live as the session starts, and
   assert.deepEqual(opened, [{ agentId: AGENT_ID, voice: "marin", sdp: "v=0 offer" }]);
   assert.deepEqual(peer.remote, { type: "answer", sdp: "v=0 answer" });
   assert.equal(call.call?.stage, "connecting");
+  assert.equal(call.call?.callId, CALL_ID);
   assert.equal(call.call?.startedAt, undefined);
 
   act(() => peer.channel.started());

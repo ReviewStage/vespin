@@ -59,6 +59,8 @@ export interface VoiceCallState {
   /** The agent the call speaks to, and the task it works on. */
   readonly agentId: string;
   readonly taskId: string;
+  /** The call's id as the service answered it, which its transcript lines name; nothing until it answers. */
+  readonly callId: string | undefined;
   /** When the session started, on the epoch's clock; nothing while it connects. */
   readonly startedAt: number | undefined;
   readonly microphoneMuted: boolean;
@@ -274,6 +276,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
       );
     }
 
+    setCall((last) => last && { ...last, callId: answer.callId });
     await held.peer.setRemoteDescription({ type: "answer", sdp: answer.sdp });
   };
 
@@ -298,6 +301,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
       stage: VOICE_CALL_STAGE.CONNECTING,
       agentId: into.agentId,
       taskId: into.taskId,
+      callId: undefined,
       startedAt: undefined,
       microphoneMuted: false,
       speakerMuted: false,
