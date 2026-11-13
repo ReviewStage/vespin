@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "721f7e1b-d1f1-45d2-84fc-fafe330fd636",
-  "prevIds": ["bc5086cb-6586-455c-8103-a585b0129c69"],
+  "id": "d0687612-bd02-433b-b117-d75c131c4957",
+  "prevIds": ["b4251074-f04e-4686-90a0-135b8d181ad7", "e5acca80-7f4b-4862-90c5-be95c2ef629f"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -619,6 +619,12 @@
     {
       "isRlsEnabled": false,
       "name": "voice_call",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "workspace_drive_repository",
       "entityType": "tables",
       "schema": "public"
     },
@@ -9971,6 +9977,19 @@
       "table": "account_preference"
     },
     {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "voice",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "account_preference"
+    },
+    {
       "type": "boolean",
       "typeSchema": null,
       "notNull": false,
@@ -13341,6 +13360,45 @@
       "entityType": "columns",
       "schema": "public",
       "table": "voice_call"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "organization_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_drive_repository"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "repository",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_drive_repository"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "added_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "workspace_drive_repository"
     },
     {
       "type": "uuid",
@@ -20429,6 +20487,19 @@
       "columnsTo": ["id"],
       "onUpdate": "NO ACTION",
       "onDelete": "CASCADE",
+      "name": "workspace_drive_repository_organization_id_organization_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "workspace_drive_repository"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["organization_id"],
+      "schemaTo": "public",
+      "tableTo": "organization",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
       "name": "workspace_environment_variable_ueCmXMp5f6h8_fkey",
       "entityType": "fks",
       "schema": "public",
@@ -20760,6 +20831,14 @@
       "entityType": "pks",
       "schema": "public",
       "table": "hosted_usage"
+    },
+    {
+      "columns": ["organization_id", "repository"],
+      "nameExplicit": false,
+      "name": "workspace_drive_repository_pkey",
+      "entityType": "pks",
+      "schema": "public",
+      "table": "workspace_drive_repository"
     },
     {
       "columns": ["organization_id", "experiment"],
