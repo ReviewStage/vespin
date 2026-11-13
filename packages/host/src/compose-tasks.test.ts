@@ -842,6 +842,65 @@ it.effect("a start answered after another task was opened answers its task and o
   }),
 );
 
+it.effect("a task the list does not hold is read into it as it opens, and only once", () =>
+  Effect.gen(function* () {
+    const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+    const billing = task(BILLING, "Billing export", "# Billing export", 20);
+    const service = fakeService([billing, invites]);
+    const { call, last, openTask } = yield* subject(service);
+    // The list the host follows holds the billing task alone, as one that keeps only recent tasks live.
+    yield* call("TASKS_REFRESH", undefined);
+    yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+
+    const listed = () =>
+      last()
+        ?.tasks.map((each) => each.id)
+        .toSorted();
+
+    assert.deepEqual(listed(), [BILLING]);
+
+    yield* openTask(INVITES);
+    assert.deepEqual(listed(), [BILLING, INVITES].toSorted(), "the task opened is drawn");
+
+    yield* openTask(BILLING);
+    yield* openTask(INVITES);
+    assert.deepEqual(
+      service.reads.filter((read) => read.startsWith("task-rows")),
+      [`task-rows:${INVITES}`],
+      "the task outside the list is read once, and the one in it never",
+    );
+  }),
+);
+
+it.effect("a task the list takes up and then lets go is read again as it opens", () =>
+  Effect.gen(function* () {
+    const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+    const billing = task(BILLING, "Billing export", "# Billing export", 20);
+    const service = fakeService([billing, invites]);
+    const { call, last, openTask } = yield* subject(service);
+    yield* call("TASKS_REFRESH", undefined);
+    yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+    yield* openTask(INVITES);
+    // The follow takes the task up, as an edit moves it into the live set, then lets it go again as it ages out.
+    yield* listAnswers(service, { plans: [rowOfTask(billing), rowOfTask(invites)] });
+    yield* listAnswers(service, { plans: [rowOfTask(billing)] });
+    assert.deepEqual(
+      last()?.tasks.map((each) => each.id),
+      [BILLING],
+    );
+
+    yield* openTask(INVITES);
+
+    assert.deepEqual(
+      last()
+        ?.tasks.map((each) => each.id)
+        .toSorted(),
+      [BILLING, INVITES].toSorted(),
+      "the task let go is read into the list again",
+    );
+  }),
+);
+
 it.effect("a task opened again draws its held description before any read of it answers", () =>
   Effect.gen(function* () {
     const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);

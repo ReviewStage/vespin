@@ -38,7 +38,7 @@ import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
-import { TASK_LIST_READ } from "@repo/features/task-list-live";
+import { TASK_LIST_READ, TASK_ROWS_READ } from "@repo/features/task-list-live";
 import { AGENT_PAGES_READ, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
 import type {
@@ -1259,6 +1259,18 @@ export function fakeService(tasks: Task[]): FakeService {
     ) =>
       Effect.suspend((): Effect.Effect<unknown> => {
         if (read.name === TASK_LIST_READ.name) return service.listLive(params.userId, params.sync);
+
+        // One task outside the list, read with its agents, none of which the fake's tasks hold.
+        if (read.name === TASK_ROWS_READ.name) {
+          service.reads.push(`task-rows:${params.id}`);
+          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+          rows.set({
+            plans: service.tasks.filter((each) => each.id === params.id).map(rowOfTask),
+            agents: [],
+          });
+
+          return Effect.succeed(rows.first());
+        }
 
         if (read.name === SIDEBAR_READ.name) {
           if (poll === undefined) service.reads.push("sidebar-live");
