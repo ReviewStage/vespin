@@ -46,8 +46,9 @@
  *
  * The view holds its sandbox up for as long as it stands, whether or not
  * the member acts on it: once its sandbox's session is read, it beats a
- * hold on the sandbox every `HOLD_EVERY` (`holdSandbox`), which the minute
- * sweep keeps up, and the hold lapses on its own once the view closes. The
+ * hold of its own on the sandbox every `HOLD_EVERY` (`holdSandbox`), which
+ * the minute sweep keeps up, and lets go of it as it closes, however it
+ * closes (`releaseSandbox`), any other view's hold standing. The
  * panel says it is watching while it is shown, and a viewport counts only
  * where it resizes the view, since an older panel sends the same size again
  * whether shown or not. The socket closes as idle once the panel has sent
@@ -153,8 +154,10 @@ export interface BrowserLiveDependencies {
   readonly handBack: (tabId: string, userId: string) => Effect.Effect<boolean, unknown>;
   /** Counts a takeover or hand-back the member made, in the agent's workspace, once the request that made it has answered; never fails. */
   readonly counted: (userId: string, agentId: string, tool: ServerAgentTool) => Effect.Effect<void>;
-  /** Beats a hold on the sandbox the session names, which keeps it up while the view stands; a beat the store did not take is logged, for the next to write. */
-  readonly holdSandbox: (sessionId: string) => Effect.Effect<void>;
+  /** Beats this view's hold on the sandbox the session names, under the view's own id, which keeps it up while the view stands; a beat the store did not take is logged, for the next to write. */
+  readonly holdSandbox: (sessionId: string, holder: string) => Effect.Effect<void>;
+  /** Lets go of this view's hold at once as it closes, every other holder's standing; one the store did not take lapses on its own. */
+  readonly releaseSandbox: (sessionId: string, holder: string) => Effect.Effect<void>;
   /** Keeps the tab's page as the view saw it move, on the target named alone, so a browser that starts afresh reopens it there; a write the store did not take is logged, for the next move to try again. */
   readonly notePage: (
     tabId: string,
@@ -1020,8 +1023,11 @@ function watchBrowser(view: LiveView): Effect.Effect<LiveEnd, never, Scope.Scope
 
     if (Option.isNone(session.success)) return BROWSER_LIVE_CLOSE_REASON.NOT_OPENED;
     // Note that the view holds its sandbox from here to its close, whether or not the member acts on it.
+    const sessionId = session.success.value;
+    const holder = crypto.randomUUID();
+    yield* Effect.addFinalizer(() => deps.releaseSandbox(sessionId, holder));
     yield* Effect.forkScoped(
-      Effect.repeat(deps.holdSandbox(session.success.value), {
+      Effect.repeat(deps.holdSandbox(sessionId, holder), {
         schedule: Schedule.spaced(BROWSER_LIVE_BOUNDS.HOLD_EVERY),
       }),
     );

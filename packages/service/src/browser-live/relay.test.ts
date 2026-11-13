@@ -215,6 +215,7 @@ function world(
       }),
     counted: (_userId, _agentId, tool) => Effect.sync(() => void counted.push(tool)),
     holdSandbox: () => Effect.void,
+    releaseSandbox: () => Effect.void,
     notePage: (_tab, targetId, page) =>
       Effect.sync(() => void notedPages.push({ targetId, address: page.address })),
   };

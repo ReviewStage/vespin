@@ -16,6 +16,7 @@ import {
 } from "@repo/database/models/agent-browser-tabs";
 import { readVisibleAgentWorkspace } from "@repo/database/models/agent-store";
 import { standingSessionsNamed } from "@repo/database/models/recorded-session";
+import { AGENT_SANDBOX_BEAT_KIND } from "@repo/database/schemas/agent-sandbox";
 import { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
@@ -24,7 +25,7 @@ import { AgentBrowser, agentBrowserOver } from "../agents/browser/agent-browser.
 import { connectRestoring } from "../agents/browser/restore-tabs.js";
 import { AgentImage } from "../agents/coder-host/agent-image.js";
 import { sandboxPtyOf } from "../agents/sandbox-pty.js";
-import { recordedSandboxHeld } from "../agents/sandbox-use.js";
+import { recordedSandboxBeat, recordedSandboxBeatReleased } from "../agents/sandbox-use.js";
 import { recordServerEventIn, SERVER_EVENT } from "../events/server-events.js";
 import type { BrowserLiveDependencies } from "./relay.js";
 
@@ -76,7 +77,20 @@ export const browserLiveDependencies: Effect.Effect<
           { tool },
         ),
       ),
-    holdSandbox: (sessionId) => run(recordedSandboxHeld(agentSandboxName(sessionId))),
+    holdSandbox: (sessionId, holder) =>
+      run(
+        recordedSandboxBeat(agentSandboxName(sessionId), {
+          kind: AGENT_SANDBOX_BEAT_KIND.VIEW,
+          holder,
+        }),
+      ),
+    releaseSandbox: (sessionId, holder) =>
+      run(
+        recordedSandboxBeatReleased(agentSandboxName(sessionId), {
+          kind: AGENT_SANDBOX_BEAT_KIND.VIEW,
+          holder,
+        }),
+      ),
     notePage: (tabId, targetId, page) =>
       run(noteBrowserTabPage(tabId, targetId, page)).pipe(
         Effect.catch(() => Effect.logWarning("a watched tab's page was not kept")),

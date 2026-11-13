@@ -16,9 +16,9 @@
  * running sandbox each time they are asked (`terminal/listening-ports.ts`),
  * one look at where the sandbox stands and one short command in it, so the
  * desktop polls this every few seconds while the control is open or
- * forwarding is on; a read made while forwarding is on holds the sandbox up
- * (`sandbox-use.ts`'s `recordedSandboxHeld`), and the popover's own do
- * not. A sandbox that is not running, stopped or never opened, is never
+ * forwarding is on; a read from a Mac forwarding them holds the sandbox up
+ * under that Mac's id, one from a Mac that stopped lets go of its hold at
+ * once (`sandbox-use.ts`), and the popover's own do neither. A sandbox that is not running, stopped or never opened, is never
  * woken here, and answers so with no ports; an agent on a Mac has
  * no sandbox, and answers the same.
  *
@@ -34,7 +34,9 @@
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import { taskKeyOfAgent } from "@repo/database/models/task-number-store";
+import { AGENT_SANDBOX_BEAT_KIND } from "@repo/database/schemas/agent-sandbox";
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { AGENT_PORTS_FORWARDING, type AgentPortsForwarding } from "@repo/features/contract";
 import type {
   ListeningPortsAnswer,
   PortShareAnswer,
@@ -50,7 +52,7 @@ import {
 import { PageLinks } from "../pages/page-links.js";
 import { previewNameOf, previewOrigin } from "../previews/preview-links.js";
 import { agentSandboxName } from "./agent-sandbox-open.js";
-import { recordedSandboxHeld } from "./sandbox-use.js";
+import { recordedSandboxBeat, recordedSandboxBeatReleased } from "./sandbox-use.js";
 import { AgentSandbox, type AgentSandboxService } from "./terminal/agent-sandbox.js";
 import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach.js";
 
@@ -82,19 +84,32 @@ const linkOf = (userId: string, id: string, route: string) =>
     return `${previewOrigin(sandbox, previewNameOf(key.value.slug, key.value.number, id))}/`;
   });
 
-/** The ports listened on in the agent's sandbox, and whether it is running; one read while the member's desktop is `forwarding` them beats a hold on the running sandbox. */
+/** A Mac's word on a ports read: whether it forwards the ports, and its own id. */
+export interface PortsForward {
+  readonly forwarding: AgentPortsForwarding;
+  readonly forwarder: string;
+}
+
+/** The ports listened on in the agent's sandbox, and whether it is running; a read from a Mac forwarding them beats that Mac's hold on the running sandbox, and one from a Mac that stopped lets go of it. */
 export function listAgentPorts(
   userId: string,
   id: string,
-  forwarding = false,
+  forward?: PortsForward,
 ): PortsEffect<ListeningPortsAnswer> {
   return Effect.gen(function* () {
     const sessionId = yield* cloudSession(userId, id);
 
     if (sessionId === undefined) return { running: false, ports: [], labels: [] };
+    const sandboxName = agentSandboxName(sessionId);
+    const beat = forward && { kind: AGENT_SANDBOX_BEAT_KIND.FORWARD, holder: forward.forwarder };
+
+    // Note that a stop lets go before the read, so a sandbox the read cannot reach is let go too.
+    if (beat && forward.forwarding === AGENT_PORTS_FORWARDING.OFF)
+      yield* recordedSandboxBeatReleased(sandboxName, beat);
     const answer = yield* onSandbox((sandbox) => sandbox.listeningPorts(sessionId));
 
-    if (forwarding && answer.running) yield* recordedSandboxHeld(agentSandboxName(sessionId));
+    if (beat && forward.forwarding === AGENT_PORTS_FORWARDING.ON && answer.running)
+      yield* recordedSandboxBeat(sandboxName, beat);
 
     return answer;
   });

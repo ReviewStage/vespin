@@ -8,7 +8,10 @@
  * Forwarding a port reads the agent's listening ports at once, so the act
  * answers with the port's local address where it already listens, and
  * every few seconds after for as long as any of the agent's ports is
- * forwarded; nothing is started or woken in the sandbox on its behalf, and a
+ * forwarded, each read saying this Mac forwards (under an id it mints for
+ * itself), which holds the sandbox up, and the read as forwarding ends
+ * saying it stopped, which lets go of this Mac's hold at once;
+ * nothing is started or woken in the sandbox on its behalf, and a
  * stopped sandbox reads as not running until it runs; once a sandbox seen
  * running stops, forwarding is turned off, so it waits on no agent whose
  * ports are gone. Of the ports read, only the ones the developer asked for
@@ -32,6 +35,7 @@
  */
 
 import { type HostedAgentPortsClient, webSocketOrigin } from "@repo/features";
+import { AGENT_PORTS_FORWARDING } from "@repo/features/contract";
 import {
   PORT_FORWARD_STATE,
   type PortForwarding,
@@ -53,6 +57,8 @@ import type { RunMode } from "./run-mode.js";
 export const PORT_FORWARD = {
   /** How often the forwarded agent's listening ports are read while forwarding is on. */
   LOOK_EVERY: Duration.seconds(3),
+  /** How many random bytes name this Mac to the service as the one forwarding. */
+  FORWARDER_BYTES: 16,
 } as const;
 
 /** The service's side of the forward, as this concern asks it. */
@@ -141,6 +147,13 @@ export function composePortForwards(
     const lifetimeScope = yield* Effect.scope;
     const http = yield* HttpClient.HttpClient;
     const socketOrigin = webSocketOrigin(kernel.hostedServiceBaseUrl);
+
+    // Note that the service holds the sandbox for this Mac under an id of its own, so one Mac's stop never lets go of another's forward.
+    const forwarder = Array.from(
+      crypto.getRandomValues(new Uint8Array(PORT_FORWARD.FORWARDER_BYTES)),
+      (byte) => byte.toString(16).padStart(2, "0"),
+    ).join("");
+
     const gate = () => kernel.runMode.sendsNetwork && account.capabilitiesActive();
     let forwarding: Forwarding | undefined;
     let toldText = JSON.stringify(null);
@@ -189,8 +202,10 @@ export function composePortForwards(
      */
     const look = (current: Forwarding) =>
       Effect.gen(function* () {
-        // Note that the read says it forwards, so the service holds the sandbox up while it does.
-        const answer = yield* withHttp(client.list(current.agentId, true));
+        // Note that the read says this Mac forwards, so the service holds the sandbox up while it does.
+        const answer = yield* withHttp(
+          client.list(current.agentId, { forwarding: AGENT_PORTS_FORWARDING.ON, forwarder }),
+        );
 
         if ("failure" in answer) return false;
 
@@ -241,6 +256,14 @@ export function composePortForwards(
         return forward === undefined ? Effect.void : Scope.close(forward.scope, Exit.void);
       });
 
+    /** The ending agent's hold let go, so the service may stop its sandbox at once; one the service did not take lapses on its own. */
+    const unheld = (ending: Forwarding) =>
+      Effect.asVoid(
+        withHttp(
+          client.list(ending.agentId, { forwarding: AGENT_PORTS_FORWARDING.OFF, forwarder }),
+        ),
+      );
+
     /** The ending agent's public link closed, a close the service refuses logged rather than holding forwarding on. */
     const unshared = (ending: Forwarding) =>
       Effect.gen(function* () {
@@ -268,6 +291,7 @@ export function composePortForwards(
           ? Effect.void
           : (closeLink ? unshared(ending) : Effect.void).pipe(
               Effect.andThen(Scope.close(ending.scope, Exit.void)),
+              Effect.andThen(unheld(ending)),
               Effect.andThen(tell),
             );
       });

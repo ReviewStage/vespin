@@ -14,17 +14,20 @@
  * reads it booting, running, or off. What a member holds open in it is
  * recorded here too (`@repo/database`'s `models/agent-sandbox-holds.ts`): a
  * Terminal tab's shell as it starts and ends, the shells a list reads, and a
- * heartbeat while its ports are forwarded or its Browser view is open. A
+ * holder's heartbeat while it forwards its ports or views its Browser, and
+ * its release. A
  * write that fails is logged and let be: it never fails a turn, an open, or
  * a member's call, and the next touch, list, or beat writes it again.
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
+  type AgentSandboxBeat,
   keepAgentSandboxTerminals,
-  recordAgentSandboxHeld,
+  recordAgentSandboxBeat,
   recordAgentSandboxTerminalEnded,
   recordAgentSandboxTerminalOpened,
+  releaseAgentSandboxBeat,
 } from "@repo/database/models/agent-sandbox-holds";
 import {
   recordAgentSandboxBooted,
@@ -122,15 +125,23 @@ export const recordedSandboxDiscarded = (
 ): Effect.Effect<void, never, DatabaseServices> =>
   loggedIfFailed(recordAgentSandboxDiscarded(sandboxName));
 
-/** A member's heartbeat on the sandbox now: its ports forwarded to their Mac, or its Browser view open. */
-export const recordedSandboxHeld = (
+/** One holder's heartbeat on the sandbox now: a Mac forwarding its ports, or a Browser view of it open. */
+export const recordedSandboxBeat = (
   sandboxName: string,
+  beat: AgentSandboxBeat,
 ): Effect.Effect<void, never, DatabaseServices> =>
   loggedIfFailed(
     Effect.flatMap(Clock.currentTimeMillis, (now) =>
-      recordAgentSandboxHeld(sandboxName, new Date(now)),
+      recordAgentSandboxBeat(sandboxName, beat, new Date(now)),
     ),
   );
+
+/** One holder let go of the sandbox at once: its forwarding turned off, or its view closed; one not taken lapses on its own. */
+export const recordedSandboxBeatReleased = (
+  sandboxName: string,
+  beat: AgentSandboxBeat,
+): Effect.Effect<void, never, DatabaseServices> =>
+  loggedIfFailed(releaseAgentSandboxBeat(sandboxName, beat));
 
 /** A Terminal tab's shell started in the sandbox now, which holds it until the shell ends. */
 export const recordedTerminalOpened = (

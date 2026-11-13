@@ -4,9 +4,9 @@
  * The agent travels in the path. The read is cheap enough for the desktop
  * to ask every few seconds while the control is open or forwarding is on:
  * one look at whether the sandbox is running, and one short command in it
- * while it runs. It never wakes a stopped sandbox. A read made because the
- * desktop forwards the ports says so (`forwarding`), which holds the running
- * sandbox up while it reads.
+ * while it runs. It never wakes a stopped sandbox. A read made because a
+ * Mac forwards the ports says so (`forwarding`, `forwarder`), which holds the
+ * running sandbox up, and one made as it stops lets go of that Mac's hold.
  *
  * One port may be shared by a public link (`listening-ports-wire.ts`):
  * shared, which never wakes a stopped sandbox and refuses one as stopped,
@@ -33,8 +33,22 @@ import { bodyCap, declaredProcedure, exactBodyInput, refuses } from "./base.js";
 /** The agent a path names; the service reads an id that is no UUID as naming none. */
 const agentParamsSchema = EffectSchema.Struct({ id: EffectSchema.String });
 
-/** What a read's `forwarding` query says where the desktop reads the ports because it forwards them, which holds the sandbox up; the popover's own reads leave it out. */
-export const AGENT_PORTS_FORWARDING = "1";
+/**
+ * What a read's `forwarding` query says of the Mac that reads: ON while it
+ * forwards the ports, which holds the sandbox up, and OFF once it stopped,
+ * which lets go of that hold at once. Either names the Mac by its
+ * `forwarder` id. The popover's own reads leave both out.
+ */
+export const AGENT_PORTS_FORWARDING = {
+  ON: "on",
+  OFF: "off",
+} as const;
+
+export type AgentPortsForwarding =
+  (typeof AGENT_PORTS_FORWARDING)[keyof typeof AGENT_PORTS_FORWARDING];
+
+/** The most characters a forwarder's id is. */
+const FORWARDER_MAX_CHARS = 64;
 
 /** Where the agent's shared port stands. */
 const SHARE_PATH = `${HOSTED_SERVICE_PATH.AGENTS}/{id}/ports/share` as const;
@@ -60,7 +74,12 @@ export const agentPortsContract = {
     .input(
       EffectSchema.Struct({
         ...agentParamsSchema.fields,
-        forwarding: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_PORTS_FORWARDING)),
+        forwarding: EffectSchema.optionalKey(
+          EffectSchema.Literals(Object.values(AGENT_PORTS_FORWARDING)),
+        ),
+        forwarder: EffectSchema.optionalKey(
+          EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(FORWARDER_MAX_CHARS)),
+        ),
       }),
     )
     .output(EffectSchema.flip(listeningPortsAnswerSchema)),

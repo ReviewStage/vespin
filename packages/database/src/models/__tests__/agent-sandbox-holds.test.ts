@@ -3,22 +3,24 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Effect } from "effect";
 import { Database } from "../../core/query.js";
+import { AGENT_SANDBOX_BEAT_KIND } from "../../schemas/agent-sandbox.js";
 import { user } from "../../schemas/auth.js";
 import { getTestDB, openTaskAgent, startTask } from "../../testing/index.js";
 import {
   agentSandboxHeld,
   heldAgentSandboxes,
   keepAgentSandboxTerminals,
-  recordAgentSandboxHeld,
+  recordAgentSandboxBeat,
   recordAgentSandboxTerminalEnded,
   recordAgentSandboxTerminalOpened,
+  releaseAgentSandboxBeat,
 } from "../agent-sandbox-holds.js";
 import { recordAgentSandboxDiscarded, recordAgentSandboxOpen } from "../agent-sandboxes.js";
 
 /**
  * What a member holds open in a cloud agent's sandbox, over a real dialect:
- * a Terminal tab holds it until its shell ends, a heartbeat holds it for two
- * minutes, and one sandbox's holds never hold another's. Synthetic accounts,
+ * a Terminal tab holds it until its shell ends, a holder's beat until it lets
+ * go or two minutes pass, and one sandbox's holds never hold another's. Synthetic accounts,
  * agents, and sandbox names throughout.
  */
 
@@ -85,20 +87,29 @@ it.layer(getTestDB())("what a member holds open in an agent's sandbox", (it) => 
   );
 
   it.effect(
-    "a heartbeat holds its sandbox for two minutes, and another account's sandbox is never held by it",
+    "a holder's beat holds its sandbox until that holder lets go or two minutes pass, and never holds another account's",
     () =>
       Effect.gen(function* () {
         const held = yield* openSandbox;
         const other = yield* openSandbox;
-        yield* recordAgentSandboxHeld(held, OPENED);
+        const mac = { kind: AGENT_SANDBOX_BEAT_KIND.FORWARD, holder: randomUUID() };
+        const view = { kind: AGENT_SANDBOX_BEAT_KIND.VIEW, holder: randomUUID() };
+        yield* recordAgentSandboxBeat(held, mac, OPENED);
+        yield* recordAgentSandboxBeat(held, view, OPENED);
 
         assert.equal(yield* agentSandboxHeld(held, MINUTE_LATER), true);
         assert.equal(yield* swept(held, MINUTE_LATER), true);
         assert.equal(yield* agentSandboxHeld(other, MINUTE_LATER), false);
+
+        yield* releaseAgentSandboxBeat(held, mac);
+        assert.equal(yield* agentSandboxHeld(held, MINUTE_LATER), true, "the view still holds it");
+        yield* releaseAgentSandboxBeat(held, view);
+        assert.equal(yield* agentSandboxHeld(held, MINUTE_LATER), false, "let go at once");
+
+        yield* recordAgentSandboxBeat(held, mac, OPENED);
         assert.equal(yield* agentSandboxHeld(held, MINUTES_LATER), false, "the beats stopped");
         assert.equal(yield* swept(held, MINUTES_LATER), false);
-
-        yield* recordAgentSandboxHeld(held, MINUTES_LATER);
+        yield* recordAgentSandboxBeat(held, mac, MINUTES_LATER);
         assert.equal(yield* agentSandboxHeld(held, MINUTES_LATER), true, "a beat holds it again");
       }),
   );

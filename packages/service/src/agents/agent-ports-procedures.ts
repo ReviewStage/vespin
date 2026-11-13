@@ -35,10 +35,16 @@ export function agentPortsProcedures(seams: AgentPortsProcedureSeams) {
   const signedIn = hosted.agentPorts.use(accountMiddleware(seams.resolveUserId));
 
   return {
-    /** The ports listened on in the agent's sandbox, and whether it is running; a read the desktop makes while it forwards them holds the sandbox up. */
+    /** The ports listened on in the agent's sandbox, and whether it is running; a read from a Mac forwarding them holds the sandbox up, and one from a Mac that stopped lets go. */
     list: signedIn.list.effect(function* ({ input, context }) {
       return yield* Effect.provide(
-        listAgentPorts(context.userId, input.id, input.forwarding !== undefined),
+        listAgentPorts(
+          context.userId,
+          input.id,
+          input.forwarding === undefined || input.forwarder === undefined
+            ? undefined
+            : { forwarding: input.forwarding, forwarder: input.forwarder },
+        ),
         seams.sandbox,
       );
     }),

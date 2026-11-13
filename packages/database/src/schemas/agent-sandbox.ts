@@ -17,9 +17,10 @@ import { agentTable } from "./agent.js";
  * sandbox began, set as the launch opens it and cleared once its runner is
  * handed its first lines or the open failed, so the task list reads the
  * sandbox booting, running, or off (`@repo/service`'s `live/reads/tasks.ts`).
- * `held_at` is the last heartbeat of a member's hold on the sandbox (its
- * ports forwarded to their Mac, or its Browser view open), and each Terminal
- * tab open in it is a row of `agent_sandbox_terminal` (`../models/agent-sandbox-holds.ts`).
+ * Each Terminal tab open in it is a row of `agent_sandbox_terminal`, and
+ * each holder beating a hold on it (its ports forwarded to a member's Mac,
+ * or a Browser view open) a row of `agent_sandbox_beat`
+ * (`../models/agent-sandbox-holds.ts`).
  * The row goes with its agent. It holds ids, a name, and instants alone.
  */
 
@@ -58,8 +59,6 @@ export const agentSandboxTable = pgTable(
     state: text("state").$type<AgentSandboxState>().notNull().default(AGENT_SANDBOX_STATE.LIVE),
     /** When the boot under way began; null where none is. */
     bootingSince: timestamptz("booting_since"),
-    /** When a member's heartbeat last said they hold the sandbox open: its ports forwarded, or its Browser view open; null where none ever did. */
-    heldAt: timestamptz("held_at"),
   },
   (table) => [
     // An agent's delete cascades to its rows, found by the agent alone.
@@ -88,4 +87,36 @@ export const agentSandboxTerminalTable = pgTable(
     openedAt: timestamptz("opened_at").notNull(),
   },
   (table) => [primaryKey({ columns: [table.sandboxName, table.terminalId] })],
+);
+
+/** What beats a hold on a sandbox: its ports forwarded to a member's Mac, or its Browser view open. */
+export const AGENT_SANDBOX_BEAT_KIND = {
+  FORWARD: "forward",
+  VIEW: "view",
+} as const;
+
+export type AgentSandboxBeatKind =
+  (typeof AGENT_SANDBOX_BEAT_KIND)[keyof typeof AGENT_SANDBOX_BEAT_KIND];
+
+/**
+ * One holder's heartbeat on an agent's sandbox, which holds it up: the
+ * member forwarding its ports (the holder is their user id), or one Browser
+ * view's socket (the holder is the socket's own id). Written at most once a
+ * minute while it holds, deleted as the holder lets go, and lapsed two
+ * minutes past its last beat for a holder that quit, crashed, or slept
+ * without letting go, so one holder's release never lets go of another's.
+ * A row names the sandbox, a kind, a holder's id, and an instant alone, and
+ * goes with the sandbox's row.
+ */
+export const agentSandboxBeatTable = pgTable(
+  "agent_sandbox_beat",
+  {
+    sandboxName: text("sandbox_name")
+      .notNull()
+      .references(() => agentSandboxTable.sandboxName, { onDelete: "cascade" }),
+    kind: text("kind").$type<AgentSandboxBeatKind>().notNull(),
+    holder: text("holder").notNull(),
+    beatAt: timestamptz("beat_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.sandboxName, table.kind, table.holder] })],
 );
