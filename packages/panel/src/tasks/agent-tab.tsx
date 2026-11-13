@@ -225,7 +225,13 @@ import {
   useAgentApprovals,
   useCallHeld,
 } from "./agent-approvals.js";
-import { AgentBootLine, BOOT_LINE, type BootLine, bootLineOf } from "./agent-boot-line.js";
+import {
+  AgentBootLine,
+  BOOT_LINE,
+  type BootLine,
+  bootLineOf,
+  type FirstHeld,
+} from "./agent-boot-line.js";
 import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { useForwardToast } from "./agent-forward.js";
@@ -3355,9 +3361,21 @@ function AgentTabView({
   const firstBoot = unread && agent.status === AGENT_STATUS.STARTING && agent.turnId === null;
   const booting = firstBoot || bootHolds(transcript.boot?.phase);
 
+  // The queue's first message held for an edit, which the hand-off stops at: by this window's box at once, by any other as the queue says.
+  const head = transcript.queue?.messages[0];
+
+  const firstHeld: FirstHeld | undefined =
+    head === undefined
+      ? undefined
+      : queueEditing.editing === head.id
+        ? { byReader: true }
+        : head.editing === true
+          ? { byReader: false }
+          : undefined;
+
   const bootLine: BootLine | undefined = firstBoot
     ? { kind: BOOT_LINE.STARTING, since: agent.createdAt }
-    : bootLineOf(transcript.boot);
+    : bootLineOf(transcript.boot, firstHeld);
 
   // Note that a boot under way says so as the log's working line, at its top, and a failed one in its centered line with Retry.
   const bootDrawn =

@@ -41,6 +41,7 @@ import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { agentBootTable } from "../schemas/agent-boot.js";
+import { queuedMessage } from "../schemas/agent-queue.js";
 import {
   pauseInLock,
   type QueuedLine,
@@ -59,7 +60,11 @@ const FAILURES: readonly BootFailure[] = Object.values(BOOT_FAILURE);
  * The phases a boot can fail from and lapse in: under way, or handing its
  * first message off, so a hand-off whose queue read failed, and which
  * nothing would move on again, is failed by the minute sweep past its
- * deadline and booted again by Retry rather than standing for good.
+ * deadline and booted again by Retry rather than standing for good. A
+ * hand-off stopped at a first message a member is editing never lapses,
+ * since it waits on them, and one whose first message moved within a
+ * deadline, as their save or cancel moves it and the claim that sends it
+ * does, lapses only a deadline after that.
  */
 const UNSETTLED_PHASES: readonly BootPhase[] = [...BOOTING_PHASES, BOOT_PHASE.HANDING_OFF];
 
@@ -100,6 +105,9 @@ function bootOf(row: typeof BootRowSchema.Type): AgentBootRow {
 
 /** When a boot entered under way at `at` is failed by the minute sweep. */
 const deadlineFrom = (at: Date) => new Date(at.getTime() + BOOT_BOUNDS.DEADLINE_MS);
+
+/** The earliest a hand-off's first message may have moved and still keep it from lapsing at `now`: a deadline back. */
+const movedSince = (now: Date) => new Date(now.getTime() - BOOT_BOUNDS.DEADLINE_MS);
 
 const findBoots = SqlSchema.findAll({
   Request: Schema.Struct({ agentIds: Schema.Array(Schema.String) }),
@@ -186,7 +194,12 @@ const findLapsed = SqlSchema.findAll({
         .select(BOOT_COLUMNS)
         .from(agentBootTable)
         .where(
-          and(inArray(agentBootTable.phase, UNSETTLED_PHASES), lte(agentBootTable.deadlineAt, now)),
+          and(
+            inArray(agentBootTable.phase, UNSETTLED_PHASES),
+            lte(agentBootTable.deadlineAt, now),
+            // Note that a hand-off whose first message a member is editing waits on them, not on its machine, and one whose first message moved within a deadline (an edit saved, a hold let go, a claim to send) is under way again, so neither lapses.
+            sql`not (${agentBootTable.phase} = ${BOOT_PHASE.HANDING_OFF} and coalesce((select ${queuedMessage.editing} or ${queuedMessage.updatedAt} > ${movedSince(now).toISOString()}::timestamptz from ${queuedMessage} where ${queuedMessage.agentId} = ${agentBootTable.agentId} order by ${queuedMessage.position} asc limit 1), false))`,
+          ),
         )
         .orderBy(asc(agentBootTable.deadlineAt))
         .limit(limit),
@@ -381,7 +394,7 @@ export function rebootAgent(
   );
 }
 
-/** The boots still under way or handing off past their deadline at `now`, the longest past first. */
+/** The boots still under way or handing off past their deadline at `now`, the longest past first, bar a hand-off held for an edit to its first message or whose first message moved within a deadline. */
 export function lapsedAgentBoots(
   now: Date,
   limit: number,
