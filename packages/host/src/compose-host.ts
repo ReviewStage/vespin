@@ -173,14 +173,16 @@ function macCommandsDevice(
 ): MacCommandsDevice {
   const stored = Effect.map(Effect.orDie(settings.store.snapshot()), (snapshot) => snapshot.stored);
 
+  /** One setting written, answering whether it landed: a write Settings refused answers its reason. */
   const written = (write: Effect.Effect<SettingsUpdateResult, unknown>) =>
-    Effect.asVoid(
+    Effect.map(
       settings.settingsWrite(
         () => write,
         () => Effect.void,
         "Could not save that setting on this system.",
         undefined,
       ),
+      (result) => result.reason === undefined,
     );
 
   return {
@@ -193,9 +195,10 @@ function macCommandsDevice(
     applySettings: (kept) =>
       Effect.gen(function* () {
         const values = yield* stored;
+        let landed = true;
 
         if ((values.macCommands ?? APP_SETTING_SCHEMA.macCommands.default) !== kept.commandMode) {
-          yield* written(
+          landed = yield* written(
             settings.store.set(APP_SETTING_SCHEMA.macCommands.field, kept.commandMode),
           );
         }
@@ -203,8 +206,12 @@ function macCommandsDevice(
         const apps = computerUseAppsStored(kept.alwaysAllowedApps);
 
         if (apps !== computerUseAppsStored(computerUseAppsOf(values.computerUseApps))) {
-          yield* written(settings.store.set(APP_SETTING_SCHEMA.computerUseApps.field, apps));
+          landed =
+            (yield* written(settings.store.set(APP_SETTING_SCHEMA.computerUseApps.field, apps))) &&
+            landed;
         }
+
+        return landed;
       }),
   };
 }

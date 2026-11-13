@@ -317,7 +317,7 @@ interface Gate {
   /** The computer-use helper this Mac ships, its switch, and the apps allowed without asking; none ships no helper. */
   computer?: { helper: ComputerUseHelperSeam; enabled: boolean; allowed: string[] };
   /** The device this Mac joins as, and the apps Settings allows without asking; none claims as the account alone. */
-  device?: { id: string; apps: string[] };
+  device?: { id: string; apps: string[]; applyFails?: number };
 }
 
 /**
@@ -404,8 +404,18 @@ const subject = (
         })),
         applySettings: (settings: MacDeviceSettings) =>
           Effect.sync(() => {
+            // A write Settings refuses, as a file that cannot be written refuses it, changes nothing here.
+            if ((gate.device?.applyFails ?? 0) > 0) {
+              if (gate.device !== undefined)
+                gate.device.applyFails = (gate.device.applyFails ?? 0) - 1;
+
+              return false;
+            }
+
             if (gate.device !== undefined) gate.device.apps = [...settings.alwaysAllowedApps];
             gate.mode = settings.commandMode;
+
+            return true;
           }),
       };
     }
@@ -552,6 +562,42 @@ it.effect(
       assert.deepEqual(service.savedSettings, [
         { commandMode: MAC_COMMAND_MODE.NEVER, alwaysAllowedApps: ["com.apple.Notes"] },
       ]);
+    }),
+);
+
+it.effect(
+  "a Mac whose Settings refuse the service's settings writes them again after a rest, and never carries its own up over them",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+
+      const service = scriptedService({
+        deviceSettings: { commandMode: MAC_COMMAND_MODE.NEVER, alwaysAllowedApps: [] },
+      });
+
+      const gate: Gate = {
+        mode: MAC_COMMAND_MODE.ALWAYS,
+        signedIn: true,
+        device: { id: "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13", apps: [], applyFails: 1 },
+      };
+
+      const { composer, moved } = yield* subject(service, spawner, gate);
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          // A change told at once after the refusal, as the refused write itself tells one.
+          yield* moved;
+          yield* settled;
+          assert.equal(service.joins.length, 1, "no join again before the rest");
+          yield* TestClock.adjust("15 seconds");
+          yield* settled;
+        }),
+      );
+
+      assert.equal(gate.mode, MAC_COMMAND_MODE.NEVER, "the service's mode is kept here at last");
+      assert.deepEqual(service.savedSettings, [], "the Mac's own mode never goes up over it");
     }),
 );
 

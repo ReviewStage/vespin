@@ -59,6 +59,8 @@ export const openThisMacDevice = Effect.fnUntraced(function* (parts: ThisMacDevi
   const path = yield* Path.Path;
   const oneAtATime = (yield* Semaphore.make(1)).withPermits(1);
   const file = path.join(parts.stateRoot, DEVICE_IDS_FILE);
+  /** The ids this run settled on, so one the file could not keep still holds until the app quits. */
+  const settled = new Map<string, string>();
 
   const kept = Effect.map(
     fileSystem.readFileString(file).pipe(Effect.orElseSucceed(() => "")),
@@ -77,12 +79,14 @@ export const openThisMacDevice = Effect.fnUntraced(function* (parts: ThisMacDevi
   const keptOr = (userId: string, fresh: Effect.Effect<string>) =>
     oneAtATime(
       Effect.gen(function* () {
-        const ids = yield* kept;
-        const standing = ids[userId];
+        const known = settled.get(userId);
 
-        if (standing !== undefined) return standing;
-        const id = yield* fresh;
-        yield* keep({ ...ids, [userId]: id });
+        if (known !== undefined) return known;
+        const ids = yield* kept;
+        const id = ids[userId] ?? (yield* fresh);
+        settled.set(userId, id);
+
+        if (ids[userId] === undefined) yield* keep({ ...ids, [userId]: id });
 
         return id;
       }),
@@ -95,6 +99,7 @@ export const openThisMacDevice = Effect.fnUntraced(function* (parts: ThisMacDevi
     oneAtATime(
       Effect.gen(function* () {
         const id = parts.createId();
+        settled.set(userId, id);
         yield* keep({ ...(yield* kept), [userId]: id });
 
         return id;
