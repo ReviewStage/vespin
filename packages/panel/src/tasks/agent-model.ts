@@ -93,6 +93,7 @@ import type { DescriptionEditor, TaskPullRequestLine } from "@repo/features/task
 import { dayAndTimeText, dueText } from "@repo/features/time-format";
 import { TOOL_STATE, type ToolState } from "@repo/features/tool-call-block";
 import { githubLineOf } from "@repo/features/transcript-lines";
+import { isAgentTurn, isVoiceLine, opensTurn } from "@repo/features/voice-call-lines";
 import { andList, countWords, readFailedWords, TERM } from "@repo/features/words";
 import type { FormerMember, WorkspaceMember } from "@repo/features/workspace-wire";
 import {
@@ -1667,11 +1668,13 @@ export function workerWorkingPhase(status: AgentStatus): WorkingPhase {
  * turn; none where the lines say nothing, as before a first turn.
  */
 export function agentWorkingSince(lines: readonly AgentTranscriptMessage[]): number | undefined {
-  const at = lines.findLastIndex((line) => line.role === MESSAGE_ROLE.ASSISTANT);
+  // Note that the voice's lines on a call are no turn, so the journal is the agent's newest turn whatever the voice said after it.
+  const at = lines.findLastIndex(isAgentTurn);
   const journal = lines[at];
 
+  // Note that a line said on a call opens a turn only where a delegation handed it on, so the talk before an ask counts nothing.
   const opens = (line: AgentTranscriptMessage) =>
-    line.role === MESSAGE_ROLE.USER && line.arrivedIn === undefined && line.sentAt !== undefined;
+    opensTurn(line) && line.arrivedIn === undefined && line.sentAt !== undefined;
 
   // A closed journal, or none, is followed by the line that opens the next turn, where one was sent.
   if (journal === undefined || journal.finishedAt !== undefined) {
@@ -1679,7 +1682,7 @@ export function agentWorkingSince(lines: readonly AgentTranscriptMessage[]): num
   }
 
   // An open journal was opened by the first line after the journal before it.
-  const before = lines.slice(0, at).findLastIndex((line) => line.role === MESSAGE_ROLE.ASSISTANT);
+  const before = lines.slice(0, at).findLastIndex(isAgentTurn);
 
   return lines.slice(before + 1, at).find(opens)?.sentAt ?? journal.startedAt;
 }
@@ -1726,7 +1729,7 @@ const SENTENCE_END = /[.!?](?=\s|$)/u;
 export function finishedReplyLead(
   messages: readonly AgentTranscriptMessage[],
 ): { readonly messageId: string; readonly lead: string } | undefined {
-  const reply = messages.findLast((message) => message.role === MESSAGE_ROLE.ASSISTANT);
+  const reply = messages.findLast(isAgentTurn);
 
   if (reply === undefined) return undefined;
   // Note that only words after the turn's last call are its reply, because words before it were the turn under way.
@@ -1757,8 +1760,10 @@ export function finishedReplyLead(
 export function lastTurnEnding(
   messages: readonly AgentTranscriptMessage[],
 ): { readonly messageId: string; readonly followUps: readonly string[] } | undefined {
-  // Note that a line a turn took in under way may stand after its journal, and only a line no turn took waits on the next.
-  const last = messages.findLast((message) => message.arrivedIn === undefined);
+  // Note that a line a turn took in under way may stand after its journal, and only a line no turn took waits on the next; the voice retelling the turn on a call waits on nothing.
+  const last = messages.findLast(
+    (message) => message.arrivedIn === undefined && !isVoiceLine(message),
+  );
 
   if (last?.role !== MESSAGE_ROLE.ASSISTANT) return undefined;
   const ending = endTurnOf(agentParts(last));

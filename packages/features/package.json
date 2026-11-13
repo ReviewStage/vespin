@@ -63,6 +63,7 @@
     "./tasks-model": "./src/tasks-model.js",
     "./transcript-copy": "./src/transcript-copy.js",
     "./transcript-lines": "./src/transcript-lines.js",
+    "./voice-call-lines": "./src/voice-call-lines.js",
     "./transcript-window": "./src/transcript-window.js",
     "./turn-record": "./src/turn-record.js",
     "./task-history-live": "./src/task-history-live.js",

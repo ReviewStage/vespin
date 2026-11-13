@@ -161,6 +161,7 @@ import { TURN_ENDS_EXAMPLE } from "./examples/turn-ends";
 import { TYPOGRAPHY_EXAMPLE } from "./examples/typography";
 import { UPLOAD_COVERS_EXAMPLE } from "./examples/upload-covers";
 import { VIDEO_PLAYER_EXAMPLE } from "./examples/video-player";
+import { VOICE_CALLS_EXAMPLE } from "./examples/voice-calls";
 import { WRITING_GLYPHS_EXAMPLE } from "./examples/writing-glyphs";
 import { ZOOM_IMAGES_EXAMPLE } from "./examples/zoom-images";
 
@@ -331,6 +332,7 @@ export const EXAMPLES: readonly Example[] = [
   REVEALS_EXAMPLE,
   ZOOM_IMAGES_EXAMPLE,
   MESSAGES_EXAMPLE,
+  VOICE_CALLS_EXAMPLE,
   PANE_PINS_EXAMPLE,
   KEEP_FOCUS_EXAMPLE,
   PORTAL_FENCE_EXAMPLE,

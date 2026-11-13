@@ -111,6 +111,10 @@ export const RUN_PROFILE = {
   AGENT_TRANSCRIPT: "agent-transcript",
   /** The same agent as an orchestrator days into its run, its transcript thousands of entries long and written to while it is open. */
   AGENT_LONG_RUN: "agent-long-run",
+  /** The same agent after two calls into it, the Voice experiment on: the member's, which handed it work, and a teammate's. */
+  AGENT_VOICE: "agent-voice",
+  /** The same agent mid-turn on a call, the Voice experiment on: a spoken ask awaiting the turn, and the caller's line growing as they speak. */
+  AGENT_VOICE_LIVE: "agent-voice-live",
   /** The same agent, its Pull request tab on the checks. */
   AGENT_CHECKS: "agent-checks",
   /** The same agent, its Pull request tab on Files changed. */
