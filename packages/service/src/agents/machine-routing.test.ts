@@ -128,7 +128,7 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
 
         assert.deepEqual(yield* route(target, {}), {
           kind: MACHINE_ROUTE.REFUSED,
-          reason: `Not run: Studio is offline, or Vespin isn't running on it. It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
+          reason: `Not run: Studio is offline, or Vespin isn't running on it. Carry on with what you can do without it, and try again later. It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
           why: MACHINE_UNREACHED.OFFLINE,
           others: [toLaptop.machine],
           machine: { id: studio, name: "Studio", owner: ana },
@@ -161,7 +161,7 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
         );
         assert.deepEqual(yield* route(target, { machineId: "Laptop" }), {
           kind: MACHINE_ROUTE.REFUSED,
-          reason: `Not run: no machine this task's agents may use has the id "Laptop". It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
+          reason: `Not run: no machine this task's agents may use has the id "Laptop". Leave \`machine\` out to send it where your calls go by default. It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
           why: MACHINE_UNREACHED.UNKNOWN_MACHINE,
           others: [toLaptop.machine],
         });
@@ -175,7 +175,7 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
 
         assert.deepEqual(yield* route(target, {}), {
           kind: MACHINE_ROUTE.REFUSED,
-          reason: `Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it. It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
+          reason: `Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it. Carry on with what you can do without it. It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
           why: MACHINE_UNREACHED.DEFAULT_GONE,
           others: [toLaptop.machine],
         });

@@ -156,6 +156,7 @@
     "./machine-command-live": "./src/machine-command-live.js",
     "./machine-live": "./src/machine-live.js",
     "./machine-command-wire": "./src/machine-command-wire.js",
+    "./machine-refusal-words": "./src/machine-refusal-words.js",
     "./recording-wire": "./src/recording-wire.js",
     "./sentry-install-wire": "./src/sentry-install-wire.js",
     "./slack-bot-wire": "./src/slack-bot-wire.js",
