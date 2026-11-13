@@ -7,8 +7,8 @@
  * Got it. Each one's glyph, words, and docs address are written once, here
  * (`INTRO_PAGE`), so a renamed docs page is one line. The glyph is the one
  * the page already wears where it is named: the sidebar's row for
- * Automations and the Inbox, the description's for the Overview, and the
- * Browser tab's own.
+ * Automations and the Inbox, and the tab's own (`tabLook`) for the Overview
+ * and the Browser.
  *
  * Which intros the account has seen is its preference
  * (`APP_SETTING_SCHEMA.introsSeen`), so Got it on one device dismisses the
@@ -16,7 +16,8 @@
  * account's preferences (`accountRead`), since an account made before the
  * intros shipped reads them all as seen and must not see one flash before
  * that answer lands. Got it adds the intro to the list the account holds;
- * the card goes at once in this window, before the write comes back.
+ * the card goes at once in this window, before the write comes back, and
+ * stands again if the write is refused, so Got it can be pressed again.
  */
 
 import { ENTITY_KIND } from "@repo/features/entity-kind";
@@ -31,36 +32,40 @@ import {
   introsSeenWith,
 } from "@repo/settings";
 import { IntroCard } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useState } from "react";
 import { actMutation } from "./act-mutations.js";
 import { EntityGlyph } from "./entities/entity-glyph.js";
+import { TAB_KIND, tabLook } from "./tasks/tab-look.js";
 import { useOpenLink } from "./tasks/use-open-link.js";
 import { appStateQuery, selectAppSettingsView } from "./use-app-state.js";
 
-/** What each page's intro draws: its glyph, its one sentence, and the docs page Learn more opens. */
-const INTRO_PAGE: Record<Intro, { glyph: ReactNode; words: string; learnMore: string }> = {
+/**
+ * What each page's intro draws: its glyph, its one sentence, and the docs
+ * page Learn more opens. Note that each glyph is drawn as the card draws,
+ * because the tab looks import the pages that mount these cards.
+ */
+const INTRO_PAGE: Record<Intro, { glyph: () => ReactNode; words: string; learnMore: string }> = {
   [INTRO.AUTOMATIONS]: {
-    glyph: <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />,
+    glyph: () => <EntityGlyph kind={ENTITY_KIND.AUTOMATIONS} />,
     words:
       "Automations start agents on a schedule, or when GitHub, Sentry, or a webhook says something happened.",
     learnMore: `${LINK_PAGE.DOCS}/automations`,
   },
   [INTRO.INBOX]: {
-    glyph: <EntityGlyph kind={ENTITY_KIND.INBOX} />,
+    glyph: () => <EntityGlyph kind={ENTITY_KIND.INBOX} />,
     words:
       "Agents post here when they need your decision, a to-do done, or your review, and your answer goes straight back to them.",
     learnMore: `${LINK_PAGE.DOCS}/inbox`,
   },
   [INTRO.TASK_OVERVIEW]: {
-    glyph: <GLYPH.DESCRIPTION />,
+    glyph: () => tabLook({ kind: TAB_KIND.OVERVIEW }).icon,
     words:
       "You and the task's agents keep this description current: edit it, or comment and mention an agent to steer them.",
     learnMore: `${LINK_PAGE.DOCS}/tasks`,
   },
   [INTRO.BROWSER]: {
-    glyph: <GLYPH.WEBSITE />,
+    glyph: () => tabLook({ kind: TAB_KIND.BROWSER, title: undefined }).icon,
     words: "This is the agent's own browser: watch it work, or take over to sign in for it.",
     learnMore: `${LINK_PAGE.DOCS}/tasks#the-agents-browser`,
   },
@@ -74,7 +79,7 @@ function selectIntros(state: AppStateSnapshot) {
 }
 
 /** Whether `intro`'s card stands: the account's preferences answered, and the intro not yet seen; and Got it, which dismisses it for good. */
-export function useIntro(intro: Intro): { shown: boolean; dismiss: () => void } {
+export function useIntro(intro: Intro) {
   const intros = useQuery({ ...appStateQuery, select: selectIntros }).data;
   const { mutate: updateSetting } = useMutation(actMutation(ACT_KIND.SETTING_UPDATE));
   const [dismissed, setDismissed] = useState(false);
@@ -82,10 +87,10 @@ export function useIntro(intro: Intro): { shown: boolean; dismiss: () => void } 
 
   const dismiss = () => {
     setDismissed(true);
-    updateSetting({
-      field: APP_SETTING_SCHEMA.introsSeen.field,
-      value: introsSeenWith(intros?.seen, intro),
-    });
+    updateSetting(
+      { field: APP_SETTING_SCHEMA.introsSeen.field, value: introsSeenWith(intros?.seen, intro) },
+      { onError: () => setDismissed(false) },
+    );
   };
 
   return { shown: intros?.read === true && !seen && !dismissed, dismiss };
@@ -100,7 +105,7 @@ export function PageIntro({ intro }: { intro: Intro }): React.JSX.Element {
   return (
     <IntroCard
       shown={shown}
-      glyph={page.glyph}
+      glyph={page.glyph()}
       learnMore={page.learnMore}
       open={open}
       onDismiss={dismiss}

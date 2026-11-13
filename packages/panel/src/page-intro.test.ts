@@ -1,11 +1,13 @@
 // @vitest-environment jsdom
 
 import assert from "node:assert/strict";
+import { SETTINGS_ACT_KIND } from "@repo/host/contract";
 import { INTRO } from "@repo/settings";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import { PageIntro } from "./page-intro.js";
+import { fakeActPort, fakeActPortCalls, refusedOnPort } from "./testing/app-bridge.js";
 import { handSettings } from "./testing/app-state.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
 
@@ -13,7 +15,8 @@ import { withQueryClient } from "./testing/copy-feedback.js";
  * page-intro.test.ts -- a page's intro never stands before the service has
  * answered the account's preferences, since an account made before the
  * intros shipped reads them all as seen; once answered it stands, and Got it
- * keeps it gone, for the next page drawn too.
+ * keeps it gone, for the next page drawn too. A Got it the window refuses
+ * brings the card back, to be pressed again.
  */
 
 declare global {
@@ -67,4 +70,16 @@ test("an intro waits for the account's preferences, then stands until Got it, wh
   const next = drawIntro();
   await act(async () => undefined);
   assert.equal(stands(next), false);
+});
+
+test("a Got it whose write is refused brings the card back", async () => {
+  handSettings({ accountRead: true });
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [SETTINGS_ACT_KIND.SETTING_UPDATE]: () => Promise.reject(refusedOnPort("Not saved.")),
+  });
+  const page = drawIntro();
+  const press = await vi.waitFor(() => gotIt(page) ?? assert.fail("the intro"));
+  act(() => press.click());
+  await vi.waitFor(() => assert.equal(stands(page), true));
 });
