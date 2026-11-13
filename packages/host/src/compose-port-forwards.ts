@@ -379,9 +379,9 @@ export function composePortForwards(
             current.chosen.add(port);
             yield* look(current);
 
-            // Note that a port the read did not forward is not kept chosen, so forwarding never stands on with nothing to stop.
+            // Note that a port the read did not forward is not kept chosen, and a sandbox the read found stopped ends the forward, so forwarding never stands on with nothing to stop or answers an address gone with its sandbox.
             if (!current.forwards.has(port)) current.chosen.delete(port);
-            yield* current.chosen.size === 0 ? turnOff : tell;
+            yield* ends(current) ? turnOff : tell;
 
             return standing(agentId);
           }),

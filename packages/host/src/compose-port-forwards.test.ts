@@ -400,6 +400,18 @@ it.effect("forwarding is let go once a sandbox seen running stops", () =>
 
     assert.deepEqual([...listeners.keys()], []);
     assert.equal(told(), null);
+
+    // Another agent's port is opened, its sandbox stops, and Open is pressed again before the next look: that Open's own read lets it go.
+    serve(OTHER_AGENT_ID, [4000]);
+    yield* set({ agentId: OTHER_AGENT_ID, port: 4000, on: true });
+    assert.deepEqual([...listeners.keys()], [4000]);
+    stop(OTHER_AGENT_ID);
+    const reopened = yield* set({ agentId: OTHER_AGENT_ID, port: 4000, on: true });
+    yield* settle;
+
+    assert.deepEqual(reopened, { on: false, running: false, ports: [] });
+    assert.deepEqual([...listeners.keys()], []);
+    assert.equal(told(), null);
   }),
 );
 
