@@ -50,8 +50,9 @@ import UniformTypeIdentifiers
 /// is pressed through Accessibility, as is a point on a page's element, and
 /// any other point is clicked by an event posted to the app's own process
 /// aimed at its window, so the developer keeps the cursor and whatever app
-/// they are typing into. A press answers done only once the window's elements
-/// changed after it, since a browser may answer a press it never acts on.
+/// they are typing into. A press answers pressed only once the window's
+/// elements changed after it, and pressed_unconfirmed where they did not,
+/// since a browser may answer a press it never acts on.
 /// Terminals, password managers, System Settings, the login and security
 /// prompts, and the app itself are refused whatever the request says.
 
@@ -64,8 +65,13 @@ private let LINES_PER_PAGE = 12
 private let MAX_CLICKS = 3
 /// How many ancestors up the agent's cursor looks for a place to stand where an element has none.
 private let MAX_CURSOR_ANCESTORS = 4
-/// How many ancestors up a point on a page looks for the element that takes its press, as text inside a link.
+/// How many ancestors up a point on a page looks for the control that takes its press, as text inside a link.
 private let MAX_PRESS_ANCESTORS = 4
+/// The roles of a page's controls whose press does what a click anywhere on them would, so a click at a point on one may be pressed instead. Note that a field, a canvas, or a map is left out, since where on it the click lands matters.
+private let PRESSED_ROLES: Set<String> = [
+    "AXButton", "AXLink", "AXCheckBox", "AXRadioButton", "AXMenuItem", "AXMenuButton", "AXPopUpButton",
+    "AXDisclosureTriangle",
+]
 /// The attribute Chromium and Electron read as a request to build their pages' Accessibility tree in full, as they do for a screen reader. An app that does not know it refuses it, and nothing else changes.
 private let MANUAL_ACCESSIBILITY = "AXManualAccessibility"
 /// The role of a page's root in a browser's tree, Chromium's and WebKit's alike.
@@ -1017,13 +1023,15 @@ private func windowLines(_ app: NSRunningApplication) -> String {
 
 /**
  Presses an element through Accessibility, which needs no point and no
- focus, and answers done once the window's elements read differently from
+ focus, and answers pressed once the window's elements read differently from
  `before`, read just ahead of the press. Note that a press answered as taken
  is not proof it acted, since a browser may answer one it never acts on, so a
- window that reads the same for `PRESS_SETTLE_SECONDS` is answered as a press
- not confirmed rather than done. Nothing where the element offers no press,
- so its caller clicks it instead; any other refusal may have pressed it
- already, so it is answered rather than pressed twice.
+ window that reads the same for `PRESS_SETTLE_SECONDS` answers
+ pressed_unconfirmed. That is never an error, since many a press that acted
+ changes nothing in its window, as a Send or one opening another window, and
+ an agent told it failed would press again. Nothing where the element offers
+ no press, so its caller clicks it instead; a press macOS refused may have
+ pressed it already, so it is answered rather than pressed twice.
  */
 private func confirmedPress(
     _ element: AXUIElement, of app: NSRunningApplication, named name: String, before: String
@@ -1040,19 +1048,18 @@ private func confirmedPress(
         try await Task.sleep(nanoseconds: UInt64(PRESS_LOOK_SECONDS * 1_000_000_000))
         if windowLines(app) != before { return ["done": "pressed"] }
     }
-    throw HelperError(
-        kind: ERROR_KIND.failed,
-        message:
-            "\(name) was sent the press, but \(appName(app))'s window read the same \(PRESS_SETTLE_SECONDS) seconds later, so the press is not confirmed: it may have done nothing, or done something its window does not show. Read the app again with get_app_state before pressing again.")
+    return ["done": "pressed_unconfirmed"]
 }
 
 /**
- The element of a page under `point` that takes a press, where the point
+ The control of a page under `point` that takes a press, where the point
  lands on a page in the window the session numbered: the element itself, or
- the nearest of `MAX_PRESS_ANCESTORS` above it that offers a press. Note that
- a browser in the background may drop a click posted at a point, or come
- forward for it, where it takes a press through Accessibility as it stands,
- so a click on a page goes that way; nothing where the point is on no page.
+ the nearest of `MAX_PRESS_ANCESTORS` above it, of a role in `PRESSED_ROLES`
+ that offers a press. Note that a browser in the background may drop a click
+ posted at a point, or come forward for it, where it takes a press through
+ Accessibility as it stands, so a click on a page's control goes that way.
+ Nothing where the point is on no page or on no such control, as on a field,
+ a canvas, or a map, which is clicked at the point as before.
  */
 private func pagePressTarget(at point: CGPoint, of app: NSRunningApplication, session: AppSession) -> AXUIElement? {
     var hit: AXUIElement?
@@ -1063,12 +1070,14 @@ private func pagePressTarget(at point: CGPoint, of app: NSRunningApplication, se
         sameFrame(place, session.windowFrame)
     else { return nil }
     var element = hit
-    var pressable: AXUIElement?
+    var control: AXUIElement?
     for depth in 0..<MAX_DEPTH {
-        // Note that the page's root is never pressed itself, since its press is a click at the page's center.
-        if text(element, kAXRoleAttribute) == WEB_AREA_ROLE { return pressable }
-        if pressable == nil, depth <= MAX_PRESS_ANCESTORS, actions(element).contains(kAXPressAction as String) {
-            pressable = element
+        let role = text(element, kAXRoleAttribute) ?? ""
+        if role == WEB_AREA_ROLE { return control }
+        if control == nil, depth <= MAX_PRESS_ANCESTORS, PRESSED_ROLES.contains(role),
+            actions(element).contains(kAXPressAction as String)
+        {
+            control = element
         }
         guard let parent = elementAttribute(element, kAXParentAttribute) else { return nil }
         element = parent
