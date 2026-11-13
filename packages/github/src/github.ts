@@ -35,7 +35,12 @@ import { createAppAuth, type InstallationAuthOptions } from "@octokit/auth-app";
 import { Octokit, type OctokitOptions } from "@octokit/core";
 import { type PaginatingEndpoints, paginateRest } from "@octokit/plugin-paginate-rest";
 import { type ThrottlingOptions, throttling } from "@octokit/plugin-throttling";
-import type { EndpointOptions, Endpoints, RequestInterface } from "@octokit/types";
+import type {
+  EndpointOptions,
+  Endpoints,
+  RequestInterface,
+  RequestParameters,
+} from "@octokit/types";
 import Bottleneck from "bottleneck";
 import { Clock, Context, Duration, Effect, Layer, Option, Redacted, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
@@ -217,6 +222,12 @@ export type GitHubPageItem<R extends keyof PaginatingEndpoints> =
     : PageData<R>[Exclude<keyof PageData<R>, PageMetadataKey>] extends ReadonlyArray<infer Item>
       ? Item
       : never;
+
+/** One page of a listing as the paginator answers it: its items, and the `link` naming the next. */
+interface PageOf<Item> {
+  readonly data: ReadonlyArray<Item>;
+  readonly headers: { readonly link?: string };
+}
 
 /** How far a listing is read: never past `maxPages`, and no further than the items read are `enough`. */
 export interface GitHubPaging<Item> {
@@ -809,9 +820,20 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
           const items: Array<GitHubPageItem<typeof route>> = [];
           let pages = 0;
 
-          for await (const page of octokit.paginate.iterator(route, { ...parameters, request })) {
-            // SAFETY: the paginator answers every page's data as the listing's one array of items, a wrapped page's included.
-            items.push(...(page.data as ReadonlyArray<GitHubPageItem<typeof route>>));
+          // SAFETY: handed a request method, the paginator reads its parameters as that method's endpoint options (`request.endpoint(parameters)`), and answers every page's data as the listing's one array of items, a wrapped page's included; its typing reads the parameters off the method's last overload, a route string, and the route's own types cannot be seen through the generic `R`.
+          const iterate = octokit.paginate.iterator as (
+            requestMethod: RequestInterface,
+            firstPage: EndpointOptions,
+          ) => AsyncIterable<PageOf<GitHubPageItem<typeof route>>>;
+
+          // SAFETY: a route's parameters are the request parameters Octokit merges into its endpoint; its index signature cannot be seen through the generic `R`.
+          const firstPage = octokit.request.endpoint.merge(route, parameters as RequestParameters);
+
+          // Note that the paginator sends every page as its `method`, `url`, and `headers` alone, so the call's fetch and signal ride on the request method it is handed.
+          const listing = iterate(octokit.request.defaults({ request }), firstPage);
+
+          for await (const page of listing) {
+            items.push(...page.data);
             pages += 1;
 
             if (enough?.(items) === true) return { items, ended: true };
