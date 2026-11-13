@@ -1,7 +1,6 @@
 import {
   ATTACHMENT_CHIP_STATE,
   AttachmentChip,
-  AttachmentRef,
   CARD_CORNER,
   CARD_ELEMENT,
   CARD_PADDING,
@@ -122,12 +121,6 @@ function UploadCovers(): React.JSX.Element {
             onRemove={() => setPressed("Remove")}
           />
         </ul>
-      </CatalogSection>
-      <CatalogSection id="upload-cover-pill" title="Files in a line still going up">
-        <p>
-          Here is the flow <AttachmentRef name="Picture 1" image={PICTURE} uploading /> and{" "}
-          <AttachmentRef name="notes.md" glyph={<DocumentIcon />} uploading />.
-        </p>
       </CatalogSection>
       <p>{pressed === undefined ? "Nothing pressed" : `Pressed ${pressed}`}</p>
     </>
