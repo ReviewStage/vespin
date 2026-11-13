@@ -20,7 +20,7 @@ import { type ReactNode, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
 
 /** What Remind me is called and drawn with, wherever it stands: a row's swipe and long press, a thread's ⋯ menu, and Select mode's bar. */
-const REMIND_ME = { label: REMIND_WORDS.REMIND_ME, symbol: GLYPH.TIME } as const;
+export const REMIND_ME = { label: REMIND_WORDS.REMIND_ME, symbol: GLYPH.TIME } as const;
 
 /** Remind me as one menu every place draws: a row's swipe and long press take it as a submenu, a bar as its menu. */
 type RemindMenu = RowSubmenu & BarMenu & { readonly actions: readonly RowAction[] };

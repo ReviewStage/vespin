@@ -362,7 +362,7 @@ export interface GitHubUser {
 }
 
 /** The deployment holds no App, or not all of it: every read answers this and the routes answer unavailable. */
-class GitHubAppNotConfigured extends Data.TaggedError("GitHubAppNotConfigured")<{
+export class GitHubAppNotConfigured extends Data.TaggedError("GitHubAppNotConfigured")<{
   /** The variables that were missing or unreadable, by name alone. */
   readonly missing: readonly string[];
 }> {

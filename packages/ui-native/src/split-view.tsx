@@ -20,13 +20,14 @@ import {
   type ModifierConfig,
   menuIndicator,
   menuStyle,
-  navigationBarTitleDisplayMode,
   navigationSplitViewStyle,
   navigationTitle,
   searchable,
+  searchToolbarBehavior,
+  toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { type ReactNode, useEffect } from "react";
+import { type ReactElement, type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { BarContent } from "./bar-content.js";
 import type { Glyph } from "./glyph.js";
@@ -70,6 +71,8 @@ export const BAR_ITEM_MENU = [menuStyle("button"), buttonStyle("plain"), menuInd
 export type BarAction = {
   readonly label: string;
   readonly symbol?: Glyph | undefined;
+  /** Whether it stands dimmed, as a page's acts do while nothing is picked, rather than leaving the bar. */
+  readonly disabled?: boolean | undefined;
   readonly onPress: () => void;
 };
 
@@ -122,7 +125,11 @@ export type BarPath = {
 export type ColumnBar = {
   readonly title?: string | undefined;
   readonly leading?: ReactNode | undefined;
+  /** Glyph acts at the bar's leading edge, sharing one glass, as Mail's expand and compose stand over a message. */
+  readonly lead?: readonly BarAction[] | undefined;
   readonly path?: BarPath | undefined;
+  /** A page's main acts as glyphs before its ⋯, as Mail's Reply and Trash stand, sharing the bar's one glass; each a button or a menu, such as Remind me's times. */
+  readonly acts?: readonly BarFootItem[] | undefined;
   readonly menu?: BarMenu | undefined;
   readonly action?: BarAction | undefined;
   readonly search?: BarSearch | undefined;
@@ -154,6 +161,10 @@ type SplitViewProps = {
   readonly sidebarShown: boolean;
   /** Called as a person shows or hides the sidebar, with the system's button, a swipe, or a drag. */
   readonly onSidebarShownChange: (shown: boolean) => void;
+  /** Whether the detail stands alone across the window, as Mail's expand button stands a message; the other columns keep their own choice under it. */
+  readonly detailOnly?: boolean | undefined;
+  /** Called as the detail stops standing alone, such as when a person brings the columns back with the system's sidebar button. */
+  readonly onDetailOnlyChange?: ((detailOnly: boolean) => void) | undefined;
 };
 
 /** A bar's menu as SwiftUI's: each choice a toggle the system checks, then a rule, then each act. */
@@ -199,15 +210,66 @@ export function BarMenuItem({ menu }: { readonly menu: BarMenu }) {
   return <BarMenuButton menu={menu} modifiers={BAR_ITEM_MENU} />;
 }
 
-/** A bar act as SwiftUI's button, its symbol alone, heard by its words, or its words where it has no symbol. */
+/** A bar act as SwiftUI's button, its symbol alone, heard by its words, or its words where it has no symbol, dimmed while it can't act. */
 function BarActionButton({ action }: { readonly action: BarAction }) {
-  return <SwiftUIButton {...actContent(action.label, action.symbol)} onPress={action.onPress} />;
+  return (
+    <SwiftUIButton
+      {...actContent(action.label, action.symbol)}
+      onPress={action.onPress}
+      modifiers={[disabled(action.disabled === true)]}
+    />
+  );
+}
+
+/**
+ * A page's main acts as items of its bar's trailing edge, each its glyph
+ * alone. Note that they stand as items side by side in one placement, so
+ * iPadOS 26 draws them in one shared glass with the ⋯ after them, as Mail
+ * groups Reply, Forward and Trash, never a glass of their own each.
+ */
+export function barActItems(acts: readonly BarFootItem[]): ReactElement[] {
+  return acts.map((act) => (
+    <ToolbarItem key={act.label} placement="topBarTrailing">
+      {isBarMenu(act) ? <BarMenuItem menu={act} /> : <BarActionButton action={act} />}
+    </ToolbarItem>
+  ));
+}
+
+/** A menu with the acts and menus a bar already stands as glyphs left out, so ⋯ holds only the rest. */
+export function menuWithout(menu: BarMenu, acts: readonly BarFootItem[]): BarMenu {
+  const barred = new Set(acts.map((act) => act.label));
+
+  return {
+    ...menu,
+    actions: menu.actions.filter((action) => !barred.has(action.label)),
+    submenus: menu.submenus?.filter((submenu) => !barred.has(submenu.label)),
+  };
+}
+
+/**
+ * A search field's words as the system's field holds them, started from the
+ * query its list is filtered by. Note that the field is handed a query only
+ * as its search changes hands or first arrives, so typing never fights its
+ * own echo.
+ */
+function useSearchWords(search: BarSearch | undefined, searchKey: string | undefined) {
+  const text = useNativeState(search?.text ?? "");
+  const query = search?.text ?? "";
+  const searching = search !== undefined;
+
+  useEffect(() => {
+    text.set(query);
+  }, [searchKey, searching]);
+
+  return text;
 }
 
 /** Whether a bar holds anything for the toolbar to draw. */
 function barHolds(bar: ColumnBar): boolean {
   return (
     bar.leading !== undefined ||
+    (bar.lead ?? []).length > 0 ||
+    (bar.acts ?? []).length > 0 ||
     bar.path !== undefined ||
     bar.menu !== undefined ||
     bar.action !== undefined ||
@@ -240,23 +302,19 @@ function Column({
   readonly searchKey?: string | undefined;
 }) {
   const colors = useColors();
-  const text = useNativeState(bar.search?.text ?? "");
-  const query = bar.search?.text ?? "";
-
-  const searching = bar.search !== undefined;
-
-  // Note that the field is handed a query only as its search changes hands or first arrives, so typing never fights its own echo.
-  useEffect(() => {
-    text.set(query);
-  }, [searchKey, searching]);
+  const text = useSearchWords(bar.search, searchKey);
 
   const stacked = (
     <ZStack
       modifiers={[
         ...(sidebar ? [] : [containerBackground(colors.GROUND, "navigationSplitView")]),
+        // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, compose, ⋯ and the sidebar button, and a leading title folds them into an overflow.
         ...(bar.title === undefined
           ? []
-          : [navigationTitle(bar.title), navigationBarTitleDisplayMode("inline")]),
+          : [
+              navigationTitle(bar.title),
+              toolbarTitleDisplayMode(sidebar ? "inline" : "inlineLarge"),
+            ]),
       ]}
     >
       {view}
@@ -272,11 +330,17 @@ function Column({
         {bar.leading === undefined ? null : (
           <ToolbarItem placement="topBarLeading">{bar.leading}</ToolbarItem>
         )}
+        {(bar.lead ?? []).map((act) => (
+          <ToolbarItem key={act.label} placement="topBarLeading">
+            <BarActionButton action={act} />
+          </ToolbarItem>
+        ))}
         {bar.path === undefined ? null : (
           <ToolbarItem placement="principal">
             <PathTitle path={bar.path.path} status={bar.path.status} />
           </ToolbarItem>
         )}
+        {barActItems(bar.acts ?? [])}
         {bar.action === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
             <BarActionButton action={bar.action} />
@@ -334,20 +398,46 @@ export function SplitView({
   searchKey,
   sidebarShown,
   onSidebarShownChange,
+  detailOnly = false,
+  onDetailOnlyChange,
 }: SplitViewProps) {
   const hidden = content === undefined ? "detailOnly" : "doubleColumn";
+  // Note that with three columns the list's search stands in the window's toolbar, a button at its trailing edge, as Mail's does on iPadOS 26, rather than as a field under the list's title.
+  const windowSearch = content === undefined ? undefined : contentBar?.search;
+  const searchWords = useSearchWords(windowSearch, searchKey);
+  const listBar = contentBar === undefined ? undefined : { ...contentBar, search: undefined };
 
   return (
     <NavigationSplitView
-      columnVisibility={sidebarShown ? "all" : hidden}
+      columnVisibility={detailOnly ? "detailOnly" : sidebarShown ? "all" : hidden}
       onColumnVisibilityChange={(visibility) => {
         // Note that a two-column split view names both columns standing "doubleColumn", which is its "all".
         if (visibility === "automatic") return;
+
+        // Note that the detail standing alone leaves the sidebar's own choice as it was, and columns brought back by the system's button end it.
+        if (detailOnly) {
+          if (visibility !== "detailOnly") onDetailOnlyChange?.(false);
+
+          return;
+        }
+
         onSidebarShownChange(
           visibility === "all" || (content === undefined && visibility === "doubleColumn"),
         );
       }}
-      modifiers={[navigationSplitViewStyle("balanced")]}
+      modifiers={[
+        navigationSplitViewStyle("balanced"),
+        ...(windowSearch === undefined
+          ? []
+          : [
+              searchable(searchWords, {
+                placement: "toolbar",
+                prompt: windowSearch.placeholder,
+                onChange: windowSearch.onChange,
+              }),
+              searchToolbarBehavior("minimize"),
+            ]),
+      ]}
     >
       <NavigationSplitView.Sidebar>
         {/* Note that the sidebar column is drawn afresh as it changes from the app's sidebar to the list or back, so its search field starts from the list's query rather than keeping what the other held. */}
@@ -360,7 +450,7 @@ export function SplitView({
       </NavigationSplitView.Sidebar>
       {content === undefined ? null : (
         <NavigationSplitView.Content>
-          <Column view={content} bar={contentBar} searchKey={searchKey} />
+          <Column view={content} bar={listBar} searchKey={searchKey} />
         </NavigationSplitView.Content>
       )}
       <NavigationSplitView.Detail>
