@@ -1,6 +1,7 @@
 // row-list.tsx -- a list of rows and its sections, as SwiftUI's own List draws them, each section under a small muted header that folds.
 
 import { Button, HStack, Image, List, Section, Spacer, Text } from "@expo/ui/swift-ui";
+import type { ModifierConfig } from "@expo/ui/swift-ui/modifiers";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
@@ -69,9 +70,13 @@ function selectedId(selection: readonly (string | number)[]): string | undefined
   return Predicate.isString(first) ? first : undefined;
 }
 
-/** The ground a list stands on: the brand's, the sidebar's for a sidebar, never the system's grays. */
-function listGround(colors: BrandColors, look: ListLook): string {
-  return look === LIST_LOOK.SIDEBAR ? colors.SIDEBAR : colors.GROUND;
+/**
+ * What a list paints under itself: the brand's ground, never the system's
+ * grays, but nothing for a sidebar, which stands clear on the system's own
+ * floating glass pane, as Mail's and Notes' do on iPadOS 26 and 27.
+ */
+function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfig[] {
+  return look === LIST_LOOK.SIDEBAR ? [] : [background(colors.GROUND)];
 }
 
 /**
@@ -98,7 +103,7 @@ export function RowList({ look, selected, onSelect, onRefresh, children }: RowLi
       modifiers={[
         listStyle(look),
         scrollContentBackground("hidden"),
-        background(listGround(colors, look)),
+        ...listGround(colors, look),
         onGeometryChange(({ width: next }) => setWidth(next)),
         ...(sides > 0 ? [listSectionMargins({ edges: "horizontal", length: sides })] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.

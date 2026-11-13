@@ -156,10 +156,11 @@ function barHolds(bar: ColumnBar): boolean {
  * its search where it has one. Note that the view stands in a `ZStack`,
  * because a column lays several children out one above another, so a sheet
  * or an alert a screen draws beside a column's page would otherwise take
- * half its height. The column itself stands on the brand's ground, the
- * sidebar's on `SIDEBAR` and the others' on `GROUND`, as their lists do, so
- * what isn't a list (a page, an empty state, a scope picker over its list)
- * never shows the system's own column color or sidebar material.
+ * half its height. The list and detail columns stand on the brand's
+ * `GROUND`, as their lists do, so what isn't a list (a page, an empty state,
+ * a scope picker over its list) never shows the system's own column color.
+ * The sidebar paints nothing, so it stands on the system's floating glass
+ * pane, as Mail's and Notes' do.
  */
 function Column({
   view,
@@ -177,7 +178,7 @@ function Column({
   const stacked = (
     <ZStack
       modifiers={[
-        containerBackground(sidebar ? colors.SIDEBAR : colors.GROUND, "navigationSplitView"),
+        ...(sidebar ? [] : [containerBackground(colors.GROUND, "navigationSplitView")]),
         ...(bar.title === undefined
           ? []
           : [navigationTitle(bar.title), navigationBarTitleDisplayMode("inline")]),
