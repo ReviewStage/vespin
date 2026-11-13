@@ -939,12 +939,16 @@ function InboxStackList(words: InboxSearch) {
         <Stack.Toolbar placement="bottom">
           {choosing.acts.flatMap((act, at) => [
             ...(at === 0 ? [] : [<Stack.Toolbar.Spacer key={at} />]),
+            // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass.
             <Stack.Toolbar.Button
               key={act.label}
-              icon={act.symbol === undefined ? undefined : glyphSymbol(act.symbol)}
               accessibilityLabel={act.label}
               onPress={act.onPress}
-            />,
+            >
+              {act.symbol === undefined ? null : (
+                <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
+              )}
+            </Stack.Toolbar.Button>,
           ])}
         </Stack.Toolbar>
       )}

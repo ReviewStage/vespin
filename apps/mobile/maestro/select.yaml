@@ -21,9 +21,11 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - assertVisible: "Done"
 - takeScreenshot: select-none
-# A tap on a row ticks it rather than opening it.
+# A tap on a row ticks it rather than opening it. Note that the two rows are
+# the list's first, since the bar the first tick raises at the foot covers a
+# row low on a phone's screen.
+- tapOn: "Who can withdraw an invite\\?"
 - tapOn: "Recorded the invite flow"
-- tapOn: "acceptInvite can add a member twice"
 - assertVisible: "2 selected"
 - assertNotVisible: "Reply"
 - waitForAnimationToEnd
