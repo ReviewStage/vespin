@@ -60,8 +60,6 @@ import {
 } from "@repo/database/models/voice-calls";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
-import { type WireValue, wireRecord } from "@repo/wire";
-import { readEither } from "@repo/wire/effect";
 import { send } from "@vercel/queue";
 import {
   Cause,
@@ -82,7 +80,6 @@ import {
 import { ownApiKeyOf } from "../accounts/own-api-key.js";
 import { harnessOf } from "../agents/coder-host/native-runtime.js";
 import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../auth/auth-deployment.js";
-import { EXCESS_KEYS, unparsedWire } from "../core.js";
 import { HostedEnvironment } from "../environment.js";
 import { recordServerEventIn, SERVER_EVENT, voiceCallDurationOf } from "../events/server-events.js";
 import { logStoreFailure } from "../http/store-failure.js";
@@ -382,72 +379,14 @@ export const holdVoiceCall = Effect.fn("voice/holdVoiceCall")(function* <R>(
 });
 
 /** One delivery of a lease, as the queue hands its message, held with nothing observed beyond the call's end. */
-// PROBE (temporary, reverted before merge): each event's type, id, and timing fields, never its words.
-const ProbeFieldsSchema = Schema.Struct({
-  offset_ms: Schema.optional(Schema.Number),
-  start_ms: Schema.optional(Schema.Number),
-  end_ms: Schema.optional(Schema.Number),
-  reason: Schema.optional(Schema.String),
-  usage: Schema.optional(Schema.Struct({ seconds: Schema.Number })),
-  client_event_id: Schema.optional(Schema.String),
-});
-
-const ProbePublishedSchema = Schema.Struct({ publishedAt: Schema.Number });
-
-/** PROBE: a record's field names, and the values of its `*_ms` and id fields alone, which carry no words. */
-function probeFieldsOf(value: WireValue | undefined) {
-  const record = value === undefined ? undefined : wireRecord(unparsedWire(value));
-
-  if (record === undefined) return null;
-
-  const values = Object.entries(record).flatMap(([key, field]) =>
-    key.endsWith("_ms") || key === "id" || key.endsWith("_id") ? [[key, field]] : [],
-  );
-
-  return { keys: Object.keys(record), values: Object.fromEntries(values) };
-}
-
-const probeObserver: VoiceCallObserver<never> = (event, holder) =>
-  Effect.gen(function* () {
-    if (event.type === "session.delegation.created") {
-      const body = wireRecord(unparsedWire(event.body));
-
-      yield* Effect.logInfo(
-        `voice-probe delegation ${JSON.stringify({ epoch: holder.call.leaseEpoch, event: probeFieldsOf(event.body), delegation: probeFieldsOf(body?.delegation) })}`,
-      );
-    }
-
-    const now = yield* Clock.currentTimeMillis;
-
-    const read = readEither(ProbeFieldsSchema, { excess: EXCESS_KEYS.DROP })(
-      unparsedWire(event.body),
-    );
-
-    const fields = Result.isSuccess(read) ? read.success : {};
-
-    yield* Effect.logInfo(
-      `voice-probe event ${JSON.stringify({ at: now, epoch: holder.call.leaseEpoch, type: event.type, id: event.eventId, ...fields })}`,
-    );
-  });
-
 const consumeVoiceCallLease = (lease: VoiceCallLease) =>
-  Effect.gen(function* () {
-    yield* Effect.logInfo(
-      `voice-probe delivered ${JSON.stringify({ at: yield* Clock.currentTimeMillis, epoch: lease.epoch, redelivered: lease.redelivered })}`,
-    );
-
-    const held = yield* holdVoiceCall(lease, probeObserver);
-
-    yield* Effect.logInfo(
-      `voice-probe held ${JSON.stringify({ at: yield* Clock.currentTimeMillis, epoch: lease.epoch, held })}`,
-    );
-
-    return held;
-  }).pipe(Effect.annotateLogs({ callId: lease.callId, epoch: lease.epoch }));
+  holdVoiceCall(lease, observeNothing).pipe(
+    Effect.annotateLogs({ callId: lease.callId, epoch: lease.epoch }),
+  );
 
 /** On Vercel: the message sent to the topic; a send that failed or stalled is not published. */
 const vercelPublish = (lease: VoiceCallLeaseMessage) =>
-  Effect.tryPromise(() => send(VOICE_CALL_LEASE.TOPIC, { ...lease, publishedAt: Date.now() })).pipe(
+  Effect.tryPromise(() => send(VOICE_CALL_LEASE.TOPIC, lease)).pipe(
     Effect.timeoutOption(VOICE_CALL_LEASE.PUBLISH_WAIT),
     Effect.mapError((failure) => new VoiceCallLeaseNotPublished({ reason: failureKind(failure) })),
     Effect.flatMap((sent) =>
@@ -548,17 +487,6 @@ export function voiceCallLeasesHandler(
 
           return QUEUE_ACKNOWLEDGED;
         }
-
-        // PROBE: queue latency, from the publish to this delivery.
-        const published = yield* Effect.option(
-          Schema.decodeUnknownEffect(ProbePublishedSchema)(message),
-        );
-
-        const latency = Option.map(published, ({ publishedAt }) => Date.now() - publishedAt);
-
-        yield* Effect.logInfo(
-          `voice-probe latency ${JSON.stringify({ ms: Option.getOrNull(latency), deliveryCount })}`,
-        );
 
         yield* consumeVoiceCallLease({ ...decoded.value, redelivered: deliveryCount > 1 }).pipe(
           Effect.tapCause((cause) =>
