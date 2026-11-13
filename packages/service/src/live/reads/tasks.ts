@@ -48,7 +48,7 @@ import {
   userSync,
   workspaceExperimentSync,
 } from "@repo/database/sync/tables";
-import type { BootPhase } from "@repo/features/agent-boot";
+import { BOOT_PHASE, type WireBootPhase } from "@repo/features/agent-boot";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-wire";
 import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
 import { NO_TASK_OWNER, TASK_LIST_READ } from "@repo/features/task-list-live";
@@ -283,7 +283,11 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
         permissionMode: agentTable.permissionMode,
         pendingApprovals: PENDING_APPROVALS_OF_AGENT,
         sandboxState: SANDBOX_STATE_OF_AGENT,
-        bootPhase: sql<BootPhase | null>`${agentBootTable.phase}`,
+        // Note that a boot waiting on its workspace's drive is said as starting with building beside it, since released apps decode the phase strictly.
+        bootPhase: sql<WireBootPhase | null>`case when ${agentBootTable.phase} = ${BOOT_PHASE.BUILDING} then ${BOOT_PHASE.STARTING} else ${agentBootTable.phase} end`,
+        building: sql<
+          true | null
+        >`case when ${agentBootTable.phase} = ${BOOT_PHASE.BUILDING} then true else null end`,
         sandboxRunsUntil: SANDBOX_RUNS_UNTIL_OF_AGENT,
         // Note that a released desktop reads an agent's read mark only for one on no task, which no agent is, so it is never marked.
         markedUnread: sql<boolean>`false`,

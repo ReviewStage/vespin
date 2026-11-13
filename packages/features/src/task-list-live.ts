@@ -1,7 +1,7 @@
 import { literalsReadingUnknown } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { AGENT_PERMISSION_MODE, agentPendingApprovalSchema } from "./agent-approval-wire.js";
-import { BOOT_PHASE } from "./agent-boot.js";
+import { WIRE_BOOT_PHASES } from "./agent-boot.js";
 import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { agentStatusAt, type StatusTurn, statusClockEdge, turnStoppable } from "./agent-status.js";
 import {
@@ -231,9 +231,9 @@ const agentLiveRowSchema = EffectSchema.Struct({
   sandboxStateAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   sandboxRunsUntil: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   /** Where the agent's first launch stands while its boot record does (`agent-boot.ts`), which its status reads before its first turn; null for every other agent, and absent from a statement before it was carried. */
-  bootPhase: EffectSchema.optionalKey(
-    EffectSchema.NullOr(EffectSchema.Literals(Object.values(BOOT_PHASE))),
-  ),
+  bootPhase: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.Literals(WIRE_BOOT_PHASES))),
+  /** Whether that first launch waits on its workspace's drive being built, its phase said as starting meanwhile; null for every other agent, and absent from a statement before it was carried. */
+  building: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.Literal(true))),
 });
 
 /**
