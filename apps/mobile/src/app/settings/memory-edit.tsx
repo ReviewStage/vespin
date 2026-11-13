@@ -16,9 +16,11 @@ import {
   EmptyState,
   GLYPH,
   ListSection,
+  NOTICE_KIND,
   Screen,
   SettingsForm,
   useColors,
+  useFailureNotices,
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -28,6 +30,7 @@ import { useChosenWorkspace } from "../../chosen-workspace.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
+import { SETTINGS_ROUTE } from "../../settings-button.js";
 import { DISCARD_WORDS, useKeptWords } from "../../use-kept-words.js";
 import { useWrite } from "../../use-write.js";
 
@@ -40,14 +43,28 @@ const WORDS_TEST_ID = "memory-words";
 const MEMORY_SYMBOL = GLYPH.MEMORY;
 
 export default function MemoryEditScreen() {
-  const { memory } = useLocalSearchParams<{ memory?: string }>();
+  // Note that a refused save reopens the page holding its words and why, as its notice's Try again opens it.
+  const { memory, words, refused } = useLocalSearchParams<{
+    memory?: string;
+    words?: string;
+    refused?: string;
+  }>();
+
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
 
   if (chosen === undefined) return null;
 
   // Note that the page is drawn anew for each workspace, so a draft never carries into another.
-  return <MemoryEditor key={chosen.id} workspaceId={chosen.id} memoryId={memory} />;
+  return (
+    <MemoryEditor
+      key={chosen.id}
+      workspaceId={chosen.id}
+      memoryId={memory}
+      draft={words}
+      refused={refused}
+    />
+  );
 }
 
 /** Says on the console a read asked again that did not go; the page still says the read failed. */
@@ -61,22 +78,30 @@ function retryLost(cause: unknown): void {
  * headed New memory or Edit memory. Save in the bar is lit once the words
  * are new, not empty, and within the panel's bound; it saves through the
  * one save act, an edit naming the memory it replaces, and goes back to
- * Memory once the service took them. A save refused says why under the
- * words and keeps them. Back, or a swipe down of Settings, asks first while
+ * Memory as the save is sent. A save refused says why in the failure notice,
+ * whose Try again opens the page again holding the refused words, with why
+ * under them, so they are edited rather than sent blind. Back, or a swipe down of Settings, asks first while
  * the words differ from what was saved. An edit whose memory was deleted
  * meanwhile says so in place of the words.
  */
 function MemoryEditor({
   workspaceId,
   memoryId,
+  draft,
+  refused,
 }: {
   readonly workspaceId: string;
   readonly memoryId: string | undefined;
+  /** Words a refused save left, which the page opens holding. */
+  readonly draft: string | undefined;
+  /** Why that save was refused, said under the words. */
+  readonly refused: string | undefined;
 }) {
   const colors = useColors();
   const router = useRouter();
   const acts = useHostActs();
   const write = useWrite();
+  const notices = useFailureNotices();
 
   const { data: held } = useQuery({
     ...appStateQuery,
@@ -89,7 +114,7 @@ function MemoryEditor({
   const [memory, setMemory] = useState(live);
 
   if (memory === undefined && live !== undefined) setMemory(live);
-  const [words, setWords] = useState<string | undefined>(undefined);
+  const [words, setWords] = useState<string | undefined>(draft);
   // Whether a save is out, or went and the page is leaving.
   const [saving, setSaving] = useState(false);
 
@@ -109,6 +134,8 @@ function MemoryEditor({
 
   const saved = memory?.text ?? "";
   const text = (words ?? saved).trim();
+  // Whether the words are still the ones a refused save left, under which its refusal stands until they change.
+  const unchanged = draft !== undefined && words === draft;
   const tooLong = text.length > MEMORY_BOUNDS.MAX_CHARS;
   const changed = !reading && !gone && text !== saved.trim();
   // Note that words typed before the memory was deleted still ask before they are left, and that nothing asks while a save is out, since leaving then discards nothing: the save goes on, and a refusal says why in the failure notice.
@@ -129,6 +156,21 @@ function MemoryEditor({
       {
         refused: memorySaveRefusal,
         unanswered: MEMORY_SAVE_FAILED,
+        // Note that a refusal's Try again opens the page again holding the words and why, since the page went back as the save was sent, and a person whose save was refused wants to change it rather than send it again.
+        inPlace: (refusal) =>
+          notices.say({
+            kind: NOTICE_KIND.REFUSED,
+            words: refusal,
+            retry: () =>
+              router.push({
+                pathname: SETTINGS_ROUTE.MEMORY_EDIT,
+                params: {
+                  ...(memory !== undefined && { memory: memory.id }),
+                  words: text,
+                  refused: refusal,
+                },
+              }),
+          }),
         went: BUZZ.SUCCESS,
       },
     ).then((went) => {
@@ -137,7 +179,7 @@ function MemoryEditor({
       if (!went) setSaving(false);
     });
 
-    // Note that the page goes back as the save is sent rather than once it lands, as the panel's declared writes act at once: a correction draws over its memory at once, and a refusal says why in the failure notice, with Try again.
+    // Note that the page goes back as the save is sent rather than once it lands, as the panel's declared writes act at once: a correction draws over its memory at once, and a refusal says why in the failure notice.
     kept.release();
     router.back();
   };
@@ -183,7 +225,7 @@ function MemoryEditor({
           <SettingsForm>
             <ListSection
               // Note that the words' length is said over an earlier refusal, since it is what holds Save now.
-              footer={tooLong ? MEMORY_EDITOR_WORDS.TOO_LONG : undefined}
+              footer={tooLong ? MEMORY_EDITOR_WORDS.TOO_LONG : unchanged ? refused : undefined}
             >
               <WordsField
                 placeholder={MEMORY_EDITOR_WORDS.PLACEHOLDER}
