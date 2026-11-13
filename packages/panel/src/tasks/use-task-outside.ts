@@ -10,6 +10,7 @@
  * already is asked for nothing, so nothing is asked while every task is live.
  */
 
+import type { tasksFindAnswerSchema } from "@repo/features/tasks-view";
 import { keyWordsIn, taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
@@ -30,12 +31,12 @@ function keyNumber(key: string): number | undefined {
 }
 
 /** How long a find stays fresh: a task found, for the session, since its number names it for good; an unanswered find, not at all, so the next chip asks again. */
-function foundStaysFresh(query: { readonly state: { readonly data: unknown } }): number {
+function foundStaysFresh(query: {
+  readonly state: { readonly data: (typeof tasksFindAnswerSchema)["Type"] | undefined };
+}): number {
   const { data } = query.state;
 
-  return typeof data === "object" && data !== null && "taskId" in data
-    ? Number.POSITIVE_INFINITY
-    : 0;
+  return data !== undefined && "taskId" in data ? Number.POSITIVE_INFINITY : 0;
 }
 
 /** The one workspace whose tasks `key` could name, by its slug; none where none could, or more than one, as two whose names begin alike. */
