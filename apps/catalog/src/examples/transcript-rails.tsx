@@ -3,10 +3,7 @@ import {
   AVATAR_SIZE,
   Avatar,
   Badge,
-  Comment,
   type CommentAuthor,
-  HoverCard,
-  HoverCardNote,
   QuietWords,
   TIME_LOOK,
   Time,
@@ -18,18 +15,18 @@ import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
 /**
- * transcript-rails.tsx -- the rail down a conversation's leading edge: a
- * tick in the accent for each of the reader's own lines and a dot for
- * everyone else's, the lines standing in the view lit, the ticks near the
- * pointer widening, a mark's card hung as a comment of its line, and a press
- * going to the line, said under the frame. On a phone's room the rail is one
+ * transcript-rails.tsx -- the rail down a conversation's leading edge: one
+ * gray line for each line sent in, a bubble round those standing in the
+ * view, the rail opening into a list of them under the pointer, each under
+ * its sender's face and name, and a press going to the line, said under the
+ * frame. On a phone's room the rail is one
  * press listing every line in a sheet, each under its sender's face and
  * name, the reader's own badged, and its words on at most two lines.
  */
 
 const MINUTE = 60_000;
 
-/** Who sent each line, as its card's comment heads it. */
+/** Who sent each line, as the list's faces and names show them. */
 const AUTHORS = {
   YOU: { name: "Ada Lovelace", id: "user-ada" },
   GRACE: { name: "Grace Hopper", id: "user-grace" },
@@ -94,7 +91,6 @@ function TranscriptRails(): React.JSX.Element {
   const marks = LINES.map(
     (line): TranscriptRailMark => ({
       key: line.key,
-      own: line.author === AUTHORS.YOU,
       sender: line.author === AUTHORS.YOU ? "You" : line.author.name,
       words: line.words,
       face: (
@@ -118,27 +114,13 @@ function TranscriptRails(): React.JSX.Element {
     }),
   );
 
-  const cardOf = (key: string) => {
-    const line = LINES.find((each) => each.key === key);
-
-    if (line === undefined) return null;
-
-    return (
-      <HoverCard>
-        <Comment author={line.author} at={now - line.ago * MINUTE} now={now}>
-          <HoverCardNote>{line.words}</HoverCardNote>
-        </Comment>
-      </HoverCard>
-    );
-  };
-
   const wentTo = LINES.find((line) => line.key === went);
 
   return (
     <>
-      <CatalogSection id="transcript-rail" title="A rail of seven lines, four the reader's">
+      <CatalogSection id="transcript-rail" title="A rail of seven lines, two in view">
         <div className="catalog-frame catalog-rail">
-          <TranscriptRail marks={marks} narrow={false} cardOf={cardOf} onJump={setWent} />
+          <TranscriptRail marks={marks} narrow={false} onJump={setWent} />
         </div>
         <QuietWords>
           {wentTo === undefined ? "Press a mark to go to its line." : `Went to: ${wentTo.words}`}
@@ -146,7 +128,7 @@ function TranscriptRails(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection id="transcript-rail-narrow" title="On a phone: one press listing every line">
         <div className="catalog-frame catalog-rail">
-          <TranscriptRail marks={marks} narrow cardOf={cardOf} onJump={setWent} />
+          <TranscriptRail marks={marks} narrow onJump={setWent} />
         </div>
       </CatalogSection>
     </>

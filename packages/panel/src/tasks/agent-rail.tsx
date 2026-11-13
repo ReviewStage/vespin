@@ -1,33 +1,23 @@
 /**
- * agent-rail.tsx -- the rail beside an agent's transcript: a mark for each line sent into it, the reader's own standing out, each hanging its line as a comment and going to it on a press.
+ * agent-rail.tsx -- the rail beside an agent's transcript: a line for each line sent into it, a bubble round those in view, and a list of them, each under its sender's face, going to it on a press.
  *
  * A long run buries the reader's own asks among what teammates, other
  * agents, GitHub, and automations send the agent, so the transcript wears
  * `@repo/ui`'s `TranscriptRail` down its leading edge, a mark for each line
- * sent in (`sent-lines.ts`). A mark's card is its line as a comment pin's
- * card draws one, in the reader's own design language: the sender's face,
- * their name, and how long ago, over the line's words, the reader's own
- * under their own face. A press goes to the line as a link to a message
- * does, bringing its row in where the log has not drawn it and lighting it
- * once it lands (`message-links.tsx`).
+ * sent in (`sent-lines.ts`). Its list names each line as the app names a
+ * person: their face and name, the reader's own under their own. A press
+ * goes to the line as a link to a message does, bringing its row in where
+ * the log has not drawn it and lighting it once it lands
+ * (`message-links.tsx`).
  *
- * A mark is lit while its line stands in the view, read off the rows the
+ * The bubble wraps the lines standing in the view, read off the rows the
  * log has drawn as it scrolls or it or its rows change size, the rail drawn
  * again only when which lines stand there changes. The rail marks the lines
  * of the pages the log holds and reads no page of its own: an older page's
  * lines join it as the log reads that page (`use-agent-transcript.ts`).
  */
 
-import {
-  Comment,
-  HoverCard,
-  HoverCardNote,
-  QuietWords,
-  TIME_LOOK,
-  Time,
-  TranscriptRail,
-  type TranscriptRailMark,
-} from "@repo/ui";
+import { QuietWords, TIME_LOOK, Time, TranscriptRail, type TranscriptRailMark } from "@repo/ui";
 import { ACTOR_KIND, type Actor, actorName } from "@repo/ui/actor-model";
 import { land } from "@repo/ui/landed";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
@@ -40,14 +30,7 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  ACTOR_SIZE,
-  ActorMark,
-  ActorRef,
-  BotBadge,
-  commentAuthor,
-  YouBadge,
-} from "../actor-ref.js";
+import { ACTOR_SIZE, ActorMark, BotBadge, YouBadge } from "../actor-ref.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { drawnMessages, messageElement } from "./message-links.js";
@@ -161,21 +144,6 @@ function centerIn(box: HTMLElement, rows: VirtualRowsHandle, element: HTMLElemen
   rows.scrollBy(at.top + at.height / 2 - (view.top + view.height / 2));
 }
 
-/** A line's card: as a comment pin's card draws a comment, its sender's face, name, and age over its words. */
-function SentLineCard({ line, sender }: { line: SentLine; sender: Actor }): React.JSX.Element {
-  return (
-    <HoverCard data-sent-line-card="">
-      <Comment
-        author={commentAuthor(sender)}
-        nameRef={<ActorRef actor={sender} nameOnly />}
-        at={line.sentAt}
-      >
-        <HoverCardNote>{line.words}</HoverCardNote>
-      </Comment>
-    </HoverCard>
-  );
-}
-
 /**
  * What stands beside a line's sender in a phone's list, as a comment's head
  * says it: the reader's own badge on their line where it is named by their
@@ -222,15 +190,9 @@ export function AgentRail({
   const inView = useLinesInView(list, rows, lines);
   const narrow = usePhoneRoom();
 
-  const byMessage = useMemo(
-    () => new Map(lines.map((each) => [each.line.messageId, each.line])),
-    [lines],
-  );
-
   const marks = lines.map(
     ({ line }): TranscriptRailMark => ({
       key: line.messageId,
-      own: line.sender === undefined,
       sender: line.sender === undefined ? readerName : actorName(line.sender),
       words: line.words,
       face: <ActorMark actor={line.sender ?? reader} size={ACTOR_SIZE.INLINE} />,
@@ -240,12 +202,6 @@ export function AgentRail({
       shown: inView.has(line.messageId),
     }),
   );
-
-  const cardOf = (messageId: string) => {
-    const line = byMessage.get(messageId);
-
-    return line === undefined ? null : <SentLineCard line={line} sender={line.sender ?? reader} />;
-  };
 
   // A press goes to the line as a link to it does: its row brought in, then the line lit where it lands.
   const onJump = (messageId: string) => {
@@ -265,5 +221,5 @@ export function AgentRail({
     });
   };
 
-  return <TranscriptRail marks={marks} narrow={narrow} cardOf={cardOf} onJump={onJump} />;
+  return <TranscriptRail marks={marks} narrow={narrow} onJump={onJump} />;
 }
