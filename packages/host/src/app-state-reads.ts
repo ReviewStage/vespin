@@ -483,6 +483,24 @@ export function shareAppState<T>(held: T, next: T, depth = 0): T {
   ) as T;
 }
 
+/**
+ * A keeper of one reader's last answer: each answer laid over the one
+ * before it (`shareAppState`), so an answer equal to the last is the last
+ * itself, as a list handed the same array keeps its rows. Note that it holds
+ * its answer in its own closure, for a hook to keep in state, rather than in
+ * a ref written during render.
+ */
+export function answerKeeper<T>(): (next: T) => T {
+  let held: { readonly answer: T } | undefined;
+
+  return (next) => {
+    const answer = held === undefined ? next : shareAppState(held.answer, next);
+    held = { answer };
+
+    return answer;
+  };
+}
+
 /** No task's feed read: the feed before it first answers. */
 const NO_INBOX_READS: InboxReads = new Map();
 

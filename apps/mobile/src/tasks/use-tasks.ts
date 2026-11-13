@@ -64,6 +64,7 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
+  answerKeeper,
   selectInboxGroupsIn,
   selectInboxReader,
   selectTasks,
@@ -460,17 +461,21 @@ export function useTasksListing(search: string): ReadListing {
   const { rename } = useTaskWrites();
   const placing = useTaskPlacing(workspace?.id);
   const relations = useTaskRelationWrites();
+  // Note that the last tree is kept where the new one draws the same rows, because a group's new array resets every row it holds (`RowForEach`), and every delivery to the task list built the tree anew.
+  const [keepTree] = useState(answerKeeper<TaskTree>);
 
   return useMemo(() => {
     const tasks = withHeld(listed, held);
 
-    const tree = taskTree({
-      view: { tasks, taskSections: view?.taskSections, repositoryPins: view?.repositoryPins },
-      workspaceId: workspace?.id,
-      readerId,
-      noRepository: NO_REPOSITORY,
-      tasksHead: TASKS_HEAD_WORDS[ASSIGNED_TO.ME],
-    });
+    const tree = keepTree(
+      taskTree({
+        view: { tasks, taskSections: view?.taskSections, repositoryPins: view?.repositoryPins },
+        workspaceId: workspace?.id,
+        readerId,
+        noRepository: NO_REPOSITORY,
+        tasksHead: TASKS_HEAD_WORDS[ASSIGNED_TO.ME],
+      }),
+    );
 
     const found = searchedTasks({
       tasks,
@@ -543,6 +548,7 @@ export function useTasksListing(search: string): ReadListing {
       relations,
     };
   }, [
+    keepTree,
     acts,
     write,
     listed,
