@@ -1,0 +1,42 @@
+base fbc5207d83
+  merged #8729 70ac2d0a4
+Auto-merging packages/ui-native/src/composer.tsx
+Auto-merging packages/ui-native/src/row-list.tsx
+Auto-merging packages/ui-native/src/task-rows.tsx
+  merged #8935 e59c269c5
+  merged #8959 3087edea9
+Auto-merging packages/ui-native/src/settings-form.tsx
+  merged #9020 b7a973a0e
+Auto-merging packages/ui-native/src/transcript.tsx
+  merged #9040 975936513
+Auto-merging packages/ui-native/src/composer.tsx
+  merged #9054 1f1488b61
+Auto-merging packages/ui-native/src/task-rows.tsx
+  merged #9027 77b46cac1
+Auto-merging packages/ui-native/src/settings-form.tsx
+  merged #8986 5b16720f7
+  merged #9057 8139956d3
+  merged #8694 4ad87091d
+Auto-merging apps/mobile/src/app/_layout.tsx
+  merged #8977 157f0db50
+  merged #9066 8d5cac158
+  merged #9080 b18b2728d
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging apps/mobile/src/screens/search-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/split-view.tsx
+Auto-merging packages/ui-native/src/task-rows.tsx
+  merged #8957 0264adf44
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/marks.tsx
+Auto-merging packages/ui-native/src/row-list.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/row-list.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #9036 conflict: packages/ui-native/src/row-list.tsx 
+bundle built 61086086dc
+  install 0
+  export 0
+  signed 0
