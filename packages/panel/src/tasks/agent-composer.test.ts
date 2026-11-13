@@ -34,7 +34,12 @@ import {
   QUIET_COMPOSER,
   typeInComposer,
 } from "../testing/composer.js";
-import { testQueryClientNow, withQueryClient, writeAppState } from "../testing/copy-feedback.js";
+import {
+  settleQueries,
+  testQueryClientNow,
+  withQueryClient,
+  writeAppState,
+} from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
@@ -1167,18 +1172,15 @@ test("while the agent's turn runs, a touch held on Send sends the other way: a b
 });
 
 test("Talk stands beside Dictate only in a box that calls its agent, and only while the Voice experiment is on", async () => {
-  const off = await mounted(undefined, { talksIn: "plan-1" });
-  assert.ok(off.button("Dictate"));
-  assert.equal(off.button("Talk"), null, "no box offers a call while Voice is off");
-
-  for (const root of roots.splice(0)) act(() => root.unmount());
   writeAppState(stateWith({ [EXPERIMENT.VOICE]: true }, {}));
-  const other = await mounted();
-  assert.equal(other.button("Talk"), null, "nor does a box that calls no agent");
-
-  for (const root of roots.splice(0)) act(() => root.unmount());
-
   const tab = await mounted(undefined, { talksIn: "plan-1" });
+  const other = await mounted();
   assert.ok(tab.button("Dictate"));
-  assert.ok(tab.button("Talk"), "an agent's tab's box does");
+  assert.ok(tab.button("Talk"), "an agent's tab's box offers a call");
+  assert.equal(other.button("Talk")?.ariaLabel, undefined, "a box that calls no agent offers none");
+
+  writeAppState(stateWith({ [EXPERIMENT.VOICE]: false }, {}));
+  await settleQueries();
+  assert.equal(tab.button("Talk")?.ariaLabel, undefined, "nor does any box once Voice is off");
+  assert.ok(tab.button("Dictate"));
 });
