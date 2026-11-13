@@ -34,6 +34,9 @@ import { conversations } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
 import { getTestDB } from "@repo/database/testing";
 import {
+  COMPUTER_ACTION,
+  COMPUTER_BOUNDS,
+  MAC_COMMAND_BOUNDS,
   MAC_COMMAND_KIND,
   type MacCommand,
   type MacCommandResult,
@@ -320,13 +323,68 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
         refused(HOSTED_HTTP_STATUS.BAD_REQUEST, "invalid-request"),
       );
       assert.deepEqual(
-        yield* post(JSON.stringify(settle), 256 * 1_024 + 1),
+        yield* post(JSON.stringify(settle), MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES + 1),
         refused(HOSTED_HTTP_STATUS.PAYLOAD_TOO_LARGE, "request-too-large"),
       );
       assert.deepEqual(
         yield* bytes(request({ method: "PUT", userId: "user-refused" })),
         refused(HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED, "method-not-allowed"),
       );
+    }),
+  );
+
+  it.effect("a window read at every bound the wire allows is taken and kept", () =>
+    Effect.gen(function* () {
+      yield* account("user-largest");
+
+      const read: MacCommand = {
+        id: randomUUID(),
+        kind: MAC_COMMAND_KIND.COMPUTER,
+        conversationId: randomUUID(),
+        action: {
+          op: COMPUTER_ACTION.GET_APP_STATE,
+          app: "Simulator",
+          shots: [{ edge: COMPUTER_BOUNDS.MAX_SHOT_EDGE, quality: 1 }],
+        },
+        timeoutSeconds: 60,
+      };
+
+      yield* queueMacCommand("user-largest", read);
+      yield* claimMacCommands("user-largest", new Date(0), [MAC_COMMAND_KIND.COMPUTER]);
+      // Note that every word but base64 is a character UTF-8 spells in three bytes, the most a character the helper writes takes.
+      const wide = (chars: number) => "…".repeat(chars);
+
+      const shot = {
+        width: COMPUTER_BOUNDS.MAX_SHOT_EDGE,
+        height: COMPUTER_BOUNDS.MAX_SHOT_EDGE,
+        jpeg: "A".repeat(COMPUTER_BOUNDS.MAX_SHOT_CHARS),
+      };
+
+      const largest: MacCommandResult = {
+        computer: {
+          app: {
+            name: wide(COMPUTER_BOUNDS.MAX_APP_CHARS),
+            bundleId: wide(COMPUTER_BOUNDS.MAX_APP_CHARS),
+            iconPng: "A".repeat(COMPUTER_BOUNDS.MAX_ICON_CHARS),
+            refused: false,
+          },
+          window: { title: wide(COMPUTER_BOUNDS.MAX_TEXT_CHARS), x: 0, y: 0, width: 1, height: 1 },
+          elements: wide(COMPUTER_BOUNDS.MAX_ELEMENTS_CHARS),
+          truncated: true,
+          shots: [shot, shot],
+        },
+      };
+
+      const posted = yield* bytes(
+        request({
+          method: "POST",
+          userId: "user-largest",
+          body: JSON.stringify({ id: read.id, result: largest }),
+        }),
+      );
+
+      assert.equal(posted.text, '{"settled":true}');
+      assert.deepEqual(yield* macCommandResult("user-largest", read.id), Option.some(largest));
     }),
   );
 

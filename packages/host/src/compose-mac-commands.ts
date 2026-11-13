@@ -13,6 +13,7 @@ import {
   computerPermissionsNamed,
   isMacComputerCommand,
   isMacShellCommand,
+  MAC_COMMAND_BOUNDS,
   MAC_COMMAND_KIND,
   type MacCommandKind,
   type MacCommandRead,
@@ -21,6 +22,7 @@ import {
   type MacComputerCommand,
   type MacShellResult,
   macCommandKindsQuery,
+  macCommandResultSchema,
 } from "@repo/features/mac-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
@@ -34,6 +36,7 @@ import {
   FiberSet,
   Option,
   Schedule,
+  Schema,
   type Scope,
   Stream,
   SubscriptionRef,
@@ -44,7 +47,9 @@ import type { AccountComposer } from "./compose-account.js";
 import type { Composer } from "./composer.js";
 import {
   COMPUTER_HELPER_OP,
+  type ComputerAppPin,
   type ComputerHelperAnswer,
+  type ComputerHelperRequest,
   type ComputerPermissions,
   type ComputerUseHelperSeam,
 } from "./computer-use-helper.js";
@@ -64,13 +69,17 @@ import { type MacShell, runMacCommand } from "./mac-command-runner.js";
 import type { RunMode } from "./run-mode.js";
 
 /**
- * compose-mac-commands.ts -- runs on this Mac the commands the account's agents queue for it, for as long as an account is signed in and Settings lets agents run commands here, asking the developer first where Settings says to.
+ * compose-mac-commands.ts -- runs on this Mac the commands the account's agents queue for it, for as long as an account is signed in and Settings lets agents run commands or use apps here, asking the developer first where Settings says to.
  *
  * Settings › This Mac decides (`@repo/settings`'s `MAC_COMMAND_MODE`): Ask
  * every time, the default, shows the developer each shell command before
  * it runs; Always allow runs any command of the account's agents without
- * asking; Never is the brake, under which nothing is read. While the gate
- * stands, the commands no Mac has
+ * asking; Never is the brake, under which no shell command runs. Settings ›
+ * Let agents use apps on this Mac is the other switch, for actions on
+ * apps, and the gate stands open where either lets agents in: under Never
+ * with apps on, a shell command the Mac is handed is answered not run
+ * (`COMMANDS_NEVER`), since every read is handed shell commands. While the
+ * gate stands, the commands no Mac has
  * claimed, of the kinds this Mac runs, are followed through the live layer
  * (`live-follow.ts`: a poll the service holds until the rows move), and
  * each one
@@ -102,7 +111,12 @@ import type { RunMode } from "./run-mode.js";
  * other is asked about as an app (`MacAppAsk`), on the same terms as a shell
  * command's ask. Allow once holds the app for the conversation that asked until the
  * gate moves; Always allow adds it to the apps agents use without asking.
- * Listing the apps names none, so it asks nothing.
+ * Listing the apps names none, so it asks nothing. The action then names
+ * the app as it was allowed, pinned by its bundle id, or its process where
+ * it has none, so the helper acts on no other app that answers to the
+ * agent's words by the time it runs, and the switch is read again just
+ * before the helper takes it. What the helper answers is posted only where
+ * the wire takes it (`macCommandResultSchema`), and refused otherwise.
  *
  * A live read writes nothing, so the Mac says it listens for its kinds
  * itself, every `LISTENING_EVERY`, well inside the service's freshness
@@ -110,12 +124,14 @@ import type { RunMode } from "./run-mode.js";
  * process that no row change can carry.
  *
  * The gate is a value that changes rather than one read again on a timer:
- * the account it stands open for, worked out afresh each time a setting or
- * the account changes (`MacCommandsDependencies.changed`). The setting
- * switched off, a sign-out, or another account signing in ends the follow
- * and the beats at once, the agents' calls are told no Mac listens, and
- * every command still running is stopped, its process group killed; a gate
- * shut waits for it to open, reading nothing. Every read names the account
+ * the account it stands open for and the kinds it takes, worked out afresh
+ * each time a setting or the account changes
+ * (`MacCommandsDependencies.changed`). Both switches off, a sign-out, or
+ * another account signing in ends the follow and the beats at once, the
+ * agents' calls are told no Mac listens, and every command still running
+ * is stopped, its process group killed, as commands set to Never stops them
+ * too; apps switched on or off reads again for the kinds the gate now takes
+ * and stops nothing. A gate shut waits for it to open, reading nothing. Every read names the account
  * the follow started for, so one the service signs out ends the follow.
  * Quitting closes the scope, which kills every command still running with
  * its process group.
@@ -183,6 +199,40 @@ export interface MacComputerUse {
 export interface MacCommandsComposer extends Composer {
   readonly acts: HostActTable<typeof MAC_COMMAND_ACTS>;
 }
+
+/**
+ * Where the gate stands open: the account the Mac takes commands for, and
+ * whether Settings lets agents run commands (`shell`) and use apps
+ * (`apps`) here, each by its own setting.
+ */
+interface GateStanding {
+  readonly userId: string;
+  readonly shell: boolean;
+  readonly apps: boolean;
+}
+
+/** Whether the gate stands as it did: for the same account and the same kinds. */
+function sameGate(now: GateStanding | undefined, was: GateStanding): boolean {
+  return now?.userId === was.userId && now.shell === was.shell && now.apps === was.apps;
+}
+
+/**
+ * The kinds a gate standing open reads, claims, and listens for: actions on
+ * apps where they are let, and shell always, since every read is handed
+ * shell commands whatever it names (`macCommandKindsRead`), so one taken
+ * under Never is answered not run rather than left for its call to wait out.
+ */
+function kindsOf(standing: GateStanding): readonly MacCommandKind[] {
+  return standing.apps
+    ? [MAC_COMMAND_KIND.SHELL, MAC_COMMAND_KIND.COMPUTER]
+    : [MAC_COMMAND_KIND.SHELL];
+}
+
+/** What a shell command answers where Settings lets agents run no commands on this Mac, while it stands open for their actions on apps. */
+const COMMANDS_NEVER: MacCommandRefusal = {
+  refused:
+    "Not run: the developer doesn't let agents run commands on their Mac (Settings › This Mac is set to Never).",
+};
 
 /** What a command taken as the setting was switched off, or the account signed out, answers. */
 const SWITCHED_OFF: MacShellResult = {
@@ -295,6 +345,35 @@ const UNEXPECTED_ANSWER: MacCommandRefusal = {
   refused: "Not run: the computer-use helper answered something else.",
 };
 
+/** How an action names the app allowed: by its bundle id where it has one, with the pin. */
+type PinnedApp = ComputerAppPin & { readonly app?: string };
+
+/**
+ * The pin that holds an action to the app allowed: its bundle id, which the
+ * helper finds it by too, or its process where it has none; nothing where
+ * it has neither, as an app with no bundle id that is not running.
+ */
+function pinOf(app: ComputerApp, pid: number | undefined): PinnedApp {
+  if (app.bundleId !== undefined) return { app: app.bundleId, pin_bundle_id: app.bundleId };
+
+  return pid === undefined ? {} : { pin_pid: pid };
+}
+
+const isSendable = Schema.is(macCommandResultSchema);
+
+/** Room in a posted body for what stands beside the result: its key and the command's id. */
+const SETTLE_ENVELOPE_BYTES = 128;
+
+const encoder = new TextEncoder();
+
+/** A result as the service takes it, or the helper's other-answer refusal where it would not, as a window larger than the wire or the body's cap carries, so the call is never left waiting on a result it refuses. */
+function sendable(result: MacCommandResult): MacCommandResult {
+  if (!isSendable(result)) return UNEXPECTED_ANSWER;
+  const bytes = encoder.encode(JSON.stringify(result)).byteLength + SETTLE_ENVELOPE_BYTES;
+
+  return bytes <= MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES ? result : UNEXPECTED_ANSWER;
+}
+
 /** What an action came to, as the helper answered it. */
 function computerResult(answer: ComputerHelperAnswer, app?: ComputerApp): MacCommandResult {
   if ("outcome" in answer) {
@@ -356,17 +435,12 @@ export function composeMacCommands(
     const services = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner>();
     const http = yield* HttpClient.HttpClient;
     const { kernel, account, mode, allowAlways, client, computer } = dependencies;
-
-    /** The kinds of command this Mac runs, which every read names: actions on apps only where it ships the helper. */
-    const runs: readonly MacCommandKind[] =
-      computer === undefined
-        ? [MAC_COMMAND_KIND.SHELL]
-        : [MAC_COMMAND_KIND.SHELL, MAC_COMMAND_KIND.COMPUTER];
-
     /** The apps each agent's conversation was allowed once, by its id, until the gate moves. */
     const allowedOnce = new Map<string, Set<string>>();
-
+    /** The apps allowed without asking as last read, so an app taken off that list loses every grant it was allowed once beside it. */
+    let alwaysAllowed: readonly string[] = [];
     /** The asks waiting on the developer, by the command's id, the earliest asked first, each with the account it was claimed for. */
+
     const asks = new Map<
       string,
       { ask: MacCommandAsk; userId: string; decided: Deferred.Deferred<MacCommandDecision> }
@@ -456,9 +530,14 @@ export function composeMacCommands(
     const decided = (command: MacCommandRead, userId: string) =>
       Effect.gen(function* () {
         if (isMacComputerCommand(command)) return yield* used(command, userId);
+        const how = yield* mode;
+
+        if (how === MAC_COMMAND_MODE.NEVER && isMacShellCommand(command)) {
+          return yield* settled(command.id, COMMANDS_NEVER);
+        }
 
         // Note that a kind this Mac cannot run is refused without asking, since nothing would run.
-        if ((yield* mode) !== MAC_COMMAND_MODE.ASK || !isMacShellCommand(command)) {
+        if (how !== MAC_COMMAND_MODE.ASK || !isMacShellCommand(command)) {
           return yield* run(command);
         }
 
@@ -494,14 +573,14 @@ export function composeMacCommands(
      * Whether the agent may use the app its action names: the app named by
      * the helper, launching nothing, then refused, allowed already, or asked
      * about until `deadline`. Answers why not, or the app as the helper
-     * named it where it may.
+     * named it where it may, with the pin that holds the action to it.
      */
     const appAllowed = (
       use: MacComputerUse,
       command: MacComputerCommand & { readonly action: { readonly app: string } },
       userId: string,
       deadline: number,
-    ): Effect.Effect<MacCommandRefusal | { readonly app: ComputerApp }> =>
+    ): Effect.Effect<MacCommandRefusal | { readonly app: ComputerApp; readonly pin: PinnedApp }> =>
       Effect.gen(function* () {
         const named = yield* use.helper.ask(
           { op: COMPUTER_HELPER_OP.DESCRIBE_APP, app: command.action.app },
@@ -517,11 +596,18 @@ export function composeMacCommands(
         const app = named.described;
 
         if (app.refused) return neverOffered(app.name);
+        const pin = pinOf(app, named.pid);
         const key = app.bundleId ?? app.name;
         const allowed = yield* use.allowedApps;
 
+        for (const removed of alwaysAllowed.filter((each) => !allowed.includes(each))) {
+          for (const once of allowedOnce.values()) once.delete(removed);
+        }
+
+        alwaysAllowed = allowed;
+
         if (allowed.includes(key) || allowedOnce.get(command.conversationId)?.has(key) === true) {
-          return { app };
+          return { app, pin };
         }
 
         const asked: MacAppAsk = {
@@ -541,17 +627,18 @@ export function composeMacCommands(
         if (decision === MAC_COMMAND_DECISION.DENY) return APP_DECLINED;
 
         if (dependencies.accountId() !== userId) return ACCOUNT_CHANGED;
+        // Note that an Always allow the settings kept is held by them alone, so a Remove in Settings takes it back; one they could not keep holds for this conversation, as Allow once does.
+        const always = decision === MAC_COMMAND_DECISION.ALLOW_ALWAYS;
 
-        if (decision === MAC_COMMAND_DECISION.ALLOW_ALWAYS && !(yield* use.allowApp(key))) {
-          report("an app's Always allow could not be saved; the next agent asks again");
-        }
+        if (always && (yield* use.allowApp(key))) return { app, pin };
 
+        if (always) report("an app's Always allow could not be saved; the next agent asks again");
         allowedOnce.set(
           command.conversationId,
           new Set([...(allowedOnce.get(command.conversationId) ?? []), key]),
         );
 
-        return { app };
+        return { app, pin };
       });
 
     /**
@@ -604,52 +691,76 @@ export function composeMacCommands(
 
         if (missing !== undefined) return yield* settled(command.id, missing);
         let app: ComputerApp | undefined;
+        let request: ComputerHelperRequest = action;
 
         if (action.op !== COMPUTER_ACTION.LIST_APPS) {
           const allowed = yield* appAllowed(computer, { ...command, action }, userId, deadline);
 
           if ("refused" in allowed) return yield* settled(command.id, allowed);
           app = allowed.app;
+          // Note that the action names the app as it was allowed, never the agent's words for it, since those may find another app by the time it runs.
+          request = { ...action, ...allowed.pin };
         }
 
         const left = deadline - (yield* Clock.currentTimeMillis);
 
         if (left < 1000) return yield* settled(command.id, APP_UNANSWERED);
-        const answer = yield* computer.helper.ask(action, Duration.millis(left));
-        yield* settled(command.id, computerResult(answer, app));
+
+        // Note that the switch is read again here, since the developer may have switched apps off while the app was asked about.
+        if (!(yield* computer.enabled)) return yield* settled(command.id, APPS_SWITCHED_OFF);
+        const answer = yield* computer.helper.ask(request, Duration.millis(left));
+        yield* settled(command.id, sendable(computerResult(answer, app)));
       });
 
-    /** Whether the Mac takes commands now: an account signed in, a run that sends, and the setting not Never. */
-    const gateOpen = Effect.map(
-      mode,
-      (how) =>
-        how !== MAC_COMMAND_MODE.NEVER &&
-        kernel.runMode.sendsNetwork &&
-        account.capabilitiesActive(),
-    );
+    /**
+     * Where the gate stands now: open for the account signed in, in a run
+     * that sends, where Settings lets agents run commands here (any mode
+     * but Never) or use apps here (the switch on, where the helper ships),
+     * each by its own setting; shut otherwise.
+     */
+    const gateFor = Effect.gen(function* () {
+      const userId = dependencies.accountId();
 
-    /** The gate as last worked out: the account the Mac takes commands for, none while it is shut. */
-    const gate = yield* SubscriptionRef.make<string | undefined>(undefined);
-    const gateFor = Effect.map(gateOpen, (open) => (open ? dependencies.accountId() : undefined));
-    /** How many times the gate has moved: shut, opened, or opened for another account. */
+      if (userId === undefined || !kernel.runMode.sendsNetwork || !account.capabilitiesActive()) {
+        return undefined;
+      }
+
+      const shell = (yield* mode) !== MAC_COMMAND_MODE.NEVER;
+      const apps = computer !== undefined && (yield* computer.enabled);
+
+      return shell || apps ? { userId, shell, apps } : undefined;
+    });
+
+    /** The gate as last worked out: what the Mac takes commands for, none while it is shut. */
+    const gate = yield* SubscriptionRef.make<GateStanding | undefined>(undefined);
+    /**
+     * How many times the gate has moved: shut, opened, opened for another
+     * account, or commands set to Never while apps keep it open, each of
+     * which stops the commands running. Note that apps switched on or off
+     * moves nothing, since a shell command running must not stop for it;
+     * the follow is read again for the kinds it now names, and an action
+     * already claimed reads the switch again before the helper takes it.
+     */
     let moves = 0;
 
-    const gateMoved = Effect.flatMap(gateFor, (userId) =>
-      Effect.map(SubscriptionRef.getAndSet(gate, userId), (was) => {
-        if (was !== userId) moves += 1;
+    const gateMoved = Effect.flatMap(gateFor, (now) =>
+      Effect.map(SubscriptionRef.getAndSet(gate, now), (was) => {
+        if (was?.userId !== now?.userId || (was?.shell === true && now?.shell === false)) {
+          moves += 1;
+        }
       }),
     );
 
     /** Waits until the gate stands open, for whichever account. */
     const opened = SubscriptionRef.changes(gate).pipe(
-      Stream.filter((userId) => userId !== undefined),
+      Stream.filter((now) => now !== undefined),
       Stream.runHead,
     );
+    /** Waits until the gate no longer stands as `standing`: shut, open for another account, or open for other kinds. */
 
-    /** Waits until the gate no longer stands open for `userId`: shut, or open for another account. */
-    const left = (userId: string) =>
+    const left = (standing: GateStanding) =>
       SubscriptionRef.changes(gate).pipe(
-        Stream.filter((now) => now !== userId),
+        Stream.filter((now) => !sameGate(now, standing)),
         Stream.runHead,
       );
 
@@ -681,7 +792,7 @@ export function composeMacCommands(
         if ("failure" in answer) return;
         const { command: granted } = answer;
 
-        if (!(yield* gateOpen) || dependencies.accountId() !== userId) {
+        if ((yield* gateFor)?.userId !== userId) {
           yield* asked(client.settle(granted.id, SWITCHED_OFF));
 
           return;
@@ -690,27 +801,28 @@ export function composeMacCommands(
         yield* FiberSet.run(running, decided(granted, userId));
       }).pipe(Effect.uninterruptible);
 
-    /** The unclaimed commands of this Mac's kinds, their rows inline, held past `after` where it names one, for the account `userId` names. */
-    const seal = (userId: string, poll: boolean, after?: string) =>
+    /** The unclaimed commands of the kinds the gate stands open for, their rows inline, held past `after` where it names one, for its account. */
+    const seal = (standing: GateStanding, poll: boolean, after?: string) =>
       asked(
         client.liveRead(
           MAC_COMMANDS_READ,
-          { userId, kinds: macCommandKindsQuery(runs) },
+          { userId: standing.userId, kinds: macCommandKindsQuery(kindsOf(standing)) },
           poll ? { after } : undefined,
         ),
       );
 
     /**
-     * That this Mac listens for its kinds, said every `LISTENING_EVERY` for
-     * as long as the follow stands, which ends as the gate leaves its
-     * account.
+     * That this Mac listens for the kinds the gate stands open for, said
+     * every `LISTENING_EVERY` for as long as the follow stands, which ends
+     * as the gate moves from them.
      */
-    const presence = Effect.gen(function* () {
-      for (;;) {
-        yield* asked(client.listening(runs));
-        yield* Effect.sleep(LISTENING_EVERY);
-      }
-    });
+    const presence = (standing: GateStanding) =>
+      Effect.gen(function* () {
+        for (;;) {
+          yield* asked(client.listening(kindsOf(standing)));
+          yield* Effect.sleep(LISTENING_EVERY);
+        }
+      });
 
     /**
      * The unclaimed commands followed (`live-follow.ts`, which polls the
@@ -724,10 +836,11 @@ export function composeMacCommands(
     const followed = (
       running: FiberSet.FiberSet,
       claims: FiberSet.FiberSet,
-      userId: string,
+      standing: GateStanding,
       first: MacCommandsLiveAnswer,
     ) =>
       Effect.suspend(() => {
+        const { userId } = standing;
         let tried = new Set<string>();
 
         const claimNew = (commands: readonly MacCommandRead[]) =>
@@ -741,18 +854,18 @@ export function composeMacCommands(
           });
 
         const rows = decodedLiveRows(
-          { poll: (after) => seal(userId, true, after) },
+          { poll: (after) => seal(standing, true, after) },
           first,
           MAC_COMMANDS_READ.rows,
         );
 
         const following = Stream.runForEach(rows, (read) => claimNew(macCommandsOfLiveRows(read)));
 
-        const follow = Effect.raceFirst(following, presence).pipe(
+        const follow = Effect.raceFirst(following, presence(standing)).pipe(
           Effect.catch(() => waitOrRegained(LIVE_RESTART)),
         );
 
-        return Effect.raceFirst(follow, Effect.asVoid(left(userId)));
+        return Effect.raceFirst(follow, Effect.asVoid(left(standing)));
       });
 
     /** How many times the gate had moved when the running set was last cleared. */
@@ -783,16 +896,19 @@ export function composeMacCommands(
         }
 
         // The account the follow starts for, which every read names, so one under another's session is refused as signed out.
-        const userId = yield* SubscriptionRef.get(gate);
+        const standing = yield* SubscriptionRef.get(gate);
 
-        if (userId === undefined) return yield* Effect.asVoid(opened);
-        const sealed = yield* seal(userId, false);
+        if (standing === undefined) return yield* Effect.asVoid(opened);
+        const sealed = yield* seal(standing, false);
 
         if ("failure" in sealed) {
-          return yield* Effect.raceFirst(waitOrRegained(LIVE_RESTART), Effect.asVoid(left(userId)));
+          return yield* Effect.raceFirst(
+            waitOrRegained(LIVE_RESTART),
+            Effect.asVoid(left(standing)),
+          );
         }
 
-        yield* followed(running, claims, userId, sealed);
+        yield* followed(running, claims, standing, sealed);
       });
 
     const lifetime = Effect.gen(function* () {
