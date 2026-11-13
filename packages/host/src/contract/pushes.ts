@@ -16,10 +16,12 @@ import {
   isLinkDestination,
   type ShownLink,
 } from "@repo/features/link-grammar";
+import { type VoiceCallPress, voiceCallPressSchema } from "@repo/features/voice-wire";
 import { type AppCommand, isAppCommand } from "@repo/settings/shortcuts";
 import { isRecord, isWireString } from "@repo/wire";
 import { COMPLETION_SOUNDS, type CompletionSound } from "@repo/wire/app-settings";
 import { wireResult as result, type WireGuard, type WireGuardValue } from "@repo/wire/wire-guard";
+import { Schema as EffectSchema } from "effect";
 import { type AppStateDelivery, isAppStateDelivery } from "../app-state.js";
 import { actProcedure } from "./base.js";
 
@@ -29,6 +31,7 @@ export const PUSH = {
   MENU_COMMAND: "app:menu-command",
   SHOW_LINK: "app:show-link",
   CHIME: "app:chime",
+  VOICE_CALL_PRESS: "app:voice-call-press",
 } as const;
 
 export type PushName = (typeof PUSH)[keyof typeof PUSH];
@@ -70,6 +73,12 @@ export const PUSH_GUARD = {
   [PUSH.CHIME]: result<CompletionSound>((value) =>
     COMPLETION_SOUNDS.some((sound) => sound === value),
   ),
+  /**
+   * A press on the floating call window's card, a mute set as it says or End
+   * call, pushed to the one window holding the call, which acts on it as on
+   * a press of its own card.
+   */
+  [PUSH.VOICE_CALL_PRESS]: result<VoiceCallPress>(EffectSchema.is(voiceCallPressSchema)),
 } as const satisfies { readonly [Name in PushName]: WireGuard<unknown> };
 
 /** What one push carries. */
@@ -86,6 +95,7 @@ export const PUSH_METHOD = {
   onMenuCommand: PUSH.MENU_COMMAND,
   onShowLink: PUSH.SHOW_LINK,
   onChime: PUSH.CHIME,
+  onVoiceCallPress: PUSH.VOICE_CALL_PRESS,
 } as const;
 
 export type PushMethod = keyof typeof PUSH_METHOD;

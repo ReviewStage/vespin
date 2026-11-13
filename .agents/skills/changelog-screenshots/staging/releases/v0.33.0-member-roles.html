@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@page{size:Letter;margin:0.8in}
+body{font-family:Helvetica,Arial,sans-serif;color:#1b1d21;font-size:11pt;line-height:1.45}
+.mark{display:flex;align-items:center;gap:10px;margin-bottom:28px}
+.mark svg{width:28px;height:28px;border-radius:6px}
+.mark span{font-weight:600;color:#0f766e;font-size:12pt}
+h1{font-size:22pt;margin:0 0 4px}
+.sub{color:#5b5e66;margin-bottom:24px}
+h2{font-size:13pt;margin:26px 0 8px;color:#0f766e}
+table{border-collapse:collapse;width:100%;font-size:10.5pt}
+th,td{border-bottom:1px solid #e2e0da;padding:8px 6px;text-align:left}
+th{background:#f3f1ec}
+td.y{color:#0f766e;font-weight:600}
+td.n{color:#a3a29c}
+.page{page-break-before:always}
+.foot{margin-top:30px;color:#8a8c92;font-size:9pt}
+</style></head><body>
+<div class="mark"><svg viewBox="0 0 64 64"><rect width="64" height="64" fill="#0f766e"/><path d="M8 48 L26 20 L36 34 L44 24 L58 48 Z" fill="#fff"/><path d="M36 34 L44 24 L58 48 L46 48 Z" fill="#99f6e4"/></svg><span>acme · Relay</span></div>
+<h1>Member roles</h1>
+<div class="sub">Who may do what in a Relay workspace. Dana Moreno · v3 · November 2026</div>
+<h2>Roles</h2>
+<p><b>Owner.</b> One per workspace. Holds billing and may transfer the workspace or delete it.</p>
+<p><b>Admin.</b> Manages members, invites, roles below their own, and webhooks.</p>
+<p><b>Member.</b> Works in the workspace; may invite teammates as members.</p>
+<h2>Invitations</h2>
+<table><tr><th>Action</th><th>Owner</th><th>Admin</th><th>Member</th></tr>
+<tr><td>Invite a member</td><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+<tr><td>Invite an admin</td><td class="y">Yes</td><td class="y">Yes</td><td class="n">No</td></tr>
+<tr><td>Withdraw a pending invite</td><td class="y">Yes</td><td class="y">Yes</td><td>Their own</td></tr>
+<tr><td>Resend an expired invite</td><td class="y">Yes</td><td class="y">Yes</td><td>Their own</td></tr>
+<tr><td>Change how long a link lasts</td><td class="y">Yes</td><td class="n">No</td><td class="n">No</td></tr>
+</table>
+<p style="margin-top:14px">An invite link lasts 7 days and works once. A withdrawn or accepted link reads “This invite is no longer valid”.</p>
+<h2>Members</h2>
+<table><tr><th>Action</th><th>Owner</th><th>Admin</th><th>Member</th></tr>
+<tr><td>Remove a member</td><td class="y">Yes</td><td class="y">Yes</td><td class="n">No</td></tr>
+<tr><td>Change a member's role</td><td class="y">Yes</td><td>Below their own</td><td class="n">No</td></tr>
+<tr><td>Leave the workspace</td><td class="n">Transfer first</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+<tr><td>See pending invites</td><td class="y">Yes</td><td class="y">Yes</td><td class="y">Yes</td></tr>
+</table>
+<div class="page"></div>
+<h2>Seats and billing</h2>
+<p>A pending invite holds no seat. A member counts toward the plan's seats from the moment they accept, and an admin sees the seat count change on the Members page.</p>
+<h2>Audit</h2>
+<p>Every invite sent, withdrawn, accepted, or expired is written to the workspace's audit log with who did it and when.</p>
+<div class="foot">acme, Inc. · Internal · Questions to dana@acme.dev</div>
+</body></html>
