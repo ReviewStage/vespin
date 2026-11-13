@@ -5,11 +5,10 @@
 #
 # Each simulator is booted, handed the app, driven through the flows, and
 # shut down again, so the Mac holds no booted simulator once the run ends.
-# The flows are every one under maestro/, the Spotlight flow under
-# maestro/spotlight/, and the notification flow under maestro/notification/,
-# or with --flows only those named, each as its file under maestro/ is named
-# without `.yaml` (`inbox`, `tasks`), the Spotlight flow as `spotlight`, and
-# the notification flow as `notification`. Every flow runs once in the light
+# The flows are every one under maestro/ and the notification flow under
+# maestro/notification/, or with --flows only those named, each as its file
+# under maestro/ is named without `.yaml` (`inbox`, `tasks`), the
+# notification flow as `notification`. Every flow runs once in the light
 # appearance and once in the dark, and a device's screenshots land under
 # <output>/<device slug>/<appearance>/debug/<flow>/takeScreenshot/.
 # The simulator is named as `xcrun simctl list devices` names it, such as
@@ -22,11 +21,9 @@ APP_DIRECTORY=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 USAGE="usage: $0 [--flows <name>,...] <path to Vespin.app> <output directory> <simulator name>..."
 
 # The flows under test, as their files under maestro/ are named, and whether
-# the Spotlight and notification flows are among them: every flow where
-# --flows names none.
+# the notification flow is among them: every flow where --flows names none.
 all_flows=1
 flows=()
-spotlight=1
 notification=1
 if [[ "${1:-}" == "--flows" ]]; then
     (($# >= 2)) || {
@@ -34,13 +31,10 @@ if [[ "${1:-}" == "--flows" ]]; then
         exit 2
     }
     all_flows=0
-    spotlight=0
     notification=0
     while IFS= read -r name; do
         if [[ -z "$name" ]]; then
             continue
-        elif [[ "$name" == "spotlight" ]]; then
-            spotlight=1
         elif [[ "$name" == "notification" ]]; then
             notification=1
         elif [[ -f "$APP_DIRECTORY/maestro/$name.yaml" ]]; then
@@ -50,7 +44,7 @@ if [[ "${1:-}" == "--flows" ]]; then
             exit 2
         fi
     done < <(printf '%s\n' "$2" | tr ',' '\n' | sed 's/^ *//; s/ *$//')
-    if ((${#flows[@]} == 0 && spotlight == 0 && notification == 0)); then
+    if ((${#flows[@]} == 0 && notification == 0)); then
         echo "error: --flows named no flow" >&2
         exit 2
     fi
@@ -195,23 +189,6 @@ run_suite() {
         "$APP_DIRECTORY/maestro"
 }
 
-# Runs the Spotlight flow on the booted simulator `$1`, its output under `$2`:
-# the app installed afresh, the simulator restarted, and
-# `maestro/spotlight/spotlight.yaml` run without clearing the app. Note that
-# the restart is what lets the app's Spotlight index be written, because
-# until the simulator restarts after an app's install it drops every
-# donation the app makes ("Set existence required and no set exists"), and
-# that the flow clears nothing, because Maestro's clear reinstalls the app,
-# which undoes the restart. It costs a restart and a start of Maestro's
-# driver in each appearance.
-run_spotlight_flow() {
-    xcrun simctl uninstall "$1" "$bundle_id" || true
-    xcrun simctl install "$1" "$app" || return 1
-    xcrun simctl shutdown "$1" || return 1
-    xcrun simctl bootstatus "$1" -b || return 1
-    run_maestro "$1" "$2" "$APP_DIRECTORY/maestro/spotlight/spotlight.yaml"
-}
-
 # Runs the notification flow on the booted simulator `$1`, its output under
 # `$2`: the app installed afresh and let notify, launched and sent to the
 # background, `ask.apns` pushed to it, and the notification tapped, since
@@ -230,17 +207,14 @@ run_notification_flow() {
 
 # Runs the flows under test on the booted simulator `$1`, from a clean app,
 # their output under `$2`, which a run before it is cleared from, then the
-# Spotlight and notification flows where they are under test, and fails
-# where any failed. Note that each runs whatever the others did, so its
+# notification flow where it is under test, and fails where either failed.
+# Note that the notification flow runs whatever the others did, so its
 # screenshots are kept even where another flow fails.
 run_flows() {
     rm -rf "$2"
     xcrun simctl terminate "$1" "$bundle_id" 2>/dev/null || true
     local failed=0
     run_suite "$1" "$2" || failed=1
-    if ((spotlight)); then
-        run_spotlight_flow "$1" "$2/spotlight" || failed=1
-    fi
     if ((notification)); then
         run_notification_flow "$1" "$2/notification" || failed=1
     fi
