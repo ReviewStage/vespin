@@ -36,11 +36,9 @@ appId: dev.vespin.ios
 - tapOn:
     id: "settings-notifications"
 - waitForAnimationToEnd
-# Note that a row's name and value stand apart in the tree Maestro reads,
-# the name as the row's label and the value as its text, so each is found
-# on its own.
-- assertVisible: "Status"
-- assertVisible: "Working"
+# Note that the row is one element, its name and value heard together, and a
+# text matches an element's whole words.
+- assertVisible: "Status, Working"
 - assertVisible: "Open iOS notification settings"
 - takeScreenshot: settings-notifications
 # A choice is drawn at once, as the fixture takes it.

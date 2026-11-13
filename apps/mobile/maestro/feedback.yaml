@@ -9,7 +9,11 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Recorded the invite flow"
+# Note that the Inbox is waited for, since a loaded runner's cold launch has
+# drawn it after Maestro's own few seconds.
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 15000
 - tapOn:
     id: "workspace-switcher"
 - tapOn: ".*, Settings"

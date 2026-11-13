@@ -26,9 +26,15 @@ appId: dev.vespin.ios
     timeout: 5000
 - takeScreenshot: accessibility-inbox
 # A thread: its title as the page's heading, each message's writer line, and
-# the composer docked at its foot. Note that the row is opened through
-# `open-row.yaml`, because at this text size it stands at the window's foot,
-# under the tab bar.
+# the composer docked at its foot. Note that the list is drawn up a quarter
+# of the window first, because at this text size the row stands at the
+# window's foot, its middle under the tab bar, though its top stands above
+# it, which `open-row.yaml`'s check reads as clear.
+- swipe:
+    start: "50%, 60%"
+    end: "50%, 35%"
+    duration: 800
+- waitForAnimationToEnd
 - runFlow:
     file: subflows/open-row.yaml
     env:

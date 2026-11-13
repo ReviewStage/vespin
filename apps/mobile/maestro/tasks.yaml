@@ -216,10 +216,12 @@ onFlowComplete:
       # Overview opened at its top stands it, as the leading swipe above
       # does, because a swipe from the row's name either holds long enough
       # to lift its preview or runs far enough to press Open; a tap on the
-      # page's plain line, inside the same list, then closes it.
+      # page's plain line, inside the same list, then closes it. It starts
+      # a fifth of the window in from the edge, clear of a wide window's
+      # rail of tabs.
       - swipe:
-          start: "85%, 66%"
-          end: "50%, 66%"
+          start: "80%, 66%"
+          end: "45%, 66%"
           duration: 900
       - waitForAnimationToEnd
       - takeScreenshot: task-agent-swipe
@@ -306,7 +308,7 @@ onFlowComplete:
 - takeScreenshot: task-sub-task-add
 - tapOn: "New sub-task"
 - assertVisible: "Describe the task"
-- assertVisible: "Relation, Sub-task of"
+- assertVisible: "Sub-task of · Teammate invitations"
 # Note that the keyboard is lowered by a short drag up the form, which
 # lowers it on a drag (`SettingsForm`), since Maestro's hideKeyboard fails
 # on this sheet when no keyboard stands, as with nothing typed.

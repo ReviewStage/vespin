@@ -152,7 +152,9 @@ appId: dev.vespin.ios
 # row left open takes the next press on the list, the long press below among
 # them, only to close itself; that a tap off the list, on the bar's title,
 # leaves it open; and that a regular window, which stands "Choose an item"
-# beside its sidebar, is left out, as its swipes read as taps.
+# beside its sidebar, is left out, as its swipes read as taps. The trailing
+# swipe starts a fifth of the window in from its edge, since a wide
+# window, the iPhone Duo's, stands its tabs as a rail along that edge.
 - runFlow:
     when:
       notVisible: "Choose an item"
@@ -166,8 +168,8 @@ appId: dev.vespin.ios
       - tapOn: "Mark as .*"
       - waitForAnimationToEnd
       - swipe:
-          start: "92%, 27%"
-          end: "60%, 27%"
+          start: "80%, 27%"
+          end: "48%, 27%"
           duration: 900
       - waitForAnimationToEnd
       - assertVisible: "Resolve"
