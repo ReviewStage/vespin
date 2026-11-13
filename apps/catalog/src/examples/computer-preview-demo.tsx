@@ -26,9 +26,10 @@ import {
   JUSTIFY,
   MENU_ITEM_MARK,
   Menu,
+  PICTURE_TILE_FACE,
+  PictureTile,
   PlusIcon,
   Stack,
-  StopIcon,
   SUBMIT_STATE,
   TEXT_TONE,
   TEXT_VARIANT,
@@ -36,9 +37,9 @@ import {
   useMenu,
   WorkingMark,
 } from "@repo/ui";
-import { ArrowUpRightIcon, Minimize2Icon } from "@repo/ui/icons";
+import { MinusIcon } from "@repo/ui/icons";
 import { type ReactNode, useEffect, useState } from "react";
-import { APPS, type App, LAST_DONE, usingWords, Window, XCODE } from "./computer-preview-options";
+import { APPS, type App, LAST_DONE, XCODE } from "./computer-preview-options";
 
 /**
  * computer-preview-demo.tsx -- THROWAWAY: the stacked preview and A's +2 menu,
@@ -82,63 +83,90 @@ interface Live {
   readonly onThatMac: boolean;
 }
 
-/** The front window's title bar: the app shown, "Using" and the mark only on the app in use, and its controls. */
+/** The app's name, a chip on the Mac the agent uses that brings the app's own window forward, words elsewhere. */
+function AppName({ app, live }: { app: App; live: Live }): React.JSX.Element {
+  if (!live.onThatMac) {
+    return (
+      <span className="flex min-w-0 items-center gap-ui-6">
+        <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />
+        <Text variant={TEXT_VARIANT.LABEL} truncate>
+          {app.name}
+        </Text>
+      </span>
+    );
+  }
+
+  return (
+    <Chip
+      look={CHIP_LOOK.TOOLBAR}
+      size={CHIP_SIZE.COMPACT}
+      aria-label={`Show ${app.name} on your Mac`}
+      onClick={ignore}
+    >
+      <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />
+      <ChipName>{app.name}</ChipName>
+    </Chip>
+  );
+}
+
+/** The front window's title bar: "Using" and the mark only on the app in use, the app's name, and Minimize. */
 function TitleBar({
   live,
   middle,
   onMinimize,
-  onStop,
 }: {
   live: Live;
   middle?: ReactNode;
   onMinimize: () => void;
-  onStop: () => void;
 }): React.JSX.Element {
   const { shown } = live;
   const using = live.working && shown === live.inUse;
 
   return (
-    <div className="flex min-w-0 items-center gap-ui-6 border-b border-border py-ui-4 ps-ui-8 pe-ui-4">
-      <AppIcon src={shown.icon} size={APP_ICON_SIZE.LINE} />
-      <Text variant={TEXT_VARIANT.LABEL} truncate>
-        {using || !live.working ? usingWords(shown, live.working) : shown.name}
-      </Text>
+    <div className="flex min-w-0 items-center gap-ui-4 border-b border-border py-ui-4 ps-ui-8 pe-ui-4">
+      {using || !live.working ? (
+        <Text variant={TEXT_VARIANT.LABEL} tone={TEXT_TONE.MUTED}>
+          {live.working ? "Using" : "Used"}
+        </Text>
+      ) : null}
+      <AppName app={shown} live={live} />
       {using ? <WorkingMark /> : null}
       <span className="flex-1" />
       {middle}
-      {live.onThatMac ? (
-        <IconButton
-          icon={<ArrowUpRightIcon />}
-          label={`Show ${shown.name}`}
-          size={BUTTON_SIZE.COMPACT}
-          onClick={ignore}
-        />
-      ) : null}
       <IconButton
-        icon={<Minimize2Icon />}
+        icon={<MinusIcon />}
         label="Minimize"
         size={BUTTON_SIZE.COMPACT}
         onClick={onMinimize}
       />
-      {live.working ? (
-        <IconButton icon={<StopIcon />} label="Stop" size={BUTTON_SIZE.COMPACT} onClick={onStop} />
-      ) : null}
     </div>
   );
 }
 
-/** The front window's card. */
+/** The front window's card, as wide as its window at the preview's height, or the column where it is narrow. */
 function FrontCard({ live, children }: { live: Live; children: ReactNode }): React.JSX.Element {
+  const { shown } = live;
+
   return (
     <Card
       look={CARD_LOOK.SURFACE}
       corner={CARD_CORNER.CONTROL}
       padding={CARD_PADDING.FLUSH}
       shadow={CARD_SHADOW.SOFT}
-      className={live.narrow ? "w-full" : "w-cpo-wide"}
+      className={live.narrow ? "w-full" : "w-fit min-w-app-window-least max-w-cpo-wide"}
     >
       {children}
-      <Window app={live.shown} narrow={live.narrow} />
+      <span className="flex justify-center bg-muted">
+        <PictureTile name={shown.name} face={PICTURE_TILE_FACE.FLUSH} onOpen={ignore}>
+          <img
+            className={`block h-auto w-auto max-w-full ${live.narrow ? "max-h-cpo-narrow" : "max-h-cpo-tall"}`}
+            src={shown.window}
+            width={shown.width}
+            height={shown.height}
+            alt=""
+          />
+        </PictureTile>
+      </span>
     </Card>
   );
 }
@@ -169,12 +197,14 @@ function BehindTitle({
         <span className="flex min-w-0 items-center gap-ui-6 pt-ui-4 pb-ui-12 ps-ui-8 pe-ui-8">
           <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />
           <Text variant={TEXT_VARIANT.LABEL} tone={using ? undefined : TEXT_TONE.MUTED} truncate>
-            {using ? usingWords(app, true) : app.name}
+            {using ? `Using ${app.name}` : app.name}
           </Text>
           {using ? <WorkingMark /> : null}
-          <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} truncate>
-            {LAST_DONE.get(app) ?? ""}
-          </Text>
+          {using ? null : (
+            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} truncate>
+              {LAST_DONE.get(app) ?? ""}
+            </Text>
+          )}
         </span>
       </CardPress>
     </Card>
@@ -186,19 +216,17 @@ function Stacked({
   live,
   onPick,
   onMinimize,
-  onStop,
 }: {
   live: Live;
   onPick: (app: App) => void;
   onMinimize: () => void;
-  onStop: () => void;
 }): React.JSX.Element {
   const others = live.used.filter((app) => app !== live.shown);
   const behind = others.slice(0, MOST_BEHIND);
   const counted = others.length - behind.length;
 
   return (
-    <div className={`flex flex-col ${live.narrow ? "w-full" : "w-cpo-wide"}`}>
+    <div className={`flex flex-col ${live.narrow ? "w-full" : "w-fit max-w-cpo-wide"}`}>
       {behind.toReversed().map((app, at) => (
         <BehindTitle
           key={app.name}
@@ -220,7 +248,6 @@ function Stacked({
               ) : null
             }
             onMinimize={onMinimize}
-            onStop={onStop}
           />
         </FrontCard>
       </div>
@@ -269,9 +296,9 @@ function Pill({ live, onRestore }: { live: Live; onRestore: () => void }): React
       <AppIcon src={live.inUse.icon} size={APP_ICON_SIZE.LINE} />
       <ChipName>
         {live.working
-          ? usingWords(live.inUse, true)
+          ? `Using ${live.inUse.name}`
           : live.used.length === 1
-            ? usingWords(live.inUse, false)
+            ? `Used ${live.inUse.name}`
             : `Used ${String(live.used.length)} apps`}
       </ChipName>
       {live.working ? <WorkingMark /> : null}
@@ -360,14 +387,13 @@ export function ComputerPreviewDemo(): React.JSX.Element {
     used.length === 0 ? null : minimized ? (
       <Pill live={live} onRestore={() => setMinimized(false)} />
     ) : design === DESIGN.STACKED ? (
-      <Stacked live={live} onPick={setShown} onMinimize={() => setMinimized(true)} onStop={stop} />
+      <Stacked live={live} onPick={setShown} onMinimize={() => setMinimized(true)} />
     ) : (
       <FrontCard live={live}>
         <TitleBar
           live={live}
           middle={<AppsMenu live={live} onPick={setShown} />}
           onMinimize={() => setMinimized(true)}
-          onStop={stop}
         />
       </FrontCard>
     );
