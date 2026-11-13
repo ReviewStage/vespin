@@ -96,9 +96,9 @@ const POPOVER_WIDTH = 320;
 
 /**
  * How tall the popover's rows and their gaps stand, in points, at the
- * default text size: its first height, until its list has laid out and
- * said how tall its rows stand, since a list has no height of its own for a
- * popover to fit. A row with its mark and two lines, one with a line, the
+ * default text size: its least height, which the list's own measure raises
+ * once it has laid out, since a list has no height of its own for a popover
+ * to fit. A row with its mark and two lines, one with a line, the
  * gap above and below the list and between its sections, and a section's
  * name over it. `POPOVER_TALLEST` keeps a long list of workspaces, or a
  * large text size, on the screen, scrolling inside it.
@@ -145,7 +145,7 @@ function rowHeard(name: string, line: string | undefined): string {
   return line === undefined ? name : `${name}, ${line}`;
 }
 
-/** The popover's first height for the rows it holds, reckoned as `POPOVER_ROW` says, before its list has measured them. */
+/** The popover's least height for the rows it holds, reckoned as `POPOVER_ROW` says, which its list's measure only ever raises. */
 function popoverHeight({
   workspaces,
   account,
@@ -376,7 +376,7 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
   // Note that the popover's list mounts on its first open and stays, since a closed popover's content stays mounted, every workspace's photo with it, and a list mounted anew on each open would draw each photo's letter tile again.
   const [opened, setOpened] = useState(false);
   const [after, setAfter] = useState<{ readonly act: () => void } | undefined>(undefined);
-  // Note that the popover takes the height its list's rows lay out at, since a reckoning at the default text size cut its last section off.
+  // Note that the popover grows to the height its list's rows lay out at, since a reckoning at the default text size cut its last section off, but never stands shorter than the reckoning, since the list measures nothing (0) before the popover first draws, and a popover of no height never draws.
   const [measured, setMeasured] = useState<number | undefined>(undefined);
 
   // Note that the act is taken off as it runs, so a second dismissal never runs it again.
@@ -433,7 +433,7 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
           modifiers={[
             frame({
               width: POPOVER_WIDTH,
-              height: Math.min(measured ?? popoverHeight(props), POPOVER_TALLEST),
+              height: Math.min(Math.max(measured ?? 0, popoverHeight(props)), POPOVER_TALLEST),
             }),
             // Note that the popover stands on the list's own ground, its arrow and rim too, rather than the system's glass around a solid list.
             presentationBackground(colors.GROUPED),
