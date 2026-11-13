@@ -33,8 +33,11 @@ and we never store the audio. What you and the voice say is kept as text in
 the agent's conversation, one message for each thing either of you said, so
 the agent's transcript shows both sides of the call. What you say reaches the
 agent as its messages, as a typed line does. What the voice says stays in the
-transcript and is never handed to the agent's model. We keep nothing else of a
-call but its length, which counts toward your day and in our usage counts.
+transcript and is never handed to the agent's model. While a call is under way,
+the Service keeps one record of who is calling which agent and the state of the
+call's session, and deletes it when the call ends. Past its end we keep nothing
+else of a call but its length, which counts toward your day and in our usage
+counts.
 
 ### Workspaces, tasks, and descriptions
 
