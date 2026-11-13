@@ -233,7 +233,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   or remind) read as iOS Settings' cards: their rows stand in the panel's
   raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
   (`GROUPED`: the chip's hover gray in light, black in dark), and the sheet
-  around them stands on `GROUPED` too.
+  around them stands on `GROUPED` too, but for a short sheet at half height,
+  which iOS floats as Liquid Glass: there the glass is its one ground
+  (`Screen` and `SettingsForm` `clear`), as Apple's half sheets stand.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
   rows, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it; `AnswerFields`, a row per

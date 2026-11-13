@@ -12,6 +12,7 @@ import {
   FollowerRow,
   GLYPH,
   ListSection,
+  NO_GROUND,
   type PageFollowing,
   Screen,
   SettingsForm,
@@ -19,6 +20,7 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { Stack, useRouter } from "expo-router";
+import { useSheetAtHalf } from "../sheet-stack.js";
 import { type FollowerFace, type TaskFollowing, useTaskFollowing } from "../tasks/use-following.js";
 import { useAddFollowerDoor } from "./follower-screens.js";
 
@@ -118,6 +120,7 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
   const router = useRouter();
   const following = useTaskFollowing(taskId);
   const addFollower = useAddFollowerDoor();
+  const half = useSheetAtHalf();
 
   const bar = (
     <>
@@ -128,7 +131,7 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
+          contentStyle: { backgroundColor: half ? NO_GROUND : colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="right">
@@ -143,7 +146,7 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
     return (
       <>
         {bar}
-        <Screen>
+        <Screen clear={half}>
           <EmptyState title={SHEET_WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         </Screen>
       </>
@@ -153,8 +156,8 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
   return (
     <>
       {bar}
-      <Screen>
-        <SettingsForm>
+      <Screen clear={half}>
+        <SettingsForm clear={half}>
           {following.followers.length === 0 ? null : (
             <ListSection>
               {following.followers.map((face) => (

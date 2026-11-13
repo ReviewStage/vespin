@@ -183,7 +183,7 @@ export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./r
 
 export { latestStep, type PreviewMessage, previewMessages } from "./row-preview-model.js";
 
-export { Screen, Spacer } from "./screen.js";
+export { NO_GROUND, Screen, Spacer } from "./screen.js";
 
 export { ScreenFailure } from "./screen-failure.js";
 

@@ -53,6 +53,7 @@ import {
   MenuPickRow,
   MenuRow,
   type MenuRowAct,
+  NO_GROUND,
   NO_TOGGLES,
   openCuts,
   QueuedLines,
@@ -112,6 +113,7 @@ import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
+import { useSheetAtHalf } from "../sheet-stack.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
@@ -894,6 +896,7 @@ export function AgentPageScreen() {
  */
 export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
   const colors = useColors();
+  const half = useSheetAtHalf();
   const router = useRouter();
   const pick = useAgentModelPick(agentId);
   const mode = useAgentMode(agentId);
@@ -916,7 +919,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
+          contentStyle: { backgroundColor: half ? NO_GROUND : colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="right">
@@ -924,8 +927,8 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
           {OPTIONS_WORDS.DONE}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
-      <Screen>
-        <SettingsForm>
+      <Screen clear={half}>
+        <SettingsForm clear={half}>
           <ListSection footer={pick.note ?? OPTIONS_WORDS.APPLIES}>
             <MenuPickRow
               label={OPTIONS_WORDS.MODEL}
@@ -1014,6 +1017,7 @@ const PORTS_WORDS = { DONE: "Done" } as const;
  */
 export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
   const colors = useColors();
+  const half = useSheetAtHalf();
   const router = useRouter();
   const ports = useAgentPorts(agentId);
 
@@ -1043,7 +1047,7 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.GROUPED },
+          contentStyle: { backgroundColor: half ? NO_GROUND : colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="right">
@@ -1051,8 +1055,8 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
           {PORTS_WORDS.DONE}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
-      <Screen>
-        <SettingsForm>
+      <Screen clear={half}>
+        <SettingsForm clear={half}>
           <ListSection
             footer={ports.note ?? (ports.rows.length === 0 ? ports.none : ports.linkNote)}
           >

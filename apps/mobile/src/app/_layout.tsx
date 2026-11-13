@@ -3,7 +3,7 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
+import { FailureNoticeProvider, KeepingProvider, NO_GROUND } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { hide as hideSplash } from "expo-splash-screen";
@@ -88,6 +88,8 @@ function GuardedScreens() {
         presentation: "formSheet" as const,
         sheetAllowedDetents: SHORT_SHEET_DETENTS,
         sheetGrabberVisible: true,
+        // Note that the route under the sheet's own stack paints no ground, so at half height the sheet's glass shows through to its screen, which paints none there either (`useSheetAtHalf`).
+        contentStyle: { backgroundColor: NO_GROUND },
       };
 
   return (
