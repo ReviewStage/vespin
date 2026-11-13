@@ -797,7 +797,7 @@ export const agentApprovalAnswerViewSchema = answerView(agentsContract.answerApp
 
 export type AgentApprovalAnswerView = typeof agentApprovalAnswerViewSchema.Type;
 
-/** An agent on screen kept warm, as the window hears it: that the service took the call, or why not. */
+/** The service's warm, which does nothing now, as the window hears it: that the service took the call, or why not. */
 export const agentWarmAnswerViewSchema = answerView(agentsContract.warm);
 
 export type AgentWarmAnswerView = typeof agentWarmAnswerViewSchema.Type;

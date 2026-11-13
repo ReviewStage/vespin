@@ -90,7 +90,6 @@ import {
   deletedAgent,
   resumedAgentSandbox,
   rewoundAgentById,
-  warmedAgent,
 } from "./agent-lifecycle.js";
 import { admitsPlanWriter, controlsAgent, reachedAgentById } from "./agent-reach.js";
 import { agentSandboxName } from "./agent-sandbox-open.js";
@@ -623,11 +622,13 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
 
       return { agent: yield* summaryOf(userId, agent) };
     }),
-    /** The agent on screen kept warm (`agent-lifecycle.ts`): answered at once, its runner launched past the answer where none runs. */
-    warm: signedIn.warm.effect(function* ({ input, context }) {
-      yield* warmedAgent(context.userId, input.id);
-
-      return { warm: true as const };
+    /**
+     * Answered and nothing done: an agent on screen no longer keeps its
+     * sandbox up, which only its holds do. Kept so a desktop that still
+     * calls it each minute is not refused; drop it in a later release.
+     */
+    warm: signedIn.warm.effect(function* () {
+      return yield* Effect.succeed({ warm: true as const });
     }),
     /** The agent's harness started on a fresh session in the same agent (`agent-lifecycle.ts`), answered as it then stands. */
     clear: signedIn.clear.effect(function* ({ input, context }) {

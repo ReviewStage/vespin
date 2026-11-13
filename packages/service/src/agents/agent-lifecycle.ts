@@ -31,10 +31,9 @@ import {
   type HostedRefusal,
   hostedStoreOrUnavailable,
 } from "../http/http-effect.js";
-import { controlsAgent, reachedAgentById } from "./agent-reach.js";
+import { reachedAgentById } from "./agent-reach.js";
 import { clearedAgent } from "./coder-host/clear.js";
 import { rewoundAgent } from "./coder-host/rewind.js";
-import { runnerWarmed } from "./coder-host/runtime-sessions.js";
 import { startedBlank } from "./coder-host/status.js";
 import { standsStopped, stoppedForGood, summaryOf } from "./coder-host/stop.js";
 import { retiredBeforeDelete, retiringReach } from "./retire-sessions.js";
@@ -117,20 +116,6 @@ export const rewoundAgentById = /* @__PURE__ */ Effect.fnUntraced(function* (
   yield* rewoundAgent(userId, agent, messageId, restoreFiles);
 
   return yield* summaryOf(userId, agent);
-});
-
-/**
- * The agent kept warm (`runnerWarmed`), its runner launched where none
- * runs. Kept for a member who may message it alone, whose message the warm
- * runner would take; anyone else is answered the same, and nothing is kept.
- */
-export const warmedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
-  account: string,
-  id: string,
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices> {
-  const { userId, agent } = yield* reachedAgentById(account, id);
-
-  if (controlsAgent(userId, agent)) yield* runnerWarmed(agent);
 });
 
 /** The agent's sandbox resumed from its snapshot, answering where it stands after; one not opened yet stands starting and is resumed by nothing. */

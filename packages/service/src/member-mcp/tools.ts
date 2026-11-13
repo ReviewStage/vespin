@@ -215,12 +215,7 @@ import {
   takeOverAgentBrowserTab,
 } from "../agents/agent-browser-tabs.js";
 import { READ_AGENT_CHANGES_INPUT, runReadAgentChanges } from "../agents/agent-changes-tool.js";
-import {
-  deletedAgent,
-  resumedAgentSandbox,
-  rewoundAgentById,
-  warmedAgent,
-} from "../agents/agent-lifecycle.js";
+import { deletedAgent, resumedAgentSandbox, rewoundAgentById } from "../agents/agent-lifecycle.js";
 import { agentPullRequestAction } from "../agents/agent-pull-request-procedures.js";
 import {
   AGENT_CALLER,
@@ -2601,9 +2596,8 @@ const WAKE_AGENT_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.WAKE_AGENT,
   description:
     "Wake the cloud sandbox of a coding agent the member can see, by its id, as the member's " +
-    "own Resume would: a stopped sandbox is resumed from its snapshot with its files, and the " +
-    "agent's runner is started where none runs, so its next message, shell, or shared port " +
-    "answers at once. A sandbox already running is left as it is, and one never opened stays " +
+    "own Resume would: a stopped sandbox is resumed from its snapshot with its files, so its " +
+    "next message, shell, or shared port answers at once. A sandbox already running is left as it is, and one never opened stays " +
     "starting until the agent's first command. Only the member who started an agent wakes one " +
     "on their own GitHub token or Mac, and an archived agent is not woken. Answers " +
     "`accepted` with where the sandbox stands now (" +
@@ -2614,7 +2608,6 @@ const WAKE_AGENT_TOOL = memberMcpTool({
     lifecycleAsMember(LIFECYCLE_VERB.WOKEN, (userId) =>
       Effect.gen(function* () {
         const sandbox = yield* resumedAgentSandbox(userId, agentId);
-        yield* warmedAgent(userId, agentId);
 
         return { status: ACTION_RESULT_STATUS.ACCEPTED, sandbox };
       }),

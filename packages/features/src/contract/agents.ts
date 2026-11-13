@@ -389,7 +389,7 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/boot` }))
     .input(idParams)
     .output(EffectSchema.flip(agentAnswerSchema)),
-  /** One agent on screen, kept warm for the next message while it stays there (`agentWarmAnswerSchema`). */
+  /** Answered and does nothing, for builds already shipped that still call it (`agentWarmAnswerSchema`); drop it in a later release. */
   warm: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/warm` }))

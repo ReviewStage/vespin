@@ -72,8 +72,8 @@ import type { RunMode } from "./run-mode.js";
  * the worktree's place while the tunnel opens, because the header waits on
  * the sandbox running, and from it the worktree fetches only what its base
  * changes. The mirror never wakes, opens, or keeps alive a sandbox: it
- * follows one something else keeps running (a turn, the agent on screen, a
- * Terminal), so a stopped sandbox stays stopped and the mirror waits for
+ * follows one something else keeps running (a turn, a Terminal, a port
+ * forward, a Browser view), so a stopped sandbox stays stopped and the mirror waits for
  * it, its worktree built the next time it finds the sandbox running. From
  * then on the mirror holds one tunnel of the
  * `MIRROR` kind open (`@repo/features/sandbox-tunnel-wire`) with one channel on it,
@@ -86,13 +86,14 @@ import type { RunMode } from "./run-mode.js";
  * There is one recovery path, which is to connect and match again: no
  * cursor, no change log, nothing stored between connections. A mirror makes
  * one attempt each time it is asked and never tries again on its own: a
- * socket that drops, is refused, closes as idle, finds the sandbox not
+ * socket that drops, is refused, finds the sandbox not
  * running, or fails a step ends the attempt, and an ensure waiting on a
  * worktree not made yet is refused, for its Local tab to offer Retry. The
- * window asks again each minute an agent is on screen, beside the warm call
- * that wakes its sandbox (`@repo/panel`'s `use-warm-agent.ts`), so the mirror
- * follows the agent being looked at, its worktree usually made by the time
- * its Local tab opens; the next manifest brings it back in step. Every
+ * window asks again each minute an agent is on screen (`@repo/panel`'s
+ * `use-agent-mirror.ts`), an ask that neither wakes nor holds its sandbox,
+ * so the mirror follows the agent being looked at while something else
+ * keeps its sandbox up, its worktree usually made by the time its Local tab
+ * opens; the next manifest brings it back in step. Every
  * mirror on disk is tried once from the host's start, which is how one whose
  * agent is gone is found. A mirror is taken away, its worktree removed from the shared
  * clone and its folder deleted, when the task list shows its agent archived,

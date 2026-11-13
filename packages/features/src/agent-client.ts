@@ -1349,7 +1349,7 @@ export class HostedAgentClient {
     );
   }
 
-  /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */
+  /** The service's warm, which does nothing now (`agentWarmAnswerSchema`). */
   warm(agentId: string): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.agents.warm, { id: agentId });
   }

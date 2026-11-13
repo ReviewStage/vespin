@@ -1151,6 +1151,7 @@ function composed(
     AGENTS_REWIND: declaredWrite(dependencies.pool, rewound),
     AGENTS_CLEAR: ({ agentId }) => asked(client.clear(agentId)),
     AGENTS_BOOT: ({ agentId }) => asked(client.boot(agentId)),
+    // Note that the service's warm does nothing now; this answers for builds already shipped, to drop in a later release.
     AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
     AGENTS_UNSEND: (params) => queues.unsend(params),
     // Note that a button in a reply is asked of the service on each act and held nowhere here, since its press is the service's to keep.
