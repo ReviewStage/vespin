@@ -30,14 +30,23 @@
  * new session under the next lease epoch, from the session the reconnect
  * read, so every lease on the old one is stale, and with how far into the
  * call the new session starts, so the new session's lines keep counting
- * from the call's start (`clock_base_ms`). The lease published for it closes
+ * from the call's start (`clock_base_ms`). Note that a holder skips a
+ * replay by a fragment's end against the stored lines', so without one
+ * clock a new session, whose timeline starts again at zero, would have its
+ * first words passed by as a replay of the old one's; and since a session's
+ * clock starts at its first audio rather than at its creation, the new one
+ * is set to start no earlier than the latest line said before it. The lease published for it closes
  * the old session and keeps its seconds before it holds the new one
  * (`voice-call-lease.ts`). A call no longer standing is refused as not
  * found, and the panel lets it go.
  */
 
 import { readAgentRouting, readVisibleAgent } from "@repo/database/models/agent-store";
-import { listCallLines, listRecentMessages } from "@repo/database/models/message-reads";
+import {
+  listCallLines,
+  listRecentMessages,
+  type StoredMessageRecord,
+} from "@repo/database/models/message-reads";
 import { readTaskHeader } from "@repo/database/models/task-store";
 import {
   deleteVoiceCall,
@@ -145,8 +154,18 @@ const openedSession = /* @__PURE__ */ Effect.fnUntraced(function* (ask: SessionA
     Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
   );
 
-  return { agent, created };
+  return { agent, created, lines: lines?.ok === true ? lines.value : [] };
 });
+
+/** The latest end on the call's clock of the lines given, 0 where none names one. */
+function latestEndMs(lines: readonly StoredMessageRecord[]): number {
+  return lines.reduce((latest, record) => {
+    const metadata = "metadata" in record.message ? record.message.metadata : undefined;
+    const end = metadata !== undefined && "to_ms" in metadata ? metadata.to_ms : undefined;
+
+    return end === undefined ? latest : Math.max(latest, end);
+  }, 0);
+}
 
 /** The call's next lease published; where the queue did not take it, the call's row deleted and the call refused as unavailable, since nothing would hold it. */
 const publishedLease = /* @__PURE__ */ Effect.fnUntraced(function* (
@@ -209,7 +228,7 @@ export function voiceProcedures(seams: VoiceProcedureSeams) {
       if (Option.isNone(standing)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const left = standing.value;
 
-      const { created } = yield* openedSession({
+      const { created, lines } = yield* openedSession({
         userId: context.userId,
         key: context.openAiKey,
         agentId: left.agentId,
@@ -224,7 +243,8 @@ export function voiceProcedures(seams: VoiceProcedureSeams) {
       const moved = yield* hostedStoreOrUnavailable(
         moveVoiceCall(left.callerId, left.id, left.liveSessionId, {
           liveSessionId: created.sessionId,
-          clockBaseMs: now - left.startedAt.getTime(),
+          // The new session's clock starts at its first audio, so it never starts before a line already said.
+          clockBaseMs: Math.max(now - left.startedAt.getTime(), latestEndMs(lines)),
           leaseUntil: new Date(now + VOICE_CALL_LEASE.MAX_DURATION_SECONDS * MS_PER_SECOND),
         }),
       );

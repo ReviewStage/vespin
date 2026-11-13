@@ -17,7 +17,17 @@ import { PROVIDER_KEY_KIND, PROVIDER_KEY_PROVIDER } from "@repo/features/provide
 import { LIVE_VOICE } from "@repo/features/voices";
 import type { WireValue } from "@repo/wire";
 import { eq } from "drizzle-orm";
-import { type Cause, Deferred, Effect, Layer, Queue, Redacted, Result, Stream } from "effect";
+import {
+  type Cause,
+  Clock,
+  Deferred,
+  Effect,
+  Layer,
+  Queue,
+  Redacted,
+  Result,
+  Stream,
+} from "effect";
 import type { HostedEnvironmentValues } from "../environment.js";
 import {
   LIVE_SIDEBAND_EVENT,
@@ -179,7 +189,7 @@ export const openVoiceCall = Effect.gen(function* () {
     callerId,
     agentId,
     voice: LIVE_VOICE.MARIN,
-    startedAt: new Date(0),
+    startedAt: new Date(yield* Clock.currentTimeMillis),
     leaseUntil: new Date(0),
   });
 

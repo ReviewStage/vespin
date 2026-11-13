@@ -10,7 +10,7 @@ import { hostedUsage } from "@repo/database/schemas/usage";
 import { getTestDB } from "@repo/database/testing";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { eq } from "drizzle-orm";
-import { Deferred, Effect, Fiber, Layer, Option, Queue } from "effect";
+import { Deferred, Duration, Effect, Fiber, Layer, Option, Queue } from "effect";
 import { TestClock } from "effect/testing";
 import { HostedEnvironment } from "../environment.js";
 import {
@@ -402,6 +402,8 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
           const standing = yield* readVoiceCall(callerId, call.id);
           const meteredMid = yield* metered(callerId);
 
+          // The call ends 80 s after it started, which is the length it is counted by.
+          yield* TestClock.adjust(Duration.seconds(80));
           yield* moved.say(LIVE_SIDEBAND_EVENT.CLOSED, { usage: { seconds: 20 } });
           assert.equal(yield* Fiber.join(after), VOICE_CALL_HELD.ENDED);
 

@@ -49,9 +49,9 @@
  * on the caller's day before it holds the new one, since no other holder
  * will: a call's row is deleted only by naming the session it stands on, so
  * a stale holder that hears the old session close ends nothing and keeps
- * nothing. The call's seconds are so kept
- * session by session, and the call is counted once, at its last session's
- * close, by its length on the call's clock.
+ * nothing. The call's seconds are so kept session by session, and the
+ * call is counted once, at its last session's close, by its length from
+ * its start.
  *
  * The driver (`holdVoiceCall`) names nothing of Functions: it takes a lease
  * and runs until it hands over or the call ends, so a longer-lived host can
@@ -205,8 +205,8 @@ export const observeNothing: VoiceCallObserver<never> = () =>
 /**
  * The call's row deleted where it still stands on the session this lease
  * holds, and, where this delete is the one that took it, its seconds kept
- * on the caller's day and the call counted once, by its length on the
- * call's clock and the agent's harness, in the agent's workspace. A meter
+ * on the caller's day and the call counted once, by its length from its
+ * start to now and the agent's harness, in the agent's workspace. A meter
  * the store refused is logged and the call still counted, as dictation's
  * is.
  */
@@ -237,7 +237,7 @@ const endCall = Effect.fnUntraced(function* (
     call.callerId,
     readVisibleAgentWorkspace(call.callerId, call.agentId),
     {
-      duration: voiceCallDurationOf(call.clockBaseMs + seconds.value * MS_PER_SECOND),
+      duration: voiceCallDurationOf(now - call.startedAt.getTime()),
       harness: harness.value,
     },
   );

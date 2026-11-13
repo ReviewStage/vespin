@@ -413,7 +413,8 @@ it.layer(getTestDB())("the voice routes", (it) => {
         // SAFETY: an answered open is the call's id and its SDP answer.
         const { callId } = (yield* router.open(ownerId, agentId)).body as { callId: string };
         const conversationId = yield* saidOnCall(ownerId, agentId, callId);
-        yield* TestClock.adjust(Duration.seconds(61));
+        // A second in by the wall, but the voice's last line already ended 1.8 s in, since a session's clock starts at its first audio.
+        yield* TestClock.adjust(Duration.seconds(1));
 
         assert.deepEqual(
           yield* router.reconnect(stranger, callId),
@@ -425,7 +426,7 @@ it.layer(getTestDB())("the voice routes", (it) => {
         assert.deepEqual(answered, { status: HOSTED_HTTP_STATUS.OK, body: { sdp: ANSWER } });
         const call = Option.getOrThrow(yield* readVoiceCall(ownerId, callId));
         assert.equal(call.liveSessionId, RECONNECTED_SESSION_ID);
-        assert.equal(call.clockBaseMs, 61_000);
+        assert.equal(call.clockBaseMs, 1_800);
         assert.equal(call.leaseEpoch, 2);
         assert.deepEqual(router.published.at(-1), {
           callId,
