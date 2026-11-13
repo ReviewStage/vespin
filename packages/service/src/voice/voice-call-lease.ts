@@ -32,11 +32,14 @@
  *
  * A holder that crashed is the queue's to recover, with no heartbeat and no
  * sweep: the queue renews a delivery's visibility while its handler runs, so
- * a lease delivered again is one whose earlier delivery died. That delivery
- * may have claimed already, so a redelivery claims from the epoch its
- * message names or, failing that, from the one after, which only that dead
- * delivery could have taken; a successor that claimed past both makes it
- * stale. A sideband that drops with no close fails the delivery the same way.
+ * a lease delivered again is one whose earlier delivery died, and that dead
+ * delivery may have claimed already, however many times it came before. So
+ * a redelivery claims from the epoch the call stands at, whoever took it:
+ * where that is a successor the dead holder published before it died, the
+ * successor loses the call and lets go at its next fenced act, so one lease
+ * still acts at a time. A sideband that drops with no close fails the
+ * delivery the same way; one that will not attach for now fails it before
+ * it claims anything.
  *
  * The driver (`holdVoiceCall`) names nothing of Functions: it takes a lease
  * and runs until it hands over or the call ends, so a longer-lived host can
@@ -212,14 +215,16 @@ const callerKey = Effect.fnUntraced(function* (callerId: string) {
     : Option.some(key);
 });
 
-/** The lease claimed until the function's limit, from the epoch the message names or, for a redelivery, from the one its dead delivery took. */
-const claimLease = Effect.fnUntraced(function* (lease: VoiceCallLease, startedAt: number) {
+/** The lease claimed until the function's limit: from the epoch the message names, or, for a redelivery, from the one the call stands at. */
+const claimLease = Effect.fnUntraced(function* (
+  lease: VoiceCallLease,
+  standing: VoiceCallRow,
+  startedAt: number,
+) {
   const until = new Date(startedAt + VOICE_CALL_LEASE.MAX_DURATION_SECONDS * MS_PER_SECOND);
-  const claimed = yield* claimVoiceCallLease(lease.callId, lease.epoch, until);
+  const epoch = lease.redelivered ? standing.leaseEpoch : lease.epoch;
 
-  if (Option.isSome(claimed) || !lease.redelivered) return claimed;
-
-  return yield* claimVoiceCallLease(lease.callId, lease.epoch + 1, until);
+  return yield* claimVoiceCallLease(lease.callId, epoch, until);
 });
 
 /** Sleeps until `at` on the clock, a lease's own deadline. */
@@ -271,16 +276,17 @@ export const holdVoiceCall = Effect.fn("voice/holdVoiceCall")(function* <R>(
         sidebands.attach(standing.value.liveSessionId, key.value),
       );
 
-      const claimed = yield* claimLease(lease, startedAt);
+      // Note that an attach that may pass later claims nothing, so the lease comes again at the epoch it names.
+      if (Result.isFailure(attached) && !sessionGone(attached.failure)) {
+        return yield* new SidebandUnattached({ status: attached.failure.status });
+      }
+
+      const claimed = yield* claimLease(lease, standing.value, startedAt);
 
       if (Option.isNone(claimed)) return VOICE_CALL_HELD.STALE;
       const call = claimed.value;
 
       if (Result.isFailure(attached)) {
-        if (!sessionGone(attached.failure)) {
-          return yield* new SidebandUnattached({ status: attached.failure.status });
-        }
-
         // The session closed while no lease listened, so its seconds were never heard.
         yield* endCall(call, Option.none());
 

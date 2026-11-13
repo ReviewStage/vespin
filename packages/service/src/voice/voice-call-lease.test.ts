@@ -325,7 +325,7 @@ it.layer(getTestDB())("a voice call held lease by lease", (it) => {
   );
 
   it.effect(
-    "a lease delivered again after its holder crashed takes the call back, and a stale one takes nothing",
+    "a lease delivered again after its holders crashed, however many times, takes the call back, and a stale one takes nothing",
     () =>
       Effect.gen(function* () {
         const { call, callerId } = yield* openCall;
@@ -346,7 +346,7 @@ it.layer(getTestDB())("a voice call held lease by lease", (it) => {
           );
           yield* Fiber.interrupt(crashed);
 
-          // The same message, come again, claims past the epoch its dead delivery took.
+          // The same message, come again, claims from the epoch its dead delivery took.
           const again = yield* Effect.forkChild(
             holdVoiceCall({ ...lease, redelivered: true }, observe),
           );
@@ -360,11 +360,21 @@ it.layer(getTestDB())("a voice call held lease by lease", (it) => {
           const stale = yield* holdVoiceCall({ ...lease, redelivered: false }, observe);
           assert.equal(stale, VOICE_CALL_HELD.STALE);
 
+          // Its holder dies too, and the message comes a third time: the call is still taken back.
           yield* Fiber.interrupt(again);
+          const third = yield* Effect.forkChild(
+            holdVoiceCall({ ...lease, redelivered: true }, observe),
+          );
+
+          assert.deepEqual(
+            (yield* nextHeard(heard, 1)).map((one) => one.epoch),
+            [4],
+          );
+          yield* Fiber.interrupt(third);
         }).pipe(Effect.provide(world(session, leases)));
 
         const row = Option.getOrThrow(yield* readVoiceCall(callerId, call.id));
-        assert.equal(row.leaseEpoch, 3);
+        assert.equal(row.leaseEpoch, 4);
       }),
   );
 });
