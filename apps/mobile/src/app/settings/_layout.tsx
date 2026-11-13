@@ -28,7 +28,7 @@ export default function SettingsLayout() {
         headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         headerBackButtonDisplayMode: "minimal",
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: colors.SIDEBAR },
+        contentStyle: { backgroundColor: colors.GROUPED },
       }}
     >
       <Stack.Screen name="index" options={{ title: "Settings" }} />

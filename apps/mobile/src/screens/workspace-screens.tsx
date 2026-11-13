@@ -100,7 +100,7 @@ export function NewWorkspaceScreen() {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.SIDEBAR },
+          contentStyle: { backgroundColor: colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="left">

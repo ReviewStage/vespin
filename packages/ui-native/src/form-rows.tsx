@@ -98,7 +98,7 @@ export function WordsField({
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_TITLE }),
         lineLimit(WORDS_LINES),
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         SwiftModifiers.disabled(disabled),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
         ...(label === undefined ? [] : [accessibilityLabel(label)]),
@@ -128,7 +128,7 @@ export function SkillRow({
   const colors = useColors();
 
   return (
-    <HStack modifiers={[listRowBackground(colors.SURFACE)]}>
+    <HStack modifiers={[listRowBackground(colors.RAISED)]}>
       <SkillSuggestions skills={skills} empty={empty} onPick={onPick} />
     </HStack>
   );
@@ -160,7 +160,7 @@ export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }:
     <HStack
       spacing={SPACE.TIGHT * 2}
       modifiers={[
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
       ]}
     >
@@ -215,7 +215,7 @@ export function MenuPickRow({ label, options, picked, onPick }: PickRowProps) {
       onSelectionChange={(id) => {
         if (id !== null) onPick(id);
       }}
-      modifiers={[pickerStyle("menu"), tint(colors.TEXT_MUTED), listRowBackground(colors.SURFACE)]}
+      modifiers={[pickerStyle("menu"), tint(colors.TEXT_MUTED), listRowBackground(colors.RAISED)]}
     >
       {options.map((option) => (
         <Text key={option.id} modifiers={[tag(option.id)]}>

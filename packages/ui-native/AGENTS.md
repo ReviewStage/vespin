@@ -197,6 +197,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
   status, priority and assignee. Each stands
   on `SURFACE` inside a hairline.
+- **Grouped forms** (`SettingsForm` and the sheets that start work, pick
+  or remind) read as iOS Settings' cards: their rows stand in the panel's
+  raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
+  (`GROUPED`: the chip's hover gray in light, black in dark), and the sheet
+  around them stands on `GROUPED` too.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
   rows, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it; `AnswerFields`, a row per
