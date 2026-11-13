@@ -115,8 +115,9 @@ import {
   SETUP_STEP,
   type SetupStatus,
 } from "@repo/host/daemon";
-import { Environment, reporterLayer } from "@repo/host/effect";
+import { Environment, type ReportAttributes, reporterLayer } from "@repo/host/effect";
 import { armedWatchLayer, reportToStderr } from "@repo/host/node";
+import { sendLineToSentry } from "@repo/host/sentry-line";
 import * as Sentry from "@sentry/node";
 import { ConfigProvider, Duration, Effect, Exit, Layer, Option } from "effect";
 import * as FileSystem from "effect/FileSystem";
@@ -138,9 +139,6 @@ const LOG_FILE =
   process.platform === "darwin" && process.argv.includes("--bundled")
     ? path.join(os.homedir(), "Library", "Logs", `${PRODUCT_NAME} Host`, "vespin-host.log")
     : undefined;
-
-/** Whether a reported line says something failed, which Sentry is told as an error rather than a log line. */
-const FAILING = /could not|couldn't|failed|refused/i;
 
 /** The service a box connects to where its install script names none. */
 const DEFAULT_SERVICE_ORIGIN = LINK_ORIGIN;
@@ -291,17 +289,13 @@ function logToFile(message: string): void {
   }
 }
 
-/** A line the daemon reports: to stderr, to its log file where it keeps one, and to Sentry, as an error where it says something failed. */
-function reportEverywhere(message: string): void {
-  reportToStderr(message);
+/** A line the daemon reports: to stderr, to its log file where it keeps one, and to Sentry as `sendLineToSentry` sends it, so an error's or a tool's words after its own stay in the log. */
+function reportEverywhere(message: string, attributes?: ReportAttributes): void {
+  reportToStderr(message, attributes);
   logToFile(message);
 
   if (SENTRY_DSN === "") return;
-  // Note that a line is sent up to what its step said of itself, so an error's or a tool's words after it stay in the log.
-  const ours = message.split(": ").slice(0, 2).join(": ");
-
-  if (FAILING.test(ours)) Sentry.captureMessage(ours, "error");
-  else Sentry.logger.info(ours);
+  sendLineToSentry(Sentry, message, attributes);
 }
 
 const nodeServices = Layer.mergeAll(

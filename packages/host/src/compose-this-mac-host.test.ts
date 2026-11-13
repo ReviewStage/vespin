@@ -29,6 +29,7 @@ import { TestClock } from "effect/testing";
 import type { AppThisMacHost, AppThisMacHosts } from "./app-state.js";
 import { composeThisMacHost } from "./compose-this-mac-host.js";
 import {
+  type ReportAttributes,
   reporterLayer,
   THIS_MAC_AGENT_STATUS,
   type ThisMacAgentStatus,
@@ -134,7 +135,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
   Effect.gen(function* () {
     const asked: string[] = [];
     const reported: string[] = [];
-    const reasons: { line: string; reason: string }[] = [];
+    const attributed: ({ line: string } & ReportAttributes)[] = [];
     const enrolled: { deviceId: string; version: string | null }[] = [];
     let failedRegisters = options.failedRegisters ?? 0;
     let status = options.status ?? THIS_MAC_AGENT_STATUS.NOT_REGISTERED;
@@ -223,8 +224,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
           reporterLayer((message, attributes) => {
             reported.push(message);
 
-            if (attributes !== undefined)
-              reasons.push({ line: message, reason: attributes.reason });
+            if (attributes !== undefined) attributed.push({ line: message, ...attributes });
           }),
           Layer.succeed(ThisMacHost, {
             stateRoot,
@@ -316,7 +316,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
     return {
       asked,
       reported,
-      reasons,
+      attributed,
       enrolled,
       scripts,
       held,
@@ -624,14 +624,15 @@ it.effect(
         assert.equal(Option.getOrUndefined(yield* readHostDevice(stateRoot))?.deviceId, MINTED_ID);
 
         assert.deepEqual(
-          mac.reasons,
+          mac.attributed,
           [
             {
               line: "this Mac's host: could not register it, so it is tried again",
               reason: "macOS did not register it: not-registered",
+              attempt: 1,
             },
           ],
-          "the line names the step alone, and why it failed is reported beside it",
+          "the line names the step alone, and why it failed and which try it was are reported beside it",
         );
       }).pipe(Effect.provide(FILES)),
     ),
