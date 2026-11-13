@@ -311,12 +311,13 @@ export function readGoal(messages: readonly AgentTranscriptMessage[], older = fa
   let goal: AgentGoal | undefined;
   let asked: GoalAsked | undefined;
 
-  // A line the developer wrote once the goal settled lets it go: its end was seen, and the conversation moved on.
+  // A line the developer wrote once the goal settled lets it go: its end was seen, and the conversation moved on. Note that a pause, resume, or clear is no such line, since the transcript draws it as no message.
   const seen = (line: AgentTranscriptMessage) => {
     if (!developersLine(line)) return;
+    const text = lineText(line);
 
-    if (goal !== undefined && goalSettled(goal)) goal = undefined;
-    const ask = goalAskOf(lineText(line));
+    if (goal !== undefined && goalSettled(goal) && !goalControlWords(text)) goal = undefined;
+    const ask = goalAskOf(text);
 
     if (ask !== undefined && ask.kind !== GOAL_ASK.NONE) {
       asked = { ask, messageId: line.id, sentAt: line.sentAt };

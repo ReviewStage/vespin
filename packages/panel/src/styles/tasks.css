@@ -1900,6 +1900,12 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   min-width: 0;
 }
 
+/* A goal's trail (agent-goal.tsx) stands a little room off the words and
+   the trails around it, which a turn's parts would otherwise set flush. */
+[data-goal-trail] {
+  padding-block: var(--ui-space-4);
+}
+
 /* A message's Forked to trail (fork-action.tsx) stands a list's gap under
    its foot. */
 [data-forked-to] {

@@ -115,6 +115,10 @@ describe("agentGoal", () => {
       reason: "All pass.",
     });
     expect(agentGoal([...met, line("l2")])).toBeUndefined();
+    // A pause, resume, or clear the transcript draws no message for leaves it standing too, as the row's own act did.
+    expect(
+      agentGoal([...met, { ...line("p"), parts: [{ type: "text", text: "/goal pause" }] }]),
+    ).toMatchObject({ state: AGENT_GOAL_STATE.MET });
     // A wakeup the app sent is no line of the developer's, and leaves the goal's end standing.
     expect(
       agentGoal([...met, { ...line("w"), sentBy: { kind: AGENT_SENDER.APP, name: "Vespin" } }]),

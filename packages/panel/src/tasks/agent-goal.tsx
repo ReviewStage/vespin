@@ -12,10 +12,11 @@
  * of budget in the attention tone, a paused one's play standing at its end where
  * Pause stood, and
  * a blocked one in the danger tone. The notices are what the goal
- * did, where it did it: its setting and each verdict of the checker as a
- * card a check's line is drawn as (`line-cards.tsx`), the checker's reason
- * in its fold, and a pause or a resume as a trail across the transcript, as
- * a new session's is. The goal is read from those notices
+ * did, where it did it: each verdict of the checker, and an end other than
+ * met, as a card a check's line is drawn as (`line-cards.tsx`), the
+ * checker's reason in its fold, and its setting, its end once met, and a
+ * pause, a resume, or a clear as a trail across the transcript, as a new
+ * session's is, a little room around each. The goal is read from those notices
  * (`@repo/features/agent-goal-model`). While the Goals experiment is off,
  * neither stands anywhere.
  */
@@ -69,9 +70,9 @@ const GOAL_THING = "Goal";
 
 /** What a goal's notice says it did, as its card's head reads. */
 const NOTICE_WORDS = {
-  [GOAL_EVENT.SET]: "Goal set",
+  [GOAL_EVENT.SET]: "Goal set.",
   [GOAL_EVENT.NOT_MET]: "Goal not met yet",
-  [GOAL_EVENT.MET]: "Goal met",
+  [GOAL_EVENT.MET]: "Goal met.",
   [GOAL_EVENT.IMPOSSIBLE]: "Goal blocked",
   [GOAL_EVENT.PAUSED]: "Goal paused. The agent stops after this turn.",
   [GOAL_EVENT.RESUMED]: "Goal resumed.",
@@ -82,8 +83,10 @@ const NOTICE_WORDS = {
 /** A token count as the row says it: "184k", "1.2M". */
 const TOKENS = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 
-/** The moves that are only a move of the goal's own standing, said as a trail rather than a card, since they carry nothing to read. */
+/** The moves said as a trail rather than a card, since they carry nothing to read: the goal's setting, whose condition the developer's own `/goal` message and the row say, its end once met, and each move of its standing. */
 const TRAILS: ReadonlySet<GoalNotice["event"]> = new Set([
+  GOAL_EVENT.SET,
+  GOAL_EVENT.MET,
   GOAL_EVENT.PAUSED,
   GOAL_EVENT.RESUMED,
   GOAL_EVENT.CLEARED,
@@ -305,7 +308,21 @@ export function GoalDock({
   );
 }
 
-/** One move of the goal where it happened in the transcript: a trail for a move of its standing, a card for its setting and each verdict, the reason in its fold. */
+/** The glyph that leads a goal's trail: a met goal's tick in the ink the row's tick wears. */
+function trailGlyph(event: GoalNotice["event"]): ReactNode {
+  switch (event) {
+    case GOAL_EVENT.PAUSED:
+      return <PauseIcon />;
+    case GOAL_EVENT.RESUMED:
+      return <PlayIcon />;
+    case GOAL_EVENT.MET:
+      return <CircleCheckIcon className="text-complete" />;
+    default:
+      return <GLYPH.GOAL />;
+  }
+}
+
+/** One move of the goal where it happened in the transcript: a trail for its setting, its end once met, and each move of its standing; a card for each verdict and any other end, the reason in its fold. */
 export function GoalNoticeView({ notice }: { notice: GoalNotice }): ReactNode {
   const goalsOn = useGoalsOn();
 
@@ -313,24 +330,13 @@ export function GoalNoticeView({ notice }: { notice: GoalNotice }): ReactNode {
 
   if (TRAILS.has(notice.event)) {
     return (
-      <NoteLine
-        look={NOTE_LINE_LOOK.TRAIL}
-        glyph={
-          notice.event === GOAL_EVENT.PAUSED ? (
-            <PauseIcon />
-          ) : notice.event === GOAL_EVENT.RESUMED ? (
-            <PlayIcon />
-          ) : (
-            <GLYPH.GOAL />
-          )
-        }
-      >
+      <NoteLine look={NOTE_LINE_LOOK.TRAIL} glyph={trailGlyph(notice.event)} data-goal-trail="">
         {NOTICE_WORDS[notice.event]}
       </NoteLine>
     );
   }
 
-  const body = notice.event === GOAL_EVENT.SET ? notice.condition : notice.reason;
+  const body = notice.reason;
   const folds = body !== null && body !== "";
   const said = NOTICE_WORDS[notice.event];
   const turn = notice.turns === null ? undefined : `Turn ${notice.turns}`;
@@ -344,9 +350,7 @@ export function GoalNoticeView({ notice }: { notice: GoalNotice }): ReactNode {
         actions={
           <span className="flex min-w-0 flex-1 items-baseline gap-tight-gap py-row-inset">
             <OneLine className="flex-none text-muted-foreground">{said}</OneLine>
-            {notice.event === GOAL_EVENT.SET || body === null ? null : (
-              <OneLine className="min-w-0 flex-1">{body}</OneLine>
-            )}
+            {body === null ? null : <OneLine className="min-w-0 flex-1">{body}</OneLine>}
             {turn === undefined ? null : (
               <OneLine className="ms-auto flex-none ps-tight-gap text-muted-foreground">
                 {turn}
@@ -357,13 +361,7 @@ export function GoalNoticeView({ notice }: { notice: GoalNotice }): ReactNode {
       >
         <PlanHeader folds={folds} aria-label={said}>
           <PlanIcon>
-            {notice.event === GOAL_EVENT.MET ? (
-              <CircleCheckIcon />
-            ) : notice.event === GOAL_EVENT.IMPOSSIBLE ? (
-              <CircleSlashIcon />
-            ) : (
-              <GLYPH.GOAL />
-            )}
+            {notice.event === GOAL_EVENT.IMPOSSIBLE ? <CircleSlashIcon /> : <GLYPH.GOAL />}
           </PlanIcon>
         </PlanHeader>
         {folds ? (
