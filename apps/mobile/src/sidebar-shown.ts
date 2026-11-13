@@ -1,7 +1,7 @@
 // sidebar-shown.ts -- whether a regular window's first column stands beside its other columns, one answer for every tab's split view and the menu bar's Show or Hide Sidebar.
 
+import { useThreeColumns } from "@repo/ui-native";
 import { useSyncExternalStore } from "react";
-import { useThreeColumns } from "./use-window-size-class.js";
 
 /** A person's choice, held with the window it was made in, so it lapses once the window stands a different number of columns. */
 type Choice = { readonly threeColumns: boolean; readonly shown: boolean };

@@ -55,6 +55,8 @@ import {
   Screen,
   STATUS_TONE,
   useColors,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
   WriteNoteRow,
 } from "@repo/ui-native";
 import { Stack, useLocalSearchParams } from "expo-router";
@@ -70,8 +72,6 @@ import {
 } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 /** What the bar's ⋯ menu offers beside the merge. */
 const MENU_WORDS = {

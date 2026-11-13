@@ -31,7 +31,7 @@ import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
-import { BUZZ, ConfirmAsk } from "@repo/ui-native";
+import { BUZZ, ConfirmAsk, useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
@@ -43,9 +43,7 @@ import { openInSafari } from "../open-link.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { menuCommandsModule } from "./menu-commands-module.js";
 

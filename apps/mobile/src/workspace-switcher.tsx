@@ -9,7 +9,9 @@ import {
   newWorkspaceAction,
   SWITCHER_PRESENTATION,
   type SwitcherWorkspace,
+  WINDOW_SIZE_CLASS,
   type WorkspaceSwitcher,
+  windowSizeClass,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { useRouter } from "expo-router";
@@ -18,7 +20,6 @@ import { useWindowDimensions } from "react-native";
 import { useChosenWorkspace } from "./chosen-workspace.js";
 import { appStateQuery } from "./host/app-state-query.js";
 import { SETTINGS_ROUTE, useOpenSettings, useSettingsAccount } from "./settings-button.js";
-import { WINDOW_SIZE_CLASS, windowSizeClass } from "./window-size-class.js";
 
 /** What the switcher is drawn from, which a tab's root bar draws it by. */
 export type SwitcherProps = ComponentProps<typeof WorkspaceSwitcher>;

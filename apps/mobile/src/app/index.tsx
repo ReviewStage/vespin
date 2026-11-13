@@ -7,11 +7,11 @@ import {
   iosRouteOnTab,
 } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { useThreeColumns } from "@repo/ui-native";
 import { Redirect } from "expo-router";
 import { launchAgent, launchPullRequest } from "../host/launch-arguments.js";
 import { placeOfRoute, placeRoute } from "../screens/app-sidebar.js";
 import { keptSidebarPlace } from "../sidebar-pick.js";
-import { useThreeColumns } from "../use-window-size-class.js";
 
 /**
  * Where the launch opens: the agent it names, or that agent's pull request

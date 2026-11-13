@@ -25,6 +25,9 @@ import {
   ScopePicker,
   Screen,
   UNDER_SPLIT_SCREEN,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
 } from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -36,8 +39,6 @@ import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
-import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";

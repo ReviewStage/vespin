@@ -3,7 +3,12 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
+import {
+  FailureNoticeProvider,
+  KeepingProvider,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { hide as hideSplash } from "expo-splash-screen";
@@ -20,9 +25,7 @@ import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 

@@ -56,7 +56,6 @@ import {
   NO_TOGGLES,
   openCuts,
   QueuedLines,
-  RenameAsk,
   Screen,
   SettingsForm,
   SkillSuggestions,
@@ -71,6 +70,8 @@ import {
   transcriptOriginOf,
   useAnnounced,
   useColors,
+  WORDS_ASK_KIND,
+  WordsAsk,
   withSending,
   withWaitingLine,
 } from "@repo/ui-native";
@@ -810,16 +811,21 @@ export function AgentScreen() {
       {asked === undefined ? null : (
         <CardMergeAsk agentId={id} pullRequest={asked} onDone={() => setMerging(undefined)} />
       )}
-      <RenameAsk
+      <WordsAsk
         title={RENAME_WORDS.TITLE}
-        act={RENAME_WORDS.ACT}
-        name={actions.title}
         placeholder={RENAME_WORDS.PLACEHOLDER}
+        initial={actions.title}
+        kind={WORDS_ASK_KIND.NAME}
+        acts={[
+          {
+            label: RENAME_WORDS.ACT,
+            onAct: (name) => {
+              setRenaming(false);
+              actions.rename(name);
+            },
+          },
+        ]}
         presented={renaming}
-        onRename={(name) => {
-          setRenaming(false);
-          actions.rename(name);
-        }}
         onDismiss={() => setRenaming(false)}
       />
       <ConfirmAsk

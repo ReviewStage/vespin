@@ -6,10 +6,9 @@ import {
   type ProductLayout,
   type ProductSurface,
 } from "@repo/features/analytics";
+import { useWindowSizeClass, WINDOW_SIZE_CLASS, type WindowSizeClass } from "@repo/ui-native";
 import { useEffect, useRef } from "react";
 import { useHostCount } from "./host/host-provider.js";
-import { useWindowSizeClass } from "./use-window-size-class.js";
-import { WINDOW_SIZE_CLASS, type WindowSizeClass } from "./window-size-class.js";
 
 /** The layout a window's size class stands the panel's in: side by side in a regular window, one at a time in a compact one. */
 const LAYOUT_OF_SIZE_CLASS = {
