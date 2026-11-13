@@ -228,6 +228,8 @@ function Version({
     void write(() => acts[ACT_KIND.TASKS_RESTORE]({ taskId, seq }), {
       refused: (restored) => (restored ? undefined : VERSION_HISTORY_WORDS.RESTORE_REFUSED),
       unanswered: VERSION_HISTORY_WORDS.RESTORE_REFUSED,
+      // Note that a refused restore offers Try again, as its words say, since the screen has gone back and nothing else sends it again.
+      retry: true,
       went: BUZZ.SUCCESS,
     }).then((went) => {
       setRestoring(false);
