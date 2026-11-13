@@ -79,19 +79,28 @@ export interface ExperimentEntry {
 }
 
 /**
- * The experiments standing now, newest first, so a release's review reads
- * the latest at the top; the Experimental page lists each group by name. An entry exists only while its feature is experimental, so
+ * The experiments standing now, in alphabetical order by name: the order the
+ * Experimental page lists them, each group keeping it. An entry exists only while its feature is experimental, so
  * there is no status to drift and every experiment is off until turned on.
  */
 export const EXPERIMENTS = [
   {
-    key: EXPERIMENT.VOICE,
+    key: EXPERIMENT.COMPUTER_USE,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
-    name: "Voice",
+    name: "Computer use",
     detail:
-      "Talk to an agent out loud through GPT-Live on your own OpenAI API key, from Talk in an agent's box.",
+      "Let agents see and use the apps you allow on your Mac, in the background, while you keep working.",
     owner: "Dean",
-    since: "2026-11-12",
+    since: "2026-11-09",
+  },
+  {
+    key: EXPERIMENT.TURN_END,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    name: "Done and follow-ups",
+    detail:
+      "When an agent you started finishes, it says what it needs from you, or that it's done, with follow-ups to send.",
+    owner: "Dean",
+    since: "2026-11-10",
   },
   {
     key: EXPERIMENT.FOLLOWING,
@@ -103,23 +112,12 @@ export const EXPERIMENTS = [
     since: "2026-11-12",
   },
   {
-    key: EXPERIMENT.TURN_CHANGES,
-    scope: EXPERIMENT_SCOPE.ACCOUNT,
-    name: "Turn changes",
-    detail:
-      "Under each of an agent's turns, the files it changed, which open the turn's changes in a tab of their own.",
-    owner: "Dean",
-    since: "2026-11-12",
-  },
-  {
-    key: EXPERIMENT.REPLY_BUTTONS,
+    key: EXPERIMENT.MEMORY,
     scope: EXPERIMENT_SCOPE.WORKSPACE,
-    name: "Suggestions",
-    detail:
-      "Agents put suggestions in their replies, of a new agent or a message to a running one, " +
-      "which you open filled in, edit, and send.",
+    name: "Memory",
+    detail: "Agents remember how your team works and use it in later tasks.",
     owner: "Dean",
-    since: "2026-11-10",
+    since: "2026-10-23",
   },
   {
     key: EXPERIMENT.REWIND_FILES,
@@ -127,15 +125,6 @@ export const EXPERIMENTS = [
     name: "Rewind restores files",
     detail:
       "Rewinding or editing a message can also put the agent's files back to how they stood before it.",
-    owner: "Dean",
-    since: "2026-11-10",
-  },
-  {
-    key: EXPERIMENT.TURN_END,
-    scope: EXPERIMENT_SCOPE.ACCOUNT,
-    name: "Done and follow-ups",
-    detail:
-      "When an agent you started finishes, it says what it needs from you, or that it's done, with follow-ups to send.",
     owner: "Dean",
     since: "2026-11-10",
   },
@@ -150,13 +139,22 @@ export const EXPERIMENTS = [
     since: "2026-11-10",
   },
   {
-    key: EXPERIMENT.COMPUTER_USE,
+    key: EXPERIMENT.SKILLS,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
-    name: "Computer use",
+    name: "Skills",
+    detail: "Install skills for your agents, and use one by typing / in a message.",
+    owner: "Charles",
+    since: "2026-10-30",
+  },
+  {
+    key: EXPERIMENT.REPLY_BUTTONS,
+    scope: EXPERIMENT_SCOPE.WORKSPACE,
+    name: "Suggestions",
     detail:
-      "Let agents see and use the apps you allow on your Mac, in the background, while you keep working.",
+      "Agents put suggestions in their replies, of a new agent or a message to a running one, " +
+      "which you open filled in, edit, and send.",
     owner: "Dean",
-    since: "2026-11-09",
+    since: "2026-11-10",
   },
   {
     key: EXPERIMENT.DESCRIPTIONS,
@@ -167,20 +165,22 @@ export const EXPERIMENTS = [
     since: "2026-11-05",
   },
   {
-    key: EXPERIMENT.SKILLS,
+    key: EXPERIMENT.TURN_CHANGES,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
-    name: "Skills",
-    detail: "Install skills for your agents, and use one by typing / in a message.",
-    owner: "Charles",
-    since: "2026-10-30",
+    name: "Turn changes",
+    detail:
+      "Under each of an agent's turns, the files it changed, which open the turn's changes in a tab of their own.",
+    owner: "Dean",
+    since: "2026-11-12",
   },
   {
-    key: EXPERIMENT.MEMORY,
-    scope: EXPERIMENT_SCOPE.WORKSPACE,
-    name: "Memory",
-    detail: "Agents remember how your team works and use it in later tasks.",
+    key: EXPERIMENT.VOICE,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    name: "Voice",
+    detail:
+      "Talk to an agent out loud through GPT-Live on your own OpenAI API key, from Talk in an agent's box.",
     owner: "Dean",
-    since: "2026-10-23",
+    since: "2026-11-12",
   },
 ] as const satisfies readonly ExperimentEntry[];
 
