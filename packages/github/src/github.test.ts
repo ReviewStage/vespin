@@ -305,4 +305,34 @@ describe("GitHub", () => {
       }).pipe(Effect.provide(layer));
     },
   );
+
+  it.effect("leaves a body asked for as bytes unread, whatever charset GitHub names", () => {
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+
+    const { layer } = harness(
+      () =>
+        new Response(bytes, {
+          headers: { "content-type": "application/vnd.github.raw; charset=utf-8" },
+        }),
+    );
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+
+      const answer = yield* github
+        .asMember(Redacted.make("gho_member"))
+        .request("GET /repos/{owner}/{repo}/contents/{path}", {
+          ...REPOSITORY,
+          path: "logo.jpg",
+          headers: { accept: "application/vnd.github.raw" },
+          parseSuccessResponseBody: false,
+        });
+
+      const read = yield* Effect.promise(() =>
+        new Response(answer.data as unknown as ReadableStream).arrayBuffer(),
+      );
+
+      assert.deepStrictEqual(new Uint8Array(read), bytes);
+    }).pipe(Effect.provide(layer));
+  });
 });

@@ -180,10 +180,14 @@ export interface GitHubPaging<Item> {
  * What a request names beside its route's own parameters: the headers it
  * adds, such as an `accept` naming one of GitHub's media types
  * (https://docs.github.com/en/rest/using-the-rest-api/getting-started-with-the-rest-api#media-types),
- * as Octokit's `headers` request option takes them.
+ * as Octokit's `headers` request option takes them; and, for an answer read
+ * as bytes, such as a file's raw contents or an archive, Octokit's
+ * `request.parseSuccessResponseBody: false`, which leaves a successful
+ * answer's `data` its unread body stream.
  */
 export interface GitHubRequestOptions {
   readonly headers?: Readonly<Record<string, string>>;
+  readonly parseSuccessResponseBody?: false;
 }
 
 /** One identity's requests to GitHub. Answers are typed by Octokit's route table and decoded by the caller. */
@@ -265,10 +269,11 @@ declare module "@octokit/core" {
   }
 }
 
-/** The per-call `request` options Octokit takes: the fetch to send on, and the signal that aborts it. */
+/** The per-call `request` options Octokit takes: the fetch to send on, the signal that aborts it, and whether a successful body is left unread. */
 interface CallOptions {
   readonly fetch: ReturnType<typeof githubFetch>;
   readonly signal: AbortSignal;
+  readonly parseSuccessResponseBody?: false;
 }
 
 /**
@@ -624,11 +629,19 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
         // SAFETY: Octokit's `request` answers `Endpoints[R]["response"]` for a route of its table, with that route's parameters; its conditional overload cannot see that through the generic `R`.
         const send = octokit.request as (
           route: R,
-          parameters: Endpoints[R]["parameters"] &
-            GitHubRequestOptions & { readonly request: CallOptions },
+          parameters: Endpoints[R]["parameters"] & {
+            readonly headers?: GitHubRequestOptions["headers"];
+            readonly request: CallOptions;
+          },
         ) => Promise<Endpoints[R]["response"]>;
 
-        return send(route, { ...parameters, request });
+        const { parseSuccessResponseBody, ...named } = parameters ?? {};
+
+        return send(route, {
+          ...named,
+          request:
+            parseSuccessResponseBody === false ? { ...request, parseSuccessResponseBody } : request,
+        });
       }),
     paginate: (route, parameters, { maxPages, enough }) =>
       Effect.flatMap(
