@@ -34,7 +34,12 @@ import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
-import { CHOOSE_AN_ITEM_WORDS, SELECTION_WORDS, selectedWords } from "@repo/features/words";
+import {
+  CHOOSE_AN_ITEM_WORDS,
+  PATH_OPENS,
+  SELECTION_WORDS,
+  selectedWords,
+} from "@repo/features/words";
 import {
   INBOX_FEED,
   type InboxFeed,
@@ -123,9 +128,6 @@ const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INB
 
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
 const MORE = { label: "More", symbol: GLYPH.MORE } as const;
-
-/** What a thread's path opens, as the panel's crumbs open its task and its agent. */
-const PATH_OPENS = { TASK: "Open task", AGENT: "Open agent" } as const;
 
 /** What ends Select mode, as the system's own Done does. */
 const SELECT_DONE = "Done";

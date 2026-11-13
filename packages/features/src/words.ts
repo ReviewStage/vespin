@@ -50,6 +50,9 @@ export const VERB = {
   RESET_TO_DEFAULTS: "Reset to defaults",
 } as const;
 
+/** What a page's path opens, as the panel's crumbs open a thread's or an agent's task, and a thread's agent. */
+export const PATH_OPENS = { TASK: "Open task", AGENT: "Open agent" } as const;
+
 /**
  * What those same services are called where an agent is handed them: the
  * agent box's + menu and popover, the @ menu, and the automation editor's

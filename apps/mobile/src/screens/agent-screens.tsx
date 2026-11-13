@@ -13,6 +13,7 @@ import {
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentStateWords } from "@repo/features/glyph-state";
+import { iosAppRouteOf } from "@repo/features/ios-app-links";
 import { agentActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import { agentName, modelLabel } from "@repo/features/model-label";
@@ -29,7 +30,7 @@ import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions
 import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-copy";
-import { MCP_SERVER_LABEL, VERB } from "@repo/features/words";
+import { MCP_SERVER_LABEL, PATH_OPENS, VERB } from "@repo/features/words";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
 import { PERMISSION_MODE_WORDS } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
@@ -116,7 +117,7 @@ import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
-import { useOnOwnTab } from "../tab-route.js";
+import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { PageScreen } from "./page-screens.js";
 
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
@@ -462,6 +463,7 @@ export function AgentScreen() {
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
+  const onTab = useOnTab();
   const navigation = useNavigation();
   const openLink = useOpenLink();
   const colors = useColors();
@@ -640,6 +642,13 @@ export function AgentScreen() {
   };
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
+  const taskId = shown?.planId;
+
+  // Note that the agent's task opens as a page pushed over it, as the panel's crumbs open it and a thread's path does; the stack's title holds no menu, so it leads the ⋯ menu.
+  const openTask =
+    taskId === undefined
+      ? undefined
+      : () => router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: taskId })));
 
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) =>
     router.push({
@@ -664,6 +673,13 @@ export function AgentScreen() {
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
+          {openTask === undefined ? null : (
+            <Stack.Toolbar.Menu inline>
+              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.TASK)} onPress={openTask}>
+                {PATH_OPENS.TASK}
+              </Stack.Toolbar.MenuAction>
+            </Stack.Toolbar.Menu>
+          )}
           {/* Note that the page's link and its transcript's copy stand in one group, as Mail groups a message's copy and share, and the agent's two ends stand together last, Archive over Delete. */}
           <Stack.Toolbar.Menu inline>
             {address === undefined ? null : (
