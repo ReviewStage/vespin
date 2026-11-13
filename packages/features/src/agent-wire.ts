@@ -1950,6 +1950,9 @@ const reactionSubjectSchema = EffectSchema.optionalKey(
 
 export type ReactionGroup = typeof reactionGroupSchema.Type;
 
+/** Whether the member reading may edit a comment's words on their own GitHub sign-in, which ticking its task items does; absent where that was not read, or from a service before it. */
+const editableSchema = EffectSchema.optionalKey(EffectSchema.Boolean);
+
 /** The reactions a comment wears, in GitHub's order, absent where it wears none or from a service before them. */
 const reactionsSchema = EffectSchema.Array(reactionGroupSchema).check(
   EffectSchema.isMaxLength(Object.values(REACTION).length),
@@ -1969,6 +1972,7 @@ const reviewThreadCommentSchema = EffectSchema.Struct({
   url: EffectSchema.String,
   reactions: EffectSchema.optionalKey(reactionsSchema),
   subject: reactionSubjectSchema,
+  editable: editableSchema,
 });
 
 const diffSideSchema = EffectSchema.Literals(Object.values(DIFF_SIDE));
@@ -2056,6 +2060,7 @@ const conversationEntrySchema = EffectSchema.Struct({
   ),
   reactions: EffectSchema.optionalKey(reactionsSchema),
   subject: reactionSubjectSchema,
+  editable: editableSchema,
 });
 
 export type ConversationEntry = typeof conversationEntrySchema.Type;

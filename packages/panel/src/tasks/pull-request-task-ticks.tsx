@@ -12,8 +12,9 @@
  * where GitHub refused, its words stand under the words they were on. The
  * write names how many boxes the reader saw, which the service holds the
  * words to, so a tick on words changed since never lands on another item.
- * Outside a tab, or where the read named no id for what they are on, the
- * boxes stand read-only.
+ * Outside a tab, where the read named no id for what they are on, or where
+ * GitHub says the member may not edit the words, the boxes stand read-only,
+ * as GitHub greys them out.
  */
 
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
@@ -64,9 +65,15 @@ export interface TaskTicks {
 /**
  * How the words on what `subject` names draw their task items' boxes, and
  * what the last tick left to say under them; boxes the member cannot tick
- * outside a tab or without a subject.
+ * outside a tab, without a subject, or where GitHub says they may not edit
+ * the words (`editable` false), as GitHub greys a box out for them. Where
+ * that is not known the boxes stand tickable, and GitHub's refusal, if
+ * any, says why under the words.
  */
-export function useTaskTicks(subject: string | undefined): TaskTicks {
+export function useTaskTicks(
+  subject: string | undefined,
+  editable: boolean | undefined,
+): TaskTicks {
   const writing = useThreadWriting();
   const writes = usePullRequestWrites(writing?.agentId ?? "", writing?.onWritten ?? noop);
   const { write } = writes;
@@ -77,7 +84,7 @@ export function useTaskTicks(subject: string | undefined): TaskTicks {
     [subject, write],
   );
 
-  const tickable = writing !== undefined && subject !== undefined;
+  const tickable = writing !== undefined && subject !== undefined && editable !== false;
 
   return {
     taskTick: tickable ? draw : undefined,

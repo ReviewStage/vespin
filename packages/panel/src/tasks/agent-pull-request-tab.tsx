@@ -1097,12 +1097,12 @@ function EntryWords({
   picture,
   subject,
 }: {
-  entry: Pick<ConversationEntry, "html" | "body">;
+  entry: Pick<ConversationEntry, "html" | "body" | "editable">;
   picture: GitHubPictureDrawer;
   /** GitHub's id for what the words are on, which their task items are ticked by (`pull-request-task-ticks.tsx`); none where they cannot be. */
   subject?: string | undefined;
 }): React.JSX.Element | null {
-  const { taskTick, note } = useTaskTicks(subject);
+  const { taskTick, note } = useTaskTicks(subject, entry.editable);
 
   if (entry.html !== null) {
     return (
@@ -2284,12 +2284,15 @@ function DescriptionWords({
   html,
   picture,
   subject,
+  editable,
 }: {
   html: string;
   picture: GitHubPictureDrawer;
   subject: string | undefined;
+  /** Whether the member may edit the description, which ticking its task items does; unknown where the read did not say. */
+  editable: boolean | undefined;
 }): React.JSX.Element {
-  const { taskTick, note } = useTaskTicks(subject);
+  const { taskTick, note } = useTaskTicks(subject, editable);
 
   return (
     <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
@@ -2327,7 +2330,12 @@ function DescriptionPart({
 
   const words =
     part.kind !== PART.LANDED || part.value.html === "" ? undefined : (
-      <DescriptionWords html={part.value.html} picture={picture} subject={subject} />
+      <DescriptionWords
+        html={part.value.html}
+        picture={picture}
+        subject={subject}
+        editable={part.value.canEditDescription}
+      />
     );
 
   return (
