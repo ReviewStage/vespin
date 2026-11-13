@@ -22,6 +22,7 @@ import {
   ARCHIVE_FAILED,
   ARCHIVE_NOT_READY,
   DELETE_FAILED,
+  PIN_FAILED,
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { agentStillWriting } from "@repo/features/task-agents-model";
@@ -45,8 +46,6 @@ import { useFollowedAgent, useReadAgent } from "./use-agent.js";
 /** Why each act did not take, said over the composer. */
 const ACT_FAILED = {
   RENAME: "The agent could not be renamed.",
-  PIN: "The agent could not be pinned.",
-  UNPIN: "The agent could not be unpinned.",
   ARCHIVE: ARCHIVE_FAILED,
   COPY: "The link could not be copied.",
 } as const;
@@ -227,7 +226,7 @@ export function useAgentActions(agentId: string, address: string | undefined): A
     pin: () =>
       send(
         () => acts[ACT_KIND.AGENTS_PIN]({ agentId, pinned: !pinned }),
-        pinned ? ACT_FAILED.UNPIN : ACT_FAILED.PIN,
+        pinned ? PIN_FAILED.UNPIN : PIN_FAILED.PIN,
       ),
     archiveAsk,
     archive: (onArchived) =>

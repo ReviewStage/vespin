@@ -13,7 +13,7 @@
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { type AgentPartCut, WHOLE_PART, type WholePartRead } from "@repo/features/agent-parts";
-import { ARCHIVE_FAILED, STOP_FAILED } from "@repo/features/agent-refusal-words";
+import { ARCHIVE_FAILED, PIN_FAILED, STOP_FAILED } from "@repo/features/agent-refusal-words";
 import { type AgentPageAnswerView, TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   type AgentPullRequest,
@@ -187,10 +187,11 @@ export function useHeldAgentStep(agentId: string, status: AgentStatus): string |
   }, [messages, status]);
 }
 
-/** An agent row's acts, as the panel's row menu offers them: Stop while it works, and Archive, once asked, each buzzing as it lands or is refused. */
+/** An agent row's acts, as the panel's row menu offers them: Stop while it works, Archive, once asked, and Pin or Unpin, each buzzing as it lands or is refused. */
 export function useAgentRowActs(): {
   readonly stop: (agentId: string) => void;
   readonly archive: (agentId: string) => void;
+  readonly pin: (agentId: string, pinned: boolean) => void;
 } {
   const acts = useHostActs();
   const write = useWrite();
@@ -211,6 +212,15 @@ export function useAgentRowActs(): {
           unanswered: ARCHIVE_FAILED,
           retry: true,
           went: BUZZ.SUCCESS,
+        });
+      },
+      pin: (agentId, pinned) => {
+        const failed = pinned ? PIN_FAILED.PIN : PIN_FAILED.UNPIN;
+        write(() => acts[ACT_KIND.AGENTS_PIN]({ agentId, pinned }), {
+          refused: (answer) => ("failure" in answer ? failed : undefined),
+          unanswered: failed,
+          retry: true,
+          went: BUZZ.SELECTION,
         });
       },
     }),

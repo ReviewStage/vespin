@@ -30,13 +30,13 @@ import {
 } from "@repo/features/tasks-model";
 import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
-import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectAgentPinned, selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
 import { BUZZ, ConfirmAsk } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useAgentRowActs } from "../agents/use-agent.js";
 import { useDetailOnly } from "../detail-only.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -106,8 +106,10 @@ interface Subject {
   readonly threadId: string | undefined;
   /** The thread in front, which Resolve settles against the revision it drew. */
   readonly thread: InboxItem | undefined;
-  /** The agent in front, which Stop stops. */
+  /** The agent in front, which Stop stops and Pin pins. */
   readonly agentId: string | undefined;
+  /** Whether the agent in front is pinned, which Pin then unpins. */
+  readonly agentPinned: boolean;
   readonly threadUnread: boolean;
 }
 
@@ -129,6 +131,9 @@ function useSubject(signedIn: boolean): Subject {
     focus.kind === MENU_SUBJECT.AGENT
       ? view?.taskAgents?.find(({ id }) => id === focus.id)
       : undefined;
+
+  const pinnedOf = useMemo(() => selectAgentPinned(agent?.id ?? ""), [agent?.id]);
+  const agentPinned = useQuery({ ...appStateQuery, select: pinnedOf }).data ?? false;
 
   const taskNamed =
     focus.kind === MENU_SUBJECT.TASK
@@ -172,6 +177,11 @@ function useSubject(signedIn: boolean): Subject {
     if (task !== undefined) enabled.push(MENU_COMMAND.NEW_AGENT);
 
     if (agentStillWriting(agent.status)) enabled.push(MENU_COMMAND.STOP_AGENT);
+
+    // Note that Pin acts on the agent in front, not its task, as the agent page's bar pins it.
+    enabled.push(MENU_COMMAND.PIN);
+
+    if (agentPinned) toggled.push(MENU_COMMAND.PIN);
   } else if (task !== undefined) {
     address = linked({ kind: LINK_DESTINATION.TASK, planId: task.id });
     enabled.push(MENU_COMMAND.NEW_AGENT, MENU_COMMAND.TOGGLE_READ, MENU_COMMAND.PIN);
@@ -194,6 +204,7 @@ function useSubject(signedIn: boolean): Subject {
     threadId: thread?.item.id,
     thread: thread?.item,
     agentId: agent?.id,
+    agentPinned: agent !== undefined && agentPinned,
     threadUnread: thread !== undefined && isUnread(thread.item),
   };
 }
@@ -389,6 +400,12 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
         return;
       case MENU_COMMAND.PIN:
+        if (subject.agentId !== undefined) {
+          agentActs.pin(subject.agentId, !subject.agentPinned);
+
+          return;
+        }
+
         if (task === undefined) return;
         {
           const pinned = task.pinnedAt === undefined;
