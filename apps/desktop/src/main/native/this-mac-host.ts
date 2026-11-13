@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import { DEVICE_ARCH } from "@repo/features/device-agent-wire";
 import { buildCarriesDeveloperIdSigning } from "@repo/host/app-identity";
-import { DARWIN_HOST } from "@repo/host/daemon";
+import { DARWIN_HOST, launchdJobOf } from "@repo/host/daemon";
 import { THIS_MAC_AGENT_STATUS, ThisMacHost, type ThisMacHostSeam } from "@repo/host/effect";
 import { Duration, Effect, Layer, Option, Result, Schedule, Stream } from "effect";
 import { ChildProcess } from "effect/process";
@@ -47,6 +47,9 @@ import { app } from "electron";
 
 /** The agent's plist, by its name under `Contents/Library/LaunchAgents` (`BUNDLED_HOST.plistPath`). */
 const SERVICE = { type: "agentService", serviceName: "dev.vespin.host.plist" } as const;
+
+/** The agent's job as launchd holds it, by the label its plist gives (`BUNDLED_HOST.label`). */
+const AGENT_LABEL = "dev.vespin.host";
 
 /** The job the account install loaded before the app carried the host (`MAC_LABEL` in the install script), and its plist under the home, which launchd loads at login while the job is enabled. */
 const STANDALONE_LABEL = "dev.vespin.host.standalone";
@@ -151,11 +154,17 @@ interface ThisMacHostFacts {
 
 /** The bundled host as This Mac's host, for the user the app runs as. */
 function thisMacHost(facts: ThisMacHostFacts): ThisMacHostSeam {
-  const standalone = `gui/${process.getuid?.() ?? 0}/${STANDALONE_LABEL}`;
+  const domain = `gui/${process.getuid?.() ?? 0}`;
+  const standalone = `${domain}/${STANDALONE_LABEL}`;
   const registeredFile = path.join(facts.stateRoot, REGISTERED_FILE);
   const daemonRun = `${path.join(process.resourcesPath, DAEMON_RUN.script)} ${DAEMON_RUN.args}`;
 
   const status = Effect.sync(() => app.getLoginItemSettings(SERVICE).status);
+
+  const job = Effect.map(
+    output("launchctl", ["print", `${domain}/${AGENT_LABEL}`]),
+    Option.flatMap(launchdJobOf),
+  );
 
   const standalonePlist = path.join(os.homedir(), ...STANDALONE_PLIST);
 
@@ -221,6 +230,7 @@ function thisMacHost(facts: ThisMacHostFacts): ThisMacHostSeam {
     registers: facts.packaged && buildCarriesDeveloperIdSigning(),
     machine,
     status,
+    job,
     registeredHere: Effect.sync(() => {
       try {
         return readFileSync(registeredFile, "utf8") === facts.appVersion;
