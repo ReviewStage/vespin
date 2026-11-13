@@ -37,6 +37,8 @@ import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
+import { useScaledSize } from "./accessibility.js";
+import { BrandMark } from "./brand-mark.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dropLink } from "./interactions.js";
@@ -52,6 +54,7 @@ import {
 import { Markdown, type MarkdownVideo } from "./markdown.js";
 import {
   AgentTile,
+  Avatar,
   type Face,
   FailedMark,
   TaskStatusMark,
@@ -369,8 +372,40 @@ export function RelationRow({
   );
 }
 
+/** Who a row is of, where it leads with a face in its glyph's place, as the panel's version rows lead with their writer's: a member by their face, a coding agent by its tile, or the product by its mark. */
+export const LINK_FACE = {
+  PERSON: "person",
+  AGENT: "agent",
+  PRODUCT: "product",
+} as const;
+
+export type LinkFace =
+  | { readonly of: typeof LINK_FACE.PERSON; readonly face: Face }
+  | {
+      readonly of: typeof LINK_FACE.AGENT;
+      readonly name: string;
+      readonly harness: ModelProvider | undefined;
+    }
+  | { readonly of: typeof LINK_FACE.PRODUCT };
+
+/** A row's face at the size a face stands in a row's lead column, growing with Dynamic Type. */
+function LinkFaceMark({ face }: { readonly face: LinkFace }) {
+  const size = useScaledSize(MARK_SIZE.FACE);
+
+  switch (face.of) {
+    case LINK_FACE.PERSON:
+      return <Avatar name={face.face.name} picture={face.face.picture} size={size} />;
+    case LINK_FACE.AGENT:
+      return <AgentTile name={face.name} harness={face.harness} size={size} />;
+    case LINK_FACE.PRODUCT:
+      return <BrandMark size={size} />;
+  }
+}
+
 type LinkRowProps = {
   readonly symbol: Glyph;
+  /** Who the row is of, by their face in the glyph's place; the glyph where none is given. */
+  readonly face?: LinkFace | undefined;
   readonly label: string;
   /** Words at the line's end in the muted ink, such as a page's age. */
   readonly detail?: string | undefined;
@@ -380,13 +415,14 @@ type LinkRowProps = {
 };
 
 /**
- * A row pressed to go somewhere or act, in a row's columns: its glyph, its
- * words, and its detail at the line's end, with no mark of where it goes,
+ * A row pressed to go somewhere or act, in a row's columns: its glyph, or
+ * whose it is by their face, its words, and its detail at the line's end, with no mark of where it goes,
  * as the panel's draw none: Automations, New agent, a page, or the threads
  * that need you.
  */
 export function LinkRow({
   symbol,
+  face,
   label,
   detail,
   tone = LINK_ROW_TONE.PLAIN,
@@ -411,7 +447,13 @@ export function LinkRow({
       <RowHead
         unread={false}
         faded={false}
-        lead={<LeadGlyph symbol={symbol} ink={ink} />}
+        lead={
+          face === undefined ? (
+            <LeadGlyph symbol={symbol} ink={ink} />
+          ) : (
+            <LinkFaceMark face={face} />
+          )
+        }
         title={label}
         ink={ink}
         end={detail === undefined ? null : <EndWords words={detail} />}

@@ -5,16 +5,20 @@ import {
   revisionWriterName,
   VERSION_HISTORY_WORDS,
 } from "@repo/features/description-history-words";
-import type { DescriptionRevisionLine } from "@repo/features/task-wire";
+import { providerOf } from "@repo/features/model-label";
+import { DESCRIPTION_ACTOR, type DescriptionRevisionLine } from "@repo/features/task-wire";
 import { agoText, dayAndTimeText } from "@repo/features/time-format";
 import { readingWords, showMoreWords, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
+import { selectTasks } from "@repo/host/app-state-reads";
 import {
   BUZZ,
   EmptyState,
   GLYPH,
   glyphSymbol,
+  LINK_FACE,
   LIST_LOOK,
+  type LinkFace,
   LinkRow,
   ListSection,
   NOTICE_KIND,
@@ -24,9 +28,12 @@ import {
   useFailureNotices,
   WordsRow,
 } from "@repo/ui-native";
+import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
+import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
@@ -57,6 +64,45 @@ function versionNumber(spelled: string | undefined): number | undefined {
   return Number.isInteger(seq) && seq >= 1 ? seq : undefined;
 }
 
+/**
+ * Who wrote a version, by their face, as the panel's version rows lead with
+ * them: a member by their picture, a coding agent by its tile and its
+ * harness's mark where the task's agents still hold it, and our own
+ * notetaker by the product's mark; none for writing older than its writer
+ * was kept, which keeps the history's glyph.
+ */
+function writerFace(
+  line: DescriptionRevisionLine,
+  pictureOf: PictureOf,
+  modelOf: (agentId: string | undefined) => string | undefined,
+): LinkFace | undefined {
+  const { lastEdit } = line;
+
+  switch (lastEdit.actor) {
+    case DESCRIPTION_ACTOR.DEVELOPER:
+      return lastEdit.by === undefined
+        ? undefined
+        : {
+            of: LINK_FACE.PERSON,
+            face: { name: lastEdit.by.name, picture: pictureOf(lastEdit.by.userId) },
+          };
+    case DESCRIPTION_ACTOR.NOTETAKER:
+      return { of: LINK_FACE.PRODUCT };
+    case DESCRIPTION_ACTOR.AGENT: {
+      const model = modelOf(line.agentId);
+
+      return {
+        of: LINK_FACE.AGENT,
+        name: revisionWriterName(lastEdit, undefined),
+        harness: model === undefined ? undefined : providerOf(model),
+      };
+    }
+
+    case DESCRIPTION_ACTOR.EARLIER:
+      return undefined;
+  }
+}
+
 /** The line under a version's writer: Current first on the newest, so a narrow row cuts off its summary rather than it, then what it did and how long ago. */
 function versionLine(line: DescriptionRevisionLine, newest: boolean, now: number): string {
   const said = [revisionSummary(line), agoText(line.lastEdit.at, now)];
@@ -76,6 +122,12 @@ export function HistoryScreen() {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const history = useTaskHistory(id);
+  const pictureOf = useMemberPictures();
+  const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
+
+  const modelOf = (agentId: string | undefined) =>
+    view?.taskAgents?.find((agent) => agent.id === agentId)?.model;
+
   const now = Date.now();
   const revisions = history.page?.revisions ?? [];
   const earlier = history.page?.earlier;
@@ -103,6 +155,7 @@ export function HistoryScreen() {
             <LinkRow
               key={line.seq}
               symbol={VERSION_SYMBOL}
+              face={writerFace(line, pictureOf, modelOf)}
               label={revisionWriterName(line.lastEdit, history.readerId)}
               detail={versionLine(line, line.seq === newest, now)}
               onPress={() =>
