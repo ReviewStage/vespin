@@ -288,6 +288,7 @@ test("an agent continued from another opens on the description's card, the folde
   // The rail beside the log lists the brief and the note as they are drawn, never the replay the first line carries.
   const rail = container.querySelector('nav[aria-label="Messages to the agent"] button');
   act(() => (rail instanceof HTMLElement ? rail.focus() : undefined));
+
   const marks = [
     ...container.querySelectorAll(
       '[role="listbox"][aria-label="Messages to the agent"] [role="option"]',
