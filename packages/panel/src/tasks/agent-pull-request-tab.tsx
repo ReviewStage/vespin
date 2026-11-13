@@ -3920,4 +3920,4 @@ function PullRequestTabBody({
 }
 
 // The turn's Changes tab rides this chunk, which the side panel reads it from (`desktop/pages-on-demand.ts`).
-export { TurnChangesPane } from "./agent-changes-tab.js";
+export { TurnChangesTab } from "./agent-changes-tab.js";

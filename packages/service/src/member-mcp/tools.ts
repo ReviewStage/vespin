@@ -5043,7 +5043,7 @@ const RUN_ACTION_TOOL = memberMcpTool({
     "agent's id and the action's, as the member's press in the agent's Run menu would: its " +
     "command runs from the checkout with the workspace's environment variables in a Terminal " +
     "tab of its own, and an action already running is left running rather than started twice. " +
-    "Only a cloud agent with a repository, in a workspace with Run actions on, has them. A " +
+    "Only a cloud agent with a repository has them. A " +
     "sandbox that is not running is refused, never woken; " +
     `${MEMBER_MCP_TOOL.WAKE_AGENT} wakes it. Only the member who started an agent runs one on ` +
     "their own GitHub token. Answers `accepted` with the action's shell, or `rejected` and " +
@@ -5052,7 +5052,6 @@ const RUN_ACTION_TOOL = memberMcpTool({
   annotations: ADDITIVE,
   run: ({ agentId, actionId }) =>
     runActionAnswer((userId) => ranRunAction(userId, agentId, actionId)),
-  experiment: EXPERIMENT.RUN_ACTIONS,
 });
 
 const STOP_RUN_ACTION_TOOL = memberMcpTool({
@@ -5067,7 +5066,6 @@ const STOP_RUN_ACTION_TOOL = memberMcpTool({
   annotations: DESTRUCTIVE,
   run: ({ agentId, actionId }) =>
     runActionAnswer((userId) => stoppedRunAction(userId, agentId, actionId)),
-  experiment: EXPERIMENT.RUN_ACTIONS,
 });
 
 /*
