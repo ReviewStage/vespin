@@ -2054,7 +2054,7 @@ export function useMentionPicker({
       : taskKey(tasksWorkspace.name, planNumber);
 
   // The apps offered are this Mac's where the window is the Mac the agent uses, else those the reader's own machines always allow, each read while the list stands open (`mac-apps.ts`).
-  const onThatMac = useOnThatMac();
+  const onThatMac = useOnThatMac(open && macApps ? self : undefined);
   const apps = useMacApps(open && macApps && onThatMac);
   const allowedApps = useAllowedApps(open && macApps && !onThatMac);
   const keptApps = useKeptApps();

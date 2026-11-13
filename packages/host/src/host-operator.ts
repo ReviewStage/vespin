@@ -61,7 +61,11 @@ import type {
   AppWorkspacePhotos,
   SessionReplayState,
 } from "./app-state.js";
-import { type MachineCommandAsk, machineCommandAsksSchema } from "./machine-command-ask.js";
+import {
+  type MachineCommandAsk,
+  machineCommandAsksSchema,
+  machineCommandDeviceSchema,
+} from "./machine-command-ask.js";
 
 /** Everything a window's bootstrap reads of the host, in one answer. */
 export interface HostBootstrap {
@@ -136,6 +140,8 @@ export interface HostOperator {
   onTasksChanged(listener: (view: TasksView) => void): () => void;
   /** The commands agents asked to run on this Mac that wait on the developer, whole, each time one is asked or answered. */
   onMachineCommandAsksChanged(listener: (asks: readonly MachineCommandAsk[]) => void): () => void;
+  /** The device this Mac claims commands as for the account signed in, or none before it joined for it, each time it moves. */
+  onMachineCommandDeviceChanged(listener: (deviceId: string | undefined) => void): () => void;
   /** How many changes made offline the service refused as they were sent again, each time the count moves. */
   onOfflineRefusedChanged(listener: (count: number) => void): () => void;
   /** An agent's shells and where its sandbox stands, or why not; none where the host could not answer. */
@@ -397,6 +403,15 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
             readEither(machineCommandAsksSchema, { excess: EXCESS_KEYS.DROP })(payload),
           )?.asks,
         listener,
+      ),
+    onMachineCommandDeviceChanged: (listener) =>
+      on(
+        GATEWAY_EVENT.MACHINE_COMMAND_DEVICE_CHANGED,
+        (payload) =>
+          Result.getOrUndefined(
+            readEither(machineCommandDeviceSchema, { excess: EXCESS_KEYS.DROP })(payload),
+          ),
+        (device) => listener(device.deviceId),
       ),
     terminalList: (params) =>
       Effect.map(

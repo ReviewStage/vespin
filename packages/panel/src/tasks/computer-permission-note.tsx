@@ -12,8 +12,9 @@ import type { UnparsedWireValue } from "@repo/wire";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { actFailureWords, askAct } from "../act.js";
+import { workspaceToolsQuery } from "../live-reads.js";
 import { QUERY_ROOT } from "../query-keys.js";
-import { appStateQuery, selectCapability } from "../use-app-state.js";
+import { appStateQuery, selectCapability, selectMachineCommandDevice } from "../use-app-state.js";
 import { useMacOwner } from "./transcript-blocks.js";
 
 /**
@@ -56,15 +57,32 @@ function noteWords(
   return `${PRODUCT_NAME} on ${whose} Mac needs ${names} to use apps. Turn ${them} on in Settings › ${THIS_MAC} on that Mac.`;
 }
 
-/** Whether the window is the Mac an agent's computer calls run on: one that runs Mac commands, signed in as that Mac's owner (`MacOwnerProvider`), or where the window cannot tell whose Mac it is, which is then the reader's own. */
-export function useOnThatMac(): boolean {
+/**
+ * Whether the window is the Mac an agent's calls run on: one that runs Mac
+ * commands, and is the machine a call naming none would go to now
+ * (`workspaceTools.runOnMac`), compared by the device this Mac claims
+ * commands as. Where that names no machine, as for a call that goes to the
+ * account's Macs from before machines claimed, or for an agent not given
+ * (`agentId` none), it is the Mac of the person whose Mac it is: signed in as
+ * its owner (`MacOwnerProvider`), or where the window cannot tell whose Mac
+ * it is, which is then the reader's own.
+ */
+export function useOnThatMac(agentId: string | undefined): boolean {
   const owner = useMacOwner();
 
   const runsCommands =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.MACHINE_COMMANDS) })
       .data === true;
 
+  const thisDevice = useQuery({ ...appStateQuery, select: selectMachineCommandDevice }).data;
+
+  // Note that the agent's standing is read only where this window could be its Mac, so a window that runs no commands asks nothing.
+  const machine = useQuery(workspaceToolsQuery(runsCommands ? agentId : undefined)).data?.runOnMac
+    ?.machine;
+
   if (!runsCommands) return false;
+
+  if (machine !== undefined) return machine.id === thisDevice;
 
   return owner === undefined || (owner.kind === ACTOR_KIND.PERSON && owner.you);
 }
@@ -79,7 +97,8 @@ export function ComputerPermissionNote({
 }): ReactNode {
   const queries = useQueryClient();
   const owner = useMacOwner();
-  const thatMac = useOnThatMac();
+  // Note that the call already ran on its Mac, which its answer does not name, so the note asks whose Mac the transcript's is rather than where a call would go now.
+  const thatMac = useOnThatMac(undefined);
 
   const asked = useMutation({
     mutationFn: () => askAct(ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS, {}),

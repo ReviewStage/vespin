@@ -1037,6 +1037,25 @@ export function composeMachineCommands(
     /** The device the Mac joined as, and the settings the service keeps for it; none before it has joined for the account signed in. */
     const joined = yield* SubscriptionRef.make<Joined | undefined>(undefined);
 
+    /** The device last told to the windows as the one the Mac claims as for the account signed in; none before any was. */
+    let toldDevice: string | undefined;
+
+    /** The device the Mac claims as for the account signed in, told to the windows where it moved since it was last told, so the panel can tell this Mac from the account's others. */
+    const tellDevice = Effect.gen(function* () {
+      const userId = dependencies.accountId();
+
+      const now =
+        userId === undefined ? undefined : joinedAs(yield* SubscriptionRef.get(joined), userId);
+
+      if (now === toldDevice) return;
+      toldDevice = now;
+
+      kernel.emit(
+        GATEWAY_EVENT.MACHINE_COMMAND_DEVICE_CHANGED,
+        carried(now === undefined ? {} : { deviceId: now }),
+      );
+    });
+
     /** Waits until the device the Mac claims as for `userId` is no longer `device`: it joined, or joined again under another id. */
     const rejoined = (userId: string, device: string | undefined) =>
       SubscriptionRef.changes(joined).pipe(
@@ -1294,7 +1313,7 @@ export function composeMachineCommands(
           Stream.runForEach(looks, () =>
             Effect.catchDefect(
               Effect.andThen(
-                reconciled(device),
+                Effect.andThen(reconciled(device), tellDevice),
                 computer === undefined ? Effect.void : looksPosted(computer),
               ),
               () => Effect.sync(() => report("this Mac could not join as a device")),

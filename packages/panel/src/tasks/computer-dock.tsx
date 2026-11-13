@@ -259,7 +259,7 @@ function AppsDock({
   const window = useKeptPicture(top.window?.id);
   const { open, viewer } = useKeptPictureViewer();
   const stop = useAsyncAction(rejectionWords);
-  const onThatMac = useOnThatMac();
+  const onThatMac = useOnThatMac(agentId);
   const { mutate: showApp } = useMutation(pressMutation(ACT_KIND.MAC_APP_SHOW));
   const [hidden, setHidden] = useState(() => WINDOWS_HIDDEN.has(agentId));
 

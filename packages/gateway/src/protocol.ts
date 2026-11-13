@@ -191,6 +191,8 @@ export const GATEWAY_EVENT = {
   OFFLINE_REFUSED_CHANGED: "offlineRefused.changed",
   /** The commands agents asked to run on this Mac that wait on the developer's answer, whole, each time one is asked or answered. */
   MACHINE_COMMAND_ASKS_CHANGED: "macCommandAsks.changed",
+  /** The device this Mac claims commands as for the account signed in, or none before it joined for it, each time it moves. */
+  MACHINE_COMMAND_DEVICE_CHANGED: "macCommandDevice.changed",
 } as const;
 
 export type GatewayEventKind = (typeof GATEWAY_EVENT)[keyof typeof GATEWAY_EVENT];

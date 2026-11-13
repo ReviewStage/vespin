@@ -93,7 +93,11 @@ export const createOperatorClient = /* @__PURE__ */ Effect.fn("client/createOper
         state.update({ access });
       }),
       gateway.host.onMachineCommandAsksChanged((asks) => {
-        state.update({ machineCommands: { asks } });
+        state.update({ machineCommands: { ...state.snapshot().machineCommands, asks } });
+      }),
+      gateway.host.onMachineCommandDeviceChanged((deviceId) => {
+        const { asks } = state.snapshot().machineCommands;
+        state.update({ machineCommands: deviceId === undefined ? { asks } : { asks, deviceId } });
       }),
       gateway.host.onOfflineRefusedChanged((offlineRefused) => {
         state.update({ network: { ...state.snapshot().network, offlineRefused } });
