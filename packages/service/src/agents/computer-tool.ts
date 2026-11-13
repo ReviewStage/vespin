@@ -206,10 +206,12 @@ export const COMPUTER_TOOL = {
     "working: its window as numbered elements and a screenshot, and clicks, typing, keys, " +
     "scrolls, and drags on it. Start with list_apps or get_app_state; act on an element by the " +
     "number the app's last get_app_state gave it, or on a point in its screenshot's pixels, " +
-    "and read the app again after you act, since its numbers change with it. A click answers " +
-    "that it was sent, not that the app took it: an app in the background, a browser above " +
-    "all, may drop a click at a point, so press an element by its number where one serves, " +
-    "and read the app again to see what a click did. An app not " +
+    "and read the app again after you act, since its numbers change with it. A press of an " +
+    "element by its number, or of a web page's button or link at a point, answers pressed " +
+    "once the window's elements changed after it, and pressed_unconfirmed where they did not, " +
+    "which may still have acted, so read the app again before pressing again; a click at any " +
+    "other point answers only that it was sent, and an app in the background, a browser above " +
+    "all, may drop it, so press an element by its number where one serves. An app not " +
     "running is opened behind the developer's windows. The developer's Mac asks them the " +
     "first time an agent uses each app, and they may decline, in which case the call answers " +
     "`not-run`; agents are never offered terminals, password managers, System Settings, or " +
