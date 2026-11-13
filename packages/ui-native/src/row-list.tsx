@@ -11,6 +11,7 @@ import {
   accessibilityValue,
   background,
   buttonStyle,
+  environment,
   font,
   foregroundStyle,
   frame,
@@ -21,6 +22,7 @@ import {
   refreshable,
   scrollContentBackground,
   scrollDismissesKeyboard,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useState } from "react";
@@ -56,6 +58,16 @@ export const LIST_LOOK = {
 
 export type ListLook = (typeof LIST_LOOK)[keyof typeof LIST_LOOK];
 
+/**
+ * A list's Select mode, as Mail's: the rows chosen, by their ids, and what is
+ * called with every row chosen as a person ticks one, or drags two fingers
+ * down a run of them.
+ */
+export type RowChoosing = {
+  readonly chosen: readonly string[];
+  readonly onChoose: (ids: readonly string[]) => void;
+};
+
 type RowListProps = {
   readonly look: ListLook;
   /** The id of the row drawn selected, in a sidebar. */
@@ -64,6 +76,8 @@ type RowListProps = {
   readonly onSelect?: ((id: string) => void) | undefined;
   /** What a pull down the list reads again, its spinner standing until it settles; none where a pull reads nothing. */
   readonly onRefresh?: (() => Promise<void>) | undefined;
+  /** Its Select mode, while it stands in one; none for a list a tap opens rows in. */
+  readonly choosing?: RowChoosing | undefined;
   readonly children: ReactNode;
 };
 
@@ -89,17 +103,29 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
  * the row should not stand selected on the way back. A plain list wider than
  * the reading width, such as a pull request's page across an iPad, centers
  * its sections in it, as iOS's readable content guide does, while the list
- * still scrolls from either edge.
+ * still scrolls from either edge. In Select mode the list stands in
+ * SwiftUI's own edit mode, as Mail's Select does: a round check leads each
+ * row, a tap ticks it rather than opening it, two fingers dragged down tick
+ * a run, and the rows' swipes step aside, as the system's do.
  */
-export function RowList({ look, selected, onSelect, onRefresh, children }: RowListProps) {
+export function RowList({ look, selected, onSelect, onRefresh, choosing, children }: RowListProps) {
   const colors = useColors();
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
 
+  // Note that a list in Select mode draws no row as the open one and reads nothing on a pull, since its checks say what is chosen and a pull there would read the rows from under them.
   return (
     <List
-      selection={selected === undefined ? [] : [selected]}
+      selection={
+        choosing !== undefined ? [...choosing.chosen] : selected === undefined ? [] : [selected]
+      }
       onSelectionChange={(selection) => {
+        if (choosing !== undefined) {
+          choosing.onChoose(selection.filter(Predicate.isString));
+
+          return;
+        }
+
         const id = selectedId(selection);
 
         if (id !== undefined) onSelect?.(id);
@@ -112,11 +138,15 @@ export function RowList({ look, selected, onSelect, onRefresh, children }: RowLi
         ...(sides > 0 ? [listSectionMargins({ edges: "horizontal", length: sides })] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
         scrollDismissesKeyboard("immediately"),
-        ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
+        ...(onRefresh === undefined || choosing !== undefined ? [] : [refreshable(onRefresh)]),
+        // Note that a ticked check is what the reader chose, so Select mode tints it copper, as Mail's checks take its accent, where the screen's ink drew a pale disc in dark.
+        ...(choosing === undefined ? [] : [environment("editMode", "active"), tint(colors.ACCENT)]),
       ]}
     >
       <RowOpenContext value={onSelect}>
-        <RowSelectedContext value={selected}>{children}</RowSelectedContext>
+        <RowSelectedContext value={choosing === undefined ? selected : undefined}>
+          {children}
+        </RowSelectedContext>
       </RowOpenContext>
     </List>
   );

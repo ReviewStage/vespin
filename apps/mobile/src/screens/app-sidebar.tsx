@@ -142,7 +142,8 @@ export function useListColumn(list: ListColumn): FirstColumn {
 
   return {
     sidebar: list.view,
-    sidebarBar: { ...list.bar, leading, action: compose },
+    // Note that an action the list's bar names, such as Select mode's Done, stands in New task's place.
+    sidebarBar: { ...list.bar, leading, action: list.bar.action ?? compose },
     sidebarShown: shown,
     onSidebarShownChange: setShown,
   };

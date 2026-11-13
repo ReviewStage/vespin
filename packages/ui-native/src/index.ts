@@ -170,7 +170,14 @@ export {
 
 export { RemindSheet } from "./remind-sheet.js";
 
-export { LIST_LOOK, type ListLook, ListSection, RowForEach, RowList } from "./row-list.js";
+export {
+  LIST_LOOK,
+  type ListLook,
+  ListSection,
+  type RowChoosing,
+  RowForEach,
+  RowList,
+} from "./row-list.js";
 
 export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./row-preview.js";
 

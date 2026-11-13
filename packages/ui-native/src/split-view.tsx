@@ -65,10 +65,10 @@ const layers = StyleSheet.create({
  */
 export const BAR_ITEM_MENU = [menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")];
 
-/** An act a bar holds by its symbol alone, such as Settings. */
+/** An act a bar holds by its symbol alone, such as Settings, or by its words where it has no symbol, such as a Select mode's Done. */
 export type BarAction = {
   readonly label: string;
-  readonly symbol: Glyph;
+  readonly symbol?: Glyph | undefined;
   readonly onPress: () => void;
 };
 
@@ -186,7 +186,7 @@ export function BarMenuItem({ menu }: { readonly menu: BarMenu }) {
   return <BarMenuButton menu={menu} modifiers={BAR_ITEM_MENU} />;
 }
 
-/** A bar act as SwiftUI's button, its symbol alone, heard by its words. */
+/** A bar act as SwiftUI's button, its symbol alone, heard by its words, or its words where it has no symbol. */
 function BarActionButton({ action }: { readonly action: BarAction }) {
   return <SwiftUIButton {...actContent(action.label, action.symbol)} onPress={action.onPress} />;
 }
