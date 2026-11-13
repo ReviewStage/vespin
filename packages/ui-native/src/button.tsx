@@ -55,8 +55,9 @@ export const BUTTON_LOOK = {
 
 export type ButtonLook = (typeof BUTTON_LOOK)[keyof typeof BUTTON_LOOK];
 
-/** How big a button is drawn: a row's, or a screen's own act. */
+/** How big a button is drawn: a capsule inside a list row, a row's, or a screen's own act. */
 export const BUTTON_SIZE = {
+  SMALL: "small",
   REGULAR: "regular",
   LARGE: "large",
 } as const;
@@ -108,6 +109,8 @@ export function Button(props: ButtonProps) {
       modifiers={[
         buttonStyle(look),
         controlSize(size),
+        // Note that a small button stands in a list row as a capsule, as the App Store's Get and Settings' Add do.
+        ...(size === BUTTON_SIZE.SMALL ? [SwiftModifiers.buttonBorderShape("capsule")] : []),
         ...(accent ? [tint(filled ? colors.ACCENT : colors.TEXT)] : []),
         ...(filled ? [foregroundStyle(colors.ON_ACCENT)] : []),
         disabledModifier(props.disabled === true),

@@ -22,10 +22,10 @@ import {
   accessibilityLabel,
   accessibilityValue,
   background,
-  buttonStyle,
   disabled,
   font,
   foregroundStyle,
+  frame,
   listRowBackground,
   scrollContentBackground,
   scrollDismissesKeyboard,
@@ -34,7 +34,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
-import { BUTTON_LOOK, Button } from "./button.js";
+import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { Avatar } from "./marks.js";
@@ -49,10 +49,13 @@ const ACCOUNT_FACE_SIZE = 36;
 /** A face or tile a picking or member row leads with, in points, before Dynamic Type scales it: smaller than the account's, since the row is a plain one. */
 const ROW_FACE_SIZE = ACCOUNT_FACE_SIZE - 8;
 
-/** Where a `PushRow` goes, and the mark at its end that says so, where iOS's own Settings marks them, in the panel's glyphs. */
+/** An account's face heading its own page, as large as Apple Account's photo stands over its name. */
+const ACCOUNT_HEAD_FACE_SIZE = 72;
+
+/** Where a `PushRow` goes, and the mark at its end that says so, where iOS's own Settings marks them. */
 export const PUSH_ROW_GOES = {
-  /** A page of Settings, pushed over this one: the panel's chevron. */
-  PAGE: GLYPH.FOLDED,
+  /** A page of Settings, pushed over this one: iOS's own chevron, as every row that goes on draws it. */
+  PAGE: GLYPH.DISCLOSURE,
   /** Out of the app, to Safari or iOS's own Settings: the panel's arrow out. */
   OUT: GLYPH.OPEN_EXTERNALLY,
 } as const satisfies Record<string, Glyph>;
@@ -62,15 +65,24 @@ export type PushRowGoes = (typeof PUSH_ROW_GOES)[keyof typeof PUSH_ROW_GOES];
 /** The size of the glyph leading a `MenuRow`, as a list's leading mark stands. */
 const GLYPH_SIZE = 15;
 
-/** The size of the mark at a `PushRow`'s end, as small as iOS draws its chevron. */
-const GOES_MARK_SIZE = 13;
+/** The size of the glyph leading a `PushRow` or a `NoteRow`, before Dynamic Type scales it. */
+const LEAD_GLYPH_SIZE = 17;
 
-/** The mark at a row's end that says where a press goes, in the muted ink. */
+/**
+ * The mark at a row's end that says where a press goes, in the muted ink,
+ * semibold at the row's small line, as iOS draws its chevron, so it grows
+ * with the reader's text size.
+ */
 function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
   const colors = useColors();
-  const size = useScaledSize(GOES_MARK_SIZE);
 
-  return <Image {...glyphImage(goes)} size={size} color={colors.TEXT_MUTED} />;
+  return (
+    <Image
+      {...glyphImage(goes)}
+      color={colors.TEXT_MUTED}
+      modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" })]}
+    />
+  );
 }
 
 /** The row's other words, joined as VoiceOver reads a value after its label; none where there are none. */
@@ -82,13 +94,14 @@ function spokenValue(...parts: readonly (string | undefined)[]) {
 
 /**
  * A row's content made one press, as a Form's navigation row is: the whole
- * row takes the press, its words keep their own ink rather than the tint a
+ * row takes the press and flashes the system's gray while it is held, as
+ * Settings' rows do, its words keep their own ink rather than the tint a
  * button lends, and VoiceOver hears it by its name, then its other words as
- * its value, so a flow still finds it by the name alone. Note that the
- * whole row takes the press only because each row's own stack carries the
- * rectangle as its content shape: a plain button answers only where its label
- * draws, and a shape set on the button itself does not widen that, so the
- * blank run between a row's words and its chevron took no tap.
+ * its value, so a flow still finds it by the name alone. Note that it is the
+ * system's default button rather than a plain one, since a plain button in a
+ * Form turns off the row's highlight; each row's stack still carries the
+ * rectangle as its content shape, so the blank run between its words and its
+ * chevron takes the press too.
  */
 function PressedRow({
   label,
@@ -110,7 +123,6 @@ function PressedRow({
     <SwiftUIButton
       onPress={onPress}
       modifiers={[
-        buttonStyle("plain"),
         accessibilityLabel(label),
         ...spokenValue(...(value ?? [])),
         listRowBackground(colors.RAISED),
@@ -261,6 +273,50 @@ export function AccountRow({ name, email, picture, detail, onPress }: AccountRow
 }
 
 /**
+ * Who is signed in, heading their own Account page as Apple Account's page
+ * heads: their photo or monogram large and centered on the form's ground
+ * rather than in a row's card, their name under it, then their address and
+ * how they signed in in the muted ink. It takes no press, and VoiceOver
+ * hears it as one element, their name then the rest.
+ */
+export function AccountHead({ name, email, picture, detail }: Omit<AccountRowProps, "onPress">) {
+  const colors = useColors();
+
+  return (
+    <VStack
+      spacing={SPACE.TIGHT}
+      modifiers={[
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "center" }),
+        listRowBackground(colors.GROUPED),
+        accessibilityElement("ignore"),
+        accessibilityLabel(name),
+        ...spokenValue(email, detail),
+      ]}
+    >
+      <Avatar name={name} picture={picture} size={ACCOUNT_HEAD_FACE_SIZE} />
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
+          foregroundStyle(colors.TEXT),
+        ]}
+      >
+        {name}
+      </Text>
+      <Text
+        modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+      >
+        {email}
+      </Text>
+      {detail === undefined ? null : (
+        <Text modifiers={[font({ textStyle: TYPE_ROLE.TIME }), foregroundStyle(colors.TEXT_MUTED)]}>
+          {detail}
+        </Text>
+      )}
+    </VStack>
+  );
+}
+
+/**
  * A workspace heading its own page: its tile, as the switcher draws it (its
  * photo, its owner's picture, or its letter on its hue, on a softened square,
  * since a square says a team as a circle says a person), its name, and what
@@ -312,7 +368,7 @@ type PushRowProps = {
  */
 export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRowProps) {
   const colors = useColors();
-  const glyphSize = useScaledSize(GOES_MARK_SIZE + 4);
+  const leadSize = useScaledSize(LEAD_GLYPH_SIZE);
 
   return (
     <PressedRow label={label} value={[detail]} onPress={onPress} testId={testId}>
@@ -321,7 +377,7 @@ export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRo
         modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
       >
         {symbol === undefined ? null : (
-          <Image {...glyphImage(symbol)} size={glyphSize} color={colors.TEXT_MUTED} />
+          <Image {...glyphImage(symbol)} size={leadSize} color={colors.TEXT_MUTED} />
         )}
         <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
         <Spacer />
@@ -412,6 +468,8 @@ type ActionRowProps = {
   readonly heard?: string | undefined;
   /** A line under its name in the muted ink, such as why it takes no press; none for none. */
   readonly detail?: string | undefined;
+  /** Whether its words stand centered in the row with no glyph, as Sign Out closes Apple Account's page. */
+  readonly centered?: boolean | undefined;
   readonly onPress: () => void;
 };
 
@@ -428,10 +486,25 @@ export function ActionRow({
   disabled: off = false,
   heard = label,
   detail,
+  centered = false,
   onPress,
 }: ActionRowProps) {
   const colors = useColors();
   const role = destructive ? "destructive" : "default";
+
+  if (centered) {
+    return (
+      <SwiftUIButton
+        role={role}
+        onPress={onPress}
+        modifiers={[accessibilityLabel(heard), listRowBackground(colors.RAISED), disabled(off)]}
+      >
+        <Text modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "center" })]}>
+          {label}
+        </Text>
+      </SwiftUIButton>
+    );
+  }
 
   if (detail === undefined) {
     return (
@@ -473,8 +546,13 @@ export function ActionRow({
   );
 }
 
-/** One of the few things a `PickRows` picks among. */
-export type PickOption = { readonly id: string; readonly label: string };
+/** One of the few things a `PickRows` picks among, with what it does under its name where it says. */
+export type PickOption = {
+  readonly id: string;
+  readonly label: string;
+  /** What picking it does, in the muted ink under its name, such as a permission mode's; none for none. */
+  readonly hint?: string | undefined;
+};
 
 type PickRowsProps = {
   readonly options: readonly PickOption[];
@@ -488,9 +566,26 @@ const PICKED_MARK = GLYPH.CHECK;
 /** The check's size, as small and heavy as the system's own. */
 const PICKED_MARK_SIZE = 15;
 
+/** The picked row's copper check at its end, as iOS's own Settings checks a choice: the one pick look every list of choices draws, a decide ask's card among them. */
+export function PickedCheck() {
+  const colors = useColors();
+  const markSize = useScaledSize(PICKED_MARK_SIZE);
+
+  return (
+    <Image
+      {...glyphImage(PICKED_MARK)}
+      size={markSize}
+      color={colors.ACCENT}
+      modifiers={[font({ size: markSize, weight: "semibold" })]}
+    />
+  );
+}
+
 /**
- * A choice among a few, each a row of its own with the picked one checked
- * in copper, as iOS's own Settings checks a choice. Note that the rows are
+ * A choice among a few, each a row of its own with what it does under its
+ * name where it says, and the picked one checked in copper, as iOS's own
+ * Settings checks a choice: Notify me, and a running agent's permission
+ * modes, as the panel's menu offers them with their hints. Note that the rows are
  * drawn here rather than by SwiftUI's inline picker, because its check takes
  * the form's tint, which stands in the ink, and neither a tint on the picker
  * nor one on a group around it reached the check. VoiceOver hears each row
@@ -499,7 +594,6 @@ const PICKED_MARK_SIZE = 15;
  */
 export function PickRows({ options, picked, onPick }: PickRowsProps) {
   const colors = useColors();
-  const markSize = useScaledSize(PICKED_MARK_SIZE);
 
   // Note that the rows stand in a fragment, each its own row of the form, because a group around them made one element of them all, which neither VoiceOver nor a flow could pick from.
   return (
@@ -509,23 +603,28 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
           key={option.id}
           onPress={() => onPick(option.id)}
           modifiers={[
-            buttonStyle("plain"),
             accessibilityLabel(option.label),
+            ...(option.hint === undefined ? [] : [accessibilityValue(option.hint)]),
             ...(option.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
             listRowBackground(colors.RAISED),
           ]}
         >
           <HStack modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}>
-            <Text modifiers={[foregroundStyle(colors.TEXT)]}>{option.label}</Text>
+            <VStack alignment="leading" spacing={2}>
+              <Text modifiers={[foregroundStyle(colors.TEXT)]}>{option.label}</Text>
+              {option.hint === undefined ? null : (
+                <Text
+                  modifiers={[
+                    font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                    foregroundStyle(colors.TEXT_MUTED),
+                  ]}
+                >
+                  {option.hint}
+                </Text>
+              )}
+            </VStack>
             <Spacer />
-            {option.id === picked ? (
-              <Image
-                {...glyphImage(PICKED_MARK)}
-                size={markSize}
-                color={colors.ACCENT}
-                modifiers={[font({ size: markSize, weight: "semibold" })]}
-              />
-            ) : null}
+            {option.id === picked ? <PickedCheck /> : null}
           </HStack>
         </SwiftUIButton>
       ))}
@@ -557,7 +656,6 @@ type WorkspacePickRowsProps = {
 export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRowsProps) {
   const colors = useColors();
   const faceSize = useScaledSize(ROW_FACE_SIZE);
-  const markSize = useScaledSize(PICKED_MARK_SIZE);
 
   return (
     <>
@@ -566,7 +664,6 @@ export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRows
           key={workspace.id}
           onPress={() => onPick(workspace.id)}
           modifiers={[
-            buttonStyle("plain"),
             accessibilityLabel(workspace.name),
             ...(line === undefined ? [] : [accessibilityValue(line)]),
             ...(workspace.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
@@ -595,14 +692,7 @@ export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRows
               )}
             </VStack>
             <Spacer />
-            {workspace.id === picked ? (
-              <Image
-                {...glyphImage(PICKED_MARK)}
-                size={markSize}
-                color={colors.ACCENT}
-                modifiers={[font({ size: markSize, weight: "semibold" })]}
-              />
-            ) : null}
+            {workspace.id === picked ? <PickedCheck /> : null}
           </HStack>
         </SwiftUIButton>
       ))}
@@ -643,7 +733,6 @@ export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
           key={id}
           onPress={() => onPick(id)}
           modifiers={[
-            buttonStyle("plain"),
             accessibilityLabel(name),
             ...(line === undefined ? [] : [accessibilityValue(line)]),
             disabled(off),
@@ -905,7 +994,7 @@ type NoteRowProps = {
  */
 export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: NoteRowProps) {
   const colors = useColors();
-  const glyphSize = useScaledSize(GOES_MARK_SIZE + 4);
+  const leadSize = useScaledSize(LEAD_GLYPH_SIZE);
 
   const lines = (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
@@ -931,7 +1020,7 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
     >
       {symbol === undefined ? null : (
-        <Image {...glyphImage(symbol)} size={glyphSize} color={colors.TEXT_MUTED} />
+        <Image {...glyphImage(symbol)} size={leadSize} color={colors.TEXT_MUTED} />
       )}
       {lines}
       <Spacer />
@@ -939,17 +1028,11 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
     </HStack>
   );
 
-  // Note that a row a press takes somewhere, or opens to be changed, is the system's plain button, its words keeping their own ink, as `PressedRow` draws one.
+  // Note that a row a press takes somewhere, or opens to be changed, is the system's button, flashing the row's gray while held, its words keeping their own ink, as `PressedRow` draws one.
   const pressed = onPress ?? edit?.onPress;
 
   const drawn =
-    pressed === undefined ? (
-      content
-    ) : (
-      <SwiftUIButton onPress={pressed} modifiers={[buttonStyle("plain")]}>
-        {content}
-      </SwiftUIButton>
-    );
+    pressed === undefined ? content : <SwiftUIButton onPress={pressed}>{content}</SwiftUIButton>;
 
   const placed = [
     listRowBackground(colors.RAISED),
@@ -1022,8 +1105,9 @@ type ConnectionRowProps = {
 /**
  * A connection of the account's, such as an integration or an app given
  * access: its name in the ink, its lines in the muted ink or a problem's in
- * danger's, and its one act at its end as the system's bordered button, in
- * the ink as a quiet act stands; the rest in the menu a long press opens, and
+ * danger's, and its one act at its end as the system's small bordered
+ * capsule, in the ink as a quiet act stands, as the App Store's Get and
+ * Settings' Add stand in a row, so the row keeps a list row's height; the rest in the menu a long press opens, and
  * a destructive one, such as Disconnect, behind a swipe too, which a full
  * swipe never runs, since it asks first.
  */
@@ -1055,6 +1139,7 @@ export function ConnectionRow({ name, lines, act, menu = [] }: ConnectionRowProp
         <Button
           label={act.label}
           look={BUTTON_LOOK.BORDERED}
+          size={BUTTON_SIZE.SMALL}
           disabled={act.disabled}
           onPress={act.onPress}
         />

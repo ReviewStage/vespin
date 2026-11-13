@@ -289,15 +289,19 @@ const MAC_APPS = [
   { name: "Notes", bundleId: "com.apple.Notes", running: false, allowed: true },
 ];
 
+/** The reader's two machines, by their device ids. */
+const STUDIO_ID = "00000000-0000-4000-8000-000000000001";
+const LAPTOP_ID = "00000000-0000-4000-8000-000000000002";
+
 /** The reader's own machines that always allow an app, as the service answers them: Notes on both, Slack on one, which named it. */
 const ALLOWED_MACHINES = [
   {
-    deviceId: "00000000-0000-4000-8000-000000000001",
+    deviceId: STUDIO_ID,
     name: "Studio",
     apps: ["com.apple.Notes", "com.tinyspeck.slackmacgap"],
     looks: [{ app: "com.tinyspeck.slackmacgap", name: "Slack" }],
   },
-  { deviceId: "00000000-0000-4000-8000-000000000002", name: "Laptop", apps: ["com.apple.Notes"] },
+  { deviceId: LAPTOP_ID, name: "Laptop", apps: ["com.apple.Notes"] },
 ];
 
 /** What main answers the box's acts with on the act port, every one told. */
@@ -818,7 +822,7 @@ test("an @ in the box browses the account's connected MCP servers as one kind, a
   ]);
 });
 
-test("with Computer use on, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
+test("with Computer use on, on the Mac the agent's calls go to, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
   const sent: string[] = [];
 
   const sender: MessageSender = (_agentId, { text }) => {
@@ -827,8 +831,21 @@ test("with Computer use on, an @ in the box offers the apps on this Mac, a pick 
     return new Promise<AgentAgentAnswer>(ignore);
   };
 
+  // The reader's Studio, which the agent's calls go to.
   const state = stateWith(experimentsOn(EXPERIMENT.DESCRIPTIONS, EXPERIMENT.COMPUTER_USE), {
     tasks: tasksView(),
+    machineCommands: { asks: [], deviceId: STUDIO_ID },
+    [LIVE_READ.WORKSPACE_TOOLS]: {
+      [SELF_ID]: {
+        rows: {
+          runOnMac: {
+            on: true,
+            owner: { userId: "user-ada", name: "Ada Lovelace" },
+            machine: { id: STUDIO_ID, name: "Studio" },
+          },
+        },
+      },
+    },
   });
 
   fakeActs({ act: answer, requestAppState: () => Promise.resolve(state) });
@@ -855,63 +872,92 @@ test("with Computer use on, an @ in the box offers the apps on this Mac, a pick 
   ]);
 });
 
-test("off a Mac that runs its commands, an @ in the box offers the apps the reader's machines always allow, each by the name its machine posted and saying the machines it is allowed on, a pick sent as the app's mention by its bundle id", async () => {
-  const sent: string[] = [];
+/** The window an @ list's apps are read off, where it is not the Mac the agent's calls go to. */
+const OFF_THAT_MAC = {
+  /** A window that runs no Mac commands, as the web's tab is. */
+  NO_COMMANDS: "a window that runs no Mac commands",
+  /** The reader's Studio, while the agent's calls go to their Laptop. */
+  ANOTHER_MACHINE: "a Mac of the reader's that the agent's calls do not go to",
+} as const;
 
-  const sender: MessageSender = (_agentId, { text }) => {
-    sent.push(text);
+test.each(Object.values(OFF_THAT_MAC))(
+  "off the Mac the agent's calls go to, in %s, an @ in the box offers the apps the reader's machines always allow, each by the name its machine posted and saying the machines it is allowed on, a pick sent as the app's mention by its bundle id",
+  async (window) => {
+    const sent: string[] = [];
 
-    return new Promise<AgentAgentAnswer>(ignore);
-  };
+    const sender: MessageSender = (_agentId, { text }) => {
+      sent.push(text);
 
-  const experiments = experimentsOn(EXPERIMENT.DESCRIPTIONS, EXPERIMENT.COMPUTER_USE);
-  const idle = stateWith(experiments, {});
+      return new Promise<AgentAgentAnswer>(ignore);
+    };
 
-  // A window that runs no Mac commands, as the web's tab is.
-  const state = stateWith(experiments, {
-    tasks: tasksView(),
-    run: {
-      ...idle.run,
-      capabilities: DESKTOP_CAPABILITIES.filter(
-        (capability) => capability !== HOST_CAPABILITY.MACHINE_COMMANDS,
-      ),
-    },
-  });
+    const experiments = experimentsOn(EXPERIMENT.DESCRIPTIONS, EXPERIMENT.COMPUTER_USE);
+    const idle = stateWith(experiments, {});
 
-  fakeActs({ act: answer, requestAppState: () => Promise.resolve(state) });
+    const state = stateWith(
+      experiments,
+      window === OFF_THAT_MAC.NO_COMMANDS
+        ? {
+            tasks: tasksView(),
+            run: {
+              ...idle.run,
+              capabilities: DESKTOP_CAPABILITIES.filter(
+                (capability) => capability !== HOST_CAPABILITY.MACHINE_COMMANDS,
+              ),
+            },
+          }
+        : {
+            tasks: tasksView(),
+            machineCommands: { asks: [], deviceId: STUDIO_ID },
+            [LIVE_READ.WORKSPACE_TOOLS]: {
+              [SELF_ID]: {
+                rows: {
+                  runOnMac: {
+                    on: true,
+                    owner: { userId: "user-ada", name: "Ada Lovelace" },
+                    machine: { id: LAPTOP_ID, name: "Laptop" },
+                  },
+                },
+              },
+            },
+          },
+    );
 
-  const { container } = drawing(
-    createElement(Box, { sender, skills: noSkills }),
-    planPage([]),
-    state,
-  );
+    fakeActs({ act: answer, requestAppState: () => Promise.resolve(state) });
 
-  await settle();
+    const { container } = drawing(
+      createElement(Box, { sender, skills: noSkills }),
+      planPage([]),
+      state,
+    );
 
-  typeInComposer(container, "Check @apps:");
-  await settle();
+    await settle();
 
-  const rows = [...container.querySelectorAll('.mention-menu [role="option"]')].map((row) => [
-    row.querySelector(".ui-combobox-option-label")?.textContent ?? "",
-    row.querySelector(".ui-combobox-option-detail")?.textContent ?? "",
-  ]);
+    typeInComposer(container, "Check @apps:");
+    await settle();
 
-  typeInComposer(container, "slack");
-  await settle();
-  pressInComposer(container, "Enter");
-  await settle();
-  pressInComposer(container, "Enter");
-  await settle();
+    const rows = [...container.querySelectorAll('.mention-menu [role="option"]')].map((row) => [
+      row.querySelector(".ui-combobox-option-label")?.textContent ?? "",
+      row.querySelector(".ui-combobox-option-detail")?.textContent ?? "",
+    ]);
 
-  assert.deepEqual(rows, [
-    ["Computer", ""],
-    ["Notes", "Always allowed on Studio, Laptop"],
-    ["Slack", "Always allowed on Studio"],
-  ]);
-  assert.deepEqual(sent, [
-    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.tinyspeck.slackmacgap" }, "Slack", PLACE)}`,
-  ]);
-});
+    typeInComposer(container, "slack");
+    await settle();
+    pressInComposer(container, "Enter");
+    await settle();
+    pressInComposer(container, "Enter");
+    await settle();
+
+    assert.deepEqual(rows, [
+      ["Computer", ""],
+      ["Notes", "Always allowed on Studio, Laptop"],
+      ["Slack", "Always allowed on Studio"],
+    ]);
+    assert.deepEqual(sent, [
+      `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.tinyspeck.slackmacgap" }, "Slack", PLACE)}`,
+    ]);
+  },
+);
 
 test("an @ in the box offers the repository's skills, a pick written as the /name chip the / list writes", async () => {
   const release: SkillSource = () =>
