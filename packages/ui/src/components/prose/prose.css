@@ -289,6 +289,27 @@
     border-bottom: 0;
   }
 
+  /* A raised or lowered run of words, a footnote's mark or a bot's glyph
+     beside a name (`<sup><img></sup>`), is moved off its line's baseline
+     rather than set on a baseline of its own, as GitHub draws it, so it
+     never makes its line taller and its line's words stand where its
+     neighbors' do. Note that the panel takes no preflight (its own
+     `base.css` is its reset), so without this the browser's `super` and
+     `sub` stand. Its size stays the browser's own, a step smaller. */
+  :is(.ui-markdown-flow, .ui-prose-document) :is(sub, sup) {
+    position: relative;
+    line-height: 0;
+    vertical-align: baseline;
+  }
+
+  :is(.ui-markdown-flow, .ui-prose-document) sup {
+    top: -0.5em;
+  }
+
+  :is(.ui-markdown-flow, .ui-prose-document) sub {
+    bottom: -0.25em;
+  }
+
   .ui-markdown-flow hr {
     border: 0;
     border-top: 1px solid var(--ui-markdown-edge);
