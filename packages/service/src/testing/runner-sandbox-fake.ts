@@ -265,6 +265,8 @@ export function runnerSandboxApi() {
    */
   const failCommandReads = { remaining: 0 };
   const failPolicy = { remaining: 0 };
+  /** How many stops the API refuses next, leaving the sandbox and its commands running. */
+  const failStop = { remaining: 0 };
   /** How many network policy updates the API holds next, answering none until the caller gives up. */
   const holdPolicy = { remaining: 0 };
   /** Whether a read that waits for a running command's exit is held until the reader gives up or the command exits. */
@@ -469,6 +471,15 @@ export function runnerSandboxApi() {
       const refused = sandboxStopRefusal(init);
 
       if (refused !== undefined) return refused;
+
+      if (failStop.remaining > 0) {
+        failStop.remaining -= 1;
+
+        return Response.json(
+          { error: { code: "bad_request", message: "The stop was refused." } },
+          { status: 400 },
+        );
+      }
 
       for (const sandbox of sandboxes.filter((each) => each.currentSessionId === sessionId)) {
         sandbox.status = "stopped";
@@ -707,6 +718,7 @@ export function runnerSandboxApi() {
     failStdin,
     failCommandReads,
     failPolicy,
+    failStop,
     holdPolicy,
     waits,
     exit,

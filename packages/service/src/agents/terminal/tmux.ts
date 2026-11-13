@@ -191,22 +191,37 @@ function processOf(run: RunActionStart): readonly string[] {
 /**
  * Starts a run action detached in the agent's checkout, under its id, its
  * command the pane's own process, with the workspace's variables, named for
- * the action's label and marked with its id. Note that the pane is kept on
- * exit by a command of the same list, because tmux runs a list whole before
- * it hears a process end, so even a command that ends at once leaves its
- * pane and its status standing.
+ * the action's label and marked with its id. An ordinary shell standing
+ * under the id, as a tab's attach makes one afresh after a stop forgot the
+ * action's (`attachTerminal`), is ended first, so the action's id is never
+ * lost to it; one marked for a run action, as a press made at once beside
+ * this one starts, is left, and tmux refuses this start. Note that the pane
+ * is kept on exit by a command of the same list, because tmux runs a list
+ * whole before it hears a process end, so even a command that ends at once
+ * leaves its pane and its status standing.
  */
 export function startRunAction(terminalId: string, run: RunActionStart): CommandAsk {
   const target = optionTargetOf(terminalId);
 
-  return tmux([
-    ...["new-session", "-d", "-s", sessionOf(terminalId), "-c", TMUX.START_DIRECTORY],
-    ...environmentOf(run),
-    ...processOf(run),
-    ...[";", "set-option", "-w", "-t", target, TMUX.REMAIN_OPTION, "on"],
-    ...[";", "set-option", "-t", target, TMUX.TITLE_OPTION, literal(run.label)],
-    ...[";", "set-option", "-t", target, TMUX.RUN_ACTION_OPTION, run.actionId],
-  ]);
+  return script(
+    [
+      "target=$1 && shift",
+      `if tmux has-session -t "$target" 2>/dev/null && [ -z "$(tmux show-options -qv -t "$target:" ${TMUX.RUN_ACTION_OPTION} 2>/dev/null)" ]; then`,
+      // Note that the shell ends in the start's own list, because a server left with no session exits, and a start sent after would reach it as it goes.
+      `  exec tmux -L ${TMUX.SOCKET} kill-session -t "$target" ";" "$@"`,
+      "fi",
+      `exec tmux -L ${TMUX.SOCKET} "$@"`,
+    ].join("\n"),
+    [
+      targetOf(terminalId),
+      ...["new-session", "-d", "-s", sessionOf(terminalId), "-c", TMUX.START_DIRECTORY],
+      ...environmentOf(run),
+      ...processOf(run),
+      ...[";", "set-option", "-w", "-t", target, TMUX.REMAIN_OPTION, "on"],
+      ...[";", "set-option", "-t", target, TMUX.TITLE_OPTION, literal(run.label)],
+      ...[";", "set-option", "-t", target, TMUX.RUN_ACTION_OPTION, run.actionId],
+    ],
+  );
 }
 
 /**

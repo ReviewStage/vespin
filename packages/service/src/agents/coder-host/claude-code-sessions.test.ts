@@ -2346,6 +2346,45 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
       }),
   );
 
+  it.effect(
+    "a turn's end whose stop fails keeps its runner recorded, so the next message is written to it rather than to a second runner launched beside it",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const target = { userId, conversationId: agent.conversationId };
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* runnerTook(agent.id);
+        yield* settleRunnerLostTurns(writer, agent.conversationId, yield* Clock.currentTimeMillis);
+
+        api.failStop.remaining = 1;
+
+        const idled = yield* Effect.exit(
+          runnerIdled({ target, sessionId: opened.sessionId, sequence: 41 }).pipe(
+            Effect.provide(api.layer),
+          ),
+        );
+
+        assert.ok(Exit.isFailure(idled));
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+        const sent = yield* sentAndDelivered(sessions, opened.sessionId, agent, "Now the emails.");
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(api.commands.length, 1);
+      }),
+  );
+
   it.effect("a turn's end stops a sandbox nothing holds, and the next message resumes it", () =>
     Effect.gen(function* () {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
