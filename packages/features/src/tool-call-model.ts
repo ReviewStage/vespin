@@ -224,6 +224,11 @@ export function computerPermissionsMissing(
   return reason === undefined || permissions.length === 0 ? undefined : { reason, permissions };
 }
 
+/** The bundle id a computer call's answer names its app by, as the Mac answered it; none where it named none, as an app with no bundle answers. */
+export function computerAppBundleId(output: WireValue | undefined): string | undefined {
+  return isRecord(output) ? stringAt(output.app, "bundleId") : undefined;
+}
+
 /** The picture a computer call's answer kept its app's icon as, by id; none where it kept none. */
 export function computerAppIcon(output: WireValue | undefined): string | undefined {
   if (!isRecord(output) || !isRecord(output.app) || !isRecord(output.app.icon)) return undefined;
