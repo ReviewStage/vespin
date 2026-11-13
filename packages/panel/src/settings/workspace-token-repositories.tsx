@@ -17,7 +17,6 @@ import {
   useConfirmDialog,
 } from "@repo/ui";
 import { neverBusyAct } from "@repo/ui/confirm-state";
-import { GLYPH } from "@repo/ui/icons";
 import { type UseQueryResult, useMutation, useQuery } from "@tanstack/react-query";
 import { useCallback, useRef, useState } from "react";
 import { actMutation, pressMutation } from "../act-mutations.js";
@@ -418,7 +417,6 @@ function TokenOwnerRow({
     .map((repository) => ({
       label: `${WORDS.REMOVE} ${nameOf(repository)}`,
       replayMasked: true,
-      icon: <GLYPH.REMOVE />,
       danger: true,
       onSelect: () => {
         setAsked(repository);

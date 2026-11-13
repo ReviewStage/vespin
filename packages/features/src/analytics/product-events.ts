@@ -325,6 +325,9 @@ export const PRODUCT_EXPERIMENT = {
   MERGE_QUEUE: "merge-queue",
   TURN_CHANGES: "turn-changes",
   REPLY_BUTTONS: "reply-buttons",
+  FOLLOWING: "following",
+  COMPUTER_USE: "computer-use",
+  VOICE: "voice",
 } as const;
 
 export type ProductExperiment = (typeof PRODUCT_EXPERIMENT)[keyof typeof PRODUCT_EXPERIMENT];

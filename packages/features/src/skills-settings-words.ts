@@ -37,9 +37,13 @@ export const SKILLS_LINE = {
   PASTE_LABEL: "GitHub repository or SKILL.md text",
   PASTE_HINT:
     "Paste owner/repo, a GitHub link to a repository or skill folder, an npx skills add line, or a skill's SKILL.md text.",
+  PASTE_PLACEHOLDER: "npx skills add vercel-labs/agent-skills --skill frontend-design",
+  /** What the list of a source's skills is heard as. */
+  TO_INSTALL: "Skills to install",
   READING: "Reading…",
   UNSUPPORTED: "Only GitHub repositories.",
   INSTALL: "Install",
+  INSTALLING: "Installing",
   INSTALL_FOR: "Install for",
   ONLY_YOU: "Only you",
   VIEW: "Open",

@@ -1,0 +1,45 @@
+{
+  "instead": "Draw the way back with BackButton from @repo/ui, or the toolbar's crumbs lead; the back arrow glyph is imported only there. A history step's Back, a chapter's Previous, a row's Move left and a calendar's previous month are not a way back and name their files.",
+  "glyphs": [
+    { "glyph": "GLYPH.BACK", "allow": ["packages/ui/src/components/back-button/"] },
+    {
+      "glyph": "ArrowLeft",
+      "allow": [
+        "packages/panel/src/tasks/attachment-viewer.tsx",
+        "packages/panel/src/tasks/cloud-browser-pane.tsx",
+        "packages/ui/src/components/back-button/",
+        "packages/ui/src/components/landing/landing-desktop.tsx",
+        "packages/ui/src/icons/lucide-glyphs.tsx"
+      ]
+    }
+  ],
+  "patterns": [
+    {
+      "import": "@repo/ui",
+      "names": ["BackIcon", "ArrowLeftIcon"],
+      "allow": [
+        "apps/catalog/src/examples/keep-focus.tsx",
+        "apps/catalog/src/examples/pane-bars.tsx",
+        "apps/catalog/src/examples/press-shortcuts.tsx",
+        "packages/panel/src/desktop/desktop-sidebar.tsx",
+        "packages/panel/src/desktop/row-moves.tsx",
+        "packages/panel/src/tasks/agent-chapters-tab.tsx",
+        "packages/panel/src/tasks/cloud-browser-pane.tsx",
+        "packages/panel/src/tasks/file-view.tsx"
+      ]
+    },
+    {
+      "import": "../../icons/lucide-glyphs.js",
+      "names": ["BackIcon", "ArrowLeftIcon"],
+      "allow": [
+        "packages/ui/src/components/calendar/",
+        "packages/ui/src/components/landing/landing-desktop.tsx"
+      ]
+    },
+    {
+      "import": "./lucide-glyphs.js",
+      "names": ["BackIcon", "ArrowLeftIcon"],
+      "allow": ["packages/ui/src/icons/glyph-registry.tsx"]
+    }
+  ]
+}

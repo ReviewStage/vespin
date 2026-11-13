@@ -239,29 +239,32 @@ it.effect("a refresh records the service's id for an account stored without one"
   }),
 );
 
-it.effect(
-  "a renewal the service refuses with invalid_grant is the one path that signs the account out",
-  () =>
-    Effect.gen(function* () {
-      const subject = yield* manager({
-        stored: STORED,
-        client: refreshingClient(() =>
-          Promise.resolve(
-            jsonResponse(
-              { error: "invalid_grant", error_description: "Refresh token was revoked" },
-              400,
-            ),
-          ),
-        ),
-      });
+it.effect.each<readonly [label: string, tokenEndpoint: () => Response]>([
+  [
+    "a grant refused with invalid_grant",
+    () =>
+      jsonResponse({ error: "invalid_grant", error_description: "Refresh token was revoked" }, 400),
+  ],
+  // The grant answers, but the service refuses the token it just minted: a
+  // sign-in whose session ran out, which once renewed on every call.
+  [
+    "a renewed token refused at once",
+    () => jsonResponse({ access_token: "renewed-access", refresh_token: "renewed-refresh" }),
+  ],
+])("a renewal ending in %s signs the account out", ([, tokenEndpoint]) =>
+  Effect.gen(function* () {
+    const subject = yield* manager({
+      stored: STORED,
+      client: refreshingClient(() => Promise.resolve(tokenEndpoint())),
+    });
 
-      subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
+    subject.instance.initialize({ status: ACCOUNT_STATUS.SIGNED_IN, ...STORED });
 
-      yield* subject.instance.refresh();
+    yield* subject.instance.refresh();
 
-      assert.equal(subject.instance.snapshot.status, ACCOUNT_STATUS.SIGNED_OUT);
-      assert.equal(subject.stored(), undefined);
-    }),
+    assert.equal(subject.instance.snapshot.status, ACCOUNT_STATUS.SIGNED_OUT);
+    assert.equal(subject.stored(), undefined);
+  }),
 );
 
 it.effect(

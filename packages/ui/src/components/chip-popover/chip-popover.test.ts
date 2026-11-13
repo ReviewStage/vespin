@@ -105,3 +105,55 @@ test("a press opens a dialog named by its title listing the facts, and a pick in
     "the popover is put away",
   );
 });
+
+test("a popover of rows that only say, with no title, stays open on a press and turns its pinned switch", () => {
+  for (const root of roots.splice(0)) act(() => root.unmount());
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  const turned: boolean[] = [];
+  act(() =>
+    root.render(
+      createElement(ChipPopover, {
+        label: "Followers",
+        glyph: null,
+        words: "Following",
+        menu: {
+          rows: [
+            { id: "you", label: "You" },
+            { id: "manuel", label: "Manuel Ruiz" },
+          ],
+          noMatch: "No followers",
+          foot: [
+            {
+              id: "machines",
+              label: "Let agents here use my machines",
+              toggle: { on: false, onToggle: () => turned.push(true) },
+            },
+          ],
+        },
+      }),
+    ),
+  );
+  act(() => container.querySelector<HTMLButtonElement>('button[aria-label^="Followers"]')?.click());
+
+  act(() =>
+    [...document.querySelectorAll<HTMLElement>('[role="option"]')]
+      .find((row) => row.textContent?.includes("Manuel Ruiz"))
+      ?.click(),
+  );
+  assert.equal(document.querySelectorAll('button[aria-expanded="true"]').length, 1, "still open");
+
+  act(() =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="menuitemcheckbox"], [role="menuitem"], [role="switch"]',
+      ),
+    ]
+      .find((row) => row.textContent?.includes("Let agents here use my machines"))
+      ?.click(),
+  );
+  assert.deepEqual(turned, [true]);
+  assert.equal(document.querySelectorAll('button[aria-expanded="true"]').length, 1, "still open");
+});

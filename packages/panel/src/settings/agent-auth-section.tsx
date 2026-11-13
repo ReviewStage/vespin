@@ -28,9 +28,9 @@ import type { PortActPayload } from "@repo/host/contract";
 import { SETTINGS_SECTION } from "@repo/settings/settings-views";
 import {
   ANNOUNCE,
+  BUTTON_SIZE,
   BUTTON_VARIANT,
   Button,
-  ButtonLink,
   CONFIRM_LOSS,
   COPY_FIELD_PROMPT,
   COPY_FIELD_WIDTH,
@@ -59,6 +59,7 @@ import {
   SettingsLine,
   SettingsOrderedRows,
   SettingsRow,
+  SettingsRowAction,
   SettingsRowMark,
   SettingsRowMeter,
   type SettingsRowSkeletonLayout,
@@ -70,10 +71,12 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  Tooltip,
   type UsageMeterRow,
   useConfirmDialog,
   useMenu,
 } from "@repo/ui";
+import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { useAsyncAction } from "@repo/ui/use-async-action";
 import { type InlineRename, type RenameWrite, useInlineRename } from "@repo/ui/use-inline-rename";
@@ -90,7 +93,8 @@ import { HarnessMark } from "../harness-marks.js";
 import { providerKeysQuery, providerKeysRetryMutation } from "../live-reads.js";
 import { type PlanUsageMeters, planUsageMeters } from "../plan-usage.js";
 import { renameWrite } from "../rename-write.js";
-import { linkPressOf, useOpenLink } from "../tasks/use-open-link.js";
+import { ResetCreditCard, useResetCreditOffer } from "../reset-credit.js";
+import { useOpenLink } from "../tasks/use-open-link.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { ChatGptDeviceLogin } from "./chatgpt-device-login.js";
@@ -119,8 +123,10 @@ import { ReadFailed } from "./marks.js";
  * token, and Disconnect, the fix its state asks for standing beside it:
  * Replace token for a Claude token Anthropic refused, Reconnect for a
  * Codex plan whose sign-in expired (Sign in again for one whose plan has no
- * Codex, since another account mends it), and Manage usage, which opens
- * ChatGPT's usage settings, for one at its limit. A key is named by the name the
+ * Codex, since another account mends it). A ChatGPT plan's ⋯ also holds
+ * Manage usage in ChatGPT, which opens ChatGPT's usage settings, and a plan
+ * holding rate-limit reset credits offers one under its meters
+ * (`reset-credit.tsx`). A key is named by the name the
  * account gave it, else API key and its hint, renamed in place as a Claude
  * plan is; says Ready, or what is wrong with it; and ends in a ⋯ holding
  * Rename, Move up and down, Replace key, and Remove key. With neither a plan nor a key, no agent
@@ -239,7 +245,8 @@ const WORDS = {
   MOVE_DOWN: "Move down",
   RECONNECT: VERB.RECONNECT,
   SIGN_IN_AGAIN: "Sign in again",
-  MANAGE_USAGE: "Manage usage",
+  MANAGE_USAGE: "Manage usage in ChatGPT",
+  USING_RESET: "Using reset",
   API_KEY: "API key",
   CANCEL: "Cancel",
   TOKEN_EXAMPLE: "sk-ant-oat01-…",
@@ -247,8 +254,8 @@ const WORDS = {
   CHECKING_KEY: "Checking the key",
   DISCONNECT: "Disconnect",
   DISCONNECTING: "Disconnecting",
-  REMOVE_KEY: "Remove key",
-  REMOVING: "Removing",
+  DELETE_KEY: "Delete key",
+  DELETING: "Deleting",
   REPLACE_KEY: "Replace key",
   REPLACE_TOKEN: "Replace token",
   RUN_SETUP_TOKEN: "Run this in a terminal",
@@ -268,7 +275,7 @@ const WORDS = {
   REVOCATION_UNCONFIRMED: `${PRODUCT_NAME} signed out of Codex, but OpenAI didn't confirm it ended. To end it there too, remove ${PRODUCT_NAME} in your ChatGPT settings.`,
   SAVE_TOKEN_FAILED: "Couldn't save the token. Try again.",
   SAVE_KEY_FAILED: "Couldn't save the key. Try again.",
-  REMOVE_KEY_FAILED: "Couldn't remove the key. Try again.",
+  DELETE_KEY_FAILED: "Couldn't delete the key. Try again.",
   CLAUDE_DISCONNECT_FAILED: "Couldn't disconnect your Claude plan. Try again.",
   CHATGPT_DISCONNECT_FAILED: "Couldn't disconnect your Codex plan. Try again.",
   REORDER_FAILED: "Couldn't reorder. Try again.",
@@ -292,7 +299,7 @@ const PLAN_DISCONNECT_REFUSED = {
 
 const KEY_REMOVE_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
-  reason: WORDS.REMOVE_KEY_FAILED,
+  reason: WORDS.DELETE_KEY_FAILED,
 };
 
 /** What disconnecting each harness's plan asks. */
@@ -362,7 +369,7 @@ function harnessReady(answer: ProviderKeysAnswer, provider: ProviderKeyProvider)
 function limitWords(plan: SubscriptionKeySummary, now: number): string {
   return plan.limitResetsAt === undefined
     ? WORDS.AT_LIMIT
-    : `${WORDS.AT_LIMIT} · ${WORDS.BACK_AT} ${dueText(plan.limitResetsAt, now)}`;
+    : `${WORDS.AT_LIMIT}, ${WORDS.BACK_AT} ${dueText(plan.limitResetsAt, now)}`;
 }
 
 /** What a Claude token that does not stand says. */
@@ -488,13 +495,13 @@ function keyRemovalQuestion(provider: ProviderKeyProvider): DialogQuestion {
   const name = harness.keyName;
 
   return {
-    title: `Remove your ${name} ${WORDS.API_KEY}?`,
+    title: `Delete your ${name} ${WORDS.API_KEY}?`,
     body:
       provider === PROVIDER_KEY_PROVIDER.OPENAI
         ? `Agents on ${name} models won't start without a ${harness.planName}. Calls and dictation will be off.`
         : `Agents on ${name} models won't start without a ${harness.planName}.`,
-    verb: WORDS.REMOVE_KEY,
-    running: WORDS.REMOVING,
+    verb: WORDS.DELETE_KEY,
+    running: WORDS.DELETING,
     loss: CONFIRM_LOSS.IRREVERSIBLE,
   };
 }
@@ -1067,20 +1074,7 @@ function PlanFix({
   plan: SubscriptionKeySummary;
   onOpen: () => void;
 }): React.JSX.Element | null {
-  const openLink = useOpenLink();
   const chatGpt = provider === PROVIDER_KEY_PROVIDER.OPENAI;
-
-  if (chatGpt && plan.status === PROVIDER_KEY_STATUS.LIMIT_REACHED) {
-    return (
-      <ButtonLink
-        href={CHATGPT_USAGE_URL}
-        variant={BUTTON_VARIANT.OUTLINE}
-        onClick={linkPressOf(openLink, CHATGPT_USAGE_URL)}
-      >
-        {WORDS.MANAGE_USAGE}
-      </ButtonLink>
-    );
-  }
 
   if (standing(plan)) return null;
 
@@ -1163,12 +1157,15 @@ function PlanRow({
   const removal = usePlanRemoval(provider, plan, onUnconfirmed);
   const door = useRef<HTMLButtonElement | null>(null);
   const line = planLine(provider, plan, Date.now());
+  const offer = useResetCreditOffer(claude ? undefined : plan);
   const rename = useInlineRename(plan.id, renames);
+  const openLink = useOpenLink();
 
   const own = [
     ...(claude ? [{ label: WORDS.RENAME, onSelect: () => renameIn(rename, onClose) }] : []),
     ...moveActions(at, count, onMove),
     ...(claude ? [{ label: WORDS.REPLACE_TOKEN, onSelect: () => onOpen(STEPS.REPLACE) }] : []),
+    ...(claude ? [] : [{ label: WORDS.MANAGE_USAGE, onSelect: () => openLink(CHATGPT_USAGE_URL) }]),
   ];
 
   return (
@@ -1196,6 +1193,22 @@ function PlanRow({
               />
             ) : line.meter === undefined ? null : (
               <SettingsRowMeter value={line.meter.value} tone={line.meter.tone} />
+            )}
+            {offer === undefined ? null : (
+              <SettingsRowAction>
+                <Tooltip label={offer.words} card={<ResetCreditCard plan={plan} />}>
+                  <Button
+                    variant={BUTTON_VARIANT.OUTLINE}
+                    size={BUTTON_SIZE.COMPACT}
+                    busy={offer.busy}
+                    busyLabel={WORDS.USING_RESET}
+                    label={`${offer.words} on ${name}`}
+                    onClick={offer.use}
+                  >
+                    {offer.words}
+                  </Button>
+                </Tooltip>
+              </SettingsRowAction>
             )}
           </>
         }
@@ -1232,6 +1245,7 @@ function PlanRow({
         }
       </SettingsRow>
       <RemovalQuestion confirm={removal} question={PLAN_DISCONNECT[provider]} />
+      {offer?.dialog}
     </>
   );
 }
@@ -1314,7 +1328,14 @@ function KeyRow({
                 ...moveActions(at, count, onMove),
                 { label: WORDS.REPLACE_KEY, onSelect: () => onOpen(STEPS.REPLACE) },
               ],
-              [{ label: WORDS.REMOVE_KEY, danger: true, onSelect: removal.ask }],
+              [
+                {
+                  label: WORDS.DELETE_KEY,
+                  icon: <GLYPH.DELETE />,
+                  danger: true,
+                  onSelect: removal.ask,
+                },
+              ],
             ]}
           />
         )}

@@ -18,6 +18,7 @@ import {
   childTaskCounts,
   type DrawnTaskRow,
   drawnTaskRows,
+  followingTasks,
   homedTaskRows,
   NO_REPOSITORY,
   type RepositoryGroup,
@@ -43,8 +44,10 @@ import {
   sectionOfTask,
   unplaceAllWrites,
 } from "@repo/features/task-sections-model";
+import { FOLLOWING_HEAD } from "@repo/features/task-tree-model";
 import type { TaskAgentPin, TaskSummary } from "@repo/features/task-wire";
 import { repositoryPageUrl, TASK_MARK } from "@repo/features/tasks-model";
+import { EXPERIMENT } from "@repo/settings";
 import type { UpdateControl } from "@repo/settings/settings-controls";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -91,8 +94,6 @@ import {
   Shortcut,
   SidebarPlaces,
   SidebarRule,
-  Skeleton,
-  SkeletonRegion,
   STATUS_TONE,
   TEXT_ELEMENT,
   TEXT_VARIANT,
@@ -165,6 +166,7 @@ import { useReadMark, useUnreadTasks } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
+import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { runningRuns } from "./automation-runs-tab.js";
 import { useFailedRunsMark } from "./failed-runs.js";
@@ -193,10 +195,12 @@ import { SidebarInboxRow } from "./sidebar-inbox-row.js";
 import { SidebarPinnedTab } from "./sidebar-pinned-tab.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import {
+  LIST_SKELETON,
   NEW_SECTION,
   PINNED_DROP_ZONE,
   SidebarSections,
   TASKS_DROP_ZONE,
+  TaskRowsSkeleton,
   useSectionDialogs,
   useSectionEdits,
 } from "./sidebar-sections.js";
@@ -221,9 +225,6 @@ const WORK_RESERVE = 360;
 
 /** What the Automations row's count counts, as a reader hears it after the figure. */
 const RUNNING_NOUN = "running";
-
-/** The widths of the tasks' names while the list is first read, uneven as names are. */
-const LIST_SKELETON = ["72%", "54%", "64%", "46%"] as const;
 
 /**
  * The edge of the window's left column, the tasks' sidebar or Settings' page
@@ -1081,6 +1082,79 @@ function PinnedSection({
   );
 }
 
+/**
+ * The Following group, under Pinned and above the Tasks head: the tasks the
+ * reader follows that no other list holds (`followingTasks`), a teammate's
+ * they keep up with, newest active first, each naming its repository as a
+ * row in one run does, since the group gathers repositories. It stands only
+ * while it holds a task, so a task followed lands in it at once and one
+ * unfollowed leaves it, as the live list moves. Its head folds it as
+ * Pinned's does, kept across launches, the open task still standing under
+ * the fold, and offers Mark all as read while a task in it is unread. It is
+ * no drop zone, since letting a row go in it would follow nothing, but a
+ * row of it is carried into Pinned or a section as any row is.
+ */
+function FollowingSection({
+  tasks,
+  folds,
+  repositoryOf,
+  context,
+}: {
+  tasks: readonly TaskSummary[];
+  folds: FoldedGroups;
+  repositoryOf: (task: TaskSummary) => React.ReactNode;
+  context: RowContext;
+}): React.JSX.Element {
+  const folded = folds.followingFolded;
+  const standing = tasks.filter(context.currentTask);
+  const menu = useMenu(context.tasks.shown && context.inSight);
+  const ellipsis = useRef<HTMLButtonElement | null>(null);
+  const markRead = useReadMark();
+  const actionGroups = markAllReadGroups(tasks, context, markRead);
+
+  return (
+    <nav className="sidebar-group" aria-label={FOLLOWING_HEAD} {...motionKey(FOLLOWING_KEY)}>
+      <GroupHeader
+        {...sidebarHead({
+          folded,
+          onToggle: folds.toggleFollowing,
+          count: tasks.length,
+          noun: TASK_NOUN,
+        })}
+        label={FOLLOWING_HEAD}
+        menuOpen={menu.open !== undefined}
+        contextMenu={actionGroups.length === 0 ? undefined : menu.contextMenu(ellipsis)}
+        actions={
+          actionGroups.length === 0 ? null : (
+            <MoreButton
+              ref={ellipsis}
+              thing={FOLLOWING_HEAD}
+              size={BUTTON_SIZE.COMPACT}
+              {...menu.trigger()}
+            />
+          )
+        }
+        standing={
+          standing.length === 0 ? undefined : (
+            <TaskRows tasks={standing} context={context} repository={repositoryOf} />
+          )
+        }
+      >
+        <TaskRows tasks={tasks} context={context} repository={repositoryOf} />
+      </GroupHeader>
+      {menu.drawn === undefined ? null : (
+        <ActionMenu
+          label={`${FOLLOWING_HEAD} actions`}
+          replayUnmasked
+          menu={menu.drawn}
+          groups={actionGroups}
+          onClose={menu.close}
+        />
+      )}
+    </nav>
+  );
+}
+
 /** Mark all as read over a group's unread tasks, in one group of its own; none where every task in it is read. */
 function markAllReadGroups(
   tasks: readonly TaskSummary[],
@@ -1163,11 +1237,15 @@ const PIN_NOUN: CountNoun = { one: "pin", many: "pins" };
 /** Pinned's key, by which it leaves the column once it stands for nothing. */
 const PINNED_KEY = "pinned";
 
-/** The Tasks head's key, by which it glides as Pinned comes and goes above it. */
+/** Following's key, by which it leaves the column once it holds no task. */
+const FOLLOWING_KEY = "following";
+
+/** The Tasks head's key, by which it glides as Pinned and Following come and go above it. */
 const TASKS_HEAD_KEY = "tasks-head";
 
 /** Pinned listed, or not, for `LeavingGroups`: constants, so a render that changes neither lists nothing new. */
 const PINNED_LISTED: readonly string[] = [PINNED_KEY];
+const FOLLOWING_LISTED: readonly string[] = [FOLLOWING_KEY];
 const NOTHING_LISTED: readonly string[] = [];
 
 /**
@@ -1483,26 +1561,6 @@ function TaskGroups({
   }
 }
 
-/**
- * The tasks while the list is first read: a task row's room and its name's
- * type for each block, one line as a row's name is, so the rows land where
- * the blocks stood. Nothing stands for the repository headers, whose number
- * nobody knows yet.
- */
-function ListSkeleton(): React.JSX.Element {
-  return (
-    <SkeletonRegion label="Reading your tasks…">
-      <div className="sidebar-skeleton">
-        {LIST_SKELETON.map((width) => (
-          <div key={width} className="sidebar-skeleton-row">
-            <Skeleton width={width} />
-          </div>
-        ))}
-      </div>
-    </SkeletonRegion>
-  );
-}
-
 /** What the sidebar is drawn with while it floats, or could. */
 interface FloatingSidebar extends HoverPane {
   /** Whether the sidebar is on screen: pinned, or floating over the work. */
@@ -1749,7 +1807,8 @@ function useFirstUsableSpan(tasks: TasksControl): void {
  * reaches a row nobody can see, until it floats open over the work
  * (`sidebar-collapse.ts`). A floating sidebar is put away by a choice in it,
  * by Escape, by a press outside, or once the pointer leaves a peek, a press
- * in it or not, though not for a menu it raised (`hover-pane.ts`). Opened
+ * in it or not, though not for a menu it raised, nor while a popup raised
+ * from it, as Resources' card, stands open (`hover-pane.ts`). Opened
  * from away, it takes the keyboard at the row it marks, else at Search,
  * holds it there against Tab, and Escape gives the keyboard back where it
  * was. Floating, it has no edge to drag, since only a pinned sidebar is
@@ -1904,7 +1963,16 @@ function SidebarColumn({
   // Only a workspace somebody shares has people to filter by, so one nobody shares lists every task.
   const { memberCount } = tasks.workspace ?? {};
   const shared = memberCount === undefined ? (reader.members?.length ?? 0) > 1 : memberCount > 1;
-  const assignedTo: AssignedTo = shared ? taskView.view.assignedTo : { kind: ASSIGNED_TO.ANYONE };
+  // Following stands while the workspace has it on; a list kept narrowed to the tasks followed reads as the reader's own while it is off.
+  const followingOn = useWorkspaceExperiment(tasks.workspace?.id, EXPERIMENT.FOLLOWING);
+  const kept = taskView.view.assignedTo;
+
+  const assignedTo: AssignedTo = !shared
+    ? { kind: ASSIGNED_TO.ANYONE }
+    : kept.kind === ASSIGNED_TO.FOLLOWING && !followingOn
+      ? { kind: ASSIGNED_TO.ME }
+      : kept;
+
   useTaskViewCommands({
     offered: tasks.signedIn && tasks.workspace !== undefined,
     control: taskView,
@@ -2134,15 +2202,26 @@ function SidebarColumn({
   // A child task stands under its parent, wherever a list draws it, unless pinned or put in a section of its own, and nowhere where none does (`homedTaskRows`).
   const pinnedOwn = pinnedHeld(pinnedSection);
 
+  // The tasks the reader follows that no list above holds stand under Following, a task drawn in one place (`followingTasks`).
+  const followed = followingOn
+    ? followingTasks(unpinnedTasks, statusTasks, taskView.view, tasks.me)
+    : [];
+
   const homed = homedTaskRows(
-    [pinnedOwn, ...shownSections.map((drawn) => drawn.tasks), ...taskSectionLists(sections)],
+    [
+      pinnedOwn,
+      ...shownSections.map((drawn) => drawn.tasks),
+      followed,
+      ...taskSectionLists(sections),
+    ],
     everyTask,
     1 + shownSections.length,
   );
 
   const pinnedAdopted = (homed[0] ?? []).slice(pinnedOwn.length);
   const homedSections = shownSections.map((drawn, at) => homedSection(drawn, homed[at + 1] ?? []));
-  const homedTasks = withTaskLists(sections, homed.slice(shownSections.length + 1));
+  const homedFollowing = homed[shownSections.length + 1] ?? [];
+  const homedTasks = withTaskLists(sections, homed.slice(shownSections.length + 2));
 
   const pinnedDrawnRows = pinnedDrawn(
     pinnedSection,
@@ -2159,13 +2238,14 @@ function SidebarColumn({
       [
         ...pinnedSection.map((pin) => pin.task),
         ...pinnedAdopted,
+        ...homedFollowing,
         ...homedSections.flatMap((drawn) => drawn.tasks),
         ...taskSectionLists(homedTasks).flat(),
       ].map((task) => task.id),
     ),
   );
 
-  // The rows as the list draws them: the pinned, then each group not folded
+  // The rows as the list draws them: the pinned, the followed, then each group not folded
   // away, the open row standing in its place even under a fold, so walking
   // the list still moves from it.
   const pinnedWalked = pinnedTaskRows(pinnedDrawnRows);
@@ -2181,8 +2261,16 @@ function SidebarColumn({
 
   const pinnedShownDrawn = folds.pinnedFolded ? pinnedWalked.filter(currentTask) : pinnedWalked;
 
+  const followingDrawn = nestedRows(
+    folds.followingFolded ? homedFollowing.filter(currentTask) : homedFollowing,
+    folds,
+    currentTask,
+    everyTask,
+  );
+
   const drawn = [
     ...pinnedShownDrawn,
+    ...followingDrawn,
     ...sectionsDrawn,
     ...drawnTasks(homedTasks, folds, currentTask, everyTask),
   ];
@@ -2374,6 +2462,24 @@ function SidebarColumn({
                         />
                       )}
                     />
+                    {/* Following stands while it holds a task, and leaves after its exit once it holds none. */}
+                    <LeavingGroups
+                      groups={
+                        tasks.signedIn && homedFollowing.length > 0
+                          ? FOLLOWING_LISTED
+                          : NOTHING_LISTED
+                      }
+                      keyOf={(key) => key}
+                      group={(key) => (
+                        <FollowingSection
+                          key={key}
+                          tasks={homedFollowing}
+                          folds={folds}
+                          repositoryOf={repositoryOf}
+                          context={context}
+                        />
+                      )}
+                    />
                     {/* The Tasks head heads what its view filters, the sections and the list, Pinned standing above it unfiltered; a row let go on it leaves its section, as one let go on the list does. */}
                     {tasks.signedIn ? (
                       <div
@@ -2407,6 +2513,7 @@ function SidebarColumn({
                                 shown={tasks.shown && overlay.inSight}
                                 control={taskView}
                                 shared={shared}
+                                following={followingOn}
                                 filtered={shared && assignedTo.kind !== mine.kind}
                               />
                             </>
@@ -2490,7 +2597,7 @@ function SidebarColumn({
                       {/* The list is empty before its first read lands, so that it
               holds none says nothing until the service has answered. */}
                       {tasks.signedIn && unlisted && !tasks.listRead && !tasks.listFailed ? (
-                        <ListSkeleton />
+                        <TaskRowsSkeleton widths={LIST_SKELETON} />
                       ) : null}
                       {tasks.signedIn && unlisted && tasks.listRead && !tasks.listFailed ? (
                         <NoteLine look={NOTE_LINE_LOOK.ROWS}>No tasks yet.</NoteLine>

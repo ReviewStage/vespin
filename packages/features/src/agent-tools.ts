@@ -25,6 +25,8 @@ export const AGENT_TOOL = {
   // One agent's message to another of its workspace, shown in the two agents' transcripts alone.
   MESSAGE_AGENT: AGENT_MESSAGE_TOOL,
   START_AGENT: "start_agent",
+  // A button the agent puts in its reply, which starts a new agent or sends to a running one once a member presses it.
+  ADD_SUGGESTION: "add_suggestion",
   STOP_AGENT: "stop_agent",
   UPDATE_AGENT: "update_agent",
   LIST_TASKS: "list_tasks",
@@ -59,6 +61,8 @@ export const AGENT_TOOL = {
   // The ports a server listens on in a coding agent's own cloud sandbox, and the one it shares by link.
   LIST_PORTS: "list_ports",
   SHARE_PORT: "share_port",
+  // One app on the developer's own Mac, seen and used in the background, every role's.
+  COMPUTER: "computer",
   // The retired runtime's shell and file tools and the code extension's, started in a coding agent's checkout.
   BASH: "bash",
   READ_FILE: "read_file",

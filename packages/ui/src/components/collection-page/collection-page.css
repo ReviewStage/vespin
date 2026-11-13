@@ -19,7 +19,7 @@
   }
 
   [data-ui-profile="web"] .ui-collection-page {
-    --ui-collection-page-width: 1040px;
+    --ui-collection-page-width: var(--ui-wide-measure);
   }
 
   /* Under 480px of room a desktop page gives back half its inset. */
@@ -71,7 +71,7 @@
 
   /* The rows of blocks a read in progress stands, where the caller hands no
      skeleton: a skeleton's elements wear only classes naming themselves a
-     skeleton's (`packages/ui/README.md`'s Skeletons), so they are laid
+     skeleton's (`vespin/skeleton-through-components`), so they are laid
      out here. */
   .ui-collection-page-skeleton {
     display: flex;

@@ -46,6 +46,18 @@ const FAVORITE_FAILED = "The favorite could not be saved. Try again.";
 /** What every admin read asks of Query beside its key and its door. */
 const ADMIN_READ_OPTIONS = { retry: false } as const;
 
+/**
+ * The catalog's read, which the Limits, Tools, and Prompts screens share: the
+ * deploy's own code, the same for every scope and window, so one key holds it.
+ */
+export function adminCatalogQuery(reads: AdminReads) {
+  return queryOptions({
+    queryKey: [QUERY_ROOT.ADMIN, ADMIN_READ.CATALOG],
+    queryFn: ({ signal }) => reads.catalog(signal),
+    ...ADMIN_READ_OPTIONS,
+  });
+}
+
 /** The overview's read. */
 export function adminMetricsQuery(reads: AdminReads, query: AdminWindowedQuery) {
   return queryOptions({
@@ -71,6 +83,39 @@ export function adminReliabilityQuery(reads: AdminReads, query: AdminWindowedQue
   return queryOptions({
     queryKey: [QUERY_ROOT.ADMIN, ADMIN_READ.RELIABILITY, query.scope, query.window],
     queryFn: ({ signal }) => reads.reliability(query, signal),
+    placeholderData: keepPreviousData,
+    ...ADMIN_READ_OPTIONS,
+  });
+}
+
+/**
+ * The Agents page's read: the Cost and Reliability answers asked together,
+ * since the page joins them by harness and draws nothing until both are in;
+ * its key names both reads, apart from either page's own, and it keeps
+ * whether the database answered Reliability's probe.
+ */
+export function adminAgentsQuery(reads: AdminReads, query: AdminWindowedQuery) {
+  return queryOptions({
+    queryKey: [
+      QUERY_ROOT.ADMIN,
+      ADMIN_READ.COST,
+      ADMIN_READ.RELIABILITY,
+      query.scope,
+      query.window,
+    ],
+    queryFn: async ({ signal }) => {
+      const [cost, reliability] = await Promise.all([
+        reads.cost(query, signal),
+        reads.reliability(query, signal),
+      ]);
+
+      // Note that we keep the database probe's verdict, because Reliability answers an empty source when it fails, which would otherwise read as no runs.
+      return {
+        cost,
+        harnesses: reliability.agentHarnesses,
+        databaseReachable: reliability.systemHealth.database.reachable,
+      };
+    },
     placeholderData: keepPreviousData,
     ...ADMIN_READ_OPTIONS,
   });

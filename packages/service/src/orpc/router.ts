@@ -118,6 +118,10 @@ import {
   taskFilesProcedures,
 } from "../tasks/task-files-procedures.js";
 import {
+  type TaskFollowersProcedureSeams,
+  taskFollowersProcedures,
+} from "../tasks/task-followers-procedures.js";
+import {
   type TaskSectionsProcedureSeams,
   taskSectionsProcedures,
 } from "../tasks/task-sections-procedures.js";
@@ -169,6 +173,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   RepositoryPullRequestProcedureSeams &
   SupportAccessProcedureSeams &
   TaskFilesProcedureSeams &
+  TaskFollowersProcedureSeams &
   TaskSectionsProcedureSeams &
   TasksProcedureSeams &
   WorkspaceEnvironmentProcedureSeams &
@@ -217,6 +222,7 @@ export function hostedRouter(seams: HostedRouterSeams) {
     repositoryPins: repositoryPinsProcedures(seams),
     supportAccess: supportAccessProcedures(seams),
     taskFiles: taskFilesProcedures(seams),
+    taskFollowers: taskFollowersProcedures(seams),
     taskSections: taskSectionsProcedures(seams),
     workspaceEnvironment: workspaceEnvironmentProcedures(seams),
     workspaceSandboxSetup: workspaceSandboxSetupProcedures(seams),

@@ -1,4 +1,9 @@
 import { subTaskCount, subTasksOf, taskFinished } from "@repo/features/task-list-model";
+import {
+  CHANGE_RELATION,
+  REMOVE_RELATION,
+  TASK_RELATION_ORDER,
+} from "@repo/features/task-relation-model";
 import { TASK_RELATION_WORDS } from "@repo/features/task-standing-words";
 import {
   TASK_RELATION_KIND,
@@ -20,14 +25,13 @@ import {
   ProgressCount,
   Tooltip,
 } from "@repo/ui";
-import { GLYPH, LinkIcon, PlusIcon } from "@repo/ui/icons";
+import { LinkIcon, PlusIcon } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
 import type { DescriptionRoom } from "../tasks/description-body.js";
 import { RelationKindPill } from "../tasks/relation-kind-pill.js";
 import {
-  TASK_RELATION_ORDER,
   type TaskRelationDoor,
   TaskRelationIcon,
   TaskRelationMenu,
@@ -96,10 +100,6 @@ const ADDING_LIST = "New sub-tasks";
 /** What the Task relations group's count counts, said to a reader beside the figure. */
 const RELATIONS_NOUN = { one: "task relation", many: "task relations" } as const;
 
-/** What a row's menu and a pill's menu name the relation's change and its taking away. */
-const CHANGE_RELATION = "Change relation";
-const REMOVE_RELATION = "Remove relation";
-
 /** What a related task the list does not hold yet is called on its row. */
 const UNLISTED_TASK_NAME = "Task";
 
@@ -167,7 +167,7 @@ function relationMenu(kind: TaskRelationKind, doors: RelationDoors): readonly Me
     if (picked !== undefined) doors.onChange(picked);
   });
 
-  return [[change, { label: REMOVE_RELATION, icon: <GLYPH.CLOSE />, onSelect: doors.onRemove }]];
+  return [[change, { label: REMOVE_RELATION, onSelect: doors.onRemove }]];
 }
 
 /**

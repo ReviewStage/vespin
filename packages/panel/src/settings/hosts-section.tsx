@@ -19,7 +19,6 @@ import {
   SIGNED_OUT_WORDS,
 } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
-import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
   ANNOUNCE,
   BUTTON_VARIANT,
@@ -55,7 +54,6 @@ import {
   useConfirmDialog,
   useSecond,
 } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -73,6 +71,7 @@ import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 
 /**
  * hosts-section.tsx -- Settings › Hosts: the member's own machines that run their local agents, Linux servers and Macs alike, and Add a host, which shows the install command and names each host it adds as it joins.
@@ -127,11 +126,6 @@ import { MenuRow } from "./menu-row.js";
  * (`host-connect-dialog.tsx`), and once Connect makes the host the list
  * carries it.
  */
-
-const SECTION_TITLE = {
-  HOSTS: MACHINES_WORDS.TITLE,
-  ADD: "Add a machine",
-} as const;
 
 const WORDS = {
   NONE: MACHINES_WORDS.NONE,
@@ -321,7 +315,6 @@ function HostRow({
       actions={[
         {
           label: MACHINES_WORDS.REMOVE,
-          icon: <GLYPH.REMOVE />,
           danger: true,
           disabled: locked,
           onSelect: onRemove,
@@ -487,7 +480,7 @@ function AddHostSection({
   useAnnounce(ANNOUNCE.POLITE, joined === undefined ? "" : `${joined} ${WORDS.CONNECTED}`);
 
   return (
-    <SettingsSection title={SECTION_TITLE.ADD} anchor={SETTINGS_SEARCH_ROW.ADD_HOSTS}>
+    <SettingsSection {...settingsSectionHead(SECTION.ADD_HOSTS)}>
       <SettingsBlock>
         <OutsideSteps waiting={joined === undefined ? WORDS.WAITING : undefined}>
           <Step number={1} title={WORDS.INSTALL_LABEL} state={STEP_STATE.CURRENT}>
@@ -673,10 +666,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   const empty = others.length === 0 && thisMac === undefined;
 
   const list = (
-    <SettingsSection
-      title={SECTION_TITLE.HOSTS}
-      anchor={signedIn ? undefined : SETTINGS_SEARCH_ROW.ADD_HOSTS}
-    >
+    <SettingsSection {...settingsSectionHead(SECTION.HOSTS)}>
       {!signedIn ? (
         <SettingsLine>{SIGNED_OUT_WORDS}</SettingsLine>
       ) : loaded && empty ? (

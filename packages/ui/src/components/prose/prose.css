@@ -227,8 +227,8 @@
     display: block;
   }
 
-  /* A table, a note's and a transcript's alike, scrolls sideways rather than
-     widening its column; a column's
+  /* A table, a note's, a transcript's, and a site document's alike, scrolls
+     sideways rather than widening its column; a column's
      alignment arrives as each cell's own inline style, from the delimiter
      row. Its edges fade where it hides columns past them, as the tab strip
      does, so a column cut at the edge reads as more to scroll to rather than
@@ -237,7 +237,7 @@
      inline timeline, which stands only while the table overflows. Note that
      the table is no `ScrollArea` itself, because a table's own box is what
      scrolls. */
-  .ui-markdown-flow table {
+  :is(.ui-markdown-flow, .ui-prose-document) table {
     display: block;
     max-width: 100%;
     border-collapse: collapse;
@@ -245,13 +245,16 @@
     overscroll-behavior-x: contain;
     font-variant-numeric: tabular-nums;
     text-align: left;
-    mask-image: linear-gradient(
-      to right,
-      transparent,
-      #000 var(--ui-scroll-area-fade-start),
-      #000 calc(100% - var(--ui-scroll-area-fade-end)),
-      transparent
-    );
+    scrollbar-width: thin;
+    mask:
+      linear-gradient(
+        to right,
+        transparent,
+        #000 var(--ui-scroll-area-fade-start),
+        #000 calc(100% - var(--ui-scroll-area-fade-end)),
+        transparent
+      ),
+      var(--ui-scrollbar-keep-horizontal);
     animation-name: ui-scroll-area-fade-start, ui-scroll-area-fade-end;
     animation-timing-function: linear;
     animation-fill-mode: both;
@@ -261,9 +264,10 @@
       calc(100% - var(--ui-scroll-fade)) 100%;
   }
 
-  .ui-markdown-flow :is(th, td) {
+  :is(.ui-markdown-flow, .ui-prose-document) :is(th, td) {
     padding: 0.3em 0.7em 0.3em 0;
-    border-bottom: 1px solid var(--ui-markdown-edge);
+    /* A site document sets no Markdown tints, so its rules are the page's own. */
+    border-bottom: 1px solid var(--ui-markdown-edge, var(--ui-color-border-strong));
     vertical-align: top;
   }
 
@@ -271,17 +275,17 @@
      rather than splitting its words into letters. Note that it outranks the
      note's `p`, which an editor's cell holds its words in, and a list item
      around the table, whose words break anywhere. */
-  .ui-markdown-flow :is(th, td),
-  .ui-markdown-flow :is(th, td) > p {
+  :is(.ui-markdown-flow, .ui-prose-document) :is(th, td),
+  :is(.ui-markdown-flow, .ui-prose-document) :is(th, td) > p {
     overflow-wrap: normal;
   }
 
-  .ui-markdown-flow th {
+  :is(.ui-markdown-flow, .ui-prose-document) th {
     opacity: 0.8;
     font-weight: var(--ui-type-emphasis-weight);
   }
 
-  .ui-markdown-flow tbody tr:last-child td {
+  :is(.ui-markdown-flow, .ui-prose-document) tbody tr:last-child td {
     border-bottom: 0;
   }
 

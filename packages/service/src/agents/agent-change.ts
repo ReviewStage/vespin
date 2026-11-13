@@ -7,8 +7,8 @@
  * moved are handed to a native runner that runs at once and counted for each
  * of the two that moved; a permission mode is read by the agent's next
  * launch, so it reaches the agent from its next turn. An archive stops a
- * turn still running first, as a Stop does, then stamps the agent, runs its
- * archive script and lets its device go once the archive stands, its cloud
+ * turn still running first, as a Stop does, then stamps the agent and lets
+ * its device go once the archive stands, its cloud
  * sandbox left to its release once unused (`session-sandboxes.ts`), and is
  * counted where it archived an agent standing unarchived; bringing one back
  * clears whichever archive stands.
@@ -169,9 +169,9 @@ export const changedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
  * The agent archived by who the stamp names, or brought back. An archived
  * agent works on unseen, so a turn still running is stopped before the
  * stamp, refused where none can be stopped yet (`stoppedForGood`); once the
- * archive stands its repository's archive script runs in its sandbox, which
- * is left standing until it goes unused long enough to be released
- * (`session-sandboxes.ts`), and a local agent is let go of on its device.
+ * archive stands its sandbox is left standing until it goes unused long
+ * enough to be released (`session-sandboxes.ts`), and a local agent is let
+ * go of on its device.
  * Nothing where the agent left the account's reach.
  */
 export const archivedAgent = /* @__PURE__ */ Effect.fnUntraced(function* (
@@ -219,7 +219,7 @@ export const doneTaskArchive = (archivedBy: StoredArchive, stopped: ReadonlySet<
       ),
   }) satisfies TaskDoneArchive<DatabaseServices>;
 
-/** The agents a task's Done or Canceled archived with it let go of once it commits, as an archive by hand lets one go: their archive scripts run and a local one discarded on its device. */
+/** The agents a task's Done or Canceled archived with it let go of once it commits, as an archive by hand lets one go: a local one discarded on its device. */
 export const archivedWithTaskLetGo = (
   reach: SandboxDeleteReach,
   archived: readonly TaskArchivedAgent[],

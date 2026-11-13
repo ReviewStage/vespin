@@ -1,5 +1,5 @@
 /**
- * turn-message.ts -- a coding agent's turn message composed, on either harness: the call's words, the time, and the task where it changed.
+ * turn-message.ts -- a coding agent's turn message composed, on either harness: the spoken turn's words, the time, and the task where it changed.
  *
  * What a turn opens with after the history is the same whichever native
  * harness answers the agent's conversation: the pieces are
@@ -49,6 +49,8 @@ import {
 export interface CoderTurn {
   readonly kind: SessionTurn | undefined;
   readonly turnId: string | undefined;
+  /** Whether the line the turn opens on is the developer's words spoken on a call. */
+  readonly spoken?: boolean;
   readonly words?: string;
 }
 
@@ -205,8 +207,9 @@ const memoriesOf = (agent: Agent, words: string) =>
 
 /**
  * The message the agent's turn opens with after the history, and what the
- * session has handed once it is: after a spoken turn, the line saying the
- * call's words no longer hold (`turnKindWords`); the developer's time on
+ * session has handed once it is: on a spoken turn, the words for a reply
+ * read aloud, and after one, the line saying they no longer hold
+ * (`turnKindWords`); the developer's time on
  * every turn; the task where `taskOf` hands it; and on the agent's first
  * turn alone, the memories its task's name, brief, and description and the
  * line's words find (`memoriesOf`). Note that a later turn is handed none,
@@ -227,11 +230,12 @@ export function coderTurnMessage(
     const memories = task?.opening === true ? yield* memoriesOf(agent, task.words) : undefined;
     const clock = { now, timeZone: admitted.timeZone };
     const standing = task?.text ?? timeWithLead(standingContext(undefined, clock));
-    const kind = turnKindWords(handed);
+    const kind = turnKindWords(handed, turn.spoken === true);
     const taskHanded = task === undefined ? handed.task : task.key;
 
     const next: TurnHanded = {
       ...(taskHanded === undefined ? undefined : { task: taskHanded }),
+      ...(turn.spoken === true ? { spoken: true } : undefined),
     };
 
     const parts = [kind, standing, memories].filter((part) => part !== undefined);

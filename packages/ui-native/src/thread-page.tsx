@@ -23,6 +23,7 @@ import {
   padding,
   scrollDismissesKeyboard,
 } from "@expo/ui/swift-ui/modifiers";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { sinceHeard, sinceText } from "@repo/features/time-format";
@@ -122,6 +123,8 @@ type ThreadPageProps = {
   readonly pictureSource?: ((written: string) => string | undefined) | undefined;
   /** The video a picture its words draw names, played in its place; every address names a picture where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** What GitHub holds of a pull request or issue a chip in its words names, by its page, which the chip says where it stands. */
+  readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
   /** What the times count from; now where none is given. */
   readonly now?: number | undefined;
   /** How a settled thread ended, in one word under its heading, as the panel's card says it: "Answered", "Resolved", "Withdrawn"; none while it stands open. */
@@ -250,6 +253,7 @@ function MessageView({
   onOpenLink,
   pictureSource,
   videoAt,
+  linkStanding,
   now,
 }: Omit<ThreadPageProps, "path" | "status" | "title" | "messages" | "ask" | "menu" | "foot"> & {
   readonly message: ThreadMessage;
@@ -308,6 +312,7 @@ function MessageView({
                 typed={message.typed}
                 pictureSource={pictureSource}
                 videoAt={videoAt}
+                linkStanding={linkStanding}
               />
             )}
             {message.media.map((media) => (

@@ -2,40 +2,10 @@
  * client-parity.ts -- whether the desktop, the web, and the iOS app each offer what an act does, and why where one does not, so a client's gap is chosen rather than left by accident.
  *
  * The three clients run the one host (`compose-host.ts`) and answer the one
- * act port, but each offers its member a different share of it: the desktop
- * all of it, the web all but what only an app on the Mac can carry, and the
- * iOS app what its screens have been built for: today its sign-in and
- * sign-out; the Inbox: its list, which the host reads from the account
- * gate opening with no act of the app's, its read marks, its reminders, its
- * retry, its pictures, a thread's answer, reply, and resolve, a notice's Got
- * it, and the Undo of either, a new thread started with a thread's agent,
- * and a thread its link names that the feed does not hold, found where it
- * stands and read from its task's own inbox; the Tasks
- * tab: its tree, read from the same list, a task's status set, pin, read
- * mark, rename, and delete, a task moved into a section from its menu or
- * dragged into one on an iPad, its repository changed, and a task's
- * description, pages, and comment threads followed, with a reply on a
- * thread; an agent's page: a message sent or
- * queued, its queue steered, its turn stopped, its model, effort, Fast,
- * permission mode, and MCP servers changed, the account's integrations
- * followed for those servers, its task's skills read for a `/`, a part of
- * its transcript carried cut read whole as its call opens, a cloud agent's
- * listening ports listed and shared by a public link, opened in Safari or
- * no longer shared, its repository's run actions run and stopped in its
- * sandbox, and the agent renamed, pinned, archived, and deleted; New agent
- * on a task and New task, a sub-task or a related task among it, or one
- * filed for later with no agent, with the models and the repositories they
- * pick among followed, and read again where they could not be;
- * Settings' Account page: Share usage data, support access, and the
- * account's deletion; Settings' Send feedback, its words and pictures
- * sent as the panel's form sends them; a workspace made from the switcher, which New
- * workspace names; Settings' Workspace page: the rename, the members read
- * and their roles changed or removed, the invitations read, sent, and
- * canceled, and Leave; its Agents page: the default model and the settings
- * it writes; and the phone's own push registration,
- * which no other client has a place for. Nothing else says which share, so
- * this table is what keeps the gaps known: every kind in `PORT_ACT_KIND` has
- * a row, and a kind added without one, or a row whose act is gone, does not
+ * act port, but each offers its member a different share of it; the rows
+ * below hold what each client offers. Nothing else says which share, so this
+ * table is what keeps the gaps known: every kind in `PORT_ACT_KIND` has a
+ * row, and a kind added without one, or a row whose act is gone, does not
  * build. A client offers an act where a member can do what the act does
  * there, though the client may reach it another way; a client that does not
  * names why. `NOT_YET` is the backlog, a row a client's next screen
@@ -85,6 +55,9 @@ const byDesign = (why: string): ClientGapCell => ({
 
 /** The web's gaps, each the reason a browser tab cannot carry the act or carries it its own way. */
 const WEB = {
+  COMPUTER_USE: byDesign(
+    "Agents use apps on the Mac through its own helper, which a tab cannot run",
+  ),
   CLI: byDesign(
     "A tab cannot run the install script; the MCP & CLI page shows the command to paste",
   ),
@@ -111,7 +84,12 @@ const WEB = {
 /** The iOS app's gaps, each named for the pull request or wave that would close it, or the reason none will. */
 const IOS = {
   ADMIN: byDesign("iOS v1 opens the admin dashboard in Safari"),
-  AGENTS: notYet("iOS's agent page and lists don't offer this yet"),
+  AGENT_TAB_DOT: byDesign(
+    "An agent's unseen dot marks the desktop's and the web's tab strip, which the phone has none of; a failed run reaches the phone as a push, and a running one as its Live Activity",
+  ),
+  RUN_ON_MAC_STANDING: byDesign(
+    "Whether run_on_mac is on for an agent is the desktop's Runs on card's to say, about the Mac its commands would run on",
+  ),
   AGENT_SESSION: notYet(
     "iOS's agent page leaves a rewind, a fresh session, and a restart of the agent's machine to the desktop and the web for now",
   ),
@@ -119,8 +97,8 @@ const IOS = {
   COPY_PICTURE: byDesign(
     "iOS copies a picture to the system's pasteboard itself (expo-clipboard), from its long press or the viewer's share button",
   ),
-  COPY_RICH: notYet(
-    "iOS draws no draft card yet; a message's long press copies its Markdown as plain words",
+  COPY_RICH: byDesign(
+    "iOS copies a draft card's message to the system's pasteboard itself, as rich text and plain words (expo-clipboard)",
   ),
   PASTEBOARD: byDesign("iOS copies to the system's pasteboard itself (expo-clipboard)"),
   SAVE_FILE: byDesign(
@@ -133,17 +111,8 @@ const IOS = {
   CHANGELOG: byDesign("iOS opens the changelog in its own Safari sheet (Settings › What's new)"),
   CONTACT_MAIL: byDesign("iOS writes the contact mail itself through openURL (Settings › Email)"),
   LINKS: byDesign("iOS opens a link through the system itself (openURL)"),
-  HOSTS_PAIRING: notYet(
-    "iOS's Machines page lists and removes machines; a pairing link opens in Safari",
-  ),
   HOSTS_STANDING: byDesign(
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
-  ),
-  SKILL_INSTALL: notYet(
-    "iOS's Skills page reads and deletes skills; Add skill's paste isn't built there yet",
-  ),
-  INTEGRATION_EXTRAS: notYet(
-    "iOS's Integrations page connects, cancels, and disconnects; a server's tools and an account's rename aren't built there yet",
   ),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
@@ -157,6 +126,24 @@ const IOS = {
   SIGN_IN_SHEET: byDesign("The system's authentication sheet cancels its own sign-in"),
   SOUNDS: byDesign("The phone plays only its push sound, never the account's chosen sounds"),
   TASKS: notYet("iOS v1's Tasks tab and task page don't offer this yet"),
+  ACTIVE_TASK: byDesign(
+    "iOS follows each open task's description by its id (TASKS_DOCUMENT_FOLLOW), so it has no one active task to select or leave",
+  ),
+  CODE_COLOR: byDesign(
+    "iOS's host colors no code (compose-mobile.ts answers plainCodeLines), so a fenced block draws plain in mono",
+  ),
+  DESCRIPTION_EDIT: byDesign(
+    "iOS reads a description and comments on it; editing it, and the pictures an edit adds, stay on the desktop and the web",
+  ),
+  PAGE_SOURCE: byDesign(
+    "iOS draws a page in its sealed view; the page tab's source view is the desktop's and the web's",
+  ),
+  REPOSITORY_FILES: byDesign(
+    "iOS opens a repository's files on GitHub, as it does the diff; it has no File tab",
+  ),
+  REPOSITORY_PINS: byDesign(
+    "iOS's Tasks lists sections, not repositories, so it has no repository list to pin in",
+  ),
   UPDATER: byDesign("The App Store updates the app"),
 } as const;
 
@@ -198,6 +185,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.PROVIDER_KEYS_SAVE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.PROVIDER_KEYS_REMOVE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.PROVIDER_KEYS_FOR_AGENTS]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.PROVIDER_KEYS_USE_RESET_CREDIT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SUBSCRIPTION_RENAME]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SUBSCRIPTIONS_REORDER]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.CHATGPT_DEVICE_START]: panel(IOS.SETTINGS),
@@ -243,13 +231,13 @@ export const CLIENT_PARITY = {
     byDesign("Runs agents on the Mac the app is on, which a tab is not"),
     byDesign("Runs agents on the Mac the app is on, which a phone is not"),
   ),
-  [PORT_ACT_KIND.HOSTS_PAIRING_READ]: panel(IOS.HOSTS_PAIRING),
-  [PORT_ACT_KIND.HOSTS_PAIRING_APPROVE]: panel(IOS.HOSTS_PAIRING),
-  [PORT_ACT_KIND.HOSTS_PAIRING_DENY]: panel(IOS.HOSTS_PAIRING),
-  [PORT_ACT_KIND.AGENTS_LIST]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.HOSTS_PAIRING_READ]: EVERYWHERE,
+  [PORT_ACT_KIND.HOSTS_PAIRING_APPROVE]: EVERYWHERE,
+  [PORT_ACT_KIND.HOSTS_PAIRING_DENY]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_LIST]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_WORKSPACE_LIST]: panel(IOS.AUTOMATIONS),
   [PORT_ACT_KIND.AGENTS_START]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_MESSAGES]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_MESSAGES]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_TRANSCRIPT_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PART]: EVERYWHERE,
@@ -266,6 +254,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_CLEAR]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_BOOT]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_WARM]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_REPLY_BUTTON]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_REPLY_BUTTON_PRESS]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORTS]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORT_SHARED]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORT_SHARE]: EVERYWHERE,
@@ -275,17 +265,17 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_ARCHIVE]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PIN]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_DELETE]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_SHOWN]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_SEEN]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_PAGE]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_ORIGIN_FOLLOW]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_ORIGIN_RETRY]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_SHOWN]: panel(IOS.AGENT_TAB_DOT),
+  [PORT_ACT_KIND.AGENTS_SEEN]: panel(IOS.AGENT_TAB_DOT),
+  [PORT_ACT_KIND.AGENTS_PAGE]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_ORIGIN_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_ORIGIN_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_PART_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_PART_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_CHANGES]: panel(IOS.DIFF),
   [PORT_ACT_KIND.AGENTS_TURN_CHANGES]: panel(IOS.DIFF),
-  [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW]: panel(IOS.AGENTS),
-  [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_RETRY]: panel(IOS.AGENTS),
+  [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_FOLLOW]: panel(IOS.RUN_ON_MAC_STANDING),
+  [PORT_ACT_KIND.AGENTS_WORKSPACE_TOOLS_RETRY]: panel(IOS.RUN_ON_MAC_STANDING),
   [PORT_ACT_KIND.AGENTS_GITHUB_IMAGE]: panel(IOS.DIFF),
   [PORT_ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: EVERYWHERE,
 
@@ -324,8 +314,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.INSTALLED_SKILLS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_READ]: EVERYWHERE,
-  [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: panel(IOS.SKILL_INSTALL),
-  [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: panel(IOS.SKILL_INSTALL),
+  [PORT_ACT_KIND.INSTALLED_SKILLS_PREVIEW]: EVERYWHERE,
+  [PORT_ACT_KIND.INSTALLED_SKILLS_INSTALL]: EVERYWHERE,
   [PORT_ACT_KIND.INSTALLED_SKILLS_REMOVE]: EVERYWHERE,
 
   [PORT_ACT_KIND.INTEGRATIONS_FOLLOW]: EVERYWHERE,
@@ -333,14 +323,16 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.INTEGRATIONS_CONNECT]: EVERYWHERE,
   [PORT_ACT_KIND.INTEGRATIONS_CANCEL]: EVERYWHERE,
   [PORT_ACT_KIND.INTEGRATIONS_DISCONNECT]: EVERYWHERE,
-  [PORT_ACT_KIND.INTEGRATIONS_TOOLS_FOLLOW]: panel(IOS.INTEGRATION_EXTRAS),
-  [PORT_ACT_KIND.INTEGRATIONS_TOOLS_RETRY]: panel(IOS.INTEGRATION_EXTRAS),
-  [PORT_ACT_KIND.INTEGRATIONS_RENAME]: panel(IOS.INTEGRATION_EXTRAS),
-  [PORT_ACT_KIND.MCP_CLIENTS_FOLLOW]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.MCP_CLIENTS_RETRY]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.MCP_CLIENTS_REVOKE]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.INTEGRATIONS_TOOLS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.INTEGRATIONS_TOOLS_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.INTEGRATIONS_RENAME]: EVERYWHERE,
+  [PORT_ACT_KIND.MCP_CLIENTS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.MCP_CLIENTS_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.MCP_CLIENTS_REVOKE]: EVERYWHERE,
 
   [PORT_ACT_KIND.MAC_COMMAND_ANSWER]: desktopOnly(WEB.MAC_COMMAND, IOS.MAC_COMMAND),
+  [PORT_ACT_KIND.COMPUTER_USE_STATUS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
+  [PORT_ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
 
   [PORT_ACT_KIND.MAC_PHOTO_TO_JPEG]: desktopOnly(WEB.MAC_PHOTO, IOS.DESKTOP_ONLY),
 
@@ -363,25 +355,29 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.SETTINGS_RESET]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.EXPERIMENT_SET]: panel(IOS.SETTINGS),
 
-  [PORT_ACT_KIND.TASKS_REFRESH]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_SELECT]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_CLOSE]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_OFFLINE_REFUSED_CLEAR]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_REFRESH]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_SELECT]: panel(IOS.ACTIVE_TASK),
+  [PORT_ACT_KIND.TASKS_CLOSE]: panel(IOS.ACTIVE_TASK),
+  [PORT_ACT_KIND.TASKS_OFFLINE_REFUSED_CLEAR]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_START]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_DELETE]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_RENAME]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_PIN]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_MARK_READ]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_PIN_REPOSITORY]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_PIN_REPOSITORY]: panel(IOS.REPOSITORY_PINS),
   [PORT_ACT_KIND.TASKS_WRITE_SECTION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REPOSITORIES_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REPOSITORIES_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_SET_REPOSITORY]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_MOVE]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_BLOCK]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_SET_PARENT]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_CHANGE_RELATION]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_EDIT]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_MOVE]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_BLOCK]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_SET_PARENT]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_CHANGE_RELATION]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_EDIT]: panel(IOS.DESCRIPTION_EDIT),
+  [PORT_ACT_KIND.TASKS_FOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_UNFOLLOW]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_ADD_FOLLOWER]: EVERYWHERE,
   [PORT_ACT_KIND.GITHUB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.WEB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.GITHUB_CONNECT]: panel(IOS.SETTINGS),
@@ -390,23 +386,19 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.ADMIN_FAVORITE]: panel(IOS.ADMIN),
   [PORT_ACT_KIND.GITHUB_DISCONNECT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.TASKS_SET_STANDING]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_FILE]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_TREE]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_FILE]: panel(IOS.REPOSITORY_FILES),
+  [PORT_ACT_KIND.TASKS_TREE]: panel(IOS.REPOSITORY_FILES),
   [PORT_ACT_KIND.TASKS_SKILLS]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_LINK_STANDING_FOLLOW]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_LINK_STANDING_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_LINK_PREVIEW]: panel(IOS.HOVER),
   [PORT_ACT_KIND.TASKS_BROWSER_TAB_OPEN]: panel(IOS.DESK_TOOLS),
   [PORT_ACT_KIND.TASKS_BROWSER_TABS_FOLLOW]: panel(IOS.DESK_TOOLS),
-  [PORT_ACT_KIND.TASKS_COLOR_CODE]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_FIND]: panel(
-    notYet(
-      "iOS opens a task link by its number from the tasks it holds; one outside them is Task not found",
-    ),
-  ),
+  [PORT_ACT_KIND.TASKS_COLOR_CODE]: panel(IOS.CODE_COLOR),
+  [PORT_ACT_KIND.TASKS_FIND]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REVISIONS]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REVISION]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_RESTORE]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_PAGE_SOURCE]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_PAGE_SOURCE]: panel(IOS.PAGE_SOURCE),
   [PORT_ACT_KIND.TASKS_PAGE_HTML]: {
     desktop: PANEL_PAGE_FRAME,
     web: PANEL_PAGE_FRAME,
@@ -414,14 +406,14 @@ export const CLIENT_PARITY = {
   },
   [PORT_ACT_KIND.TASKS_PAGES_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_DOCUMENT_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_DOCUMENT_RETRY]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_DOCUMENT_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_HISTORY_RETRY]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_PICTURE_READ]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_PICTURE_KEEP]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_PICTURE_READ]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_PICTURE_KEEP]: panel(IOS.DESCRIPTION_EDIT),
   [PORT_ACT_KIND.TASKS_COMMENTS_FOLLOW]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_COMMENTS_RETRY]: panel(IOS.TASKS),
-  [PORT_ACT_KIND.TASKS_COMMENT_START]: panel(IOS.TASKS),
+  [PORT_ACT_KIND.TASKS_COMMENTS_RETRY]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_COMMENT_START]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_COMMENT_ACT]: EVERYWHERE,
 
   [PORT_ACT_KIND.TERMINAL_LIST]: panel(IOS.DESK_TOOLS),
@@ -484,10 +476,10 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WORKSPACE_INVITATIONS_RETRY]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_MEMBER_REMOVE]: EVERYWHERE,
   [PORT_ACT_KIND.WORKSPACE_MEMBER_ROLE]: EVERYWHERE,
-  [PORT_ACT_KIND.WORKSPACE_TRANSFER]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_TRANSFER]: EVERYWHERE,
   [PORT_ACT_KIND.WORKSPACE_LEAVE]: EVERYWHERE,
   [PORT_ACT_KIND.WORKSPACE_DELETE]: panel(IOS.SETTINGS),
-  [PORT_ACT_KIND.WORKSPACE_PHOTO_SET]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_PHOTO_SET]: EVERYWHERE,
   [PORT_ACT_KIND.WORKSPACE_SLUG_SET]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_FOLLOW]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_TOKEN_REPOSITORIES_RETRY]: panel(IOS.SETTINGS),

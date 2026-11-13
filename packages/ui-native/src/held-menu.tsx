@@ -2,8 +2,10 @@
 
 import { Button, ContextMenu, Host, Image, Menu, RNHostView } from "@expo/ui/swift-ui";
 import { accessibilityIdentifier, accessibilityLabel } from "@expo/ui/swift-ui/modifiers";
+import type { DraftCopy } from "@repo/features/draft-text";
 import { createContext, type ReactElement, type ReactNode, useContext } from "react";
 import { StyleSheet } from "react-native";
+import { InlineHost } from "./inline-host.js";
 import {
   KEEP_ACT,
   KEEP_SYMBOL,
@@ -36,13 +38,15 @@ export interface HeldAct {
 /**
  * What the app does with what is held: copies a picture or a text file's
  * words, saves a picture or a recording to Photos, or shares any of them in
- * the system's share sheet; and copies a message's words. The app answers
- * them with the device's own pasteboard, Photos, and share sheet, and says
- * what did not go; nothing here reaches the device.
+ * the system's share sheet; copies a message's words; and copies a draft's
+ * body as rich text, its marks and links kept. The app answers them with
+ * the device's own pasteboard, Photos, and share sheet, and says what did
+ * not go; nothing here reaches the device.
  */
 export interface Keeping {
   readonly keep: (kept: Kept, act: KeepAct) => void;
   readonly copyWords: (words: string) => void;
+  readonly copyRich: (copy: DraftCopy) => void;
 }
 
 const KeepingDoor = createContext<Keeping | undefined>(undefined);
@@ -84,6 +88,11 @@ function useCopyWordsActs(words: string): readonly HeldAct[] {
       onPress: () => keeping.copyWords(words),
     },
   ];
+}
+
+/** What the app does with what is held, for a piece that copies on a press of its own, such as a draft's Copy; none where no app answers it. */
+export function useKeeping(): Keeping | undefined {
+  return useContext(KeepingDoor);
 }
 
 function HeldActButtons({ acts }: { readonly acts: readonly HeldAct[] }) {
@@ -132,11 +141,11 @@ export function HeldMenu({
   if (acts.length === 0) return children;
 
   return (
-    <Host matchContents={{ vertical: true }} style={styles.host}>
+    <InlineHost matchContents={{ vertical: true }} style={styles.host}>
       <HeldSwiftMenu acts={acts}>
         <RNHostView matchContents={{ vertical: true }}>{children}</RNHostView>
       </HeldSwiftMenu>
-    </Host>
+    </InlineHost>
   );
 }
 

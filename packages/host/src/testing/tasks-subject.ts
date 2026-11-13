@@ -3,6 +3,7 @@
  */
 import assert from "node:assert/strict";
 import {
+  type FollowersWritten,
   GITHUB_CONNECTION_CALL_FAILURE,
   type GitHubRepositoriesAnswer,
   type GitHubRepositoryIssueAnswer,
@@ -63,6 +64,7 @@ import {
 import {
   type BlockCallFailure,
   BROWSER_TAB_OPEN_FAILURE,
+  type FollowerCallFailure,
   type HeldDescriptionDocument,
   type ParentCallFailure,
   PICTURE_KEEP_FAILURE,
@@ -94,7 +96,7 @@ import {
   type GatewayMethod,
 } from "@repo/gateway";
 import { type EntityPool, entityPool } from "@repo/sync";
-import type { WireBoundaryInput, WireRecord, WireValue } from "@repo/wire";
+import type { TaskFollowerWire, WireBoundaryInput, WireRecord, WireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { noNetwork } from "@repo/wire/testing";
 import { Data, Deferred, Duration, Effect, FiberMap, Predicate, Result, type Scope } from "effect";
@@ -521,11 +523,31 @@ function listBySyncId(answer: ListAnswer, past: string | undefined, listAt: List
   };
 }
 
+/** The account a follower write of the fake service's reader names: the subject's default account. */
+const READER_ID = "user-dana";
+
 export function fakeService(tasks: Task[]): FakeService {
   let memberships: Workspace[] = [PERSONAL];
   /** What the task list's read keeps to answer by sync id. */
   const listAt: ListAt = new Map();
   let followMisses = false;
+
+  // A follower write on a task the service holds, answering its followers as they then stand.
+  const followersWrite = (
+    taskId: string,
+    change: (followers: readonly TaskFollowerWire[]) => readonly TaskFollowerWire[],
+  ) =>
+    Effect.sync((): TaskCallResult<FollowersWritten, FollowerCallFailure> => {
+      const found = service.tasks.find((candidate) => candidate.id === taskId);
+
+      if (found === undefined) return { ok: false, failure: TASK_CALL_FAILURE.NOT_FOUND };
+      const followers = change(found.followers ?? []);
+      service.tasks = service.tasks.map((candidate) =>
+        candidate.id === taskId ? { ...candidate, followers } : candidate,
+      );
+
+      return { ok: true, answer: { followers } };
+    });
 
   const live: FakeService["live"] = {
     workspaces: polledLive<"workspaces" | "installations" | "experiments">(
@@ -1347,6 +1369,25 @@ export function fakeService(tasks: Task[]): FakeService {
 
         return { ok: true, answer: { task: blocked } };
       }),
+    // The service keeps each task's followers as the store does: the reader is the subject's default account, followed last, its machines off.
+    follow: (taskId) =>
+      followersWrite(taskId, (followers) =>
+        followers.some((each) => each.userId === READER_ID)
+          ? followers
+          : [...followers, { userId: READER_ID, assignee: false, machines: false }],
+      ),
+    unfollow: (taskId) =>
+      followersWrite(taskId, (followers) => followers.filter((each) => each.userId !== READER_ID)),
+    setFollowerMachines: (taskId, machines) =>
+      followersWrite(taskId, (followers) =>
+        followers.map((each) => (each.userId === READER_ID ? { ...each, machines } : each)),
+      ),
+    addFollower: (taskId, userId) =>
+      followersWrite(taskId, (followers) =>
+        followers.some((each) => each.userId === userId)
+          ? followers
+          : [...followers, { userId, assignee: false, machines: false }],
+      ),
     // The service sets the task's parent, or clears it, as the store does, and answers the task whole.
     setParent: (taskId, { parentTaskId }) =>
       Effect.sync((): TaskCallResult<TaskWritten, ParentCallFailure> => {

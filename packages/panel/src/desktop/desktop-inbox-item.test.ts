@@ -99,6 +99,7 @@ import {
   openings,
   openOptions,
   pagerOf,
+  pickOnUndelivered,
   pressKey,
   pushedOf,
   READER,
@@ -121,6 +122,7 @@ import {
   THRESHOLD,
   threadItem,
   threadMessage,
+  undeliveredWords,
   wearsAgentTile,
   wordsOf,
   world,
@@ -1815,7 +1817,7 @@ test("a message written on a settled item's thread from its box goes as a messag
   assert.equal(board.scrollTop, 1_000, "the reader's own message takes the thread to its end");
 });
 
-test("a message refused says why under the box, which keeps its words, and leaves nothing on the thread", async () => {
+test("a message refused says why under the box and stands on the thread marked Not delivered, the box empty", async () => {
   const { page } = mount();
   await settle();
   act(() => rowNamed(page, "How is a failed email retried?").click());
@@ -1831,16 +1833,12 @@ test("a message refused says why under the box, which keeps its words, and leave
     pane.querySelector('.agent-composer [role="alert"]')?.textContent,
     "Only the member who started this agent can do this.",
   );
-  assert.equal(
-    threadOf(page).some(([, , , words]) => words === "Page on-call at night too."),
-    false,
-    "nothing lands on the thread",
-  );
-  assert.equal(composerEditor(pane).textContent, "Page on-call at night too.");
+  assert.deepEqual(undeliveredWords(page), ["Page on-call at night too."]);
+  assert.equal(composerEditor(pane).textContent, "", "the box holds none of it");
   assert.deepEqual(subjectOf(page), ["How is a failed email retried?"]);
 });
 
-test("a message refused as naming no agent says the agent is archived where it is, with Unarchive after it, which brings the agent back and lets the note go, the box keeping its words; one whose agent is gone says it no longer exists", async () => {
+test("a message refused as naming no agent says the agent is archived where it is, with Unarchive after it, which brings the agent back and lets the note go, the message standing Not delivered; one whose agent is gone says it no longer exists", async () => {
   world.listedAgents = [{ ...AGENT, status: AGENT_STATUS.COMPLETED, archivedAt: 4_000 }];
   const { page } = mount();
   await settle();
@@ -1879,7 +1877,7 @@ test("a message refused as naming no agent says the agent is archived where it i
   await settle();
   assert.deepEqual(unarchived, [{ agentId: AGENT.id, archived: false }]);
   assert.equal(note(), null, "the note is let go once the agent is back");
-  assert.equal(composerEditor(pane).textContent, "Page on-call at night too.");
+  assert.deepEqual(undeliveredWords(page), ["Page on-call at night too."]);
 
   act(() => world.root?.unmount());
   world.listedAgents = [];
@@ -1910,7 +1908,7 @@ test("an Unarchive that lands after another send was refused lets only the archi
   act(() => rowNamed(page, "How is a failed email retried?").click());
   await settle();
 
-  let refusal: typeof AGENT_CALL_FAILURE.NOT_FOUND | typeof AGENT_CALL_FAILURE.UNANSWERED =
+  let refusal: typeof AGENT_CALL_FAILURE.NOT_FOUND | typeof AGENT_CALL_FAILURE.NOT_PERMITTED =
     AGENT_CALL_FAILURE.NOT_FOUND;
 
   heldMessages(() => ({ failure: refusal }));
@@ -1947,7 +1945,8 @@ test("an Unarchive that lands after another send was refused lets only the archi
   ].find((button) => button.textContent === "Unarchive");
 
   act(() => (unarchive ?? assert.fail("Unarchive follows the note")).click());
-  refusal = AGENT_CALL_FAILURE.UNANSWERED;
+  refusal = AGENT_CALL_FAILURE.NOT_PERMITTED;
+  typeInComposer(pane, "Also page the lead.");
   send();
   await settle();
   const newer = note();
@@ -2459,7 +2458,7 @@ test("a thread draws every message, the agent's by its tile and name alone, no t
     [
       "controls",
       "line: Add a note",
-      "row: Add files and more, Runs on: Cloud, Off, Ports: Ports not forwarded, Opus 5.5 High, Dictate, Composer actions, Send",
+      "row: Add files and more, Runs on: Cloud, Off, Ports: Ports, Opus 5.5 High, Dictate, Composer actions, Send",
     ],
     "under them the note line on its own, and under it the agent box's row: +, where the agent runs, its model, the microphone, and Send",
   );
@@ -2639,7 +2638,7 @@ test("a teammate's notice is left open as it is opened, since acknowledging it s
   assert.deepEqual(messaged, []);
 });
 
-test("a reply leaves its box the moment it is sent, the box and the ask standing empty and open while it is out, so the next reply goes once it answers, in order; refused, its words and files come back into the box, which says why, those of every reply behind it after them, none of which goes", async () => {
+test("a reply leaves its box the moment it is sent, the box and the ask standing empty and open while it is out, so the next reply goes once it answers, in order; refused, it and every reply behind it, none of which goes, stand on the thread marked Not delivered, the box empty and saying why, and Retry sends one again under its own key while Edit takes another's words and files back into the box", async () => {
   const shown = threadItem([askingMessage(EXPIRY_ASK)]);
   const pane = await mountThread(shown);
   const page = pane.ownerDocument.body;
@@ -2720,17 +2719,29 @@ test("a reply leaves its box the moment it is sent, the box and the ask standing
     ["Does it matter for SSO teams?", "And for guests? [File: notes.md]"],
     "the reply behind the one refused never goes",
   );
-  assert.deepEqual(sendingMarks(page), [], "both leave the thread");
-  assert.equal(
-    composerWords(pane),
-    "And for guests? [File: notes.md] \nNever mind.",
-    "their words come back into the box, in order, a line each",
+  assert.deepEqual(sendingMarks(page), [], "neither says it is on its way");
+  assert.deepEqual(
+    undeliveredWords(page),
+    ["And for guests? file notes.md", "Never mind."],
+    "both stand on the thread, in order, marked Not delivered",
   );
-  assert.deepEqual(attachedNames(pane), ["notes.md"]);
+  assert.equal(composerWords(pane), "", "the box holds none of their words");
   assert.equal(
     pane.querySelector('.agent-composer [role="alert"]')?.textContent,
     "Only the member who started this agent can do this.",
   );
+
+  await pickOnUndelivered(page, "And for guests? file notes.md", "Retry");
+  assert.deepEqual(
+    sent.slice(2).map(({ text, clientKey }) => ({ text, clientKey })),
+    [{ text: "And for guests? [File: notes.md]", clientKey: sent[1]?.clientKey }],
+    "Retry sends it again under the key it went under",
+  );
+  assert.deepEqual(sendingMarks(page), ["Sending"]);
+
+  await pickOnUndelivered(page, "Never mind.", "Edit");
+  assert.equal(composerWords(pane), "Never mind.", "Edit takes its words back into the box");
+  assert.deepEqual(undeliveredWords(page), [], "and lets its line go");
 });
 
 test("a second reply in the same words as one on its way stays marked Sending once the first lands, until its own answer does", async () => {
@@ -2783,9 +2794,10 @@ test("a second reply in the same words as one on its way stays marked Sending on
   assert.equal(threadOf(page).filter(([, , , words]) => words === "Thanks.").length, 2);
 });
 
-test("an answer queued behind a note on the open question keeps its pick once the note is refused, back in the box beside the note's words, and never goes", async () => {
+test("an answer queued behind a note on the open question never goes once the note is refused, standing Not delivered after it, and Edit puts its pick back on the ask", async () => {
   const shown = threadItem([askingMessage(EXPIRY_ASK)]);
   const pane = await mountThread(shown);
+  const page = pane.ownerDocument.body;
   const sent: AgentInboxMessageParams[] = [];
   const answers: ((answer: AgentInboxMessagedView) => void)[] = [];
   const bridge = appBridge();
@@ -2825,8 +2837,49 @@ test("an answer queued behind a note on the open question keeps its pick once th
     ["Checking this."],
     "the answer never goes once the note is refused",
   );
-  assert.equal(composerEditor(pane).textContent, "Checking this.");
-  assert.deepEqual(checkedOptions(pane), ["7 days"], "its pick is back in the box");
+  assert.deepEqual(undeliveredWords(page), ["Checking this.", null], "both stand, in order");
+  assert.equal(composerEditor(pane).textContent, "");
+  assert.deepEqual(checkedOptions(pane), []);
+
+  await pickOnUndelivered(page, null, "Edit");
+  assert.deepEqual(checkedOptions(pane), ["7 days"], "its pick is back on the ask");
+});
+
+test("Edit on an answer that did not go puts no pick back once the agent asked again, though the new ask offers the same options", async () => {
+  const shown = threadItem([askingMessage(EXPIRY_ASK)]);
+  const pane = await mountThread(shown);
+  const page = pane.ownerDocument.body;
+  heldMessages(() => ({ failure: AGENT_CALL_FAILURE.NOT_PERMITTED }));
+  act(() => openOptions(pane)[1]?.click());
+  act(() =>
+    pane.querySelector<HTMLButtonElement>('form.inbox-answer button[type="submit"]')?.click(),
+  );
+  await settle();
+  assert.deepEqual(undeliveredWords(page), [null]);
+
+  // The agent withdraws its ask and asks again, offering the same options.
+  const askedAgain = threadItem(
+    [
+      askingMessage(EXPIRY_ASK, { status: INBOX_ASK_STATUS.WITHDRAWN }),
+      askingMessage(EXPIRY_ASK, { id: "e1b2c3d4-0000-4000-8000-000000000040", createdAt: 2_000 }),
+    ],
+    { revision: shown.revision + 1 },
+  );
+
+  await act(async () =>
+    world.main.push(
+      { kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id },
+      { items: [askedAgain, RETRY] },
+    ),
+  );
+  await settle();
+
+  await pickOnUndelivered(page, null, "Edit");
+  assert.deepEqual(
+    checkedOptions(itemPane(page)),
+    [],
+    "the new ask holds no pick it was never given",
+  );
 });
 
 test("Got it pressed while a reply that settles the notice is out goes nowhere once the reply lands, the box released and saying nothing", async () => {
@@ -2897,7 +2950,7 @@ function sendingMarks(page: HTMLElement): (string | undefined)[] {
   );
 }
 
-test("a plain reply stands at the thread's end marked Sending the moment it is sent, and once a read or its answer holds it, the message stands in its place once; refused, it leaves the thread as its words go back into the box, which says why", async () => {
+test("a plain reply stands at the thread's end marked Sending the moment it is sent, and once a read or its answer holds it, the message stands in its place once; refused, it stays there marked Not delivered, the box empty and saying why", async () => {
   const shown = threadItem([askingMessage(EXPIRY_ASK)]);
   const pane = await mountThread(shown);
   const page = pane.ownerDocument.body;
@@ -2959,20 +3012,16 @@ test("a plain reply stands at the thread's end marked Sending the moment it is s
   assert.deepEqual(sendingMarks(page), ["Sending"]);
   await act(async () => lands[1]?.(true));
   await settle();
-  assert.equal(
-    threadOf(page).some(([, , , words]) => words === "Never mind."),
-    false,
-    "a refused reply leaves the thread",
-  );
+  assert.deepEqual(undeliveredWords(page), ["Never mind."], "a refused reply stays on the thread");
   assert.deepEqual(sendingMarks(page), []);
-  assert.equal(composerEditor(pane).textContent, "Never mind.", "its words are back in the box");
+  assert.equal(composerEditor(pane).textContent, "", "its words never come back into the box");
   assert.equal(
     pane.querySelector('.agent-composer [role="alert"]')?.textContent,
     "Only the member who started this agent can do this.",
   );
 });
 
-test("words written in a reply's box while the reply is out stay there, whether it lands or is refused", async () => {
+test("words written in a reply's box while the reply is out stay there as written, whether it lands or is refused", async () => {
   const shown = threadItem([askingMessage(EXPIRY_ASK)]);
   const pane = await mountThread(shown);
   // Each send waits on the test's word: the reply landing on the thread, or refused.
@@ -3019,12 +3068,12 @@ test("words written in a reply's box while the reply is out stay there, whether 
   await settle();
   assert.equal(
     composerEditor(pane).textContent,
-    "And for guests?Never mind.",
-    "a refusal puts its words back ahead of them, a line each read without its break",
+    "Never mind.",
+    "a refusal leaves them as they are, its own words standing on the thread",
   );
 });
 
-test("words written on a reply's settled box while the reply carrying the ask's answer is out stay in the box, beside the answer, once the reply is refused and the ask stands open again", async () => {
+test("words written on a reply's settled box while the reply carrying the ask's answer is out stay in the box once the reply is refused and the ask stands open again, its answer standing Not delivered on the thread", async () => {
   const shown = threadItem([askingMessage(EXPIRY_ASK)]);
   const pane = await mountThread(shown);
   const refuse: (() => void)[] = [];
@@ -3058,6 +3107,6 @@ test("words written on a reply's settled box while the reply carrying the ask's 
 
   assert.equal(askMarker(pane), null);
   assert.equal(composerEditor(pane).textContent, "One more detail");
-  assert.deepEqual(checkedOptions(pane), ["7 days"]);
-  assert.equal(footWords(pane), "", "the box says nothing of what is sent");
+  assert.deepEqual(checkedOptions(pane), [], "the pick stands with its answer, not on the ask");
+  assert.deepEqual(undeliveredWords(pane.ownerDocument.body), [null]);
 });

@@ -14,19 +14,23 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   ATTACHMENT_CHIP_STATE,
   BUTTON_VARIANT,
+  CAPTION_LEAVE,
   CARD_CORNER,
   CARD_ELEMENT,
   CARD_PADDING,
+  CaptionField,
+  type CaptionLeave,
   Card,
-  ErrorState,
   FoldingButton,
   FormField,
   isVideoDataUrl,
   MENU_SURFACE_ELEMENT,
   MENU_SURFACE_FLOW,
   MenuSurface,
-  Spinner,
   TextField,
+  UPLOAD_COVER_SIZE,
+  UPLOAD_COVER_STATE,
+  UploadCover,
   useFilePicker,
 } from "@repo/ui";
 import { CaptionsIcon, GLYPH, Maximize2Icon, TextCursorInputIcon } from "@repo/ui/icons";
@@ -36,12 +40,15 @@ import { type ReactNode, useCallback, useLayoutEffect, useRef, useState } from "
 import { createPortal } from "react-dom";
 import { actMutation } from "../act-mutations.js";
 import { useAppCommand } from "../app-commands.js";
-import type {
-  DescriptionEditorHandle,
-  DescriptionEditorPictures,
-  PictureNode,
-  PictureNodeDoors,
-  PictureTaken,
+import { copyPictureWithWordsThroughShell } from "../copy-feedback.js";
+import {
+  type DescriptionEditorHandle,
+  type DescriptionEditorPictures,
+  PICTURE_LEAVE,
+  type PictureLeave,
+  type PictureNode,
+  type PictureNodeDoors,
+  type PictureTaken,
 } from "../description-editor/contract.js";
 import { failureShown, pictureUnread } from "../failure-report.js";
 import { encodeImage } from "../feedback-images.js";
@@ -68,18 +75,26 @@ import { documentScrollerOf } from "./document-frame.js";
  *
  * A picture laid in waits on its upload: the Mac re-encodes it to at most
  * `PICTURE_BOUNDS.MAX_BYTES` (`encodeImage`), shows it at once from those
- * bytes at half strength with the window's spinner and "Uploading" where
- * its caption will stand, and keeps it on the description (`planning.pictureKeep`).
- * Kept, the picture takes its address and the text writes its line; until
- * then the text writes nothing of it. A keep that fails says so in the same
- * place, as every failure is said (`@repo/ui`'s `ErrorState`): its sentence, then
- * Retry and Remove. A picture of another description pasted in is read as that
+ * bytes under the upload's cover (`@repo/ui`'s `UploadCover`), the spinner
+ * on it and the meter along its foot, and keeps it on the description
+ * (`planning.pictureKeep`). Kept, the picture takes its address and the text
+ * writes its line; until then the text writes nothing of it. A keep that
+ * fails says so on the picture, under the same veil: its sentence, then
+ * Retry, Copy details, and Remove, Retry left out where a refusal says
+ * nothing a second try would change. A PDF waits and fails the same way on
+ * its file's chip, its face Retry and its corner Remove. A picture of another description pasted in is read as that
  * description's and kept again on this one, so this description's readers can see it; a
  * video an agent recorded is carried across as it is, and waits as a quiet
  * box, since its bytes draw no picture, and so does a PDF laid in, which
  * once kept is drawn as its file's chip (`picture-block.tsx`).
- * Selected, a picture offers its tools: Alt text and Caption, each a field
- * under it, Enlarge, and Delete. They hang above the picture from its left
+ * Selected, a picture offers its tools: Alt text, a field under it,
+ * Caption, Enlarge, and Delete. Its caption is typed in place, the muted
+ * line under it that the text draws (`@repo/ui`'s `CaptionField`): Caption
+ * puts the caret at its end, a press on its words puts it there, Return
+ * starts a new line after the picture, ↓ goes on to the line after it, and
+ * ↑ or Escape go back to the picture, selected. A picture with no caption draws nothing
+ * under it until Caption opens one, which shows its placeholder while it
+ * holds the caret and goes again when left empty. They hang above the picture from its left
  * edge, as wide as their own names, so a skinny picture neither squeezes
  * them nor sits under them, unless the description's scroller would cut them off
  * there, when they stand inside its top edge; in a column too narrow for
@@ -87,14 +102,14 @@ import { documentScrollerOf } from "./document-frame.js";
  * chooses files while the text is edited.
  */
 
-/** What a picture's upload says, and what a failed one says by why. */
+/** What a failed upload says by why. */
 const UPLOAD_WORDS = {
-  SENDING: "Uploading",
   NOT_A_PICTURE: "This file is not a picture a description can keep.",
   TOO_MANY: "This description already holds as many pictures as it can.",
   TOO_MANY_VIDEOS: "This description already holds as many videos as it can.",
   NOT_COPIED: "The picture could not be read from its description.",
   FAILED: "The image could not be uploaded.",
+  PDF_FAILED: "The PDF could not be uploaded.",
   NOT_A_PDF: "This file is not a PDF a description can keep.",
   PDF_TOO_LARGE: `This PDF is larger than the ${formatBytes(AGENT_BOUNDS.MAX_PDF_BYTES)} a description keeps.`,
 } as const;
@@ -107,13 +122,15 @@ const TOOL = {
   DELETE: "Delete",
 } as const;
 
-/** What a field under a picture describes. */
-const DESCRIBING = {
-  ALT: { label: TOOL.ALT },
-  CAPTION: { label: TOOL.CAPTION },
-} as const;
+/** What an empty caption says while it holds the caret. */
+const CAPTION_PLACEHOLDER = "Write a caption";
 
-type Describing = (typeof DESCRIBING)[keyof typeof DESCRIBING];
+/** Where the caret goes in the text as each way out of a caption leaves it. */
+const CAPTION_LEFT_TO = {
+  [CAPTION_LEAVE.UP]: PICTURE_LEAVE.UP,
+  [CAPTION_LEAVE.DOWN]: PICTURE_LEAVE.DOWN,
+  [CAPTION_LEAVE.NEW_LINE]: PICTURE_LEAVE.NEW_LINE,
+} as const satisfies Record<CaptionLeave, PictureLeave>;
 
 /** The narrowest column a selected picture's tools say their names in; narrower, each is its glyph. */
 const TOOLS_WORDED_PX = 360;
@@ -142,6 +159,8 @@ type Upload =
       readonly url?: string | undefined;
       readonly reason: string;
       readonly taken: PictureTaken;
+      /** Whether a second try could land, which a file that is no picture or PDF it can keep never does. */
+      readonly again: boolean;
     };
 
 /** A picture's node the panel draws into. */
@@ -153,13 +172,13 @@ interface DrawnPicture {
   readonly doors: PictureNodeDoors;
 }
 
-/** Why a keep failed, in the words said where its caption will stand. */
-function keepFailedWords(failure: string | undefined): string {
+/** Why a keep failed, in the words said on what failed to go: a picture, or a PDF. */
+function keepFailedWords(failure: string | undefined, url: string): string {
   if (failure === PICTURE_KEEP_FAILURE.TOO_MANY) return UPLOAD_WORDS.TOO_MANY;
 
   if (failure === PICTURE_KEEP_FAILURE.TOO_MANY_VIDEOS) return UPLOAD_WORDS.TOO_MANY_VIDEOS;
 
-  return UPLOAD_WORDS.FAILED;
+  return isPdfDataUrl(url) ? UPLOAD_WORDS.PDF_FAILED : UPLOAD_WORDS.FAILED;
 }
 
 /** A `data:` URL of bytes the Mac encoded. */
@@ -193,7 +212,7 @@ async function encodedUrl(
   return { url: dataUrlOf(read.image.mediaType, read.image.base64) };
 }
 
-/** A picture waiting on its upload: the Mac's bytes at half strength, and the wait or its failure where its caption will stand. */
+/** A picture waiting on its upload, its bytes under the upload's cover: the wait, or why it failed with Retry where a second try could land, and Remove. */
 function UploadingPicture({
   upload,
   alt,
@@ -202,75 +221,89 @@ function UploadingPicture({
 }: {
   upload: Upload | undefined;
   alt: string;
-  onRetry: () => void;
+  onRetry: (taken: PictureTaken) => void;
   onRemove: () => void;
 }): React.JSX.Element {
   const url = upload?.url;
+  const sending = upload?.kind === UPLOAD.SENDING;
+  const failed = upload?.kind === UPLOAD.FAILED ? upload : undefined;
+  const retry = failed?.again === true ? () => onRetry(failed.taken) : undefined;
+  const name = alt === "" ? (url !== undefined && isPdfDataUrl(url) ? "PDF" : "Picture") : alt;
+
+  // Note that a node whose upload this window never held, one read back mid-upload, is said not kept, with Remove alone.
+  const failure = failureShown({
+    surface: FAILURE_SURFACE.PICTURE_KEEP,
+    cause: upload ?? FAILURE_CONDITION.NOT_KEPT,
+    ...(failed === undefined ? undefined : { refused: true }),
+  });
+
+  const words = failed?.reason ?? UPLOAD_WORDS.FAILED;
+
+  if (url !== undefined && isPdfDataUrl(url)) {
+    return (
+      <span className={PICTURE_BLOCK_CLASS} data-upload={upload?.kind ?? UPLOAD.FAILED}>
+        <PdfFile
+          url={url}
+          name={name}
+          state={sending ? ATTACHMENT_CHIP_STATE.UPLOADING : ATTACHMENT_CHIP_STATE.FAILED}
+          {...(sending ? {} : { failure: words, reported: failure, onRetry: retry, onRemove })}
+        />
+      </span>
+    );
+  }
 
   return (
     <span className={PICTURE_BLOCK_CLASS} data-upload={upload?.kind ?? UPLOAD.FAILED}>
-      {url !== undefined && isPdfDataUrl(url) ? (
-        <PdfFile
-          url={url}
-          name={alt}
-          state={
-            upload?.kind === UPLOAD.SENDING
-              ? ATTACHMENT_CHIP_STATE.UPLOADING
-              : ATTACHMENT_CHIP_STATE.FAILED
-          }
-        />
-      ) : (
-        <Card
-          as={CARD_ELEMENT.SPAN}
-          corner={CARD_CORNER.CONTROL}
-          padding={CARD_PADDING.FLUSH}
-          className={PICTURE_FRAME_CLASS}
-        >
-          {url === undefined || isVideoDataUrl(url) ? (
-            <span className={PICTURE_PENDING_CLASS} />
-          ) : (
-            // The Mac's own bytes at half strength while the upload waits.
-            <img
-              className={`${PICTURE_IMAGE_CLASS} opacity-50`}
-              src={url}
-              alt={alt}
-              draggable={false}
-            />
-          )}
-        </Card>
-      )}
-      {upload?.kind === UPLOAD.SENDING ? (
-        <span className="picture-status mt-item-gap flex items-center gap-item-gap text-caption text-muted-foreground">
-          <Spinner delay label={UPLOAD_WORDS.SENDING} />
-          <span>{UPLOAD_WORDS.SENDING}</span>
-        </span>
-      ) : (
-        <span className="mt-item-gap block">
-          <ErrorState
-            failure={failureShown({
-              surface: FAILURE_SURFACE.PICTURE_KEEP,
-              cause: upload ?? FAILURE_CONDITION.NOT_KEPT,
-              ...(upload?.kind === UPLOAD.FAILED ? { refused: true } : undefined),
-            })}
-            onRetry={upload?.kind === UPLOAD.FAILED ? onRetry : undefined}
+      <Card
+        as={CARD_ELEMENT.SPAN}
+        corner={CARD_CORNER.CONTROL}
+        padding={CARD_PADDING.FLUSH}
+        className={`${PICTURE_FRAME_CLASS} relative`}
+      >
+        {url === undefined || isVideoDataUrl(url) ? (
+          <span className={PICTURE_PENDING_CLASS} />
+        ) : (
+          <img
+            // Note that a failed picture stands at least the failure card's size, because the frame clips what the cover lays over it.
+            className={
+              failed === undefined && upload !== undefined
+                ? PICTURE_IMAGE_CLASS
+                : `${PICTURE_IMAGE_CLASS} min-h-picture-failed-h min-w-picture-failed-w`
+            }
+            src={url}
+            alt={alt}
+            draggable={false}
+          />
+        )}
+        {sending ? (
+          <UploadCover
+            size={UPLOAD_COVER_SIZE.BLOCK}
+            state={UPLOAD_COVER_STATE.UPLOADING}
+            name={name}
+          />
+        ) : (
+          <UploadCover
+            size={UPLOAD_COVER_SIZE.BLOCK}
+            state={UPLOAD_COVER_STATE.FAILED}
+            name={name}
+            failure={failure}
+            onRetry={retry}
             onRemove={onRemove}
           >
-            {upload?.kind === UPLOAD.FAILED ? upload.reason : UPLOAD_WORDS.FAILED}
-          </ErrorState>
-        </span>
-      )}
+            {words}
+          </UploadCover>
+        )}
+      </Card>
     </span>
   );
 }
 
-/** The field under a picture that describes it anew: its words saved on Return, let go on Escape. */
+/** The field under a picture that says its alt text anew: its words saved on Return, let go on Escape. */
 function DescribeField({
-  describing,
   value,
   onSave,
   onClose,
 }: {
-  describing: Describing;
   value: string;
   onSave: (words: string) => void;
   onClose: () => void;
@@ -284,8 +317,8 @@ function DescribeField({
 
   return (
     <span className="mx-0 mt-item-gap mb-block-gap grid w-picture-describe">
-      {/* Note that a picture's words may be cleared, so the field says it may be left empty. */}
-      <FormField label={describing.label} optional>
+      {/* Note that a picture's alt text may be cleared, so the field says it may be left empty. */}
+      <FormField label={TOOL.ALT} optional>
         {(field) => (
           <TextField
             field={field}
@@ -397,26 +430,46 @@ function KeptPicture({
     pictureUnread,
   );
 
-  const [describing, setDescribing] = useState<Describing | undefined>(undefined);
+  const [describing, setDescribing] = useState(false);
+  // Whether the caption stands open under the picture though empty, as Caption opens one and typing keeps one.
+  const [captioning, setCaptioning] = useState(false);
+  // How many times Caption has asked for the caret, which each ask puts at the caption's end.
+  const [asked, setAsked] = useState(0);
+  const captionField = useRef<HTMLTextAreaElement>(null);
   const own = named?.taskId === door.taskId;
+
+  useLayoutEffect(() => {
+    const field = captionField.current;
+
+    if (asked === 0 || field === null) return;
+    field.focus();
+    field.setSelectionRange(field.value.length, field.value.length);
+  }, [asked]);
 
   const tools: PictureTool[] = [
     {
       label: TOOL.ALT,
       icon: <TextCursorInputIcon aria-hidden="true" />,
-      run: () => setDescribing(DESCRIBING.ALT),
+      run: () => setDescribing(true),
     },
     {
       label: TOOL.CAPTION,
       icon: <CaptionsIcon aria-hidden="true" />,
-      run: () => setDescribing(DESCRIBING.CAPTION),
+      run: () => {
+        setCaptioning(true);
+        setAsked((was) => was + 1);
+      },
     },
     ...(own && named !== undefined
       ? [
           {
             label: TOOL.ENLARGE,
             icon: <Maximize2Icon aria-hidden="true" />,
-            run: () => door.open(named.attachmentId),
+            run: () => {
+              // Note that the text takes the focus back, the picture selected, before the viewer opens, so the viewer hands it back there as it closes and one Escape then leaves the text, where the tool's own button would hold it.
+              doors.leave(PICTURE_LEAVE.UP);
+              door.open(named.attachmentId);
+            },
           },
         ]
       : []),
@@ -436,19 +489,40 @@ function KeptPicture({
       <PictureBlock
         state={named === undefined ? { kind: PICTURE_STATE.MISSING } : state}
         alt={picture.alt}
-        caption={picture.title === "" ? undefined : picture.title}
+        caption={undefined}
+        captionField={
+          picture.title === "" && !captioning ? undefined : (
+            <CaptionField
+              ref={captionField}
+              label={TOOL.CAPTION}
+              placeholder={CAPTION_PLACEHOLDER}
+              value={picture.title}
+              onChange={(words) => {
+                // Note that a caption being typed stays open, cleared or not, until the caret leaves it.
+                setCaptioning(true);
+                doors.describe({ title: words });
+              }}
+              onLeave={(way) => doors.leave(CAPTION_LEFT_TO[way])}
+              onEscape={() => doors.leave(PICTURE_LEAVE.UP)}
+              onBlur={() => {
+                // Note that the words are kept as typed, spaces and all, until the caret leaves them.
+                setCaptioning(false);
+                const kept = picture.title.trim();
+
+                if (kept !== picture.title) doors.describe({ title: kept });
+              }}
+            />
+          )
+        }
       />
       {selected ? <PictureTools column={drawn.element} tools={tools} /> : null}
-      {describing === undefined ? null : (
+      {describing ? (
         <DescribeField
-          describing={describing}
-          value={describing === DESCRIBING.ALT ? picture.alt : picture.title}
-          onSave={(words) =>
-            doors.describe(describing === DESCRIBING.ALT ? { alt: words } : { title: words })
-          }
-          onClose={() => setDescribing(undefined)}
+          value={picture.alt}
+          onSave={(words) => doors.describe({ alt: words })}
+          onClose={() => setDescribing(false)}
         />
-      )}
+      ) : null}
     </span>
   );
 }
@@ -499,11 +573,14 @@ export function useEditorPictures(
       settled(taken.upload, { kind: UPLOAD.SENDING, url });
 
       const failed = (reason: string) =>
-        settled(taken.upload, { kind: UPLOAD.FAILED, url, reason, taken });
+        settled(taken.upload, { kind: UPLOAD.FAILED, url, reason, taken, again: true });
 
       const kept = await sendKeep({ planId: taskId, picture: url }).catch(() => undefined);
 
-      if (kept === undefined || "failure" in kept) return failed(keepFailedWords(kept?.failure));
+      if (kept === undefined || "failure" in kept) {
+        return failed(keepFailedWords(kept?.failure, url));
+      }
+
       keepPictureRead(queryClient, taskId, kept.id, url);
       handle.current?.settlePicture(
         taken.upload,
@@ -523,7 +600,12 @@ export function useEditorPictures(
         const encoded = await encodedUrl(taken.file);
 
         if ("reason" in encoded) {
-          return settled(taken.upload, { kind: UPLOAD.FAILED, reason: encoded.reason, taken });
+          return settled(taken.upload, {
+            kind: UPLOAD.FAILED,
+            reason: encoded.reason,
+            taken,
+            again: false,
+          });
         }
 
         return keep(taken, encoded.url);
@@ -544,6 +626,7 @@ export function useEditorPictures(
           kind: UPLOAD.FAILED,
           reason: UPLOAD_WORDS.NOT_COPIED,
           taken,
+          again: true,
         });
       }
 
@@ -555,6 +638,17 @@ export function useEditorPictures(
   // Note that the doors handed the editor once read the newest of these as they run.
   const beginning = useRef(begin);
   beginning.current = begin;
+  const reading = useRef(door?.read);
+  reading.current = door?.read;
+
+  // A double-click opens a kept picture of this description over the window, as its Enlarge does.
+  const enlarging = useRef<(picture: PictureNode) => void>(() => undefined);
+  enlarging.current = (picture) => {
+    const named = descriptionAttachmentOf(picture.src);
+
+    if (door !== undefined && named?.taskId === door.taskId) door.open(named.attachmentId);
+  };
+
   const pictures = useRef<DescriptionEditorPictures | undefined>(undefined);
 
   if (pictures.current === undefined && workspace !== undefined) {
@@ -562,13 +656,17 @@ export function useEditorPictures(
       draw: (element, picture, doors) => {
         counted.current += 1;
         const key = counted.current;
+        let shown = picture;
         setDrawn((was) => [...was, { key, element, picture, doors, selected: false }]);
 
         return {
-          redraw: (next, selected) =>
+          redraw: (next, selected) => {
+            shown = next;
             setDrawn((was) =>
               was.map((each) => (each.key === key ? { ...each, picture: next, selected } : each)),
-            ),
+            );
+          },
+          enlarge: () => enlarging.current(shown),
           undraw: () => setDrawn((was) => was.filter((each) => each.key !== key)),
         };
       },
@@ -579,6 +677,25 @@ export function useEditorPictures(
         const named = descriptionAttachmentOf(src);
 
         return named !== undefined && named.taskId !== taskId;
+      },
+      copiedAlone: (src, words) => {
+        const named = descriptionAttachmentOf(src);
+        const reader = reading.current;
+
+        if (named === undefined || reader === undefined) return;
+
+        // Note that the picture is read as it is drawn, from the window's copy where it holds one; a video, or a refused write, leaves the words the editor's own copy wrote standing.
+        const url = queryClient
+          .fetchQuery(pictureQuery(named.taskId, named.attachmentId, reader))
+          .then((read) => {
+            if (read.kind !== PICTURE_STATE.READY || !read.url.startsWith("data:image/")) {
+              throw new Error("The picture is not one the clipboard takes as a picture.");
+            }
+
+            return read.url;
+          });
+
+        copyPictureWithWordsThroughShell(words, url).catch(() => undefined);
       },
     };
   }
@@ -602,11 +719,7 @@ export function useEditorPictures(
         <UploadingPicture
           upload={uploads.get(each.picture.upload)}
           alt={each.picture.alt}
-          onRetry={() => {
-            const upload = uploads.get(each.picture.upload);
-
-            if (upload?.kind === UPLOAD.FAILED) beginning.current(upload.taken);
-          }}
+          onRetry={(taken) => beginning.current(taken)}
           onRemove={() => {
             handle.current?.removePicture(each.picture.upload);
             settled(each.picture.upload, undefined);

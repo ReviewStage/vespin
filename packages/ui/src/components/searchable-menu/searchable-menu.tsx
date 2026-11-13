@@ -188,7 +188,7 @@ export interface MenuRow {
   searchOnly?: boolean | undefined;
   /** Rows the row opens beside itself rather than being picked, as a pinned row's submenu: where a new Browser tab opens. */
   submenu?: Submenu | undefined;
-  /** Acts on the row's own thing, which its ⋯ (and Right) opens beside it while a press on the row still picks it: a sound's Rename and Remove. */
+  /** Acts on the row's own thing, which its ⋯ (and Right) opens beside it while a press on the row still picks it: a sound's Rename and Delete. */
   actions?: RowActions | undefined;
   /** The card hung beside the row while the pointer rests on it, as ⌘K hangs an agent's: an agent's own card. */
   card?: React.ReactNode;

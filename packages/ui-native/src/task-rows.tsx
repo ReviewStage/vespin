@@ -1,6 +1,7 @@
 // task-rows.tsx -- the rows a task's page and the Tasks list draw beside the task rows: a task's head, an agent, a related task, a group, a row that opens somewhere, and a description's words.
 
 import {
+  ContextMenu,
   HStack,
   Image,
   RNHostView,
@@ -15,6 +16,7 @@ import {
   accessibilityLabel,
   accessibilityValue,
   buttonStyle,
+  disabled,
   font,
   foregroundStyle,
   frame,
@@ -28,6 +30,7 @@ import {
 import type { PullRequestState } from "@repo/features/agent-wire";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
@@ -36,8 +39,16 @@ import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
-import { RowFrame, RowHead, type RowSwipe, rowPlacement } from "./list-row.js";
-import { Markdown } from "./markdown.js";
+import {
+  actionButton,
+  type RowAction,
+  RowFrame,
+  RowHead,
+  type RowSubmenu,
+  type RowSwipe,
+  rowPlacement,
+} from "./list-row.js";
+import { Markdown, type MarkdownVideo } from "./markdown.js";
 import {
   AgentTile,
   type Face,
@@ -46,7 +57,7 @@ import {
   ToneGlyph,
   WorkingMark,
 } from "./marks.js";
-import { PageHeader } from "./page-header.js";
+import { type PageFollowing, PageHeader } from "./page-header.js";
 import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
@@ -121,14 +132,19 @@ type TaskHeadProps = {
   readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */
   readonly createdBy?: string | undefined;
+  /** Who follows it, as a chip under its fields; none while its workspace has Following off. */
+  readonly following?: PageFollowing | undefined;
 };
 
 /**
  * A task's head as the first row of its page: its name as the page's
- * heading, its status, priority and assignee as small chips, and who
- * created it. Its path stands in the bar above.
+ * heading, its status, priority and assignee as small chips, who follows
+ * it as a chip that opens them, and who created it. Its path stands in the
+ * bar above.
  */
-export function TaskHead({ name, status, priority, assignee, createdBy }: TaskHeadProps) {
+export function TaskHead(props: TaskHeadProps) {
+  const { name, status, priority, assignee, createdBy, following } = props;
+
   return (
     <VStack
       alignment="leading"
@@ -144,6 +160,7 @@ export function TaskHead({ name, status, priority, assignee, createdBy }: TaskHe
         status={status}
         priority={priority}
         assignee={assignee}
+        following={following}
         summary={createdBy}
       />
     </VStack>
@@ -290,18 +307,32 @@ type RelationRowProps = {
   readonly id: string;
   readonly name: string;
   readonly status: TaskStatus | undefined;
-  /** How the task stands to this one: "Sub-task", "Blocked by", "Blocks". */
+  /** How the task stands to this one: "Sub-task", "Blocked by", "Blocks"; or, in a picker, its key or why it cannot be picked. */
   readonly relation: string;
+  /** Whether it cannot be picked, which mutes its words, as a picker dims a task that cannot take the relation. */
+  readonly faded?: boolean | undefined;
+  /** What a swipe from the trailing edge reveals, such as Remove relation. */
+  readonly trailingActions?: readonly RowSwipe[] | undefined;
+  /** Menus its long press menu holds, such as Change relation. */
+  readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
 };
 
-/** A task related to the one shown: its status ring and name, and at the line's end how it stands to this one. */
-export function RelationRow({ id, name, status, relation }: RelationRowProps) {
+/** A task related to the one shown, or one a picker offers: its status ring and name, and at the line's end how it stands to this one, its swipe and long press holding what changes that. */
+export function RelationRow({
+  id,
+  name,
+  status,
+  relation,
+  faded = false,
+  trailingActions,
+  menuSubmenus,
+}: RelationRowProps) {
   const colors = useColors();
 
   const row: ReactElement = (
     <RowHead
       unread={false}
-      faded={false}
+      faded={faded}
       lead={
         status === undefined ? (
           <ToneGlyph glyph="doc.text" tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} />
@@ -310,7 +341,7 @@ export function RelationRow({ id, name, status, relation }: RelationRowProps) {
         )
       }
       title={name}
-      ink={colors.TEXT_BODY}
+      ink={faded ? colors.TEXT_MUTED : colors.TEXT_BODY}
       end={<EndWords words={relation} />}
     />
   );
@@ -319,6 +350,8 @@ export function RelationRow({ id, name, status, relation }: RelationRowProps) {
     <RowFrame
       id={id}
       row={row}
+      trailingActions={trailingActions}
+      menuSubmenus={menuSubmenus}
       heard={{
         label: name,
         value: [status === undefined ? undefined : TASK_STATUS_WORDS[status], relation],
@@ -348,7 +381,7 @@ export function LinkRow({
   label,
   detail,
   tone = LINK_ROW_TONE.PLAIN,
-  disabled = false,
+  disabled: off = false,
   onPress,
 }: LinkRowProps) {
   const colors = useColors();
@@ -357,8 +390,8 @@ export function LinkRow({
   return (
     <SwiftUIButton
       onPress={onPress}
-      {...(disabled ? { disabled: true } : {})}
       modifiers={[
+        disabled(off),
         ...rowPlacement(colors),
         buttonStyle("borderless"),
         accessibilityLabel(label),
@@ -417,23 +450,112 @@ export function GroupRow({ id, title, symbol, count, testId }: GroupRowProps) {
   );
 }
 
+/** How many comment threads stand open on a block, and what opens them. */
+type WordsComments = {
+  readonly count: number;
+  /** What the count is heard as: "2 comments". */
+  readonly heard: string;
+  readonly onOpen: () => void;
+};
+
 type WordsRowProps = {
   readonly words: string;
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
   /** Opens a link or a chip pressed, by the address it was written as, where the app draws it or in Safari. */
   readonly onOpenLink: (address: string) => void;
+  /** What a long press on the words offers, such as Comment on one block of a description; none where the words are read alone. */
+  readonly menuActions?: readonly RowAction[] | undefined;
+  /** The comment threads standing open on the words, counted beside them; none where none stand. */
+  readonly comments?: WordsComments | undefined;
+  /** How far under the words the next row stands: a page's gap after the last block, a block's own gap between blocks. */
+  readonly last?: boolean | undefined;
+  /** The address a picture is drawn from, by the address its words name it by, such as a description's picture read through the host; each from the address it names where none is given. */
+  readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
+  /** The video a picture's address names, played in its place; none where none is given. */
+  readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** What GitHub holds of a pull request or issue a chip in the words names, by its page, which the chip says where it stands. */
+  readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
 };
+
+/** The count of a block's open comment threads at its trailing edge, as a document's margin marks them, opening them on a press. */
+function CommentCount({ comments }: { readonly comments: WordsComments }) {
+  const colors = useColors();
+
+  return (
+    <SwiftUIButton
+      onPress={comments.onOpen}
+      modifiers={[buttonStyle("borderless"), accessibilityLabel(comments.heard)]}
+    >
+      <HStack spacing={SPACE.TIGHT}>
+        <Image systemName="text.bubble" size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.TIME }),
+            monospacedDigit(),
+            foregroundStyle(colors.TEXT_MUTED),
+          ]}
+        >
+          {String(comments.count)}
+        </Text>
+      </HStack>
+    </SwiftUIButton>
+  );
+}
 
 /**
  * A description's words as a row of a list, read-only and flat on the
  * ground: the Markdown drawn in React Native views hosted in the row, as
  * wide as the list and as tall as the words, since SwiftUI has no piece
- * that draws the panel's Markdown.
+ * that draws the panel's Markdown. Given acts, a long press lifts the words
+ * over the system's menu of them, as a document's block offers Comment;
+ * given comments, their count stands at the words' trailing edge.
  */
-export function WordsRow({ words, repository, onOpenLink }: WordsRowProps) {
+export function WordsRow({
+  words,
+  repository,
+  onOpenLink,
+  menuActions = [],
+  comments,
+  last = true,
+  pictureSource,
+  videoAt,
+  linkStanding,
+}: WordsRowProps) {
+  const colors = useColors();
+
+  const host = (
+    <RNHostView matchContents={{ vertical: true }}>
+      <View>
+        <Markdown
+          words={words}
+          repository={repository}
+          onOpenLink={onOpenLink}
+          pictureSource={pictureSource}
+          videoAt={videoAt}
+          linkStanding={linkStanding}
+          headings
+        />
+      </View>
+    </RNHostView>
+  );
+
+  const held =
+    menuActions.length === 0 ? (
+      host
+    ) : (
+      <ContextMenu>
+        <ContextMenu.Items>
+          {menuActions.map((action) => actionButton(action, colors))}
+        </ContextMenu.Items>
+        <ContextMenu.Trigger>{host}</ContextMenu.Trigger>
+      </ContextMenu>
+    );
+
   return (
-    <VStack
+    <HStack
+      alignment="top"
+      spacing={SPACE.ROW}
       modifiers={[
         listRowBackground("clear"),
         listRowSeparator("hidden"),
@@ -441,16 +563,15 @@ export function WordsRow({ words, repository, onOpenLink }: WordsRowProps) {
           leading: SPACE.EDGE,
           trailing: SPACE.EDGE,
           top: SPACE.TIGHT,
-          bottom: SPACE.PAGE,
+          bottom: last ? SPACE.PAGE : SPACE.TIGHT,
         }),
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
       ]}
     >
-      <RNHostView matchContents={{ vertical: true }}>
-        <View>
-          <Markdown words={words} repository={repository} onOpenLink={onOpenLink} headings />
-        </View>
-      </RNHostView>
-    </VStack>
+      <VStack modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]}>
+        {held}
+      </VStack>
+      {comments === undefined || comments.count === 0 ? null : <CommentCount comments={comments} />}
+    </HStack>
   );
 }

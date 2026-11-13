@@ -50,6 +50,10 @@ export const SETTINGS_SEARCH_ROW = {
   CLI_SIGN_IN: "cli-sign-in",
   /** Hosts' Add hosts button, under its list. */
   ADD_HOSTS: "add-hosts",
+  /** Machines' list of the account's machines. */
+  HOSTS: "hosts-list",
+  /** Skills' group of the reader's own, under the workspace's in a workspace of several members. */
+  SKILLS_PERSONAL: "skills-personal",
   /** The Workspace page's identity row, where an owner or an admin renames the workspace. */
   WORKSPACE_RENAME: "workspace-rename",
   /** The Workspace page's identity row, whose ⋯ holds the owner's Change URL. */
@@ -64,8 +68,6 @@ export const SETTINGS_SEARCH_ROW = {
   ENVIRONMENT_INSTALL: "environment-install",
   /** Cloud environment's Setup scripts, each repository's. */
   ENVIRONMENT_SETUP: "environment-setup",
-  /** Cloud environment's Archive scripts, each repository's. */
-  ENVIRONMENT_ARCHIVE: "environment-archive",
   /** Cloud environment's Run actions, each repository's, drawn while the workspace has Run actions on. */
   ENVIRONMENT_RUN_ACTIONS: "environment-run-actions",
 } as const;
@@ -87,4 +89,7 @@ export const EXPERIMENT_ANCHOR = {
   [EXPERIMENT.MERGE_QUEUE]: "experiment-merge-queue",
   [EXPERIMENT.TURN_CHANGES]: "experiment-turn-changes",
   [EXPERIMENT.REPLY_BUTTONS]: "experiment-reply-buttons",
+  [EXPERIMENT.FOLLOWING]: "experiment-following",
+  [EXPERIMENT.COMPUTER_USE]: "experiment-computer-use",
+  [EXPERIMENT.VOICE]: "experiment-voice",
 } as const satisfies Record<Experiment, string>;

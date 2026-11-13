@@ -6,6 +6,8 @@ import {
   EmptyState,
   MoreButton,
   PlugIcon,
+  SETTINGS_PAGE_WIDTH,
+  SETTINGS_SECTION_FRAME,
   SettingsPage,
   SettingsRow,
   SettingsSection,
@@ -13,6 +15,12 @@ import {
   TOOLBAR_LOOK,
   type ToolbarLook,
 } from "@repo/ui";
+import {
+  createDataTableColumnHelper,
+  DATA_TABLE_COLUMN_KIND,
+  DATA_TABLE_MIN_WIDTH,
+  DataTable,
+} from "@repo/ui/data-table";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -22,8 +30,9 @@ import { CatalogSection } from "../section";
  * title's line, tall enough to scroll inside its frame; and the same page
  * in a frame narrower than the 480px a desktop page insets less under, its
  * long title pushing the Reset below it; the page on a phone, its way back
- * and a ⋯ holding its Reset in its bar's corners; and a page whose content is an empty
- * state, standing in the room under its title.
+ * and a ⋯ holding its Reset in its bar's corners; a page whose content is an empty
+ * state, standing in the room under its title; and a page at the wide
+ * measure holding a table of records, its head following it.
  */
 
 function HeldSwitch({ label, describedBy }: { label: string; describedBy: string | undefined }) {
@@ -91,6 +100,55 @@ function Page({ title, look }: { title: string; look?: ToolbarLook }): React.JSX
   );
 }
 
+interface Note {
+  readonly id: string;
+  readonly words: string;
+  readonly savedBy: string;
+  readonly recalls: number;
+  readonly last: string;
+}
+
+const NOTES: readonly Note[] = [
+  {
+    id: "deploys",
+    words: "Deployments go out from the release branch, and a hotfix is cherry-picked onto it.",
+    savedBy: "Ship the release notes",
+    recalls: 42,
+    last: "2 hours ago",
+  },
+  {
+    id: "tests",
+    words: "The store tests run against an in-memory database, so they need no server.",
+    savedBy: "Audit the test suite",
+    recalls: 7,
+    last: "Yesterday",
+  },
+];
+
+const noteColumn = createDataTableColumnHelper<Note>();
+
+const NOTE_COLUMNS = noteColumn.columns([
+  noteColumn.accessor((note) => note.words, {
+    id: "words",
+    header: "Note",
+    meta: { kind: DATA_TABLE_COLUMN_KIND.PROSE },
+    sortFn: "text",
+  }),
+  noteColumn.accessor((note) => note.savedBy, {
+    id: "savedBy",
+    header: "Saved by",
+    sortFn: "text",
+  }),
+  noteColumn.accessor((note) => note.recalls, {
+    id: "recalls",
+    header: "Recalls",
+    meta: { kind: DATA_TABLE_COLUMN_KIND.NUMERIC },
+    sortFn: "basic",
+    sortDescFirst: true,
+  }),
+  noteColumn.display({ id: "last", header: "Last recalled", cell: ({ row }) => row.original.last }),
+]);
+
 function SettingsPages(): React.JSX.Element {
   return (
     <>
@@ -113,6 +171,25 @@ function SettingsPages(): React.JSX.Element {
         <div className="catalog-settings-frame">
           <SettingsPage title="Experimental">
             <EmptyState icon={<PlugIcon />}>Nothing to try out right now.</EmptyState>
+          </SettingsPage>
+        </div>
+      </CatalogSection>
+      <CatalogSection
+        id="settings-page-wide-measure"
+        title="At the wide measure, a table of records"
+      >
+        <div className="catalog-settings-frame catalog-settings-frame-wide">
+          <SettingsPage title="Notes" width={SETTINGS_PAGE_WIDTH.WIDE}>
+            <SettingsSection frame={SETTINGS_SECTION_FRAME.NONE}>
+              <DataTable
+                label="Notes"
+                columns={NOTE_COLUMNS}
+                rows={NOTES}
+                getRowId={(note) => note.id}
+                empty=""
+                minWidth={DATA_TABLE_MIN_WIDTH.WIDE}
+              />
+            </SettingsSection>
           </SettingsPage>
         </div>
       </CatalogSection>

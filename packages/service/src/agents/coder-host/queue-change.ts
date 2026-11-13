@@ -1,8 +1,10 @@
 /**
  * queue-change.ts -- one member's change to a coding agent's queue, as their window and their MCP's `message_agent` ask it.
  *
- * The queue is its starter's own messages to come, so the starter alone
- * changes it. A change that leaves its first message free to go while the
+ * Any member who may message the agent changes its queue, every message in
+ * it whoever queued it, as they may steer it (`controlsAgent`): its starter
+ * alone for one on the starter's own GitHub token or Mac. A message keeps
+ * the member who queued it, whose message it goes as, whoever edits it. A change that leaves its first message free to go while the
  * agent stands idle hands it on here, since no turn's end is coming to: the
  * message is claimed before the queue is read back, so the answer never
  * lists a message about to go, and sent once the answer is out
@@ -26,13 +28,17 @@ import {
   takeQueuedMessage,
 } from "@repo/database/models/agent-queue-store";
 import type { Agent } from "@repo/database/models/agent-store";
+import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { bootHolds } from "@repo/features/agent-boot";
 import { type AgentQueueChange, QUEUE_CHANGE } from "@repo/features/agent-wire";
 import { DateTime, Effect, Option } from "effect";
 import { afterResponse } from "../../http/after-response.js";
 import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
+import { followAsMessaged } from "../../tasks/task-following.js";
+import { controlsAgent } from "../agent-reach.js";
 import { claimNext, sendClaimed, sendQueued, wireQueue } from "./agent-queue.js";
 import { routedSessions } from "./runtime-sessions.js";
+import { spokenLineMetadata } from "./spoken-line.js";
 
 /** The changes to a queue after which its first message may go at once, where the agent stands idle: every change but a delete, a hold let go among them. */
 const HANDS_ON: ReadonlySet<string> = new Set([
@@ -42,6 +48,15 @@ const HANDS_ON: ReadonlySet<string> = new Set([
   QUEUE_CHANGE.RESUME,
   QUEUE_CHANGE.HOLD,
 ]);
+
+/** What a queued message spoken on a call keeps beside its words, so it goes on as the developer's voice line; nothing for a typed one. */
+function spokenLine(userId: string, body: Parameters<typeof spokenLineMetadata>[0]) {
+  const metadata = spokenLineMetadata(body);
+
+  return metadata === undefined
+    ? undefined
+    : { sender: { kind: MESSAGE_SENDER.MEMBER, userId }, metadata };
+}
 
 /** A store's answer for the account's agent, its absence answered as no such agent. */
 const found = <A>(effect: Effect.Effect<Option.Option<A>, StoreFailure, DatabaseServices>) =>
@@ -62,6 +77,7 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
           id: body.id,
           text: body.text,
           attachments: body.attachments,
+          line: spokenLine(userId, body),
         }),
       );
 
@@ -138,16 +154,19 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
 
 /**
  * The member's change to the agent's queue, and the queue as it then
- * stands: refused as not permitted for anyone but the agent's starter, who
- * alone changes it, and a teammate reads it.
+ * stands: refused as not permitted for a member who may not message the
+ * agent, who reads it.
  */
 export const changeAgentQueue = Effect.fn("web/changeAgentQueue")(function* (
   userId: string,
   agent: Agent,
   body: AgentQueueChange,
 ) {
-  if (agent.userId !== userId) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+  if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* applyChange(userId, agent, body);
+
+  // A member who queues a message for one of the task's agents follows the task, as one who sends it does.
+  if (body.change === QUEUE_CHANGE.ADD) yield* followAsMessaged(userId, agent.taskId);
 
   const claimed = HANDS_ON.has(body.change)
     ? yield* claimNext(agent)

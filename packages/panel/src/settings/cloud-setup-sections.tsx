@@ -6,9 +6,7 @@ import { readingWords } from "@repo/features/words";
 import { managesWorkspace } from "@repo/features/workspace-role";
 import {
   type CloudSetupScriptRun,
-  REPOSITORY_SCRIPT_KIND,
   type RepositoryRunActions,
-  type RepositoryScriptKind,
   RUN_ACTION_AVAILABILITY,
   type RunAction,
   type RunActionAvailability,
@@ -18,8 +16,6 @@ import {
 } from "@repo/features/workspace-sandbox-setup-wire";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
-import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -85,23 +81,22 @@ import { confirmFailure, refusalShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { renameWrite } from "../rename-write.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
+import type { SettingsSearchInput } from "../settings-search.js";
 import { useRepositoryMenu } from "../tasks/repository-chip.js";
 import { useRepositoriesIn } from "../tasks/task-repository-menus.js";
 import { useOpenPlace } from "../tasks/use-open-link.js";
-import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
+import { SECTION, settingsSectionDrawn, settingsSectionHead } from "./settings-sections.js";
 
 /**
- * cloud-setup-sections.tsx -- Settings › Cloud environment's scripts: how the workspace's cloud agent sandboxes are set up and archived, its install script and each repository's setup and archive scripts, saved by its owners and admins.
+ * cloud-setup-sections.tsx -- Settings › Cloud environment's scripts: how the workspace's cloud agent sandboxes are set up, its install script and each repository's setup script, saved by its owners and admins.
  *
- * As Conductor Cloud's Cloud computer settings keep them. The install script
+ * Kept together in Settings. The install script
  * runs once per build of each of the workspace's repositories' base
  * snapshots, with `sudo`, so what it installs is in every new sandbox; a
  * repository's setup script runs once in each new agent sandbox of it, after
- * its checkout, and its archive script once in each as its agent is archived,
- * just before the sandbox is deleted, both with the workspace's environment
- * variables. Every member reads them all, each script drawn under its row in
+ * its checkout, with the workspace's environment variables. Every member reads them all, each script drawn under its row in
  * Bash's colors with its lines numbered, at least a few lines tall; an owner
  * or admin edits each in place, as a file is edited, its border taking the
  * accent and Discard and Save standing at its row's end once it differs from
@@ -109,7 +104,7 @@ import { MenuRow } from "./menu-row.js";
  * that already stands as tall as they are, so neither their arrival nor the
  * first character typed moves the page; types the install script into its
  * empty row where none is saved
- * yet, adds a setup or archive script from a repository picked in the menu a
+ * yet, adds a setup script from a repository picked in the menu a
  * task's repository is picked in, and removes one from its ⋯, a removal
  * asking first. Each save answers the setup as it then stands, which the
  * sections draw at once. Under a saved script's name stands how it last ran in
@@ -132,34 +127,8 @@ const SCRIPT_ROW_SKELETON: SettingsRowSkeletonLayout = {
 /** What a script's editor offers while it is empty, by which script it is. */
 const PLACEHOLDER = {
   INSTALL: "sudo apt-get install -y postgresql-client",
-  [REPOSITORY_SCRIPT_KIND.SETUP]: "pnpm install\ndocker compose pull",
-  [REPOSITORY_SCRIPT_KIND.ARCHIVE]: "docker compose down --volumes",
+  SETUP: "pnpm install\ndocker compose pull",
 } as const;
-
-/** What a section of a repository's scripts says, by which script it holds. */
-const REPOSITORY_SECTION = {
-  [REPOSITORY_SCRIPT_KIND.SETUP]: {
-    title: "Setup scripts",
-    anchor: SETTINGS_SEARCH_ROW.ENVIRONMENT_SETUP,
-    caption: "Run in each new cloud sandbox after its repository is checked out.",
-    empty: "No setup scripts yet.",
-  },
-  [REPOSITORY_SCRIPT_KIND.ARCHIVE]: {
-    title: "Archive scripts",
-    anchor: SETTINGS_SEARCH_ROW.ENVIRONMENT_ARCHIVE,
-    caption:
-      "Run when an agent is archived, before its sandbox is deleted. Stopped after 90 seconds.",
-    empty: "No archive scripts yet.",
-  },
-} as const satisfies Record<
-  RepositoryScriptKind,
-  {
-    readonly title: string;
-    readonly anchor: string;
-    readonly caption: string;
-    readonly empty: string;
-  }
->;
 
 /** How many lines a script's editor stands while it holds fewer, so its placeholder and the first lines typed have room, and an empty one does not shrink as it is typed in. */
 const MIN_SCRIPT_LINES = 3;
@@ -195,10 +164,10 @@ function saveRefusal(error: Error | null): ShownError | undefined {
   );
 }
 
-/** Which script a save names: the workspace's install script, or a repository's setup or archive script. */
-type ScriptTarget =
-  | { readonly repository?: undefined }
-  | { readonly repository: string; readonly kind: RepositoryScriptKind };
+/** Which script a save names: the workspace's install script, or a repository's setup script. */
+interface ScriptTarget {
+  readonly repository?: string;
+}
 
 /** The workspace's sandbox setup, read as the page opens and on Try again. */
 function setupQuery(workspaceId: string) {
@@ -287,7 +256,6 @@ function useSaveScript(workspaceId: string) {
             workspaceId,
             repository: target.repository,
             script,
-            kind: target.kind,
           }),
     onSuccess: (answer) => drawAnswer(queries, workspaceId, answer, {}),
   });
@@ -405,7 +373,7 @@ function LastRun({
 /**
  * One script's row: its name and the script under it, which an owner or
  * admin edits in place, Discard and Save standing at the row's end once it
- * differs from what is saved, and a ⋯ with Remove once one is saved. The
+ * differs from what is saved, and a ⋯ with Delete once one is saved. The
  * install script's row stands with an empty script where none is saved, so
  * the first is typed in place as any edit is; a setup script just added
  * stands the same way, the caret in it and Cancel at its end until it is
@@ -475,7 +443,7 @@ function ScriptRow({
 
   const actions =
     manages && script !== ""
-      ? [{ label: "Remove", icon: <TrashIcon />, danger: true, onSelect: removal.ask }]
+      ? [{ label: "Delete", icon: <TrashIcon />, danger: true, onSelect: removal.ask }]
       : [];
 
   return (
@@ -528,7 +496,7 @@ function ScriptRow({
               value={shown}
               onChange={setEdited}
               placeholder={
-                target.repository === undefined ? PLACEHOLDER.INSTALL : PLACEHOLDER[target.kind]
+                target.repository === undefined ? PLACEHOLDER.INSTALL : PLACEHOLDER.SETUP
               }
               editable={manages}
               busy={saving.isPending}
@@ -547,11 +515,11 @@ function ScriptRow({
           question={{
             title:
               target.repository === undefined
-                ? `Remove ${name}?`
-                : `Remove ${name}'s ${target.kind} script?`,
-            verb: "Remove",
-            running: "Removing",
-            loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+                ? `Delete ${name}?`
+                : `Delete ${name}'s setup script?`,
+            verb: "Delete script",
+            running: "Deleting",
+            loss: CONFIRM_LOSS.IRREVERSIBLE,
             replayUnmasked: true,
             titleReplayMasked: repository !== undefined,
           }}
@@ -576,7 +544,7 @@ function AddRepositoryButton({
   workspaceId: string;
   /** The press's words: Add script, Add action. */
   label: string;
-  /** The repositories the menu leaves out: those with a script of the section's kind saved or being added. */
+  /** The repositories the menu leaves out: those with a setup script saved or being added. */
   taken: readonly string[];
   onPick: (repository: string) => void;
 }): React.JSX.Element {
@@ -611,21 +579,19 @@ function AddRepositoryButton({
 }
 
 /**
- * One section of the repositories' scripts of a kind: a row for each saved,
+ * The section of the repositories' setup scripts: a row for each saved,
  * and for each repository an owner or admin added and has not yet saved,
  * under its Add script.
  */
 function RepositoryScriptsSection({
   workspaceId,
-  kind,
   saved,
   read,
   manages,
   pictures,
 }: {
   workspaceId: string;
-  kind: RepositoryScriptKind;
-  /** The repositories' saved scripts of the kind, in the order of their names. */
+  /** The repositories' saved setup scripts, in the order of their names. */
   saved: WorkspaceSandboxSetupAnswer["setups"];
   /** What stands in the rows' place while the setup is read, or why it could not be; nothing once it is. */
   read: React.JSX.Element | undefined;
@@ -633,7 +599,6 @@ function RepositoryScriptsSection({
   pictures: boolean;
 }): React.JSX.Element {
   const [added, setAdded] = useState<readonly string[]>([]);
-  const words = REPOSITORY_SECTION[kind];
 
   // A repository added and since saved is the saved list's now, so it is let go of here.
   const unsaved = added.filter(
@@ -660,9 +625,8 @@ function RepositoryScriptsSection({
 
   return (
     <SettingsSection
-      title={words.title}
-      anchor={words.anchor}
-      caption={words.caption}
+      {...settingsSectionHead(SECTION.ENVIRONMENT_SETUP)}
+      caption="Run in each new cloud sandbox after its repository is checked out."
       action={
         manages ? (
           <AddRepositoryButton
@@ -676,13 +640,13 @@ function RepositoryScriptsSection({
     >
       {read ?? (
         <>
-          {rows.length === 0 ? <SettingsLine>{words.empty}</SettingsLine> : null}
+          {rows.length === 0 ? <SettingsLine>No setup scripts yet.</SettingsLine> : null}
           {rows.map((each) => (
             <ScriptRow
               key={each.repository.toLowerCase()}
               workspaceId={workspaceId}
               name={each.repository}
-              target={{ repository: each.repository, kind }}
+              target={{ repository: each.repository }}
               script={each.script}
               manages={manages}
               pictures={pictures}
@@ -1071,7 +1035,7 @@ function RunActionRow({
           availabilityItems,
           [
             {
-              label: "Remove",
+              label: "Delete",
               icon: <TrashIcon />,
               danger: true,
               disabled: busy,
@@ -1209,10 +1173,10 @@ function RunActionRow({
           open
           confirm={removal}
           question={{
-            title: `Remove ${action.label}?`,
-            verb: "Remove",
-            running: "Removing",
-            loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+            title: `Delete ${action.label}?`,
+            verb: "Delete run action",
+            running: "Deleting",
+            loss: CONFIRM_LOSS.IRREVERSIBLE,
             replayUnmasked: true,
             titleReplayMasked: true,
           }}
@@ -1288,8 +1252,7 @@ function RunActionsSection({
 
   return (
     <SettingsSection
-      title="Run actions"
-      anchor={SETTINGS_SEARCH_ROW.ENVIRONMENT_RUN_ACTIONS}
+      {...settingsSectionHead(SECTION.ENVIRONMENT_RUN_ACTIONS)}
       caption="Listed in each agent's Run menu, the default on its button. Each runs when pressed: in a cloud agent's sandbox, or on the Mac a local agent runs on."
       action={
         manages ? (
@@ -1439,10 +1402,20 @@ function RunActionsOfRepository({
   );
 }
 
-/** The scripts over one workspace: its install script, then each repository's setup script, then each one's archive script, then each one's run actions where the workspace has Run actions on. */
-export function CloudSetupSections({ workspace }: { workspace: Workspace }): React.JSX.Element {
+/** The scripts over one workspace: its install script, then each repository's setup script, then each one's run actions where the workspace has Run actions on. */
+export function CloudSetupSections({
+  workspace,
+  view,
+}: {
+  workspace: Workspace;
+  /** What the pages offer, which says whether Run actions is drawn as the search says it is. */
+  view: SettingsSearchInput | undefined;
+}): React.JSX.Element {
   const manages = managesWorkspace(workspace);
-  const runActionsOn = useWorkspaceExperiment(workspace.id, EXPERIMENT.RUN_ACTIONS);
+
+  const runActionsOn =
+    view !== undefined && settingsSectionDrawn(SECTION.ENVIRONMENT_RUN_ACTIONS, view);
+
   const pictures = useRepositoryPictures();
   const setup = useQuery(setupQuery(workspace.id));
   const answer = setup.data;
@@ -1460,8 +1433,7 @@ export function CloudSetupSections({ workspace }: { workspace: Workspace }): Rea
   return (
     <>
       <SettingsSection
-        title="Install software"
-        anchor={SETTINGS_SEARCH_ROW.ENVIRONMENT_INSTALL}
+        {...settingsSectionHead(SECTION.ENVIRONMENT_INSTALL)}
         caption="Installs tools in every new cloud sandbox. Runs with sudo."
       >
         {read ??
@@ -1481,16 +1453,7 @@ export function CloudSetupSections({ workspace }: { workspace: Workspace }): Rea
       </SettingsSection>
       <RepositoryScriptsSection
         workspaceId={workspace.id}
-        kind={REPOSITORY_SCRIPT_KIND.SETUP}
         saved={answer?.setups ?? []}
-        read={read}
-        manages={manages}
-        pictures={pictures}
-      />
-      <RepositoryScriptsSection
-        workspaceId={workspace.id}
-        kind={REPOSITORY_SCRIPT_KIND.ARCHIVE}
-        saved={answer?.archives ?? []}
         read={read}
         manages={manages}
         pictures={pictures}

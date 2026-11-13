@@ -31,7 +31,10 @@ const tellUnsavedWork = (): void =>
 export const DESKTOP_PLATFORM: AppPlatform = {
   copyText: (words) => askAct(ACT_KIND.WINDOW_COPY_TEXT, { words }),
   copyImage: (png) => png.then((drawn) => askAct(ACT_KIND.WINDOW_COPY_IMAGE, { png: drawn })),
-  copyRich: ({ html, text }) => askAct(ACT_KIND.WINDOW_COPY_RICH, { html, text }),
+  copyRich: ({ html, text, png }) =>
+    png === undefined
+      ? askAct(ACT_KIND.WINDOW_COPY_RICH, { html, text })
+      : png.then((drawn) => askAct(ACT_KIND.WINDOW_COPY_RICH, { html, text, png: drawn })),
   saveFile: ({ name, text }) => askAct(ACT_KIND.WINDOW_SAVE_FILE, { name, text }),
   focusPanel: () => tellAct(ACT_KIND.WINDOW_FOCUS_PANEL),
   menuOffers: (commands) => tellAct(ACT_KIND.WINDOW_MENU_OFFERS, { commands }),

@@ -735,7 +735,7 @@ test("a message that comes back reads its Markdown back into marks, and reads ou
   const box = mounted("");
 
   const message =
-    "Go **now**, *gently*, ~~not~~ `make it` per [the guide](https://example.com/guide) ***both*** ways";
+    "Go **now**, *gently*, ~~not~~ `make it` and `` a`b `` per [the guide](https://example.com/guide) ***both*** ways";
 
   box.handle.replace(message);
 
@@ -743,7 +743,7 @@ test("a message that comes back reads its Markdown back into marks, and reads ou
     strong: ["now", "both"],
     em: ["gently", "both"],
     s: ["not"],
-    code: ["make it"],
+    code: ["make it", "a`b"],
     a: ["the guide"],
   });
   assert.equal(box.drafts.at(-1), message);

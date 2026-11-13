@@ -38,7 +38,7 @@
 
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { Predicate } from "effect";
-import type { ElementContent, Root } from "hast";
+import type { Element, ElementContent, Root } from "hast";
 import type { Root as MarkdownRoot, PhrasingContent, RootContent } from "mdast";
 import { memo, type ReactNode, useMemo, useRef } from "react";
 import remarkGfm from "remark-gfm";
@@ -198,6 +198,30 @@ function inlineChildren(children: readonly ElementContent[]): ElementContent[] {
     const kept = inlineChildren(child.children);
 
     return INLINE_TAGS.has(child.tagName) ? [{ ...child, children: kept }] : kept;
+  });
+}
+
+/**
+ * The rehype step that stands each block of HTML in a note as a paragraph of
+ * its own, in a quote as at the top. Note that a note draws HTML as its
+ * words, which reach the tree as bare words between its blocks, the only
+ * words that stand there, so a block of HTML ran together with the next and
+ * had no gap above it; as a paragraph each reads as its own line, as the
+ * description's editor draws it.
+ */
+const htmlBlocksAsParagraphs = () => (tree: Root) => {
+  paragraphedHtml(tree);
+};
+
+function paragraphedHtml(holder: Root | Element): void {
+  holder.children = holder.children.map((child) => {
+    if (child.type === "text" && child.value.trim() !== "") {
+      return { type: "element", tagName: "p", properties: {}, children: [child] };
+    }
+
+    if (child.type === "element" && child.tagName === "blockquote") paragraphedHtml(child);
+
+    return child;
   });
 }
 
@@ -387,6 +411,7 @@ function WholeWords({
   const steps = useMemo(
     () => [
       placeTaskItems,
+      ...(look === MARKDOWN_LOOK.NOTE ? [htmlBlocksAsParagraphs] : []),
       ...(rehypePlugins ?? []),
       ...(look === MARKDOWN_LOOK.INLINE ? [unwrapBlocks] : []),
     ],

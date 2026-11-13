@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
   - "tools/*"
+  - "tools/oxlint/vespin"
 
 catalog:
   typescript: 7.0.2
@@ -151,6 +152,17 @@ patchedDependencies:
 # react-native-screens release carries #4851.
   react-native-screens@4.30.1: patches/react-native-screens@4.30.1.patch
 #
+# `@sentry/react-native` 8.28.0's native start (`RNSentrySDK.start`, which the
+# iOS app's AppDelegate calls first at launch, `useNativeInit`) reads the
+# bundled `sentry.options.json`; where that names no DSN, as a local or
+# simulator build's does, both its parse and its `{}` fallback fail ("Invalid
+# DSN URL") and it starts the SDK with no options at all, which faults in
+# `+[SentrySDKInternal startWithOptions:]` (EXC_BAD_ACCESS at 0x10) on some
+# launches. The patch returns without starting where no options could be made,
+# so a DSN-less build starts nothing natively and a build with a DSN is
+# unchanged. Delete it when a release stops starting with nil options.
+  "@sentry/react-native@8.28.0": patches/@sentry__react-native@8.28.0.patch
+#
 # `@tiptap/extension-list` 3.33.1 strips an ordered list item's continuation
 # lines by the marker's width less its `.` or `)`, so each line of a code
 # block in a numbered item opens with a stray space, one more on every save,
@@ -160,13 +172,19 @@ patchedDependencies:
 # TipTap release carries #8405.
   "@tiptap/extension-list@3.33.1": patches/@tiptap__extension-list@3.33.1.patch
 #
-# `@tiptap/markdown` 3.33.1 writes two code spans that touch as one span where
-# another mark changes between them, so an edited line holding inline code
-# right against bold inline code saved one span with the bold's asterisks
-# inside it. The patch makes the serializer half of upstream's
-# ueberdosis/tiptap#8662 (#8637): a code span is written innermost, closed
-# where another mark opens or closes while it goes on, and opened again
-# after. Delete it when a TipTap release carries #8662.
+# `@tiptap/markdown` 3.33.1 is patched for two things. It writes two code spans
+# that touch as one span where another mark changes between them, so an edited
+# line holding inline code right against bold inline code saved one span with
+# the bold's asterisks inside it; the patch makes the serializer half of
+# upstream's ueberdosis/tiptap#8662 (#8637): a code span is written innermost,
+# closed where another mark opens or closes while it goes on, and opened again
+# after. And its `MarkdownManager` registers its extensions' tokenizers on the
+# global `marked` for good, so every editor opened adds about six more and
+# parsing a description slows with each one (ueberdosis/tiptap#8316): a
+# 20-section description took ~16 ms to open in a fresh window and ~300 ms
+# after 400 editors had opened; the patch makes upstream's one-line change in
+# ueberdosis/tiptap#8317, each manager lexing with a `marked` of its own.
+# Delete each half when a TipTap release carries its PR.
   "@tiptap/markdown@3.33.1": patches/@tiptap__markdown@3.33.1.patch
 
 # Transitive versions raised past a published advisory, each within the major

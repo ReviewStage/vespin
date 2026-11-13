@@ -40,6 +40,7 @@ const storedGrouping = Schema.Literals([
 /** A kept Assigned to. */
 const storedAssignedTo = Schema.Union([
   Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.ME) }),
+  Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.FOLLOWING) }),
   Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.ANYONE) }),
   Schema.Struct({ kind: Schema.Literal(ASSIGNED_TO.MEMBER), userId: Schema.String }),
 ]);

@@ -76,11 +76,11 @@ test("a Claude Code agent is told of Claude Code's own tools and never of Vespin
 });
 
 test("a Claude Code or Codex agent is told of its browser, which Vespin's MCP server serves it, with Playwright run from its own shell", () => {
-  const BROWSER = `\`${AGENT_TOOL.BROWSER}\` drives a real browser, a Chromium in your own sandbox`;
+  const BROWSER = `\`${AGENT_TOOL.BROWSER}\` drives a Chromium in your own sandbox`;
 
   const SHELL_OF = [
-    [CODER_HARNESS.CLAUDE_CODE, "on Playwright from Bash,"],
-    [CODER_HARNESS.CODEX, "on Playwright from your shell,"],
+    [CODER_HARNESS.CLAUDE_CODE, "on Playwright from Bash."],
+    [CODER_HARNESS.CODEX, "on Playwright from your shell."],
   ] as const;
 
   for (const brief of Object.values(AGENT_BRIEF)) {
@@ -205,7 +205,7 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
     "`apply_patch`",
     "`update_plan`",
     "Codex's own web search",
-    "Codex's own subagent tools",
+    "Codex's subagent tools",
   ];
 
   for (const brief of Object.values(AGENT_BRIEF)) {
@@ -264,11 +264,7 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
         const label = `${brief} ${harness} ${memberToken ? "token" : "app"}`;
         assert.ok(waiting.includes(`wait with \`${AGENT_TOOL.SCHEDULE_WAKEUP}\``), label);
         // GitHub's message that the checks finished reaches an agent on the App alone, so only it is told to cancel the wakeup then.
-        assert.equal(
-          waiting.includes(`call \`${AGENT_TOOL.SCHEDULE_WAKEUP}\` with \`stop: true\``),
-          !memberToken,
-          label,
-        );
+        assert.equal(waiting.includes("cancel the wakeup with `stop: true`"), !memberToken, label);
         assert.ok(!waiting.includes("ScheduleWakeup"), label);
         assert.ok(!waiting.includes("--watch --fail-fast"), label);
       }
@@ -277,9 +273,9 @@ test("a Codex agent is told of Codex's own tools and never of Vespin's it is not
 });
 
 test("an agent on a task is told of the task's links, pages, and comments", () => {
-  const TASK_LINK = "`https://vespin.dev/<workspace>/task/<number>` link, or one by the task's id";
-  const PAGES = `show it with \`${AGENT_TOOL.SHOW_PAGE}\``;
-  const COMMENTS = `answer in that thread with \`${AGENT_TOOL.REPLY_TO_COMMENT}\``;
+  const TASK_LINK = "`https://vespin.dev/<workspace>/task/<number or id>` link";
+  const PAGES = `a self-contained HTML page with \`${AGENT_TOOL.SHOW_PAGE}\``;
+  const COMMENTS = `answered in its own thread with \`${AGENT_TOOL.REPLY_TO_COMMENT}\``;
 
   for (const brief of Object.values(AGENT_BRIEF)) {
     const onTask = coderInstructions("Acme/Relay", brief, TASK_ADDRESS, standingFor("Acme/Relay"));
@@ -289,8 +285,8 @@ test("an agent on a task is told of the task's links, pages, and comments", () =
 });
 
 test("every agent on a task is told how to update its description, one handed a prompt told to read it first", () => {
-  const UPDATING = "## Updating the description";
-  const READ_FIRST = `Read it with \`${AGENT_TOOL.READ_TASK}\``;
+  const UPDATING = `**The description** (\`${AGENT_TOOL.EDIT_DESCRIPTION}\`)`;
+  const READ_FIRST = `read it with \`${AGENT_TOOL.READ_TASK}\``;
 
   const told = (brief: AgentBrief, task: OwnTask) => {
     const words = coderInstructions("Acme/Relay", brief, task, standingFor("Acme/Relay"));
@@ -307,7 +303,8 @@ test("every agent on a task is told how to update its description, one handed a 
 });
 
 test("an agent on a task with no repository names what it decided in its message, never in a pull request's description, which it opens none of", () => {
-  const IN_PULL_REQUEST = "pull request's description";
+  const IN_PULL_REQUEST =
+    "Its description says what the task's description asked and what you decided";
 
   const decided = (repository: string | null) =>
     coderInstructions(
@@ -346,7 +343,7 @@ test("every agent on a task is told to keep its task's status with update_task, 
 });
 
 test("an agent asked for a plan, a proposal, or research opens no pull request of a document, and writes it where it can: the description, or a page on its task", () => {
-  const NO_DOCUMENT = "never commit the write-up as a document";
+  const NO_DOCUMENT = "commit no document and open no pull request for it";
   const PLAN = `write it into the description with \`${AGENT_TOOL.EDIT_DESCRIPTION}\``;
   const PAGE = `show it as a page with \`${AGENT_TOOL.SHOW_PAGE}\``;
 
@@ -368,7 +365,7 @@ test("the thread post tool tells the session never to ask for a credential or a 
 });
 
 test("the session sends whatever is ready for the developer to look at or review to a thread, a pull request among it, and a test only the developer can run, and an agent another coding agent started may message that agent before its report", () => {
-  const READY = "ready for them to look at or review";
+  const READY = "ready for them to look at";
 
   for (const brief of Object.values(AGENT_BRIEF)) {
     const inbox = coderInstructions(
@@ -376,11 +373,11 @@ test("the session sends whatever is ready for the developer to look at or review
       brief,
       TASK_ADDRESS,
       standingFor("Acme/Relay"),
-    ).split("## Threads")[1];
+    ).split("## Talking to the developer")[1];
 
     assert.ok(inbox?.includes(READY), brief);
-    assert.ok(inbox?.includes("a pull request you opened or marked ready"), brief);
-    assert.ok(inbox?.includes("needs to test something by hand"), brief);
+    assert.ok(inbox?.includes("a pull request, a page, or a screenshot"), brief);
+    assert.ok(inbox?.includes("testing what your own checks cannot reach"), brief);
     // An agent another coding agent started reports to it, and is not told to keep off the threads.
     assert.ok(
       inbox?.includes(
@@ -399,12 +396,12 @@ test("an agent is told whose its commits are and to end each on the trailer it i
     {
       by: COMMIT_BY.DEVELOPER,
       coAuthor: BOT_TRAILER,
-      says: "set to the developer's own GitHub account",
+      says: "set to their GitHub account",
     },
     {
       by: COMMIT_BY.DEVELOPER,
       coAuthor: undefined,
-      says: "set to the developer's own GitHub account",
+      says: "set to their GitHub account",
     },
     { by: COMMIT_BY.APP, coAuthor: DEVELOPER_TRAILER, says: "set to its bot" },
     { by: COMMIT_BY.APP, coAuthor: undefined, says: "set to its bot" },
@@ -429,11 +426,11 @@ test("an agent is told whose its commits are and to end each on the trailer it i
       );
 
       if (authorship.coAuthor === undefined) {
-        assert.ok(words.includes("add a `Co-authored-by` trailer"), named);
+        assert.ok(words.includes("add no `Co-authored-by` trailer"), named);
         assert.ok(!words.includes("exactly as written: `Co-authored-by"), named);
       } else {
         assert.ok(words.includes(`exactly as written: \`${authorship.coAuthor}\``), named);
-        assert.ok(!words.includes("add a `Co-authored-by` trailer"), named);
+        assert.ok(!words.includes("add no `Co-authored-by` trailer"), named);
       }
 
       assert.ok(
@@ -471,7 +468,7 @@ test("an agent on its starter's own token reads its checks and its pull request 
     assert.ok(onToken.includes("`gh api repos/{owner}/{repo}/commits/<sha>/check-runs`"), brief);
     assert.ok(onToken.includes("`gh api repos/{owner}/{repo}/pulls/<number>/reviews`"), brief);
     assert.ok(onToken.includes("A draft cannot be marked ready from here"), brief);
-    assert.ok(!onToken.includes("reaches you as a message from GitHub"), brief);
+    assert.ok(!onToken.includes("reach you as messages from GitHub"), brief);
     assert.ok(onToken.includes("GitHub App on the repository gets you woken"), brief);
   }
 });
@@ -485,8 +482,8 @@ test("every agent is told that what happens on its pull request after its turn r
       standingFor("Acme/Relay"),
     );
 
-    assert.ok(instructions.includes("reaches you as a message from GitHub"), brief);
-    assert.ok(instructions.includes("before you end a turn on an open pull request"), brief);
+    assert.ok(instructions.includes("reach you as messages from GitHub"), brief);
+    assert.ok(instructions.includes("Before you end a turn on an open pull request"), brief);
   }
 });
 
@@ -500,17 +497,18 @@ test("every agent is told to reply on an inbox thread to a question or a request
     );
 
     assert.ok(
-      instructions.includes(`reply on that thread with \`${INBOX_TOOLS.POST.name}\` under its key`),
+      instructions.includes(
+        "answer a question or a request there, on that thread, never in your reply alone",
+      ),
       brief,
     );
-    assert.ok(instructions.includes("never answer them in your message alone"), brief);
     // Note that a request acted on in silence leaves the member asking again, so its end is said on the thread.
     assert.ok(
-      instructions.includes("once a request is done, say in a line or two what you did"),
+      instructions.includes("once a request is done, say there in a line what you did"),
       brief,
     );
     // Note that a progress note on a thread is noise the developer must acknowledge, so none is asked for.
-    assert.ok(instructions.includes("Never post on a thread to say how the work is going"), brief);
+    assert.ok(instructions.includes("Never post progress"), brief);
     assert.ok(!instructions.includes("saying what you did with it"), brief);
   }
 });
@@ -593,7 +591,7 @@ test("with Memory off the instructions say nothing of the workspace's memory; wi
     assert.ok(!off.includes("## The workspace's memory"), brief);
     assert.ok(!off.includes(`\`${AGENT_TOOL.SAVE_MEMORY}\``), brief);
     const start = on.indexOf("## The workspace's memory\n\n");
-    const end = on.indexOf("## What your messages are", start);
+    const end = on.indexOf("## Writing", start);
     assert.ok(start > 0 && end > start, brief);
     assert.ok(on.slice(start, end).includes(`\`${AGENT_TOOL.SEARCH_MEMORY}\``), brief);
     assert.equal(on.slice(0, start) + on.slice(end), off, brief);
@@ -613,24 +611,46 @@ test("with Done and follow-ups off the instructions say nothing of ending a turn
 
     assert.ok(!off.includes(`\`${AGENT_TOOL.END_TURN}\``), brief);
     const start = on.indexOf("## Ending a turn\n\n");
-    const end = on.indexOf("## What your messages are", start);
+    const end = on.indexOf("## Writing", start);
     assert.ok(start > 0 && end > start, brief);
     assert.ok(on.slice(start, end).includes(`\`${AGENT_TOOL.END_TURN}\``), brief);
     assert.equal(on.slice(0, start) + on.slice(end), off, brief);
   }
 });
 
+test("with Suggestions off the instructions say nothing of add_suggestion; with it on they add its section before the memory's, and nothing else", () => {
+  const off = coderInstructions(
+    "Acme/Relay",
+    AGENT_BRIEF.PROMPT,
+    TASK_LINK,
+    standingFor("Acme/Relay"),
+  );
+
+  const on = coderInstructions(
+    "Acme/Relay",
+    AGENT_BRIEF.PROMPT,
+    TASK_LINK,
+    standingFor("Acme/Relay", { replyButtons: true }),
+  );
+
+  assert.ok(!off.includes(AGENT_TOOL.ADD_SUGGESTION));
+  const start = on.indexOf("## Suggestions in your reply\n\n");
+  const end = on.indexOf("## Writing", start);
+  assert.ok(start > 0 && end > start);
+  assert.ok(on.slice(start, end).includes(`\`${AGENT_TOOL.ADD_SUGGESTION}\``));
+  assert.equal(on.slice(0, start) + on.slice(end), off);
+});
+
 test("with Task descriptions off the instructions say nothing of a description: no edit_description, no description handed with a task's link or read_task, no description to name or write a write-up into, and comments on pages alone", () => {
   const DESCRIPTION_WORDS = [
     `\`${AGENT_TOOL.EDIT_DESCRIPTION}\``,
-    "## Updating the description",
+    "**The description**",
     "take that decision into the description",
     "write it into the description",
-    "what its description said when the message was sent",
-    "its description included",
-    "Your task's description, whose link is",
-    "Keep a mention in the description",
-    "comment threads on a description's text",
+    "a section of its description",
+    "Your task's description:",
+    "keep a mention in the description",
+    "A comment on the description",
   ];
 
   for (const brief of Object.values(AGENT_BRIEF)) {
@@ -658,8 +678,12 @@ test("with Task descriptions off the instructions say nothing of a description: 
       [],
       brief,
     );
-    const comments = off.slice(off.indexOf("## Comments"), off.indexOf("## Handing work"));
-    assert.ok(comments.includes(`\`${AGENT_TOOL.REPLY_TO_COMMENT}\``), brief);
+    assert.ok(
+      off.includes(
+        `A comment on a page that reaches you is answered in its own thread with \`${AGENT_TOOL.REPLY_TO_COMMENT}\``,
+      ),
+      brief,
+    );
     assert.ok(off.includes(`show it as a page with \`${AGENT_TOOL.SHOW_PAGE}\``), brief);
   }
 

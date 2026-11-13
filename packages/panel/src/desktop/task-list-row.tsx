@@ -1,4 +1,5 @@
 import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { openerOf } from "@repo/features/link-standing-model";
 import { TASK_AGENTS_STATUS, taskAgentsStatus } from "@repo/features/task-agents-model";
 import {
   type ChildTaskCount,
@@ -50,7 +51,6 @@ import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { openTaskInTab } from "../tasks/task-menu-items.js";
 import { TASK_RENAME_TERMS, useTaskRename } from "../tasks/task-rename.js";
 import { TaskKey } from "../tasks/task-standing.js";
-import { openerOf } from "../tasks/use-link-standing.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { useMarkedUnread } from "../tasks/use-task-looks.js";
 import { useTaskPullRequests } from "../tasks/use-task-work.js";

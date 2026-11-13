@@ -1,10 +1,10 @@
 /**
- * code-coloring.ts -- code colored by main's one highlighter, asked once per language and words: a transcript's fenced block, and a script as it is typed.
+ * code-coloring.ts -- code colored by main's one highlighter, asked once per language and words: a transcript's fenced block, a block open in a text's editor, and a script as it is typed.
  */
 
 import type { CodeLines } from "@repo/features/tasks-view";
 import { ACT_KIND, COLORED_CODE_MAX_CHARS, FENCE_LANGUAGE_MAX_CHARS } from "@repo/host/acts";
-import { keepPreviousData, queryOptions, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, type QueryClient, queryOptions, useQuery } from "@tanstack/react-query";
 import { askAct } from "./act.js";
 import { QUERY_ROOT } from "./query-keys.js";
 
@@ -33,6 +33,22 @@ export function colorable(language: string, code: string): boolean {
     code.trim() !== "" &&
     code.length <= COLORED_CODE_MAX_CHARS
   );
+}
+
+/**
+ * A block's coloring as `client` holds it, asked of main where it holds none;
+ * none for a block not colored at all. Note that a block the drawn text
+ * colored is answered from that read, so a text opened to be edited opens
+ * its blocks in the colors they were drawn in.
+ */
+export function heldColoring(
+  client: QueryClient,
+  language: string,
+  code: string,
+): Promise<CodeLines | null> {
+  return colorable(language, code)
+    ? client.fetchQuery(coloringQueryOptions(language, code))
+    : Promise.resolve(null);
 }
 
 /**

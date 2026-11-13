@@ -71,6 +71,7 @@ import { SignInGate } from "../sign-in-gate.js";
 import { ChipCards, type TaskFocus } from "../tasks/chip-cards.js";
 import { MentionedAgents } from "../tasks/mentioned-place.js";
 import { NewTaskDialog } from "../tasks/new-task-dialog.js";
+import { isOverviewTab } from "../tasks/use-main-tabs.js";
 import { useTaskLooks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectAdminAccess, selectAdminAccessPending } from "../use-app-state.js";
@@ -977,8 +978,11 @@ export function DesktopShell({
   // toolbar beneath it leaves the toggle room then and only then. The
   // Automations page stands in the plan's place, so it draws
   // no panel to toggle; an agent's page draws the agent's own, and the Inbox
-  // the chosen item's task's.
-  const descriptionToggle = tasks.page === TASKS_PAGE.DOCUMENT && !standingIn;
+  // the chosen item's task's. The task's details take the panel's room too,
+  // so while they stand there is no panel to toggle either; but a panel left
+  // filling the window over them hides them too, and its toggle is the way out.
+  const detailsShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
+  const descriptionToggle = tasks.page === TASKS_PAGE.DOCUMENT && !standingIn && !detailsShown;
   // A phone's task leads its own row with the way back to the page it was opened from, named for it (`task-pane-switcher.tsx`).
   const awayLabel = awayBack(history.away, history.onLeave).label;
   const { onLeave } = history;

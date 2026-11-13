@@ -8,10 +8,9 @@ import {
   MEMORY_EDITOR_WORDS,
   MEMORY_PAGE_WORDS,
   MEMORY_RECALLS_WORDS,
-  MEMORY_USE_WORDS,
+  MEMORY_UNRECALLED_WORDS,
   memoriesByUse,
   memorySaveRefusal,
-  memoryUse,
 } from "@repo/features/memory-settings-words";
 import { MEMORY_BOUNDS, type MemorySummary } from "@repo/features/memory-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
@@ -29,7 +28,6 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
-  Badge,
   BUTTON_VARIANT,
   Button,
   CHIP_LOOK,
@@ -62,7 +60,6 @@ import {
   SettingsLine,
   SettingsSection,
   SkeletonRegion,
-  STATUS_TONE,
   Stack,
   selectionMenu,
   TEXT_ELEMENT,
@@ -76,7 +73,6 @@ import {
   useConfirmDialog,
   useLeaving,
   useMenu,
-  useMinute,
 } from "@repo/ui";
 import {
   ACTOR_KIND,
@@ -149,16 +145,17 @@ import { ReadFailed } from "./marks.js";
  * The memories stand in a table (`DataTable`), one row each, sorted from any
  * heading but the ⋯'s, the memories agents recalled most in the last thirty
  * days first, then the most recently kept or corrected, so what no agent
- * reaches sinks to the foot, where it is pruned. A row's columns: its box,
- * its words whole at any width, drawn as the notes are since a memory is
- * Markdown (`pnpm db:generate` in backticks), with New under them on one
- * kept in the last week and Unused on one older than the recall window that
- * no agent was handed in it, and whose they are and when they were kept on
- * the card the words hang, and beside New or Unused the agent that saved
- * it as that agent's mention chip, wearing its harness's mark, whose press
- * opens the agent's transcript at the line that kept it, or the task's chip
- * where the window cannot name the agent; how often agents were handed it
- * in the window; when last; and its ⋯. A row opens nothing. Its ⋯, a right-click on it, and
+ * reaches sinks to the foot, where it is pruned. The page stands at
+ * Settings' wide measure, so every column shows in a big window, and in a
+ * narrow one the table scrolls sideways in its own frame. A row's columns:
+ * its box; its words whole at any width, drawn as the notes are since a
+ * memory is Markdown (`pnpm db:generate` in backticks), whose they are and
+ * when they were kept on the card the words hang; Saved by, the agent that
+ * saved it as that agent's mention chip, wearing its harness's mark, whose
+ * press opens the agent's transcript at the line that kept it, or the
+ * task's chip where the window cannot name the agent, sorted by the name
+ * the chip says; how often agents were handed it in the window; when last;
+ * and its ⋯. A row opens nothing. Its ⋯, a right-click on it, and
  * the menu key offer Edit, Copy text, and Delete to a reader who may change
  * it: its words are theirs, or they own or administer the workspace. To any
  * other reader Edit stands nowhere and Delete stands unavailable, saying who
@@ -206,6 +203,7 @@ const KEPT_BY = "Saved by";
 const COLUMN = {
   CHOSEN: "chosen",
   MEMORY: "memory",
+  SAVED_BY: "savedBy",
   RECALLS: "recalls",
   LAST_RECALLED: "lastRecalled",
 } as const;
@@ -214,6 +212,7 @@ const COLUMN = {
 const HEADING = {
   [COLUMN.CHOSEN]: "Select",
   [COLUMN.MEMORY]: "Memory",
+  [COLUMN.SAVED_BY]: KEPT_BY,
   [COLUMN.RECALLS]: "Recalls",
   [COLUMN.LAST_RECALLED]: "Last recalled",
 } as const;
@@ -334,15 +333,6 @@ function SourceChip({
   return chip ?? null;
 }
 
-/** New on a memory kept in the last week, Unused on one older than the recall window that no agent was handed in it, and nothing otherwise. */
-function UseBadge({ memory }: { memory: MemorySummary }): React.JSX.Element | null {
-  const use = memoryUse(memory, useMinute());
-
-  if (use === MEMORY_USE_WORDS.NEW) return <Badge tone={STATUS_TONE.WORKING}>{use}</Badge>;
-
-  return use === MEMORY_USE_WORDS.UNUSED ? <Badge tone={STATUS_TONE.ATTENTION}>{use}</Badge> : null;
-}
-
 /** The card a memory's words hang: whose they are, and when they were last kept or corrected. */
 function KeeperCard({ shown }: { shown: ShownMemory }): React.JSX.Element {
   const { actor, memory } = shown;
@@ -370,14 +360,15 @@ function rowId(row: MemoryTableRow): string {
   return row.memory.id;
 }
 
-/** What the table's cells draw that the page holds: a memory's box and its words. */
+/** What the table's cells draw that the page holds: a memory's box, its words, and the agent that saved it. */
 interface MemoryCells {
   readonly chosen: (shown: ShownMemory) => ReactNode;
   readonly words: (shown: ShownMemory) => ReactNode;
+  readonly source: (shown: ShownMemory) => ReactNode;
 }
 
 /** No cells, where no table hands its own. */
-const NO_CELLS: MemoryCells = { chosen: () => null, words: () => null };
+const NO_CELLS: MemoryCells = { chosen: () => null, words: () => null, source: () => null };
 
 /**
  * What the table's cells draw from the page, handed down rather than closed
@@ -397,11 +388,21 @@ function WordsCell({ shown }: { shown: ShownMemory }): ReactNode {
   return useContext(MemoryCellsContext).words(shown);
 }
 
+/** The agent that saved a memory, as the page draws it. */
+function SourceCell({ shown }: { shown: ShownMemory }): ReactNode {
+  return useContext(MemoryCellsContext).source(shown);
+}
+
+/** What a memory's Saved by column sorts by: the name its chip says, the agent's or its task's, and nothing where no source traveled. */
+function sourceName(shown: ShownMemory): string {
+  return shown.agentName ?? shown.memory.source?.taskName ?? "";
+}
+
 const column = createDataTableColumnHelper<MemoryTableRow>();
 
 /**
- * The table's columns: a memory's box; its words, wrapping, with the agent
- * that saved it under them; how often agents were handed it in the recall
+ * The table's columns: a memory's box; its words, wrapping; the agent that
+ * saved it, by its name; how often agents were handed it in the recall
  * window; and when last.
  */
 function memoryColumns(): DataTableColumns<MemoryTableRow> {
@@ -420,13 +421,21 @@ function memoryColumns(): DataTableColumns<MemoryTableRow> {
       sortDescFirst: false,
       cell: ({ row: { original } }) => <WordsCell shown={original} />,
     }),
+    column.accessor(sourceName, {
+      id: COLUMN.SAVED_BY,
+      header: HEADING[COLUMN.SAVED_BY],
+      sortFn: "text",
+      sortDescFirst: false,
+      cell: ({ row: { original } }) => <SourceCell shown={original} />,
+    }),
     column.accessor((row) => row.memory.recalls30d, {
       id: COLUMN.RECALLS,
       header: HEADING[COLUMN.RECALLS],
       meta: { kind: DATA_TABLE_COLUMN_KIND.NUMERIC },
       sortFn: "basic",
       sortDescFirst: true,
-      cell: ({ getValue }) => (getValue() === 0 ? MEMORY_USE_WORDS.NONE : formatCount(getValue())),
+      cell: ({ getValue }) =>
+        getValue() === 0 ? MEMORY_UNRECALLED_WORDS.NONE : formatCount(getValue()),
     }),
     column.accessor((row) => row.memory.lastRecalledAt ?? 0, {
       id: COLUMN.LAST_RECALLED,
@@ -439,7 +448,7 @@ function memoryColumns(): DataTableColumns<MemoryTableRow> {
         return (
           <Text tone={TEXT_TONE.MUTED}>
             {last === null ? (
-              MEMORY_USE_WORDS.NEVER
+              MEMORY_UNRECALLED_WORDS.NEVER
             ) : (
               <Time at={last} look={TIME_LOOK.AGO} hint={false} />
             )}
@@ -461,7 +470,7 @@ function MemoriesSkeleton({ label }: { label: string }): React.JSX.Element {
         label={TABLE_LABEL}
         columns={MEMORY_COLUMNS}
         rows={SKELETON_ROWS}
-        minWidth={DATA_TABLE_MIN_WIDTH.NARROW}
+        minWidth={DATA_TABLE_MIN_WIDTH.WIDE}
         menus
       />
     </SkeletonRegion>
@@ -759,40 +768,27 @@ function saveAnswered(answer: MemorySaveAnswerView): ActionResult {
     : { status: ACTION_RESULT_STATUS.REJECTED, reason: refusal };
 }
 
-/** A memory's words as its row draws them: lit where the search landed, hanging the card of whose they are, with New or Unused and the agent that saved them under them. */
+/** A memory's words as its row draws them: lit where the search landed, and hanging the card of whose they are. */
 function MemoryWords({
   shown,
   found,
-  workspaceStep,
 }: {
   shown: ShownMemory;
   /** The words the search asks for, lit where they landed. */
   found: readonly string[];
-  /** The step the workspace's links name it by, which the agent's chip is written under. */
-  workspaceStep: string;
 }): React.JSX.Element {
-  const { source } = shown.memory;
-
   return (
-    <Stack gap={GAP.TIGHT}>
-      <Tooltip label={`Saved by ${actorName(shown.actor)}`} card={<KeeperCard shown={shown} />}>
-        <div className="memory-words">
-          {/* A memory's words stand inside its row's card, so they stay words going nowhere, links among them. */}
-          <MarkdownMessage
-            words={shown.memory.text}
-            className="memory-text"
-            found={found}
-            link={null}
-          />
-        </div>
-      </Tooltip>
-      <Inline gap={GAP.ICON}>
-        <UseBadge memory={shown.memory} />
-        {source === null ? null : (
-          <SourceChip source={source} agentName={shown.agentName} workspaceStep={workspaceStep} />
-        )}
-      </Inline>
-    </Stack>
+    <Tooltip label={`Saved by ${actorName(shown.actor)}`} card={<KeeperCard shown={shown} />}>
+      <div className="memory-words">
+        {/* A memory's words stand inside its row's card, so they stay words going nowhere, links among them. */}
+        <MarkdownMessage
+          words={shown.memory.text}
+          className="memory-text"
+          found={found}
+          link={null}
+        />
+      </div>
+    </Tooltip>
   );
 }
 
@@ -1091,7 +1087,14 @@ function MemoryList({
 
   const acts: readonly SelectionAct[] = [
     ...(chosen.some((memory) => memory.forgettable) && !forgetting
-      ? [{ label: MEMORY_ACT.FORGET, icon: <TrashIcon />, onAct: () => askForget(chosen) }]
+      ? [
+          {
+            label: MEMORY_ACT.FORGET,
+            icon: <TrashIcon />,
+            danger: true,
+            onAct: () => askForget(chosen),
+          },
+        ]
       : []),
     { label: MEMORY_ACT.COPY, icon: <GLYPH.COPY />, onAct: () => copyAll(chosen) },
   ];
@@ -1114,7 +1117,11 @@ function MemoryList({
         onChange={() => setSelected(toggled(standing, shown.memory.id))}
       />
     ),
-    words: (shown) => <MemoryWords shown={shown} found={found} workspaceStep={workspaceStep} />,
+    words: (shown) => <MemoryWords shown={shown} found={found} />,
+    source: ({ memory: { source }, agentName }) =>
+      source === null ? null : (
+        <SourceChip source={source} agentName={agentName} workspaceStep={workspaceStep} />
+      ),
   };
 
   const rowMenu = (row: MemoryTableRow): ListRowMenu => {
@@ -1167,7 +1174,7 @@ function MemoryList({
                 rows={listed}
                 getRowId={rowId}
                 empty=""
-                minWidth={DATA_TABLE_MIN_WIDTH.NARROW}
+                minWidth={DATA_TABLE_MIN_WIDTH.WIDE}
                 initialSorting={MOST_RECALLED_FIRST}
                 rowMenu={rowMenu}
               />

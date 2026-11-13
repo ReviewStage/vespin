@@ -43,7 +43,7 @@
  * A member's change to a CLAIMED message finds no message and changes
  * nothing, which the route answers as not found: it has left the queue. A
  * mark left standing, a window closed mid-edit, holds the queue until any
- * of the member's windows cancels it from the row.
+ * of the windows that may change the queue cancels it from the row.
  *
  * Every write holds the agent's queue lock until it commits, so two changes
  * at once land one after the other, and each that changed anything moves
@@ -172,7 +172,7 @@ function messageOf(row: typeof QueuedRowSchema.Type): QueuedMessageRow {
     attachments,
     claimedAt: row.claimedAt ?? undefined,
     sendKey: row.sendKey ?? undefined,
-    // SAFETY: the column is written only by `queueWhileBooting`, from a send's own line.
+    // SAFETY: the column is written only by `queueWhileBooting` and a queued message spoken on a call, from their own lines.
     line: (row.line ?? undefined) as QueuedLine | undefined,
   };
 }
@@ -671,6 +671,8 @@ export function queueAgentMessage(
     readonly id: string;
     readonly text: string;
     readonly attachments?: readonly AgentAttachment[] | undefined;
+    /** What it names beside its words where it is not a plain typed message, such as a line spoken on a call (`QueuedLine`). */
+    readonly line?: QueuedLine | undefined;
   },
 ): AgentQueueEffect<Option.Option<QueueOutcome>> {
   let inserted = false;
@@ -683,7 +685,7 @@ export function queueAgentMessage(
       const queued = yield* queueLineInLock(agentId, userId, {
         ...message,
         sendKey: undefined,
-        line: undefined,
+        line: message.line,
       });
 
       inserted = queued.inserted;

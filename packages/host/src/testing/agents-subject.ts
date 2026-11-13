@@ -669,6 +669,8 @@ function fakeService() {
 
         return { agent: { ...AGENT, status: AGENT_STATUS.STARTING } };
       }),
+    replyButton: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    pressReplyButton: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
         asked.push(`delete:${agentId}`);
@@ -786,6 +788,7 @@ function fakeService() {
 
         return { keys: [] };
       }),
+    useResetCredit: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     renameSubscription: (rename) =>
       Effect.sync(() => {
         asked.push(`rename:${rename.subscriptionId}`);

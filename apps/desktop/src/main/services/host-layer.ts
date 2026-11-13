@@ -33,6 +33,7 @@ import { armedWatchLayer, mirrorPlatform } from "@repo/host/node";
 import { ConfigProvider, Layer } from "effect";
 import * as FetchHttpClient from "effect/http/FetchHttpClient";
 import { net } from "electron";
+import { computerUseHelperLayer } from "../native/computer-use";
 import { thisMacHostLayer } from "../native/this-mac-host";
 import type { DesktopConfig } from "./desktop-config";
 import { mainSentryTracer } from "./telemetry-service";
@@ -109,15 +110,18 @@ export function hostAssemblyLayerFor(
 ): Layer.Layer<HostAssemblyTag | ServiceReach, DuplicateGatewayMethod | DuplicateHostAct> {
   const seams = hostSeamLayersFor(dependencies);
 
+  const spawning = Layer.provideMerge(
+    NodeChildProcessSpawner.layer,
+    Layer.mergeAll(NodeFileSystem.layer.pipe(Layer.provide(armedWatchLayer)), NodePath.layer),
+  );
+
   return Layer.provide(
     // The desktop runs every platform concern: it is the host they were written for.
     hostAssemblyLayer(ALL_HOST_PLATFORM_CONCERNS),
     Layer.mergeAll(
       Layer.provideMerge(hostKernelLayer, seams),
-      Layer.provideMerge(
-        NodeChildProcessSpawner.layer,
-        Layer.mergeAll(NodeFileSystem.layer.pipe(Layer.provide(armedWatchLayer)), NodePath.layer),
-      ),
+      // The computer-use helper is the app's own child, so the Mac's grants are the app's.
+      Layer.provideMerge(computerUseHelperLayer(), spawning),
       FetchHttpClient.layer,
     ),
   ).pipe(Layer.provideMerge(serviceReachLayer));

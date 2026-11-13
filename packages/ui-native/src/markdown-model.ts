@@ -1,19 +1,30 @@
 // markdown-model.ts -- a message's Markdown read into what the iOS app draws: blocks, and runs of words, links, and chips, each link read as the panel reads it.
 
 import { dateChipText } from "@repo/features/date-mention";
+import { type Draft, draftKindOf, readDraft } from "@repo/features/draft-text";
 import {
   type EntityKind,
   entityOfDestination,
   entityOfMention,
   entityWordHeard,
 } from "@repo/features/entity-kind";
-import { type LinkDestination, openableLinkOf, readLink } from "@repo/features/link-grammar";
+import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import {
+  LINK_DESTINATION,
+  type LinkDestination,
+  linkOf,
+  openableLinkOf,
+  readLink,
+} from "@repo/features/link-grammar";
+import { githubPageAsked } from "@repo/features/link-standing-model";
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { markdownTree } from "@repo/features/markdown-tree";
-import { LINK_CHIP, linkChipOf, MENTION_KIND } from "@repo/features/mention-link";
+import { LINK_CHIP, linkChipOf, MENTION_KIND, type Mention } from "@repo/features/mention-link";
 import { placeChipLook } from "@repo/features/place-chip-model";
+import { type ReplyButtonLink, readReplyButtonLink } from "@repo/features/reply-button-wire";
 import { Match } from "effect";
 import type {
+  Code,
   Definition,
   ImageReference,
   LinkReference,
@@ -46,6 +57,7 @@ export const MARKDOWN_BLOCK = {
   QUOTE: "quote",
   TABLE: "table",
   CODE: "code",
+  DRAFT: "draft",
   RULE: "rule",
   PICTURE: "picture",
 } as const;
@@ -56,6 +68,8 @@ export const MARKDOWN_RUN = {
   CODE: "code",
   LINK: "link",
   CHIP: "chip",
+  /** A suggestion an agent wrote into its reply as a link (`@repo/features/reply-button-wire`), which the screen reads and draws. */
+  SUGGESTION: "suggestion",
   BREAK: "break",
 } as const;
 
@@ -102,6 +116,20 @@ export interface MarkdownChip {
   /** Its kind's word before its name, where the name does not say it already: "pull request #42 Fix the refresh". */
   readonly heard: string;
   readonly target: LinkTarget;
+  /** The GitHub pull request's or issue's page it names, by which its standing is read; none for any other chip. */
+  readonly github?: string | undefined;
+}
+
+/**
+ * A suggestion's link as its words name it: the button it reads, the words it
+ * was written with, its label until the button is read, and where the plain
+ * link goes, to the agent whose reply holds it, drawn where no suggestion
+ * stands (Suggestions off, the button unread, or refused).
+ */
+export interface MarkdownSuggestion {
+  readonly link: ReplyButtonLink;
+  readonly words: string;
+  readonly target: LinkTarget;
 }
 
 export type MarkdownRun =
@@ -113,6 +141,7 @@ export type MarkdownRun =
       readonly runs: readonly MarkdownRun[];
     }
   | { readonly kind: typeof MARKDOWN_RUN.CHIP; readonly chip: MarkdownChip }
+  | { readonly kind: typeof MARKDOWN_RUN.SUGGESTION; readonly suggestion: MarkdownSuggestion }
   | { readonly kind: typeof MARKDOWN_RUN.BREAK };
 
 interface MarkdownListItem {
@@ -142,6 +171,8 @@ export type MarkdownBlock =
       readonly rows: readonly (readonly (readonly MarkdownRun[])[])[];
     }
   | { readonly kind: typeof MARKDOWN_BLOCK.CODE; readonly text: string }
+  /** Words an agent wrote to be sent elsewhere, fenced ```slack, ```email, or ```draft, read as the panel's draft card reads them. */
+  | { readonly kind: typeof MARKDOWN_BLOCK.DRAFT; readonly draft: Draft }
   | { readonly kind: typeof MARKDOWN_BLOCK.RULE }
   | { readonly kind: typeof MARKDOWN_BLOCK.PICTURE; readonly source: string; readonly alt: string };
 
@@ -257,7 +288,89 @@ function linkChip(href: string, label: string, reading: MarkdownReading): Markdo
     return chipOf(MENTION_KIND.DATE, name, { kind: LINK_TARGET.NONE });
   }
 
-  return chipOf(entityOfMention(chip.mention).kind, chip.name, linkTarget(href));
+  const drawn = chipOf(entityOfMention(chip.mention).kind, chip.name, linkTarget(href));
+  const github = githubAddressOf(chip.mention);
+
+  return github === undefined ? drawn : { ...drawn, github };
+}
+
+/** The GitHub pull request's or issue's page a mention names, as the panel's chip asks GitHub of it; none for any other. */
+function githubAddressOf(mention: Mention): string | undefined {
+  // Note that a well-known site's page names no provider to ask.
+  if (mention.kind !== MENTION_KIND.LINK || !("provider" in mention)) return undefined;
+
+  if (mention.provider !== INTEGRATION_PROVIDER.GITHUB) return undefined;
+
+  return githubPageAsked(mention.url) === undefined ? undefined : mention.url;
+}
+
+/** The address a link node names, through its definition where it is a reference; none for any other node. */
+function linkHrefOf(node: Nodes, reader: Reader): string | undefined {
+  if (node.type === "link") return node.url;
+
+  return node.type === "linkReference" ? referenced(node, reader)?.url : undefined;
+}
+
+/** Each GitHub page the links under `node` name as chips, by `reader`. */
+function githubPagesUnder(node: Nodes, reader: Reader): readonly string[] {
+  const href = linkHrefOf(node, reader);
+
+  const own =
+    href === undefined || !("children" in node)
+      ? undefined
+      : linkChip(href, node.children.map(wordsOf).join(""), reader.reading)?.github;
+
+  const inner =
+    "children" in node
+      ? node.children.flatMap((child: Nodes) => githubPagesUnder(child, reader))
+      : [];
+
+  return own === undefined ? inner : [own, ...inner];
+}
+
+/** Each suggestion the links under `node` name, by `reader`. */
+function replyButtonsUnder(node: Nodes, reader: Reader): readonly ReplyButtonLink[] {
+  const href = linkHrefOf(node, reader);
+  const own = href === undefined ? undefined : readReplyButtonLink(href);
+
+  const inner =
+    "children" in node
+      ? node.children.flatMap((child: Nodes) => replyButtonsUnder(child, reader))
+      : [];
+
+  return own === undefined ? inner : [own, ...inner];
+}
+
+/**
+ * The suggestions `words` name, each button once, read as `markdownBlocks`
+ * reads them, so a screen reads each one's button while it draws them.
+ */
+export function markdownReplyButtons(
+  words: string,
+  reading: MarkdownReading,
+): readonly ReplyButtonLink[] {
+  if (markdownTooDeep(words)) return [];
+  const tree = markdownTree(words);
+  const links = replyButtonsUnder(tree, { reading, definitions: definitionsIn(tree) });
+
+  return links.filter(
+    (link, at) =>
+      links.findIndex(
+        (each) => each.agentId === link.agentId && each.buttonId === link.buttonId,
+      ) === at,
+  );
+}
+
+/**
+ * The GitHub pull requests' and issues' pages `words` name as chips, each
+ * once, read as `markdownBlocks` reads them, so a screen holds each one's
+ * standing while it draws them.
+ */
+export function markdownGithubPages(words: string, reading: MarkdownReading): readonly string[] {
+  if (markdownTooDeep(words)) return [];
+  const tree = markdownTree(words);
+
+  return [...new Set(githubPagesUnder(tree, { reading, definitions: definitionsIn(tree) }))];
 }
 
 function linkRun(
@@ -266,7 +379,22 @@ function linkRun(
   marks: WordMarks,
   reader: Reader,
 ): MarkdownRun {
-  const chip = linkChip(href, children.map(wordsOf).join(""), reader.reading);
+  const words = children.map(wordsOf).join("");
+  const button = readReplyButtonLink(href);
+
+  if (button !== undefined) {
+    const agentHref = linkOf(
+      { kind: LINK_DESTINATION.AGENT, agentId: button.agentId },
+      button.workspace,
+    );
+
+    return {
+      kind: MARKDOWN_RUN.SUGGESTION,
+      suggestion: { link: button, words, target: linkTarget(agentHref) },
+    };
+  }
+
+  const chip = linkChip(href, words, reader.reading);
 
   if (chip !== undefined) return { kind: MARKDOWN_RUN.CHIP, chip };
 
@@ -408,6 +536,15 @@ function tableBlock(node: Table, reader: Reader): MarkdownBlock {
   };
 }
 
+/** A fence: a draft where it is named for where its words go, as the panel draws every rendered text's (`DraftFence`), and code otherwise. */
+function codeBlock(node: Code): MarkdownBlock {
+  const kind = draftKindOf(node.lang ?? "");
+
+  if (kind === undefined) return { kind: MARKDOWN_BLOCK.CODE, text: node.value };
+
+  return { kind: MARKDOWN_BLOCK.DRAFT, draft: readDraft(kind, node.value) };
+}
+
 function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
   switch (node.type) {
     case "heading":
@@ -427,7 +564,7 @@ function blockOf(node: RootContent, reader: Reader): MarkdownBlock[] {
     case "table":
       return [tableBlock(node, reader)];
     case "code":
-      return [{ kind: MARKDOWN_BLOCK.CODE, text: node.value }];
+      return [codeBlock(node)];
     case "thematicBreak":
       return [{ kind: MARKDOWN_BLOCK.RULE }];
     case "html":
@@ -461,16 +598,34 @@ function blocksOf(nodes: readonly RootContent[], reader: Reader): MarkdownBlock[
   return nodes.flatMap((node) => blockOf(node, reader));
 }
 
-/** A run's words as VoiceOver hears them, each chip by its kind and name. */
-function heardRun(run: MarkdownRun): string {
+/** A chip as VoiceOver hears it where nothing more is known of it: by its kind and name. */
+function chipHeardAsWritten(chip: MarkdownChip): string {
+  return chip.heard;
+}
+
+/** A suggestion as VoiceOver hears it where nothing more is known of it: by the words it was written with. */
+function suggestionHeardAsWritten(suggestion: MarkdownSuggestion): string {
+  return suggestion.words;
+}
+
+/** How a line's chips and suggestions are heard. */
+interface LineHearing {
+  readonly chip: (chip: MarkdownChip) => string;
+  readonly suggestion: (suggestion: MarkdownSuggestion) => string;
+}
+
+/** A run's words as VoiceOver hears them, each chip and suggestion as `hearing` says it. */
+function heardRun(run: MarkdownRun, hearing: LineHearing): string {
   switch (run.kind) {
     case MARKDOWN_RUN.WORDS:
     case MARKDOWN_RUN.CODE:
       return run.text;
     case MARKDOWN_RUN.LINK:
-      return run.runs.map(heardRun).join("");
+      return run.runs.map((each) => heardRun(each, hearing)).join("");
     case MARKDOWN_RUN.CHIP:
-      return run.chip.heard;
+      return hearing.chip(run.chip);
+    case MARKDOWN_RUN.SUGGESTION:
+      return hearing.suggestion(run.suggestion);
     case MARKDOWN_RUN.BREAK:
       return "\n";
   }
@@ -480,18 +635,25 @@ function heardRun(run: MarkdownRun): string {
 function holdsChip(run: MarkdownRun): boolean {
   if (run.kind === MARKDOWN_RUN.LINK) return run.runs.some(holdsChip);
 
-  return run.kind === MARKDOWN_RUN.CHIP;
+  return run.kind === MARKDOWN_RUN.CHIP || run.kind === MARKDOWN_RUN.SUGGESTION;
 }
 
 /**
- * A line's words as VoiceOver hears them where it holds a chip, each chip by
- * its kind and name; nothing where it holds none, since its words are heard
+ * A line's words as VoiceOver hears them where it holds a chip, each chip as
+ * `chipHeard` says it, by its kind and name unless the caller knows more of
+ * it, such as a GitHub page's title and state; nothing where it holds none, since its words are heard
  * as drawn. Note that a chip stands in the line as a view, which iOS never
  * hears inside a run of text, so a line read without this says
  * "Pull request:" and stops.
  */
-export function heardLine(runs: readonly MarkdownRun[]): string | undefined {
-  return runs.some(holdsChip) ? runs.map(heardRun).join("") : undefined;
+export function heardLine(
+  runs: readonly MarkdownRun[],
+  chipHeard: (chip: MarkdownChip) => string = chipHeardAsWritten,
+  suggestionHeard: (suggestion: MarkdownSuggestion) => string = suggestionHeardAsWritten,
+): string | undefined {
+  const hearing = { chip: chipHeard, suggestion: suggestionHeard };
+
+  return runs.some(holdsChip) ? runs.map((run) => heardRun(run, hearing)).join("") : undefined;
 }
 
 /** Markdown as the blocks the app draws, read as the panel reads it; words nested too deep to parse safely are one block of plain text. */

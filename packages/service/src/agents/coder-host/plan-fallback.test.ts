@@ -20,10 +20,15 @@ import {
 import { deviceAgentLinesWaiting } from "@repo/database/models/device-agent-store";
 import { beatDevice, registerDevice } from "@repo/database/models/device-store";
 import { parseKeyRing, sealProviderKey } from "@repo/database/models/provider-key-seal";
-import { saveProviderKey, setPlanStatus } from "@repo/database/models/provider-key-store";
+import {
+  listProviderKeyRows,
+  saveProviderKey,
+  setPlanStatus,
+} from "@repo/database/models/provider-key-store";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
+import { turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
 import {
@@ -46,12 +51,15 @@ import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken } from "@repo/sandbox/vercel/testing";
 import { TURN_STATUS, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
+import { HTTP_STATUS, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
+import { eq } from "drizzle-orm";
 import { Clock, DateTime, Duration, Effect, Layer, Option, Redacted, Result, Schema } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { afterEach, vi } from "vitest";
 import { sealCodexDeviceCredentials } from "../../accounts/chatgpt-credentials.js";
+import { spentResetCredit } from "../../accounts/chatgpt-reset-credits.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../../environment.js";
 import { type AfterResponse, keptAfterResponse } from "../../http/after-response.js";
 import { NO_GITHUB } from "../../testing/github-app-fake.js";
@@ -805,6 +813,144 @@ it.layer(SUITE)("a turn its plan's limit cuts short", (it) => {
         assert.deepEqual(
           [turn?.status, agentFailureOf(turn)],
           [TURN_STATUS.FAILED, AGENT_FAILURE.PLAN_LIMIT],
+        );
+      }),
+  );
+});
+
+it.layer(SUITE)("a reset credit spent on a ChatGPT plan at its limit", (it) => {
+  it.effect(
+    "carries on the plan's waiting Codex agent before its reset, a retry ChatGPT did not answer sending the same key, and leaves another account's waiting agent waiting",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const spec = HARNESS[CONVERSATION_RUNTIME.CODEX];
+
+        const limitedAgent = Effect.gen(function* () {
+          const { userId, agent, sessions, sequence, launches } = yield* accountWith(
+            CONVERSATION_RUNTIME.CODEX,
+            false,
+            FALLBACK.NONE,
+          );
+
+          const reached = reaching(userId, sessions);
+          const post = yield* eventsRoute(reached);
+          const sent = yield* writtenLine(agent, "Fix the invitations.");
+          const opened = yield* sessions.open(sent);
+          assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+          yield* sessions.deliverTurn(opened.sessionId, agent.conversationId);
+          const [first] = yield* launches;
+          assert.ok(first !== undefined);
+          const resetsAt = (yield* Clock.currentTimeMillis) + Duration.toMillis(LIMIT_FOR);
+          const limited = numbered(first.firstSequence, spec.limited(sent.lineId, resetsAt));
+          sequence.next = first.firstSequence + limited.length;
+          assert.equal(yield* post(first, limited), 200);
+          const [plan] = yield* listProviderKeyRows(userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+          assert.ok(plan !== undefined);
+
+          return { userId, agent, reached, launches, plan };
+        });
+
+        const mine = yield* limitedAgent;
+        const theirs = yield* limitedAgent;
+
+        // ChatGPT takes nothing the first time it is asked to spend, spends one the second, and then counts what is left.
+        const spends = [
+          jsonResponse({}, HTTP_STATUS.SERVER_ERROR),
+          jsonResponse({ code: "reset" }),
+        ];
+
+        // ChatGPT lists the plan's credits in no order, a spent one among them.
+        const soonest = Date.UTC(2026, 10, 30);
+        const later = Date.UTC(2026, 11, 14);
+
+        const chatgpt = recordingHttpClient((request) =>
+          request.method === "POST"
+            ? (spends.shift() ?? jsonResponse({ code: "already_redeemed" }))
+            : request.pathname.endsWith("/rate-limit-reset-credits")
+              ? jsonResponse({
+                  credits: [
+                    { id: "later", status: "available", expires_at: new Date(later).toISOString() },
+                    { id: "spent", status: "redeemed", expires_at: null },
+                    {
+                      id: "soonest",
+                      status: "available",
+                      expires_at: new Date(soonest).toISOString(),
+                    },
+                  ],
+                })
+              : jsonResponse({
+                  rate_limit: {
+                    primary_window: { used_percent: 0, limit_window_seconds: 18_000, reset_at: 1 },
+                  },
+                  rate_limit_reset_credits: { available_count: 2 },
+                }),
+        );
+
+        const key = randomUUID();
+        const next = randomUUID();
+
+        const spendUnder = (under: string) =>
+          spentResetCredit(mine.userId, keyRing(), mine.plan.id, under).pipe(
+            Effect.provide(Layer.merge(chatgpt.layer, mine.reached)),
+          );
+
+        const unanswered = yield* spendUnder(key);
+        const retried = yield* spendUnder(key);
+        // The next press, once the plan's credits are listed, names the one that expires soonest.
+        yield* spendUnder(next);
+
+        const SpendSchema = Schema.fromJsonString(
+          Schema.Struct({
+            redeem_request_id: Schema.String,
+            credit_id: Schema.optionalKey(Schema.String),
+          }),
+        );
+
+        const keys = yield* Effect.forEach(
+          chatgpt.requests.filter((request) => request.method === "POST"),
+          (request) =>
+            Effect.promise(() => new Response(request.init.body ?? null).text()).pipe(
+              Effect.flatMap(Schema.decodeUnknownEffect(SpendSchema)),
+              Effect.map((sent) => [sent.redeem_request_id, sent.credit_id]),
+            ),
+        );
+
+        const [plan] = yield* listProviderKeyRows(mine.userId, PROVIDER_KEY_KIND.CHATGPT_OAUTH);
+
+        const waits = yield* Effect.flatMap(Database, (db) =>
+          db
+            .select({ waitsUntil: turns.waitsUntil })
+            .from(turns)
+            .where(eq(turns.conversationId, theirs.agent.conversationId)),
+        );
+
+        assert.deepEqual(
+          [Option.getOrUndefined(unanswered), Option.getOrUndefined(retried)],
+          [undefined, "reset"],
+        );
+        assert.deepEqual(keys, [
+          [key, undefined],
+          [key, undefined],
+          [next, "soonest"],
+        ]);
+        assert.deepEqual(
+          [plan?.status, plan?.resetCredits],
+          [
+            PROVIDER_KEY_STATUS.VERIFIED,
+            {
+              count: 2,
+              credits: [
+                { id: "soonest", expiresAt: soonest },
+                { id: "later", expiresAt: later },
+              ],
+            },
+          ],
+        );
+        assert.equal((yield* mine.launches).length, 2, "the plan's agent went on before its reset");
+        assert.ok(
+          waits.some((turn) => turn.waitsUntil !== null),
+          "another account's agent still waits",
         );
       }),
   );

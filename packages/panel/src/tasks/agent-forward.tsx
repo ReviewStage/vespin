@@ -15,111 +15,154 @@ import { ACT_KIND } from "@repo/host/acts";
 import type { PortActKind } from "@repo/host/contract";
 import { HOST_CAPABILITY } from "@repo/settings";
 import {
+  AnchoredPopover,
+  BUTTON_SIZE,
+  BUTTON_VARIANT,
+  Button,
+  ButtonLink,
   CHIP_LOOK,
   Chip,
   ChipName,
-  MENU_DETAIL,
-  MENU_ITEM_MARK,
-  riseAbove,
+  IconButton,
+  MenuSection,
+  POPOVER_ALIGN,
+  POPOVER_PANEL_LOOK,
+  POPOVER_SIDE,
+  POPOVER_WIDTH,
+  PopoverPanel,
+  PortTable,
+  PortTableCell,
+  type PortTableColumn,
+  PortTableRow,
   STATUS_TONE,
   StatusGlyph,
   Tooltip,
-  useMenu,
 } from "@repo/ui";
-import { CopyIcon, GlobeIcon, LinkIcon, PlugIcon, UnlinkIcon } from "@repo/ui/icons";
+import { ArrowUpRight, GLYPH, LaptopIcon, LinkIcon, PlugIcon } from "@repo/ui/icons";
 import { type QueryClient, queryOptions, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
-import { askAct, pressAct } from "../act.js";
+import { useEffect, useId, useRef, useState } from "react";
+import { askAct, pressAct, toastActFailure } from "../act.js";
 import { appPlatform } from "../app-platform.js";
-import { LINK_COPY, useCopyToast } from "../copy-feedback.js";
-import { ActionMenu, type MenuAction, type MenuEntry } from "../desktop/action-menu.js";
+import { useCopyToast } from "../copy-feedback.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { showToast, useToast } from "../toast.js";
 import { appStateQuery, selectCapability, selectPortForwarding } from "../use-app-state.js";
+import { turnUnderWay } from "./agent-model.js";
+import { linkPressOf } from "./use-open-link.js";
 
 /**
- * agent-forward.tsx -- an agent's cloud ports at a plug at its box's foot: on every host, one of them shared by a public link; on the desktop, forwarded to this Mac's localhost too, turned on or off there, with a toast saying so once.
+ * agent-forward.tsx -- an agent's cloud ports at a plug at its box's foot, its popover a table of them: each port opened on this Mac's localhost or shared by link in one press, its stop beside it once it is on; and a toast with Open as a server starts.
  *
  * Only an agent in a cloud sandbox has ports, so the plug stands nowhere
- * else. Both menus are drawn by one view model (`PlugPorts`, `portRows`);
- * only where its ports come from differs:
+ * else. The popover is drawn from one view model (`PlugPorts`); only where
+ * its ports come from differs:
  *
  * - Where the host listens on the Mac's loopback
- *   (`HOST_CAPABILITY.PORT_FORWARDS`), the desktop's, and the agent's
- *   forwarding is on, the host forwards one agent at a time and follows its sandbox's ports and shared link itself, which
- *   it keeps in app state (`portForwarding`), so the plug only reads them
- *   and asks the host to turn forwarding on or off and to share a port
- *   (`PORT_SHARE_SET`). Nothing is forwarded on its own: the developer turns
- *   an agent's forwarding on from its plug, and it stands until they turn it
- *   off or its sandbox stops. As the first port reaches the Mac, a toast
- *   says its address once, with Open.
- * - Everywhere else, a browser tab's host and a desktop agent forwarding
- *   is off for among them, the plug asks the
- *   service for the ports and the shared link through the host
- *   (`AGENTS_PORTS`, `AGENTS_PORT_SHARED`), every few seconds while its menu
- *   stands open and the link once as it is drawn, never waking a stopped
- *   sandbox, and shares or stops sharing one (`AGENTS_PORT_SHARE`,
- *   `AGENTS_PORT_UNSHARE`), laying the answer over what it read.
+ *   (`HOST_CAPABILITY.PORT_FORWARDS`), the desktop's, and has forwarded one
+ *   of the agent's ports, the host follows the agent's ports and shared link
+ *   itself and keeps them in app state (`portForwarding`), so the popover
+ *   only reads them and asks the host to forward or let go of a port
+ *   (`PORT_FORWARD_SET`) and to share one (`PORT_SHARE_SET`). The host
+ *   forwards one agent at a time, and of it only the ports opened.
+ * - Everywhere else, a browser tab's host and a desktop agent with no port
+ *   forwarded among them, the popover asks the service for the ports and the
+ *   shared link through the host (`AGENTS_PORTS`, `AGENTS_PORT_SHARED`),
+ *   every few seconds while it stands open, and, on the desktop, while a turn
+ *   runs so a server's start is heard, never waking a stopped sandbox; it
+ *   shares or stops sharing one (`AGENTS_PORT_SHARE`, `AGENTS_PORT_UNSHARE`),
+ *   laying the answer over what it read.
  *
- * The box's foot wears a plug after the Cloud chip, its glyph alone, as
- * Cursor's cloud agents wear one: while the agent is forwarded, or on a
- * agent not forwarded while a port is shared, it wears a dot in the
- * complete tone, and its hint says the address, "Forwarding to
- * localhost:3000" or "Sharing :3000". Its menu holds the ports, so one can
- * be shared whether or not it is forwarded, and on the desktop the Forward
- * to localhost switch under them, beside the plug the menu rises from.
- * One row per port, "localhost:3000" where it reached this Mac
- * and ":3000" where it did not, with what serves it beside, such as
- * "storybook dev", has a submenu beside it holding Open, which
- * opens a forwarded port in the default browser (saying where it came from,
- * "from :3000", where the Mac's port differs), and Share, which shares it by
- * a public link. The one shared port wears a link glyph, and its submenu
- * holds Open link, Copy link, and Stop sharing. The switch, a setting,
- * leaves the menu standing as every menu's switch does, so the ports appear
- * under it, and so does every action in a port's submenu, so it redraws
- * with the link or with Share again; the menu closes only on a click
- * outside it or Escape. Every word drawn is the app's own, port numbers
- * among them, and the link is never drawn, so a screen recording shows them
- * as they read, but what serves a port, which is made from a command line
- * and kept masked. The plug's hint names it too, after the port it says.
+ * The plug is its glyph alone after the Cloud chip, wearing a dot in the
+ * complete tone while a port is forwarded or shared, its hint saying the
+ * address or the port. Its popover is a `PortTable`: a line per port, its
+ * number first and what serves it under, under This Mac (on the desktop)
+ * and Team link. Each cell is one press that gets its place ready and acts:
+ * Open forwards the port and opens it in the default browser, and Share
+ * shares it by link and copies the link; the button spins while it gets
+ * ready, its glyph wears the dot once its place is on, and a borderless ×
+ * beside it stops it. One port is shared at a time, so Share on another
+ * moves the link. Every button's hint says what its press does now. The
+ * link itself is never drawn, so a screen recording shows the app's words,
+ * port numbers among them, as they read, but what serves a port, made from
+ * a command line, masked.
+ *
+ * On the desktop, once the ports are read, a port that starts listening
+ * after says so in a toast whose Open forwards and opens it, as the
+ * popover's Open does.
  */
 
-/** What an agent forwarding is off for reads. */
+/** What an agent with no port forwarded reads. */
 const OFF: PortForwardingAnswer = { on: false, running: false, ports: [] };
 
-/** What the plug, its menu, and the toast say, beyond what every list of the ports says (`AGENT_PORTS_WORDS`). */
-const WORDS = {
-  ...AGENT_PORTS_WORDS,
-  SWITCH: "Forward to localhost",
-  OFF: "Ports not forwarded",
-  FORWARDING: "Forwarding to this Mac",
-  FORWARDING_TO: "Forwarding to",
-  BUSY: "Port busy on this Mac",
-  FORWARDED: "Forwarded",
-  FROM_SANDBOX: "From the agent's sandbox",
-  OPEN: "Open",
+/** The places a port reaches, one column each. */
+const PLACE = {
+  MAC: "mac",
+  TEAM: "team",
 } as const;
 
-/** One port the plug lists: the sandbox's, the local port this Mac reaches it at where it was forwarded to one, and what serves it where that was read. */
+type Place = (typeof PLACE)[keyof typeof PLACE];
+
+/** What the plug, its popover, and its toasts say. */
+const WORDS = {
+  ...AGENT_PORTS_WORDS,
+  PORT: "Port",
+  THIS_MAC: "This Mac",
+  TEAM_LINK: "Team link",
+  OPEN: "Open",
+  FORWARDING_TO: "Forwarding to",
+  WAITING: "Nothing is running yet. Ports show here once the agent starts a server.",
+  READING: "Looking for ports…",
+  NOT_READ: "Couldn't read the ports.",
+  STOPPED: "The sandbox is asleep. Ports show here once it runs again.",
+  FORWARDING: "Forwarding to this Mac",
+  CREATING: "Creating the link",
+  STOPPING: "Stopping",
+  LINK_COPIED: "Team link copied",
+  COPY_AGAIN: "Copy the team link again",
+  CREATE_LINK: "Create a link your teammates can open, and copy it",
+  NOT_LISTENING: "That port isn't listening in the sandbox anymore.",
+  FROM_SANDBOX: "In the agent's sandbox",
+} as const;
+
+/** The two places' heads. */
+const MAC_COLUMN: PortTableColumn = {
+  key: PLACE.MAC,
+  icon: <LaptopIcon />,
+  label: WORDS.THIS_MAC,
+};
+
+const TEAM_COLUMN: PortTableColumn = {
+  key: PLACE.TEAM,
+  icon: <LinkIcon />,
+  label: WORDS.TEAM_LINK,
+};
+
+/** One port the popover lists: the sandbox's, the local port this Mac reaches it at where it is forwarded, and what serves it where that was read. */
 interface PlugPort {
   readonly port: number;
   readonly localPort: number | undefined;
   readonly label: string | undefined;
   /** Whether forwarding found no local port free for it. */
-  readonly busy: boolean;
+  readonly unavailable: boolean;
 }
 
 /**
- * What the plug's menu draws its ports from, wherever they come from: the
- * ports, the one shared by link, the line drawn where none is listed, and a
- * share or its close asked.
+ * What the popover draws its ports from, wherever they come from: the
+ * ports, whether they have been read, the one shared by link, the line
+ * drawn where none is listed, and a share or its close asked, a share
+ * answering its link where it was made.
  */
 interface PlugPorts {
   readonly ports: readonly PlugPort[];
+  readonly read: boolean;
   readonly shared: SharedPort | undefined;
   readonly none: string;
-  readonly share: (port: number | null) => void;
+  readonly share: (port: number) => Promise<string | undefined>;
+  readonly unshare: () => Promise<void>;
 }
+
+/** The agent fields the plug reads: where it runs, and whether a turn of it runs. */
+type PlugAgent = Pick<AgentSummary, "id" | "machine" | "status" | "stoppable">;
 
 /** The local address a port is forwarded to. */
 function localAddress(localPort: number): string {
@@ -131,21 +174,66 @@ function served(address: string, label: string | undefined): string {
   return label === undefined ? address : `${address} (${label})`;
 }
 
-/** The local ports that reached this Mac, the lowest sandbox port first. */
-function reached(answer: PortForwardingAnswer): number[] {
-  return answer.ports.flatMap((each) =>
-    each.localPort === undefined || each.state === PORT_FORWARD_STATE.UNAVAILABLE
-      ? []
-      : [each.localPort],
+/** The address a forwarded port opens at in the default browser. */
+function localHref(localPort: number): string {
+  return `http://${localAddress(localPort)}`;
+}
+
+function openWeb(href: string): void {
+  appPlatform().openWeb(href);
+}
+
+/** A port's act the host or the service did not take, said in a FAILED toast as a refused press is. */
+function actFailed(kind: PortActKind, agentId: string, cause: unknown, words: string): void {
+  showToast({
+    words,
+    tone: STATUS_TONE.DANGER,
+    failure: { surface: FAILURE_SURFACE.ACT, act: kind, cause, about: failureAboutOf({ agentId }) },
+  });
+}
+
+/** Where a port stands on this Mac as the host answered: its local port where it listens, or that it could not. */
+function localOf(
+  answer: PortForwardingAnswer,
+  port: number,
+): Pick<PlugPort, "localPort" | "unavailable"> {
+  const each = answer.ports.find((candidate) => candidate.port === port);
+  const unavailable = each?.state === PORT_FORWARD_STATE.UNAVAILABLE;
+  const listens = each !== undefined && !unavailable && each.state !== PORT_FORWARD_STATE.OFF;
+
+  return { localPort: listens ? each.localPort : undefined, unavailable };
+}
+
+/** Says a port could not open on this Mac: its local ports in use, or it no longer listening. */
+function notOpened(port: number, unavailable: boolean): void {
+  showToast({
+    words: unavailable ? `Port ${port} is in use on this Mac.` : WORDS.NOT_LISTENING,
+    tone: STATUS_TONE.ATTENTION,
+    replayUnmasked: true,
+  });
+}
+
+/** The port forwarded to this Mac and opened in the default browser, or why it was not said. */
+async function forwardAndOpen(agentId: string, port: number): Promise<void> {
+  const answer = await askAct(ACT_KIND.PORT_FORWARD_SET, { agentId, port, on: true }).catch(
+    (cause: unknown) => ({ cause }),
   );
-}
 
-function setForwarding(agentId: string, on: boolean): void {
-  void pressAct(ACT_KIND.PORT_FORWARD_SET, { agentId, on });
-}
+  if ("cause" in answer) {
+    toastActFailure({
+      surface: FAILURE_SURFACE.ACT,
+      act: ACT_KIND.PORT_FORWARD_SET,
+      cause: answer.cause,
+      about: failureAboutOf({ agentId }),
+    });
 
-function openLocal(localPort: number): void {
-  appPlatform().openWeb(`http://${localAddress(localPort)}`);
+    return;
+  }
+
+  const { localPort, unavailable } = localOf(answer, port);
+
+  if (localPort === undefined) notOpened(port, unavailable);
+  else openWeb(localHref(localPort));
 }
 
 type UseForwardingResult = {
@@ -154,7 +242,7 @@ type UseForwardingResult = {
   answer: PortForwardingAnswer;
 };
 
-/** How forwarding stands for the agent: whether it runs in the cloud, and whether this Mac forwards it. */
+/** How forwarding stands for the agent: whether it runs in the cloud, whether this Mac can forward, and what it forwards. */
 function useForwarding(agent: Pick<AgentSummary, "id" | "machine">): UseForwardingResult {
   const capable =
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.PORT_FORWARDS) }).data ===
@@ -170,52 +258,41 @@ function useForwarding(agent: Pick<AgentSummary, "id" | "machine">): UseForwardi
   };
 }
 
-/** Says once, as the agent's first forwarded port reaches the Mac, where it opens. */
-export function useForwardToast(agent: Pick<AgentSummary, "id" | "machine">): void {
-  const { answer } = useForwarding(agent);
-  // Note that the toast answers the first port reaching the Mac, not each read, so a forward that stands says nothing more.
-  const toast = useToast();
-  const ports = reached(answer);
-  const first = ports[0];
-  const hadPorts = useRef(first !== undefined);
-  useEffect(() => {
-    const had = hadPorts.current;
-    hadPorts.current = first !== undefined;
-
-    if (had || first === undefined) return;
-    const more = ports.length - 1;
-    toast({
-      tone: STATUS_TONE.COMPLETE,
-      glyph: () => <PlugIcon aria-hidden="true" />,
-      words: `${WORDS.FORWARDED} ${localAddress(first)}`,
-      detail: more > 0 ? `And ${more} more from the agent's sandbox` : WORDS.FROM_SANDBOX,
-      replayUnmasked: true,
-      action: { label: WORDS.OPEN, replayUnmasked: true, onPress: () => openLocal(first) },
-    });
-  }, [first, ports.length, toast]);
-}
-
-/** The ports as this Mac's host forwards them, kept in app state, and a share asked of it. */
+/** The ports as this Mac's host keeps them in app state, and a share asked of it. */
 function forwardedPorts(agentId: string, answer: PortForwardingAnswer): PlugPorts {
-  return {
-    ports: answer.ports.map(({ port, localPort, state, label }) => {
-      const busy = localPort === undefined || state === PORT_FORWARD_STATE.UNAVAILABLE;
+  const share = async (port: number | null) => {
+    const asked = await askAct(ACT_KIND.PORT_SHARE_SET, { agentId, port }).catch(
+      (cause: unknown) => ({ cause }),
+    );
 
-      return { port, localPort: busy ? undefined : localPort, label, busy };
-    }),
+    if (!("cause" in asked)) return asked.shared?.url;
+    actFailed(
+      ACT_KIND.PORT_SHARE_SET,
+      agentId,
+      asked.cause,
+      port === null ? WORDS.NOT_UNSHARED : WORDS.NOT_SHARED,
+    );
+
+    return undefined;
+  };
+
+  return {
+    ports: answer.ports.map(({ port, label }) => ({ port, label, ...localOf(answer, port) })),
+    read: true,
     shared: answer.shared,
-    none: WORDS.WAITING,
-    share: (port) => void pressAct(ACT_KIND.PORT_SHARE_SET, { agentId, port }),
+    none: answer.running ? WORDS.WAITING : WORDS.STOPPED,
+    share: (port) => share(port),
+    unshare: async () => void (await share(null)),
   };
 }
 
-/** The agent's listening ports, as the service answers them; read only while `open`, every few seconds. */
-function agentPortsQuery(agentId: string, open: boolean) {
+/** The agent's listening ports, as the service answers them; read only while `reading`, every few seconds. */
+function agentPortsQuery(agentId: string, reading: boolean) {
   return queryOptions({
     queryKey: [QUERY_ROOT.AGENT_PORTS, agentId],
     queryFn: () => askAct(ACT_KIND.AGENTS_PORTS, { agentId }),
-    enabled: open,
-    refetchInterval: open ? PORTS_LOOK_EVERY_MS : false,
+    enabled: reading,
+    refetchInterval: reading ? PORTS_LOOK_EVERY_MS : false,
     retry: false,
   });
 }
@@ -231,236 +308,360 @@ function agentSharedPortQuery(agentId: string, drawn: boolean, open: boolean) {
   });
 }
 
-/** A share or its close the service did not take, said in a FAILED toast as a refused press is. */
-function shareFailed(kind: PortActKind, agentId: string, cause: unknown, words: string): void {
-  showToast({
-    words,
-    tone: STATUS_TONE.DANGER,
-    failure: { surface: FAILURE_SURFACE.ACT, act: kind, cause, about: failureAboutOf({ agentId }) },
-  });
-}
-
-/** One of the agent's ports shared by link, or the shared one closed with `null`, its answer laid over the link read. */
+/** One of the agent's ports shared by link, its link laid over the link read and answered; or why not, said. */
 async function shareAsked(
   queryClient: QueryClient,
   agentId: string,
-  port: number | null,
-): Promise<void> {
+  port: number,
+): Promise<string | undefined> {
   const { queryKey } = agentSharedPortQuery(agentId, false, false);
-
-  if (port === null) {
-    const answer = await askAct(ACT_KIND.AGENTS_PORT_UNSHARE, { agentId }).catch(
-      (cause: unknown) => ({ error: cause }),
-    );
-
-    if ("shared" in answer) queryClient.setQueryData(queryKey, answer);
-    else shareFailed(ACT_KIND.AGENTS_PORT_UNSHARE, agentId, answer, WORDS.NOT_UNSHARED);
-
-    return;
-  }
 
   const answer = await askAct(ACT_KIND.AGENTS_PORT_SHARE, { agentId, port }).catch(
     (cause: unknown) => ({ error: cause }),
   );
 
-  const linked: AgentSharedPortAnswerView | undefined =
-    "url" in answer ? { shared: { port, url: answer.url } } : undefined;
+  if (!("url" in answer)) {
+    actFailed(ACT_KIND.AGENTS_PORT_SHARE, agentId, answer, WORDS.NOT_SHARED);
 
-  if (linked !== undefined) queryClient.setQueryData(queryKey, linked);
-  else shareFailed(ACT_KIND.AGENTS_PORT_SHARE, agentId, answer, WORDS.NOT_SHARED);
+    return undefined;
+  }
+
+  const linked: AgentSharedPortAnswerView = { shared: { port, url: answer.url } };
+  queryClient.setQueryData(queryKey, linked);
+
+  return answer.url;
+}
+
+/** The agent's shared link closed, the answer laid over the link read; or why not, said. */
+async function unshareAsked(queryClient: QueryClient, agentId: string): Promise<void> {
+  const { queryKey } = agentSharedPortQuery(agentId, false, false);
+
+  const answer = await askAct(ACT_KIND.AGENTS_PORT_UNSHARE, { agentId }).catch(
+    (cause: unknown) => ({ error: cause }),
+  );
+
+  if ("shared" in answer) queryClient.setQueryData(queryKey, answer);
+  else actFailed(ACT_KIND.AGENTS_PORT_UNSHARE, agentId, answer, WORDS.NOT_UNSHARED);
 }
 
 /** The ports as the service answers them where this Mac forwards none of the agent's, and a share asked of it; nothing is read where `asked` is false. */
-function useHostedPorts(agentId: string, asked: boolean, open: boolean): PlugPorts {
+function useHostedPorts(
+  agentId: string,
+  asked: boolean,
+  reading: boolean,
+  open: boolean,
+): PlugPorts {
   const queryClient = useQueryClient();
-  const listed = useQuery(agentPortsQuery(agentId, asked && open)).data;
+  const listed = useQuery(agentPortsQuery(agentId, asked && reading)).data;
   const linked = useQuery(agentSharedPortQuery(agentId, asked, asked && open)).data;
   const hosted = hostedPorts(listed, linked);
+  const read = listed === undefined || "failure" in listed ? undefined : listed;
 
   return {
     ports: hosted.ports.map(({ port, label }) => ({
       port,
       localPort: undefined,
       label,
-      busy: false,
+      unavailable: false,
     })),
+    read: read !== undefined,
     shared: hosted.shared,
-    none: hosted.none,
-    share: (port) => void shareAsked(queryClient, agentId, port),
+    // Note that the popover says what stands in its own sentences, longer than a menu's line.
+    none:
+      listed === undefined
+        ? WORDS.READING
+        : read === undefined
+          ? WORDS.NOT_READ
+          : read.running
+            ? WORDS.WAITING
+            : WORDS.STOPPED,
+    share: (port) => shareAsked(queryClient, agentId, port),
+    unshare: () => unshareAsked(queryClient, agentId),
   };
 }
 
-/** What a shared port's submenu offers beyond Open: its link, Copy, and Stop sharing. */
-function sharedItems(
-  view: PlugPorts,
-  url: string,
-  copy: (words: string, label: string) => void,
-): MenuAction[] {
-  return [
-    {
-      label: WORDS.OPEN_LINK,
-      icon: <LinkIcon aria-hidden="true" />,
-      stays: true,
-      onSelect: () => appPlatform().openWeb(url),
-    },
-    {
-      label: WORDS.COPY_LINK,
-      icon: <CopyIcon aria-hidden="true" />,
-      stays: true,
-      onSelect: () => copy(url, LINK_COPY.COPIED),
-    },
-    {
-      label: WORDS.STOP_SHARING,
-      icon: <UnlinkIcon aria-hidden="true" />,
-      stays: true,
-      onSelect: () => view.share(null),
-    },
-  ];
-}
-
-/** A port's row that offers nothing: dimmed, saying why where it is busy on this Mac, and what serves it otherwise. */
-function dimmedRow(port: number, busy: boolean, label: string | undefined): MenuEntry {
-  const detail = busy ? WORDS.BUSY : label;
-
-  return {
-    key: port,
-    label: `:${port}`,
-    icon: <GlobeIcon aria-hidden="true" />,
-    ...(detail !== undefined && { detail, detailPlace: MENU_DETAIL.BESIDE, detailMasked: !busy }),
-    disabled: true,
-    onSelect: () => {},
-  };
-}
+type UsePlugPortsResult = {
+  cloud: boolean;
+  offered: boolean;
+  forwarded: boolean;
+  view: PlugPorts;
+};
 
 /**
- * One row of the chip's menu per port, its actions in a submenu beside it:
- * Open where it reached this Mac, and Share while no port is, or, for the
- * shared port, its link, Copy link, and Stop sharing; a port that offers
- * none of them is a dimmed row, saying so where it is busy on this Mac, and
- * the line saying none is listed stands where none is.
+ * The agent's ports wherever they come from: the host's while it forwards
+ * one of them, else the service's, read while the popover is `open` and,
+ * where this Mac can forward, while a turn runs.
  */
-function portRows(view: PlugPorts, copy: (words: string, label: string) => void): MenuEntry[] {
-  const { shared } = view;
+function usePlugPorts(agent: PlugAgent, open: boolean): UsePlugPortsResult {
+  const { cloud, offered, answer } = useForwarding(agent);
+  const forwarded = offered && answer.on;
+  const reading = open || (offered && turnUnderWay(agent));
+  const hosted = useHostedPorts(agent.id, cloud && !forwarded, reading, open);
 
-  const rows = view.ports.map(({ port, localPort, label, busy }): MenuEntry => {
-    const isShared = shared?.port === port;
+  return { cloud, offered, forwarded, view: forwarded ? forwardedPorts(agent.id, answer) : hosted };
+}
 
-    const open: MenuAction[] =
-      localPort === undefined
-        ? []
-        : [
-            {
-              label: WORDS.OPEN,
-              icon: <GlobeIcon aria-hidden="true" />,
-              // Note that the submenu's row names the Mac's port, so where it differs Open says the sandbox's.
-              ...(localPort !== port && {
-                detail: `from :${port}`,
-                detailPlace: MENU_DETAIL.BESIDE,
-              }),
-              stays: true,
-              onSelect: () => openLocal(localPort),
-            },
-          ];
+/** Says once, as a port starts listening in the agent's sandbox after its ports were read, that it runs, with Open. */
+export function useForwardToast(agent: PlugAgent): void {
+  const { offered, view } = usePlugPorts(agent, false);
+  const toast = useToast();
+  const seen = useRef<ReadonlySet<number> | undefined>(undefined);
+  useEffect(() => {
+    if (!offered || !view.read) return;
+    const listed = new Set(view.ports.map(({ port }) => port));
+    const had = seen.current;
+    seen.current = listed;
+    // Note that the first read only learns what runs, so a server already up when the tab opens says nothing.
+    const started = had === undefined ? undefined : view.ports.find(({ port }) => !had.has(port));
 
-    const items: MenuAction[] =
-      shared !== undefined && isShared
-        ? [...open, ...sharedItems(view, shared.url, copy)]
-        : shared !== undefined
-          ? // Note that one port is shared at a time, so another offers Share only once the shared one stops, rather than moving the live link.
-            open
-          : [
-              ...open,
-              {
-                label: WORDS.SHARE,
-                icon: <LinkIcon aria-hidden="true" />,
-                stays: true,
-                onSelect: () => view.share(port),
-              },
-            ];
-
-    if (items.length === 0 || (busy && !isShared)) return dimmedRow(port, busy, label);
-
-    return {
-      label: localPort === undefined ? `:${port}` : localAddress(localPort),
-      detail: label,
-      detailMasked: true,
-      icon: isShared ? <LinkIcon aria-hidden="true" /> : <GlobeIcon aria-hidden="true" />,
-      items,
-    };
-  });
-
-  // Note that a shared port the sandbox no longer lists keeps a row, so its link can still be stopped.
-  if (shared !== undefined && !view.ports.some(({ port }) => port === shared.port))
-    rows.push({
-      label: `:${shared.port}`,
-      icon: <LinkIcon aria-hidden="true" />,
-      items: sharedItems(view, shared.url, copy),
+    if (started === undefined) return;
+    toast({
+      tone: STATUS_TONE.COMPLETE,
+      glyph: () => <PlugIcon aria-hidden="true" />,
+      words:
+        started.label === undefined
+          ? `Port ${started.port} is listening`
+          : `${started.label} is running on ${started.port}`,
+      detail: WORDS.FROM_SANDBOX,
+      action: {
+        label: WORDS.OPEN,
+        replayUnmasked: true,
+        onPress: () => void forwardAndOpen(agent.id, started.port),
+      },
     });
+  }, [offered, view, toast, agent.id]);
+}
 
-  if (rows.length === 0) return [{ label: view.none, disabled: true, onSelect: () => {} }];
+/** A press under way on one of a port's places. */
+interface Pending {
+  readonly port: number;
+  readonly place: Place;
+}
 
-  return rows;
+/** A cell's glyph, wearing the complete dot while its place is on for the port. */
+function Lit({
+  on,
+  label,
+  children,
+}: {
+  on: boolean;
+  label: string;
+  children: React.ReactNode;
+}): React.ReactNode {
+  return on ? (
+    <StatusGlyph tone={STATUS_TONE.COMPLETE} label={label} hinted={false}>
+      {children}
+    </StatusGlyph>
+  ) : (
+    children
+  );
+}
+
+/** What Open's hint says it does now. */
+function openHint(port: PlugPort): string {
+  if (port.unavailable) return `Port ${port.port} and the ports near it are in use on this Mac`;
+
+  if (port.localPort === undefined) return `Forward ${port.port} to this Mac and open it`;
+
+  return port.localPort === port.port
+    ? `Open ${localAddress(port.localPort)}`
+    : `Open ${localAddress(port.localPort)}, since ${port.port} is in use on this Mac`;
+}
+
+/** What Share's hint says it does now. */
+function shareHint(port: number, shared: SharedPort | undefined): string {
+  if (shared === undefined) return WORDS.CREATE_LINK;
+
+  if (shared.port === port) return WORDS.COPY_AGAIN;
+
+  return `Share ${port} instead of ${shared.port}. The link moves, and is copied.`;
 }
 
 /**
  * The plug at the foot of a cloud agent's box: a dot in the complete tone
- * while this Mac forwards its ports, or, where it forwards none, while one
- * is shared, the address in its hint; its menu the ports, and the switch
- * under them where this Mac can forward.
+ * while this Mac forwards one of its ports or one is shared, the address in
+ * its hint; its popover the ports' table.
  */
-export function ForwardChip({
-  agent,
-}: {
-  agent: Pick<AgentSummary, "id" | "machine">;
-}): React.JSX.Element | null {
-  const { cloud, offered, answer } = useForwarding(agent);
-  const menu = useMenu(true);
+export function ForwardChip({ agent }: { agent: PlugAgent }): React.JSX.Element | null {
+  const [open, setOpen] = useState(false);
+  const [pending, setPending] = useState<readonly Pending[]>([]);
+  const { cloud, offered, forwarded, view } = usePlugPorts(agent, open);
   const copy = useCopyToast();
-  // Note that while this Mac forwards none of the agent's ports the service lists them, so one can be shared without forwarding, and none offers Open.
-  const forwarded = offered && answer.on;
-  const hosted = useHostedPorts(agent.id, cloud && !forwarded, menu.drawn !== undefined);
+  const popoverId = useId();
+  const root = useRef<HTMLSpanElement>(null);
+  const trigger = useRef<HTMLButtonElement>(null);
 
   if (!cloud) return null;
-  const view = forwarded ? forwardedPorts(agent.id, answer) : hosted;
-  const first = reached(answer)[0];
-  const labelOf = (port: number) => view.ports.find((each) => each.port === port)?.label;
-  const firstLabel = view.ports.find((each) => each.localPort === first)?.label;
-  const lit = forwarded || view.shared !== undefined;
 
-  const words = forwarded
-    ? first === undefined
-      ? WORDS.FORWARDING
-      : `${WORDS.FORWARDING_TO} ${served(localAddress(first), firstLabel)}`
-    : view.shared !== undefined
-      ? `${WORDS.SHARING} ${served(`:${view.shared.port}`, labelOf(view.shared.port))}`
-      : offered
-        ? WORDS.OFF
+  const isPending = (port: number, place: Place) =>
+    pending.some((each) => each.port === port && each.place === place);
+
+  // Note that a press is pending until its answer, so its button spins and takes no second press.
+  const pressing = async (port: number, place: Place, act: () => Promise<void>) => {
+    setPending((was) => [...was, { port, place }]);
+    await act();
+    setPending((was) => was.filter((each) => each.port !== port || each.place !== place));
+  };
+
+  const forwardPort = (port: number) =>
+    void pressing(port, PLACE.MAC, () => forwardAndOpen(agent.id, port));
+
+  const sharePort = (port: number) => {
+    const { shared } = view;
+
+    if (shared?.port === port) return copy(shared.url, WORDS.LINK_COPIED);
+    void pressing(port, PLACE.TEAM, async () => {
+      const url = await view.share(port);
+
+      if (url !== undefined) copy(url, WORDS.LINK_COPIED);
+    });
+  };
+
+  const stopForwarding = (port: number) =>
+    void pressing(port, PLACE.MAC, () =>
+      pressAct(ACT_KIND.PORT_FORWARD_SET, { agentId: agent.id, port, on: false }),
+    );
+
+  const stopSharing = (port: number) => void pressing(port, PLACE.TEAM, view.unshare);
+
+  const close = () => {
+    setOpen(false);
+    trigger.current?.focus();
+  };
+
+  const { shared } = view;
+
+  // Note that a shared port the sandbox no longer lists keeps a line, so its link can still be stopped.
+  const rows: readonly PlugPort[] =
+    shared === undefined || view.ports.some(({ port }) => port === shared.port)
+      ? view.ports
+      : [
+          ...view.ports,
+          { port: shared.port, localPort: undefined, label: undefined, unavailable: false },
+        ];
+
+  const first = view.ports.find((each) => each.localPort !== undefined);
+  const lit = forwarded || shared !== undefined;
+
+  const words =
+    forwarded && first?.localPort !== undefined
+      ? `${WORDS.FORWARDING_TO} ${served(localAddress(first.localPort), first.label)}`
+      : shared !== undefined
+        ? `${WORDS.SHARING} ${served(String(shared.port), rows.find((each) => each.port === shared.port)?.label)}`
         : WORDS.PORTS;
 
-  const groups: MenuEntry[][] = [
-    portRows(view, copy),
-    ...(offered
-      ? [
-          [
-            {
-              label: WORDS.SWITCH,
-              icon: <PlugIcon aria-hidden="true" />,
-              checked: answer.on,
-              mark: MENU_ITEM_MARK.SWITCH,
-              stays: true,
-              onSelect: () => setForwarding(agent.id, !answer.on),
-            },
-          ],
-        ]
-      : []),
-  ];
+  const macCell = (port: PlugPort) => {
+    const { localPort } = port;
+    const on = localPort !== undefined;
+    // Note that a port with no local port free is still forwarded, so it keeps its stop.
+    const stoppable = on || port.unavailable;
+    const busy = isPending(port.port, PLACE.MAC);
+
+    const glyph = (
+      <Lit on={on} label={WORDS.THIS_MAC}>
+        <ArrowUpRight />
+      </Lit>
+    );
+
+    return (
+      <PortTableCell
+        key={PLACE.MAC}
+        stop={
+          stoppable ? (
+            <Tooltip label={`Stop forwarding ${port.port} to this Mac`}>
+              <IconButton
+                label={`Stop forwarding ${port.port} to this Mac`}
+                icon={<GLYPH.CLOSE />}
+                size={BUTTON_SIZE.COMPACT}
+                keepFocus
+                {...(busy ? { busy: true, busyLabel: WORDS.STOPPING } : {})}
+                onClick={() => stopForwarding(port.port)}
+              />
+            </Tooltip>
+          ) : undefined
+        }
+      >
+        <Tooltip label={busy ? WORDS.FORWARDING : openHint(port)}>
+          {localPort === undefined ? (
+            // Note that a port not yet forwarded is a press, which forwards it and then opens it.
+            <Button
+              variant={BUTTON_VARIANT.OUTLINE}
+              size={BUTTON_SIZE.COMPACT}
+              keepFocus
+              icon={glyph}
+              {...(busy ? { busy: true, busyLabel: WORDS.FORWARDING } : {})}
+              onClick={() => forwardPort(port.port)}
+            >
+              {WORDS.OPEN}
+            </Button>
+          ) : (
+            <ButtonLink
+              variant={BUTTON_VARIANT.OUTLINE}
+              size={BUTTON_SIZE.COMPACT}
+              icon={glyph}
+              href={localHref(localPort)}
+              onClick={linkPressOf(openWeb, localHref(localPort))}
+            >
+              {WORDS.OPEN}
+            </ButtonLink>
+          )}
+        </Tooltip>
+      </PortTableCell>
+    );
+  };
+
+  const teamCell = (port: PlugPort) => {
+    const on = shared?.port === port.port;
+    const busy = isPending(port.port, PLACE.TEAM);
+
+    return (
+      <PortTableCell
+        key={PLACE.TEAM}
+        stop={
+          on ? (
+            <Tooltip label={`Stop sharing ${port.port}. The link stops working.`}>
+              <IconButton
+                label={`Stop sharing ${port.port}`}
+                icon={<GLYPH.CLOSE />}
+                size={BUTTON_SIZE.COMPACT}
+                keepFocus
+                {...(busy ? { busy: true, busyLabel: WORDS.STOPPING } : {})}
+                onClick={() => stopSharing(port.port)}
+              />
+            </Tooltip>
+          ) : undefined
+        }
+      >
+        <Tooltip label={busy ? WORDS.CREATING : shareHint(port.port, shared)}>
+          <Button
+            variant={BUTTON_VARIANT.OUTLINE}
+            size={BUTTON_SIZE.COMPACT}
+            keepFocus
+            icon={
+              <Lit on={on} label={WORDS.TEAM_LINK}>
+                <LinkIcon />
+              </Lit>
+            }
+            {...(busy ? { busy: true, busyLabel: WORDS.CREATING } : {})}
+            onClick={() => sharePort(port.port)}
+          >
+            {WORDS.SHARE}
+          </Button>
+        </Tooltip>
+      </PortTableCell>
+    );
+  };
 
   const chip = (
     <Chip
+      ref={trigger}
       look={CHIP_LOOK.TOOLBAR}
       iconOnly
       aria-label={`${WORDS.PORTS}: ${words}`}
-      {...menu.trigger(riseAbove)}
+      aria-haspopup="dialog"
+      aria-expanded={open}
+      aria-controls={open ? popoverId : undefined}
+      onClick={() => setOpen(!open)}
     >
       {lit ? (
         // Note that the dot's hint is the chip's, the address it forwards to or the port it shares, so no hint of its own hangs over it.
@@ -475,17 +676,44 @@ export function ForwardChip({
   );
 
   return (
-    <>
+    <span className="agent-forward relative inline-flex min-w-0" ref={root}>
       {lit ? chip : <Tooltip label={words}>{chip}</Tooltip>}
-      {menu.drawn === undefined ? null : (
-        <ActionMenu
+      <AnchoredPopover
+        open={open}
+        align={POPOVER_ALIGN.START}
+        side={POPOVER_SIDE.ABOVE}
+        width={POPOVER_WIDTH.WIDE}
+      >
+        <PopoverPanel
+          open={open}
+          id={popoverId}
+          look={POPOVER_PANEL_LOOK.MENU}
+          title={WORDS.PORTS}
           replayUnmasked
-          label={WORDS.PORTS}
-          menu={menu.drawn}
-          groups={groups}
-          onClose={menu.close}
-        />
-      )}
-    </>
+          onDismiss={close}
+          onLeave={(left) => {
+            if (!(left instanceof Node && root.current?.contains(left))) setOpen(false);
+          }}
+        >
+          <div className="agent-forward-ports p-menu-inset">
+            <MenuSection heading={WORDS.PORTS}>
+              <PortTable
+                label={WORDS.PORTS}
+                portLabel={WORDS.PORT}
+                columns={offered ? [MAC_COLUMN, TEAM_COLUMN] : [TEAM_COLUMN]}
+                empty={rows.length === 0 ? view.none : undefined}
+              >
+                {rows.map((port) => (
+                  <PortTableRow key={port.port} port={port.port} detail={port.label}>
+                    {offered ? macCell(port) : null}
+                    {teamCell(port)}
+                  </PortTableRow>
+                ))}
+              </PortTable>
+            </MenuSection>
+          </div>
+        </PopoverPanel>
+      </AnchoredPopover>
+    </span>
   );
 }

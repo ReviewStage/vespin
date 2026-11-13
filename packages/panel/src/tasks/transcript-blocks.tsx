@@ -12,6 +12,7 @@ import { GITHUB_DEFAULT_BRANCH, GITHUB_PAGE, gitHubPageLink } from "@repo/featur
 import { mayNameChip } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
+import { readReplyButtonLink } from "@repo/features/reply-button-wire";
 import {
   blockSays,
   TOOL_BLOCK,
@@ -100,6 +101,7 @@ import {
   CircleIcon,
   CirclePlusIcon,
   CircleStopIcon,
+  CornerDownRightIcon,
   CpuIcon,
   FilePenIcon,
   FilePlusIcon,
@@ -116,6 +118,7 @@ import {
   LayoutListIcon,
   LinkIcon,
   type LucideIcon,
+  MonitorIcon,
   PencilLineIcon,
   PlayIcon,
   PlugIcon,
@@ -180,6 +183,7 @@ import { FIND_DETAIL, FindDetailFolds } from "../find-in-tab.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
+import { KeptAppIcon } from "./agent-pictures.js";
 import { useDescriptionPictureDrawer } from "./description-pictures.js";
 import { useInboxPictureDrawer } from "./inbox-pictures.js";
 import {
@@ -190,6 +194,7 @@ import {
 import { LoneLinkCard } from "./lone-link-card.js";
 import { fileChip, linkChip, type MentionDoors } from "./mention-chip.js";
 import { ModelLabel } from "./model-label.js";
+import { ReplyButtonLink } from "./reply-button-link.js";
 import { SubagentMark } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
 import {
@@ -378,7 +383,7 @@ function markMentions(node: MarkdownNode, definitions: ReadonlyMap<string, Markd
         ? definitions.get(node.identifier)?.url
         : undefined;
 
-  if (target !== undefined && mayNameChip(target)) {
+  if (target !== undefined && (mayNameChip(target) || readReplyButtonLink(target) !== undefined)) {
     node.data = {
       hName: MENTION_ELEMENT.TAG,
       hProperties: { [MENTION_ELEMENT.TARGET]: target },
@@ -673,6 +678,22 @@ function MentionElement({
   const doors = useMentionDoors();
   const target = String(node?.properties[MENTION_ELEMENT.TARGET] ?? "");
   const words = node === undefined ? "" : wordsOf(node);
+  const button = readReplyButtonLink(target);
+
+  if (button !== undefined) {
+    return (
+      <ReplyButtonLink
+        link={button}
+        words={words}
+        plain={(href) => (
+          <TranscriptLink href={href} words={words}>
+            {children}
+          </TranscriptLink>
+        )}
+      />
+    );
+  }
+
   const chip = node === undefined ? undefined : linkChip(target, words, doors);
 
   return (
@@ -1146,6 +1167,7 @@ const CALL_ICON = {
   [CALL_KIND.COMMAND]: TerminalIcon,
   [CALL_KIND.MAC_COMMAND]: LaptopIcon,
   [CALL_KIND.BROWSER]: GlobeIcon,
+  [CALL_KIND.COMPUTER]: MonitorIcon,
   [CALL_KIND.READ_FILE]: FileTextIcon,
   [CALL_KIND.WRITE_FILE]: FilePenIcon,
   [CALL_KIND.EDIT]: FilePenIcon,
@@ -1155,6 +1177,7 @@ const CALL_ICON = {
   [CALL_KIND.LOAD_SKILL]: () => <EntityGlyph kind={ENTITY_KIND.SKILL} />,
   [CALL_KIND.LOOK_AT_PICTURE]: ImageIcon,
   [CALL_KIND.LOOK_AT_THREAD_PICTURE]: ImageIcon,
+  [CALL_KIND.READ_DESCRIPTION_PDF]: FileTextIcon,
   [CALL_KIND.EDIT_DESCRIPTION]: FilePenIcon,
   [CALL_KIND.TODOS]: () => <GLYPH.TODOS />,
   [CALL_KIND.INBOX_POST]: InboxIcon,
@@ -1172,6 +1195,7 @@ const CALL_ICON = {
   [CALL_KIND.READ_AGENT]: ScrollTextIcon,
   [CALL_KIND.MESSAGE_AGENT]: SendIcon,
   [CALL_KIND.START_AGENT]: PlayIcon,
+  [CALL_KIND.ADD_SUGGESTION]: CornerDownRightIcon,
   [CALL_KIND.ARCHIVE_AGENT]: ArchiveIcon,
   [CALL_KIND.UNARCHIVE_AGENT]: ArchiveRestoreIcon,
   [CALL_KIND.LIST_MODELS]: CpuIcon,
@@ -1341,6 +1365,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     kind: CallKind;
     /** For a call of an integration's own tool, the integration, whose mark the row wears in its kind's icon's place. */
     provider?: IntegrationProvider | undefined;
+    /** For a call on an app on the developer's Mac, the picture its icon was kept as, which the row wears in its kind's icon's place. */
+    appIcon?: string | undefined;
     /** For a call of an MCP server's tool, the server's name, which the row says it ran on beside its line. */
     server?: string | undefined;
     /** For a command, the plain words the model said it is for, which the row says in its verb's place; the closed row previews the command's first line after them, and the body holds it whole. */
@@ -1412,6 +1438,7 @@ export function TranscriptTool({
   state,
   kind,
   provider,
+  appIcon,
   server,
   subject,
   description,
@@ -1446,10 +1473,12 @@ export function TranscriptTool({
       <ToolHeader
         state={state}
         icon={
-          provider === undefined ? (
-            <Icon aria-hidden="true" />
-          ) : (
+          provider !== undefined ? (
             <ProviderMark provider={provider} />
+          ) : appIcon !== undefined ? (
+            <KeptAppIcon id={appIcon} />
+          ) : (
+            <Icon aria-hidden="true" />
           )
         }
         label={line.verb}
@@ -1458,7 +1487,8 @@ export function TranscriptTool({
         subjectIsCode={line.code}
         subjectInBody={(command && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject)}
         place={
-          kind === CALL_KIND.MAC_COMMAND && macOwner !== undefined ? (
+          (kind === CALL_KIND.MAC_COMMAND || kind === CALL_KIND.COMPUTER) &&
+          macOwner !== undefined ? (
             <ActorLine>
               {"On "}
               <ActorRef actor={macOwner} sentence possessive />

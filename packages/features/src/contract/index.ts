@@ -36,6 +36,7 @@ import { pushDevicesContract } from "./push-devices.js";
 import { repositoryPinsContract } from "./repository-pins.js";
 import { supportAccessContract } from "./support-access.js";
 import { taskFilesContract } from "./task-files.js";
+import { taskFollowersContract } from "./task-followers.js";
 import { taskSectionsContract } from "./task-sections.js";
 import { tasksContract } from "./tasks.js";
 import { workspaceEnvironmentContract } from "./workspace-environment.js";
@@ -97,6 +98,7 @@ export const hostedContract = {
   repositoryPins: repositoryPinsContract,
   supportAccess: supportAccessContract,
   taskFiles: taskFilesContract,
+  taskFollowers: taskFollowersContract,
   taskSections: taskSectionsContract,
   workspaceEnvironment: workspaceEnvironmentContract,
   workspaceSandboxSetup: workspaceSandboxSetupContract,
