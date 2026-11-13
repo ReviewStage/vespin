@@ -1,6 +1,7 @@
 // detail-stack.ts -- the pages each place pushes over its detail inside the detail's own column, in a window wide enough for three columns, as Mail opens a message's related pages beside its list with a Back there.
 
-import { useRouter } from "expo-router";
+import { IOS_TAB, type IosTab, iosRouteOnTab } from "@repo/features/ios-app-links";
+import { type Href, useRouter } from "expo-router";
 import {
   createContext,
   useCallback,
@@ -108,6 +109,13 @@ const TASKS_SEGMENT = "tasks";
 
 const EMPTY: PlaceStack = { over: undefined, pages: [] };
 
+/** The tab whose stack each place's routes stand on. */
+const PLACE_TAB = {
+  [SIDEBAR_PLACE.INBOX]: IOS_TAB.INBOX,
+  [SIDEBAR_PLACE.TASKS]: IOS_TAB.TASKS,
+  [SIDEBAR_PLACE.SEARCH]: IOS_TAB.SEARCH,
+} as const satisfies Record<SidebarPlace, IosTab>;
+
 /** Each place's stack, as it was last pushed or popped. */
 const stacks = new Map<SidebarPlace, PlaceStack>();
 
@@ -187,6 +195,79 @@ function replaceDetail(place: SidebarPlace, key: string, page: PushedPage): void
     over: was.over,
     pages: was.pages.map((held) => (held.key === key ? { key: next, page } : held)),
   });
+}
+
+/** An agent route's params, as `AgentScreen` reads them. */
+type AgentRouteParams = { id: string; suggestedBy?: string; button?: string };
+
+/** A version route's params, as `VersionScreen` reads them. */
+type VersionRouteParams = { id: string; seq: string; at?: string; newest?: string };
+
+/** The route a compact window or a portrait iPad pushes for a page, on the tab `tab` names, with the params its screen reads. */
+function routeOf(page: PushedPage, tab: IosTab): Href {
+  const on = (route: string) => iosRouteOnTab(route, tab);
+
+  switch (page.kind) {
+    case PUSHED_PAGE.TASK:
+      return { pathname: on("/tasks/[id]"), params: { id: page.taskId } };
+    case PUSHED_PAGE.AGENT: {
+      const params: AgentRouteParams = { id: page.agentId };
+
+      if (page.suggestedBy !== undefined) params.suggestedBy = page.suggestedBy;
+
+      if (page.button !== undefined) params.button = page.button;
+
+      return { pathname: on("/tasks/agent/[id]"), params };
+    }
+
+    case PUSHED_PAGE.PULL_REQUEST:
+      return {
+        pathname: on("/tasks/agent/[id]/pull/[number]"),
+        params: { id: page.agentId, number: String(page.number) },
+      };
+    case PUSHED_PAGE.AGENT_PAGE:
+      return {
+        pathname: on("/tasks/agent/[id]/page"),
+        params: {
+          id: page.agentId,
+          page: page.pageId,
+          version: String(page.version),
+          title: page.title,
+        },
+      };
+    case PUSHED_PAGE.TASK_PAGE:
+      return {
+        pathname: on("/tasks/page/[id]"),
+        params: {
+          id: page.pageId,
+          task: page.taskId,
+          workspace: page.workspaceId ?? "",
+          version: String(page.version),
+          title: page.title,
+        },
+      };
+    case PUSHED_PAGE.COMMENTS:
+      return {
+        pathname: on("/tasks/comments/[id]"),
+        params: { id: page.threadId, task: page.taskId },
+      };
+    case PUSHED_PAGE.NEW_COMMENT:
+      return {
+        pathname: on("/tasks/comments/new"),
+        params: { task: page.taskId, from: page.from, to: page.to, quote: page.quote },
+      };
+    case PUSHED_PAGE.HISTORY:
+      return { pathname: on("/tasks/history/[id]"), params: { id: page.taskId } };
+    case PUSHED_PAGE.VERSION: {
+      const params: VersionRouteParams = { id: page.taskId, seq: String(page.seq) };
+
+      if (page.at !== undefined) params.at = String(page.at);
+
+      if (page.newest !== undefined) params.newest = String(page.newest);
+
+      return { pathname: on("/tasks/version/[id]"), params };
+    }
+  }
 }
 
 /** A place's stack, live as it is pushed and popped. */
@@ -272,4 +353,30 @@ export function useHandToDetail(page: PushedPage | undefined): boolean {
   }, [handing, page, place, router]);
 
   return handing;
+}
+
+/**
+ * Keeps the page in front as the window leaves three columns, as Mail keeps
+ * the open message across a rotation: the top page of the place standing
+ * is pushed onto its tab's router stack, over the row its list keeps
+ * picked, and every place's stack is let go, since a window that narrow
+ * stands its pages over the window. Note that only the top page is pushed,
+ * because Back from it then lands on the row it was opened from rather than
+ * on each page under it.
+ */
+export function useStackToRoutes(threeColumns: boolean, place: SidebarPlace | undefined): void {
+  const router = useRouter();
+  const was = useRef(threeColumns);
+
+  useEffect(() => {
+    const left = was.current && !threeColumns;
+    was.current = threeColumns;
+
+    if (!left) return;
+    const top = place === undefined ? undefined : stackOf(place).pages.at(-1);
+
+    for (const each of Object.values(SIDEBAR_PLACE)) clearDetail(each);
+
+    if (place !== undefined && top !== undefined) router.push(routeOf(top.page, PLACE_TAB[place]));
+  }, [threeColumns, place, router]);
 }
