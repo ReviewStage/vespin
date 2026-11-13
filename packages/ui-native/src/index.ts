@@ -60,6 +60,7 @@ export {
 export { EmptyState } from "./empty-state.js";
 
 export {
+  FailureNoticeLayer,
   FailureNoticeProvider,
   type FailureNotices,
   useFailureNotices,

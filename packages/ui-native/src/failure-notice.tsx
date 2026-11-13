@@ -20,10 +20,11 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useId,
   useMemo,
   useState,
 } from "react";
-import { AccessibilityInfo, Animated, PanResponder, StyleSheet } from "react-native";
+import { AccessibilityInfo, Animated, PanResponder, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useReduceMotion } from "./accessibility.js";
 import {
@@ -75,6 +76,8 @@ const styles = StyleSheet.create({
   edge: { position: "absolute", top: 0, left: 0, right: 0 },
   lane: { paddingHorizontal: SPACE.ROW + 2, paddingTop: SPACE.TIGHT, alignItems: "center" },
   banner: { width: "100%", maxWidth: 560 },
+  // A sheet's own frame, which its banner stands over.
+  layer: { flex: 1 },
 });
 
 /** What a screen asks of the notice. */
@@ -88,6 +91,16 @@ export interface FailureNotices {
 }
 
 const Notices = createContext<FailureNotices | undefined>(undefined);
+
+/** Where the one notice stands: the notice itself, the layer drawn last (the sheet on top), and how a layer comes and goes. */
+interface NoticeStage {
+  readonly shown: ShownNotice | undefined;
+  readonly top: string | undefined;
+  readonly gone: (serial: number) => void;
+  readonly enter: (layer: string) => () => void;
+}
+
+const Stage = createContext<NoticeStage | undefined>(undefined);
 
 /** The notice of the app drawn under `FailureNoticeProvider`. */
 export function useFailureNotices(): FailureNotices {
@@ -177,7 +190,9 @@ function NoticeBody({
  * app's root view, above the tabs, and passes every touch outside it
  * through to the screen under it; it does not stand in a window of its own
  * (`FullWindowOverlay`), because on iOS 27.2 that window never drew, so no
- * notice showed at all. A sheet open over the root covers it.
+ * notice showed at all. A sheet open over the root would cover it, so a
+ * sheet draws its own (`FailureNoticeLayer`), and the notice stands in the
+ * one on top.
  */
 function NoticeBanner({
   notice,
@@ -293,10 +308,13 @@ function NoticeBanner({
  * `useFailureNotices` to the screens: a refusal, or a write that went with
  * its Undo, stands in place of any notice standing, and the offline notice
  * once a stretch offline
- * (`failure-notice-model.ts`).
+ * (`failure-notice-model.ts`). It draws over the root while no sheet stands,
+ * and in the sheet on top while one does (`FailureNoticeLayer`), since a
+ * sheet is a view of its own over the root, which would hide it.
  */
 export function FailureNoticeProvider({ children }: { readonly children: ReactNode }) {
   const [state, setState] = useState(NO_NOTICE);
+  const [layers, setLayers] = useState<readonly string[]>([]);
 
   const notices = useMemo<FailureNotices>(
     () => ({
@@ -309,10 +327,49 @@ export function FailureNoticeProvider({ children }: { readonly children: ReactNo
 
   const gone = useCallback((serial: number) => setState((was) => noticeGone(was, serial)), []);
 
+  // Note that a sheet opens over the ones before it, so the layer that entered last is the one on top.
+  const enter = useCallback((layer: string) => {
+    setLayers((were) => [...were, layer]);
+
+    return () => setLayers((were) => were.filter((was) => was !== layer));
+  }, []);
+
+  const top = layers.at(-1);
+
+  const stage = useMemo<NoticeStage>(
+    () => ({ shown: state.shown, top, gone, enter }),
+    [state.shown, top, gone, enter],
+  );
+
   return (
     <Notices.Provider value={notices}>
-      {children}
-      <NoticeBanner notice={state.shown} onGone={gone} />
+      <Stage.Provider value={stage}>
+        {children}
+        <NoticeBanner notice={top === undefined ? state.shown : undefined} onGone={gone} />
+      </Stage.Provider>
     </Notices.Provider>
+  );
+}
+
+/**
+ * A sheet's own place for the notice: wraps the sheet's screens, and draws
+ * the notice over them while this sheet is the one on top, so a write
+ * refused inside a sheet, or under it, is seen rather than hidden behind it.
+ */
+export function FailureNoticeLayer({ children }: { readonly children: ReactNode }) {
+  const stage = useContext(Stage);
+  const layer = useId();
+
+  if (stage === undefined) throw new Error("A sheet drew a notice layer outside its provider.");
+
+  const { enter, top, shown, gone } = stage;
+
+  useEffect(() => enter(layer), [enter, layer]);
+
+  return (
+    <View style={styles.layer}>
+      {children}
+      <NoticeBanner notice={top === layer ? shown : undefined} onGone={gone} />
+    </View>
   );
 }

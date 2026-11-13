@@ -3,11 +3,11 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
+import { FailureNoticeLayer, FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { hide as hideSplash } from "expo-splash-screen";
-import { useEffect } from "react";
+import { type ReactNode, useEffect } from "react";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -28,6 +28,24 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
 /** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
 const SHORT_SHEET_DETENTS = [0.5, 1];
+
+/** The presentations that stand a screen in a sheet over the root, which would hide a notice drawn there. */
+const SHEET_PRESENTATIONS: ReadonlySet<string | undefined> = new Set(["modal", "formSheet"]);
+
+/** A root screen, wrapped in a place of its own for the failure notice where it stands as a sheet, so a notice shows over the sheet rather than behind it. */
+function screenLayout({
+  options,
+  children,
+}: {
+  readonly options: { readonly presentation?: string | undefined };
+  readonly children: ReactNode;
+}) {
+  return SHEET_PRESENTATIONS.has(options.presentation) ? (
+    <FailureNoticeLayer>{children}</FailureNoticeLayer>
+  ) : (
+    <>{children}</>
+  );
+}
 
 /**
  * The screens, each behind the account's standing: the tabs, Settings, and
@@ -53,7 +71,8 @@ const SHORT_SHEET_DETENTS = [0.5, 1];
  * (`host-connect-link.ts`).
  * Over every screen stands the one notice of a write that did not go
  * (`use-write.ts`), which lets its offline word go once the service answers,
- * and every word with its Try again once the account it was said for is gone.
+ * and every word with its Try again once the account it was said for is gone;
+ * while a sheet stands, it stands in the sheet on top (`screenLayout`).
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -93,7 +112,7 @@ function GuardedScreens() {
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false }} screenLayout={screenLayout}>
         <Stack.Protected guard={signedIn && !updateNeeded}>
           <Stack.Screen name="index" />
           <Stack.Screen name="(tabs)" />
