@@ -120,7 +120,7 @@ function WhyWords({
     case MACHINE_UNREACHED.UNKNOWN_MACHINE:
       return "The agent named a machine this task's agents can't use.";
     case MACHINE_UNREACHED.NO_MACHINE:
-      return "No machine was online to take it.";
+      return "None of the machines this agent may use could take it.";
   }
 }
 
@@ -156,9 +156,10 @@ async function moveDefault(
     return false;
   }
 
-  const sent = await send(tryAgainLine(machine));
+  // Note that a send that never reached the host is said as unsent too, since the default already moved.
+  const sent = await send(tryAgainLine(machine)).catch((cause: unknown) => ({ failure: cause }));
 
-  if ("failure" in sent) refused(MACHINE_REFUSAL_WORDS.UNSENT, agentId, sent);
+  if ("failure" in sent) refused(MACHINE_REFUSAL_WORDS.UNSENT, agentId, sent.failure);
 
   return true;
 }
