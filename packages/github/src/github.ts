@@ -102,6 +102,9 @@ const SECONDARY_LIMIT_WORDS = /\bsecondary rate\b/iu;
 /** A `link` header naming a next page (https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api). */
 const NEXT_PAGE = /rel="next"/u;
 
+/** The header GitHub answers a token not authorized for an organization's SAML SSO with. */
+const SSO_HEADER = "x-github-sso";
+
 const GRAPHQL_RESOURCE = "graphql";
 const CORE_RESOURCE = "core";
 
@@ -388,7 +391,11 @@ function failureOf(rejection: Rejection, identity: GitHubIdentityKind): GitHubFa
 
   if (status === STATUS.UNAUTHORIZED) return new GitHubUnauthorized({ message });
 
-  if (status === STATUS.FORBIDDEN) return new GitHubForbidden({ message });
+  if (status === STATUS.FORBIDDEN) {
+    const sso = headers[SSO_HEADER];
+
+    return new GitHubForbidden({ message, ...(sso !== undefined && { sso: String(sso) }) });
+  }
 
   if (status === STATUS.NOT_FOUND) return new GitHubNotFound({ message });
 
