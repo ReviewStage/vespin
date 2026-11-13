@@ -1446,9 +1446,9 @@ const AGENT_TOOL_VIEWS = {
     const command = stringAt(input, "command") ?? "";
     const notRun = machineNotRunOf(output);
 
-    // Note that a command that never ran says so in its verb's place, over what the model said it was for.
+    // Note that a command that never ran says so in its verb's place, over what the model said it was for; one the Mac never answered for may have run, so it keeps its words.
     const description =
-      notRun === undefined
+      notRun === undefined || notRun.outcome === NOT_RUN_OUTCOME.NO_ANSWER
         ? commandDescription(stringAt(input, "description"))
         : MACHINE_NOT_RUN_WORDS.COMMAND;
 
@@ -1468,8 +1468,11 @@ const AGENT_TOOL_VIEWS = {
     const action = stringAt(input, "action");
     const notRun = machineNotRunOf(output);
 
+    // Note that an action the Mac never answered for may have run, so it keeps its words.
     const description =
-      notRun === undefined ? computerCallWords(action) : computerNotRunWords(action);
+      notRun === undefined || notRun.outcome === NOT_RUN_OUTCOME.NO_ANSWER
+        ? computerCallWords(action)
+        : computerNotRunWords(action);
 
     const icon = computerAppIcon(output);
     const machine = callMachineOf(output);
