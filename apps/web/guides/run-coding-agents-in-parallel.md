@@ -33,15 +33,15 @@ That's enough for two agents. Past three or four, the hard part is no longer the
 
 These apps make the worktrees for you and show every agent in one window. [Conductor](https://conductor.build) runs Claude Code, Codex, Cursor, and OpenCode on a Mac, and it's [free for now](https://www.conductor.build/docs/faq). It's also [joining Meta](https://www.conductor.build/announcement). If you'd rather stay in the terminal, [Claude Squad](https://github.com/smtg-ai/claude-squad) runs each agent in its own tmux session. [Paradev](https://paradev.com/), which used to be called Superset, runs most CLI agents, and its [Team plan](https://paradev.com/pricing) adds cloud workspaces.
 
-Two of them run on Windows as well as macOS and Linux: [Emdash](https://github.com/generalaction/emdash), which can also run agents on another machine over SSH, and [Nimbalyst](https://nimbalyst.com), which was called Crystal. [Sculptor](https://imbue.com/product/sculptor), from Imbue, is a research preview built around Claude Code. [Vibe Kanban](https://github.com/BloopAI/vibe-kanban) puts your tasks on a kanban board. [Its company shut down](https://www.vibekanban.com/blog/shutdown) in April 2026, but its community still maintains the project.
+Two of them run on Windows as well as macOS and Linux: [Emdash](https://github.com/generalaction/emdash), which can also run agents on another machine over SSH, and [Nimbalyst](https://nimbalyst.com), which was called Crystal. [Sculptor](https://imbue.com/product/sculptor), from Imbue, is a research preview that runs Claude Code, the Pi harness, and other terminal agents. [Vibe Kanban](https://github.com/BloopAI/vibe-kanban) puts your tasks on a kanban board, and its community maintains it as an open-source project.
 
 If you already work in Cursor, its editor [runs its own agent in local worktrees](https://cursor.com/docs/configuration/worktrees) too.
 
 ## Each vendor's own cloud agent
 
-Anthropic, OpenAI, GitHub, Cursor, and Cognition each run their own agent in the cloud. You start a task in the browser, it runs on their servers, and a pull request comes back. Nothing on your end has to stay awake, which is the one thing a local app can't give you. Parallel tasks still draw on your plan's usage limits.
+Anthropic, OpenAI, GitHub, Cursor, and Cognition each run their own agent in the cloud. You start a task in the browser, it runs in the cloud, and you can open a pull request from the result. Nothing on your end has to stay awake. Parallel tasks still draw on your plan's usage limits.
 
-[Claude Code on the web](https://code.claude.com/docs/en/claude-code-on-the-web) comes with [Claude's paid plans](https://claude.com/pricing), and [Codex cloud](https://learn.chatgpt.com/docs/cloud) comes with [ChatGPT's paid plans](https://learn.chatgpt.com/docs/pricing). If you already pay for one of those and use only that agent, start there, because it costs you nothing extra. [GitHub Copilot's coding agent](https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent) turns an issue into a pull request, and while the feature is in public preview it can also [hand the task to Claude or Codex](https://docs.github.com/en/copilot/concepts/agents/about-third-party-agents). [Cursor's cloud agents](https://cursor.com/docs/cloud-agent) need its [Premium plan or higher](https://cursor.com/pricing), and Free and Plus don't include them. [Devin](https://devin.ai/pricing) runs Cognition's own agent and caps how many sessions each plan runs at once.
+[Claude Code on the web](https://code.claude.com/docs/en/claude-code-on-the-web) comes with [Claude's paid plans](https://claude.com/pricing), and [Codex cloud](https://learn.chatgpt.com/docs/cloud) comes with [ChatGPT's paid plans](https://learn.chatgpt.com/docs/pricing). If you already pay for one of those and use only that agent, start there, because it costs you nothing extra. [GitHub Copilot's coding agent](https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent) starts from an issue, a file, or a pull request, and while the feature is in public preview it can also [hand the task to Claude or Codex](https://docs.github.com/en/copilot/concepts/agents/about-third-party-agents). [Cursor's cloud agents](https://cursor.com/docs/cloud-agent) need its [Premium plan or higher](https://cursor.com/pricing), and Free and Plus don't include them. [Devin](https://devin.ai/pricing) runs Cognition's own agent and caps how many sessions each plan runs at once.
 
 ## Clouds that run more than one vendor's agent
 
@@ -54,14 +54,14 @@ Anthropic, OpenAI, GitHub, Cursor, and Cognition each run their own agent in the
 | Conductor | Your Mac | Claude Code, Codex, Cursor, OpenCode | Team plan, invite-only | Free for now | None published |
 | Claude Squad | Your terminal | Claude Code, Codex, Gemini, Aider | No | Free | AGPL-3.0 |
 | Paradev | Mac; cloud on Team plan | Claude Code, Codex, Gemini, more | Team plan | Free; Team $60/user/mo | MIT |
-| Emdash | Mac, Windows, Linux, SSH | Claude Code, Codex, Amp, more | No | No price listed | Apache-2.0 |
+| Emdash | Mac, Windows, Linux, SSH | Claude Code, Codex, Amp, more | Early access | No price listed | Apache-2.0 |
 | Nimbalyst | Mac, Windows, Linux | Claude Code, Codex | Paid wiki | Free app | MIT |
-| Sculptor | Mac, Linux | Claude Code | No | Free | MIT |
-| Vibe Kanban | Your machine | 10+ agents | Self-hosted | Free | Apache-2.0 |
+| Sculptor | Mac, Linux | Claude Code, Pi, terminal agents | No | Free | MIT |
+| Vibe Kanban | Your machine | 10+ agents | No | Free | Apache-2.0 |
 | Claude Code on the web | Anthropic's VMs | Claude Code | Yes | Claude plan | Hosted service |
-| Codex cloud | OpenAI's cloud | Codex | Yes | ChatGPT plan | Hosted service |
+| Codex cloud | Cloud | Codex | Yes | ChatGPT plan | Hosted service |
 | Copilot coding agent | GitHub's cloud | Copilot; Claude and Codex in preview | Yes | From $10/mo | Hosted service |
-| Cursor cloud agents | Cursor's VMs | Cursor's agent | Yes | Premium plan or higher | Hosted service |
+| Cursor cloud agents | Cloud VMs | Cursor's agent | Yes | Premium plan or higher | Hosted service |
 | Devin | Devin's cloud | Devin | Yes | From $20/mo | Hosted service |
 | Warp | Warp's cloud | Warp's agent, Claude Code, Codex | Yes | Free tier; from $20/mo | Hosted service |
 | Vespin | Cloud, your Mac, or Linux | Claude Code, Codex | Yes | Free | Apache-2.0 |
