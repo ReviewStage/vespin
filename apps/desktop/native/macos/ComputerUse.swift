@@ -1187,6 +1187,8 @@ private final class WindowRecorder: NSObject, SCStreamOutput {
     private let frames = DispatchQueue(label: "dev.vespin.computer-use.recording")
     private var first: CMTime?
     private var last: CMTime?
+    /// When the first frame arrived, on the system's monotonic clock, so the stop holds the last frame for as long as the window stood still after it.
+    private var firstUptime: TimeInterval?
     private var ended = false
 
     init(filter: SCContentFilter, configuration: SCStreamConfiguration) throws {
@@ -1219,29 +1221,39 @@ private final class WindowRecorder: NSObject, SCStreamOutput {
         if first == nil {
             writer.startSession(atSourceTime: at)
             first = at
+            firstUptime = ProcessInfo.processInfo.systemUptime
         }
         guard input.isReadyForMoreMediaData, input.append(buffer) else { return }
         last = at
     }
 
-    /// The capture stopped and its video written whole, the last frame held for the tail; how it ended.
+    /**
+     The capture stopped and its video written whole, the last frame held
+     until the stop, as the window stood still that long, and for the tail at
+     the least; how it ended. Note that a window that does not change draws no
+     frame, so the stop's own time, measured from the first frame's arrival,
+     is what keeps that stillness in the video rather than cutting it.
+     */
     func finish() async -> CaptureEnd {
+        let stoppedUptime = ProcessInfo.processInfo.systemUptime
         try? await stream.stopCapture()
-        let span: (first: CMTime, last: CMTime)? = frames.sync {
+        let span: (first: CMTime, last: CMTime, held: TimeInterval)? = frames.sync {
             ended = true
-            guard let first, let last else { return nil }
-            return (first, last)
+            guard let first, let last, let firstUptime else { return nil }
+            return (first, last, stoppedUptime - firstUptime)
         }
         guard let span else {
             writer.cancelWriting()
             return .empty
         }
-        let tail = CMTime(seconds: RECORDING_TAIL_SECONDS, preferredTimescale: 600)
+        let tailed = CMTimeAdd(span.last, CMTime(seconds: RECORDING_TAIL_SECONDS, preferredTimescale: 600))
+        let stopped = CMTimeAdd(span.first, CMTime(seconds: span.held, preferredTimescale: 600))
+        let end = CMTimeMaximum(tailed, stopped)
         input.markAsFinished()
-        writer.endSession(atSourceTime: CMTimeAdd(span.last, tail))
+        writer.endSession(atSourceTime: end)
         await writer.finishWriting()
         guard writer.status == .completed else { return .encoder }
-        return .ran(CMTimeGetSeconds(CMTimeSubtract(span.last, span.first)) + RECORDING_TAIL_SECONDS)
+        return .ran(CMTimeGetSeconds(CMTimeSubtract(end, span.first)))
     }
 }
 
@@ -1369,14 +1381,17 @@ private actor Recordings {
     private var maxBytes = 0
     private var stopping: Task<RecordingOutcome, Never>?
     private var timer: Task<Void, Never>?
+    /// Whether the last recording's video is written whole, so its folder may be cleared for the next.
+    private var finalized = true
 
-    /// Whether a recording runs and is not yet being stopped.
-    var isRunning: Bool { running != nil && stopping == nil }
+    /// Whether a recording runs, or its video is still being written, during which a new one would clear the folder under it.
+    var isRunning: Bool { running != nil && !finalized }
 
     func begin(_ recorder: WindowRecorder, maxSeconds: Double, maxBytes: Int) {
         running = recorder
         self.maxBytes = maxBytes
         stopping = nil
+        finalized = false
         timer?.cancel()
         timer = Task {
             try? await Task.sleep(nanoseconds: UInt64(maxSeconds * 1_000_000_000))
@@ -1393,7 +1408,9 @@ private actor Recordings {
         let finishing = Task { await kept(running, maxBytes: bound) }
         stopping = finishing
         timer?.cancel()
-        return await finishing.value
+        let outcome = await finishing.value
+        finalized = true
+        return outcome
     }
 }
 
