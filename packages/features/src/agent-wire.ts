@@ -831,21 +831,79 @@ export const agentStartRequestOnWire = (request: AgentStartRequest) =>
     EffectSchema.encodeUnknownResult(agentStartRequestSchema),
   );
 
+/** Who said a line of a call: the caller, or the voice. */
+export const VOICE_SPEAKER = {
+  CALLER: "caller",
+  VOICE: "voice",
+} as const;
+
+export type VoiceSpeaker = (typeof VOICE_SPEAKER)[keyof typeof VOICE_SPEAKER];
+
+/**
+ * The most a line of a call holds: its words, far past what one utterance
+ * says, and how many of the caller's lines one delegation hands on.
+ */
+export const VOICE_LINE_BOUNDS = {
+  TEXT_CHARS: 8_000,
+  LINES: 200,
+} as const;
+
 /**
  * What a line carries when it is the developer's words spoken on a call: the
- * channel it came by (absent for a typed line) and, where a voice delegated
- * it, the delegation's id, which a delegation alone has no meaning without
- * the channel.
+ * channel it came by (absent for a typed line); where a voice delegated it,
+ * the delegation's id, which a delegation alone has no meaning without the
+ * channel; and the caller's lines of the call it is, by the ids they were
+ * recorded under (`agentVoiceLineRequestSchema`), oldest first, which the
+ * service starts the turn on in place of writing the words again, and which
+ * only a delegation names.
  */
 const spokenFields = {
   channel: EffectSchema.optionalKey(EffectSchema.Literal(MESSAGE_CHANNEL.VOICE)),
   delegationId: EffectSchema.optionalKey(trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS)),
+  lines: EffectSchema.optionalKey(
+    EffectSchema.Array(wireUuidSchema).check(
+      EffectSchema.isMinLength(1),
+      EffectSchema.isMaxLength(VOICE_LINE_BOUNDS.LINES),
+    ),
+  ),
 };
 
 const spokenFilter = EffectSchema.makeFilter(
-  ({ channel, delegationId }: { channel?: unknown; delegationId?: unknown }) =>
-    delegationId === undefined || channel === MESSAGE_CHANNEL.VOICE,
+  ({
+    channel,
+    delegationId,
+    lines,
+  }: {
+    channel?: unknown;
+    delegationId?: unknown;
+    lines?: unknown;
+  }) =>
+    (delegationId === undefined || channel === MESSAGE_CHANNEL.VOICE) &&
+    (lines === undefined || delegationId !== undefined),
 );
+
+/**
+ * One line of a call into an agent, recorded (POST) as it stands: the id the
+ * caller's client minted for it, which it is written under once and grown
+ * in place under after, as later words of it arrive; the call it was said
+ * on, by the id the client minted for the call; who said it; and its words.
+ * The caller's line stands as their spoken words, and the voice's as the
+ * voice's; neither opens a turn, which only a delegation naming the
+ * caller's lines does (`spokenFields`).
+ */
+export const agentVoiceLineRequestSchema = EffectSchema.Struct({
+  id: wireUuidSchema,
+  callId: wireUuidSchema,
+  speaker: EffectSchema.Literals(Object.values(VOICE_SPEAKER)),
+  text: trimmedText(VOICE_LINE_BOUNDS.TEXT_CHARS),
+});
+
+export type AgentVoiceLineRequest = typeof agentVoiceLineRequestSchema.Type;
+
+/** A line of a call recorded: the transaction that wrote it, where this record wrote or grew it. */
+export const agentVoiceLineAnswerSchema = EffectSchema.Struct({
+  txid: EffectSchema.optionalKey(EffectSchema.String),
+});
 
 /**
  * Messaging an agent (POST): the developer's words, trimmed and bounded,

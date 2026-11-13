@@ -32,7 +32,10 @@ import {
   agentPartAnswerSchema,
   agentQueueAnswerSchema,
   agentQueueChangeSchema,
+  agentVoiceLineAnswerSchema,
+  agentVoiceLineRequestSchema,
   MAXIMUM_ATTACHMENTS_BODY_BYTES,
+  VOICE_LINE_BOUNDS,
 } from "../agent-wire.js";
 import { transcriptNowAnswerSchema } from "../live-wire.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
@@ -41,6 +44,9 @@ import { bodyCap, declaredProcedure, exactBodyInput, refuses } from "./base.js";
 /** A message is its words, its files, and a key: the bound's characters at JSON's widest escape, the files, and room for the keys around them. */
 const MESSAGE_BODY_BYTES =
   6 * AGENT_BOUNDS.MAX_MESSAGE_CHARS + MAXIMUM_ATTACHMENTS_BODY_BYTES + 1_024;
+
+/** A line of a call is its words, at JSON's widest escape, and room for its ids and the keys around them. */
+const VOICE_LINE_BODY_BYTES = 6 * VOICE_LINE_BOUNDS.TEXT_CHARS + 1_024;
 
 /** The status a message handed to an agent is answered with: taken, its turn yet to read it. */
 const ACCEPTED = 202;
@@ -82,6 +88,11 @@ const readProcedure = declaredProcedure.errors(refuses(HOSTED_API_ERROR.NOT_FOUN
 
 /** A message to an agent, or a change of its queue. */
 const messageProcedure = declaredProcedure.errors(refuses(...MESSAGE_REFUSALS));
+
+/** A line of a call recorded refuses an agent not found or not the caller's to write to; a line its id names already under another speaker or call is an invalid request. */
+const voiceLineProcedure = declaredProcedure.errors(
+  refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED),
+);
 
 /** A query value as the handler reads it, checked there rather than here. */
 const queryValue = EffectSchema.optionalKey(EffectSchema.String);
@@ -145,6 +156,18 @@ export const messagesContract = {
     )
     .input(exactBodyInput(EffectSchema.Struct(byId), agentQueueChangeSchema))
     .output(EffectSchema.flip(agentQueueAnswerSchema)),
+  /** One line of a call into an agent, recorded as it stands: written once under its id, and grown in place after. */
+  recordVoiceLine: voiceLineProcedure
+    .meta(bodyCap(VOICE_LINE_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: "/api/agents/{id}/voice-lines",
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(EffectSchema.Struct(byId), agentVoiceLineRequestSchema))
+    .output(EffectSchema.flip(agentVoiceLineAnswerSchema)),
   /** One agent's worker's transcript past the cursor, held while it runs, or read at once where `wait=none` asks. */
   agentWorker: readProcedure
     .meta(openapi({ method: HTTP_METHOD.GET, path: "/api/agents/{id}/subagents/{call}/messages" }))

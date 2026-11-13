@@ -28,10 +28,13 @@ browser.
 ### Voice calls
 
 When you talk to an agent by voice, your audio goes from the app to OpenAI, on
-your own OpenAI API key, and nowhere else; the key never leaves the Service.
-What you say reaches the agent as its messages, as a typed line does, and is
-kept in its conversation like one. We keep nothing else of a call but its
-length, which counts toward your day and in our usage counts.
+your own OpenAI API key, and nowhere else; the key never leaves the Service,
+and we never store the audio. What you and the voice say is kept as text in
+the agent's conversation, one message for each thing either of you said, so
+the agent's transcript shows both sides of the call. What you say reaches the
+agent as its messages, as a typed line does. What the voice says stays in the
+transcript and is never handed to the agent's model. We keep nothing else of a
+call but its length, which counts toward your day and in our usage counts.
 
 ### Workspaces, tasks, and descriptions
 

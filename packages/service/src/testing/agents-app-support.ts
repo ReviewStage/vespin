@@ -458,6 +458,7 @@ const ORPC_PUBLIC_PATH: ReadonlyMap<string, (id: string) => string> = new Map([
   ["/api/agents/stop", (id: string) => `/api/agents/${id}/stop`],
   ["/api/agents/rewind", (id: string) => `/api/agents/${id}/rewind`],
   ["/api/agents/queue", (id: string) => `/api/agents/${id}/queue`],
+  ["/api/agents/voice-lines", (id: string) => `/api/agents/${id}/voice-lines`],
   ["/api/agents/agents", (id: string) => `/api/agents/${id}/agents`],
   ["/api/agents/messages-newest", (id: string) => `/api/agents/${id}/messages/newest`],
   ["/api/agents/changes", (id: string) => `/api/agents/${id}/changes`],
