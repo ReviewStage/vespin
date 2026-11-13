@@ -36,7 +36,7 @@ import {
 } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
-import { useDockRoom } from "./glass-bar.js";
+import { useDockLift, useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
@@ -934,6 +934,8 @@ export function AgentTranscript({
   const rowDrawing: RowDrawing = { ...drawing, now: now ?? Date.now() };
   // Note that the room under the newest row clears the bar docked over the list's foot as tall as it stands, so a composer grown by its head never covers the end of the transcript.
   const foot = bottom + TAB_BAR_ROOM + useDockRoom();
+  // How far the keyboard lifts the bar, which the list keeps as room past its end while the keyboard stands, as Messages' conversation rises with its field.
+  const lift = useDockLift();
 
   // Note that only the reader's own scroll moves the anchor, never the list's own scroll to its end as rows render in: a drag lets it go, and where the scroll settles sets it again.
   const onScrollBegin = useCallback(() => {
@@ -997,6 +999,18 @@ export function AgentTranscript({
     [],
   );
 
+  // Note that a reader at the newest row keeps it over the bar as the keyboard rises and falls, the list scrolling with the keyboard rather than leaving the row under it.
+  const liftWas = useRef(lift);
+  useEffect(() => {
+    if (lift === liftWas.current) return;
+
+    liftWas.current = lift;
+
+    if (!anchored.current) return;
+
+    list.current?.getScrollResponder()?.scrollToEnd({ animated: !reduceMotion });
+  }, [lift, reduceMotion]);
+
   // Note that a row landing, or a fold opened, at the newest row keeps it in view, while one landing as the reader reads back leaves their place.
   const onContentSizeChange = useCallback(() => {
     // Note that the scroller itself is asked, since the list's own end is an estimate until every row has been measured.
@@ -1028,6 +1042,9 @@ export function AgentTranscript({
           )
         }
         ListFooterComponent={<View style={{ height: foot }} />}
+        // Note that the keyboard's room is an inset rather than the footer's height, so its rise moves no row and lands no content size the anchor scrolls on at once.
+        contentInset={{ bottom: lift }}
+        scrollIndicatorInsets={{ bottom: lift }}
         // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
         contentContainerStyle={[
           styles.content,
@@ -1051,7 +1068,7 @@ export function AgentTranscript({
       />
       {away ? (
         <JumpToLatest
-          bottom={foot}
+          bottom={foot + lift}
           onPress={() => {
             anchored.current = true;
             // Note that the jump scrolls at once where the reader asked for less motion.

@@ -22,6 +22,9 @@ const DOCK_ROOM_UNMEASURED = 72;
 /** The room the dock a screen's content stands in takes at its foot, above the bottom safe area, in points; none outside a dock. */
 const DockRoom = createContext(0);
 
+/** How far the keyboard lifts the dock's bar above where it rests, in points; none while the keyboard is down, or outside a dock. */
+const DockLift = createContext(0);
+
 /** Tells the dock how tall the bar inside it stands, with its gap; nothing outside a dock. */
 const DockMeasure = createContext<((room: number) => void) | undefined>(undefined);
 
@@ -229,11 +232,15 @@ export function GlassDock({
   const keyboard = useKeyboardHeight();
   const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
   // Note that the column holds the window's side safe areas too, which the bar's own safe area view pads inside it, so its glass spans the reading width.
-  const { left, right } = useSafeAreaInsets();
+  const { bottom, left, right } = useSafeAreaInsets();
+  // The bar's lift above where it rests: the keyboard's height less the bottom safe area the bar lets go of under it.
+  const lift = Math.max(0, keyboard - bottom);
 
   return (
     <View style={styles.dock}>
-      <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
+      <DockRoom.Provider value={room}>
+        <DockLift.Provider value={lift}>{children}</DockLift.Provider>
+      </DockRoom.Provider>
       <View style={[styles.docked, { bottom: keyboard }]}>
         <View style={[styles.column, { maxWidth: READING_WIDTH + left + right }]}>
           <DockMeasure.Provider value={setRoom}>{bar}</DockMeasure.Provider>
@@ -246,4 +253,9 @@ export function GlassDock({
 /** The room the dock a screen's content stands in takes at its foot, above the bottom safe area, which the content leaves under its last row so it scrolls clear of the bar; none outside a dock. */
 export function useDockRoom(): number {
   return useContext(DockRoom);
+}
+
+/** How far the keyboard lifts the dock's bar above where it rests, as the keyboard starts to rise and to fall, which the content under the bar adds to its foot's room, so its last row stands over the bar rather than under the keyboard; none outside a dock. */
+export function useDockLift(): number {
+  return useContext(DockLift);
 }
