@@ -30,7 +30,13 @@ import {
   STOP_NOTHING_YET,
 } from "@repo/features/agent-refusal-words";
 import { AGENT_CALL_FAILURE, type AgentCallFailure } from "@repo/features/agent-view";
-import { type AgentQueueChange, type AgentStatus, QUEUE_CHANGE } from "@repo/features/agent-wire";
+import {
+  type AgentAttachment,
+  type AgentQueueChange,
+  type AgentStatus,
+  QUEUE_CHANGE,
+} from "@repo/features/agent-wire";
+import { type SuggestionSendResult, suggestedWords } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppTranscript } from "@repo/host/app-state";
@@ -99,12 +105,25 @@ export interface AgentComposer {
   readonly skills: SkillsOffered | undefined;
 }
 
+/** A message suggestion a box was opened on: its button, by which its words are laid in once, the words, and the send that goes through it in place of a message. */
+export interface SuggestedSend {
+  readonly key: string;
+  readonly words: string;
+  readonly send: (
+    text: string,
+    attachments: readonly AgentAttachment[],
+  ) => Promise<SuggestionSendResult>;
+}
+
 /**
  * The composer of the agent `agentId` names, whose followed row is `agent`
  * and whose transcript the page holds as `transcript`. Only the agent's
  * starter may change its queue, as the service holds, so a teammate's
  * Send never queues and their queue offers no Steer or Delete. `onMessage`
  * hears each message sent straight to the agent, and whether it was taken.
+ * Opened on a message suggestion (`suggested`), the box lays its words in
+ * under anything typed, offers no queue, and its Send goes through the
+ * suggestion, once, as the panel's box filled in from one does.
  */
 export function useAgentComposer(
   agentId: string,
@@ -112,6 +131,7 @@ export function useAgentComposer(
   transcript: AppTranscript | undefined,
   status: AgentStatus | undefined,
   onMessage?: (taken: Promise<boolean>) => void,
+  suggested?: SuggestedSend | undefined,
 ): AgentComposer {
   const acts = useHostActs();
   const write = useWrite();
@@ -123,6 +143,14 @@ export function useAgentComposer(
 
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
   const [words, setWords] = useState("");
+  // The suggestion whose words the box last laid in, so each is laid in once.
+  const [laidFor, setLaidFor] = useState<string | undefined>(undefined);
+
+  if (suggested !== undefined && suggested.key !== laidFor) {
+    setLaidFor(suggested.key);
+    setWords((typed) => suggestedWords(typed, suggested.words));
+  }
+
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const [stopping, setStopping] = useState(false);
@@ -134,7 +162,7 @@ export function useAgentComposer(
     agent?.runtime !== undefined && (starter === undefined || starter.userId === readerId);
 
   // Note that a message sent to the agent now denies a call it holds for an answer, while one queued waits behind it.
-  const sendQueues = writing && enterQueues && controlsQueue;
+  const sendQueues = suggested === undefined && writing && enterQueues && controlsQueue;
   const planId = agent?.planId;
   const skills = useSkillOffer(words, setWords, planId === undefined ? undefined : { planId });
 
@@ -207,6 +235,16 @@ export function useAgentComposer(
       inPlace: (words: string) => handBack(sent, words),
       went: BUZZ.SUCCESS,
     } as const;
+
+    if (suggested !== undefined) {
+      write(() => suggested.send(text, attachments?.attachments ?? []), {
+        ...saying,
+        refused: (result) => ("failure" in result ? result.failure.text : undefined),
+        unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
+      });
+
+      return;
+    }
 
     if (sendQueues) {
       const change = { change: QUEUE_CHANGE.ADD, id: sent.id, text, ...attachments } as const;

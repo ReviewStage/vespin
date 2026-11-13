@@ -114,9 +114,6 @@ const IOS = {
   HOSTS_STANDING: byDesign(
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
   ),
-  REPLY_BUTTONS: notYet(
-    "iOS draws a reply button's link as a plain link until its transcript draws buttons",
-  ),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
   MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
@@ -257,8 +254,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_BOOT]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_WARM]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_UNSEND]: EVERYWHERE,
-  [PORT_ACT_KIND.AGENTS_REPLY_BUTTON]: panel(IOS.REPLY_BUTTONS),
-  [PORT_ACT_KIND.AGENTS_REPLY_BUTTON_PRESS]: panel(IOS.REPLY_BUTTONS),
+  [PORT_ACT_KIND.AGENTS_REPLY_BUTTON]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_REPLY_BUTTON_PRESS]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORTS]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORT_SHARED]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORT_SHARE]: EVERYWHERE,

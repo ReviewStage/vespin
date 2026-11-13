@@ -9,12 +9,19 @@ import {
   entityWordHeard,
 } from "@repo/features/entity-kind";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
-import { type LinkDestination, openableLinkOf, readLink } from "@repo/features/link-grammar";
+import {
+  LINK_DESTINATION,
+  type LinkDestination,
+  linkOf,
+  openableLinkOf,
+  readLink,
+} from "@repo/features/link-grammar";
 import { githubPageAsked } from "@repo/features/link-standing-model";
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { markdownTree } from "@repo/features/markdown-tree";
 import { LINK_CHIP, linkChipOf, MENTION_KIND, type Mention } from "@repo/features/mention-link";
 import { placeChipLook } from "@repo/features/place-chip-model";
+import { type ReplyButtonLink, readReplyButtonLink } from "@repo/features/reply-button-wire";
 import { Match } from "effect";
 import type {
   Code,
@@ -61,6 +68,8 @@ export const MARKDOWN_RUN = {
   CODE: "code",
   LINK: "link",
   CHIP: "chip",
+  /** A suggestion an agent wrote into its reply as a link (`@repo/features/reply-button-wire`), which the screen reads and draws. */
+  SUGGESTION: "suggestion",
   BREAK: "break",
 } as const;
 
@@ -111,6 +120,18 @@ export interface MarkdownChip {
   readonly github?: string | undefined;
 }
 
+/**
+ * A suggestion's link as its words name it: the button it reads, the words it
+ * was written with, its label until the button is read, and where the plain
+ * link goes, to the agent whose reply holds it, drawn where no suggestion
+ * stands (Suggestions off, the button unread, or refused).
+ */
+export interface MarkdownSuggestion {
+  readonly link: ReplyButtonLink;
+  readonly words: string;
+  readonly target: LinkTarget;
+}
+
 export type MarkdownRun =
   | ({ readonly kind: typeof MARKDOWN_RUN.WORDS; readonly text: string } & WordMarks)
   | { readonly kind: typeof MARKDOWN_RUN.CODE; readonly text: string }
@@ -120,6 +141,7 @@ export type MarkdownRun =
       readonly runs: readonly MarkdownRun[];
     }
   | { readonly kind: typeof MARKDOWN_RUN.CHIP; readonly chip: MarkdownChip }
+  | { readonly kind: typeof MARKDOWN_RUN.SUGGESTION; readonly suggestion: MarkdownSuggestion }
   | { readonly kind: typeof MARKDOWN_RUN.BREAK };
 
 interface MarkdownListItem {
@@ -306,6 +328,39 @@ function githubPagesUnder(node: Nodes, reader: Reader): readonly string[] {
   return own === undefined ? inner : [own, ...inner];
 }
 
+/** Each suggestion the links under `node` name, by `reader`. */
+function replyButtonsUnder(node: Nodes, reader: Reader): readonly ReplyButtonLink[] {
+  const href = linkHrefOf(node, reader);
+  const own = href === undefined ? undefined : readReplyButtonLink(href);
+
+  const inner =
+    "children" in node
+      ? node.children.flatMap((child: Nodes) => replyButtonsUnder(child, reader))
+      : [];
+
+  return own === undefined ? inner : [own, ...inner];
+}
+
+/**
+ * The suggestions `words` name, each button once, read as `markdownBlocks`
+ * reads them, so a screen reads each one's button while it draws them.
+ */
+export function markdownReplyButtons(
+  words: string,
+  reading: MarkdownReading,
+): readonly ReplyButtonLink[] {
+  if (markdownTooDeep(words)) return [];
+  const tree = markdownTree(words);
+  const links = replyButtonsUnder(tree, { reading, definitions: definitionsIn(tree) });
+
+  return links.filter(
+    (link, at) =>
+      links.findIndex(
+        (each) => each.agentId === link.agentId && each.buttonId === link.buttonId,
+      ) === at,
+  );
+}
+
 /**
  * The GitHub pull requests' and issues' pages `words` name as chips, each
  * once, read as `markdownBlocks` reads them, so a screen holds each one's
@@ -324,7 +379,22 @@ function linkRun(
   marks: WordMarks,
   reader: Reader,
 ): MarkdownRun {
-  const chip = linkChip(href, children.map(wordsOf).join(""), reader.reading);
+  const words = children.map(wordsOf).join("");
+  const button = readReplyButtonLink(href);
+
+  if (button !== undefined) {
+    const agentHref = linkOf(
+      { kind: LINK_DESTINATION.AGENT, agentId: button.agentId },
+      button.workspace,
+    );
+
+    return {
+      kind: MARKDOWN_RUN.SUGGESTION,
+      suggestion: { link: button, words, target: linkTarget(agentHref) },
+    };
+  }
+
+  const chip = linkChip(href, words, reader.reading);
 
   if (chip !== undefined) return { kind: MARKDOWN_RUN.CHIP, chip };
 
@@ -533,16 +603,29 @@ function chipHeardAsWritten(chip: MarkdownChip): string {
   return chip.heard;
 }
 
-/** A run's words as VoiceOver hears them, each chip as `chipHeard` says it. */
-function heardRun(run: MarkdownRun, chipHeard: (chip: MarkdownChip) => string): string {
+/** A suggestion as VoiceOver hears it where nothing more is known of it: by the words it was written with. */
+function suggestionHeardAsWritten(suggestion: MarkdownSuggestion): string {
+  return suggestion.words;
+}
+
+/** How a line's chips and suggestions are heard. */
+interface LineHearing {
+  readonly chip: (chip: MarkdownChip) => string;
+  readonly suggestion: (suggestion: MarkdownSuggestion) => string;
+}
+
+/** A run's words as VoiceOver hears them, each chip and suggestion as `hearing` says it. */
+function heardRun(run: MarkdownRun, hearing: LineHearing): string {
   switch (run.kind) {
     case MARKDOWN_RUN.WORDS:
     case MARKDOWN_RUN.CODE:
       return run.text;
     case MARKDOWN_RUN.LINK:
-      return run.runs.map((each) => heardRun(each, chipHeard)).join("");
+      return run.runs.map((each) => heardRun(each, hearing)).join("");
     case MARKDOWN_RUN.CHIP:
-      return chipHeard(run.chip);
+      return hearing.chip(run.chip);
+    case MARKDOWN_RUN.SUGGESTION:
+      return hearing.suggestion(run.suggestion);
     case MARKDOWN_RUN.BREAK:
       return "\n";
   }
@@ -552,7 +635,7 @@ function heardRun(run: MarkdownRun, chipHeard: (chip: MarkdownChip) => string): 
 function holdsChip(run: MarkdownRun): boolean {
   if (run.kind === MARKDOWN_RUN.LINK) return run.runs.some(holdsChip);
 
-  return run.kind === MARKDOWN_RUN.CHIP;
+  return run.kind === MARKDOWN_RUN.CHIP || run.kind === MARKDOWN_RUN.SUGGESTION;
 }
 
 /**
@@ -566,8 +649,11 @@ function holdsChip(run: MarkdownRun): boolean {
 export function heardLine(
   runs: readonly MarkdownRun[],
   chipHeard: (chip: MarkdownChip) => string = chipHeardAsWritten,
+  suggestionHeard: (suggestion: MarkdownSuggestion) => string = suggestionHeardAsWritten,
 ): string | undefined {
-  return runs.some(holdsChip) ? runs.map((run) => heardRun(run, chipHeard)).join("") : undefined;
+  const hearing = { chip: chipHeard, suggestion: suggestionHeard };
+
+  return runs.some(holdsChip) ? runs.map((run) => heardRun(run, hearing)).join("") : undefined;
 }
 
 /** Markdown as the blocks the app draws, read as the panel reads it; words nested too deep to parse safely are one block of plain text. */

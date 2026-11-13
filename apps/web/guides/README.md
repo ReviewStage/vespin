@@ -43,11 +43,12 @@ before the first section.
 | `related` | no | Other guides' slugs, linked under "Related guides". Without it, the page links the three most recently updated others. |
 | `draft` | no | `true` keeps the guide out of production builds; a Preview and a local build still draw it. |
 
-Link another guide by its file, `[the Codex guide](run-codex-in-the-cloud.md)`:
-the page links it at `/guides/run-codex-in-the-cloud`, and the Markdown copy
-and GitHub read it as written. A picture is written from the repository's
-root, `apps/web/public/…`, as the changelog's are, and served from the
-site's.
+Link another guide by its file, `[the Codex guide](run-codex-in-the-cloud.md)`,
+and a section of it by the id GitHub gives the heading,
+`run-codex-in-the-cloud.md#a-section`: the page links them at
+`/guides/run-codex-in-the-cloud`, and the Markdown copy and GitHub read them
+as written. A picture is written from the repository's root,
+`apps/web/public/…`, as the changelog's are, and served from the site's.
 
 The body has no `#` heading, since the page sets the title, and no FAQ of its
 own, since the front matter's is drawn for it. Every page closes on the FAQ, the
@@ -55,7 +56,8 @@ download button, and related guides.
 
 The build refuses a guide that breaks this format, naming the file and the
 key: a missing or misspelled key, a day that is not `YYYY-MM-DD`, an
-`updated` before `published`, an empty FAQ, or a `related` slug no guide has.
+`updated` before `published`, an empty FAQ, a `related` slug no guide has, or
+a link to a guide that build doesn't publish (a draft, in production).
 
 ## What a guide gets
 

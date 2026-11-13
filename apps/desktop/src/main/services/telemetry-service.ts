@@ -18,6 +18,7 @@ import { sentryTracesSampler } from "@repo/features/sentry-tracing";
 import { type RunMode, sentryReportingEnabled } from "@repo/host";
 import type { AppStateStore } from "@repo/host/client";
 import type { EffectDesktopService } from "@repo/host/desktop-service";
+import type { ReportAttributes } from "@repo/host/effect";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import * as Sentry from "@sentry/electron/main";
 import { Data, Effect, Exit, type Layer, Option, Predicate, Scope, Stream, Tracer } from "effect";
@@ -90,16 +91,18 @@ const FAILING = /could not|couldn't|failed|refused/i;
 /**
  * A line main reports, told to Sentry where it is about This Mac's host
  * setup, up to what its step said of itself: as an error where it says
- * something failed, as a log line otherwise. Note that only those lines
- * leave, and only our own words of them, so a command's output and every
- * other line main reports stay on stderr.
+ * something failed, as a log line otherwise, with why beside it as the
+ * event's extra data or the log's attributes, so one kind of failure stays
+ * one issue whatever its reason. Note that only those lines leave, and only
+ * our own words of them, so a command's output and every other line main
+ * reports stay on stderr.
  */
-export function reportThisMacToSentry(message: string): void {
+export function reportThisMacToSentry(message: string, attributes?: ReportAttributes): void {
   if (!message.startsWith(THIS_MAC_LINE)) return;
   const ours = ownWords(message);
 
-  if (FAILING.test(ours)) Sentry.captureMessage(ours, "error");
-  else Sentry.logger.info(ours);
+  if (FAILING.test(ours)) Sentry.captureMessage(ours, { level: "error", extra: { ...attributes } });
+  else Sentry.logger.info(ours, { ...attributes });
 }
 
 /** A reported line up to what a step said of itself, so a command's output after it stays on stderr: `this Mac's host: could not install it` of `…: <stderr>`. */

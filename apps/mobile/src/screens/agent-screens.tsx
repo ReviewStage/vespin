@@ -24,7 +24,9 @@ import {
   mergeActionFor,
 } from "@repo/features/pull-request-model";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
+import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions-model";
+import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-copy";
 import { MCP_SERVER_LABEL, VERB } from "@repo/features/words";
@@ -81,13 +83,23 @@ import {
 } from "../agents/use-agent.js";
 import { useAgentActions } from "../agents/use-agent-actions.js";
 import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-approvals.js";
-import { type AgentComposer, useAgentComposer } from "../agents/use-agent-composer.js";
+import {
+  type AgentComposer,
+  type SuggestedSend,
+  useAgentComposer,
+} from "../agents/use-agent-composer.js";
 import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
 import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-model.js";
 import { useAgentOrigin } from "../agents/use-agent-origin.js";
 import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
 import { useAgentRun } from "../agents/use-agent-run.js";
 import { useAgentServers } from "../agents/use-agent-servers.js";
+import {
+  type OpenedSuggestion,
+  useOpenedSuggestion,
+  useSuggestionLooks,
+  useSuggestionSender,
+} from "../agents/use-suggestions.js";
 import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
 import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -355,6 +367,38 @@ function agentAddMenu(
 }
 
 /**
+ * The send a box opened on a message suggestion goes through: the
+ * suggestion's words and the send through it, where the page is the running
+ * agent it goes to; none for any other page, or once a send of it landed.
+ */
+function suggestedSendOf(
+  opened: OpenedSuggestion | undefined,
+  agentId: string,
+  sendSuggestion: ReturnType<typeof useSuggestionSender>,
+): SuggestedSend | undefined {
+  const action = opened?.view.action;
+
+  if (opened === undefined || action?.kind !== REPLY_BUTTON_ACTION.SEND) return undefined;
+
+  if (opened.view.sendTo?.id !== agentId) return undefined;
+  const { suggestion } = opened;
+
+  return {
+    key: suggestion.buttonId,
+    words: action.text,
+    send: (text, attachments) =>
+      sendSuggestion(
+        {
+          agentId: suggestion.agentId,
+          buttonId: suggestion.buttonId,
+          sent: sentOf(suggestion, text, attachments),
+        },
+        MESSAGE_SUGGESTION_REFUSAL,
+      ),
+  };
+}
+
+/**
  * One agent's page: the system's header naming the agent in the ink, as
  * Messages names a conversation, since the transcript opens at its newest
  * row and its head scrolls away, its back button leading to the task, with
@@ -387,7 +431,12 @@ function agentAddMenu(
  * task's skills over the field.
  */
 export function AgentScreen() {
-  const { id = "" } = useLocalSearchParams<{ id: string }>();
+  const {
+    id = "",
+    suggestedBy,
+    button,
+  } = useLocalSearchParams<{ id: string; suggestedBy?: string; button?: string }>();
+
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
   const router = useRouter();
   const navigation = useNavigation();
@@ -466,7 +515,20 @@ export function AgentScreen() {
 
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
   const approvals = useAgentApprovals(agent, id);
-  const composer = useAgentComposer(id, agent, transcript, status, approvals.messageSent);
+  const opened = useOpenedSuggestion({ suggestedBy, button });
+  const sendSuggestion = useSuggestionSender();
+  const suggested = suggestedSendOf(opened, id, sendSuggestion);
+
+  const composer = useAgentComposer(
+    id,
+    agent,
+    transcript,
+    status,
+    approvals.messageSent,
+    suggested,
+  );
+
+  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.planId);
   const older = useOlderPages(id, transcript?.before);
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
@@ -666,6 +728,7 @@ export function AgentScreen() {
           }}
           older={older}
           heldCall={approvals.heldCall}
+          suggestion={suggestion}
           repository={agent?.repository}
           onOpenLink={openLink}
           onToggle={(item) => setToggles((held) => toggledAt(held, item))}
