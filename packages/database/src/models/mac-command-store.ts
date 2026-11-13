@@ -124,27 +124,61 @@ const findListener = SqlSchema.findOneOption({
     ),
 });
 
+/** One command to queue, as a row keeps it. */
+const QueuedRowSchema = Schema.Struct({
+  id: Schema.String,
+  userId: Schema.String,
+  kind: KindSchema,
+  command: Schema.String,
+  timeoutSeconds: Schema.Number,
+  now: Schema.Date,
+});
+
+/** Queues a command for any of the account's Macs. */
 const insertCommand = SqlSchema.void({
-  Request: Schema.Struct({
-    id: Schema.String,
-    userId: Schema.String,
-    deviceId: ClaimingDeviceSchema,
-    kind: KindSchema,
-    command: Schema.String,
-    timeoutSeconds: Schema.Number,
-    now: Schema.Date,
-  }),
+  Request: QueuedRowSchema,
   execute: (row) =>
     Database.use((db) =>
       db.insert(macCommand).values({
         id: row.id,
         userId: row.userId,
-        deviceId: row.deviceId,
         kind: row.kind,
         command: row.command,
         timeoutSeconds: row.timeoutSeconds,
         queuedAt: row.now,
       }),
+    ),
+});
+
+/** Queues a command for one device, where the device is the account's and not removed; the row it wrote, or none. */
+const insertDeviceCommand = SqlSchema.findAll({
+  Request: Schema.Struct({ ...QueuedRowSchema.fields, deviceId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: (row) =>
+    Database.use((db) =>
+      db
+        .insert(macCommand)
+        .select((qb) =>
+          qb
+            .select({
+              id: sql<string>`${row.id}::uuid`.as("id"),
+              userId: sql<string>`${device.userId}`.as("user_id"),
+              deviceId: sql<string>`${device.id}`.as("device_id"),
+              kind: sql<MacCommandKind>`${row.kind}`.as("kind"),
+              command: sql<string>`${row.command}::text`.as("command"),
+              timeoutSeconds: sql<number>`${row.timeoutSeconds}::integer`.as("timeout_seconds"),
+              queuedAt: sql<Date>`${row.now}::timestamptz`.as("queued_at"),
+            })
+            .from(device)
+            .where(
+              and(
+                eq(device.id, row.deviceId),
+                eq(device.userId, row.userId),
+                isNull(device.removedAt),
+              ),
+            ),
+        )
+        .returning({ id: macCommand.id }),
     ),
 });
 
@@ -547,25 +581,30 @@ export function macOwnerOf(target: ConversationTarget): TaskStoreEffect<string> 
 
 /**
  * Queues one command for the account's Mac, under the id its caller minted:
- * for the device of the account given alone, or for any of its Macs where
- * none is given.
+ * for the device given alone, or for any of its Macs where none is given.
+ * Answers whether it was queued: a device that is not the account's, or
+ * was removed, queues nothing, since no Mac could ever claim it, and its caller says so at once
+ * rather than waiting out its result.
  */
 export function queueMacCommand(
   userId: string,
   queued: MacCommand,
   deviceId?: string,
-): TaskStoreEffect<void> {
-  return Effect.flatMap(DateTime.nowAsDate, (now) =>
-    insertCommand({
+): TaskStoreEffect<boolean> {
+  return Effect.flatMap(DateTime.nowAsDate, (now) => {
+    const row = {
       id: queued.id,
       userId,
-      deviceId: deviceId ?? null,
       kind: queued.kind,
       command: storedMacCommandText(queued),
       timeoutSeconds: queued.timeoutSeconds,
       now,
-    }),
-  );
+    };
+
+    return deviceId === undefined
+      ? Effect.as(insertCommand(row), true)
+      : Effect.map(insertDeviceCommand({ ...row, deviceId }), (rows) => rows.length > 0);
+  });
 }
 
 /**
@@ -603,6 +642,7 @@ export function claimMacCommands(
       (rows) =>
         rows.flatMap((row) => {
           const command = macCommandOfStored(row);
+
           return command === undefined ? [] : [command];
         }),
     ),
