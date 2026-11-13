@@ -359,7 +359,7 @@ test("Enter on a focused option sends the reply carrying the pick and never pres
     [
       "controls",
       "line: Add a note",
-      "row: Add files and more, Runs on: Cloud, Off, Ports: Ports not forwarded, Opus 5.5 High, Dictate, Composer actions, Send",
+      "row: Add files and more, Runs on: Cloud, Off, Ports: Ports, Opus 5.5 High, Dictate, Composer actions, Send",
     ],
     "the note line stands on its own under the options, over the row of presses",
   );
@@ -1067,7 +1067,7 @@ test("picking an option in the draft reply stands it picked and lights Send, the
   assert.equal(composerEditor(pane).getAttribute("aria-label"), "Reply");
   assert.deepEqual(boxParts(pane), [
     "line: Reply",
-    "row: Add files and more, Runs on: Cloud, Off, Ports: Ports not forwarded, Opus 5.5 High, Dictate, Composer actions, Send",
+    "row: Add files and more, Runs on: Cloud, Off, Ports: Ports, Opus 5.5 High, Dictate, Composer actions, Send",
   ]);
 });
 
@@ -1133,7 +1133,7 @@ test("an ask of words alone is a plain box with no controls, its line asking for
   assert.equal(pane.querySelector("[data-inbox-draft-ask]"), null, "and no Answer press");
   assert.deepEqual(boxParts(pane), [
     "line: Reply",
-    "row: Add files and more, Runs on: Cloud, Off, Ports: Ports not forwarded, Opus 5.5 High, Dictate, Composer actions, Send",
+    "row: Add files and more, Runs on: Cloud, Off, Ports: Ports, Opus 5.5 High, Dictate, Composer actions, Send",
   ]);
   assert.equal(sendHeld(pane), true, "an empty box sends nothing");
   assert.equal(footWords(pane), "");
@@ -1187,7 +1187,7 @@ test("a form's fields attach to the reply as they are filled, with no Submit, an
     [
       "controls",
       "line: Add a note",
-      "row: Add files and more, Runs on: Cloud, Off, Ports: Ports not forwarded, Opus 5.5 High, Dictate, Composer actions, Send",
+      "row: Add files and more, Runs on: Cloud, Off, Ports: Ports, Opus 5.5 High, Dictate, Composer actions, Send",
     ],
     "the note line stands on its own under the form, over the row of presses",
   );

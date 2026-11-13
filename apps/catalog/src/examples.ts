@@ -100,6 +100,7 @@ import { PANE_PINS_EXAMPLE } from "./examples/pane-pins";
 import { PICTURE_SETS_EXAMPLE } from "./examples/picture-sets";
 import { PICTURE_TILES_EXAMPLE } from "./examples/picture-tiles";
 import { POPOVER_PANELS_EXAMPLE } from "./examples/popover-panels";
+import { PORT_TABLES_EXAMPLE } from "./examples/port-tables";
 import { PORTAL_FENCE_EXAMPLE } from "./examples/portal-fence";
 import { PRESS_SHORTCUTS_EXAMPLE } from "./examples/press-shortcuts";
 import { PROGRESS_EXAMPLE } from "./examples/progress";
@@ -289,6 +290,7 @@ export const EXAMPLES: readonly Example[] = [
   PICTURE_SETS_EXAMPLE,
   PICTURE_TILES_EXAMPLE,
   POPOVER_PANELS_EXAMPLE,
+  PORT_TABLES_EXAMPLE,
   PRESS_SHORTCUTS_EXAMPLE,
   PROGRESS_EXAMPLE,
   PROGRESS_RINGS_EXAMPLE,
