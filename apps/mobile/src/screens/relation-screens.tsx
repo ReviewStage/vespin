@@ -164,13 +164,15 @@ export function TaskRelationScreen({
       <Stack.Screen
         options={{
           headerShown: true,
-          title: kind === undefined ? TASK_RELATION_MENU : TASK_RELATION_VERBS[kind].head,
           headerTintColor: colors.TEXT,
-          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.SIDEBAR },
         }}
       >
+        {/* Note that the title is the bar's own (`Stack.Title`), as its search and Cancel are, since the root stack's title for the sheet stood over one set in the options. */}
+        <Stack.Title style={{ ...BAR_TITLE.SCREEN, color: colors.TEXT }}>
+          {kind === undefined ? TASK_RELATION_MENU : TASK_RELATION_VERBS[kind].head}
+        </Stack.Title>
         {kind === undefined ? null : (
           <Stack.SearchBar
             placeholder={TASK_RELATION_SEARCH[kind].find}
