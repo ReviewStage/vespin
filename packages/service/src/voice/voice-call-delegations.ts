@@ -254,6 +254,16 @@ const callStart = Effect.fnUntraced(function* (call: VoiceCallRow, target: Agent
     return delegationId === undefined ? [] : [delegationId];
   });
 
+  // Note that a line ending before this session began was said on an earlier one, as the reconnect set the session's start past every line before it.
+  const earlier = records.flatMap((record) => {
+    const metadata = metadataOf(record);
+    const delegationId = delegationOf(metadata);
+    const toMs = lineFieldsOf(metadata)?.to_ms;
+    const before = call.clockBaseMs > 0 && toMs !== undefined && toMs <= call.clockBaseMs;
+
+    return delegationId !== undefined && before ? [delegationId] : [];
+  });
+
   const working = yield* agentWorking(target);
 
   const start: VoiceCallStart = {
@@ -263,6 +273,7 @@ const callStart = Effect.fnUntraced(function* (call: VoiceCallRow, target: Agent
     lineId: (eventId) => callLineKey(call.id, eventId),
     lines,
     delegations: new Set([...handedOn, ...queuedDelegations]),
+    earlier: new Set(earlier),
   };
 
   return start;

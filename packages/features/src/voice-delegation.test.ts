@@ -101,6 +101,7 @@ const outputsOf = (
       answering: null,
       lines: [],
       delegations: new Set(),
+      earlier: new Set(),
       ...start,
       lineId,
     }),
@@ -375,7 +376,7 @@ it.effect(
 );
 
 it.effect(
-  "a call moved to a new session after its network changed keeps counting its lines from the call's start",
+  "a call moved to a new session after its network changed keeps counting its lines from the call's start, opens a new line, and tells a reply to the earlier session's request as general context",
   () =>
     Effect.gen(function* () {
       const lines: readonly StoredVoiceLine[] = [
@@ -390,18 +391,33 @@ it.effect(
         },
       ];
 
-      // The new session's timeline starts again at zero, a minute into the call, and its event ids are its own.
-      const outputs = yield* outputsOf([said("Where was I?", 0, 400, "n1")], {
-        lines,
-        sessionStartMs: 60_000,
-      });
+      // The new session's timeline starts again at zero, three seconds into the call, and its event ids are its own.
+      const outputs = yield* outputsOf(
+        [said("Where was I?", 0, 400, "n1"), agent({ kind: AGENT_TURN.REPLY, text: "Done." })],
+        {
+          lines,
+          sessionStartMs: 3_000,
+          agentWorking: true,
+          answering: "item_0",
+          earlier: new Set(["item_0"]),
+        },
+      );
 
+      // Its first words open a line of their own rather than growing the line the earlier session left open, and the reply to the earlier session's request is told as general context, since this session never raised it.
       assert.deepEqual(outputs, [
         {
           ...record(VOICE_SPEAKER.CALLER, "line_1", "Where was I?"),
-          fromMs: 60_000,
-          toMs: 60_400,
+          fromMs: 3_000,
+          toMs: 3_400,
           eventId: "n1",
+        },
+        {
+          kind: VOICE_OUTPUT.TELL,
+          event: {
+            type: LIVE_CLIENT_EVENT.COMMENTARY_APPEND,
+            delegation_id: null,
+            content: "Done.",
+          },
         },
       ]);
     }),

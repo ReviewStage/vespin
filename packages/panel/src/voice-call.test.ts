@@ -90,8 +90,8 @@ class FakePeer {
   }
 }
 
-/** The microphone's one track, whose light a stop puts out. */
-const microphone = { stopped: false };
+/** The microphone's one track, whose light a stop puts out, and whether it carries sound. */
+const microphone = { stopped: false, enabled: true };
 
 /** What the call asked the service to open, and to reconnect. */
 let opened: unknown[];
@@ -143,10 +143,14 @@ beforeEach(() => {
   opened = [];
   reconnected = [];
   microphone.stopped = false;
+  microphone.enabled = true;
 
   const track = {
     stop: () => {
       microphone.stopped = true;
+    },
+    set enabled(on: boolean) {
+      microphone.enabled = on;
     },
   };
 
@@ -296,6 +300,7 @@ test("a peer that fails after it connected is carried on over a new one under th
 
   assert.ok(peer.closed, "the failed peer is dropped");
   assert.equal(microphone.stopped, false, "the microphone is kept");
+  assert.equal(microphone.enabled, false, "the muted track stays silent on the new peer");
   assert.deepEqual(reconnected, [{ callId: CALL_ID, sdp: "v=0 offer" }]);
   assert.deepEqual(again.remote, { type: "answer", sdp: "v=0 answer again" });
   assert.equal(call.call?.stage, "connecting");

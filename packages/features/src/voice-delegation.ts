@@ -52,7 +52,10 @@
  * timeline starts again at zero, so every fragment's span is read on the
  * call's own clock: the session's, moved on by how far into the call the
  * session started (`sessionStartMs`), and the lines of every session keep
- * counting from the call's start.
+ * counting from the call's start. A line an earlier session said is never
+ * open to grow, and a delegation an earlier session raised is one this
+ * session does not know, so what answers it is told as the session's
+ * general context rather than under its id.
  */
 
 import { EXCESS_KEYS, unparsedWire, type WireValue } from "@repo/wire";
@@ -190,6 +193,8 @@ export interface VoiceCallStart {
   readonly lineId: (eventId: string) => string;
   readonly lines: readonly StoredVoiceLine[];
   readonly delegations: ReadonlySet<string>;
+  /** The delegations an earlier session of the call raised, which this session does not know by id. */
+  readonly earlier: ReadonlySet<string>;
 }
 
 /** A transcript fragment's interval on the session's timeline, in milliseconds, where GPT-Live names it. */
@@ -248,6 +253,8 @@ interface VoiceState {
   readonly resuming: { readonly [speaker in VoiceSpeaker]: Resume | undefined };
   /** The delegations handed on before this holder took the call, which a replay raises again. */
   readonly handedOn: ReadonlySet<string>;
+  /** The delegations an earlier session raised, which this one does not know by id. */
+  readonly earlier: ReadonlySet<string>;
   /** The caller's lines since the last delegation took them, oldest first; the last grows. */
   readonly heard: readonly Line[];
   /** The voice's latest line, which grows. */
@@ -563,6 +570,11 @@ function heardLive(state: VoiceState, event: LiveServerEvent): Step {
   }
 }
 
+/** The delegation the running turn's appends name: none for one an earlier session raised, which this session would not know. */
+function addressed(state: VoiceState): string | null {
+  return state.answering !== null && state.earlier.has(state.answering) ? null : state.answering;
+}
+
 function followedAgent(state: VoiceState, event: AgentTurnEvent): Step {
   switch (event.kind) {
     // Note that a turn whose opening line names no delegation keeps the one
@@ -570,11 +582,11 @@ function followedAgent(state: VoiceState, event: AgentTurnEvent): Step {
     case AGENT_TURN.STARTED:
       return [{ ...state, working: true, answering: event.delegationId ?? state.answering }, []];
     case AGENT_TURN.PROGRESS:
-      return [state, tell(LIVE_CLIENT_EVENT.THINKING_APPEND, state.answering, event.step)];
+      return [state, tell(LIVE_CLIENT_EVENT.THINKING_APPEND, addressed(state), event.step)];
     case AGENT_TURN.REPLY:
       return [
         state,
-        tell(LIVE_CLIENT_EVENT.COMMENTARY_APPEND, state.answering, event.text, REPLY_MAX_APPENDS),
+        tell(LIVE_CLIENT_EVENT.COMMENTARY_APPEND, addressed(state), event.text, REPLY_MAX_APPENDS),
       ];
     case AGENT_TURN.ENDED:
       return [{ ...state, working: false, answering: null }, []];
@@ -620,11 +632,16 @@ function resumeOf(lines: readonly StoredVoiceLine[], speaker: VoiceSpeaker): Res
     : { eventId: newest.eventId, endMs: newest.toMs };
 }
 
+/** Whether a stored line was said on an earlier session of the call: one that ended before this session's timeline began. */
+function saidEarlier(line: StoredVoiceLine, sessionStartMs: number): boolean {
+  return sessionStartMs > 0 && line.toMs !== undefined && line.toMs <= sessionStartMs;
+}
+
 /**
  * The loop's state at the call's start, or as a holder taking the call over
  * finds it in the stored lines: the caller's lines no delegation took, the
  * voice's newest line, and the speaker of the newest line open, unless a
- * delegation took it.
+ * delegation took it or an earlier session said it.
  */
 function startedVoiceLoop(start: VoiceCallStart): VoiceState {
   const named = start.lines.flatMap((line) =>
@@ -642,13 +659,17 @@ function startedVoiceLoop(start: VoiceCallStart): VoiceState {
       [VOICE_SPEAKER.VOICE]: resumeOf(start.lines, VOICE_SPEAKER.VOICE),
     },
     handedOn: start.delegations,
+    earlier: start.earlier,
     heard: named.filter(
       (line) =>
         line.speaker === VOICE_SPEAKER.CALLER &&
         start.lines.some((stored) => stored.id === line.id && !stored.delegated),
     ),
     voiced,
-    open: newest === undefined || newest.delegated ? null : newest.speaker,
+    open:
+      newest === undefined || newest.delegated || saidEarlier(newest, start.sessionStartMs)
+        ? null
+        : newest.speaker,
     working: start.agentWorking,
     answering: start.answering,
   };

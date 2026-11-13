@@ -35,9 +35,9 @@
  * clock a new session, whose timeline starts again at zero, would have its
  * first words passed by as a replay of the old one's; and since a session's
  * clock starts at its first audio rather than at its creation, the new one
- * is set to start no earlier than the latest line said before it. The lease published for it closes
- * the old session and keeps its seconds before it holds the new one
- * (`voice-call-lease.ts`). A call no longer standing is refused as not
+ * is set to start no earlier than the latest line said before it. The lease
+ * published for it closes the old session and keeps its seconds before it
+ * holds the new one (`voice-call-lease.ts`). A call no longer standing is refused as not
  * found, and the panel lets it go.
  */
 

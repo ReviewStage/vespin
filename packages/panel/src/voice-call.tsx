@@ -15,8 +15,9 @@
  * `session.close`.
  *
  * The call is live once the session says it started, and timed from then.
- * Muting the microphone tells the session to stop hearing it; muting the
- * speaker silences the voice on this device alone. End sends
+ * Muting the microphone tells the session to stop hearing it and silences
+ * the track itself; muting the speaker silences the voice on this device
+ * alone. End sends
  * `session.close` and closes the channel, which sends what it holds first,
  * and the peer is dropped once the channel has closed; a `session.closed`
  * from the service, a peer that failed before it ever connected, or the
@@ -369,6 +370,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
 
     if (held === undefined || held.channel.readyState !== "open") return;
     tell(held, muted ? LIVE_EVENT.MUTE : LIVE_EVENT.UNMUTE);
+
+    // Note that the track itself is silenced too, so a reconnect's new peer, which carries the same track, sends nothing before its session is told of the mute.
+    for (const track of held.microphone.getTracks()) track.enabled = !muted;
     microphoneMuted.current = muted;
     setCall((last) => last && { ...last, microphoneMuted: muted });
   };

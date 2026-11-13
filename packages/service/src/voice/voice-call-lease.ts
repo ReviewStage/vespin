@@ -44,10 +44,10 @@
  * A reconnect moves the call to a new session when the caller's peer
  * failed (`voice-procedures.ts`), taking the next epoch, so every lease on
  * the old session is stale, and publishes a lease that names the session it
- * left. That lease attaches to the new session and claims the call as any
- * lease does, then attaches to the old one, closes it, and keeps its seconds
- * on the caller's day before it holds the new one, since no other holder
- * will: a call's row is deleted only by naming the session it stands on, so
+ * left. That lease first attaches to the old one, closes it, and keeps its
+ * seconds on the caller's day, whatever becomes of its own claim, since no
+ * other holder will, and only then attaches to the new session and claims
+ * the call as any lease does: a call's row is deleted only by naming the session it stands on, so
  * a stale holder that hears the old session close ends nothing and keeps
  * nothing. The call's seconds are so kept session by session, and the
  * call is counted once, at its last session's close, by its length from
@@ -342,6 +342,9 @@ export const holdVoiceCall = Effect.fn("voice/holdVoiceCall")(function* <R>(
 
   const sidebands = yield* LiveSidebands;
 
+  // A reconnect's lease closes the session the call left first, whatever becomes of its own claim, so no stale or failed claim leaves it open; a session closed already refuses the attach and keeps nothing twice.
+  if (lease.closes !== undefined) yield* closedLeft(standing.value, lease.closes, key.value);
+
   return yield* Effect.scoped(
     Effect.gen(function* () {
       // Attached before claiming, so the lease this one takes over from still listens while it comes.
@@ -368,9 +371,6 @@ export const holdVoiceCall = Effect.fn("voice/holdVoiceCall")(function* <R>(
 
       const sideband = attached.success;
       let lost = false;
-
-      // A reconnect's lease closes the session the call left before it holds the new one, whose events wait on the sideband meanwhile.
-      if (lease.closes !== undefined) yield* closedLeft(call, lease.closes, key.value);
 
       // Whether this lease still holds the call, read now; a lease told no has lost it.
       const stillHolds = Effect.gen(function* () {
