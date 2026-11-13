@@ -405,15 +405,3 @@ export function threadActs(
     },
   ];
 }
-
-/** A thread's acts while none is picked, dimmed rather than gone, as Mail's bar stands over No Message Selected. */
-export const NO_THREAD_ACTS: readonly BarAction[] = [
-  {
-    label: INBOX_READ_MARK.UNREAD,
-    symbol: GLYPH.MARK_UNREAD,
-    disabled: true,
-    onPress: () => undefined,
-  },
-  { ...REMIND_ME, disabled: true, onPress: () => undefined },
-  { label: RESOLVE, symbol: GLYPH.RESOLVED, disabled: true, onPress: () => undefined },
-];
