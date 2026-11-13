@@ -615,13 +615,15 @@ function useRelationPick(
   listed: readonly TaskSummary[],
   workspaceId: string | undefined,
   parent: string | undefined,
-  opensOn?: TaskCreateRelation,
+  restored?: { readonly relation: TaskCreateRelation | undefined },
 ): RelationPick {
+  // Note that a sheet opened again keeps the relation as it pressed Start, none where it was removed, rather than a parent's Sub-task of again.
   const [relation, setRelation] = useState<TaskCreateRelation | undefined>(
-    opensOn ??
-      (parent === undefined
+    restored !== undefined
+      ? restored.relation
+      : parent === undefined
         ? undefined
-        : { kind: TASK_CREATE_RELATION_KIND.SUB_TASK_OF, taskId: parent }),
+        : { kind: TASK_CREATE_RELATION_KIND.SUB_TASK_OF, taskId: parent },
   );
 
   const tasks = useMemo(
@@ -760,7 +762,7 @@ export function NewTaskScreen({
   // Note that a sub-task's repositories are its parent's workspace's alone, never the chosen one's, so none is offered until that workspace is read.
   const workspace = parent === undefined ? own : workspaces.find((each) => each.id === workspaceId);
   const repository = useRepositoryPick(workspace, again?.repository ?? draft?.repository);
-  const relation = useRelationPick(listed, workspaceId, parent, again?.relation);
+  const relation = useRelationPick(listed, workspaceId, parent, again);
   const pick = useModelPick(again?.picked);
   const startTask = useStartTask(workspaceId);
   const fileTask = useFileTask(workspaceId);

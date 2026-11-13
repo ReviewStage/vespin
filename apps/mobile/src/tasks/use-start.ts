@@ -336,11 +336,19 @@ export type StartLanded =
 /** The page of each task that stands, by its task, which hears what its start came to. */
 const hearing = new Map<string, (landed: StartLanded) => void>();
 
-/** The tasks whose page a start opened and whose answer is awaited, until that page hears it or leaves. */
+/** The tasks a start opened whose answer is still on its way. */
 const awaiting = new Set<string>();
 
-/** What a start came to before its task's page stood to hear it, by its task, kept until the page mounts. */
-const unheard = new Map<string, StartLanded>();
+/**
+ * How long an answer that found no page standing is kept for one that
+ * mounts: long enough for a page a moment late, as a task handed to the
+ * iPad's split view stands again in its detail column, and short enough
+ * that a visit to the task later on never acts on it.
+ */
+const UNHEARD_FOR_MS = 5000;
+
+/** What a start came to while no page of its task stood to hear it, by its task, and when it landed. */
+const unheard = new Map<string, { readonly landed: StartLanded; readonly at: number }>();
 
 /** Marks the task a start just opened as awaiting what the start comes to. */
 export function awaitStart(taskId: string): void {
@@ -349,23 +357,23 @@ export function awaitStart(taskId: string): void {
 
 /**
  * Tells the page of the task a New task start opened what the start came
- * to, or keeps it for the page about to mount. Note that an answer landing
- * after its page has left is let go, so a later visit to the task never
+ * to, or keeps it a moment for a page about to mount. Note that it is kept
+ * only for a page that mounts soon after, so a later visit to the task never
  * opens its agent or steps back.
  */
 export function startLanded(taskId: string, landed: StartLanded): void {
+  if (!awaiting.delete(taskId)) return;
   const hear = hearing.get(taskId);
 
-  if (hear !== undefined) {
-    awaiting.delete(taskId);
-    hear(landed);
-  } else if (awaiting.has(taskId)) unheard.set(taskId, landed);
+  if (hear === undefined) unheard.set(taskId, { landed, at: Date.now() });
+  else hear(landed);
 }
 
 /**
  * Hears what the start of the task `taskId` came to while its page stands,
- * including an answer that landed before the page mounted, as an answer to
- * a start refused at once does.
+ * including an answer that landed a moment before the page mounted, as an
+ * answer to a start refused at once does, or one landing while a task's
+ * page hands itself to the iPad's split view.
  */
 export function useStartLanded(
   taskId: string | undefined,
@@ -378,18 +386,13 @@ export function useStartLanded(
     const listener = (landed: StartLanded) => heard(landed);
     hearing.set(taskId, listener);
     const waiting = unheard.get(taskId);
+    unheard.delete(taskId);
 
-    if (waiting !== undefined) {
-      unheard.delete(taskId);
-      awaiting.delete(taskId);
-      listener(waiting);
-    }
+    if (waiting !== undefined && Date.now() - waiting.at < UNHEARD_FOR_MS) listener(waiting.landed);
 
+    // Note that a page leaving leaves its start awaited, so a page standing again in its place, as the split view's detail does, still hears it.
     return () => {
-      if (hearing.get(taskId) !== listener) return;
-      hearing.delete(taskId);
-      awaiting.delete(taskId);
-      unheard.delete(taskId);
+      if (hearing.get(taskId) === listener) hearing.delete(taskId);
     };
   }, [taskId]);
 }
