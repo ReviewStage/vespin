@@ -1,4 +1,4 @@
-// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned and the member's sections with their tasks, and Settings at its foot.
+// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned, Following, and the member's sections with their tasks, and Settings at its foot.
 
 import {
   AccountBarItem,
@@ -64,7 +64,7 @@ const PLACES = [
 const NEW_TASK = { label: "New task", symbol: GLYPH.NEW_TASK } as const;
 const SETTINGS = { label: "Settings", symbol: GLYPH.SETTINGS } as const;
 
-/** The member's tasks the sidebar lists under its places: Pinned and each of their sections, as the Tasks tab draws them. */
+/** The member's tasks the sidebar lists under its places: Pinned, Following, and each of their sections, as the Tasks tab draws them. */
 export type SidebarTasks = {
   /** The sections, each a `ListSection` of task rows. */
   readonly sections: ReactNode;

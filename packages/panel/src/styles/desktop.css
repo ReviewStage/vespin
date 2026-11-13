@@ -629,8 +629,7 @@ body,
    task's page stands them at the end of the agents' tabs' row rather than
    the title bar's: its tabs stand flush under the topbar, which is two
    title-bar middles tall. They rest on the frame as the tabs beside them do,
-   with no ground of their own, the panel open or not. Where the task's
-   details stand in that row's place, the toggle keeps to the title bar. */
+   with no ground of their own, the panel open or not. */
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell:has(> .desktop-main .desktop-task > .task-tabs)
   > .title-bar-controls[data-edge="end"] {
@@ -904,6 +903,7 @@ body,
 .desktop-agent .agent-published-dock,
 .desktop-agent .agent-threads-dock,
 .desktop-agent .agent-follow-offer-dock,
+.desktop-agent .agent-computer-dock,
 .desktop-agent .agent-queue-dock,
 .desktop-agent .draft-fork-dock,
 .desktop-agent .agent-composer,
@@ -1597,10 +1597,16 @@ body,
 .side-panel-content .agent-published-dock,
 .side-panel-content .agent-threads-dock,
 .side-panel-content .agent-follow-offer-dock,
+.side-panel-content .agent-computer-dock,
 .side-panel-content .agent-queue-dock,
 .side-panel-content .draft-fork-dock,
 .side-panel-content .agent-tab-foot .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
+}
+/* The apps' windows an agent is using float at the right edge of that same column. */
+.desktop-agent .agent-computer-float,
+.side-panel-content .agent-computer-float {
+  inset-inline-end: max(var(--content-inset), var(--reading-room));
 }
 
 /* Tabs ------------------------------------------------------------------------ */

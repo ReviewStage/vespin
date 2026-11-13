@@ -288,7 +288,7 @@ function AddSkill({ workspace }: { readonly workspace: Workspace }) {
           }}
           autoFocus
           testId={TEST_IDS.PASTE}
-            disabled={busy}
+          disabled={busy}
           verbatim
         />
         {failed !== undefined && previewRetries(failed) ? (

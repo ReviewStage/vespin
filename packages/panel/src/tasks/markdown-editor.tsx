@@ -25,11 +25,13 @@ import {
   type EditorCodeBlock,
   type EditorDiagram,
   type EditorDrawing,
+  type EditorHistory,
   type EditorTaskBox,
   type Finish,
   type HeadingsChange,
   type MentionNode,
   type MentionNodeDoors,
+  type OpenedHistory,
   SLASH_INSERT,
   type SlashBlock,
 } from "../description-editor/contract.js";
@@ -155,6 +157,10 @@ export interface MarkdownEditorProps {
   readonly ownBlocks?: readonly OwnBlock[] | undefined;
   /** The `/` menu's blocks that do not apply to the document, which it does not offer. */
   readonly droppedBlocks?: ReadonlySet<SlashBlock> | undefined;
+  /** The undo history an earlier editor left on this text, which the editor takes up, and the step it takes through it as it opens; none where it opens with a history of its own. */
+  readonly history?: OpenedHistory | undefined;
+  /** Hears the editor's undo history as it is taken down, for an editor opened later on the same text; none where the document keeps none. */
+  readonly onClosed?: ((history: EditorHistory) => void) | undefined;
 }
 
 /** The bundle's editor mounted in place, built once, on the text it opened with; its handle kept for its document. */
@@ -162,17 +168,22 @@ function MountedEditor({
   module,
   props,
   handle,
+  onClosed,
 }: {
   module: DescriptionEditorModule;
   props: DescriptionEditorProps;
   handle: RefObject<DescriptionEditorHandle | undefined>;
+  onClosed: ((history: EditorHistory) => void) | undefined;
 }): React.JSX.Element {
   const host = useRef<HTMLDivElement>(null);
   const latest = useRef(props);
   latest.current = props;
+  // Note that who hears the history is the one drawn as the editor mounted, so a history is only ever handed to the document it was written in.
+  const closedTo = useRef(onClosed);
   useLayoutEffect(() => {
     if (host.current === null) return;
     const { mentions } = latest.current;
+    const closed = closedTo.current;
 
     const mounted = module.mount(host.current, {
       ...latest.current,
@@ -217,6 +228,7 @@ function MountedEditor({
 
     return () => {
       handle.current = undefined;
+      closed?.(mounted.history());
       mounted.destroy();
     };
   }, [module, handle]);
@@ -250,6 +262,8 @@ export function MarkdownEditor({
   diagrams = false,
   ownBlocks,
   droppedBlocks,
+  history,
+  onClosed,
 }: MarkdownEditorProps): React.JSX.Element {
   const ownHandle = useRef<DescriptionEditorHandle | undefined>(undefined);
   const handle = givenHandle ?? ownHandle;
@@ -370,6 +384,7 @@ export function MarkdownEditor({
     pictures: pictures?.pictures,
     format: toolbar.doors,
     blocks: { onTrigger: blocks.onTrigger, onKey: blocks.onKey },
+    history,
   };
 
   return (
@@ -411,7 +426,7 @@ export function MarkdownEditor({
         once(onLeave);
       }}
     >
-      <MountedEditor module={module.data} props={props} handle={handle} />
+      <MountedEditor module={module.data} props={props} handle={handle} onClosed={onClosed} />
       {toolbar.drawn}
       {blocks.menu}
       {children}

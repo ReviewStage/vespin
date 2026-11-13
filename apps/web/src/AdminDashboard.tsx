@@ -21,7 +21,9 @@ import { CostScreen } from "@repo/panel/admin/screens/cost";
 import { DashboardScreen } from "@repo/panel/admin/screens/dashboard";
 import { DayScreen } from "@repo/panel/admin/screens/day";
 import { LimitsScreen } from "@repo/panel/admin/screens/limits";
+import { PromptsScreen } from "@repo/panel/admin/screens/prompts";
 import { ReliabilityScreen } from "@repo/panel/admin/screens/reliability";
+import { ToolsScreen } from "@repo/panel/admin/screens/tools";
 import { UsersScreen } from "@repo/panel/admin/screens/users";
 import { WorkspaceScreen } from "@repo/panel/admin/screens/workspace";
 import { WorkspacesScreen } from "@repo/panel/admin/screens/workspaces";
@@ -261,7 +263,33 @@ function AdminDashboardPage(): React.JSX.Element {
   }
 
   if (view.kind === ADMIN_TAB.LIMITS) {
-    return <LimitsScreen frame={(content) => shell(ADMIN_TAB.LIMITS, content)} />;
+    return (
+      <LimitsScreen
+        account={viewer}
+        onSignOut={signOut}
+        frame={(content) => shell(ADMIN_TAB.LIMITS, content)}
+      />
+    );
+  }
+
+  if (view.kind === ADMIN_TAB.TOOLS) {
+    return (
+      <ToolsScreen
+        account={viewer}
+        onSignOut={signOut}
+        frame={(content) => shell(ADMIN_TAB.TOOLS, content)}
+      />
+    );
+  }
+
+  if (view.kind === ADMIN_TAB.PROMPTS) {
+    return (
+      <PromptsScreen
+        account={viewer}
+        onSignOut={signOut}
+        frame={(content) => shell(ADMIN_TAB.PROMPTS, content)}
+      />
+    );
   }
 
   if (view.kind === ADMIN_TAB.USERS) {

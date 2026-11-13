@@ -893,9 +893,36 @@ export const RUNNER_WARM = {
   IDLE_CAP_MS: 60 * 60 * 1_000,
 } as const;
 
-/** The IDLE event: the agent's turn is over, and the launch stays warm for the next message. */
+/** The bounds of a turn's summary of files (`TurnFilesSummary`). */
+export const TURN_FILES_BOUNDS = {
+  /** The most files a summary names; the rest are counted in its totals alone. */
+  MAX_FILES: 50,
+} as const;
+
+/** One file a turn changed, where it stands after the turn, with the lines the turn added to it and removed from it. */
+export interface TurnFile {
+  readonly path: string;
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+/**
+ * The files a turn changed, as git diffs its checkout from the snapshot
+ * before it to the checkout as the turn left it (`checkout-diff.ts`): the
+ * first `TURN_FILES_BOUNDS.MAX_FILES` files, and how many files and lines
+ * the turn changed over all of them.
+ */
+export interface TurnFilesSummary {
+  readonly files: readonly TurnFile[];
+  readonly total: number;
+  readonly additions: number;
+  readonly deletions: number;
+}
+
+/** The IDLE event: the agent's turn is over, and the launch stays warm for the next message, with the files the turn changed where its checkout was snapshotted before it and it changed any. */
 export interface RunnerIdle {
   readonly type: typeof RUNNER_EVENT.IDLE;
+  readonly files?: TurnFilesSummary | undefined;
 }
 
 /** Where a checkout keeps the snapshots taken before each turn (`checkout-snapshot.ts`): under the agent's id, each under a stamp of when it was taken and the line's id, in the clone's own refs beside an archived agent's (`refs/vespin/archive/`). */
@@ -1009,11 +1036,12 @@ export const RUNNER_UNANSWERED = {
   SILENCE_MS: 5 * 60 * 1_000,
 } as const;
 
-/** The END event; `detail` is the CLI's failure, with the launch's secrets taken out, where it failed. */
+/** The END event; `detail` is the CLI's failure, with the launch's secrets taken out, where it failed; `files` the files the turn it ended changed, as IDLE carries them, where a turn ended with it. */
 export interface RunnerEndEvent {
   readonly type: typeof RUNNER_EVENT.END;
   readonly reason: RunnerEnd;
   readonly detail?: string;
+  readonly files?: TurnFilesSummary | undefined;
 }
 
 /**

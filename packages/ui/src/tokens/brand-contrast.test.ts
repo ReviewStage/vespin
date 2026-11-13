@@ -16,7 +16,7 @@ const NON_TEXT = 3;
 const WHITE = "#ffffff";
 
 /** How much of the links' ink the sidebar's current row is mixed from (`palettes.css`'s fill-current). */
-const CURRENT_ROW_INK = 0.14;
+const CURRENT_ROW_INK = 0.12;
 
 /** A hex color's channels, 0 to 1. */
 function channels(hex: string): [number, number, number] {
@@ -75,7 +75,7 @@ function pairs(theme: Theme): [string, string, string, number][] {
     ["danger's words on the ground", theme.DANGER_TEXT, theme.GROUND, WORDS],
     ["white on a destructive button", WHITE, theme.DANGER_FILL, WORDS],
     ["attention's words on the ground", theme.ATTENTION, theme.GROUND, WORDS],
-    ["white on attention's fill", WHITE, theme.ATTENTION_FILL, WORDS],
+    ["words on attention's fill", theme.ON_ACCENT, theme.ATTENTION_FILL, WORDS],
     ["work under way on the ground", theme.WORKING, theme.GROUND, WORDS],
     ["a finished state on the ground", theme.COMPLETE, theme.GROUND, WORDS],
     ["a merged state on the ground", theme.MERGED, theme.GROUND, WORDS],

@@ -2,6 +2,21 @@ import { REPLAY_STEP_KIND, type Replay, type ReplayStep } from "@repo/features/a
 import type { AgentPullRequest, AgentSummary, AgentTodos } from "@repo/features/agent-wire";
 import { AGENT_SENDER } from "@repo/features/agent-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import {
+  earlierStepsLine,
+  leftOutLine,
+  REPLAY_PAGE,
+  replayCallsServer,
+  replayCount,
+  replayPage,
+  replayTaskTodos,
+  replayVerb,
+  replayWords,
+  STEP_VIEW,
+  type StepView,
+  stepView,
+  summaryLine,
+} from "@repo/features/replay-card-model";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import {
   BUTTON_VARIANT,
@@ -38,21 +53,6 @@ import { lineSender, providerOf } from "./agent-model.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
 import { CopyMessageAction } from "./copy-message.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, ORIGIN_CHIP } from "./mention-chip.js";
-import {
-  earlierStepsLine,
-  leftOutLine,
-  REPLAY_PAGE,
-  replayCallsServer,
-  replayCount,
-  replayPage,
-  replayTaskTodos,
-  replayVerb,
-  replayWords,
-  STEP_VIEW,
-  type StepView,
-  stepView,
-  summaryLine,
-} from "./replay-card-model.js";
 import { useMentionDoors } from "./task-mentions.js";
 import { TranscriptTool, TranscriptWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";

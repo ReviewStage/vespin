@@ -10,6 +10,7 @@ import {
 } from "@repo/features/agent-wire";
 import { type Failure, remedyLabel } from "@repo/features/failure-remedy";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import type { DraftSuggestion, SuggestionSendResult } from "@repo/features/suggestion-model";
 import { STATUS_TONE } from "@repo/ui";
 import { sentLineId } from "@repo/wire/host-ids";
 import { useSelector } from "@tanstack/react-store";
@@ -278,6 +279,10 @@ export interface HeldComposer extends AgentComposerControl {
   readonly sendsSettled: () => Promise<void>;
   /** Moves the box's words and files on together from what its draft holds as the change lands, as a refused send put back does (`refused-send.ts`). */
   readonly updateHeld: HeldUpdate;
+  /** The suggestion in another agent's reply the box was filled in from, which its send goes through; none for any other draft. */
+  readonly suggestion: DraftSuggestion | undefined;
+  /** Lets the box's suggestion go, its words kept, so the box sends them as a line of the developer's own. */
+  readonly dropSuggestion: () => void;
 }
 
 export function useAgentComposer(input: {
@@ -303,6 +308,14 @@ export function useAgentComposer(input: {
   lead?: string | undefined;
   /** Told once a send has carried the lead, so its holder lets it go. */
   onLeadSent?: (() => void) | undefined;
+  /** Sends the box's words through the suggestion it was filled in from, once (`suggestion-send.ts`); none where the box takes none. */
+  sendSuggestion?:
+    | ((
+        suggestion: DraftSuggestion,
+        words: string,
+        attachments: readonly AgentAttachment[],
+      ) => Promise<SuggestionSendResult>)
+    | undefined;
 }): HeldComposer {
   const { agentId, messages } = input;
   const kept = useDraft({ kind: DRAFT_PLACE.AGENT, planId: input.taskId, agentId });
@@ -564,13 +577,79 @@ export function useAgentComposer(input: {
       .filter((each) => each !== "")
       .join("\n\n");
 
-    const { attachments } = kept.draft;
+    const { attachments, suggestion } = kept.draft;
 
     if (!hasWordsOrFiles(text, attachments) || held.closed !== undefined) return;
+
+    if (suggestion !== undefined) {
+      sendThroughSuggestion(suggestion, text, kept.draft, lead);
+
+      return;
+    }
+
     update(() => EMPTY_DRAFT);
     sendLine(text, attachments, clientKey);
 
     if (lead !== undefined) onLeadSent?.();
+  };
+
+  // Note that a suggestion's words are sent through it rather than as a
+  // line of the box's own, since the service sends them once, under the
+  // suggestion's key, and the transcript reads them back as its line. The
+  // box holds them until that send answers: a send refused, or one another
+  // member landed first, leaves them in the box, saying why in a toast. It
+  // goes behind the box's lines still on their way, as every send to the
+  // agent does, so the agent takes them in the order they were sent.
+  const [suggesting, setSuggesting] = useState(false);
+
+  const sendThroughSuggestion = (
+    suggestion: DraftSuggestion,
+    text: string,
+    sent: Draft,
+    sentLead: string | undefined,
+  ) => {
+    const sendSuggestion = latest.current.sendSuggestion;
+
+    if (sendSuggestion === undefined || suggesting) return;
+    setSuggesting(true);
+    queue.after(agentId, () =>
+      sendSuggestion(suggestion, text, sent.attachments)
+        .then((result) => {
+          if ("reached" in result) {
+            // Note that the box is emptied only while it holds what was sent, since a tab opened
+            // again while the send was out may have taken newer words; those stay, as the
+            // member's own, because the suggestion they would have gone through is spent.
+            update((was) =>
+              was.text === sent.text && was.attachments.length === sent.attachments.length
+                ? EMPTY_DRAFT
+                : was.suggestion?.buttonId === suggestion.buttonId
+                  ? { ...was, suggestion: undefined }
+                  : was,
+            );
+
+            // Note that the follow-ups the send carried go once it lands, as a line's do, so no later send carries them again,
+            // but only while they are still the ones ticked: one ticked while the send was out stays, with those it joined.
+            if (sentLead !== undefined && latest.current.lead === sentLead)
+              latest.current.onLeadSent?.();
+
+            return;
+          }
+
+          toast({
+            replayUnmasked: true,
+            words: result.failure.text,
+            tone: STATUS_TONE.DANGER,
+            failure: {
+              surface: FAILURE_SURFACE.AGENT_SEND,
+              cause: result.failure.cause,
+              about: { agentId },
+            },
+          });
+        })
+        .finally(() => {
+          if (mounted.current) setSuggesting(false);
+        }),
+    );
   };
 
   /** Sends the words and files in place of the line named, the messages from it on hidden at once; the box is left as it is. */
@@ -712,7 +791,7 @@ export function useAgentComposer(input: {
 
         return moved === undefined ? was : { ...was, ...moved };
       }),
-    sending: false,
+    sending: suggesting,
     note: held.closed === undefined ? (held.revertFailed?.note ?? held.remedied?.note) : undefined,
     closed: held.closed,
     send: () => sendDraft(),
@@ -741,6 +820,8 @@ export function useAgentComposer(input: {
     },
     sent,
     unsent: { words: kept.draft.text, attachments: kept.draft.attachments },
+    suggestion: held.closed === undefined ? kept.draft.suggestion : undefined,
+    dropSuggestion: () => kept.update((was) => ({ ...was, suggestion: undefined })),
     editing: held.editing,
     edit: (messageId) => setHeld((was) => ({ ...was, editing: messageId })),
     dropEdit: () => setHeld((was) => ({ ...was, editing: undefined })),

@@ -11,3 +11,8 @@ declare module "virtual:site/privacy-policy" {
   const policy: import("./site-markdown").Policy;
   export default policy;
 }
+
+declare module "virtual:site/guides" {
+  const guides: readonly import("./guides").Guide[];
+  export default guides;
+}

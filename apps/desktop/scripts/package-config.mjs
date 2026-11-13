@@ -11,7 +11,7 @@ export const APP_ID = "dev.vespin.app";
 // This is the sentence macOS shows when it asks for the microphone, so it is
 // what consent is given against. It has to say where the audio goes.
 export const MICROPHONE_USAGE_DESCRIPTION =
-  "Vespin uses the microphone for dictation. What you dictate is sent to OpenAI to be transcribed.";
+  "Vespin uses the microphone for dictation and voice. What you dictate or say is sent to OpenAI.";
 
 // The sentence macOS shows when it asks whether we may control another app,
 // so it is what consent is given against. Note that only a command an agent

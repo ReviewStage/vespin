@@ -185,6 +185,9 @@ const STAGED_PROFILES: ReadonlySet<string> = new Set<string>([
 /** The account signed in: the owner of the fixture's first workspace, which is named for it. */
 const ADA = { userId: "user-ada", name: "Ada Lovelace" } as const;
 
+/** A teammate, the workspace's admin, who is assigned a task the account follows. */
+const GRACE = { userId: "user-grace", name: "Grace Hopper" } as const;
+
 /**
  * The sign-in pictures the fixture's people stand in with: organizations'
  * logos on GitHub's avatar host, which the apps may load pictures from,
@@ -212,12 +215,13 @@ const TASK = {
   ROUNDING: "4dae6081-2f5b-4c73-9e9b-5a6b7c8d9ea4",
 } as const;
 
-/** The account's tasks that hold no item, which fill out its Tasks list: a sub-task of the reference journey's, one in a second repository, and one in a section of its own. */
+/** The account's tasks that hold no item, which fill out its Tasks list: a sub-task of the reference journey's, one in a second repository, one in a section of its own, and a teammate's it follows. */
 const LISTED = {
   COPY: "81e2a425-6d9f-4ab7-92df-9eafb0c1d2e8",
   ALERTS: "92f3b536-7eaf-4bc8-a3ea-afb0c1d2e3f9",
   LAUNCH: "a304c647-8fb0-4cd9-b4fb-b0c1d2e3f40a",
   SECTION: "b415d758-90c1-4dea-85ac-c1d2e3f4051b",
+  BILLING: "c526e869-a1d2-4efb-96bd-d2e3f405162c",
 } as const;
 
 /** The agents that posted the items, one at work on each task. */
@@ -848,6 +852,12 @@ const OWN_TASKS: readonly TaskSummary[] = [
     createdBy: ADA,
     assignee: ADA,
     pinnedAt: LANDED - 9 * DAY,
+    // Note that its followers are the account, its assignee, letting its agents use her machines, and both teammates, one letting them.
+    followers: [
+      { userId: ADA.userId, assignee: true, machines: true },
+      { userId: GRACE.userId, assignee: false, machines: true },
+      { userId: "user-alan", assignee: false, machines: false },
+    ],
     ...agentsLine(TASK.DIGEST),
   },
   {
@@ -889,8 +899,9 @@ function listedTask(
 /**
  * The account's tasks that hold no item, which fill out its Tasks list as
  * the sidebar stands it: a sub-task under the reference journey's, a task
- * in a second repository, so the list draws its repositories' headings, and
- * one the account keeps in a section of its own.
+ * in a second repository, so the list draws its repositories' headings,
+ * one the account keeps in a section of its own, and a teammate's it
+ * follows, which the list draws under Following.
  */
 const LISTED_TASKS: readonly TaskSummary[] = [
   listedTask(LISTED.COPY, "Invite email copy", {
@@ -912,6 +923,20 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     status: TASK_STATUS.IN_PROGRESS,
     number: 46,
     updatedAt: LANDED - 7 * HOUR,
+  }),
+  // Note that the account follows a teammate's task, which the Tasks list draws under Following.
+  listedTask(LISTED.BILLING, "Billing export", {
+    repository: "ada/relay",
+    status: TASK_STATUS.IN_PROGRESS,
+    number: 47,
+    updatedAt: LANDED - 9 * HOUR,
+    ownerId: GRACE.userId,
+    createdBy: GRACE,
+    assignee: GRACE,
+    followers: [
+      { userId: GRACE.userId, assignee: true, machines: true },
+      { userId: ADA.userId, assignee: false, machines: false },
+    ],
   }),
 ];
 

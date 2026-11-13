@@ -432,6 +432,7 @@ interface RunnerMessage {
   readonly line: MessageLine;
   readonly files: readonly SandboxFile[];
   readonly turn: SessionTurn;
+  readonly spoken: boolean;
   readonly timeZone: string | undefined;
 }
 
@@ -1462,6 +1463,7 @@ export const runnerSessions = <
         line: { type: INPUT_LINE.MESSAGE, uuid, content },
         files,
         turn: message.turn,
+        spoken: message.spoken === true,
         timeZone: message.timeZone,
       };
     };
@@ -1528,6 +1530,7 @@ export const runnerSessions = <
         const turn = {
           kind: sent.turn,
           turnId: Option.getOrUndefined(awaited),
+          spoken: sent.spoken,
           words: textOf(content),
         };
 
@@ -1623,7 +1626,8 @@ export const runnerSessions = <
           opened.descriptionsOn !== standing.descriptionsOn ||
           opened.memoryOn !== standing.memoryOn ||
           (opened.turnEndOn ?? false) !== standing.turnEndOn ||
-          (opened.replyButtonsOn ?? false) !== standing.replyButtonsOn
+          (opened.replyButtonsOn ?? false) !== standing.replyButtonsOn ||
+          (opened.computerUseOn ?? false) !== standing.computerUseOn
         );
       });
 

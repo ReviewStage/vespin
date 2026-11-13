@@ -1,4 +1,4 @@
-// system-asks.ts -- the system's own sheets a screen raises from a press: the alert that asks for a name, as Files and Notes rename, and the share sheet a link is copied or sent from.
+// system-asks.ts -- the system's own sheets a screen raises from a press: the alert that asks for a name, as Files and Notes rename, and the share sheet a link or words are copied or sent from.
 
 import { Alert, Share } from "react-native";
 
@@ -56,4 +56,14 @@ export function shareLink(url: string): void {
   Share.share({ url }).catch((cause: unknown) => {
     console.error("The share sheet did not open.", cause);
   });
+}
+
+/**
+ * Raises the system's share sheet on words, such as a transcript copied as
+ * Markdown, which it sends as text to Messages, Mail, Notes or a file. Note
+ * that a sheet put away answers nothing, and a sheet that could not stand
+ * rejects, so the caller can say so where its press shows a failure.
+ */
+export function shareWords(message: string): Promise<void> {
+  return Share.share({ message }).then(() => undefined);
 }

@@ -29,6 +29,8 @@ export const QUERY_ROOT = {
   WORKSPACE_ENVIRONMENT: "workspace-environment",
   /** Settings › Cloud environment's scripts: a workspace's install script and each repository's setup script (`settings/cloud-setup-sections.tsx`). */
   WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
+  /** Settings › This Mac's computer use: the Mac's grants and the apps agents use without asking, as the host reads them through the helper. */
+  COMPUTER_USE_STATUS: "computer-use-status",
   INSTALLED_SKILL: "installed-skill",
   INSTALLED_SKILL_PREVIEW: "installed-skill-preview",
   TASK_NEWEST_REVISION: "task-newest-revision",
@@ -39,6 +41,8 @@ export const QUERY_ROOT = {
   APP_STATE: "appState",
   /** A web page's preview for the card a plain link hangs, by the link's address (`tasks/link-preview-card.tsx`). */
   LINK_PREVIEW: "link-preview",
+  /** A button an agent put in its reply, by the agent and the button (`tasks/reply-button-link.tsx`). */
+  REPLY_BUTTON: "reply-button",
   TASK_FILE: "task-file",
   TASK_TREE: "task-tree",
   PAGE_SOURCE: "page-source",

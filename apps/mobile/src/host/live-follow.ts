@@ -63,20 +63,26 @@ export function useLiveFollow(
  * Holds a follow for each of `keys` for as long as the screen holds it, as
  * the panel holds one query per server: a key that joins opens its follow,
  * and one that leaves lets its follow go, the others held throughout. Every
- * follow is let go as the screen leaves.
+ * follow is let go as the screen leaves, and taken up anew once `scope`
+ * moves, such as the workspace a page's links are read through, since a
+ * follow opened under one scope reads nothing of another.
  */
 export function useLiveFollows(
   keys: readonly string[],
   open: (key: string) => Promise<OpenedFollow>,
+  scope?: string,
 ) {
   const opening = useEffectEvent(open);
   // The follows held, by their key, kept apart from the drawing so a draw that keeps the same keys moves none.
   const held = useRef(new Map<string, () => void>());
+  const heldScope = useRef(scope);
   useEffect(() => {
     const now = held.current;
+    const moved = heldScope.current !== scope;
+    heldScope.current = scope;
 
     for (const [key, release] of now) {
-      if (keys.includes(key)) continue;
+      if (!moved && keys.includes(key)) continue;
       release();
       now.delete(key);
     }

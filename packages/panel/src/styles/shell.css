@@ -579,6 +579,18 @@
     opacity var(--ui-duration-pane) var(--ui-motion-pane);
 }
 
+/* Open beside a wide room's work, the sidebar stands beneath the work rather
+   than over it. Note that the sheet's hairline and shadow fall just past its
+   left edge, onto the sidebar's column, so a sidebar raised over the work
+   paints its ground across them and the sheet's left edge goes missing. Left
+   unraised, it lays no stacking context of its own, so its resize edge still
+   stands over the work by its own `z-index`. */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell[data-sidebar-collapsed="false"]
+  .desktop-sidebar {
+  z-index: auto;
+}
+
 .desktop-shell[data-sidebar-collapsed="true"] .desktop-sidebar {
   opacity: 0;
   transform: translateX(-100%);

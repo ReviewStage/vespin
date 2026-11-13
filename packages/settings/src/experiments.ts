@@ -16,6 +16,8 @@ export const EXPERIMENT = {
   SKILLS: "skills",
   /** Descriptions: a task's description its coding agents keep current as they work, its comments and version history, and the tools and instructions they write it and answer its comments with. */
   DESCRIPTIONS: "descriptions",
+  /** Computer use: agents see and use the apps a member allows on their own Mac, in the background, through the `computer` tool. */
+  COMPUTER_USE: "computer-use",
   /** Rewind restores files: a rewind or an edit of a message may put the agent's files back as they stood before it, from the checkout its runner records before each turn. */
   REWIND_FILES: "rewind-files",
   /** Done and follow-ups: an agent ends a turn with a short summary, and the bar over its box says what it needs from you, or that it is done, with what is still open and the follow-ups it offers. */
@@ -28,6 +30,8 @@ export const EXPERIMENT = {
   REPLY_BUTTONS: "reply-buttons",
   /** Following: the members who follow each task, who starts, is assigned, or messages its agents, and each follower's switch letting the task's agents use their machines. */
   FOLLOWING: "following",
+  /** Voice: talk to an agent out loud through GPT-Live on your own OpenAI API key: Talk in an agent's box, the call card, and Settings › Voice. */
+  VOICE: "voice",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -64,6 +68,15 @@ export interface ExperimentEntry {
   readonly key: Experiment;
   /** Whose choice it is, by the rule `EXPERIMENT_SCOPE` states. */
   readonly scope: ExperimentScope;
+  /**
+   * Whether Settings › Experimental and the settings search show it. Required
+   * on every entry, so adding one forces the choice. An unlisted experiment
+   * is still gated, scoped, and counted like any other, and still reads as on
+   * where a choice holds it on (a fixture's `experimentsOn`); only its row
+   * is hidden, so a feature in the making can be tried by its builders before
+   * a member could turn it on.
+   */
+  readonly listed: boolean;
   /** The feature's own name, as the row and its gated surfaces call it. */
   readonly name: string;
   /** One line on what turning it on brings. */
@@ -78,11 +91,31 @@ export interface ExperimentEntry {
  * The experiments standing now, newest first: the order the Experimental page
  * lists them. An entry exists only while its feature is experimental, so
  * there is no status to drift and every experiment is off until turned on.
+ *
+ * Adding an experiment: in the feature's first PR, add its key to
+ * `EXPERIMENT` and an entry here with `listed: false`, so every later PR can
+ * gate on the key while no member can see a row for a feature that cannot be
+ * tried yet. Gate everything the feature draws or does on that key. In the PR
+ * that makes the feature ready to try as an experiment, set `listed: true`.
+ * Until then a builder turns it on in a test, fixture, or Preview's staged
+ * settings with `experimentsOn` (`@repo/settings/testing`); no row of
+ * Settings sets it, and every other read treats it as any experiment.
  */
 export const EXPERIMENTS = [
   {
+    key: EXPERIMENT.VOICE,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: false,
+    name: "Voice",
+    detail:
+      "Talk to an agent out loud through GPT-Live on your own OpenAI API key, from Talk in an agent's box.",
+    owner: "Dean",
+    since: "2026-11-12",
+  },
+  {
     key: EXPERIMENT.FOLLOWING,
     scope: EXPERIMENT_SCOPE.WORKSPACE,
+    listed: true,
     name: "Following",
     detail:
       "Follow the tasks you care about, and choose on each whether its agents may use your machines.",
@@ -92,6 +125,7 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.TURN_CHANGES,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: true,
     name: "Turn changes",
     detail:
       "Under each of an agent's turns, the files it changed, which open the turn's changes in a tab of their own.",
@@ -101,6 +135,7 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.REPLY_BUTTONS,
     scope: EXPERIMENT_SCOPE.WORKSPACE,
+    listed: true,
     name: "Suggestions",
     detail:
       "Agents put suggestions in their replies, of a new agent or a message to a running one, " +
@@ -111,6 +146,7 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.REWIND_FILES,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: true,
     name: "Rewind restores files",
     detail:
       "Rewinding or editing a message can also put the agent's files back to how they stood before it.",
@@ -120,6 +156,7 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.TURN_END,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: true,
     name: "Done and follow-ups",
     detail:
       "When an agent you started finishes, it says what it needs from you, or that it's done, with follow-ups to send.",
@@ -129,6 +166,7 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.RUN_ACTIONS,
     scope: EXPERIMENT_SCOPE.WORKSPACE,
+    listed: true,
     name: "Run actions",
     detail:
       "Keep each repository's commands, such as its dev server, in Cloud environment, " +
@@ -137,8 +175,19 @@ export const EXPERIMENTS = [
     since: "2026-11-10",
   },
   {
+    key: EXPERIMENT.COMPUTER_USE,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: true,
+    name: "Computer use",
+    detail:
+      "Let agents see and use the apps you allow on your Mac, in the background, while you keep working.",
+    owner: "Dean",
+    since: "2026-11-09",
+  },
+  {
     key: EXPERIMENT.DESCRIPTIONS,
     scope: EXPERIMENT_SCOPE.WORKSPACE,
+    listed: true,
     name: "Task descriptions",
     detail: "Tasks get a description their agents keep up to date, with comments and history.",
     owner: "Dean",
@@ -147,6 +196,7 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.SKILLS,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: true,
     name: "Skills",
     detail: "Install skills for your agents, and use one by typing / in a message.",
     owner: "Charles",
@@ -155,6 +205,7 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.MEMORY,
     scope: EXPERIMENT_SCOPE.WORKSPACE,
+    listed: true,
     name: "Memory",
     detail: "Agents remember how your team works and use it in later tasks.",
     owner: "Dean",
@@ -162,18 +213,23 @@ export const EXPERIMENTS = [
   },
 ] as const satisfies readonly ExperimentEntry[];
 
-type ListedExperiment = (typeof EXPERIMENTS)[number];
+/** The experiments Settings draws and searches: every entry of `EXPERIMENTS` not marked unlisted. */
+export const LISTED_EXPERIMENTS: readonly ExperimentEntry[] = EXPERIMENTS.filter(
+  (entry) => entry.listed,
+);
+
+type RegisteredExperiment = (typeof EXPERIMENTS)[number];
 
 /** The experiments a workspace turns on for everyone in it, as their entries name them (`EXPERIMENT_SCOPE.WORKSPACE`). */
 export type WorkspaceExperiment = Extract<
-  ListedExperiment,
+  RegisteredExperiment,
   { readonly scope: typeof EXPERIMENT_SCOPE.WORKSPACE }
 >["key"];
 
 export type AccountExperiment = Exclude<Experiment, WorkspaceExperiment>;
 
 /** An entry's key where it is a workspace's choice; none where it is an account's. */
-function workspaceKeyOf(entry: ListedExperiment): readonly WorkspaceExperiment[] {
+function workspaceKeyOf(entry: RegisteredExperiment): readonly WorkspaceExperiment[] {
   return entry.scope === EXPERIMENT_SCOPE.WORKSPACE ? [entry.key] : [];
 }
 

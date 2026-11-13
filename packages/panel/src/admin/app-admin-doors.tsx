@@ -62,6 +62,7 @@ async function readThroughHost<T, Query extends object>(
 }
 
 const APP_ADMIN_READS: AdminReads = {
+  catalog: () => readThroughHost("catalog", {}),
   metrics: (query) => readThroughHost("metrics", query),
   cost: (query) => readThroughHost("cost", query),
   reliability: (query) => readThroughHost("reliability", query),

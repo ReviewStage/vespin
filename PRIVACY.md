@@ -25,6 +25,14 @@ or linking GitHub later, authorizes the Vespin GitHub App; we store its
 OAuth tokens encrypted on the Service and never send them to your Mac or
 browser.
 
+### Voice calls
+
+When you talk to an agent by voice, your audio goes from the app to OpenAI, on
+your own OpenAI API key, and nowhere else; the key never leaves the Service.
+What you say reaches the agent as its messages, as a typed line does, and is
+kept in its conversation like one. We keep nothing else of a call but its
+length, which counts toward your day and in our usage counts.
+
 ### Workspaces, tasks, and descriptions
 
 Every account gets a first workspace, and you can create or join others.
@@ -47,7 +55,8 @@ For each turn an agent runs, we store your message, any files you attach, the
 agent's reply and reasoning summaries, each tool call with its input and
 output, and the model, token counts, and timing. Tool output can include files
 from your repository, command output, web pages, screenshots of the agent's
-browser, and answers from your integrations. We also store the agent harness's
+browser, windows of apps on your Mac you let agents use, and answers from your
+integrations. We also store the agent harness's
 own record of its session, Claude Code's transcript or Codex's thread, its
 thinking text included, so the agent can resume it and an agent continued or
 forked from it goes on from it. Transcripts and descriptions are stored
@@ -126,6 +135,20 @@ its exit code, and up to 20,000 characters each of its output and errors are
 returned to the agent, stored in its transcript, and sent to the agent's model
 provider. **This output is not redacted**: if a command prints a password,
 token, key, or file contents, that goes too.
+
+### Apps on your Mac
+
+If your workspace turns on Computer use and you allow it in Settings › This
+Mac, agents can see and use apps on your Mac: Vespin asks you the first time an
+agent wants each app, and you can answer Allow once, Always allow, or Deny.
+For an app you allow, the agent reads its window's controls and their text and
+a screenshot of the window, and clicks and types in it. The screenshot is sent
+to the agent's model provider, and a full-size copy and the app's icon are
+stored with the agent's transcript and deleted with it. Vespin never offers
+agents terminals, password managers, System Settings, or Vespin itself, but
+**anything an allowed app's window shows goes too**, a message or a password
+on screen included. You can take an app off the always-allowed list, or turn
+computer use off, in Settings › This Mac.
 
 ### Agents on your own machines
 
@@ -406,7 +429,7 @@ We do not use your code or conversations to train AI models.
 We do not sell your personal information or use it for advertising. We share
 data with:
 
-- **AI providers:** your agents, web search, dictation, and pull request
+- **AI providers:** your agents, web search, dictation, voice calls, and pull request
   chapters run on Anthropic or OpenAI, always on the API key or subscription
   you saved, never ours. Titles, of your agents, tasks, and the threads you
   start, are generated on Anthropic under Vespin's own API key, from excerpts

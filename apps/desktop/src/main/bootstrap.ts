@@ -9,6 +9,7 @@ import {
 } from "@repo/host/app-identity";
 import { RUN_PROFILE } from "@repo/host/app-state";
 import { buildCommit } from "@repo/host/build-commit";
+import type { HostReporter } from "@repo/host/effect";
 import { type SentryEnvironment, sentryEnvironment } from "@repo/host/sentry-environment";
 import type { MenuBarChange } from "./app-menu";
 import type { DesktopConfig } from "./services/desktop-config";
@@ -33,7 +34,7 @@ export interface BootstrapDependencies {
   environment: NodeJS.ProcessEnv;
   /** Where this build's own files sit; the entry reads it from its own module. */
   resourceDirectory: string;
-  report: (message: string) => void;
+  report: HostReporter["report"];
   openExternal: (url: string) => Promise<void>;
   quit: () => void;
   showMenuBar: (change?: MenuBarChange) => void;

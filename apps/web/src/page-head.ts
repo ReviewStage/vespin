@@ -7,7 +7,9 @@
  * template's. X reads its own `twitter:` copies of the card's tags, so each
  * is rewritten beside its Open Graph twin. The template's tags are the
  * contract: each one rewritten here must be in it once, and a template
- * without it is refused rather than shipped with another route's words.
+ * without it is refused rather than shipped with another route's words. A
+ * guide's Markdown alternate and structured data are added rather than
+ * rewritten, since no other route has them.
  */
 
 import type { PageHead } from "./changelog-releases";
@@ -60,6 +62,27 @@ function withCanonical(html: string, url: string): string {
 }
 
 /**
+ * What a route adds to its head that no template carries: an alternate link
+ * to its words as Markdown, and its structured data, before `</head>`.
+ */
+function withHeadAdditions(html: string, head: PageHead): string {
+  const additions = [
+    ...(head.markdown === undefined
+      ? []
+      : [`<link rel="alternate" type="text/markdown" href="${escapeAttribute(head.markdown)}" />`]),
+    ...(head.structuredData ?? []).map(
+      (json) => `<script type="application/ld+json">${json}</script>`,
+    ),
+  ];
+
+  if (additions.length === 0) return html;
+
+  if (!html.includes("</head>")) throw new Error("the page template has no </head>");
+
+  return html.replace("</head>", () => `${additions.join("\n")}\n</head>`);
+}
+
+/**
  * The template's head rewritten for a route. A route with an image shares it
  * in place of the site's card, at its own size when the caller read one.
  */
@@ -79,6 +102,7 @@ export function withPageHead(
   rewritten = withMeta(rewritten, "name", "twitter:description", head.description);
   rewritten = withMeta(rewritten, "property", "og:url", head.url);
   rewritten = withCanonical(rewritten, head.url);
+  rewritten = withHeadAdditions(rewritten, head);
 
   if (head.image === undefined) return rewritten;
   const origin = new URL(head.url).origin;

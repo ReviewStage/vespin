@@ -1,3 +1,4 @@
+import type { TurnFilesSummaryView } from "@repo/features/turn-files-wire";
 import type { RunModelUsage, RunUsage } from "@repo/features/turn-run";
 import {
   MESSAGE_ROLE,
@@ -399,6 +400,15 @@ export const turns = pgTable(
     snapshotCommit: text("snapshot_commit"),
     snapshotHead: text("snapshot_head"),
     snapshotBranch: text("snapshot_branch"),
+    /**
+     * The files the turn changed, as its runner diffed its checkout from the
+     * snapshot before the turn when the turn ended (`@repo/agent-runner`'s
+     * `checkout-diff.ts`): the first of them with their lines added and
+     * removed, and the totals over all of them. Null where the turn changed
+     * none, its checkout was not recorded, its runner predates the summary,
+     * or it ended before the column.
+     */
+    files: jsonb("files").$type<TurnFilesSummaryView>(),
   },
   (table) => [
     index("turns_by_user").on(table.userId),

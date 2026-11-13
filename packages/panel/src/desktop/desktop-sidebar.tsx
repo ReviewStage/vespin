@@ -94,8 +94,6 @@ import {
   Shortcut,
   SidebarPlaces,
   SidebarRule,
-  Skeleton,
-  SkeletonRegion,
   STATUS_TONE,
   TEXT_ELEMENT,
   TEXT_VARIANT,
@@ -193,10 +191,12 @@ import { SidebarInboxRow } from "./sidebar-inbox-row.js";
 import { SidebarPinnedTab } from "./sidebar-pinned-tab.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import {
+  LIST_SKELETON,
   NEW_SECTION,
   PINNED_DROP_ZONE,
   SidebarSections,
   TASKS_DROP_ZONE,
+  TaskRowsSkeleton,
   useSectionDialogs,
   useSectionEdits,
 } from "./sidebar-sections.js";
@@ -221,9 +221,6 @@ const WORK_RESERVE = 360;
 
 /** What the Automations row's count counts, as a reader hears it after the figure. */
 const RUNNING_NOUN = "running";
-
-/** The widths of the tasks' names while the list is first read, uneven as names are. */
-const LIST_SKELETON = ["72%", "54%", "64%", "46%"] as const;
 
 /**
  * The edge of the window's left column, the tasks' sidebar or Settings' page
@@ -1560,26 +1557,6 @@ function TaskGroups({
   }
 }
 
-/**
- * The tasks while the list is first read: a task row's room and its name's
- * type for each block, one line as a row's name is, so the rows land where
- * the blocks stood. Nothing stands for the repository headers, whose number
- * nobody knows yet.
- */
-function ListSkeleton(): React.JSX.Element {
-  return (
-    <SkeletonRegion label="Reading your tasks…">
-      <div className="sidebar-skeleton">
-        {LIST_SKELETON.map((width) => (
-          <div key={width} className="sidebar-skeleton-row">
-            <Skeleton width={width} />
-          </div>
-        ))}
-      </div>
-    </SkeletonRegion>
-  );
-}
-
 /** What the sidebar is drawn with while it floats, or could. */
 interface FloatingSidebar extends HoverPane {
   /** Whether the sidebar is on screen: pinned, or floating over the work. */
@@ -1799,7 +1776,8 @@ function useFirstUsableSpan(tasks: TasksControl): void {
  * reaches a row nobody can see, until it floats open over the work
  * (`sidebar-collapse.ts`). A floating sidebar is put away by a choice in it,
  * by Escape, by a press outside, or once the pointer leaves a peek, a press
- * in it or not, though not for a menu it raised (`hover-pane.ts`). Opened
+ * in it or not, though not for a menu it raised, nor while a popup raised
+ * from it, as Resources' card, stands open (`hover-pane.ts`). Opened
  * from away, it takes the keyboard at the row it marks, else at Search,
  * holds it there against Tab, and Escape gives the keyboard back where it
  * was. Floating, it has no edge to drag, since only a pinned sidebar is
@@ -2576,7 +2554,7 @@ function SidebarColumn({
                       {/* The list is empty before its first read lands, so that it
               holds none says nothing until the service has answered. */}
                       {tasks.signedIn && unlisted && !tasks.listRead && !tasks.listFailed ? (
-                        <ListSkeleton />
+                        <TaskRowsSkeleton widths={LIST_SKELETON} />
                       ) : null}
                       {tasks.signedIn && unlisted && tasks.listRead && !tasks.listFailed ? (
                         <NoteLine look={NOTE_LINE_LOOK.ROWS}>No tasks yet.</NoteLine>

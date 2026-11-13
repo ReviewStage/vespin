@@ -216,6 +216,27 @@ attached. A view handed a modifier the build does not register draws as it
 would without it. No Maestro flow can drag or hover, so these are checked by
 hand on an iPad with a trackpad.
 
+## The photo scaler
+
+A workspace's photo is picked in the system's photo picker, cropped there to
+a square, and drawn at the panel's size (`WORKSPACE_PHOTO_EDGE`) as a JPEG
+within the service's bound by the app's own native module, autolinked from
+`modules/photo-scale/`, through ImageIO as the share extension scales a
+shared picture, so a HEIC from the library is read and no metadata goes with
+it (`src/workspace-photo.ts`). A build without the module says the photo
+could not be read rather than sending one at full size.
+
+## The rich copy module
+
+A draft's Copy message puts one pasteboard item holding the body's HTML, the
+rich text the system reads from it, and the plain words beside it, a link's
+address after its label, as the desktop writes them (`src/keeping.ts`). That
+item is the app's own native module, autolinked from
+`modules/rich-pasteboard/`, since expo-clipboard takes the plain words from
+the system's reading of the HTML, which drops each link's address. A build
+without the module copies through expo-clipboard. Pasting into Messages
+(plain) and Slack or Mail (rich) is checked by hand on a device.
+
 ## The share extension
 
 Vespin stands in the system's share sheet for text, a web link and up to

@@ -30,7 +30,6 @@
     "./tokens.css": "./src/tokens/tokens.css",
     "./styles.css": "./src/styles.css",
     "./microphone-access": "./src/microphone-access.js",
-    "./reply-quote": "./src/reply-quote.js",
     "./sort-direction": "./src/sort-direction.js",
     "./tab-strip-model": "./src/tab-strip-model.js",
     "./tasks-page-model": "./src/tasks-page-model.js",

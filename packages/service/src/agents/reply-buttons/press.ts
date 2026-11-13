@@ -10,7 +10,9 @@
  * own presser runs it again under the same key, the button's id, which the
  * start keys the agent by and the send keys its line by, so a retry after a
  * press cut off starts or sends once, and an attempt refused releases only
- * its own claim, never a retry's. Every check runs again here as the
+ * its own claim, never a retry's. A start a press already made, whoever's,
+ * is the agent a later press reaches, so a press taking over a claim cut off
+ * after its start never starts a second. Every check runs again here as the
  * presser: a start lands on the button agent's task, on their model or the
  * one the button names; a send reaches an agent they reach. A press refused
  * is released, so the button may be pressed again.
@@ -21,6 +23,7 @@ import { readVisibleAgent } from "@repo/database/models/agent-store";
 import {
   claimReplyButtonPress,
   type ReplyButton,
+  readAgentStartedByPress,
   readReplyButton,
   releaseReplyButtonPress,
   settleReplyButtonPress,
@@ -130,12 +133,14 @@ export const readReplyButtonView = /* @__PURE__ */ Effect.fnUntraced(function* (
   return yield* viewOf(userId, button, agent);
 });
 
-/** Whether what the member sent fits what the suggestion sets off: a send names no title, branch, or model, and a model goes with its effort. */
+/** Whether what the member sent fits what the suggestion sets off: a send names nothing of a new agent's (title, branch, model, servers, place, or permissions), and a model goes with its effort. */
 function sentFits(button: ReplyButton, sent: ReplyButtonSent): boolean {
-  const { title, branch, model, effort } = sent;
+  const { title, branch, model, effort, disabledServers, runsOn, permissionMode } = sent;
 
   if (button.action.kind === REPLY_BUTTON_ACTION.SEND) {
-    return [title, branch, model, effort].every((each) => each === undefined);
+    return [title, branch, model, effort, disabledServers, runsOn, permissionMode].every(
+      (each) => each === undefined,
+    );
   }
 
   return (model === undefined) === (effort === undefined);
@@ -144,7 +149,8 @@ function sentFits(button: ReplyButton, sent: ReplyButtonSent): boolean {
 /**
  * The suggestion run as the member, with what they sent from its draft: the
  * agent it reached, or why it was refused. The words, files, title, branch,
- * and model are the draft's as the member left them, never the button's,
+ * model, servers, place, and permissions are the draft's as the member left
+ * them, never the button's,
  * which only filled the draft in. The words open with a link to the agent
  * whose reply held the suggestion, and the line keeps which suggestion it
  * was, so the agent they reach and its transcript both say who suggested
@@ -179,6 +185,13 @@ const runPressed = (
       return agent.id;
     }
 
+    // A start an earlier press made, another member's whose claim lapsed or was released after it ran, is the one this press reached.
+    const already = yield* hostedStoreOrUnavailable(
+      readAgentStartedByPress(button.id, button.taskId),
+    );
+
+    if (already !== undefined) return already;
+
     const started = yield* startRequestedAgent(
       routedSessions<TypedTurn>(userId),
       userId,
@@ -192,6 +205,13 @@ const runPressed = (
         ...(sent.model === undefined || sent.effort === undefined
           ? undefined
           : { model: sent.model, effort: sent.effort }),
+        ...(sent.disabledServers === undefined
+          ? undefined
+          : { disabledServers: sent.disabledServers }),
+        ...(sent.runsOn === undefined ? undefined : { runsOn: sent.runsOn }),
+        ...(sent.permissionMode === undefined
+          ? undefined
+          : { permissionMode: sent.permissionMode }),
       },
       summaryModel,
       undefined,

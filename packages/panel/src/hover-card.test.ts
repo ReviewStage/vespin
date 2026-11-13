@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_STATUS, CHECK_SUMMARY, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
+import { PULL_REQUEST_MOMENT } from "@repo/features/link-standing-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
 import { Effect } from "effect";
@@ -16,7 +17,6 @@ import { AgentTabCard, cardCorner } from "./tasks/agent-tab-card.js";
 import { PullRequestCard } from "./tasks/pull-request-card.js";
 import { SentWords, SkillFiles } from "./tasks/skill-chip.js";
 import type { SkillSource } from "./tasks/skill-picker.js";
-import { PULL_REQUEST_MOMENT } from "./tasks/use-link-standing.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
 import { holdFrames, settleFrames } from "./testing/frames.js";

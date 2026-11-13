@@ -138,7 +138,7 @@ component, or add the component or variant there.
   @Vespin mention or a DM), with the earlier messages of the Slack thread it
   stands in, may reach the agent it starts or is sent to: that agent's task,
   transcript and traces. And an automation webhook secret may be shown once, in the window that
-  minted it, at creation or rotation; never anywhere else. And an agent's cloud
+  minted it, at creation or rotation; never anywhere else. And a voice call's audio goes only between the caller's panel and the GPT-Live session the service opens on the caller's own OpenAI key, which never leaves the service; what was said reaches the agent it was said to as that agent's messages, transcript, and traces, as a typed line does, and nothing of a call is stored but its seconds on the member's day, a counted event carries only its length, and none of it goes into a fixture. And an agent's cloud
   browser, a
   Chromium in that agent's own Vercel Sandbox, shows its pages, their live-view
   frames, address, title, screenshots, and text snapshots to that agent and its
@@ -173,7 +173,14 @@ component, or add the component or variant there.
   (`packages/database/src/models/plan-attachments.ts`), shown to the members
   who can open the task and deleted with the plan; `look_at_picture` refuses
   it (`packages/service/src/tasks/picture-look.ts`), so no model is handed it,
-  and none of it goes into a trace, a counted event, or a fixture. And Sentry's SDKs run
+  and none of it goes into a trace, a counted event, or a fixture. And a window on a member's own Mac,
+  which an agent's `computer` tool reads only for an app the member allowed,
+  reaches the model as a bounded copy, and its full-size copy and the app's
+  icon are kept beside the transcript the call is written to, as
+  `show_image`'s pictures are (`packages/service/src/agents/computer-tool.ts`),
+  shown to the members who can open the task and deleted with the
+  conversation; session replay masks the transcript's screenshots, and none
+  of it ever goes into a trace, a counted event, or a fixture. And Sentry's SDKs run
   with their default data collection, but that the service's
   leaves out model inputs and outputs and request bodies
   (`packages/service/src/observability/sentry.ts`, the desktop's

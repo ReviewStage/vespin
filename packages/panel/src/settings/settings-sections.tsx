@@ -146,6 +146,8 @@ export const SECTION = {
   PRIVACY: "privacy",
   NEW_AGENTS: "new-agents",
   ALWAYS_ALLOWED: SETTINGS_SEARCH_ROW.ALWAYS_ALLOWED,
+  COMPUTER_USE: "computer-use",
+  COMPUTER_USE_APPS: "computer-use-apps",
   STARTUP: "startup",
   DICTATION: "dictation",
   NOTIFICATIONS: "notifications",
@@ -241,6 +243,14 @@ const SETTINGS_SECTIONS = {
     words:
       "always allow allowlist allowed commands permissions approval ask run without asking shell bash claude code",
     drawn: accountDrawn,
+  },
+  [SECTION.COMPUTER_USE]: {
+    found: SECTION_FOUND.PAGE,
+    head: "Computer use",
+  },
+  [SECTION.COMPUTER_USE_APPS]: {
+    found: SECTION_FOUND.PAGE,
+    head: "Always-allowed apps",
   },
   [SECTION.ADD_HOSTS]: {
     found: SECTION_FOUND.HEAD,
