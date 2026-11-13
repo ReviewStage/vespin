@@ -296,19 +296,21 @@ export const holdVoiceCall = Effect.fn("voice/holdVoiceCall")(function* <R>(
       const sideband = attached.success;
       let lost = false;
 
+      // Whether this lease still holds the call, read now; a lease told no has lost it.
+      const stillHolds = Effect.gen(function* () {
+        const now = yield* readVoiceCall(call.callerId, call.id);
+        const holds = Option.exists(now, (row) => row.leaseEpoch === call.leaseEpoch);
+
+        if (!holds) lost = true;
+
+        return holds;
+      });
+
       const holder: VoiceCallHolder = {
         call,
         send: (event) =>
           Effect.gen(function* () {
-            const now = yield* readVoiceCall(call.callerId, call.id);
-            const holds = Option.exists(now, (row) => row.leaseEpoch === call.leaseEpoch);
-
-            if (!holds) {
-              lost = true;
-
-              return false;
-            }
-
+            if (!(yield* stillHolds)) return false;
             yield* sideband.send(event);
 
             return true;
@@ -364,8 +366,10 @@ export const holdVoiceCall = Effect.fn("voice/holdVoiceCall")(function* <R>(
           return VOICE_CALL_HELD.STALE;
         }
 
-        // The close the session confirms ends the call where it is heard; one it never confirms ends it here, with no seconds heard.
+        // The close the session confirms ends the call where it is heard; one it never confirms ends it here, with no seconds heard, unless a lease took the call meanwhile, which is then that lease's to end.
         yield* Effect.sleep(VOICE_CALL_LEASE.CLOSE_WAIT);
+
+        if (!(yield* stillHolds)) return VOICE_CALL_HELD.STALE;
         yield* endCall(call, Option.none());
 
         return VOICE_CALL_HELD.CLOSED;

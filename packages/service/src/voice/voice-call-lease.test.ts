@@ -14,7 +14,7 @@ import { getTestDB, openAgentOnOwnTask, openWorkspace } from "@repo/database/tes
 import { LIVE_VOICE } from "@repo/features/voices";
 import type { WireValue } from "@repo/wire";
 import { eq } from "drizzle-orm";
-import { type Cause, Effect, Fiber, Layer, Option, Queue, Stream } from "effect";
+import { type Cause, Deferred, Effect, Fiber, Layer, Option, Queue, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import { HostedEnvironment } from "../environment.js";
 import {
@@ -69,9 +69,10 @@ interface Heard {
  * a new one hears its last `REPLAYED` events first, and a close it is sent
  * is answered with `session.closed` carrying the seconds given.
  */
-function fakeSession(closingSeconds: number) {
+function fakeSession(closingSeconds: number | undefined) {
   const said: LiveEvent[] = [];
   const sent: string[] = [];
+  const askedToClose = Deferred.makeUnsafe<void>();
   const connections = new Set<Queue.Queue<LiveEvent, Cause.Done>>();
 
   const say = (type: string, extra: { readonly [key: string]: WireValue } = {}) =>
@@ -104,7 +105,11 @@ function fakeSession(closingSeconds: number) {
             Effect.gen(function* () {
               sent.push(event.type);
 
-              if (event.type === LIVE_SIDEBAND_EVENT.CLOSE) {
+              if (event.type === LIVE_SIDEBAND_EVENT.CLOSE)
+                Deferred.doneUnsafe(askedToClose, Effect.void);
+
+              // A session given no seconds to close with never confirms the close.
+              if (event.type === LIVE_SIDEBAND_EVENT.CLOSE && closingSeconds !== undefined) {
                 yield* say(LIVE_SIDEBAND_EVENT.CLOSED, { usage: { seconds: closingSeconds } });
               }
             }),
@@ -112,7 +117,7 @@ function fakeSession(closingSeconds: number) {
       }),
   });
 
-  return { say, sent, layer };
+  return { say, sent, askedToClose, layer };
 }
 
 /** A queue that records what it is handed, or refuses every lease. */
@@ -321,6 +326,38 @@ it.layer(getTestDB())("a voice call held lease by lease", (it) => {
         assert.deepEqual(session.sent, [LIVE_SIDEBAND_EVENT.CLOSE]);
         assert.equal(Option.isNone(yield* readVoiceCall(callerId, call.id)), true);
         assert.deepEqual(yield* metered(callerId), [{ voiceSeconds: 709 }]);
+      }),
+  );
+
+  it.effect(
+    "a lease whose close goes unconfirmed leaves the call to a lease that took it meanwhile",
+    () =>
+      Effect.gen(function* () {
+        const { call, callerId } = yield* openCall;
+        const session = fakeSession(undefined);
+        const leases = yield* recordingLeases(false);
+        const { heard, observe } = yield* hearing;
+
+        const held = yield* Effect.gen(function* () {
+          const holder = yield* Effect.forkChild(
+            holdVoiceCall({ callId: call.id, callerId, epoch: 1, redelivered: false }, observe),
+          );
+
+          yield* session.say(SPOKEN);
+          yield* nextHeard(heard, 1);
+          yield* TestClock.adjust(VOICE_CALL_LEASE.HAND_OVER_AFTER);
+          yield* Deferred.await(session.askedToClose);
+
+          // Another lease takes the call while this one waits on a close the session never confirms.
+          const taken = yield* claimVoiceCallLease(call.id, 2, new Date(0));
+          assert.equal(Option.isSome(taken), true);
+          yield* TestClock.adjust(VOICE_CALL_LEASE.CLOSE_WAIT);
+
+          return yield* Fiber.join(holder);
+        }).pipe(Effect.provide(world(session, leases)));
+
+        assert.equal(held, VOICE_CALL_HELD.STALE);
+        assert.equal(Option.isSome(yield* readVoiceCall(callerId, call.id)), true);
       }),
   );
 
