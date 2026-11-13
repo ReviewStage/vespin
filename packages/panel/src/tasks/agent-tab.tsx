@@ -3757,7 +3757,8 @@ function AgentTabView({
                                   holding={holding}
                                   failed={transcript.failed}
                                   failedWith={transcript.failedWith}
-                                  working={standing.working && !booting}
+                                  // Note that a line sent draws no working line until its answer names the turn it queued, so the line stands once, from there.
+                                  working={standing.drawsLine && !booting}
                                   boot={bootFailed ? bootDrawn : undefined}
                                   starting={bootFailed ? undefined : bootDrawn}
                                   phase={standing.phase}

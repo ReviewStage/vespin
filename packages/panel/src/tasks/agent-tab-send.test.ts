@@ -292,7 +292,7 @@ test("a message sent stands in the transcript at once with its time, the box emp
   assert.equal(tab.lines("Now the dark variant.").length, 1);
 });
 
-test("a message sent to an agent at rest draws the working line at once, before the service takes it, counting from the press rather than the turn before it, and keeps it while its row lands before the send answers", async () => {
+test("a message sent to an agent at rest draws no working line until its answer names the turn it queued, whether its row landed first or not, then one counting from the press", async () => {
   vi.spyOn(crypto, "randomUUID").mockReturnValue(RESTING_KEY);
 
   const row: AgentTranscriptMessage = {
@@ -306,20 +306,32 @@ test("a message sent to an agent at rest draws the working line at once, before 
   // The summary still holds the ended turn's start, as the task list does until the line wakes it.
   const tab = await drawnTab([row], { ...AGENT_SUMMARY, runStartedAt: 2_000 });
   vi.spyOn(Date, "now").mockReturnValue(PRESSED_AT);
-  assert.equal(tab.container.querySelector("[data-working]"), null, "an agent at rest");
 
   await tab.send("Now the dark variant.");
-
-  const working = tab.container.querySelector("[data-working]");
-  assert.ok(working, "working from the press");
-  assert.equal(working.querySelector("time")?.textContent, "0s", "counted from the press");
-  assert.equal(tab.sent.length, 1, "with the send still unanswered");
+  assert.equal(tab.container.querySelector("[data-working]"), null, "no line before the answer");
 
   await tab.landRow();
-  assert.ok(
+  assert.equal(
     tab.container.querySelector("[data-working]"),
-    "the line's row landing leaves the send unanswered, so the working line stands",
+    null,
+    "nor once its row lands before the answer",
   );
+
+  await tab.answer(0, {
+    agent: {
+      ...TAKEN.agent,
+      turn: {
+        id: "4c6e8a0b-1d3f-4a5c-9e7b-0f2d4b6c8e13",
+        queuedAt: PRESSED_AT,
+        status: TURN_STATUS.QUEUED,
+      },
+    },
+  });
+
+  const working = tab.container.querySelector("[data-working]");
+  assert.ok(working, "the answer's turn puts the tab to work");
+  assert.match(working.textContent ?? "", /^Starting…/u);
+  assert.equal(working.querySelector("time")?.textContent, "0s", "counted from the press");
 });
 
 test("a Codex or Claude Code agent's box says nothing under it of the plan that pays", async () => {
