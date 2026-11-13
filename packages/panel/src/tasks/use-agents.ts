@@ -31,6 +31,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type DraftSuggestion, sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { ListedPullRequest } from "@repo/features/task-wire";
+import type { TasksView } from "@repo/features/tasks-view";
 import type { TranscriptReader } from "@repo/features/transcript-copy";
 import { ACT_KIND } from "@repo/host/acts";
 import { OWN_PULL_REQUEST } from "@repo/host/app-state";
@@ -39,6 +40,7 @@ import { EXPERIMENT } from "@repo/settings";
 import { STATUS_TONE } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
+import { eq, useLiveQuery } from "@tanstack/react-db";
 import {
   mutationOptions,
   type QueryClient,
@@ -73,6 +75,7 @@ import { modelsRetryMutation } from "../live-reads.js";
 import type { RenameTerms } from "../rename-write.js";
 import { rendererFork } from "../renderer-runtime.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
+import { type TaskListCollections, useTaskListCollections } from "../task-list-collections.js";
 import { useToast } from "../toast.js";
 import {
   type LocalWrite,
@@ -192,9 +195,6 @@ export const AGENT_RENAME_TERMS = {
 /** No words to listen for, one array so a render that has none hands down the same one. */
 const NO_KEYWORDS: readonly string[] = [];
 
-/** No agent listed, as the list reads where it is not followed. */
-const NO_LISTED_AGENTS: readonly AgentSummary[] = [];
-
 /** No pull request a tab names by its number, one map so a draw that holds none hands down the same one. */
 const NO_NUMBERED_PULL_REQUESTS: ByPullRequestTab<AgentPullRequest> = new Map();
 
@@ -226,6 +226,56 @@ const selectNumberedPullRequests = memoizedSelect(
     return numbered.size === 0 ? NO_NUMBERED_PULL_REQUESTS : numbered;
   },
 );
+
+/** What the task list's collections carry of one task: its agents in the order started, the archived among them, none where they are not followed, and its agents' pull requests. */
+interface TaskRows {
+  readonly listedHere: readonly AgentSummary[] | undefined;
+  readonly listedPullRequests: readonly ListedPullRequest[] | undefined;
+}
+
+/**
+ * The task's own rows, each a live query over the collections filtered by
+ * the task, so a delivery that moves another task's rows tells none of them
+ * and their answers stay the same objects.
+ */
+function useTaskRows(
+  collections: TaskListCollections,
+  taskId: string | undefined,
+  followed: boolean,
+): TaskRows {
+  const { data: agents } = useLiveQuery((q) =>
+    taskId === undefined
+      ? undefined
+      : q
+          .from({ agent: collections.agents })
+          .where(({ agent }) => eq(agent.planId, taskId))
+          .orderBy(({ agent }) => agent.createdAt)
+          .orderBy(({ agent }) => agent.id),
+  );
+
+  const { data: pullRequests } = useLiveQuery((q) =>
+    taskId === undefined
+      ? undefined
+      : q
+          .from({ listed: collections.agentPullRequests })
+          .where(({ listed }) => eq(listed.taskId, taskId)),
+  );
+
+  return {
+    listedHere: followed ? agents : undefined,
+    listedPullRequests: pullRequests,
+  };
+}
+
+/** What a fixture run's staged list carries of one task, as the collections carry a followed list's. */
+function stagedRows(staged: TasksView, taskId: string | undefined): TaskRows {
+  const carried = taskId !== undefined && staged.tasks.some((task) => task.id === taskId);
+
+  return {
+    listedHere: carried ? staged.taskAgents?.filter((agent) => agent.planId === taskId) : undefined,
+    listedPullRequests: staged.agentPullRequests,
+  };
+}
 
 /** How long a read of the models may stay out before it is said as failed, past the host's own ten-second bound on the call it makes. */
 const MODELS_READ_BOUND_MS = 15_000;
@@ -340,8 +390,6 @@ export interface AgentsControl {
   agents: readonly AgentSummary[] | undefined;
   /** The open task's archived agents in the order started, or nothing before the task list carries the task. */
   archived: readonly AgentSummary[] | undefined;
-  /** Every agent the followed task list carries, on any task or none, the archived ones among them, which names an agent of another task that wrote on the open task's description; none where the list is not followed or does not list the open task. */
-  listed?: readonly AgentSummary[] | undefined;
   /** Reads the task list again where its read failed; the list follows itself otherwise, a task's agents among it. */
   onRetryList: () => void;
   /** The agent tabs the panel may show, by agent id; nothing before the task list carries the task. */
@@ -876,20 +924,12 @@ export function useAgents(input: {
   taskId: string | undefined;
   /** The open task's repository, or null while it names none. */
   repository: string | null;
-  /**
-   * Every agent the task list followed live carries, the archived ones
-   * among them; none where it is not followed, or does not list the open
-   * task.
-   */
-  listedAgents?: readonly AgentSummary[] | undefined;
+  /** Whether the task list follows the open task's agents live, so a task with none has none, rather than none read yet. */
+  agentsFollowed: boolean;
+  /** A fixture run's staged task list, which stands in for the task list's collections, which never carry it; none outside one. */
+  staged?: TasksView | undefined;
   /** Where the task list's read stands, which an answer on the task's Inbox reads again where it failed: failed, and its Try again; none where nothing reads it again. */
   list?: { readonly failed: boolean; readonly onRetry: () => void } | undefined;
-  /**
-   * The pull request of every agent the task list followed live carries,
-   * on a task or with none, the archived ones among them; none where it is
-   * not followed.
-   */
-  listedPullRequests?: readonly ListedPullRequest[] | undefined;
   /** Opens Settings on its Integrations page. */
   onOpenIntegrations: () => void;
   /** Opens Settings on its Agents page. */
@@ -1005,14 +1045,18 @@ export function useAgents(input: {
   // The agent New task just started on the open task, which stands until the list carries it, so its tab draws at once.
   const seed = useMemo(() => (started === undefined ? undefined : [started.agent]), [started]);
   const held = taskId !== undefined && started?.taskId === taskId ? seed : undefined;
-  // The task's agents as the followed task list carries them; none where it does not carry the task.
-  const { listedAgents } = input;
+  // The task's agents and their pull requests as the task list's collections carry them, read by the task alone, so a
+  // delivery that moves another task's rows draws nothing here; none where the list does not carry the task.
+  const collections = useTaskListCollections();
+  const followedRows = useTaskRows(collections, taskId, input.agentsFollowed);
+  const { staged } = input;
 
-  const listedHere = useMemo(
-    () =>
-      taskId === undefined ? undefined : listedAgents?.filter((agent) => agent.planId === taskId),
-    [listedAgents, taskId],
+  const stagedHere = useMemo(
+    () => (staged === undefined ? undefined : stagedRows(staged, taskId)),
+    [staged, taskId],
   );
+
+  const { listedHere, listedPullRequests } = stagedHere ?? followedRows;
 
   // Note that an agent New task holds stands beside the list's until the list first carries it,
   // and leaves with it once it no longer does, so a tab never leaves between the two.
@@ -1813,9 +1857,16 @@ export function useAgents(input: {
   // A rename's field closes as the edit ends, and the host draws the new name at once, so a second
   // rename may be out before the first answers; only the newest one's refusal is said, in a toast,
   // as the name it replaced comes back, which the call's own `onSettled` keeps to.
+  // Note that the mutations' options are made once and run through steady doors, so the control handed back stands
+  // across draws that move nothing it holds.
+  const renameOptions = useMemo(
+    () => agentRenameMutation((asked) => sendAct(ACT_KIND.AGENTS_RENAME, asked)),
+    [],
+  );
+
   const rename = {
     ...AGENT_RENAME_TERMS,
-    options: agentRenameMutation((asked) => sendAct(ACT_KIND.AGENTS_RENAME, asked)),
+    options: renameOptions,
     onRefused: (
       answer: AgentActAnswer | undefined,
       error: Error | null,
@@ -1830,11 +1881,11 @@ export function useAgents(input: {
 
   // The agents the list draws as they stand at each call, and the archive's
   // mutation, which ⌘Z reads an archive's row and sends its writes through.
-  const listedNow = useRef(input.listedAgents ?? NO_LISTED_AGENTS);
-  listedNow.current = input.listedAgents ?? NO_LISTED_AGENTS;
+  // Note that the rows are read from the collection at the call, never at a draw, so no draw walks them.
+  const listedNow = (): readonly AgentSummary[] => collections.agents.toArray;
 
   const agentDoors: RowDoors<readonly AgentSummary[], typeof ROW_WRITE.AGENT_ARCHIVE.kind> = {
-    rows: () => listedNow.current,
+    rows: listedNow,
     send: sendArchive,
   };
 
@@ -1852,7 +1903,7 @@ export function useAgents(input: {
     asked: true | undefined,
   ): Promise<readonly ActedResult[]> => {
     const drawn = agentIds.every(
-      (agentId) => ROW_WRITE.AGENT_ARCHIVE.read(listedNow.current, agentId) !== undefined,
+      (agentId) => ROW_WRITE.AGENT_ARCHIVE.read(listedNow(), agentId) !== undefined,
     );
 
     const pressed = pressRows(
@@ -1901,16 +1952,19 @@ export function useAgents(input: {
     return results;
   };
 
-  const archiveAgent = agentArchiveMutation(({ agentId, archived, asked }) =>
+  const runArchiveOne = useSteadyDoor(({ agentId, archived, asked }: ArchiveAsk) =>
     archiveRows([agentId], archived, asked).then(
       ([result]) =>
         result ?? { status: ACTION_RESULT_STATUS.REJECTED, reason: archiveWords(archived).refused },
     ),
   );
 
-  const archiveAgents = agentsArchiveMutation(({ agentIds, archived, asked }) =>
+  const runArchiveMany = useSteadyDoor(({ agentIds, archived, asked }: ArchiveManyAsk) =>
     archiveRows(agentIds, archived, asked),
   );
+
+  const archiveAgent = useMemo(() => agentArchiveMutation(runArchiveOne), [runArchiveOne]);
+  const archiveAgents = useMemo(() => agentsArchiveMutation(runArchiveMany), [runArchiveMany]);
 
   const { mutateAsync: archive } = useMutation(archiveAgent);
 
@@ -1924,8 +1978,12 @@ export function useAgents(input: {
   const archiveManyNow = useRef(archiveMany);
   archiveManyNow.current = archiveMany;
 
-  const deleteAgent = agentDeleteMutation((agentId) =>
-    sendAct(ACT_KIND.AGENTS_DELETE, { agentId }).catch(agentUnreached),
+  const deleteAgent = useMemo(
+    () =>
+      agentDeleteMutation((agentId) =>
+        sendAct(ACT_KIND.AGENTS_DELETE, { agentId }).catch(agentUnreached),
+      ),
+    [],
   );
 
   // Note that an Undo refused is said once, by the first agent it could not put back.
@@ -1954,7 +2012,7 @@ export function useAgents(input: {
 
   // Note that every agent's pull request, an archived one's among them, is the task list's, so
   // choosing a task reads none of them.
-  const pullRequests = useListedPullRequests(input.listedPullRequests, taskId);
+  const pullRequests = useListedPullRequests(listedPullRequests, taskId);
 
   // A pull request a tab names by its number is kept by agent and number,
   // apart from the agents' own, so it never stands for what an agent published.
@@ -2018,7 +2076,6 @@ export function useAgents(input: {
   return useSteadyDoors({
     agents,
     archived: archivedAgents,
-    listed: listedAgents,
     agentIds,
     heldIds: standing?.map((agent) => agent.id),
     draft,

@@ -21,6 +21,7 @@ import {
   accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
+  alignmentGuide,
   background,
   disabled,
   font,
@@ -36,7 +37,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent } from "./glyph-label.js";
+import { actContent, GlyphImage } from "./glyph-label.js";
 import { Avatar } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -492,13 +493,16 @@ export function ActionRow({
   const colors = useColors();
   const role = destructive ? "destructive" : "default";
 
+  const modifiers = [
+    listRowBackground(colors.RAISED),
+    disabled(off),
+    accessibilityLabel(heard),
+    ...(detail === undefined ? [] : [accessibilityValue(detail)]),
+  ];
+
   if (centered) {
     return (
-      <SwiftUIButton
-        role={role}
-        onPress={onPress}
-        modifiers={[accessibilityLabel(heard), listRowBackground(colors.RAISED), disabled(off)]}
-      >
+      <SwiftUIButton role={role} onPress={onPress} modifiers={modifiers}>
         <Text modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "center" })]}>
           {label}
         </Text>
@@ -506,40 +510,28 @@ export function ActionRow({
     );
   }
 
-  if (detail === undefined) {
-    return (
-      <SwiftUIButton
-        {...actContent(label, symbol)}
-        role={role}
-        onPress={onPress}
-        modifiers={[accessibilityLabel(heard), listRowBackground(colors.RAISED), disabled(off)]}
-      />
-    );
+  if (symbol === undefined && detail === undefined) {
+    return <SwiftUIButton label={label} role={role} onPress={onPress} modifiers={modifiers} />;
   }
 
+  // Note that the glyph and the words stand in a stack of our own rather than SwiftUI's `Label`, because a form's button draws a `Label` as one run of text, so its words, wrapped at a large text size, ran on under the glyph.
   return (
-    <SwiftUIButton
-      role={role}
-      onPress={onPress}
-      modifiers={[
-        listRowBackground(colors.RAISED),
-        disabled(off),
-        accessibilityLabel(heard),
-        accessibilityValue(detail),
-      ]}
-    >
-      <HStack spacing={SPACE.ROW}>
-        {symbol === undefined ? null : <Image {...glyphImage(symbol)} />}
+    <SwiftUIButton role={role} onPress={onPress} modifiers={modifiers}>
+      <HStack spacing={SPACE.ROW} alignment="firstTextBaseline">
+        {symbol === undefined ? null : <GlyphImage glyph={symbol} />}
         <VStack alignment="leading" spacing={1}>
-          <Text>{label}</Text>
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE }),
-              foregroundStyle(colors.TEXT_MUTED),
-            ]}
-          >
-            {detail}
-          </Text>
+          {/* Note that the separator starts at the words, not the glyph, as a `Label`'s does. */}
+          <Text modifiers={[alignmentGuide("listRowSeparatorLeading", 0)]}>{label}</Text>
+          {detail === undefined ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+              ]}
+            >
+              {detail}
+            </Text>
+          )}
         </VStack>
       </HStack>
     </SwiftUIButton>
@@ -974,7 +966,7 @@ type NoteRowProps = {
   readonly line: string;
   /** Where a press goes, such as a skill's file, the chevron at its end; a row with none takes no press. */
   readonly onPress?: (() => void) | undefined;
-  /** The act that opens its words to be changed, such as Edit, on a press of the row where it goes nowhere else, and first in the menu a long press opens; none where the reader may not. */
+  /** The act that opens its words to be changed on a page of their own, such as Edit, on a press of the row where it goes nowhere else, with the chevron at its end, and first in the menu a long press opens; none where the reader may not. */
   readonly edit?: NoteAct | undefined;
   /** The act that takes it away, such as Delete, behind a swipe from the trailing edge and in the menu a long press opens; none where the reader may not. */
   readonly remove?: NoteAct | undefined;
@@ -985,7 +977,8 @@ type NoteRowProps = {
  * where it has one, its words whole in the ink, what it is under them where
  * it says, and the chevron where a press opens it, then a
  * quiet line of whose they are. Where the reader may, a press that goes
- * nowhere else opens its words to be changed, as a note in Notes opens, and
+ * nowhere else opens its words to be changed on a page of their own, the
+ * chevron saying so, as a Settings row that goes on does, and
  * the act that takes it away stands behind a swipe from the trailing edge,
  * as Notes' rows carry Delete; a long press opens a menu of both, Edit
  * first. Note that a full swipe never runs Delete, since it asks first.
@@ -1014,6 +1007,9 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
     </VStack>
   );
 
+  // Note that a row a press takes somewhere, or opens to be changed on a page of its own, is the system's button with the chevron at its end, flashing the row's gray while held, its words keeping their own ink, as `PressedRow` draws one.
+  const pressed = onPress ?? edit?.onPress;
+
   const content = (
     <HStack
       spacing={SPACE.ROW}
@@ -1024,12 +1020,9 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
       )}
       {lines}
       <Spacer />
-      {onPress === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
+      {pressed === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
     </HStack>
   );
-
-  // Note that a row a press takes somewhere, or opens to be changed, is the system's button, flashing the row's gray while held, its words keeping their own ink, as `PressedRow` draws one.
-  const pressed = onPress ?? edit?.onPress;
 
   const drawn =
     pressed === undefined ? content : <SwiftUIButton onPress={pressed}>{content}</SwiftUIButton>;

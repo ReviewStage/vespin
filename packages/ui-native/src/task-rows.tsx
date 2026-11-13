@@ -91,6 +91,8 @@ function linkInk(colors: BrandColors, tone: LinkRowTone): string {
 /** A row's 12 pt words at the line's end, in the muted ink or the one given, with tabular figures. */
 function EndWords({ words, ink }: { readonly words: string; readonly ink?: string | undefined }) {
   const colors = useColors();
+  // Note that at an accessibility size the end stands under the title with the row's width, so a long name, such as a device's, wraps to a second line rather than being cut.
+  const lines = useAccessibilitySize() ? 2 : 1;
 
   return (
     <Text
@@ -98,7 +100,7 @@ function EndWords({ words, ink }: { readonly words: string; readonly ink?: strin
         font({ textStyle: TYPE_ROLE.TIME }),
         monospacedDigit(),
         foregroundStyle(ink ?? colors.TEXT_MUTED),
-        lineLimit(1),
+        lineLimit(lines),
       ]}
     >
       {words}
@@ -120,32 +122,26 @@ function LeadGlyph({
 }
 
 /**
- * A row's 13 pt line under its title, set in to the title's words: its facts
- * side by side, or at the accessibility sizes one under another, as Settings
- * and Mail stack a row's details, since side by side each fact broke
- * mid-word ("Work / ing", "#1 / 28").
+ * A row's 13 pt line under its title, set in to the title's words, which
+ * start past the lead's column as it grows with the reader's text. At an
+ * accessibility size each fact stands on a line of its own, as Mail's rows
+ * stack, since side by side they broke mid-word.
  */
 function RowLine({ children }: { readonly children: ReactNode }) {
   const stacked = useAccessibilitySize();
+  const lead = useScaledSize(MARK_SIZE.LEAD);
+  const inset = padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING + lead - MARK_SIZE.LEAD });
 
   if (stacked) {
     return (
-      <VStack
-        alignment="leading"
-        spacing={2}
-        modifiers={[padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING })]}
-      >
+      <VStack alignment="leading" spacing={2} modifiers={[inset]}>
         {children}
       </VStack>
     );
   }
 
   return (
-    <HStack
-      spacing={SPACE.TIGHT + 1}
-      alignment="center"
-      modifiers={[padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING })]}
-    >
+    <HStack spacing={SPACE.TIGHT + 1} alignment="center" modifiers={[inset]}>
       {children}
       <Spacer />
     </HStack>
@@ -300,15 +296,16 @@ export function AgentRow(props: AgentRowProps) {
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
-  // Note that the facts stand one to a line at the accessibility sizes (`RowLine`), where the needs-you count leads its own line with no separator.
+  // Note that the facts stand one to a line at the accessibility sizes (`RowLine`), where the needs-you count leads its own line with no separator, and the tile grows with the title.
   const stacked = useAccessibilitySize();
+  const tile = useScaledSize(MARK_SIZE.LEAD);
 
   const row: ReactElement = (
     <VStack alignment="leading" spacing={2}>
       <RowHead
         unread={false}
         faded={false}
-        lead={<AgentTile name={name} harness={harness} size={MARK_SIZE.LEAD} />}
+        lead={<AgentTile name={name} harness={harness} size={tile} />}
         title={name}
         ink={colors.TEXT}
         end={<EndWords words={runsOn} />}

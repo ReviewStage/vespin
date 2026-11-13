@@ -5,7 +5,7 @@ import { hostedRouteOf } from "./hosted-routes.js";
 // `vespin api` sends the member's bearer where no procedure answers, or refuses one that does.
 describe("hostedRouteOf", () => {
   it.each([
-    ["get", "/api/plans/task-1/agents?limit=5", ["agents", "listOfTask"]],
+    ["get", "/api/tasks/task-1/agents?limit=5", ["agents", "listOfTask"]],
     ["GET", "/api/workspaces", ["workspaces", "list"]],
     ["DELETE", "/api/workspaces", undefined],
   ])("reads %s %s as the procedure it names", (method, path, procedure) => {

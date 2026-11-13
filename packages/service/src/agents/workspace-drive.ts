@@ -85,7 +85,6 @@ import {
   Option,
 } from "effect";
 import { GitHubApp } from "../github/github-app.js";
-import { GitHubBackground } from "../github/github-rate-gate.js";
 import { afterResponse } from "../http/after-response.js";
 import { AgentImage } from "./coder-host/agent-image.js";
 import {
@@ -314,7 +313,7 @@ const heldBatch = (
               fullName: each.value.repository.fullName,
               branch: each.value.repository.defaultBranch,
               folder: workspaceFolderOf(each.value.repository.fullName),
-              token: each.value.token,
+              token: each.value.bearer.token,
               access: each.value.access,
             },
           ],
@@ -476,7 +475,7 @@ export const pruneWorkspaceDrive = Effect.fn("web/pruneWorkspaceDrive")(function
   return yield* pruneWorkspaceDriveTo(run, image, workspace, keep);
 });
 
-/** The workspace's drive pruned past the answer, where the function fills drives; its GitHub reads in the background lane, since no member waits on them. */
+/** The workspace's drive pruned past the answer, where the function fills drives. */
 const prunedFor = (workspace: Option.Option<BaseDriveWorkspace>) =>
   Effect.gen(function* () {
     const fills = yield* Effect.serviceOption(WorkspaceDriveFills);
@@ -498,7 +497,6 @@ const prunedFor = (workspace: Option.Option<BaseDriveWorkspace>) =>
                 causeKind(cause),
               ),
         ),
-        Effect.provideService(GitHubBackground, true),
         Effect.provideService(Sandbox, sandbox.value),
       ),
     );

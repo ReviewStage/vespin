@@ -9,7 +9,7 @@ import {
   type DescriptionCommentStart,
   type DescriptionCommentWriter,
 } from "@repo/features/description-comment-wire";
-import { sectionAt } from "@repo/features/description-document";
+import { sectionAt } from "@repo/features/description-sections";
 import type {
   TasksCommentActParams,
   TasksCommentAnswer,

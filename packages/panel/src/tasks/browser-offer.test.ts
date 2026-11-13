@@ -40,7 +40,7 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: "acme/relay",
-  document: { body: "", assumptions: [] },
+  description: { body: "", assumptions: [] },
 };
 
 const SUMMARY: TaskSummary = {

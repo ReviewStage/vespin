@@ -20,10 +20,9 @@
  * Inside the throttle's queue, so a request that waited behind a refusal is
  * not sent after it, a hook of this module's own (`conduct`) refuses a
  * request while a hold stands on its identity, reads GitHub's counters off
- * every answer for the members' reserve, and holds for a rate-limit refusal
+ * every answer for the refusal's log line, and holds for a rate-limit refusal
  * the throttle does not read as one: a 429 or a 403 with `retry-after` that
- * names neither a secondary limit nor an empty quota. The reserve itself is
- * read where the caller's `GitHubPriority` is known, as the call starts.
+ * names neither a secondary limit nor an empty quota.
  *
  * Every request leaves through `githubFetch`, on the `HttpClient` the layer
  * was built over, under the fiber context of the call that asked; a token
@@ -35,7 +34,12 @@ import { createAppAuth, type InstallationAuthOptions } from "@octokit/auth-app";
 import { Octokit, type OctokitOptions } from "@octokit/core";
 import { type PaginatingEndpoints, paginateRest } from "@octokit/plugin-paginate-rest";
 import { type ThrottlingOptions, throttling } from "@octokit/plugin-throttling";
-import type { EndpointOptions, Endpoints, RequestInterface } from "@octokit/types";
+import type {
+  EndpointOptions,
+  Endpoints,
+  RequestInterface,
+  RequestParameters,
+} from "@octokit/types";
 import Bottleneck from "bottleneck";
 import { Clock, Context, Duration, Effect, Layer, Option, Redacted, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
@@ -49,7 +53,7 @@ import {
   GitHubUnavailable,
   GitHubUnreadable,
 } from "./github-failure.js";
-import { githubFetch } from "./github-fetch.js";
+import { githubFetch, type Kept } from "./github-fetch.js";
 import type { GitHubHoldStore } from "./github-hold-store.js";
 import {
   type GitHubIdentity,
@@ -60,17 +64,14 @@ import {
 import {
   type AnswerHeaders,
   answered,
-  GitHubPriority,
   HeldRequest,
   type HoldState,
   heldUntil,
   holdStateOf,
   type IdentityState,
-  PRIORITY,
   type RouteOf,
   recordRate,
   refused,
-  reservedUntil,
 } from "./github-rate.js";
 
 /** The REST API version every request names (https://docs.github.com/en/rest/about-the-rest-api/api-versions). */
@@ -99,8 +100,18 @@ const GRAPHQL_ERROR = {
 const RATE_LIMIT_WORDS = /rate limit/iu;
 const SECONDARY_LIMIT_WORDS = /\bsecondary rate\b/iu;
 
+/** A `link` header naming a next page (https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api). */
+const NEXT_PAGE = /rel="next"/u;
+
+/** The header GitHub answers a token not authorized for an organization's SAML SSO with. */
+const SSO_HEADER = "x-github-sso";
+
 const GRAPHQL_RESOURCE = "graphql";
-const CORE_RESOURCE = "core";
+
+/** GitHub's OAuth endpoints, on github.com rather than the API (https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens). */
+const OAUTH_BASE_URL = "https://github.com";
+const OAUTH_TOKEN_ROUTE = "POST /login/oauth/access_token";
+const REFRESH_GRANT = "refresh_token";
 
 const MintedToken = Schema.Struct({ token: Schema.String, expiresAt: Schema.String });
 
@@ -138,6 +149,49 @@ export interface InstallationGrant {
   readonly permissions?: Readonly<Record<string, string>>;
 }
 
+/** The App's OAuth client: the credentials its user access tokens are exchanged, refreshed, and revoked under. */
+export interface GitHubOAuthClient {
+  readonly clientId: string;
+  readonly clientSecret: Redacted.Redacted<string>;
+}
+
+/** What a web flow's return hands back to exchange: its code, the `redirect_uri` it was asked with, and its PKCE verifier. */
+export interface GitHubWebFlowCode {
+  readonly code: string;
+  readonly redirectUrl: string;
+  readonly codeVerifier: string;
+}
+
+/** What of a user's authorization of the App a revocation takes: one access token, or the whole grant (https://docs.github.com/en/rest/apps/oauth-applications). */
+export const AUTHORIZATION_PART = { TOKEN: "token", GRANT: "grant" } as const;
+
+export type AuthorizationPart = (typeof AUTHORIZATION_PART)[keyof typeof AUTHORIZATION_PART];
+
+/**
+ * The App's OAuth endpoints under its client credentials. The token
+ * endpoint answers a refusal with a 200 and an `error` in its body
+ * (https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app),
+ * so its answer is handed back whole for the caller to read.
+ */
+export interface GitHubOAuth {
+  /** A web flow's code exchanged for a user access token. */
+  readonly exchangeCode: (flow: GitHubWebFlowCode) => Effect.Effect<GitHubAnswer, GitHubFailure>;
+  /** An expiring user access token refreshed for a new pair. */
+  readonly refreshToken: (
+    refreshToken: Redacted.Redacted<string>,
+  ) => Effect.Effect<GitHubAnswer, GitHubFailure>;
+  /** A user access token, or the grant it names, revoked. */
+  readonly revoke: (
+    token: Redacted.Redacted<string>,
+    part: AuthorizationPart,
+  ) => Effect.Effect<void, GitHubFailure>;
+}
+
+/** An answer of GitHub's, as far as its body. */
+export interface GitHubAnswer {
+  readonly data: unknown;
+}
+
 /** A value a GraphQL document's variables hold. */
 export type GraphqlVariable =
   | string
@@ -164,17 +218,48 @@ export type GitHubPageItem<R extends keyof PaginatingEndpoints> =
       ? Item
       : never;
 
+/** One page of a listing as the paginator answers it: its items, and the `link` naming the next. */
+interface PageOf<Item> {
+  readonly data: ReadonlyArray<Item>;
+  readonly headers: { readonly link?: string };
+}
+
+/** How far a listing is read: never past `maxPages`, and no further than the items read are `enough`. */
+export interface GitHubPaging<Item> {
+  readonly maxPages: number;
+  readonly enough?: (items: ReadonlyArray<Item>) => boolean;
+}
+
+/**
+ * What a request names beside its route's own parameters: the headers it
+ * adds, such as an `accept` naming one of GitHub's media types
+ * (https://docs.github.com/en/rest/using-the-rest-api/getting-started-with-the-rest-api#media-types),
+ * as Octokit's `headers` request option takes them; and, for an answer read
+ * as bytes, such as a file's raw contents or an archive, Octokit's
+ * `request.parseSuccessResponseBody: false`, which leaves a successful
+ * answer's `data` its unread body stream.
+ */
+export interface GitHubRequestOptions {
+  readonly headers?: Readonly<Record<string, string>>;
+  readonly parseSuccessResponseBody?: false;
+}
+
 /** One identity's requests to GitHub. Answers are typed by Octokit's route table and decoded by the caller. */
 export interface GitHubClient {
   readonly request: <R extends keyof Endpoints>(
     route: R,
-    parameters?: Endpoints[R]["parameters"],
+    parameters?: Endpoints[R]["parameters"] & GitHubRequestOptions,
   ) => Effect.Effect<Endpoints[R]["response"], GitHubFailure>;
-  /** Every item of a listing, following GitHub's `link` headers, up to `maxPages` pages. */
+  /**
+   * Every item of a listing, following GitHub's `link` headers, or as many
+   * as are `enough` for the caller. A listing whose `link` still names a next
+   * page after `maxPages` did not end, and fails as unreadable rather than
+   * answering the part of it read.
+   */
   readonly paginate: <R extends keyof PaginatingEndpoints>(
     route: R,
-    parameters: PaginatingEndpoints[R]["parameters"],
-    options: { readonly maxPages: number },
+    parameters: PaginatingEndpoints[R]["parameters"] & GitHubRequestOptions,
+    options: GitHubPaging<GitHubPageItem<R>>,
   ) => Effect.Effect<ReadonlyArray<GitHubPageItem<R>>, GitHubFailure>;
   /** A GraphQL document's `data`, decoded by `schema`. */
   readonly graphql: <A>(
@@ -182,6 +267,31 @@ export interface GitHubClient {
     variables: Readonly<Record<string, GraphqlVariable>>,
     schema: Schema.Decoder<A>,
   ) => Effect.Effect<A, GitHubFailure>;
+  /**
+   * A GraphQL document's `data` where GitHub answered any, decoded by
+   * `schema`, beside the errors it answered with: what a document of
+   * several parts reads, one of which may fail alone, as Octokit's
+   * `GraphqlResponseError` carries the partial `data`
+   * (https://github.com/octokit/graphql.js#partial-responses). A rate limit
+   * still fails, as `graphql` fails it.
+   */
+  readonly graphqlPartial: <A>(
+    document: string,
+    variables: Readonly<Record<string, GraphqlVariable>>,
+    schema: Schema.Decoder<A>,
+  ) => Effect.Effect<GraphqlPartial<A>, GitHubFailure>;
+}
+
+/** One error of a GraphQL answer: GitHub's type for it, where it named one, and its words. */
+export interface GraphqlError {
+  readonly type?: string;
+  readonly message: string;
+}
+
+/** A GraphQL answer read as far as it went: its data, none where GitHub answered none, and its errors. */
+export interface GraphqlPartial<A> {
+  readonly data: A | undefined;
+  readonly errors: ReadonlyArray<GraphqlError>;
 }
 
 const HeaderValue = Schema.Union([Schema.String, Schema.Number, Schema.Undefined]);
@@ -196,7 +306,10 @@ const Rejection = Schema.Struct({
   message: Schema.optional(Schema.String),
   status: Schema.optional(Schema.Number),
   response: Schema.optional(
-    Schema.Struct({ headers: Schema.optional(Schema.Record(Schema.String, HeaderValue)) }),
+    Schema.Struct({
+      headers: Schema.optional(Schema.Record(Schema.String, HeaderValue)),
+      data: Schema.optional(Schema.Unknown),
+    }),
   ),
   errors: Schema.optional(Schema.Array(Schema.Unknown)),
   data: Schema.optional(Schema.Unknown),
@@ -222,13 +335,51 @@ const UNREAD_REJECTION: Rejection = { message: "GitHub request failed" };
 /** A GraphQL error, as far as its type. */
 const TypedError = Schema.Struct({ type: Schema.String });
 
+/** A GraphQL error as far as GitHub's own words. */
+const SaidError = Schema.Struct({ message: Schema.String });
+
+/** A REST refusal's body as far as GitHub's own words: its message, and each error's, or the field and code it names. */
+const SaidRefusal = Schema.Struct({
+  message: Schema.String,
+  errors: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        message: Schema.optional(Schema.String),
+        field: Schema.optional(Schema.String),
+        code: Schema.optional(Schema.String),
+      }),
+    ),
+  ),
+});
+
+/** A REST refusal's words: its message, then each error's message, or the field and code it names where it says none (`base invalid`). */
+function refusalWords(refusal: typeof SaidRefusal.Type): ReadonlyArray<string> {
+  const details = (refusal.errors ?? []).flatMap((error) => {
+    if (error.message !== undefined) return [error.message];
+    const named = [error.field, error.code].filter((word) => word !== undefined).join(" ");
+
+    return named === "" ? [] : [named];
+  });
+
+  return [refusal.message, ...details];
+}
+
+/** A GraphQL answer's errors where it named none. */
+const NO_GRAPHQL_ERRORS: ReadonlyArray<unknown> = [];
+
+/** A GraphQL error as a partial answer carries it. */
+const PartialError = Schema.Struct({
+  type: Schema.optionalKey(Schema.String),
+  message: Schema.String,
+});
+
 /** An answer's data that names errors, as GraphQL answers do. */
 const ErroredData = Schema.Struct({ errors: Schema.Array(Schema.Unknown) });
 
 /** What `conduct` is handed for one identity: run before each send, and after each answer or refusal. */
 interface Conduct {
   readonly before: () => Promise<void>;
-  readonly answered: (route: RouteOf, headers: AnswerHeaders) => Promise<void>;
+  readonly answered: (headers: AnswerHeaders) => Promise<void>;
   readonly refused: (route: RouteOf, rejection: Rejection) => Promise<void>;
 }
 
@@ -238,10 +389,11 @@ declare module "@octokit/core" {
   }
 }
 
-/** The per-call `request` options Octokit takes: the fetch to send on, and the signal that aborts it. */
+/** The per-call `request` options Octokit takes: the fetch to send on, the signal that aborts it, and whether a successful body is left unread. */
 interface CallOptions {
   readonly fetch: ReturnType<typeof githubFetch>;
   readonly signal: AbortSignal;
+  readonly parseSuccessResponseBody?: false;
 }
 
 /**
@@ -260,7 +412,7 @@ function conduct(octokit: Octokit, options: OctokitOptions): Record<string, neve
 
     try {
       const response = await request(endpoint);
-      await handed.answered(route, response.headers);
+      await handed.answered(response.headers);
 
       return response;
     } catch (error) {
@@ -292,16 +444,43 @@ function refusalOf(
   };
 }
 
-/** The GraphQL error types a rejection carries. */
-function graphqlErrorTypes(rejection: Rejection): ReadonlyArray<string> {
-  const errors =
+/** The GraphQL errors a rejection carries. */
+function graphqlErrors(rejection: Rejection): ReadonlyArray<unknown> {
+  return (
     rejection.errors ??
     Option.match(Schema.decodeUnknownOption(ErroredData)(rejection.data), {
       onNone: () => [],
       onSome: (data) => data.errors,
-    });
+    })
+  );
+}
 
-  return errors.flatMap((each) =>
+/**
+ * GitHub's own words for a rejection, which a caller may show the member:
+ * its GraphQL errors' messages, or its REST refusal's `message`, rather than
+ * Octokit's, which adds a preamble, the errors' JSON, and a documentation
+ * link; Octokit's where GitHub said none.
+ */
+function wordsOf(rejection: Rejection): string {
+  const said = [
+    ...graphqlErrors(rejection).flatMap((each) =>
+      Option.match(Schema.decodeUnknownOption(SaidError)(each), {
+        onNone: () => [],
+        onSome: (error) => [error.message],
+      }),
+    ),
+    ...Option.match(Schema.decodeUnknownOption(SaidRefusal)(rejection.response?.data), {
+      onNone: () => [],
+      onSome: refusalWords,
+    }),
+  ];
+
+  return said.length > 0 ? said.join(" ") : (rejection.message ?? UNREAD_REJECTION.message ?? "");
+}
+
+/** The GraphQL error types a rejection carries. */
+function graphqlErrorTypes(rejection: Rejection): ReadonlyArray<string> {
+  return graphqlErrors(rejection).flatMap((each) =>
     Option.match(Schema.decodeUnknownOption(TypedError)(each), {
       onNone: () => [],
       onSome: (error) => [error.type],
@@ -335,7 +514,7 @@ function retryAfterOf(headers: AnswerHeaders): Duration.Duration | undefined {
 }
 
 /** What an Octokit call's rejection means, as the failure union says it. */
-function failureOf(rejection: Rejection, identity: GitHubIdentityKind): GitHubFailure {
+function failureOf(rejection: Rejection, identity: GitHubIdentityKind, now: number): GitHubFailure {
   if (rejection.held !== undefined) {
     return new GitHubRateLimited({
       identity: rejection.held.identity,
@@ -344,7 +523,7 @@ function failureOf(rejection: Rejection, identity: GitHubIdentityKind): GitHubFa
   }
 
   const types = graphqlErrorTypes(rejection);
-  const message = rejection.message ?? UNREAD_REJECTION.message ?? "";
+  const message = wordsOf(rejection);
 
   if (types.includes(GRAPHQL_ERROR.RATE_LIMITED)) {
     return new GitHubRateLimited({ identity, resource: GRAPHQL_RESOURCE });
@@ -354,7 +533,8 @@ function failureOf(rejection: Rejection, identity: GitHubIdentityKind): GitHubFa
 
   if (types.includes(GRAPHQL_ERROR.FORBIDDEN)) return new GitHubForbidden({ message });
 
-  if (types.length > 0) return new GitHubRejected({ status: 200, message });
+  // Note that a GraphQL answer's errors need name no type, as a refused mutation's do not.
+  if (graphqlErrors(rejection).length > 0) return new GitHubRejected({ status: 200, message });
   const refusal = refusalOf(rejection);
 
   if (refusal === undefined) return new GitHubUnavailable({ message });
@@ -364,17 +544,29 @@ function failureOf(rejection: Rejection, identity: GitHubIdentityKind): GitHubFa
     const reset = Number(headers["x-ratelimit-reset"]);
     const resource = headers["x-ratelimit-resource"];
     const exhausted = String(headers["x-ratelimit-remaining"]) === "0" && Number.isFinite(reset);
+    const retryAfter = retryAfterOf(headers);
+
+    // Note that GitHub's `retry-after` is when it may be asked again too, counted from the refusal.
+    const resetsAt = exhausted
+      ? new Date(reset * 1000)
+      : retryAfter === undefined
+        ? undefined
+        : new Date(now + Duration.toMillis(retryAfter));
 
     return new GitHubRateLimited({
       identity,
       resource: resource === undefined ? undefined : String(resource),
-      resetsAt: exhausted ? new Date(reset * 1000) : undefined,
+      resetsAt,
     });
   }
 
   if (status === STATUS.UNAUTHORIZED) return new GitHubUnauthorized({ message });
 
-  if (status === STATUS.FORBIDDEN) return new GitHubForbidden({ message });
+  if (status === STATUS.FORBIDDEN) {
+    const sso = headers[SSO_HEADER];
+
+    return new GitHubForbidden({ message, ...(sso !== undefined && { sso: String(sso) }) });
+  }
 
   if (status === STATUS.NOT_FOUND) return new GitHubNotFound({ message });
 
@@ -397,7 +589,6 @@ function identityState(identity: GitHubIdentity, secondary?: HoldState): Identit
     identity,
     own,
     secondary: secondary ?? own,
-    reserveUntil: undefined,
     rate: undefined,
     kept: new Map(),
   };
@@ -505,7 +696,7 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
       run(heldUntil(state)).then((until) => {
         if (until !== undefined) throw new HeldRequest({ identity: state.identity.kind, until });
       }),
-    answered: (route, headers) => run(answered(state, route, headers)),
+    answered: (headers) => run(answered(state, headers)),
     refused: (route, rejection) => {
       const refusal = refusalOf(rejection);
 
@@ -557,59 +748,90 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
       throttle: throttleFor(state),
     });
 
-  /** One call on Octokit as an Effect: refused at once where the reserve holds background work, sent on the caller's fiber context otherwise. */
-  const called = <A>(state: IdentityState, send: (request: CallOptions) => Promise<A>) =>
-    Effect.gen(function* () {
-      if ((yield* GitHubPriority) === PRIORITY.BACKGROUND) {
-        const until = yield* reservedUntil(state);
-
-        if (until !== undefined) {
-          return yield* new GitHubRateLimited({
-            identity: state.identity.kind,
-            resource: CORE_RESOURCE,
-            resetsAt: new Date(until),
-          });
-        }
-      }
-
-      const context = yield* Effect.context<never>();
-
-      return yield* Effect.tryPromise({
-        try: (signal) => send({ fetch: githubFetch(client, context, state.kept), signal }),
-        catch: (error) =>
-          failureOf(
-            Option.getOrElse(decodeRejection(error), () => UNREAD_REJECTION),
-            state.identity.kind,
+  /** One call on Octokit as an Effect, sent on the caller's fiber context, its rejection read as the failure union says it. */
+  const sent = <A>(
+    kept: Kept,
+    identity: GitHubIdentityKind,
+    send: (request: CallOptions) => Promise<A>,
+  ) =>
+    Effect.flatMap(Effect.context<never>(), (context) =>
+      Effect.tryPromise({
+        try: (signal) => send({ fetch: githubFetch(client, context, kept), signal }),
+        catch: (error) => Option.getOrElse(decodeRejection(error), () => UNREAD_REJECTION),
+      }).pipe(
+        Effect.catch((rejection) =>
+          Effect.flatMap(Clock.currentTimeMillis, (now) =>
+            Effect.fail(failureOf(rejection, identity, now)),
           ),
-      });
-    });
+        ),
+      ),
+    );
+
+  /** One call as an identity. */
+  const called = <A>(state: IdentityState, send: (request: CallOptions) => Promise<A>) =>
+    sent(state.kept, state.identity.kind, send);
 
   const clientFor = (state: IdentityState, octokit: GitHubOctokitInstance): GitHubClient => ({
-    request: <R extends keyof Endpoints>(route: R, parameters?: Endpoints[R]["parameters"]) =>
+    request: <R extends keyof Endpoints>(
+      route: R,
+      parameters?: Endpoints[R]["parameters"] & GitHubRequestOptions,
+    ) =>
       called(state, (request) => {
         // SAFETY: Octokit's `request` answers `Endpoints[R]["response"]` for a route of its table, with that route's parameters; its conditional overload cannot see that through the generic `R`.
         const send = octokit.request as (
           route: R,
-          parameters: Endpoints[R]["parameters"] & { readonly request: CallOptions },
+          parameters: Endpoints[R]["parameters"] & {
+            readonly headers?: GitHubRequestOptions["headers"];
+            readonly request: CallOptions;
+          },
         ) => Promise<Endpoints[R]["response"]>;
 
-        return send(route, { ...parameters, request });
+        const { parseSuccessResponseBody, ...named } = parameters ?? {};
+
+        return send(route, {
+          ...named,
+          request:
+            parseSuccessResponseBody === false ? { ...request, parseSuccessResponseBody } : request,
+        });
       }),
-    paginate: (route, parameters, { maxPages }) =>
-      called(state, async (request) => {
-        const items: Array<GitHubPageItem<typeof route>> = [];
-        let pages = 0;
+    paginate: (route, parameters, { maxPages, enough }) =>
+      Effect.flatMap(
+        called(state, async (request) => {
+          const items: Array<GitHubPageItem<typeof route>> = [];
+          let pages = 0;
 
-        for await (const page of octokit.paginate.iterator(route, { ...parameters, request })) {
-          // SAFETY: the paginator answers every page's data as the listing's one array of items, a wrapped page's included.
-          items.push(...(page.data as ReadonlyArray<GitHubPageItem<typeof route>>));
-          pages += 1;
+          // SAFETY: handed a request method, the paginator reads its parameters as that method's endpoint options (`request.endpoint(parameters)`), and answers every page's data as the listing's one array of items, a wrapped page's included; its typing reads the parameters off the method's last overload, a route string, and the route's own types cannot be seen through the generic `R`.
+          const iterate = octokit.paginate.iterator as (
+            requestMethod: RequestInterface,
+            firstPage: EndpointOptions,
+          ) => AsyncIterable<PageOf<GitHubPageItem<typeof route>>>;
 
-          if (pages >= maxPages) break;
-        }
+          // SAFETY: a route's parameters are the request parameters Octokit merges into its endpoint; its index signature cannot be seen through the generic `R`.
+          const firstPage = octokit.request.endpoint.merge(route, parameters as RequestParameters);
 
-        return items;
-      }),
+          // Note that the paginator sends every page as its `method`, `url`, and `headers` alone, so the call's fetch and signal ride on the request method it is handed.
+          const listing = iterate(octokit.request.defaults({ request }), firstPage);
+
+          for await (const page of listing) {
+            items.push(...page.data);
+            pages += 1;
+
+            if (enough?.(items) === true) return { items, ended: true };
+
+            if (pages >= maxPages) {
+              return { items, ended: !NEXT_PAGE.test(String(page.headers.link ?? "")) };
+            }
+          }
+
+          return { items, ended: true };
+        }),
+        ({ items, ended }) =>
+          ended
+            ? Effect.succeed(items)
+            : Effect.fail(
+                new GitHubUnreadable({ message: `the listing ran past ${maxPages} pages` }),
+              ),
+      ),
     graphql: (document, variables, schema) =>
       Effect.flatMap(
         called(state, (request) => octokit.graphql<unknown>(document, { ...variables, request })),
@@ -619,7 +841,86 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
             (error) => new GitHubUnreadable({ message: error.message }),
           ),
       ),
+    graphqlPartial: (document, variables, schema) =>
+      Effect.flatMap(
+        called(state, (request) =>
+          octokit.graphql<unknown>(document, { ...variables, request }).then(
+            (data) => ({ data, errors: NO_GRAPHQL_ERRORS }),
+            (error) => {
+              const rejection = Option.getOrElse(decodeRejection(error), () => UNREAD_REJECTION);
+              const errors = graphqlErrors(rejection);
+              const limited = graphqlErrorTypes(rejection).includes(GRAPHQL_ERROR.RATE_LIMITED);
+
+              // Note that only an answer GitHub gave with errors is partial; a refusal or a limit fails as `graphql` fails.
+              if (errors.length === 0 || limited || rejection.status !== undefined) throw error;
+
+              return { data: rejection.data, errors };
+            },
+          ),
+        ),
+        ({ data, errors }) =>
+          Effect.mapError(
+            Effect.all({
+              data:
+                data === undefined || data === null
+                  ? Effect.succeed(undefined)
+                  : Schema.decodeUnknownEffect(schema)(data),
+              errors: Schema.decodeUnknownEffect(Schema.Array(PartialError))(errors),
+            }),
+            (error) => new GitHubUnreadable({ message: error.message }),
+          ),
+      ),
   });
+
+  // Note that the OAuth endpoints answer no identity's API quota, so they go outside every throttle and hold, and keep no answers.
+  const oauthOctokit = new Octokit({ userAgent: options.userAgent, log });
+
+  const oauth = (credentials: GitHubOAuthClient): GitHubOAuth => {
+    const clientSecret = Redacted.value(credentials.clientSecret);
+
+    const tokenEndpoint = (parameters: Readonly<Record<string, string>>) =>
+      sent(new Map(), IDENTITY_KIND.APP, (request) =>
+        oauthOctokit.request(OAUTH_TOKEN_ROUTE, {
+          baseUrl: OAUTH_BASE_URL,
+          headers: { accept: "application/json" },
+          client_id: credentials.clientId,
+          client_secret: clientSecret,
+          ...parameters,
+          request,
+        }),
+      );
+
+    return {
+      exchangeCode: (flow) =>
+        tokenEndpoint({
+          code: flow.code,
+          redirect_uri: flow.redirectUrl,
+          code_verifier: flow.codeVerifier,
+        }),
+      refreshToken: (refreshToken) =>
+        tokenEndpoint({
+          grant_type: REFRESH_GRANT,
+          refresh_token: Redacted.value(refreshToken),
+        }),
+      revoke: (token, part) =>
+        Effect.asVoid(
+          sent(new Map(), IDENTITY_KIND.APP, (request) => {
+            const parameters = {
+              client_id: credentials.clientId,
+              access_token: Redacted.value(token),
+              headers: {
+                authorization: `basic ${btoa(`${credentials.clientId}:${clientSecret}`)}`,
+              },
+              request,
+            };
+
+            return part === AUTHORIZATION_PART.TOKEN
+              ? oauthOctokit.request("DELETE /applications/{client_id}/token", parameters)
+              : oauthOctokit.request("DELETE /applications/{client_id}/grant", parameters);
+          }),
+        ),
+    };
+  };
 
   const appOctokit = octokitFor(identities.app, {
     authStrategy: createAppAuth,
@@ -656,6 +957,7 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
 
       return clientFor(state, octokitFor(state, { auth: Redacted.value(token) }));
     },
+    oauth,
   });
 });
 
@@ -679,6 +981,8 @@ export class GitHub extends Context.Service<
       grant: InstallationGrant,
       options?: { readonly minimumLifetime?: Duration.Duration },
     ) => Effect.Effect<InstallationToken, GitHubFailure>;
+    /** The App's OAuth endpoints, under the client credentials given. */
+    readonly oauth: (client: GitHubOAuthClient) => GitHubOAuth;
   }
 >()("@repo/github/GitHub") {
   /** The service for one App, built once per instance over the instance's `HttpClient` and the shared holds. */

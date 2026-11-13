@@ -57,7 +57,7 @@ const standing = (bearers: ReadonlyMap<string, string>) =>
     );
 
     const handle = hostedFetch({
-      plans: tasksProcedures({
+      tasks: tasksProcedures({
         resolveUserId: (incoming: Request) =>
           Effect.succeed(
             Option.fromNullishOr(bearers.get(incoming.headers.get("authorization") ?? "")),
@@ -130,7 +130,7 @@ it.layer(getTestDB())("where a task runs its agents", (it) => {
         );
 
         const patch = (taskId: string, bearer: string, runsOn: TaskRunsOnRequest) =>
-          send("PATCH", `/api/plans/${taskId}`, bearer, { runsOn });
+          send("PATCH", `/api/tasks/${taskId}`, bearer, { runsOn });
 
         const toLaptop = yield* patch(task.id, "Bearer owner", {
           machine: AGENT_MACHINE.DEVICE,
@@ -167,7 +167,7 @@ it.layer(getTestDB())("where a task runs its agents", (it) => {
         const onStudio = { machine: AGENT_MACHINE.DEVICE, deviceId: studio } as const;
         const send = yield* standing(new Map([["Bearer owner", owner]]));
 
-        const made = yield* send("POST", "/api/plans", "Bearer owner", {
+        const made = yield* send("POST", "/api/tasks", "Bearer owner", {
           name: "Relay",
           workspaceId: workspace,
           planning: false,

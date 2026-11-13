@@ -74,7 +74,7 @@ const TASK: Task = {
   updatedAt: 2,
   repository: "acme-corp/relay",
   ownerId: DANA,
-  document: { body: "# Checkout retries", assumptions: [] },
+  description: { body: "# Checkout retries", assumptions: [] },
 };
 
 const AGENT: AgentSummary = {

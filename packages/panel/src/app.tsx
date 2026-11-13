@@ -63,6 +63,7 @@ import { OpenAiKeyProvider } from "./openai-key.js";
 import { PANEL_TAB, type PanelTab } from "./panel-tabs.js";
 import { OpenPersonProvider, PreloadPersonProvider } from "./person-door.js";
 import { forgetPictures } from "./picture-query.js";
+import { useHistoryRows } from "./places/history-rows.js";
 import { useLinkDestinationLandings } from "./places/link-landings.js";
 import { useLinkReads } from "./places/link-reads.js";
 import { useNarrowBacks } from "./places/narrow-backs.js";
@@ -666,16 +667,19 @@ function AppWindow(): React.JSX.Element {
   const known = run !== undefined && !accountGated && !workspacesUnread;
   const routedViews = useRoutedViews();
   const backs = useNarrowBacks(room === SHELL_ROOM.NARROW);
+  // The task list's rows the history names and reaches, read by id, so a delivery moving any other task draws none of it again.
+  const historyRows = useHistoryRows();
 
   const history = useWindowHistory({
     known,
     link: copyLink.placed,
-    title: stepTitle(routedHere?.place, tasks, routedViews),
+    title: stepTitle(routedHere?.place, tasks, historyRows, routedViews),
     routed: routedHere,
     automations: automationsView,
     versionHistory: versionHistoryView,
     inbox: inboxView,
     room,
+    rows: historyRows,
     tasks,
   });
 

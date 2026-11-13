@@ -10,6 +10,7 @@ import { agentQueue } from "@repo/database/schemas/agent-queue";
 import { user } from "@repo/database/schemas/auth";
 import { deviceAgentLine } from "@repo/database/schemas/device-agent";
 import { conversations, messages, standingLine, turns } from "@repo/database/schemas/storage";
+import { voiceCallTable } from "@repo/database/schemas/voice-call";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import {
   agentBootSync,
@@ -25,6 +26,7 @@ import {
   taskSync,
   turnsSync,
   userSync,
+  voiceCallSync,
 } from "@repo/database/sync/tables";
 import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
 import {
@@ -71,7 +73,8 @@ import { countAnswerBytes, countAnswerWait } from "../transcript-metrics.js";
  * landing, the agent's own (`agent`) or a worker's, or a worker's
  * delegation being recorded (`workers`), and, for an agent on a device, its
  * newest launch line being claimed, stepping, or settling (`launch`), which
- * is where the page reads what the agent's start waits on. Each reads only the rows of the
+ * is where the page reads what the agent's start waits on, and a voice call
+ * opening on the agent or closing (`calls`), which the page names. Each reads only the rows of the
  * account that started the agent, as the held read does, and only while
  * the reader is a member of the agent's workspace: the membership is joined
  * in the statement, so a member taken out of the workspace stops hearing
@@ -552,6 +555,24 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
       ),
   );
 
+  // The voice calls standing on the agent, by their rows, read on its own transcript alone.
+  const calls = liveRowsStatement(
+    AGENT_TRANSCRIPT_READ.parts.calls,
+    { ordered: false, columns: { id: voiceCallTable.id } },
+    (selection) =>
+      queryBuilder
+        .select(selection)
+        .from(voiceCallTable)
+        .innerJoin(agentTable, eq(agentTable.id, voiceCallTable.agentId))
+        .where(
+          and(
+            eq(agentTable.conversationId, conversationId),
+            eq(agentTable.userId, userId),
+            reached,
+          ),
+        ),
+  );
+
   return {
     messages: written,
     turns: run,
@@ -561,6 +582,7 @@ function transcriptStatements(params: TranscriptParams, past?: MessageCursor) {
     queueRevision,
     launch,
     boot,
+    calls,
     window: windowOf(target, reached, past),
     windowParts: windowPartsOf(target, reached, past),
   };
@@ -585,7 +607,8 @@ const callIdOf = /* @__PURE__ */ Effect.fnUntraced(function* (call: string) {
  * rather than wait for it. It is woken by a write to the transcript's
  * messages, turns, or conversation, to a worker's conversation or
  * delegation under the agent's, to the agent itself, its queue, or a line
- * queued for its device, and to what admits the reader to its workspace or
+ * queued for its device, to a voice call on the agent opening or closing,
+ * and to what admits the reader to its workspace or
  * repository; the agent's task is read for the reader's reach of it
  * (`agentVisibleTo`) and wakes nothing, as a task's reach moves with what
  * admits the reader. It is looked at every second where nothing wakes it,
@@ -625,6 +648,7 @@ export const agentTranscriptRead = bindLiveRead(AGENT_TRANSCRIPT_READ, {
     agentQueueSync,
     deviceAgentLineSync,
     agentBootSync,
+    voiceCallSync,
   ],
   topics: ({ conversationId, parentConversationId, agentId, userId }) => {
     const parent: readonly SyncTopic[] =

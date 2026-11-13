@@ -138,6 +138,8 @@ export interface ComboboxOption {
    * do, and none draws no room, for a list whose options wear none.
    */
   readonly icon?: ReactNode;
+  /** A small mark right before the name, after the glyph, as a menu row's `before` stands: a teammate's face on a machine of theirs. */
+  readonly before?: ReactNode;
   /** Words after the name, quieter, which give way to it in a narrow list. */
   readonly detail?: ReactNode;
   /** Whether the detail stands on a line of its own under the name, wrapping, as a mode's one-line hint does, rather than after it. */
@@ -251,6 +253,11 @@ export function ComboboxOptionItem({
       {/* Note that a null glyph still stands, empty, so the names of a group whose options mix glyphs and none start at one edge. */}
       {option.icon === undefined ? null : (
         <span className={cn("ui-combobox-option-glyph", COMBOBOX_ITEM_GLYPH)}>{option.icon}</span>
+      )}
+      {option.before === undefined || option.before === null ? null : (
+        <span className="ui-combobox-option-before inline-flex flex-none items-center">
+          {option.before}
+        </span>
       )}
       {/* Note that the name and its detail fade where the row cuts them short, as every cut line of the app does, rather than ending in an ellipsis. */}
       <span
