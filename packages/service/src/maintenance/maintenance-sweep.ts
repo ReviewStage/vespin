@@ -1,9 +1,9 @@
 import type { DatabaseServices } from "@repo/database/core/query";
+import { GitHubPriority, PRIORITY } from "@repo/github";
 import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { Cause, Clock, Data, Effect, type Redacted } from "effect";
 import type { SandboxReleaseSweep } from "../agents/session-sandboxes.js";
-import { GitHubBackground } from "../github/github-rate-gate.js";
 import {
   bearerMatchesSecret,
   errorResponse,
@@ -153,9 +153,9 @@ export const handleMaintenanceSweep = /* @__PURE__ */ Effect.fn("web/handleMaint
     // an issue on a sweep that keeps failing, while the sweeps after it ran and the answer says which.
     const ran: MaintenanceSweepAnswer | SweepsFailed = yield* options.monitor
       .run(
-        // Note that no member waits on a sweep, so what it asks GitHub waits in the background lane (`github-rate-gate.ts`).
+        // Note that no member waits on a sweep, so what it asks GitHub is asked at the background priority, leaving the members their reserve.
         Effect.flatMap(
-          sweepAll(options).pipe(Effect.provideService(GitHubBackground, true)),
+          sweepAll(options).pipe(Effect.provideService(GitHubPriority, PRIORITY.BACKGROUND)),
           (answer) =>
             Object.values(answer).some((swept) => swept === SWEEP_FAILED)
               ? Effect.fail(new SweepsFailed({ answer }))

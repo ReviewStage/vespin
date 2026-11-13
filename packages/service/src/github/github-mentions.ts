@@ -80,6 +80,7 @@ import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import { LINK_DESTINATION, linkOf, mentionMarkdownLink } from "@repo/features/link-grammar";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS } from "@repo/features/task-wire";
+import type { GitHubFailure } from "@repo/github";
 import { causeKind } from "@repo/runtime/effect";
 import {
   EXCESS_KEYS,
@@ -108,7 +109,7 @@ import { workspaceStepOf } from "../agents/written-mentions.js";
 import { TURN_FAILURE } from "../core.js";
 import { HostedEnvironment } from "../environment.js";
 import { HOSTED_API_ERROR } from "../http/http.js";
-import { GitHubApp, githubPost, repositoryPath, send } from "./github-app.js";
+import { GitHubApp, type GitHubBearer, repositoryParts } from "./github-app.js";
 
 /** The one event and action a mention is read from: a comment made on an issue or a pull request. */
 const MENTION_EVENT = { EVENT: "issue_comment", ACTION: "created" } as const;
@@ -358,9 +359,6 @@ function refusalWords(what: string, cause: unknown): string {
   return `${PRODUCT_NAME} couldn't ${what} (${slug}).`;
 }
 
-/** What the App writes on GitHub: a comment's words, or a reaction's name. */
-type AppWrite = { readonly body: string } | { readonly content: string };
-
 /**
  * One write as the App's bot on the repository, on the installation's token
  * for the workspace: answered or not, it fails nothing, and a failure is
@@ -370,8 +368,7 @@ const asApp = (
   organizationId: string,
   repository: string,
   what: string,
-  path: string,
-  body: AppWrite,
+  write: (bearer: GitHubBearer) => Effect.Effect<unknown, GitHubFailure>,
 ) =>
   Effect.gen(function* () {
     const held = yield* (yield* GitHubApp).repositoryCommentToken(organizationId, repository);
@@ -380,15 +377,11 @@ const asApp = (
       return yield* Effect.logWarning(`github mention: no token to ${what} with`);
     }
 
-    const response = yield* Effect.scoped(
-      send(githubPost(`${repositoryPath(repository)}${path}`, held.value.token, body)),
+    yield* write(held.value.bearer).pipe(
+      Effect.catch((failure) =>
+        Effect.logWarning(`github mention: GitHub refused to ${what}`, { failure: failure._tag }),
+      ),
     );
-
-    if (response.status >= 300) {
-      yield* Effect.logWarning(`github mention: GitHub refused to ${what}`, {
-        status: response.status,
-      });
-    }
   }).pipe(
     Effect.catchCause((cause) =>
       Effect.logWarning(`github mention: could not ${what}`, { failure: causeKind(cause) }),
@@ -397,18 +390,22 @@ const asApp = (
 
 /** A comment from the App on the issue or pull request given. */
 const replyOn = (organizationId: string, repository: string, number: number, words: string) =>
-  asApp(organizationId, repository, "reply", `/issues/${number}/comments`, { body: words });
+  asApp(organizationId, repository, "reply", (bearer) =>
+    bearer.client.request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", {
+      ...repositoryParts(repository),
+      issue_number: number,
+      body: words,
+    }),
+  );
 
 /** The mention's comment marked heard with 👀. */
 const reactTo = (organizationId: string, mention: GitHubMention) =>
-  asApp(
-    organizationId,
-    mention.repository,
-    "react",
-    `/issues/comments/${mention.commentId}/reactions`,
-    {
+  asApp(organizationId, mention.repository, "react", (bearer) =>
+    bearer.client.request("POST /repos/{owner}/{repo}/issues/comments/{comment_id}/reactions", {
+      ...repositoryParts(mention.repository),
+      comment_id: mention.commentId,
       content: HEARD_REACTION,
-    },
+    }),
   );
 
 /**

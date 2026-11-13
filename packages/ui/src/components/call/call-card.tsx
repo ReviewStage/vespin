@@ -85,9 +85,9 @@ function CallCardHead({
 /**
  * The card as drawn from what it is handed: the call's task by name, with
  * the way back beside it, over the call bar itself, the same component an
- * agent's own page draws, so its status, its mutes, and its end are the
- * bar's in every word, glyph, and color, and restyling the bar restyles the
- * card. There is no ×: End call is the way to put a call away, and a live
+ * agent's own page draws, so its status, its mutes, its Stop, and its end
+ * are the bar's in every word, glyph, and color, and restyling the bar
+ * restyles the card. There is no ×: End call is the way to put a call away, and a live
  * call nobody can see is what the card is for. In the floating window a
  * press acts without taking the focus (`KeepFocus`), so the next drag never
  * finds a button holding it. A card `leaving` slides out, and says so
@@ -100,6 +100,7 @@ export function CallCard({
   speaker,
   surface,
   onReturn,
+  onStop,
   onEnd,
   leaving = false,
   onLeft,
@@ -113,6 +114,8 @@ export function CallCard({
   surface: CallCardSurface;
   /** Opens what the call is about. */
   onReturn: () => void;
+  /** Stops the agent's turn, which the bar offers while the agent works. */
+  onStop: () => void;
   onEnd: () => void;
   /** Whether the card is on its way out, which it slides through before it is gone. */
   leaving?: boolean | undefined;
@@ -133,6 +136,7 @@ export function CallCard({
           status={status}
           microphone={microphone}
           speaker={speaker}
+          onStop={onStop}
           onEnd={onEnd}
           titled={inWindow}
         />

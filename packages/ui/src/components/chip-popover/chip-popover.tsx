@@ -25,7 +25,9 @@ import { type FootRow, type MenuRow, SearchableMenu } from "../searchable-menu/s
  * Where the owner hands a menu, its rows stand under the facts behind a
  * hairline, headed by the menu's heading ("Move to"), the one chosen
  * checked, and a pick hands the row's id to the owner and closes the
- * popover: the popover is then the picker menu (`SearchableMenu`), its
+ * popover; a title may stand over the rows with no facts, as an agent's
+ * "Where this agent works" does, each of its rows opening a submenu beside
+ * it whose pick closes the popover too: the popover is then the picker menu (`SearchableMenu`), its
  * facts standing over its rows (`lead`), so its keys and its phone sheet
  * are the menu's own. With no menu it is a small card (`PopoverPanel`)
  * holding the facts alone. A popover whose menu says all there is, as a
@@ -87,6 +89,22 @@ type ChipPopoverBody =
       facts?: undefined;
       menu: ChipPopoverMenu;
     };
+
+/** A row's submenu whose pick puts the popover away first, as a pick of a row does, unless the submenu stays. */
+function closingOnPick(
+  submenu: NonNullable<MenuRow["submenu"]>,
+  close: () => void,
+): NonNullable<MenuRow["submenu"]> {
+  if (submenu.stays === true) return submenu;
+
+  return {
+    ...submenu,
+    onPick: (id) => {
+      close();
+      submenu.onPick(id);
+    },
+  };
+}
 
 /** The title over the facts, as a popover card heads itself. */
 const TITLE = "ui-chip-popover-title m-0 text-section font-section";
@@ -196,11 +214,15 @@ export function ChipPopover({
                 <p className={TITLE} aria-hidden="true">
                   {head.title}
                 </p>
-                <PopoverFacts facts={head.facts} />
+                {head.facts.length === 0 ? null : <PopoverFacts facts={head.facts} />}
               </>
             )
           }
-          rows={menu.rows.map((row) => ({ ...row, section: menu.heading }))}
+          rows={menu.rows.map((row) => ({
+            ...row,
+            section: menu.heading,
+            submenu: row.submenu === undefined ? undefined : closingOnPick(row.submenu, close),
+          }))}
           value={menu.value}
           checked={menu.checked}
           placeholder={menu.placeholder}

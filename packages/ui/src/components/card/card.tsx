@@ -47,7 +47,7 @@ export type CardPadding = (typeof CARD_PADDING)[keyof typeof CARD_PADDING];
 
 /**
  * How a card stands on its page: on the page's surface; raised on an opaque
- * ground in a strong edge and a smaller corner, as a card set inside a
+ * ground in a smaller corner, as a card set inside a
  * thread's words is; tinted with the hover's wash, as what a transcript
  * folds open is; on the code's own ground, as a file's lines are; its edge
  * alone, on whatever ground it stands on; or sunk in the page's well with no
@@ -85,10 +85,12 @@ export const CARD_ELEMENT = {
 
 export type CardElement = (typeof CARD_ELEMENT)[keyof typeof CARD_ELEMENT];
 
-/** The shadow a card stands on: none; a hairline's lift off the well it stands in, as a board's card; or a menu's, standing over the page, as an open comment thread or a summary drawn over its rail. */
+/** The shadow a card stands on: none; a hairline's lift off the well it stands in, as a board's card; Geist's card shadow, which every card stands on unless it asks for another or sits in the page's well; or a menu's, standing over the page, as an open comment thread or a summary drawn over its rail. */
 export const CARD_SHADOW = {
   NONE: "none",
   SOFT: "soft",
+  /** Geist's card shadow (`--ui-shadow-card`), standing a card off the page: every card's unless it asks for another. */
+  CARD: "card",
   MENU: "menu",
 } as const;
 
@@ -97,8 +99,8 @@ export type CardShadow = (typeof CARD_SHADOW)[keyof typeof CARD_SHADOW];
 /**
  * How a card a whole-card press covers answers the pointer resting on it:
  * not at all; with the hover's wash laid over its ground, as a comment
- * thread at rest; or lifting, its edge strengthened and its shadow deepened,
- * as a board's card rises off its column.
+ * thread at rest; or lifting, its shadow deepened, as a board's card rises
+ * off its column.
  */
 export const CARD_HOVER = {
   NONE: "none",
@@ -120,24 +122,31 @@ const PADDING_CLASS: Record<CardPadding, string> = {
   [CARD_PADDING.REGULAR]: "p-card",
 };
 
-/**
- * Each look's ground and edge. Note that a well's edge is there but unseen,
- * so ringed as a drop target the card keeps its size, the ring fading in as
- * a hover does, unless the card lifts, whose own transition says it.
- */
+/** Each look's ground. Its edge is not a look's: every card wears the one edge (`edgeClass`). */
 const LOOK_CLASS: Record<CardLook, string> = {
-  [CARD_LOOK.SURFACE]: "bg-card-surface border-border",
-  [CARD_LOOK.RAISED]: "bg-background border-border-strong",
-  [CARD_LOOK.TINT]: "bg-muted border-border",
-  [CARD_LOOK.CODE]: "bg-card-code border-border",
-  [CARD_LOOK.OUTLINE]: "bg-transparent border-border",
-  [CARD_LOOK.WELL]: "bg-well border-transparent",
+  [CARD_LOOK.SURFACE]: "bg-card-surface",
+  [CARD_LOOK.RAISED]: "bg-background",
+  [CARD_LOOK.TINT]: "bg-muted",
+  [CARD_LOOK.CODE]: "bg-card-code",
+  [CARD_LOOK.OUTLINE]: "bg-transparent",
+  [CARD_LOOK.WELL]: "bg-well",
 };
+
+/**
+ * The one edge every card wears, defined here once so no card draws its own:
+ * the border's hairline, but for a well's, which is there but unseen, so
+ * ringed as a drop target the card keeps its size, the ring fading in as a
+ * hover does, unless the card lifts, whose own transition says it.
+ */
+function edgeClass(look: CardLook): string {
+  return look === CARD_LOOK.WELL ? "border-transparent" : "border-border";
+}
 
 /** The shadow a card stands on, by `CARD_SHADOW`. */
 const SHADOW_CLASS: Record<CardShadow, string> = {
   [CARD_SHADOW.NONE]: "",
   [CARD_SHADOW.SOFT]: "shadow-card-soft",
+  [CARD_SHADOW.CARD]: "shadow-card",
   [CARD_SHADOW.MENU]: "shadow-menu",
 };
 
@@ -145,15 +154,14 @@ const SHADOW_CLASS: Record<CardShadow, string> = {
  * How a card answers the pointer resting on it, or holds that look while
  * `lit`. Note that the wash is laid over the card's own ground as an image,
  * so a card on an opaque ground stays opaque under it and one with none
- * takes the wash alone; a card that lifts strengthens its edge and deepens
- * its shadow, its edge left to a drop target's ring while it is one.
+ * takes the wash alone; a card that lifts deepens its shadow, keeping the
+ * one edge every card wears.
  */
 const HOVER_CLASS: Record<CardHover, string> = {
   [CARD_HOVER.NONE]: "",
   [CARD_HOVER.WASH]:
     "hover:bg-[linear-gradient(var(--color-muted),var(--color-muted))] data-[lit=true]:bg-[linear-gradient(var(--color-muted),var(--color-muted))]",
-  [CARD_HOVER.LIFT]:
-    "hover:not-data-[drop-target=true]:border-border-strong data-[lit=true]:not-data-[drop-target=true]:border-border-strong hover:shadow-card-lift data-[lit=true]:shadow-card-lift",
+  [CARD_HOVER.LIFT]: "hover:shadow-card-lift data-[lit=true]:shadow-card-lift",
 };
 
 /** The card a dragged row is carried over, ringed and washed, so it reads as the one the row will land in. */
@@ -193,6 +201,11 @@ function transitionClass(look: CardLook, hover: CardHover): string {
   return "transition-[border-color] duration-(--ui-duration-hover) ease-plain";
 }
 
+/** The shadow a card stands on where it asks for none in particular: Geist's card shadow, but for a well, which has no edge to stand a shadow under. */
+function defaultShadow(look: CardLook): CardShadow {
+  return look === CARD_LOOK.WELL ? CARD_SHADOW.NONE : CARD_SHADOW.CARD;
+}
+
 /** Every class a card's frame wears for the choices made, its owner's last. */
 function frameClass(
   look: CardLook,
@@ -206,6 +219,7 @@ function frameClass(
   return [
     "ui-card",
     LOOK_CLASS[look],
+    edgeClass(look),
     cornerClass(look, corner),
     PADDING_CLASS[padding],
     overflowClass(look, padding),
@@ -226,7 +240,7 @@ export function Card({
   look = CARD_LOOK.SURFACE,
   corner = CARD_CORNER.CARD,
   padding = CARD_PADDING.REGULAR,
-  shadow = CARD_SHADOW.NONE,
+  shadow: asked,
   hover = CARD_HOVER.NONE,
   lit = false,
   dashed = false,
@@ -239,7 +253,8 @@ export function Card({
   look?: CardLook;
   corner?: CardCorner;
   padding?: CardPadding;
-  shadow?: CardShadow;
+  /** The shadow it stands on; Geist's card shadow where none is asked for, but in a well. */
+  shadow?: CardShadow | undefined;
   /** How it answers the pointer resting on it, where a press covers it. */
   hover?: CardHover;
   /** Whether it holds its hover's look with no pointer on it, as while the menu it opened stands or its words are pointed at elsewhere. */
@@ -252,6 +267,8 @@ export function Card({
   ref?: Ref<HTMLElement> | undefined;
   children: ReactNode;
 }): React.JSX.Element {
+  const shadow = asked ?? defaultShadow(look);
+
   return (
     <ShadcnCard
       {...rest}

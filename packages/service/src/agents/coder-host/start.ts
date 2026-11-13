@@ -406,9 +406,9 @@ export const confirmedBranch = Effect.fnUntraced(function* (
   );
 
   if (Option.isNone(reached)) return yield* Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
-  const { repository: confirmed, token } = reached.value;
+  const { repository: confirmed, bearer } = reached.value;
 
-  const head = yield* readBranchHead(token, confirmed, branch).pipe(
+  const head = yield* readBranchHead(bearer, confirmed, branch).pipe(
     Effect.mapError(() => HOSTED_REFUSAL.GITHUB_UNANSWERED),
   );
 

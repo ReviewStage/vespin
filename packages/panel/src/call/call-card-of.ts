@@ -5,7 +5,7 @@
  * card docked in a window and the card alone in the floating window are the
  * same card in every word: the call's name, the stage's word as the voice's
  * line, the agent's line while it works, and the mutes as they stand, each
- * press asking for the mute's other side.
+ * press asking for the mute's other side, and Stop for the agent's turn.
  */
 
 import { type StandingCall, VOICE_CALL_STAGE } from "@repo/features/voice-wire";
@@ -16,6 +16,8 @@ import type { ComponentProps } from "react";
 export interface CallCardPresses {
   readonly setMicrophoneMuted: (muted: boolean) => void;
   readonly setSpeakerMuted: (muted: boolean) => void;
+  /** Stops the call's agent's turn, the call staying up. */
+  readonly stop: () => void;
   readonly end: () => void;
   /** Opens the call's agent. */
   readonly open: () => void;
@@ -55,6 +57,7 @@ export function callCardOf(call: StandingCall, presses: CallCardPresses): CallCa
       onPress: () => presses.setSpeakerMuted(!call.speakerMuted),
     },
     onReturn: presses.open,
+    onStop: presses.stop,
     onEnd: presses.end,
   };
 }
