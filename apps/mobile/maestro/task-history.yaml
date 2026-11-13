@@ -10,7 +10,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - scrollUntilVisible:
     element: "Teammate invitations"
     direction: DOWN

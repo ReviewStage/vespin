@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
+import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { test } from "vitest";
 import {
   RECORDER_SOURCE,
-  RECORDING_FAILURE,
   RECORDING_READ_EXIT,
   RECORDING_START_EXIT,
   RECORDING_START_OUTPUT,

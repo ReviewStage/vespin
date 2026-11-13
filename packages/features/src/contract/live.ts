@@ -63,7 +63,7 @@ import {
 import { INSTALLED_SKILLS_READ } from "../installed-skill-live.js";
 import { INTEGRATION_STATUSES_READ } from "../integration-live.js";
 import { liveProcedure } from "../live-read.js";
-import { MAC_COMMANDS_READ } from "../mac-command-live.js";
+import { MACHINE_COMMANDS_READ } from "../machine-command-live.js";
 import { WORKSPACE_MEMORIES_READ } from "../memory-live.js";
 import { PULL_REQUEST_CHAPTERS_READ } from "../pull-request-chapters-live.js";
 import { SIDEBAR_READ } from "../sidebar-live.js";
@@ -94,7 +94,7 @@ export const liveContract = {
   [AUTOMATION_WORKSPACE_RUNS_READ.name]: liveProcedure(AUTOMATION_WORKSPACE_RUNS_READ),
   [AUTOMATION_RUNS_READ.name]: liveProcedure(AUTOMATION_RUNS_READ),
   [AGENT_TRANSCRIPT_READ.name]: liveProcedure(AGENT_TRANSCRIPT_READ),
-  [MAC_COMMANDS_READ.name]: liveProcedure(MAC_COMMANDS_READ),
+  [MACHINE_COMMANDS_READ.name]: liveProcedure(MACHINE_COMMANDS_READ),
   [TASK_INBOX_READ.name]: liveProcedure(TASK_INBOX_READ),
   [AGENT_INBOX_READ.name]: liveProcedure(AGENT_INBOX_READ),
   [SIDEBAR_READ.name]: liveProcedure(SIDEBAR_READ),

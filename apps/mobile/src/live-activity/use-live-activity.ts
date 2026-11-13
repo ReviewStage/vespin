@@ -8,7 +8,9 @@
  * is sent through the host once the account signed in holds the phone
  * (`registeredPushDevice`), since the service names the phone by its APNs
  * token, and the latest of each again on every launch, since iOS may hand a
- * new one; an activity ended or dismissed on the phone is told too, with
+ * new one, the native module's kept tokens among them; the phone is kept in
+ * the native module too, so a token iOS hands while the app is woken in the
+ * background goes from Swift before the host is up; an activity ended or dismissed on the phone is told too, with
  * its own token, so the service clears that token alone and push-to-starts
  * a fresh activity next time, and a sign-out ends it on the phone. A Stop pressed on an agent's row reaches the app's native module, which
  * hands it here; the host stops the agent as the agent page's Stop does, and
@@ -21,6 +23,7 @@
  */
 
 import { STOP_FAILED } from "@repo/features/agent-refusal-words";
+import { CLIENT_PLATFORM, clientHeaders } from "@repo/features/client-identity";
 import {
   type LiveActivityContentState,
   liveActivityContentStateSchema,
@@ -28,11 +31,12 @@ import {
 import { ACT_KIND } from "@repo/host/acts";
 import { Schema } from "effect";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useHostActs } from "../host/host-provider.js";
+import { SERVICE_ORIGIN } from "../host/compose-mobile.js";
+import { APP_VERSION, useHostActs } from "../host/host-provider.js";
 import { launchLiveActivity } from "../host/launch-arguments.js";
 import { registeredPushDevice, useFixtureRun, usePushDeviceKey } from "../push-device.js";
 import { useWrite } from "../use-write.js";
-import { liveActivityModule } from "./live-activity-module.js";
+import { type KeptPhone, liveActivityModule } from "./live-activity-module.js";
 
 /** How long ago each of the fixture's agents began its turn, so its timers read as a working afternoon. */
 const FIXTURE_TURN_AGES = { REFRESH: 94_000, ACTIVITIES: 612_000, INVITES: 8_000 } as const;
@@ -132,6 +136,27 @@ export function useLiveActivity(signedIn: boolean): void {
       );
   }, [acts, phone, start]);
   useEffect(() => {
+    if (liveActivityModule === null || phone === undefined || fixture) return undefined;
+    const module = liveActivityModule;
+
+    const kept: KeptPhone = {
+      origin: SERVICE_ORIGIN,
+      deviceToken: phone.token,
+      environment: phone.environment,
+      headers: clientHeaders({ platform: CLIENT_PLATFORM.IOS, version: APP_VERSION }),
+    };
+
+    // Note that the phone is kept once the service holds it, so a token sent from Swift names a phone the service knows, and never after a sign-out already forgot it.
+    let live = true;
+    registeredPushDevice(acts, phone).then(() => {
+      if (live) module.keepPhone(JSON.stringify(kept));
+    });
+
+    return () => {
+      live = false;
+    };
+  }, [acts, phone, fixture]);
+  useEffect(() => {
     if (phone === undefined || activity === undefined) return;
     registeredPushDevice(acts, phone)
       .then(() =>
@@ -199,11 +224,14 @@ export function useLiveActivity(signedIn: boolean): void {
   // Whether an account was signed in at the last render, so a sign-out is told from a launch still reading the account.
   const wasSignedIn = useRef(false);
   useEffect(() => {
-    // Note that a sign-out ends the activity on the phone, so none of the account's agents stay on the Lock Screen with a Stop nothing answers.
-    if (wasSignedIn.current && !signedIn)
+    // Note that a sign-out ends the activity on the phone, so none of the account's agents stay on the Lock Screen with a Stop nothing answers, and forgets the phone, so Swift sends no token for the account signed out of.
+    if (wasSignedIn.current && !signedIn) {
+      liveActivityModule?.keepPhone(null);
       liveActivityModule
         ?.endAll()
         .catch((cause: unknown) => console.error("The Live Activity was not ended.", cause));
+    }
+
     wasSignedIn.current = signedIn;
   }, [signedIn]);
   useEffect(() => {

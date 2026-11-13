@@ -12,7 +12,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - assertVisible: "Following, [0-9]+"
 - assertVisible: "Billing export"
 - waitForAnimationToEnd
@@ -32,7 +35,10 @@ appId: dev.vespin.ios
 - tapOn: "Done"
 - waitForAnimationToEnd
 # The billing export is a teammate's, so the account may unfollow it.
-- tapOn: "Tasks"
+- runFlow:
+    file: subflows/tab.yaml
+    env:
+      TAB: Tasks
 - tapOn: "Billing export"
 - tapOn: "Following"
 - assertVisible: "Unfollow"

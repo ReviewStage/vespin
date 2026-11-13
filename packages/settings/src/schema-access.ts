@@ -3,6 +3,7 @@ import { isRecord, isWireString, type UnparsedWireValue } from "@repo/wire";
 import type { AppSettingId, DescribedSetting } from "@repo/wire/app-settings";
 import { Schema } from "effect";
 import type { ExperimentChoices } from "./experiments.js";
+import { introsSeenUnion } from "./intros.js";
 import { APP_SETTING_SCHEMA } from "./schema.js";
 import type {
   AppSettingReader,
@@ -70,8 +71,10 @@ export const ACCOUNT_PREFERENCE_FIELDS = [
   APP_SETTING_SCHEMA.soundWhen.field,
   APP_SETTING_SCHEMA.completionSound.field,
   APP_SETTING_SCHEMA.askSound.field,
+  APP_SETTING_SCHEMA.voice.field,
   APP_SETTING_SCHEMA.turnNotifications.field,
   APP_SETTING_SCHEMA.onboardingSurvey.field,
+  APP_SETTING_SCHEMA.introsSeen.field,
 ] as const satisfies readonly AppSettingField[];
 
 export type AccountPreferenceField = (typeof ACCOUNT_PREFERENCE_FIELDS)[number];
@@ -93,7 +96,7 @@ const ACCOUNT_PREFERENCE_FIELD_SET: ReadonlySet<string> = new Set(ACCOUNT_PREFER
 
 const SHARED_PREFERENCE_FIELD_SET: ReadonlySet<string> = new Set(SHARED_PREFERENCE_FIELDS);
 
-/** The preferences each riding a part of the snapshot of its own, named as the preference is: where the account's app links open, where its pull requests open, what Enter does in an agent's box while it works, who authors an agent's commits, how a new agent's actions are approved, whether the account finished setup, where it stands in setup, when and which sound plays as an agent finishes, which plays as something needs the account, whether a notification is posted, and what it answered in setup's survey. */
+/** The preferences each riding a part of the snapshot of its own, named as the preference is: where the account's app links open, where its pull requests open, what Enter does in an agent's box while it works, who authors an agent's commits, how a new agent's actions are approved, whether the account finished setup, where it stands in setup, when and which sound plays as an agent finishes, which plays as something needs the account, which voice a call speaks with, whether a notification is posted, what it answered in setup's survey, and which intros it has seen. */
 const OWN_PART_FIELDS = [
   APP_SETTING_SCHEMA.linkOpen.field,
   APP_SETTING_SCHEMA.pullRequestOpen.field,
@@ -105,8 +108,10 @@ const OWN_PART_FIELDS = [
   APP_SETTING_SCHEMA.soundWhen.field,
   APP_SETTING_SCHEMA.completionSound.field,
   APP_SETTING_SCHEMA.askSound.field,
+  APP_SETTING_SCHEMA.voice.field,
   APP_SETTING_SCHEMA.turnNotifications.field,
   APP_SETTING_SCHEMA.onboardingSurvey.field,
+  APP_SETTING_SCHEMA.introsSeen.field,
 ] as const satisfies readonly AccountPreferenceField[];
 
 type OwnPartField = (typeof OWN_PART_FIELDS)[number];
@@ -216,6 +221,17 @@ function sharedOf(preferences: AccountPreferences): AccountPreferences {
   return shared;
 }
 
+/** `preferences` holding `introsSeen` as the intros seen, or none where it names none. */
+function withIntrosSeen(
+  preferences: AccountPreferences,
+  introsSeen: string | undefined,
+): AccountPreferences {
+  const rest = { ...preferences };
+  delete rest.introsSeen;
+
+  return introsSeen === undefined ? rest : { ...rest, introsSeen };
+}
+
 /** An account's preferences split into the parts of the snapshot that carry them. */
 export function accountPreferencesParts(preferences: AccountPreferences): AccountPreferencesParts {
   // SAFETY: `ownChoices` leaves out every own part the record holds no choice for.
@@ -261,8 +277,9 @@ export function snapshotAccountPreferences(
   local: AccountPreferences,
 ): AccountPreferences {
   const shared = sharedWritten ? sharedOf(remote) : sharedOf(local);
+  const merged = { ...shared, ...ownChoices(local), ...ownChoices(remote) };
 
-  return { ...shared, ...ownChoices(local), ...ownChoices(remote) };
+  return withIntrosSeen(merged, introsSeenUnion(local.introsSeen, remote.introsSeen));
 }
 
 /**
@@ -285,7 +302,10 @@ export function accountPreferencesToWrite(
   }
 
   // SAFETY: each value is the device's own choice or the preference's default.
-  return written as AccountPreferences;
+  const chosen = written as AccountPreferences;
+
+  // Note that a dismissed intro is never taken back, so the device writes what it last synced with its own.
+  return withIntrosSeen(chosen, introsSeenUnion(local.introsSeen, baseline?.introsSeen));
 }
 
 /**

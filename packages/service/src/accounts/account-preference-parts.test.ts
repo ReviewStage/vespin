@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import {
   readAccountAccess,
+  readAccountCreatedAt,
   readAccountPreferences,
   writeAccountPreferences,
 } from "@repo/database/models/account-store";
@@ -13,7 +14,8 @@ import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LINK_OPEN } from "@repo/features/link-open";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
-import { EXPERIMENT, SOUND_WHEN } from "@repo/settings";
+import { LIVE_VOICE } from "@repo/features/voices";
+import { EXPERIMENT, INTROS_SHIPPED_AT, SOUND_WHEN } from "@repo/settings";
 import {
   HTTP_METHOD,
   isRecord,
@@ -23,6 +25,7 @@ import {
 } from "@repo/wire";
 import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { noNetwork } from "@repo/wire/testing";
+import { eq } from "drizzle-orm";
 import { Clock, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { accountFastOffer } from "../agents/coder-host/agent-runtime-choice.js";
@@ -117,6 +120,7 @@ const openAccounts = Effect.gen(function* () {
         Option.fromNullishOr(bearers.get(incoming.headers.get("authorization") ?? "")),
       ),
     readPreferences: readAccountPreferences,
+    readCreatedAt: readAccountCreatedAt,
     readAccess: readAccountAccess,
     accountFastOffer,
     writePreferences: writeAccountPreferences,
@@ -278,20 +282,24 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
       assert.equal(partOf(yield* ask(request(owner)), "soundWhen"), undefined);
       assert.equal(partOf(yield* ask(request(owner)), "completionSound"), undefined);
       assert.equal(partOf(yield* ask(request(owner)), "askSound"), undefined);
+      assert.equal(partOf(yield* ask(request(owner)), "voice"), undefined);
       assert.equal(partOf(yield* ask(request(owner)), "turnNotifications"), undefined);
 
       yield* ask(request(owner, { soundWhen: SOUND_WHEN.BACKGROUND }));
       yield* ask(request(owner, { completionSound: COMPLETION_SOUND.QUACK }));
       yield* ask(request(owner, { askSound: COMPLETION_SOUND.QUESTION }));
+      yield* ask(request(owner, { voice: LIVE_VOICE.CEDAR }));
       const chosen = yield* ask(request(owner, { turnNotifications: true }));
       assert.equal(partOf(chosen, "soundWhen"), SOUND_WHEN.BACKGROUND);
       assert.equal(partOf(chosen, "completionSound"), COMPLETION_SOUND.QUACK);
       assert.equal(partOf(chosen, "askSound"), COMPLETION_SOUND.QUESTION);
+      assert.equal(partOf(chosen, "voice"), LIVE_VOICE.CEDAR);
       assert.equal(partOf(chosen, "turnNotifications"), true);
       assert.equal(partOf(chosen, "updatedAt"), undefined);
       assert.equal(partOf(yield* ask(request(other)), "soundWhen"), undefined);
       assert.equal(partOf(yield* ask(request(other)), "completionSound"), undefined);
       assert.equal(partOf(yield* ask(request(other)), "askSound"), undefined);
+      assert.equal(partOf(yield* ask(request(other)), "voice"), undefined);
       assert.equal(partOf(yield* ask(request(other)), "turnNotifications"), undefined);
     }),
   );
@@ -304,6 +312,7 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
           soundWhen: SOUND_WHEN.ALWAYS,
           completionSound: COMPLETION_SOUND.BELL,
           askSound: COMPLETION_SOUND.QUESTION,
+          voice: LIVE_VOICE.CEDAR,
           turnNotifications: true,
         }),
       );
@@ -312,6 +321,7 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
         { soundWhen: "sometimes" },
         { completionSound: "kazoo" },
         { askSound: "kazoo" },
+        { voice: "kazoo" },
         { turnNotifications: "yes" },
       ]) {
         assert.deepEqual(yield* ask(request(owner, refused)), {
@@ -324,6 +334,7 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
       assert.equal(partOf(kept, "soundWhen"), SOUND_WHEN.ALWAYS);
       assert.equal(partOf(kept, "completionSound"), COMPLETION_SOUND.BELL);
       assert.equal(partOf(kept, "askSound"), COMPLETION_SOUND.QUESTION);
+      assert.equal(partOf(kept, "voice"), LIVE_VOICE.CEDAR);
       assert.equal(partOf(kept, "turnNotifications"), true);
     }),
   );
@@ -484,5 +495,35 @@ it.layer(getTestDB())("the preferences snapshot's agent part", (it) => {
         effort: "high",
       });
     }),
+  );
+});
+
+it.layer(getTestDB())("the preferences snapshot's intros seen", (it) => {
+  it.effect(
+    "an account made before the intros shipped reads the launch's as seen beside what it dismissed, and one made after reads only what it dismissed",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, ask } = yield* openAccounts;
+        const db = yield* Database;
+        const before = new Date(INTROS_SHIPPED_AT.getTime() - 1);
+        const after = new Date(INTROS_SHIPPED_AT.getTime() + 1);
+        yield* db.update(user).set({ createdAt: before }).where(eq(user.id, owner));
+        yield* db.update(user).set({ createdAt: after }).where(eq(user.id, other));
+
+        assert.equal(
+          partOf(yield* ask(request(owner)), "introsSeen"),
+          '["automations","browser","inbox","task_overview"]',
+        );
+        assert.equal(partOf(yield* ask(request(other)), "introsSeen"), undefined);
+
+        // Note that a later intro dismissed by the older account still leaves the launch's seen.
+        const dismissed = yield* ask(request(owner, { introsSeen: '["a_later_page"]' }));
+        assert.equal(
+          partOf(dismissed, "introsSeen"),
+          '["a_later_page","automations","browser","inbox","task_overview"]',
+        );
+        const newer = yield* ask(request(other, { introsSeen: '["inbox"]' }));
+        assert.equal(partOf(newer, "introsSeen"), '["inbox"]');
+      }),
   );
 });

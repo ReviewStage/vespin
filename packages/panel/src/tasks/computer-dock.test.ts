@@ -35,7 +35,12 @@ function read(callId: string, app: string, window: WireRecord): WireRecord {
     { action: "get_app_state", app },
     {
       status: "ran",
-      app: { name: app, refused: false, icon: { picture: ICON } },
+      app: {
+        name: app,
+        bundleId: `com.example.${app.toLowerCase()}`,
+        refused: false,
+        icon: { picture: ICON },
+      },
       elements: "[0] AXWindow",
       kept: { picture: window },
     },
@@ -60,7 +65,7 @@ function asked(id: string): AgentTranscriptMessage {
   return { id, role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "Try the invite flow" }] };
 }
 
-test("every app used this turn stands once, the one used last first, each with its newest window, an earlier turn's left out", () => {
+test("every app used this turn stands once, the one used last first, each with its bundle id and newest window, an earlier turn's left out", () => {
   const messages = [
     asked("ask-1"),
     turn("turn-1", [read("r0", "Notes", OTHER_WINDOW)]),
@@ -71,8 +76,8 @@ test("every app used this turn stands once, the one used last first, each with i
 
   assert.deepEqual(appsInUse(messages, true), {
     apps: [
-      { app: "Simulator", icon: ICON.id, window: WINDOW },
-      { app: "Xcode", icon: ICON.id, window: OTHER_WINDOW },
+      { app: "Simulator", bundleId: "com.example.simulator", icon: ICON.id, window: WINDOW },
+      { app: "Xcode", bundleId: "com.example.xcode", icon: ICON.id, window: OTHER_WINDOW },
     ],
     using: true,
   });

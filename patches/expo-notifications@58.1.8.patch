@@ -1,0 +1,31 @@
+diff --git a/ios/ExpoNotifications/Permissions/PermissionsModule.swift b/ios/ExpoNotifications/Permissions/PermissionsModule.swift
+index c98a625935915304adf44d7eee01de96dadcff2c..180c5f495d11654e4bc5b84914b0983ea8ad5a83 100644
+--- a/ios/ExpoNotifications/Permissions/PermissionsModule.swift
++++ b/ios/ExpoNotifications/Permissions/PermissionsModule.swift
+@@ -6,6 +6,11 @@ import UIKit
+ public class PermissionsModule: Module {
+   var permissionsManager: (any EXPermissionsInterface)?
+   let requester = ExpoNotificationsPermissionsRequester()
++  // The permission calls run on a serial queue of their own, because `getPermissionsAsync`
++  // blocks its thread until usernotificationsd answers (`getPermissions()` waits on a
++  // semaphore), and on the shared AsyncFunction queue that wait holds every other module's
++  // async calls, which a cold boot that never answers holds for good.
++  private let permissionsQueue = DispatchQueue(label: "expo.modules.notifications.permissions")
+ 
+   public func definition() -> ModuleDefinition {
+     Name("ExpoNotificationPermissionsModule")
+@@ -25,6 +30,7 @@ public class PermissionsModule: Module {
+           reject: promise.legacyRejecter
+         )
+     }
++    .runOnQueue(permissionsQueue)
+ 
+     AsyncFunction("requestPermissionsAsync") { (requestedPermissions: NotificationPermissionRecord, promise: Promise) in
+       let defaultAuthorizationOptions: UNAuthorizationOptions = [.alert, .badge, .sound]
+@@ -46,5 +52,6 @@ public class PermissionsModule: Module {
+       }
+       requester.requestAuthorizationOptions(options, resolver: resolver, rejecter: promise.legacyRejecter)
+     }
++    .runOnQueue(permissionsQueue)
+   }
+ }

@@ -1,16 +1,18 @@
 /**
- * settled-turns.ts -- what hears of each coding agent turn the store writer settles, wherever it was settled: the deployment's count of it, the report to the agent's starter, the turn on Slack, an automation run's result or a reply in its agent's thread, the push of a failed one to its member's phone, their Live Activity, the archive of a finished automation run, and the agent's queue handed on.
+ * settled-turns.ts -- what hears of each coding agent turn the store writer settles, wherever it was settled: the deployment's count of it, the report to the agent's starter, the turn on Slack, a GitHub mention's first turn on GitHub, an automation run's result or a reply in its agent's thread, the push of a failed one to its member's phone, their Live Activity, the archive of a finished automation run, and the agent's queue handed on.
  *
  * The writer tells its `SettledTurnListener` once the settle's transaction
  * is done (`@repo/database/models/writer`), whichever path settled the turn:
  * the relay's or a runner's own end, a Stop, a lost session's, or the
  * sweep's abandon. This is the one listener the deployment provides
- * (`../../runtime.ts`), and it does seven things with each turn: counts it
+ * (`../../runtime.ts`), and it does eight things with each turn: counts it
  * (`../../events/server-events.ts`), hands its final message to the agent
  * that started it, where one did (`starter-report.ts`), and posts it on
  * Slack, as a DM of an automation run's result to its owner where the run's
  * automation asks for it, or else in the agent's current Slack thread,
- * where one speaks for it (`../../slack/slack-agent-starts.ts`), pushes a
+ * where one speaks for it (`../../slack/slack-agent-starts.ts`), posts the
+ * first of an agent a GitHub comment started back on that comment's issue or
+ * pull request (`../../github/github-mentions.ts`), pushes a
  * failed one to the phones of the member who started the agent
  * (`../../push/inbox-pushes.ts`), refreshes that member's Live Activity,
  * which ends once none of their agents runs (`../../push/live-activities.ts`), and archives the automation run the agent belongs to where its last agent
@@ -19,7 +21,7 @@
  * queue goes on however its turn ended. Each runs
  * once the request has answered, where the runtime runs work past the
  * answer, since none is the settle's to wait on; and the report, the
- * Slack message, the push, and the archive run on the pool rather than on a
+ * Slack message, the GitHub comment, the push, and the archive run on the pool rather than on a
  * transaction the settle may have run inside, so their sends hold no
  * transaction open over a harness or Slack. Note that the work may start
  * before such a transaction commits, so
@@ -39,6 +41,7 @@ import { reconsiderRunArchiveAfterTurn } from "../../automations/run-archive.js"
 import type { HostedEnvironment } from "../../environment.js";
 import { turnEndCounted } from "../../events/server-events.js";
 import type { GitHubApp } from "../../github/github-app.js";
+import { postTurnToGitHub } from "../../github/github-mentions.js";
 import { afterResponse } from "../../http/after-response.js";
 import { ApnsSender } from "../../push/apns.js";
 import { pushFailedTurn } from "../../push/inbox-pushes.js";
@@ -95,6 +98,12 @@ export const settledTurnListener: Layer.Layer<
         postTurnToSlack(turn).pipe(Effect.provideContext(reach), outsideTransaction),
       );
 
+    const postedOnGitHub = (turn: SettledAgentTurn) =>
+      afterResponse(
+        "an agent's turn on GitHub",
+        postTurnToGitHub(turn).pipe(Effect.provideContext(reach), outsideTransaction),
+      );
+
     const pushed = (turn: SettledAgentTurn) =>
       afterResponse(
         "a failed turn's push",
@@ -140,6 +149,7 @@ export const settledTurnListener: Layer.Layer<
             turnEndCounted(turn),
             reported(turn),
             posted(turn),
+            postedOnGitHub(turn),
             pushed(turn),
             refreshed(turn),
             archived(turn),

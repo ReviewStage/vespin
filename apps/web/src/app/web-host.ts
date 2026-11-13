@@ -541,7 +541,7 @@ const composedWeb = (
         // its place as a link handed the tab does, under the workspace the tab stands in; the bridge
         // it is said through is made below, before any notification can be clicked.
         presenter: {
-          openMacCommandAsk: () => window.focus(),
+          openMachineCommandAsk: () => window.focus(),
           openPlace: (place) => {
             window.focus();
             made.events.onShowLink({ workspace: "", place });

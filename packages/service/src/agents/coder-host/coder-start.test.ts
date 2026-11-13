@@ -2,16 +2,18 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { agentBootOf } from "@repo/database/models/agent-boot-store";
 import { agentQueueNow } from "@repo/database/models/agent-queue-store";
 import { readAgent, readAgentByKey } from "@repo/database/models/agent-store";
-import { heardFromAnotherAccount } from "@repo/database/models/mac-command-store";
+import { heardFromAnotherAccount } from "@repo/database/models/machine-command-store";
 import { createTask, readTask } from "@repo/database/models/task-store";
+import { recordWorkspaceDriveRepositories } from "@repo/database/models/workspace-drive-repositories";
 import { storeWriter } from "@repo/database/models/writer";
 import { messages } from "@repo/database/schemas/storage";
 import { task } from "@repo/database/schemas/task";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
-import { BOOT_FAILURE, type BootFailure } from "@repo/features/agent-boot";
+import { BOOT_FAILURE, BOOT_PHASE, type BootFailure } from "@repo/features/agent-boot";
 import { AGENT_KIND } from "@repo/features/agent-wire";
 import { AUTOMATION_FIRING, type AutomationFiring } from "@repo/features/automation-wire";
 import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -44,6 +46,8 @@ import {
   type SessionFailed,
   type SessionMessage,
 } from "../sessions/agent-sessions.js";
+import { WorkspaceDriveFills } from "../workspace-drive.js";
+import { WorkspaceDriveBuilds } from "../workspace-drive-builds.js";
 import { type StartAsk, startAgent } from "./start.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
 
@@ -60,7 +64,9 @@ const SUITE = Layer.merge(getTestDB(), memorySandbox().layer);
  * prompt, and a retry under its key is that agent and opens nothing again;
  * a member who did not make the task starts one as well, an account outside it starts nothing, and a
  * repository the workspace's installation does not reach is refused before
- * the harness is asked, and a Start whose session never opened leaves no agent. An agent started on a task moves it into progress from the
+ * the harness is asked, and a Start whose session never opened leaves no agent. A Start
+ * whose repository its workspace's drive does not hold yet waits for the
+ * drive's build, its machine not opened. An agent started on a task moves it into progress from the
  * backlog or to do, and on a task stored in pilot mode it is a coder. The
  * agent's sessions are a fake, GitHub a script,
  * the catalog fixed, and the store PGlite. Synthetic accounts and words
@@ -151,6 +157,52 @@ const promptAsk = (owner: string, workspaceId: string, repository = RELAY_REPOSI
       choice: undefined,
     }),
   );
+
+/**
+ * A Start in a function that fills drives, its workspace's drive holding
+ * its repository or not: the boot's phase, the workspaces whose build it
+ * published, and how many sessions its machine opened once up.
+ */
+const startedOnDrive = (holdsRepository: boolean) =>
+  Effect.gen(function* () {
+    const { owner, workspaceId } = yield* openConnectedWorkspace;
+    const { opened, agentSessions } = fakeAgentSessions();
+    const after = keptAfterResponse();
+    const published: string[] = [];
+
+    if (holdsRepository) {
+      yield* recordWorkspaceDriveRepositories(workspaceId, [RELAY_REPOSITORY], new Date(0));
+    }
+
+    const { agent } = yield* startAgent(
+      agentSessions,
+      owner,
+      yield* promptAsk(owner, workspaceId),
+    ).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          services,
+          after.layer,
+          Layer.succeed(WorkspaceDriveFills, {
+            run: () => Promise.reject(new Error("no fill runs in a Start")),
+            image: Effect.succeed("agent-image:fixture"),
+          }),
+        ),
+      ),
+      Effect.provideService(WorkspaceDriveBuilds, {
+        publish: (workspace) => Effect.sync(() => void published.push(workspace)),
+      }),
+    );
+
+    yield* after.run;
+
+    return {
+      workspaceId,
+      phase: Option.getOrUndefined(yield* agentBootOf(agent.id))?.phase,
+      published,
+      sentOnceUp: opened.length,
+    };
+  });
 
 /**
  * The agent's lines once its first turn took the first message its Start
@@ -316,6 +368,31 @@ it.layer(SUITE)("an agent started on a prompt", (it) => {
           sentOnceUp: 0,
           queuedOnceUp: 1,
         });
+      }),
+  );
+
+  it.effect(
+    "a Start whose repository its workspace's drive does not hold waits building, its machine not opened and its workspace's build published",
+    () =>
+      Effect.gen(function* () {
+        const started = yield* startedOnDrive(false);
+
+        assert.deepEqual(started, {
+          workspaceId: started.workspaceId,
+          phase: BOOT_PHASE.BUILDING,
+          published: [started.workspaceId],
+          sentOnceUp: 0,
+        });
+      }),
+  );
+
+  it.effect(
+    "a Start whose repository its workspace's drive holds opens its machine at once and publishes no build",
+    () =>
+      Effect.gen(function* () {
+        const started = yield* startedOnDrive(true);
+
+        assert.deepEqual([started.published, started.sentOnceUp], [[], 1]);
       }),
   );
 

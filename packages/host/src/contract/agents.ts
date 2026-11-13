@@ -66,6 +66,7 @@ import {
   chaptersProviderWriteParamsSchema,
   hostDoneAnswerViewSchema,
   hostIdParamsSchema,
+  machineAllowedAppsAnswerViewSchema,
   pullRequestPartParamsSchema,
   replyButtonAnswerViewSchema,
   replyButtonParamsSchema,
@@ -155,6 +156,14 @@ export const AGENT_ACTS = declaredActs({
     refusal: "Could not change this Mac on this system.",
     panelOnly: true,
     door: ACT.LOCAL_WRITE,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  HOSTS_ALLOWED_APPS: hostAct({
+    input: EffectSchema.Struct({}),
+    output: machineAllowedAppsAnswerViewSchema,
+    refusal: "Could not read the apps your machines allow on this system.",
+    panelOnly: true,
+    door: ACT.READ,
     unanswered: AGENT_UNANSWERED,
   }),
   HOSTS_PAIRING_READ: hostAct({

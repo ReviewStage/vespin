@@ -35,6 +35,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { readAlike } from "@repo/features/turn-rows";
 import { CHOOSE_AN_ITEM_WORDS, countWords, selectedWords, TERM } from "@repo/features/words";
+import { INTRO } from "@repo/settings";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   CHIP_LOOK,
@@ -71,6 +72,7 @@ import {
   PaneBar,
   RESIZE_EDGE_SIDE,
   ResizeEdge,
+  RevealArea,
   RowHint,
   RowHintOptions,
   reachedKey,
@@ -159,6 +161,7 @@ import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { PEOPLE_FILTER, PEOPLE_FILTER_WORDS, peopleFilterActions } from "../member-rows.js";
+import { PageIntro } from "../page-intro.js";
 import { useShortcutTarget } from "../shortcut-target.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { useSteadyDoor } from "../steady-door.js";
@@ -1831,6 +1834,8 @@ export function InboxList({
       data-empty={String(listedItems(view).length === 0)}
       {...motionRows()}
     >
+      {/* Note that the Inbox's intro stands on the Inbox itself, not on a task's own Inbox tab. */}
+      {head.tab === true ? null : <PageIntro intro={INTRO.INBOX} />}
       <InboxRuns view={view} place={rowsPlace} row={row} onFold={head.view?.onFold} />
       {note}
     </div>
@@ -1873,18 +1878,20 @@ export function InboxList({
               }
         }
       />
-      <ListMotion root={bodyRef} change={laidOut} reading={reading}>
-        <SelectionRegion
-          id={regionId}
-          selection={{ selected: picked, onChange: setPicked }}
-          order={[drawn.map(({ item }) => item.id)]}
-          bringIn={rows.bringIn}
-        >
-          <ScrollArea ref={scroller} fade={SCROLL_FADE.START}>
-            {body}
-          </ScrollArea>
-        </SelectionRegion>
-      </ListMotion>
+      <RevealArea root={bodyRef}>
+        <ListMotion root={bodyRef} change={laidOut} reading={reading}>
+          <SelectionRegion
+            id={regionId}
+            selection={{ selected: picked, onChange: setPicked }}
+            order={[drawn.map(({ item }) => item.id)]}
+            bringIn={rows.bringIn}
+          >
+            <ScrollArea ref={scroller} fade={SCROLL_FADE.START}>
+              {body}
+            </ScrollArea>
+          </SelectionRegion>
+        </ListMotion>
+      </RevealArea>
       {/* Note that a phone's bar stands at the list's foot rather than over its rows, so choosing a row moves none under the finger. */}
       {footed && picks.length > 0 ? (
         <Stack inset={INSET.COLUMN}>

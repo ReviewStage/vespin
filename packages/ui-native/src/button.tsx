@@ -1,6 +1,15 @@
 // button.tsx -- the app's buttons, chips, and pills: the system's own buttons, a filled one in the brand's accent and the rest in the ink, and the small capsules a person picks among or reads a task's fields on.
 
-import { HStack, Image, Picker, Button as SwiftUIButton, Text, VStack } from "@expo/ui/swift-ui";
+import {
+  HStack,
+  Image,
+  Menu,
+  Picker,
+  Button as SwiftUIButton,
+  Text,
+  Toggle,
+  VStack,
+} from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
@@ -28,7 +37,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactNode } from "react";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
+import type { MenuChoice } from "./list-row.js";
 import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -197,7 +206,6 @@ export function Chip({ label, symbol, count, selected = false, hint, onPress }: 
         controlSize("small"),
         tint(colors.TEXT),
         ...(selected ? [foregroundStyle(colors.GROUND)] : []),
-        hoverEffect(HOVER_EFFECT.LIFT),
         ...(selected ? [accessibilityAddTraits(["isSelected"])] : []),
         ...(hint === undefined ? [] : [accessibilityHint(hint)]),
       ]}
@@ -289,6 +297,15 @@ type FieldChipProps = {
   readonly symbol?: Glyph | undefined;
   /** A mark leading the chip in its tone where none of the above does, such as a pull request's state. */
   readonly mark?: { readonly glyph: Glyph; readonly tone: StatusTone } | undefined;
+  /** What a press offers, the field's other values, where the reader may change it; a chip with none takes no press. */
+  readonly menu?: FieldMenu | undefined;
+};
+
+/** A field's values as its chip's menu offers them: the field's name, which VoiceOver hears before its value, and each value, the one it holds checked. */
+export type FieldMenu = {
+  /** The field's name, such as Status, heard before the chip's words. */
+  readonly label: string;
+  readonly choices: readonly MenuChoice[];
 };
 
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
@@ -314,28 +331,68 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   return null;
 }
 
-/** A task's field read as a small capsule, such as its status, priority, or assignee: on the surface inside a hairline, never pressed, and heard as its words once, its mark saying the same. */
+/**
+ * A task's field read as a small capsule, such as its status, priority, or
+ * assignee: on the surface inside a hairline, and heard as its words once,
+ * its mark saying the same. Where it carries a menu, a press opens the
+ * system's pull-down menu of the field's values over it, the one it holds
+ * checked, as Reminders' and Linear's fields open theirs, and VoiceOver
+ * hears the field's name and its value as one label; with none it takes no
+ * press.
+ */
 export function FieldChip(props: FieldChipProps) {
   const colors = useColors();
+  const { menu } = props;
 
-  return (
+  const capsule = (
     <HStack
       spacing={SPACE.TIGHT + 2}
       modifiers={[
         ...capsuleModifiers(colors, false),
-        accessibilityElement("ignore"),
-        accessibilityLabel(props.label),
+        ...(menu === undefined
+          ? [accessibilityElement("ignore"), accessibilityLabel(props.label)]
+          : []),
       ]}
     >
       {fieldMark(props, colors)}
       <CapsuleWords label={props.label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
     </HStack>
   );
+
+  if (menu === undefined) return capsule;
+
+  return (
+    <Menu
+      label={capsule}
+      modifiers={[
+        // Note that a borderless menu takes only its own press, since a list row holding the system's buttons hands any press on it to all of them.
+        buttonStyle("borderless"),
+        // Note that the field's name and its value are one label, "Status, Todo", because Maestro and Voice Control match a label and never a value.
+        accessibilityLabel(`${menu.label}, ${props.label}`),
+      ]}
+    >
+      {menu.choices.map((choice, at) => (
+        <Toggle
+          // Note that a choice is keyed by its place, since two members may share a name.
+          key={at}
+          {...actContent(choice.label, choice.symbol)}
+          isOn={choice.on}
+          onIsOnChange={() => choice.onPress()}
+        />
+      ))}
+    </Menu>
+  );
 }
 
-/** A task's status as its chip: the ring and the status's name. */
-export function StatusChip({ status }: { readonly status: TaskStatus }) {
-  return <FieldChip label={TASK_STATUS_WORDS[status]} status={status} />;
+/** A task's status as its chip: the ring and the status's name, opening its menu where it carries one. */
+export function StatusChip({
+  status,
+  menu,
+}: {
+  readonly status: TaskStatus;
+  readonly menu?: FieldMenu | undefined;
+}) {
+  return <FieldChip label={TASK_STATUS_WORDS[status]} status={status} menu={menu} />;
 }
 
 /** How far each face of a face pile tucks under the one after it, in points. */
@@ -370,7 +427,6 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
       onPress={onPress}
       modifiers={[
         buttonStyle("borderless"),
-        hoverEffect(HOVER_EFFECT.LIFT),
         accessibilityLabel(label),
         accessibilityValue(heard),
         accessibilityHint(hint),

@@ -4,10 +4,12 @@ import { AGENT_TOOL } from "@repo/features/agent-tools";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import type { KeptPicture } from "@repo/features/conversation-picture-wire";
 import {
+  computerAppBundleId,
   computerAppIcon,
   computerAppName,
   computerCallRefused,
 } from "@repo/features/tool-call-model";
+import { ACT_KIND } from "@repo/host/acts";
 import {
   APP_ICON_SIZE,
   AppIcon,
@@ -23,11 +25,15 @@ import {
   StopIcon,
   WorkingMark,
 } from "@repo/ui";
+import { ArrowUpRightIcon } from "@repo/ui/icons";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { MESSAGE_ROLE } from "@repo/wire";
+import { useMutation } from "@tanstack/react-query";
 import { type ReactNode, useMemo, useState } from "react";
+import { pressMutation } from "../act-mutations.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { KeptAppIcon, useKeptPicture, useKeptPictureViewer } from "./agent-pictures.js";
+import { useOnThatMac } from "./computer-permission-note.js";
 
 /**
  * computer-dock.tsx -- the apps an agent is using on the developer's Mac, as a dock's row over its message box with their windows floating above it, while it works in them.
@@ -36,8 +42,10 @@ import { KeptAppIcon, useKeptPicture, useKeptPictureViewer } from "./agent-pictu
  * docks over the box as the pull request's and the Inbox's do: the app it
  * used last by its icon, "Using" and its name while its newest call is still
  * on that app, the working mark, how many other apps it used, a press that
- * hides or shows their windows, and Stop, which stops the turn as the box's
- * own Stop does. Over the row's end float the apps' windows
+ * hides or shows their windows, Show and the app's name on the Mac the
+ * agent uses, which brings that app's own window to the front so the
+ * developer can take over, and Stop, which stops the turn as the box's own
+ * Stop does. Over the row's end float the apps' windows
  * (`AppWindowStack`): the app used last on top at its own shape, every other
  * app behind it as a card's edge; a press on the window opens the viewer,
  * which walks every app's newest window. While they float the transcript's
@@ -52,6 +60,7 @@ const WORDS = {
   LABEL: "Apps in use",
   USING: "Using",
   SHOW: "Show the apps' windows",
+  SHOW_APP: "Show",
   HIDE: "Hide the apps' windows",
   STOP: "Stop",
   STOPPING: "Stopping",
@@ -62,9 +71,10 @@ function othersWords(count: number): string {
   return count === 1 ? "+1 app" : `+${String(count)} apps`;
 }
 
-/** An app the agent used this turn: its name, its icon as a call kept it, and the newest window it read of it. */
+/** An app the agent used this turn: its name, its bundle id and icon as a call answered them, and the newest window it read of it. */
 export interface UsedApp {
   readonly app: string;
+  readonly bundleId: string | undefined;
   readonly icon: string | undefined;
   readonly window: KeptPicture | undefined;
 }
@@ -133,6 +143,28 @@ function usedApp(call: ReadCall): string | undefined {
 }
 
 /**
+ * The name each app came to, by the spelling a call asked for it in and by
+ * the name the Mac answered, each folded to lower case, read off the calls
+ * the Mac answered, so a call still running, which names its app only as
+ * the agent spelled it, counts as the app it will turn out to be.
+ */
+function answeredNames(calls: readonly ReadCall[]): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+
+  for (const call of calls) {
+    const answered = computerAppName(undefined, call.output);
+
+    if (call.tool !== AGENT_TOOL.COMPUTER || answered === undefined) continue;
+    names.set(answered.toLowerCase(), answered);
+    const asked = computerAppName(call.input, undefined);
+
+    if (asked !== undefined) names.set(asked.toLowerCase(), answered);
+  }
+
+  return names;
+}
+
+/**
  * The apps the agent used this turn while it works, each once, the one it
  * used last first, each with its icon and newest window from the newest of
  * its calls that kept them; nothing while it works in none, or once it is
@@ -145,17 +177,28 @@ export function appsInUse(
   working: boolean,
 ): AppsInUse | undefined {
   if (!working) return undefined;
-  const found = new Map<string, UsedApp>();
-  let newest: ReadCall | undefined;
+  const calls = [...turnCallsNewestFirst(messages)];
+  const names = answeredNames(calls);
 
-  for (const call of turnCallsNewestFirst(messages)) {
-    newest ??= call;
+  const appOf = (call: ReadCall): string | undefined => {
     const app = usedApp(call);
+
+    return app === undefined || call.output !== undefined
+      ? app
+      : (names.get(app.toLowerCase()) ?? app);
+  };
+
+  const found = new Map<string, UsedApp>();
+  const newest = calls[0];
+
+  for (const call of calls) {
+    const app = appOf(call);
 
     if (app === undefined) continue;
     const held = found.get(app);
     found.set(app, {
       app,
+      bundleId: held?.bundleId ?? computerAppBundleId(call.output),
       icon: held?.icon ?? computerAppIcon(call.output),
       window: held?.window ?? keptWindow(call),
     });
@@ -165,7 +208,7 @@ export function appsInUse(
   const top = apps[0];
 
   if (top === undefined || newest === undefined) return undefined;
-  const using = usedApp(newest) === top.app;
+  const using = appOf(newest) === top.app;
 
   return { apps, using };
 }
@@ -216,6 +259,8 @@ function AppsDock({
   const window = useKeptPicture(top.window?.id);
   const { open, viewer } = useKeptPictureViewer();
   const stop = useAsyncAction(rejectionWords);
+  const onThatMac = useOnThatMac();
+  const { mutate: showApp } = useMutation(pressMutation(ACT_KIND.MAC_APP_SHOW));
   const [hidden, setHidden] = useState(() => WINDOWS_HIDDEN.has(agentId));
 
   const windows = inUse.apps.flatMap((each) =>
@@ -276,6 +321,15 @@ function AppsDock({
                 label={hidden ? WORDS.SHOW : WORDS.HIDE}
                 onClick={toggle}
               />
+              {onThatMac && top.bundleId !== undefined ? (
+                <IconButton
+                  icon={<ArrowUpRightIcon />}
+                  label={`${WORDS.SHOW_APP} ${top.app}`}
+                  onClick={() => {
+                    if (top.bundleId !== undefined) showApp({ bundleId: top.bundleId });
+                  }}
+                />
+              ) : null}
               {onStop === undefined ? null : (
                 <IconButton
                   icon={<StopIcon />}

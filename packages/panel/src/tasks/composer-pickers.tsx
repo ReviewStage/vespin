@@ -138,6 +138,8 @@ export function useComposerPickers({
             accountsOf: servers.statuses.accountsOf,
             standing: (status) => status === INTEGRATION_STATUS.CONNECTED,
           }),
+    // The apps on this Mac, where the words go to an agent, as its servers are.
+    macApps: servers !== undefined,
     room,
     side,
     onChoose: (mention) => editor.current?.chooseMention(mention),

@@ -969,6 +969,10 @@ class Fold {
         }
 
         return;
+      case NATIVE_MOMENT.GOAL:
+        this.#setTurn(this.#tell(this.turn(), { kind: RUN_EVENT.GOAL, notice: moment.notice }));
+
+        return;
       case NATIVE_MOMENT.COMPACTION_FAILED: {
         this.#context.report(moment.detail);
         const turn = this.state.turn;

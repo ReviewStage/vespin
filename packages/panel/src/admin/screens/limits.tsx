@@ -39,7 +39,7 @@ import { CONVERSATION_PICTURE_BOUNDS } from "@repo/features/conversation-picture
 import { DESCRIPTION_ATTACHMENT_BOUNDS } from "@repo/features/description-attachment-wire";
 import { DICTATION_BOUNDS } from "@repo/features/dictation-wire";
 import { INBOX_BOUNDS } from "@repo/features/inbox-wire";
-import { MAC_COMMAND_BOUNDS } from "@repo/features/mac-command-wire";
+import { MACHINE_COMMAND_BOUNDS } from "@repo/features/machine-command-wire";
 import { MEMORY_BOUNDS } from "@repo/features/memory-wire";
 import { formatBytes, formatCount } from "@repo/features/number-format";
 import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
@@ -240,18 +240,18 @@ const LIMIT_GROUPS: readonly LimitGroup[] = [
       ...SANDBOX_OVERRIDES,
       limit(
         "Command on a Mac, by default",
-        seconds(MAC_COMMAND_BOUNDS.DEFAULT_TIMEOUT_SECONDS),
-        "MAC_COMMAND_BOUNDS.DEFAULT_TIMEOUT_SECONDS",
+        seconds(MACHINE_COMMAND_BOUNDS.DEFAULT_TIMEOUT_SECONDS),
+        "MACHINE_COMMAND_BOUNDS.DEFAULT_TIMEOUT_SECONDS",
       ),
       limit(
         "Command on a Mac, at most",
-        seconds(MAC_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS),
-        "MAC_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS",
+        seconds(MACHINE_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS),
+        "MACHINE_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS",
       ),
       limit(
         "Output kept from a command on a Mac",
-        characters(MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS),
-        "MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS",
+        characters(MACHINE_COMMAND_BOUNDS.MAX_OUTPUT_CHARS),
+        "MACHINE_COMMAND_BOUNDS.MAX_OUTPUT_CHARS",
       ),
       limit(
         "Browser action",

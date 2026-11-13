@@ -1,4 +1,4 @@
-// index.tsx -- Settings' main list, as iOS's own Settings stands: the account at its head pushing to Account, the workspace the app works in pushing to Workspace, with its Cloud environment opening on vespin.dev under it, notifications and when this phone takes them, Agents, Integrations, MCP, Machines, and the workspace's Memory and Skills, and About with Send feedback.
+// index.tsx -- Settings' main list, as iOS's own Settings stands and grouped as the panel's Settings sidebar groups its pages: the account at its head pushing to Account; Workspace, headed by the workspace the app works in pushing to its page, then its Cloud environment opening on vespin.dev and its Memory; Account, with Notifications pushing to its own page, Agents, Machines, Integrations, MCP, and Skills; and About with Send feedback.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
@@ -7,25 +7,30 @@ import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { LINK_ORIGIN, LINK_PAGE } from "@repo/features/link-home";
 import { MCP_CLIENTS_WORDS } from "@repo/features/mcp-clients-words";
 import {
-  PUSH_NOTIFY_CHOICES,
-  PUSH_NOTIFY_FOOTER,
-  pushStandingText,
+  PUSH_NOTIFICATIONS_STATE,
+  PUSH_NOTIFICATIONS_TITLE,
+  pushNotifyLabel,
 } from "@repo/features/push-device-model";
 import { SOCIAL_PROVIDER_LABEL } from "@repo/features/sign-in-provider";
+import { WORKSPACE_ROLE_WORDS } from "@repo/features/workspace-role";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import { CONTACT_MAILTO } from "@repo/host/contract";
-import { SETTINGS_PAGE_TITLE, SETTINGS_VIEW } from "@repo/settings/settings-views";
+import {
+  SETTINGS_PAGE_GROUP,
+  SETTINGS_PAGE_GROUP_HEADING,
+  SETTINGS_PAGE_TITLE,
+  SETTINGS_VIEW,
+} from "@repo/settings/settings-views";
 import {
   AccountRow,
-  ActionRow,
   ListSection,
-  PickRows,
   PUSH_ROW_GOES,
   PushRow,
   Screen,
   SettingsForm,
   useColors,
   ValueRow,
+  WorkspaceRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import Constants from "expo-constants";
@@ -33,14 +38,9 @@ import { Stack, useRouter } from "expo-router";
 import { openBrowserAsync } from "expo-web-browser";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
 import { appStateQuery } from "../../host/app-state-query.js";
-import {
-  NOTIFICATION_STANDING,
-  openNotificationSettings,
-  useNotificationPermission,
-} from "../../notification-permission.js";
+import { NOTIFICATION_STANDING, useNotificationPermission } from "../../notification-permission.js";
 import { openInSafari } from "../../open-link.js";
 import {
-  isPushNotify,
   notificationsAllowed,
   useFixtureRun,
   usePushDeviceKey,
@@ -48,23 +48,12 @@ import {
 } from "../../push-device.js";
 import { SETTINGS_ROUTE } from "../../settings-button.js";
 import { useSurfaceOpen } from "../../surface-open.js";
+import { selectPhotos, switcherWorkspace } from "../../workspace-switcher.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
 /** What the row that writes the team a mail is called, as the panel's Help menu names it. */
 const CONTACT_WORDS = { EMAIL: "Email" } as const;
-
-/** What the row under Notifications that says how the phone's pushes fare is named, so it does not repeat its heading. */
-const NOTIFICATIONS_STATUS = "Status";
-
-/** What Notifications reads once the phone lets the app notify, until the service says how its pushes fare. */
-const NOTIFICATIONS_ON = "On";
-
-/** The step toward allowing them, where one is left: the system's prompt, or iOS's Settings after a refusal. */
-const NOTIFICATION_STEP = {
-  [NOTIFICATION_STANDING.REFUSED]: "Open iOS Settings",
-  [NOTIFICATION_STANDING.UNASKED]: "Turn on notifications",
-} as const;
 
 /** This build's version and build number, as iOS's own About names an app's: "1.4.0 (212)". */
 function buildWords(): string {
@@ -88,11 +77,25 @@ export default function SettingsScreen() {
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
+  const { data: photos } = useQuery({ ...appStateQuery, select: selectPhotos });
   const notifications = useNotificationPermission();
   const device = usePushDeviceKey();
   const push = usePushDeviceStanding(device);
   const fixture = useFixtureRun();
   const allowed = notificationsAllowed(fixture, notifications.standing);
+
+  // Note that Notifications is offered once the phone has a say in it: allowed, refused, or not yet asked.
+  const notificationsShown =
+    allowed ||
+    notifications.standing === NOTIFICATION_STANDING.REFUSED ||
+    notifications.standing === NOTIFICATION_STANDING.UNASKED;
+
+  // What the row reads at its end: when the phone takes them once it may, as the Settings app's rows say an app's choice.
+  const notificationsDetail = !allowed
+    ? PUSH_NOTIFICATIONS_STATE.OFF
+    : push.standing === undefined
+      ? PUSH_NOTIFICATIONS_STATE.ON
+      : pushNotifyLabel(push.standing.notify);
 
   // Cloud environment stays on the web, its scripts and secrets no work for a phone, and opens in Safari under the chosen workspace, where the member is signed in.
   const openCloudEnvironment = () =>
@@ -124,10 +127,10 @@ export default function SettingsScreen() {
             </ListSection>
           ) : null}
           {chosen === undefined ? null : (
-            <ListSection title={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.WORKSPACE]}>
-              <PushRow
-                label={chosen.name}
-                goes={PUSH_ROW_GOES.PAGE}
+            <ListSection title={SETTINGS_PAGE_GROUP_HEADING[SETTINGS_PAGE_GROUP.WORKSPACE]}>
+              <WorkspaceRow
+                workspace={switcherWorkspace(chosen, false, photos)}
+                role={WORKSPACE_ROLE_WORDS[chosen.role]}
                 onPress={() => router.push(SETTINGS_ROUTE.WORKSPACE)}
                 testId="settings-workspace"
               />
@@ -136,48 +139,33 @@ export default function SettingsScreen() {
                 goes={PUSH_ROW_GOES.OUT}
                 onPress={openCloudEnvironment}
               />
-            </ListSection>
-          )}
-          {/* Note that Notifications reads one state: how the phone's pushes fare once it lets the app notify, and only the step toward letting it until then. */}
-          {allowed ? (
-            <ListSection title="Notifications">
-              <ValueRow
-                label={NOTIFICATIONS_STATUS}
-                value={
-                  push.standing === undefined ? NOTIFICATIONS_ON : pushStandingText(push.standing)
-                }
-              />
               <PushRow
-                label="Open iOS notification settings"
-                goes={PUSH_ROW_GOES.OUT}
-                onPress={openNotificationSettings}
-              />
-            </ListSection>
-          ) : notifications.standing === NOTIFICATION_STANDING.REFUSED ||
-            notifications.standing === NOTIFICATION_STANDING.UNASKED ? (
-            <ListSection title="Notifications">
-              <ActionRow
-                label={NOTIFICATION_STEP[notifications.standing]}
-                onPress={notifications.allow}
-              />
-            </ListSection>
-          ) : null}
-          {!allowed || push.standing === undefined ? null : (
-            <ListSection title="Notify me" footer={PUSH_NOTIFY_FOOTER}>
-              <PickRows
-                options={PUSH_NOTIFY_CHOICES}
-                picked={push.standing.notify}
-                onPick={(id) => {
-                  if (isPushNotify(id)) push.choose(id);
-                }}
+                label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY]}
+                goes={PUSH_ROW_GOES.PAGE}
+                onPress={() => router.push(SETTINGS_ROUTE.MEMORY)}
               />
             </ListSection>
           )}
-          <ListSection>
+          {/* Note that the account's pages stand in the panel's order, Notifications in the place of its Preferences page, which holds the desktop's notifications. */}
+          <ListSection title={SETTINGS_PAGE_GROUP_HEADING[SETTINGS_PAGE_GROUP.ACCOUNT]}>
+            {notificationsShown ? (
+              <PushRow
+                label={PUSH_NOTIFICATIONS_TITLE}
+                detail={notificationsDetail}
+                goes={PUSH_ROW_GOES.PAGE}
+                onPress={() => router.push(SETTINGS_ROUTE.NOTIFICATIONS)}
+                testId="settings-notifications"
+              />
+            ) : null}
             <PushRow
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.AGENTS]}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.AGENTS)}
+            />
+            <PushRow
+              label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.HOSTS]}
+              goes={PUSH_ROW_GOES.PAGE}
+              onPress={() => router.push(SETTINGS_ROUTE.MACHINES)}
             />
             <PushRow
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.INTEGRATIONS]}
@@ -189,18 +177,6 @@ export default function SettingsScreen() {
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.MCP)}
             />
-            <PushRow
-              label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.HOSTS]}
-              goes={PUSH_ROW_GOES.PAGE}
-              onPress={() => router.push(SETTINGS_ROUTE.MACHINES)}
-            />
-            {chosen === undefined ? null : (
-              <PushRow
-                label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY]}
-                goes={PUSH_ROW_GOES.PAGE}
-                onPress={() => router.push(SETTINGS_ROUTE.MEMORY)}
-              />
-            )}
             {chosen === undefined ? null : (
               <PushRow
                 label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.SKILLS]}

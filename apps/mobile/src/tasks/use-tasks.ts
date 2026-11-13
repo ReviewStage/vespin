@@ -42,13 +42,16 @@ import {
 import {
   isTaskSettled,
   type Task,
+  type TaskPriority,
   type TaskStatus,
   type TaskSummary,
 } from "@repo/features/task-wire";
 import {
+  ASSIGNEE_FAILED_NOTE,
   DELETE_FAILED_NOTE,
   deleteTaskWords,
   MARK_FAILED_NOTES,
+  PRIORITY_FAILED_NOTE,
   RENAME_FAILED_NOTE,
   repositoryChangeFailureNote,
   type StopAgentsWords,
@@ -234,15 +237,25 @@ function useStatusWrites(tasks: readonly TaskSummary[]): UseStatusWritesResult {
   return { held, setStatus };
 }
 
-/** A task's rename and its delete, as the panel's menu sends them. */
+/** A member a task is assigned to: their account id, and the name the host draws them by until the list carries them. */
+export interface Assignee {
+  readonly userId: string;
+  readonly name: string;
+}
+
+/** A task's rename, its delete, and its priority and assignee, as the panel's menus and chips send them. */
 export interface TaskWrites {
   /** Renames a task, as the panel's Rename does (`TASKS_RENAME`): the host draws the name at once and puts it back where the service refused it. */
   readonly rename: (taskId: string, name: string) => void;
   /** Deletes a task for good, as the panel's Permanently delete does once asked (`TASKS_DELETE`), the host taking its row at once. */
   readonly remove: (taskId: string) => void;
+  /** Sets how much a task matters, as the panel's priority chip does (`TASKS_SET_STANDING`): the host draws it at once and puts it back where the service refused it. */
+  readonly setPriority: (taskId: string, priority: TaskPriority) => void;
+  /** Assigns a task to a member, or to no one at null, as the panel's assignee chip does, drawn at once by their name. */
+  readonly setAssignee: (taskId: string, assignee: Assignee | null) => void;
 }
 
-/** A task's rename and delete, sent on the host's port. */
+/** A task's rename, delete, priority, and assignee, sent on the host's port. */
 export function useTaskWrites(): TaskWrites {
   const acts = useHostActs();
   const write = useWrite();
@@ -263,6 +276,27 @@ export function useTaskWrites(): TaskWrites {
           refused: (landed) => (landed ? undefined : DELETE_FAILED_NOTE),
           unanswered: DELETE_FAILED_NOTE,
           retry: true,
+          went: BUZZ.SUCCESS,
+        });
+      },
+      setPriority: (taskId, priority) => {
+        write(() => acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, priority }), {
+          refused: (landed) => (landed ? undefined : PRIORITY_FAILED_NOTE),
+          retry: true,
+          subject: { kind: WRITE_SUBJECT.TASK_PRIORITY, id: taskId },
+          went: BUZZ.SUCCESS,
+        });
+      },
+      setAssignee: (taskId, assignee) => {
+        const standing =
+          assignee === null
+            ? { assigneeId: null }
+            : { assigneeId: assignee.userId, assigneeName: assignee.name };
+
+        write(() => acts[ACT_KIND.TASKS_SET_STANDING]({ taskId, ...standing }), {
+          refused: (landed) => (landed ? undefined : ASSIGNEE_FAILED_NOTE),
+          retry: true,
+          subject: { kind: WRITE_SUBJECT.TASK_ASSIGNEE, id: taskId },
           went: BUZZ.SUCCESS,
         });
       },
@@ -563,6 +597,8 @@ export interface TaskOverview {
   readonly setStatus: SetStatus;
   readonly agentsWorking: (taskId: string) => boolean;
   readonly rename: TaskWrites["rename"];
+  readonly setPriority: TaskWrites["setPriority"];
+  readonly setAssignee: TaskWrites["setAssignee"];
   /** Its workspace's sections and repositories, and the writes that move it among them. */
   readonly placing: TaskPlacing;
   /** The writes that relate it to another task, change how one stands to it, or take it out from under its parent. */
@@ -610,7 +646,7 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const waiting = useWaiting(workspace?.id);
   const { held: statuses, setStatus } = useStatusWrites(view?.tasks ?? NO_TASKS);
-  const { rename } = useTaskWrites();
+  const { rename, setPriority, setAssignee } = useTaskWrites();
   const listed = useMemo(() => withHeld(view?.tasks ?? NO_TASKS, statuses), [view, statuses]);
 
   const listedTask =
@@ -684,10 +720,25 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       setStatus,
       agentsWorking: agentsWorkingIn(view, listed),
       rename,
+      setPriority,
+      setAssignee,
       placing,
       relations,
     };
-  }, [task, view, waiting, held, taskWorkspace, listed, rename, placing, relations, acts]);
+  }, [
+    task,
+    view,
+    waiting,
+    held,
+    taskWorkspace,
+    listed,
+    rename,
+    setPriority,
+    setAssignee,
+    placing,
+    relations,
+    acts,
+  ]);
 }
 
 /** Whether the host has read the task list once, so a task it does not hold is one that is not there rather than one still on its way. */

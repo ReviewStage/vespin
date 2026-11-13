@@ -10,12 +10,14 @@
 // on this device, never syncs, and lives in a Keychain group only the app
 // and the share extension are entitled to, named by each bundle's
 // Info.plist (`VespinShareKeychainGroup`), never spelled here. This file is
-// built into the app's module and copied into the share extension.
+// built into the app's module and copied into the share extension. The app's
+// Live Activity module reads it too, to send an activity's update token
+// from Swift while the app is woken in the background (`modules/live-activity/`).
 
 import Foundation
 import Security
 
-enum ShareToken {
+public enum ShareToken {
   /// The Info.plist key naming the shared Keychain group, which each target reads its group from.
   private static let groupKey = "VespinShareKeychainGroup"
   private static let service = "dev.vespin.ios.share"
@@ -56,7 +58,7 @@ enum ShareToken {
   }
 
   /// The token the app kept, or none where it kept none, it has expired, or the Keychain refuses this bundle.
-  static func read() -> String? {
+  public static func read() -> String? {
     guard var query = query() else { return nil }
     query[kSecReturnData as String] = true
     query[kSecMatchLimit as String] = kSecMatchLimitOne

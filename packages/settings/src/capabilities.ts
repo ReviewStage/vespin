@@ -14,7 +14,7 @@ export const HOST_CAPABILITY = {
   /** The microphone's permission and the route it is opened on. */
   MICROPHONE: "microphone",
   /** `run_on_mac`, and the This Mac page that turns it on. */
-  MAC_COMMANDS: "macCommands",
+  MACHINE_COMMANDS: "macCommands",
   /** A local agent's Terminal, which opens the Mac's own Terminal in its worktree. */
   MAC_TERMINAL: "macTerminal",
   /** An agent's Terminal tab, and Show terminal and New terminal that open it. */

@@ -1,5 +1,5 @@
 /**
- * use-agent-approvals.ts -- the calls an agent holds for the member's answer, as its page draws and answers them: each held call's row, the oldest waiting for the banner over the composer, and a message's denial of those waiting.
+ * use-agent-approvals.ts -- the calls an agent holds for the member's answer, as its page draws and answers them: each held call's row, how many wait and the oldest drawn one, the banner over the composer for one no row draws, and a message's denial of those waiting.
  *
  * The asks are held as the panel's tab holds them, by the shared model
  * (`@repo/features/agent-approval-model`): each the agent's row carries
@@ -8,7 +8,10 @@
  * with its press busy while it is out, and the row then says how it came
  * out, "Allowed" or "Denied"; one that stops waiting with no answer of this
  * page's says it was denied by a message sent meanwhile, answered elsewhere,
- * or expired. The page offers Allow and Deny, the panel's first two answers.
+ * or expired. The page offers Allow and Deny, the panel's first two answers,
+ * once: on the call's own row, or, for a call no row draws, such as a
+ * subagent's, in the banner over the composer, as the panel draws such a
+ * call as a row of its own.
  */
 
 import {
@@ -38,7 +41,7 @@ type Held = HeldAsk<HeldAnswer, string>;
 /** No asks, held as one value so an agent that holds none reads the same each time. */
 const NO_ASKS: readonly AgentPendingApproval[] = [];
 
-/** The banner over the composer while a call waits: how many wait, what the oldest asks, and its answer's press. */
+/** The banner over the composer while a call no row draws waits: how many wait, what the oldest such asks, and its answer's press. */
 export interface WaitingBanner {
   readonly waiting: string;
   readonly asks: string;
@@ -47,11 +50,22 @@ export interface WaitingBanner {
   readonly onAnswer: (answer: HeldAnswer) => void;
 }
 
+/** How many calls wait on the member, and the oldest whose row the transcript draws, which the composer's denial line scrolls to. */
+export interface Waiting {
+  /** As the panel's working line says it: "Waiting on you · 1 approval". */
+  readonly words: string;
+  /** What the newest call waiting asks, as the agent's CLI put it, which VoiceOver hears with the words, so each call that starts waiting is told as it comes. */
+  readonly asks: string;
+  readonly callId: string | undefined;
+}
+
 /** The agent's held calls as its page draws them. */
 export interface AgentApprovals {
   /** The ask the agent holds the call `callId` for, as its row draws it; none where it holds none. */
   readonly heldCall: (callId: string) => HeldCall | undefined;
-  /** The banner over the composer; none while no call waits. */
+  /** How many calls wait; none while none does. */
+  readonly waiting: Waiting | undefined;
+  /** The banner over the composer for a call no row draws; none while no such call waits. */
   readonly banner: WaitingBanner | undefined;
   /** Says a message went while calls waited, which the service denies them with once it takes it; one not taken takes that back. */
   readonly messageSent: (taken: Promise<boolean>) => void;
@@ -84,12 +98,14 @@ function heldCallOf(ask: Held, answer: (answer: HeldAnswer) => void): HeldCall {
 
 /**
  * The calls the agent holds for an answer, from its row as the task list
- * follows it. Note that the asks are held per agent, from the first render
- * that sees each, so a page moved to another agent starts from none.
+ * follows it, `drawn` naming the calls the transcript draws a row for. Note
+ * that the asks are held per agent, from the first render that sees each,
+ * so a page moved to another agent starts from none.
  */
 export function useAgentApprovals(
   agent: FollowedAgent | undefined,
   agentId: string,
+  drawn: ReadonlySet<string>,
 ): AgentApprovals {
   const acts = useHostActs();
   const write = useWrite();
@@ -183,9 +199,15 @@ export function useAgentApprovals(
   return useMemo(() => {
     const asks = [...held.values()].toSorted((a, b) => a.approval.askedAt - b.approval.askedAt);
     const waiting = asks.filter((ask) => ask.settled === undefined);
-    const oldest = waiting[0];
 
-    // Note that a subagent's call is not among the transcript's rows, so the banner alone answers it.
+    // Note that a subagent's call is not among the transcript's rows, nor is one on a page not yet read, so the banner alone answers it.
+    const onRow = (ask: Held) =>
+      ask.approval.subagentId === undefined && drawn.has(ask.approval.toolUseId);
+
+    const newest = waiting.at(-1);
+    const oldestDrawn = waiting.find(onRow);
+    const oldest = waiting.find((ask) => !onRow(ask));
+
     const byCall = new Map(
       asks.flatMap((ask) =>
         ask.approval.subagentId === undefined ? [[ask.approval.toolUseId, ask] as const] : [],
@@ -200,6 +222,14 @@ export function useAgentApprovals(
           ? undefined
           : heldCallOf(ask, (press) => answer(ask.approval.id, press));
       },
+      waiting:
+        newest === undefined
+          ? undefined
+          : {
+              words: waitingOnYouWords(waiting.length),
+              asks: newest.approval.title,
+              callId: oldestDrawn?.approval.toolUseId,
+            },
       banner:
         oldest === undefined
           ? undefined
@@ -212,5 +242,5 @@ export function useAgentApprovals(
             },
       messageSent,
     };
-  }, [held, answer, messageSent]);
+  }, [held, drawn, answer, messageSent]);
 }

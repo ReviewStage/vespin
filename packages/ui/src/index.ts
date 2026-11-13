@@ -188,6 +188,8 @@ export * from "./components/inline-ref/inline-ref.js";
 
 export * from "./components/inline-ref/inline-ref-fit.js";
 
+export * from "./components/intro-card/intro-card.js";
+
 export * from "./components/keep-focus/keep-focus.js";
 
 export * from "./components/landing/landing-page.js";
@@ -443,6 +445,8 @@ export * from "./components/usage-meters/usage-meters.js";
 export * from "./components/video-player/video-player.js";
 
 export * from "./components/visually-hidden/visually-hidden.js";
+
+export * from "./components/voice-call/voice-call.js";
 
 export * from "./components/waiting-line/waiting-line.js";
 

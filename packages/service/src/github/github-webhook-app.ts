@@ -35,7 +35,7 @@ import {
 } from "effect/http";
 import { agentPublished } from "../agents/coder-host/published.js";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
-import { installationDriveRegenerated } from "../agents/workspace-drive.js";
+import { installationDrivePruned } from "../agents/workspace-drive.js";
 import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../auth/auth-deployment.js";
 import { cadenceOrUnavailable } from "../automations/automation-cadence.js";
 import { queueGithubRuns } from "../automations/automation-github.js";
@@ -57,6 +57,7 @@ import { agentWakeOf, checksCompletedWakeOf, wakeAgents } from "./agent-wakes.js
 import { clearRevokedAuthorization, GitHubApp } from "./github-app.js";
 import { GITHUB_DELIVERY_READ } from "./github-delivery-read-bounds.js";
 import { setInstallationStatus } from "./github-installations.js";
+import { actOnGitHubMention, githubMentionOf, type MentionServices } from "./github-mentions.js";
 import { GitHubBackground } from "./github-rate-gate.js";
 
 /**
@@ -113,9 +114,9 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * nothing held, because no repository of an installation is held: the chip
  * lists them from GitHub each time it opens, and every start checks its
  * repository there (`github-procedures.ts`, `workspace-repository.ts`). But
- * a repository given or taken, or an installation made, deleted, or brought
- * back, regenerates its workspace's drive past the answer
- * (`workspace-drive.ts`), so the drive holds what the workspace connects.
+ * a repository taken, or an installation deleted, prunes its workspace's
+ * drive past the answer (`workspace-drive.ts`), so the drive drops what the
+ * workspace no longer connects.
  *
  * A user revoking their authorization of the App, which GitHub also sends
  * without subscribing (`github_app_authorization`), drops that GitHub user's
@@ -126,7 +127,10 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * (`packages/service/src/automations/automation-github.ts`): a pull request or issue opened or
  * labeled, a check suite that failed, or a push queues a run, under the
  * delivery's own id, for each automation listing the repository that
- * listens for it, which the automation-runs queue's consumer starts. And a
+ * listens for it, which the automation-runs queue's consumer starts. A
+ * comment that mentions the App's bot, by a person with write access,
+ * starts an agent as its writer or reaches the agent whose pull request it
+ * is (`github-mentions.ts`). And a
  * review, a comment on a pull request, or a check that failed on an
  * agent's branch is told to the agents on that pull request as a message
  * from GitHub (`agent-wakes.ts`), and so is every check on an agent's head
@@ -183,31 +187,21 @@ const INSTALLATION_ACTION_STATUS: ReadonlyMap<string, GitHubInstallationStatus> 
   ["unsuspend", GITHUB_INSTALLATION_STATUS.ACTIVE],
 ]);
 
-/** The installation actions after which the repositories it grants changed, as GitHub spells them. */
+/** The installation actions after which repositories it granted left it, as GitHub spells them. */
 const GRANT_CHANGE_ACTION = {
-  CREATED: "created",
   DELETED: "deleted",
-  UNSUSPEND: "unsuspend",
-  /** An `installation_repositories` delivery's: repositories given to the installation. */
-  ADDED: "added",
   /** An `installation_repositories` delivery's: repositories taken from it. */
   REMOVED: "removed",
 } as const;
 
-/** The actions, by event, after which the workspace's drive is regenerated, since the repositories it connects changed. */
+/**
+ * The actions, by event, after which the workspace's drive is pruned,
+ * since repositories left it. A grant fills nothing: a start in a repository
+ * the drive lacks clones it (`workspace-drive.ts`).
+ */
 const DRIVE_CHANGE_ACTIONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  [
-    WEBHOOK_EVENT.INSTALLATION,
-    new Set<string>([
-      GRANT_CHANGE_ACTION.CREATED,
-      GRANT_CHANGE_ACTION.DELETED,
-      GRANT_CHANGE_ACTION.UNSUSPEND,
-    ]),
-  ],
-  [
-    WEBHOOK_EVENT.INSTALLATION_REPOSITORIES,
-    new Set<string>([GRANT_CHANGE_ACTION.ADDED, GRANT_CHANGE_ACTION.REMOVED]),
-  ],
+  [WEBHOOK_EVENT.INSTALLATION, new Set<string>([GRANT_CHANGE_ACTION.DELETED])],
+  [WEBHOOK_EVENT.INSTALLATION_REPOSITORIES, new Set<string>([GRANT_CHANGE_ACTION.REMOVED])],
 ]);
 
 /** A pull request's actions that change what a task's row says of it: where it stands, its merge queue among it, its title, or its size. */
@@ -448,7 +442,7 @@ function installationTarget(
     : { installationId: read.success.installation.id, status };
 }
 
-/** The installation a delivery says now grants other repositories; nothing for any other event or action. */
+/** The installation a delivery says repositories left; nothing for any other event or action. */
 function installationRegranted(event: string, payload: UnparsedWireValue): number | undefined {
   const actions = DRIVE_CHANGE_ACTIONS.get(event);
 
@@ -515,14 +509,23 @@ interface DeliveryReadCounts {
   readonly told: number;
 }
 
-type DeliveryReadServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox;
+type DeliveryReadServices =
+  | DatabaseServices
+  | HttpClient.HttpClient
+  | GitHubApp
+  | Sandbox
+  | MentionServices;
 
 const NOTHING_READ: DeliveryReadCounts = { read: 0, told: 0 };
 
 /**
- * A delivery's reads of GitHub: what the agents on its branches published
- * read again, then the agents its review, comment, failure, or finished
- * checks concern told, in the background lane, since no member waits on it.
+ * A delivery's reads of GitHub: a comment that mentions the App's bot acted
+ * on as its writer (`github-mentions.ts`), what the agents on its branches
+ * published read again, then the agents its review, comment, failure, or
+ * finished checks concern told, in the background lane, since no member
+ * waits on it. Note that a comment the mention took is told no agent as
+ * GitHub's own, because the mention sent it to the agent that holds the
+ * pull request as its writer's message, and the agent hears it once.
  */
 const deliveryReads = /* @__PURE__ */ Effect.fn("web/githubDeliveryReads")(
   function* ({
@@ -532,12 +535,19 @@ const deliveryReads = /* @__PURE__ */ Effect.fn("web/githubDeliveryReads")(
   }: DeliveryToRead): Effect.fn.Return<DeliveryReadCounts, HostedRefusal, DeliveryReadServices> {
     // A deployment with no App configured knows no bot of its own, so every bot is another's.
     const agentLogin = yield* Effect.orElseSucceed((yield* GitHubApp).botLogin, () => undefined);
+    const mention = githubMentionOf(event, payload, agentLogin);
+    const taken = mention === undefined ? false : yield* actOnGitHubMention(mention);
     const target = deliveryTarget(event, payload);
     const read = target === undefined ? 0 : yield* readAgainOnBranches(target);
     const now = yield* Clock.currentTimeMillis;
+
     // Note that the checks finishing are read after the agents' pull requests were read again above,
     // because a wake tells only the agents whose row keeps the finished commit as their head.
-    const wakes = [agentWakeOf(event, payload, now), checksCompletedWakeOf(event, payload, now)];
+    const wakes = [
+      taken ? undefined : agentWakeOf(event, payload, now),
+      checksCompletedWakeOf(event, payload, now),
+    ];
+
     // Each agent's sessions as the deployment acting for its owner, as an automation's run reaches them.
     const sessionsForAccount: SessionsForAccount = routedSessions;
 
@@ -647,12 +657,7 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
   function* (): Effect.fn.Return<
     HttpServerResponse.HttpServerResponse,
     HostedRefusal,
-    | HttpServerRequest.HttpServerRequest
-    | HostedEnvironment
-    | DatabaseServices
-    | HttpClient.HttpClient
-    | GitHubApp
-    | Sandbox
+    HttpServerRequest.HttpServerRequest | HostedEnvironment | DeliveryReadServices
   > {
     const request = yield* HttpServerRequest.HttpServerRequest;
 
@@ -682,10 +687,10 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
         yield* hostedStoreOrUnavailable(setInstallationStatus(moved.installationId, moved.status));
       }
 
-      // Note that the status is moved first, so an installation deleted regenerates a drive that drops its repositories.
+      // Note that the status is moved first, so an installation deleted prunes its repositories from the drive.
       const regranted = installationRegranted(event, payload);
 
-      if (regranted !== undefined) yield* installationDriveRegenerated(regranted);
+      if (regranted !== undefined) yield* installationDrivePruned(regranted);
 
       return hostedJsonResponse(200, { read: 0 });
     }
@@ -728,9 +733,7 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
 );
 
 /** The group: the one delivery path, and the hosted vocabulary's own refusal for any other. */
-export function githubWebhookApp(): WebRoutes<
-  HostedEnvironment | DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox
-> {
+export function githubWebhookApp(): WebRoutes<DeliveryReadServices> {
   return Layer.mergeAll(
     HttpRouter.add(ANY_METHOD, GITHUB_WEBHOOK_PATH, hostedRefusing(deliveryEndpoint())),
     hostedNotFoundRoute,

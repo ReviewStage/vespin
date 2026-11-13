@@ -1,4 +1,4 @@
-# navigation.yaml -- how the app is found around: an iPad in landscape standing the app sidebar with its places, Pinned and the member's sections, a pinned task opened beside its list from it, Search beside it, and the workspace switcher's menu holding the account, which opens Settings; and a compact window's switcher and its tab bar minimized as a list scrolls down.
+# navigation.yaml -- how the app is found around: an iPad in landscape standing the app sidebar with its places and Pinned, Following, and the member's sections as collections, Pinned picked to fill the list with its tasks and one opened beside it, the list's compose button opening New task, the pick kept across a rotation, Search beside it, and the workspace switcher's menu holding the account, which opens Settings; and a compact window's switcher and its tab bar minimized as a list scrolls down.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -19,10 +19,12 @@ onFlowComplete:
 # A regular window, which stands "Choose an item" beside the Inbox's list, is
 # turned to landscape, wide enough for three columns: the system's tab bar
 # steps aside for the app sidebar, the Inbox with its count, Tasks, and
-# Search, then Pinned and the member's sections with their tasks, the
-# switcher at its head and Settings at its foot. A pinned task opens beside
-# the Tasks list, and the switcher's menu holds the account, which opens
-# Settings, as the sidebar's foot does.
+# Search, then Pinned, Following, and the member's sections, each one row
+# with its count, the switcher at its head and nothing in its bar but the
+# system's toggle. Pinned fills the list with its tasks alone, one opens
+# beside it, and the list's compose button opens New task. The pick stands
+# through a turn to portrait and back. The switcher's menu holds the
+# account, which opens Settings, the sidebar's one way there besides ⌘,.
 - runFlow:
     when:
       visible: "Choose an item"
@@ -31,10 +33,26 @@ onFlowComplete:
       - waitForAnimationToEnd
       - assertVisible: "Pinned"
       - takeScreenshot: ipad-sidebar
+      - tapOn: "Pinned"
       - tapOn: "Weekly digest email"
       - assertVisible: "Created by .*"
       - waitForAnimationToEnd
-      - takeScreenshot: ipad-sidebar-task
+      - takeScreenshot: ipad-sidebar-pinned
+      - tapOn: "New task"
+      - assertVisible: "Describe the task"
+      - takeScreenshot: ipad-compose
+      - tapOn: "Cancel"
+      - waitForAnimationToEnd
+      - setOrientation: PORTRAIT
+      - waitForAnimationToEnd
+      - setOrientation: LANDSCAPE_LEFT
+      - waitForAnimationToEnd
+      - assertVisible: "Weekly digest email"
+      - takeScreenshot: ipad-sidebar-pinned-turned
+      - tapOn:
+          id: "tasks-tab"
+      - waitForAnimationToEnd
+      - takeScreenshot: ipad-sidebar-tasks
       - tapOn:
           id: "search-tab"
       - assertVisible: "Find a task, an Inbox item, or an agent."
@@ -54,8 +72,8 @@ onFlowComplete:
       - setOrientation: PORTRAIT
       - waitForAnimationToEnd
 # A compact window, the iPhone's, names its workspace as the Inbox's one
-# leading button, whose menu holds the account, opening Settings, over New
-# workspace and the workspace's Settings… under its name, and keeps the
+# leading button, whose list holds the workspaces, New workspace and
+# Workspace settings, then the account opening Settings, and keeps the
 # system's tab bar, minimizing it as the Tasks list scrolls down, the round +
 # staying on its own glass beside it.
 - runFlow:

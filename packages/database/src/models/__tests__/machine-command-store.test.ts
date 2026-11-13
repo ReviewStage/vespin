@@ -1,0 +1,698 @@
+import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
+import { it } from "@effect/vitest";
+import {
+  AUTOMATION_ACTION,
+  AUTOMATION_DEFAULT_GUARDS,
+  AUTOMATION_FIRING,
+  AUTOMATION_RUN_REASON,
+  AUTOMATION_TARGET,
+  AUTOMATION_TRIGGER,
+  type AutomationFiring,
+} from "@repo/features/automation-wire";
+import {
+  MACHINE_COMMAND_KIND,
+  type MachineCommand,
+  type MachineCommandResult,
+} from "@repo/features/machine-command-wire";
+import {
+  GITHUB_LINE_EVENT,
+  type GitHubLineMetadata,
+  MESSAGE_CHANNEL,
+  MESSAGE_ROLE,
+  type MessageRole,
+  type SlackLineMetadata,
+} from "@repo/wire";
+import { eq, sql } from "drizzle-orm";
+import { Clock, Effect, Option } from "effect";
+import { Database } from "../../core/query.js";
+import { agentTable } from "../../schemas/agent.js";
+import { user } from "../../schemas/auth.js";
+import { device } from "../../schemas/device.js";
+import { machineCommand } from "../../schemas/machine-command.js";
+import { conversations, messages } from "../../schemas/storage.js";
+import { CONVERSATION_KIND, MESSAGE_SENDER, type MessageSender } from "../../storage-vocabulary.js";
+import {
+  DEVICE_LAYOUT,
+  getTestDB,
+  joinWorkspace,
+  leaveWorkspace,
+  openWorkspace,
+} from "../../testing/index.js";
+import {
+  claimAutomationRun,
+  createAutomation,
+  failClaimedRun,
+  recordAutomationRun,
+} from "../automation-store.js";
+import { registerDevice } from "../device-store.js";
+import {
+  claimMachineCommand,
+  claimMachineCommands,
+  heardFromAnotherAccount,
+  machineCommandResult,
+  machineCommandsWaiting,
+  machineOwnerOf,
+  macListeningSince,
+  markMachineListening,
+  queueMachineCommand,
+  settleMachineCommand,
+} from "../machine-command-store.js";
+import { createTask } from "../task-store.js";
+
+/**
+ * The commands an account's agents queue for its Mac, over a real dialect:
+ * a command is claimed once and settled once, by its own account alone, a
+ * row its call has stopped waiting for is never claimed, a read claims and
+ * waits on only the kinds it names, so a row of a kind no read names now
+ * is left be, a row queued before kinds were reads as a shell command, and
+ * a Mac counts as listening from its last read on. A command queued for a
+ * device is claimed by that device alone. The live statement
+ * delivers what a Mac following live would claim: the account's unclaimed
+ * commands of its kinds and no one else's.
+ *
+ * Synthetic accounts and commands throughout.
+ */
+
+/** The instant the clock reads now, which every command these tests queue is at or after. */
+const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis));
+
+const RESULT: MachineCommandResult = {
+  exitCode: 0,
+  stdout: "main\n",
+  stderr: "",
+  truncated: false,
+  timedOut: false,
+};
+
+const openAccounts = Effect.gen(function* () {
+  const db = yield* Database;
+  const [owner, other] = [`user-${randomUUID()}`, `user-${randomUUID()}`];
+
+  for (const id of [owner, other]) {
+    yield* db.insert(user).values({ id, name: "Test User", email: `${id}@app.test` });
+  }
+
+  return { owner, other };
+});
+
+const command = (timeoutSeconds = 60): MachineCommand => ({
+  id: randomUUID(),
+  kind: MACHINE_COMMAND_KIND.SHELL,
+  command: "git branch --show-current",
+  timeoutSeconds,
+});
+
+/**
+ * A row of a kind no read names now, as a service that still queued Mac
+ * Browser commands left one waiting, written as that build wrote it; its id.
+ */
+const queueOtherKind = (userId: string) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const id = randomUUID();
+    const queuedAt = (yield* now).toISOString();
+    yield* db.execute(
+      sql`INSERT INTO machine_command (id, user_id, kind, timeout_seconds, queued_at)
+          VALUES (${id}, ${userId}, 'browser', 30, ${queuedAt})`,
+    );
+
+    return id;
+  });
+
+/** Registers a Mac of the account; its id. */
+const openDevice = (userId: string, name: string) =>
+  Effect.gen(function* () {
+    const id = randomUUID();
+    yield* registerDevice(userId, { id, name, ...DEVICE_LAYOUT });
+
+    return id;
+  });
+
+/** What every Mac's read names: shell alone. */
+const SHELL_ONLY = [MACHINE_COMMAND_KIND.SHELL];
+
+it.layer(getTestDB())("the Mac command store", (it) => {
+  it.effect(
+    "a command is claimed and settled once, by its own account, and its result read by that account alone",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const since = yield* now;
+        const queued = command();
+        yield* queueMachineCommand(owner, queued);
+
+        const claimedByOther = yield* claimMachineCommands(other, since, SHELL_ONLY);
+        const settledByOther = yield* settleMachineCommand(other, queued.id, RESULT);
+        const settledUnclaimed = yield* settleMachineCommand(owner, queued.id, RESULT);
+        const claimed = yield* claimMachineCommands(owner, since, SHELL_ONLY);
+        const claimedAgain = yield* claimMachineCommands(owner, since, SHELL_ONLY);
+        const settled = yield* settleMachineCommand(owner, queued.id, RESULT);
+
+        const settledAgain = yield* settleMachineCommand(owner, queued.id, {
+          ...RESULT,
+          exitCode: 1,
+        });
+
+        assert.deepEqual(claimedByOther, []);
+        assert.equal(settledByOther, false, "another account settles nothing");
+        assert.equal(settledUnclaimed, false, "nothing is settled before a Mac claims it");
+        assert.deepEqual(claimed, [queued]);
+        assert.deepEqual(claimedAgain, [], "a claimed command is not handed out twice");
+        assert.equal(settled, true);
+        assert.equal(settledAgain, false, "the first result stands");
+        assert.deepEqual(yield* machineCommandResult(owner, queued.id), Option.some(RESULT));
+        assert.deepEqual(yield* machineCommandResult(other, queued.id), Option.none());
+      }),
+  );
+
+  it.effect(
+    "a command queued for a device is claimed by that device alone, never by another account naming it",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const since = yield* now;
+
+        const [laptop, studio, othersMac] = [
+          yield* openDevice(owner, "Laptop"),
+          yield* openDevice(owner, "Studio"),
+          yield* openDevice(other, "Other's Mac"),
+        ];
+
+        const queued = command();
+        const queuedForStudio = yield* queueMachineCommand(owner, queued, studio);
+        const queuedForOthersMac = yield* queueMachineCommand(owner, command(), othersMac);
+        const retired = yield* openDevice(owner, "Retired");
+
+        yield* Database.use((db) =>
+          db
+            .update(device)
+            .set({ removedAt: new Date(0) })
+            .where(eq(device.id, retired)),
+        );
+
+        const queuedForRemoved = yield* queueMachineCommand(owner, command(), retired);
+
+        const byOtherNamingIt = yield* claimMachineCommand(
+          other,
+          queued.id,
+          since,
+          SHELL_ONLY,
+          studio,
+        );
+
+        const byOtherDevice = yield* claimMachineCommands(other, since, SHELL_ONLY, othersMac);
+        const byAccountAlone = yield* claimMachineCommands(owner, since, SHELL_ONLY);
+
+        const byAnotherOfTheirs = yield* claimMachineCommand(
+          owner,
+          queued.id,
+          since,
+          SHELL_ONLY,
+          laptop,
+        );
+
+        const waitsForStudio = yield* machineCommandsWaiting(owner, since, SHELL_ONLY, studio);
+        const byStudio = yield* claimMachineCommands(owner, since, SHELL_ONLY, studio);
+
+        assert.equal(queuedForStudio, true);
+        assert.equal(queuedForOthersMac, false, "nothing is queued for another account's Mac");
+        assert.equal(queuedForRemoved, false, "nothing is queued for a removed Mac");
+        assert.deepEqual(byOtherNamingIt, Option.none(), "another account claims nothing");
+        assert.deepEqual(byOtherDevice, []);
+        assert.deepEqual(byAccountAlone, [], "a Mac claiming as the account takes no device's");
+        assert.deepEqual(byAnotherOfTheirs, Option.none(), "another Mac of theirs takes none");
+        assert.equal(waitsForStudio, true);
+        assert.deepEqual(byStudio, [queued]);
+      }),
+  );
+
+  it.effect("a row of a kind no read names is neither waited on nor claimed", () =>
+    Effect.gen(function* () {
+      const { owner } = yield* openAccounts;
+      const since = yield* now;
+      const shell = command();
+      const other = yield* queueOtherKind(owner);
+
+      const waits = yield* machineCommandsWaiting(owner, since, SHELL_ONLY);
+      yield* queueMachineCommand(owner, shell);
+      const claimed = yield* claimMachineCommands(owner, since, SHELL_ONLY);
+      const claimedById = yield* claimMachineCommand(owner, other, since, SHELL_ONLY);
+
+      assert.equal(waits, false, "a row of another kind does not wake the read");
+      assert.deepEqual(claimed, [shell]);
+      assert.deepEqual(claimedById, Option.none());
+    }),
+  );
+
+  it.effect("a row queued before kinds were reads as a shell command", () =>
+    Effect.gen(function* () {
+      const db = yield* Database;
+      const { owner } = yield* openAccounts;
+      const since = yield* now;
+      const id = randomUUID();
+      // Note that the row is written as a build before kinds wrote one, naming no kind.
+      yield* db.execute(
+        sql`INSERT INTO machine_command (id, user_id, command, timeout_seconds, queued_at)
+            VALUES (${id}, ${owner}, 'uptime', 60, ${since.toISOString()})`,
+      );
+
+      const [row] = yield* db
+        .select({ kind: machineCommand.kind })
+        .from(machineCommand)
+        .where(eq(machineCommand.id, id));
+
+      const claimed = yield* claimMachineCommands(owner, since, SHELL_ONLY);
+
+      assert.equal(row?.kind, MACHINE_COMMAND_KIND.SHELL);
+      assert.deepEqual(claimed, [
+        { id, kind: MACHINE_COMMAND_KIND.SHELL, command: "uptime", timeoutSeconds: 60 },
+      ]);
+    }),
+  );
+
+  it.effect("a Mac counts as listening from its read on, for its own account alone", () =>
+    Effect.gen(function* () {
+      const { owner, other } = yield* openAccounts;
+      const since = yield* now;
+
+      const before = yield* macListeningSince(owner, since);
+      yield* markMachineListening(owner);
+      const after = yield* macListeningSince(owner, since);
+      const forOther = yield* macListeningSince(other, since);
+
+      assert.equal(before, false);
+      assert.equal(after, true);
+      assert.equal(forOther, false);
+    }),
+  );
+});
+
+/** A coding agent's conversation under the account, with the agent itself in the workspace given, started on the prompt given or blank, answering both ids. */
+const openAgent = (userId: string, organizationId: string, prompt: string | null = null) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const [id, conversationId] = [randomUUID(), randomUUID()];
+    const { id: taskId } = yield* createTask(userId, { organizationId, name: "Mac commands" });
+    yield* db
+      .insert(conversations)
+      .values({ id: conversationId, userId, kind: CONVERSATION_KIND.AGENT });
+    yield* db.insert(agentTable).values({
+      id,
+      organizationId,
+      userId,
+      taskId,
+      conversationId,
+      prompt,
+      model: "anthropic/claude-opus-5.5",
+      effort: "high",
+      repository: "acme/api",
+      idempotencyKey: randomUUID(),
+    });
+
+    return { id, conversationId };
+  });
+
+/** A worker's conversation delegated from the one given, under the same account. */
+const openWorker = (userId: string, parentConversationId: string) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    const id = randomUUID();
+    yield* db.insert(conversations).values({
+      id,
+      userId,
+      kind: CONVERSATION_KIND.CHILD,
+      parentConversationId,
+    });
+
+    return id;
+  });
+
+/**
+ * One line sent into the conversation, as the writer keeps a developer's or
+ * an agent's line to a coding agent, with the metadata given; with no
+ * sender, as a line was kept before senders were, or as the model's own
+ * reply is.
+ */
+const sendLine = (
+  owner: string,
+  conversationId: string,
+  seq: number,
+  sender?: {
+    readonly kind: MessageSender;
+    readonly userId?: string;
+    readonly agentId?: string;
+  },
+  role: MessageRole = MESSAGE_ROLE.USER,
+  metadata?: GitHubLineMetadata | SlackLineMetadata,
+) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+    yield* db.insert(messages).values({
+      userId: owner,
+      conversationId,
+      seq,
+      clientId: randomUUID(),
+      role,
+      parts: [],
+      placedAt: yield* now,
+      sender: sender?.kind ?? null,
+      senderUserId: sender?.userId ?? null,
+      senderAgentId: sender?.agentId ?? null,
+      metadata: metadata ?? null,
+    });
+  });
+
+it.layer(getTestDB())("who has put words into an agent's conversation", (it) => {
+  const people = Effect.gen(function* () {
+    const { owner: starter, other: teammate } = yield* openAccounts;
+    const workspace = yield* openWorkspace(starter);
+
+    return { starter, teammate, workspace };
+  });
+
+  it.effect(
+    "only the starter, their own agents, and the service's wakes leave it the starter's",
+    () =>
+      Effect.gen(function* () {
+        const { starter, workspace } = yield* people;
+        const agent = yield* openAgent(starter, workspace);
+        const own = yield* openAgent(starter, workspace);
+        yield* sendLine(starter, agent.conversationId, 1, {
+          kind: MESSAGE_SENDER.MEMBER,
+          userId: starter,
+        });
+        yield* sendLine(starter, agent.conversationId, 2, {
+          kind: MESSAGE_SENDER.AGENT,
+          agentId: own.id,
+        });
+        yield* sendLine(starter, agent.conversationId, 3, { kind: MESSAGE_SENDER.APP });
+        const target = { userId: starter, conversationId: agent.conversationId };
+        assert.equal(yield* heardFromAnotherAccount(target), false);
+      }),
+  );
+
+  it.effect("a teammate's line, or a line from their agent, counts as another account's", () =>
+    Effect.gen(function* () {
+      const { starter, teammate, workspace } = yield* people;
+      const messaged = yield* openAgent(starter, workspace);
+      yield* sendLine(starter, messaged.conversationId, 1, {
+        kind: MESSAGE_SENDER.MEMBER,
+        userId: teammate,
+      });
+      const theirs = yield* openAgent(teammate, workspace);
+      const reached = yield* openAgent(starter, workspace);
+      yield* sendLine(starter, reached.conversationId, 1, {
+        kind: MESSAGE_SENDER.AGENT,
+        agentId: theirs.id,
+      });
+
+      for (const { conversationId } of [messaged, reached]) {
+        assert.equal(yield* heardFromAnotherAccount({ userId: starter, conversationId }), true);
+      }
+    }),
+  );
+
+  it.effect(
+    "an agent's commands go to its task's assignee's Mac, whoever has written to it, and to its starter's where no one is assigned or the assignee left",
+    () =>
+      Effect.gen(function* () {
+        const { starter, teammate, workspace } = yield* people;
+        yield* joinWorkspace(workspace, teammate);
+        const db = yield* Database;
+        const agent = yield* openAgent(starter, workspace);
+        const target = { userId: starter, conversationId: agent.conversationId };
+        assert.equal(yield* machineOwnerOf(target), starter, "no one assigned");
+
+        const handed = yield* createTask(starter, {
+          organizationId: workspace,
+          assigneeId: teammate,
+        });
+
+        yield* db.update(agentTable).set({ taskId: handed.id }).where(eq(agentTable.id, agent.id));
+        yield* sendLine(starter, agent.conversationId, 1, {
+          kind: MESSAGE_SENDER.MEMBER,
+          userId: starter,
+        });
+        const worker = yield* openWorker(starter, agent.conversationId);
+        assert.equal(yield* machineOwnerOf(target), teammate, "handed to a teammate");
+        assert.equal(
+          yield* machineOwnerOf({ userId: starter, conversationId: worker }),
+          teammate,
+          "its worker's too",
+        );
+        yield* leaveWorkspace(workspace, teammate);
+        assert.equal(yield* machineOwnerOf(target), starter, "an assignee who left hands it back");
+      }),
+  );
+
+  it.effect("a line whose sender is gone counts as another account's", () =>
+    Effect.gen(function* () {
+      const { starter, workspace } = yield* people;
+      const agent = yield* openAgent(starter, workspace);
+      yield* sendLine(starter, agent.conversationId, 1, { kind: MESSAGE_SENDER.MEMBER });
+      yield* sendLine(starter, agent.conversationId, 2, {
+        kind: MESSAGE_SENDER.AGENT,
+        agentId: randomUUID(),
+      });
+      const target = { userId: starter, conversationId: agent.conversationId };
+      assert.equal(yield* heardFromAnotherAccount(target), true);
+    }),
+  );
+
+  it.effect(
+    "a developer's line kept before senders were counts as another account's, all but the prompt an agent was started on",
+    () =>
+      Effect.gen(function* () {
+        const { starter, workspace } = yield* people;
+        const agent = yield* openAgent(starter, workspace, "Find the flakiest test and fix it.");
+        const target = { userId: starter, conversationId: agent.conversationId };
+        yield* sendLine(starter, agent.conversationId, 1, undefined, MESSAGE_ROLE.ASSISTANT);
+        assert.equal(yield* heardFromAnotherAccount(target), false, "the model's own reply");
+        yield* sendLine(starter, agent.conversationId, 2);
+        assert.equal(yield* heardFromAnotherAccount(target), false, "the prompt it was started on");
+        yield* sendLine(starter, agent.conversationId, 3);
+        assert.equal(
+          yield* heardFromAnotherAccount(target),
+          true,
+          "a later line nothing says whose it was",
+        );
+      }),
+  );
+
+  it.effect("a blank agent's first untagged line counts, since it was started on no prompt", () =>
+    Effect.gen(function* () {
+      const { starter, workspace } = yield* people;
+      const blank = yield* openAgent(starter, workspace);
+      yield* sendLine(starter, blank.conversationId, 1);
+      const target = { userId: starter, conversationId: blank.conversationId };
+      assert.equal(yield* heardFromAnotherAccount(target), true);
+    }),
+  );
+
+  it.effect(
+    "an automation's line from before its line said what fired it counts where a run handed to the agent was a webhook's, and not where it was a schedule's or one whose send was refused, as does the untagged opening of an agent a webhook's run started",
+    () =>
+      Effect.gen(function* () {
+        const { starter, workspace } = yield* people;
+
+        const heardAfter = (firing: AutomationFiring, sent = true) =>
+          Effect.gen(function* () {
+            const agent = yield* openAgent(starter, workspace, "Keep the desk.");
+
+            const aimed = Option.getOrThrow(
+              yield* createAutomation(starter, {
+                organizationId: workspace,
+                repositories: [],
+                name: "Triage",
+                trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 9 * * *", timezone: "UTC" },
+                action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Triage what came in." },
+                guards: AUTOMATION_DEFAULT_GUARDS,
+                nextRunAt: null,
+                webhookSecretHash: null,
+                targetKind: AUTOMATION_TARGET.SAME_AGENT,
+                targetAgentId: agent.id,
+              }),
+            );
+
+            const run = Option.getOrThrow(
+              yield* recordAutomationRun(aimed, {
+                dedupeKey: randomUUID(),
+                firing,
+                firedAt: yield* now,
+              }),
+            );
+
+            yield* claimAutomationRun(run.id, agent.id);
+
+            // A send refused withdraws its line, so the run fails having handed the agent nothing.
+            if (!sent) yield* failClaimedRun(run.id, AUTOMATION_RUN_REASON.UNAVAILABLE);
+            // Written as a line was before it said what fired it: its sender, and nothing else.
+            yield* sendLine(starter, agent.conversationId, 1, { kind: MESSAGE_SENDER.AUTOMATION });
+
+            return yield* heardFromAnotherAccount({
+              userId: starter,
+              conversationId: agent.conversationId,
+            });
+          });
+
+        assert.equal(yield* heardAfter({ kind: AUTOMATION_FIRING.SCHEDULE, dueAt: 0 }), false);
+        assert.equal(yield* heardAfter({ kind: AUTOMATION_FIRING.WEBHOOK, bytes: 2 }), true);
+        assert.equal(
+          yield* heardAfter({ kind: AUTOMATION_FIRING.WEBHOOK, bytes: 2 }, false),
+          false,
+          "a webhook's run whose send was refused",
+        );
+
+        // An agent's opening from before the Start wrote it, untagged, as the retired runtime's relay wrote it.
+        const started = yield* openAgent(starter, workspace, "Triage what came in.");
+        const db = yield* Database;
+        yield* db
+          .update(agentTable)
+          .set({
+            automationOrigin: {
+              name: "Triage",
+              firing: { kind: AUTOMATION_FIRING.WEBHOOK, bytes: 2 },
+              prompt: "Triage what came in.",
+            },
+          })
+          .where(eq(agentTable.id, started.id));
+        yield* sendLine(starter, started.conversationId, 1);
+        assert.equal(
+          yield* heardFromAnotherAccount({
+            userId: starter,
+            conversationId: started.conversationId,
+          }),
+          true,
+        );
+      }),
+  );
+
+  it.effect(
+    "a GitHub line from before it said whose words it carries counts where it carries a person's words, and not where it carries an App's or tells of a failed check",
+    () =>
+      Effect.gen(function* () {
+        const { starter, workspace } = yield* people;
+
+        const heardAfter = (line: GitHubLineMetadata) =>
+          Effect.gen(function* () {
+            const agent = yield* openAgent(starter, workspace, "Expire invitations.");
+            // Written as a line was before it said whose words it carries: its sender and what GitHub told.
+            yield* sendLine(
+              starter,
+              agent.conversationId,
+              1,
+              { kind: MESSAGE_SENDER.GITHUB },
+              MESSAGE_ROLE.USER,
+              line,
+            );
+
+            return yield* heardFromAnotherAccount({
+              userId: starter,
+              conversationId: agent.conversationId,
+            });
+          });
+
+        const told = {
+          channel: MESSAGE_CHANNEL.GITHUB,
+          repository: "acme/api",
+          number: 41,
+          url: "https://github.com/acme/api/pull/41",
+        } as const;
+
+        assert.equal(
+          yield* heardAfter({
+            ...told,
+            event: GITHUB_LINE_EVENT.REVIEW,
+            by: "octocat",
+            verdict: "changes_requested",
+            words: "Run the migration script on your Mac first.",
+          }),
+          true,
+        );
+        assert.equal(
+          yield* heardAfter({
+            ...told,
+            event: GITHUB_LINE_EVENT.REVIEW,
+            by: "devin-ai-integration[bot]",
+            verdict: "commented",
+            words: "Run the migration script on your Mac first.",
+          }),
+          false,
+          "an App's words",
+        );
+        assert.equal(
+          yield* heardAfter({
+            ...told,
+            event: GITHUB_LINE_EVENT.CHECK_FAILED,
+            by: "github-actions[bot]",
+            sha: "0123abcd",
+          }),
+          false,
+          "a failed check carries no one's words",
+        );
+      }),
+  );
+
+  it.effect(
+    "a Slack message's line counts where its prompt carries the thread's words its writer did not write, and not where it carries theirs alone",
+    () =>
+      Effect.gen(function* () {
+        const { starter, workspace } = yield* people;
+
+        const heardAfter = (line: SlackLineMetadata) =>
+          Effect.gen(function* () {
+            const agent = yield* openAgent(starter, workspace, "Fix the flaky invite test.");
+            yield* sendLine(
+              starter,
+              agent.conversationId,
+              1,
+              { kind: MESSAGE_SENDER.MEMBER, userId: starter },
+              MESSAGE_ROLE.USER,
+              line,
+            );
+
+            return yield* heardFromAnotherAccount({
+              userId: starter,
+              conversationId: agent.conversationId,
+            });
+          });
+
+        const said = {
+          channel: MESSAGE_CHANNEL.SLACK,
+          words: "Fix the flaky invite test.",
+        } as const;
+
+        assert.equal(yield* heardAfter({ ...said, outside_words: true }), true);
+        assert.equal(yield* heardAfter(said), false, "the writer's own words");
+      }),
+  );
+
+  it.effect("a worker's conversation reads the lines of the agent it was delegated from", () =>
+    Effect.gen(function* () {
+      const { starter, teammate, workspace } = yield* people;
+      const agent = yield* openAgent(starter, workspace);
+      const worker = yield* openWorker(starter, agent.conversationId);
+      const target = { userId: starter, conversationId: worker };
+      assert.equal(yield* heardFromAnotherAccount(target), false);
+      yield* sendLine(starter, agent.conversationId, 1, {
+        kind: MESSAGE_SENDER.MEMBER,
+        userId: teammate,
+      });
+      assert.equal(yield* heardFromAnotherAccount(target), true);
+    }),
+  );
+
+  it.effect("an account reads nothing of a conversation that is not its own", () =>
+    Effect.gen(function* () {
+      const { starter, teammate, workspace } = yield* people;
+      const agent = yield* openAgent(starter, workspace);
+      yield* sendLine(starter, agent.conversationId, 1, {
+        kind: MESSAGE_SENDER.MEMBER,
+        userId: teammate,
+      });
+      const target = { userId: teammate, conversationId: agent.conversationId };
+      assert.equal(yield* heardFromAnotherAccount(target), false);
+    }),
+  );
+});

@@ -22,6 +22,7 @@ export {
   COMPUTER_USE_DETAIL,
   COMPUTER_USE_LABEL,
   computerUseAppsOf,
+  computerUseAppsStored,
   computerUseAppsWith,
   computerUseAppsWithout,
   isComputerUseAppsJson,
@@ -60,6 +61,17 @@ export {
 } from "./experiments.js";
 
 export {
+  INTRO,
+  INTROS_SHIPPED_AT,
+  type Intro,
+  introsSeenAnswered,
+  introsSeenFrom,
+  introsSeenUnion,
+  introsSeenWith,
+  isIntrosSeenJson,
+} from "./intros.js";
+
+export {
   isKeepAwake,
   KEEP_AWAKE,
   KEEP_AWAKE_DEFAULT,
@@ -69,13 +81,10 @@ export {
 } from "./keep-awake.js";
 
 export {
-  isMacCommandMode,
-  MAC_COMMAND_MODE,
-  MAC_COMMAND_MODE_LABEL,
-  MAC_COMMAND_MODE_LIST,
-  MAC_COMMANDS_LABEL,
-  type MacCommandMode,
-} from "./mac-commands.js";
+  isMachineCommandMode,
+  MACHINE_COMMAND_MODE_LABEL,
+  MACHINE_COMMANDS_LABEL,
+} from "./machine-commands.js";
 
 export {
   isOlderOnboardingSurveyJson,
@@ -180,6 +189,8 @@ export {
 } from "./sound-when.js";
 
 export { isTheme, THEME, THEME_LIST, type Theme } from "./theme.js";
+
+export { voiceSamplePath } from "./voice-choice.js";
 
 export {
   isZoomPercent,

@@ -16,6 +16,7 @@ import { createAutomation, listAutomationRuns } from "@repo/database/models/auto
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { readTask } from "@repo/database/models/task-store";
 import { listWorkspaces } from "@repo/database/models/workspace-store";
+import { agentTable } from "@repo/database/schemas/agent";
 import { account, user } from "@repo/database/schemas/auth";
 import { githubInstallation } from "@repo/database/schemas/github-installation";
 import { turns } from "@repo/database/schemas/storage";
@@ -34,6 +35,8 @@ import {
   type GitHubTriggerEvent,
   PULL_REQUEST_MOMENT,
 } from "@repo/features/automation-wire";
+import { AGENT_DEFAULT_CHOICE, MODEL_PROVIDER } from "@repo/features/models-wire";
+import { TASK_STATUS } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_ORIGIN, TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
 import { and, eq } from "drizzle-orm";
@@ -41,15 +44,18 @@ import { Clock, DateTime, Effect, Layer, Option, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { afterEach, vi } from "vitest";
-import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
 import { WorkspaceDriveFills, workspaceDriveName } from "../agents/workspace-drive.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import { keptAfterResponse } from "../http/after-response.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
+import { modelCatalogOf } from "../providers/model-catalog.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import {
   connectWorkspaceGitHub,
   type FakeGitHub,
+  GITHUB_APP_SETTINGS,
+  GITHUB_FIXTURE,
+  GITHUB_FIXTURE_MEMBER,
   githubReaching,
   openGithubUser,
   repositoryIdOf,
@@ -177,6 +183,16 @@ interface Answer {
 /** The native harnesses the webhook's wakes reach, writing down each with the account it acted for. */
 const HARNESS = recordingHarness();
 
+/** The models a mention's agent may start on: the default alone. */
+const MODEL_CATALOG = modelCatalogOf([
+  {
+    id: AGENT_DEFAULT_CHOICE.model,
+    name: "Claude Opus 5.5",
+    provider: MODEL_PROVIDER.ANTHROPIC,
+    efforts: ["low", "medium", "high", "max"],
+  },
+]);
+
 /** Where a case watches the group fill a workspace's drive: its sandboxes, and the work it kept past the answer. */
 interface Filling {
   readonly sandbox: ReturnType<typeof memorySandbox>;
@@ -208,6 +224,7 @@ const answer = (
       Layer.succeed(Clock.Clock, yield* Clock.Clock),
       Layer.succeed(HostedEnvironment, { ...environment(secret), ...held }),
       github.layer,
+      MODEL_CATALOG,
       HARNESS.layer,
     );
 
@@ -309,6 +326,63 @@ const openAgent = (pull: PullRequestFixture) =>
   });
 
 const refusal = (status: number, error: string): Answer => ({ status, body: { error } });
+
+/** Who writes a comment: their login, GitHub's id for them, and GitHub's word for their access to the repository. */
+interface CommentWriter {
+  readonly login: string;
+  readonly id: number;
+  readonly association: string;
+}
+
+/** The fixture member's own GitHub account, which `openGithubUser` links, as a member of the repository's organization. */
+const MEMBER_WRITER: CommentWriter = {
+  login: GITHUB_FIXTURE_MEMBER.LOGIN,
+  id: Number(GITHUB_FIXTURE_MEMBER.ID),
+  association: "MEMBER",
+};
+
+/** GitHub's delivery of a comment made on the issue or pull request numbered, under the installation given, by the writer given. */
+function commentDelivery(
+  installationId: number,
+  on: { readonly number: number; readonly pullRequest: boolean },
+  body: string,
+  writer: CommentWriter,
+  commentId: number = Math.floor(Math.random() * 1_000_000_000),
+) {
+  const kind = on.pullRequest ? "pull" : "issues";
+
+  return {
+    action: "created",
+    installation: { id: installationId },
+    repository,
+    issue: {
+      number: on.number,
+      title: "Invitations expire too early",
+      html_url: `https://github.com/${RELAY_FULL_NAME}/${kind}/${on.number}`,
+      ...(on.pullRequest && { pull_request: { url: "ignored" } }),
+    },
+    comment: {
+      id: commentId,
+      body,
+      html_url: `https://github.com/${RELAY_FULL_NAME}/${kind}/${on.number}#issuecomment-${commentId}`,
+      created_at: "2026-11-13T12:00:00Z",
+      author_association: writer.association,
+      user: { login: writer.login, id: writer.id, type: "User" },
+    },
+    sender: { login: writer.login, id: writer.id, type: "User" },
+  };
+}
+
+/** The writes the App made on the repository's issues and comments, by path, as GitHub was sent them. */
+function appWrites(
+  github: FakeGitHub,
+): readonly { readonly path: string; readonly body: string }[] {
+  const base = `/repos/${RELAY.owner}/${RELAY.name}/issues`;
+
+  return github.sent
+    .filter((sent) => sent.method === "POST" && new URL(sent.url).pathname.startsWith(base))
+    .map((sent) => ({ path: new URL(sent.url).pathname.slice(base.length), body: sent.body }));
+}
 
 it.layer(SUITE)("the GitHub App's webhook", (it) => {
   it.effect(
@@ -445,7 +519,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
   );
 
   it.effect(
-    "repositories added to an installation have its workspace's drive filled with them past the answer",
+    "repositories added to an installation fill nothing, and repositories removed from it regenerate its workspace's drive past the answer",
     () =>
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
@@ -462,34 +536,33 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         yield* connectWorkspaceGitHub(workspaceId, installation);
         const filling = { sandbox: memorySandbox(), after: keptAfterResponse() };
 
-        const added = {
-          action: "added",
-          installation: { id: installation.id },
-          repositories_added: [{ full_name: RELAY_FULL_NAME }],
-        };
+        const grantChange = (action: string) =>
+          Effect.gen(function* () {
+            const answered = yield* answer(
+              github,
+              SECRET,
+              delivery("installation_repositories", {
+                action,
+                installation: { id: installation.id },
+                [`repositories_${action}`]: [{ full_name: RELAY_FULL_NAME }],
+              }),
+              {},
+              filling,
+            );
 
-        const answered = yield* answer(
-          github,
-          SECRET,
-          delivery("installation_repositories", added),
-          {},
-          filling,
-        );
+            yield* filling.after.run.pipe(Effect.provide(github.layer));
 
-        yield* filling.after.run.pipe(Effect.provide(github.layer));
+            return { answered, drives: [...filling.sandbox.state.drives.keys()] };
+          });
 
-        const drive = workspaceDriveName(workspaceId);
+        const added = yield* grantChange("added");
+        const removed = yield* grantChange("removed");
 
-        // A fill's sync lists its batch's repositories one a line, each led by its folder.
-        const folders = filling.sandbox.state.commands.flatMap((command) =>
-          (command.ask.env?.[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.SYNC_LIST] ?? "")
-            .split("\n")
-            .flatMap((line) => (line === "" ? [] : [line.split(" ")[0]])),
-        );
-
-        assert.deepEqual(answered, { status: 200, body: { read: 0 } });
-        assert.deepEqual([...filling.sandbox.state.drives.keys()], [drive]);
-        assert.deepEqual(folders, ["acme/relay"]);
+        assert.deepEqual(added, { answered: { status: 200, body: { read: 0 } }, drives: [] });
+        assert.deepEqual(removed, {
+          answered: { status: 200, body: { read: 0 } },
+          drives: [workspaceDriveName(workspaceId)],
+        });
       }),
   );
 
@@ -1437,6 +1510,136 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         assert.deepEqual(answered, { status: 200, body: { read: 0 } });
         const stored = Option.getOrThrow(yield* readTask(owner, task.id));
         assert.equal(stored.task.repository, `acme/${name}`);
+      }),
+  );
+  it.effect(
+    "a member's mention of the bot on an issue starts an agent as them on a task made in the repository, marks the comment heard, and a redelivery starts nothing again",
+    () =>
+      Effect.gen(function* () {
+        const writer = yield* openGithubUser();
+        yield* connectAgentApiKeys(writer);
+        const installation = installationOfRelay();
+        const { workspaceId } = yield* startTask(writer, { name: "Elsewhere" });
+        yield* connectWorkspaceGitHub(workspaceId, installation);
+        // A slug spelled with a hyphen, as the deployed App's is.
+        const slug = "luke-agent";
+        const app = GitHubApp.layer({ ...GITHUB_APP_SETTINGS, slug });
+        const github = githubReaching([installation], app);
+        const commentId = 31_337;
+
+        const comment = commentDelivery(
+          installation.id,
+          { number: 7, pullRequest: false },
+          // A tilde inside a sentence opens no fence, and a fence closed on a CRLF line ends there,
+          // so the mention after both is read.
+          `The ~~~ in the expiry header breaks invitations:\r\n\`\`\`\r\nexpires_in: 3600\r\n\`\`\`\r\n@${slug} find out why`,
+          MEMBER_WRITER,
+          commentId,
+        );
+
+        const answered = yield* answer(github, SECRET, delivery("issue_comment", comment));
+        yield* answer(github, SECRET, delivery("issue_comment", comment));
+
+        assert.deepEqual(answered, { status: 200, body: { read: 0, queued: 0, told: 0 } });
+
+        const started = yield* Database.use((db) =>
+          db.select().from(agentTable).where(eq(agentTable.userId, writer)),
+        );
+
+        assert.equal(started.length, 1);
+        const made = Option.getOrThrow(yield* readTask(writer, started[0]?.taskId ?? ""));
+        assert.equal(made.task.repository, RELAY_FULL_NAME);
+        assert.equal(made.task.status, TASK_STATUS.IN_PROGRESS);
+        assert.equal(made.task.assignee?.userId, writer);
+        assert.deepEqual(
+          HARNESS.heard.filter((heard) => heard.account === writer),
+          [{ call: "open", account: writer }],
+        );
+        assert.deepEqual(appWrites(github), [
+          { path: `/comments/${commentId}/reactions`, body: JSON.stringify({ content: "eyes" }) },
+        ]);
+      }),
+  );
+  it.effect(
+    "a member's mention of the bot on a pull request an agent holds reaches that agent once, as their message, and is not told it again as GitHub's comment",
+    () =>
+      Effect.gen(function* () {
+        const pull = { state: "open", merged: false, conclusion: "success" } as const;
+        const { github, ref, owner, agent, installation } = yield* openAgent({ ...pull });
+        yield* claimRuntimeSession(
+          { userId: owner, conversationId: agent.conversationId },
+          `wrun_${randomUUID()}`,
+          yield* DateTime.nowAsDate,
+        );
+        yield* answer(github, SECRET, delivery("pull_request", pullRequestDelivery("opened", ref)));
+
+        const comment = commentDelivery(
+          installation.id,
+          { number: 41, pullRequest: true },
+          "@Vespin cover the expired invitation too",
+          MEMBER_WRITER,
+        );
+
+        const answered = yield* answer(github, SECRET, delivery("issue_comment", comment));
+
+        assert.deepEqual(answered, { status: 200, body: { read: 0, queued: 0, told: 0 } });
+        assert.deepEqual(
+          HARNESS.heard.filter((heard) => heard.account === owner),
+          [{ call: "send", account: owner }],
+        );
+        assert.deepEqual(
+          appWrites(github).map((write) => write.path),
+          [`/comments/${comment.comment.id}/reactions`],
+        );
+      }),
+  );
+  it.effect(
+    "a mention inside code or by a writer without write access is not heard, and one by a writer who is no member is answered so and starts nothing",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        const installation = installationOfRelay();
+        const { workspaceId } = yield* startTask(owner, { name: "Elsewhere" });
+        yield* connectWorkspaceGitHub(workspaceId, installation);
+        const github = githubReaching([installation]);
+        const on = { number: 9, pullRequest: false };
+        const words = `@${GITHUB_FIXTURE.SLUG} please fix this`;
+
+        const quoted = `~~~\n${words}\n~~~`;
+
+        yield* answer(
+          github,
+          SECRET,
+          delivery("issue_comment", commentDelivery(installation.id, on, quoted, MEMBER_WRITER)),
+        );
+
+        assert.deepEqual(appWrites(github), []);
+
+        const outsider = { ...MEMBER_WRITER, association: "CONTRIBUTOR" };
+        yield* answer(
+          github,
+          SECRET,
+          delivery("issue_comment", commentDelivery(installation.id, on, words, outsider)),
+        );
+        assert.deepEqual(appWrites(github), []);
+
+        const stranger = { login: "stranger", id: 777_001, association: "COLLABORATOR" };
+        yield* answer(
+          github,
+          SECRET,
+          delivery("issue_comment", commentDelivery(installation.id, on, words, stranger)),
+        );
+
+        assert.deepEqual(
+          appWrites(github).map((write) => write.path),
+          ["/9/comments"],
+        );
+
+        const started = yield* Database.use((db) =>
+          db.select().from(agentTable).where(eq(agentTable.userId, owner)),
+        );
+
+        assert.deepEqual(started, []);
       }),
   );
 });

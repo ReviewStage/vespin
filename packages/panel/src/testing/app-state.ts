@@ -242,7 +242,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.DESCRIPTION_COMMENTS]: NO_DESCRIPTION_COMMENTS,
     [LIVE_READ.HISTORY]: NO_KEYS_HELD,
     [LIVE_READ.DESCRIPTION_DOCUMENT]: NO_KEYS_HELD,
-    macCommands: { asks: [] },
+    machineCommands: { asks: [] },
     notifications: { status: NOTIFICATIONS_STATUS.UNKNOWN },
     sessionReplay: { permitted: false, halted: false },
     portForwarding: null,

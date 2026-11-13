@@ -7,7 +7,7 @@ import { Option, Predicate, Schema } from "effect";
  * Settings stores both as app settings of this Mac's own (`schema.ts`): the
  * switch, which the host reads as each action on an app arrives, and the
  * apps the developer answered Always allow for, by bundle id, as JSON, which
- * the prompt's Always allow writes (`compose-mac-commands.ts`).
+ * the prompt's Always allow writes (`compose-machine-commands.ts`).
  */
 
 /** What the switch is called, wherever its control stands. */
@@ -30,6 +30,11 @@ export function isComputerUseAppsJson(value: UnparsedWireValue): value is string
 /** The apps the stored value allows, by bundle id; none where nothing is stored. */
 export function computerUseAppsOf(stored: string | undefined): readonly string[] {
   return stored === undefined ? [] : Option.getOrElse(decodeAllowedApps(stored), () => []);
+}
+
+/** The stored value allowing the apps given, each once, in their order. */
+export function computerUseAppsStored(apps: readonly string[]): string {
+  return encodeAllowedApps([...new Set(apps)]);
 }
 
 /** The stored value with one more app allowed, each app once. */

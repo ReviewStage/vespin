@@ -53,6 +53,7 @@ import {
   Server,
   ShieldUser,
   Split,
+  Target,
   Unplug,
   Users,
   Zap,
@@ -196,6 +197,8 @@ export const GLYPH = {
   FEEDBACK: lucideGlyph(MessageSquareHeart),
   // A message waiting behind an agent's running turn, to open the next one.
   QUEUED: lucideGlyph(ListEnd),
+  // A goal an agent works toward across turns until it holds.
+  GOAL: lucideGlyph(Target),
 
   // States.
   // The link to the service lost, as the banner saying so wears it; never an act's.

@@ -128,6 +128,13 @@ const GROUP_OF_PAGE = {
   [SETTINGS_VIEW.SHORTCUTS]: SETTINGS_PAGE_GROUP.THIS_MAC,
 } as const satisfies Record<SettingsView, SettingsPageGroup>;
 
+/** What each of the Settings groups is headed by where no workspace is listed to name the first, on the panel's sidebar and the iOS app's Settings alike. */
+export const SETTINGS_PAGE_GROUP_HEADING = {
+  [SETTINGS_PAGE_GROUP.WORKSPACE]: "Workspace",
+  [SETTINGS_PAGE_GROUP.ACCOUNT]: "Account",
+  [SETTINGS_PAGE_GROUP.THIS_MAC]: "This Mac",
+} as const satisfies Record<SettingsPageGroup, string>;
+
 /** The Settings sidebar's groups in the order it draws them, each with its pages in the list's own order. */
 export const SETTINGS_PAGE_GROUPS: readonly {
   readonly group: SettingsPageGroup;

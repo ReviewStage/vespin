@@ -24,6 +24,7 @@ import type {
   SessionCronSummary,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { WireValue } from "@repo/wire";
+import type { GoalNotice } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 import type { ServerNotification } from "./codex-protocol/index.js";
 import type { CodexErrorInfo } from "./codex-protocol/v2/index.js";
@@ -718,7 +719,10 @@ const UuidSchema = Schema.String.check(
  * compacts its thread (`thread/compact/start`), which takes no words, once no
  * turn of its own runs, and Claude Code, whose CLI runs the message's bare
  * `/compact` as its own command, needs no mark. A runner from before the mark
- * hands the message on as words.
+ * hands the message on as words. `goal` asks, in the same way, for the
+ * message's `/goal` to be applied to Codex's thread goal (`thread/goal/set`
+ * or `thread/goal/clear`, `codex-goals.ts`) rather than read as words;
+ * Claude Code runs a bare `/goal` itself and needs no mark.
  */
 const MessageLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.MESSAGE),
@@ -726,6 +730,7 @@ const MessageLineSchema = Schema.Struct({
   content: Schema.Array(ContentBlockSchema),
   resent: Schema.optionalKey(Schema.Boolean),
   compact: Schema.optionalKey(Schema.Boolean),
+  goal: Schema.optionalKey(Schema.Boolean),
 });
 
 /**
@@ -840,6 +845,7 @@ export const RUNNER_EVENT = {
   END: "vespin_runner_end",
   APPROVAL_REQUESTED: "vespin_runner_approval_requested",
   APPROVAL_RESOLVED: "vespin_runner_approval_resolved",
+  GOAL: "vespin_runner_goal",
 } as const;
 
 /** Why a launch ended. */
@@ -958,6 +964,18 @@ export interface RunnerWaiting {
   readonly type: typeof RUNNER_EVENT.WAITING;
   readonly background_tasks: readonly BackgroundTaskSummary[];
   readonly session_crons: readonly SessionCronSummary[];
+}
+
+/**
+ * The GOAL event: the agent's goal moved where nothing the harness puts out
+ * on its own stream says so. Claude Code's `/goal` settling, met or judged
+ * impossible, which the CLI writes only to its transcript (a `goal_status`
+ * attachment), posted just ahead of the `result` that ends the turn it
+ * settled in (`claude-goals.ts`); the checker's verdicts before it are on the
+ * stream itself, as the CLI's `Stop hook feedback` lines.
+ */
+export interface RunnerGoal extends GoalNotice {
+  readonly type: typeof RUNNER_EVENT.GOAL;
 }
 
 /** The CONNECTION_LOST event: the provider's host the launch could not reach and now probes. */
@@ -1154,7 +1172,8 @@ export type RunnerMessage =
   | RunnerIdle
   | RunnerEndEvent
   | RunnerApprovalRequested
-  | RunnerApprovalResolved;
+  | RunnerApprovalResolved
+  | RunnerGoal;
 
 /** One event as posted: its number and its message. */
 export interface RunnerEvent {

@@ -70,7 +70,6 @@
   /* The code's own words, where its highlighter left a run uncolored: GitHub's too. */
   --ui-color-code-text: light-dark(#1f2328, #e6edf3);
   --ui-color-fill-hover: var(--geist-gray-alpha-100);
-  --ui-color-fill-strong: var(--geist-gray-alpha-200);
   --ui-color-fill-selected: var(--geist-gray-alpha-300);
   /* The row open beside its list: the accent's own ink over the ground, a
      step past the neutral fills, so it reads apart from a row merely hovered
@@ -161,7 +160,6 @@
      step each past it, the desktop's light steps, so a chosen segment or a
      pressed button reads apart from one merely hovered. */
   --ui-color-fill-hover: var(--geist-gray-alpha-100);
-  --ui-color-fill-strong: var(--geist-gray-alpha-200);
   --ui-color-fill-selected: var(--geist-gray-alpha-300);
   /* The row open beside its list: the accent's own ink over the ground, a
      step past the neutral fills, so it reads apart from a row merely hovered
@@ -231,7 +229,6 @@
 
   --ui-color-code-text: #e6edf3;
   --ui-color-fill-hover: var(--geist-gray-alpha-100);
-  --ui-color-fill-strong: var(--geist-gray-alpha-200);
   --ui-color-fill-selected: var(--geist-gray-alpha-300);
   /* The row open beside its list: the accent's own ink over the ground, a
      step past the neutral fills, so it reads apart from a row merely hovered

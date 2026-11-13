@@ -27,6 +27,9 @@ import {
   CompactedNoticeSchema,
   type ConnectionLostNotice,
   ConnectionLostNoticeSchema,
+  GOAL_PART,
+  type GoalNotice,
+  GoalNoticeSchema,
   SESSION_CLEARED_PART,
   USAGE_LIMIT_PART,
   UsageLimitAnswerSchema,
@@ -52,13 +55,22 @@ import { drawnCall } from "./native-tool-calls.js";
 import { formatBytes } from "./number-format.js";
 import { TOOL_STATE, type ToolState } from "./tool-call-block.js";
 import {
+  computerAppBundleId,
   computerAppIcon,
   computerAppName,
   remoteCallOf,
   TOOL_TARGET,
   toolTarget,
 } from "./tool-call-model.js";
-import { ROW_PART, type RowReading, TURN_ROW, type TurnRow, turnRows } from "./turn-rows.js";
+import {
+  groupSummary,
+  ROW_PART,
+  type RowReading,
+  TURN_ROW,
+  type TurnRow,
+  turnRows,
+} from "./turn-rows.js";
+import { isAgentTurn, spokenLineOf } from "./voice-call-lines.js";
 
 /** The kinds of part a stored message holds that the tab draws apart. */
 export const AGENT_PART = {
@@ -68,6 +80,8 @@ export const AGENT_PART = {
   COMPACTED: COMPACTED_PART,
   /** Where the agent's harness was started on a fresh session (`/clear`). */
   SESSION_CLEARED: SESSION_CLEARED_PART,
+  /** Where the agent's goal moved: set, judged, paused, resumed, or ended. */
+  GOAL: GOAL_PART,
   TEXT: "text",
   REASONING: "reasoning",
   TOOL: "tool",
@@ -118,6 +132,7 @@ export type AgentPart =
   | { readonly kind: typeof AGENT_PART.CONNECTION_LOST; readonly notice: ConnectionLostNotice }
   | { readonly kind: typeof AGENT_PART.COMPACTED; readonly notice: CompactedNotice }
   | { readonly kind: typeof AGENT_PART.SESSION_CLEARED }
+  | { readonly kind: typeof AGENT_PART.GOAL; readonly notice: GoalNotice }
   | { readonly kind: typeof AGENT_PART.TEXT; readonly text: string }
   | {
       readonly kind: typeof AGENT_PART.REASONING;
@@ -188,6 +203,14 @@ export function agentPart(part: WireValue): AgentPart {
   }
 
   if (part.type === AGENT_PART.SESSION_CLEARED) return { kind: AGENT_PART.SESSION_CLEARED };
+
+  if (part.type === AGENT_PART.GOAL) {
+    const notice = Schema.decodeUnknownOption(GoalNoticeSchema)(part.data);
+
+    return Option.isSome(notice)
+      ? { kind: AGENT_PART.GOAL, notice: notice.value }
+      : { kind: AGENT_PART.OTHER };
+  }
 
   if (part.type === AGENT_PART.STEP_START) return { kind: AGENT_PART.STEP_START };
 
@@ -288,6 +311,37 @@ export function computerIconsByCall(
   }
 
   return byCall;
+}
+
+/** An app a `computer` call used, as its answer named it: its name, and the icon a call kept for it, by the picture's id, where one did. */
+export interface ComputerAppKept {
+  readonly name: string;
+  readonly icon: string | undefined;
+}
+
+/**
+ * The apps the conversation's `computer` calls used, by the bundle id the
+ * Mac answered each with: the name the newest answer gave it, and the icon
+ * the newest call that kept one kept. A call the Mac answered no bundle id
+ * for, as an app with none, or that it refused, is left out.
+ */
+export function computerAppsKept(
+  messages: readonly AgentTranscriptMessage[],
+): ReadonlyMap<string, ComputerAppKept> {
+  const apps = new Map<string, ComputerAppKept>();
+
+  for (const message of messages) {
+    for (const part of agentParts(message)) {
+      if (part.kind !== AGENT_PART.TOOL || part.tool !== AGENT_TOOL.COMPUTER) continue;
+      const bundleId = computerAppBundleId(part.output);
+      const name = computerAppName(undefined, part.output);
+
+      if (bundleId === undefined || name === undefined) continue;
+      apps.set(bundleId, { name, icon: computerAppIcon(part.output) ?? apps.get(bundleId)?.icon });
+    }
+  }
+
+  return apps;
 }
 
 /**
@@ -405,7 +459,8 @@ const AGENT_READING: RowReading<AgentPart> = {
       part.kind === AGENT_PART.USAGE_LIMIT ||
       part.kind === AGENT_PART.CONNECTION_LOST ||
       part.kind === AGENT_PART.COMPACTED ||
-      part.kind === AGENT_PART.SESSION_CLEARED
+      part.kind === AGENT_PART.SESSION_CLEARED ||
+      part.kind === AGENT_PART.GOAL
     ) {
       return ROW_PART.NOTICE;
     }
@@ -534,28 +589,12 @@ function drawnParts(
   message: AgentTranscriptMessage,
   arrived: readonly AgentTranscriptMessage[] = [],
 ): readonly AgentPart[] {
-  const parts = agentParts(message);
+  const parts = arrivedParts(message, arrived);
   const ran = runConnectionCalls(parts);
   const drawn: AgentPart[] = [];
-  const waiting = arrived.toSorted((a, b) => afterStepOf(a) - afterStepOf(b));
-  let begun = 0;
-
-  const arrive = (steps: number) => {
-    while (waiting[0] !== undefined && afterStepOf(waiting[0]) <= steps) {
-      const line = waiting.shift();
-
-      if (line !== undefined) drawn.push({ kind: AGENT_PART.ARRIVED, line });
-    }
-  };
 
   for (const part of parts) {
-    if (part.kind === AGENT_PART.STEP_START) {
-      arrive(begun);
-      begun += 1;
-      continue;
-    }
-
-    if (part.kind === AGENT_PART.OTHER) continue;
+    if (part.kind === AGENT_PART.STEP_START || part.kind === AGENT_PART.OTHER) continue;
 
     if (
       part.kind === AGENT_PART.TOOL &&
@@ -581,14 +620,46 @@ function drawnParts(
     }
   }
 
-  arrive(Number.POSITIVE_INFINITY);
-
   return drawn;
 }
 
 /** The steps of its turn a line arrived after; none for a line no turn took in under way. */
 function afterStepOf(line: AgentTranscriptMessage): number {
   return line.arrivedIn?.afterStep ?? 0;
+}
+
+/** A message's parts with each line that reached its turn while it ran (`arrived`) placed among them as an ARRIVED part: ahead of the first step after the steps it arrived after, or at the end where that step has not begun. */
+export function arrivedParts(
+  message: AgentTranscriptMessage,
+  arrived: readonly AgentTranscriptMessage[] = [],
+): readonly AgentPart[] {
+  const parts = agentParts(message);
+
+  if (arrived.length === 0) return parts;
+  const placed: AgentPart[] = [];
+  const waiting = arrived.toSorted((a, b) => afterStepOf(a) - afterStepOf(b));
+  let begun = 0;
+
+  const arrive = (steps: number) => {
+    while (waiting[0] !== undefined && afterStepOf(waiting[0]) <= steps) {
+      const line = waiting.shift();
+
+      if (line !== undefined) placed.push({ kind: AGENT_PART.ARRIVED, line });
+    }
+  };
+
+  for (const part of parts) {
+    if (part.kind === AGENT_PART.STEP_START) {
+      arrive(begun);
+      begun += 1;
+    }
+
+    placed.push(part);
+  }
+
+  arrive(Number.POSITIVE_INFINITY);
+
+  return placed;
 }
 
 /** How a turn ended where it ended with `end_turn`: the summary its developer reads as its reply, and the follow-ups it offered, at most three. */
@@ -687,6 +758,21 @@ export function agentRows(
   return turnRows(parts, reading, { moving });
 }
 
+/** What a whole turn's work holds, in the words its groups' lines say it (`groupSummary`): its calls, a coding agent's start among them, and its subagents; empty where it made none. */
+export function turnWorkSummary(message: AgentTranscriptMessage): string {
+  const held = { calls: 0, subagents: 0, startedAgents: 0 };
+
+  for (const part of agentParts(message)) {
+    const read = AGENT_READING.part(part);
+
+    if (read === ROW_PART.CALL || read === ROW_PART.LONE_CALL) held.calls += 1;
+    else if (read === ROW_PART.SUBAGENT) held.subagents += 1;
+    else if (read === ROW_PART.AGENT) held.startedAgents += 1;
+  }
+
+  return groupSummary(held);
+}
+
 /** One of a transcript's rows as the tab draws it, with the developer's lines that reached it while its turn ran. */
 export interface PlacedMessage {
   readonly message: AgentTranscriptMessage;
@@ -701,13 +787,15 @@ export interface PlacedMessage {
  * line steers the turn, and drawn below it, it would stand the turn as
  * done, offering a finished turn's actions, then move into it as the
  * service takes it. A line that did not go (`unsent`) reached no turn, so
- * it stands where the order puts it.
+ * it stands where the order puts it, as does every line of a call, either
+ * speaker's, which stands in the order it was said (`voice-call-lines.ts`'s
+ * `callItemsOf`).
  */
 function steeringPlaced(
   messages: readonly AgentTranscriptMessage[],
   unsent: (id: string) => boolean,
 ): readonly AgentTranscriptMessage[] {
-  const at = messages.findLastIndex((message) => message.role === MESSAGE_ROLE.ASSISTANT);
+  const at = messages.findLastIndex(isAgentTurn);
   const journal = messages[at];
 
   if (journal === undefined || journal.finishedAt !== undefined) return messages;
@@ -718,6 +806,7 @@ function steeringPlaced(
     index > at &&
     message.role === MESSAGE_ROLE.USER &&
     message.arrivedIn === undefined &&
+    spokenLineOf(message) === undefined &&
     !unsent(message.id)
       ? { ...message, arrivedIn }
       : message,
@@ -737,26 +826,29 @@ export function placedMessages(
 ): readonly PlacedMessage[] {
   const shown = steeringPlaced(messages, unsent);
 
-  const journals = new Set(
-    shown.filter((message) => message.role === MESSAGE_ROLE.ASSISTANT).map((each) => each.id),
-  );
+  const journals = new Set(shown.filter(isAgentTurn).map((each) => each.id));
 
   const arrived = new Map<string, AgentTranscriptMessage[]>();
 
-  for (const message of shown) {
+  // A line of a call is never moved into a turn, even one the service says took it under way: it stands where it was said.
+  const placedIn = (message: AgentTranscriptMessage) => {
     const journal = message.arrivedIn?.journalId;
 
-    if (journal === undefined || !journals.has(journal)) continue;
+    return journal !== undefined && journals.has(journal) && spokenLineOf(message) === undefined
+      ? journal
+      : undefined;
+  };
+
+  for (const message of shown) {
+    const journal = placedIn(message);
+
+    if (journal === undefined) continue;
     arrived.set(journal, [...(arrived.get(journal) ?? []), message]);
   }
 
-  return shown.flatMap((message) => {
-    const journal = message.arrivedIn?.journalId;
-
-    if (journal !== undefined && journals.has(journal)) return [];
-
-    return [{ message, arrived: arrived.get(message.id) ?? [] }];
-  });
+  return shown.flatMap((message) =>
+    placedIn(message) === undefined ? [{ message, arrived: arrived.get(message.id) ?? [] }] : [],
+  );
 }
 
 /** A stretch of a turn's rows as the tab draws it: the turn's own rows, or a line that reached it while it ran, which stands between them as the developer's own message. */

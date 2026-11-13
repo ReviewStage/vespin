@@ -3,6 +3,7 @@
 import { FEEDBACK_WORDS } from "@repo/features/feedback";
 import { HOST_CONNECT_WORDS } from "@repo/features/host-connect-words";
 import { MCP_CLIENTS_WORDS } from "@repo/features/mcp-clients-words";
+import { PUSH_NOTIFICATIONS_TITLE } from "@repo/features/push-device-model";
 import { SETTINGS_PAGE_TITLE, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { BAR_TITLE, useColors } from "@repo/ui-native";
 import { Stack } from "expo-router";
@@ -28,7 +29,7 @@ export default function SettingsLayout() {
         headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         headerBackButtonDisplayMode: "minimal",
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: colors.SIDEBAR },
+        contentStyle: { backgroundColor: colors.GROUPED },
       }}
     >
       <Stack.Screen name="index" options={{ title: "Settings" }} />
@@ -40,6 +41,7 @@ export default function SettingsLayout() {
         name="workspace"
         options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.WORKSPACE] }}
       />
+      <Stack.Screen name="notifications" options={{ title: PUSH_NOTIFICATIONS_TITLE }} />
       <Stack.Screen name="agents" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.AGENTS] }} />
       <Stack.Screen
         name="integrations"

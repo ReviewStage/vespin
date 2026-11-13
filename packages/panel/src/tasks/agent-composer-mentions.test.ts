@@ -33,7 +33,7 @@ import { TASK_SKILL_SOURCE, TASK_TREE_ENTRY } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW, TASKS_READ, type TasksView } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
+import { EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
 import { experimentsOn } from "@repo/settings/testing";
 import { ACTOR_KIND, ACTOR_STATE } from "@repo/ui/actor-model";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
@@ -52,6 +52,7 @@ import {
 } from "../testing/app-bridge.js";
 import { DESKTOP_LINKS, fakeAppPlatform } from "../testing/app-platform.js";
 import {
+  DESKTOP_CAPABILITIES,
   handHostReads,
   holdIntegrations,
   holdIntegrationTools,
@@ -282,6 +283,23 @@ const LISTED_TOOLS = [
   { name: "..", description: "A name an address resolves away." },
 ];
 
+/** The apps on this Mac, as its host lists them. */
+const MAC_APPS = [
+  { name: "Simulator", bundleId: "com.apple.iphonesimulator", running: true, allowed: false },
+  { name: "Notes", bundleId: "com.apple.Notes", running: false, allowed: true },
+];
+
+/** The reader's own machines that always allow an app, as the service answers them: Notes on both, Slack on one, which named it. */
+const ALLOWED_MACHINES = [
+  {
+    deviceId: "00000000-0000-4000-8000-000000000001",
+    name: "Studio",
+    apps: ["com.apple.Notes", "com.tinyspeck.slackmacgap"],
+    looks: [{ app: "com.tinyspeck.slackmacgap", name: "Slack" }],
+  },
+  { deviceId: "00000000-0000-4000-8000-000000000002", name: "Laptop", apps: ["com.apple.Notes"] },
+];
+
 /** What main answers the box's acts with on the act port, every one told. */
 function answer(request: AnyAct): Promise<FakeActAnswer> {
   told.push(request);
@@ -295,6 +313,19 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
     deliverTasks(tasksView());
 
     return Promise.resolve({ status: FAKE_ANSWER.DONE, value: undefined });
+  }
+
+  // The Mac lists Simulator running and Notes installed, and draws no icon of its own for either.
+  if (request.kind === ACT_KIND.COMPUTER_USE_APPS) {
+    return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { apps: MAC_APPS } });
+  }
+
+  if (request.kind === ACT_KIND.HOSTS_ALLOWED_APPS) {
+    return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { machines: ALLOWED_MACHINES } });
+  }
+
+  if (request.kind === ACT_KIND.COMPUTER_USE_APP_ICON) {
+    return Promise.resolve({ status: FAKE_ANSWER.DONE, value: {} });
   }
 
   return Promise.resolve(
@@ -784,6 +815,101 @@ test("an @ in the box browses the account's connected MCP servers as one kind, a
   assert.deepEqual(tools, ["Linear · list_issues"]);
   assert.deepEqual(sent, [
     `Use ${mentionMarkdown({ kind: MENTION_KIND.TOOL, provider: INTEGRATION_PROVIDER.LINEAR, tool: "list_issues" }, "Linear · list_issues", PLACE)}`,
+  ]);
+});
+
+test("with Computer use on, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
+  const sent: string[] = [];
+
+  const sender: MessageSender = (_agentId, { text }) => {
+    sent.push(text);
+
+    return new Promise<AgentAgentAnswer>(ignore);
+  };
+
+  const state = stateWith(experimentsOn(EXPERIMENT.DESCRIPTIONS, EXPERIMENT.COMPUTER_USE), {
+    tasks: tasksView(),
+  });
+
+  fakeActs({ act: answer, requestAppState: () => Promise.resolve(state) });
+
+  const { container } = drawing(
+    createElement(Box, { sender, skills: noSkills }),
+    planPage([]),
+    state,
+  );
+
+  await settle();
+
+  typeInComposer(container, "Check @sim");
+  await settle();
+  const apps = groupsListed(container).find(([group]) => group === "Apps");
+  pressInComposer(container, "Enter");
+  await settle();
+  pressInComposer(container, "Enter");
+  await settle();
+
+  assert.deepEqual(apps, ["Apps", ["Simulator"]]);
+  assert.deepEqual(sent, [
+    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.iphonesimulator" }, "Simulator", PLACE)}`,
+  ]);
+});
+
+test("off a Mac that runs its commands, an @ in the box offers the apps the reader's machines always allow, each by the name its machine posted and saying the machines it is allowed on, a pick sent as the app's mention by its bundle id", async () => {
+  const sent: string[] = [];
+
+  const sender: MessageSender = (_agentId, { text }) => {
+    sent.push(text);
+
+    return new Promise<AgentAgentAnswer>(ignore);
+  };
+
+  const experiments = experimentsOn(EXPERIMENT.DESCRIPTIONS, EXPERIMENT.COMPUTER_USE);
+  const idle = stateWith(experiments, {});
+
+  // A window that runs no Mac commands, as the web's tab is.
+  const state = stateWith(experiments, {
+    tasks: tasksView(),
+    run: {
+      ...idle.run,
+      capabilities: DESKTOP_CAPABILITIES.filter(
+        (capability) => capability !== HOST_CAPABILITY.MACHINE_COMMANDS,
+      ),
+    },
+  });
+
+  fakeActs({ act: answer, requestAppState: () => Promise.resolve(state) });
+
+  const { container } = drawing(
+    createElement(Box, { sender, skills: noSkills }),
+    planPage([]),
+    state,
+  );
+
+  await settle();
+
+  typeInComposer(container, "Check @apps:");
+  await settle();
+
+  const rows = [...container.querySelectorAll('.mention-menu [role="option"]')].map((row) => [
+    row.querySelector(".ui-combobox-option-label")?.textContent ?? "",
+    row.querySelector(".ui-combobox-option-detail")?.textContent ?? "",
+  ]);
+
+  typeInComposer(container, "slack");
+  await settle();
+  pressInComposer(container, "Enter");
+  await settle();
+  pressInComposer(container, "Enter");
+  await settle();
+
+  assert.deepEqual(rows, [
+    ["Computer", ""],
+    ["Notes", "Always allowed on Studio, Laptop"],
+    ["Slack", "Always allowed on Studio"],
+  ]);
+  assert.deepEqual(sent, [
+    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.tinyspeck.slackmacgap" }, "Slack", PLACE)}`,
   ]);
 });
 

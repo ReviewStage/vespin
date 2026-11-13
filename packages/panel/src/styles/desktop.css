@@ -905,6 +905,7 @@ body,
 .desktop-agent .agent-follow-offer-dock,
 .desktop-agent .agent-computer-dock,
 .desktop-agent .agent-queue-dock,
+.desktop-agent .agent-goal-dock,
 .desktop-agent .draft-fork-dock,
 .desktop-agent .agent-composer,
 .desktop-inbox .conversation-log.inbox-board,
@@ -1157,6 +1158,12 @@ body,
   --ui-toolbar-height: var(--secondary-bar-height);
   --ui-toolbar-block-inset: var(--ui-tight-gap);
   --ui-toolbar-ground: var(--ui-color-fill-hover);
+}
+
+/* The Inbox's intro (`page-intro.tsx`) stands at the head of the rows, a
+   section's gap above the first, and rolls up as the rows close over it. */
+.inbox-tasks-body > .ui-reveal {
+  margin-block-end: var(--ui-section-gap);
 }
 
 /* A group's room above it counts only the groups still in the layout, so a
@@ -1599,6 +1606,7 @@ body,
 .side-panel-content .agent-follow-offer-dock,
 .side-panel-content .agent-computer-dock,
 .side-panel-content .agent-queue-dock,
+.side-panel-content .agent-goal-dock,
 .side-panel-content .draft-fork-dock,
 .side-panel-content .agent-tab-foot .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));

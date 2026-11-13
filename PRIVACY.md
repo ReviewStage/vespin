@@ -33,8 +33,11 @@ and we never store the audio. What you and the voice say is kept as text in
 the agent's conversation, one message for each thing either of you said, so
 the agent's transcript shows both sides of the call. What you say reaches the
 agent as its messages, as a typed line does. What the voice says stays in the
-transcript and is never handed to the agent's model. We keep nothing else of a
-call but its length, which counts toward your day and in our usage counts.
+transcript and is never handed to the agent's model. While a call is under way,
+the Service keeps one record of who is calling which agent and the state of the
+call's session, and deletes it when the call ends. Past its end we keep nothing
+else of a call but its length, which counts toward your day and in our usage
+counts.
 
 ### Workspaces, tasks, and descriptions
 
@@ -47,10 +50,11 @@ full revision history, comments on the description, inbox items and their answer
 pages that agents make, pictures and short videos added to any of these, and,
 if the Memory experiment is on, short facts agents save about how your team
 works. Every member of the workspace can see all of this. Agents record their
-videos as WebM, which iPhones cannot play, so for each video an agent records
+browser's videos as WebM, which iPhones cannot play, so for each video an agent records
 in a cloud sandbox, we also keep an MP4 copy, made in that agent's sandbox.
 The copy is shown to the same people as its video, is deleted with it, and is
-the version the iPhone app plays.
+the version the iPhone app plays. A video of an app on your Mac (see "Apps on
+your Mac") is an MP4 already, which every app plays, so it has no copy.
 
 ### Agent conversations
 
@@ -152,6 +156,29 @@ agents terminals, password managers, System Settings, or Vespin itself, but
 **anything an allowed app's window shows goes too**, a message or a password
 on screen included. You can take an app off the always-allowed list, or turn
 computer use off, in Settings › This Mac.
+
+An agent may also record an app you allowed as a video, up to two minutes, to
+show you a flow it drove there. Vespin on your Mac records that app's window,
+with the agent's pointer drawn over it, and keeps the video on your Mac's disk
+until the agent's next recording replaces it. When the agent stops recording,
+the video is uploaded and stored with the agent's transcript, where members
+who can open the task can play it, and is deleted with it; a copy is also saved
+on the machine the agent runs on, its cloud sandbox or your Mac, so it can post
+the video to an inbox thread or add it to the task's description, where it is
+kept and deleted as any other video there is. The video is never sent to the
+agent's model provider, and session recordings never include it. Like a
+screenshot, **anything the app's window shows while it records goes too**.
+
+When you type `@` in a message to an agent, Vespin lists the apps running and
+installed on that Mac so you can point the agent at one. The list is read on
+your Mac and never leaves it; only an app you pick is sent, by its name and
+bundle id, as part of your message, which the agent and anyone who can open
+the task can read.
+
+The apps you always allow on a Mac are kept with that Mac's settings on our
+servers, by bundle id, with each app's name and icon as the Mac shows them,
+so that `@` in the web app, or on another of your machines, can list them.
+Only you see them, and only while Computer use is on for you.
 
 ### Agents on your own machines
 

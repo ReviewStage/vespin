@@ -1,3 +1,4 @@
+import type { ComputerAppKept } from "@repo/features/agent-parts";
 import type { NamedServer } from "@repo/features/agent-servers-model";
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
@@ -54,6 +55,7 @@ import {
 } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxItems, AppStateSnapshot } from "@repo/host/app-state";
+import type { MacApp } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import {
@@ -118,6 +120,8 @@ import { Highlighted } from "../search-field.js";
 import { appStateQuery } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { type AgentRowPlace, agentMenuRow, useAgentRowPlace } from "./agent-menu-row.js";
+import { useKeptApps } from "./agent-pictures.js";
+import { useOnThatMac } from "./computer-permission-note.js";
 import {
   DATE_PICKER_CLOSE,
   type DatePicked,
@@ -128,6 +132,7 @@ import {
 import { fileFolder } from "./file-ref-model.js";
 import { InboxItemChipCard } from "./inbox-item-chip.js";
 import { inboxItemGlyph } from "./inbox-item-parts.js";
+import { type MachineAllowedApps, useAllowedApps, useMacApps } from "./mac-apps.js";
 import { PageCard } from "./page-card.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
@@ -264,6 +269,8 @@ const MENTION_GROUP = {
   AUTOMATIONS: "Automations",
   PULL_REQUESTS: "Pull requests",
   SKILLS: "Skills",
+  /** The apps on the developer's Mac, which an agent uses through `computer`. */
+  APPS: "Apps",
   SERVERS: MCP_SERVER_LABEL.many,
   FROM: "Browse",
 } as const;
@@ -281,6 +288,7 @@ const MENTION_FROM = {
   PULL_REQUESTS: "prs",
   SKILLS: "skills",
   DATES: "dates",
+  APPS: "apps",
   SERVERS: "servers",
   SERVER: "server",
 } as const;
@@ -298,6 +306,7 @@ const KIND_ENTITY = {
   [MENTION_FROM.PULL_REQUESTS]: ENTITY_KIND.PULL_REQUEST,
   [MENTION_FROM.SKILLS]: ENTITY_KIND.SKILL,
   [MENTION_FROM.DATES]: ENTITY_KIND.DATE,
+  [MENTION_FROM.APPS]: ENTITY_KIND.MAC_APP,
   [MENTION_FROM.SERVERS]: ENTITY_KIND.SERVER,
 } as const satisfies Record<
   Exclude<
@@ -841,6 +850,96 @@ function pullRequestRows(pullRequests: readonly MentionablePullRequest[]): Menti
   });
 }
 
+/** What an app's row says after its name: that the developer always allows it, or that it runs now. */
+const APP_DETAIL = { ALLOWED: "Always allowed", RUNNING: "Running" } as const;
+
+/** The row that names the Mac itself, any app on it, found by the words a person says it with. */
+const COMPUTER_ROW: MentionRow = {
+  mention: { kind: MENTION_KIND.COMPUTER },
+  name: "Computer",
+  detail: undefined,
+  terms: "Computer Mac screen",
+};
+
+/**
+ * The Mac's own row, then each app on this Mac's row, as the host lists
+ * them, those running first; none where it lists none, as while agents use
+ * no apps here. A pick names an app by its bundle id, or by its name where
+ * it has none, and it is found by either. Note that routing's R3 adds the
+ * Mac each row stands on once a command can name one; until then a row
+ * names the app alone.
+ */
+function appRows(apps: readonly MacApp[]): MentionRow[] {
+  if (apps.length === 0) return [];
+
+  const rows = apps.map(({ name, bundleId, running, allowed }): MentionRow => {
+    const detail = allowed ? APP_DETAIL.ALLOWED : running ? APP_DETAIL.RUNNING : undefined;
+
+    return {
+      mention: { kind: MENTION_KIND.MAC_APP, app: bundleId ?? name },
+      name,
+      detail,
+      terms: bundleId === undefined ? name : `${name} ${bundleId}`,
+    };
+  });
+
+  return [COMPUTER_ROW, ...rows];
+}
+
+/**
+ * The name an app is called by where no call named it: a bundle id's last
+ * part, its first letter raised ("com.apple.Notes" is "Notes"), or the name
+ * an app with no bundle id is allowed by as it stands.
+ */
+function allowedAppName(app: string): string {
+  if (/\s/u.test(app) || !app.includes(".")) return app;
+  const last = app.slice(app.lastIndexOf(".") + 1);
+
+  return last === "" ? app : `${last.charAt(0).toUpperCase()}${last.slice(1)}`;
+}
+
+/**
+ * The Mac's own row, then a row for each app the reader's own machines
+ * always allow, by name, as the list offers them where it stands off the
+ * Mac the agent uses; none where no machine allows one. An app is named as
+ * a machine that allows it posted it, else as a `computer` call in the
+ * conversation named it, else by its bundle id, and is found by either. Where the reader has more than one
+ * machine that allows an app, each row names the machines it is allowed on.
+ */
+function allowedAppRows(
+  machines: readonly MachineAllowedApps[],
+  kept: ReadonlyMap<string, ComputerAppKept>,
+): MentionRow[] {
+  const allowedOn = new Map<string, string[]>();
+  const posted = new Map<string, string>();
+
+  for (const machine of machines) {
+    for (const app of machine.apps) {
+      allowedOn.set(app, [...(allowedOn.get(app) ?? []), machine.name]);
+    }
+
+    for (const look of machine.looks ?? []) {
+      if (!posted.has(look.app)) posted.set(look.app, look.name);
+    }
+  }
+
+  if (allowedOn.size === 0) return [];
+  const named = machines.length > 1;
+
+  const rows = [...allowedOn].map(([app, on]): MentionRow => {
+    const name = posted.get(app) ?? kept.get(app)?.name ?? allowedAppName(app);
+
+    return {
+      mention: { kind: MENTION_KIND.MAC_APP, app },
+      name,
+      detail: named ? `${APP_DETAIL.ALLOWED} on ${on.join(", ")}` : APP_DETAIL.ALLOWED,
+      terms: `${name} ${app}`,
+    };
+  });
+
+  return [COMPUTER_ROW, ...rows.toSorted((one, other) => one.name.localeCompare(other.name))];
+}
+
 /** Each connected server's row, and where asked each of its tools' rows as far as its read answered, found by the server's name and the tool's. */
 function serverRows(
   servers: readonly NamedServer[],
@@ -1107,6 +1206,8 @@ interface KindRows {
   readonly skills: readonly MentionRow[];
   /** The date the words name, or the dates a list narrowed to dates offers. */
   readonly dates: readonly MentionRow[];
+  /** The apps on this Mac, those running first. */
+  readonly apps: readonly MentionRow[];
   /** The connected servers' rows, or the one server's the list is narrowed to. */
   readonly servers: readonly MentionRow[];
 }
@@ -1142,6 +1243,8 @@ function narrowedRows(
       return best(rows.skills, term, PER_KIND);
     case MENTION_FROM.DATES:
       return rows.dates;
+    case MENTION_FROM.APPS:
+      return best(rows.apps, term, PER_KIND);
     case MENTION_FROM.SERVERS:
     case MENTION_FROM.SERVER:
       return best(rows.servers, term, PER_KIND);
@@ -1255,6 +1358,7 @@ function groupsFor(
     group(MENTION_GROUP.AUTOMATIONS, rows.automations, MENTION_FROM.AUTOMATIONS),
     group(MENTION_GROUP.PULL_REQUESTS, rows.pullRequests, MENTION_FROM.PULL_REQUESTS),
     group(MENTION_GROUP.SKILLS, rows.skills, MENTION_FROM.SKILLS),
+    group(MENTION_GROUP.APPS, rows.apps, MENTION_FROM.APPS),
     group(MENTION_GROUP.SERVERS, rows.servers, MENTION_FROM.SERVERS),
   ].filter((each) => each.rows.length > 0);
 }
@@ -1472,6 +1576,8 @@ const MENTION_READ = {
   SKILLS: "skills",
   THREADS: "Inbox threads",
   AUTOMATIONS: "automations",
+  APPS: "the apps on this Mac",
+  ALLOWED_APPS: "the apps your machines allow",
 } as const;
 
 type MentionRead = (typeof MENTION_READ)[keyof typeof MENTION_READ];
@@ -1711,7 +1817,8 @@ function repositoryPathsQueryOptions(place: {
  * holds it, its repository's files and folders where it names one, its
  * Inbox threads and automations where it holds any, the pull requests
  * the plan's agents published, the repository's skills where the words go
- * to an agent, dates wherever the list stands, every connected server at
+ * to an agent, dates wherever the list stands, the apps on this Mac where
+ * the words go to an agent and it may read them, every connected server at
  * once, and each connected server alone, the first of each provider
  * narrowed to by the provider's own word.
  */
@@ -1724,6 +1831,7 @@ function kindsOf(
   tasks: number,
   inbox: { readonly threads: number; readonly automations: number },
   descriptionsOn: boolean,
+  apps: number,
 ): readonly MentionKind[] {
   const { holder, repository } = source;
   const taskId = holder?.taskId;
@@ -1753,6 +1861,7 @@ function kindsOf(
     [MENTION_FROM.PULL_REQUESTS, MENTION_GROUP.PULL_REQUESTS, pullRequests > 0],
     [MENTION_FROM.SKILLS, MENTION_GROUP.SKILLS, (skills?.known ?? []).length > 0],
     [MENTION_FROM.DATES, MENTION_GROUP.DATES, true],
+    [MENTION_FROM.APPS, MENTION_GROUP.APPS, apps > 0],
     [MENTION_FROM.SERVERS, MENTION_GROUP.SERVERS, servers.length > 0],
   ];
 
@@ -1824,6 +1933,7 @@ export function useMentionPicker({
   self,
   skills,
   servers = NO_SERVERS,
+  macApps = false,
   room,
   side,
   onChoose,
@@ -1835,6 +1945,8 @@ export function useMentionPicker({
   skills?: MentionSkills | undefined;
   /** The account's connected MCP servers, where the words go to an agent; none for the description's own words. */
   servers?: readonly NamedServer[] | undefined;
+  /** Whether the list offers apps, where the words go to an agent: this Mac's where the window is the Mac the agent uses, else those the reader's machines always allow; never for the description's own words. */
+  macApps?: boolean | undefined;
   /** The box the editor stands in: a press in it is the editor's, and the date picker hangs in it. */
   room: RefObject<HTMLElement | null>;
   side: MentionMenuSide;
@@ -1941,6 +2053,18 @@ export function useMentionPicker({
       ? undefined
       : taskKey(tasksWorkspace.name, planNumber);
 
+  // The apps offered are this Mac's where the window is the Mac the agent uses, else those the reader's own machines always allow, each read while the list stands open (`mac-apps.ts`).
+  const onThatMac = useOnThatMac();
+  const apps = useMacApps(open && macApps && onThatMac);
+  const allowedApps = useAllowedApps(open && macApps && !onThatMac);
+  const keptApps = useKeptApps();
+
+  const appRowsOffered = !open
+    ? []
+    : onThatMac
+      ? appRows(apps.apps)
+      : allowedAppRows(allowedApps.machines, keptApps);
+
   // The list is narrowed to the kind a key opened or whose word was typed, and searched by the words after it.
   const kinds = open
     ? kindsOf(
@@ -1955,6 +2079,7 @@ export function useMentionPicker({
           automations: automationRowsOffered.length,
         },
         descriptionsOn,
+        appRowsOffered.length,
       )
     : [];
 
@@ -2048,6 +2173,7 @@ export function useMentionPicker({
             pullRequests: pullRequestRows(source.pullRequests ?? NO_PULL_REQUESTS),
             skills: skillRows(skills?.known ?? []),
             dates: dateRows(term, narrow?.from === MENTION_FROM.DATES, now, readerZone()),
+            apps: appRowsOffered,
             // A list narrowed to one server offers its tools before a word is typed.
             servers:
               narrow?.from === MENTION_FROM.SERVER
@@ -2073,7 +2199,9 @@ export function useMentionPicker({
         treeKey(taskId, workspaceId, repository) !== undefined) ||
       (skills !== undefined && skills.known === undefined && !skills.unread) ||
       (threadsAsked && feed.isPending) ||
-      (automationsAsked && automationsRead === undefined));
+      (automationsAsked && automationsRead === undefined) ||
+      apps.reading ||
+      allowedApps.reading);
 
   // The list says a read could not be read, never that nothing matches, and Retry reads it again.
   const failures: readonly MentionReadFailure[] = open
@@ -2089,6 +2217,10 @@ export function useMentionPicker({
           : []),
         ...(automationsRead !== undefined && "failure" in automationsRead
           ? [{ read: MENTION_READ.AUTOMATIONS, retry: automations.reload }]
+          : []),
+        ...(apps.failed ? [{ read: MENTION_READ.APPS, retry: apps.retry }] : []),
+        ...(allowedApps.failed
+          ? [{ read: MENTION_READ.ALLOWED_APPS, retry: allowedApps.retry }]
           : []),
       ]
     : [];

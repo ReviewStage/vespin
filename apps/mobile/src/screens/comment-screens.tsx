@@ -21,6 +21,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
+import { useOnOwnTab } from "../tab-route.js";
 import {
   threadMessages,
   threadOpen,
@@ -149,6 +150,7 @@ export function NewCommentScreen() {
   } = useLocalSearchParams<{ task: string; from: string; to: string; quote: string }>();
 
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const colors = useColors();
   const openLink = useOpenLink();
   const overview = useTaskOverview(taskId);
@@ -175,7 +177,7 @@ export function NewCommentScreen() {
     void start.send().then((threadId) => {
       if (threadId === undefined) return;
       router.replace({
-        pathname: "/tasks/comments/[id]",
+        pathname: onOwnTab("/tasks/comments/[id]"),
         params: { id: threadId, task: overview?.task.id ?? taskId },
       });
     });

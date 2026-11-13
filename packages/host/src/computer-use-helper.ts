@@ -2,7 +2,8 @@ import type {
   ComputerApp,
   ComputerOutcome,
   MacComputerAction,
-} from "@repo/features/mac-command-wire";
+} from "@repo/features/machine-command-wire";
+import { RECORDING_FAILURE, type RecordingFailure } from "@repo/features/recording-wire";
 import {
   type Cause,
   Clock,
@@ -32,7 +33,8 @@ import { ChildProcess, type ChildProcessSpawner } from "effect/process";
  *
  * The helper speaks in its own spelling (`bundle_id`, `icon_png`); what it
  * answers is read through a Schema and handed on in the wire's
- * (`ComputerOutcome`).
+ * (`ComputerOutcome`), but for a stopped recording's video, which the host
+ * posts up on a path of its own before the result.
  */
 
 /** What the helper refuses or fails with, by its own words for why. */
@@ -44,24 +46,56 @@ export const COMPUTER_HELPER_FAILURE = {
   NO_WINDOW: "no_window",
   NO_STATE: "no_state",
   FAILED: "failed",
+  /** No recording runs or waits to be read. */
+  RECORDING_NONE: "recording_none",
+  /** A recording already runs, so another cannot start. */
+  RECORDING_RUNNING: "recording_running",
+  /** The window drew nothing while it was recorded. */
+  RECORDING_EMPTY: "recording_empty",
+  /** The encoder failed. */
+  RECORDING_ENCODER: "recording_encoder",
+  /** No size the helper tried fit the byte bound. */
+  RECORDING_TOO_LARGE: "recording_too_large",
 } as const;
+
+/** Each of the helper's failures of a recording as the wire names it (`@repo/features/recording-wire`). */
+const RECORDING_FAILURE_OF: ReadonlyMap<string, RecordingFailure> = new Map([
+  [COMPUTER_HELPER_FAILURE.RECORDING_NONE, RECORDING_FAILURE.NONE],
+  [COMPUTER_HELPER_FAILURE.RECORDING_RUNNING, RECORDING_FAILURE.RUNNING],
+  [COMPUTER_HELPER_FAILURE.RECORDING_EMPTY, RECORDING_FAILURE.EMPTY],
+  [COMPUTER_HELPER_FAILURE.RECORDING_ENCODER, RECORDING_FAILURE.ENCODER],
+  [COMPUTER_HELPER_FAILURE.RECORDING_TOO_LARGE, RECORDING_FAILURE.TOO_LARGE],
+]);
 
 /**
  * The requests beyond the agent's actions: one app named, without launching
- * it, so the developer can be asked about it; and the Mac's two grants,
+ * it, so the developer can be asked about it; the apps installed, without
+ * their icons, for the developer's @ list; and the Mac's two grants,
  * read, or asked for by macOS's own prompts, for Settings to show.
  */
 export const COMPUTER_HELPER_OP = {
   DESCRIBE_APP: "describe_app",
+  LIST_INSTALLED_APPS: "list_installed_apps",
   PERMISSIONS: "permissions",
   REQUEST_PERMISSIONS: "request_permissions",
 } as const;
 
+/**
+ * The app the developer allowed, pinned to an action on it so the helper
+ * acts on that app alone: by its bundle id, or by its process where it has
+ * none. The helper refuses an action whose app it finds no longer matches.
+ */
+export interface ComputerAppPin {
+  readonly pin_bundle_id?: string;
+  readonly pin_pid?: number;
+}
+
 export type ComputerHelperRequest =
-  | MacComputerAction
+  | (MacComputerAction & ComputerAppPin)
   | { readonly op: typeof COMPUTER_HELPER_OP.DESCRIBE_APP; readonly app: string }
   | {
       readonly op:
+        | typeof COMPUTER_HELPER_OP.LIST_INSTALLED_APPS
         | typeof COMPUTER_HELPER_OP.PERMISSIONS
         | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS;
     };
@@ -72,24 +106,39 @@ export interface ComputerPermissions {
   readonly accessibility: boolean;
 }
 
-/** What one request came to: what the action did, the app described, or why the helper did nothing. */
+/** A recording the helper stopped: how long it ran, its size, and its H.264 MP4 as base64, which stays on the Mac's disk until the next recording. */
+export interface ComputerHelperRecording {
+  readonly seconds: number;
+  readonly width: number;
+  readonly height: number;
+  readonly mp4: string;
+}
+
+/** What one request came to: what the action did, a recording stopped, the app described, or why the helper did nothing. */
 export type ComputerHelperAnswer =
   | { readonly outcome: ComputerOutcome }
-  | { readonly described: ComputerApp }
+  | { readonly recording: ComputerHelperRecording }
+  | { readonly described: ComputerApp; readonly pid?: number }
   | { readonly permissions: ComputerPermissions }
   | { readonly failure: string; readonly message: string };
 
 export interface ComputerUseHelperSeam {
-  /** One request answered within `within`, after every request asked before it. */
+  /**
+   * One request answered within `within`, after every request asked before
+   * it; where `stillLet` is given, read once the helper's turn is taken, a
+   * request it answers a reason for is refused with it rather than handed over.
+   */
   readonly ask: (
     request: ComputerHelperRequest,
     within: Duration.Duration,
+    stillLet?: Effect.Effect<string | undefined>,
   ) => Effect.Effect<ComputerHelperAnswer>;
 }
 
 /** How the helper names one app. */
 const helperAppSchema = Schema.Struct({
   name: Schema.String,
+  pid: Schema.optionalKey(Schema.Int),
   bundle_id: Schema.optionalKey(Schema.String),
   icon_png: Schema.optionalKey(Schema.String),
   refused: Schema.Boolean,
@@ -137,6 +186,16 @@ const helperLineSchema = Schema.fromJsonString(
       accessibility: Schema.Boolean,
     }),
     Schema.Struct({ id: Schema.Number, ok: Schema.Literal(true), done: Schema.String }),
+    Schema.Struct({
+      id: Schema.Number,
+      ok: Schema.Literal(true),
+      recorded: Schema.Struct({
+        seconds: Schema.Number,
+        width: Schema.Number,
+        height: Schema.Number,
+        mp4: Schema.String,
+      }),
+    }),
   ]),
 );
 
@@ -156,7 +215,15 @@ function wireApp(app: typeof helperAppSchema.Type): ComputerApp {
 
 /** What a request came to, read off the helper's line for it. */
 function answerOf(line: HelperLine): ComputerHelperAnswer {
-  if (!line.ok) return { failure: line.error.kind, message: line.error.message };
+  if (!line.ok) {
+    const unrecorded = RECORDING_FAILURE_OF.get(line.error.kind);
+
+    return unrecorded === undefined
+      ? { failure: line.error.kind, message: line.error.message }
+      : { outcome: { unrecorded } };
+  }
+
+  if ("recorded" in line) return { recording: line.recorded };
 
   if ("apps" in line) return { outcome: { apps: line.apps.map(wireApp) } };
 
@@ -166,7 +233,11 @@ function answerOf(line: HelperLine): ComputerHelperAnswer {
     return { outcome: { app: wireApp(app), window, elements, truncated, shots } };
   }
 
-  if ("app" in line) return { described: wireApp(line.app) };
+  if ("app" in line) {
+    const { pid } = line.app;
+
+    return { described: wireApp(line.app), ...(pid === undefined ? undefined : { pid }) };
+  }
 
   if ("screen_recording" in line) {
     return {
@@ -179,6 +250,11 @@ function answerOf(line: HelperLine): ComputerHelperAnswer {
 
 /** What a request answers where the helper was still on an earlier one when its own time ran out. */
 const BUSY = "The computer-use helper was busy with an earlier request and did not answer in time.";
+
+/** What a request answers where what lets it moved while it waited its turn. */
+function refusedHere(message: string): ComputerHelperAnswer {
+  return { failure: COMPUTER_HELPER_FAILURE.REFUSED, message };
+}
 
 function failed(message: string): ComputerHelperAnswer {
   return { failure: COMPUTER_HELPER_FAILURE.FAILED, message };
@@ -305,7 +381,11 @@ export function computerUseHelperProcess(
      * rather than waiting out the other's first, and its caller, such as an
      * agent's call the service waits on, is never held past it.
      */
-    const ask = (request: ComputerHelperRequest, within: Duration.Duration) =>
+    const ask = (
+      request: ComputerHelperRequest,
+      within: Duration.Duration,
+      stillLet?: Effect.Effect<string | undefined>,
+    ) =>
       Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
           const deadline = (yield* Clock.currentTimeMillis) + Duration.toMillis(within);
@@ -313,9 +393,16 @@ export function computerUseHelperProcess(
 
           if (Option.isNone(took)) return failed(BUSY);
 
-          return yield* restore(sent(request, deadline)).pipe(
-            Effect.ensuring(Semaphore.release(turn, 1)),
-          );
+          // Note that what lets the request is read again once its turn is taken, since it may have moved while the request waited behind another.
+          const handed = Effect.gen(function* () {
+            const why = stillLet === undefined ? undefined : yield* stillLet;
+
+            if (why !== undefined) return refusedHere(why);
+
+            return yield* sent(request, deadline);
+          });
+
+          return yield* restore(handed).pipe(Effect.ensuring(Semaphore.release(turn, 1)));
         }),
       );
 

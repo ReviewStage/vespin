@@ -9,13 +9,13 @@
     "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
-    "@oxlint/plugins": "1.79.0",
+    "@oxlint/plugins": "1.93.0",
     "effect": "catalog:",
     "oxc-parser": "0.152.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",
-    "oxlint": "1.79.0",
+    "oxlint": "1.93.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

@@ -335,6 +335,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   hosts: {
     list: INTERNAL,
     presence: INTERNAL,
+    // The apps a member's machines always allow are offered in an agent's `@` list; a member's agent reads its own machine's with `computer`.
+    allowedApps: SCREEN_ONLY,
     remove: INTERNAL,
     readPairing: INTERNAL,
     approvePairing: INTERNAL,
@@ -396,7 +398,16 @@ export const MEMBER_MCP_EXCLUSIONS = {
     answerRequest: INTERNAL,
   },
   liveActivities: { startToken: INTERNAL, activityToken: INTERNAL, ended: INTERNAL },
-  macCommands: { waiting: INTERNAL, settle: INTERNAL, claim: INTERNAL, listening: INTERNAL },
+  machineCommands: {
+    waiting: INTERNAL,
+    settle: INTERNAL,
+    recording: INTERNAL,
+    claim: INTERNAL,
+    listening: INTERNAL,
+    join: INTERNAL,
+    saveDeviceSettings: INTERNAL,
+    saveDeviceAppLooks: INTERNAL,
+  },
   pullRequests: { reviewOptions: SCREEN_ONLY },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
   // A page the member hovers, read for their own screen: an agent reads a page with its own tools.

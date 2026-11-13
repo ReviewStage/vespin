@@ -774,7 +774,6 @@ const MEMBER_LIST_AGENTS_TOOL = memberMcpTool({
   run: ({ workspace, ...asked }) => listAsMember(workspace, (call) => runListAgents(call, asked)),
 });
 
-/** A read of one agent names it and, at most, which page of its transcript to read and how many entries. */
 const ReadAgentInputSchema = Schema.Struct({
   agentId: describeWire(
     wireUuidSchema,
@@ -866,7 +865,6 @@ const MEMBER_LIST_MODELS_TOOL = memberMcpTool({
   run: () => Effect.flatMap(AdmittedMember, (member) => runListMemberModels(member.userId)),
 });
 
-/** A read of a page names it by its id and, at most, the version to read. */
 const ReadPageInputSchema = Schema.Struct({
   pageId: describeWire(wireUuidSchema, "The page's id, as a mention of it or a link to it names."),
   version: READ_PAGE_TOOL.inputSchema.fields.version,
@@ -922,7 +920,6 @@ const TASK_FILE_TASK_INPUT = describeWire(
   `The task whose repository to read, by the id ${MEMBER_MCP_TOOL.LIST_TASKS} answered.`,
 );
 
-/** A read of a file names its task, its path, at most the line to start at, and the commit to read it at. */
 const ReadTaskFileInputSchema = Schema.Struct({
   taskId: TASK_FILE_TASK_INPUT,
   path: describeWire(
@@ -971,7 +968,6 @@ const READ_TASK_FILE_TOOL = memberMcpTool({
     }),
 });
 
-/** A listing names its task, at most the folder, and whether everything under it is listed. */
 const ListTaskFolderInputSchema = Schema.Struct({
   taskId: TASK_FILE_TASK_INPUT,
   path: Schema.optionalKey(
@@ -1032,7 +1028,6 @@ const IDEMPOTENT_CHANGE: ToolAnnotations = {
   idempotentHint: true,
 };
 
-/** A change of the member's preferences names their coding agents' default model and effort together, and at most its context window. */
 const UpdatePreferencesInputSchema = Schema.Struct({
   model: describeWire(
     modelChoiceSchema.fields.model,
@@ -1349,7 +1344,6 @@ function deleteTaskRefusalWords(refusal: HostedRefusal): string {
   }
 }
 
-/** A delete names the task alone. */
 const DeleteTaskInputSchema = Schema.Struct({
   taskId: describeWire(
     wireUuidSchema,
@@ -1757,10 +1751,8 @@ function memberStartAgentWords(handed: string, newTaskPrompt: string): string {
   );
 }
 
-/** A stop names the agent alone. */
 const AgentIdInputSchema = Schema.Struct({ agentId: ReadAgentInputSchema.fields.agentId });
 
-/** A message names the agent and the member's words. */
 const MessageAgentInputSchema = Schema.Struct({
   agentId: AgentIdInputSchema.fields.agentId,
   text: describeWire(
@@ -1940,7 +1932,6 @@ const MemberQueueChangeSchema = Schema.Union([
   }),
 ]);
 
-/** A change to a queue names the agent and the change. */
 const ChangeAgentQueueInputSchema = Schema.Struct({
   agentId: AgentIdInputSchema.fields.agentId,
   change: describeWire(
@@ -2234,7 +2225,6 @@ const workspaceToChange = (what: string) =>
     ),
   );
 
-/** A members read names the workspace it reads. */
 const ListWorkspaceMembersInputSchema = Schema.Struct({ workspace: WORKSPACE_INPUT });
 
 const LIST_WORKSPACE_MEMBERS_TOOL = memberMcpTool({
@@ -2258,7 +2248,6 @@ const LIST_WORKSPACE_MEMBERS_TOOL = memberMcpTool({
     ),
 });
 
-/** A slug change names the workspace it changes and the slug it takes. */
 const SetWorkspaceSlugInputSchema = Schema.Struct({
   workspace: workspaceToChange("whose slug to change"),
   slug: describeWire(
@@ -2286,7 +2275,6 @@ const SET_WORKSPACE_SLUG_TOOL = memberMcpTool({
     ),
 });
 
-/** A rename names the workspace and its new name. */
 const RenameWorkspaceInputSchema = Schema.Struct({
   workspace: workspaceToChange("to rename"),
   name: describeWire(
@@ -2323,7 +2311,6 @@ const MEMBER_USER_ID_INPUT = describeWire(
   `The member's account id, as ${MEMBER_MCP_TOOL.LIST_WORKSPACE_MEMBERS} answered it.`,
 );
 
-/** A removal names the workspace and the member it removes. */
 const RemoveWorkspaceMemberInputSchema = Schema.Struct({
   workspace: workspaceToChange("to remove them from"),
   userId: MEMBER_USER_ID_INPUT,
@@ -2348,7 +2335,6 @@ const REMOVE_WORKSPACE_MEMBER_TOOL = memberMcpTool({
     ),
 });
 
-/** A role change names the workspace, the member, and the role they take. */
 const ChangeWorkspaceMemberRoleInputSchema = Schema.Struct({
   workspace: workspaceToChange("the member is in"),
   userId: MEMBER_USER_ID_INPUT,
@@ -2376,7 +2362,6 @@ const CHANGE_WORKSPACE_MEMBER_ROLE_TOOL = memberMcpTool({
     ),
 });
 
-/** An invitations read names the workspace it reads. */
 const ListWorkspaceInvitationsInputSchema = Schema.Struct({
   workspace: workspaceToChange("whose invitations to list"),
 });
@@ -2397,7 +2382,6 @@ const LIST_WORKSPACE_INVITATIONS_TOOL = memberMcpTool({
     ),
 });
 
-/** An invitation names the workspace, the address, and the role it offers. */
 const InviteToWorkspaceInputSchema = Schema.Struct({
   workspace: workspaceToChange("to invite them to"),
   email: describeWire(
@@ -2428,7 +2412,6 @@ const INVITE_TO_WORKSPACE_TOOL = memberMcpTool({
     ),
 });
 
-/** A cancel names the workspace and the invitation it cancels. */
 const CancelWorkspaceInvitationInputSchema = Schema.Struct({
   workspace: workspaceToChange("the invitation is to"),
   invitationId: describeWire(
@@ -2562,7 +2545,6 @@ const lifecycleAsMember = <R>(
     );
   });
 
-/** A rewind names the agent and the line it is taken back to just before. */
 const RewindAgentInputSchema = Schema.Struct({
   agentId: AgentIdInputSchema.fields.agentId,
   lineId: describeWire(
@@ -2778,7 +2760,6 @@ const oneTab = ({ tab }: { readonly tab: AgentBrowserTab }, userId: string): Wir
   tab: memberBrowserTab(tab, userId),
 });
 
-/** A take-over and a hand-back name the agent and the tab. */
 const AgentBrowserTabInputSchema = Schema.Struct({
   agentId: AgentIdInputSchema.fields.agentId,
   tabId: describeWire(
@@ -2787,7 +2768,6 @@ const AgentBrowserTabInputSchema = Schema.Struct({
   ),
 });
 
-/** An open names the agent and the address. */
 const OpenAgentBrowserTabInputSchema = Schema.Struct({
   agentId: AgentIdInputSchema.fields.agentId,
   address: describeWire(Schema.String, "The http or https address to open the tab at."),
@@ -2931,7 +2911,6 @@ const REPOSITORY_INPUT = describeWire(
   `The repository, by its full name (owner/name), as ${MEMBER_MCP_TOOL.LIST_REPOSITORIES} lists it.`,
 );
 
-/** A read of the repositories names its workspace, as a list does. */
 const ListRepositoriesInputSchema = Schema.Struct({ workspace: WORKSPACE_INPUT });
 
 const LIST_REPOSITORIES_TOOL = memberMcpTool({
@@ -2961,7 +2940,6 @@ const LIST_REPOSITORIES_TOOL = memberMcpTool({
     ),
 });
 
-/** An add or a removal names the workspace, the repository, and which. */
 const SetTokenRepositoryInputSchema = Schema.Struct({
   workspace: WORKSPACE_INPUT,
   repository: REPOSITORY_INPUT,
@@ -2990,7 +2968,6 @@ const SET_TOKEN_REPOSITORY_TOOL = memberMcpTool({
     ),
 });
 
-/** A read of a file names the workspace, the repository, its path, at most the line to start at, and the commit. */
 const ReadRepositoryFileInputSchema = Schema.Struct({
   workspace: WORKSPACE_INPUT,
   repository: REPOSITORY_INPUT,
@@ -3042,7 +3019,6 @@ const READ_REPOSITORY_FILE_TOOL = memberMcpTool({
     ),
 });
 
-/** A listing names the workspace, the repository, at most the folder, and whether everything under it is listed. */
 const ListRepositoryFolderInputSchema = Schema.Struct({
   workspace: WORKSPACE_INPUT,
   repository: REPOSITORY_INPUT,
@@ -3086,7 +3062,6 @@ const LIST_REPOSITORY_FOLDER_TOOL = memberMcpTool({
     ),
 });
 
-/** A read of the skills names the workspace and at most the repository. */
 const ListRepositorySkillsInputSchema = Schema.Struct({
   workspace: WORKSPACE_INPUT,
   repository: Schema.optionalKey(
@@ -3117,7 +3092,6 @@ const LIST_REPOSITORY_SKILLS_TOOL = memberMcpTool({
     ),
 });
 
-/** A read of an issue or a pull request names the workspace, the repository, and the number. */
 const ReadGitHubIssueInputSchema = Schema.Struct({
   workspace: WORKSPACE_INPUT,
   repository: REPOSITORY_INPUT,
@@ -3184,7 +3158,6 @@ const THREAD_ID = describeWire(
   `The thread's id, as ${MEMBER_MCP_TOOL.READ_INBOX} answered it.`,
 );
 
-/** A read of the inbox names its workspace, as a list does. */
 const ReadInboxInputSchema = Schema.Struct({ workspace: WORKSPACE_INPUT });
 
 const READ_INBOX_TOOL = memberMcpTool({
@@ -3308,7 +3281,6 @@ const ANSWER_ASK_TOOL = memberMcpTool({
     ),
 });
 
-/** A Got it names its thread and the revision it was read at. */
 const AcknowledgeThreadInputSchema = Schema.Struct({
   threadId: THREAD_ID,
   revision: describeWire(
@@ -3335,7 +3307,6 @@ const ACKNOWLEDGE_THREAD_TOOL = memberMcpTool({
     Effect.flatMap(AdmittedMember, (member) => acknowledgeThreadAsMember(member.userId, asked)),
 });
 
-/** A message names its thread and its words. */
 const ReplyToThreadInputSchema = Schema.Struct({
   threadId: THREAD_ID,
   text: describeWire(
@@ -3356,7 +3327,6 @@ const REPLY_TO_THREAD_TOOL = memberMcpTool({
   run: (asked) => Effect.flatMap(AdmittedMember, (member) => replyAsMember(member.userId, asked)),
 });
 
-/** A close names its thread and the revision it was read at. */
 const CloseThreadInputSchema = Schema.Struct({
   threadId: THREAD_ID,
   revision: describeWire(
@@ -3380,7 +3350,6 @@ const CLOSE_THREAD_TOOL = memberMcpTool({
     Effect.flatMap(AdmittedMember, (member) => closeThreadAsMember(member.userId, asked)),
 });
 
-/** A thread marked read or unread names it and which. */
 const MarkThreadReadInputSchema = Schema.Struct({
   threadId: THREAD_ID,
   read: describeWire(
@@ -3422,7 +3391,6 @@ const MARK_INBOX_READ_TOOL = memberMcpTool({
     }),
 });
 
-/** A reminder names its thread and when it comes due, or none to end it. */
 const RemindThreadInputSchema = Schema.Struct({
   threadId: THREAD_ID,
   at: describeWire(
@@ -3451,7 +3419,6 @@ const REMIND_THREAD_TOOL = memberMcpTool({
     ),
 });
 
-/** A new thread names its agent, its first message, and at most its subject. */
 const StartThreadInputSchema = Schema.Struct({
   agentId: AgentIdInputSchema.fields.agentId,
   title: Schema.optionalKey(
@@ -3996,7 +3963,6 @@ const COMMENT_WORDS_INPUT = describeWire(
     "under the member's name.",
 );
 
-/** A read of comments names the task, and the page to read in the description's place, and which threads. */
 const ReadCommentsInputSchema = Schema.Struct({
   taskId: COMMENTED_TASK_INPUT,
   page: Schema.optionalKey(
@@ -4059,7 +4025,6 @@ const MEMBER_READ_COMMENTS_TOOL = memberMcpTool({
     ),
 });
 
-/** A thread started on the description names the task, the words it stands on, and its first comment. */
 const CommentOnDescriptionInputSchema = Schema.Struct({
   taskId: COMMENTED_TASK_INPUT,
   quote: describeWire(
@@ -4137,7 +4102,6 @@ const MEMBER_COMMENT_ON_DESCRIPTION_TOOL = memberMcpTool({
   experiment: EXPERIMENT.DESCRIPTIONS,
 });
 
-/** A reply names the task, the thread, and the member's words. */
 const ReplyToCommentInputSchema = Schema.Struct({
   taskId: COMMENTED_TASK_INPUT,
   thread: REPLY_TO_COMMENT_TOOL.inputSchema.fields.thread,
@@ -4224,7 +4188,6 @@ const MEMBER_REPLY_TO_COMMENT_TOOL = memberMcpTool({
     ),
 });
 
-/** A thread settled or brought back names the task, the thread, and which. */
 const UpdateCommentInputSchema = Schema.Struct({
   taskId: COMMENTED_TASK_INPUT,
   thread: UPDATE_COMMENT_TOOL.inputSchema.fields.thread,
@@ -4338,7 +4301,6 @@ const MEMBER_SAVE_MEMORY_TOOL = memberMcpTool({
   experiment: EXPERIMENT.MEMORY,
 });
 
-/** A list names the workspace whose memories to list. */
 const ListMemoriesInputSchema = Schema.Struct({ workspace: MEMORY_WORKSPACE_INPUT });
 
 const MEMBER_LIST_MEMORIES_TOOL = memberMcpTool({
@@ -4357,7 +4319,6 @@ const MEMBER_LIST_MEMORIES_TOOL = memberMcpTool({
   experiment: EXPERIMENT.MEMORY,
 });
 
-/** A forget names the workspace and the memory. */
 const ForgetMemoryInputSchema = Schema.Struct({
   workspace: MEMORY_WORKSPACE_INPUT,
   memoryId: describeWire(
@@ -4830,10 +4791,8 @@ const SANDBOX_SETUP_WORKSPACE_INPUT = Schema.optionalKey(
   ),
 );
 
-/** A read of the setup names its workspace. */
 const ReadSandboxSetupInputSchema = Schema.Struct({ workspace: SANDBOX_SETUP_WORKSPACE_INPUT });
 
-/** A save names its workspace, at most the repository whose setup script it is, and the script. */
 const EditSandboxSetupInputSchema = Schema.Struct({
   workspace: SANDBOX_SETUP_WORKSPACE_INPUT,
   repository: Schema.optionalKey(
@@ -5068,7 +5027,6 @@ const runActionAnswer = <A extends object, R>(
     );
   });
 
-/** A run and a stop name the agent and the action. */
 const AgentRunActionInputSchema = Schema.Struct({
   agentId: AgentIdInputSchema.fields.agentId,
   actionId: describeWire(

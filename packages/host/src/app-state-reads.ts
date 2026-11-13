@@ -213,7 +213,7 @@ export const selectFailedRuns = (state: AppStateSnapshot) => state.inbox.failedR
 export const selectPullRequestPublished = (state: AppStateSnapshot) =>
   state[LIVE_READ.PULL_REQUEST_PUBLISHED];
 
-export const selectMacCommands = (state: AppStateSnapshot) => state.macCommands;
+export const selectMachineCommands = (state: AppStateSnapshot) => state.machineCommands;
 export const selectNotifications = (state: AppStateSnapshot) => state.notifications;
 export const selectNetwork = (state: AppStateSnapshot) => state.network;
 export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionReplay;

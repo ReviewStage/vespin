@@ -71,6 +71,7 @@ import { HOVER_CARDS_EXAMPLE } from "./examples/hover-cards";
 import { ICONS_EXAMPLE } from "./examples/icons";
 import { INLINE_EDITS_EXAMPLE } from "./examples/inline-edits";
 import { INLINE_REFS_EXAMPLE } from "./examples/inline-refs";
+import { INTRO_CARDS_EXAMPLE } from "./examples/intro-cards";
 import { KEEP_FOCUS_EXAMPLE } from "./examples/keep-focus";
 import { LANDING_EXAMPLE } from "./examples/landing";
 import { LAYOUT_EXAMPLE } from "./examples/layout";
@@ -160,6 +161,7 @@ import { TURN_ENDS_EXAMPLE } from "./examples/turn-ends";
 import { TYPOGRAPHY_EXAMPLE } from "./examples/typography";
 import { UPLOAD_COVERS_EXAMPLE } from "./examples/upload-covers";
 import { VIDEO_PLAYER_EXAMPLE } from "./examples/video-player";
+import { VOICE_CALLS_EXAMPLE } from "./examples/voice-calls";
 import { WRITING_GLYPHS_EXAMPLE } from "./examples/writing-glyphs";
 import { ZOOM_IMAGES_EXAMPLE } from "./examples/zoom-images";
 
@@ -245,6 +247,7 @@ export const EXAMPLES: readonly Example[] = [
   HOVER_CARDS_EXAMPLE,
   INLINE_EDITS_EXAMPLE,
   INLINE_REFS_EXAMPLE,
+  INTRO_CARDS_EXAMPLE,
   SUGGESTION_CARDS_EXAMPLE,
   SWATCHES_EXAMPLE,
   TEXT_BUTTONS_EXAMPLE,
@@ -329,6 +332,7 @@ export const EXAMPLES: readonly Example[] = [
   REVEALS_EXAMPLE,
   ZOOM_IMAGES_EXAMPLE,
   MESSAGES_EXAMPLE,
+  VOICE_CALLS_EXAMPLE,
   PANE_PINS_EXAMPLE,
   KEEP_FOCUS_EXAMPLE,
   PORTAL_FENCE_EXAMPLE,
