@@ -1,4 +1,5 @@
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
+import { fileMarkers } from "@repo/features/file-marker";
 import type { JSONContent } from "@tiptap/core";
 import Image from "@tiptap/extension-image";
 import {
@@ -19,7 +20,7 @@ import {
 } from "@tiptap/pm/state";
 import { insertPoint } from "@tiptap/pm/transform";
 import type { EditorView } from "@tiptap/pm/view";
-import { descriptionFiles, isPdfUpload } from "../picture-files.js";
+import { descriptionFiles, isPdfUpload, isPictureFile } from "../picture-files.js";
 import {
   type DescriptionEditorPictures,
   PICTURE_LEAVE,
@@ -28,6 +29,7 @@ import {
   type PictureNode,
   type PictureTaken,
 } from "./contract.js";
+import { copiedFileOf, fileOfCopy } from "./copied-files.js";
 import { inTableCell } from "./writing-keys.js";
 
 /**
@@ -347,6 +349,75 @@ function onControl(event: Event): boolean {
   return event.target instanceof Element && event.target.closest(PICTURE_CONTROLS) !== null;
 }
 
+/** A message box's copied file chip, as its copy writes it (`./copied-files.ts`). */
+const COMPOSER_CHIP = "fileChip";
+
+/** The file a message box's copied chip carried, by its marker's name and its data address: a picture's image carries it in its source, another file's chip beside its words. */
+function chipFile(element: HTMLElement) {
+  const picture = element.tagName === "IMG";
+  const words = picture ? (element.getAttribute("alt") ?? "") : element.textContent;
+  const address = element.getAttribute(picture ? "src" : "data-file");
+  const name = fileMarkers(words)[0]?.name;
+  const file = copiedFileOf(address);
+
+  return name === undefined || file === undefined
+    ? undefined
+    : { name, address, type: file.mediaType };
+}
+
+/**
+ * How a message box's copied chip is read in as a picture, a picture's or a
+ * PDF's, which TipTap's own image leaves out for its data address; every
+ * other chip pastes as its marker's words. Note that the address and the
+ * name are read by the node's own attributes (`chipAttribute`), which TipTap
+ * reads over what a rule answers.
+ */
+function composerChipRules() {
+  const taken = (element: HTMLElement) => {
+    const file = chipFile(element);
+
+    return file !== undefined && (isPictureFile(file) || isPdfUpload(file)) ? {} : false;
+  };
+
+  return [
+    { tag: `img[data-chip="${COMPOSER_CHIP}"]`, getAttrs: taken },
+    { tag: `span[data-chip="${COMPOSER_CHIP}"][data-file]`, getAttrs: taken },
+  ];
+}
+
+/** A picture attribute read from its element: a message box's copied chip's from the file it carried, any other image's as TipTap reads it. */
+function chipAttribute(name: "src" | "alt") {
+  return {
+    default: null,
+    parseHTML: (element: HTMLElement) => {
+      const file = element.dataset.chip === COMPOSER_CHIP ? chipFile(element) : undefined;
+
+      if (file === undefined) return element.getAttribute(name);
+
+      return name === "src" ? file.address : file.name;
+    },
+  };
+}
+
+/**
+ * A picture selected alone, copied or cut, handed to the panel with the
+ * words the editor's own copy writes, so it puts the picture's image beside
+ * them; the editor's copy still writes the words first.
+ */
+function pictureCopies(pictures: DescriptionEditorPictures): Plugin {
+  const copied = (view: EditorView) => {
+    const picked = pictureSelected(view.state.selection);
+
+    if (picked === undefined) return false;
+    const { dom, text } = view.serializeForClipboard(picked.content());
+    pictures.copiedAlone(String(picked.node.attrs.src ?? ""), { html: dom.innerHTML, text });
+
+    return false;
+  };
+
+  return new Plugin({ props: { handleDOMEvents: { copy: copied, cut: copied } } });
+}
+
 /**
  * The picture node: TipTap's image, inline, with the upload it waits on;
  * drawn into its own element by the panel where it can draw one, and as an
@@ -355,7 +426,12 @@ function onControl(event: Event): boolean {
 export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
   const node = Image.extend({
     addAttributes() {
-      return { ...this.parent?.(), upload: { default: "", rendered: false } };
+      return {
+        ...this.parent?.(),
+        src: chipAttribute("src"),
+        alt: chipAttribute("alt"),
+        upload: { default: "", rendered: false },
+      };
     },
     renderMarkdown: (held: JSONContent) => pictureMarkdown(held.attrs),
   }).configure({ inline: true });
@@ -363,8 +439,16 @@ export function pictureNode(pictures: DescriptionEditorPictures | undefined) {
   if (pictures === undefined) return node;
 
   return node.extend({
+    parseHTML() {
+      return [...composerChipRules(), ...(this.parent?.() ?? [])];
+    },
     addProseMirrorPlugins() {
-      return [...(this.parent?.() ?? []), settledPictures(), pictureCaret()];
+      return [
+        ...(this.parent?.() ?? []),
+        settledPictures(),
+        pictureCaret(),
+        pictureCopies(pictures),
+      ];
     },
     addNodeView() {
       return ({ node: held, getPos, editor }) => {
@@ -650,19 +734,25 @@ function withPictures(fragment: Fragment, change: (picture: PmNode) => PmNode): 
 }
 
 /**
- * A pasted slice's pictures of another description, each made to wait on a new
- * upload that keeps it again on this description, and handed to the panel to keep;
- * every other picture as it was.
+ * A pasted slice's pictures of another description, and those a message box's
+ * copied chips carried in, each made to wait on a new upload that keeps it on
+ * this description, and handed to the panel to keep; every other picture as it was.
  */
 export function copiedPictures(slice: Slice, pictures: DescriptionEditorPictures): Slice {
   const taken: PictureTaken[] = [];
 
   const content = withPictures(slice.content, (picture) => {
     const src = String(picture.attrs.src ?? "");
+    const carried = copiedFileOf(src);
 
-    if (!pictures.copies(src)) return picture;
+    if (carried === undefined && !pictures.copies(src)) return picture;
     const upload = uploadName();
-    taken.push({ upload, from: src });
+
+    taken.push(
+      carried === undefined
+        ? { upload, from: src }
+        : { upload, file: fileOfCopy(carried, String(picture.attrs.alt ?? "")) },
+    );
 
     return picture.type.create({ ...picture.attrs, src: "", upload }, null, picture.marks);
   });
