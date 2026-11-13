@@ -60,8 +60,8 @@ function useTabStanding(segments: readonly string[], threeColumns: boolean): Tab
 // is held unselectable (`disabled`, which keeps its look and only stops the
 // system selecting it), and its press opens the sheet. It stands only in a
 // compact window, the iPhone's and the folded Duo's: a regular one, an
-// iPad's or the open Duo's, stands New task as the compose button in its
-// list column's bar instead (`useComposeAction`), as Mail does, so a window
+// iPad's or the open Duo's, stands New task as the compose button leading
+// its detail's bar instead (`useComposeAction`), as Mail does, so a window
 // never offers it twice.
 //
 // The bar is `sidebarAdaptable` on an iPhone, which the iPhone Duo is in

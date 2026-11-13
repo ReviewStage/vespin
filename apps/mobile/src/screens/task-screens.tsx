@@ -158,7 +158,12 @@ import {
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, type SidebarTasks, useListColumn } from "./app-sidebar.js";
+import {
+  SIDEBAR_PLACE,
+  type SidebarTasks,
+  useListColumn,
+  usePortraitDetailBar,
+} from "./app-sidebar.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -2019,6 +2024,7 @@ function TasksSplitScreen({
   };
 
   const first = useListColumn(list);
+  const firstDetailBar = usePortraitDetailBar(detailBar);
   useHandColumns(
     SIDEBAR_PLACE.TASKS,
     threeColumns
@@ -2031,7 +2037,7 @@ function TasksSplitScreen({
       <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
       {threeColumns ? null : (
         <Screen>
-          <SplitView {...first} detail={detail} detailBar={detailBar} />
+          <SplitView {...first} detail={detail} detailBar={firstDetailBar} />
         </Screen>
       )}
       <StatusQuestionAsk question={status} />

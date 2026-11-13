@@ -1,4 +1,4 @@
-// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned, Following, and the member's sections, each a collection of tasks with its count, as Mail lists its mailboxes; and New task, the list column's compose button.
+// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned, Following, and the member's sections, each a collection of tasks with its count, as Mail lists its mailboxes; and New task, the compose button leading the detail's bar.
 
 import {
   AccountBarItem,
@@ -102,15 +102,26 @@ export function placeRoute(place: SidebarPlace): string {
 }
 
 /**
- * New task as every list column's bar offers it in a regular window, its one
- * trailing act beside the list's search and ⋯, as Mail's compose button
- * stands over its list; ⌘N opens it from the menu bar too. A compact
- * window keeps the tab bar's round + instead.
+ * New task as a regular window offers it: the compose button leading the
+ * detail's bar beside Expand, as Mail's stands over its message, or in
+ * Search's own bar where Search stands alone; ⌘N opens it from the menu bar
+ * too. A compact window keeps the tab bar's round + instead.
  */
 export function useComposeAction(): BarAction {
   const router = useRouter();
 
   return { ...NEW_TASK, onPress: () => router.push("/start-task") };
+}
+
+/**
+ * The detail's bar beside a regular window's first column, led by New task's
+ * compose as a landscape window's detail bar is and Mail's stands over its
+ * message, so New task stands in one place in every regular window.
+ */
+export function usePortraitDetailBar(bar: ColumnBar | undefined): ColumnBar {
+  const compose = useComposeAction();
+
+  return { ...bar, lead: [compose] };
 }
 
 /**
@@ -122,7 +133,6 @@ export function useComposeAction(): BarAction {
  * is never out of reach.
  */
 export function useListColumn(list: ListColumn): FirstColumn {
-  const compose = useComposeAction();
   const account = useSettingsAccount();
   const switcher = useWorkspaceSwitcher();
   const { shown, setShown } = useSidebarShown();
@@ -140,8 +150,8 @@ export function useListColumn(list: ListColumn): FirstColumn {
 
   return {
     sidebar: list.view,
-    // Note that an action the list's bar names, such as Select mode's Done, stands in New task's place.
-    sidebarBar: { ...list.bar, leading, action: list.bar.action ?? compose },
+    // Note that New task leads the detail's bar instead (`usePortraitDetailBar`), as in a landscape window and Mail, so the narrow list's bar keeps only its own acts, such as Select mode's Done.
+    sidebarBar: { ...list.bar, leading },
     sidebarShown: shown,
     onSidebarShownChange: setShown,
   };

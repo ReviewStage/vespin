@@ -106,7 +106,7 @@ import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, useListColumn } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, useListColumn, usePortraitDetailBar } from "./app-sidebar.js";
 import {
   NO_THREAD_ACTS,
   OpenAskCard,
@@ -1092,6 +1092,7 @@ function InboxSplitScreen({
   const detailBar = selected === undefined ? { acts: NO_THREAD_ACTS } : undefined;
 
   const first = useListColumn(list);
+  const firstDetailBar = usePortraitDetailBar(detailBar);
   useHandColumns(
     SIDEBAR_PLACE.INBOX,
     threeColumns
@@ -1104,7 +1105,7 @@ function InboxSplitScreen({
       <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
       {threeColumns ? null : (
         <Screen>
-          <SplitView {...first} detail={detail} detailBar={detailBar} />
+          <SplitView {...first} detail={detail} detailBar={firstDetailBar} />
         </Screen>
       )}
       {remind.sheet}
