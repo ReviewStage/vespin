@@ -169,7 +169,15 @@ export function ComputerUseSection({
         return { words: written.reason, cause: written };
       }
 
-      removed.current.add(bundleId);
+      // Note that the stored list may already leave the app out as the answer lands, its update having come first, so it is held only while the list still has it.
+      const now = appStateIn(queries);
+
+      const listed = computerUseAppsOf(
+        (now === undefined ? undefined : selectAppSettingsView(now))?.computerUseApps ??
+          view.settings.computerUseApps,
+      );
+
+      if (listed.includes(bundleId)) removed.current.add(bundleId);
       await queries.invalidateQueries({ queryKey: statusQuery.queryKey });
 
       return undefined;

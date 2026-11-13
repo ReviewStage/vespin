@@ -282,7 +282,12 @@ export function computerUseHelperProcess(
         if (left === 0)
           return failed("The computer-use helper was busy until the request's time ran out.");
         yield* Queue.offer(current.requests, `${JSON.stringify({ ...request, id })}\n`);
-        const answer = yield* Effect.timeoutOption(answerFor(current, id), Duration.millis(left));
+
+        // Note that a wait interrupted, as when the gate closes, stops the helper too, since the request is already written to it and it would otherwise act after the gate closed.
+        const answer = yield* Effect.timeoutOption(
+          answerFor(current, id),
+          Duration.millis(left),
+        ).pipe(Effect.onInterrupt(() => ended(current)));
 
         if (Option.isSome(answer) && Option.isSome(answer.value)) return answer.value.value;
         yield* ended(current);
