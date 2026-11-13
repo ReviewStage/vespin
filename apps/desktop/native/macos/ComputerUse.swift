@@ -1245,6 +1245,35 @@ private final class WindowRecorder: NSObject, SCStreamOutput {
     }
 }
 
+/**
+ One copy of frames from a reader to a writer. Note that it is touched only
+ on the writer's queue, which asks for frames one call at a time, so its
+ parts and its flag are never read on two threads at once, which is what
+ `@unchecked Sendable` vouches for.
+ */
+private final class FrameCopy: @unchecked Sendable {
+    private let input: AVAssetWriterInput
+    private let output: AVAssetReaderTrackOutput
+    private var finished = false
+
+    init(input: AVAssetWriterInput, output: AVAssetReaderTrackOutput) {
+        self.input = input
+        self.output = output
+    }
+
+    /// Moves every frame the writer takes now; true the one time the copy ends, at the last frame or the first the writer refuses, which its status then answers as failed.
+    func moved() -> Bool {
+        while !finished, input.isReadyForMoreMediaData {
+            guard let buffer = output.copyNextSampleBuffer(), input.append(buffer) else {
+                finished = true
+                input.markAsFinished()
+                return true
+            }
+        }
+        return false
+    }
+}
+
 /// The video at `source` made again at `target`, no longer than `edge` on its longest side, at `bitRate`; its size, or nothing where it could not be made.
 private func madeSmaller(_ source: URL, to target: URL, edge: Int, bitRate: Int) async -> (width: Int, height: Int)? {
     try? FileManager.default.removeItem(at: target)
@@ -1268,24 +1297,10 @@ private func madeSmaller(_ source: URL, to target: URL, edge: Int, bitRate: Int)
     guard reader.startReading(), writer.startWriting() else { return nil }
     writer.startSession(atSourceTime: .zero)
     let queue = DispatchQueue(label: "dev.vespin.computer-use.recording-smaller")
+    let copy = FrameCopy(input: input, output: output)
     await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
-        var finished = false
         input.requestMediaDataWhenReady(on: queue) {
-            while !finished, input.isReadyForMoreMediaData {
-                guard let buffer = output.copyNextSampleBuffer() else {
-                    finished = true
-                    input.markAsFinished()
-                    done.resume()
-                    return
-                }
-                // Note that a frame the writer refuses ends the copy, which the writer's status then answers as failed.
-                if !input.append(buffer) {
-                    finished = true
-                    input.markAsFinished()
-                    done.resume()
-                    return
-                }
-            }
+            if copy.moved() { done.resume() }
         }
     }
     await writer.finishWriting()
