@@ -334,13 +334,13 @@ export interface ThisMacHostSeam {
   readonly status: Effect.Effect<ThisMacAgentStatus>;
   /** Whether this app's own version registered the agent; another's leaves it running the bundle an update replaced until it is registered again. */
   readonly registeredHere: Effect.Effect<boolean>;
-  /** The agent registered, which starts the host, the job the account install loaded booted out first so two never run. */
+  /** The agent registered, which starts the host, the job the account install loaded booted out first so two never run; a failure says why in our own words, never a command's output. */
   readonly register: Effect.Effect<
     Result.Result<void, string>,
     never,
     ChildProcessSpawner.ChildProcessSpawner
   >;
-  /** The agent unregistered, which stops the host and keeps it from starting at the next login, its files kept; answered once its daemon has exited. */
+  /** The agent unregistered, which stops the host and keeps it from starting at the next login, its files kept; answered once its daemon has exited. A failure says why in our own words, never a command's output. */
   readonly unregister: Effect.Effect<
     Result.Result<void, string>,
     never,
@@ -389,12 +389,23 @@ export class AccountSource extends Context.Service<AccountSource, AccountSourceS
  * reported line land in one place rather than two.
  */
 export interface HostReporter {
-  readonly report: (message: string) => void;
+  readonly report: (message: string, attributes?: ReportAttributes) => void;
+}
+
+/**
+ * What a reported line names beside its words, as structured attributes
+ * rather than more of the line, so a sink that sends the line on, as Sentry's
+ * does, keeps one line per kind of event and carries these as data. Only
+ * our own words, never what a command or a file printed.
+ */
+export interface ReportAttributes {
+  /** Why the step the line names failed, as the seam it asked said so. */
+  readonly reason: string;
 }
 
 export class Reporter extends Context.Service<Reporter, HostReporter>()("@repo/host/Reporter") {}
 
-export const reporterLayer = (report: (message: string) => void): Layer.Layer<Reporter> =>
+export const reporterLayer = (report: HostReporter["report"]): Layer.Layer<Reporter> =>
   Layer.merge(
     Layer.succeed(Reporter, { report }),
     // v4 states the whole active set rather than swapping one logger out of
