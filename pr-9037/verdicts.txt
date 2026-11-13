@@ -1,0 +1,7 @@
+#9037 at e93fd0bb4 (built e93fd0bb4), iPhone 18 Pro portrait, light and dark, JS on Nov 12's app, flow na9037.yaml, 0 failed steps.
+VERDICT: PASS.
+- 1: New agent's sheet opened from the task, with words typed and Start pressed.
+- 2 (the frame the sheet leaves), 3 (settled) and 4 (later): the new agent's page shows the spinner over "Reading the transcript", centered, under the "Agent" title with Back and ⋯, and the composer at its foot. The page is never blank, in either appearance.
+Note, not part of this PR: in dark, the empty composer's Send draws as a filled dark circle that reads as enabled, while light draws it grayed. Worth a look by the composer's owner.
+The fixture's new agent never gets a transcript, so the page stays on the spinner; that's the fixture, not the app.
+26.5: not run (memory), per the work-hours rule.
