@@ -4,7 +4,7 @@ import { hasWordsOrFiles } from "@repo/features/agent-wire";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
-import { agentName } from "@repo/features/model-label";
+import { agentName, providerOf } from "@repo/features/model-label";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
@@ -232,6 +232,7 @@ function ModelChip({ pick }: { readonly pick: ModelPick }) {
   return (
     <MenuChip
       label={effort === undefined ? model : `${model}${JOINED}${effort}`}
+      harness={pick.shown === undefined ? undefined : providerOf(pick.shown.model)}
       menu={{ groups }}
     />
   );

@@ -14,7 +14,7 @@ import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/feature
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
-import { agentName, modelLabel } from "@repo/features/model-label";
+import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -774,6 +774,7 @@ export function AgentScreen() {
           head={
             <AgentHead
               model={agent === undefined ? undefined : modelLabel(agent.model)}
+              harness={agent === undefined ? undefined : providerOf(agent.model)}
               status={status}
               onModel={openOptions}
             />

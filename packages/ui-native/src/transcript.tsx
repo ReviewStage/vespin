@@ -2,6 +2,7 @@
 
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
+import type { ModelProvider } from "@repo/features/models-wire";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
@@ -11,6 +12,7 @@ import {
   type AccessibilityActionEvent,
   ActivityIndicator,
   FlatList,
+  Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
   Pressable,
@@ -35,6 +37,7 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
+import { HARNESS_MARK_ASSET } from "./marks.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -162,6 +165,8 @@ const styles = StyleSheet.create({
   },
   headLine: { flexDirection: "row", alignItems: "center", gap: 6 },
   headModel: { flexDirection: "row", alignItems: "center", gap: 3 },
+  // Note that the mark leads the model's name at the size of its line's glyphs, from the asset catalog the app's config writes.
+  headMark: { width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH, marginRight: 1 },
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
   jump: { position: "absolute", alignSelf: "center" },
   jumpFace: {
@@ -736,6 +741,8 @@ function TranscriptRow({
 type AgentHeadProps = {
   /** The model the agent runs on, as the panel's chip names it. */
   readonly model: string | undefined;
+  /** The harness the model runs in, whose mark leads the model's name, as the panel's chip leads with it; none where it is not known. */
+  readonly harness?: ModelProvider | undefined;
   readonly status: AgentStatus | undefined;
   /** Opens the picker that changes the model, as a press on the panel's chip does; none where the reader may not change it. */
   readonly onModel?: (() => void) | undefined;
@@ -751,7 +758,7 @@ const CHANGE_MODEL = "Change model";
  * Where the model may be changed, its name is a press with a chevron after
  * it, as the panel's chip draws one, opening the picker.
  */
-export function AgentHead({ model, status, onModel }: AgentHeadProps) {
+export function AgentHead({ model, harness, status, onModel }: AgentHeadProps) {
   const colors = useColors();
   const state = status === undefined ? undefined : agentGlyphState(status);
   const words = status === undefined ? undefined : agentStateWords(status);
@@ -791,6 +798,13 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
           testID="agent-model"
           style={styles.headModel}
         >
+          {harness === undefined ? null : (
+            <Image
+              source={{ uri: HARNESS_MARK_ASSET[harness] }}
+              style={styles.headMark}
+              accessibilityElementsHidden
+            />
+          )}
           <Text style={ink}>{model}</Text>
           <SymbolView
             name={glyphSymbol(GLYPH.UNFOLDED)}

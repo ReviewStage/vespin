@@ -234,7 +234,7 @@ const TILE_MARK_SCALE = 0.72;
  * Clawd from the brand's path in its own clay, and Codex's picture from the
  * files the panel serves, each as the panel's `HarnessMark` draws it.
  */
-const HARNESS_MARK_ASSET = {
+export const HARNESS_MARK_ASSET = {
   [MODEL_PROVIDER.ANTHROPIC]: "ClawdMark",
   [MODEL_PROVIDER.OPENAI]: "CodexMark",
 } as const satisfies Record<ModelProvider, string>;
@@ -281,6 +281,22 @@ export function AgentTile({
         />
       )}
     </ZStack>
+  );
+}
+
+/** The mark of the harness a model runs in, as the panel leads a model's name with it: Claude Code's Clawd or Codex's picture, in its own colors, at `size`, unheard beside the name it leads. */
+export function HarnessMark({
+  provider,
+  size = MARK_SIZE.FACE,
+}: {
+  readonly provider: ModelProvider;
+  readonly size?: number | undefined;
+}) {
+  return (
+    <Image
+      assetName={HARNESS_MARK_ASSET[provider]}
+      modifiers={[resizable(), frame({ width: size, height: size }), accessibilityHidden()]}
+    />
   );
 }
 
