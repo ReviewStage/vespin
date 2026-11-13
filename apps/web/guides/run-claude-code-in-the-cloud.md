@@ -14,7 +14,7 @@ faq:
     a: Yes. Each `claude --cloud` command starts its own session. In Vespin, each agent gets its own sandbox, and an agent can start other agents. Every session counts toward your plan's usage limits, so several at once use them up faster.
 ---
 
-You can run Claude Code in the cloud with Anthropic's Claude Code on the web, or with a cloud workspace such as Vespin, which runs Claude Code on your own Claude plan in a sandbox per task and opens a pull request.
+You can run Claude Code in the cloud with Anthropic's Claude Code on the web, or with a cloud workspace such as Vespin, which runs Claude Code on your own Claude plan in a sandbox per agent and opens a pull request.
 
 A cloud session keeps running after you close your laptop. Each one has its own machine and its own copy of the repository, and it pushes its work to a branch.
 
