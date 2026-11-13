@@ -41,6 +41,7 @@ import {
 } from "@repo/ui";
 import { ACTOR_KIND, actorName, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
+import { Fragment } from "react";
 import { ACTOR_SIZE, ActorMark, actorCard, UnassignedMark } from "../actor-ref.js";
 import { useCreator, useMemberDirectory, usePerson } from "../member-directory.js";
 import { useActorDoor } from "../person-door.js";
@@ -290,10 +291,11 @@ function RelatedTaskLine({
 }
 
 /**
- * One relation's tasks on the card, as Sub-tasks first drew them: a header
- * row of the relation's glyph, as the relation menu draws it, its words, and
- * what stands at its end, over a row for each task, scrolling past a few
- * rows' height. Nothing where it names no task.
+ * One relation's tasks on the card: a header row of the relation's glyph,
+ * as the relation menu draws it, its words, and what stands at its end, in
+ * a detail's quieter caption so it reads as the group's label and not as
+ * one of its tasks, over a row for each task, scrolling past a few rows'
+ * height. Nothing where it names no task.
  */
 function RelatedTaskGroup({
   kind,
@@ -315,7 +317,12 @@ function RelatedTaskGroup({
 
   return (
     <>
-      <HoverCardRow glyph={<TaskRelationIcon kind={kind} />} label={words} end={end} />
+      <HoverCardRow
+        look={HOVER_CARD_ROW_LOOK.DETAIL}
+        glyph={<TaskRelationIcon kind={kind} />}
+        label={words}
+        end={end}
+      />
       <HoverCardList label={words}>
         {tasks.map((each) => (
           <li key={each.id} data-task-card-related={kind}>
@@ -341,8 +348,9 @@ function heldTasks(
 
 /**
  * What a card says of the task's place among others, each relation a group
- * as the task page's relations name them: its Parent, its Sub-tasks with how
- * many are finished, the tasks it is Blocked by, and the tasks it Blocks.
+ * as the task page's relations name them, a rule between each and the next:
+ * its Parent, its Sub-tasks with how many are finished, the tasks it is
+ * Blocked by, and the tasks it Blocks.
  * Each task named opens as a press on it does. A task a service before
  * blocks marks blocked, naming no blocker, says only that it is blocked.
  */
@@ -364,49 +372,57 @@ function TaskRelations({
   onOpenTask: ((taskId: string) => void) | undefined;
 }): React.JSX.Element {
   const count = subTaskCount(subTasks);
-  const group = { workspaceName, onOpenTask };
 
+  const groups = [
+    {
+      kind: TASK_RELATION_KIND.PARENT,
+      words: TASK_RELATION_WORDS[TASK_RELATION_KIND.PARENT],
+      tasks: parent === undefined ? [] : [parent],
+    },
+    {
+      kind: TASK_RELATION_KIND.SUB_TASK,
+      words: "Sub-tasks",
+      end: (
+        <ProgressCount
+          done={count.finished}
+          total={count.total}
+          label={`${count.finished} of ${count.total} sub-tasks finished`}
+        />
+      ),
+      tasks: subTasks,
+    },
+    {
+      kind: TASK_RELATION_KIND.BLOCKED_BY,
+      words: TASK_RELATION_WORDS[TASK_RELATION_KIND.BLOCKED_BY],
+      tasks: blockedBy,
+    },
+    {
+      kind: TASK_RELATION_KIND.BLOCKS,
+      words: TASK_RELATION_WORDS[TASK_RELATION_KIND.BLOCKS],
+      tasks: blocks,
+    },
+  ].filter((each) => each.tasks.length > 0);
+
+  // Note that a rule parts each group from the one before, so where one relation's rows end reads at a glance.
   return (
     <>
-      <RelatedTaskGroup
-        kind={TASK_RELATION_KIND.PARENT}
-        words={TASK_RELATION_WORDS[TASK_RELATION_KIND.PARENT]}
-        tasks={parent === undefined ? [] : [parent]}
-        {...group}
-      />
-      <RelatedTaskGroup
-        kind={TASK_RELATION_KIND.SUB_TASK}
-        words="Sub-tasks"
-        end={
-          <ProgressCount
-            done={count.finished}
-            total={count.total}
-            label={`${count.finished} of ${count.total} sub-tasks finished`}
-          />
-        }
-        tasks={subTasks}
-        {...group}
-      />
-      <RelatedTaskGroup
-        kind={TASK_RELATION_KIND.BLOCKED_BY}
-        words={TASK_RELATION_WORDS[TASK_RELATION_KIND.BLOCKED_BY]}
-        tasks={blockedBy}
-        {...group}
-      />
-      <RelatedTaskGroup
-        kind={TASK_RELATION_KIND.BLOCKS}
-        words={TASK_RELATION_WORDS[TASK_RELATION_KIND.BLOCKS]}
-        tasks={blocks}
-        {...group}
-      />
+      {groups.map((each, index) => (
+        <Fragment key={each.kind}>
+          {index === 0 ? null : <HoverCardRule />}
+          <RelatedTaskGroup {...each} workspaceName={workspaceName} onOpenTask={onOpenTask} />
+        </Fragment>
+      ))}
       {task.blocked === true && blockedBy.length === 0 ? (
-        <div data-task-card-blocked="">
-          <HoverCardRow
-            look={HOVER_CARD_ROW_LOOK.DETAIL}
-            glyph={<BlockedMark aria-hidden="true" />}
-            label={BLOCKED_WORDS}
-          />
-        </div>
+        <>
+          {groups.length === 0 ? null : <HoverCardRule />}
+          <div data-task-card-blocked="">
+            <HoverCardRow
+              look={HOVER_CARD_ROW_LOOK.DETAIL}
+              glyph={<BlockedMark aria-hidden="true" />}
+              label={BLOCKED_WORDS}
+            />
+          </div>
+        </>
       ) : null}
     </>
   );

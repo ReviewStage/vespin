@@ -72,7 +72,7 @@ interface CatalogRelated {
   readonly status: TaskStatus;
 }
 
-/** One relation's tasks on a task card, as the panel's card draws them: a header of its glyph, its words, and its end, over a row for each task. */
+/** One relation's tasks on a task card, as the panel's card draws them: a header of its glyph, its words, and its end in a detail's caption, over a row for each task. */
 function CatalogRelation({
   glyph,
   words,
@@ -86,7 +86,7 @@ function CatalogRelation({
 }): React.JSX.Element {
   return (
     <>
-      <HoverCardRow glyph={glyph} label={words} end={end} />
+      <HoverCardRow look={HOVER_CARD_ROW_LOOK.DETAIL} glyph={glyph} label={words} end={end} />
       <HoverCardList label={words}>
         {tasks.map((each) => (
           <li key={each.key}>
@@ -292,12 +292,14 @@ function HoverCards(): React.JSX.Element {
                   words="Parent"
                   tasks={[{ name: "Ship invitations", key: "ACME-1", status: TASK_STATUS.TODO }]}
                 />
+                <HoverCardRule />
                 <CatalogRelation
                   glyph={<GLYPH.SUB_TASK />}
                   words="Sub-tasks"
                   end={<ProgressCount done={1} total={5} label="1 of 5 sub-tasks finished" />}
                   tasks={CATALOG_SUB_TASKS}
                 />
+                <HoverCardRule />
                 <CatalogRelation
                   glyph={<OctagonMinusIcon aria-hidden="true" />}
                   words="Blocked by"
@@ -309,6 +311,7 @@ function HoverCards(): React.JSX.Element {
                     },
                   ]}
                 />
+                <HoverCardRule />
                 <CatalogRelation
                   glyph={<HandIcon aria-hidden="true" />}
                   words="Blocks"
