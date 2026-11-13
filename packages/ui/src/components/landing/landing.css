@@ -292,12 +292,12 @@
   .ui-hero-app-room {
     position: relative;
     /* off-scale: the app's height, a laptop window's */
-    height: calc(720px * var(--ui-hero-app-fit, 1));
+    height: calc(760px * var(--ui-hero-app-fit, 1));
   }
 
   .ui-hero-app {
     /* off-scale: the panel's shell metrics, its title bar, sheet gap, and column inset */
-    --ui-hero-bar: 48px;
+    --ui-hero-bar: 50px;
     --ui-hero-gap: 8px;
     --ui-hero-inset: 12px;
     --ui-hero-reading-room: max(20px, calc((100% - 720px) / 2));
@@ -309,7 +309,7 @@
     grid-template-columns: 264px minmax(0, 1fr);
     box-sizing: border-box;
     width: 100%;
-    height: 720px;
+    height: 760px;
     overflow: hidden;
     border-radius: var(--ui-display-window-radius);
     background: var(--ui-color-sidebar);
@@ -357,7 +357,16 @@
     width: 12px;
     height: 12px;
     border-radius: var(--ui-radius-full);
-    background: var(--ui-color-border-strong);
+    background: var(--ui-color-danger);
+  }
+
+  /* The lights in the Mac's own order: close, minimize, zoom. */
+  .ui-hero-lights > i:nth-child(2) {
+    background: var(--ui-color-attention);
+  }
+
+  .ui-hero-lights > i:nth-child(3) {
+    background: var(--ui-color-complete);
   }
 
   .ui-hero-history {
@@ -501,7 +510,7 @@
     gap: var(--ui-icon-gap);
   }
 
-  .ui-hero-chip-words > svg {
+  .ui-hero-chip-words svg {
     width: 14px;
     height: 14px;
   }
@@ -638,24 +647,85 @@
 
   /* The tabs' row stands a control's height and a gap under the title,
      as the panel's does (`desktop.css`'s `--task-tabs-gap`). */
+  /* The tabs' row stands a control's height and a gap under the title,
+     as the panel's does (`desktop.css`'s `--task-tabs-gap`), the task's
+     checks and the side panel's toggle at its end. */
   .ui-hero-task-tabs {
+    display: flex;
     flex: none;
+    align-items: center;
+    gap: var(--ui-tight-gap);
     min-width: 0;
     height: calc(var(--ui-control-height) + var(--ui-hero-gap));
+    padding-bottom: var(--ui-hero-gap);
+    box-sizing: border-box;
     --ui-button-ground: var(--ui-color-sidebar);
-  }
-
-  /* The bar's own height is a toolbar's; the row is shorter, so the bar
-     stands from its top, its tabs a gap above the sheet. */
-  .ui-hero-task-tabs > * {
-    margin-top: calc((var(--ui-control-height) - var(--ui-hero-bar)) / 2 - var(--ui-space-4));
   }
 
   .ui-hero-tabs {
     display: flex;
+    flex: 1;
     align-items: center;
     gap: var(--ui-list-gap);
     min-width: 0;
+  }
+
+  .ui-hero-tabs-end {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-tight-gap);
+    padding-right: var(--ui-tight-gap);
+  }
+
+  .ui-hero-check svg {
+    color: var(--ui-color-complete);
+  }
+
+  .ui-hero-cloud {
+    position: relative;
+    display: inline-flex;
+  }
+
+  /* The sandbox standing ready: a dot at the cloud's foot. */
+  .ui-hero-cloud::after {
+    content: "";
+    position: absolute;
+    right: -2px;
+    bottom: -1px;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--ui-radius-full);
+    background: var(--ui-color-complete);
+    box-shadow: 0 0 0 1.5px var(--ui-color-surface);
+  }
+
+  .ui-hero-context {
+    display: inline-flex;
+    padding: 0 var(--ui-space-4);
+  }
+
+  .ui-hero-asks {
+    color: var(--ui-color-attention);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .ui-hero-answered {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-tight-gap);
+    font-size: var(--ui-type-caption-size);
+    line-height: var(--ui-type-caption-leading);
+  }
+
+  .ui-hero-worked {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-tight-gap);
+  }
+
+  .ui-hero-turn-acts {
+    display: inline-flex;
   }
 
   .ui-hero-log {
@@ -669,6 +739,10 @@
   }
 
   .ui-hero-message-you {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: var(--ui-tight-gap);
     align-self: flex-end;
     max-width: 80%;
   }
@@ -696,7 +770,12 @@
 
   .ui-hero-working {
     display: inline-flex;
+    align-items: baseline;
+    gap: var(--ui-item-gap);
     color: var(--ui-color-text-muted);
+    font-size: var(--ui-type-caption-size);
+    line-height: var(--ui-type-caption-leading);
+    font-variant-numeric: tabular-nums;
   }
 
   .ui-hero-empty {

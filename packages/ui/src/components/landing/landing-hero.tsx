@@ -6,6 +6,7 @@ import {
   CheckIcon,
   GLYPH,
   ICON_SIZE,
+  PlugIcon,
   SlidersHorizontalIcon,
   SquareCheckIcon,
 } from "../../icons/icons.js";
@@ -25,10 +26,10 @@ import {
 import { HarnessMark } from "../../marks/harness-mark.js";
 import { TaskStatusMark } from "../../marks/task-marks.js";
 import { STATUS_TONE } from "../../status-tone.js";
-import { DENSITY, PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
+import { PROFILE, surfaceAttributes, THEME } from "../../tokens/surface.js";
 import { AVATAR_OUTLINE, AVATAR_SIZE, Avatar } from "../avatar/avatar.js";
 import { Breadcrumbs } from "../breadcrumbs/breadcrumbs.js";
-import { BUTTON_SIZE, IconButton } from "../button/button.js";
+import { BUTTON_SIZE, BUTTON_VARIANT, IconButton } from "../button/button.js";
 import { CHIP_LOOK, Chip, ChipName } from "../chip/chip.js";
 import { CHOICE_LOOK, CHOICE_SELECT, ChoiceList } from "../choice-list/choice-list.js";
 import { Comment, type CommentAuthor } from "../comment/comment.js";
@@ -39,6 +40,7 @@ import { DetailPage } from "../detail-page/detail-page.js";
 import { Disclosure, DisclosureBody, DisclosureSummary } from "../disclosure/disclosure.js";
 import { GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { GROUP_HEADING, GROUP_LOOK, GroupHeader } from "../group-header/group-header.js";
+import { INLINE_REF_LOOK, InlineRef } from "../inline-ref/inline-ref.js";
 import { LineRow } from "../line-button/line-button.js";
 import {
   LIST_DENSITY,
@@ -47,23 +49,31 @@ import {
   LIST_ROW_INK,
   LIST_ROW_LEAD,
   LIST_ROW_META,
+  LIST_VARIANT,
   List,
   ListRow,
 } from "../list-row/list-row.js";
+import { useMenu } from "../menu/menu.js";
 import { MoreButton } from "../more-button/more-button.js";
 import { NAV_ITEM_VARIANT, NavItem } from "../nav-item/nav-item.js";
 import { PAGE_FRAME } from "../page-frame/page-frame.js";
-import { PROGRESS_COUNT_LOOK, ProgressCount } from "../progress-ring/progress-ring.js";
+import {
+  PROGRESS_COUNT_LOOK,
+  PROGRESS_RING_TONE,
+  ProgressCount,
+  ProgressRing,
+} from "../progress-ring/progress-ring.js";
 import { SearchField } from "../search-field/search-field.js";
 import { Shimmer } from "../shimmer/shimmer.js";
 import { SidebarAccountRow, SidebarFoot, SidebarRule } from "../sidebar/sidebar.js";
+import { SplitButton } from "../split-button/split-button.js";
 import { TABS_GROUND, Tab, Tabs } from "../tabs/tabs.js";
 import { TEXT_ELEMENT, TEXT_TONE, Text } from "../text/text.js";
 import { TEXT_VARIANT } from "../text/text-role.js";
 import { TEXT_AREA_LOOK, TextArea } from "../text-field/text-field.js";
-import { Time } from "../time/time.js";
+import { TIME_LOOK, Time } from "../time/time.js";
 import { Toolbar } from "../toolbar/toolbar.js";
-import { TOOLBAR_INSET, TOOLBAR_LOOK } from "../toolbar/toolbar-frame.js";
+import { TOOLBAR_INSET } from "../toolbar/toolbar-frame.js";
 import { UnreadMark } from "../unread-mark/unread-mark.js";
 import { WorkingMark } from "../working-mark/working-mark.js";
 import { DESKTOP_PLACE, DesktopPlaces } from "./landing-desktop.js";
@@ -86,8 +96,8 @@ import { MINUTE, STORY_NOW, still } from "./landing-story.js";
  * takes an answer or a reply, and a task a follow-up.
  */
 
-/** The surface the app draws at: the web app's, dark. */
-const APP_SURFACE = surfaceAttributes(PROFILE.WEB, THEME.DARK, DENSITY.COMPACT);
+/** The surface the app draws at: the Mac app's own, dark. */
+const APP_SURFACE = surfaceAttributes(PROFILE.DESKTOP, THEME.DARK);
 
 /** The least width the app lays itself out at; a narrower stage scales it down whole. */
 const LEAST_WIDTH = 1040;
@@ -118,22 +128,38 @@ type Call = {
 };
 
 type Line =
-  | { readonly kind: typeof LINE.YOU; readonly id: string; readonly words: string }
+  | {
+      readonly kind: typeof LINE.YOU;
+      readonly id: string;
+      readonly words: string;
+      readonly at: string;
+      /** The thread the words answered, which stands over the bubble. */
+      readonly answered?: string;
+    }
   | { readonly kind: typeof LINE.AGENT; readonly id: string; readonly words: string }
   | { readonly kind: typeof LINE.CALLS; readonly id: string; readonly calls: readonly Call[] }
-  | { readonly kind: typeof LINE.WORKED; readonly id: string; readonly minutes: number }
+  | {
+      readonly kind: typeof LINE.WORKED;
+      readonly id: string;
+      readonly seconds: number;
+      readonly at: string;
+      readonly last?: boolean;
+    }
   | { readonly kind: typeof LINE.WORKING; readonly id: string };
 
-/** A task as the app holds it: its repository, status, agents, and its open agent's transcript. */
+/** A task as the app holds it: where it is listed, its status and marks, its agent, and that agent's transcript. */
 type Task = {
   readonly id: string;
   readonly name: string;
-  readonly repository: string;
+  readonly list: (typeof LIST)[keyof typeof LIST];
   readonly status: TaskStatus;
   readonly working: boolean;
   readonly ago: number;
+  readonly unread?: boolean;
   readonly progress?: { readonly done: number; readonly total: number };
-  readonly agents: readonly string[];
+  readonly agent: string;
+  /** How many of the agent's threads wait in the Inbox, which its tab counts. */
+  readonly asks?: number;
   readonly lines: readonly Line[];
   readonly pullRequest?: {
     readonly title: string;
@@ -142,27 +168,32 @@ type Task = {
   };
 };
 
+/** The sidebar's lists a task stands in. */
+const LIST = {
+  PINNED: "pinned",
+  MINE: "mine",
+} as const;
+
+/** The task the app opens on. */
+const OPEN_TASK = "invites";
+
 const TASKS: readonly Task[] = [
   {
     id: "invites",
     name: "Teammate invitations",
-    repository: "relay",
+    list: LIST.PINNED,
     status: TASK_STATUS.IN_PROGRESS,
     working: true,
-    ago: 12,
-    progress: { done: 2, total: 4 },
-    agents: ["Invite emails", "Accept page"],
+    ago: 0,
+    progress: { done: 3, total: 4 },
+    agent: "Teammate invitations",
+    asks: 1,
     lines: [
-      {
-        kind: LINE.YOU,
-        id: "ask",
-        words: "Let members invite teammates by email. The link should expire after seven days.",
-      },
       {
         kind: LINE.AGENT,
         id: "plan",
         words:
-          "The emails link to an accept page that isn't built yet, so I'll start an agent on the page and wire the emails meanwhile.",
+          "I split this into four sub-tasks: the memberships schema, the invite and accept endpoints, the accept page, and the emails. The first two are merged, and I started an agent on the accept page while I wire the emails.",
       },
       {
         kind: LINE.CALLS,
@@ -171,33 +202,128 @@ const TASKS: readonly Task[] = [
           { id: "plan", icon: <GLYPH.FILE />, verb: "Read", subject: "plan.md" },
           { id: "start", icon: <PlayIcon />, verb: "Started an agent", subject: "Accept page" },
           {
-            id: "schema",
+            id: "mail",
             icon: <GLYPH.FILE />,
             verb: "Edited",
-            subject: "db/schema/memberships.ts",
+            subject: "server/mail/invite-email.tsx",
           },
+        ],
+      },
+      {
+        kind: LINE.AGENT,
+        id: "sent",
+        words:
+          "Invites now go out through Postmark and expire after seven days. A second accept of the same link reads as no longer valid, and a test opens one link twice at once. #217 is open with the emails.",
+      },
+      { kind: LINE.WORKED, id: "worked", seconds: 37, at: "Today, 3:55 PM" },
+      {
+        kind: LINE.YOU,
+        id: "answer",
+        words: "Chose \u201cBoth\u201d.",
+        at: "Today, 4:02 PM",
+        answered: "Who can withdraw an invite?",
+      },
+      {
+        kind: LINE.CALLS,
+        id: "withdraw",
+        calls: [
+          {
+            id: "route",
+            icon: <GLYPH.FILE />,
+            verb: "Edited",
+            subject: "server/routes/invites/withdraw.ts",
+          },
+          { id: "test", icon: <PlayIcon />, verb: "Ran", subject: "pnpm test invites" },
         ],
       },
       {
         kind: LINE.AGENT,
         id: "done",
         words:
-          "Invites go out through Postmark and expire after seven days. A second accept of the same link now reads as no longer valid, and a test opens one link twice at once.",
+          "Both the member who sent an invite and any admin can withdraw it now, and the audit log records who did. I pushed it to #217 and the checks are running.",
       },
-      { kind: LINE.WORKED, id: "worked", minutes: 14 },
+      { kind: LINE.WORKED, id: "worked-2", seconds: 21, at: "Today, 4:03 PM", last: true },
+      {
+        kind: LINE.YOU,
+        id: "reminder",
+        words: "Also send a reminder if an invite hasn't been accepted after three days.",
+        at: "Today, 4:24 PM",
+      },
+      { kind: LINE.WORKING, id: "working" },
     ],
-    pullRequest: { title: "#217 Invite emails through Postmark", added: 184, removed: 12 },
+    pullRequest: {
+      title: "#217 feat(invites): invite teammates by email",
+      added: 412,
+      removed: 38,
+    },
+  },
+  {
+    id: "cpu",
+    name: "Investigate CPU usage spikes",
+    list: LIST.PINNED,
+    status: TASK_STATUS.IN_PROGRESS,
+    working: true,
+    ago: 1,
+    unread: true,
+    progress: { done: 7, total: 23 },
+    agent: "CPU spikes",
+    lines: [
+      {
+        kind: LINE.YOU,
+        id: "ask",
+        words: "The API's CPU spikes every few minutes. Find out why.",
+        at: "Today, 3:41 PM",
+      },
+      {
+        kind: LINE.AGENT,
+        id: "found",
+        words:
+          "The spikes line up with the session sweep, which reads every row to find expired ones. I'm adding an index on expiry and batching the sweep.",
+      },
+      { kind: LINE.WORKING, id: "working" },
+    ],
+  },
+  {
+    id: "rate",
+    name: "Stay under GitHub's rate limit",
+    list: LIST.PINNED,
+    status: TASK_STATUS.IN_PROGRESS,
+    working: false,
+    ago: 3,
+    unread: true,
+    progress: { done: 7, total: 10 },
+    agent: "Rate limits",
+    lines: [
+      {
+        kind: LINE.YOU,
+        id: "ask",
+        words: "We keep hitting GitHub's rate limit on big repositories.",
+        at: "Today, 2:10 PM",
+      },
+      {
+        kind: LINE.AGENT,
+        id: "done",
+        words:
+          "Pull request lists now use conditional requests, so an unchanged page costs nothing against the limit. Seven of ten sub-tasks are merged.",
+      },
+      { kind: LINE.WORKED, id: "worked", seconds: 54, at: "Today, 2:31 PM", last: true },
+    ],
   },
   {
     id: "digest",
     name: "Weekly digest email",
-    repository: "relay",
+    list: LIST.PINNED,
     status: TASK_STATUS.IN_PROGRESS,
     working: true,
-    ago: 25,
-    agents: ["Digest template"],
+    ago: 8,
+    agent: "Digest template",
     lines: [
-      { kind: LINE.YOU, id: "ask", words: "Send each member a weekly digest of what merged." },
+      {
+        kind: LINE.YOU,
+        id: "ask",
+        words: "Send each member a weekly digest of what merged.",
+        at: "Today, 1:05 PM",
+      },
       {
         kind: LINE.AGENT,
         id: "plan",
@@ -208,18 +334,43 @@ const TASKS: readonly Task[] = [
     ],
   },
   {
-    id: "alerts",
-    name: "Usage alerts",
-    repository: "ledger",
+    id: "export",
+    name: "Billing export",
+    list: LIST.MINE,
     status: TASK_STATUS.IN_PROGRESS,
     working: false,
-    ago: 300,
-    agents: ["Usage alerts"],
+    ago: 60 * 24,
+    progress: { done: 0, total: 7 },
+    agent: "Billing export",
+    lines: [
+      {
+        kind: LINE.YOU,
+        id: "ask",
+        words: "Let owners export a month of invoices as CSV.",
+        at: "Yesterday, 5:12 PM",
+      },
+      {
+        kind: LINE.AGENT,
+        id: "plan",
+        words: "I wrote a plan with seven sub-tasks. Approve it and I'll start on the first.",
+      },
+      { kind: LINE.WORKED, id: "worked", seconds: 48, at: "Yesterday, 5:14 PM", last: true },
+    ],
+  },
+  {
+    id: "alerts",
+    name: "Usage alerts",
+    list: LIST.MINE,
+    status: TASK_STATUS.IN_PROGRESS,
+    working: false,
+    ago: 60 * 24,
+    agent: "Usage alerts",
     lines: [
       {
         kind: LINE.YOU,
         id: "ask",
         words: "Email the workspace's owners when usage passes 80% of the plan.",
+        at: "Yesterday, 11:20 AM",
       },
       {
         kind: LINE.AGENT,
@@ -227,23 +378,48 @@ const TASKS: readonly Task[] = [
         words:
           "Owners get one email per threshold per month, and the alert links to the usage page.",
       },
-      { kind: LINE.WORKED, id: "worked", minutes: 9 },
+      { kind: LINE.WORKED, id: "worked", seconds: 32, at: "Yesterday, 11:24 AM", last: true },
     ],
   },
   {
-    id: "export",
-    name: "Billing export",
-    repository: "ledger",
+    id: "onboarding",
+    name: "Onboarding checklist",
+    list: LIST.MINE,
     status: TASK_STATUS.TODO,
     working: false,
     ago: 60 * 24,
-    agents: [],
+    agent: "New agent",
     lines: [],
+  },
+  {
+    id: "search",
+    name: "Search across tasks",
+    list: LIST.MINE,
+    status: TASK_STATUS.IN_PROGRESS,
+    working: false,
+    ago: 60 * 48,
+    progress: { done: 0, total: 6 },
+    agent: "Task search",
+    lines: [
+      {
+        kind: LINE.YOU,
+        id: "ask",
+        words: "Let members search every task's title and description.",
+        at: "Wednesday, 9:40 AM",
+      },
+      {
+        kind: LINE.AGENT,
+        id: "plan",
+        words:
+          "Postgres full-text search covers it without a new service. The plan has six sub-tasks.",
+      },
+      { kind: LINE.WORKED, id: "worked", seconds: 41, at: "Wednesday, 9:43 AM", last: true },
+    ],
   },
 ];
 
-/** The task pinned over My tasks. */
-const PINNED = "digest";
+/** How many tasks the member follows, which the sidebar's folded Following counts. */
+const FOLLOWING = 4;
 
 /** What an Inbox item asks: a decision, a to-do, a notice, or one that is settled. */
 const ASK = {
@@ -416,7 +592,7 @@ function useAppFit() {
 /**
  * Scrolls the element `ref` names to its end each time `count`, how many
  * lines it holds, grows, so a message the reader sends stands in view
- * rather than under the scroll's edge; the first draw keeps its place.
+ * rather than under the scroll's edge.
  */
 function useScrollToEnd(ref: RefObject<HTMLDivElement | null>, count: number): void {
   const seen = useRef(count);
@@ -430,6 +606,15 @@ function useScrollToEnd(ref: RefObject<HTMLDivElement | null>, count: number): v
 
     log.scrollTo({ top: log.scrollHeight, behavior: "smooth" });
   }, [ref, count]);
+}
+
+/** Stands the element `ref` names at its end as it first draws, as a transcript opens on its latest turn. */
+function useOpenAtEnd(ref: RefObject<HTMLDivElement | null>): void {
+  useEffect(() => {
+    const log = ref.current;
+
+    if (log !== null) log.scrollTop = log.scrollHeight;
+  }, [ref]);
 }
 
 /** A composer's field: its words, as they change, sent with Return. */
@@ -463,13 +648,14 @@ function ComposerField({
   );
 }
 
-/** The agent composer's card: `head` over the field, and its foot of attach, where it runs, the model, dictate, and send. */
+/** The agent composer's card: `head` over the field, and its foot of attach, where it runs, its tools, the model, its context, dictate, and send, or stop while the agent works and nothing waits to be sent. */
 function AgentComposer({
   label,
   words,
   onWords,
   onSend,
   sendable,
+  working = false,
   rows,
   head,
 }: {
@@ -478,6 +664,7 @@ function AgentComposer({
   onWords: (words: string) => void;
   onSend: () => void;
   sendable: boolean;
+  working?: boolean | undefined;
   rows?: number | undefined;
   head?: ReactNode;
 }): React.JSX.Element {
@@ -489,26 +676,33 @@ function AgentComposer({
       <ComposerField label={label} words={words} onWords={onWords} onSend={send} rows={rows} />
       <ComposerFoot
         send={{ label: "Send", empty: send === undefined, onSend: send }}
+        stop={working && send === undefined ? { label: "Stop", onStop: still } : undefined}
         tools={
           <>
             <IconButton icon={<PlusIcon />} label="Attach files" onClick={still} />
-            <Chip look={CHIP_LOOK.TOOLBAR} chevron onClick={still}>
+            <Chip look={CHIP_LOOK.TOOLBAR} onClick={still}>
               <ChipName>
                 <span className="ui-hero-chip-words">
-                  <GLYPH.CLOUD />
+                  <span className="ui-hero-cloud">
+                    <GLYPH.CLOUD />
+                  </span>
                   Cloud
                 </span>
               </ChipName>
             </Chip>
+            <IconButton icon={<PlugIcon />} label="Forward a port" onClick={still} />
           </>
         }
         actions={
           <>
             <Chip look={CHIP_LOOK.TOOLBAR} chevron onClick={still}>
               <ChipName>
-                Opus 5.5 <span className="ui-hero-effort">High</span>
+                Opus 5.5 <span className="ui-hero-effort">Medium</span>
               </ChipName>
             </Chip>
+            <span className="ui-hero-context">
+              <ProgressRing share={0.34} tone={PROGRESS_RING_TONE.MUTED} />
+            </span>
             <IconButton icon={<MicrophoneIcon />} label="Dictate" onClick={still} />
           </>
         }
@@ -517,7 +711,7 @@ function AgentComposer({
   );
 }
 
-/** A task's row in the sidebar: its status, its name, and at its end its sub-tasks done, its working mark, and its age. */
+/** A task's row in the sidebar: its status, its name, bold while unread, and at its end its sub-tasks done, its working mark, and its age. */
 function SidebarTaskRow({
   task,
   current,
@@ -544,17 +738,18 @@ function SidebarTaskRow({
               look={PROGRESS_COUNT_LOOK.BARE}
             />
           )}
-          {task.working ? <WorkingMark /> : null}
+          {task.working && task.progress === undefined ? <WorkingMark /> : null}
           <Time at={STORY_NOW - task.ago * MINUTE} now={STORY_NOW} hint={false} />
         </span>
       }
       current={current ? LIST_ROW_CURRENT.PAGE : undefined}
+      unread={task.unread === true}
       onPress={onOpen}
     />
   );
 }
 
-/** The sidebar: the title bar's controls, the workspace, the places, Pinned and My tasks by repository, and the account's foot. */
+/** The sidebar: the title bar's controls, the workspace, the places, Pinned, Following folded, and My tasks, over the account's foot. */
 function Sidebar({
   view,
   tasks,
@@ -567,7 +762,6 @@ function Sidebar({
   go: (view: View) => void;
 }): React.JSX.Element {
   const openTask = view.place === DESKTOP_PLACE.TASK ? view.task : undefined;
-  const repositories = [...new Set(tasks.map((task) => task.repository))];
 
   const row = (task: Task) => (
     <SidebarTaskRow
@@ -626,24 +820,22 @@ function Sidebar({
         <nav className="ui-hero-sidebar-group" aria-label="Pinned">
           <GroupHeader heading={GROUP_HEADING.NONE} look={GROUP_LOOK.HEADING} label="Pinned" />
           <List label="Pinned" density={LIST_DENSITY.DENSE}>
-            {tasks.filter((task) => task.id === PINNED).map(row)}
+            {tasks.filter((task) => task.list === LIST.PINNED).map(row)}
           </List>
         </nav>
+        <div className="ui-hero-sidebar-group">
+          <GroupHeader
+            heading={GROUP_HEADING.NONE}
+            look={GROUP_LOOK.HEADING}
+            label="Following"
+            count={{ value: FOLLOWING, noun: "tasks" }}
+          />
+        </div>
         <nav className="ui-hero-sidebar-group" aria-label="My tasks">
-          <GroupHeader heading={GROUP_HEADING.NONE} look={GROUP_LOOK.HEADING} label="My tasks" />
-          {repositories.map((repository) => (
-            <div key={repository} className="ui-hero-repository">
-              <GroupHeader
-                heading={GROUP_HEADING.NONE}
-                look={GROUP_LOOK.HEADING}
-                glyph={<GLYPH.REPOSITORY />}
-                label={repository}
-              />
-              <List label={repository} density={LIST_DENSITY.DENSE}>
-                {tasks.filter((task) => task.repository === repository).map(row)}
-              </List>
-            </div>
-          ))}
+          <GroupHeader heading={GROUP_HEADING.NONE} label="My tasks" />
+          <List label="My tasks" density={LIST_DENSITY.DENSE}>
+            {tasks.filter((task) => task.list === LIST.MINE).map(row)}
+          </List>
         </nav>
       </div>
       <SidebarFoot>
@@ -857,15 +1049,78 @@ function CallRow({ call }: { call: Call }): React.JSX.Element {
   );
 }
 
+/** A turn's foot: how long the agent worked and when, and on the last turn the acts on it. */
+function WorkedLine({
+  seconds,
+  at,
+  last,
+}: {
+  seconds: number;
+  at: string;
+  last: boolean;
+}): React.JSX.Element {
+  return (
+    <div className="ui-hero-worked">
+      <Text tone={TEXT_TONE.MUTED} variant={TEXT_VARIANT.CAPTION}>
+        Worked for {seconds}s · {at}
+      </Text>
+      {last ? (
+        <span className="ui-hero-turn-acts">
+          <IconButton
+            icon={<GLYPH.COPY />}
+            label="Copy"
+            size={BUTTON_SIZE.COMPACT}
+            onClick={still}
+          />
+          <IconButton
+            icon={<GLYPH.LINK />}
+            label="Copy link"
+            size={BUTTON_SIZE.COMPACT}
+            onClick={still}
+          />
+          <IconButton
+            icon={<GLYPH.BRANCH />}
+            label="Fork from here"
+            size={BUTTON_SIZE.COMPACT}
+            onClick={still}
+          />
+          <IconButton
+            icon={<GLYPH.RETRY />}
+            label="Retry"
+            size={BUTTON_SIZE.COMPACT}
+            onClick={still}
+          />
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 /** A line of the transcript, as the panel's conversation draws it. */
 function TranscriptLine({ line }: { line: Line }): React.JSX.Element {
   switch (line.kind) {
     case LINE.YOU:
       return (
         <div className="ui-hero-message ui-hero-message-you ui-hero-enter">
+          {line.answered === undefined ? null : (
+            <span className="ui-hero-answered">
+              <Text as={TEXT_ELEMENT.SPAN} tone={TEXT_TONE.MUTED} variant={TEXT_VARIANT.CAPTION}>
+                Answered
+              </Text>
+              <InlineRef
+                look={INLINE_REF_LOOK.PILL}
+                glyph={<GLYPH.DECIDE />}
+                label={line.answered}
+                hint={false}
+              />
+            </span>
+          )}
           <div className="ui-hero-bubble">
             <Text>{line.words}</Text>
           </div>
+          <Text tone={TEXT_TONE.MUTED} variant={TEXT_VARIANT.CAPTION}>
+            {line.at}
+          </Text>
         </div>
       );
     case LINE.AGENT:
@@ -888,36 +1143,36 @@ function TranscriptLine({ line }: { line: Line }): React.JSX.Element {
         </Disclosure>
       );
     case LINE.WORKED:
-      return (
-        <Text tone={TEXT_TONE.MUTED} variant={TEXT_VARIANT.CAPTION}>
-          Worked for {line.minutes}m
-        </Text>
-      );
+      return <WorkedLine seconds={line.seconds} at={line.at} last={line.last === true} />;
     case LINE.WORKING:
       return (
         <span className="ui-hero-working">
           <Shimmer>Working…</Shimmer>
+          <Time at={STORY_NOW - 5000} now={STORY_NOW} look={TIME_LOOK.DURATION} />
         </span>
       );
   }
 }
 
-/** A task's page: its name on the frame, its agents' tabs, the open agent's transcript, and the follow-up box. */
+/** A task's page: its name on the frame, its agent's tab and the task's checks beside it, the transcript, the dock of its pull request and Inbox, and the follow-up box. */
 function TaskPage({
   task,
   followUp,
   onFollowUp,
   onSend,
+  onInbox,
 }: {
   task: Task;
   followUp: string;
   onFollowUp: (words: string) => void;
   onSend: () => void;
+  onInbox: () => void;
 }): React.JSX.Element {
   const started = task.lines.length > 0;
-  const agents = task.agents.length > 0 ? task.agents : ["New agent"];
   const log = useRef<HTMLDivElement>(null);
+  const checks = useMenu(false);
 
+  useOpenAtEnd(log);
   useScrollToEnd(log, task.lines.length);
 
   return (
@@ -927,31 +1182,34 @@ function TaskPage({
           <TaskStatusMark status={task.status} />
           {task.name}
         </span>
-        <span className="ui-hero-bar-end">
-          <IconButton icon={<SidePanelIcon />} label="Show side panel" onClick={still} />
-        </span>
       </div>
       <div className="ui-hero-task-tabs">
-        <Toolbar
-          start={TOOLBAR_INSET.COLUMN}
-          look={TOOLBAR_LOOK.TABS}
-          title={
-            <span className="ui-hero-tabs">
-              <Tabs label="Agents" ground={TABS_GROUND.FRAME}>
-                {agents.map((agent, index) => (
-                  <Tab
-                    key={agent}
-                    icon={task.working && index === 0 ? <WorkingMark /> : agentFace(agent)}
-                    label={agent}
-                    selected={index === 0}
-                    onSelect={still}
-                  />
-                ))}
-              </Tabs>
-              <IconButton icon={<PlusIcon />} label="Open a tab" onClick={still} />
-            </span>
-          }
-        />
+        <span className="ui-hero-tabs">
+          <Tabs label="Agents" ground={TABS_GROUND.FRAME}>
+            <Tab
+              icon={task.working ? <WorkingMark /> : agentFace(task.agent)}
+              label={task.agent}
+              detail={task.asks === undefined ? undefined : String(task.asks)}
+              detailTone={STATUS_TONE.ATTENTION}
+              selected
+              onSelect={still}
+            />
+          </Tabs>
+          <IconButton icon={<PlusIcon />} label="Open a tab" onClick={still} />
+        </span>
+        <span className="ui-hero-tabs-end">
+          <span className="ui-hero-check">
+            <SplitButton
+              variant={BUTTON_VARIANT.OUTLINE}
+              icon={<CheckIcon />}
+              menu={{ label: "More checks", ...checks.trigger() }}
+              onClick={still}
+            >
+              Check
+            </SplitButton>
+          </span>
+          <IconButton icon={<SidePanelIcon />} label="Show side panel" onClick={still} />
+        </span>
       </div>
       <section className="ui-hero-sheet ui-hero-agent" aria-label={task.name}>
         <div ref={log} className="ui-hero-log">
@@ -974,12 +1232,23 @@ function TaskPage({
               removed={task.pullRequest.removed}
             />
           )}
+          {task.asks === undefined ? null : (
+            <List label="Inbox" variant={LIST_VARIANT.CARD}>
+              <ListRow
+                leading={<GLYPH.INBOX />}
+                title="Inbox"
+                meta={<span className="ui-hero-asks">{task.asks}</span>}
+                onPress={onInbox}
+              />
+            </List>
+          )}
           <AgentComposer
             label={started ? "Send a follow-up" : "Ask to make changes"}
             words={followUp}
             onWords={onFollowUp}
             onSend={onSend}
             sendable={followUp.trim() !== ""}
+            working={task.working}
           />
         </div>
       </section>
@@ -1033,7 +1302,7 @@ function HomePage({
 /** The live Mac app the hero shows, opened on Home. */
 export function LandingHeroApp(): React.JSX.Element {
   const fit = useAppFit();
-  const [view, setView] = useState<View>({ place: DESKTOP_PLACE.HOME });
+  const [view, setView] = useState<View>({ place: DESKTOP_PLACE.TASK, task: OPEN_TASK });
   const [tasks, setTasks] = useState<readonly Task[]>(TASKS);
   const [openItem, setOpenItem] = useState<string>(QUESTION_ID);
   const [answer, setAnswer] = useState<Answer>({ pick: null, note: "", sent: false });
@@ -1077,10 +1346,10 @@ export function LandingHeroApp(): React.JSX.Element {
           ? {
               ...task,
               working: true,
-              agents: task.agents.length > 0 ? task.agents : [taskName(words)],
+              agent: task.lines.length > 0 ? task.agent : taskName(words),
               lines: [
                 ...task.lines.filter((line) => line.kind !== LINE.WORKING),
-                { kind: LINE.YOU, id: `you-${id}`, words },
+                { kind: LINE.YOU, id: `you-${id}`, words, at: "Just now" },
                 { kind: LINE.WORKING, id: `working-${id}` },
               ],
             }
@@ -1099,13 +1368,13 @@ export function LandingHeroApp(): React.JSX.Element {
     const task: Task = {
       id,
       name: taskName(words),
-      repository: "relay",
+      list: LIST.MINE,
       status: TASK_STATUS.IN_PROGRESS,
       working: true,
       ago: 0,
-      agents: [taskName(words)],
+      agent: taskName(words),
       lines: [
-        { kind: LINE.YOU, id: "ask", words },
+        { kind: LINE.YOU, id: "ask", words, at: "Just now" },
         { kind: LINE.WORKING, id: "working" },
       ],
     };
@@ -1236,6 +1505,7 @@ export function LandingHeroApp(): React.JSX.Element {
             followUp={draft(task.id)}
             onFollowUp={setDraft(task.id)}
             onSend={sendFollowUp(task.id)}
+            onInbox={() => setView({ place: DESKTOP_PLACE.INBOX })}
           />
         );
       }

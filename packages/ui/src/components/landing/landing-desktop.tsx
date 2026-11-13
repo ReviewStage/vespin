@@ -142,7 +142,7 @@ export function SidePanelToggle(): React.JSX.Element {
 
 /**
  * The sidebar's places as the panel lists them: Search, Home, the Inbox
- * with how many of its items wait on the reader, Tasks, and Automations,
+ * with how many of its items wait on the reader, Tasks, Automations, and the Merge queue,
  * `place` marked, each of Home, the Inbox, and Automations going where
  * `go` says where it is given.
  */
@@ -180,6 +180,7 @@ export function DesktopPlaces({
       <NavItem icon={<ZapIcon />} current={current(DESKTOP_PLACE.AUTOMATIONS)}>
         Automations
       </NavItem>
+      <NavItem icon={<GLYPH.QUEUED />}>Merge queue</NavItem>
     </SidebarPlaces>
   );
 }
