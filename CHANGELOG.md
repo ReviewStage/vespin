@@ -102,7 +102,7 @@ add, edit, and remove in place.
 [#8662](https://github.com/ReviewStage/vespin/pull/8662),
 [#8559](https://github.com/ReviewStage/vespin/pull/8559))
 
-### PDFs and iPhone photos
+### PDFs and HEIC photos
 
 A PDF opens in the file viewer page by page, and a pasted PDF, or one shared
 in Slack, goes to the agent, which reads it on any machine. A HEIC photo turns
@@ -120,13 +120,6 @@ Zoom row in the tab's menu, and its bar says the size it stands at.
 ([#8471](https://github.com/ReviewStage/vespin/pull/8471),
 [#8606](https://github.com/ReviewStage/vespin/pull/8606),
 [#8595](https://github.com/ReviewStage/vespin/pull/8595))
-
-### Handoff to your iPhone
-
-The thread, task, agent, or pull request your Mac shows can be picked up on
-your iPhone through Handoff.
-([#8643](https://github.com/ReviewStage/vespin/pull/8643),
-[#8650](https://github.com/ReviewStage/vespin/pull/8650))
 
 ### Improvements
 
