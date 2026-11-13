@@ -95,6 +95,7 @@ import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -523,6 +524,8 @@ function ThreadDetail({
   const openRemind = place.inStack ? remind.open : place.onRemind;
   const menu = threadMenu(item, answer, () => openRemind(item));
 
+  const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
+
   const drawn: readonly ThreadMessage[] = messages.map((message) => ({
     ...message,
     writer: {
@@ -591,6 +594,13 @@ function ThreadDetail({
 
   const path = [holder.task.name, agentName];
 
+  // A chip's pull request in the thread is read through its task's own workspace, as the panel's Inbox reads it.
+  const linkStanding = useLinkStandings(
+    messageWords,
+    holder.task.repository,
+    workspaces.find((each) => each.id === workspaceId),
+  );
+
   const page = (
     <ThreadPage
       path={path}
@@ -601,6 +611,7 @@ function ThreadDetail({
       onOpenLink={openLink}
       pictureSource={pictureSource}
       videoAt={videoAt}
+      linkStanding={linkStanding}
       standing={item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(item)}
       ask={
         <OpenAskCard

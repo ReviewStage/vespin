@@ -27,6 +27,8 @@ export const APP_SETTING_ID = {
   AGENT_NOTIFICATIONS: "agent_notifications",
   MAC_COMMANDS: "mac_commands",
   KEEP_AWAKE: "keep_awake",
+  COMPUTER_USE: "computer_use",
+  COMPUTER_USE_APPS: "computer_use_apps",
   /** Offered by no build: Forward cloud agents' ports automatically, removed since ports are forwarded only from the agent's plug. */
   FORWARD_PORTS: "forward_ports",
   /** Offered by no build: Run agents on this Mac, removed since Runs on chooses where each agent runs. */

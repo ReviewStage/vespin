@@ -24,7 +24,7 @@ import {
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import type { WireBoundaryInput } from "@repo/wire";
+import { MESSAGE_CHANNEL, type WireBoundaryInput } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { noNetwork } from "@repo/wire/testing";
 import { Effect, Layer, Option } from "effect";
@@ -251,6 +251,41 @@ it.layer(SUITE)("an agent's queue", (it) => {
         ).pipe(Effect.provide(Layer.mergeAll(github.layer, noNetwork)));
 
         assert.deepEqual(handedFiles(agentSessions), ["spec.pdf"]);
+      }),
+  );
+
+  it.effect(
+    "a message queued on the voice channel goes on as a spoken line, and a typed one beside it does not",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { agent, ask, owner } = yield* messagedAgent(agentSessions, { running: true });
+
+        const [typed, voice] =
+          (yield* Effect.forEach(
+            [{}, { channel: MESSAGE_CHANNEL.VOICE, delegationId: "item_delegation_1" }],
+            (spoken) =>
+              queueChanged(ask, owner, agent.id, {
+                change: QUEUE_CHANGE.ADD,
+                text: "Is it done?",
+                id: randomUUID(),
+                ...spoken,
+              }),
+          )).at(-1)?.messages ?? [];
+
+        assert.ok(typed !== undefined && voice !== undefined);
+
+        for (const queued of [typed, voice]) {
+          yield* queueChanged(ask, owner, agent.id, {
+            change: QUEUE_CHANGE.STEER,
+            messageId: queued.id,
+          });
+        }
+
+        assert.deepEqual(
+          agentSessions.sent.slice(-2).map((each) => each.message.spoken ?? false),
+          [false, true],
+        );
       }),
   );
 

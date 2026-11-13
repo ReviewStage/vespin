@@ -30,6 +30,8 @@ export const CALL_KIND = {
   MAC_COMMAND: "mac-command",
   /** Actions an agent took in the browser in its own sandbox (`browser`), its line saying what it did and in which tab, with where it ran beside it. */
   BROWSER: "browser",
+  /** One action an agent took on an app on the developer's own Mac (`computer`), its line saying what it did and to which app, the app's icon in its kind's icon's place. */
+  COMPUTER: "computer",
   READ_FILE: "read-file",
   WRITE_FILE: "write-file",
   EDIT: "edit",
@@ -152,6 +154,7 @@ export const CALL_WORDS = {
   [CALL_KIND.COMMAND]: { verb: "Ran", code: true },
   [CALL_KIND.MAC_COMMAND]: { verb: "Ran", code: true },
   [CALL_KIND.BROWSER]: { verb: "Used the browser", code: false },
+  [CALL_KIND.COMPUTER]: { verb: "Used an app", code: false },
   [CALL_KIND.READ_FILE]: { verb: "Read", code: true },
   [CALL_KIND.WRITE_FILE]: { verb: "Wrote", code: true },
   [CALL_KIND.EDIT]: { verb: "Edited", code: true },
@@ -250,6 +253,24 @@ const BROWSER_ACTION_WORDS: ReadonlyMap<string, string> = new Map([
   ["record", "started recording"],
   ["stop_recording", "stopped recording"],
 ]);
+
+/** What each of the computer tool's actions says it did, before the app it did it to, on its call's line. */
+const COMPUTER_ACTION_WORDS: ReadonlyMap<string, string> = new Map([
+  ["list_apps", "Listed the apps"],
+  ["get_app_state", "Looked at"],
+  ["click", "Clicked in"],
+  ["type_text", "Typed in"],
+  ["press_key", "Pressed a key in"],
+  ["scroll", "Scrolled in"],
+  ["drag", "Dragged in"],
+  ["set_value", "Set a value in"],
+  ["perform_secondary_action", "Acted in"],
+]);
+
+/** What a computer call's line says it did, in place of its kind's verb; nothing for an action this build does not know, so the kind's own verb stands. */
+export function computerCallWords(action: string | undefined): string | undefined {
+  return action === undefined ? undefined : COMPUTER_ACTION_WORDS.get(action);
+}
 
 /**
  * What a browser call's line says it did, in place of its kind's verb: each
@@ -354,7 +375,7 @@ export function isCommandKind(kind: CallKind): boolean {
 export function callPlace(kind: CallKind, server?: string): string | undefined {
   if (kind === CALL_KIND.MCP_TOOL || kind === CALL_KIND.SEARCH_TOOLS) return server;
 
-  if (kind === CALL_KIND.MAC_COMMAND) return ON_YOUR_MAC;
+  if (kind === CALL_KIND.MAC_COMMAND || kind === CALL_KIND.COMPUTER) return ON_YOUR_MAC;
 
   return kind === CALL_KIND.BROWSER ? IN_THE_BROWSER : undefined;
 }
@@ -384,7 +405,11 @@ export function callLine(
 
   if (description === undefined) return { verb: words.verb, subject, code: words.code };
 
-  if (kind === CALL_KIND.BROWSER || kind === CALL_KIND.OPEN_PULL_REQUEST) {
+  if (
+    kind === CALL_KIND.BROWSER ||
+    kind === CALL_KIND.COMPUTER ||
+    kind === CALL_KIND.OPEN_PULL_REQUEST
+  ) {
     return { verb: description, subject, code: false };
   }
 

@@ -22,7 +22,9 @@ import { CostScreen } from "./screens/cost.js";
 import { DashboardScreen } from "./screens/dashboard.js";
 import { DayScreen } from "./screens/day.js";
 import { LimitsScreen } from "./screens/limits.js";
+import { PromptsScreen } from "./screens/prompts.js";
 import { ReliabilityScreen } from "./screens/reliability.js";
+import { ToolsScreen } from "./screens/tools.js";
 import { UsersScreen } from "./screens/users.js";
 import { WorkspaceScreen } from "./screens/workspace.js";
 import { WorkspacesScreen } from "./screens/workspaces.js";
@@ -154,7 +156,11 @@ function AdminViews({ view, onOpen }: AdminPlaceProps): React.JSX.Element {
         />
       );
     case ADMIN_TAB.LIMITS:
-      return <LimitsScreen frame={unframed} />;
+      return <LimitsScreen {...shared} />;
+    case ADMIN_TAB.TOOLS:
+      return <ToolsScreen {...shared} />;
+    case ADMIN_TAB.PROMPTS:
+      return <PromptsScreen {...shared} />;
     default:
       return (
         <DashboardScreen

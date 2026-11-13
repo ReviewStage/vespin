@@ -179,6 +179,8 @@ type SessionReset =
 export interface SessionMessage<Turn extends SessionTurn = SessionTurn> {
   readonly conversationId: string;
   readonly turn: Turn;
+  /** Whether the message is the developer's words spoken on a call (`MESSAGE_CHANNEL.VOICE`), so the turn it opens is told its reply is read aloud (`turn-context.ts`). */
+  readonly spoken?: boolean;
   /** The words alone, or the AI SDK's user content where a coding agent's message carries files (`attached-files.ts`). */
   readonly message: string | UserContent;
   /** The sender's time zone, which the turn the message opens reads the day in; none reads UTC. */

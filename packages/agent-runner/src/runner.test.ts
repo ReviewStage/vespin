@@ -52,7 +52,11 @@ import {
 } from "./protocol.js";
 import { runAgent } from "./runner.js";
 import { fakeAppServer } from "./testing/fake-app-server.js";
-import { fakeCheckoutSnapshots, fakeSnapshotOf } from "./testing/fake-checkout-snapshots.js";
+import {
+  fakeCheckoutSnapshots,
+  fakeFilesOf,
+  fakeSnapshotOf,
+} from "./testing/fake-checkout-snapshots.js";
 import { fakeClaudeCode } from "./testing/fake-claude-code.js";
 import { fakeProbe } from "./testing/fake-probe.js";
 import { ANSWER, type Answer, makeFakeService } from "./testing/fake-service.js";
@@ -163,6 +167,7 @@ function launch(
   chain: readonly string[] | null = [],
   answering = true,
   probe = fakeProbe(),
+  changed = false,
 ) {
   return Effect.gen(function* () {
     const cli = yield* fakeClaudeCode(steps, chain, answering);
@@ -178,7 +183,7 @@ function launch(
           service.layer,
           fakeAppServer([]).layer,
           probe.layer,
-          fakeCheckoutSnapshots().layer,
+          fakeCheckoutSnapshots(false, changed).layer,
         ),
       ),
       Effect.forkScoped,
@@ -1484,11 +1489,21 @@ it.effect("ends a stopped launch within one post's bound while Vespin is still u
 );
 
 it.effect(
-  "posts each message's uuid as accepted ahead of handing it to the CLI, which takes it as the prompt's own",
+  "posts each message's uuid as accepted ahead of handing it to the CLI, which takes it as the prompt's own, and ends with the files the turn changed",
   () =>
     Effect.gen(function* () {
       const service = fakeService([], "Working on the first message.");
-      const { cli, prompted, release, write, run } = yield* launch(FOLLOW_UP_TURNS, service);
+
+      const { cli, prompted, release, write, run } = yield* launch(
+        FOLLOW_UP_TURNS,
+        service,
+        ENV,
+        [],
+        true,
+        fakeProbe(),
+        true,
+      );
+
       const first = "6f1c2a4e-3b7d-4c8e-9a0b-1d2e3f405162";
       yield* write(CONFIG);
       yield* write({ ...FIRST_MESSAGE, uuid: first });
@@ -1517,6 +1532,12 @@ it.effect(
       assert.equal(cli.prompts[0]?.uuid, first);
       assert.notEqual(cli.prompts[1]?.uuid, undefined);
       assert.deepEqual(service.applied[0]?.message, accepted[0]?.message);
+      // The turn the launch's end ended says what it changed since the snapshot its first message opened on.
+      assert.deepEqual(service.applied.at(-1)?.message, {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.TURN_ENDED,
+        files: fakeFilesOf(fakeSnapshotOf(CONFIG.cwd, first).commit),
+      });
     }),
 );
 

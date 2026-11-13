@@ -290,6 +290,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     cancelChatGptDeviceLogin: NEEDS_BROWSER,
   },
   admin: {
+    catalog: INTERNAL,
     cost: INTERNAL,
     day: INTERNAL,
     favorite: INTERNAL,

@@ -1,14 +1,14 @@
 import assert from "node:assert/strict";
-import { firstMessageText, REPLAY_STEP_KIND } from "@repo/features/agent-replay";
+import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
+import { test } from "vitest";
+import { firstMessageText, REPLAY_STEP_KIND } from "./agent-replay.js";
 import {
   AGENT_BRIEF,
   AGENT_SENDER,
   type AgentTranscriptMessage,
   agentMessageReplyLine,
-} from "@repo/features/agent-wire";
-import { INBOX_REPLY, inboxAnswerMessage } from "@repo/features/inbox-wire";
-import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
-import { test } from "vitest";
+} from "./agent-wire.js";
+import { INBOX_REPLY, inboxAnswerMessage } from "./inbox-wire.js";
 import { REPLAY_PAGE } from "./replay-card-model.js";
 import {
   agentTranscript,

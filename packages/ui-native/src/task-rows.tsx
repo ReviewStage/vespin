@@ -30,6 +30,7 @@ import {
 import type { PullRequestState } from "@repo/features/agent-wire";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
@@ -57,7 +58,7 @@ import {
   ToneGlyph,
   WorkingMark,
 } from "./marks.js";
-import { PageHeader } from "./page-header.js";
+import { type PageFollowing, PageHeader } from "./page-header.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -135,14 +136,19 @@ type TaskHeadProps = {
   readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */
   readonly createdBy?: string | undefined;
+  /** Who follows it, as a chip under its fields; none while its workspace has Following off. */
+  readonly following?: PageFollowing | undefined;
 };
 
 /**
  * A task's head as the first row of its page: its name as the page's
- * heading, its status, priority and assignee as small chips, and who
- * created it. Its path stands in the bar above.
+ * heading, its status, priority and assignee as small chips, who follows
+ * it as a chip that opens them, and who created it. Its path stands in the
+ * bar above.
  */
-export function TaskHead({ name, status, priority, assignee, createdBy }: TaskHeadProps) {
+export function TaskHead(props: TaskHeadProps) {
+  const { name, status, priority, assignee, createdBy, following } = props;
+
   return (
     <VStack
       alignment="leading"
@@ -158,6 +164,7 @@ export function TaskHead({ name, status, priority, assignee, createdBy }: TaskHe
         status={status}
         priority={priority}
         assignee={assignee}
+        following={following}
         summary={createdBy}
       />
     </VStack>
@@ -471,6 +478,8 @@ type WordsRowProps = {
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** The video a picture's address names, played in its place; none where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** What GitHub holds of a pull request or issue a chip in the words names, by its page, which the chip says where it stands. */
+  readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
 };
 
 /** The count of a block's open comment threads at its trailing edge, as a document's margin marks them, opening them on a press. */
@@ -483,7 +492,11 @@ function CommentCount({ comments }: { readonly comments: WordsComments }) {
       modifiers={[buttonStyle("borderless"), accessibilityLabel(comments.heard)]}
     >
       <HStack spacing={SPACE.TIGHT}>
-        <Image systemName="text.bubble" size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />
+        <Image
+          {...glyphImage(GLYPH.COMMENT)}
+          size={MARK_SIZE.GLYPH - 2}
+          color={colors.TEXT_MUTED}
+        />
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.TIME }),
@@ -515,6 +528,7 @@ export function WordsRow({
   last = true,
   pictureSource,
   videoAt,
+  linkStanding,
 }: WordsRowProps) {
   const colors = useColors();
 
@@ -527,6 +541,7 @@ export function WordsRow({
           onOpenLink={onOpenLink}
           pictureSource={pictureSource}
           videoAt={videoAt}
+          linkStanding={linkStanding}
           headings
         />
       </View>

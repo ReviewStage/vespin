@@ -134,13 +134,14 @@ const tasksReadSchema = EffectSchema.Literals(Object.values(TASKS_READ));
  * Whether what the host follows live is current, as the task list's follow
  * last found it: live while its rows arrive, catching up while a poll that
  * failed twice running is asked again or a follow that broke is started
- * again, never while a read is only loading, and
- * offline while the service answers no seal at all.
+ * again, and never while a read is only loading. Whether the service
+ * answers at all is the network watch's to say (`network.reachable`),
+ * since a read refused, as an expired sign-in's is, is not the service out
+ * of reach.
  */
 export const HOST_LIVE = {
   LIVE: "live",
   CATCHING_UP: "catching-up",
-  OFFLINE: "offline",
 } as const;
 
 export type HostLive = (typeof HOST_LIVE)[keyof typeof HOST_LIVE];

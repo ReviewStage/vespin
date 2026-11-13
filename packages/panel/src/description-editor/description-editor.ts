@@ -58,6 +58,7 @@ import {
   withLf,
   withLineEnding,
 } from "./document-source.js";
+import { historyOf, historyStepped, historyTakenUp } from "./kept-history.js";
 import { mentionNode, pastedMention } from "./mention-node.js";
 import {
   copiedPictures,
@@ -748,6 +749,7 @@ export function mountDescriptionEditor(
     anchors,
     format,
     blocks,
+    history,
   } = props;
 
   const extensions = markdownExtensions(
@@ -901,8 +903,20 @@ export function mountDescriptionEditor(
 
   if (slash !== undefined) editor.registerPlugin(slash.plugin);
   held = sourcesOf(editor.state.doc, opened);
+  // An earlier editor's history on this very document is taken up, its blocks' sources with it, so a block it brings back writes as it was written.
+  const historySources = historyTakenUp(editor.view, history);
+
+  if (historySources !== undefined) {
+    held = { ...held, sources: new Map([...historySources, ...held.sources]) };
+  }
+
   const onWords = placedOnWords(editor, placement);
   editor.view.dispatch(editor.state.tr.setSelection(onWords ?? placed(editor, placement)));
+
+  // Note that the step is taken once the caret is placed, so the caret stands where the step left it.
+  const stepped = historySources !== undefined && history?.step !== undefined;
+
+  if (stepped) historyStepped(editor.view, history);
 
   // Files dropped on the text are laid in at the caret the drop put, whether it opened the editor or moved its caret.
   const laidInDropped = (at: DescriptionEditorPlacement | undefined) => {
@@ -916,9 +930,10 @@ export function mountDescriptionEditor(
   laidInDropped(placement);
 
   // The text and caret as the editor opened on the words a click landed on,
+  // or on the change a step through its history took back or put back,
   // which stand for those words only until either changes: a merged answer
   // laid in, a word typed, or the caret moved.
-  let onWordsAs = onWords === undefined ? undefined : editor.state;
+  let onWordsAs = onWords === undefined && !stepped ? undefined : editor.state;
 
   if (focus) editor.view.focus();
 
@@ -1009,6 +1024,7 @@ export function mountDescriptionEditor(
 
       return editorSpan(editor, written(), resolved.before(1), resolved.after(1));
     },
+    history: () => historyOf(editor.state, written(), held.sources),
     destroy: () => editor.destroy(),
   };
 }

@@ -27,6 +27,8 @@ export const FOLLOWING_WORDS = {
   UNFOLLOW: "Unfollow",
   /** The reader's own row. */
   YOU: "You",
+  /** Adding someone else as a follower: the panel's offer to add a person mentioned, and the iPhone's member picker. */
+  ADD_FOLLOWER: "Add a follower",
   /** A row's muted mark on the assignee, and their card's role. */
   ASSIGNEE: "Assignee",
   /** A card's role for a follower who is not the assignee. */

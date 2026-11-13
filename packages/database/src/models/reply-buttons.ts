@@ -15,7 +15,10 @@
  * standing. A press that landed keeps the agent it reached, and an attempt
  * that ran lands even where a later attempt of the same member's was refused
  * and released the claim; one refused is released, so the button may be
- * pressed again.
+ * pressed again. A start a press made is found again by the button's id,
+ * which keys it, whoever's press made it (`readAgentStartedByPress`), so a
+ * press that takes over a claim cut off after its start lands on that agent
+ * rather than starting another.
  */
 
 import { type ReplyButtonAction, replyButtonActionSchema } from "@repo/features/reply-button-wire";
@@ -179,6 +182,19 @@ const releasePress = SqlSchema.void({
     ),
 });
 
+const findStartedAgent = SqlSchema.findAll({
+  Request: Schema.Struct({ buttonId: Schema.String, taskId: Schema.String }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ buttonId, taskId }) =>
+    Database.use((db) =>
+      db
+        .select({ id: agentTable.id })
+        .from(agentTable)
+        .where(and(eq(agentTable.taskId, taskId), eq(agentTable.idempotencyKey, buttonId)))
+        .limit(1),
+    ),
+});
+
 /** A button the agent made in its reply, labeled and doing what it was made to do; answers its id. */
 export function makeReplyButton(
   agentId: string,
@@ -236,4 +252,18 @@ export function settleReplyButtonPress(
 /** The attempt's claim released where it still holds it and the press never landed, so the button may be pressed again. */
 export function releaseReplyButtonPress(buttonId: string, attempt: string): ButtonEffect<void> {
   return releasePress({ buttonId, attempt });
+}
+
+/**
+ * The agent a press of the button started on its task, by any member, which
+ * a start keys by the button's id; none where no press started one. Note
+ * that it reads across members, because the start's own key is unique only
+ * per account, and a press taking over a claim another member's start was
+ * cut off under would otherwise start a second agent.
+ */
+export function readAgentStartedByPress(
+  buttonId: string,
+  taskId: string,
+): ButtonEffect<string | undefined> {
+  return Effect.map(findStartedAgent({ buttonId, taskId }), (rows) => rows[0]?.id);
 }

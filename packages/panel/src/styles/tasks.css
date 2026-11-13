@@ -2927,3 +2927,28 @@ svg.lucide {
 blockquote.comment-quote {
   margin-bottom: var(--ui-control-gap);
 }
+
+/* The apps' windows an agent is using float over the end of what docks
+   over its box, above every dock's row, over the transcript's foot, as a
+   picture in a picture does (`computer-dock.tsx`), and while they do the
+   transcript's end makes room for the tallest stack of them, so its newest
+   line stands clear of them. */
+.agent-tab-foot {
+  position: relative;
+}
+.agent-computer-float {
+  position: absolute;
+  z-index: 1;
+  inset-block-end: 100%;
+  inset-inline-end: var(--ui-space-16);
+  margin-block-end: var(--ui-space-8);
+}
+.agent-tab:has(.agent-computer-float) .agent-log-over-composer {
+  padding-bottom: calc(
+    var(--ui-scroll-fade) +
+    var(--ui-space-4) +
+    var(--spacing-app-window-tall) +
+    var(--spacing-app-window-peek-twice) +
+    var(--ui-space-8)
+  );
+}

@@ -19,7 +19,7 @@
  * (`cutReply`).
  */
 
-import { fenceAfter } from "@repo/features/description-document";
+import { fenceAfter } from "./description-document.js";
 
 const ELLIPSIS = "…";
 const NEWLINE = "\n";

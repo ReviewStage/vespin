@@ -76,6 +76,7 @@ function opened(markdown = TEXT, placement: DescriptionEditorPlacement = { secti
     },
     take: (each) => taken.push(...each),
     copies: (src) => src.includes(OTHER_TASK_ID),
+    copiedAlone: () => undefined,
   };
 
   const host = document.body.appendChild(document.createElement("div"));
@@ -265,6 +266,36 @@ test("a picture of another description pasted in is kept again on this one, and 
   );
   assert.ok(handle.markdown().includes(`![The mock](${KEPT})`));
   assert.equal(handle.markdown().includes(OTHER_TASK_ID), false);
+});
+
+test("a message box's copied picture and PDF pasted in are each kept on this description under their own names", () => {
+  const { handle, taken, host } = opened();
+  const editable = host.querySelector(".ProseMirror") ?? assert.fail("the editor stands");
+
+  // What a message box's copy writes of "Like [Picture 1] per [File: spec.pdf]" (`./copied-files.ts`).
+  const html =
+    '<p>Like <img data-chip="fileChip" alt="[Picture 1]" src="data:image/png;base64,iVBORw==">' +
+    ' per <span data-chip="fileChip" data-file="data:application/pdf;base64,JVBERg==">[File: spec.pdf]</span></p>';
+
+  const paste = new Event("paste", { bubbles: true, cancelable: true });
+  Object.defineProperty(paste, "clipboardData", {
+    value: {
+      files: [],
+      types: ["text/html"],
+      getData: (type: string) => (type === "text/html" ? html : ""),
+    },
+  });
+
+  editable.dispatchEvent(paste);
+
+  assert.deepEqual(
+    taken.map((each) => ("file" in each ? [each.file.name, each.file.type, each.file.size] : [])),
+    [
+      ["Picture 1", "image/png", 4],
+      ["spec.pdf", "application/pdf", 4],
+    ],
+  );
+  assert.equal(handle.markdown().includes("data:"), false);
 });
 
 test("a picture laid in after the text's last block stands apart from it by a blank line", () => {

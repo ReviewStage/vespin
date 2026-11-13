@@ -25,6 +25,7 @@ export {
   type ButtonSize,
   Chip,
   FieldChip,
+  FollowingChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -99,6 +100,8 @@ export {
 
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 
+export { markdownGithubPages, markdownReplyButtons } from "./markdown-model.js";
+
 export { MarkdownPage } from "./markdown-page.js";
 
 export {
@@ -117,7 +120,7 @@ export { monogramOf } from "./monogram.js";
 
 export { type HintOption, HintPickRows, RenameAsk, SwitchRow } from "./option-rows.js";
 
-export { PageHeader } from "./page-header.js";
+export { type PageFollowing, PageHeader } from "./page-header.js";
 
 export {
   PROVIDER_MARK_ASSET,
@@ -165,11 +168,14 @@ export {
   CodeRow,
   type ConnectionLine,
   ConnectionRow,
+  FollowerRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,
   type MenuRowAct,
   NoteRow,
+  type PersonPickOption,
+  PersonPickRows,
   type PickOption,
   PickRows,
   PUSH_ROW_GOES,
@@ -194,7 +200,9 @@ export {
 
 export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 
-export { askForName, type NameAsk, shareLink } from "./system-asks.js";
+export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
+
+export { askForName, type NameAsk, shareLink, shareWords } from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,
@@ -244,6 +252,7 @@ export {
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
+  transcriptOriginOf,
 } from "./transcript-model.js";
 
 export {

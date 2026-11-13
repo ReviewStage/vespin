@@ -110,14 +110,6 @@ test("the pill going offline or catching up is announced politely as it changes,
   await vi.waitFor(() => assert.equal(announcedPolitely(), ""));
 });
 
-test("a service that answers no seal says offline while the Mac is online", async () => {
-  const push = await mount(documentOf(true, HOST_LIVE.OFFLINE));
-  await vi.waitFor(() => assert.equal(said(), "Offline"));
-
-  await push(documentOf(true, HOST_LIVE.LIVE, 2));
-  await vi.waitFor(() => assert.equal(said(), undefined));
-});
-
 test("a service whose calls go unanswered asks to check the connection while the Mac is online, and an answer clears it", async () => {
   const push = await mount(documentOf(true, HOST_LIVE.LIVE, 1, false));
   await vi.waitFor(() => assert.equal(said(), "Offline"));

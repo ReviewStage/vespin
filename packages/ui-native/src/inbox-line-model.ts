@@ -1,6 +1,7 @@
-// inbox-line-model.ts -- the glyphs and tones a row's marks wear: an Inbox row's last line, and a task row's pull request, as the panel draws them.
+// inbox-line-model.ts -- the glyphs and tones a row's marks wear: an Inbox row's last line, a task row's pull request, and a GitHub issue a chip names, as the panel draws them.
 
 import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
+import { ISSUE_STATE, type IssueState } from "@repo/features/github-repositories-wire";
 import { INBOX_LINE, type InboxLineKind } from "@repo/features/inbox-list-model";
 import {
   PULL_REQUEST_MARK_QUEUED,
@@ -49,3 +50,15 @@ export const PULL_REQUEST_LOOK = {
   },
   [PULL_REQUEST_MARK_QUEUED]: { symbol: GLYPH.MERGED, tone: STATUS_TONE.ATTENTION },
 } as const satisfies Record<PullRequestMarkState, InboxLineLook>;
+
+/**
+ * A GitHub issue's mark, by where it stands, in GitHub's colors, as the
+ * panel's issue mark draws it (`issue-mark.tsx`): open in the success
+ * green, closed as done in the merged purple, and closed as not planned in
+ * the muted ink, each the panel's own Lucide circle.
+ */
+export const ISSUE_LOOK = {
+  [ISSUE_STATE.OPEN]: { symbol: GLYPH.ISSUE_OPEN, tone: STATUS_TONE.COMPLETE },
+  [ISSUE_STATE.CLOSED]: { symbol: GLYPH.ISSUE_CLOSED, tone: STATUS_TONE.MERGED },
+  [ISSUE_STATE.NOT_PLANNED]: { symbol: GLYPH.ISSUE_NOT_PLANNED, tone: STATUS_TONE.NEUTRAL },
+} as const satisfies Record<IssueState, InboxLineLook>;

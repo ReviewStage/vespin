@@ -8,6 +8,7 @@ import {
   settleReplyButtonPress,
 } from "@repo/database/models/reply-buttons";
 import { storeWriter } from "@repo/database/models/writer";
+import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
 import {
   experimentInTestWorkspace,
@@ -19,8 +20,10 @@ import {
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { EXPERIMENT } from "@repo/settings";
-import { Effect, Layer } from "effect";
+import { eq } from "drizzle-orm";
+import { Duration, Effect, Layer } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
+import { TestClock } from "effect/testing";
 import { GitHubApp } from "../../github/github-app.js";
 import { HOSTED_REFUSAL } from "../../http/http-effect.js";
 import { ModelCatalog } from "../../providers/model-catalog.js";
@@ -138,6 +141,49 @@ it.layer(SUITE)("a button in an agent's reply", (it) => {
 
         assert.equal(refused, HOSTED_REFUSAL.INVALID_REQUEST);
         assert.equal((yield* readReplyButtonView(owner, agentId, buttonId)).pressed, null);
+      }),
+  );
+
+  it.effect(
+    "taken over by a teammate after its first press was cut off past its start, lands on the agent that start made rather than starting another",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openAccount;
+        const teammate = yield* openAccount;
+        const task = yield* startTask(owner, { name: "Invitations", repository: "acme/relay" });
+        yield* joinWorkspace(task.workspaceId, teammate);
+        const agentId = yield* openTaskAgent(owner, task.workspaceId, task.id);
+
+        const buttonId = yield* makeReplyButton(
+          agentId,
+          "Wire up the invite email",
+          { kind: REPLY_BUTTON_ACTION.START, prompt: "Send the invite email." },
+          NOW,
+        );
+
+        yield* experimentInTestWorkspace(owner, EXPERIMENT.REPLY_BUTTONS);
+        // The owner's press claimed and started its agent under the button's key, then was cut off before it settled.
+        assert.ok((yield* claimReplyButtonPress(buttonId, owner, new Date(0))) !== undefined);
+        const started = yield* openTaskAgent(owner, task.workspaceId, task.id);
+        yield* (yield* Database)
+          .update(agentTable)
+          .set({ idempotencyKey: buttonId })
+          .where(eq(agentTable.id, started));
+        yield* TestClock.adjust(Duration.minutes(16));
+
+        const pressed = yield* pressReplyButton(
+          writer,
+          teammate,
+          agentId,
+          buttonId,
+          { words: "Send the invite email." },
+          noSummary,
+        );
+
+        assert.deepEqual(
+          { byReader: pressed.pressed?.byReader, agent: pressed.pressed?.agent?.id },
+          { byReader: true, agent: started },
+        );
       }),
   );
 });

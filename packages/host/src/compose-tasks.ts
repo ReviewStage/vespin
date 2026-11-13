@@ -1231,8 +1231,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
           yield* resendQueued;
         }),
-      // A list that could not be read says so beside the tasks it already drew rather than emptying them.
-      failed: () => write({ listStatus: TASKS_READ.FAILED, live: HOST_LIVE.OFFLINE }),
+      // A list that could not be read says so beside the tasks it already drew rather than emptying them. Note that it says nothing of the service's reach, which the network watch hears from every call, because a read the service refused was still answered.
+      failed: () => write({ listStatus: TASKS_READ.FAILED }),
       // A list that may be behind keeps drawing what it had, and says it is catching up until the next lands.
       behind: () => write({ live: HOST_LIVE.CATCHING_UP }),
       onTxWait: (wait) => {

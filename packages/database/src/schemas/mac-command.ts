@@ -25,7 +25,7 @@ export const macCommand = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     /** What the command asks; a row queued before kinds were is a shell command. */
     kind: text("kind").$type<MacCommandKind>().notNull().default(MAC_COMMAND_KIND.SHELL),
-    /** A shell command's text; null for any other kind. */
+    /** What it asks: a shell command's text, or a computer command's request as JSON (`storedMacCommandText`). */
     command: text("command"),
     timeoutSeconds: integer("timeout_seconds").notNull(),
     queuedAt: timestamptz("queued_at").notNull(),

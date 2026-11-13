@@ -7,6 +7,7 @@ import {
   accessibilityElement,
   accessibilityHint,
   accessibilityLabel,
+  accessibilityValue,
   background,
   buttonStyle,
   controlSize,
@@ -335,4 +336,74 @@ export function FieldChip(props: FieldChipProps) {
 /** A task's status as its chip: the ring and the status's name. */
 export function StatusChip({ status }: { readonly status: TaskStatus }) {
   return <FieldChip label={TASK_STATUS_WORDS[status]} status={status} />;
+}
+
+/** How far each face of a face pile tucks under the one after it, in points. */
+const FACE_OVERLAP = 4;
+
+type FollowingChipProps = {
+  /** What it says: Following where the reader follows, Follow where they don't. */
+  readonly label: string;
+  /** The faces it shows, the earliest first. */
+  readonly faces: readonly Face[];
+  /** How many more follow than it shows, drawn as +N after the faces; none at 0. */
+  readonly more: number;
+  /** What a press opens, heard after its words. */
+  readonly hint: string;
+  /** What VoiceOver hears beside its words, such as who follows. */
+  readonly heard: string;
+  readonly onPress: () => void;
+};
+
+/**
+ * Who follows a task as a capsule beside its fields: a face pile, each face
+ * overlapping the one before it and a +N count last and on top, then
+ * Following or Follow; pressed, it opens who follows. It stands as the
+ * fields' chips do, on the surface inside a hairline, but takes a press, as
+ * the system's borderless button over it.
+ */
+export function FollowingChip({ label, faces, more, hint, heard, onPress }: FollowingChipProps) {
+  const colors = useColors();
+
+  return (
+    <SwiftUIButton
+      onPress={onPress}
+      modifiers={[
+        buttonStyle("borderless"),
+        hoverEffect(HOVER_EFFECT.LIFT),
+        accessibilityLabel(label),
+        accessibilityValue(heard),
+        accessibilityHint(hint),
+      ]}
+    >
+      <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, false)}>
+        {faces.length === 0 ? null : (
+          <HStack spacing={-FACE_OVERLAP}>
+            {faces.map((face, at) => (
+              <Avatar
+                // Note that a face is keyed by its place, since two followers may share a name.
+                key={at}
+                name={face.name}
+                picture={face.picture}
+                size={MARK_SIZE.FACE}
+              />
+            ))}
+            {more === 0 ? null : (
+              <Text
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.TIME, weight: "medium" }),
+                  monospacedDigit(),
+                  foregroundStyle(colors.TEXT_MUTED),
+                  padding({ leading: FACE_OVERLAP + 2 }),
+                ]}
+              >
+                {`+${more}`}
+              </Text>
+            )}
+          </HStack>
+        )}
+        <CapsuleWords label={label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
+      </HStack>
+    </SwiftUIButton>
+  );
 }

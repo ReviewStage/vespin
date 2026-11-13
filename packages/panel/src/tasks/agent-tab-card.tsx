@@ -11,6 +11,11 @@ import { agentStillWriting } from "@repo/features/task-agents-model";
 import type { DescriptionEditor } from "@repo/features/task-wire";
 import { delegationView } from "@repo/features/tool-call-model";
 import {
+  type CopiedTranscript,
+  LATEST_ACTIVITY,
+  latestActivity,
+} from "@repo/features/transcript-copy";
+import {
   AVATAR_SIZE,
   HOVER_CARD_ROW_LOOK,
   HoverCard,
@@ -42,7 +47,6 @@ import { type ArchivedByReading, pullRequestNumberLabel } from "./agent-model.js
 import { ModelLabel } from "./model-label.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { useStartingAgent } from "./starting-agent.js";
-import { type CopiedTranscript, LATEST_ACTIVITY, latestActivity } from "./transcript-copy.js";
 import { WorkingTime } from "./working-time.js";
 
 /**

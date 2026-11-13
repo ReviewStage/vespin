@@ -16,6 +16,7 @@ import { DESCRIPTION_ACTOR, type Task } from "@repo/features/task-wire";
 import { TASK_CALL_FAILURE, type TasksEditAnswer } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { experimentsOn } from "@repo/settings/testing";
 import {
   type DescriptionCommentsControl,
@@ -26,12 +27,15 @@ import { Effect } from "effect";
 import { act, createElement, Fragment, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest";
+import { appCommandOffered, runAppCommand } from "../app-commands.js";
 import type { SideBundles } from "../bundle-loader.js";
 import {
   type DescriptionEditorModule,
   type DescriptionEditorPlacement,
   type DescriptionEditorProps,
+  type EditorHistory,
   FINISH,
+  HISTORY_STEP,
   PLACEMENT_END,
   type PlacedWords,
 } from "../description-editor/contract.js";
@@ -66,12 +70,13 @@ const BODY = DOCUMENT_TASK.document.body;
 
 const CHARLES = { userId: "user-charles", name: "Charles Pan" };
 
-/** Every editor the document mounted, newest last, with what it was handed, what it was asked to take, and where a press on its room put its caret. */
+/** Every editor the document mounted, newest last, with what it was handed, what it was asked to take, where a press on its room put its caret, and the history it left as it was taken down. */
 const mounted: {
   props: DescriptionEditorProps;
   destroyed: boolean;
   took: [string, string][];
   placed: DescriptionEditorPlacement[];
+  left: EditorHistory[];
 }[] = [];
 
 /** Where the line of the words the stand-in opened on stands in the window, as a laid-out editor answers; none, as when the words were not found, unless a test lays it out. */
@@ -80,12 +85,16 @@ let wordsLine: (() => number) | undefined;
 /** The words the stand-in's caret stands in as it closes, as a laid-out editor answers; none unless a test lays them out. */
 let caretOn: PlacedWords | undefined;
 
+/** The words last typed into the stand-in through `type`, which the history it leaves ends on. */
+let typed: string | undefined;
+
 /** The stand-in for the editor's bundle: it records what it is handed and takes a merged answer whole. */
 const STAND_IN: DescriptionEditorModule = {
   mount: (_host, props) => {
     const took: [string, string][] = [];
     const placed: DescriptionEditorPlacement[] = [];
-    const editor = { props, destroyed: false, took, placed };
+    const left: EditorHistory[] = [];
+    const editor = { props, destroyed: false, took, placed, left };
     mounted.push(editor);
 
     return {
@@ -109,6 +118,13 @@ const STAND_IN: DescriptionEditorModule = {
       removePicture: () => undefined,
       selectionSpan: () => undefined,
       blockSpan: () => undefined,
+      // Note that the stand-in's history ends on the last words the test typed, as a TipTap editor's ends on its text.
+      history: () => {
+        const history = { markdown: typed ?? props.markdown, undoes: true, redoes: true };
+        left.push(history);
+
+        return history;
+      },
       selectionBox: () => undefined,
       toggleMark: () => undefined,
       turnInto: () => undefined,
@@ -161,6 +177,7 @@ afterEach(async () => {
   releaseMotion();
   wordsLine = undefined;
   caretOn = undefined;
+  typed = undefined;
   vi.restoreAllMocks();
 
   for (const root of roots.splice(0)) act(() => root.unmount());
@@ -373,6 +390,12 @@ function _press(element: Element, key: string): void {
   act(() => {
     element.dispatchEvent(new KeyboardEvent("keydown", { key, bubbles: true, cancelable: true }));
   });
+}
+
+/** Words typed into the open editor, handed over as it hands them. */
+function type(words: string): void {
+  typed = words;
+  act(() => open().onDraft(words));
 }
 
 /** The editor open now, as the document handed it over. */
@@ -1845,4 +1868,102 @@ test("the editor is handed the open threads' words, and none while no open threa
   const withNone = mount([], DOCUMENT_TASK, []);
   act(() => block(withNone.container, "Goal").click());
   assert.equal(open().anchors, undefined);
+});
+
+/** The fixture task as its description was saved holding `body`. */
+function holding(body: string, task: Task = DOCUMENT_TASK): Task {
+  return { ...task, document: { ...task.document, body } };
+}
+
+/** The description opened, `words` typed, and the editor left by Escape once its save landed, the page drawing the text it saved. */
+async function typedAndLeft(
+  container: HTMLElement,
+  render: (task: Task) => void,
+  words: string,
+): Promise<void> {
+  act(() => block(container, "Goal").click());
+  type(words);
+  act(() => open().onFinish(0, FINISH.ESCAPE));
+  await settle();
+  render(holding(words));
+}
+
+test("⌘Z in the drawn text after the editor closed opens it again a step back through the history it left, and ⇧⌘Z a step forward", async () => {
+  const { container, render } = mount();
+  const mine = `${BODY}Mine.\n`;
+  await typedAndLeft(container, render, mine);
+  const left = mounted.at(-1)?.left.at(-1);
+
+  act(() => void runAppCommand(APP_COMMAND.UNDO));
+  const undone = open();
+  type(BODY);
+  act(() => undone.onFinish(0, FINISH.ESCAPE));
+  await settle();
+  render(holding(BODY));
+  act(() => void runAppCommand(APP_COMMAND.REDO));
+
+  assert.deepEqual(undone.history, { kept: left, step: HISTORY_STEP.UNDO });
+  assert.deepEqual(open().history, {
+    kept: mounted.at(-2)?.left.at(-1),
+    step: HISTORY_STEP.REDO,
+  });
+});
+
+test("the history an editor left is dropped once the description changes underneath it: ⌘Z opens nothing, and the editor opens without it", async () => {
+  const { container, render } = mount();
+  const mine = `${BODY}Mine.\n`;
+  await typedAndLeft(container, render, mine);
+  const offeredBefore = appCommandOffered(APP_COMMAND.UNDO);
+
+  render(holding(`${mine}\nAn agent's line.\n`));
+  const offeredAfter = appCommandOffered(APP_COMMAND.UNDO);
+  act(() => block(container, "Goal").click());
+
+  assert.deepEqual({ offeredBefore, offeredAfter }, { offeredBefore: true, offeredAfter: false });
+  assert.equal(open().history, undefined);
+});
+
+test("the history an editor left never reaches another task, though its description reads the same", async () => {
+  const { container, render } = mount();
+  const mine = `${BODY}Mine.\n`;
+  await typedAndLeft(container, render, mine);
+  const offeredBefore = appCommandOffered(APP_COMMAND.UNDO);
+
+  render(holding(mine, { ...DOCUMENT_TASK, id: "0c4f2e9a-7d1b-4a3e-8f6c-2b9d5e1a7c40" }));
+  const offeredAfter = appCommandOffered(APP_COMMAND.UNDO);
+  act(() => block(container, "Goal").click());
+
+  assert.deepEqual({ offeredBefore, offeredAfter }, { offeredBefore: true, offeredAfter: false });
+  assert.equal(open().history, undefined);
+});
+
+test("⌘Z leaves the description alone while the focus stands outside its page, and takes it up again once the focus comes back", async () => {
+  const { container, render } = mount();
+  await typedAndLeft(container, render, `${BODY}Mine.\n`);
+  const elsewhere = document.createElement("button");
+  document.body.append(elsewhere);
+
+  act(() => elsewhere.focus());
+  const offeredElsewhere = appCommandOffered(APP_COMMAND.UNDO);
+  act(() => block(container, "Goal").focus());
+
+  assert.deepEqual(
+    { offeredElsewhere, offeredOnPage: appCommandOffered(APP_COMMAND.UNDO) },
+    { offeredElsewhere: false, offeredOnPage: true },
+  );
+});
+
+test("the history an editor leaves as it closes on another account signing in is dropped, so ⌘Z never takes back the last account's words", async () => {
+  const { container, render } = mount();
+  await typedAndLeft(container, render, `${BODY}Mine.\n`);
+  act(() => block(container, "Goal").click());
+  const openBefore = container.querySelector(".description-document-editor") !== null;
+
+  act(() => signInTeammate());
+  await settle();
+
+  assert.deepEqual(
+    { openBefore, offered: appCommandOffered(APP_COMMAND.UNDO) },
+    { openBefore: true, offered: false },
+  );
 });

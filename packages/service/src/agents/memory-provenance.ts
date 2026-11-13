@@ -86,6 +86,8 @@ const WEB_READS: ReadonlySet<string> = new Set([
   AGENT_TOOL.READ_WEB_PAGE,
   AGENT_TOOL.WEB_SEARCH,
   AGENT_TOOL.BROWSER,
+  // Note that an app's window shows whatever it holds, a page or a message among it.
+  AGENT_TOOL.COMPUTER,
   RETIRED_CODER_TOOL.WEB_FETCH,
   RETIRED_CODER_TOOL.SEARCH_WEB,
   CLAUDE_CODE_TOOL.WEB_FETCH,
