@@ -1,0 +1,9 @@
+#8957 round 2, iPad 27.2 (landscape and portrait, light and dark; #8957 at 0264adf44, on Nov 12's native app, so layout only). PASS on five of six; the band check needs a picked page. r8957.yaml 0 fails in all four runs.
+1. No band under the detail's bar: NOT SHOT. r8957 takes only nothing-picked shots, so no task or thread stood in the detail. Retaken with a picked task and thread in the iPad chain round, which builds on #8957.
+2. Mail's placeholders: "Choose an item" (Inbox) and "Select a task" (Tasks) stand as the words alone in the muted ink, regular weight, with no glyph or bold title, in both orientations and looks.
+3. The portrait list stands solid: in portrait, the Inbox and Tasks lists are plain lists on the brand's ground (#0a0a0a in dark, white in light) beside the detail, not on the glass sidebar pane.
+4. No "0": the sidebar's Ideas and Experiments rows and the Tasks list's Ideas and Experiments headers show no count; Pinned 1, Following 1, Launch 1 keep theirs.
+5. No lone Search over the detail: "Search inbox" and "Search tasks" are fields in the list column under its title. The detail bar holds only expand and compose at its leading end and, on the Inbox, the thread acts (envelope, clock, check) dimmed with nothing picked.
+6. One ground in dark: sampled pixels read #0a0a0a on the list's bar, the list, the detail's bar and the detail, in landscape and portrait. The app sidebar stays warm glass (#25221d).
+Note: Experiments' sidebar row draws no glyph. That's #8920's rocket symbol, which Nov 12's native app doesn't carry, not this PR.
+Still to come: the one 26.5 dark landscape Inbox shot, after 6 PM ET.
