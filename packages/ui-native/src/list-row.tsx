@@ -48,7 +48,7 @@ import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { dragLink } from "./interactions.js";
+import { cellFocusRingOff, dragLink } from "./interactions.js";
 import {
   Avatar,
   type Face,
@@ -393,6 +393,8 @@ export function RowFrame({
           accessibilityValue(heardValue(heard.value)),
         ]),
     ...(link === undefined ? [] : [dragLink(link)]),
+    // Note that a row of a list that opens its rows draws no keyboard focus ring around its cell, as iPadOS's own sidebars draw none, since its selection already stands on the `SELECTED` fill; it's set by whether the row opens at all, not by whether it's selected now, so the modifiers don't change as the selection does.
+    ...(open === undefined ? [] : [cellFocusRingOff()]),
   ];
 
   if (swiped.length + menuSubmenus.length + menuActions.length === 0 && preview === undefined) {
