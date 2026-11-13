@@ -51,8 +51,10 @@ builds a control of its own.
   Send, or, with nothing typed, Stop while an agent works; its + is one act
   or a native menu (`ComposerMenu`: an agent's Photos, Options, permission
   mode, and Fast); and its head, inside the same glass, holds an agent's
-  `HeldCallBanner` (the oldest call it holds for an answer, with Deny and
-  Allow), the `SkillSuggestions` a `/` offers, its `QueuedLines` (Steer and
+  `DeniesWaiting` (that a message sent now denies the call waiting, a press
+  scrolling to the call's row, whose Deny and Allow alone answer it), a
+  `HeldCallBanner` only for a call no row draws, such as a subagent's (with
+  Deny and Allow), the `SkillSuggestions` a `/` offers, its `QueuedLines` (Steer and
   Delete), its `AttachedPictures`, and an `AskNote`.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full

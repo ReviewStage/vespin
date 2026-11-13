@@ -67,6 +67,7 @@ export { GLYPH, type Glyph, glyphSymbol, type LucideSymbol, type MarkLook } from
 export { BUZZ, type Buzz, buzz } from "./haptics.js";
 
 export {
+  DeniesWaiting,
   HELD_ANSWER,
   type HeldAnswer,
   type HeldCall,
@@ -241,9 +242,15 @@ export { MARK_SIZE, SPACE } from "./tokens/space.js";
 
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
-export { AgentHead, AgentTranscript, type OlderPages } from "./transcript.js";
+export {
+  AgentHead,
+  AgentTranscript,
+  type OlderPages,
+  type TranscriptReveal,
+} from "./transcript.js";
 
 export {
+  drawnCallIds,
   NO_TOGGLES,
   openCuts,
   shownMediaIds,
@@ -254,6 +261,7 @@ export {
   transcriptItems,
   transcriptOriginOf,
   withSending,
+  withWaitingLine,
 } from "./transcript-model.js";
 
 export {
