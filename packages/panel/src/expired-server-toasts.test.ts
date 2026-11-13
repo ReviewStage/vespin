@@ -13,7 +13,8 @@ import { ACT_KIND } from "@repo/host/acts";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { useExpiredServerToasts } from "./expired-server-toasts.js";
+import { useExpiredServerToasts, useHoldExpiredServerToasts } from "./expired-server-toasts.js";
+import { useIntegrationStatuses } from "./integration-statuses.js";
 import { fakeActPort, fakeAppBridge } from "./testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "./testing/app-platform.js";
 import { holdIntegrations, type IntegrationsHeld } from "./testing/app-state.js";
@@ -26,7 +27,10 @@ import { ToastHost } from "./toast.js";
  * said in a toast of its own with Reconnect, which begins its sign-in, says
  * the reconnect while it is under way, and leaves once the server is
  * connected again, the others standing; a reconnect that could not begin
- * says so with Retry. Synthetic throughout.
+ * says so with Retry; and while setup holds them back none is said, and
+ * only the servers still expired are said once it goes, one dismissed and
+ * reconnected meanwhile among them where it expires anew. Synthetic
+ * throughout.
  */
 
 /** Where each offered provider stands at the service; every other is not offered. */
@@ -92,14 +96,48 @@ function Toasts(): null {
   return null;
 }
 
-/** The toasts, mounted as the window's root mounts them. */
-async function mount(): Promise<void> {
-  const container = document.body.appendChild(document.createElement("div"));
-  root = createRoot(container);
+/** Where Slack stands as the window last heard it, which a toast held back cannot show. */
+let heardSlack: string | undefined;
+
+/** Writes where Slack stands as the window hears it into `heardSlack`. */
+function Hearing(): null {
+  heardSlack = useIntegrationStatuses().statusOf("slack");
+
+  return null;
+}
+
+/** Lays Slack at `status` and waits until the window has heard it. */
+async function laySlack(status: IntegrationStatus): Promise<void> {
+  standing = { [INTEGRATION_PROVIDER.SLACK]: status };
+  act(() => integrations.lay());
+  await vi.waitFor(() => assert.equal(heardSlack, status));
+}
+
+/** Holds the toasts back while it stands, as setup does. */
+function Holder(): null {
+  useHoldExpiredServerToasts();
+
+  return null;
+}
+
+/** The toasts, mounted as the window's root mounts them, held back by setup where `holding`; mounted again where they stand. */
+async function mount(holding = false): Promise<void> {
+  if (root === undefined) {
+    const container = document.body.appendChild(document.createElement("div"));
+    root = createRoot(container);
+  }
+
   act(() =>
     root?.render(
       withQueryClient(
-        createElement(Fragment, null, createElement(Toasts), createElement(ToastHost)),
+        createElement(
+          Fragment,
+          null,
+          holding ? createElement(Holder) : null,
+          createElement(Hearing),
+          createElement(Toasts),
+          createElement(ToastHost),
+        ),
       ),
     ),
   );
@@ -168,4 +206,45 @@ test("a reconnect that could not begin says so in the server's toast, with Retry
   await press("Slack could not be reconnected.", "Retry");
   assert.deepEqual(connects, [INTEGRATION_PROVIDER.SLACK, INTEGRATION_PROVIDER.SLACK]);
   assert.deepEqual(said(), ["Reconnecting Slack…"]);
+});
+
+test("while setup holds them back no server is said, and once it goes only those still expired are", async () => {
+  standing = {
+    [INTEGRATION_PROVIDER.SLACK]: INTEGRATION_STATUS.EXPIRED,
+    [INTEGRATION_PROVIDER.LINEAR]: INTEGRATION_STATUS.EXPIRED,
+  };
+  await mount();
+  await vi.waitFor(() => assert.equal(said().length, 2));
+
+  await mount(true);
+  await vi.waitFor(() => assert.deepEqual(said(), []));
+  // Linear is reconnected in setup's own row while its toast is held back.
+  standing = { ...standing, [INTEGRATION_PROVIDER.LINEAR]: INTEGRATION_STATUS.CONNECTED };
+  act(() => integrations.lay());
+  await settle();
+  const held = said();
+  await mount(false);
+
+  assert.deepEqual(held, []);
+  await vi.waitFor(() => assert.deepEqual(said(), ["Slack's sign-in expired"]));
+});
+
+test("a server dismissed, then reconnected and expired again while setup holds them back, is said once it goes", async () => {
+  standing = { [INTEGRATION_PROVIDER.SLACK]: INTEGRATION_STATUS.EXPIRED };
+  await mount();
+  await vi.waitFor(() => assert.deepEqual(said(), ["Slack's sign-in expired"]));
+
+  const dismiss = [...document.querySelectorAll(`${STANDING_TOAST} button`)].find(
+    (each) => each.getAttribute("aria-label") === "Dismiss",
+  );
+
+  act(() => (dismiss instanceof HTMLButtonElement ? dismiss : assert.fail("a Dismiss")).click());
+  await settle();
+
+  await mount(true);
+  await laySlack(INTEGRATION_STATUS.CONNECTED);
+  await laySlack(INTEGRATION_STATUS.EXPIRED);
+  await mount(false);
+
+  await vi.waitFor(() => assert.deepEqual(said(), ["Slack's sign-in expired"]));
 });

@@ -27,6 +27,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
 import { ANSWER_ACCEPTED, refusedWith, useConfirmAct } from "../confirm-act.js";
 import { welcomed } from "../desktop/desktop-welcome.js";
+import { useHoldExpiredServerToasts } from "../expired-server-toasts.js";
 import { confirmFailure } from "../failure-report.js";
 import { workspaceMembersQuery } from "../live-reads.js";
 import { signOutSayingFailure } from "../settings/account-section.js";
@@ -169,9 +170,13 @@ const AUDIENCES: readonly ChoiceOption<SetupAudience>[] = [
 /**
  * Setup, step by step; `onFinish` lets the app in. Note that its words show
  * in a screen recording, because they are the app's own, but for a person's,
- * which each step masks where it draws them.
+ * which each step masks where it draws them. A connection whose sign-in
+ * lapsed says so in no toast until it finishes, because on a phone those
+ * stand over each step's foot, and its steps reconnect one in place.
  */
 export function SetupSteps(props: SetupStepsProps): React.JSX.Element {
+  useHoldExpiredServerToasts();
+
   return (
     <ReplayUnmask>
       <SetupStep {...props} />
