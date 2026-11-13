@@ -75,6 +75,7 @@ export function useSettledPages(
     }
 
     if (paging.current?.workspaceId === workspaceId) return;
+
     const held: SettledPaging = {
       workspaceId,
       next: undefined,
