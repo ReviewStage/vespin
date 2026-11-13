@@ -1,14 +1,14 @@
 #!/bin/zsh -l
 # job.sh TAG [REF...] -- MEASUREMENT ONLY: the probe branch with each REF merged over it, bundled (--no-minify, so components keep their names) into a copy of Nov 12's app, then tap-timing.sh on the iPhone 18 Pro and the landscape iOS 26.5 iPad. Results under ~/vespin-perf/TAG/.
+# It uses the rig's own checkout (R, default $W/repo) between the rig's jobs, so no second node_modules is made.
 # Env: W (the iPad agent's rig, default ~/vespin-ipad-agent), BASE (its Vmain.app), IPH and IPAD (UDIDs), DEVICES ("iphone ipad").
 set -u
 T=$1; shift
 W=${W:-$HOME/vespin-ipad-agent}; BASE=${BASE:-$W/Vmain.app}
 IPH=${IPH:-CE9E34B9-693F-475C-8AC7-308952029222}; IPAD=${IPAD:-ABD9B3FE-4859-40A8-85F9-63B98B47142F}
-P=$HOME/vespin-perf; R=$P/repo; O=$P/$T; mkdir -p $P; rm -rf $O; mkdir -p $O; L=$O/job.log
-[[ -d $R ]] || git clone -q --reference $W/repo https://github.com/ReviewStage/vespin.git $R
-cd $R && git checkout -q -- . && git clean -qfd apps/mobile && git fetch -q origin chore/probe-tap-timing "$@" && git checkout -q --detach FETCH_HEAD 2>/dev/null
-git checkout -q --detach origin/chore/probe-tap-timing 2>/dev/null || git checkout -q --detach $(git ls-remote origin chore/probe-tap-timing | cut -f1)
+P=$HOME/vespin-perf; R=${R:-$W/repo}; O=$P/$T; mkdir -p $P; rm -rf $O; mkdir -p $O; L=$O/job.log
+cd $R && git checkout -q -- . && git fetch -q origin main "+refs/heads/chore/probe-tap-timing:refs/remotes/origin/chore/probe-tap-timing" && for ref in "$@"; do git fetch -q origin "+refs/heads/$ref:refs/remotes/origin/$ref" 2>/dev/null; done
+git checkout -q --detach origin/chore/probe-tap-timing || { echo "CHECKOUT FAILED" >> $L; exit 1; }
 for ref in "$@"; do git -c user.name=perf -c user.email=perf@localhost merge -q --no-edit origin/$ref >> $L 2>&1 || git -c user.name=perf -c user.email=perf@localhost merge -q --no-edit $ref >> $L 2>&1 || { echo "MERGE FAILED $ref" >> $L; exit 1; }; done
 echo "built $(git rev-parse --short HEAD) = probe + $*" >> $L
 pnpm install --frozen-lockfile > $O/install.log 2>&1; echo "install $?" >> $L
