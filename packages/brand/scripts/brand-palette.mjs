@@ -42,8 +42,9 @@ const AVATAR = { TILE: "#171412", INK: COPPER.DARK.FILL };
 // frame and the wells, gray-100 to 300 a control's rest, hover, and press,
 // gray-400 and 500 its edges, gray-900 the secondary words and gray-1000 the
 // primary. A status ink is its scale's 900, Geist's accessible text step.
-// Attention shares the accent, as copper's did; work under way is Geist's
-// blue and a start its teal, so neither reads as the accent.
+// Attention shares the accent, as copper's did, and so does a start, which
+// copper drew in a yellow Geist has no scale for; work under way is
+// Geist's blue, as it was copper's.
 //
 // Note that words on the dark fill are gray-1000, since white reads on that
 // orange at under 2:1, and attention's fill and its words are the accent's,
@@ -158,7 +159,7 @@ const BRAND_PALETTES = {
       ATTENTION: GEIST_AMBER.LIGHT.AMBER_900,
       ATTENTION_FILL: GEIST_AMBER.LIGHT.AMBER_900,
       WORKING: "#0064e2",
-      STARTING: "#007a6e",
+      STARTING: GEIST_AMBER.LIGHT.AMBER_900,
       COMPLETE: "#107d32",
       MERGED: "#7c00c9",
       AVATAR_TILE: AVATAR.TILE,
@@ -193,7 +194,7 @@ const BRAND_PALETTES = {
       ATTENTION: GEIST_AMBER.DARK.AMBER_900,
       ATTENTION_FILL: GEIST_AMBER.DARK.AMBER_900,
       WORKING: "#50a8ff",
-      STARTING: "#00c9b5",
+      STARTING: GEIST_AMBER.DARK.AMBER_900,
       COMPLETE: "#00ca52",
       MERGED: "#c472fb",
       AVATAR_TILE: AVATAR.TILE,
