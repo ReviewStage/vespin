@@ -167,6 +167,10 @@
     "dest": "/api/default.js?route=maintenance/provider-keys-rewrap"
   },
   {
+    "src": "/api/maintenance/workspace-drives",
+    "dest": "/api/default.js?route=maintenance/workspace-drives"
+  },
+  {
     "src": "/api/previews/sign-in",
     "dest": "/api/default.js?route=previews/sign-in"
   },

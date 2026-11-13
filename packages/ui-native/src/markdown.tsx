@@ -12,10 +12,10 @@ import {
   ActivityIndicator,
   Image,
   Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  type TextLayoutEvent,
   type TextStyle,
   useWindowDimensions,
   View,
@@ -40,6 +40,7 @@ import {
   type MarkdownSuggestion,
   markdownBlocks,
 } from "./markdown-model.js";
+import { Press } from "./press.js";
 import {
   SUGGESTION_LOOK,
   SUGGESTION_SENT_WORDS,
@@ -128,11 +129,37 @@ const MARKER_WIDTH = 1.4;
  */
 const BULLET = { SIZE: 0.34, MIDDLE: 0.69, INSET: 0.2 } as const;
 
+/**
+ * How far apart a flow's blocks stand, in body sizes, as the panel's
+ * Markdown flow sets them (`prose.css`'s `.ui-markdown-flow`): a paragraph's
+ * gap between blocks, a heading close over what it names, a rule a gap and a
+ * half from what it divides, and a list's items close together. Note that
+ * these scale with the reader's text size, as the words do.
+ */
+const BLOCK_GAP = { BLOCK: 1, UNDER_HEADING: 0.25, RULE: 1.5, ITEM: 0.25 } as const;
+
+/** How far apart the blocks inside one list item or one quote stand, in body sizes, as the panel's `li > * + *` and quote's own set them. */
+const NESTED_GAP = 0.5;
+
+/**
+ * Where a list item's first line of words stands, in points from the item's
+ * top, as the line was laid out: its baseline and its face's lowercase and
+ * capital heights. Note that an inline chip makes its line taller and sets
+ * the words lower in it, so a marker placed by the body size alone stood
+ * high beside such a line; one placed on the measured baseline does not.
+ */
+type FirstLine = {
+  readonly baseline: number;
+  readonly xHeight: number;
+  readonly capHeight: number;
+};
+
+/** Reports a list item's first line once it is laid out; none where nothing asks. */
+type OnFirstLine = ((line: FirstLine) => void) | undefined;
+
 const styles = StyleSheet.create({
-  flow: { gap: SPACE.ROW },
-  itemBody: { gap: SPACE.TIGHT },
   marker: { position: "absolute", left: 0, top: 0 },
-  quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW, gap: SPACE.ROW },
+  quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW },
   well: { borderRadius: 8, padding: SPACE.ROW },
   tableBox: { alignSelf: "stretch", overflow: "hidden" },
   table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
@@ -280,7 +307,7 @@ function MentionChip({
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
-      <Pressable
+      <Press
         onPress={onPress}
         disabled={onPress === undefined}
         accessibilityRole={onPress === undefined ? "text" : "link"}
@@ -310,7 +337,7 @@ function MentionChip({
             {standing.state}
           </Text>
         )}
-      </Pressable>
+      </Press>
     </View>
   );
 }
@@ -337,7 +364,7 @@ function SuggestionChip({
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
-      <Pressable
+      <Press
         onPress={look.onPress}
         accessibilityRole="button"
         accessibilityLabel={suggestionHeard(look)}
@@ -373,7 +400,7 @@ function SuggestionChip({
             </Text>
           </>
         )}
-      </Pressable>
+      </Press>
     </View>
   );
 }
@@ -566,18 +593,35 @@ function runsText(runs: readonly MarkdownRun[], drawing: Drawing): string {
   return runs.map((run) => runText(run, drawing)).join("");
 }
 
+/** Reads a laid-out line's first line for `onFirstLine`. Note that iOS reports each line's `ascender` as its baseline's offset from the line's top, measured, so a chip's height is in it. */
+function firstLineOf(onFirstLine: (line: FirstLine) => void) {
+  return (event: TextLayoutEvent) => {
+    const first = event.nativeEvent.lines[0];
+
+    if (first === undefined) return;
+
+    onFirstLine({
+      baseline: first.y + first.ascender,
+      xHeight: first.xHeight,
+      capHeight: first.capHeight,
+    });
+  };
+}
+
 /** A line of words: a paragraph's, a heading's, or a table cell's. */
 function Line({
   runs,
   drawing,
   style,
   heading,
+  onFirstLine,
 }: {
   readonly runs: readonly MarkdownRun[];
   readonly drawing: Drawing;
   readonly style?: TextStyle | undefined;
   /** Whether the line is heard as a heading. */
   readonly heading?: boolean | undefined;
+  readonly onFirstLine?: OnFirstLine;
 }) {
   const openings = lineOpenings(runs, drawing);
 
@@ -595,6 +639,7 @@ function Line({
       accessibilityLabel={lineHeard(runs, drawing)}
       {...(heading === true ? { accessibilityRole: "header" as const } : {})}
       {...actions}
+      {...(onFirstLine === undefined ? {} : { onTextLayout: firstLineOf(onFirstLine) })}
       style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
     >
       <Runs runs={runs} drawing={drawing} />
@@ -609,19 +654,30 @@ const TASK_BOX_HEARD = { DONE: "Done", OPEN: "Not done" } as const;
 function Marker({
   checked,
   number,
+  firstLine,
   drawing,
 }: {
   readonly checked: boolean | undefined;
   readonly number: number | undefined;
+  /** The item's first line as laid out; none until it is, or where the item opens with no line of words. */
+  readonly firstLine: FirstLine | undefined;
   readonly drawing: Drawing;
 }) {
   const { colors, fontScale } = drawing;
   const width = PROSE_SIZE * MARKER_WIDTH * fontScale;
+  const size = PROSE_SIZE * fontScale;
+
+  // Note that each marker centers on the first line as measured, a box on its capitals and a bullet on its lowercase letters, and falls back to the body size's own place until the line is laid out.
+  const centerOn = (height: number, middle: (line: FirstLine) => number, fallback: number) =>
+    firstLine === undefined ? fallback : Math.max(0, middle(firstLine) - height / 2);
 
   if (checked !== undefined) {
     return (
       <View
-        style={{ width, paddingTop: 2 * fontScale }}
+        style={{
+          width,
+          paddingTop: centerOn(size, (line) => line.baseline - line.capHeight / 2, 2 * fontScale),
+        }}
         accessible
         accessibilityRole="checkbox"
         accessibilityLabel={checked ? TASK_BOX_HEARD.DONE : TASK_BOX_HEARD.OPEN}
@@ -629,7 +685,7 @@ function Marker({
       >
         <SymbolView
           name={glyphSymbol(checked ? GLYPH.BOX_TICKED : GLYPH.BOX)}
-          size={PROSE_SIZE * fontScale}
+          size={size}
           tintColor={checked ? colors.ACCENT : colors.TEXT_MUTED}
         />
       </View>
@@ -638,7 +694,6 @@ function Marker({
 
   // Note that a bullet is a dot drawn at the panel's disc's size on the first line's lowercase letters, since the bullet character stands small and high in the system face; it is never heard, while an ordered list's number is, since its order is part of what it says.
   if (number === undefined) {
-    const size = PROSE_SIZE * fontScale;
     const dot = size * BULLET.SIZE;
 
     return (
@@ -646,7 +701,11 @@ function Marker({
         style={{
           width,
           alignItems: "flex-end",
-          paddingTop: size * BULLET.MIDDLE - dot / 2,
+          paddingTop: centerOn(
+            dot,
+            (line) => line.baseline - line.xHeight / 2,
+            size * BULLET.MIDDLE - dot / 2,
+          ),
           paddingRight: size * BULLET.INSET,
         }}
         accessibilityElementsHidden
@@ -664,10 +723,41 @@ function Marker({
     );
   }
 
+  return <ItemNumber number={number} width={width} firstLine={firstLine} drawing={drawing} />;
+}
+
+/** An ordered item's number, set on the item's first line's baseline: it measures its own and stands lower by however far the item's line sets its words lower. */
+function ItemNumber({
+  number,
+  width,
+  firstLine,
+  drawing,
+}: {
+  readonly number: number;
+  readonly width: number;
+  readonly firstLine: FirstLine | undefined;
+  readonly drawing: Drawing;
+}) {
+  const [own, setOwn] = useState<number | undefined>(undefined);
+
+  const drop =
+    firstLine === undefined || own === undefined ? 0 : Math.max(0, firstLine.baseline - own);
+
+  // Note that the drop stands on a box around the number rather than on its words, so the number's own measured baseline never moves with it.
   return (
-    <Text style={{ width, fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "right" }}>
-      {`${number}.`}
-    </Text>
+    <View style={{ paddingTop: drop }}>
+      <Text
+        onTextLayout={firstLineOf((line) => setOwn(line.baseline))}
+        style={{
+          width,
+          fontSize: PROSE_SIZE,
+          color: drawing.colors.TEXT_MUTED,
+          textAlign: "right",
+        }}
+      >
+        {`${number}.`}
+      </Text>
+    </View>
   );
 }
 
@@ -688,21 +778,55 @@ function ListView({
 }) {
   const indent = PROSE_SIZE * MARKER_WIDTH * drawing.fontScale + SPACE.TIGHT;
 
+  const itemGap = PROSE_SIZE * BLOCK_GAP.ITEM * drawing.fontScale;
+
   return (
-    <View style={styles.flow}>
+    <View style={{ gap: itemGap }}>
       {block.items.map((item, at) => (
-        <View key={at} style={[styles.itemBody, { paddingLeft: indent }]}>
-          {/* Note that an empty item's marker stands in the flow, pulled back into the margin, since an item with no words would otherwise take no height and the next item would draw over its marker. */}
-          <View style={item.blocks.length === 0 ? { marginLeft: -indent } : styles.marker}>
-            <Marker
-              checked={item.checked}
-              number={block.start === undefined ? undefined : block.start + at}
-              drawing={drawing}
-            />
-          </View>
-          <Blocks blocks={item.blocks} drawing={drawing} />
-        </View>
+        <ListItem
+          key={at}
+          item={item}
+          number={block.start === undefined ? undefined : block.start + at}
+          indent={indent}
+          drawing={drawing}
+        />
       ))}
+    </View>
+  );
+}
+
+/** One list item: its marker in the margin, placed on the item's first line as laid out, beside its blocks. */
+function ListItem({
+  item,
+  number,
+  indent,
+  drawing,
+}: {
+  readonly item: Extract<MarkdownBlock, { kind: typeof MARKDOWN_BLOCK.LIST }>["items"][number];
+  readonly number: number | undefined;
+  readonly indent: number;
+  readonly drawing: Drawing;
+}) {
+  const [firstLine, setFirstLine] = useState<FirstLine | undefined>(undefined);
+
+  // Note that a layout reporting the same line keeps the state as it stands, so a redraw of the words never draws the item again.
+  const onFirstLine = (line: FirstLine) =>
+    setFirstLine((held) =>
+      held !== undefined &&
+      held.baseline === line.baseline &&
+      held.xHeight === line.xHeight &&
+      held.capHeight === line.capHeight
+        ? held
+        : line,
+    );
+
+  return (
+    <View style={{ paddingLeft: indent }}>
+      {/* Note that an empty item's marker stands in the flow, pulled back into the margin, since an item with no words would otherwise take no height and the next item would draw over its marker. */}
+      <View style={item.blocks.length === 0 ? { marginLeft: -indent } : styles.marker}>
+        <Marker checked={item.checked} number={number} firstLine={firstLine} drawing={drawing} />
+      </View>
+      <Blocks blocks={item.blocks} drawing={drawing} gap={NESTED_GAP} onFirstLine={onFirstLine} />
     </View>
   );
 }
@@ -866,7 +990,7 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
   return (
     <>
       <HeldMenu acts={acts}>
-        <Pressable
+        <Press
           onPress={() => setFull(true)}
           accessibilityRole="imagebutton"
           accessibilityLabel={heard}
@@ -882,7 +1006,7 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
             }}
             style={well}
           />
-        </Pressable>
+        </Press>
       </HeldMenu>
       <Modal
         visible={full}
@@ -907,7 +1031,7 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
               style={{ width, height }}
             />
           </ScrollView>
-          <Pressable
+          <Press
             onPress={() => setFull(false)}
             accessibilityRole="button"
             accessibilityLabel="Done"
@@ -917,7 +1041,7 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
             <Text style={{ fontSize: TEXT_SIZE.BODY, fontWeight: "600", color: "white" }}>
               Done
             </Text>
-          </Pressable>
+          </Press>
           <View
             style={[
               styles.viewerKeep,
@@ -958,9 +1082,12 @@ function PictureBlock({
 function BlockView({
   block,
   drawing,
+  onFirstLine,
 }: {
   readonly block: MarkdownBlock;
   readonly drawing: Drawing;
+  /** Reports a heading's or a paragraph's first line, where a list item opens with it. */
+  readonly onFirstLine?: OnFirstLine;
 }) {
   const { colors } = drawing;
 
@@ -973,16 +1100,17 @@ function BlockView({
           drawing={drawing}
           style={{ ...HEADING_LOOK[block.level], color: colors.TEXT }}
           heading={drawing.headings}
+          onFirstLine={onFirstLine}
         />
       );
     case MARKDOWN_BLOCK.PARAGRAPH:
-      return <Line runs={block.runs} drawing={drawing} />;
+      return <Line runs={block.runs} drawing={drawing} onFirstLine={onFirstLine} />;
     case MARKDOWN_BLOCK.LIST:
       return <ListView block={block} drawing={drawing} />;
     case MARKDOWN_BLOCK.QUOTE:
       return (
         <View style={[styles.quote, { borderColor: colors.CHIP_EDGE }]}>
-          <Blocks blocks={block.blocks} drawing={drawing} />
+          <Blocks blocks={block.blocks} drawing={drawing} gap={NESTED_GAP} />
         </View>
       );
     case MARKDOWN_BLOCK.TABLE:
@@ -1000,14 +1128,38 @@ function BlockView({
   }
 }
 
+/** The space over a block, in body sizes, by what stands before it: none over the first, a heading's close gap under a heading, a rule's wider gap around a rule, and `gap` otherwise. */
+function gapOver(block: MarkdownBlock, before: MarkdownBlock | undefined, gap: number): number {
+  if (before === undefined) return 0;
+
+  if (block.kind === MARKDOWN_BLOCK.RULE || before.kind === MARKDOWN_BLOCK.RULE) {
+    return BLOCK_GAP.RULE;
+  }
+
+  return before.kind === MARKDOWN_BLOCK.HEADING ? BLOCK_GAP.UNDER_HEADING : gap;
+}
+
+/** A run of blocks, each set its gap below the one before it, as the panel's flow spaces them; `gap` is the plain gap, a page's or a list item's. */
 function Blocks({
   blocks,
   drawing,
+  gap = BLOCK_GAP.BLOCK,
+  onFirstLine,
 }: {
   readonly blocks: readonly MarkdownBlock[];
   readonly drawing: Drawing;
+  readonly gap?: number;
+  /** Reports the first block's first line, a list item's, which its marker stands on. */
+  readonly onFirstLine?: OnFirstLine;
 }): ReactNode {
-  return blocks.map((block, at) => <BlockView key={at} block={block} drawing={drawing} />);
+  return blocks.map((block, at) => (
+    <View
+      key={at}
+      style={{ marginTop: PROSE_SIZE * gapOver(block, blocks[at - 1], gap) * drawing.fontScale }}
+    >
+      <BlockView block={block} drawing={drawing} onFirstLine={at === 0 ? onFirstLine : undefined} />
+    </View>
+  ));
 }
 
 type MarkdownProps = {
@@ -1099,7 +1251,7 @@ export function Markdown({
   };
 
   return (
-    <View style={styles.flow}>
+    <View>
       <Blocks blocks={blocks} drawing={drawing} />
     </View>
   );

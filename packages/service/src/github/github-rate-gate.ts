@@ -44,6 +44,18 @@
  * minute sweep, says so (`GitHubBackground`) and waits in a lane of its own
  * beside the identity's, so a member's read is never queued behind a burst
  * of it: an identity has at most two requests out at once, one of each.
+ *
+ * That work also leaves the members a share of the hour: once an answer says
+ * less than `GATE.MEMBER_SHARE` of the identity's core quota is left, its
+ * background requests are held as above until GitHub's reset, and a
+ * member's are still sent. A morning of webhook deliveries once spent the
+ * App's whole hour in thirty-one minutes, and no member could start a task
+ * for the twenty-nine after. Note that the share is the instance's own
+ * reading of the answers it was sent, kept in no database, because every
+ * instance sending background work reads the same counters on its own
+ * answers; and that the installations share the App's identity here as they
+ * do a hold, so one installation running low holds every installation's
+ * background work, which a member waits on nowhere.
  */
 
 import { createHash } from "node:crypto";
@@ -79,6 +91,8 @@ const GATE = {
   MUTATIVE_SPACING: Duration.seconds(1),
   /** How long an instance trusts its last read of an identity's shared hold. */
   SHARED_READ_FOR: Duration.seconds(5),
+  /** The part of an identity's hourly core quota background work leaves for the members' own requests. */
+  MEMBER_SHARE: 0.25,
   /** The header a held answer carries, so a log or a test can tell it from GitHub's own. */
   HELD_MARK: "x-app-github-held",
 } as const;
@@ -103,6 +117,9 @@ const RATE_LIMIT_WORDS = /rate limit/iu;
 const APP_BEARERS = /^(?:bearer|token)\s+(?:ghs_|ey)/iu;
 
 const IDENTITY = { APP: "app", ANONYMOUS: "anonymous" } as const;
+
+/** The quota GitHub counts REST requests against, as `x-ratelimit-resource` names it. */
+const CORE_RESOURCE = "core";
 
 /** The methods GitHub asks a second between: the ones that write. */
 const MUTATIVE_METHODS: ReadonlySet<string> = new Set(["POST", "PATCH", "PUT", "DELETE"]);
@@ -318,6 +335,7 @@ export const githubRateGate: Layer.Layer<
     const writers = new Map<string, Lane>();
     const senders = new Map<string, Lane>();
     const backgroundSenders = new Map<string, Lane>();
+    const reserves = new Map<string, number>();
 
     const remembered = (identity: string, now: number, hold: Hold | undefined) =>
       Effect.sync(() => {
@@ -455,10 +473,42 @@ export const githubRateGate: Layer.Layer<
       return hold;
     });
 
+    /** Holds the identity's background work until GitHub's reset, once an answer says less than the members' share of its core quota is left. */
+    const reserved = Effect.fnUntraced(function* (
+      identity: string,
+      response: HttpClientResponse.HttpClientResponse,
+    ) {
+      if (header(response, "x-ratelimit-resource") !== CORE_RESOURCE) return;
+      const limit = Number(header(response, "x-ratelimit-limit"));
+      const remaining = Number(header(response, "x-ratelimit-remaining"));
+      const reset = Number(header(response, "x-ratelimit-reset")) * 1000;
+      const now = yield* Clock.currentTimeMillis;
+
+      // Note that a reserve already over is let go here, so a member token that ran low once is not kept.
+      for (const [kept, until] of reserves) {
+        if (until <= now) reserves.delete(kept);
+      }
+
+      // Note that a header GitHub left out reads as no number, which is under and past nothing.
+      if (!(remaining < limit * GATE.MEMBER_SHARE) || !(reset > now)) return;
+
+      if ((reserves.get(identity) ?? 0) >= reset) return;
+      reserves.set(identity, reset);
+      // The identity's kind and GitHub's own counters alone, once per reset.
+      yield* Effect.logWarning("github: quota low; holding background requests", {
+        identity: loggedIdentity(identity),
+        remaining,
+        limit,
+        heldForSeconds: Math.ceil((reset - now) / 1000),
+      });
+    });
+
     const noted = Effect.fnUntraced(function* (
       identity: string,
       response: HttpClientResponse.HttpClientResponse,
     ) {
+      yield* reserved(identity, response);
+
       // Note that an answer sent before the refusal and landing after it
       // lifts nothing, because the hold GitHub asked for still stands.
       if (response.status < FIRST_REFUSAL_STATUS) {
@@ -515,7 +565,7 @@ export const githubRateGate: Layer.Layer<
       // that queued behind the refusal must not be sent after it.
       const writes = MUTATIVE_METHODS.has(request.method) && !graphqlQuery(request);
 
-      const send = Effect.gen(function* () {
+      const send = Effect.fnUntraced(function* (background: boolean) {
         const now = yield* Clock.currentTimeMillis;
 
         const local = () => {
@@ -529,6 +579,9 @@ export const githubRateGate: Layer.Layer<
         const held = local() ?? shared;
 
         if (held !== undefined && now < held.until) return heldAnswer(request, held.until - now);
+        const reserve = background ? reserves.get(identity) : undefined;
+
+        if (reserve !== undefined && now < reserve) return heldAnswer(request, reserve - now);
 
         // Note that a write books its start only now, as it is sent, so a
         // write that waited for its lane still starts a second after the
@@ -541,7 +594,7 @@ export const githubRateGate: Layer.Layer<
       });
 
       const gated = Effect.flatMap(Effect.service(GitHubBackground), (background) =>
-        inLane(background ? backgroundSenders : senders, identity, send),
+        inLane(background ? backgroundSenders : senders, identity, send(background)),
       );
 
       // Note that a write waits its turn before it takes the lane, and reads the hold after, so the wait holds no lane and misses no hold set meanwhile.

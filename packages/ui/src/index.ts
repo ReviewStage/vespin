@@ -432,6 +432,8 @@ export * from "./components/tooltip/tooltip.js";
 
 export * from "./components/track-list/track-list.js";
 
+export * from "./components/transcript-rail/transcript-rail.js";
+
 export * from "./components/turn-end/turn-end.js";
 
 export * from "./components/turn-into-menu/turn-into-menu.js";

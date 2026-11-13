@@ -1,7 +1,21 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../tsconfig.package.json",
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts"],
+  "references": [
+    {
+      "path": "../features"
+    },
+    {
+      "path": "../runtime"
+    },
+    {
+      "path": "../settings"
+    },
+    {
+      "path": "../wire"
+    }
+  ]
 }

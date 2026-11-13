@@ -58,7 +58,7 @@ import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
-import { cardTitle } from "@repo/features/plain-words";
+import { cardTitle, plainWords } from "@repo/features/plain-words";
 import { briefAgent, replayOpening } from "@repo/features/replay-card-model";
 import { suggestionWords } from "@repo/features/reply-button-wire";
 import {
@@ -228,6 +228,7 @@ import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.j
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
+import { useVoiceCall } from "../voice-call.js";
 import {
   type AgentApprovalsControl,
   ApprovalsProvider,
@@ -248,6 +249,7 @@ import { type AgentBox, useAgentBox } from "./agent-box.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS, LOG_OVER_COMPOSER_CLASS } from "./agent-composer.js";
 import { useForwardToast } from "./agent-forward.js";
 import { GoalConditions, GoalDock, GoalNoticeView } from "./agent-goal.js";
+import { useRoutedMachine } from "./agent-machines.js";
 import {
   agentLines,
   agentName,
@@ -299,6 +301,7 @@ import {
 } from "./agent-pictures.js";
 import { PublishedBar, type PublishedDoors } from "./agent-published.js";
 import { AgentQueueDock } from "./agent-queue-dock.js";
+import { AgentRail, type RailLine } from "./agent-rail.js";
 import { SendingAgent } from "./agent-ref.js";
 import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
@@ -338,6 +341,7 @@ import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
 import { REWIND_ACTION, RewindProvider, rewindPoints, useMessageEdit } from "./rewind-action.js";
+import { type SentLine as RailSentLine, sentLineOf } from "./sent-lines.js";
 import { MentionedServers, SentToAgent } from "./server-card.js";
 import { ShownPage } from "./shown-page.js";
 import { SentWords, useSkill } from "./skill-chip.js";
@@ -348,7 +352,7 @@ import { PlanGlyph } from "./tab-look.js";
 import { useMentionDoors } from "./task-mentions.js";
 import { type AgentThreads, ThreadsDock, type TurnDone } from "./threads-dock.js";
 import {
-  MacOwnerProvider,
+  CallPlaceProvider,
   TranscriptNote,
   TranscriptOpeningCall,
   TranscriptReasoning,
@@ -769,6 +773,7 @@ function ToolCallView({
         provider={view.provider}
         appIcon={appIcon}
         server={server}
+        machine={view.machine}
         subject={view.subject}
         description={view.description}
         files={view.files}
@@ -2447,6 +2452,46 @@ function heldElsewhere(row: PlacedRow, messageId: string): boolean {
   return row.arrived.some((line) => line.id === messageId);
 }
 
+/** What a transcript's first line is drawn as: the description's card, or the task the agent was handed as a prompt. */
+interface OpeningLines {
+  readonly description: AgentTranscriptMessage | undefined;
+  readonly task: AgentTranscriptMessage | undefined;
+}
+
+/**
+ * Which of the transcript's first line is drawn as what: the description's
+ * card, or the task the agent was handed as a prompt, or neither for an
+ * agent started blank, whose first line is a line as any other is.
+ */
+function openingLinesOf(
+  brief: AgentBrief | undefined,
+  origin: TranscriptOrigin | undefined,
+  first: AgentTranscriptMessage | undefined,
+): OpeningLines {
+  const blank = brief === AGENT_BRIEF.BLANK && origin === undefined;
+  const carded = !blank && (brief !== AGENT_BRIEF.PROMPT || origin !== undefined);
+
+  return { description: carded ? first : undefined, task: carded || blank ? undefined : first };
+}
+
+/**
+ * The lines sent into the agent, in the order the log draws them, each by
+ * the row drawing it: a row's own line, then each line that reached its turn
+ * while it ran, which the turn draws among its work (`entryDraws`). Each
+ * message is read as the lines its row draws for it (`readOf`).
+ */
+function railLinesOf(
+  entries: readonly LogEntry[],
+  readOf: (message: AgentTranscriptMessage) => readonly RailSentLine[],
+): readonly RailLine[] {
+  return entries.flatMap((entry) => {
+    const { row } = entry;
+    const drawn = [row.message, ...row.arrived].filter((message) => entryDraws(entry, message.id));
+
+    return drawn.flatMap((message) => readOf(message).map((line) => ({ rowKey: entry.key, line })));
+  });
+}
+
 /** Each piece's own words as a find counts them, kept by the piece. */
 const pieceWords = new WeakMap<TurnPiece, Omit<FindRow, "key">>();
 
@@ -2819,6 +2864,8 @@ function AgentTranscriptView({
   const undelivered = useUndeliveredLines();
   const unsent = useUnsentLines();
   const voiceShown = useVoiceShown();
+  // The call this window holds, whose end is not yet among the rows however its last line reads.
+  const liveCallId = useVoiceCall().call?.callId;
   // Note that the voice may talk on after the turn, so the current turn is the agent's newest, whatever row stands last.
   const lastTurn = messages.findLast(isAgentTurn);
 
@@ -2920,14 +2967,78 @@ function AgentTranscriptView({
     findable: rowKeys.length > 0,
     details: findsDetails,
   });
-  useLayoutEffect(() => {
-    if (bringIn === undefined) return;
-    bringIn.current = (messageId, then) => {
-      const entry = entries.find((each) => entryDraws(each, messageId));
+  const { first: firstLine, opening: replayOpened } = placing;
+
+  // An agent a member started from a suggestion opens on the suggestion's card, which its first line alone says.
+  const drawnOrigin = useMemo(
+    () =>
+      origin ??
+      suggestionOrigin(
+        firstLine,
+        firstLine === undefined ? undefined : messageSender(firstLine, readerId, members, former),
+      ),
+    [origin, firstLine, readerId, members, former],
+  );
+
+  // Brings the row drawing a message into view, handing it to `then` once it is drawn there; a continue's note is drawn in its first line's row.
+  const bringMessage = useCallback(
+    (messageId: string, then: (row: HTMLElement) => void) => {
+      const note = replayOpened?.note;
+      const held = note !== undefined && messageId === note.id ? firstLine?.id : messageId;
+      const entry = held === undefined ? undefined : entries.find((each) => entryDraws(each, held));
 
       return entry !== undefined && rowsHandle.current?.bringIn(entry.key, then) === true;
-    };
+    },
+    [entries, firstLine, replayOpened],
+  );
+
+  useLayoutEffect(() => {
+    if (bringIn === undefined) return;
+    bringIn.current = bringMessage;
   });
+
+  // The lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief, then its note, and the task the agent was handed, as the note is, under whoever handed it.
+  const railLines = useMemo(() => {
+    const { description, task } = openingLinesOf(brief, drawnOrigin, firstLine);
+
+    // Note that the description's card says what its origin hands it where it hands words, an automation's prompt, rather than the line's own.
+    const read = (message: AgentTranscriptMessage, opening: AgentTranscriptMessage) => {
+      const line = sentLineOf(message, readerId, members, former);
+
+      if (line === undefined) return [];
+
+      const said =
+        opening === description && drawnOrigin?.text !== undefined
+          ? { ...line, words: plainWords(drawnOrigin.text) }
+          : line;
+
+      return [opening === task ? { ...said, sender: briefSender } : said];
+    };
+
+    const readOf = (message: AgentTranscriptMessage): readonly RailSentLine[] => {
+      if (message !== firstLine || replayOpened === undefined) return read(message, message);
+      const note = replayOpened.note;
+
+      return [
+        ...read(replayOpened.brief, message),
+        ...(note === undefined
+          ? []
+          : read(note, note).map((line) => ({ ...line, sender: briefSender }))),
+      ];
+    };
+
+    return railLinesOf(entries, readOf);
+  }, [
+    entries,
+    brief,
+    drawnOrigin,
+    briefSender,
+    firstLine,
+    replayOpened,
+    readerId,
+    members,
+    former,
+  ]);
 
   if (!holding && messages.length > 0) {
     const { todos, first, opening, placed, writing, calls } = placing;
@@ -2936,24 +3047,13 @@ function AgentTranscriptView({
     const callerOf = (line: AgentTranscriptMessage) =>
       messageSender(line, readerId, members, former);
 
-    // An agent a member started from a suggestion opens on the suggestion's card, which its first line alone says.
-    const drawnOrigin =
-      origin ??
-      suggestionOrigin(
-        first,
-        first === undefined ? undefined : messageSender(first, readerId, members, former),
-      );
-
     // The description is the first of the developer's messages, unless the agent
     // was handed a prompt in its place, which is the developer's message as
     // any other is, but where something sent it, an automation, when it is
     // that sender's card; the rest the developer sent since. An agent
     // started blank was handed nothing, so its first line, typed or spoken,
     // is a line as any other is, under whoever sent it.
-    const blank = brief === AGENT_BRIEF.BLANK && drawnOrigin === undefined;
-    const carded = !blank && (brief !== AGENT_BRIEF.PROMPT || drawnOrigin !== undefined);
-    const description = carded ? first : undefined;
-    const task = carded || blank ? undefined : first;
+    const { description, task } = openingLinesOf(brief, drawnOrigin, first);
     // What stands after the messages is drawn inside the last of them, which grows as TanStack's streaming reply does, so the virtualizer measures it with the row and the log holds nothing past its rows.
     // Note that an ask no drawn call holds stands at the foot after the turn too, settled there as it settled.
     const loose = approvals === undefined ? [] : looseApprovals(approvals.asks, callIds);
@@ -3127,7 +3227,11 @@ function AgentTranscriptView({
                           <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
                         ) : null}
                         {tails ? (
-                          <CallEnds spans={calls.closes.get(message.id)} callerOf={callerOf} />
+                          <CallEnds
+                            spans={calls.closes.get(message.id)}
+                            live={liveCallId}
+                            callerOf={callerOf}
+                          />
                         ) : null}
                         {at === entries.length - 1 ? trailing : null}
                       </>
@@ -3135,6 +3239,7 @@ function AgentTranscriptView({
                   }}
                 </ConversationRows>
               </ConversationContent>
+              <AgentRail lines={railLines} list={log} rows={rowsHandle} bringIn={bringMessage} />
               <ConversationScrollButton />
             </Conversation>
           </ConnectionNames>
@@ -3564,6 +3669,7 @@ function AgentTabView({
     !composer.sending;
 
   const macOwner = useKept(macOwnerOf(agent.startedBy, members, readerId, former), sameFields);
+  const routedMachine = useRoutedMachine(agent.id);
   const disabledServers = servers.disabled;
 
   const mentioned = useMemo(
@@ -3610,7 +3716,7 @@ function AgentTabView({
 
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <MacOwnerProvider value={macOwner}>
+      <CallPlaceProvider owner={macOwner} machine={routedMachine}>
         <AgentPicturesProvider value={pictures}>
           <ComputerIconsProvider value={computerIcons}>
             <KeptAppsProvider value={keptApps}>
@@ -3710,7 +3816,7 @@ function AgentTabView({
             </KeptAppsProvider>
           </ComputerIconsProvider>
         </AgentPicturesProvider>
-      </MacOwnerProvider>
+      </CallPlaceProvider>
       <AgentTabFoot>
         <TodosDock messages={lines} working={standing.working} />
         <PublishedDock
@@ -3738,14 +3844,14 @@ function AgentTabView({
         />
         <AgentPicturesProvider value={pictures}>
           {/* Note that the dock reads whose Mac the agent uses, as the transcript above it does, to offer Show only on that Mac. */}
-          <MacOwnerProvider value={macOwner}>
+          <CallPlaceProvider owner={macOwner} machine={routedMachine}>
             <ComputerDock
               agentId={agent.id}
               messages={dockLines}
               working={standing.working}
               onStop={offersStop(agent) ? onStop : undefined}
             />
-          </MacOwnerProvider>
+          </CallPlaceProvider>
           <AgentQueueDock
             messages={queue.messages}
             controls={controlsQueue}
@@ -3782,11 +3888,12 @@ function AgentTabView({
               />
             )}
             {/* Note that the box's `@` reads whose Mac the agent uses, to list that Mac's apps or else the ones the reader's machines allow, named and drawn as the agent's calls kept them. */}
-            <MacOwnerProvider value={macOwner}>
+            <CallPlaceProvider owner={macOwner} machine={routedMachine}>
               <AgentPicturesProvider value={pictures}>
                 <KeptAppsProvider value={keptApps}>
                   <AgentComposer
                     {...box}
+                    talksIn={agent.planId}
                     composer={composer}
                     usage={transcript.usage}
                     payer={transcript.payer}
@@ -3824,7 +3931,7 @@ function AgentTabView({
                   />
                 </KeptAppsProvider>
               </AgentPicturesProvider>
-            </MacOwnerProvider>
+            </CallPlaceProvider>
           </>
         )}
       </AgentTabFoot>
@@ -4327,6 +4434,7 @@ export function AgentSubagentTab({
   const wholeParts = useWholePartDoor(agentId, callId);
   const { members, former } = useMemberDirectory();
   const macOwner = useKept(macOwnerOf(owner?.startedBy, members, control.me, former), sameFields);
+  const routedMachine = useRoutedMachine(agentId);
   // The worker's lines, its task first, and what its rows draw from, kept from draw to draw while none of it moved.
   const lines = useMemo(() => workerLines(task, transcript.messages), [task, transcript.messages]);
   const computerIcons = useMemo(() => computerIconsByCall(lines), [lines]);
@@ -4353,7 +4461,7 @@ export function AgentSubagentTab({
 
   return (
     <AgentTabFrame ref={tab} label={name}>
-      <MacOwnerProvider value={macOwner}>
+      <CallPlaceProvider owner={macOwner} machine={routedMachine}>
         <AgentPicturesProvider value={pictures}>
           <ComputerIconsProvider value={computerIcons}>
             <WholePartsProvider value={wholeParts}>
@@ -4379,7 +4487,7 @@ export function AgentSubagentTab({
             </WholePartsProvider>
           </ComputerIconsProvider>
         </AgentPicturesProvider>
-      </MacOwnerProvider>
+      </CallPlaceProvider>
     </AgentTabFrame>
   );
 }

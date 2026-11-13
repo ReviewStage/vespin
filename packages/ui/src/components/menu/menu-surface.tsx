@@ -99,16 +99,22 @@ export function MenuSurface({
 /** A glyph in a menu row's column, muted beside the words it leads, as a crumb heading a menu's narrowed list leads with its kind's mark. */
 export function MenuGlyph({
   masked = false,
+  onFirstLine = false,
   children,
 }: {
   /** Whether the glyph stands for a person's thing, a person's face or a workspace's tile, kept masked in a screen recording as its item's words are. */
   masked?: boolean | undefined;
+  /** Whether it stands on its item's first line rather than across the item, as a face leads a name over words wrapped under it. */
+  onFirstLine?: boolean | undefined;
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
     <span
       {...(masked ? REPLAY_MASKED : undefined)}
-      className="ui-menu-item-glyph size-menu-glyph flex-none items-center justify-center text-muted-foreground group-data-[variant=destructive]/menu-item:text-inherit [&_svg]:size-menu-glyph [&_svg]:flex-none [&>img]:size-menu-glyph [&>img]:flex-none"
+      className={cn(
+        "ui-menu-item-glyph size-menu-glyph flex-none items-center justify-center text-muted-foreground group-data-[variant=destructive]/menu-item:text-inherit [&_svg]:size-menu-glyph [&_svg]:flex-none [&>img]:size-menu-glyph [&>img]:flex-none",
+        onFirstLine && "h-lh self-start",
+      )}
     >
       {children}
     </span>

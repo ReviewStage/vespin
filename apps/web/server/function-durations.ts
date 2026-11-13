@@ -21,6 +21,7 @@ import { MEMBER_MCP_FUNCTION, MEMBER_MCP_METADATA_ROUTE } from "@repo/service/me
 import { MEMBER_MCP_PATH } from "@repo/service/member-mcp/resource";
 import { PAGE_LINK_ROUTE } from "@repo/service/pages/page-links";
 import { PREVIEW_LINK } from "@repo/service/previews/preview-links";
+import { VOICE_CALL_LEASE } from "@repo/service/voice/voice-call-bounds";
 import { ORPC_ROUTE_KEY } from "./function-dispatch.js";
 
 /**
@@ -137,9 +138,10 @@ const STANDALONE_ROUTES: readonly string[] = [
  * the agent-turns consumer, and the agent-wakeups consumer, each under the
  * Fluid default a Start's function runs under, the sandbox-releases
  * consumer, under its own short bound, the github-delivery-reads
- * consumer, under the Fluid default, and the workspace-drive-builds
- * consumer, under the platform's longest, since a fill runs up to ten
- * minutes.
+ * consumer, under the Fluid default, the workspace-drive-builds consumer,
+ * under the platform's longest, since a fill runs up to ten minutes, and the
+ * voice-calls consumer, under the platform's longest duration, which one
+ * lease on a call runs to.
  */
 const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
   {
@@ -183,6 +185,13 @@ const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
     routes: [routeKeyOf(WORKSPACE_DRIVE_BUILD.PATH)],
     dispatches: false,
     queueTopic: WORKSPACE_DRIVE_BUILD.TOPIC,
+  },
+  {
+    file: routeKeyOf(VOICE_CALL_LEASE.PATH),
+    maxDuration: VOICE_CALL_LEASE.MAX_DURATION_SECONDS,
+    routes: [routeKeyOf(VOICE_CALL_LEASE.PATH)],
+    dispatches: false,
+    queueTopic: VOICE_CALL_LEASE.TOPIC,
   },
 ];
 

@@ -254,6 +254,42 @@ it.layer(getTestDB())("the GitHub rate gate", (it) => {
   );
 
   it.effect(
+    "background work is held until GitHub's reset once a quarter of the hour's quota is left, and a member's request is still sent",
+    () =>
+      Effect.gen(function* () {
+        const anHourOn = (yield* Clock.currentTimeMillis) / 1000 + 3600;
+
+        // A fifth of the hour's five thousand left, under the quarter kept for members.
+        const runningLow = () =>
+          Response.json(
+            {},
+            {
+              headers: {
+                "x-ratelimit-resource": "core",
+                "x-ratelimit-limit": "5000",
+                "x-ratelimit-remaining": "1000",
+                "x-ratelimit-reset": String(anHourOn),
+              },
+            },
+          );
+
+        const inBackground = asked.pipe(Effect.provideService(GitHubBackground, true));
+
+        const statuses = yield* Effect.gen(function* () {
+          const sawItLow = yield* inBackground;
+          const held = yield* inBackground;
+          const member = yield* asked;
+          yield* TestClock.adjust("1 hour");
+          const afterReset = yield* inBackground;
+
+          return [sawItLow, held, member, afterReset];
+        }).pipe(Effect.provide(scriptedGitHub([runningLow])), holdingNothing);
+
+        assert.deepEqual(statuses, [200, 429, 200, 200]);
+      }),
+  );
+
+  it.effect(
     "writes under one identity start a second apart, and reads, GraphQL queries among them, are not spaced",
     () =>
       Effect.gen(function* () {

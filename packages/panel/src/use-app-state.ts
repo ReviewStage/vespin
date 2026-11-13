@@ -38,6 +38,7 @@ export {
   selectInbox,
   selectInboxTasks,
   selectInboxWaiting,
+  selectMachineCommandDevice,
   selectMachineCommands,
   selectMirrors,
   selectNetwork,
@@ -52,6 +53,7 @@ export {
   selectStoredExperimentChoices,
   selectTaskSendRefused,
   selectTasks,
+  selectVoiceCall,
   selectWorkspaces,
   supportAccessStanding,
 } from "@repo/host/app-state-reads";

@@ -424,6 +424,12 @@ body {
   border-radius: var(--ui-radius-8);
 }
 
+/* The room a conversation's rail stands down the edge of. */
+.catalog-rail {
+  position: relative;
+  height: 200px;
+}
+
 .catalog-frame-wide {
   width: 160px;
 }

@@ -235,7 +235,7 @@ export type InboxChoice =
  * it opens again on nothing chosen, its list beside an empty pane, or alone
  * where the Inbox shows one column (`inbox-columns.ts`).
  */
-interface InboxViewControl {
+export interface InboxViewControl {
   /**
    * Goes back from the item chosen to its list, which stands the list alone where the Inbox shows one column: a step
    * back where the list is the step behind, else its route's own move, unasked (`inbox-route.ts`), standing the list in
