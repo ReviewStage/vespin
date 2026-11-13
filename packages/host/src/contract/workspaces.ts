@@ -1,5 +1,6 @@
 import { workspaceTokenRepositorySchema } from "@repo/features/github-repositories-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { mergeQueueAnswerSchema } from "@repo/features/merge-queue-wire";
 import { workspaceSentryAnswerSchema } from "@repo/features/sentry-install-wire";
 import { workspaceSlackBotAnswerSchema } from "@repo/features/slack-bot-wire";
 import {
@@ -271,6 +272,13 @@ export const WORKSPACE_ACTS = declaredActs({
     refusal: "Could not save those run actions on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
+  }),
+  WORKSPACE_MERGE_QUEUE_READ: hostAct({
+    input: tasksWorkspaceParamsSchema,
+    output: mergeQueueAnswerSchema,
+    refusal: "Could not read that workspace's merge queues on this system.",
+    panelOnly: true,
+    door: ACT.READ,
   }),
 });
 

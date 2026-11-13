@@ -253,6 +253,7 @@ export {
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
+  withSending,
 } from "./transcript-model.js";
 
 export {

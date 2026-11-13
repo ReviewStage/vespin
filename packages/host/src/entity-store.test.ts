@@ -4,7 +4,7 @@ import { it } from "@effect/vitest";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { entityPool, type FieldChange, fieldKind, type WriteDeclaration } from "@repo/sync";
-import { Effect, Exit, Layer, Path, Result, Schema, Scope } from "effect";
+import { Effect, Exit, Layer, Path, PubSub, Result, Schema, Scope, Stream } from "effect";
 import { Base64 } from "effect/encoding";
 import * as FileSystem from "effect/FileSystem";
 import { TestClock } from "effect/testing";
@@ -168,6 +168,42 @@ it.effect("a write waiting for the service is written within half a second of it
       { name: "plans.rename", key: "rename-1", input: "Invites" },
     ]);
   }).pipe(Effect.provide(files)),
+);
+
+it.effect(
+  "the messages refused are written within half a second of moving, and read back at the next launch by the same account alone",
+  () =>
+    Effect.gen(function* () {
+      const directory = yield* temporaryDirectoryScoped("entity-store-");
+      const moves = yield* PubSub.unbounded<void>();
+      let refused: readonly unknown[] = [];
+      const scope = yield* Scope.make();
+
+      yield* Scope.provide(scope)(
+        openEntityStore({
+          directory,
+          cipher: testCipher(),
+          accountId: DANA,
+          refused: () => refused,
+          refusedMoves: Stream.fromPubSub(moves),
+        }),
+      );
+
+      yield* Effect.yieldNow;
+      refused = [{ id: "line-1", text: "Rebase on main" }];
+      yield* PubSub.publish(moves, undefined);
+      yield* TestClock.adjust("500 millis");
+      yield* writtenText(directory);
+      yield* Scope.close(scope, Exit.void);
+
+      const again = yield* opened(directory, DANA);
+      assert.deepEqual(again.store.refused, refused);
+      yield* again.closed;
+
+      const another = yield* opened(directory, "user-ravi");
+      assert.deepEqual(another.store.refused, []);
+      yield* another.closed;
+    }).pipe(Effect.provide(files)),
 );
 
 it.effect(

@@ -117,6 +117,7 @@ const IOS = {
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
   MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
+  MERGE_QUEUE: notYet("iOS leaves the Merge queue page to the desktop and the web for now"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
   NOTIFICATIONS: byDesign("iOS's Settings screen opens the system's settings itself"),
   ONE_SCREEN: byDesign("The app is one screen, with no panel to bring forward or preview"),
@@ -253,6 +254,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_CLEAR]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_BOOT]: panel(IOS.AGENT_SESSION),
   [PORT_ACT_KIND.AGENTS_WARM]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_UNSEND]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_REPLY_BUTTON]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_REPLY_BUTTON_PRESS]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_PORTS]: EVERYWHERE,
@@ -331,6 +333,8 @@ export const CLIENT_PARITY = {
 
   [PORT_ACT_KIND.MAC_COMMAND_ANSWER]: desktopOnly(WEB.MAC_COMMAND, IOS.MAC_COMMAND),
   [PORT_ACT_KIND.COMPUTER_USE_STATUS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
+  [PORT_ACT_KIND.COMPUTER_USE_APPS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
+  [PORT_ACT_KIND.COMPUTER_USE_APP_ICON]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
 
   [PORT_ACT_KIND.MAC_PHOTO_TO_JPEG]: desktopOnly(WEB.MAC_PHOTO, IOS.DESKTOP_ONLY),
@@ -490,4 +494,5 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_MERGE_QUEUE_READ]: panel(IOS.MERGE_QUEUE),
 } as const satisfies Record<PortActKind, ClientParityRow>;

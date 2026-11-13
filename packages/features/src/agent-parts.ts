@@ -51,7 +51,13 @@ import {
 import { drawnCall } from "./native-tool-calls.js";
 import { formatBytes } from "./number-format.js";
 import { TOOL_STATE, type ToolState } from "./tool-call-block.js";
-import { remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
+import {
+  computerAppIcon,
+  computerAppName,
+  remoteCallOf,
+  TOOL_TARGET,
+  toolTarget,
+} from "./tool-call-model.js";
 import {
   groupSummary,
   ROW_PART,
@@ -261,6 +267,35 @@ export function agentParts(message: AgentTranscriptMessage): readonly AgentPart[
   partsRead.set(message, parts);
 
   return parts;
+}
+
+/**
+ * The icon each `computer` call's row wears, by its call: the one its answer
+ * kept, or, where it kept none, the one the newest call before it on the
+ * same app kept, as a call the Mac answered as text or with no icon does; a
+ * call no call on its app kept an icon for by then is left out, and wears
+ * the placeholder.
+ */
+export function computerIconsByCall(
+  messages: readonly AgentTranscriptMessage[],
+): ReadonlyMap<string, string> {
+  const byApp = new Map<string, string>();
+  const byCall = new Map<string, string>();
+
+  for (const message of messages) {
+    for (const part of agentParts(message)) {
+      if (part.kind !== AGENT_PART.TOOL || part.tool !== AGENT_TOOL.COMPUTER) continue;
+      const app = computerAppName(part.input, part.output);
+      const kept = computerAppIcon(part.output);
+
+      if (app !== undefined && kept !== undefined) byApp.set(app, kept);
+      const icon = kept ?? (app === undefined ? undefined : byApp.get(app));
+
+      if (icon !== undefined) byCall.set(part.callId, icon);
+    }
+  }
+
+  return byCall;
 }
 
 /**

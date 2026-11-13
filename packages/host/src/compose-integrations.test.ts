@@ -101,7 +101,11 @@ function fakeService(script: ServiceScript) {
 
   const client: IntegrationsClient = {
     // SAFETY: the integrations' read is the one live read the client is asked for, answering its script's rows.
-    liveRead: (<Read, Params>(_read: Read, _params: Params, poll?: { readonly after?: string | undefined }) =>
+    liveRead: (<Read, Params>(
+      _read: Read,
+      _params: Params,
+      poll?: { readonly after?: string | undefined },
+    ) =>
       Effect.map(
         poll === undefined ? Effect.succeed(live.first()) : live.poll(poll.after),
         (answer): IntegrationStatusesLiveAnswer => ({ ...answer, ...beside }),

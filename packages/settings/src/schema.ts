@@ -1,4 +1,5 @@
 import { isLinkOpen, LINK_OPEN, LINK_OPEN_LABEL, LINK_OPEN_LIST } from "@repo/features/link-open";
+import { MAC_COMMAND_MODE, MAC_COMMAND_MODE_LIST } from "@repo/features/mac-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { UnparsedWireValue } from "@repo/wire";
 import {
@@ -49,13 +50,7 @@ import {
   KEEP_AWAKE_LIST,
   KEEP_AWAKE_OPTION_LABEL,
 } from "./keep-awake.js";
-import {
-  isMacCommandMode,
-  MAC_COMMAND_MODE,
-  MAC_COMMAND_MODE_LABEL,
-  MAC_COMMAND_MODE_LIST,
-  MAC_COMMANDS_LABEL,
-} from "./mac-commands.js";
+import { isMacCommandMode, MAC_COMMAND_MODE_LABEL, MAC_COMMANDS_LABEL } from "./mac-commands.js";
 import { isOnboardingSurveyJson } from "./onboarding-survey.js";
 import {
   isPermissionMode,

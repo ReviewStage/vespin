@@ -19,7 +19,7 @@ import { AgentTab } from "./agent-tab.js";
 /**
  * starting-agent-tab.test.ts -- an agent's tab while its first launch
  * boots, its first page landed or not, reads its empty transcript as read,
- * saying how the boot stands in its centered line. Synthetic throughout.
+ * saying how the boot stands. Synthetic throughout.
  */
 
 const roots: Root[] = [];
@@ -86,10 +86,13 @@ async function agentTabWords(
   return container.textContent ?? "";
 }
 
-test("an agent's tab while its first launch boots reads its empty transcript as read, saying Starting… in its centered line and no placeholder", async () => {
+test("an agent's tab while its first launch boots reads its empty transcript as read, saying its sandbox is starting and no placeholder", async () => {
   const words = await bootingTabWords({ phase: BOOT_PHASE.STARTING, since: Date.now() });
 
-  assert.ok(words.includes(BOOT_WORDS.STARTING), "the empty transcript says it is starting");
+  assert.ok(
+    words.includes("Starting a cloud sandbox…"),
+    "the empty transcript says where it starts",
+  );
   assert.ok(
     !words.includes(readingWords("the transcript")),
     "no placeholder stands for a transcript already read",
@@ -99,11 +102,20 @@ test("an agent's tab while its first launch boots reads its empty transcript as 
 test("an agent's tab just made, before its first transcript page lands, says Starting… as the start's own tab did rather than a placeholder", async () => {
   const words = await agentTabWords(AGENT_STATUS.STARTING, []);
 
-  assert.ok(words.includes(BOOT_WORDS.STARTING), "the empty transcript says it is starting");
+  assert.ok(
+    words.includes("Starting a cloud sandbox…"),
+    "the empty transcript says it is starting",
+  );
   assert.ok(
     !words.includes(readingWords("the transcript")),
     "no placeholder stands between the start's tab and the agent's",
   );
+});
+
+test("an agent's tab whose machine is up says the agent is starting", async () => {
+  const words = await bootingTabWords({ phase: BOOT_PHASE.HANDING_OFF, since: Date.now() });
+
+  assert.ok(words.includes("Starting the agent…"));
 });
 
 test("an agent's tab whose first launch failed says why in its empty transcript, with Retry for its starter", async () => {

@@ -141,8 +141,8 @@ token, key, or file contents, that goes too.
 
 ### Apps on your Mac
 
-If your workspace turns on Computer use and you allow it in Settings › This
-Mac, agents can see and use apps on your Mac: Vespin asks you the first time an
+If you turn on Computer use in Settings › Experimental and allow it in
+Settings › This Mac, agents can see and use apps on your Mac: Vespin asks you the first time an
 agent wants each app, and you can answer Allow once, Always allow, or Deny.
 For an app you allow, the agent reads its window's controls and their text and
 a screenshot of the window, and clicks and types in it. The screenshot is sent
@@ -152,6 +152,12 @@ agents terminals, password managers, System Settings, or Vespin itself, but
 **anything an allowed app's window shows goes too**, a message or a password
 on screen included. You can take an app off the always-allowed list, or turn
 computer use off, in Settings › This Mac.
+
+When you type `@` in a message to an agent, Vespin lists the apps running and
+installed on that Mac so you can point the agent at one. The list is read on
+your Mac and never leaves it; only an app you pick is sent, by its name and
+bundle id, as part of your message, which the agent and anyone who can open
+the task can read.
 
 ### Agents on your own machines
 
@@ -369,9 +375,10 @@ data, and post them to our team's Slack.
 ### Information stored on your Mac
 
 The Mac app keeps its window layout and the drafts of messages you have not
-sent. While you are signed in, it also keeps a copy of your workspaces' lists
-and changes you made offline in one file, `entities.sealed`, encrypted under a
-key in the macOS Keychain and deleted when you sign out. Your sign-in
+sent. While you are signed in, it also keeps a copy of your workspaces' lists,
+changes you made offline, and the words of messages to agents that were not
+delivered, with the names of their files, in one file, `entities.sealed`,
+encrypted under a key in the macOS Keychain and deleted when you sign out. Your sign-in
 tokens are kept encrypted the same way. Transcripts and pictures you
 open are held in memory only.
 

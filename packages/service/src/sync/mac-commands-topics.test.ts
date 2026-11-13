@@ -41,7 +41,7 @@ const wakesTheMac = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     const fired = yield* expectTopicsFire(write, topics);
-    const woken = macCommandsRead.topics({ userId, kinds: MAC_COMMAND_KIND.SHELL });
+    const woken = macCommandsRead.topics({ userId, kinds: MAC_COMMAND_KIND.SHELL, device: "" });
     assert.ok(
       topics.some(([kind, id]) => woken.some((topic) => topic[0] === kind && topic[1] === id)),
       "the Mac's read is woken by a topic the write notifies",

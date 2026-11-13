@@ -120,15 +120,19 @@ export type RowAction = {
   readonly onPress: () => void;
 };
 
+/** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark. */
+export type MenuChoice = {
+  readonly label: string;
+  readonly symbol?: Glyph | undefined;
+  readonly on: boolean;
+  readonly onPress: () => void;
+};
+
 /** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them, and the acts under them, such as a task's Remove from section. */
 export type RowSubmenu = {
   readonly label: string;
   readonly symbol: Glyph;
-  readonly choices: readonly {
-    readonly label: string;
-    readonly on: boolean;
-    readonly onPress: () => void;
-  }[];
+  readonly choices: readonly MenuChoice[];
   readonly actions?: readonly RowAction[] | undefined;
 };
 
@@ -232,7 +236,7 @@ function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
       {submenu.choices.map((choice) => (
         <Toggle
           key={choice.label}
-          label={choice.label}
+          {...actContent(choice.label, choice.symbol)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />

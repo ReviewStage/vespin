@@ -16,6 +16,8 @@ import UniformTypeIdentifiers
 /// - `permissions`, `request_permissions`: whether it may capture windows and
 ///   post input, the second raising macOS's own prompts first.
 /// - `list_apps`: the running apps a person uses, each with its icon.
+/// - `list_installed_apps`: the apps installed in the usual folders, by name
+///   and bundle id, without icons, which `describe_app` draws one at a time.
 /// - `describe_app {app}`: one app, running or installed, as `list_apps`
 ///   names each, launching nothing, so the developer can be asked about it.
 /// - `get_app_state {app, shots}`: an app's frontmost window as a numbered
@@ -24,6 +26,10 @@ import UniformTypeIdentifiers
 /// - `click`, `type_text`, `press_key`, `scroll`, `drag`, `set_value`,
 ///   `perform_secondary_action`: act on the app by an element's number or by
 ///   a point in the first screenshot's pixels.
+///
+/// A read or an action may pin its app to the one the developer allowed,
+/// by `pin_bundle_id`, or by `pin_pid` for an app with no bundle id, and is
+/// refused where the app it finds no longer matches.
 ///
 /// The agent's own cursor, the browser's pointer drawn over the app in a
 /// window that takes no clicks, glides to each point an action
@@ -46,6 +52,15 @@ private let LAUNCH_WAIT_SECONDS = 8.0
 private let LINES_PER_PAGE = 12
 private let MAX_CLICKS = 3
 private let MAX_PAGES = 20.0
+/// The most base64 characters of one screenshot, as the wire bounds it (`COMPUTER_BOUNDS.MAX_SHOT_CHARS`).
+private let MAX_SHOT_CHARS = 1_600_000
+/// The smallest edge a screenshot steps down to, as the wire bounds it (`COMPUTER_BOUNDS.MIN_SHOT_EDGE`).
+private let MIN_SHOT_EDGE = 64
+/// The quality a screenshot past the bound steps down by, to the least it steps to before it is made smaller instead.
+private let SHOT_QUALITY_STEP = 0.15
+private let MIN_SHOT_QUALITY = 0.4
+/// How much smaller each step makes a screenshot still past the bound at the least quality.
+private let SHOT_EDGE_STEP = 0.8
 
 private let REFUSED_BUNDLE_IDS: Set<String> = [
     "com.apple.Terminal",
@@ -175,9 +190,14 @@ private func pngBase64(_ image: NSImage, edge: Int) -> String? {
     return bitmap.representation(using: .png, properties: [:])?.base64EncodedString()
 }
 
+/// An app's name as the developer reads it.
+private func appName(_ app: NSRunningApplication) -> String {
+    app.localizedName ?? app.bundleIdentifier ?? "App \(app.processIdentifier)"
+}
+
 private func describe(_ app: NSRunningApplication) -> [String: Any] {
     var described: [String: Any] = [
-        "name": app.localizedName ?? app.bundleIdentifier ?? "App \(app.processIdentifier)",
+        "name": appName(app),
         "pid": Int(app.processIdentifier),
         "active": app.isActive,
         "refused": isRefused(app.bundleIdentifier),
@@ -195,14 +215,20 @@ private func listApps() -> [String: Any] {
     ["apps": runningApps().map(describe)]
 }
 
+/// The folders an app not yet running is looked for in, by its name: the usual ones, the developer's own, and Xcode's tools.
+private let APP_FOLDERS: [URL] =
+    ["/Applications", "/System/Applications", "/System/Applications/Utilities",
+     "/Applications/Utilities", "/Applications/Xcode.app/Contents/Developer/Applications",
+     "/Applications/Xcode.app/Contents/Applications"]
+    .map { URL(fileURLWithPath: $0) }
+    + [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")]
+
 /// Where an app not yet running is installed, found by its bundle id or by its name in the usual folders.
 private func installedURL(_ name: String) -> URL? {
     if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: name) { return url }
-    let folders = ["/Applications", "/System/Applications", "/System/Applications/Utilities",
-                   "/Applications/Utilities", "/Applications/Xcode.app/Contents/Developer/Applications"]
     let file = name.hasSuffix(".app") ? name : "\(name).app"
-    return folders
-        .map { URL(fileURLWithPath: $0).appendingPathComponent(file) }
+    return APP_FOLDERS
+        .map { $0.appendingPathComponent(file) }
         .first { FileManager.default.fileExists(atPath: $0.path) }
 }
 
@@ -223,6 +249,17 @@ private func runningApp(_ name: String) throws -> NSRunningApplication? {
     return running
 }
 
+/// Refuses an app that is not the one the developer allowed, where the request pins it: by `pin_bundle_id`, or by `pin_pid` for an app with no bundle id.
+private func requirePinned(_ request: [String: Any], _ app: NSRunningApplication) throws {
+    let bundleMoved = (request["pin_bundle_id"] as? String).map { $0 != app.bundleIdentifier } ?? false
+    let processMoved = integer(request, "pin_pid").map { pid_t($0) != app.processIdentifier } ?? false
+    guard !bundleMoved, !processMoved else {
+        throw HelperError(
+            kind: ERROR_KIND.refused,
+            message: "The app found is no longer the one the developer allowed; read it again with get_app_state.")
+    }
+}
+
 /// The running app an action names. Note that an action never launches an app, because its numbers came from a state the app's exit has ended.
 private func actedApp(_ request: [String: Any]) throws -> NSRunningApplication {
     let name = try string(request, "app")
@@ -230,6 +267,7 @@ private func actedApp(_ request: [String: Any]) throws -> NSRunningApplication {
         throw HelperError(
             kind: ERROR_KIND.noState, message: "\(name) is not running; read it with get_app_state first.")
     }
+    try requirePinned(request, running)
     return running
 }
 
@@ -268,6 +306,40 @@ private func describeApp(_ request: [String: Any]) throws -> [String: Any] {
     if let bundleId = bundle?.bundleIdentifier { described["bundle_id"] = bundleId }
     if let png = pngBase64(NSWorkspace.shared.icon(forFile: url.path), edge: ICON_EDGE) { described["icon_png"] = png }
     return ["app": described]
+}
+
+/// An installed app as `list_apps` names one, without its icon, which takes far longer to draw than the folders take to read.
+private func describeInstalled(_ url: URL) -> [String: Any] {
+    let bundleId = Bundle(url: url)?.bundleIdentifier
+    var described: [String: Any] = [
+        "name": FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: ""),
+        "refused": isRefused(bundleId),
+    ]
+    if let bundleId { described["bundle_id"] = bundleId }
+    return described
+}
+
+/**
+ The apps installed in the usual folders (`APP_FOLDERS`), each once by its
+ bundle id, by name. Note that only each folder's own apps are read, not
+ the folders inside it, so the list is read in a moment whatever the disk
+ holds; an app filed deeper is still found by `describe_app` through its
+ bundle id.
+ */
+private func listInstalledApps() -> [String: Any] {
+    var seen = Set<String>()
+    let urls = APP_FOLDERS.flatMap { folder in
+        ((try? FileManager.default.contentsOfDirectory(
+            at: folder, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? [])
+            .filter { $0.pathExtension == "app" }
+    }
+    let apps = urls.map(describeInstalled).filter { app in
+        seen.insert((app["bundle_id"] as? String) ?? (app["name"] as? String) ?? "").inserted
+    }
+    let sorted = apps.sorted {
+        (($0["name"] as? String) ?? "").localizedCaseInsensitiveCompare(($1["name"] as? String) ?? "") == .orderedAscending
+    }
+    return ["apps": sorted]
 }
 
 // MARK: - Accessibility tree
@@ -360,20 +432,41 @@ private struct TreeWalk {
     }
 }
 
-private func focusedWindow(_ pid: pid_t) -> AXUIElement? {
-    let app = AXUIElementCreateApplication(pid)
-    if let window = attribute(app, kAXFocusedWindowAttribute), CFGetTypeID(window) == AXUIElementGetTypeID() {
-        return (window as! AXUIElement)
+/// One of an app's windows by an attribute that names one, where it does.
+private func windowAttribute(_ app: AXUIElement, _ name: String) -> AXUIElement? {
+    guard let window = attribute(app, name), CFGetTypeID(window) == AXUIElementGetTypeID() else { return nil }
+    return (window as! AXUIElement)
+}
+
+/// Whether a window is in the Dock, which no capture reads without bringing it back, and bringing it back takes the developer's screen.
+private func minimized(_ window: AXUIElement) -> Bool {
+    (attribute(window, kAXMinimizedAttribute) as? Bool) == true
+}
+
+/**
+ The window an agent reads of an app: its focused window, else its main
+ one, else its first, passing over any in the Dock; none where it has no
+ window. Note that an app whose every window is in the Dock is refused by
+ name, so the agent can ask the developer to bring one back rather than
+ read that the app has no window.
+ */
+private func focusedWindow(_ app: NSRunningApplication) throws -> AXUIElement? {
+    let element = AXUIElementCreateApplication(app.processIdentifier)
+    let named = [kAXFocusedWindowAttribute, kAXMainWindowAttribute].compactMap { windowAttribute(element, $0) }
+    let candidates = named + ((attribute(element, kAXWindowsAttribute) as? [AXUIElement]) ?? [])
+    if let shown = candidates.first(where: { !minimized($0) }) { return shown }
+    guard candidates.isEmpty else {
+        throw HelperError(
+            kind: ERROR_KIND.noWindow,
+            message:
+                "\(appName(app))'s window is minimized, so it can't be read without bringing it back. Ask the developer to restore it; it can stay behind their other windows.")
     }
-    if let window = attribute(app, kAXMainWindowAttribute), CFGetTypeID(window) == AXUIElementGetTypeID() {
-        return (window as! AXUIElement)
-    }
-    return (attribute(app, kAXWindowsAttribute) as? [AXUIElement])?.first
+    return nil
 }
 
 // MARK: - Screenshots
 
-private func jpegBase64(_ image: CGImage, edge: Int, quality: Double) -> [String: Any]? {
+private func jpegShot(_ image: CGImage, edge: Int, quality: Double) -> (width: Int, height: Int, base64: String)? {
     let scale = min(1.0, Double(edge) / Double(max(image.width, image.height)))
     let width = max(1, Int((Double(image.width) * scale).rounded()))
     let height = max(1, Int((Double(image.height) * scale).rounded()))
@@ -393,11 +486,48 @@ private func jpegBase64(_ image: CGImage, edge: Int, quality: Double) -> [String
     CGImageDestinationAddImage(
         destination, resized, [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
     guard CGImageDestinationFinalize(destination) else { return nil }
-    return ["width": width, "height": height, "jpeg": (data as Data).base64EncodedString()]
+    return (width, height, (data as Data).base64EncodedString())
+}
+
+/// A screenshot the wire carries: at the size and quality asked where it fits under `MAX_SHOT_CHARS`, else at a quality stepped down to `MIN_SHOT_QUALITY`, then a fifth smaller at a time, so a large window still sends a picture rather than one the service refuses.
+private func jpegBase64(_ image: CGImage, edge: Int, quality: Double) -> [String: Any]? {
+    var edge = edge
+    var quality = quality
+    while edge >= MIN_SHOT_EDGE {
+        guard let shot = jpegShot(image, edge: edge, quality: quality) else { return nil }
+        if shot.base64.utf8.count <= MAX_SHOT_CHARS {
+            return ["width": shot.width, "height": shot.height, "jpeg": shot.base64]
+        }
+        if quality > MIN_SHOT_QUALITY {
+            quality = max(MIN_SHOT_QUALITY, quality - SHOT_QUALITY_STEP)
+        } else {
+            edge = Int(Double(min(edge, max(image.width, image.height))) * SHOT_EDGE_STEP)
+        }
+    }
+    return nil
 }
 
 /// The app's window to capture: the one its focused window is, else its largest on screen.
-private func captureWindow(_ pid: pid_t, title: String?) async throws -> SCWindow {
+/// How far a window's frame may stand from its Accessibility frame, in points, and still be the same window.
+private let FRAME_SLACK: CGFloat = 2
+
+/// Whether two frames of a window, its capture's and its Accessibility one's, are the same window's.
+private func sameFrame(_ one: CGRect, _ other: CGRect) -> Bool {
+    abs(one.minX - other.minX) <= FRAME_SLACK && abs(one.minY - other.minY) <= FRAME_SLACK
+        && abs(one.width - other.width) <= FRAME_SLACK && abs(one.height - other.height) <= FRAME_SLACK
+}
+
+/**
+ The window to capture: the one at the frame of the window whose elements
+ are numbered, so the screenshot and the numbers are of one window, or the
+ app's largest where it has no such window, whose numbers are then none.
+ Note that a window whose frame no capturable window matches is refused
+ rather than another captured in its place, as when it stands on another
+ Space, since the agent would then click by numbers of one window on a
+ picture of another.
+ */
+private func captureWindow(_ app: NSRunningApplication, frame numbered: CGRect?) async throws -> SCWindow {
+    let pid = app.processIdentifier
     guard CGPreflightScreenCaptureAccess() else {
         throw HelperError(
             kind: ERROR_KIND.noPermission,
@@ -408,7 +538,15 @@ private func captureWindow(_ pid: pid_t, title: String?) async throws -> SCWindo
     let windows = content.windows.filter {
         $0.owningApplication?.processID == pid && $0.windowLayer == 0 && $0.frame.width > 1
     }
-    if let title, let titled = windows.first(where: { $0.title == title }) { return titled }
+    if let numbered {
+        guard let paired = windows.first(where: { sameFrame($0.frame, numbered) }) else {
+            throw HelperError(
+                kind: ERROR_KIND.noWindow,
+                message:
+                    "\(appName(app))'s window can't be captured as it stands, as when it is on another Space. Ask the developer to bring it onto this Space; it can stay behind their other windows.")
+        }
+        return paired
+    }
     guard let largest = windows.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height })
     else {
         throw HelperError(kind: ERROR_KIND.noWindow, message: "The app has no window on screen to look at.")
@@ -473,10 +611,18 @@ private func session(_ app: NSRunningApplication) throws -> AppSession {
 private func getAppState(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
     let app = try await resolveApp(try string(request, "app"))
+    try requirePinned(request, app)
     let pid = app.processIdentifier
-    let axWindow = focusedWindow(pid)
+    let axWindow = try focusedWindow(app)
     let title = axWindow.flatMap { text($0, kAXTitleAttribute) }
-    let window = try await captureWindow(pid, title: title)
+    // Note that a window whose elements are numbered and that has no frame is refused too, since no capture could be paired with it.
+    let numbered = try axWindow.map { element in
+        guard let place = frame(element) else {
+            throw HelperError(kind: ERROR_KIND.noWindow, message: "\(appName(app))'s window has no place on screen to capture.")
+        }
+        return place
+    }
+    let window = try await captureWindow(app, frame: numbered)
     let image = try await capture(window)
     let asked = (request["shots"] as? [[String: Any]]) ?? [["edge": 1280, "quality": 0.7]]
     let shots = asked.compactMap { shot in
@@ -737,9 +883,15 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
         let element = try current.element(index)
         if let center = try? current.center(index) { await cursorTo(center) }
         // Note that a plain press goes through Accessibility, which needs no point and no focus, before an event is aimed at the element's center.
-        if button == BUTTON.left, count == 1,
-           AXUIElementPerformAction(element, kAXPressAction as CFString) == .success {
-            return ["done": "pressed"]
+        if button == BUTTON.left, count == 1 {
+            let pressed = AXUIElementPerformAction(element, kAXPressAction as CFString)
+            if pressed == .success { return ["done": "pressed"] }
+            // Note that only an element that offers no press is clicked at its center instead; any other failure may have pressed it already, so it is answered rather than pressed twice.
+            guard pressed == .actionUnsupported else {
+                throw HelperError(
+                    kind: ERROR_KIND.failed,
+                    message: "Element \(index) did not confirm its press (\(pressed.rawValue)); read the app again to see whether it took it.")
+            }
         }
         clickPoint(try current.center(index), session: current, button: button, count: count)
         return ["done": "clicked"]
@@ -903,6 +1055,7 @@ private let OPERATIONS: [String: ([String: Any]) async throws -> [String: Any]] 
     "permissions": { _ in permissions() },
     "request_permissions": { _ in requestPermissions() },
     "list_apps": { _ in listApps() },
+    "list_installed_apps": { _ in listInstalledApps() },
     "describe_app": describeApp,
     "get_app_state": getAppState,
     "click": click,

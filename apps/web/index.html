@@ -6,7 +6,7 @@
     <title>Vespin - An inbox for all your coding agents</title>
     <meta
       name="description"
-      content="Vespin is an inbox for all your coding agents. They post to it when they need you, and you answer them there."
+      content="Vespin runs Claude Code and Codex agents in parallel in the cloud, each on its own branch, and gives you one inbox to answer them all."
     />
     <!-- Matches the page background so mobile browser chrome blends into it. -->
     <meta name="theme-color" content="#0a0a0a" />
@@ -16,7 +16,7 @@
     <meta property="og:title" content="Vespin: An inbox for all your coding agents" />
     <meta
       property="og:description"
-      content="Vespin is an inbox for all your coding agents. They post to it when they need you, and you answer them there."
+      content="Vespin runs Claude Code and Codex agents in parallel in the cloud, each on its own branch, and gives you one inbox to answer them all."
     />
     <meta property="og:url" content="https://vespin.dev/" />
     <link rel="canonical" href="https://vespin.dev/" />
@@ -43,7 +43,7 @@
     <meta name="twitter:title" content="Vespin: An inbox for all your coding agents" />
     <meta
       name="twitter:description"
-      content="Vespin is an inbox for all your coding agents. They post to it when they need you, and you answer them there."
+      content="Vespin runs Claude Code and Codex agents in parallel in the cloud, each on its own branch, and gives you one inbox to answer them all."
     />
     <meta name="twitter:image" content="https://vespin.dev/og-card.png" />
     <meta
@@ -67,9 +67,11 @@
          Organization names Vespin's logo and what Vespin is, so a search
          for the name finds this product rather than one spelled like it.
          The logo is the app icon the manifest already serves, at 512 pixels,
-         past Google's 112-pixel floor. The two stand apart, each one top-level
-         item, as Google's examples write them. Google's Rich Results Test
-         reports neither (it answers "No items detected" for Google's own
+         past Google's 112-pixel floor. The SoftwareApplication is the app
+         itself: free on macOS and the web, under the Apache 2.0 license, with
+         the price Google asks of a software app's rich result. Each stands
+         apart, one top-level item, as Google's examples write them. Google's Rich Results Test
+         reports neither of the first two (it answers "No items detected" for Google's own
          Organization sample too), so check them with validator.schema.org.
          A data block runs nothing, so the site's script-src policy leaves it
          alone. -->
@@ -89,8 +91,26 @@
             "name": "Vespin",
             "url": "https://vespin.dev/",
             "logo": "https://vespin.dev/app-icon-512.png",
-            "description": "Vespin is an inbox for all your coding agents. They post to it when they need you, and you answer them there.",
+            "description": "Vespin runs Claude Code and Codex agents in parallel in the cloud, each on its own branch, and gives you one inbox to answer them all.",
             "sameAs": ["https://github.com/ReviewStage/vespin"]
+          },
+          {
+            "@type": "SoftwareApplication",
+            "@id": "https://vespin.dev/#software",
+            "name": "Vespin",
+            "url": "https://vespin.dev/",
+            "description": "Vespin runs Claude Code and Codex agents in parallel in the cloud, each on its own branch, and gives you one inbox to answer them all.",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "macOS, Web",
+            "offers": {
+              "@type": "Offer",
+              "price": "0",
+              "priceCurrency": "USD"
+            },
+            "license": "https://www.apache.org/licenses/LICENSE-2.0",
+            "isAccessibleForFree": true,
+            "sameAs": ["https://github.com/ReviewStage/vespin"],
+            "publisher": { "@id": "https://vespin.dev/#organization" }
           }
         ]
       }

@@ -110,3 +110,39 @@ it.effect("off production nothing is asked of Vercel Schedules", () =>
     );
   }),
 );
+
+it.effect(
+  "on production a one-time automation still to come is made as a single schedule at its date and time in its zone, and one moved to it from cron is made anew",
+  () =>
+    Effect.gen(function* () {
+      vi.stubEnv("VERCEL_ENV", "production");
+      const spied = spiedSchedules();
+      spied.update.mockRejectedValue(
+        new SchedulesApiError(400, "Type change", { code: "schedule_type_change_not_allowed" }),
+      );
+
+      const reminder = {
+        ...NIGHTLY,
+        enabled: true,
+        trigger: {
+          kind: AUTOMATION_TRIGGER.SCHEDULE,
+          at: "2999-11-27T09:00",
+          timezone: "Europe/Paris",
+        },
+      } as const;
+
+      yield* Effect.gen(function* () {
+        yield* (yield* AutomationCadence).keep(reminder);
+      }).pipe(Effect.provide(automationCadenceFromEnvironment));
+
+      assert.deepEqual(
+        spied.delete.mock.calls.map(([identity]) => identity),
+        [{ name: NIGHTLY.id, namespace: WORKSPACE }],
+        "the cron schedule standing is deleted, since Vercel writes no cron over as single",
+      );
+      assert.deepEqual(
+        spied.create.mock.calls.map(([params]) => [params.expression, params.timezone]),
+        [[{ type: "single", at: "2999-11-27T09:00" }, "Europe/Paris"]],
+      );
+    }),
+);

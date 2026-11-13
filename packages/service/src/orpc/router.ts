@@ -130,6 +130,7 @@ import {
   type SentryInstallProcedureSeams,
   sentryInstallProcedures,
 } from "../triggers/sentry/sentry-install-procedures.js";
+import { type VoiceProcedureSeams, voiceProcedures } from "../voice/voice-procedures.js";
 import {
   type WorkspaceEnvironmentProcedureSeams,
   workspaceEnvironmentProcedures,
@@ -150,6 +151,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   AgentsProcedureSeams &
   AutomationsProcedureSeams &
   DictationProcedureSeams &
+  VoiceProcedureSeams &
   EventsProcedureSeams &
   GitHubProcedureSeams &
   GitHubTokenProcedureSeams &
@@ -224,6 +226,7 @@ export function hostedRouter(seams: HostedRouterSeams) {
     taskFiles: taskFilesProcedures(seams),
     taskFollowers: taskFollowersProcedures(seams),
     taskSections: taskSectionsProcedures(seams),
+    voice: voiceProcedures(seams),
     workspaceEnvironment: workspaceEnvironmentProcedures(seams),
     workspaceSandboxSetup: workspaceSandboxSetupProcedures(seams),
     workspaceGithub: workspaceGithubProcedures(seams),

@@ -21,6 +21,7 @@
  */
 
 import { Predicate } from "effect";
+import { COMPUTER_ACTION, type ComputerAction } from "./mac-command-wire.js";
 import { countWords } from "./words.js";
 
 /** The kinds of call a row can be, across both tabs. */
@@ -255,21 +256,30 @@ const BROWSER_ACTION_WORDS: ReadonlyMap<string, string> = new Map([
 ]);
 
 /** What each of the computer tool's actions says it did, before the app it did it to, on its call's line. */
-const COMPUTER_ACTION_WORDS: ReadonlyMap<string, string> = new Map([
-  ["list_apps", "Listed the apps"],
-  ["get_app_state", "Looked at"],
-  ["click", "Clicked in"],
-  ["type_text", "Typed in"],
-  ["press_key", "Pressed a key in"],
-  ["scroll", "Scrolled in"],
-  ["drag", "Dragged in"],
-  ["set_value", "Set a value in"],
-  ["perform_secondary_action", "Acted in"],
-]);
+const COMPUTER_ACTION_WORDS = {
+  [COMPUTER_ACTION.LIST_APPS]: "Listed the apps",
+  [COMPUTER_ACTION.GET_APP_STATE]: "Looked at",
+  [COMPUTER_ACTION.CLICK]: "Clicked in",
+  [COMPUTER_ACTION.TYPE_TEXT]: "Typed in",
+  [COMPUTER_ACTION.PRESS_KEY]: "Pressed a key in",
+  [COMPUTER_ACTION.SCROLL]: "Scrolled in",
+  [COMPUTER_ACTION.DRAG]: "Dragged in",
+  [COMPUTER_ACTION.SET_VALUE]: "Set a value in",
+  [COMPUTER_ACTION.PERFORM_SECONDARY_ACTION]: "Acted in",
+} as const satisfies { readonly [Action in ComputerAction]: string };
+
+const COMPUTER_ACTIONS: ReadonlySet<string> = new Set(Object.values(COMPUTER_ACTION));
+
+/** Whether a call's action is one this build knows. */
+function isComputerAction(action: string): action is ComputerAction {
+  return COMPUTER_ACTIONS.has(action);
+}
 
 /** What a computer call's line says it did, in place of its kind's verb; nothing for an action this build does not know, so the kind's own verb stands. */
 export function computerCallWords(action: string | undefined): string | undefined {
-  return action === undefined ? undefined : COMPUTER_ACTION_WORDS.get(action);
+  return action === undefined || !isComputerAction(action)
+    ? undefined
+    : COMPUTER_ACTION_WORDS[action];
 }
 
 /**

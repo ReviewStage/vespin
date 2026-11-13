@@ -6,7 +6,10 @@
  * query, as text (`macCommandKindsQuery`); an older Mac's read names none,
  * which is `shell` alone. A Mac that follows its commands live
  * (`contract/live.ts`) claims each it hears of by its id, and says it
- * listens, naming its kinds as the held read does. A result or a claim
+ * listens, naming its kinds as the held read does. A Mac joins as the
+ * device its commands are claimed by, carrying its own settings up the
+ * first time, and writes them as the member changes them on it; the claim
+ * and the presence then name that device. A result or a claim
  * for a command the account does not hold, claimed or waiting, is refused
  * as not found; the read and the presence refuse only as any procedure
  * may. The outputs are the wire schemas flipped, so oRPC's output check encodes the
@@ -17,30 +20,36 @@ import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import {
+  MAC_COMMAND_BOUNDS,
   macCommandClaimAnswerSchema,
   macCommandClaimRequestSchema,
   macCommandListeningAnswerSchema,
   macCommandSettledAnswerSchema,
   macCommandSettleRequestSchema,
   macCommandsAnswerSchema,
+  macDeviceJoinAnswerSchema,
+  macDeviceJoinRequestSchema,
+  macDeviceSettingsAnswerSchema,
+  macDeviceSettingsRequestSchema,
 } from "../mac-command-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
-import { HOSTED_API_ERROR } from "../service-wire.js";
+import { HOSTED_API_ERROR, wireUuidSchema } from "../service-wire.js";
 import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
 
 /** The held read's input: the kinds its Mac runs, where it names any, as the query spells them. */
 const waitingInput = EffectSchema.Struct({ kinds: EffectSchema.optionalKey(EffectSchema.String) });
 
-/** A presence's input: the kinds its Mac runs, as the held read names them. */
+/** A presence's input: the kinds its Mac runs, as the held read names them, and the device it joined as, where it did. */
 const listeningInput = EffectSchema.Struct({
   kinds: EffectSchema.optionalKey(EffectSchema.String),
+  deviceId: EffectSchema.optionalKey(wireUuidSchema),
 });
 
 /** A claim's body: one id, and room to spare. */
 const CLAIM_BODY_BYTES = 1_024;
 
-/** Two outputs at their bound, and room for the rest of the body. */
-const RESULT_BODY_BYTES = 256 * 1_024;
+/** A device's settings at their bound, and room for the rest of the body. */
+const DEVICE_BODY_BYTES = 64 * 1_024;
 
 export const macCommandsContract = {
   waiting: declaredProcedure
@@ -49,7 +58,7 @@ export const macCommandsContract = {
     .output(EffectSchema.flip(macCommandsAnswerSchema)),
   settle: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
-    .meta(bodyCap(RESULT_BODY_BYTES))
+    .meta(bodyCap(MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MAC_COMMANDS }))
     .input(exactInput(macCommandSettleRequestSchema))
     .output(EffectSchema.flip(macCommandSettledAnswerSchema)),
@@ -64,4 +73,18 @@ export const macCommandsContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MAC_COMMANDS_LISTENING }))
     .input(exactInput(listeningInput))
     .output(EffectSchema.flip(macCommandListeningAnswerSchema)),
+  join: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(bodyCap(DEVICE_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MAC_COMMAND_DEVICE }))
+    .input(exactInput(macDeviceJoinRequestSchema))
+    .output(EffectSchema.flip(macDeviceJoinAnswerSchema)),
+  saveDeviceSettings: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(bodyCap(DEVICE_BODY_BYTES))
+    .meta(
+      openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MAC_COMMAND_DEVICE_SETTINGS }),
+    )
+    .input(exactInput(macDeviceSettingsRequestSchema))
+    .output(EffectSchema.flip(macDeviceSettingsAnswerSchema)),
 };

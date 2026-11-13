@@ -98,6 +98,7 @@ export function wireQueue(read: AgentQueueRead, now: Date): AgentQueue {
         text: message.text,
         queuedBy: message.userId,
         ...(sentAs === undefined ? undefined : { from: sentAs }),
+        ...(message.sendKey === undefined ? undefined : { sendKey: message.sendKey }),
         ...(message.editing ? { editing: true as const } : undefined),
         ...(message.attachments.length === 0
           ? undefined

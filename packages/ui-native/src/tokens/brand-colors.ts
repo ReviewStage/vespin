@@ -33,7 +33,7 @@ export const BRAND_COLOR = {
     ON_ACCENT: "#171717",
     ACCENT_TEXT: "#ff9900",
     GROUND: "#0a0a0a",
-    SURFACE: "#0a0a0a",
+    SURFACE: "#1a1a1a",
     SIDEBAR: "#000000",
     SIDEBAR_INK: "#a1a1a1",
     WELL: "#000000",

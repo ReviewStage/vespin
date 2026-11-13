@@ -1451,7 +1451,7 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a Vespin tool's pictures stay out of its stored answer, and a CLI tool's stand in for theirs",
+    "a Vespin tool's pictures and the words the CLI saves them under stay out of its stored answer, and a CLI tool's pictures stand in for theirs",
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
@@ -1494,7 +1494,12 @@ it.layer(SUITE)("the runner events route", (it) => {
                 {
                   type: "tool_result",
                   tool_use_id: "toolu_look",
-                  content: [{ type: "text", text: '{"status":"looked"}' }, image],
+                  // Note that the CLI writes where it saved the picture after it, as 2.1.322 does.
+                  content: [
+                    { type: "text", text: '{"status":"looked"}' },
+                    image,
+                    { type: "text", text: "[Image: source: /home/agent/.claude/shot.png]" },
+                  ],
                 },
               ],
             },

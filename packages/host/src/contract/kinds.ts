@@ -258,6 +258,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_BOOT: "agents.boot",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
+  /** A message of the member's the service refused let go, from its Delete or its Edit, which took its words back into the box (`agent-queue-writes.ts`). */
+  AGENTS_UNSEND: "agents.unsend",
   /** A button in an agent's reply as the transcript draws it, asked of the service as it is drawn (`reply-button-wire.ts`). */
   AGENTS_REPLY_BUTTON: "agents.replyButton",
   /** A suggestion in an agent's reply sent by the member from its draft, which the service runs once. */
@@ -693,6 +695,8 @@ export type MacShellActKind = (typeof MAC_SHELL_ACT_KIND)[keyof typeof MAC_SHELL
 const MAC_COMMAND_ACT_KIND = {
   MAC_COMMAND_ANSWER: "macCommands.answer",
   COMPUTER_USE_STATUS: "macCommands.computerUseStatus",
+  COMPUTER_USE_APPS: "macCommands.computerUseApps",
+  COMPUTER_USE_APP_ICON: "macCommands.computerUseAppIcon",
   COMPUTER_USE_ASK_PERMISSIONS: "macCommands.computerUseAskPermissions",
 } as const;
 
@@ -837,6 +841,8 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
   WORKSPACE_REPOSITORY_SETUP_PUT: "workspace.repositorySetupPut",
   WORKSPACE_RUN_ACTIONS_PUT: "workspace.runActionsPut",
+  /** Every pull request GitHub's merge queues hold across a workspace's repositories, read as the Merge queue page opens and again while it stands; refused while the account's Merge queue experiment is off. */
+  WORKSPACE_MERGE_QUEUE_READ: "workspace.mergeQueueRead",
 } as const;
 
 /**
@@ -1033,6 +1039,7 @@ export const PORT_ACT_USE = {
   AGENTS_CLEAR: ACT_USE.WRITE,
   AGENTS_BOOT: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
+  AGENTS_UNSEND: ACT_USE.WRITE,
   AGENTS_REPLY_BUTTON: ACT_USE.FETCH,
   AGENTS_REPLY_BUTTON_PRESS: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,
@@ -1111,6 +1118,8 @@ export const PORT_ACT_USE = {
 
   MAC_COMMAND_ANSWER: ACT_USE.WRITE,
   COMPUTER_USE_STATUS: ACT_USE.FETCH,
+  COMPUTER_USE_APPS: ACT_USE.FETCH,
+  COMPUTER_USE_APP_ICON: ACT_USE.FETCH,
   COMPUTER_USE_ASK_PERMISSIONS: ACT_USE.WRITE,
 
   MAC_PHOTO_TO_JPEG: ACT_USE.FETCH,
@@ -1260,6 +1269,7 @@ export const PORT_ACT_USE = {
   WORKSPACE_INSTALL_SCRIPT_PUT: ACT_USE.WRITE,
   WORKSPACE_REPOSITORY_SETUP_PUT: ACT_USE.WRITE,
   WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
+  WORKSPACE_MERGE_QUEUE_READ: ACT_USE.FETCH,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
 
 /**

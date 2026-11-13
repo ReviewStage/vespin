@@ -1,4 +1,5 @@
 import { Effect, Schema as EffectSchema, Option } from "effect";
+import { DEVICE_ARCH, DEVICE_PLATFORM, deviceMachineFields } from "./device-agent-wire.js";
 import { wireUuidSchema } from "./service-wire.js";
 
 /**
@@ -30,6 +31,12 @@ export const MAC_COMMAND_BOUNDS = {
   MAX_COMMAND_CHARS: 100_000,
   /** The most characters of stdout or stderr a result carries; the Mac cuts each to this. */
   MAX_OUTPUT_CHARS: 20_000,
+  /**
+   * The most bytes of one result's posted body: an app's window read at
+   * every bound (`COMPUTER_BOUNDS`), under the 4.5 MB a function takes. A
+   * Mac answers a result past it as not run rather than post it.
+   */
+  MAX_RESULT_BYTES: 4_000_000,
 } as const;
 
 /**
@@ -135,8 +142,15 @@ export const COMPUTER_BOUNDS = {
   /** A screenshot's longest edge, in pixels, at the least and the most. */
   MIN_SHOT_EDGE: 64,
   MAX_SHOT_EDGE: 4_096,
-  /** The most base64 characters of one screenshot: a 1.5 MB JPEG. */
-  MAX_SHOT_CHARS: 2_100_000,
+  /**
+   * The most base64 characters of one screenshot: a 1.2 MB JPEG, which the
+   * helper keeps a window under by stepping its quality, then its size, down.
+   * Note that two at this bound, with the elements, the window's title, and
+   * the icon at theirs, three bytes to a character where they are not
+   * base64, come to under 3.9 MB, so a read at every bound posts under
+   * `MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES`.
+   */
+  MAX_SHOT_CHARS: 1_600_000,
   /** The most base64 characters of an app's icon: a 64px PNG. */
   MAX_ICON_CHARS: 60_000,
   /** The most characters of a state's numbered elements. */
@@ -390,11 +404,41 @@ const macShellResultSchema = EffectSchema.Struct({
 
 export type MacShellResult = typeof macShellResultSchema.Type;
 
-/** A command the Mac would not run, such as one of a kind it cannot run, and why, in words the agent can act on. */
+/** The two grants macOS holds against the app for computer use: capturing other apps' windows, and reading and posting input to them. */
+export const COMPUTER_PERMISSION = {
+  SCREEN_RECORDING: "screen_recording",
+  ACCESSIBILITY: "accessibility",
+} as const;
+
+export type ComputerPermission = (typeof COMPUTER_PERMISSION)[keyof typeof COMPUTER_PERMISSION];
+
+/** Each grant as macOS's Privacy & Security names it. */
+const COMPUTER_PERMISSION_NAME = {
+  [COMPUTER_PERMISSION.SCREEN_RECORDING]: "Screen Recording",
+  [COMPUTER_PERMISSION.ACCESSIBILITY]: "Accessibility",
+} as const satisfies Record<ComputerPermission, string>;
+
+/** Grants as words, as macOS names them: "Screen Recording", or "Screen Recording and Accessibility". */
+export function computerPermissionsNamed(permissions: readonly ComputerPermission[]): string {
+  return permissions.map((permission) => COMPUTER_PERMISSION_NAME[permission]).join(" and ");
+}
+
+/**
+ * A command the Mac would not run, such as one of a kind it cannot run, and
+ * why, in words the agent can act on; for an action refused because the Mac
+ * lacks a grant it needs, those grants too, so the transcript can offer the
+ * place they are turned on.
+ */
 const macCommandRefusalSchema = EffectSchema.Struct({
   refused: EffectSchema.String.check(
     EffectSchema.isMinLength(1),
     EffectSchema.isMaxLength(MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS),
+  ),
+  missingPermissions: EffectSchema.optionalKey(
+    EffectSchema.Array(EffectSchema.Literals(Object.values(COMPUTER_PERMISSION))).check(
+      EffectSchema.isMinLength(1),
+      EffectSchema.isMaxLength(Object.values(COMPUTER_PERMISSION).length),
+    ),
   ),
 });
 
@@ -480,9 +524,35 @@ export const macCommandSettledAnswerSchema = EffectSchema.Struct({
   settled: EffectSchema.Literal(true),
 });
 
-/** One command the Mac heard of over Realtime, claimed by its id (POST). */
+/**
+ * Whether an agent's command runs on a Mac: never, after the developer
+ * allows it, or always. The Mac's own setting and the service's copy for
+ * its device name the same three. Note that the order is the menu's, from
+ * least freedom to most.
+ */
+export const MAC_COMMAND_MODE = {
+  /** The Mac takes no commands. */
+  NEVER: "never",
+  /** Each command is shown to the developer first, and runs only once they allow it. */
+  ASK: "ask",
+  /** Any command from any of the account's agents runs without asking. */
+  ALWAYS: "always",
+} as const;
+
+export type MacCommandMode = (typeof MAC_COMMAND_MODE)[keyof typeof MAC_COMMAND_MODE];
+
+export const MAC_COMMAND_MODE_LIST: readonly MacCommandMode[] = Object.values(MAC_COMMAND_MODE);
+
+export const macCommandModeSchema = EffectSchema.Literals(MAC_COMMAND_MODE_LIST);
+
+/**
+ * One command the Mac heard of over Realtime, claimed by its id (POST), as
+ * the device it joined as, where it did: a device claims what was queued
+ * for it or for none, a Mac naming none only what was queued for none.
+ */
 export const macCommandClaimRequestSchema = EffectSchema.Struct({
   id: wireUuidSchema,
+  deviceId: EffectSchema.optionalKey(wireUuidSchema),
 });
 
 /** The command claimed for this Mac, to run; `not-found` where another Mac took it, its call withdrew it, or it waited too long. */
@@ -493,4 +563,56 @@ export const macCommandClaimAnswerSchema = EffectSchema.Struct({
 /** That the service counts this Mac listening now, for the kinds it named (POST). */
 export const macCommandListeningAnswerSchema = EffectSchema.Struct({
   listening: EffectSchema.Literal(true),
+});
+
+/**
+ * A machine's own say over agents' terminal commands and computer use, as
+ * the service keeps it for the device: how commands run there, the same
+ * three modes its own setting names, and the apps agents use there without
+ * asking, by bundle id, or by name where an app has none.
+ */
+export const macDeviceSettingsSchema = EffectSchema.Struct({
+  commandMode: macCommandModeSchema,
+  alwaysAllowedApps: EffectSchema.Array(appName).check(
+    EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_APPS),
+  ),
+});
+
+export type MacDeviceSettings = typeof macDeviceSettingsSchema.Type;
+
+/**
+ * This Mac joining as the device its commands are claimed by (POST): the
+ * id it keeps for the account, and its name, platform and architecture,
+ * which create the device under the account where the account never had
+ * the id, which machine it runs on as its host names one
+ * (`deviceMachineFields`), so two installs on one Mac can be told for one,
+ * and its own settings as it holds them, which the service keeps
+ * only where it holds none for the device yet, so a machine carries them up
+ * once and reads the service's from then on.
+ */
+export const macDeviceJoinRequestSchema = EffectSchema.Struct({
+  deviceId: wireUuidSchema,
+  name: EffectSchema.String.check(EffectSchema.isMinLength(1), EffectSchema.isMaxLength(200)),
+  platform: EffectSchema.Literals(Object.values(DEVICE_PLATFORM)),
+  arch: EffectSchema.Literals(Object.values(DEVICE_ARCH)),
+  ...deviceMachineFields,
+  settings: macDeviceSettingsSchema,
+});
+
+export type MacDeviceJoinRequest = typeof macDeviceJoinRequestSchema.Type;
+
+/** The device's settings as the service keeps them once it joined; `not-found` where another account holds the id. */
+export const macDeviceJoinAnswerSchema = EffectSchema.Struct({
+  settings: macDeviceSettingsSchema,
+});
+
+/** The device's settings as the member changed them on it (POST); `not-found` where the account holds no such device. */
+export const macDeviceSettingsRequestSchema = EffectSchema.Struct({
+  deviceId: wireUuidSchema,
+  settings: macDeviceSettingsSchema,
+});
+
+/** That the service keeps the device's settings as written (POST). */
+export const macDeviceSettingsAnswerSchema = EffectSchema.Struct({
+  saved: EffectSchema.Literal(true),
 });

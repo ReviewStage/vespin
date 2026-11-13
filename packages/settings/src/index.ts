@@ -22,6 +22,7 @@ export {
   COMPUTER_USE_DETAIL,
   COMPUTER_USE_LABEL,
   computerUseAppsOf,
+  computerUseAppsStored,
   computerUseAppsWith,
   computerUseAppsWithout,
   isComputerUseAppsJson,
@@ -70,11 +71,8 @@ export {
 
 export {
   isMacCommandMode,
-  MAC_COMMAND_MODE,
   MAC_COMMAND_MODE_LABEL,
-  MAC_COMMAND_MODE_LIST,
   MAC_COMMANDS_LABEL,
-  type MacCommandMode,
 } from "./mac-commands.js";
 
 export {

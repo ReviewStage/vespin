@@ -29,20 +29,21 @@
  * a listing that failed fills nothing, so nothing is deleted on a GitHub
  * that did not answer.
  *
- * The drive is regenerated past the request's answer whenever a repository
- * is connected or disconnected: a workspace connecting its installation
- * (`github-install-app.ts`), GitHub creating, unsuspending, or deleting an
- * installation, or adding repositories to it or removing them
- * (`github-webhook-app.ts`), and a member adding or removing a repository on
- * their token (`workspace-repositories.ts`), and the drive is deleted with
- * its workspace (`workspace-deletion.ts`). The fill's sandbox
- * writes its firewall under the workspace's first owner.
+ * A connect or a grant fills nothing, since a workspace may grant far more
+ * repositories than one function can clone, and a new workspace has no
+ * drive until one is built; a start that finds none clones into its own
+ * sandbox. The drive is regenerated past the request's answer only as a
+ * repository leaves it: GitHub deleting an installation or removing
+ * repositories from it (`github-webhook-app.ts`), and a member removing a
+ * repository added on their token (`workspace-repositories.ts`), and the
+ * drive is deleted with its workspace (`workspace-deletion.ts`). The fill's
+ * sandbox writes its firewall under the workspace's first owner.
  *
  * Nothing refills a drive on a timer, so a drive that is not whole stays so
  * until someone fixes it: every way one ends up so is reported to Sentry as
  * a `WorkspaceDriveBroken` issue (`reportedBroken`), a repository whose fill
- * failed, a fill that failed whole, and a start that found the drive gone or
- * left unfinished, each naming the workspace.
+ * failed, a fill that failed whole, and a start that found the drive left
+ * unfinished, each naming the workspace.
  */
 
 import { createHash } from "node:crypto";
@@ -125,8 +126,6 @@ export const DRIVE_BROKEN = {
   REPOSITORY_FAILED: "repository_failed",
   /** A fill failed whole, before or past its repositories. */
   FILL_FAILED: "fill_failed",
-  /** A start forked the drive and found none. */
-  GONE: "gone",
   /** A start found a fill's sandbox left past its grace, so the drive is unfinished. */
   UNFINISHED: "unfinished",
 } as const;
@@ -380,14 +379,14 @@ const regeneratedFor = (workspace: Option.Option<BaseDriveWorkspace>) =>
     );
   });
 
-/** The workspace's drive regenerated past the answer, as a repository of it is connected or disconnected; a workspace the store could not read regenerates nothing. */
+/** The workspace's drive regenerated past the answer, as a repository leaves it; a workspace the store could not read regenerates nothing. */
 export const workspaceDriveRegenerated = (workspaceId: string) =>
   Effect.flatMap(
     Effect.orElseSucceed(workspaceDriveOwner(workspaceId), () => Option.none()),
     regeneratedFor,
   );
 
-/** The drive of the workspace an installation is linked to regenerated past the answer, as GitHub says its repositories changed. */
+/** The drive of the workspace an installation is linked to regenerated past the answer, as GitHub says repositories left it. */
 export const installationDriveRegenerated = (installationId: number) =>
   Effect.flatMap(
     Effect.orElseSucceed(baseDriveWorkspaceOfInstallation(installationId), () => Option.none()),

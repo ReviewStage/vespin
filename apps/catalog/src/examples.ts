@@ -71,6 +71,7 @@ import { HOVER_CARDS_EXAMPLE } from "./examples/hover-cards";
 import { ICONS_EXAMPLE } from "./examples/icons";
 import { INLINE_EDITS_EXAMPLE } from "./examples/inline-edits";
 import { INLINE_REFS_EXAMPLE } from "./examples/inline-refs";
+import { INTRO_CARDS_EXAMPLE } from "./examples/intro-cards";
 import { KEEP_FOCUS_EXAMPLE } from "./examples/keep-focus";
 import { LANDING_EXAMPLE } from "./examples/landing";
 import { LAYOUT_EXAMPLE } from "./examples/layout";
@@ -108,6 +109,7 @@ import { PROGRESS_RINGS_EXAMPLE } from "./examples/progress-rings";
 import { PROSE_EXAMPLE } from "./examples/prose";
 import { PROVIDER_BUTTONS_EXAMPLE } from "./examples/provider-buttons";
 import { PUBLIC_PAGE_EXAMPLE } from "./examples/public-page";
+import { QUEUE_LINES_EXAMPLE } from "./examples/queue-lines";
 import { READABLE_CONTROLS_EXAMPLE } from "./examples/readable-controls";
 import { RECT_FLOAT_EXAMPLE } from "./examples/rect-float";
 import { REMOTE_SURFACE_EXAMPLE } from "./examples/remote-surface";
@@ -245,6 +247,7 @@ export const EXAMPLES: readonly Example[] = [
   HOVER_CARDS_EXAMPLE,
   INLINE_EDITS_EXAMPLE,
   INLINE_REFS_EXAMPLE,
+  INTRO_CARDS_EXAMPLE,
   SUGGESTION_CARDS_EXAMPLE,
   SWATCHES_EXAMPLE,
   TEXT_BUTTONS_EXAMPLE,
@@ -300,6 +303,7 @@ export const EXAMPLES: readonly Example[] = [
   ROLLING_NUMBER_EXAMPLE,
   PUBLIC_PAGE_EXAMPLE,
   LANDING_EXAMPLE,
+  QUEUE_LINES_EXAMPLE,
   SCROLL_AREA_EXAMPLE,
   SAVED_TICKS_EXAMPLE,
   SEARCH_FIELDS_EXAMPLE,

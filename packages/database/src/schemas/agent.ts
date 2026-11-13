@@ -358,6 +358,12 @@ export const agentTable = pgTable(
     machine: text("machine").$type<AgentMachineKind>().notNull().default(AGENT_MACHINE.VERCEL),
     /** The Mac a local agent is pinned to; null for one in a sandbox. */
     deviceId: uuid("device_id").references(() => device.id, { onDelete: "set null" }),
+    /**
+     * The machine the agent's terminal commands and computer use go to when
+     * a call names none, its default machine; null where none was chosen.
+     * Note that this is not `device_id`, which is where the agent itself runs.
+     */
+    targetDeviceId: uuid("target_device_id").references(() => device.id, { onDelete: "set null" }),
     /** How the agent's tool calls are answered (`AGENT_PERMISSION_MODE`); full access for every row from before the column. */
     permissionMode: text("permission_mode")
       .$type<AgentPermissionMode>()

@@ -6,6 +6,7 @@ import { it } from "@effect/vitest";
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { LINK_OPEN } from "@repo/features/link-open";
+import { MAC_COMMAND_MODE } from "@repo/features/mac-command-wire";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import {
   type AccountPreferenceField,
@@ -21,7 +22,6 @@ import {
   EXPERIMENT,
   type ExperimentChoices,
   KEEP_AWAKE,
-  MAC_COMMAND_MODE,
   PULL_REQUEST_OPEN,
   SETTINGS_RESET_SCOPE,
   SOUND_WHEN,

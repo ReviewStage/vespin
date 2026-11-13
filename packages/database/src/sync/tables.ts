@@ -418,8 +418,9 @@ export const taskReadSync = defineSyncTable(taskRead, {
 /**
  * A command an agent queued for the account's Mac, on the account's topic,
  * which the Mac's read of the commands it may claim is woken on. Note that
- * the account's listener row (`mac_command_listener`), which every such read
- * rewrites, is not captured: no read waits on it.
+ * the account's and each device's listener rows (`mac_command_listener`,
+ * `mac_command_device_listener`), which every such read rewrites, are not
+ * captured: no read waits on them.
  */
 export const macCommandSync = defineSyncTable(macCommand, {
   topics: [{ kind: TOPIC.ACCOUNT, column: macCommand.userId }],

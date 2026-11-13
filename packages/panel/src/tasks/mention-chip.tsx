@@ -263,6 +263,8 @@ const WHOLE_KINDS: ReadonlySet<Mention["kind"]> = new Set([
   MENTION_KIND.PERSON,
   MENTION_KIND.SERVER,
   MENTION_KIND.TOOL,
+  MENTION_KIND.MAC_APP,
+  MENTION_KIND.COMPUTER,
 ]);
 
 /** What a gone section's card says of it. */
@@ -305,6 +307,8 @@ function pressOf(
     case MENTION_KIND.SERVER:
     case MENTION_KIND.TOOL:
     case MENTION_KIND.DATE:
+    case MENTION_KIND.MAC_APP:
+    case MENTION_KIND.COMPUTER:
       return undefined;
     case MENTION_KIND.TASK:
       return () => doors.onOpenTask(mention);

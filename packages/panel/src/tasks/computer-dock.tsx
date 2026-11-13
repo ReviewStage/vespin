@@ -3,7 +3,11 @@ import { calledPicturesOf } from "@repo/features/agent-pictures-model";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
 import type { KeptPicture } from "@repo/features/conversation-picture-wire";
-import { computerAppIcon, computerAppName } from "@repo/features/tool-call-model";
+import {
+  computerAppIcon,
+  computerAppName,
+  computerCallRefused,
+} from "@repo/features/tool-call-model";
 import {
   APP_ICON_SIZE,
   AppIcon,
@@ -78,12 +82,32 @@ interface ReadCall {
   readonly output: Parameters<typeof computerAppName>[1];
 }
 
-/** Every call of the turn under way, the newest first: back to the developer's line that opened it. */
+/**
+ * Every call of the turn under way, the newest first: back to the
+ * developer's line that opened it. Note that a line the turn took in under
+ * way (`arrivedIn`), or one that follows its journal while it is still open,
+ * steers that turn rather than opening one, as the transcript places it
+ * (`placedMessages`), so the apps used before it stay the turn's; a line
+ * after a closed journal opens the next turn, even before it is read back,
+ * so the turn before it is never shown as the one under way.
+ */
 function* turnCallsNewestFirst(messages: readonly AgentTranscriptMessage[]): Generator<ReadCall> {
+  const journal = messages.findLastIndex((message) => message.role === MESSAGE_ROLE.ASSISTANT);
+  const open = journal >= 0 && messages[journal]?.finishedAt === undefined;
+
   for (let at = messages.length - 1; at >= 0; at -= 1) {
     const message = messages[at];
 
-    if (message === undefined || message.role === MESSAGE_ROLE.USER) return;
+    if (message === undefined) return;
+
+    if (message.role === MESSAGE_ROLE.USER) {
+      const steers = message.arrivedIn !== undefined || (open && at > journal);
+
+      if (steers) continue;
+
+      return;
+    }
+
     const parts = agentParts(message);
 
     for (let index = parts.length - 1; index >= 0; index -= 1) {
@@ -101,25 +125,64 @@ function keptWindow(call: ReadCall): KeptPicture | undefined {
   return called?.kept === true ? called.picture : undefined;
 }
 
+/** The app a call used, by its name: none for a call that is no computer call, names no app, as listing them does, or that the Mac refused, which used none. */
+function usedApp(call: ReadCall): string | undefined {
+  if (call.tool !== AGENT_TOOL.COMPUTER || computerCallRefused(call.output)) return undefined;
+
+  return computerAppName(call.input, call.output);
+}
+
+/**
+ * The name each app came to, by the spelling a call asked for it in and by
+ * the name the Mac answered, each folded to lower case, read off the calls
+ * the Mac answered, so a call still running, which names its app only as
+ * the agent spelled it, counts as the app it will turn out to be.
+ */
+function answeredNames(calls: readonly ReadCall[]): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+
+  for (const call of calls) {
+    const answered = computerAppName(undefined, call.output);
+
+    if (call.tool !== AGENT_TOOL.COMPUTER || answered === undefined) continue;
+    names.set(answered.toLowerCase(), answered);
+    const asked = computerAppName(call.input, undefined);
+
+    if (asked !== undefined) names.set(asked.toLowerCase(), answered);
+  }
+
+  return names;
+}
+
 /**
  * The apps the agent used this turn while it works, each once, the one it
  * used last first, each with its icon and newest window from the newest of
  * its calls that kept them; nothing while it works in none, or once it is
- * done. A call that names no app, listing them, adds none.
+ * done. A call that names no app, listing them, adds none, nor does one the
+ * Mac refused, such as for a grant it lacks, so a refused app never floats
+ * a window it never read or says it is in use.
  */
 export function appsInUse(
   messages: readonly AgentTranscriptMessage[],
   working: boolean,
 ): AppsInUse | undefined {
   if (!working) return undefined;
+  const calls = [...turnCallsNewestFirst(messages)];
+  const names = answeredNames(calls);
+
+  const appOf = (call: ReadCall): string | undefined => {
+    const app = usedApp(call);
+
+    return app === undefined || call.output !== undefined
+      ? app
+      : (names.get(app.toLowerCase()) ?? app);
+  };
+
   const found = new Map<string, UsedApp>();
-  let newest: ReadCall | undefined;
+  const newest = calls[0];
 
-  for (const call of turnCallsNewestFirst(messages)) {
-    newest ??= call;
-
-    const app =
-      call.tool === AGENT_TOOL.COMPUTER ? computerAppName(call.input, call.output) : undefined;
+  for (const call of calls) {
+    const app = appOf(call);
 
     if (app === undefined) continue;
     const held = found.get(app);
@@ -134,9 +197,7 @@ export function appsInUse(
   const top = apps[0];
 
   if (top === undefined || newest === undefined) return undefined;
-
-  const using =
-    newest.tool === AGENT_TOOL.COMPUTER && computerAppName(newest.input, newest.output) === top.app;
+  const using = appOf(newest) === top.app;
 
   return { apps, using };
 }
@@ -144,7 +205,15 @@ export function appsInUse(
 /** Every agent whose windows the reader put away this window's session, so its stack stays down as the tab comes back. */
 const WINDOWS_HIDDEN = new Set<string>();
 
-/** The apps in use as a dock's row, their windows floating over it; nothing while the agent uses no app. */
+/** Stops the agent's turn, answering whether the service took it; none where the reader may not stop it. */
+type StopTurn = (() => Promise<boolean>) | undefined;
+
+/**
+ * The apps in use as a dock's row, their windows floating over it; nothing
+ * while the agent uses no app. Note that the row is its own component, so
+ * the viewer it opened goes with it as the turn ends rather than standing
+ * open into the next.
+ */
 export function ComputerDock({
   agentId,
   messages,
@@ -154,17 +223,32 @@ export function ComputerDock({
   agentId: string;
   messages: readonly AgentTranscriptMessage[];
   working: boolean;
-  /** Stops the agent's turn, answering whether the service took it; none where the reader may not stop it. */
-  onStop: (() => Promise<boolean>) | undefined;
+  onStop: StopTurn;
 }): ReactNode {
   const inUse = useMemo(() => appsInUse(messages, working), [messages, working]);
   const top = inUse?.apps[0];
-  const window = useKeptPicture(top?.window?.id);
+
+  if (inUse === undefined || top === undefined) return null;
+
+  return <AppsDock agentId={agentId} inUse={inUse} top={top} onStop={onStop} />;
+}
+
+/** The row and the windows of the apps in use this turn. */
+function AppsDock({
+  agentId,
+  inUse,
+  top,
+  onStop,
+}: {
+  agentId: string;
+  inUse: AppsInUse;
+  top: UsedApp;
+  onStop: StopTurn;
+}): ReactNode {
+  const window = useKeptPicture(top.window?.id);
   const { open, viewer } = useKeptPictureViewer();
   const stop = useAsyncAction(rejectionWords);
   const [hidden, setHidden] = useState(() => WINDOWS_HIDDEN.has(agentId));
-
-  if (inUse === undefined || top === undefined) return null;
 
   const windows = inUse.apps.flatMap((each) =>
     each.window === undefined ? [] : [{ picture: each.window, words: each.app }],
@@ -194,7 +278,10 @@ export function ComputerDock({
               : { name: each.app },
           )}
           onOpen={() => {
-            if (shown !== undefined) open(windows, shown.id);
+            // Note that an app on top whose window was never read opens the newest window another app's call kept.
+            const first = shown ?? windows[0]?.picture;
+
+            if (first !== undefined) open(windows, first.id);
           }}
         />
       )}

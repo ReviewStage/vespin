@@ -10,10 +10,14 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { editorBundleLanded, installEditorLayout, QUIET_COMPOSER } from "../testing/composer.js";
 import { layContainersAt } from "../testing/container-width.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { relayout } from "../testing/resize-observer.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { AgentComposer } from "./agent-composer.js";
 import { useAgentComposer } from "./use-agent-composer.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * The agent's message box on a card too narrow for every press: the ⋯
@@ -76,10 +80,12 @@ afterEach(() => {
 /** An agent's box with everything its foot can carry: a pull request, a model, and a step's context. */
 function Box({ status }: { status: AgentStatus }): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
-    send: () => new Promise(ignore),
+    send: outboxed(() => new Promise(ignore)),
   });
 
   const [choice, choose] = useState({ model: "anthropic/claude-opus-5.5", effort: "high" });

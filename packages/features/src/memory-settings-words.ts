@@ -2,6 +2,7 @@
  * memory-settings-words.ts -- what Settings › Memory says, and how it orders the workspace's memories, on the desktop, the web, and the iOS app alike.
  */
 
+import { DAY_MS } from "@repo/runtime/vocabulary";
 import { MEMORY_SAVE_FAILURE, type MemorySaveAnswerView } from "./agent-view.js";
 import { MEMORY_BOUNDS, MEMORY_RECALL_WINDOW_DAYS, type MemorySummary } from "./memory-wire.js";
 import { PRODUCT_NAME } from "./product-name.js";
@@ -58,14 +59,22 @@ export function memorySaveRefusal(answer: MemorySaveAnswerView): string | undefi
   return "failure" in answer ? MEMORY_SAVE_REFUSAL[answer.failure] : undefined;
 }
 
-/** What a memory's recall columns say where agents were handed it in none of the window: no count, and never last. */
+/** What a memory's row says of its recalls besides their count: none in the window, when last, or never. */
 export const MEMORY_UNRECALLED_WORDS = {
-  NONE: "—",
-  NEVER: "Never",
+  NONE: "No recalls",
+  LAST: "Last",
+  NEVER: "Never recalled",
 } as const;
 
 /** What a caption says Recalls counts. */
 export const MEMORY_RECALLS_WORDS = `Recalls count the last ${MEMORY_RECALL_WINDOW_DAYS} days`;
+
+/** What a memory's row says of who saved it: "Saved 2h ago by" its keeper "from" the agent it came from. */
+export const MEMORY_SAVED_WORDS = {
+  SAVED: "Saved",
+  BY: "by",
+  FROM: "from",
+} as const;
 
 /** How often agents were handed a memory in the recall window, as a line says it: "3 recalls". */
 export function recallsText(recalls: number): string {
@@ -78,6 +87,94 @@ export function memoriesByUse(memories: readonly MemorySummary[]): readonly Memo
     (one, other) => other.recalls30d - one.recalls30d || other.updatedAt - one.updatedAt,
   );
 }
+
+/**
+ * The views the page lists the memories in, each for a job: every memory,
+ * the ones agents kept lately, for a member to read over while a wrong one
+ * is still young, and the ones no agent reaches, to prune.
+ */
+export const MEMORY_VIEW = {
+  ALL: "all",
+  NEW: "new",
+  UNUSED: "unused",
+} as const;
+
+export type MemoryView = (typeof MEMORY_VIEW)[keyof typeof MEMORY_VIEW];
+
+/** The views in the order the page offers them. */
+export const MEMORY_VIEWS: readonly MemoryView[] = [
+  MEMORY_VIEW.ALL,
+  MEMORY_VIEW.NEW,
+  MEMORY_VIEW.UNUSED,
+];
+
+/** What each view is called. */
+export const MEMORY_VIEW_WORDS = {
+  [MEMORY_VIEW.ALL]: "All",
+  [MEMORY_VIEW.NEW]: "New",
+  [MEMORY_VIEW.UNUSED]: "Unused",
+} as const satisfies Record<MemoryView, string>;
+
+/** How many days a memory counts as new after it was kept. */
+export const MEMORY_NEW_DAYS = 7;
+
+/**
+ * Whether `memory` stands in `view` at `now`. New is kept in the last
+ * `MEMORY_NEW_DAYS` days; Unused is recalled by no agent in the recall
+ * window, though kept before it opened, so a memory too young to have been
+ * reached is never offered to prune.
+ */
+function inView(memory: MemorySummary, view: MemoryView, now: number): boolean {
+  if (view === MEMORY_VIEW.NEW) return memory.createdAt > now - MEMORY_NEW_DAYS * DAY_MS;
+
+  if (view === MEMORY_VIEW.UNUSED) {
+    return memory.recalls30d === 0 && memory.createdAt <= now - MEMORY_RECALL_WINDOW_DAYS * DAY_MS;
+  }
+
+  return true;
+}
+
+/** When a memory was last of use: last recalled, or kept where no agent ever recalled it. */
+function lastUsed(memory: MemorySummary): number {
+  return memory.lastRecalledAt ?? memory.createdAt;
+}
+
+/**
+ * The memories `view` lists at `now`, in its order: All the most recalled
+ * first (`memoriesByUse`), New the most recently kept first, and Unused the
+ * longest out of use first, so what to prune leads.
+ */
+export function memoriesInView(
+  memories: readonly MemorySummary[],
+  view: MemoryView,
+  now: number,
+): readonly MemorySummary[] {
+  if (view === MEMORY_VIEW.ALL) return memoriesByUse(memories);
+  const listed = memories.filter((memory) => inView(memory, view, now));
+
+  return view === MEMORY_VIEW.NEW
+    ? listed.sort((one, other) => other.createdAt - one.createdAt)
+    : listed.sort((one, other) => lastUsed(one) - lastUsed(other));
+}
+
+/** What the Unused view's press that chooses all `count` of its memories says. */
+export function selectAllWords(count: number): string {
+  return `Select all ${count.toLocaleString("en-US")}`;
+}
+
+/** What each view says of what it lists, over its rows. */
+export const MEMORY_VIEW_CAPTION = {
+  [MEMORY_VIEW.ALL]: `Most recalled first. Recalls count the last ${MEMORY_RECALL_WINDOW_DAYS} days.`,
+  [MEMORY_VIEW.NEW]: `Saved in the last ${MEMORY_NEW_DAYS} days, newest first.`,
+  [MEMORY_VIEW.UNUSED]: `No agent recalled these in the last ${MEMORY_RECALL_WINDOW_DAYS} days, the longest unused first.`,
+} as const satisfies Record<MemoryView, string>;
+
+/** What a view with nothing in it says. */
+export const MEMORY_VIEW_EMPTY = {
+  [MEMORY_VIEW.ALL]: MEMORY_PAGE_WORDS.EMPTY,
+  [MEMORY_VIEW.NEW]: `No memories kept in the last ${MEMORY_NEW_DAYS} days.`,
+  [MEMORY_VIEW.UNUSED]: `Every memory older than ${MEMORY_RECALL_WINDOW_DAYS} days was recalled in the last ${MEMORY_RECALL_WINDOW_DAYS}.`,
+} as const satisfies Record<MemoryView, string>;
 
 /** What Delete asks, of `count` memories, and what it says of the `left` the reader may not delete. */
 export function forgetQuestion(count: number, left: number) {
