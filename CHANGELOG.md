@@ -81,6 +81,8 @@ Run button over an agent's tabs, from ⌘K, or with ⌥⌘R, in a cloud agent's
 sandbox or on the Mac a local agent runs on, for every workspace.
 ([#8962](https://github.com/ReviewStage/vespin/pull/8962))
 
+![The Run button over an agent's tabs reads Dev server, and its menu is open on acme/relay's run actions: Dev server, pnpm dev, marked Default with ⌥⌘R; Members tests, pnpm test src/members; Seed pending invites, pnpm db:seed --invites; Email previews, pnpm email:dev; and Edit run actions…](apps/web/public/changelog/0.34.0/run-actions.png)
+
 ### Automations once, and on merges and releases
 
 An automation can run once, at a date and time, and pauses itself after its
@@ -90,6 +92,8 @@ filtered by tag, with prereleases left out unless you include them.
 ([#8855](https://github.com/ReviewStage/vespin/pull/8855),
 [#8834](https://github.com/ReviewStage/vespin/pull/8834))
 
+![acme's Automations list: Write release notes, when a release by people is published in acme/relay or acme/web; Update docs after a merge, when a pull request by people is merged in acme/relay on the default branch; Morning Sentry triage, weekdays at 9:00 AM; and Check Postmark's domain verification, Once · Nov 20, 9:00 AM](apps/web/public/changelog/0.34.0/automations-once-and-on-merges-and-releases.png)
+
 ### Mention Vespin on GitHub
 
 A comment that mentions Vespin's GitHub App on an issue or a pull request starts
@@ -97,6 +101,8 @@ an agent as the member who wrote it, or sends the comment to the agent already
 working on that pull request. Vespin reacts with 👀 and posts the agent's first
 answer back as a comment with a link to it.
 ([#8898](https://github.com/ReviewStage/vespin/pull/8898))
+
+![A GitHub issue on acme/relay, Expired invite link shows a 404: Dana asks the vespin-agent bot to take it, her comment wearing a 👀 reaction, and the vespin-agent bot answers that it opened #232, which shows an expired link as no longer valid with Ask for a new invite, ending in Open in Vespin](apps/web/public/changelog/0.34.0/mention-vespin-on-github.png)
 
 ### Find any line sent to an agent
 
