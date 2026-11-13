@@ -89,21 +89,25 @@ const openMachine = (
     return id;
   });
 
-/** Where a call of the kind given, naming the machine given, goes, with the account's own listener answering as given. */
+/** Where a call of the kind given, naming the machine's id given, goes, with the account's own listener answering as given. */
 const route = (
   target: { readonly userId: string; readonly conversationId: string },
-  ask: { readonly kind?: MachineCommandKind; readonly name?: string; readonly account?: boolean },
+  ask: {
+    readonly kind?: MachineCommandKind;
+    readonly machineId?: string;
+    readonly account?: boolean;
+  },
 ) =>
   routeOf(target, {
     kind: ask.kind ?? MACHINE_COMMAND_KIND.SHELL,
-    name: ask.name,
+    machineId: ask.machineId,
     accountListening: () => Effect.succeed(ask.account ?? false),
     noMachine: NO_MACHINE,
   });
 
 it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
   it.effect(
-    "a call goes to the machine it names, else the agent's default, else the owner's that listened; one that cannot take it, a default that is gone, or a name two share is refused naming the ones that can",
+    "a call goes to the machine whose id it names, else the agent's default, else the owner's that listened; one that cannot take it, or a default that is gone, is refused listing the ids of the ones that can",
     () =>
       Effect.gen(function* () {
         const { owner, agentId, target } = yield* openPeople;
@@ -124,15 +128,13 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
 
         assert.deepEqual(yield* route(target, {}), {
           kind: MACHINE_ROUTE.REFUSED,
-          reason:
-            "Not run: Studio is offline, or Vespin isn't running on it. It can go to Laptop (Ana): name one in `machine`.",
+          reason: `Not run: Studio is offline, or Vespin isn't running on it. It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
           machine: { id: studio, name: "Studio", owner: ana },
         });
-        assert.deepEqual(yield* route(target, { name: "laptop" }), toLaptop, "by name, any case");
-        assert.deepEqual(yield* route(target, { name: "Mini" }), {
+        assert.deepEqual(yield* route(target, { machineId: laptop }), toLaptop, "by its id");
+        assert.deepEqual(yield* route(target, { machineId: "Laptop" }), {
           kind: MACHINE_ROUTE.REFUSED,
-          reason:
-            'Not run: no machine this task\'s agents may use is named "Mini". It can go to Laptop (Ana): name one in `machine`.',
+          reason: `Not run: no machine this task's agents may use has the id "Laptop". It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
         });
 
         yield* Database.use((db) =>
@@ -144,19 +146,7 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
 
         assert.deepEqual(yield* route(target, {}), {
           kind: MACHINE_ROUTE.REFUSED,
-          reason:
-            "Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it. It can go to Laptop (Ana): name one in `machine`.",
-        });
-
-        const twin = yield* openMachine(owner, "LAPTOP", true);
-        const shared = yield* route(target, { name: "Laptop" });
-
-        assert.equal(shared.kind, MACHINE_ROUTE.REFUSED, "a name two machines share");
-        assert.ok(shared.kind === MACHINE_ROUTE.REFUSED && shared.reason.includes(laptop));
-        assert.ok(shared.kind === MACHINE_ROUTE.REFUSED && shared.reason.includes(twin));
-        assert.deepEqual(yield* route(target, { name: twin }), {
-          kind: MACHINE_ROUTE.MACHINE,
-          machine: { id: twin, name: "LAPTOP", owner: ana },
+          reason: `Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it. It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
         });
       }),
   );
@@ -168,7 +158,7 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
         const { owner, teammate, workspace, taskId, target } = yield* openPeople;
         const bens = yield* openMachine(teammate, "Studio", true, MACHINE_COMMAND_MODE.NEVER);
         yield* followTask(owner, { taskId, followerId: teammate, machines: true });
-        const computer = { kind: MACHINE_COMMAND_KIND.COMPUTER, name: "Studio" };
+        const computer = { kind: MACHINE_COMMAND_KIND.COMPUTER, machineId: bens };
         const off = yield* route(target, computer);
 
         yield* setWorkspaceExperiment({
@@ -179,7 +169,7 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
         });
 
         const on = yield* route(target, computer);
-        const shell = yield* route(target, { name: "Studio" });
+        const shell = yield* route(target, { machineId: bens });
         yield* setFollowerMachines(teammate, taskId, false);
         const switchedOff = yield* route(target, computer);
 
