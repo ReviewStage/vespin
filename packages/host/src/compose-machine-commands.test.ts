@@ -680,6 +680,59 @@ it.effect(
 );
 
 it.effect(
+  "after an upload with an app the helper could not name, putting the apps back as they were posts them again",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+      const bundleId = SIMULATOR.bundleId ?? "";
+      const flaky = "com.example.Flaky";
+
+      // The helper is always too busy to name the flaky app.
+      const helper: ComputerUseHelperSeam = {
+        ask: (request, within, stillLet) =>
+          request.op === COMPUTER_HELPER_OP.DESCRIBE_APP && request.app === flaky
+            ? Effect.succeed({ failure: COMPUTER_HELPER_FAILURE.FAILED, message: "Busy." })
+            : scripted.helper.ask(request, within, stillLet),
+      };
+
+      const service = scriptedService();
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        computer: { helper, enabled: true, allowed: [] },
+        device: { id: "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13", apps: [bundleId] },
+      };
+
+      const { composer, moved } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        gate,
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+
+          if (gate.device !== undefined) gate.device.apps = [bundleId, flaky];
+          yield* moved;
+          yield* settled;
+
+          if (gate.device !== undefined) gate.device.apps = [bundleId];
+          yield* moved;
+          yield* settled;
+        }),
+      );
+
+      assert.deepEqual(
+        service.postedLooks.map((looks) => looks.map((look) => look.app)),
+        [[bundleId], [bundleId, flaky], [bundleId]],
+      );
+    }),
+);
+
+it.effect(
   "a Mac whose Settings refuse the service's settings writes them again after a rest, and never carries its own up over them",
   () =>
     Effect.gen(function* () {
