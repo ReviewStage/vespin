@@ -35,9 +35,10 @@ import {
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactNode } from "react";
+import { useScaledSize } from "./accessibility.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import type { MenuChoice } from "./list-row.js";
+import { choiceColor, type MenuChoice } from "./list-row.js";
 import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -54,8 +55,9 @@ export const BUTTON_LOOK = {
 
 export type ButtonLook = (typeof BUTTON_LOOK)[keyof typeof BUTTON_LOOK];
 
-/** How big a button is drawn: a row's, or a screen's own act. */
+/** How big a button is drawn: a capsule inside a list row, a row's, or a screen's own act. */
 export const BUTTON_SIZE = {
+  SMALL: "small",
   REGULAR: "regular",
   LARGE: "large",
 } as const;
@@ -107,6 +109,8 @@ export function Button(props: ButtonProps) {
       modifiers={[
         buttonStyle(look),
         controlSize(size),
+        // Note that a small button stands in a list row as a capsule, as the App Store's Get and Settings' Add do.
+        ...(size === BUTTON_SIZE.SMALL ? [SwiftModifiers.buttonBorderShape("capsule")] : []),
         ...(accent ? [tint(filled ? colors.ACCENT : colors.TEXT)] : []),
         ...(filled ? [foregroundStyle(colors.ON_ACCENT)] : []),
         disabledModifier(props.disabled === true),
@@ -309,7 +313,7 @@ export type FieldMenu = {
 };
 
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
-function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
+function fieldMark(props: FieldChipProps, colors: BrandColors, glyphSize: number): ReactNode {
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
 
   if (props.face !== undefined) {
@@ -317,9 +321,7 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   }
 
   if (props.symbol !== undefined) {
-    return (
-      <Image {...glyphImage(props.symbol)} size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />
-    );
+    return <Image {...glyphImage(props.symbol)} size={glyphSize} color={colors.TEXT_MUTED} />;
   }
 
   if (props.mark !== undefined) {
@@ -342,6 +344,7 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
  */
 export function FieldChip(props: FieldChipProps) {
   const colors = useColors();
+  const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
   const { menu } = props;
 
   const capsule = (
@@ -354,7 +357,7 @@ export function FieldChip(props: FieldChipProps) {
           : []),
       ]}
     >
-      {fieldMark(props, colors)}
+      {fieldMark(props, colors, glyphSize)}
       <CapsuleWords label={props.label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
     </HStack>
   );
@@ -375,7 +378,7 @@ export function FieldChip(props: FieldChipProps) {
         <Toggle
           // Note that a choice is keyed by its place, since two members may share a name.
           key={at}
-          {...actContent(choice.label, choice.symbol)}
+          {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />

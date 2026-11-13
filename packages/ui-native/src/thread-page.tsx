@@ -34,6 +34,7 @@ import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
+import { BarContent } from "./bar-content.js";
 import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage } from "./glyph.js";
@@ -41,7 +42,13 @@ import { actContent } from "./glyph-label.js";
 import { CopyWordsSwiftMenu } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
-import { BAR_ITEM_MENU, type BarMenu, BarMenuItem } from "./split-view.js";
+import {
+  BAR_ITEM_MENU,
+  type BarAction,
+  type BarMenu,
+  BarMenuItem,
+  barActItems,
+} from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -139,7 +146,9 @@ type ThreadPageProps = {
   readonly standing?: string | undefined;
   /** The open ask's card, such as its options, steps, or fields, under the messages. */
   readonly ask?: ReactNode | undefined;
-  /** The thread's ⋯ menu, such as Resolve, in a split view's detail bar; a compact window's stack holds it in its own bar. */
+  /** The thread's main acts as glyphs before its ⋯ in a split view's detail bar, such as Resolve; none in a compact window, whose ⋯ holds them. */
+  readonly acts?: readonly BarAction[] | undefined;
+  /** The thread's ⋯ menu, such as Copy link, in a split view's detail bar; a compact window's stack holds it in its own bar. */
   readonly menu?: BarMenu | undefined;
   /** What stands at the page's foot under its scroll, such as a split view's composer (`ComposerFoot`). */
   readonly foot?: ReactNode | undefined;
@@ -380,8 +389,19 @@ function MessageView({
  * thread's document moves, and the open ask's card stands under the last.
  */
 export function ThreadPage(props: ThreadPageProps) {
-  const { path, status, pathActions, title, messages, ask, menu, foot, standing, ...drawing } =
-    props;
+  const {
+    path,
+    status,
+    pathActions,
+    title,
+    messages,
+    ask,
+    acts = [],
+    menu,
+    foot,
+    standing,
+    ...drawing
+  } = props;
 
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
@@ -413,16 +433,17 @@ export function ThreadPage(props: ThreadPageProps) {
         </ScrollView>
         {foot}
       </VStack>
-      <Toolbar.Content>
+      <BarContent>
         <ToolbarItem placement="principal">
           <PathTitle path={path} status={status} actions={pathActions} />
         </ToolbarItem>
+        {barActItems(acts)}
         {menu === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
             <BarMenuItem menu={menu} />
           </ToolbarItem>
         )}
-      </Toolbar.Content>
+      </BarContent>
     </Toolbar>
   );
 }
