@@ -1,0 +1,6 @@
+#9020 round 2 (iPhone 18 Pro; light at AX3 accessibility-extra-large, dark at the default size; #9020 at b7a973a0e among round 2's heads)
+PASS. r9020.yaml ran clean in both (0 fails).
+- Switcher at AX3: names and subtitles wrap onto lines of their own ("Ada / Lovelace / Personal / workspace"), the check stays at the trailing edge, centered on the row, and nothing clips. Relay, New workspace, Workspace settings and the Settings row all wrap cleanly.
+- Separators start under the words, not under the avatar or glyph, at both sizes (Ada Lovelace / Relay, New workspace / Workspace settings).
+- Account: Sign out and Delete account are centered in their rows, red, at both sizes; the AX3 header (avatar, name, address, "Signed in with GitHub") is centered and whole.
+- Settings root at AX3: the account row's address breaks as "ada@exam-/ple.com", the system's own hyphenation, which is expected at this size.

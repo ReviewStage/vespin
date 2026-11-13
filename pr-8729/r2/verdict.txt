@@ -1,0 +1,5 @@
+#8729 round 2 (iPhone 18 Pro, light and dark; built with #8729 at 70ac2d0a4 among round 2's heads on main 16a63af7f)
+PASS on what stills can show. r8729.yaml ran clean in both looks (0 fails).
+- 2-first-screen: the Inbox is drawn whole on the first frame Maestro sees, with the tabs, rows and badge, in both looks. No blank or half-drawn screen.
+- 1-at-launch caught the Home Screen, before the app had drawn, so it shows nothing of the splash itself.
+- Not proven: that the splash holds with no blank frame between it and the Inbox. That needs a launch video; ask if you want one (simctl recordVideo, one launch per look).
