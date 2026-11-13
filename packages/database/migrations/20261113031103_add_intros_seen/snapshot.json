@@ -1,8 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "c66a4386-a726-401f-ba8f-68069987a5e4",
-  "prevIds": ["90ce0e78-7345-46c5-8bb6-430ac9c83551"],
+  "id": "721f7e1b-d1f1-45d2-84fc-fafe330fd636",
+  "prevIds": ["bc5086cb-6586-455c-8103-a585b0129c69"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -613,6 +613,12 @@
     {
       "isRlsEnabled": false,
       "name": "hosted_usage",
+      "entityType": "tables",
+      "schema": "public"
+    },
+    {
+      "isRlsEnabled": false,
+      "name": "voice_call",
       "entityType": "tables",
       "schema": "public"
     },
@@ -13230,6 +13236,123 @@
       "name": "id",
       "entityType": "columns",
       "schema": "public",
+      "table": "voice_call"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "live_session_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "voice_call"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "caller_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "voice_call"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "agent_id",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "voice_call"
+    },
+    {
+      "type": "text",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "voice",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "voice_call"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "started_at",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "voice_call"
+    },
+    {
+      "type": "integer",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "1",
+      "generated": null,
+      "identity": null,
+      "name": "lease_epoch",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "voice_call"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "lease_until",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "voice_call"
+    },
+    {
+      "type": "bigint",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "told_seq",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "voice_call"
+    },
+    {
+      "type": "uuid",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "gen_random_uuid()",
+      "generated": null,
+      "identity": null,
+      "name": "id",
+      "entityType": "columns",
+      "schema": "public",
       "table": "workspace_environment_variable"
     },
     {
@@ -20274,6 +20397,32 @@
     },
     {
       "nameExplicit": false,
+      "columns": ["caller_id"],
+      "schemaTo": "public",
+      "tableTo": "user",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "voice_call_caller_id_user_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "voice_call"
+    },
+    {
+      "nameExplicit": false,
+      "columns": ["agent_id"],
+      "schemaTo": "public",
+      "tableTo": "agent",
+      "columnsTo": ["id"],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "name": "voice_call_agent_id_agent_id_fkey",
+      "entityType": "fks",
+      "schema": "public",
+      "table": "voice_call"
+    },
+    {
+      "nameExplicit": false,
       "columns": ["organization_id"],
       "schemaTo": "public",
       "tableTo": "organization",
@@ -21250,6 +21399,14 @@
       "name": "task_section_pkey",
       "schema": "public",
       "table": "task_section",
+      "entityType": "pks"
+    },
+    {
+      "columns": ["id"],
+      "nameExplicit": false,
+      "name": "voice_call_pkey",
+      "schema": "public",
+      "table": "voice_call",
       "entityType": "pks"
     },
     {
