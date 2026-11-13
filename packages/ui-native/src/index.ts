@@ -57,7 +57,7 @@ export {
   SkillSuggestions,
 } from "./composer-head.js";
 
-export { EmptyState } from "./empty-state.js";
+export { EmptyState, NoSelection } from "./empty-state.js";
 
 export {
   FailureNoticeProvider,
