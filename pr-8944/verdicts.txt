@@ -4,3 +4,6 @@ AX3 (ax8944), IPH light: PASS on rings, ask glyph, unread dot, composer (pr-8944
 AX3 account row -> Settings (r3, sheet dragged full): PASS. Account row stands last in its own card; Settings root wraps cleanly at AX3 (r3-3, r3-4).
 Section + 44 pt target: FAIL at this head alone. A tap ~20 pt left of the Sub-tasks + glyph (inside a trailing 44 pt frame) did nothing: r3-1 and r3-2 byte-identical. Code agrees: row-list.tsx's SectionAddButton puts frame(44x44) and contentShape on the Button, not its label, the class #8934 fixed; a borderless button answers only where its label is hit, so only the glyph takes a press. #8935 (open, unarmed) moves both onto the glyph. Pass once #8935 lands or #8944 carries the same move; one retake of the 20 pt tap confirms.
 Side notes: at AX3 the switcher's 'Workspace settings' wraps with 'settings' under the gear (#9020's area); the email hyphenates as ada@exam-ple.com.
+
+RETAKE at ab0a15f0d (built ab0a15f0d; main merged for settings-form.tsx), iPhone 18 Pro light, AX3, 0 failed steps, shots under pr-8944/retake/.
+PASS - section +'s 44 pt target: a tap at 89%,64%, about 17-20 pt left of Sub-tasks' + (the + glyph at ~93%), opens its menu: New sub-task, Link existing task (r3-2). Shot r3-1 shows the header before the tap, with Sub-tasks 0/1 and the + at the row's end.
