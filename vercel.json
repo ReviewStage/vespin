@@ -264,6 +264,10 @@
           "dest": "/api/preview-proxy.js?route=previews/proxy"
         },
         {
+          "src": "/api/maintenance/workspace-drives",
+          "dest": "/api/workspace-drive-cleanup.js?route=maintenance/workspace-drives"
+        },
+        {
           "src": "/api/browser/live",
           "dest": "/api/browser/live"
         },
@@ -525,6 +529,11 @@
     "maintenance-sweep": {
       "schedule": "* * * * *",
       "path": "/api/maintenance/sweep",
+      "requestMethod": "GET"
+    },
+    "workspace-drive-cleanup": {
+      "schedule": "0 8 * * *",
+      "path": "/api/maintenance/workspace-drives",
       "requestMethod": "GET"
     }
   },

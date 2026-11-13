@@ -2769,6 +2769,14 @@ a 60-second duration (`MAINTENANCE_SWEEP.MAX_DURATION_SECONDS` in
 `src/maintenance/maintenance-app.ts`, hands it the deployment's seams. A static
 schedule runs only on production unless it is enabled on a Preview branch by hand.
 
+Once a day, at 08:00 UTC, the `workspace-drive-cleanup` schedule calls
+`apps/web/server/routes/maintenance/workspace-drives.ts` under the same
+`CRON_SECRET`, in a function group of its own (`workspace-drive-cleanup`, 800
+seconds). It prunes from each workspace's drive the repositories no agent of
+the workspace started in for 30 days (`src/agents/workspace-drive-cleanup.ts`),
+a few workspaces at once, a drive a fill holds or a prune that failed logged
+and passed by for the next day's run.
+
 The sweep ends what no request will. `MaintenanceSweeps`
 (`src/maintenance/maintenance-sweep.ts`) runs its sweeps in turn and
 answers what each did; one that fails is logged and answered as failed while

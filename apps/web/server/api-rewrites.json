@@ -203,6 +203,10 @@
     "dest": "/api/preview-proxy.js?route=previews/proxy"
   },
   {
+    "src": "/api/maintenance/workspace-drives",
+    "dest": "/api/workspace-drive-cleanup.js?route=maintenance/workspace-drives"
+  },
+  {
     "src": "/api/browser/live",
     "dest": "/api/browser/live"
   },

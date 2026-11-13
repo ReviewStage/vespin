@@ -11,14 +11,17 @@
 /** Where Vercel's scheduler calls the sweep, fixed here so its schedule can be checked against it. */
 export const MAINTENANCE_SWEEP_PATH = "/api/maintenance/sweep";
 
+/** Where Vercel's scheduler calls the daily workspace drive cleanup (`workspace-drive-cleanup-app.ts`). */
+export const WORKSPACE_DRIVE_CLEANUP_PATH = "/api/maintenance/workspace-drives";
+
 /** The rotation's rewrap of every stored provider key (`provider-key-rewrap.ts`), asked by hand under the same secret. */
 export const MAINTENANCE_PROVIDER_KEYS_REWRAP_PATH = "/api/maintenance/provider-keys-rewrap";
 
 export const CRON_ENVIRONMENT = {
   /**
    * Vercel sends this as the bearer on every scheduled call once it is set.
-   * It guards the maintenance routes alone, the sweep, and the rewrap and
-   * the schedules' backfill asked by hand.
+   * It guards the maintenance routes alone, the sweep, the workspace drive
+   * cleanup, and the rewrap and the schedules' backfill asked by hand.
    */
   CRON_SECRET: "CRON_SECRET",
 } as const;
@@ -36,4 +39,15 @@ export const MAINTENANCE_SWEEP = {
   MAX_DURATION_SECONDS: 300,
   /** The schedule the root `vercel.json` calls the sweep on, which its Sentry monitor expects a check-in against. */
   CRONTAB: "* * * * *",
+} as const;
+
+export const WORKSPACE_DRIVE_CLEANUP = {
+  /**
+   * The function duration the cleanup's bundle declares: the platform's
+   * longest, since it prunes every workspace's drive in the one call, and
+   * each prune opens a sandbox on its drive.
+   */
+  MAX_DURATION_SECONDS: 800,
+  /** The schedule the root `vercel.json` calls the cleanup on: once a day, at 08:00 UTC. */
+  CRONTAB: "0 8 * * *",
 } as const;
