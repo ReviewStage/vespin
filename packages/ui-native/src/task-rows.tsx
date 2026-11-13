@@ -88,6 +88,8 @@ function linkInk(colors: BrandColors, tone: LinkRowTone): string {
 /** A row's 12 pt words at the line's end, in the muted ink or the one given, with tabular figures. */
 function EndWords({ words, ink }: { readonly words: string; readonly ink?: string | undefined }) {
   const colors = useColors();
+  // Note that at an accessibility size the end stands under the title with the row's width, so a long name, such as a device's, wraps to a second line rather than being cut.
+  const lines = useAccessibilitySize() ? 2 : 1;
 
   return (
     <Text
@@ -95,7 +97,7 @@ function EndWords({ words, ink }: { readonly words: string; readonly ink?: strin
         font({ textStyle: TYPE_ROLE.TIME }),
         monospacedDigit(),
         foregroundStyle(ink ?? colors.TEXT_MUTED),
-        lineLimit(1),
+        lineLimit(lines),
       ]}
     >
       {words}
