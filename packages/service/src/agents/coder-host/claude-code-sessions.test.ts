@@ -4295,7 +4295,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a Start in a workspace with no drive yet is created from the image on an empty drive of its own and clones its repository whole onto it, filling no workspace drive, and reports the drive gone",
+    "a Start in a workspace with no drive yet is created from the image on an empty drive of its own and clones its repository whole onto it, filling no workspace drive, and reports nothing broken",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -4330,7 +4330,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.deepEqual(api.drives, [drive], "no drive but its own was made or filled");
         assert.deepEqual(
           reported.filter((each) => each.broken !== undefined),
-          [{ workspaceId: agent.organizationId, broken: "gone" }],
+          [],
         );
         const visible = JSON.stringify([api.commands, api.runs, api.sandboxes]);
         assert.equal(visible.includes(GITHUB_FIXTURE_INSTALLATION_TOKEN), false);
