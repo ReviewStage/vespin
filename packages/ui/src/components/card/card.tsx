@@ -89,11 +89,11 @@ export const CARD_ELEMENT = {
 
 export type CardElement = (typeof CARD_ELEMENT)[keyof typeof CARD_ELEMENT];
 
-/** The shadow a card stands on: none; a hairline's lift off the well it stands in, as a board's card; or a menu's, standing over the page, as an open comment thread or a summary drawn over its rail. */
+/** The shadow a card stands on: none; a hairline's lift off the well it stands in, as a board's card; Geist's card shadow, which every card stands on unless it asks for another or sits in the page's well; a menu's, standing over the page, as an open comment thread or a summary drawn over its rail; or a dialog's. */
 export const CARD_SHADOW = {
   NONE: "none",
   SOFT: "soft",
-  /** Geist's card shadow (`--ui-shadow-card`), standing a card off the page as a message box does. */
+  /** Geist's card shadow (`--ui-shadow-card`), standing a card off the page: every card's unless it asks for another. */
   CARD: "card",
   MENU: "menu",
   /** A dialog's, standing over the dimmed window. */
@@ -166,16 +166,6 @@ const HOVER_CLASS: Record<CardHover, string> = {
     "hover:not-data-[drop-target=true]:border-border-strong data-[lit=true]:not-data-[drop-target=true]:border-border-strong hover:shadow-card-lift data-[lit=true]:shadow-card-lift",
 };
 
-/**
- * A card set inside a card whose edge shows: its own edge and shadow drop,
- * its fill kept, so two edges never stand one inside the other. Note that a
- * well's edge is unseen, and so is a bare dialog's, a window's or a sheet's
- * (`DIALOG_SIZE`), whose owner draws the card that is its frame, so a card
- * in either keeps its own; and a drop target keeps its ring.
- */
-const NESTED_CLASS =
-  "in-[.ui-card:not([data-look=well],[data-size=window],[data-size=sheet])]:not-data-[drop-target=true]:border-transparent in-[.ui-card:not([data-look=well],[data-size=window],[data-size=sheet])]:shadow-none";
-
 /** The edge while what it holds stops its form, shaken and in the danger ink, as a text field's is. */
 const INVALID_CLASS =
   "data-[invalid=true]:animate-field-shake data-[invalid=true]:border-destructive";
@@ -219,6 +209,11 @@ function transitionClass(look: CardLook, hover: CardHover): string {
   return "transition-[border-color] duration-(--ui-duration-hover) ease-plain";
 }
 
+/** The shadow a card stands on where it asks for none in particular: Geist's card shadow, but for a well, which has no edge to stand a shadow under. */
+function defaultShadow(look: CardLook): CardShadow {
+  return look === CARD_LOOK.WELL ? CARD_SHADOW.NONE : CARD_SHADOW.CARD;
+}
+
 /** Every class a card's frame wears for the choices made, its owner's last. */
 function frameClass(
   look: CardLook,
@@ -238,7 +233,6 @@ function frameClass(
     dashed ? "border-dashed" : "",
     SHADOW_CLASS[shadow],
     HOVER_CLASS[hover],
-    NESTED_CLASS,
     INVALID_CLASS,
     DROP_TARGET_CLASS,
     transitionClass(look, hover),
@@ -254,7 +248,7 @@ export function Card({
   look = CARD_LOOK.SURFACE,
   corner = CARD_CORNER.CARD,
   padding = CARD_PADDING.REGULAR,
-  shadow = CARD_SHADOW.NONE,
+  shadow: asked,
   hover = CARD_HOVER.NONE,
   lit = false,
   dashed = false,
@@ -268,7 +262,8 @@ export function Card({
   look?: CardLook;
   corner?: CardCorner;
   padding?: CardPadding;
-  shadow?: CardShadow;
+  /** The shadow it stands on; Geist's card shadow where none is asked for, but in a well. */
+  shadow?: CardShadow | undefined;
   /** How it answers the pointer resting on it, where a press covers it. */
   hover?: CardHover;
   /** Whether it holds its hover's look with no pointer on it, as while the menu it opened stands or its words are pointed at elsewhere. */
@@ -283,6 +278,8 @@ export function Card({
   ref?: Ref<HTMLElement> | undefined;
   children: ReactNode;
 }): React.JSX.Element {
+  const shadow = asked ?? defaultShadow(look);
+
   return (
     <ShadcnCard
       {...rest}

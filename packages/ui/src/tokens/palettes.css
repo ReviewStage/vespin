@@ -35,8 +35,9 @@
    A role names a step of Geist's (`geist.css`, generated from `@repo/brand`'s
    `geist.mjs`) wherever Geist has one: the fills and edges are its
    gray-alpha steps (100 a hover, 200 a strong fill, 300 a chosen one, 500 a
-   press; 400 the border, 500 the strong edge, 600 the chosen edge), and the
-   web's fields its background-100. A literal here is a color Geist has no
+   press; 400 the border, 500 the strong edge, 600 the chosen edge, each
+   edge a step softer in the dark, 200 and 400), and the web's fields its
+   background-100. A literal here is a color Geist has no
    step for: a shadow, a scrim, a veil, the tooltip's pill, find's yellows,
    the code's own words, and the switch's and scrollbar's alphas; and the
    chart's series, Geist's light teal, purple, green, pink, and gray held in
@@ -76,8 +77,10 @@
      or chosen in a set. */
   --ui-color-fill-current: color-mix(in srgb, var(--ui-color-accent-text) 12%, transparent);
   --ui-color-fill-pressed: var(--geist-gray-alpha-500);
-  --ui-color-border: var(--geist-gray-alpha-400);
-  --ui-color-border-strong: var(--geist-gray-alpha-500);
+  /* The edges are a step softer in the dark than the light's, where a white
+     hairline reads stronger on near-black than a black one on white. */
+  --ui-color-border: light-dark(var(--geist-gray-alpha-400), var(--geist-gray-alpha-200));
+  --ui-color-border-strong: light-dark(var(--geist-gray-alpha-500), var(--geist-gray-alpha-400));
   --ui-color-border-selected: var(--geist-gray-alpha-600);
   /* The hairline round a row whose menu stands open, so the menu is plainly
      about it: soft, since the menu beside it says the rest. */
@@ -235,8 +238,8 @@
      or chosen in a set. */
   --ui-color-fill-current: color-mix(in srgb, var(--ui-color-accent-text) 12%, transparent);
   --ui-color-fill-pressed: var(--geist-gray-alpha-500);
-  --ui-color-border: var(--geist-gray-alpha-400);
-  --ui-color-border-strong: var(--geist-gray-alpha-500);
+  --ui-color-border: var(--geist-gray-alpha-200);
+  --ui-color-border-strong: var(--geist-gray-alpha-400);
   --ui-color-border-selected: var(--geist-gray-1000);
   /* Note that a row's open-menu ring is the desktop's soft one, not the
      selected edge, which stands as strong as the keyboard's ring. */
