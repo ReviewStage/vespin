@@ -209,7 +209,9 @@ export const COMPUTER_TOOL = {
     "and read the app again after you act, since its numbers change with it. A press of an " +
     "element by its number, or of a web page's button or link at a point, answers pressed " +
     "once the window's elements changed after it, and pressed_unconfirmed where they did not, " +
-    "which may still have acted, so read the app again before pressing again; a click at any " +
+    "which may still have acted, so read the app again before pressing again. A ⌘ shortcut " +
+    "the app's menus hold is pressed through that menu item and answers the same way; any " +
+    "other key answers sent. A click at any " +
     "other point answers only that it was sent, and an app in the background, a browser above " +
     "all, may drop it, so press an element by its number where one serves. An app not " +
     "running is opened behind the developer's windows. The developer's Mac asks them the " +
