@@ -2,6 +2,7 @@
 
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
+import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
@@ -36,6 +37,7 @@ import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
 import { ToneGlyph } from "./marks.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
+import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
@@ -552,6 +554,10 @@ interface RowDrawing {
   readonly pullRequestActs?: ((item: PullRequestItem) => readonly PullRequestAct[]) | undefined;
   /** The answer the agent holds a call for, by the call's id; none where it holds none. */
   readonly heldCall?: ((callId: string) => HeldCall | undefined) | undefined;
+  /** How a suggestion the agent wrote into its words stands, by its button and the words it was written with; every suggestion is drawn as its plain link where none is given. */
+  readonly suggestion?:
+    | ((link: ReplyButtonLink, words: string) => SuggestionLook | undefined)
+    | undefined;
 }
 
 /** A pull request an agent opened, as the transcript lists it. */
@@ -626,6 +632,7 @@ function TranscriptRow({
                 words={item.words}
                 repository={drawing.repository}
                 onOpenLink={drawing.onOpenLink}
+                suggestion={drawing.suggestion}
               />
             </View>
           </CopyWordsMenu>

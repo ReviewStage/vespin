@@ -100,7 +100,7 @@ export {
 
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 
-export { markdownGithubPages } from "./markdown-model.js";
+export { markdownGithubPages, markdownReplyButtons } from "./markdown-model.js";
 
 export { MarkdownPage } from "./markdown-page.js";
 
@@ -201,6 +201,8 @@ export {
 } from "./split-view.js";
 
 export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
+
+export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
 export { askForName, type NameAsk, shareLink, shareWords } from "./system-asks.js";
 
