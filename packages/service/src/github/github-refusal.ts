@@ -48,6 +48,9 @@ export function logGitHubReadFailure(failure: GitHubReadFailure): Effect.Effect<
 export function logWorkspaceReadFailure(failure: GitHubWorkspaceReadFailure): Effect.Effect<void> {
   return Match.value(failure).pipe(
     Match.tag(...GITHUB_READ_FAILURE_TAGS, logGitHubReadFailure),
+    Match.tag("GitHubMemberTokensUnavailable", (unavailable) =>
+      Effect.logWarning(`Hosted store unavailable: ${unavailable.message}`),
+    ),
     Match.orElse(logStoreFailure),
   );
 }

@@ -11,6 +11,7 @@ import {
   type GitHubTokenAnswer,
   githubTokenAnswerSchema,
 } from "@repo/features/github-token-wire";
+import { MEMBER_TOKEN_ABSENCE } from "@repo/github";
 import { unparsedWire, type WireBoundaryInput } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { HTTP_STATUS, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
@@ -22,7 +23,7 @@ import { recordingProductAnalytics, SERVER_EVENT } from "../events/server-events
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { fixtureGitHubApp, GITHUB_APP_SETTINGS } from "../testing/github-app-fake.js";
 import { hostedAnswer } from "../testing/hosted-route.js";
-import { GITHUB_TOKEN_ABSENCE, memberGitHubToken } from "./github-token.js";
+import { memberGitHubToken } from "./github-token.js";
 import { githubTokenProcedures } from "./github-token-procedures.js";
 
 /**
@@ -265,7 +266,7 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
           Effect.provideService(HostedEnvironment, ENVIRONMENT),
         );
 
-        assert.deepEqual(afterUse, Result.fail(GITHUB_TOKEN_ABSENCE.INVALID));
+        assert.deepEqual(afterUse, Result.fail(MEMBER_TOKEN_ABSENCE.INVALID));
         assert.equal(answerOf(yield* ask(owner)).token?.status, GITHUB_TOKEN_STATUS.INVALID);
 
         assert.deepEqual(answerOf(yield* ask(owner, "DELETE")), { token: null });
@@ -274,7 +275,7 @@ it.layer(getTestDB())("the GitHub token procedures", (it) => {
           Effect.provideService(HostedEnvironment, ENVIRONMENT),
         );
 
-        assert.deepEqual(removed, Result.fail(GITHUB_TOKEN_ABSENCE.NONE));
+        assert.deepEqual(removed, Result.fail(MEMBER_TOKEN_ABSENCE.NONE));
       }),
   );
 
