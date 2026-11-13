@@ -7,7 +7,7 @@ import { Effect } from "effect";
 import Constants from "expo-constants";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.js";
-import { HostFailedScreen } from "../screens/host-failed.js";
+import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
 import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
 import {
@@ -114,15 +114,18 @@ function launchOptions(): MobileHostStartOptions {
  * Starts the host once, follows its document into a Query client of the
  * app's own, and draws the screens once the first reading is in it, so no
  * screen draws an empty document first. A host that cannot stand is said on
- * the console, reported to Sentry, and shown in the screens' place with Retry, which starts it
+ * the console, reported to Sentry, and shown in the screens' place with Try again, which starts it
  * again, rather than drawing an empty Inbox over nothing; a host that stands
  * but refuses its first read is said on the console too, and the screens
- * draw over the empty client, which the next delivery fills. The host is
- * drained as the tree unmounts, which on a device is the app ending.
+ * draw over the empty client, which the next delivery fills. Until the host
+ * stands, the brand's ground stands in the screens' place, since the splash
+ * comes down as the root first draws and an empty tree let the window's own
+ * black show between the two in dark mode. The host is drained as the tree
+ * unmounts, which on a device is the app ending.
  */
 export function HostProvider({ children }: { readonly children: ReactNode }) {
   const [standing, setStanding] = useState<Standing | undefined>(undefined);
-  // Each press of Retry starts the host anew.
+  // Each press of Try again starts the host anew.
   const [attempt, setAttempt] = useState(0);
   useEffect(() => {
     let live = true;
@@ -169,7 +172,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
     };
   }, [attempt]);
 
-  if (standing === undefined) return null;
+  if (standing === undefined) return <HostStartingScreen />;
 
   if ("failed" in standing) {
     return <HostFailedScreen onRetry={() => setAttempt((count) => count + 1)} />;

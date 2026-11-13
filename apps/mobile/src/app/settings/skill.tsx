@@ -5,7 +5,7 @@ import { formatBytes } from "@repo/features/number-format";
 import { fencedSkillFile, SKILLS_LINE } from "@repo/features/skills-settings-words";
 import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
-import { EmptyState, GLYPH, MarkdownPage, Screen } from "@repo/ui-native";
+import { BUTTON_LOOK, EmptyState, GLYPH, MarkdownPage, Screen } from "@repo/ui-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { useHostActs } from "../../host/host-provider.js";
@@ -39,7 +39,7 @@ export default function SkillScreen() {
   const [read, setRead] = useState<SkillRead>({ kind: SKILL_READ.READING });
   const [round, setRound] = useState(0);
 
-  // Note that a skill's files change only by a new install, so the page reads them once as it opens, and again only on Retry.
+  // Note that a skill's files change only by a new install, so the page reads them once as it opens, and again only on Try again.
   useEffect(() => {
     let held = true;
     acts[ACT_KIND.INSTALLED_SKILLS_READ]({ skillId: skill })
@@ -73,7 +73,8 @@ export default function SkillScreen() {
             title={SKILLS_LINE.VIEW_FAILED}
             symbol={GLYPH.FAILED}
             action={{
-              label: VERB.RETRY,
+              label: VERB.TRY_AGAIN,
+              look: BUTTON_LOOK.BORDERED,
               onPress: () => {
                 setRead({ kind: SKILL_READ.READING });
                 setRound((each) => each + 1);

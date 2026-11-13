@@ -230,9 +230,11 @@ export const SCOPE_LOOK = {
 
 export type ScopeLook = (typeof SCOPE_LOOK)[keyof typeof SCOPE_LOOK];
 
-/** A scope as its segment names it: its label, and its count after it where it has one. */
+/** A scope as its segment names it: its label, and its count after it where it lists any, as Mail names a mailbox, so a scope with none reads "Open" rather than "Open 0". */
 function segmentWords(scope: Scope): string {
-  return scope.count === undefined ? scope.label : `${scope.label} ${scope.count}`;
+  return scope.count === undefined || scope.count === 0
+    ? scope.label
+    : `${scope.label} ${scope.count}`;
 }
 
 /**

@@ -18,6 +18,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  BUTTON_LOOK,
   ConfirmAsk,
   EmptyState,
   GLYPH,
@@ -133,7 +134,8 @@ function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
           title={SKILLS_LINE.READ_FAILED}
           symbol={GLYPH.FAILED}
           action={{
-            label: VERB.RETRY,
+            label: VERB.TRY_AGAIN,
+            look: BUTTON_LOOK.BORDERED,
             onPress: () =>
               void acts[ACT_KIND.INSTALLED_SKILLS_RETRY]({ workspaceId }).catch((cause: unknown) =>
                 console.error("Reading the skills again did not go.", cause),

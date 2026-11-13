@@ -17,6 +17,7 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { selectWorkspaceMemories, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  BUTTON_LOOK,
   ConfirmAsk,
   EmptyState,
   GLYPH,
@@ -113,7 +114,8 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
           title={MEMORY_PAGE_WORDS.FAILED}
           symbol={GLYPH.FAILED}
           action={{
-            label: VERB.RETRY,
+            label: VERB.TRY_AGAIN,
+            look: BUTTON_LOOK.BORDERED,
             onPress: () => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost),
           }}
         />

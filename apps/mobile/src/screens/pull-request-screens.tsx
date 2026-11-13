@@ -38,6 +38,7 @@ import { workingTime } from "@repo/features/time-format";
 import type { AppHostRead } from "@repo/host/app-state";
 import {
   BAR_TITLE,
+  BUTTON_LOOK,
   CHECK_LOOK,
   CHECK_SUMMARY_LOOK,
   ConfirmAsk,
@@ -382,7 +383,13 @@ export function PullRequestScreen() {
             symbol={failed ? GLYPH.FAILED : GLYPH.PULL_REQUEST}
             loading={!failed}
             action={
-              failed ? { label: MENU_WORDS.TRY_AGAIN, onPress: () => void retry() } : undefined
+              failed
+                ? {
+                    label: MENU_WORDS.TRY_AGAIN,
+                    look: BUTTON_LOOK.BORDERED,
+                    onPress: () => void retry(),
+                  }
+                : undefined
             }
           />
         </Screen>

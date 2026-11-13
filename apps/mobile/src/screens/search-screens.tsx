@@ -4,8 +4,6 @@ import type { InboxItem } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import {
-  noResultsWords,
-  SEARCH_FINDS,
   SEARCH_FOUND_KIND,
   SEARCH_FOUND_TITLE,
   SEARCH_SCOPE,
@@ -14,7 +12,7 @@ import {
   scopedFound,
   searchPlaceholder,
 } from "@repo/features/search-found-model";
-import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
+import { CHOOSE_AN_ITEM_WORDS, NO_RESULTS_HINT, noResultsForWords } from "@repo/features/words";
 import {
   EmptyState,
   GLYPH,
@@ -190,14 +188,16 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
     onPress: () => setScope(each),
   }));
 
-  // Note that the scopes stand once anything is typed, and stay over a scope that found nothing, so another is one tap away.
+  // Note that nothing stands before anything is typed, as Apple's own search screens wait on the field; the scopes stand once anything is typed, and stay over a scope that found nothing, so another is one tap away.
   const results =
-    query.trim() === "" ? (
-      <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
-    ) : (
+    query.trim() === "" ? null : (
       <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
         {none ? (
-          <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
+          <EmptyState
+            title={noResultsForWords(query)}
+            symbol={GLYPH.SEARCH}
+            description={NO_RESULTS_HINT}
+          />
         ) : (
           <FoundList
             found={found}

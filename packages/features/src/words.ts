@@ -43,7 +43,7 @@ export const TERM = {
 /** The glossary's verbs: the one label each act goes by. */
 export const VERB = {
   SIGN_OUT: "Sign out",
-  RETRY: "Retry",
+  TRY_AGAIN: "Try again",
   RECONNECT: "Reconnect",
   OPEN: "Open",
   OPEN_IN_BROWSER: "Open in browser",
@@ -143,6 +143,14 @@ export function backToWords(place: string): string {
 export function noMatchWords(noun: Noun): string {
   return `No ${noun.many} match`;
 }
+
+/** What a search that found nothing says as its title, as Apple's apps head one: "No results for “ledger”". */
+export function noResultsForWords(query: string): string {
+  return `No ${TERM.RESULT.many} for “${query.trim()}”`;
+}
+
+/** The line under a search that found nothing, Apple's own. */
+export const NO_RESULTS_HINT = "Check the spelling or try a new search.";
 
 /** What a place with nothing in it yet says: "No tasks yet". */
 export function noneYetWords(noun: Noun): string {

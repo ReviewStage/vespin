@@ -22,6 +22,7 @@ import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   ActionRow,
+  BUTTON_LOOK,
   BUZZ,
   buzz,
   CodeRow,
@@ -259,7 +260,11 @@ function Pairing({ code }: { readonly code: string }) {
               <EmptyState
                 title={HOST_CONNECT_WORDS.UNREAD}
                 symbol={GLYPH.FAILED}
-                action={{ label: VERB.RETRY, onPress: () => void pairing.refetch() }}
+                action={{
+                  label: VERB.TRY_AGAIN,
+                  look: BUTTON_LOOK.BORDERED,
+                  onPress: () => void pairing.refetch(),
+                }}
               />
             ) : (
               <EmptyState title={HOST_CONNECT_WORDS.READING} symbol={PAIRING_SYMBOL} loading />

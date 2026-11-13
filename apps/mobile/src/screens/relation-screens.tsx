@@ -24,6 +24,7 @@ import {
   EmptyState,
   GLYPH,
   type Glyph,
+  glyphSymbol,
   LIST_LOOK,
   LinkRow,
   ListSection,
@@ -185,7 +186,11 @@ export function TaskRelationScreen({
         )}
       </Stack.Screen>
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={WORDS.CANCEL}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
     </>
   );

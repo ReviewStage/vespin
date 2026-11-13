@@ -59,7 +59,15 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { provenanceText } from "@repo/features/time-format";
-import { countWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
+import {
+  countWords,
+  NO_RESULTS_HINT,
+  noResultsForWords,
+  readFailedWords,
+  readingWords,
+  TERM,
+  VERB,
+} from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -217,11 +225,6 @@ const LINE_PART = " · ";
 
 /** No parent's sub-tasks stand open, as a section opens. */
 const NONE_OPEN: ReadonlySet<string> = new Set();
-
-/** What the list's search says where it finds nothing. */
-function noMatchWords(search: string): string {
-  return `No tasks match “${search}”.`;
-}
 
 /** A destination on vespin.dev in the workspace, opened in Safari, since the app draws no page for it yet. */
 function openOnWeb(destination: LinkDestination, workspace: Workspace | undefined): void {
@@ -856,7 +859,13 @@ function TasksTree({
 
   if (search.trim() !== "") {
     if (found.length === 0) {
-      return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
+      return (
+        <EmptyState
+          title={noResultsForWords(search)}
+          symbol={GLYPH.SEARCH}
+          description={NO_RESULTS_HINT}
+        />
+      );
     }
 
     return (
@@ -1624,7 +1633,7 @@ function ReadFailedRow({
     <LinkRow
       symbol={GLYPH.FAILED}
       label={words}
-      detail={VERB.RETRY}
+      detail={VERB.TRY_AGAIN}
       tone={LINK_ROW_TONE.ATTENTION}
       onPress={onRetry}
     />

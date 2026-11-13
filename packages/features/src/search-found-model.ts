@@ -18,7 +18,6 @@ import { cardTitle } from "./plain-words.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import { type SearchSubject, searchHit } from "./search-score.js";
 import type { TaskSummary } from "./task-wire.js";
-import { TERM } from "./words.js";
 import { taskKey } from "./workspace-key.js";
 
 /** The kinds a search finds, in the order their sections stand. */
@@ -65,14 +64,6 @@ export function searchPlaceholder(scope: SearchScope): string {
   return scope === SEARCH_SCOPE.ALL
     ? SEARCH_EVERYTHING
     : `Search ${SEARCH_SCOPE_TITLE[scope].toLowerCase()}`;
-}
-
-/** What the search says before anything is typed: what it finds. */
-export const SEARCH_FINDS = `Find a ${TERM.TASK.one}, an Inbox ${TERM.INBOX_ITEM.one}, or an ${TERM.AGENT.one}.`;
-
-/** What a search that found nothing says: "No results match “ledger”." */
-export function noResultsWords(query: string): string {
-  return `No ${TERM.RESULT.many} match “${query.trim()}”.`;
 }
 
 /** Each kind's rows a search found, best first. */

@@ -38,6 +38,7 @@ import {
   AskNote,
   AttachedPictures,
   BAR_TITLE,
+  BUTTON_LOOK,
   Composer,
   type ComposerMenu,
   ConfirmAsk,
@@ -782,7 +783,9 @@ export function AgentScreen() {
             title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
             symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
             loading: !failed,
-            action: failed ? { label: TRANSCRIPT_WORDS.RETRY, onPress: retry } : undefined,
+            action: failed
+              ? { label: TRANSCRIPT_WORDS.RETRY, look: BUTTON_LOOK.BORDERED, onPress: retry }
+              : undefined,
           }}
           older={older}
           heldCall={approvals.heldCall}
@@ -920,9 +923,11 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
-          {OPTIONS_WORDS.DONE}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={OPTIONS_WORDS.DONE}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>
@@ -1047,9 +1052,11 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Button onPress={() => router.back()}>
-          {PORTS_WORDS.DONE}
-        </Stack.Toolbar.Button>
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.CLOSE)}
+          accessibilityLabel={PORTS_WORDS.DONE}
+          onPress={() => router.back()}
+        />
       </Stack.Toolbar>
       <Screen>
         <SettingsForm>

@@ -34,7 +34,13 @@ import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
-import { CHOOSE_AN_ITEM_WORDS, SELECTION_WORDS, selectedWords } from "@repo/features/words";
+import {
+  CHOOSE_AN_ITEM_WORDS,
+  NO_RESULTS_HINT,
+  noResultsForWords,
+  SELECTION_WORDS,
+  selectedWords,
+} from "@repo/features/words";
 import {
   INBOX_FEED,
   type InboxFeed,
@@ -92,7 +98,6 @@ import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns, useInFront } from "../place-columns.js";
-import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
@@ -111,6 +116,9 @@ const INBOX_TITLE = "Inbox";
 
 /** The act under a read that failed, as the app's other failures say it, rather than the panel's Retry. */
 const TRY_AGAIN = "Try again";
+
+/** The compact list's search, which it never narrows by: the Search tab finds threads there. */
+const UNSEARCHED: InboxSearch = { search: "", setSearch: () => {} };
 
 /** What a pushed thread's screen says where the feed, once read, holds no such thread, such as one a link names that was deleted. */
 const THREAD_NOT_FOUND = "This thread isn't in your inbox";
@@ -141,11 +149,6 @@ const UNLISTED_AGENT = "Agent";
 
 /** How many of a thread's newest messages its row reads for its preview: more than the preview draws, since a file sent alone says nothing there. */
 const PREVIEW_TAIL = 6;
-
-/** What the list's search says where it finds nothing. */
-function noMatchWords(search: string): string {
-  return `No items match “${search}”.`;
-}
 
 type InboxRowsProps = {
   readonly look: ListLook;
@@ -362,7 +365,13 @@ function InboxEmpty({
   }
 
   if (search.trim() !== "") {
-    return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
+    return (
+      <EmptyState
+        title={noResultsForWords(search)}
+        symbol={GLYPH.SEARCH}
+        description={NO_RESULTS_HINT}
+      />
+    );
   }
 
   return <EmptyState title={INBOX_SHOW_EMPTY[INBOX_WHOSE.MINE][show]} symbol={GLYPH.INBOX} />;
@@ -893,34 +902,24 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
 
 // A compact window: the list under its scopes' segmented control, the account's photo
 // opening Settings and the workspace switcher beside it at the bar's leading
-// edge, and its search and its ⋯ menu as round
-// glass buttons at its trailing one, each row pushing its thread as the Stack's
-// next screen.
-function InboxStackList(words: InboxSearch) {
+// edge, and its ⋯ menu as a round glass button at its trailing one, each row
+// pushing its thread as the Stack's next screen. Note that it stands no
+// search of its own, since a compact window's tab bar, or the folded Duo's
+// rail, always stands the Search tab beside it, whose Inbox scope finds the
+// same threads, as Photos keeps one search; a regular window's list column
+// keeps its field, and the words typed there wait over a fold.
+function InboxStackList() {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
 
-  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing } =
-    useInboxScreen(words);
-
-  const field = useRefilledSearchField(search);
+  const { show, search, listing, acts, scopes, menu, remind, choosing } =
+    useInboxScreen(UNSEARCHED);
 
   // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does.
   return (
     <>
-      <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }}>
-        {choosing !== undefined ? null : (
-          <Stack.SearchBar
-            ref={field}
-            placeholder={SEARCH_INBOX}
-            placement="integratedButton"
-            allowToolbarIntegration={false}
-            onChangeText={(event) => setSearch(event.nativeEvent.text)}
-            onCancelButtonPress={() => setSearch("")}
-          />
-        )}
-      </Stack.Screen>
+      <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }} />
       {choosing !== undefined ? null : <SettingsBarButton switcher={switcher} />}
       <Stack.Toolbar placement="right">
         {choosing !== undefined ? (
@@ -1092,7 +1091,7 @@ export function InboxListScreen() {
   return sizeClass === WINDOW_SIZE_CLASS.REGULAR ? (
     <InboxSplitScreen selected={selected} select={select} words={{ search, setSearch }} />
   ) : (
-    <InboxStackList search={search} setSearch={setSearch} />
+    <InboxStackList />
   );
 }
 

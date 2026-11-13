@@ -56,12 +56,12 @@ appId: dev.vespin.ios
 # The iPad's top tab bar carries no id, so there the tab is the Search right of Tasks.
 - runFlow:
     when:
-      notVisible: "Find a task, an Inbox item, or an agent."
+      notVisible: "Search Vespin"
     commands:
       - tapOn:
           text: "Search"
           rightOf: "Tasks"
-- assertVisible: "Find a task, an Inbox item, or an agent."
+- assertVisible: "Search Vespin"
 - tapOn: "Search Vespin"
 - inputText: "invitations"
 - assertVisible: "Teammate invitations"
