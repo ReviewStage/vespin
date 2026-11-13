@@ -1,5 +1,6 @@
 import { type ReactNode, type Ref, useState } from "react";
 import { AspectRatio } from "../../shadcn/aspect-ratio.js";
+import { CARD_CORNER, CARD_ELEMENT, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
 import { useBlobUrl } from "../video-player/video-player.js";
 
 /**
@@ -118,16 +119,15 @@ export function PageThumb({
   const [loadedFrom, setLoadedFrom] = useState<string | undefined>(undefined);
 
   return (
-    <AspectRatio
-      as="span"
-      ratio={THUMB_RATIO}
+    <Card
+      as={CARD_ELEMENT.SPAN}
+      look={CARD_LOOK.TINT}
+      corner={CARD_CORNER.CONTROL}
+      padding={CARD_PADDING.FLUSH}
       className={[
-        "ui-page-thumb group/page-thumb flex-none overflow-hidden rounded-control border border-border bg-muted text-muted-foreground",
-        // A card's glyph stands at its middle, as a row's does.
-        glyph !== undefined && size === PAGE_THUMB_SIZE.CARD
-          ? "flex items-center justify-center"
-          : SIZE_CLASS[size],
-        glyph === undefined ? "" : "[&_svg]:size-control-icon",
+        "ui-page-thumb group/page-thumb flex-none text-muted-foreground",
+        // A card's glyph stands at its middle, as a row's does, its width the place's own.
+        glyph !== undefined && size === PAGE_THUMB_SIZE.CARD ? "" : SIZE_CLASS[size],
       ]
         .filter((part) => part !== "")
         .join(" ")}
@@ -135,31 +135,45 @@ export function PageThumb({
       data-loaded={String(frame !== undefined && loadedFrom === frame.src)}
       data-missing={glyph === undefined ? undefined : ""}
     >
-      {image === undefined ? null : (
-        <img
-          className={`ui-page-thumb-image size-full ${FIT_CLASS[fit]}`}
-          src={image}
-          alt=""
-          draggable={false}
-        />
-      )}
-      {video === undefined ? null : <VideoStill dataUrl={video} fit={fit} />}
-      {frame === undefined ? null : (
-        <iframe
-          ref={frameRef}
-          className="ui-page-thumb-frame pointer-events-none absolute top-0 left-0 h-[400%] w-[400%] origin-top-left scale-25 border-0 opacity-0 transition-opacity duration-(--ui-duration-hover) ease-motion-exit group-data-[loaded=true]/page-thumb:opacity-100"
-          title={frame.title}
-          src={frame.src}
-          sandbox={frame.sandbox}
-          allow=""
-          referrerPolicy="no-referrer"
-          loading={frame.lazy === true ? "lazy" : undefined}
-          tabIndex={-1}
-          aria-hidden="true"
-          onLoad={() => setLoadedFrom(frame.src)}
-        />
-      )}
-      {glyph}
-    </AspectRatio>
+      <AspectRatio
+        as="span"
+        ratio={THUMB_RATIO}
+        className={[
+          "block w-full",
+          glyph !== undefined && size === PAGE_THUMB_SIZE.CARD
+            ? "flex items-center justify-center"
+            : "",
+          glyph === undefined ? "" : "[&_svg]:size-control-icon",
+        ]
+          .filter((part) => part !== "")
+          .join(" ")}
+      >
+        {image === undefined ? null : (
+          <img
+            className={`ui-page-thumb-image size-full ${FIT_CLASS[fit]}`}
+            src={image}
+            alt=""
+            draggable={false}
+          />
+        )}
+        {video === undefined ? null : <VideoStill dataUrl={video} fit={fit} />}
+        {frame === undefined ? null : (
+          <iframe
+            ref={frameRef}
+            className="ui-page-thumb-frame pointer-events-none absolute top-0 left-0 h-[400%] w-[400%] origin-top-left scale-25 border-0 opacity-0 transition-opacity duration-(--ui-duration-hover) ease-motion-exit group-data-[loaded=true]/page-thumb:opacity-100"
+            title={frame.title}
+            src={frame.src}
+            sandbox={frame.sandbox}
+            allow=""
+            referrerPolicy="no-referrer"
+            loading={frame.lazy === true ? "lazy" : undefined}
+            tabIndex={-1}
+            aria-hidden="true"
+            onLoad={() => setLoadedFrom(frame.src)}
+          />
+        )}
+        {glyph}
+      </AspectRatio>
+    </Card>
   );
 }

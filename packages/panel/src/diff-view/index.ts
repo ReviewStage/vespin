@@ -468,6 +468,7 @@ const LIST_CSS = `
     overflow: clip;
     border: 1px solid var(--ui-color-border);
     border-radius: var(--ui-control-radius);
+    box-shadow: var(--ui-shadow-card);
     --diffs-bg-separator-override: var(--ui-color-fill-hover);
   }
   [data-separator="line-info-basic"] {
