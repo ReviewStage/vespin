@@ -243,6 +243,8 @@ export interface MacComputerUse {
   readonly helper: ComputerUseHelperSeam;
   /** Whether Settings lets agents use apps on this Mac, read as each action arrives. */
   readonly enabled: Effect.Effect<boolean>;
+  /** Whether the account has Computer use on (Settings › Experimental), read as the settings change, so turning it on asks macOS for the grants. */
+  readonly offered: Effect.Effect<boolean>;
   /** The apps the developer answered Always allow for, by bundle id, or by name where an app has none. */
   readonly allowedApps: Effect.Effect<readonly string[]>;
   /** Adds an app to them, answering whether the write landed: an app's Always allow. */
@@ -1087,7 +1089,37 @@ export function composeMacCommands(
       );
 
       yield* Effect.forkScoped(Effect.forever(guarded));
+
+      if (computer !== undefined) yield* askedAtSetUp(computer);
     });
+
+    /** Whether computer use is set up on this Mac: Computer use on for the account, and This Mac's switch on. */
+    const setUp = (use: MacComputerUse) =>
+      Effect.zipWith(use.offered, use.enabled, (offered, enabled) => offered && enabled);
+
+    /**
+     * macOS asked for the grants the Mac lacks each time computer use comes
+     * to be set up here, as the account turns it on or This Mac's switch
+     * does, so the developer grants them before an agent first needs them
+     * rather than at its first refusal. Note that computer use already set
+     * up as the host starts asks nothing, since a prompt at every launch
+     * would nag, and that a gate already asking waits for no answer.
+     */
+    const askedAtSetUp = (use: MacComputerUse) =>
+      Effect.gen(function* () {
+        const changes = yield* dependencies.changed;
+        let was = yield* setUp(use);
+        yield* Effect.forkScoped(
+          Stream.runForEach(changes, () =>
+            Effect.gen(function* () {
+              const now = yield* setUp(use);
+
+              if (now && !was) yield* grantsAsked;
+              was = now;
+            }),
+          ),
+        );
+      });
 
     /** The Mac's two grants as the helper reads them, or after it asks macOS for them; neither where there is no helper or it could not say. */
     const permissionsRead = (
@@ -1099,6 +1131,15 @@ export function composeMacCommands(
         "permissions" in answer ? answer.permissions : NO_PERMISSIONS,
       );
     };
+
+    /** macOS asked for the grants the Mac lacks, by its own prompts and the pane of the first missing; nothing where it has both. */
+    const grantsAsked = Effect.flatMap(
+      permissionsRead(COMPUTER_HELPER_OP.PERMISSIONS),
+      (granted) =>
+        granted.screenRecording && granted.accessibility
+          ? Effect.void
+          : Effect.asVoid(permissionsRead(COMPUTER_HELPER_OP.REQUEST_PERMISSIONS)),
+    );
 
     /** Each app allowed without asking, named and drawn by the helper; one it no longer finds by its bundle id alone. */
     const allowedAppsNamed = (use: MacComputerUse) =>
