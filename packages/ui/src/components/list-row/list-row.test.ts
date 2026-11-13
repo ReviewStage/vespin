@@ -729,6 +729,24 @@ test("the app's hint hung from a row's press raises its words while the press ho
   expect(heard).toEqual(["open"]);
 });
 
+test("a row that opens nothing still hangs the app's hint, raised as the keyboard reaches its words", () => {
+  const container = draw(
+    createElement(List, {
+      label: "Goal",
+      children: createElement(ListRow, {
+        title: "Every invitation test passes",
+        hint: { Hint: SayingHint, label: "Every invitation test passes" },
+      }),
+    }),
+  );
+
+  expect(container.querySelector("button")).toBeNull();
+  const words = container.querySelector<HTMLElement>("[tabindex='0']");
+  expect(words).not.toBeNull();
+  act(() => words?.focus());
+  expect(container.querySelector("output")?.textContent).toBe("Every invitation test passes");
+});
+
 test("a row that keeps focus, pressed with the pointer, leaves the focus on the field and is pressed", () => {
   const pressed: string[] = [];
 

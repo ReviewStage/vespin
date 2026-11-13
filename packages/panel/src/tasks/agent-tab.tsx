@@ -30,6 +30,7 @@ import {
   AGENT_BRIEF,
   AGENT_FAILURE,
   AGENT_MACHINE,
+  AGENT_RUNTIME,
   AGENT_SENDER,
   AGENT_STATUS,
   type AgentBrief,
@@ -66,7 +67,7 @@ import {
   type FailureAbout,
 } from "@repo/features/shown-failure";
 import { skillWord } from "@repo/features/skill-word";
-import { GOAL_CLEAR_LINE } from "@repo/features/slash-command";
+import { GOAL_LINE } from "@repo/features/slash-command";
 import { sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
@@ -3369,6 +3370,8 @@ function AgentTabView({
   const boxOpen =
     onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined;
 
+  // Only Codex pauses a goal, and only the agent's starter may change it, while the box can send.
+  const pausesGoal = controlsQueue && boxOpen && agent.runtime === AGENT_RUNTIME.CODEX;
   const onEdit = useSteady(boxOpen ? composer.edit : undefined);
   const onCancelEdit = useSteady(composer.dropEdit);
   const onSendEdit = useSteady(boxOpen ? composer.sendEdit : undefined);
@@ -3728,10 +3731,10 @@ function AgentTabView({
           going={pendingWords}
           older={transcript.hasOlder}
           working={standing.working}
-          onPause={undefined}
-          onClear={controlsQueue && boxOpen ? () => composer.sendWords(GOAL_CLEAR_LINE) : undefined}
+          onClear={controlsQueue && boxOpen ? () => composer.sendWords(GOAL_LINE.CLEAR) : undefined}
           // Note that only Codex's goal pauses; Claude Code's stops only as it is cleared.
-          onResume={undefined}
+          onPause={pausesGoal ? () => composer.sendWords(GOAL_LINE.PAUSE) : undefined}
+          onResume={pausesGoal ? () => composer.sendWords(GOAL_LINE.RESUME) : undefined}
         />
         <AgentPicturesProvider value={pictures}>
           {/* Note that the dock reads whose Mac the agent uses, as the transcript above it does, to offer Show only on that Mac. */}
