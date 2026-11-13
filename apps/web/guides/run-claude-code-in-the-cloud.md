@@ -63,7 +63,7 @@ The cost of that control is upkeep. You patch and secure the server yourself, an
 
 ## How we run it in Vespin
 
-[Vespin](https://vespin.dev) is what we built for running many coding agents at once. Each cloud agent runs Claude Code on your Claude plan in a sandbox of its own, with its own checkout of your repository. It works on a branch, opens a pull request, and fixes the checks that fail on it. When it has a question or wants a review, it posts to your inbox, so you don't have to keep opening sessions to find the one that's waiting on you. We wrote these guides that way: seven agents worked in parallel, one per page, each with its own pull request, and a person approved every page before it went up.
+[Vespin](https://vespin.dev) is what we built for running many coding agents at once. Each cloud agent runs Claude Code on your Claude plan in a sandbox of its own, with its own checkout of your repository. It works on a branch, opens a pull request, and fixes the checks that fail on it. When it has a question or wants a review, it posts to your inbox, so you don't have to keep opening sessions to find the one that's waiting on you.
 
 1. Download the Mac app or open [vespin.dev/app](https://vespin.dev/app), sign in, and connect GitHub in Settings › Workspace.
 2. In Settings › Agents, add your Claude plan: run `claude setup-token` in a terminal and paste the token it prints. You can also add an Anthropic API key.
