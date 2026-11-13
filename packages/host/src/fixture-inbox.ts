@@ -695,9 +695,25 @@ const ROUNDING_ITEMS: readonly InboxItem[] = [
   ),
 ];
 
+/** PROBE, never merged: six more questions, so the Inbox's scopes read two-digit counts (Questions 13, Open 15). */
+function probeQuestions(): readonly InboxItem[] {
+  const [first] = INVITES_ITEMS;
+
+  return first === undefined
+    ? []
+    : Array.from({ length: 6 }, (_, index) => ({
+        ...first,
+        id: fixtureId(900 + index),
+        key: `probe-question-${index}`,
+        title: `Probe question ${index + 1}`,
+        postedAt: first.postedAt - (index + 1) * DAY,
+        updatedAt: first.updatedAt - (index + 1) * DAY,
+      }));
+}
+
 /** Each task's inbox, by the task's id. */
 const INBOXES: ReadonlyMap<string, readonly InboxItem[]> = new Map([
-  [TASK.INVITES, INVITES_ITEMS],
+  [TASK.INVITES, [...INVITES_ITEMS, ...probeQuestions()]],
   [TASK.DIGEST, DIGEST_ITEMS],
   [TASK.ROUNDING, ROUNDING_ITEMS],
 ]);
