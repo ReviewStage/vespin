@@ -259,6 +259,9 @@ let notifyConfirmed: PushNotify | undefined;
 /** Which choice was made last, so an earlier one's refusal never puts back what a later one drew. */
 let picksMade = 0;
 
+/** The pick `notifyConfirmed` stands for, so an older answer, a read or a write, never replaces a newer one. */
+let confirmedPick = 0;
+
 const standingListeners = new Set<() => void>();
 
 function subscribeStanding(listener: () => void): () => void {
@@ -283,12 +286,15 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): UsePushDe
   useEffect(() => {
     if (key === undefined) return undefined;
     let live = true;
+    // Note that a read answers for the choices made before it began, so a pick made while it ran stands over it.
+    const readAt = picksMade;
     registeredPushDevice(acts, key)
       .then(() => acts[ACT_KIND.PUSH_DEVICE_STATUS](key))
       .then(
         (answer) => {
           // A phone the service does not hold yet, or a read it did not answer, draws no standing.
-          if (!live) return;
+          if (!live || readAt !== picksMade) return;
+          confirmedPick = readAt;
           notifyConfirmed = "failure" in answer ? undefined : answer.notify;
           holdStanding("failure" in answer ? undefined : answer);
         },
@@ -320,8 +326,10 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): UsePushDe
         // Note that a pick offers no Try again, which could replay an older choice over a newer one; picking again is the retry.
         refused: (answer) => ("failure" in answer ? PUSH_NOTIFY_REFUSED : undefined),
       }).then((went) => {
-        if (went) notifyConfirmed = notify;
-        else putBack();
+        if (went && pick > confirmedPick) {
+          confirmedPick = pick;
+          notifyConfirmed = notify;
+        } else if (!went) putBack();
       });
     },
     [acts, write, key],
