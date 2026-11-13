@@ -137,6 +137,7 @@ const DECLARED_TABLES = [
   "turns",
   "user",
   "verification",
+  "voice_call",
   "workspace_environment_variable",
   "workspace_experiment",
   "workspace_former_slug",
