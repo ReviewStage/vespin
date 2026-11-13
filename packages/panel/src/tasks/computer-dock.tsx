@@ -127,9 +127,9 @@ export function appsInUse(
 /** Every agent whose stack the reader put down while it worked, this window's session, so it stays down as the tab comes back. */
 const STACKS_DOWN = new Set<string>();
 
-/** The app a press names, by its name, from the apps in use. */
-function appNamed(apps: readonly ComputerApp[], name: string): ComputerApp | undefined {
-  return apps.find((each) => each.name === name);
+/** The app a press names, by its id, from the apps in use. */
+function appOfId(apps: readonly ComputerApp[], id: string): ComputerApp | undefined {
+  return apps.find((each) => each.id === id);
 }
 
 /**
@@ -229,18 +229,18 @@ function AppsFloat({
   const [doneOpen, setDoneOpen] = useState(false);
   // Note that an app the reader brought forward stays in front only until the agent moves to another app, even one it moves back from.
   const [picked, setPicked] = useState<string>();
-  const [pickedOver, setPickedOver] = useState(top.name);
+  const [pickedOver, setPickedOver] = useState(top.id);
 
-  if (pickedOver !== top.name) {
-    setPickedOver(top.name);
+  if (pickedOver !== top.id) {
+    setPickedOver(top.id);
     setPicked(undefined);
   }
 
-  const front = (picked === undefined ? undefined : appNamed(inUse.apps, picked)) ?? top;
+  const front = (picked === undefined ? undefined : appOfId(inUse.apps, picked)) ?? top;
   const window = useKeptPicture(front.window?.id);
   const icons = useKeptPictures(inUse.apps.map((each) => each.icon));
   const down = working ? putDown : !doneOpen;
-  const using = inUse.using ? top.name : undefined;
+  const using = inUse.using ? top.id : undefined;
 
   const apps = inUse.apps.map((each, at) => {
     const icon = icons[at];
@@ -248,11 +248,12 @@ function AppsFloat({
 
     return each === front && front.window !== undefined
       ? {
+          id: each.id,
           name: each.name,
           iconSrc,
           window: { state: window, width: front.window.width, height: front.window.height },
         }
-      : { name: each.name, iconSrc };
+      : { id: each.id, name: each.name, iconSrc };
   });
 
   const putAway = () => {
@@ -280,7 +281,7 @@ function AppsFloat({
           <AppWindowStack
             label={LABEL}
             apps={apps}
-            shown={front.name}
+            shown={front.id}
             using={using}
             onPick={setPicked}
             onMinimize={putAway}
@@ -292,8 +293,8 @@ function AppsFloat({
             }}
             onShowApp={
               onThatMac === true && front.bundleId !== undefined
-                ? (name) => {
-                    const bundleId = appNamed(inUse.apps, name)?.bundleId;
+                ? (id) => {
+                    const bundleId = appOfId(inUse.apps, id)?.bundleId;
 
                     if (bundleId !== undefined) showApp({ bundleId });
                   }

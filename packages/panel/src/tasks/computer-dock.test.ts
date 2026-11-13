@@ -76,8 +76,20 @@ test("every app used this turn stands once, the one used last first, each with i
 
   assert.deepEqual(appsInUse(messages, true), {
     apps: [
-      { name: "Simulator", bundleId: "com.example.simulator", icon: ICON.id, window: WINDOW },
-      { name: "Xcode", bundleId: "com.example.xcode", icon: ICON.id, window: OTHER_WINDOW },
+      {
+        id: "com.example.simulator",
+        name: "Simulator",
+        bundleId: "com.example.simulator",
+        icon: ICON.id,
+        window: WINDOW,
+      },
+      {
+        id: "com.example.xcode",
+        name: "Xcode",
+        bundleId: "com.example.xcode",
+        icon: ICON.id,
+        window: OTHER_WINDOW,
+      },
     ],
     using: true,
   });

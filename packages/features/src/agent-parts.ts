@@ -278,8 +278,9 @@ export function agentParts(message: AgentTranscriptMessage): readonly AgentPart[
   return parts;
 }
 
-/** An app the conversation's `computer` calls used, named once: as the Mac newest answered it, else as the agent typed it, with its bundle id and the newest icon and window a call on it kept. */
+/** An app the conversation's `computer` calls used, named once: what tells it apart from every other (its bundle id, else its name in lower case), its name as the Mac newest answered it, else as the agent typed it, its bundle id, and the newest icon and window a call on it kept. */
 export interface ComputerApp {
+  readonly id: string;
   readonly name: string;
   readonly bundleId: string | undefined;
   readonly icon: string | undefined;
@@ -412,7 +413,7 @@ export function computerAppsOf(messages: readonly AgentTranscriptMessage[]): Com
   const apps = new Map(
     [...newest].map(([key, { typed, answered, ...kept }]): [string, ComputerApp] => [
       key,
-      { name: answered ?? typed ?? key, ...kept },
+      { id: key, name: answered ?? typed ?? key, ...kept },
     ]),
   );
 
