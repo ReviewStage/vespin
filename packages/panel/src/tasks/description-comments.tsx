@@ -152,6 +152,7 @@ import { useFindOpen } from "../find-in-tab.js";
 import { MarkdownMessage } from "../markdown-message.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { centerWithin } from "../scroll-within.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
 import { AgentActorRef, type AgentSubject, agentSubject, NOTHING_HELD } from "./agent-ref.js";
 import { attachmentChips } from "./attached-file-chips.js";
@@ -493,11 +494,18 @@ type WriterSubjectResult = { subject: AgentSubject; elsewhere: boolean };
  * across the workspace names it, rather than as an agent no list holds;
  * and whether it is such an agent, which has no tab on this task.
  */
-function writerSubject(agents: EditAgents, agentId: string): WriterSubjectResult {
-  const line = agents.control.listed?.find((each) => each.id === agentId);
+function useWriterSubject(
+  agents: EditAgents | undefined,
+  writer: DescriptionCommentWriter,
+): (WriterSubjectResult & { readonly agentId: string }) | undefined {
+  const agentId = writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT ? writer.agentId : undefined;
+  // Note that the line is looked up by its id alone, so no draw of a comment walks the list.
+  const line = useTaskListRow(useTaskListCollections().agents, agentId);
+
+  if (agents === undefined || agentId === undefined) return undefined;
   const subject = agentSubject(agents.control, agentId, NOTHING_HELD, false, line);
 
-  return { subject, elsewhere: subject.agent === undefined && line !== undefined };
+  return { agentId, subject, elsewhere: subject.agent === undefined && line !== undefined };
 }
 
 type UseWriterResult = { author: CommentAuthor; nameRef: ReactNode };
@@ -508,18 +516,14 @@ function useWriter(
   agents: EditAgents | undefined,
 ): UseWriterResult {
   const person = usePerson(writer.by);
+  const written = useWriterSubject(agents, writer);
 
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) {
     return { author: commentAuthor(APP_ACTOR), nameRef: <ActorRef actor={APP_ACTOR} nameOnly /> };
   }
 
-  if (
-    writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT &&
-    writer.agentId !== undefined &&
-    agents !== undefined
-  ) {
-    const { agentId } = writer;
-    const { subject, elsewhere } = writerSubject(agents, agentId);
+  if (written !== undefined && agents !== undefined) {
+    const { agentId, subject, elsewhere } = written;
 
     return {
       author: commentAuthor(subject.tile),
@@ -581,16 +585,11 @@ function WriterMark({
   agents: EditAgents | undefined;
 }): ReactNode {
   const person = usePerson(writer.by);
+  const written = useWriterSubject(agents, writer);
   let actor: Actor = person;
 
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.APP) actor = APP_ACTOR;
-  else if (
-    writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT &&
-    writer.agentId !== undefined &&
-    agents !== undefined
-  ) {
-    actor = writerSubject(agents, writer.agentId).subject.tile;
-  }
+  else if (written !== undefined) actor = written.subject.tile;
 
   return <ActorMark actor={actor} />;
 }
