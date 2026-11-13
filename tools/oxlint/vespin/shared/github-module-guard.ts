@@ -43,6 +43,9 @@ export const TOKEN_OPENER = { NAME: "openGitHubToken", FROM: "provider-key-seal"
 /** The service's `GitHubMemberTokens` implementation, whose exports hand out an opened token. */
 export const MEMBER_TOKENS_FILE = "packages/service/src/github/github-token.ts";
 
+/** The same file as `@repo/service` exports it. */
+export const MEMBER_TOKENS_SUBPATH = "@repo/service/github/github-token";
+
 /** Whether a file is named in the list given, by repository path or, ending in `/`, a folder. */
 function isListed(list: Readonly<Record<string, string>>, file: string): boolean {
   return Object.keys(list).some((entry) =>

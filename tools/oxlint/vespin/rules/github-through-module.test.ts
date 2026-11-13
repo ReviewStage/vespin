@@ -40,6 +40,11 @@ tester.run("github-through-module", githubThroughModuleRule, {
       code: 'import { githubTokenOpens, sealGitHubToken } from "@repo/database/models/provider-key-seal";\nconst url = "https://github.com/apps";',
       filename: SERVICE_FILE,
     },
+    // A type names no value, so a type-only import or re-export of the opener's module opens nothing.
+    {
+      code: 'import type { SealedGitHubToken } from "@repo/database/models/provider-key-seal";\nexport type { KeyRing } from "@repo/database/models/provider-key-seal";',
+      filename: SERVICE_FILE,
+    },
     // The GitHubMemberTokens implementation opens the token.
     { code: OPENER, filename: MEMBER_TOKENS_FILE },
     // A test stands a fake GitHub and seeds a token.
@@ -70,6 +75,20 @@ tester.run("github-through-module", githubThroughModuleRule, {
       errors: [
         { messageId: "tokenOpenedOutsideModule", data: { name: "openGitHubToken" } },
         { messageId: "tokenOpenedOutsideModule", data: { name: "./github-token.js" } },
+      ],
+    },
+    // However the opener is reached: re-exported, through every export, imported at run time, or by the service's subpath.
+    {
+      code: 'export { openGitHubToken } from "@repo/database/models/provider-key-seal";\nexport * from "@repo/database/models/provider-key-seal";\nawait import("@repo/database/models/provider-key-seal");\nimport { memberGitHubToken } from "@repo/service/github/github-token";',
+      filename: SERVICE_FILE,
+      errors: [
+        { messageId: "tokenOpenedOutsideModule", data: { name: "openGitHubToken" } },
+        { messageId: "tokenOpenedOutsideModule", data: { name: "openGitHubToken" } },
+        { messageId: "tokenOpenedOutsideModule", data: { name: "openGitHubToken" } },
+        {
+          messageId: "tokenOpenedOutsideModule",
+          data: { name: "@repo/service/github/github-token" },
+        },
       ],
     },
   ],

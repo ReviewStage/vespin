@@ -7,6 +7,7 @@ import {
   GITHUB_API_HOST,
   GITHUB_API_VERSION_HEADER,
   MEMBER_TOKENS_FILE,
+  MEMBER_TOKENS_SUBPATH,
   mayCallApi,
   mayOpenToken,
   OCTOKIT_SCOPE,
@@ -30,10 +31,17 @@ function isOpenerModule(source: string): boolean {
   return source.endsWith(`/${TOKEN_OPENER.FROM}`) || source.endsWith(`/${TOKEN_OPENER.FROM}.js`);
 }
 
-/** The repository path a relative import names, its `.js` read as the `.ts` beside it; none for a package. */
-function importedFile(file: string, source: string): string | undefined {
-  if (!source.startsWith(".")) return undefined;
-  return path.posix.join(path.posix.dirname(file), source).replace(/\.js$/u, ".ts");
+/** Whether an import's source is the service's `GitHubMemberTokens` implementation: by a relative path, its `.js` read as the `.ts` beside it, or by `@repo/service`'s subpath. */
+function isMemberTokensModule(file: string, source: string): boolean {
+  const bare = source.replace(/\.js$/u, "");
+  if (bare === MEMBER_TOKENS_SUBPATH) return true;
+  if (!source.startsWith(".")) return false;
+  return `${path.posix.join(path.posix.dirname(file), bare)}.ts` === MEMBER_TOKENS_FILE;
+}
+
+/** The name a specifier takes from its module, as written. */
+function nameOf(name: ESTree.ModuleExportName): string {
+  return name.type === "Identifier" ? name.name : String(name.value);
 }
 
 /** What a string names that only the module may, if anything. */
@@ -76,9 +84,18 @@ export const githubThroughModuleRule = defineRule({
       if (!apiAllowed && source.startsWith(OCTOKIT_SCOPE)) {
         context.report({ node, messageId: "octokitOutsideModule", data: { name: source } });
       }
-      if (!tokenAllowed && importedFile(file, source) === MEMBER_TOKENS_FILE) {
+      if (!tokenAllowed && isMemberTokensModule(file, source)) {
         context.report({ node, messageId: "tokenOpenedOutsideModule", data: { name: source } });
       }
+    };
+
+    // Note that a type names no value, so a type-only import or re-export opens nothing.
+    const reportOpener = (node: ESTree.Node): void => {
+      context.report({
+        node,
+        messageId: "tokenOpenedOutsideModule",
+        data: { name: TOKEN_OPENER.NAME },
+      });
     };
 
     return {
@@ -98,35 +115,39 @@ export const githubThroughModuleRule = defineRule({
       ImportDeclaration(node) {
         const source = node.source.value;
         checkSource(node, source);
-        if (tokenAllowed || !isOpenerModule(source)) return;
+        if (tokenAllowed || node.importKind === "type" || !isOpenerModule(source)) return;
         for (const specifier of node.specifiers) {
           // A namespace import reaches the opener too, so it is refused like the name.
-          const imported =
-            specifier.type === "ImportSpecifier"
-              ? specifier.imported.type === "Identifier"
-                ? specifier.imported.name
-                : String(specifier.imported.value)
-              : specifier.type === "ImportNamespaceSpecifier"
-                ? TOKEN_OPENER.NAME
-                : undefined;
-          if (imported !== TOKEN_OPENER.NAME) continue;
-          context.report({
-            node: specifier,
-            messageId: "tokenOpenedOutsideModule",
-            data: { name: TOKEN_OPENER.NAME },
-          });
+          const opens =
+            specifier.type === "ImportNamespaceSpecifier" ||
+            (specifier.type === "ImportSpecifier" &&
+              specifier.importKind !== "type" &&
+              nameOf(specifier.imported) === TOKEN_OPENER.NAME);
+          if (opens) reportOpener(specifier);
         }
       },
       ExportAllDeclaration(node) {
         checkSource(node, node.source.value);
+        if (!tokenAllowed && node.exportKind !== "type" && isOpenerModule(node.source.value)) {
+          reportOpener(node);
+        }
       },
       ExportNamedDeclaration(node) {
-        if (node.source !== null) checkSource(node, node.source.value);
+        if (node.source === null) return;
+        checkSource(node, node.source.value);
+        if (tokenAllowed || node.exportKind === "type" || !isOpenerModule(node.source.value)) {
+          return;
+        }
+        for (const specifier of node.specifiers) {
+          if (specifier.exportKind !== "type" && nameOf(specifier.local) === TOKEN_OPENER.NAME) {
+            reportOpener(specifier);
+          }
+        }
       },
       ImportExpression(node) {
-        if (node.source.type === "Literal" && typeof node.source.value === "string") {
-          checkSource(node, node.source.value);
-        }
+        if (node.source.type !== "Literal" || typeof node.source.value !== "string") return;
+        checkSource(node, node.source.value);
+        if (!tokenAllowed && isOpenerModule(node.source.value)) reportOpener(node);
       },
     };
   },
