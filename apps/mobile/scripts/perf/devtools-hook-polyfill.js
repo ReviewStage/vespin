@@ -17,6 +17,7 @@
   // Note that a fiber rendered this commit where it mounted or its props or state are new, the heuristic React DevTools uses; a subtree React bailed out of keeps its child objects and is skipped.
   function walk(root) {
     var counts = {};
+    var times = {};
     var rendered = 0,
       mounted = 0,
       hosts = 0,
@@ -36,6 +37,7 @@
         if (name !== undefined) {
           rendered += 1;
           counts[name] = (counts[name] || 0) + 1;
+          times[name] = (times[name] || 0) + (fiber.selfBaseDuration || 0);
         } else if (typeof fiber.type === "string") hosts += 1;
       }
       if (fiber.sibling) stack.push(fiber.sibling);
@@ -44,12 +46,16 @@
     }
     var top = Object.keys(counts).map((k) => [k, counts[k]]);
     top.sort((a, b) => b[1] - a[1]);
+    var slow = Object.keys(times).map((k) => [k, Math.round(times[k] * 10) / 10]);
+    slow.sort((a, b) => b[1] - a[1]);
     return {
       rendered: rendered,
       mounted: mounted,
       hostRendered: hosts,
       total: total,
       top: top.slice(0, 25),
+      slow: slow.slice(0, 25),
+      renderMs: Math.round((root.current.actualDuration || 0) * 10) / 10,
     };
   }
 

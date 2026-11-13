@@ -155,9 +155,12 @@ def main():
         moment = first_event["t"] if first_event else None
         mine = [c for c in commits if (moment or start) <= c["t"] < end]
         rendered = Counter()
+        slow = Counter()
         for c in mine:
             for name, count in c.get("top", []):
                 rendered[name] += count
+            for name, ms in c.get("slow", []):
+                slow[name] += ms
         stall_ms = sum(s["ms"] for s in stalls if (moment or start) <= s["t"] < end)
         walk_ms = sum(c.get("walkMs", 0) for c in mine)
         anchor = moment or start
@@ -188,12 +191,14 @@ def main():
                 "to_first_frame": round(first_frame - anchor) if first_frame else None,
                 "to_settle": round(settle - anchor) if settle else None,
                 "top": rendered.most_common(12),
+                "slow": slow.most_common(12),
+                "render_ms": round(sum(c.get("renderMs", 0) for c in mine)),
             }
         )
 
     print(f"probe rows {len(probe)}, commands {len(commands)}, frames {len(frames)}")
     print(
-        "path | n | event | ev-after-cmd | commits | comps rendered | mounted | "
+        "path | n | event | ev-after-cmd | commits | render ms | comps rendered | mounted | "
         "to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle"
     )
     for path, rows in taps.items():
@@ -206,6 +211,7 @@ def main():
                     Counter(r["event"] for r in rows).most_common(1)[0][0],
                     median([r["event_after_cmd"] for r in rows]),
                     median([r["commits"] for r in rows]),
+                    median([r["render_ms"] for r in rows]),
                     median([r["rendered"] for r in rows]),
                     median([r["mounted"] for r in rows]),
                     median([r["to_last_commit"] for r in rows]),
@@ -225,6 +231,14 @@ def main():
             for name, count in r["top"]:
                 total[name] += count
         print(f"{path}: " + ", ".join(f"{n}×{c}" for n, c in total.most_common(14)))
+    print("\nslowest components per path (React's own render ms, summed over its taps, then per tap):")
+    for path, rows in taps.items():
+        total = Counter()
+        for r in rows:
+            for name, ms in r["slow"]:
+                total[name] += ms
+        n = max(len(rows), 1)
+        print(f"{path}: " + ", ".join(f"{name} {ms / n:.1f}" for name, ms in total.most_common(10)))
     # Background churn: commits and rendered components per second while nothing is tapped.
     if probe:
         span = (probe[-1]["t"] - probe[0]["t"]) / 1000

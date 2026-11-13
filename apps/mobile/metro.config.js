@@ -127,4 +127,15 @@ exported.serializer.getPolyfills = (context) => [
   ...basePolyfills(context),
   path.join(__dirname, "scripts", "perf", "devtools-hook-polyfill.js"),
 ];
+// MEASUREMENT ONLY: React's profiling renderer, so each fiber carries its own render time (selfBaseDuration).
+const baseResolve = exported.resolver.resolveRequest;
+exported.resolver.resolveRequest = (context, moduleName, platform) => {
+  const name =
+    moduleName === "../implementations/ReactFabric-prod"
+      ? "../implementations/ReactFabric-profiling"
+      : moduleName;
+  return baseResolve
+    ? baseResolve(context, name, platform)
+    : context.resolveRequest(context, name, platform);
+};
 module.exports = exported;

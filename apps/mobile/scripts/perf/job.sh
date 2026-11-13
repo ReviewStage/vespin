@@ -21,6 +21,8 @@ for D in ${=DEVICES:-iphone ipad}; do
   xcrun simctl boot $U 2>/dev/null; xcrun simctl bootstatus $U -b >/dev/null 2>&1; xcrun simctl ui $U appearance light
   $H/tap-timing.sh $A $U $R/apps/mobile/maestro/perf/$D.yaml $O/$D > $O/$D.txt 2>&1
   echo "$D: $(cat $O/$D/status 2>/dev/null)" >> $L
+  # The rig's floor: the same kind of taps on stock apps, recorded and read the same way.
+  [[ ${FLOOR:-1} == 1 ]] && { $H/tap-timing.sh $A $U $R/apps/mobile/maestro/perf/floor.yaml $O/$D-floor > $O/$D-floor.txt 2>&1; echo "$D floor: $(cat $O/$D-floor/status 2>/dev/null)" >> $L; }
   xcrun simctl shutdown $U 2>/dev/null
 done
 rm -rf $A; rm -f $O/*/screen.mp4.tmp; echo ALLDONE >> $L
