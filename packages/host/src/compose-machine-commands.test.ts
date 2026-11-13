@@ -11,6 +11,7 @@ import {
   type ComputerApp,
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
+  MACHINE_REFUSAL,
   type MacComputerAction,
   type MachineCommand,
   type MachineCommandKind,
@@ -553,8 +554,10 @@ const subject = (
       moved: Effect.asVoid(PubSub.publish(moves, undefined)),
       /** The asks waiting as last told. */
       asks: () => told.at(-1) ?? [],
-      answer: (id: string, decision: MachineCommandDecision) =>
-        composer.acts.MACHINE_COMMAND_ANSWER({ id, decision }),
+      answer: (id: string, decision: MachineCommandDecision, note?: string) =>
+        composer.acts.MACHINE_COMMAND_ANSWER(
+          note === undefined ? { id, decision } : { id, decision, note },
+        ),
     };
   });
 };
@@ -1264,30 +1267,37 @@ it.effect("Always allow writes the setting, runs the command, and the next runs 
   }),
 );
 
-it.effect("Deny answers the call as not run, declined, and runs nothing", () =>
-  Effect.gen(function* () {
-    const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
-    const service = scriptedService();
-    yield* Effect.scoped(
-      Effect.gen(function* () {
-        const built = yield* askedFor(service, spawner, [COMMAND]);
-        yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.DENY);
-        yield* settled;
-        assert.deepEqual(built.asks(), []);
-        // An answer after the ask went runs nothing (below).
-        yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
-        yield* settled;
-      }),
-    );
-    const answered = service.settledResults.get(COMMAND.id);
-    assert.ok(answered !== undefined && "refused" in answered, "the call hears it was not run");
-    assert.match(answered.refused, /declined/u);
-    assert.deepEqual(spawner.spawned, []);
-  }),
+it.effect(
+  "Deny answers the call as not run, declined, with the words given, and runs nothing",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const built = yield* askedFor(service, spawner, [COMMAND]);
+          yield* built.answer(
+            COMMAND.id,
+            MACHINE_COMMAND_DECISION.DENY,
+            "Use the staging database",
+          );
+          yield* settled;
+          assert.deepEqual(built.asks(), []);
+          // An answer after the ask went runs nothing (below).
+          yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
+          yield* settled;
+        }),
+      );
+      const answered = service.settledResults.get(COMMAND.id);
+      assert.ok(answered !== undefined && "refused" in answered, "the call hears it was not run");
+      assert.match(answered.refused, /declined.*Use the staging database/u);
+      assert.equal(answered.outcome, MACHINE_REFUSAL.DECLINED);
+      assert.deepEqual(spawner.spawned, []);
+    }),
 );
 
 it.effect(
-  "no answer by the command's own timeout answers the call as not run, and the ask goes",
+  "an ask stands five minutes from when it is shown, however short the command's own timeout, and no answer by then answers the call as not answered",
   () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
@@ -1295,7 +1305,7 @@ it.effect(
       yield* Effect.scoped(
         Effect.gen(function* () {
           const built = yield* askedFor(service, spawner, [SECOND]);
-          yield* TestClock.adjust(Duration.seconds(SECOND.timeoutSeconds - 1));
+          yield* TestClock.adjust("299 seconds");
           yield* settled;
           assert.deepEqual(built.asks(), [{ id: SECOND.id, command: SECOND.command }]);
           yield* TestClock.adjust("1 second");
@@ -1305,7 +1315,7 @@ it.effect(
       );
       const answered = service.settledResults.get(SECOND.id);
       assert.ok(answered !== undefined && "refused" in answered, "the call hears it was not run");
-      assert.match(answered.refused, /did not answer/u);
+      assert.equal(answered.outcome, MACHINE_REFUSAL.UNANSWERED);
       assert.deepEqual(spawner.spawned, []);
     }),
 );
@@ -1347,28 +1357,28 @@ it.effect(
 );
 
 it.effect(
-  "a command allowed late runs in what is left of its timeout, so its result still reaches the call",
+  "a command allowed late still runs for the whole of its own timeout, so its result reaches the call",
   () =>
     Effect.gen(function* () {
-      // A command that would run for twenty seconds, allowed with ten left of its sixty.
-      const spawner = scriptedSpawner(() => ({ exitCode: 0, after: "20 seconds" }));
+      // A command of sixty seconds that runs for fifty, allowed with ten seconds of its ask left.
+      const spawner = scriptedSpawner(() => ({ exitCode: 0, after: "50 seconds" }));
       const service = scriptedService();
       yield* Effect.scoped(
         Effect.gen(function* () {
           const built = yield* askedFor(service, spawner, [COMMAND]);
-          yield* TestClock.adjust("50 seconds");
+          yield* TestClock.adjust("290 seconds");
           yield* settled;
           yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
           yield* settled;
           assert.equal(spawner.spawned.length, 1, "it runs");
-          yield* TestClock.adjust("15 seconds");
+          yield* TestClock.adjust("55 seconds");
           yield* settled;
         }),
       );
       const answered = service.settledResults.get(COMMAND.id);
       assert.ok(answered !== undefined && "timedOut" in answered, "the call hears what it did");
-      assert.equal(answered.timedOut, true, "killed as the command's own timeout ran out");
-      assert.notEqual(spawner.spawned[0]?.ended, "running");
+      assert.equal(answered.timedOut, false, "it ran to its end");
+      assert.equal(answered.exitCode, 0);
     }),
 );
 
@@ -1397,7 +1407,7 @@ it.effect(
 );
 
 it.effect(
-  "an ask of an account that signed out is withdrawn, and an answer after the switch runs nothing",
+  "an ask of an account that signed out is withdrawn, its call told at once that no one answered, and an answer after the switch runs nothing",
   () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
@@ -1417,7 +1427,9 @@ it.effect(
         }),
       );
       assert.deepEqual(spawner.spawned, []);
-      assert.equal(service.settledResults.has(COMMAND.id), false);
+      const answered = service.settledResults.get(COMMAND.id);
+      assert.ok(answered !== undefined && "refused" in answered, "the call hears at once");
+      assert.equal(answered.outcome, MACHINE_REFUSAL.UNANSWERED);
     }),
 );
 

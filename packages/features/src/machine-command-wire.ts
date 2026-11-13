@@ -34,12 +34,33 @@ export const MACHINE_COMMAND_BOUNDS = {
   /** The most characters of stdout or stderr a result carries; the Mac cuts each to this. */
   MAX_OUTPUT_CHARS: 20_000,
   /**
+   * How long an ask stands from the moment the Mac shows it, before the
+   * call is answered as not answered. The command's own time to run starts
+   * once it is allowed, so a late Allow takes none of it.
+   */
+  ASK_SECONDS: 300,
+  /**
+   * The most an ask and the run after it may take together: the workspace
+   * MCP function's duration (`WORKSPACE_MCP_FUNCTION`) less the service's
+   * grace for the claim and the answer, and room for the store. A command
+   * that may run long is asked for that much less (`machineAskSeconds`).
+   */
+  ASK_AND_RUN_SECONDS: 720,
+  /**
    * The most bytes of one result's posted body: an app's window read at
    * every bound (`COMPUTER_BOUNDS`), under the 4.5 MB a function takes. A
    * Mac answers a result past it as not run rather than post it.
    */
   MAX_RESULT_BYTES: 4_000_000,
 } as const;
+
+/** How long the Mac's ask for a command that may run `timeoutSeconds` stands: `ASK_SECONDS`, less where the run would leave no room for it. */
+export function machineAskSeconds(timeoutSeconds: number): number {
+  return Math.min(
+    MACHINE_COMMAND_BOUNDS.ASK_SECONDS,
+    MACHINE_COMMAND_BOUNDS.ASK_AND_RUN_SECONDS - timeoutSeconds,
+  );
+}
 
 /**
  * What a command asks the Mac to do. Every Mac that reads runs `shell`, an
