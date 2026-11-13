@@ -64,7 +64,13 @@ const found = <A>(effect: Effect.Effect<Option.Option<A>, StoreFailure, Database
     Option.isSome(answer) ? Effect.succeed(answer.value) : Effect.fail(HOSTED_REFUSAL.NOT_FOUND),
   );
 
-/** The change made, or refused as the procedure answers it: a full queue or a bad order as invalid, a message no longer queued as not found. */
+/**
+ * The change made, or refused as the procedure answers it: a full queue or a
+ * bad order as invalid, a message no longer queued as not found. A message
+ * queued anew makes the member follow the task, as one sent does; one
+ * queued again under its id, a retry, wrote nothing new and makes no one
+ * follow, so a member who unfollowed since stays unfollowed.
+ */
 const applyChange = Effect.fn("web/applyQueueChange")(function* (
   userId: string,
   agent: Agent,
@@ -82,6 +88,8 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
       );
 
       if (outcome === QUEUE_OUTCOME.FULL) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
+      if (outcome === QUEUE_OUTCOME.QUEUED) yield* followAsMessaged(userId, agent.taskId);
 
       return;
     }
@@ -164,9 +172,6 @@ export const changeAgentQueue = Effect.fn("web/changeAgentQueue")(function* (
 ) {
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* applyChange(userId, agent, body);
-
-  // A member who queues a message for one of the task's agents follows the task, as one who sends it does.
-  if (body.change === QUEUE_CHANGE.ADD) yield* followAsMessaged(userId, agent.taskId);
 
   const claimed = HANDS_ON.has(body.change)
     ? yield* claimNext(agent)

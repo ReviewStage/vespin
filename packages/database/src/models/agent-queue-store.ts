@@ -152,9 +152,10 @@ export interface AgentQueueRead {
   readonly revision: number;
 }
 
-/** What queueing a message answered: queued (or queued already under its id), or refused because the queue is full. */
+/** What queueing a message answered: queued, queued already under its id or key (which wrote nothing), or refused because the queue is full. */
 export const QUEUE_OUTCOME = {
   QUEUED: "queued",
+  REPEATED: "repeated",
   FULL: "full",
 } as const;
 
@@ -709,8 +710,8 @@ export function bootPhaseInLock(agentId: string): AgentQueueEffect<BootPhase | u
  * A line queued at the end of the agent's queue inside a caller's lock, as
  * `userId`'s, under `sendKey` where it was sent under a key of its own, with
  * what it named beside its words; a line repeated under its key keeps the
- * one queued first. Answers whether it is queued or the queue was full, and
- * whether it wrote a row.
+ * one queued first. Answers whether it is queued, repeated, or the queue
+ * was full, and whether it wrote a row.
  */
 export function queueLineInLock(
   agentId: string,
@@ -742,7 +743,9 @@ export function queueLineInLock(
       now: yield* DateTime.nowAsDate,
     });
 
-    return { outcome: QUEUE_OUTCOME.QUEUED, inserted: rows.length > 0 };
+    const inserted = rows.length > 0;
+
+    return { outcome: inserted ? QUEUE_OUTCOME.QUEUED : QUEUE_OUTCOME.REPEATED, inserted };
   });
 }
 
