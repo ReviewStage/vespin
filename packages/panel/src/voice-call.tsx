@@ -15,9 +15,10 @@
  * `session.close`.
  *
  * The call is live once the session says it started, and timed from then.
- * Muting the microphone tells the session to stop hearing it, and a mute
- * pressed while the call still connects is told the moment the session
- * starts, since the session takes no command before; muting the speaker
+ * Muting the microphone silences its track at once and tells the session to
+ * stop hearing it, and a mute pressed while the call still connects is told
+ * the moment the session starts, since the session takes no command before,
+ * while the silenced track sends nothing meanwhile; muting the speaker
  * silences the voice on this device alone. End sends
  * `session.close` and closes the channel, which sends what it holds first,
  * and the peer is dropped once the channel has closed; a `session.closed`
@@ -142,6 +143,11 @@ function eventType(text: string): string | undefined {
   }
 }
 
+/** The microphone's tracks silenced while the call is muted, and sounding again once it is not. */
+function silenced(microphone: MediaStream, muted: boolean): void {
+  for (const track of microphone.getTracks()) track.enabled = !muted;
+}
+
 /** Everything a call opened, let go: the peer closed, the microphone's light out, the voice stopped. */
 function release(standing: Standing): void {
   standing.peer.close();
@@ -253,6 +259,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     }
 
     const held = connect(opened.stream);
+    silenced(held.microphone, microphoneMuted.current);
     standing.current = held;
     listen(asked, held);
     const offer = await held.peer.createOffer();
@@ -317,6 +324,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
   const setMicrophoneMuted = (muted: boolean) => {
     const held = standing.current;
     microphoneMuted.current = muted;
+
+    if (held !== undefined) silenced(held.microphone, muted);
 
     if (held !== undefined && sessionStarted.current) {
       tell(held, muted ? LIVE_EVENT.MUTE : LIVE_EVENT.UNMUTE);

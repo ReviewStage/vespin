@@ -85,8 +85,8 @@ class FakePeer {
   }
 }
 
-/** The microphone's one track, whose light a stop puts out. */
-const microphone = { stopped: false };
+/** The microphone's one track, whose light a stop puts out, and whether it sounds. */
+const microphone = { stopped: false, enabled: true };
 
 /** What the call asked the service to open. */
 let opened: unknown[];
@@ -136,10 +136,14 @@ beforeEach(() => {
   FakePeer.made = [];
   opened = [];
   microphone.stopped = false;
+  microphone.enabled = true;
 
   const track = {
     stop: () => {
       microphone.stopped = true;
+    },
+    set enabled(on: boolean) {
+      microphone.enabled = on;
     },
   };
 
@@ -215,6 +219,11 @@ test("a mute pressed while the call connects is told to the session once it star
   act(() => call.setMicrophoneMuted(true));
   assert.equal(call.call?.microphoneMuted, true);
   assert.deepEqual(peer.channel.told(), []);
+  assert.equal(
+    microphone.enabled,
+    false,
+    "the track sends nothing before the session hears the mute",
+  );
 
   act(() => peer.channel.started());
 
