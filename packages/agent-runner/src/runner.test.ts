@@ -732,6 +732,43 @@ it.effect(
     }),
 );
 
+it.effect(
+  "a message taken while the turn waits on a wakeup joins that turn, whose IDLE counts its files from the snapshot its first message opened on",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+      const { write, run } = yield* launch(
+        [...WAKEUP_WAIT.slice(0, -1), ...WARM_TURNS.slice(-4)],
+        service,
+        ENV,
+        [],
+        true,
+        fakeProbe(),
+        true,
+      );
+      const first = "6f1c2a4e-3b7d-4c8e-9a0b-1d2e3f405162";
+      yield* write(WARM_CONFIG);
+      yield* write({ ...FIRST_MESSAGE, uuid: first });
+
+      for (let step = 0; step < 5_000; step += 1) {
+        if (kinds(service.applied).includes(RUNNER_EVENT.WAITING)) break;
+        yield* Effect.yieldNow;
+      }
+
+      yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: "And this." }] });
+      yield* untilIdles(service, 1);
+      yield* write({ type: INPUT_LINE.RETIRE });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.IDLED);
+      assert.deepEqual(
+        service.applied.find(
+          ({ message }) => "type" in message && message.type === RUNNER_EVENT.IDLE,
+        )?.message,
+        { type: RUNNER_EVENT.IDLE, files: fakeFilesOf(fakeSnapshotOf(CONFIG.cwd, first).commit) },
+      );
+    }),
+);
+
 it.effect("a retire written behind a message is skipped, and the message's turn runs", () =>
   Effect.gen(function* () {
     const service = fakeService();
