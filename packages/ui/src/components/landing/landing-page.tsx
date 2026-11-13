@@ -1,14 +1,18 @@
 import { type ReactNode, useId } from "react";
 import type { CodexArt } from "../../marks/harness-mark.js";
-import { MarkOrb } from "../../marks/mark-orb.js";
 import { LANDING_FIELD, LandingField, type LandingFieldPattern } from "./landing-field.js";
+import { LandingHeroApp } from "./landing-hero.js";
 import { LANDING_SCENE, type LandingScene, LandingSceneView } from "./landing-scenes.js";
 import { SiteFrame, SiteRule } from "./site-frame.js";
 
 export { SiteBarPages } from "./site-frame.js";
 
 /**
- * landing-page.tsx -- the product's landing: a bar that floats once the page scrolls, the one line beside the copper ball, a section per feature each over a moving screen, and a close over the wordmark in dots.
+ * landing-page.tsx -- the product's landing: a bar that floats once the page scrolls, the one line over the live app, a section per feature each over a moving screen, and a close over the wordmark in dots.
+ *
+ * The hero sets its line, its sentence, and its calls over a stage as wide
+ * as the rails, where the Mac app stands live on the field of copper dots
+ * for the reader to click through (`landing-hero.tsx`).
  *
  * It stands in the site's frame (`site-frame.tsx`): the margin grid's
  * rails, the bar that floats once the page scrolls, and the foot over the
@@ -129,7 +133,7 @@ export function LandingBackedBy({ href }: { href: string }): React.JSX.Element {
   );
 }
 
-/** The landing: `bar` over the hero's `badge`, `title`, `lead`, and `actions` beside the ball, the sections, the `close`, and the `footer` over the wordmark. */
+/** The landing: `bar` over the hero's `badge`, `title`, `lead`, and `actions` over the live app, the sections, the `close`, and the `footer` over the wordmark. */
 export function LandingPage({
   bar,
   barCall,
@@ -172,8 +176,11 @@ export function LandingPage({
             {lead === undefined ? null : <p className="ui-landing-hero-lead">{lead}</p>}
             <div className="ui-landing-actions">{actions}</div>
           </div>
-          <div className="ui-landing-hero-art">
-            <MarkOrb />
+          <div className="ui-landing-hero-stage">
+            <LandingField pattern={LANDING_FIELD.FLOW} />
+            <div className="ui-landing-hero-app">
+              <LandingHeroApp />
+            </div>
           </div>
         </div>
         {children}

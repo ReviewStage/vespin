@@ -52,6 +52,12 @@ export const DESKTOP_PLACE = {
 
 export type DesktopPlace = (typeof DESKTOP_PLACE)[keyof typeof DESKTOP_PLACE];
 
+/** Where a press in the sidebar goes: to one of its places, or to one of My tasks by its id. */
+export type SidebarGo = {
+  readonly place: (place: DesktopPlace) => void;
+  readonly task: (id: string) => void;
+};
+
 /** One of My tasks: its status, its name, whether an agent is at work on it, and how long ago it moved. */
 type SidebarTask = {
   readonly id: string;
@@ -140,13 +146,18 @@ export function SidePanelToggle(): React.JSX.Element {
   );
 }
 
-/** The desktop's sidebar, `place` marked among its places and `openTask` among My tasks. */
+/** The desktop's sidebar, `place` marked among its places and `openTask` among My tasks, its presses going where `go` says. */
 export function DesktopSidebar({
   place,
   openTask,
+  needYou = 2,
+  go,
 }: {
   place: DesktopPlace;
   openTask?: string | undefined;
+  /** How many of the Inbox's items wait on the reader, its count. */
+  needYou?: number | undefined;
+  go?: SidebarGo | undefined;
 }): React.JSX.Element {
   return (
     <aside className="ui-landing-sidebar">
@@ -167,7 +178,8 @@ export function DesktopSidebar({
         <NavItem
           icon={<InboxIcon />}
           current={place === DESKTOP_PLACE.INBOX ? NAV_CURRENT.PAGE : undefined}
-          count={{ value: 2, noun: "need you", tone: STATUS_TONE.ATTENTION }}
+          count={{ value: needYou, noun: "need you", tone: STATUS_TONE.ATTENTION }}
+          onClick={go === undefined ? undefined : () => go.place(DESKTOP_PLACE.INBOX)}
         >
           Inbox
         </NavItem>
@@ -175,6 +187,7 @@ export function DesktopSidebar({
         <NavItem
           icon={<ZapIcon />}
           current={place === DESKTOP_PLACE.AUTOMATIONS ? NAV_CURRENT.PAGE : undefined}
+          onClick={go === undefined ? undefined : () => go.place(DESKTOP_PLACE.AUTOMATIONS)}
         >
           Automations
         </NavItem>
@@ -205,7 +218,7 @@ export function DesktopSidebar({
                     </span>
                   }
                   current={task.id === openTask ? LIST_ROW_CURRENT.PAGE : undefined}
-                  onPress={still}
+                  onPress={go === undefined ? still : () => go.task(task.id)}
                 />
               ))}
             </List>

@@ -32,7 +32,7 @@ const CODEX_ART = {
 const Y_COMBINATOR_PAGE = "https://www.ycombinator.com/companies/vespin";
 
 /**
- * The landing: the one line beside the copper ball, then a section for each
+ * The landing: the one line over the live app, then a section for each
  * of the product's features over the app's own screens at work, and the
  * close. A reader with an account signs in from the bar or under the hero's
  * download.
@@ -43,7 +43,8 @@ export function App(): React.JSX.Element {
       bar={<SiteNavigation current={{ page: SITE_PAGE.HOME }} />}
       barCall={<SiteBarDownload />}
       badge={<LandingBackedBy href={Y_COMBINATOR_PAGE} />}
-      title="An inbox for all your coding agents."
+      title="The workspace for coding agents."
+      lead="Hand off tasks, follow along from anywhere, and review the pull requests when they're ready."
       actions={
         <>
           <SiteDownload />

@@ -108,13 +108,13 @@ import { MINUTE, STORY_NOW, still, useNarrowPage, useStory } from "./landing-sto
  */
 
 /** How long each scene holds a step, in milliseconds. */
-const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700, KEYS: 1500 } as const;
+export const BEAT = { INBOX: 1900, AGENTS: 1800, RUNS: 1700, KEYS: 1500 } as const;
 
 /**
  * A window's story: how many steps it plays, the last it draws (held for the
  * rest), and the step a narrow page's crop opens on.
  */
-const STORY = {
+export const STORY = {
   INBOX: { STEPS: 7, LAST: 5, NARROW_FROM: 2 },
   AGENTS: { STEPS: 7, LAST: 5, NARROW_FROM: 3 },
 } as const;
@@ -174,16 +174,18 @@ function AgentPill({
   );
 }
 
-/** The Mac app's window: the desktop's surface holding `children` as the app on show. */
-function DesktopWindow({
+/** The Mac app's window: the desktop's surface holding `children` as the app on show, `live` where the reader may click through it. */
+export function DesktopWindow({
   label,
+  live = false,
   children,
 }: {
   label: string;
+  live?: boolean | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <LandingWindow label={label}>
+    <LandingWindow label={label} live={live}>
       <div className="ui-landing-desktop" {...DESKTOP_SURFACE}>
         {children}
       </div>
@@ -207,7 +209,7 @@ const LINE_GLYPH: Readonly<Record<Line, ReactNode>> = {
 };
 
 /** One of the Inbox's items: its task, what it asks, its last line, and where the reader stands with it. */
-type InboxItem = {
+export type InboxItem = {
   readonly id: string;
   readonly task: string;
   readonly status: TaskStatus;
@@ -220,7 +222,13 @@ type InboxItem = {
 };
 
 /** An Inbox row as the panel draws it: the task above, the ask's glyph before its last line, its age beside the title. */
-function InboxRow({ item }: { item: InboxItem }): React.JSX.Element {
+function InboxRow({
+  item,
+  onOpen = still,
+}: {
+  item: InboxItem;
+  onOpen?: (() => void) | undefined;
+}): React.JSX.Element {
   const open = item.kind !== LINE.SETTLED;
 
   return (
@@ -248,16 +256,19 @@ function InboxRow({ item }: { item: InboxItem }): React.JSX.Element {
       metaAt={LIST_ROW_META.TITLE}
       current={item.current === true ? LIST_ROW_CURRENT.PAGE : undefined}
       unread={item.unread === true}
-      onPress={still}
+      onPress={onOpen}
     />
   );
 }
 
 /** The question the Inbox's story turns on, its options, the one the reader picks, and the note they send with it. */
-const QUESTION = {
+const INVITE_AGENT = "Invite emails";
+
+export const QUESTION = {
+  ID: "question",
   TITLE: "Who can withdraw an invite?",
   TASK: "Teammate invitations",
-  AGENT: "Invite emails",
+  AGENT: INVITE_AGENT,
   WORDS:
     "An invite is a pending membership row, so withdrawing one deletes it. The description leaves open who may.",
   OPTIONS: [
@@ -278,7 +289,11 @@ const QUESTION = {
   NOTE: "Log who withdrew it.",
 } as const;
 
-const OTHER_ITEMS: readonly InboxItem[] = [
+/** The Inbox's other items, each with the words its agent wrote. */
+export const OTHER_ITEMS: readonly (InboxItem & {
+  readonly agent: string;
+  readonly words: string;
+})[] = [
   {
     id: "domain",
     task: "Weekly digest email",
@@ -287,6 +302,9 @@ const OTHER_ITEMS: readonly InboxItem[] = [
     line: "3 steps left · Open the mail provider's Domains page",
     kind: LINE.DO,
     ago: 25,
+    agent: "Digest template",
+    words:
+      "The digest can't send until the mail provider trusts our domain. Add the three DNS records on its Domains page, then tell me and I'll send a test.",
   },
   {
     id: "migration",
@@ -296,6 +314,9 @@ const OTHER_ITEMS: readonly InboxItem[] = [
     line: "Approve (recommended) / Decline",
     kind: LINE.DECIDE,
     ago: 40,
+    agent: INVITE_AGENT,
+    words:
+      "The pending memberships table is ready. Should I run the migration on the preview database so the accept page can be tried there?",
   },
   {
     id: "subject",
@@ -305,60 +326,103 @@ const OTHER_ITEMS: readonly InboxItem[] = [
     line: "Answered",
     kind: LINE.SETTLED,
     ago: 62,
+    agent: "Digest template",
+    words: "Going with “Your week at acme” as the subject, as you said.",
   },
 ];
+
+/** The option of the question whose value is `value`, if any. */
+function questionOption(value: string | null): (typeof QUESTION.OPTIONS)[number] | undefined {
+  return QUESTION.OPTIONS.find((option) => option.value === value);
+}
+
+/** The question's row: its options while it waits, the one picked once answered. */
+export function questionItem({
+  answer,
+  unread,
+  current,
+}: {
+  answer: string | null;
+  unread: boolean;
+  current: boolean;
+}): InboxItem {
+  const picked = questionOption(answer);
+
+  return {
+    id: QUESTION.ID,
+    task: QUESTION.TASK,
+    status: TASK_STATUS.IN_PROGRESS,
+    title: QUESTION.TITLE,
+    line:
+      picked === undefined
+        ? QUESTION.OPTIONS.map((option) => option.label).join(" / ")
+        : `${picked.label}${"badge" in picked ? " (recommended)" : ""}`,
+    kind: picked === undefined ? LINE.DECIDE : LINE.SETTLED,
+    ago: 1,
+    unread,
+    current,
+  };
+}
 
 /** The Inbox's items at `step` of the story: the question arriving on top, opened, and settled once answered. */
 function inboxItems(step: number): readonly InboxItem[] {
   if (step < 1) return OTHER_ITEMS;
-  const answered = step >= 5;
 
-  const question: InboxItem = {
-    id: "question",
-    task: QUESTION.TASK,
-    status: TASK_STATUS.IN_PROGRESS,
-    title: QUESTION.TITLE,
-    line: answered ? "Both (recommended)" : "The member who sent it / Any admin / Both",
-    kind: answered ? LINE.SETTLED : LINE.DECIDE,
-    ago: 1,
-    unread: step < 2,
-    current: step >= 2,
-  };
-
-  return [question, ...OTHER_ITEMS];
+  return [
+    questionItem({
+      answer: step >= 5 ? QUESTION.PICK : null,
+      unread: step < 2,
+      current: step >= 2,
+    }),
+    ...OTHER_ITEMS,
+  ];
 }
 
 /** The thread's path in its bar: its task, then the agent that asked. */
-function ThreadPath(): React.JSX.Element {
+export function ThreadPath({
+  task,
+  status,
+  agent,
+}: {
+  task: string;
+  status: TaskStatus;
+  agent: string;
+}): React.JSX.Element {
   return (
     <Breadcrumbs
       label="Path"
       crumbs={[
-        { label: QUESTION.TASK, glyph: <TaskStatusMark status={TASK_STATUS.IN_PROGRESS} /> },
-        { label: QUESTION.AGENT, glyph: agentFace(QUESTION.AGENT, AVATAR_SIZE.INLINE) },
+        { label: task, glyph: <TaskStatusMark status={status} /> },
+        { label: agent, glyph: agentFace(agent, AVATAR_SIZE.INLINE) },
       ]}
     />
   );
 }
 
-/** The ask's options as the thread holds them, `picked` checked; numbered while they wait on the reader. */
+/** The ask's options as the thread holds them, `pick` checked; numbered while they wait on the reader. */
 function AskChoices({
-  picked,
+  pick,
   readOnly,
+  onPick = still,
 }: {
-  picked: boolean;
+  pick: string | null;
   readOnly: boolean;
+  onPick?: ((value: string) => void) | undefined;
 }): React.JSX.Element {
   return (
     <ChoiceList
       legend="Options"
       options={QUESTION.OPTIONS}
-      value={picked ? [QUESTION.PICK] : []}
+      value={pick === null ? [] : [pick]}
       select={CHOICE_SELECT.ONE}
       look={CHOICE_LOOK.MARKED}
       numbered={!readOnly}
       readOnly={readOnly}
-      onChange={still}
+      onChange={(value) => {
+        const [picked] = value;
+
+        if (picked !== undefined) onPick(picked);
+      }}
     />
   );
 }
@@ -368,10 +432,14 @@ function ComposerField({
   label,
   placeholder,
   words = "",
+  onWords = still,
+  onSubmit,
 }: {
   label: string;
   placeholder: string;
   words?: string | undefined;
+  onWords?: ((words: string) => void) | undefined;
+  onSubmit?: (() => void) | undefined;
 }): React.JSX.Element {
   return (
     <ComposerBody>
@@ -382,7 +450,8 @@ function ComposerField({
           placeholder={placeholder}
           look={TEXT_AREA_LOOK.BARE}
           rows={1}
-          onChange={still}
+          onChange={onWords}
+          onSubmit={onSubmit}
         />
       </div>
     </ComposerBody>
@@ -394,19 +463,31 @@ function ReplyComposer({
   placeholder,
   words,
   sendable,
+  onWords,
+  onSend,
   children,
 }: {
   placeholder: string;
   words?: string | undefined;
   sendable: boolean;
+  onWords?: ((words: string) => void) | undefined;
+  onSend?: (() => void) | undefined;
   children?: ReactNode;
 }): React.JSX.Element {
+  const send = sendable ? onSend : undefined;
+
   return (
     <ComposerFrame>
       {children}
-      <ComposerField label={placeholder} placeholder={placeholder} words={words} />
+      <ComposerField
+        label={placeholder}
+        placeholder={placeholder}
+        words={words}
+        onWords={onWords}
+        onSubmit={send}
+      />
       <ComposerFoot
-        send={{ label: "Send", empty: !sendable }}
+        send={{ label: "Send", empty: !sendable, onSend: send }}
         tools={<IconButton icon={<PlusIcon />} label="Attach files" onClick={still} />}
         actions={<IconButton icon={<MicrophoneIcon />} label="Dictate" onClick={still} />}
       />
@@ -414,14 +495,35 @@ function ReplyComposer({
   );
 }
 
+/** What the reader does to the question's draft: pick an option, write the note, and send. */
+export type AnswerDrive = {
+  readonly onPick: (value: string) => void;
+  readonly onNote: (note: string) => void;
+  readonly onSend: () => void;
+};
+
 /** The reader's draft under the question: its options in the composer, a note, and the new thread's choice. */
-function DraftAnswer({ picked, note }: { picked: boolean; note: string }): React.JSX.Element {
+function DraftAnswer({
+  pick,
+  note,
+  drive,
+}: {
+  pick: string | null;
+  note: string;
+  drive?: AnswerDrive | undefined;
+}): React.JSX.Element {
   return (
     <>
-      <ReplyComposer placeholder="Add a note" words={note} sendable={picked}>
+      <ReplyComposer
+        placeholder="Add a note"
+        words={note}
+        sendable={pick !== null}
+        onWords={drive?.onNote}
+        onSend={drive?.onSend}
+      >
         <div className="ui-landing-draft-ask">
           <div className="ui-landing-draft-ask-options">
-            <AskChoices picked={picked} readOnly={false} />
+            <AskChoices pick={pick} readOnly={false} onPick={drive?.onPick} />
           </div>
           <IconButton
             icon={<GLYPH.CLOSE />}
@@ -446,9 +548,17 @@ function DraftAnswer({ picked, note }: { picked: boolean; note: string }): React
  * the reader's draft, an option picked, a note written, and the answer sent,
  * a fresh draft waiting under it.
  */
-function QuestionThread({ step }: { step: number }): React.JSX.Element {
-  const sent = step >= 5;
-
+export function QuestionThread({
+  pick,
+  note,
+  sent,
+  drive,
+}: {
+  pick: string | null;
+  note: string;
+  sent: boolean;
+  drive?: AnswerDrive | undefined;
+}): React.JSX.Element {
   return (
     <div className="ui-landing-thread">
       <header className="ui-landing-subject">
@@ -469,8 +579,8 @@ function QuestionThread({ step }: { step: number }): React.JSX.Element {
         {sent ? (
           <li className="ui-landing-comment ui-landing-enter">
             <Comment author={{ name: MEMBER }} at={STORY_NOW} now={STORY_NOW}>
-              <AskChoices picked readOnly />
-              <Text>{QUESTION.NOTE}</Text>
+              <AskChoices pick={pick} readOnly />
+              {note === "" ? null : <Text>{note}</Text>}
             </Comment>
           </li>
         ) : null}
@@ -479,7 +589,7 @@ function QuestionThread({ step }: { step: number }): React.JSX.Element {
             {sent ? (
               <ReplyComposer placeholder="Reply" sendable={false} />
             ) : (
-              <DraftAnswer picked={step >= 3} note={step >= 4 ? QUESTION.NOTE : ""} />
+              <DraftAnswer pick={pick} note={note} drive={drive} />
             )}
           </Comment>
         </li>
@@ -488,13 +598,24 @@ function QuestionThread({ step }: { step: number }): React.JSX.Element {
   );
 }
 
-/** The Inbox's page at `step`: the list, a question arriving, opened, answered in the draft under it, and sent. */
-function InboxPage({ step }: { step: number }): React.JSX.Element {
-  const open = step >= 2;
+/** An Inbox item opened beside the list: its path in the bar over its thread. */
+export type OpenThread = { readonly path: ReactNode; readonly thread: ReactNode };
 
+/** The Inbox's page: `sidebar`, the list of `items`, and the `open` item's thread beside it, or the empty column. */
+export function InboxPage({
+  sidebar,
+  items,
+  open,
+  onOpen,
+}: {
+  sidebar: ReactNode;
+  items: readonly InboxItem[];
+  open: OpenThread | null;
+  onOpen?: ((id: string) => void) | undefined;
+}): React.JSX.Element {
   return (
     <div className="ui-landing-app">
-      <DesktopSidebar place={DESKTOP_PLACE.INBOX} />
+      {sidebar}
       <div className="ui-landing-main ui-landing-inbox">
         <nav className="ui-landing-inbox-list" aria-label="Inbox">
           <Toolbar
@@ -515,8 +636,12 @@ function InboxPage({ step }: { step: number }): React.JSX.Element {
             </search>
             <div className="ui-landing-rows">
               <List label="Inbox items">
-                {inboxItems(step).map((item) => (
-                  <InboxRow key={item.id} item={item} />
+                {items.map((item) => (
+                  <InboxRow
+                    key={item.id}
+                    item={item}
+                    onOpen={onOpen === undefined ? undefined : () => onOpen(item.id)}
+                  />
                 ))}
               </List>
             </div>
@@ -525,12 +650,12 @@ function InboxPage({ step }: { step: number }): React.JSX.Element {
         <section className="ui-landing-inbox-thread">
           <Toolbar
             start={TOOLBAR_INSET.COLUMN}
-            title={open ? <ThreadPath /> : undefined}
-            actions={open ? <MoreButton thing="thread" onClick={still} /> : undefined}
+            title={open?.path}
+            actions={open === null ? undefined : <MoreButton thing="thread" onClick={still} />}
           />
           <div className="ui-landing-sheet-end">
-            {open ? (
-              <QuestionThread step={step} />
+            {open !== null ? (
+              open.thread
             ) : (
               <div className="ui-landing-empty">
                 <GlyphSlot size={ICON_SIZE.LARGE}>
@@ -547,6 +672,36 @@ function InboxPage({ step }: { step: number }): React.JSX.Element {
   );
 }
 
+/** The Inbox's page at `step` of its story: a question arriving, opened, answered in the draft under it, and sent. */
+function StoryInbox({ step }: { step: number }): React.JSX.Element {
+  return (
+    <InboxPage
+      sidebar={<DesktopSidebar place={DESKTOP_PLACE.INBOX} />}
+      items={inboxItems(step)}
+      open={
+        step >= 2
+          ? {
+              path: (
+                <ThreadPath
+                  task={QUESTION.TASK}
+                  status={TASK_STATUS.IN_PROGRESS}
+                  agent={QUESTION.AGENT}
+                />
+              ),
+              thread: (
+                <QuestionThread
+                  pick={step >= 3 ? QUESTION.PICK : null}
+                  note={step >= 4 ? QUESTION.NOTE : ""}
+                  sent={step >= 5}
+                />
+              ),
+            }
+          : null
+      }
+    />
+  );
+}
+
 function InboxScene(): React.JSX.Element {
   const ref = useRef<HTMLDivElement>(null);
   const step = useWindowStory(ref, STORY.INBOX, BEAT.INBOX);
@@ -554,7 +709,7 @@ function InboxScene(): React.JSX.Element {
   return (
     <div ref={ref} className="ui-landing-scene">
       <DesktopWindow label="The Inbox, where an agent's question is answered">
-        <InboxPage step={step} />
+        <StoryInbox step={step} />
       </DesktopWindow>
     </div>
   );
@@ -598,8 +753,158 @@ function ReceivedMessage({ sender, words }: { sender: string; words: string }): 
   );
 }
 
+/** Something the reader sent: its words, and the id it is listed by. */
+export type Said = { readonly id: number; readonly words: string };
+
+/** The reader's own messages in a log, each in a bubble under their name. */
+function SentMessages({ sent }: { sent: readonly Said[] }): React.JSX.Element {
+  return (
+    <>
+      {sent.map((said) => (
+        <MessageFrame key={said.id} className="ui-landing-received ui-landing-enter">
+          <MessageHead sender={<Text as={TEXT_ELEMENT.SPAN}>You</Text>} />
+          <div className="ui-landing-bubble">
+            <Text>{said.words}</Text>
+          </div>
+        </MessageFrame>
+      ))}
+    </>
+  );
+}
+
+/** One of the Inbox's other items opened: its agent's words, the reader's replies, and the reply box under them. */
+export function ItemThread({
+  item,
+  replies,
+  reply,
+}: {
+  item: (typeof OTHER_ITEMS)[number];
+  replies: readonly Said[];
+  reply: Draft;
+}): React.JSX.Element {
+  return (
+    <div className="ui-landing-thread">
+      <header className="ui-landing-subject">
+        <Text variant={TEXT_VARIANT.DIALOG} as={TEXT_ELEMENT.H2}>
+          {item.title}
+        </Text>
+      </header>
+      <ol className="ui-landing-comments">
+        <li className="ui-landing-comment">
+          <Comment
+            author={agentAuthor(item.agent)}
+            at={STORY_NOW - item.ago * MINUTE}
+            now={STORY_NOW}
+          >
+            <Text>{item.words}</Text>
+          </Comment>
+        </li>
+        {replies.map((said) => (
+          <li key={said.id} className="ui-landing-comment ui-landing-enter">
+            <Comment author={{ name: MEMBER }} at={STORY_NOW} now={STORY_NOW}>
+              <Text>{said.words}</Text>
+            </Comment>
+          </li>
+        ))}
+        <li className="ui-landing-comment">
+          <Comment author={{ name: MEMBER }} nameRef="You">
+            <ReplyComposer
+              placeholder="Reply"
+              words={reply.words}
+              sendable={reply.words.trim() !== ""}
+              onWords={reply.onWords}
+              onSend={reply.onSend}
+            />
+          </Comment>
+        </li>
+      </ol>
+    </div>
+  );
+}
+
+/**
+ * A task with no story of its own, as the hero's app opens it: its agent's
+ * tab over what the agent last said, or the empty log of a task no agent has
+ * started on, the reader's messages under it, and the follow-up box.
+ */
+export function QuietTaskPage({
+  sidebar,
+  agent,
+  words,
+  sent,
+  followUp,
+}: {
+  sidebar: ReactNode;
+  /** The agent at work on it, or none where no agent has started. */
+  agent: string | null;
+  words: string;
+  sent: readonly Said[];
+  followUp: Draft;
+}): React.JSX.Element {
+  const started = agent !== null || sent.length > 0;
+
+  return (
+    <div className="ui-landing-app">
+      {sidebar}
+      <div className="ui-landing-main ui-landing-task ui-landing-task-alone">
+        <section className="ui-landing-agent-log">
+          <Toolbar
+            start={TOOLBAR_INSET.COLUMN}
+            look={TOOLBAR_LOOK.TABS}
+            title={
+              started ? (
+                <span className="ui-landing-tabs">
+                  <Tabs label="Task" ground={TABS_GROUND.FRAME}>
+                    <Tab
+                      icon={<WorkingMark />}
+                      label={agent ?? "New agent"}
+                      selected
+                      onSelect={still}
+                    />
+                  </Tabs>
+                </span>
+              ) : undefined
+            }
+          />
+          <div className="ui-landing-sheet-start ui-landing-log-sheet">
+            {started ? (
+              <div className="ui-landing-log">
+                {agent === null ? null : (
+                  <MessageFrame>
+                    <Text>{words}</Text>
+                  </MessageFrame>
+                )}
+                <SentMessages sent={sent} />
+                <NoteLine look={NOTE_LINE_LOOK.INSET}>
+                  <span className="ui-landing-working">
+                    <Shimmer>Working…</Shimmer>
+                  </span>
+                </NoteLine>
+              </div>
+            ) : (
+              <div className="ui-landing-empty">
+                <GlyphSlot size={ICON_SIZE.LARGE}>
+                  <ComposeIcon />
+                </GlyphSlot>
+                <Text tone={TEXT_TONE.MUTED}>{words}</Text>
+              </div>
+            )}
+            <AgentFoot
+              step={0}
+              followUp={followUp}
+              placeholder={started ? "Send a follow-up" : "Describe what to build"}
+              working={started}
+            />
+          </div>
+        </section>
+      </div>
+      <SidePanelToggle />
+    </div>
+  );
+}
+
 const ACCEPT_PAGE = "Accept page";
-const INVITE_EMAILS = "Invite emails";
+const INVITE_EMAILS = INVITE_AGENT;
 
 /** A sub-task of the plan beside the log. */
 type SubTask = {
@@ -648,7 +953,7 @@ function TaskTabs({ step }: { step: number }): React.JSX.Element {
 }
 
 /** The agent's log at `step`: its words, its folded calls, the other agent's messages, and its working line. */
-function AgentLog({ step }: { step: number }): React.JSX.Element {
+function AgentLog({ step, sent }: { step: number; sent: readonly Said[] }): React.JSX.Element {
   const calls = step >= 3 ? 3 : step >= 1 ? 2 : 1;
 
   return (
@@ -693,6 +998,7 @@ function AgentLog({ step }: { step: number }): React.JSX.Element {
       {step >= 4 ? (
         <ReceivedMessage sender={ACCEPT_PAGE} words="#216 is ready for review." />
       ) : null}
+      <SentMessages sent={sent} />
       <NoteLine look={NOTE_LINE_LOOK.INSET}>
         <span className="ui-landing-working">
           <Shimmer>Working…</Shimmer>
@@ -703,8 +1009,32 @@ function AgentLog({ step }: { step: number }): React.JSX.Element {
   );
 }
 
-/** The log's foot at `step`: the pull request once opened, over the composer with the model the agent runs on. */
-function AgentFoot({ step }: { step: number }): React.JSX.Element {
+/** A box the reader writes in: its words, as they change, and their send. */
+export type Draft = {
+  readonly words: string;
+  readonly onWords: (words: string) => void;
+  readonly onSend: () => void;
+};
+
+/** The send of `draft`, where it holds words to send. */
+function draftSend(draft: Draft | undefined): (() => void) | undefined {
+  return draft !== undefined && draft.words.trim() !== "" ? draft.onSend : undefined;
+}
+
+/** The log's foot at `step`: the pull request once opened, over the composer with the model the agent runs on, writing `followUp` where given. */
+function AgentFoot({
+  step,
+  followUp,
+  placeholder = "Send a follow-up",
+  working = true,
+}: {
+  step: number;
+  followUp?: Draft | undefined;
+  placeholder?: string | undefined;
+  working?: boolean | undefined;
+}): React.JSX.Element {
+  const send = draftSend(followUp);
+
   return (
     <div className="ui-landing-agent-foot">
       {step >= 5 ? (
@@ -729,10 +1059,16 @@ function AgentFoot({ step }: { step: number }): React.JSX.Element {
       ) : null}
       <div className="ui-landing-composer">
         <ComposerFrame>
-          <ComposerField label="Follow-up" placeholder="Send a follow-up" />
+          <ComposerField
+            label={placeholder}
+            placeholder={placeholder}
+            words={followUp?.words}
+            onWords={followUp?.onWords}
+            onSubmit={send}
+          />
           <ComposerFoot
-            send={{ label: "Send", empty: true }}
-            stop={{ label: "Stop", onStop: still }}
+            send={{ label: "Send", empty: send === undefined, onSend: send }}
+            stop={working && send === undefined ? { label: "Stop", onStop: still } : undefined}
             tools={
               <>
                 <IconButton icon={<PlusIcon />} label="Attach files" onClick={still} />
@@ -832,11 +1168,21 @@ function PlanPanel({ step }: { step: number }): React.JSX.Element {
   );
 }
 
-/** The task's page at `step`: its tabs, the agent's log over its foot, and the plan beside it. */
-function TaskPage({ step }: { step: number }): React.JSX.Element {
+/** The task's page at `step`: `sidebar`, its tabs, the agent's log over its foot, and the plan beside it. */
+export function TaskPage({
+  step,
+  sidebar,
+  followUp,
+  sent = [],
+}: {
+  step: number;
+  sidebar: ReactNode;
+  followUp?: Draft | undefined;
+  sent?: readonly Said[] | undefined;
+}): React.JSX.Element {
   return (
     <div className="ui-landing-app">
-      <DesktopSidebar place={DESKTOP_PLACE.TASK} openTask="invites" />
+      {sidebar}
       <div className="ui-landing-main ui-landing-task">
         <section className="ui-landing-agent-log">
           <Toolbar
@@ -846,8 +1192,8 @@ function TaskPage({ step }: { step: number }): React.JSX.Element {
             actions={<MoreButton thing="agent" onClick={still} />}
           />
           <div className="ui-landing-sheet-start ui-landing-log-sheet">
-            <AgentLog step={step} />
-            <AgentFoot step={step} />
+            <AgentLog step={step} sent={sent} />
+            <AgentFoot step={step} followUp={followUp} />
           </div>
         </section>
         <PlanPanel step={step} />
@@ -864,7 +1210,10 @@ function AgentsScene(): React.JSX.Element {
   return (
     <div ref={ref} className="ui-landing-scene">
       <DesktopWindow label="A task's agent starting another agent, and the two trading messages">
-        <TaskPage step={step} />
+        <TaskPage
+          step={step}
+          sidebar={<DesktopSidebar place={DESKTOP_PLACE.TASK} openTask="invites" />}
+        />
       </DesktopWindow>
     </div>
   );
@@ -1026,16 +1375,37 @@ function AutomationRuns({ step }: { step: number }): React.JSX.Element {
 }
 
 /** The automation's page at `step`, its sidebar folded: its toolbar over its settings beside its runs. */
-function AutomationPage({ step }: { step: number }): React.JSX.Element {
+/** The automation's page at `step`: beside `sidebar` where given, or with the sidebar folded away. */
+export function AutomationPage({
+  step,
+  sidebar,
+}: {
+  step: number;
+  sidebar?: ReactNode;
+}): React.JSX.Element {
+  const main = (
+    <div className="ui-landing-main ui-landing-automation">
+      <AutomationBar />
+      <div className="ui-landing-automation-sheet">
+        <AutomationSettings />
+        <AutomationRuns step={step} />
+      </div>
+    </div>
+  );
+
+  if (sidebar !== undefined) {
+    return (
+      <div className="ui-landing-app">
+        {sidebar}
+        {main}
+        <SidePanelToggle />
+      </div>
+    );
+  }
+
   return (
     <div className="ui-landing-app ui-landing-app-folded">
-      <div className="ui-landing-main ui-landing-automation">
-        <AutomationBar />
-        <div className="ui-landing-automation-sheet">
-          <AutomationSettings />
-          <AutomationRuns step={step} />
-        </div>
-      </div>
+      {main}
       <span className="ui-landing-title-bar-folded">
         <IconButton icon={<SidebarIcon />} label="Show sidebar" onClick={still} />
         <IconButton icon={<ComposeIcon />} label="New task" onClick={still} />
@@ -1112,7 +1482,7 @@ function DevicesScene(): React.JSX.Element {
     <div className="ui-landing-scene ui-landing-devices">
       <div className="ui-landing-devices-window">
         <DesktopWindow label="The Inbox in the Mac app">
-          <InboxPage step={2} />
+          <StoryInbox step={2} />
         </DesktopWindow>
       </div>
       <div className="ui-landing-devices-phone">
