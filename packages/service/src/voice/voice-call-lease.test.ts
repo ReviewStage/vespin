@@ -362,6 +362,7 @@ it.layer(getTestDB())("a voice call held lease by lease", (it) => {
 
           // Its holder dies too, and the message comes a third time: the call is still taken back.
           yield* Fiber.interrupt(again);
+
           const third = yield* Effect.forkChild(
             holdVoiceCall({ ...lease, redelivered: true }, observe),
           );

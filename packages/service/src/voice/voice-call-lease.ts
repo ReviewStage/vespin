@@ -152,7 +152,7 @@ export class VoiceCallLeaseNotPublished extends Data.TaggedError("VoiceCallLease
 }> {}
 
 /** The sideband closed with no word of the session's close, so the call is unheld until the lease comes again. */
-class SidebandDropped extends Data.TaggedError("SidebandDropped")<{}> {}
+class SidebandDropped extends Data.TaggedError("SidebandDropped") {}
 
 /** The sideband would not attach for now, so the lease comes again. */
 class SidebandUnattached extends Data.TaggedError("SidebandUnattached")<{
