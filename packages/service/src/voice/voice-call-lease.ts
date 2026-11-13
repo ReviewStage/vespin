@@ -248,7 +248,8 @@ const endCall = Effect.fnUntraced(function* (
  * on the caller's day: attached on the caller's key, asked to close, and its
  * close waited on for `CLOSE_WAIT`. A session already gone, or one that
  * never confirms its close, keeps no seconds, as a call whose close no lease
- * heard keeps none.
+ * heard keeps none; one that will not attach for now fails the delivery, as
+ * the call's own session does, so the lease comes again to close it.
  */
 const closedLeft = Effect.fnUntraced(function* (
   call: VoiceCallRow,
@@ -257,6 +258,10 @@ const closedLeft = Effect.fnUntraced(function* (
 ) {
   const sidebands = yield* LiveSidebands;
   const attached = yield* Effect.result(sidebands.attach(sessionId, key));
+
+  if (Result.isFailure(attached) && !sessionGone(attached.failure)) {
+    return yield* new SidebandUnattached({ status: attached.failure.status });
+  }
 
   if (Result.isFailure(attached)) return;
   const sideband = attached.success;

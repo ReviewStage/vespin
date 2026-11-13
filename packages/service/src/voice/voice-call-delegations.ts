@@ -242,7 +242,7 @@ const callStart = Effect.fnUntraced(function* (call: VoiceCallRow, target: Agent
   const queuedDelegations = queued.flatMap((message) => {
     const delegationId = delegationOf(message.line?.metadata);
 
-    return delegationId === undefined ? [] : [delegationId];
+    return delegationId === undefined ? [] : [{ delegationId, adopts: message.line?.adopts ?? [] }];
   });
 
   const records = read.ok ? read.value : [];
@@ -255,14 +255,25 @@ const callStart = Effect.fnUntraced(function* (call: VoiceCallRow, target: Agent
   });
 
   // Note that a line ending before this session began was said on an earlier one, as the reconnect set the session's start past every line before it.
-  const earlier = records.flatMap((record) => {
-    const metadata = metadataOf(record);
-    const delegationId = delegationOf(metadata);
-    const toMs = lineFieldsOf(metadata)?.to_ms;
-    const before = call.clockBaseMs > 0 && toMs !== undefined && toMs <= call.clockBaseMs;
+  const before = (toMs: number | undefined) =>
+    call.clockBaseMs > 0 && toMs !== undefined && toMs <= call.clockBaseMs;
 
-    return delegationId !== undefined && before ? [delegationId] : [];
-  });
+  const earlierLines = new Set(lines.flatMap((line) => (before(line.toMs) ? [line.id] : [])));
+
+  // A delegation is an earlier session's where the lines it took were: stored ones by their own end, queued ones by the lines they adopt.
+  const earlier = [
+    ...records.flatMap((record) => {
+      const metadata = metadataOf(record);
+      const delegationId = delegationOf(metadata);
+
+      return delegationId !== undefined && before(lineFieldsOf(metadata)?.to_ms)
+        ? [delegationId]
+        : [];
+    }),
+    ...queuedDelegations.flatMap((queuedOne) =>
+      queuedOne.adopts.some((key) => earlierLines.has(key)) ? [queuedOne.delegationId] : [],
+    ),
+  ];
 
   const working = yield* agentWorking(target);
 
@@ -272,7 +283,7 @@ const callStart = Effect.fnUntraced(function* (call: VoiceCallRow, target: Agent
     answering: working ? (handedOn.at(-1) ?? null) : null,
     lineId: (eventId) => callLineKey(call.id, eventId),
     lines,
-    delegations: new Set([...handedOn, ...queuedDelegations]),
+    delegations: new Set([...handedOn, ...queuedDelegations.map((one) => one.delegationId)]),
     earlier: new Set(earlier),
   };
 

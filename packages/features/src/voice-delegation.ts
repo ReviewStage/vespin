@@ -434,6 +434,11 @@ function replayed(resume: Resume, eventId: string, endMs: number | undefined): b
   return endMs !== undefined && resume.endMs !== undefined && endMs <= resume.endMs;
 }
 
+/** Whether a line that ended at `endMs` was said on an earlier session of the call: before this session's timeline began. */
+function endedEarlier(endMs: number | undefined, sessionStartMs: number): boolean {
+  return sessionStartMs > 0 && endMs !== undefined && endMs <= sessionStartMs;
+}
+
 /** The later of two ends, or whichever is known. */
 function laterEnd(standing: number | undefined, given: number | undefined): number | undefined {
   return standing === undefined || given === undefined
@@ -479,7 +484,12 @@ function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
   const silent =
     own?.endMs !== undefined && startMs !== undefined && startMs - own.endMs > SILENCE_SPLIT_MS;
 
-  const grows = own !== undefined && !silent && (state.open === speaker || late);
+  // Note that a line an earlier session said never grows, late fragment or not, so the transcript before a reconnect stands as it was.
+  const grows =
+    own !== undefined &&
+    !silent &&
+    !endedEarlier(own.endMs, state.sessionStartMs) &&
+    (state.open === speaker || late);
 
   if (grows) {
     const [kept, outputs] = recorded({
@@ -632,11 +642,6 @@ function resumeOf(lines: readonly StoredVoiceLine[], speaker: VoiceSpeaker): Res
     : { eventId: newest.eventId, endMs: newest.toMs };
 }
 
-/** Whether a stored line was said on an earlier session of the call: one that ended before this session's timeline began. */
-function saidEarlier(line: StoredVoiceLine, sessionStartMs: number): boolean {
-  return sessionStartMs > 0 && line.toMs !== undefined && line.toMs <= sessionStartMs;
-}
-
 /**
  * The loop's state at the call's start, or as a holder taking the call over
  * finds it in the stored lines: the caller's lines no delegation took, the
@@ -667,7 +672,7 @@ function startedVoiceLoop(start: VoiceCallStart): VoiceState {
     ),
     voiced,
     open:
-      newest === undefined || newest.delegated || saidEarlier(newest, start.sessionStartMs)
+      newest === undefined || newest.delegated || endedEarlier(newest.toMs, start.sessionStartMs)
         ? null
         : newest.speaker,
     working: start.agentWorking,

@@ -393,7 +393,11 @@ it.effect(
 
       // The new session's timeline starts again at zero, three seconds into the call, and its event ids are its own.
       const outputs = yield* outputsOf(
-        [said("Where was I?", 0, 400, "n1"), agent({ kind: AGENT_TURN.REPLY, text: "Done." })],
+        [
+          voiced("I'm back.", 200, 600, "v1"),
+          said("Where was I?", 100, 400, "n1"),
+          agent({ kind: AGENT_TURN.REPLY, text: "Done." }),
+        ],
         {
           lines,
           sessionStartMs: 3_000,
@@ -403,11 +407,17 @@ it.effect(
         },
       );
 
-      // Its first words open a line of their own rather than growing the line the earlier session left open, and the reply to the earlier session's request is told as general context, since this session never raised it.
+      // The caller's late first words open a line of their own rather than growing the line the earlier session left, and the reply to the earlier session's request is told as general context, since this session never raised it.
       assert.deepEqual(outputs, [
         {
-          ...record(VOICE_SPEAKER.CALLER, "line_1", "Where was I?"),
-          fromMs: 3_000,
+          ...record(VOICE_SPEAKER.VOICE, "line_1", "I'm back."),
+          fromMs: 3_200,
+          toMs: 3_600,
+          eventId: "v1",
+        },
+        {
+          ...record(VOICE_SPEAKER.CALLER, "line_2", "Where was I?"),
+          fromMs: 3_100,
           toMs: 3_400,
           eventId: "n1",
         },
