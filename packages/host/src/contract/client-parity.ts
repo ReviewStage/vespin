@@ -121,9 +121,6 @@ const IOS = {
   HOSTS_STANDING: byDesign(
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
   ),
-  TASK_SEARCH: notYet(
-    "iOS's task search filters the tasks the phone holds, and doesn't search the service for older ones yet",
-  ),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
   MACHINE_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
@@ -428,7 +425,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_BROWSER_TABS_FOLLOW]: panel(IOS.DESK_TOOLS),
   [PORT_ACT_KIND.TASKS_COLOR_CODE]: panel(IOS.CODE_COLOR),
   [PORT_ACT_KIND.TASKS_FIND]: EVERYWHERE,
-  [PORT_ACT_KIND.TASKS_SEARCH]: panel(IOS.TASK_SEARCH),
+  [PORT_ACT_KIND.TASKS_SEARCH]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_SETTLED_PAGE]: panel(IOS.TASKS),
   [PORT_ACT_KIND.TASKS_REVISIONS]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REVISION]: EVERYWHERE,
