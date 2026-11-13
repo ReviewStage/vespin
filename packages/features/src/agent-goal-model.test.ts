@@ -190,6 +190,14 @@ describe("goalAsShown", () => {
     expect(goalAsShown(readGoal(set), [], true, 5_000 + GOAL_ASK_WAIT_MS)?.state).toBe(
       AGENT_GOAL_STATE.ACTIVE,
     );
+    // A project's own Stop hook, said as a verdict of no goal's, answers no ask.
+    const hooked = [
+      ...paused,
+      turn("t1b", [
+        notice(GOAL_EVENT.NOT_MET, { condition: "lint is clean", reason: "Run lint." }),
+      ]),
+    ];
+    expect(goalAsShown(readGoal(hooked), [], false, 6_000)?.state).toBe(AGENT_GOAL_STATE.PAUSED);
     // The harness's word settles it: here, it resumed the goal again.
     const answered = [...paused, turn("t2", [notice(GOAL_EVENT.RESUMED)])];
     expect(goalAsShown(readGoal(answered), [], false, 6_000)?.state).toBe(AGENT_GOAL_STATE.ACTIVE);

@@ -1743,6 +1743,8 @@ const takeTurnCompleted = Effect.fn("agent-runner/codex/takeTurnCompleted")(func
 const waitOnGoal = Effect.fn("agent-runner/codex/waitOnGoal")(function* (launch: CodexLaunch) {
   launch.goalWaits += 1;
   launch.goalWait = true;
+  // Note that a warm launch is not warm while it waits, because a retire or its window would end it before the goal's turn starts; `turnOver` makes it warm again.
+  launch.state = IDLE;
   const wait = launch.goalWaits;
   yield* Effect.forkScoped(
     Effect.sleep(GOAL_CONTINUE_WAIT).pipe(
