@@ -6,7 +6,7 @@ import {
   dateWhole,
   readerZone,
 } from "@repo/features/date-mention";
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
 import {
   ENTITY_KIND,
   ENTITY_WORD,

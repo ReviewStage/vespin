@@ -1400,7 +1400,7 @@ test("in the window's Inbox an @ in the box of a task's item offers that descrip
         return Promise.resolve({
           status: FAKE_ANSWER.DONE,
           value: {
-            revision: { seq: 2, document: { body, assumptions: [] }, previous: null },
+            revision: { seq: 2, description: { body, assumptions: [] }, previous: null },
           },
         });
       }

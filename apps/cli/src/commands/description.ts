@@ -35,7 +35,7 @@ export function writeDescription(taskId: string, base: string, value: string) {
 
     const saved = yield* askService(hosted.tasks.editDescription, {
       params: { id: taskId },
-      body: { document: { base, value } },
+      body: { description: { base, value } },
     });
 
     if ("plan" in saved) return saved.plan;
@@ -97,7 +97,7 @@ const showCommand = Command.make(
           NO_REVISION_WORDS,
         );
 
-        const { body } = read.revision.document;
+        const { body } = read.revision.description;
         yield* answer({
           json: { id, revision: seq, body },
           lines: [withoutTrailingNewlines(body)],
@@ -109,9 +109,9 @@ const showCommand = Command.make(
 
       const { plan } = yield* askService(hosted.tasks.open, { id });
       yield* answer({
-        json: { id: plan.id, name: plan.name, body: plan.document.body },
+        json: { id: plan.id, name: plan.name, body: plan.description.body },
         // Note that the closing line break is dropped, since each line printed ends in one.
-        lines: [withoutTrailingNewlines(plan.document.body)],
+        lines: [withoutTrailingNewlines(plan.description.body)],
         ids: [plan.id],
       });
     }),
@@ -145,9 +145,9 @@ const editCommand = Command.make(
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
       const { plan } = yield* askService(hosted.tasks.open, { id });
-      const saved = yield* writeDescription(id, plan.document.body, value);
+      const saved = yield* writeDescription(id, plan.description.body, value);
       yield* answer({
-        json: { id: saved.id, name: saved.name, body: saved.document.body },
+        json: { id: saved.id, name: saved.name, body: saved.description.body },
         lines: [`Saved the description of ${saved.name}.`],
         ids: [saved.id],
       });
@@ -243,7 +243,7 @@ const restoreCommand = Command.make(
       );
 
       yield* answer({
-        json: { id: plan.id, name: plan.name, restored: revision, body: plan.document.body },
+        json: { id: plan.id, name: plan.name, restored: revision, body: plan.description.body },
         lines: [`Restored revision ${revision} of the description of ${plan.name}.`],
         ids: [plan.id],
       });

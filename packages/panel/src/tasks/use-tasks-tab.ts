@@ -1119,7 +1119,7 @@ export function useTasksTab(input: {
         : dictationKeywords({
             repository: openDocument.repository,
             title: openDocument.name,
-            body: openDocument.document.body,
+            body: openDocument.description.body,
           }),
     [openDocument, viewed.activeTaskId],
   );
@@ -1674,7 +1674,7 @@ export function useTasksTab(input: {
 
     if (timed === undefined || readyTask?.id !== timed.taskId) return;
     opening.current = undefined;
-    const descriptionChars = readyTask.document.body.length;
+    const descriptionChars = readyTask.description.body.length;
     recordPanelSpan({
       name: PANEL_SPAN.TASK_OPEN,
       startedAt: timed.startedAt,

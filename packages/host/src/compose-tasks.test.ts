@@ -239,12 +239,12 @@ it.effect("the window's refresh lists the plans and opening one draws its saved 
 
     assert.deepEqual(yield* openTask(INVITES), true);
     assert.equal(last()?.activeTaskId, INVITES);
-    assert.deepEqual(description(INVITES)?.document, invites.document);
+    assert.deepEqual(description(INVITES)?.description, invites.description);
     assert.equal(tasks.snapshot().activeTaskId, INVITES);
 
     yield* openTask(BILLING);
     assert.equal(last()?.activeTaskId, BILLING);
-    assert.deepEqual(description(BILLING)?.document, billing.document);
+    assert.deepEqual(description(BILLING)?.description, billing.description);
   }),
 );
 
@@ -532,7 +532,7 @@ it.effect(
       // A teammate saves the description, which the next poll carries.
       service.tasks = service.tasks.map((each) =>
         each.id === INVITES
-          ? { ...each, updatedAt: 40, document: { ...each.document, body: "# Theirs" } }
+          ? { ...each, updatedAt: 40, description: { ...each.description, body: "# Theirs" } }
           : each,
       );
       record.move();
@@ -541,7 +541,7 @@ it.effect(
 
       assert.deepEqual(service.createKeys, ["start-key", "start-key"]);
       assert.equal(last()?.activeTaskId, INVITES);
-      assert.equal(description(INVITES)?.document.body, "# Theirs");
+      assert.equal(description(INVITES)?.description.body, "# Theirs");
       assert.deepEqual(pool.queued(), []);
     }),
 );
@@ -766,7 +766,7 @@ it.effect(
 
       assert.equal(opened, INVITES, "the task opens before the service answers");
       assert.equal(drawn?.name, "Invitation expiry");
-      assert.equal(drawn?.document.body, "", "on its empty description");
+      assert.equal(drawn?.description.body, "", "on its empty description");
       assert.deepEqual(refused, { failure: TASK_CALL_FAILURE.REPOSITORY_NOT_REACHABLE });
       assert.equal(last()?.activeTaskId, BILLING, "the reader is back where they stood");
     }),
@@ -806,14 +806,14 @@ it.effect(
       // A teammate saves the description, which the next poll carries.
       service.tasks = service.tasks.map((each) =>
         each.id === INVITES
-          ? { ...each, updatedAt: 40, document: { ...each.document, body: "# Theirs" } }
+          ? { ...each, updatedAt: 40, description: { ...each.description, body: "# Theirs" } }
           : each,
       );
       record.move();
       yield* TestClock.adjust(Duration.seconds(1));
       yield* followSettled;
 
-      assert.equal(description(INVITES)?.document.body, "# Theirs");
+      assert.equal(description(INVITES)?.description.body, "# Theirs");
     }),
 );
 
@@ -992,13 +992,27 @@ it.effect(
       yield* openTask(INVITES);
       assert.equal(held(INVITES), undefined, "the description is still read");
       yield* call("TASKS_RENAME", { taskId: INVITES, name: "Invitations" });
-      assert.equal(description(INVITES)?.document.body, "# Invitations");
+      assert.equal(description(INVITES)?.description.body, "# Invitations");
 
       yield* Deferred.succeed(answered, undefined);
       yield* settled;
       assert.equal(description(INVITES)?.name, "Invitations");
-      assert.equal(description(INVITES)?.document.body, "# Invitations");
+      assert.equal(description(INVITES)?.description.body, "# Invitations");
     }),
+);
+
+it.effect("a rename of an open task draws the description the service answered with", () =>
+  Effect.gen(function* () {
+    const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+    const { call, settled, description, openTask } = yield* subject(fakeService([invites]));
+    yield* openTask(INVITES);
+    yield* settled;
+
+    yield* call("TASKS_RENAME", { taskId: INVITES, name: "Invitations" });
+    yield* settled;
+
+    assert.equal(description(INVITES)?.description.body, "# Invitations");
+  }),
 );
 
 it.effect(
@@ -1023,7 +1037,7 @@ it.effect(
       yield* Deferred.succeed(answered, undefined);
       yield* settled;
       assert.equal(description(INVITES)?.pinnedAt, MARKED_AT);
-      assert.equal(description(INVITES)?.document.body, "# Teammate invitations");
+      assert.equal(description(INVITES)?.description.body, "# Teammate invitations");
     }),
 );
 
@@ -1089,11 +1103,11 @@ it.effect(
 
       const answer = yield* call("TASKS_EDIT", {
         taskId: INVITES,
-        edit: { document: { base: INVITES_TEXT, value: mine } },
+        edit: { description: { base: INVITES_TEXT, value: mine } },
       });
 
       assert.deepEqual(answer, { saved: true }, "the edit answers once its description is drawn");
-      assert.equal(description(INVITES)?.document.body, mine);
+      assert.equal(description(INVITES)?.description.body, mine);
       assert.equal(description(INVITES)?.updatedAt, EDITED_AT);
 
       // A teammate's save the record carries before the edit's transaction reads nothing, and the list's row from before it is held over.
@@ -1103,7 +1117,7 @@ it.effect(
       const theirs = {
         ...edited,
         updatedAt: 9_000,
-        document: { ...edited.document, body: "Theirs." },
+        description: { ...edited.description, body: "Theirs." },
       };
 
       service.tasks = [theirs];
@@ -1113,7 +1127,7 @@ it.effect(
       service.live.list.set({ plans: [rowOfTask(invites)] }, ["tx-other"]);
       yield* nextPoll(settled);
       assert.equal(opens(), opened);
-      assert.equal(description(INVITES)?.document.body, mine);
+      assert.equal(description(INVITES)?.description.body, mine);
       assert.equal(last()?.tasks.find((row) => row.id === INVITES)?.updatedAt, EDITED_AT);
 
       // Once the record carries the edit's transaction, the save it delivered meanwhile is read.
@@ -1123,7 +1137,7 @@ it.effect(
       service.live.list.set({ plans: [rowOfTask(theirs)] }, ["tx-edit"]);
       yield* nextPoll(settled);
       assert.equal(opens(), opened + 1);
-      assert.equal(description(INVITES)?.document.body, "Theirs.");
+      assert.equal(description(INVITES)?.description.body, "Theirs.");
       assert.equal(last()?.tasks.find((row) => row.id === INVITES)?.updatedAt, theirs.updatedAt);
     }),
 );
@@ -2264,7 +2278,7 @@ it.effect(
           ? {
               ...held,
               updatedAt: 20,
-              document: { ...held.document, body: theirs },
+              description: { ...held.description, body: theirs },
               lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, at: 20, duringCall: false },
             }
           : each,
@@ -2275,10 +2289,10 @@ it.effect(
       yield* TestClock.adjust(Duration.seconds(1));
       yield* followSettled;
       assert.equal(opens(), opened + 1);
-      assert.equal(description(INVITES)?.document.body, INVITES_TEXT, "the copy held stands");
+      assert.equal(description(INVITES)?.description.body, INVITES_TEXT, "the copy held stands");
       yield* TestClock.adjust(Duration.seconds(2));
       yield* followSettled;
-      assert.equal(description(INVITES)?.document.body, theirs);
+      assert.equal(description(INVITES)?.description.body, theirs);
       assert.equal(opens(), opened + 2);
 
       // The window's own save is drawn from its answer, which the next poll's mark only confirms.
@@ -2286,14 +2300,14 @@ it.effect(
       assert.deepEqual(
         yield* call("TASKS_EDIT", {
           taskId: INVITES,
-          edit: { document: { base: theirs, value: mine } },
+          edit: { description: { base: theirs, value: mine } },
         }),
         { saved: true },
       );
       record.move();
       yield* TestClock.adjust(Duration.seconds(5));
       yield* followSettled;
-      assert.equal(description(INVITES)?.document.body, mine);
+      assert.equal(description(INVITES)?.description.body, mine);
       assert.equal(opens(), opened + 2);
     }),
 );
@@ -2338,7 +2352,7 @@ it.effect("a read answering an older save than the held description lands nothin
     const mine = `${INVITES_TEXT}\n\nInvites expire.`;
     yield* call("TASKS_EDIT", {
       taskId: INVITES,
-      edit: { document: { base: INVITES_TEXT, value: mine } },
+      edit: { description: { base: INVITES_TEXT, value: mine } },
     });
     const opens = () => service.reads.filter((read) => read === `open:${INVITES}`).length;
     const opened = opens();
@@ -2356,7 +2370,7 @@ it.effect("a read answering an older save than the held description lands nothin
 
     assert.equal(opens(), opened + 1, "the moved mark asked a read");
     assert.equal(
-      description(INVITES)?.document.body,
+      description(INVITES)?.description.body,
       mine,
       "the saved description stands over the older read",
     );
@@ -2382,7 +2396,7 @@ it.effect(
       service.open = (taskId) =>
         Effect.flatMap(open(taskId), (read) => Effect.as(Deferred.await(answered), read));
       service.tasks = [
-        { ...invites, updatedAt: 20, document: { ...invites.document, body: "Theirs." } },
+        { ...invites, updatedAt: 20, description: { ...invites.description, body: "Theirs." } },
       ];
       record.move();
       yield* TestClock.adjust(Duration.seconds(1));
@@ -2401,7 +2415,7 @@ it.effect(
       yield* TestClock.adjust(Duration.seconds(2));
       yield* followSettled;
       assert.equal(
-        description(INVITES)?.document.body,
+        description(INVITES)?.description.body,
         "Theirs.",
         "the save is read again after the pin",
       );
@@ -2892,7 +2906,7 @@ it.effect(
       const service = fakeService([task(INVITES, "Teammate invitations", "# Invites", 10)]);
       service.revisions[1] = {
         seq: 1,
-        document: { body: "# Invites", assumptions: [] },
+        description: { body: "# Invites", assumptions: [] },
         previous: null,
       };
       const history = polledLive<"revisions">(["revisions"]);
@@ -3124,7 +3138,7 @@ it.effect(
           open?.status,
           open?.assignee,
           open?.repository,
-          open?.document.body,
+          open?.description.body,
           open?.updatedAt,
         ];
       };

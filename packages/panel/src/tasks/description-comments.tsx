@@ -14,7 +14,7 @@ import {
   type DescriptionCommentThread,
   type DescriptionCommentWriter,
 } from "@repo/features/description-comment-wire";
-import type { DescriptionSection } from "@repo/features/description-document";
+import type { DescriptionSection } from "@repo/features/description-sections";
 import { fileMarkers } from "@repo/features/file-marker";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { FrameBox, PagePicked } from "@repo/features/page-pick";
