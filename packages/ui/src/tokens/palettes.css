@@ -36,7 +36,7 @@
    (https://vercel.com/geist/colors): 100 a hover, 200 a strong fill, 300 a
    chosen one, 500 a press; 400 the border, 500 the strong edge, and 600 the
    chosen edge. The chart's series are Geist's teal, purple, green, pink, and
-   gray, none of them the accent's blue. */
+   gray, none of them the accent's amber. */
 
 [data-ui-theme="dark"] {
   color-scheme: dark;
@@ -133,7 +133,7 @@
 
   /* A chart's series, in the order a chart takes them: each mark holds 3:1
      on either ground, so a stack of them reads apart by hue alone, and none
-     is the accent's blue, so no series reads as attention beside a badge. */
+     is the accent's amber, so no series reads as attention beside a badge. */
   --ui-color-chart-1: #008d7d;
   --ui-color-chart-2: #9f00f4;
   --ui-color-chart-3: #279141;

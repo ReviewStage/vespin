@@ -35,22 +35,26 @@ const COPPER = {
 const AVATAR = { TILE: "#171412", INK: COPPER.DARK.FILL };
 
 // Geist: Vercel's design system (https://vercel.com/geist/colors), its
-// neutral grays and backgrounds verbatim, and its blue as the one accent.
-// Each role takes the step Geist names for it: background-100 the ground
-// and background-200 the frame and the wells, gray-100 to 300 a control's
-// rest, hover, and press, gray-400 and 500 its edges, gray-900 the
+// neutral grays and backgrounds verbatim, and its amber-800 as the one
+// accent. Each role takes the step Geist names for it: background-100 the
+// ground and background-200 the frame and the wells, gray-100 to 300 a
+// control's rest, hover, and press, gray-400 and 500 its edges, gray-900 the
 // secondary words and gray-1000 the primary. A status ink is its scale's
-// 900, Geist's accessible text step, and a fill is its 700 or 800. The
-// accent is blue, the focus color Geist rings a control in, and attention
-// shares it, as copper's did; work under way is amber, as a Vercel build is.
+// 900, Geist's accessible text step. Attention shares the accent, as
+// copper's did; work under way is Geist's blue and a start its teal, so
+// neither reads as the accent.
 //
-// Note that two blues sit a step off Geist's own: the dark fill is its
-// blue-800, since white words read on blue-700 at only 4.47:1, and the light
-// link is blue-800 a shade darker, since blue-900 drops under 4.5:1 on the
-// sidebar's current row, which is tinted with it.
-const GEIST_BLUE = {
-  LIGHT: { FILL: "#0070f7", INK: "#0059cc" },
-  DARK: { FILL: "#005fd8", INK: "#50a8ff" },
+// Note that amber-800 is too light to carry words on the light ground or
+// white words on itself: the accent's fill and the dark theme's inks are
+// amber-800, words on the fill are gray-1000, and the light theme's inks,
+// its keyboard ring, and attention's fill (which holds white words) are
+// amber-900. The light link is amber-900 a shade darker, since amber-900
+// drops under 4.5:1 on the sidebar's current row, which is tinted with it.
+const GEIST_AMBER = {
+  FILL: "#ff9900",
+  ON_FILL: "#171717",
+  LIGHT_INK: "#a64f00",
+  LIGHT_LINK: "#9e4b00",
 };
 
 const BRAND_PALETTES = {
@@ -146,19 +150,19 @@ const BRAND_PALETTES = {
       TEXT: "#171717",
       TEXT_BODY: "#171717",
       TEXT_MUTED: "#4d4d4d",
-      ACCENT: GEIST_BLUE.LIGHT.FILL,
-      ON_ACCENT: "#ffffff",
-      ON_ACCENT_MUTED: "#ffffff",
-      ACCENT_TEXT: GEIST_BLUE.LIGHT.INK,
-      FOCUS_RING: GEIST_BLUE.LIGHT.FILL,
-      SWITCH_ON: GEIST_BLUE.LIGHT.FILL,
+      ACCENT: GEIST_AMBER.FILL,
+      ON_ACCENT: GEIST_AMBER.ON_FILL,
+      ON_ACCENT_MUTED: GEIST_AMBER.ON_FILL,
+      ACCENT_TEXT: GEIST_AMBER.LIGHT_LINK,
+      FOCUS_RING: GEIST_AMBER.LIGHT_INK,
+      SWITCH_ON: GEIST_AMBER.FILL,
       DANGER: "#d60020",
       DANGER_TEXT: "#d60020",
       DANGER_FILL: "#d60020",
-      ATTENTION: GEIST_BLUE.LIGHT.INK,
-      ATTENTION_FILL: GEIST_BLUE.LIGHT.FILL,
-      WORKING: "#a64f00",
-      STARTING: "#a64f00",
+      ATTENTION: GEIST_AMBER.LIGHT_INK,
+      ATTENTION_FILL: GEIST_AMBER.LIGHT_INK,
+      WORKING: "#0064e2",
+      STARTING: "#007a6e",
       COMPLETE: "#107d32",
       MERGED: "#7c00c9",
       AVATAR_TILE: AVATAR.TILE,
@@ -181,19 +185,19 @@ const BRAND_PALETTES = {
       TEXT: "#ededed",
       TEXT_BODY: "#ededed",
       TEXT_MUTED: "#a1a1a1",
-      ACCENT: GEIST_BLUE.DARK.FILL,
-      ON_ACCENT: "#ffffff",
-      ON_ACCENT_MUTED: "#ffffff",
-      ACCENT_TEXT: GEIST_BLUE.DARK.INK,
-      FOCUS_RING: GEIST_BLUE.DARK.INK,
-      SWITCH_ON: GEIST_BLUE.DARK.FILL,
+      ACCENT: GEIST_AMBER.FILL,
+      ON_ACCENT: GEIST_AMBER.ON_FILL,
+      ON_ACCENT_MUTED: GEIST_AMBER.ON_FILL,
+      ACCENT_TEXT: GEIST_AMBER.FILL,
+      FOCUS_RING: GEIST_AMBER.FILL,
+      SWITCH_ON: GEIST_AMBER.FILL,
       DANGER: "#ff5e63",
       DANGER_TEXT: "#ff5e63",
       DANGER_FILL: "#e2162a",
-      ATTENTION: GEIST_BLUE.DARK.INK,
-      ATTENTION_FILL: GEIST_BLUE.DARK.FILL,
-      WORKING: "#ff9900",
-      STARTING: "#ff9900",
+      ATTENTION: GEIST_AMBER.FILL,
+      ATTENTION_FILL: GEIST_AMBER.LIGHT_INK,
+      WORKING: "#50a8ff",
+      STARTING: "#00c9b5",
       COMPLETE: "#00ca52",
       MERGED: "#c472fb",
       AVATAR_TILE: AVATAR.TILE,
