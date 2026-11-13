@@ -625,8 +625,13 @@ export function useInboxActs(): {
               return went;
             }),
           {
-            // Note that a resolve none of whose closes went says so; one some of which went says how many in the notice that offers their Undo.
-            refused: () => (taken.length === 0 ? closedNote(0, keyed.length) : undefined),
+            // Note that a resolve with closes no answer reached says how many went and offers Try again for the rest, since the one notice draws Try again or Undo, never both; the Undo once they go covers every close taken. One none of whose closes went says so, and one whose untaken closes were answered says how many in the notice that offers the Undo.
+            refused: () =>
+              pending.length > 0
+                ? closedNote(taken.length, keyed.length - taken.length)
+                : taken.length === 0
+                  ? closedNote(0, keyed.length)
+                  : undefined,
             retry: () => pending.length > 0,
             went: BUZZ.SUCCESS,
             done: () =>
