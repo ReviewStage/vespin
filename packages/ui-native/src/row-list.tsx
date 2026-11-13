@@ -15,6 +15,9 @@ import {
   font,
   foregroundStyle,
   frame,
+  listRowBackground,
+  listRowInsets,
+  listRowSeparator,
   listSectionMargins,
   listStyle,
   monospacedDigit,
@@ -26,6 +29,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useState } from "react";
+import { type ListScopes, ScopeControl } from "./button.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
@@ -78,6 +82,8 @@ type RowListProps = {
   readonly onRefresh?: (() => Promise<void>) | undefined;
   /** Its Select mode, while it stands in one; none for a list a tap opens rows in. */
   readonly choosing?: RowChoosing | undefined;
+  /** The scopes it lists under, standing as its first row so they scroll away with the rows; none where it has none. */
+  readonly scopes?: ListScopes | undefined;
   readonly children: ReactNode;
 };
 
@@ -98,6 +104,27 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
 }
 
 /**
+ * A list's scopes as its first row: the system's control on the list's own
+ * ground, edge to edge with no hairline, so the rows scroll up under the bar
+ * with it, as Mail's categories do, and a pull reads again from above it.
+ */
+function ScopeRow({ scopes }: { readonly scopes: ListScopes }) {
+  const colors = useColors();
+
+  return (
+    <HStack
+      modifiers={[
+        listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
+        listRowBackground(colors.GROUND),
+        listRowSeparator("hidden"),
+      ]}
+    >
+      <ScopeControl {...scopes} />
+    </HStack>
+  );
+}
+
+/**
  * A list of `ListRow`s, each picked by its id. Note that a list on a screen
  * of its own keeps no selection, since a pick pushes the row's own screen and
  * the row should not stand selected on the way back. A plain list wider than
@@ -108,7 +135,15 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
  * row, a tap ticks it rather than opening it, two fingers dragged down tick
  * a run, and the rows' swipes step aside, as the system's do.
  */
-export function RowList({ look, selected, onSelect, onRefresh, choosing, children }: RowListProps) {
+export function RowList({
+  look,
+  selected,
+  onSelect,
+  onRefresh,
+  choosing,
+  scopes,
+  children,
+}: RowListProps) {
   const colors = useColors();
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
@@ -145,6 +180,8 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
     >
       <RowOpenContext value={onSelect}>
         <RowSelectedContext value={choosing === undefined ? selected : undefined}>
+          {/* Note that Select mode leaves the scopes out, since the rows chosen are the scope's and the edit mode would lead the scopes' row with a check of its own. */}
+          {scopes === undefined || choosing !== undefined ? null : <ScopeRow scopes={scopes} />}
           {children}
         </RowSelectedContext>
       </RowOpenContext>

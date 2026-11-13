@@ -20,6 +20,7 @@ import {
   GLYPH,
   glyphSymbol,
   LIST_LOOK,
+  type ListScopes,
   ListSection,
   RowList,
   ScopePicker,
@@ -96,6 +97,7 @@ function FoundList({
   onOpen,
   onRemind,
   onArchiveAgent,
+  scopes,
 }: {
   readonly found: SearchFound;
   readonly scope: SearchScope;
@@ -106,6 +108,8 @@ function FoundList({
   readonly onRemind: (item: InboxItem) => void;
   /** Asks to archive an agent found, once it rests, as a task's Agents do. */
   readonly onArchiveAgent: (agentId: string) => void;
+  /** The scopes the results list under, standing as the list's first row. */
+  readonly scopes: ListScopes;
 }) {
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const pictureOf = useMemberPictures();
@@ -116,6 +120,7 @@ function FoundList({
   return (
     <RowList
       look={LIST_LOOK.PLAIN}
+      scopes={scopes}
       onSelect={onOpen}
       onRefresh={async () => {
         await Promise.all([refresh(), refreshTasks()]);
@@ -190,25 +195,24 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
     onPress: () => setScope(each),
   }));
 
-  // Note that the scopes stand once anything is typed, and stay over a scope that found nothing, so another is one tap away.
+  // Note that the scopes stand once anything is typed, as the results' first row, and stay over a scope that found nothing, so another is one tap away.
   const results =
     query.trim() === "" ? (
       <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
-    ) : (
+    ) : none ? (
       <ScopePicker label={SCOPE_LABEL} scopes={scopes}>
-        {none ? (
-          <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
-        ) : (
-          <FoundList
-            found={found}
-            scope={scope}
-            listing={listing}
-            onOpen={open}
-            onRemind={remind.open}
-            onArchiveAgent={archiveAsk.archive}
-          />
-        )}
+        <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
       </ScopePicker>
+    ) : (
+      <FoundList
+        scopes={{ label: SCOPE_LABEL, scopes }}
+        found={found}
+        scope={scope}
+        listing={listing}
+        onOpen={open}
+        onRemind={remind.open}
+        onArchiveAgent={archiveAsk.archive}
+      />
     );
 
   return {
