@@ -224,6 +224,8 @@ public final class SystemActivityModule: Module {
   private static func searchableItem(_ record: SpotlightRecord) -> CSSearchableItem {
     let attributes = CSSearchableItemAttributeSet(contentType: .text)
     attributes.title = record.title
+    // Note that the name is the title too, because Spotlight has matched a query against an item's display name alone since iOS 17, so an item with a title alone is held but never found.
+    attributes.displayName = record.title
     attributes.contentDescription = record.summary
     return CSSearchableItem(
       uniqueIdentifier: record.id, domainIdentifier: record.domain, attributeSet: attributes)
