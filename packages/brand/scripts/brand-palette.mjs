@@ -47,6 +47,11 @@ const AVATAR = { TILE: "#171412", INK: COPPER.DARK.FILL };
 // does a start, which copper drew in a yellow Geist has no scale for; work
 // under way is Geist's blue, as it was copper's.
 //
+// A card (the surface) is the ground's own background-100 in the light
+// theme, standing off it by Geist's card shadow, and gray-100 in the dark,
+// where a shadow falls black on black, so it stands off the ground by its
+// fill.
+//
 // Note that words on the dark fill are the light theme's gray-1000, since
 // white reads on that orange at under 2:1, and attention's fill and its
 // words are the accent's, so one orange means the same in every place it is
@@ -167,7 +172,7 @@ const BRAND_PALETTES = {
     },
     DARK: {
       GROUND: GEIST_DARK.BACKGROUND[100],
-      SURFACE: GEIST_DARK.BACKGROUND[100],
+      SURFACE: GEIST_DARK.GRAY[100],
       OVERLAY: GEIST_DARK.GRAY[100],
       SIDEBAR: GEIST_DARK.BACKGROUND[200],
       SIDEBAR_INK: GEIST_DARK.GRAY[900],

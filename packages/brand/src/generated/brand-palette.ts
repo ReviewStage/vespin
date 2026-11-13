@@ -43,7 +43,7 @@ export const BRAND_PALETTE = {
   },
   DARK: {
     GROUND: "#0a0a0a",
-    SURFACE: "#0a0a0a",
+    SURFACE: "#1a1a1a",
     OVERLAY: "#1a1a1a",
     SIDEBAR: "#000000",
     SIDEBAR_INK: "#a1a1a1",
