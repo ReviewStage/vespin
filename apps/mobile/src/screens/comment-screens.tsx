@@ -1,4 +1,4 @@
-// comment-screens.tsx -- one thread of a task's description comments, pushed from the task's Overview: its comments as a thread's messages, the words it stands on as its heading, and the reply field docked at its foot; and a new thread on one block of the description, its words as the heading and the comment field docked under them.
+// comment-screens.tsx -- one thread of a task's description comments, pushed from the task's Overview: its comments as a thread's messages, the words it stands on as its heading, Resolve or Reopen in its bar, and the reply field docked at its foot; and a new thread on one block of the description, its words as the heading and the comment field docked under them.
 
 import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
 import { COMMENT_NOTE } from "@repo/features/description-comment-notes";
@@ -12,6 +12,7 @@ import {
   EmptyState,
   GLYPH,
   GlassDock,
+  glyphSymbol,
   PATH_PART,
   Screen,
   ThreadPage,
@@ -26,6 +27,7 @@ import {
   threadMessages,
   threadOpen,
   useCommentReply,
+  useCommentSettle,
   useCommentStart,
   useTaskComments,
 } from "../tasks/use-comments.js";
@@ -38,6 +40,8 @@ const WORDS = {
   RESOLVED: "Resolved",
   GONE: "Original content deleted",
   NOT_FOUND: "Comment not found",
+  RESOLVE: "Resolve",
+  REOPEN: "Reopen",
 } as const;
 
 /** What the description is called while it is first read. */
@@ -67,7 +71,9 @@ function quoteOf(quote: string, anchored: boolean): string {
  * field docked over its foot, which answers it whether it stands open or
  * resolved, as the panel's thread does, what a reply that did not land
  * said standing in the field's head. The task's path stands small in
- * the bar, as a page of the task's does.
+ * the bar, as a page of the task's does, and the bar's trailing button
+ * resolves the thread, or reopens it once resolved, as the panel's check
+ * on its first comment does.
  */
 export function CommentThreadScreen() {
   const { id = "", task: taskId = "" } = useLocalSearchParams<{ id: string; task: string }>();
@@ -77,6 +83,7 @@ export function CommentThreadScreen() {
   const threads = useTaskComments(overview?.task.id);
   const thread = threads.find((each) => each.id === id);
   const reply = useCommentReply(taskId, id);
+  const settle = useCommentSettle(taskId);
   const pictureOf = useMemberPictures();
 
   const agentNames = new Map(
@@ -94,6 +101,15 @@ export function CommentThreadScreen() {
           headerTitleStyle: { ...BAR_TITLE.PATH, color: colors.TEXT_MUTED },
         }}
       />
+      {thread === undefined ? null : (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(threadOpen(thread) ? GLYPH.CHECK : GLYPH.RESTORE)}
+            accessibilityLabel={threadOpen(thread) ? WORDS.RESOLVE : WORDS.REOPEN}
+            onPress={() => settle(thread)}
+          />
+        </Stack.Toolbar>
+      )}
       {thread === undefined ? (
         <Screen>
           <EmptyState title={WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />

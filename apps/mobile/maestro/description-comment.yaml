@@ -37,3 +37,27 @@ appId: dev.vespin.ios
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
+# The Comments section lists the open thread, then a last row that swaps in
+# the resolved ones, as the panel's Resolved toggle does; a thread's bar
+# offers Resolve while it stands open and Reopen once resolved.
+- scrollUntilVisible:
+    element: "Show resolved comments"
+    direction: DOWN
+- waitForAnimationToEnd
+- takeScreenshot: comments-open
+- tapOn: "Show resolved comments"
+- assertVisible: "Show open comments"
+- assertVisible: "Done in the email template."
+- waitForAnimationToEnd
+- takeScreenshot: comments-resolved
+- tapOn: "Done in the email template."
+- assertVisible: "Reopen"
+- waitForAnimationToEnd
+- takeScreenshot: comment-resolved-thread
+- tapOn:
+    id: "BackButton"
+- tapOn: "Show open comments"
+- tapOn: "Should an owner be able to resend an expired invite from this page?"
+- assertVisible: "Resolve"
+- waitForAnimationToEnd
+- takeScreenshot: comment-open-thread

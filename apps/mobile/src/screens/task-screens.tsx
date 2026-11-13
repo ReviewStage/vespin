@@ -1631,18 +1631,29 @@ function ReadFailedRow({
   );
 }
 
+/** What the Comments section's last row says it shows in the threads' place, as the panel's comments pane toggles: the resolved threads, or the open ones again. */
+const COMMENTS_SHOWN = {
+  RESOLVED: "Show resolved comments",
+  OPEN: "Show open comments",
+} as const;
+
 /**
- * The description's comment threads that still stand open, as the panel's
- * comments list holds them, the oldest started first: each its first
- * comment's words and when it last moved, opening the thread with its reply
- * field; none where no thread stands open.
+ * The description's comment threads, as the panel's comments list holds
+ * them, the oldest started first: those that still stand open, each its
+ * first comment's words and when it last moved, opening the thread with its
+ * reply field; and, where any is resolved, a last row that lists the
+ * resolved ones in their place, as the panel's Resolved toggle does, and
+ * back. None where no thread stands, open or resolved.
  */
 function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
   const onOwnTab = useOnOwnTab();
   const { task } = overview;
-  const open = useTaskComments(task.id).filter(threadOpen);
+  const threads = useTaskComments(task.id);
   const retry = useTaskCommentsRetry(task.id);
+  const [resolvedShown, setResolvedShown] = useState(false);
+  const open = threads.filter(threadOpen);
+  const resolved = threads.filter((thread) => !threadOpen(thread));
 
   if (retry !== undefined) {
     return (
@@ -1652,14 +1663,18 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
     );
   }
 
-  if (open.length === 0) return null;
+  // Note that the resolved list falls back to the open one once nothing in it stays resolved, as a reopen from its thread leaves it.
+  const showingResolved = resolvedShown && resolved.length > 0;
+  const listed = showingResolved ? resolved : open;
+
+  if (open.length === 0 && resolved.length === 0) return null;
 
   return (
-    <ListSection title={WORDS.COMMENTS} count={open.length}>
-      {open.map((thread) => (
+    <ListSection title={WORDS.COMMENTS} count={listed.length}>
+      {listed.map((thread) => (
         <LinkRow
           key={thread.id}
-          symbol={GLYPH.COMMENT}
+          symbol={showingResolved ? GLYPH.RESOLVED : GLYPH.COMMENT}
           label={threadComments(thread)[0]?.words ?? thread.quote}
           detail={provenanceText(thread.updatedAt, Date.now())}
           onPress={() =>
@@ -1670,6 +1685,14 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
           }
         />
       ))}
+      {resolved.length === 0 ? null : (
+        <LinkRow
+          symbol={showingResolved ? GLYPH.COMMENT : GLYPH.RESOLVED}
+          label={showingResolved ? COMMENTS_SHOWN.OPEN : COMMENTS_SHOWN.RESOLVED}
+          detail={showingResolved ? undefined : `${resolved.length}`}
+          onPress={() => setResolvedShown(!showingResolved)}
+        />
+      )}
     </ListSection>
   );
 }

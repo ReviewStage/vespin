@@ -4,7 +4,7 @@
  * The threads are the panel's own read (`TASKS_COMMENTS_FOLLOW`), which the
  * host holds on the document while a screen holds it
  * (`LIVE_READ.DESCRIPTION_COMMENTS`), so a teammate's comment or an agent's
- * reply lands while the page is open. A reply is the panel's act
+ * reply lands while the page is open. A reply, a resolve and a reopen are the panel's act
  * (`TASKS_COMMENT_ACT` with `reply`), under a key minted for its words, so
  * one sent again after a lost answer is taken once; the host draws it over
  * the thread at once and takes it back where the service refused it.
@@ -221,6 +221,42 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
       note,
     };
   }, [acts, write, taskId, threadId, words, sent, sending, note]);
+}
+
+/**
+ * Resolves a thread that stands open, or reopens one resolved, as the
+ * panel's check on a thread's first comment does (`TASKS_COMMENT_ACT` with
+ * `resolve` or `reopen`): the host draws it on the press, and one refused is
+ * taken back and said in the notice, in the panel's words for it.
+ */
+export function useCommentSettle(taskId: string): (thread: DescriptionCommentThread) => void {
+  const acts = useHostActs();
+  const write = useWrite();
+
+  return (thread) => {
+    const action = threadOpen(thread)
+      ? DESCRIPTION_COMMENT_ACTION.RESOLVE
+      : DESCRIPTION_COMMENT_ACTION.REOPEN;
+
+    void write(
+      () =>
+        acts[ACT_KIND.TASKS_COMMENT_ACT]({
+          planId: taskId,
+          threadId: thread.id,
+          action: { action },
+        }),
+      {
+        refused: (answer) =>
+          "thread" in answer || "deleted" in answer
+            ? undefined
+            : "refused" in answer
+              ? commentRefusalNote(answer.refused)
+              : COMMENT_NOTE.NOT_CHANGED,
+        unanswered: COMMENT_NOTE.NOT_CHANGED,
+        went: BUZZ.SUCCESS,
+      },
+    );
+  };
 }
 
 /** The open threads standing on each block of a description, by the block's start, the oldest started first. */
