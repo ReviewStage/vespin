@@ -40,6 +40,7 @@ import {
   type MachineCommandKind,
   type MachineUnreached,
 } from "@repo/features/machine-command-wire";
+import { MACHINE_REFUSAL_NEXT } from "@repo/features/machine-refusal-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { Clock, Duration, Effect, Option } from "effect";
 
@@ -175,21 +176,21 @@ function whyNot(
   if (!machine.lets) {
     return {
       code: MACHINE_UNREACHED.NOT_LET,
-      words: `Not run: ${machine.ownerName} doesn't let this task's agents use their machines.`,
+      words: `Not run: ${machine.ownerName} doesn't let this task's agents use their machines. ${MACHINE_REFUSAL_NEXT.SETTING}`,
     };
   }
 
   if (!machine.online) {
     return {
       code: MACHINE_UNREACHED.OFFLINE,
-      words: `Not run: ${machine.name} is offline, or ${PRODUCT_NAME} isn't running on it.`,
+      words: `Not run: ${machine.name} is offline, or ${PRODUCT_NAME} isn't running on it. ${MACHINE_REFUSAL_NEXT.LATER}`,
     };
   }
 
   if (kind === MACHINE_COMMAND_KIND.SHELL && machine.commandMode === MACHINE_COMMAND_MODE.NEVER) {
     return {
       code: MACHINE_UNREACHED.COMMANDS_NEVER,
-      words: `Not run: ${machine.name} doesn't let agents run commands (its Settings › This Mac is set to Never).`,
+      words: `Not run: ${machine.name} doesn't let agents run commands (its Settings › This Mac is set to Never). ${MACHINE_REFUSAL_NEXT.SETTING}`,
     };
   }
 
@@ -197,7 +198,7 @@ function whyNot(
   if (kind === MACHINE_COMMAND_KIND.COMPUTER && machine.computerUse === false) {
     return {
       code: MACHINE_UNREACHED.APPS_OFF,
-      words: `Not run: ${machine.name} doesn't let agents use its apps (Let agents use its apps is off for it in Settings › Machines).`,
+      words: `Not run: ${machine.name} doesn't let agents use its apps (Let agents use its apps is off for it in Settings › Machines). ${MACHINE_REFUSAL_NEXT.SETTING}`,
     };
   }
 
@@ -240,7 +241,7 @@ export function routeOf(
         return refusal(
           {
             code: MACHINE_UNREACHED.UNKNOWN_MACHINE,
-            words: `Not run: no machine this task's agents may use has the id ${JSON.stringify(machineId)}.`,
+            words: `Not run: no machine this task's agents may use has the id ${JSON.stringify(machineId)}. Leave \`machine\` out to send it where your calls go by default.`,
           },
           reachable,
         );
@@ -258,8 +259,7 @@ export function routeOf(
       return refusal(
         {
           code: MACHINE_UNREACHED.DEFAULT_GONE,
-          words:
-            "Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it.",
+          words: `Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it. ${MACHINE_REFUSAL_NEXT.WITHOUT}`,
         },
         reachable,
       );

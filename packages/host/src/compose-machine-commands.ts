@@ -31,6 +31,7 @@ import {
   machineCommandResultSchema,
 } from "@repo/features/machine-command-wire";
 import { MACHINES_READ, machinesOfLiveRows } from "@repo/features/machine-live";
+import { MACHINE_REFUSAL_NEXT } from "@repo/features/machine-refusal-words";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
@@ -385,32 +386,36 @@ function kindsOf(standing: GateStanding): readonly MachineCommandKind[] {
 /** What a shell command answers where Settings lets agents run no commands on this Mac, while it stands open for their actions on apps. */
 const COMMANDS_NEVER: MachineCommandRefusal = {
   refused:
-    "Not run: the developer doesn't let agents run commands on their Mac (Settings › This Mac is set to Never).",
+    "Not run: the developer doesn't let agents run commands on their Mac (Settings › This Mac is set to Never). " +
+    MACHINE_REFUSAL_NEXT.SETTING,
 };
 
 /** What a command taken as the setting was switched off, or the account signed out, answers. */
 const SWITCHED_OFF: MacShellResult = {
   exitCode: null,
   stdout: "",
-  stderr: "Not run: commands on this Mac were switched off as it arrived.",
+  stderr: `Not run: commands on this Mac were switched off as it arrived. ${MACHINE_REFUSAL_NEXT.LATER}`,
   truncated: false,
   timedOut: false,
 };
 
 /** What a command the developer declined answers. */
 const DECLINED: MachineCommandRefusal = {
-  refused: "Not run: the developer declined this command.",
+  refused: `Not run: the developer declined this command. ${MACHINE_REFUSAL_NEXT.DECLINED}`,
 };
 
 /** What a command the developer did not answer for answers: not run, since its timeout had passed before it could start. */
 const UNANSWERED: MachineCommandRefusal = {
   refused:
-    "Not run: the developer did not answer in time whether to allow this command on their Mac.",
+    "Not run: the developer did not answer in time whether to allow this command on their Mac. " +
+    MACHINE_REFUSAL_NEXT.UNANSWERED,
 };
 
 /** What a command asked under an account that signed out before it was answered answers. */
 const ACCOUNT_CHANGED: MachineCommandRefusal = {
-  refused: "Not run: the account signed in on the developer's Mac changed before it was allowed.",
+  refused:
+    "Not run: the account signed in on the developer's Mac changed before it was allowed. " +
+    MACHINE_REFUSAL_NEXT.LATER,
 };
 
 /** The grants as Settings shows them where there is no helper to read them. */
@@ -418,25 +423,30 @@ const NO_PERMISSIONS: ComputerPermissions = { screenRecording: false, accessibil
 
 /** Why an action does not run where Settings has agents use no apps on this Mac. */
 const APPS_OFF_WORDS =
-  "the developer switched off Settings › Let agents use apps on this Mac, so no app can be used.";
+  "the developer switched off Settings › Let agents use apps on this Mac, so no app can be used. " +
+  MACHINE_REFUSAL_NEXT.SETTING;
 
 /** What an action answers where Settings has agents use no apps on this Mac. */
 const APPS_SWITCHED_OFF: MachineCommandRefusal = { refused: `Not run: ${APPS_OFF_WORDS}` };
 
 /** What an action on an app the developer declined answers. */
 const APP_DECLINED: MachineCommandRefusal = {
-  refused: "Not run: the developer declined to let agents use this app.",
+  refused: `Not run: the developer declined to let agents use this app. ${MACHINE_REFUSAL_NEXT.DECLINED}`,
 };
 
 /** What an action on an app the developer did not answer for in time answers. */
 const APP_UNANSWERED: MachineCommandRefusal = {
-  refused: "Not run: the developer did not answer in time whether agents may use this app.",
+  refused:
+    "Not run: the developer did not answer in time whether agents may use this app. " +
+    MACHINE_REFUSAL_NEXT.UNANSWERED,
 };
 
 /** What an action on an app agents are never offered answers, by the app's name. */
 function neverOffered(app: string): MachineCommandRefusal {
   return {
-    refused: `Not run: agents are never offered ${app}, as with terminals, password managers, System Settings, and ${PRODUCT_NAME}.`,
+    refused:
+      `Not run: agents are never offered ${app}, as with terminals, password managers, System Settings, and ${PRODUCT_NAME}. ` +
+      MACHINE_REFUSAL_NEXT.WITHOUT,
   };
 }
 
@@ -474,19 +484,19 @@ function granted(permissions: ComputerPermissions, permission: ComputerPermissio
 /**
  * What an action answers where the Mac lacks a grant it needs: each grant
  * missing by name and where it is turned on, short enough to read on the
- * call's row, and asking the agent to pass it on, since nothing it does can
- * grant them.
+ * call's row, and asking the agent to pass it on when it next writes to
+ * them and carry on meanwhile, since nothing it does can grant them.
  */
 function permissionsMissing(
   missing: readonly [ComputerPermission, ...ComputerPermission[]],
 ): MachineCommandRefusal {
   const names = computerPermissionsNamed(missing);
-  const them = missing.length === 1 ? "it" : "them";
 
   return {
     refused:
-      `Not run: ${PRODUCT_NAME} on the developer's Mac needs ${names}. ` +
-      `Ask them to turn ${them} on in ${PRODUCT_NAME}'s Settings › This Mac.`,
+      `Not run: ${PRODUCT_NAME} on the developer's Mac needs ${names}, which they turn on in ` +
+      `${PRODUCT_NAME}'s Settings › This Mac. Mention this when you next write to them. ` +
+      MACHINE_REFUSAL_NEXT.LATER,
     missingPermissions: missing,
   };
 }
