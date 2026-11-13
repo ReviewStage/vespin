@@ -82,6 +82,13 @@ const INBOX_SCOPE_KEY = "inboxScope";
 /** No file of a thread read yet. */
 const NOTHING_READ: ThreadMediaRead = { sources: new Map(), sizes: new Map() };
 
+/** How one close of a batch resolve came back: taken, answered but not taken, as for a thread settled already, or never answered. */
+const CLOSE_WENT = {
+  TAKEN: "taken",
+  UNTAKEN: "untaken",
+  UNREACHED: "unreached",
+} as const;
+
 /** No holder read yet. */
 const NO_GROUPS: ReturnType<ReturnType<typeof selectInboxGroupsIn>> = [];
 
@@ -530,47 +537,55 @@ export function useInboxActs(): {
       },
       markMany: (itemIds, unread) => {
         if (itemIds.length === 0) return;
+        // Note that Try again sends only the marks that did not land, and the note counts every mark that did.
+        let pending = itemIds;
+        let marked = 0;
         write(
           () =>
             Promise.all(
-              itemIds.map((itemId) =>
+              pending.map((itemId) =>
                 Promise.resolve(acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId, unread })).then(
                   (answer) => !("failure" in answer),
                   () => false,
                 ),
               ),
-            ),
-          {
-            refused: (landed) => {
-              const marked = landed.filter(Boolean).length;
+            ).then((landed) => {
+              marked += landed.filter(Boolean).length;
+              pending = pending.filter((_, at) => landed[at] !== true);
 
-              return marked === landed.length
-                ? undefined
-                : markedNote(unread, marked, landed.length - marked);
-            },
+              return pending.length;
+            }),
+          {
+            refused: (left) => (left === 0 ? undefined : markedNote(unread, marked, left)),
+            retry: true,
+            subject: itemIds.map((id) => ({ kind: WRITE_SUBJECT.THREAD_READ, id })),
             went: BUZZ.SUCCESS,
           },
         );
       },
       remindMany: (itemIds, until) => {
         if (itemIds.length === 0) return;
+        // Note that Try again sends only the reminders that did not land.
+        let pending = itemIds;
         write(
           () =>
             Promise.all(
-              itemIds.map((itemId) =>
+              pending.map((itemId) =>
                 Promise.resolve(acts[ACT_KIND.AGENTS_INBOX_REMIND]({ itemId, until })).then(
                   (answer) => !("failure" in answer),
                   () => false,
                 ),
               ),
-            ),
+            ).then((set) => {
+              pending = pending.filter((_, at) => set[at] !== true);
+
+              return pending.length;
+            }),
           {
-            refused: (set) =>
-              set.every(Boolean)
-                ? undefined
-                : until === null
-                  ? REMIND_REFUSED.CLEAR
-                  : REMIND_REFUSED.SET,
+            refused: (left) =>
+              left === 0 ? undefined : until === null ? REMIND_REFUSED.CLEAR : REMIND_REFUSED.SET,
+            retry: true,
+            subject: itemIds.map((id) => ({ kind: WRITE_SUBJECT.THREAD_REMINDER, id })),
             went: BUZZ.SUCCESS,
           },
         );
@@ -579,13 +594,14 @@ export function useInboxActs(): {
         const open = items.filter((item) => item.status === INBOX_STATUS.OPEN);
 
         if (open.length === 0) return;
-        // Note that one key stands for each thread's press, so the closes never go twice.
+        // Note that one key stands for each thread's press, so the closes never go twice, and Try again sends again only the closes no answer reached, under the same keys; one the service answered untaken never takes.
         const keyed: readonly SettledThread[] = open.map((item) => ({ item, key: randomUUID() }));
+        let pending = keyed;
         let taken: readonly SettledThread[] = [];
         write(
           () =>
             Promise.all(
-              keyed.map(({ item, key }) =>
+              pending.map(({ item, key }) =>
                 Promise.resolve(
                   acts[ACT_KIND.AGENTS_INBOX_CLOSE]({
                     itemId: item.id,
@@ -593,18 +609,25 @@ export function useInboxActs(): {
                     clientKey: key,
                   }),
                 ).then(
-                  (answer) => !("failure" in answer) && answer.taken,
-                  () => false,
+                  (answer) =>
+                    "failure" in answer
+                      ? CLOSE_WENT.UNREACHED
+                      : answer.taken
+                        ? CLOSE_WENT.TAKEN
+                        : CLOSE_WENT.UNTAKEN,
+                  () => CLOSE_WENT.UNREACHED,
                 ),
               ),
             ).then((went) => {
-              taken = keyed.filter((_, at) => went[at] === true);
+              taken = [...taken, ...pending.filter((_, at) => went[at] === CLOSE_WENT.TAKEN)];
+              pending = pending.filter((_, at) => went[at] === CLOSE_WENT.UNREACHED);
 
               return went;
             }),
           {
             // Note that a resolve none of whose closes went says so; one some of which went says how many in the notice that offers their Undo.
             refused: () => (taken.length === 0 ? closedNote(0, keyed.length) : undefined),
+            retry: () => pending.length > 0,
             went: BUZZ.SUCCESS,
             done: () =>
               settled(

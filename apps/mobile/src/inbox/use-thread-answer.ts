@@ -295,6 +295,8 @@ export function useSettleUndo(): (
       const takeBack = () => {
         for (const { item } of threads) letGoCloses(item.id);
         let unreached = threads;
+        // Note that what the service answered stays among the outcomes a Try again is read with, so a refusal it said is said again rather than hidden by a later take-back that went.
+        let answered: readonly TookBack[] = [];
         void write(
           () =>
             Promise.all(
@@ -305,8 +307,10 @@ export function useSettleUndo(): (
               ),
             ).then((outcomes) => {
               unreached = unreached.filter((_, at) => outcomes[at] === TOOK_BACK.UNREACHED);
+              const seen = [...answered, ...outcomes];
+              answered = seen.filter((outcome) => outcome !== TOOK_BACK.UNREACHED);
 
-              return outcomes;
+              return seen;
             }),
           {
             refused: (outcomes) => untakenSaid(outcomes, settle.untaken),
