@@ -31,6 +31,8 @@ export const QUERY_ROOT = {
   WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
   /** The Merge queue page: every pull request a workspace's merge queues hold (`desktop/merge-queue-page.tsx`). */
   MERGE_QUEUE: "merge-queue",
+  /** The machines of a workspace's members, as the `@` list offers them and a machine's chip names its owner (`tasks/workspace-machines.tsx`). */
+  WORKSPACE_MACHINES: "workspace-machines",
   /** Settings › This Mac's computer use: the Mac's grants and the apps agents use without asking, as the host reads them through the helper. */
   COMPUTER_USE_STATUS: "computer-use-status",
   /** The apps on this Mac the composer's `@` list offers (`tasks/mac-apps.ts`). */
@@ -106,6 +108,7 @@ const ACCOUNT_SCOPED_ROOTS: ReadonlySet<unknown> = new Set<string>([
   QUERY_ROOT.WORKSPACE_SANDBOX_SETUP,
   QUERY_ROOT.MERGE_QUEUE,
   QUERY_ROOT.MACHINE_ALLOWED_APPS,
+  QUERY_ROOT.WORKSPACE_MACHINES,
 ]);
 
 /**

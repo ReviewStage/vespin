@@ -64,6 +64,7 @@ beforeEach(() => {
           truncated: false,
         },
       }),
+    [ACT_KIND.WORKSPACE_MACHINES_READ]: () => Promise.resolve({ machines: [] }),
   });
 });
 
