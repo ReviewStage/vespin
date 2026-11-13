@@ -30,16 +30,22 @@ import {
   type GitHubImageType,
   isUploadOf,
 } from "@repo/features/github-image";
-import { Effect, Option, type Redacted } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
+import type { GitHubFailure } from "@repo/github";
+import { Effect, Option, Schema } from "effect";
+import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import {
+  GITHUB_FAILURE,
   GITHUB_USER_AGENT,
-  type GitHubUnavailable,
-  githubPost,
-  githubRead,
-  send,
+  type GitHubBearer,
+  GitHubUnavailable,
+  readBody,
+  readStream,
+  repositoryParts,
 } from "./github-app.js";
+
+/** What a read of an image fails with: GitHub's API as `@repo/github` says, or an image address that did not answer. */
+type ImageReadFailure = GitHubFailure | GitHubUnavailable;
 
 /** An image read for the window: its bytes and the type GitHub served them as. */
 export interface ReadImage {
@@ -107,62 +113,48 @@ function imageTypeOf(header: string | undefined): GitHubImageType | undefined {
  * no image of it, or names any other.
  */
 function signedUploadOf(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   assetId: string,
-): Effect.Effect<Option.Option<string>, GitHubUnavailable, HttpClient.HttpClient> {
-  const request = githubPost("/markdown", token, {
+): Effect.Effect<Option.Option<string>, GitHubFailure> {
+  const rendered = bearer.client.request("POST /markdown", {
     text: `![](https://github.com/user-attachments/assets/${assetId})`,
     mode: "gfm",
     context: fullName,
   });
 
-  return Effect.scoped(
-    Effect.flatMap(send(request), (response) =>
-      response.status !== 200
-        ? Effect.succeed(Option.none<string>())
-        : Effect.map(
-            Effect.orElseSucceed(response.text, () => ""),
-            (html) => {
-              const spelled = RENDERED_SOURCE.exec(html)?.[1];
-              const address = spelled?.replace(ENTITY, (entity) => ENTITIES.get(entity) ?? entity);
+  return rendered.pipe(
+    Effect.flatMap((answer) => Effect.orElseSucceed(readBody(answer, Schema.String), () => "")),
+    Effect.map((html) => {
+      const spelled = RENDERED_SOURCE.exec(html)?.[1];
+      const address = spelled?.replace(ENTITY, (entity) => ENTITIES.get(entity) ?? entity);
 
-              return address !== undefined && isUploadOf(address, assetId)
-                ? Option.some(address)
-                : Option.none<string>();
-            },
-          ),
-    ),
-  );
-}
-
-/** The image an answer carries, as the type `typeOf` reads off its `content-type`, where it is one the window draws within the bound. */
-function imageOf(
-  request: HttpClientRequest.HttpClientRequest,
-  typeOf: (header: string | undefined) => GitHubImageType | undefined,
-): Effect.Effect<Option.Option<ReadImage>, GitHubUnavailable, HttpClient.HttpClient> {
-  return Effect.scoped(
-    Effect.flatMap(send(request), (response) => {
-      const contentType = typeOf(response.headers["content-type"]);
-      const length = Number(response.headers["content-length"] ?? "0");
-
-      if (response.status !== 200 || contentType === undefined)
-        return Effect.succeed(Option.none());
-
-      if (length > GITHUB_IMAGE_BOUNDS.MAX_BYTES) return Effect.succeed(Option.none());
-
-      return Effect.map(
-        Effect.orElseSucceed(response.arrayBuffer, () => new ArrayBuffer(0)),
-        (buffer): Option.Option<ReadImage> =>
-          buffer.byteLength === 0 || buffer.byteLength > GITHUB_IMAGE_BOUNDS.MAX_BYTES
-            ? Option.none()
-            : Option.some({ bytes: new Uint8Array(buffer), contentType }),
-      );
+      return address !== undefined && isUploadOf(address, assetId)
+        ? Option.some(address)
+        : Option.none<string>();
+    }),
+    // Note that GitHub refusing the render is no image rather than a failure, as any answer but one it could not give.
+    Effect.catchTags({
+      GitHubNotFound: () => Effect.succeed(Option.none<string>()),
+      GitHubForbidden: () => Effect.succeed(Option.none<string>()),
+      GitHubUnauthorized: () => Effect.succeed(Option.none<string>()),
+      GitHubRejected: () => Effect.succeed(Option.none<string>()),
     }),
   );
 }
 
-/** The image at an address, read with no credential, where it is one the window draws within the bound. */
+/** The image bytes read, as the type named, where there are some within the bound. */
+function imageWithin(buffer: ArrayBuffer, contentType: GitHubImageType): Option.Option<ReadImage> {
+  return buffer.byteLength === 0 || buffer.byteLength > GITHUB_IMAGE_BOUNDS.MAX_BYTES
+    ? Option.none()
+    : Option.some({ bytes: new Uint8Array(buffer), contentType });
+}
+
+/**
+ * The image at an address, read with no credential, where it is one the
+ * window draws within the bound. Note that the address is a signed upload or
+ * GitHub's image proxy, never the REST API, so it goes around `@repo/github`.
+ */
 function imageAt(
   address: string,
 ): Effect.Effect<Option.Option<ReadImage>, GitHubUnavailable, HttpClient.HttpClient> {
@@ -170,7 +162,29 @@ function imageAt(
     HttpClientRequest.setHeader("user-agent", GITHUB_USER_AGENT),
   );
 
-  return imageOf(request, imageTypeOf);
+  return Effect.scoped(
+    Effect.flatMap(HttpClient.HttpClient, (client) =>
+      client.execute(request).pipe(
+        Effect.mapError(() => new GitHubUnavailable({ reason: GITHUB_FAILURE.TRANSPORT })),
+        Effect.flatMap((response) => {
+          const contentType = imageTypeOf(response.headers["content-type"]);
+          const length = Number(response.headers["content-length"] ?? "0");
+
+          if (response.status !== 200 || contentType === undefined) {
+            return Effect.succeed(Option.none<ReadImage>());
+          }
+
+          if (length > GITHUB_IMAGE_BOUNDS.MAX_BYTES)
+            return Effect.succeed(Option.none<ReadImage>());
+
+          return Effect.map(
+            Effect.orElseSucceed(response.arrayBuffer, () => new ArrayBuffer(0)),
+            (buffer) => imageWithin(buffer, contentType),
+          );
+        }),
+      ),
+    ),
+  );
 }
 
 /**
@@ -181,25 +195,46 @@ function imageAt(
  * asked for.
  */
 function repositoryFile(
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   file: GitHubFileImage,
-): Effect.Effect<Option.Option<ReadImage>, GitHubUnavailable, HttpClient.HttpClient> {
+): Effect.Effect<Option.Option<ReadImage>, GitHubFailure> {
   if (file.repository.toLowerCase() !== fullName.toLowerCase()) {
     return Effect.succeed(Option.none());
   }
 
-  const path = file.path.map(encodeURIComponent).join("/");
-  const ref = new URLSearchParams({ ref: file.ref });
+  const read = bearer.client
+    .request("GET /repos/{owner}/{repo}/contents/{path}", {
+      ...repositoryParts(fullName),
+      path: file.path.join("/"),
+      ref: file.ref,
+      headers: { accept: RAW_CONTENTS },
+      parseSuccessResponseBody: false,
+    })
+    .pipe(
+      Effect.flatMap((answer) => {
+        const headers = answer.headers;
+        const length = Number(headers["content-length"] ?? "0");
 
-  const request = githubRead(`/repos/${fullName}/contents/${path}?${ref}`, token).pipe(
-    HttpClientRequest.setHeader("accept", RAW_CONTENTS),
-  );
+        // Note that GitHub serves the raw bytes under its own type, so a JSON answer, a directory's listing, is no image.
+        if (mediaTypeOf(headers["content-type"]) !== RAW_CONTENTS) {
+          return Effect.succeed(Option.none<ReadImage>());
+        }
 
-  // Note that GitHub serves the raw bytes under its own type, so a JSON answer, a directory's listing, is no image.
-  const read = imageOf(request, (header) =>
-    mediaTypeOf(header) === RAW_CONTENTS ? file.contentType : undefined,
-  );
+        if (length > GITHUB_IMAGE_BOUNDS.MAX_BYTES) return Effect.succeed(Option.none<ReadImage>());
+
+        return readStream(answer).pipe(
+          Effect.flatMap((body) => Effect.promise(() => new Response(body).arrayBuffer())),
+          Effect.map((buffer) => imageWithin(buffer, file.contentType)),
+        );
+      }),
+      Effect.catchTags({
+        GitHubNotFound: () => Effect.succeed(Option.none<ReadImage>()),
+        GitHubForbidden: () => Effect.succeed(Option.none<ReadImage>()),
+        GitHubRejected: () => Effect.succeed(Option.none<ReadImage>()),
+        GitHubUnreadable: () => Effect.succeed(Option.none<ReadImage>()),
+      }),
+    );
 
   return Effect.map(
     read,
@@ -215,17 +250,17 @@ function repositoryFile(
  * window draws within the bound.
  */
 export const githubImage = /* @__PURE__ */ Effect.fn("web/githubImage")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   image: GitHubImage,
-): Effect.fn.Return<Option.Option<ReadImage>, GitHubUnavailable, HttpClient.HttpClient> {
+): Effect.fn.Return<Option.Option<ReadImage>, ImageReadFailure, HttpClient.HttpClient> {
   if (image.source === GITHUB_IMAGE_SOURCE.PUBLIC) return yield* imageAt(image.url);
 
   if (image.source === GITHUB_IMAGE_SOURCE.FILE) {
-    return yield* repositoryFile(token, fullName, image);
+    return yield* repositoryFile(bearer, fullName, image);
   }
 
-  const signed = yield* signedUploadOf(token, fullName, image.assetId);
+  const signed = yield* signedUploadOf(bearer, fullName, image.assetId);
 
   if (Option.isNone(signed)) return Option.none();
 

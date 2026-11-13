@@ -1584,7 +1584,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
     () =>
       Effect.gen(function* () {
         const held: RepositoryScript = (sent) =>
-          sent.url.endsWith(`/repos/${RELAY_FULL_NAME}/git/ref/heads/luke/stacked`)
+          sent.url.endsWith(`/repos/${RELAY_FULL_NAME}/git/ref/heads%2Fluke%2Fstacked`)
             ? Response.json({ object: { type: "commit", sha: "a".repeat(40) } })
             : undefined;
 
