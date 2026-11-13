@@ -295,10 +295,9 @@
      never makes its line taller and its line's words stand where its
      neighbors' do. Note that the panel takes no preflight (its own
      `base.css` is its reset), so without this the browser's `super` and
-     `sub` stand. */
+     `sub` stand. Its size stays the browser's own, a step smaller. */
   :is(.ui-markdown-flow, .ui-prose-document) :is(sub, sup) {
     position: relative;
-    font-size: 75%;
     line-height: 0;
     vertical-align: baseline;
   }
