@@ -957,7 +957,8 @@ export function composeMacCommands(
           !sameSettings(here, answer.settings) &&
           !(yield* device.applySettings(answer.settings))
         ) {
-          return;
+          // Note that a refused write tells a change too, which would start the next look at once, so the look rests first rather than joining and writing again without a pause.
+          return yield* Effect.sleep(DEVICE_LOOK_EVERY);
         }
 
         yield* SubscriptionRef.set(joined, { userId, deviceId, settings: answer.settings });

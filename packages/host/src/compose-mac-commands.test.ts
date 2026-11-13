@@ -566,7 +566,7 @@ it.effect(
 );
 
 it.effect(
-  "a Mac whose Settings refuse the service's settings writes them again on the next look, and never carries its own up over them",
+  "a Mac whose Settings refuse the service's settings writes them again after a rest, and never carries its own up over them",
   () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
@@ -587,7 +587,11 @@ it.effect(
         Effect.gen(function* () {
           yield* composer.lifetime;
           yield* settled;
+          // A change told at once after the refusal, as the refused write itself tells one.
           yield* moved;
+          yield* settled;
+          assert.equal(service.joins.length, 1, "no join again before the rest");
+          yield* TestClock.adjust("15 seconds");
           yield* settled;
         }),
       );
