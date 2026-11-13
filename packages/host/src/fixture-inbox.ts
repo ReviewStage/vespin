@@ -908,7 +908,10 @@ function listedTask(
  * in a second repository, so the list draws its repositories' headings,
  * one the account keeps in a section of its own, a teammate's it
  * follows, which the list draws under Following, and one filed for later
- * and one canceled, so the list draws every status's mark.
+ * and one canceled, so the list draws every status's mark. Note that those
+ * last two are named with Markdown's marks, and with letters beyond Latin
+ * and an emoji, so a search's bold title shows every mark as typed and
+ * lands on the right letters.
  */
 const LISTED_TASKS: readonly TaskSummary[] = [
   listedTask(LISTED.COPY, "Invite email copy", {
@@ -948,14 +951,14 @@ const LISTED_TASKS: readonly TaskSummary[] = [
       { userId: ADA.userId, assignee: false, machines: false },
     ],
   }),
-  listedTask(LISTED.EXPORT, "Ledger CSV export", {
+  listedTask(LISTED.EXPORT, "Ledger *CSV* export (v2_final)", {
     repository: "ada/ledger",
     status: TASK_STATUS.BACKLOG,
     number: 48,
     updatedAt: LANDED - 2 * DAY,
     priority: TASK_PRIORITY.LOW,
   }),
-  listedTask(LISTED.DIGEST_V1, "Daily digest email", {
+  listedTask(LISTED.DIGEST_V1, "Daily digest 日報 for Zoë 📬", {
     repository: "ada/relay",
     status: TASK_STATUS.CANCELED,
     number: 49,
