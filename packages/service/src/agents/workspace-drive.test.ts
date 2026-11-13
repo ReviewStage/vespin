@@ -11,7 +11,7 @@ import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
 import { Sandbox } from "@repo/sandbox";
 import { type MemoryCommand, memorySandbox } from "@repo/sandbox/testing";
-import { Effect, Fiber } from "effect";
+import { Deferred, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import {
   connectWorkspaceGitHub,
@@ -63,11 +63,13 @@ const isInstall = (command: MemoryCommand) =>
 
 const isPrune = (command: MemoryCommand) => Object.hasOwn(command.ask.env ?? {}, VARIABLE.KEEP);
 
-/** The sandboxes kept in memory, each command a success but the sync of the folder named, which its batch says failed, and every sync where `stalled`, which never ends. */
-function fixture(failing?: string, stalled = false) {
+/** The sandboxes kept in memory, each command a success but the sync of the folder named, which its batch says failed, and every sync where `stalled` is given, which says it started and never ends. */
+function fixture(failing?: string, stalled?: Deferred.Deferred<void>) {
   return memorySandbox({
     run: (command) => {
-      if (stalled && isSync(command)) return Effect.never;
+      if (stalled !== undefined && isSync(command)) {
+        return Effect.andThen(Deferred.succeed(stalled, undefined), Effect.never);
+      }
 
       return failing !== undefined && isSync(command) && foldersOf(command).includes(failing)
         ? { exitCode: 0, stdout: `failed ${failing}\n`, stderr: "" }
@@ -153,12 +155,15 @@ it.layer(getTestDB())("a workspace's drive", (it) => {
     Effect.gen(function* () {
       const installation = installationOf(7203, ["relay"]);
       const workspace = yield* connected(installation);
-      const memory = fixture(undefined, true);
+      const syncing = yield* Deferred.make<void>();
+      const memory = fixture(undefined, syncing);
 
       const fiber = yield* Effect.forkChild(
         Effect.flip(filled(memory, installation, workspace, ["acme/relay"])),
       );
 
+      // Note that the fill mints its token through Octokit's promises first, so the clock moves only once it is syncing.
+      yield* Deferred.await(syncing);
       yield* TestClock.adjust(WORKSPACE_DRIVE.DEADLINE);
       const failure = yield* Fiber.join(fiber);
 

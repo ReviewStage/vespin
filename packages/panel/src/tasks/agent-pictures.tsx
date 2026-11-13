@@ -695,8 +695,8 @@ function useKeptChips(files: readonly MessageFileChip[]): FileChip[] {
  * (`SentWords`), and to its files' row, which leaves those out; a press opens
  * a file over the window, walking the files in the order the words name
  * them. A line whose words name none of its files, as every line sent before
- * markers, draws as it did. While the line is on its way, its files wear the
- * upload's cover.
+ * markers, draws as it did. While the line is on its way, its files' row
+ * wears the upload's cover, and the chips in its words open nothing.
  */
 export function MessageFiles({
   message,

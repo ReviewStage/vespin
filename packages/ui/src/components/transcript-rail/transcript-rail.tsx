@@ -96,10 +96,16 @@ const NARROW_PRESS =
 const NARROW_SLOT = "flex h-ui-6 min-h-ui-2 shrink items-center";
 const NARROW_LINE = "block h-ui-2 w-ui-8 rounded-ui-full bg-muted-foreground opacity-60";
 
-/** Where the bubble stands down the column, in pixels from its top and its bottom; none where no line stands in view. */
+/** Where the bubble stands down the column, in pixels from its top and its bottom. */
 interface BubbleClip {
   readonly top: number;
   readonly bottom: number;
+}
+
+/** The bubble as drawn: where it last stood, none before any line stood in view, and whether a line stands in view now. */
+interface BubbleState {
+  readonly clip: BubbleClip | undefined;
+  readonly shown: boolean;
 }
 
 /** Every line as a phone's sheet lists it: its sender's face, name, and tag over its words. */
@@ -147,13 +153,15 @@ function lastShown(marks: readonly TranscriptRailMark[]): number {
 /**
  * Where the bubble wraps the lines in view: from the first such line's slot
  * to the last's, read off the slots as they are laid out, and read again as
- * the column changes size.
+ * the column changes size. Where no line stands in view, as between two
+ * lines a fast scroll passes, the bubble keeps where it last stood and only
+ * fades, so it never stands unclipped down the column's whole height.
  */
 function useBubble(
   column: RefObject<HTMLElement | null>,
   slots: RefObject<(HTMLElement | null)[]>,
   marks: readonly TranscriptRailMark[],
-): BubbleClip | undefined {
+): BubbleState {
   const [clip, setClip] = useState<BubbleClip | undefined>(undefined);
   const shown = marks.flatMap((mark, index) => (mark.shown ? [index] : []));
   const first = shown[0];
@@ -168,7 +176,7 @@ function useBubble(
       const from = first === undefined ? null : slots.current[first];
       const to = last === undefined ? null : slots.current[last];
 
-      if (from == null || to == null) return setClip(undefined);
+      if (from == null || to == null) return;
       const top = Math.max(from.offsetTop - BUBBLE_PAD, 0);
       const bottom = Math.max(box.clientHeight - (to.offsetTop + to.offsetHeight) - BUBBLE_PAD, 0);
 
@@ -182,21 +190,21 @@ function useBubble(
     return () => sized.disconnect();
   }, [column, slots, first, last, marks.length]);
 
-  return clip;
+  return { clip, shown: first !== undefined };
 }
 
 /** The bubble round the lines in view, placed across its column by `inset`, its corners a small round's. */
-function Bubble({
-  clip,
-  inset,
-}: {
-  clip: BubbleClip | undefined;
-  inset: string;
-}): React.JSX.Element {
+function Bubble({ bubble, inset }: { bubble: BubbleState; inset: string }): React.JSX.Element {
+  const { clip } = bubble;
+
   return (
     <span
       aria-hidden
-      className={cn(BUBBLE, inset, clip === undefined ? "opacity-0" : "opacity-100")}
+      className={cn(
+        BUBBLE,
+        inset,
+        bubble.shown && clip !== undefined ? "opacity-100" : "opacity-0",
+      )}
       style={
         clip === undefined
           ? undefined
@@ -217,11 +225,11 @@ function NarrowRail({
   const menu = useMenu(true);
   const column = useRef<HTMLDivElement | null>(null);
   const slots = useRef<(HTMLElement | null)[]>([]);
-  const clip = useBubble(column, slots, marks);
+  const bubble = useBubble(column, slots, marks);
 
   return (
     <div ref={column} className={NARROW_COLUMN}>
-      <Bubble clip={clip} inset="left-0 w-ui-16" />
+      <Bubble bubble={bubble} inset="left-0 w-ui-16" />
       <button
         type="button"
         aria-label={RAIL_LABEL}
@@ -268,7 +276,7 @@ function WideRail({
   const column = useRef<HTMLElement | null>(null);
   const slots = useRef<(HTMLElement | null)[]>([]);
   const listId = useId();
-  const clip = useBubble(column, slots, marks);
+  const bubble = useBubble(column, slots, marks);
   const open = (pointed || focused) && !shut;
   const drawn = useDisclosure(open);
 
@@ -308,7 +316,7 @@ function WideRail({
       }}
       onPointerLeave={() => setPointed(false)}
     >
-      <Bubble clip={clip} inset="left-ui-2 w-ui-20" />
+      <Bubble bubble={bubble} inset="left-ui-2 w-ui-20" />
       <button
         type="button"
         aria-label={PRESS_LABEL}

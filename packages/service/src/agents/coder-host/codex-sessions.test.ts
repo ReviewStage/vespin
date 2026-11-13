@@ -212,7 +212,7 @@ function services(
   return Layer.mergeAll(
     http,
     machineOver(http),
-    GITHUB_APP_WITH_TOKENS,
+    GITHUB_APP_WITH_TOKENS.pipe(Layer.provide(http)),
     Layer.succeed(HostedEnvironment, NO_KEYS),
     Layer.succeed(AgentImage, {
       reference: Effect.succeed(IMAGE),
