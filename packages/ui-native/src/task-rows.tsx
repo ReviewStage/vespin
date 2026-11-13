@@ -10,6 +10,7 @@ import {
   Text,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHint,
   accessibilityIdentifier,
@@ -408,14 +409,17 @@ export function LinkRow({
         ...(detail === undefined ? [] : [accessibilityValue(detail)]),
       ]}
     >
-      <RowHead
-        unread={false}
-        faded={false}
-        lead={<LeadGlyph symbol={symbol} ink={ink} />}
-        title={label}
-        ink={ink}
-        end={detail === undefined ? null : <EndWords words={detail} />}
-      />
+      {/* Note that the shape stands on the row's own stack, the button's label, so a press on the row's blank run past its words still goes, since a borderless button answers only where its label is hit. */}
+      <HStack modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}>
+        <RowHead
+          unread={false}
+          faded={false}
+          lead={<LeadGlyph symbol={symbol} ink={ink} />}
+          title={label}
+          ink={ink}
+          end={detail === undefined ? null : <EndWords words={detail} />}
+        />
+      </HStack>
     </SwiftUIButton>
   );
 }

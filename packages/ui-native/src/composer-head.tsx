@@ -52,27 +52,27 @@ function LineAct({
   const colors = useColors();
 
   return (
-    <Button
-      onPress={onPress}
-      modifiers={[
-        buttonStyle("plain"),
-        frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
-        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-        accessibilityLabel(label),
-      ]}
-    >
-      {symbol === undefined ? (
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
-            foregroundStyle(colors.TEXT_BODY),
-          ]}
-        >
-          {label}
-        </Text>
-      ) : (
-        <Image {...glyphImage(symbol)} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
-      )}
+    <Button onPress={onPress} modifiers={[buttonStyle("plain"), accessibilityLabel(label)]}>
+      {/* Note that the press's frame and its shape stand on the label, not on the button, since a plain button takes a press only where its label is hit. */}
+      <HStack
+        modifiers={[
+          frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
+      >
+        {symbol === undefined ? (
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
+              foregroundStyle(colors.TEXT_BODY),
+            ]}
+          >
+            {label}
+          </Text>
+        ) : (
+          <Image {...glyphImage(symbol)} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
+        )}
+      </HStack>
     </Button>
   );
 }
@@ -211,12 +211,9 @@ export function SkillSuggestions({
         <Button
           key={skill.name}
           onPress={() => onPick(skill.name)}
-          modifiers={[
-            buttonStyle("plain"),
-            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-            accessibilityLabel(skill.word),
-          ]}
+          modifiers={[buttonStyle("plain"), accessibilityLabel(skill.word)]}
         >
+          {/* Note that the shape stands on the row's full-width frame, not on the button, so a press past the skill's words still picks it. */}
           <HStack
             spacing={SPACE.ROW}
             modifiers={[
@@ -225,6 +222,7 @@ export function SkillSuggestions({
                 maxWidth: Number.POSITIVE_INFINITY,
                 alignment: "leading",
               }),
+              SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
             ]}
           >
             <Image {...glyphImage(GLYPH.SKILL)} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />

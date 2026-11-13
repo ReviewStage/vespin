@@ -42,9 +42,12 @@ const SEND_SIZE = 32;
 
 /**
  * A press's frame in the composer's row: Apple's least target, its mark
- * centered in it, the whole frame taking the press. The bar's edge is thin
- * (`BAR_EDGE`) by as much as the frame stands past its mark, so the bar
- * draws as it did with its marks alone.
+ * centered in it. The bar's edge is thin (`BAR_EDGE`) by as much as the frame
+ * stands past its mark, so the bar draws as it did with its marks alone.
+ * Note that a plain mark's button wears it on its label, never on the button,
+ * so the whole frame takes the press: a borderless button or a menu answers
+ * only where its label is hit. The round button wears it on itself, for its
+ * place in the row alone, since its press is its circle's, as the system's is.
  */
 const PRESS_FRAME = [
   frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
@@ -178,9 +181,14 @@ function SendButton({
     return (
       <Button
         onPress={onDictate}
-        modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel("Dictate")]}
+        modifiers={[buttonStyle("borderless"), accessibilityLabel("Dictate")]}
       >
-        <Image {...glyphImage(GLYPH.DICTATE)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+        <Image
+          {...glyphImage(GLYPH.DICTATE)}
+          size={MARK_SIZE.LEAD + 2}
+          color={colors.TEXT_MUTED}
+          modifiers={PRESS_FRAME}
+        />
       </Button>
     );
   }
@@ -210,9 +218,14 @@ function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testI
   return (
     <Menu
       label={
-        <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+        <Image
+          {...glyphImage(GLYPH.ADD)}
+          size={MARK_SIZE.LEAD + 2}
+          color={colors.TEXT_MUTED}
+          modifiers={PRESS_FRAME}
+        />
       }
-      modifiers={[...PRESS_FRAME, accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
+      modifiers={[accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
     >
       {menu.actions.map((action) => (
         <Button
@@ -268,12 +281,16 @@ export function AddPress({
       onPress={onAdd}
       modifiers={[
         buttonStyle("borderless"),
-        ...PRESS_FRAME,
         accessibilityLabel(ADD_LABEL),
         accessibilityIdentifier(testId),
       ]}
     >
-      <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+      <Image
+        {...glyphImage(GLYPH.ADD)}
+        size={MARK_SIZE.LEAD + 2}
+        color={colors.TEXT_MUTED}
+        modifiers={PRESS_FRAME}
+      />
     </Button>
   );
 }

@@ -277,15 +277,20 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
 
   if (only === undefined) return null;
 
+  // Note that the target's frame and shape stand on the glyph, the button's label, since a borderless button or a menu answers only where its label is hit.
   const glyph = (
-    <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
+    <Image
+      {...glyphImage(GLYPH.ADD)}
+      size={MARK_SIZE.GLYPH}
+      color={colors.TEXT_MUTED}
+      modifiers={[
+        frame({ minWidth: ADD_TARGET.WIDTH, minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+      ]}
+    />
   );
 
-  const target = [
-    buttonStyle("borderless"),
-    frame({ minWidth: ADD_TARGET.WIDTH, minHeight: ADD_TARGET.HEIGHT, alignment: "trailing" }),
-    SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-  ];
+  const target = [buttonStyle("borderless")];
 
   if (rest.length === 0) {
     return (
