@@ -2334,11 +2334,15 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(sandboxOfAgent(api, agent)?.status, "stopped");
 
         const [row] = yield* (yield* Database)
-          .select({ stoppedAt: agentSandboxTable.stoppedAt })
+          .select({ usedAt: agentSandboxTable.usedAt })
           .from(agentSandboxTable)
           .where(eq(agentSandboxTable.sandboxName, sandboxName));
 
-        assert.ok(row?.stoppedAt != null);
+        // The task list reads a sandbox running until five minutes past its last use, so it reads off now.
+        assert.ok(
+          row !== undefined &&
+            row.usedAt.getTime() + 5 * 60_000 <= (yield* Clock.currentTimeMillis),
+        );
       }),
   );
 

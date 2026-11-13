@@ -23,9 +23,9 @@
  * is handed its first lines, which is a use, or once the open failed; a
  * discard, which deletes the sandbox, marks it RELEASED. A stop the service
  * makes as nothing holds the sandbox (`@repo/service`'s
- * `sandboxStoppedIfUnheld`) is recorded as `stopped_at`, which the next
- * open, boot, or use clears, so the task list reads it off at once while it
- * stays LIVE for the release sweep. A sweep leaves a
+ * `sandboxStoppedIfUnheld`) moves its last use back to the instant its run
+ * would have ended at, so the task list reads it off at once with no column
+ * of its own, while it stays LIVE for the release sweep. A sweep leaves a
  * sandbox booting alone, since its boot keeps the last use it began from,
  * unless the boot began before the sweep's cutoff and never ended. The task
  * list reads the row of the agent's current session (`sandboxNamedFor`).
@@ -85,11 +85,6 @@ function notBootingSince(usedBy: Date) {
   return or(isNull(agentSandboxTable.bootingSince), lte(agentSandboxTable.bootingSince, usedBy));
 }
 
-/** That the row was last used before the cutoff, or reads stopped, which any use that follows clears whatever its cutoff. */
-function usedBeforeOrStopped(writtenBefore: Date) {
-  return or(lt(agentSandboxTable.usedAt, writtenBefore), isNotNull(agentSandboxTable.stoppedAt));
-}
-
 /** One use of a sandbox to record: its name, when it was used, and the cutoff a row written since is left at. */
 export interface AgentSandboxUse {
   readonly sandboxName: string;
@@ -112,8 +107,8 @@ const upsertOpen = SqlSchema.void({
         .values({ sandboxName, agentId, usedAt: at, state: AGENT_SANDBOX_STATE.LIVE })
         .onConflictDoUpdate({
           target: agentSandboxTable.sandboxName,
-          set: { agentId, usedAt: at, state: AGENT_SANDBOX_STATE.LIVE, stoppedAt: null },
-          setWhere: sql`${usedBeforeOrStopped(writtenBefore)} or ${mayWrite(
+          set: { agentId, usedAt: at, state: AGENT_SANDBOX_STATE.LIVE },
+          setWhere: sql`${lt(agentSandboxTable.usedAt, writtenBefore)} or ${mayWrite(
             AGENT_SANDBOX_STATE.LIVE,
             false,
           )}`,
@@ -127,9 +122,12 @@ const updateUse = SqlSchema.void({
     Database.use((db) =>
       db
         .update(agentSandboxTable)
-        .set({ usedAt: at, stoppedAt: null })
+        .set({ usedAt: at })
         .where(
-          and(eq(agentSandboxTable.sandboxName, sandboxName), usedBeforeOrStopped(writtenBefore)),
+          and(
+            eq(agentSandboxTable.sandboxName, sandboxName),
+            lt(agentSandboxTable.usedAt, writtenBefore),
+          ),
         ),
     ),
 });
@@ -247,7 +245,7 @@ const upsertBooting = SqlSchema.void({
         // Note that its last use stays, so a resume that fails reads off rather than running.
         .onConflictDoUpdate({
           target: agentSandboxTable.sandboxName,
-          set: { agentId, state: AGENT_SANDBOX_STATE.LIVE, bootingSince: at, stoppedAt: null },
+          set: { agentId, state: AGENT_SANDBOX_STATE.LIVE, bootingSince: at },
           setWhere: mayWrite(AGENT_SANDBOX_STATE.LIVE, true),
         }),
     ),
@@ -286,12 +284,15 @@ const markReleased = SqlSchema.void({
 });
 
 const markStopped = SqlSchema.void({
-  Request: Schema.Struct({ sandboxName: Schema.String, at: Schema.Date }),
-  execute: ({ sandboxName, at }) =>
+  Request: Schema.Struct({ sandboxName: Schema.String, usedAt: Schema.Date }),
+  execute: ({ sandboxName, usedAt }) =>
     Database.use((db) =>
       db
         .update(agentSandboxTable)
-        .set({ stoppedAt: at })
+        // Note that the last use moves back, never on, so a stop never reads a sandbox in use later than it was.
+        .set({
+          usedAt: sql`least(${agentSandboxTable.usedAt}, ${usedAt.toISOString()}::timestamptz)`,
+        })
         .where(
           and(
             eq(agentSandboxTable.sandboxName, sandboxName),
@@ -368,13 +369,18 @@ export function recordAgentSandboxUse(use: AgentSandboxUse): SandboxUseEffect<vo
 }
 
 /**
- * The LIVE sandbox stopped at `at` as nothing held it, its disk kept: its
- * row read off until it is opened, booted, or used again, and every hold
- * on it let go, since its shells ended with its run. A
- * release sweep still deletes it by its last use.
+ * The LIVE sandbox stopped as nothing held it, its disk kept: its last use
+ * moved back to `usedAt`, the instant its caller reckons its run would have
+ * begun its idle window at to end now, so the task list, which reads a
+ * sandbox running until its idle window past its last use, reads it off at
+ * once, and the next open, boot, or use writes it again past the write
+ * cutoff; every hold on it let go, since its shells ended with its run.
  */
-export function recordAgentSandboxStopped(sandboxName: string, at: Date): SandboxUseEffect<void> {
-  return Effect.andThen(forgetAgentSandboxHolds(sandboxName), markStopped({ sandboxName, at }));
+export function recordAgentSandboxStopped(
+  sandboxName: string,
+  usedAt: Date,
+): SandboxUseEffect<void> {
+  return Effect.andThen(forgetAgentSandboxHolds(sandboxName), markStopped({ sandboxName, usedAt }));
 }
 
 /**

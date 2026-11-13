@@ -1,1 +1,0 @@
-ALTER TABLE "agent_sandbox" ADD COLUMN "stopped_at" timestamp with time zone;

@@ -39,7 +39,7 @@ import {
   recordAgentSandboxStopped,
   recordAgentSandboxUse,
 } from "@repo/database/models/agent-sandboxes";
-import { Sandbox, type SandboxError, touchSandbox } from "@repo/sandbox";
+import { SANDBOX_IDLE, Sandbox, type SandboxError, touchSandbox } from "@repo/sandbox";
 import { Clock, Duration, Effect } from "effect";
 
 const SANDBOX_USE = {
@@ -133,7 +133,9 @@ export const recordedSandboxStopped = (
 ): Effect.Effect<void, never, DatabaseServices> =>
   loggedIfFailed(
     Effect.flatMap(Clock.currentTimeMillis, (now) =>
-      recordAgentSandboxStopped(sandboxName, new Date(now)),
+      // Note that the last use is moved back one idle window, because the task list reads a sandbox
+      // running until `SANDBOX_IDLE` past it, so the stop reads off now with no column of its own.
+      recordAgentSandboxStopped(sandboxName, new Date(now - Duration.toMillis(SANDBOX_IDLE))),
     ),
   );
 
