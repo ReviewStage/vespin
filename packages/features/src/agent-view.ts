@@ -87,7 +87,7 @@ import {
   soundRenameRequestSchema,
 } from "./sound-clip-wire.js";
 import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
-import { voiceCallEndedRequestSchema, voiceSessionRequestSchema } from "./voice-wire.js";
+import { voiceSessionRequestSchema } from "./voice-wire.js";
 
 /**
  * agent-view.ts -- a task's coding agents as one Mac's window hears them: each call's answer whole, or why there is none.
@@ -1169,20 +1169,10 @@ export const voiceSessionParamsSchema = voiceSessionRequestSchema;
 
 export type VoiceSessionParams = typeof voiceSessionParamsSchema.Type;
 
-/** The opened call, as the window hears it: the SDP answer, or why there is none. */
+/** The opened call, as the window hears it: its id and the SDP answer, or why there is none. */
 export const voiceSessionAnswerViewSchema = answerView(voiceContract.open);
 
 export type VoiceSessionAnswerView = typeof voiceSessionAnswerViewSchema.Type;
-
-/** A finished voice call, as the window reports it: the agent and the seconds it ran. */
-export const voiceCallEndedParamsSchema = voiceCallEndedRequestSchema;
-
-export type VoiceCallEndedParams = typeof voiceCallEndedParamsSchema.Type;
-
-/** A reported call, as the window hears it: kept, or why not. */
-export const voiceCallEndedAnswerViewSchema = answerView(voiceContract.ended);
-
-export type VoiceCallEndedAnswerView = typeof voiceCallEndedAnswerViewSchema.Type;
 
 /** The phone the app runs on, as it registers itself for pushes: its APNs token, its build's gateway, and its app. */
 export const pushDeviceRegisterParamsSchema = pushDeviceRegisterRequestSchema;
