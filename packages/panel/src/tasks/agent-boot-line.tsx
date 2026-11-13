@@ -1,5 +1,5 @@
 /**
- * agent-boot-line.tsx -- what an agent's empty transcript says while its first launch stands: where it is starting and how long, the agent starting once its machine is up, or a machine that never came up, with Retry.
+ * agent-boot-line.tsx -- what an agent's empty transcript says while its first launch stands: where it is starting and how long, Building… while it waits on its workspace's drive, the agent starting once its machine is up, or a machine that never came up, with Retry.
  *
  * An agent's first launch boots its machine before any turn opens, its
  * first message waiting in its queue (`@repo/features/agent-boot`), so its
@@ -7,10 +7,12 @@
  * (`bootLineOf`). While it is under way, that is the transcript's own
  * working line at the log's top, where the first line will land: a cloud
  * sandbox or the agent's Mac starting, counting from when the boot began,
- * then the agent itself once the machine is up, uncounted, or ready,
- * standing still, while an edit holds the first message. A boot that
- * failed says why in the transcript's centered line, with Retry where the
- * reader may message the agent.
+ * or Building… in its place while the start waits on its workspace's drive
+ * (the boot's `building`), which an older app reads as starting; then the
+ * agent itself once the machine is up, uncounted, or ready, standing still,
+ * while an edit holds the first message. A boot that failed says why in the
+ * transcript's centered line, with Retry where the reader may message the
+ * agent.
  */
 
 import { type AgentBoot, BOOT_PHASE, type BootFailure } from "@repo/features/agent-boot";
@@ -41,6 +43,8 @@ import { WorkingLine } from "./working-time.js";
 export const BOOT_LINE = {
   /** The machine boots, since when. */
   STARTING: "starting",
+  /** The start waits on its workspace's drive being built, since when. */
+  BUILDING: "building",
   /** The machine is up and the first message is on its way, uncounted: a moment, unless an edit held it, whose wait is no start. */
   HANDING_OFF: "handing-off",
   /** The machine is up and waits on an edit to the first message, which the hand-off stops at. */
@@ -51,6 +55,7 @@ export const BOOT_LINE = {
 
 export type BootLine =
   | { readonly kind: typeof BOOT_LINE.STARTING; readonly since: number }
+  | { readonly kind: typeof BOOT_LINE.BUILDING; readonly since: number }
   | { readonly kind: typeof BOOT_LINE.HANDING_OFF }
   | { readonly kind: typeof BOOT_LINE.READY; readonly byReader: boolean }
   | { readonly kind: typeof BOOT_LINE.FAILED; readonly failure: BootFailure | undefined };
@@ -74,7 +79,10 @@ export function bootLineOf(
 
   switch (boot.phase) {
     case BOOT_PHASE.STARTING:
-      return { kind: BOOT_LINE.STARTING, since: boot.since };
+      return {
+        kind: boot.building === true ? BOOT_LINE.BUILDING : BOOT_LINE.STARTING,
+        since: boot.since,
+      };
     case BOOT_PHASE.HANDING_OFF:
       // Note that the hand-off is not counted, since the boot keeps when it began and an edit that held its first message would be counted as starting.
       return held === undefined
@@ -121,6 +129,8 @@ export function AgentBootLine({
   switch (line.kind) {
     case BOOT_LINE.STARTING:
       return <WorkingLine startedAt={line.since} words={bootStartingWords(machine, host)} />;
+    case BOOT_LINE.BUILDING:
+      return <WorkingLine startedAt={line.since} words={BOOT_WORDS.BUILDING} />;
     case BOOT_LINE.HANDING_OFF:
       return <WorkingLine startedAt={undefined} words={BOOT_WORDS.HANDING_OFF} />;
     case BOOT_LINE.READY:

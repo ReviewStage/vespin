@@ -1,4 +1,4 @@
-// agent-boot-words.ts -- what an agent's first launch says while it boots, worded once for its empty transcript: where it is starting, the agent starting once its machine is up or ready while an edit holds its first message, and a boot that failed and why.
+// agent-boot-words.ts -- what an agent's first launch says while it boots, worded once for its empty transcript: where it is starting, building its workspace's drive, the agent starting once its machine is up or ready while an edit holds its first message, and a boot that failed and why.
 
 import { BOOT_FAILURE, type BootFailure } from "./agent-boot.js";
 import { AGENT_MACHINE, type AgentMachineKind } from "./agent-wire.js";
@@ -10,6 +10,8 @@ export const BOOT_WORDS = {
   STARTING_SANDBOX: "Starting a cloud sandbox…",
   STARTING_ON_BEFORE: "Starting on ",
   STARTING_ON_AFTER: "…",
+  /** The start waits on its workspace's drive being built. */
+  BUILDING: "Building…",
   /**
    * The machine is up and the agent's own start is under way, its first
    * message handed to it from the queue. Note that it names the agent rather
