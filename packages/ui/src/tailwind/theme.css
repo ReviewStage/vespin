@@ -1116,6 +1116,8 @@
   --spacing-conversation-empty: 280px; /* off-scale: a short line's measure */
   --spacing-conversation-empty-wide: 560px; /* off-scale: a one-line failure's measure, Continue beside it */
   --spacing-conversation-older: calc(100% - var(--ui-space-32));
+  /* The way back to the newest line stands this far above the log's foot: its own room, past whatever floats over the log's end (`--conversation-over-end`, the log's own). */
+  --spacing-conversation-scroll: calc(var(--ui-space-16) + var(--conversation-over-end, 0px));
   --shadow-floating-edge: inset 0 0 0 1px var(--ui-color-border), var(--ui-menu-shadow);
   --color-button-ground: var(--ui-button-ground);
   --color-inert-link: color-mix(in srgb, currentColor 40%, transparent);

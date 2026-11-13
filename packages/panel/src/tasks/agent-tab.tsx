@@ -2776,6 +2776,7 @@ function AgentTranscriptView({
   onOlder,
   olderFailed = false,
   overComposer = false,
+  overEnd,
   earlierOmitted = false,
   briefTitle,
   briefSender,
@@ -2844,6 +2845,8 @@ function AgentTranscriptView({
   olderFailed?: boolean;
   /** Whether the composer stands right under the log, which the log's foot then fades into. */
   overComposer?: boolean;
+  /** The room, in pixels, what floats over the log's end takes, as the apps' windows the agent is using do (`ComputerDock`). */
+  overEnd?: number | undefined;
   /** Whether older steps than these were left out, which a note says after the card. */
   earlierOmitted?: boolean;
   /** The description's or task's card line, where it is named otherwise than by its first line, as a brain's worker is by its job. */
@@ -3150,7 +3153,7 @@ function AgentTranscriptView({
       <TranscriptAgentOn agentId={agentId} planId={payerSubscriptionId}>
         <LiveDoors value={live}>
           <ConnectionNames needed={callsServer}>
-            <Conversation list={log} onNearTop={onOlder}>
+            <Conversation list={log} onNearTop={onOlder} overEnd={overEnd}>
               {/* Note that it floats in a fixed slot over the log's top rather than standing in its flow, so its coming and going moves no row, measured or not. */}
               {olderFailed && onOlder !== undefined ? (
                 <div
@@ -3535,6 +3538,8 @@ function AgentTabView({
 
   const editorNow = { agentId: agent.id, keywords, skills };
   const editorProps = useRef(editorNow);
+  // The room the apps' windows the agent is using take over the transcript's end, which the log makes room for.
+  const [appsRoom, setAppsRoom] = useState(0);
   editorProps.current = editorNow;
   const editor = useCallback(() => editorProps.current, []);
 
@@ -3822,6 +3827,7 @@ function AgentTabView({
                                   onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                                   olderFailed={transcript.olderFailed}
                                   overComposer
+                                  overEnd={appsRoom}
                                   bringIn={bringIn}
                                   approvals={mode === undefined ? undefined : approvals}
                                 />
@@ -3870,7 +3876,7 @@ function AgentTabView({
               agentId={agent.id}
               messages={dockLines}
               working={standing.working}
-              onStop={offersStop(agent) ? onStop : undefined}
+              onRoom={setAppsRoom}
             />
           </CallPlaceProvider>
           <AgentQueueDock

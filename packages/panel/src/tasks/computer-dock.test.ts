@@ -7,7 +7,7 @@ import { appsInUse } from "./computer-dock.js";
 /**
  * computer-dock.test.ts -- the stack over an agent's box holds every app
  * it used this turn, the one it used last first, each with the newest window
- * it read of that app, and stands only while the agent works. Synthetic words.
+ * it read of that app, none in use once the agent is done. Synthetic words.
  */
 
 const WINDOW = {
@@ -83,7 +83,7 @@ test("every app used this turn stands once, the one used last first, each with i
   });
 });
 
-test("the app used last is no longer in use once another tool is called, and nothing stands once the agent stops working", () => {
+test("the app used last is no longer in use once another tool is called, or once the agent is done, its apps still standing", () => {
   const using = [asked("ask-1"), turn("turn-1", [read("r1", "Simulator", WINDOW)])];
 
   const movedOn = [
@@ -92,7 +92,11 @@ test("the app used last is no longer in use once another tool is called, and not
   ];
 
   assert.equal(appsInUse(movedOn, true)?.using, false);
-  assert.equal(appsInUse(using, false), undefined);
+  assert.deepEqual(
+    appsInUse(using, false)?.apps.map((each) => each.app),
+    ["Simulator"],
+  );
+  assert.equal(appsInUse(using, false)?.using, false);
 });
 
 test("a call the Mac refused, as for a grant it lacks, adds no app, so no blank window floats as in use", () => {
