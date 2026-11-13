@@ -23,17 +23,21 @@
  * one pull request a few times a minute does not read the installation,
  * list its repositories, and mint a token for every request: a repository a
  * workspace's installation reaches is kept for `KEPT.REACH_TTL` under the
- * workspace and the repository as asked, and a token minted for one
- * repository under the workspace, the installation, the repository, and
- * the permissions it is cut to, until shortly before GitHub expires it. A
- * token is minted for the one repository alone, and a reach is kept only
+ * workspace and the repository as asked. An installation token is minted
+ * through `@repo/github`, whose cache keeps it by the installation, the
+ * repositories, and the permissions it is cut to, never by member, since an
+ * installation token is the same token whoever asked; one with time left is
+ * handed out again rather than minted afresh, as GitHub recommends
+ * (https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app).
+ * A token is minted for the one repository alone, and a reach is kept only
  * under the workspace that reached it, so nothing kept crosses workspaces. A kept reach is used only while
  * the store still links its installation to the workspace, running, so a
  * disconnect, or a removal GitHub's webhook reported, stops it at once; and
  * GitHub itself ends a token's access to a repository removed from its
- * installation. A failure, and a repository not reached, are never kept. A write token leaves for a sandbox's whole run
- * rather than for one request, so it is minted afresh with its whole hour
- * every time it is asked for.
+ * installation. A failure, and a repository not reached, are never kept. A
+ * token is handed out only with `TOKEN_LIFE` of its hour left: a little for
+ * a read here, and more for a write token, which leaves for a sandbox's run
+ * rather than for one request.
  *
  * A member who saved their own classic personal access token
  * (`./github-token.ts`) reaches, beside that, a repository no installation
@@ -106,6 +110,15 @@ import {
   REPOSITORY_UNREACHED,
   type RepositoryUnreached,
 } from "@repo/features/repository-reach-wire";
+import {
+  GitHub,
+  type GitHubHoldStore,
+  type GitHubFailure as GitHubModuleFailure,
+  GitHubPriority,
+  type GitHubThrottleGroups,
+  type InstallationGrant,
+  PRIORITY,
+} from "@repo/github";
 import { generateRandomString, symmetricDecrypt, symmetricEncrypt } from "better-auth/crypto";
 import { generateCodeChallenge } from "better-auth/oauth2";
 import { and, desc, eq } from "drizzle-orm";
@@ -120,10 +133,12 @@ import {
   Effect,
   Exit,
   Layer,
+  Match,
   Option,
   Redacted,
   Result,
   Schema,
+  type Scope,
 } from "effect";
 import * as Headers from "effect/http/Headers";
 import * as HttpClient from "effect/http/HttpClient";
@@ -238,36 +253,46 @@ type InstallationTokenPermissions =
   (typeof INSTALLATION_TOKEN_PERMISSIONS)[keyof typeof INSTALLATION_TOKEN_PERMISSIONS];
 
 /**
- * What one function instance keeps of what the App reached and minted. A
- * reach is kept briefly, since an installation's repositories change on
- * GitHub without a word to the instance; an installation token lives an
- * hour from its mint
- * (https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-an-installation-access-token-for-a-github-app),
- * and is kept until `TOKEN_MARGIN` before GitHub's `expires_at` for it, and
- * never past the hour, so a request handed one does not watch it expire
- * mid-flight.
+ * What one function instance keeps of what the App reached. A reach is kept
+ * briefly, since an installation's repositories change on GitHub without a
+ * word to the instance.
  */
 const KEPT = {
   CAPACITY: 1_024,
   REACH_TTL: Duration.minutes(5),
-  TOKEN_LIFETIME: Duration.hours(1),
-  TOKEN_MARGIN: Duration.minutes(10),
+} as const;
+
+/**
+ * How much of its hour an installation token must have left to be handed
+ * out again rather than minted afresh. A read here is done in seconds, so
+ * it only must not watch the token expire mid-flight. A write token leaves
+ * for a sandbox, whose firewall carries it until the next message, terminal,
+ * or snapshot writes it again, so it keeps most of the hour.
+ */
+const TOKEN_LIFE = {
+  READ: Duration.minutes(10),
+  SANDBOX: Duration.minutes(45),
 } as const;
 
 /** A lookup a cache keeps, run in the member's lane rather than the lane of whoever missed first (`./github-rate-gate.ts`). */
 const inForeground = <A, E, R>(lookup: Effect.Effect<A, E, R>) =>
   Effect.provideService(lookup, GitHubBackground, false);
 
-/** Whether a repository token is kept for the instance's later asks, or minted afresh for each, as a write token leaving for a sandbox's whole run is. */
-const TOKEN_KEEPING = { KEPT: "kept", FRESH: "fresh" } as const;
-
-type TokenKeeping = (typeof TOKEN_KEEPING)[keyof typeof TOKEN_KEEPING];
-
 /** The mint as GitHub takes it: the repositories by name, none for every one, and the permissions the token is cut to. */
 interface InstallationTokenRequest {
   readonly repositories?: readonly string[];
   readonly permissions: InstallationTokenPermissions;
 }
+
+/**
+ * The throttle's spacing groups the App's `@repo/github` client is built
+ * with: the plugin's own where none is given. A test hands groups that space
+ * on no real time.
+ */
+export const GitHubAppThrottle = Context.Reference<GitHubThrottleGroups | undefined>(
+  "@repo/service/GitHubAppThrottle",
+  { defaultValue: () => undefined },
+);
 
 /** The statuses the reads here decide on by name; any other is answered as the status it is. */
 export const GITHUB_HTTP_STATUS = {
@@ -494,21 +519,6 @@ class ReachKey extends Data.Class<{
   readonly fullName: string;
   readonly member: string | undefined;
 }> {}
-
-/** One installation token as minted: for which workspace and member, through which installation, for which repository or none for every one, cut to what. */
-class TokenKey extends Data.Class<{
-  readonly organizationId: string;
-  readonly member: string | undefined;
-  readonly installationId: number;
-  readonly repository: string | undefined;
-  readonly permissions: InstallationTokenPermissions;
-}> {}
-
-/** A token as minted, and how long it is kept: until the margin before its expiry, or no time where it is that near already. */
-interface KeptToken {
-  readonly token: Redacted.Redacted;
-  readonly keepFor: Duration.Duration;
-}
 
 /**
  * Whose a repository token is: an installation token the App minted, or the
@@ -886,7 +896,7 @@ export class GitHubApp extends Context.Service<GitHubApp, GitHubAppService>()("G
     settings: GitHubAppSettings | undefined,
     missing: readonly string[] = [],
     tokenKeys: Redacted.Redacted | undefined = undefined,
-  ): Layer.Layer<GitHubApp> {
+  ): Layer.Layer<GitHubApp, never, GitHubAppNeeds> {
     return Layer.effect(GitHubApp, githubAppService(settings, missing, tokenKeys));
   }
 }
@@ -956,12 +966,6 @@ const ExchangeAnswerSchema = Schema.Union([
   ExchangedTokenSchema,
   TokenRefusalSchema,
 ]);
-
-/** GitHub's answer to a token mint, read for the token and when it expires. */
-const InstallationTokenSchema = Schema.Struct({
-  token: Schema.String,
-  expires_at: Schema.DateFromString,
-});
 
 /** A user as GitHub records one, read as far as a commit identity goes; the name is null where the account set none. */
 const UserSchema = Schema.Struct({
@@ -1295,6 +1299,46 @@ function unavailable(error: HttpClientError.HttpClientError): GitHubUnavailable 
   });
 }
 
+/**
+ * A failure of `@repo/github` as the `GitHubUnavailable` this module's
+ * callers read: a refusal by its status, a rate limit with how long GitHub
+ * asked to be left alone, and an answer off its shape as unreadable.
+ */
+function unavailableOf(failure: GitHubModuleFailure): Effect.Effect<never, GitHubUnavailable> {
+  return Match.value(failure).pipe(
+    Match.tagsExhaustive({
+      GitHubRateLimited: (limited) =>
+        Effect.flatMap(Clock.currentTimeMillis, (now) => {
+          const resetsAt = limited.resetsAt?.getTime();
+
+          return Effect.fail(
+            new GitHubUnavailable({
+              reason: GITHUB_FAILURE.STATUS,
+              status: GITHUB_HTTP_STATUS.TOO_MANY_REQUESTS,
+              ...(resetsAt !== undefined && {
+                retryAfter: Duration.millis(Math.max(resetsAt - now, 0)),
+              }),
+            }),
+          );
+        }),
+      GitHubNotFound: () => Effect.fail(statusOf(GITHUB_HTTP_STATUS.NOT_FOUND)),
+      GitHubForbidden: () => Effect.fail(statusOf(GITHUB_HTTP_STATUS.FORBIDDEN)),
+      GitHubUnauthorized: () => Effect.fail(statusOf(GITHUB_HTTP_STATUS.UNAUTHORIZED)),
+      GitHubRejected: (rejected) => Effect.fail(statusOf(rejected.status)),
+      GitHubUnreadable: () =>
+        Effect.fail(
+          new GitHubUnavailable({ reason: GITHUB_FAILURE.UNREADABLE, status: undefined }),
+        ),
+      GitHubUnavailable: () =>
+        Effect.fail(new GitHubUnavailable({ reason: GITHUB_FAILURE.TRANSPORT, status: undefined })),
+    }),
+  );
+}
+
+function statusOf(status: number): GitHubUnavailable {
+  return new GitHubUnavailable({ reason: GITHUB_FAILURE.STATUS, status });
+}
+
 /** GitHub's answer under `status` read as nothing this service can read. */
 export function unreadable(status: number): GitHubUnavailable {
   return new GitHubUnavailable({ reason: GITHUB_FAILURE.UNREADABLE, status });
@@ -1342,19 +1386,6 @@ export function githubSendRequest<Body extends object>(
   );
 
   return body === undefined ? request : HttpClientRequest.bodyJsonUnsafe(request, body);
-}
-
-/** The one write the App makes as itself: a token mint, its JSON body under the App's own JWT. */
-function githubMintAsApp(
-  path: string,
-  jwt: Redacted.Redacted,
-  body: InstallationTokenRequest,
-): HttpClientRequest.HttpClientRequest {
-  return HttpClientRequest.post(`${GITHUB_API}${path}`).pipe(
-    HttpClientRequest.bearerToken(jwt),
-    HttpClientRequest.setHeaders(GITHUB_HEADERS),
-    HttpClientRequest.bodyJsonUnsafe(body),
-  );
 }
 
 /** One request sent, its answer still open for the caller to read and close. */
@@ -1614,10 +1645,46 @@ const keepInstallerTokens = /* @__PURE__ */ Effect.fn("web/githubKeepInstallerTo
   );
 });
 
+/** What the App's own `@repo/github` client is built over: the instance's client to GitHub and the holds every instance shares. */
+type GitHubAppNeeds = HttpClient.HttpClient | GitHubHoldStore;
+
+/**
+ * The service over the settings, with the App's `@repo/github` client built
+ * once for the instance where the settings name an App; with none, every
+ * read of it answers `GitHubAppNotConfigured`.
+ */
 function githubAppService(
   settings: GitHubAppSettings | undefined,
   missing: readonly string[],
   tokenKeys: Redacted.Redacted | undefined,
+): Effect.Effect<GitHubAppService, never, GitHubAppNeeds | Scope.Scope> {
+  return Effect.gen(function* () {
+    const throttleGroups = yield* GitHubAppThrottle;
+
+    const module =
+      settings === undefined
+        ? undefined
+        : Context.get(
+            yield* Layer.build(
+              GitHub.layer({
+                appId: settings.appId,
+                privateKey: settings.privateKey,
+                userAgent: GITHUB_USER_AGENT,
+                ...(throttleGroups !== undefined && { throttleGroups }),
+              }),
+            ),
+            GitHub,
+          );
+
+    return yield* githubAppServiceOver(settings, missing, tokenKeys, module);
+  });
+}
+
+function githubAppServiceOver(
+  settings: GitHubAppSettings | undefined,
+  missing: readonly string[],
+  tokenKeys: Redacted.Redacted | undefined,
+  module: GitHub["Service"] | undefined,
 ): Effect.Effect<GitHubAppService> {
   const signingKey = settings === undefined ? undefined : privateKeyOf(settings.privateKey);
 
@@ -1632,6 +1699,13 @@ function githubAppService(
           }),
         )
       : Effect.succeed({ ...settings, signingKey });
+
+  // Note that the module is built wherever settings are, so a ready App always holds one.
+  const githubModule = Effect.flatMap(ready, () =>
+    module === undefined
+      ? Effect.die("a configured App holds no GitHub client")
+      : Effect.succeed(module),
+  );
 
   const appJwt = Effect.gen(function* () {
     const app = yield* ready;
@@ -1672,19 +1746,36 @@ function githubAppService(
       return Option.some(installationOf(record));
     }).pipe(Effect.scoped);
 
-  /** A token minted as the App on the installation, cut as asked, with the instant GitHub expires it. */
-  const mint = (installationId: number, request: InstallationTokenRequest) =>
+  /**
+   * A token for the installation, cut as asked, with `lifetime` of its hour
+   * left at least: the one `@repo/github` keeps for the same cut where it has
+   * that left, else one minted as the App. Work no member waits on mints in
+   * the module's background priority, as it waits in the gate's background
+   * lane (`./github-rate-gate.ts`).
+   */
+  const mint = (
+    installationId: number,
+    request: InstallationTokenRequest,
+    lifetime: Duration.Duration,
+  ) =>
     Effect.gen(function* () {
-      const jwt = yield* appJwt;
+      const module = yield* githubModule;
+      const background = yield* GitHubBackground;
 
-      const minted = yield* Effect.scoped(
-        Effect.flatMap(
-          send(githubMintAsApp(`/app/installations/${installationId}/access_tokens`, jwt, request)),
-          (response) => readBody(response, InstallationTokenSchema),
-        ),
-      );
+      const grant: InstallationGrant = {
+        installationId,
+        permissions: request.permissions,
+        ...(request.repositories !== undefined && { repositoryNames: request.repositories }),
+      };
 
-      return { token: Redacted.make(minted.token), expiresAt: minted.expires_at.getTime() };
+      const minted = yield* module
+        .installationToken(grant, { minimumLifetime: lifetime })
+        .pipe(
+          Effect.provideService(GitHubPriority, background ? PRIORITY.BACKGROUND : PRIORITY.MEMBER),
+          Effect.catch(unavailableOf),
+        );
+
+      return { token: minted.token };
     });
 
   /**
@@ -1767,7 +1858,7 @@ function githubAppService(
     enough: Enough<GitHubRepository> = WHOLE_LISTING,
   ) =>
     Effect.flatMap(
-      mint(reached.id, { permissions: INSTALLATION_TOKEN_PERMISSIONS.LIST }),
+      mint(reached.id, { permissions: INSTALLATION_TOKEN_PERMISSIONS.LIST }, TOKEN_LIFE.READ),
       (minted) => repositoriesOnInstallationToken(minted.token, enough),
     );
 
@@ -1803,7 +1894,12 @@ function githubAppService(
    */
   const movedOnInstallation = (reached: GitHubInstallation, fullName: string) =>
     Effect.gen(function* () {
-      const minted = yield* mint(reached.id, { permissions: INSTALLATION_TOKEN_PERMISSIONS.LIST });
+      const minted = yield* mint(
+        reached.id,
+        { permissions: INSTALLATION_TOKEN_PERMISSIONS.LIST },
+        TOKEN_LIFE.READ,
+      );
+
       const response = yield* send(githubRead(repositoryPath(fullName), minted.token));
 
       if (
@@ -2030,28 +2126,6 @@ function githubAppService(
     });
 
   /**
-   * A token minted for the key's one repository, by its name, which is one
-   * repository on the installation's one account, or for none named, and
-   * how long it is kept: until `KEPT.TOKEN_MARGIN` before GitHub expires
-   * it, and never past its hour, whatever clock GitHub's `expires_at` was
-   * read against.
-   */
-  const repositoryTokenOf = (key: TokenKey) =>
-    Effect.gen(function* () {
-      const minted = yield* mint(key.installationId, {
-        ...(key.repository === undefined ? undefined : { repositories: [key.repository] }),
-        permissions: key.permissions,
-      });
-
-      const now = yield* Clock.currentTimeMillis;
-      const lasts = Math.min(minted.expiresAt - now, Duration.toMillis(KEPT.TOKEN_LIFETIME));
-      const keepFor = Duration.millis(Math.max(lasts - Duration.toMillis(KEPT.TOKEN_MARGIN), 0));
-      const kept: KeptToken = { token: minted.token, keepFor };
-
-      return kept;
-    });
-
-  /**
    * GitHub's token endpoint asked to exchange a web flow's code, on the same
    * terms as a refresh: the answer is 200 either way, so a refusal is read
    * out of the body, and is none.
@@ -2111,12 +2185,6 @@ function githubAppService(
           Exit.isSuccess(exit) && Result.isSuccess(exit.value) ? KEPT.REACH_TTL : Duration.zero,
       },
     );
-
-    const tokens = yield* Cache.makeWith((key: TokenKey) => inForeground(repositoryTokenOf(key)), {
-      capacity: KEPT.CAPACITY,
-      requireServicesAt: "lookup",
-      timeToLive: (exit) => (Exit.isSuccess(exit) ? exit.value.keepFor : Duration.zero),
-    });
 
     /**
      * The kept reach of the repository, where the store still links its
@@ -2187,7 +2255,7 @@ function githubAppService(
       fullName: string,
       member: string | undefined,
       permissionsOn: (installation: GitHubInstallation) => InstallationTokenPermissions | undefined,
-      keeping: TokenKeeping = TOKEN_KEEPING.KEPT,
+      lifetime: Duration.Duration = TOKEN_LIFE.READ,
     ) =>
       Effect.gen(function* () {
         const reached = yield* standingReach(new ReachKey({ organizationId, fullName, member }));
@@ -2203,18 +2271,11 @@ function githubAppService(
 
         if (permissions === undefined) return Option.none<GitHubRepositoryToken>();
 
-        const key = new TokenKey({
-          organizationId,
-          member,
-          installationId: on.id,
-          repository: repository.name,
-          permissions,
-        });
-
-        const { token } =
-          keeping === TOKEN_KEEPING.KEPT
-            ? yield* Cache.get(tokens, key)
-            : yield* repositoryTokenOf(key);
+        const { token } = yield* mint(
+          on.id,
+          { repositories: [repository.name], permissions },
+          lifetime,
+        );
 
         return Option.some<GitHubRepositoryToken>({
           repository,
@@ -2401,7 +2462,7 @@ function githubAppService(
             on.ciReadable
               ? INSTALLATION_TOKEN_PERMISSIONS.WRITE_READING_CI
               : INSTALLATION_TOKEN_PERMISSIONS.WRITE,
-          TOKEN_KEEPING.FRESH,
+          TOKEN_LIFE.SANDBOX,
         ),
       repositoryCommentToken: (organizationId, fullName) =>
         repositoryToken(organizationId, fullName, undefined, (on) =>
@@ -2427,12 +2488,16 @@ function githubAppService(
           if (first === undefined) return yield* Effect.die("a set of repositories names none");
           const on = first.installation;
 
-          const minted = yield* mint(on.id, {
-            repositories: reached.success.map((one) => one.repository.name),
-            permissions: on.ciReadable
-              ? INSTALLATION_TOKEN_PERMISSIONS.WRITE_READING_CI
-              : INSTALLATION_TOKEN_PERMISSIONS.WRITE,
-          });
+          const minted = yield* mint(
+            on.id,
+            {
+              repositories: reached.success.map((one) => one.repository.name),
+              permissions: on.ciReadable
+                ? INSTALLATION_TOKEN_PERMISSIONS.WRITE_READING_CI
+                : INSTALLATION_TOKEN_PERMISSIONS.WRITE,
+            },
+            TOKEN_LIFE.SANDBOX,
+          );
 
           const token: GitHubRepositoriesToken = {
             repositories: reached.success.map((one) => one.repository),
@@ -2459,15 +2524,10 @@ function githubAppService(
 
           return yield* Effect.forEach([...byInstallation], ([installationId, reached]) =>
             Effect.map(
-              Cache.get(
-                tokens,
-                new TokenKey({
-                  organizationId,
-                  member: undefined,
-                  installationId,
-                  repository: undefined,
-                  permissions: INSTALLATION_TOKEN_PERMISSIONS.PULL_REQUESTS,
-                }),
+              mint(
+                installationId,
+                { permissions: INSTALLATION_TOKEN_PERMISSIONS.PULL_REQUESTS },
+                TOKEN_LIFE.READ,
               ),
               ({ token }): GitHubRepositoriesToken => ({
                 repositories: reached.map((one) => one.repository),
@@ -2541,7 +2601,7 @@ function presentRedacted(value: Option.Option<Redacted.Redacted>): Redacted.Reda
 export const githubAppFromEnvironment: Layer.Layer<
   GitHubApp,
   Config.ConfigError,
-  HostedEnvironment
+  HostedEnvironment | GitHubAppNeeds
 > = Layer.effect(
   GitHubApp,
   Effect.flatMap(

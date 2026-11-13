@@ -305,17 +305,21 @@ interface LinkedRead {
 }
 
 /**
- * Whether a linked pull request is read again: one open or a draft, which
- * may yet merge or close, and a closed one from a branch a delivery from
- * GitHub names (`delivered`), since it may have reopened. Note that a merged
- * one never moves again.
+ * Whether a linked pull request is read again. On a delivery from GitHub
+ * (`delivered`), only one from a branch it names, open or closed, since a
+ * closed one may have reopened; with none, as the tab's reads have it, every
+ * one open or a draft, which may yet merge or close. Note that a merged one
+ * never moves again, and that we leave the rest of a delivery's linked pull
+ * requests alone, because a change to one sends a delivery of its own.
  */
 function readAgain(row: AgentPullRequestRow, delivered: readonly string[]): boolean {
   const { state } = row.pullRequest;
 
   if (state === PULL_REQUEST_STATE.MERGED) return false;
 
-  return state !== PULL_REQUEST_STATE.CLOSED || delivered.includes(row.headBranch);
+  if (delivered.length > 0) return delivered.includes(row.headBranch);
+
+  return state !== PULL_REQUEST_STATE.CLOSED;
 }
 
 /**

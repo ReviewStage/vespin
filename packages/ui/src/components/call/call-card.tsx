@@ -9,6 +9,7 @@
  * nothing: every press is handed back to its owner, which holds the call.
  */
 
+import type { AnimationEvent } from "react";
 import { ReturnIcon } from "../../icons/lucide-glyphs.js";
 import { IconButton } from "../button/button.js";
 import { KeepFocus } from "../keep-focus/keep-focus.js";
@@ -37,8 +38,15 @@ function returnLabel(name: string): string {
   return `Open ${name}`;
 }
 
+/**
+ * The card rises in as a menu does and leaves the same way, and takes no
+ * press on its way out. Alone in the floating window, which shows and hides
+ * it whole, it neither rises nor leaves, its shadow keeps within the room
+ * the window leaves it, and on the Mac the whole card drags the window but
+ * its buttons, which each answer their press.
+ */
 const CARD =
-  "ui-call-card flex flex-col gap-ui-4 rounded-ui-14 border border-border-strong bg-popover px-ui-12 py-ui-8 text-label text-foreground shadow-menu data-[surface=sidebar]:mb-ui-8";
+  "ui-call-card flex flex-col gap-ui-4 rounded-ui-14 border border-border-strong bg-popover px-ui-12 py-ui-8 text-label text-foreground shadow-menu animate-call-card-in data-[surface=sidebar]:mb-ui-8 data-[leaving=true]:pointer-events-none data-[leaving=true]:animate-call-card-out data-[surface=window]:w-call-window-card data-[surface=window]:animate-none data-[surface=window]:shadow-toast-dismiss in-data-[ui-profile=desktop]:data-[surface=window]:[-webkit-app-region:drag] in-data-[ui-profile=desktop]:data-[surface=window]:[&_button]:[-webkit-app-region:no-drag]";
 
 /**
  * The card's head: what the call is about by name, its task's or its
@@ -82,7 +90,8 @@ function CallCardHead({
  * card. There is no ×: End call is the way to put a call away, and a live
  * call nobody can see is what the card is for. In the floating window a
  * press acts without taking the focus (`KeepFocus`), so the next drag never
- * finds a button holding it.
+ * finds a button holding it. A card `leaving` slides out, and says so
+ * (`onLeft`) once it has, so its dock can let it go.
  */
 export function CallCard({
   name,
@@ -92,6 +101,8 @@ export function CallCard({
   surface,
   onReturn,
   onEnd,
+  leaving = false,
+  onLeft,
 }: {
   /** The call's task by name, or its agent's where it has no task. */
   name: string;
@@ -103,7 +114,14 @@ export function CallCard({
   /** Opens what the call is about. */
   onReturn: () => void;
   onEnd: () => void;
+  /** Whether the card is on its way out, which it slides through before it is gone. */
+  leaving?: boolean | undefined;
+  onLeft?: (() => void) | undefined;
 }): React.JSX.Element {
+  const left = (event: AnimationEvent<HTMLElement>) => {
+    if (leaving && event.target === event.currentTarget) onLeft?.();
+  };
+
   const inWindow = surface === CALL_CARD_SURFACE.WINDOW;
 
   const body = (
@@ -123,7 +141,13 @@ export function CallCard({
   );
 
   return (
-    <section className={CARD} aria-label={CALL_CARD_LABEL} data-surface={surface}>
+    <section
+      className={CARD}
+      aria-label={CALL_CARD_LABEL}
+      data-surface={surface}
+      data-leaving={String(leaving)}
+      onAnimationEnd={left}
+    >
       {/* Note that the box is drawn as its children alone, so the card lays them out either way. */}
       {inWindow ? <KeepFocus className="contents">{body}</KeepFocus> : body}
     </section>
