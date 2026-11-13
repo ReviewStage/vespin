@@ -32,11 +32,14 @@
    sidebar's ground (`--ui-color-sidebar`), so the sheet reads as lifted
    off it in either theme.
 
-   The fills and edges are Geist's gray-alpha steps
-   (https://vercel.com/geist/colors): 100 a hover, 200 a strong fill, 300 a
-   chosen one, 500 a press; 400 the border, 500 the strong edge, and 600 the
-   chosen edge. The chart's series are Geist's teal, purple, green, pink, and
-   gray, none of them the accent's amber. */
+   A role names a step of Geist's (`geist.css`, generated from `@repo/brand`'s
+   `geist.mjs`) wherever Geist has one: the fills and edges are its
+   gray-alpha steps (100 a hover, 200 a strong fill, 300 a chosen one, 500 a
+   press; 400 the border, 500 the strong edge, 600 the chosen edge), and the
+   chart's series its teal, purple, green, pink, and gray, none of them the
+   accent's amber. A literal here is a color Geist has no step for: a
+   shadow, a scrim, a veil, the tooltip's pill, find's yellows, the code's
+   own words, and the switch's and scrollbar's alphas. */
 
 [data-ui-theme="dark"] {
   color-scheme: dark;
@@ -64,17 +67,17 @@
 
   /* The code's own words, where its highlighter left a run uncolored: GitHub's too. */
   --ui-color-code-text: light-dark(#1f2328, #e6edf3);
-  --ui-color-fill-hover: light-dark(rgba(0, 0, 0, 0.05), rgba(255, 255, 255, 0.06));
-  --ui-color-fill-strong: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.09));
-  --ui-color-fill-selected: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.13));
+  --ui-color-fill-hover: var(--geist-gray-alpha-100);
+  --ui-color-fill-strong: var(--geist-gray-alpha-200);
+  --ui-color-fill-selected: var(--geist-gray-alpha-300);
   /* The row open beside its list: the accent's own ink over the ground, a
      step past the neutral fills, so it reads apart from a row merely hovered
      or chosen in a set. */
   --ui-color-fill-current: color-mix(in srgb, var(--ui-color-accent-text) 12%, transparent);
-  --ui-color-fill-pressed: light-dark(rgba(0, 0, 0, 0.21), rgba(255, 255, 255, 0.24));
-  --ui-color-border: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.14));
-  --ui-color-border-strong: light-dark(rgba(0, 0, 0, 0.21), rgba(255, 255, 255, 0.24));
-  --ui-color-border-selected: light-dark(rgba(0, 0, 0, 0.34), rgba(255, 255, 255, 0.51));
+  --ui-color-fill-pressed: var(--geist-gray-alpha-500);
+  --ui-color-border: var(--geist-gray-alpha-400);
+  --ui-color-border-strong: var(--geist-gray-alpha-500);
+  --ui-color-border-selected: var(--geist-gray-alpha-600);
   /* The hairline round a row whose menu stands open, so the menu is plainly
      about it: soft, since the menu beside it says the rest. */
   --ui-color-border-menu-open: var(--ui-color-border-selected);
@@ -134,11 +137,11 @@
   /* A chart's series, in the order a chart takes them: each mark holds 3:1
      on either ground, so a stack of them reads apart by hue alone, and none
      is the accent's amber, so no series reads as attention beside a badge. */
-  --ui-color-chart-1: #008d7d;
-  --ui-color-chart-2: #9f00f4;
-  --ui-color-chart-3: #279141;
-  --ui-color-chart-4: #e4106e;
-  --ui-color-chart-5: #8f8f8f;
+  --ui-color-chart-1: var(--geist-teal-800);
+  --ui-color-chart-2: var(--geist-purple-700);
+  --ui-color-chart-3: var(--geist-green-800);
+  --ui-color-chart-4: var(--geist-pink-800);
+  --ui-color-chart-5: var(--geist-gray-700);
 }
 
 /* The site's light theme, drawn in the brand's light colors (`brand.css`).
@@ -151,24 +154,24 @@
   /* The site had one fill, its muted ground; a control's states need a
      step each past it, the desktop's light steps, so a chosen segment or a
      pressed button reads apart from one merely hovered. */
-  --ui-color-fill-hover: rgba(0, 0, 0, 0.05);
-  --ui-color-fill-strong: rgba(0, 0, 0, 0.08);
-  --ui-color-fill-selected: rgba(0, 0, 0, 0.1);
+  --ui-color-fill-hover: var(--geist-gray-alpha-100);
+  --ui-color-fill-strong: var(--geist-gray-alpha-200);
+  --ui-color-fill-selected: var(--geist-gray-alpha-300);
   /* The row open beside its list: the accent's own ink over the ground, a
      step past the neutral fills, so it reads apart from a row merely hovered
      or chosen in a set. */
   --ui-color-fill-current: color-mix(in srgb, var(--ui-color-accent-text) 12%, transparent);
-  --ui-color-fill-pressed: rgba(0, 0, 0, 0.21);
-  --ui-color-border: rgba(0, 0, 0, 0.08);
+  --ui-color-fill-pressed: var(--geist-gray-alpha-500);
+  --ui-color-border: var(--geist-gray-alpha-400);
   /* The edge a field, a menu, and a raised or hovered card stand on: a step
      past the border, as the desktop's is, so a card's hover reads. */
-  --ui-color-border-strong: rgba(0, 0, 0, 0.21);
-  --ui-color-border-selected: #171717;
+  --ui-color-border-strong: var(--geist-gray-alpha-500);
+  --ui-color-border-selected: var(--geist-gray-1000);
   /* Note that a row's open-menu ring is the desktop's soft one, not the
      selected edge, which a chosen chip and a field's box draw near black. */
-  --ui-color-border-menu-open: rgba(0, 0, 0, 0.34);
-  --ui-color-input: oklch(1 0 0);
-  --ui-color-input-focus: oklch(1 0 0);
+  --ui-color-border-menu-open: var(--geist-gray-alpha-600);
+  --ui-color-input: var(--geist-background-100);
+  --ui-color-input-focus: var(--geist-background-100);
   --ui-color-match: rgba(0, 0, 0, 0.09);
   --ui-color-scrollbar: rgba(0, 0, 0, 0.2);
 
@@ -206,11 +209,11 @@
 
   /* A chart's series, in the order a chart takes them: each mark holds 3:1
      on either ground, so a stack of them reads apart by hue alone. */
-  --ui-color-chart-1: #008d7d;
-  --ui-color-chart-2: #9f00f4;
-  --ui-color-chart-3: #279141;
-  --ui-color-chart-4: #e4106e;
-  --ui-color-chart-5: #8f8f8f;
+  --ui-color-chart-1: var(--geist-teal-800);
+  --ui-color-chart-2: var(--geist-purple-700);
+  --ui-color-chart-3: var(--geist-green-800);
+  --ui-color-chart-4: var(--geist-pink-800);
+  --ui-color-chart-5: var(--geist-gray-700);
 }
 
 /* The site's dark ground, worn where the account's Theme setting (or the
@@ -220,20 +223,20 @@
   --ui-color-ink-inverse: var(--ui-color-ground);
 
   --ui-color-code-text: #e6edf3;
-  --ui-color-fill-hover: rgba(255, 255, 255, 0.06);
-  --ui-color-fill-strong: rgba(255, 255, 255, 0.09);
-  --ui-color-fill-selected: rgba(255, 255, 255, 0.13);
+  --ui-color-fill-hover: var(--geist-gray-alpha-100);
+  --ui-color-fill-strong: var(--geist-gray-alpha-200);
+  --ui-color-fill-selected: var(--geist-gray-alpha-300);
   /* The row open beside its list: the accent's own ink over the ground, a
      step past the neutral fills, so it reads apart from a row merely hovered
      or chosen in a set. */
   --ui-color-fill-current: color-mix(in srgb, var(--ui-color-accent-text) 12%, transparent);
-  --ui-color-fill-pressed: rgba(255, 255, 255, 0.24);
-  --ui-color-border: rgba(255, 255, 255, 0.14);
-  --ui-color-border-strong: rgba(255, 255, 255, 0.24);
-  --ui-color-border-selected: #ededed;
+  --ui-color-fill-pressed: var(--geist-gray-alpha-500);
+  --ui-color-border: var(--geist-gray-alpha-400);
+  --ui-color-border-strong: var(--geist-gray-alpha-500);
+  --ui-color-border-selected: var(--geist-gray-1000);
   /* Note that a row's open-menu ring is the desktop's soft one, not the
      selected edge, which stands as strong as the keyboard's ring. */
-  --ui-color-border-menu-open: rgba(255, 255, 255, 0.51);
+  --ui-color-border-menu-open: var(--geist-gray-alpha-600);
   --ui-color-input: var(--ui-color-overlay);
   --ui-color-input-focus: var(--ui-color-overlay);
   --ui-color-match: rgba(255, 255, 255, 0.16);
@@ -274,9 +277,9 @@
   /* The chart series on the dark ground: the light's own five, which hold
      3:1 on the dark card as well, so none needs a
      step of its own here. */
-  --ui-color-chart-1: #008d7d;
-  --ui-color-chart-2: #9f00f4;
-  --ui-color-chart-3: #279141;
-  --ui-color-chart-4: #e4106e;
-  --ui-color-chart-5: #8f8f8f;
+  --ui-color-chart-1: var(--geist-teal-800);
+  --ui-color-chart-2: var(--geist-purple-700);
+  --ui-color-chart-3: var(--geist-green-800);
+  --ui-color-chart-4: var(--geist-pink-800);
+  --ui-color-chart-5: var(--geist-gray-700);
 }
