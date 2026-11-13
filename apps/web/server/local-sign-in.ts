@@ -1,9 +1,9 @@
 /**
  * local-sign-in.ts -- the demo's sign-in, which the local server alone answers in the login page's place: a session minted for the seeded member with no provider between, and the browser sent on as a sign-in sends it.
  *
- * `run.sh --demo` signs the desktop in to the local server as a member the
- * demo seed wrote, who holds no Google or GitHub account, so that the
- * deployment's OAuth secrets never reach the Mac. The desktop's authorize
+ * The local server signs a browser, or a desktop pointed at it, in as a
+ * member the demo seed wrote, who holds no Google or GitHub account, so that
+ * the deployment's OAuth secrets never reach the machine. The desktop's authorize
  * finds no session and sends the browser to the login page (`LOGIN_PAGE`),
  * which this answers instead: it mints a session for the member through
  * Better Auth's own adapter, records the way in on the account and sets the

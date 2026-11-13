@@ -47,7 +47,7 @@ export function WordFileChip({
   /** The file, where the message holds one of that name. */
   file: FileChip | undefined;
   onOpen?: ((name: string) => void) | undefined;
-  /** Whether the file is on its way up with its line, wearing the upload's cover until it is up. */
+  /** Whether the file is on its way up with its line, opening nothing until it is up. */
   uploading?: boolean | undefined;
 }): React.JSX.Element {
   const here = file !== undefined && (chipBase64(file) !== "" || file.url !== "");
@@ -149,7 +149,7 @@ export interface ShownWordFiles {
  * where its marker stands as its chip, opening over the window and walking
  * them in the order the words name them, and every other file left for the
  * row over the words. Files on their way up with their line (`uploading`)
- * wear the upload's cover until it lands.
+ * open nothing until it lands.
  */
 export function useWordFiles(
   files: readonly FileChip[],

@@ -22,12 +22,13 @@ import { type HttpClient, HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { vi } from "vitest";
-import { GitHubApp } from "../github/github-app.js";
+import type { GitHubApp } from "../github/github-app.js";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { cookieOriginGuard } from "../http/origin-guard.js";
 import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
 import {
+  fixtureGitHubApp,
   GITHUB_APP_SETTINGS,
   openGithubUser,
   standingGithubRow,
@@ -198,7 +199,7 @@ function accountNameServer(token: string, tool: string, text: string) {
  */
 const standing = (
   variables: Readonly<Record<string, string>>,
-  githubApp: Layer.Layer<GitHubApp> = GitHubApp.layer(undefined),
+  githubApp: Layer.Layer<GitHubApp, never, HttpClient.HttpClient> = fixtureGitHubApp(undefined),
   network: Layer.Layer<HttpClient.HttpClient> = noNetwork,
   connect: {
     readonly declines?: boolean;
@@ -218,8 +219,7 @@ const standing = (
       Layer.succeed(Database, yield* Database),
       Layer.succeed(Clock.Clock, clock),
       integrationConnectOver(variables, connect),
-      githubApp,
-      network,
+      Layer.provideMerge(githubApp, network),
     );
 
     const groupSeams: IntegrationsAppSeams = {
@@ -670,7 +670,7 @@ it.layer(getTestDB())("the integrations an account is offered", (it) => {
     "GitHub, which has no connector, stands connected while the account's own GitHub sign-in does and disconnected for an account that never signed in with GitHub, and a deployment without the GitHub App does not offer it",
     () =>
       Effect.gen(function* () {
-        const group = yield* standing({}, GitHubApp.layer(GITHUB_APP_SETTINGS));
+        const group = yield* standing({}, fixtureGitHubApp(GITHUB_APP_SETTINGS));
         const signedIn = yield* openGithubUser();
         const googleOnly = yield* openAccount("devon@google-only.example");
 
@@ -687,7 +687,7 @@ it.layer(getTestDB())("the integrations an account is offered", (it) => {
       Effect.gen(function* () {
         let offered: readonly string[] = ["get_me"];
         const server = githubServer(() => offered);
-        const group = yield* standing({}, GitHubApp.layer(GITHUB_APP_SETTINGS), server.layer);
+        const group = yield* standing({}, fixtureGitHubApp(GITHUB_APP_SETTINGS), server.layer);
         const signedIn = yield* openGithubUser();
 
         assert.deepEqual(yield* group.githubTools(signedIn), ["get_me"]);

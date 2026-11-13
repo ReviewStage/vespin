@@ -18,7 +18,7 @@ import { UPLOAD_METER_PLACE, UploadMeter } from "./upload-meter.js";
  * picture and is placed for it (`position: relative`), its corners
  * followed.
  *
- * It comes at the three sizes a file stands at:
+ * It comes at the two sizes a file stands at:
  *
  * - `BLOCK`, a picture standing in written words: while it goes up, the
  *   window's spinner at its middle and the meter along its foot, filling
@@ -31,8 +31,6 @@ import { UPLOAD_METER_PLACE, UploadMeter } from "./upload-meter.js";
  *   failure's Retry glyph, at the thumbnail's middle; the chip says the
  *   rest, its meter and its face's press, so the cover says nothing to a
  *   reader.
- * - `PILL`, a picture's thumbnail on a line of words (`AttachmentRef`):
- *   the spinner alone, said by the line it stands in.
  *
  * A file that is up stands as it is: its caller draws no cover.
  */
@@ -45,11 +43,10 @@ export const UPLOAD_COVER_STATE = {
 
 export type UploadCoverState = (typeof UPLOAD_COVER_STATE)[keyof typeof UPLOAD_COVER_STATE];
 
-/** What the cover stands on: a picture in written words, a chip's thumbnail, or a pill's. */
+/** What the cover stands on: a picture in written words, or a chip's thumbnail. */
 export const UPLOAD_COVER_SIZE = {
   BLOCK: "block",
   CHIP: "chip",
-  PILL: "pill",
 } as const;
 
 export type UploadCoverSize = (typeof UPLOAD_COVER_SIZE)[keyof typeof UPLOAD_COVER_SIZE];
@@ -82,9 +79,6 @@ const ACTIONS = "ui-upload-cover-actions flex flex-wrap justify-center gap-ui-4"
 
 /** A chip's thumbnail holds its glyph at the small spinner's size. */
 const CHIP_GLYPH = "inline-flex size-spinner-small [&_svg]:size-full";
-
-/** A pill's thumbnail holds a ring a hair under its own size. */
-const PILL_RING = "inline-flex size-[70%]";
 
 /** A block's failure on its veil: why, then Retry where it can mend it, Copy details, and Remove. */
 function BlockFailure({
@@ -163,10 +157,6 @@ export function UploadCover(
     | {
         size: typeof UPLOAD_COVER_SIZE.CHIP;
         state: UploadCoverState;
-      }
-    | {
-        size: typeof UPLOAD_COVER_SIZE.PILL;
-        state: typeof UPLOAD_COVER_STATE.UPLOADING;
       },
 ): React.JSX.Element {
   if (props.size === UPLOAD_COVER_SIZE.BLOCK && props.state === UPLOAD_COVER_STATE.FAILED) {
@@ -194,18 +184,12 @@ export function UploadCover(
     );
   }
 
-  // Note that a chip's and a pill's cover say nothing to a reader, because the chip's meter and face, and the pill's line, already do.
+  // Note that a chip's cover says nothing to a reader, because the chip's meter and face already do.
   return (
     <span className={COVER} data-state={props.state} aria-hidden="true">
-      {props.size === UPLOAD_COVER_SIZE.PILL ? (
-        <span className={PILL_RING}>
-          <SpinnerRing />
-        </span>
-      ) : (
-        <span className={CHIP_GLYPH}>
-          {props.state === UPLOAD_COVER_STATE.FAILED ? <RetryIcon /> : <SpinnerRing />}
-        </span>
-      )}
+      <span className={CHIP_GLYPH}>
+        {props.state === UPLOAD_COVER_STATE.FAILED ? <RetryIcon /> : <SpinnerRing />}
+      </span>
     </span>
   );
 }
