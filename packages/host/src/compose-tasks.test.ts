@@ -872,6 +872,30 @@ it.effect("a task the list does not hold is read into it as it opens, and only o
   }),
 );
 
+it.effect(
+  "a search draws the tasks it finds outside the list beside it, and each it holds once",
+  () =>
+    Effect.gen(function* () {
+      const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+      const billing = task(BILLING, "Billing invitations", "# Billing invitations", 20);
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      // The list holds the billing task alone, as one that keeps only recent tasks live.
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(billing)], agents: [], issues: [] });
+
+      yield* call("TASKS_SEARCH", { query: "invitations" });
+
+      assert.deepEqual(
+        last()
+          ?.tasks.map((each) => each.id)
+          .toSorted(),
+        [BILLING, INVITES].toSorted(),
+        "the task found outside the list is drawn, and the one in it is drawn once",
+      );
+    }),
+);
+
 it.effect("a task the list takes up and then lets go is read again as it opens", () =>
   Effect.gen(function* () {
     const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);

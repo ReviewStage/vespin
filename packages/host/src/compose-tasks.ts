@@ -33,7 +33,7 @@ import {
 import { markedAs, readMarkOf } from "@repo/features/read-mark";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import { revisionsOfLiveRows, TASK_HISTORY_READ } from "@repo/features/task-history-live";
-import { TASK_LIST_READ, TASK_ROWS_READ } from "@repo/features/task-list-live";
+import { TASK_LIST_READ, TASK_ROWS_READ, TASK_SEARCH_READ } from "@repo/features/task-list-live";
 import { pagesOfLiveRows, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
 import {
@@ -1268,6 +1268,34 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       );
 
       return Effect.asVoid(FiberMap.run(coldReads, id, pending, { onlyIfMissing: true }));
+    });
+
+  const decodeSearchRows = Schema.decodeUnknownOption(TASK_SEARCH_READ.rows);
+
+  /**
+   * The tasks a window's search finds on the service, read with their agents
+   * and drawn in the list as cold tasks (`task-list-collections.ts`) where it
+   * holds them not, so the window's own search over the list finds them
+   * beside the live ones, one row each, and opens them as any. Answered once
+   * they are drawn, or at once while the list cannot be read outside of.
+   * Note that a task the list holds already is the list's alone, so nothing
+   * moves while it holds every one the search finds.
+   */
+  const searched = (query: string): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      const userId = dependencies.accountId();
+      const { collections } = taskList;
+
+      if (!gate() || userId === undefined || view.listStatus !== TASKS_READ.READY) return;
+      const mark = collections.mark();
+      const sealed = yield* served(client.liveRead(TASK_SEARCH_READ, { query, userId }, {}));
+
+      if ("failure" in sealed) return;
+      const { plans, agents } = sealed.queries;
+      const rows = decodeSearchRows({ plans: plans.rows, agents: agents.rows });
+
+      if (Option.isNone(rows) || taskList.collections !== collections) return;
+      yield* collections.cold(rows.value, mark);
     });
 
   /** The sync id the list drawn from disk was kept at, which the next follow reads past once; none once it has. */
@@ -2527,6 +2555,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
         return { taskId };
       }),
+    // A search past the list is read into it, answered to the window once drawn.
+    TASKS_SEARCH: ({ query }) => searched(query),
     // A page of the history is answered to the caller that asked, and an
     // older page is laid on the task's held history too, past the revisions
     // held from where it was read before, so a version history scrolled back

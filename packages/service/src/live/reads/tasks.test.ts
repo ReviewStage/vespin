@@ -62,6 +62,7 @@ import {
   agentPullRequestsOfLiveRows,
   TASK_LIST_READ,
   TASK_ROWS_READ,
+  TASK_SEARCH_READ,
   taskAgentPinsOfLiveRows,
   taskAgentsOfLiveRows,
   taskListOfLiveRows,
@@ -91,7 +92,7 @@ import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/code
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
 import { withTaskAgents } from "../../agents/task-agents.js";
 import { TURN_FAILURE } from "../../core.js";
-import { taskRowsRead, tasksRead } from "./tasks.js";
+import { taskRowsRead, taskSearchRead, tasksRead } from "./tasks.js";
 
 /**
  * The plan list's live statements against the held read it stands in for:
@@ -229,6 +230,22 @@ const taskRowsOf = (userId: string, id: string) =>
 
     return {
       plans: rows.plans.map((plan) => plan.id),
+      agents: rows.agents.map((agent) => agent.id).toSorted(),
+    };
+  });
+
+/** The tasks and agents a search delivers to the account, decoded as the desktop decodes them. */
+const searchedOf = (userId: string, query: string) =>
+  Effect.gen(function* () {
+    const statements = Option.getOrThrow(taskSearchRead.statements({ userId, query }));
+
+    const rows = yield* Schema.decodeUnknownEffect(TASK_SEARCH_READ.rows)({
+      plans: yield* runLive(statements.plans),
+      agents: yield* runLive(statements.agents),
+    });
+
+    return {
+      plans: rows.plans.map((plan) => plan.id).toSorted(),
       agents: rows.agents.map((agent) => agent.id).toSorted(),
     };
   });
@@ -988,6 +1005,37 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         assert.deepEqual(yield* taskRowsOf(teammate, second.id), whole);
         assert.deepEqual(yield* taskRowsOf(outsider, plan.id), { plans: [], agents: [] });
         assert.deepEqual(yield* taskRowsOf(outsider, first.id), { plans: [], agents: [] });
+      }),
+  );
+
+  it.effect(
+    "find a task by every word of its name or by its key, with its agents, for a member and no one else",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const teammate = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const plan = yield* startTask(owner, { name: "Teammate invitations" });
+        const other = yield* startTask(owner, { name: "Billing export" });
+        yield* joinWorkspace(plan.workspaceId, teammate);
+        const agent = yield* openAgent(owner, { taskId: plan.id }, 60_000);
+        yield* openAgent(owner, { taskId: other.id }, 30_000);
+        const found = { plans: [plan.id], agents: [agent.id] };
+        const db = yield* Database;
+
+        const [numbered] = yield* db
+          .select({ number: task.number })
+          .from(task)
+          .where(eq(task.id, plan.id));
+
+        assert.deepEqual(yield* searchedOf(teammate, "INVITATIONS team"), found);
+        assert.deepEqual(yield* searchedOf(teammate, `ACME-${numbered?.number}`), found);
+        assert.deepEqual(yield* searchedOf(teammate, "invitations billing"), {
+          plans: [],
+          agents: [],
+        });
+        assert.deepEqual(yield* searchedOf(outsider, "invitations"), { plans: [], agents: [] });
       }),
   );
 });
