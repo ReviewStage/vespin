@@ -36,8 +36,7 @@ import { OneLine } from "../one-line/one-line.js";
  * conversation through it, the stack gliding on the app's spring as the
  * pointer moves; a press asks the caller to go to the line under it
  * (`onJump`). The pointer may cross onto the stack, which then holds still,
- * and press any pill shown in it, the pill under it standing at full
- * strength. The rail is one Tab stop, steering the stack as a field
+ * and press any pill shown in it. The rail is one Tab stop, steering the stack as a field
  * steers a menu (`useComboboxField`): it opens as the keyboard reaches it,
  * its arrows walking the lines and Enter going to one.
  *
@@ -120,9 +119,9 @@ const STACK =
 const PILL_PLACE =
   "group/pill pointer-events-none absolute top-0 left-0 cursor-press py-ui-2 pl-ui-4 transition-transform duration-(--ui-duration-pane) ease-spring";
 
-/** A pill's face, name, and words, fainter by its line's distance from the one in front (`data-far`) on a pill that stays solid, so no pill shows the words behind it. */
+/** A pill's face, name, and words, fainter by its line's distance from the one in front (`data-far`) on a pill that stays solid, so no pill shows the words behind it, and at full strength under the pointer. Note that the pointer's rule is marked important, since the fade's rules weigh the same and stand after it in the sheet. */
 const PILL_WORDS =
-  "flex max-w-popover-wide items-center gap-ui-6 px-ui-4 text-caption group-data-[far=1]/pill:opacity-80 group-data-[far=2]/pill:opacity-60 group-data-[far=3]/pill:opacity-40";
+  "flex max-w-popover-wide items-center gap-ui-6 px-ui-4 text-caption group-data-[far=1]/pill:opacity-80 group-data-[far=2]/pill:opacity-60 group-data-[far=3]/pill:opacity-40 group-hover/pill:opacity-100!";
 
 const NARROW_PRESS =
   "pointer-events-auto flex max-h-full w-full cursor-press appearance-none flex-col items-start overflow-hidden border-0 bg-transparent p-0 py-ui-8 pl-ui-4";
@@ -320,11 +319,6 @@ const StackPill = memo(function StackPill({
   );
 });
 
-/** How many lines a line's pill stands from the one in front at `active`, which its words are fainter by (`PILL_WORDS`). */
-function pillFar(index: number, active: number): string {
-  return String(Math.abs(index - active));
-}
-
 /** How many lines from the one in front a line stands, held to just past the stack's ends, so a pill past the stack waits there and slides in from there rather than across the column. */
 function stackPlace(index: number, active: number): number {
   return Math.max(-STACK_REACH - 1, Math.min(index - active, STACK_REACH + 1));
@@ -359,7 +353,7 @@ function placeStack(
     element.style.transform = `translateY(${at * pill - pill / 2}px)`;
     element.style.opacity = shown ? "1" : "0";
     element.style.pointerEvents = shown ? "auto" : "none";
-    element.dataset.far = pillFar(index, to);
+    element.dataset.far = String(Math.abs(index - to));
   }
 }
 
@@ -388,7 +382,7 @@ const RailLine = memo(function RailLine({
 /** A pill before the stack first opens: below the stack's end, and gone. */
 const PILL_WAITING: React.CSSProperties = { opacity: 0, transform: "translateY(0px)" };
 
-/** A line's pill as an option of the stack, pressed to go to its line; it draws once, and draws again only as the keys name it selected or not; the line in front moves it (`placeStack`), and the pointer resting on it brings it to full strength (`onHover`). */
+/** A line's pill as an option of the stack, pressed to go to its line; it draws once, and draws again only as the keys name it selected or not; the line in front moves it (`placeStack`). */
 const StackOption = memo(function StackOption({
   mark,
   index,
@@ -396,7 +390,6 @@ const StackOption = memo(function StackOption({
   selected,
   pills,
   onChoose,
-  onHover,
 }: {
   mark: TranscriptRailMark;
   index: number;
@@ -404,7 +397,6 @@ const StackOption = memo(function StackOption({
   selected: boolean;
   pills: RefObject<(HTMLElement | null)[]>;
   onChoose: (index: number) => void;
-  onHover: (index: number, on: boolean) => void;
 }): React.JSX.Element {
   const hold = useCallback(
     (element: HTMLElement | null) => {
@@ -425,8 +417,6 @@ const StackOption = memo(function StackOption({
       className={PILL_PLACE}
       style={PILL_WAITING}
       onClick={() => onChoose(index)}
-      onPointerEnter={() => onHover(index, true)}
-      onPointerLeave={() => onHover(index, false)}
     >
       <StackPill mark={mark} />
     </div>
@@ -453,7 +443,6 @@ function WideRail({
   const stack = useRef<HTMLDivElement | null>(null);
   // Where the stack stands and what it is read against, held outside React so the pointer moving draws nothing.
   const inFront = useRef(-1);
-  const placed = useRef(-1);
   const layout = useRef<RailLayout | undefined>(undefined);
   const pillHeight = useRef(0);
   const opened = useRef(false);
@@ -469,7 +458,6 @@ function WideRail({
 
     if (box === null) return undefined;
     layout.current = readLayout(box, slots.current);
-    pillHeight.current = pills.current[0]?.offsetHeight ?? 0;
 
     return layout.current;
   };
@@ -481,15 +469,14 @@ function WideRail({
 
     if (read === undefined || box === null || to < 0) return;
 
-    // Note that the pills are drawn with the first hover or focus, after it measured, so their height is read once they stand.
+    // Note that the pills are drawn with the first hover or focus, so their height is read once they stand.
     if (pillHeight.current === 0) pillHeight.current = pills.current[0]?.offsetHeight ?? 0;
 
     const pill = pillHeight.current;
     const span = STACK_REACH * pill + pill;
     const center = Math.max(span, Math.min(read.middles[to] ?? 0, read.room - span));
-    placeStack(pills.current, placed.current < 0 ? to : placed.current, to, opened.current, pill);
+    placeStack(pills.current, inFront.current < 0 ? to : inFront.current, to, opened.current, pill);
     box.style.transform = `translateY(${center}px)`;
-    placed.current = to;
     inFront.current = to;
   };
 
@@ -555,14 +542,6 @@ function WideRail({
     },
   });
 
-  // Note that a pill's words under the pointer stand at full strength until the pointer leaves it or the stack moves.
-  const hover = useCallback((index: number, on: boolean) => {
-    const element = pills.current[index];
-
-    if (element == null || !opened.current) return;
-    element.dataset.far = on ? pillFar(index, index) : pillFar(index, placed.current);
-  }, []);
-
   const selected = open && focused ? active : -1;
 
   const lines = useMemo(
@@ -582,10 +561,9 @@ function WideRail({
           selected={index === selected}
           pills={pills}
           onChoose={choose}
-          onHover={hover}
         />
       )),
-    [armed, marks, listId, selected, choose, hover],
+    [armed, marks, listId, selected, choose],
   );
 
   // The line under the pointer, read off where the lines were laid out as the hover began.
