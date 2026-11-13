@@ -128,6 +128,8 @@ export default function AgentsScreen() {
   // Note that the newest choice sent stands until it is answered, so a pick made before the host's draw of an earlier one reaches the screen, such as an effort right after a model, builds on it rather than on the default drawn.
   const pending = useRef<ModelChoice | undefined>(undefined);
   const latest = (): ModelChoice | undefined => pending.current ?? current;
+  // Note that each setting's newest pick sent stands the same way, so a pick back to the drawn value before the first is drawn still goes.
+  const pendingSettings = useRef(new Map<AppSettingField, string>());
   const standard = current === undefined ? undefined : standardModelIdOf(current.model);
   const speeds = standard === undefined ? [] : speedsOffered(catalog, standard);
   const speed = current === undefined ? MODEL_SPEED.STANDARD : modelSpeedOf(current.model);
@@ -173,9 +175,12 @@ export default function AgentsScreen() {
   const store = (field: AppSettingField, token: string) => {
     if (view === undefined) return;
     const value = settingFromOption(field, token, view);
+    pendingSettings.current.set(field, token);
     void setting
       .run(field, () => acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(() => undefined))
       .then((landed) => {
+        if (pendingSettings.current.get(field) === token) pendingSettings.current.delete(field);
+
         if (!landed) setSettingRound((round) => round + 1);
       });
   };
@@ -206,7 +211,8 @@ export default function AgentsScreen() {
           options={control.options.map((option) => ({ id: option.value, label: option.label }))}
           picked={control.value}
           onPick={(token) => {
-            if (token !== control.value) store(field, token);
+            if (token !== (pendingSettings.current.get(field) ?? control.value))
+              store(field, token);
           }}
         />
       </Fragment>
