@@ -28,6 +28,7 @@ export const LUCIDE_SYMBOL = {
   CHECK_CHECK: "CheckCheck",
   CHEVRON_DOWN: "ChevronDown",
   CHEVRON_RIGHT: "ChevronRight",
+  CHEVRON_UP: "ChevronUp",
   CIRCLE: "Circle",
   CIRCLE_ALERT: "CircleAlert",
   CIRCLE_ARROW_UP: "CircleArrowUp",

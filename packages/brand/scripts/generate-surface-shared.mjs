@@ -220,6 +220,7 @@ const LUCIDE_SYMBOLS = {
   CHECK_CHECK: "check-check",
   CHEVRON_DOWN: "chevron-down",
   CHEVRON_RIGHT: "chevron-right",
+  CHEVRON_UP: "chevron-up",
   CIRCLE: "circle",
   CIRCLE_ALERT: "circle-alert",
   CIRCLE_ARROW_UP: "circle-arrow-up",

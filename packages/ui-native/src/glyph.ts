@@ -179,6 +179,9 @@ export const GLYPH = {
   JUMP_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   FOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_RIGHT),
   UNFOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
+  // The Inbox's pager in an open thread's bar, as the panel's K and J and Mail's message arrows.
+  PREVIOUS_ITEM: lucide(LUCIDE_SYMBOL.CHEVRON_UP),
+  NEXT_ITEM: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
   // iOS's own: Share is the system's act, and the composer's Stop is the panel's filled square.
   SHARE: system("square.and.arrow.up"),
   STOP_TURN: system("stop.fill"),
