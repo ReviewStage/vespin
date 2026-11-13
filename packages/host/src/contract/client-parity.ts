@@ -58,6 +58,9 @@ const WEB = {
   COMPUTER_USE: byDesign(
     "Agents use apps on the Mac through its own helper, which a tab cannot run",
   ),
+  CALL_WINDOW: byDesign(
+    "A tab cannot float a window over other apps; its call card docks inside the tab",
+  ),
   CLI: byDesign(
     "A tab cannot run the install script; the MCP & CLI page shows the command to paste",
   ),
@@ -108,6 +111,7 @@ const IOS = {
   DESK_TOOLS: byDesign("iOS v1 leaves the terminal and the live view to the desktop and the web"),
   DICTATION: byDesign("iOS uses the keyboard's own dictation"),
   DIFF: byDesign("iOS v1 opens the diff on GitHub"),
+  VOICE: notYet("iOS's agent page doesn't offer a voice call yet"),
   CHANGELOG: byDesign("iOS opens the changelog in its own Safari sheet (Settings › What's new)"),
   CONTACT_MAIL: byDesign("iOS writes the contact mail itself through openURL (Settings › Email)"),
   LINKS: byDesign("iOS opens a link through the system itself (openURL)"),
@@ -214,6 +218,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.SOUND_REMOVE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.SOUND_CHOOSE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.DICTATION_TRANSCRIBE]: panel(IOS.DICTATION),
+  [PORT_ACT_KIND.VOICE_OPEN]: panel(IOS.VOICE),
   [PORT_ACT_KIND.ACCOUNT_ACTIVE]: panel(IOS.PRESENCE),
   [PORT_ACT_KIND.PUSH_DEVICE_REGISTER]: PHONE_ONLY,
   [PORT_ACT_KIND.PUSH_DEVICE_UNREGISTER]: PHONE_ONLY,
@@ -226,6 +231,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.AGENTS_MODELS_FOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_MODELS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.AGENTS_DEFAULT_WRITE]: EVERYWHERE,
+  [PORT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]: panel(IOS.RUN_ON_MAC_STANDING),
   [PORT_ACT_KIND.AGENTS_CHAPTERS_PROVIDER_WRITE]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.AGENTS_PREFERENCES_RETRY]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.HOSTS_FOLLOW]: EVERYWHERE,
@@ -391,6 +397,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_ADD_FOLLOWER]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_REMOVE_FOLLOWER]: panel(IOS.FOLLOWERS),
+  [PORT_ACT_KIND.TASKS_FOLLOWER_MACHINES]: panel(IOS.HOVER),
   [PORT_ACT_KIND.GITHUB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.WEB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.GITHUB_CONNECT]: panel(IOS.SETTINGS),
@@ -463,6 +470,8 @@ export const CLIENT_PARITY = {
   ),
   [PORT_ACT_KIND.WINDOW_MENU_OFFERS]: desktopOnly(WEB.MENU_BAR, IOS.MENU_BAR),
   [PORT_ACT_KIND.WINDOW_HANDOFF]: desktopOnly(WEB.HANDOFF, IOS.HANDOFF),
+  [PORT_ACT_KIND.WINDOW_VOICE_CALL]: desktopOnly(WEB.CALL_WINDOW, IOS.VOICE),
+  [PORT_ACT_KIND.VOICE_CALL_PRESS]: desktopOnly(WEB.CALL_WINDOW, IOS.VOICE),
   [PORT_ACT_KIND.FEEDBACK_SEND]: EVERYWHERE,
 
   [PORT_ACT_KIND.WORKSPACE_CREATE]: EVERYWHERE,

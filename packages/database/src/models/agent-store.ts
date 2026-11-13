@@ -905,6 +905,18 @@ const updateAgentBranchRow = SqlSchema.void({
     ),
 });
 
+const updateAgentTargetDeviceRow = SqlSchema.void({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    agentId: Schema.String,
+    targetDeviceId: Schema.String,
+  }),
+  execute: ({ userId, agentId, targetDeviceId }) =>
+    Database.use((db) =>
+      db.update(agentTable).set({ targetDeviceId }).where(reachableAgent(userId, agentId)),
+    ),
+});
+
 const markTurnFastRefused = SqlSchema.void({
   Request: Schema.Struct({ userId: Schema.String, turnId: Schema.String }),
   execute: ({ userId, turnId }) =>
@@ -2978,6 +2990,15 @@ export function updateAgentBranch(
   branch: string | null,
 ): AgentStoreEffect<void> {
   return updateAgentBranchRow({ userId, agentId, branch });
+}
+
+/** The agent's default machine set, where its terminal commands and actions on apps go when a call names none (`agent.target_device_id`); nothing written for an agent the account does not reach. Note that the caller decides the machine may be one; this writes it. */
+export function updateAgentTargetDevice(
+  userId: string,
+  agentId: string,
+  targetDeviceId: string,
+): AgentStoreEffect<void> {
+  return updateAgentTargetDeviceRow({ userId, agentId, targetDeviceId });
 }
 
 /** The account's turn marked as one a step of ran at standard speed because Anthropic refused it Fast; nothing written for a turn the account does not own. */

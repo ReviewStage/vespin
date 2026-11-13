@@ -1,5 +1,5 @@
 /**
- * call-controls.tsx -- Talk at rest and with no OpenAI API key; each mute round and square, off and on, and the one red End call; a box's call status connecting, live, muted, and ending; a call bar at a card's width and at its narrowest, while the agent thinks and works, and muted; and the call card at the sidebar's foot and in the floating window.
+ * call-controls.tsx -- Talk at rest and with no OpenAI API key; each mute round and square, off and on, Stop, and the one red End call; a box's call status connecting, live, muted, and ending; a call bar at a card's width and at its narrowest, while the agent thinks and works, and muted; and the call card at the sidebar's foot and in the floating window.
  */
 
 import {
@@ -18,6 +18,7 @@ import {
   GAP,
   Inline,
   Stack,
+  StopAgentButton,
   TalkButton,
 } from "@repo/ui";
 import { useState } from "react";
@@ -68,7 +69,7 @@ function OwnedBar({
 
   return (
     <div style={{ width }}>
-      <CallBar status={status} {...mutes} onEnd={stay} />
+      <CallBar status={status} {...mutes} onStop={stay} onEnd={stay} />
     </div>
   );
 }
@@ -93,6 +94,7 @@ function OwnedCard({
         {...mutes}
         surface={surface}
         onReturn={stay}
+        onStop={stay}
         onEnd={stay}
       />
     </div>
@@ -130,7 +132,10 @@ function CallControls(): React.JSX.Element {
           <TalkButton keyMissing onPress={stay} />
         </Inline>
       </CatalogSection>
-      <CatalogSection id="call-controls" title="Mutes round and square, both muted, and End call">
+      <CatalogSection
+        id="call-controls"
+        title="Mutes round and square, both muted, Stop, and End call"
+      >
         <Inline gap={GAP.CONTROL}>
           <OwnedMute device={CALL_DEVICE.SPEAKER} corners={BUTTON_CORNERS.ROUND} />
           <OwnedMute device={CALL_DEVICE.MICROPHONE} corners={BUTTON_CORNERS.ROUND} />
@@ -138,6 +143,7 @@ function CallControls(): React.JSX.Element {
           <OwnedMute device={CALL_DEVICE.MICROPHONE} corners={BUTTON_CORNERS.SQUARE} />
           <OwnedMute device={CALL_DEVICE.SPEAKER} corners={BUTTON_CORNERS.ROUND} on />
           <OwnedMute device={CALL_DEVICE.MICROPHONE} corners={BUTTON_CORNERS.ROUND} on />
+          <StopAgentButton onPress={stay} />
           <EndCallButton onPress={stay} />
         </Inline>
       </CatalogSection>

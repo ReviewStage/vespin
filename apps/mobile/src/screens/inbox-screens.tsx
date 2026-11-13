@@ -70,6 +70,7 @@ import {
   ScopePicker,
   Screen,
   SplitView,
+  scopeMenu,
   THREAD_MEDIA,
   type ThreadMedia,
   type ThreadMessage,
@@ -943,7 +944,7 @@ function InboxStackList(words: InboxSearch) {
 
   const field = useRefilledSearchField(search);
 
-  // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does.
+  // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
   return (
     <>
       <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }}>
@@ -961,7 +962,7 @@ function InboxStackList(words: InboxSearch) {
       {choosing !== undefined ? null : <SettingsBarButton switcher={switcher} />}
       <Stack.Toolbar placement="right">
         {choosing !== undefined ? (
-          <Stack.Toolbar.Button variant="done" onPress={choosing.done.onPress}>
+          <Stack.Toolbar.Button variant="plain" onPress={choosing.done.onPress}>
             {choosing.done.label}
           </Stack.Toolbar.Button>
         ) : (
@@ -1054,30 +1055,36 @@ function InboxSplitScreen({
   const look = useListLook();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
 
+  const rows =
+    listing.listed.length === 0 ? (
+      <InboxEmpty
+        show={show}
+        search={search}
+        feed={listing.feed}
+        onRetry={() => void acts.refresh()}
+      />
+    ) : (
+      <InboxRows
+        look={look}
+        listed={listing.listed}
+        readerId={listing.readerId}
+        selected={selected}
+        onSelect={select}
+        onRefresh={acts.refresh}
+        onMark={acts.mark}
+        remindMenu={(item) => remind.menu([item])}
+        onResolve={acts.resolve}
+        choosing={choosing?.rows}
+      />
+    );
+
+  // Note that beside the app sidebar the scopes leave the list for Mail's filter button in its bar, so the list starts at its first thread; a two-column window keeps the menu picker over the list.
   const list = {
-    view: (
+    view: threeColumns ? (
+      rows
+    ) : (
       <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
-        {listing.listed.length === 0 ? (
-          <InboxEmpty
-            show={show}
-            search={search}
-            feed={listing.feed}
-            onRetry={() => void acts.refresh()}
-          />
-        ) : (
-          <InboxRows
-            look={look}
-            listed={listing.listed}
-            readerId={listing.readerId}
-            selected={selected}
-            onSelect={select}
-            onRefresh={acts.refresh}
-            onMark={acts.mark}
-            remindMenu={(item) => remind.menu([item])}
-            onResolve={acts.resolve}
-            choosing={choosing?.rows}
-          />
-        )}
+        {rows}
       </ScopePicker>
     ),
     // Note that Select mode names how many are chosen in the column's title, stands Done where ⋯ stood, and its acts in the column's own bar at its foot.
@@ -1085,6 +1092,9 @@ function InboxSplitScreen({
       choosing === undefined
         ? {
             title: INBOX_TITLE,
+            filter: threeColumns
+              ? scopeMenu(SCOPE_LABEL, scopes, show !== INBOX_SHOW.OPEN)
+              : undefined,
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
           }

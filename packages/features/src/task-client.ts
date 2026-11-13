@@ -115,6 +115,7 @@ import {
   type TasksBrowserTabOpenAnswer,
   type TasksBrowserTabOpenParams,
   type TasksCommentAnswer,
+  type TasksMachinesAnswer,
   type TasksPictureAnswer,
   type TasksPictureKeepAnswer,
 } from "./tasks-view.js";
@@ -621,6 +622,13 @@ export class HostedTaskClient {
     HttpClient.HttpClient
   > {
     return Effect.map(hostedCall(this.#hosted.taskFollowers.unfollow, { id: taskId }), followersOf);
+  }
+
+  /** The machines of one task's followers, each with whose it is, whether its owner lets the task's agents use it, and whether it listened lately, as a follower's card lists them. */
+  followerMachines(
+    taskId: string,
+  ): Effect.Effect<TasksMachinesAnswer, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.taskFollowers.machines, { id: taskId });
   }
 
   /** The account's own switch on one task it follows: whether the task's agents may use its machines; answers as `follow` does. */

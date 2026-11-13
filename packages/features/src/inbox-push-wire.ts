@@ -3,7 +3,8 @@
  *
  * The service composes each push (`@repo/service/push/inbox-pushes`); the
  * app reads the same keys back from the notification's payload with
- * `inboxPushOf`, which ignores a key a newer service added, and
+ * `inboxPushOf`, which ignores a key a newer service added, or from a
+ * delivered notification's request with `inboxPushOfRequest`, and
  * `inboxPushResponseOf` turns a tap or an action into the screen it opens
  * and what the app sends there. A decide's buttons are named by each
  * option's place in the payload's `options`, 0 first, which the app's
@@ -142,6 +143,38 @@ const decodePush = EffectSchema.decodeUnknownOption(inboxPushSchema);
 
 /** The push a notification's payload carries, or none where it is not one of the service's. */
 export const inboxPushOf = flow(decodePush, Option.getOrUndefined);
+
+/** The trigger `expo-notifications` names a notification Apple delivered as a push by, which carries the payload whole, `aps` and all. */
+const EXPO_PUSH_TRIGGER = "push";
+
+const pushTriggerSchema = EffectSchema.Struct({
+  type: EffectSchema.Literal(EXPO_PUSH_TRIGGER),
+  payload: EffectSchema.Record(EffectSchema.String, EffectSchema.Unknown),
+});
+
+const decodePushTrigger = EffectSchema.decodeUnknownOption(pushTriggerSchema);
+
+/** A delivered notification's request as `expo-notifications` hands it to the app: its content's data, and what triggered it. */
+export interface InboxPushRequest {
+  readonly content: { readonly data?: unknown };
+  readonly trigger?: unknown;
+}
+
+/**
+ * The push a delivered notification carries, read from its request: a
+ * push's whole payload, which its trigger carries, or a local
+ * notification's data, such as the share sheet's. Note that a push's
+ * `content.data` is not its payload, because `expo-notifications` reads
+ * that from the payload's `body`, where Expo's own push service nests what
+ * it sends, while the service writes its keys beside `aps`.
+ */
+export function inboxPushOfRequest(request: InboxPushRequest): InboxPush | undefined {
+  const payload = decodePushTrigger(request.trigger).pipe(
+    Option.match({ onNone: () => request.content.data, onSome: ({ payload }) => payload }),
+  );
+
+  return inboxPushOf(payload);
+}
 
 /** The route a push opens on. */
 function routeOf(
