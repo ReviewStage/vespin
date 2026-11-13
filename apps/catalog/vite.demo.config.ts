@@ -13,5 +13,6 @@ export default defineConfig({
     assetsInlineLimit: 100_000_000,
     cssCodeSplit: false,
     modulePreload: false,
+    rollupOptions: { output: { format: "iife", inlineDynamicImports: true } },
   },
 });
