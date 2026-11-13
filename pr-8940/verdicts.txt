@@ -14,4 +14,6 @@ PASS on the 27.2 iPad, light and dark, 0 failed steps (pr-8940/retake/):
 - c3: the agent page's bar is one glass group of ⋯, Archive and Pin, each drawn as its glyph, with no empty capsules.
 - c4: Pin turns to Unpin's glyph after a tap.
 - c5: Archive raises "Archive agent?" with Cancel and Stop agents.
-NOT RUN on the 26.5 iPad: booting its simulator took swap from ~4 GB to 11-12 GB and the disk to 11 GB, under the 12 GB floor, twice (16:10 and 16:16 UTC, with the developer's own apps open during work hours), so the guard stopped it before any shot. 1c2c29a9f's 26.5 runs (light and dark) showed the same bar as 27.2, the empty capsules included, so 26.5 is expected to match.
+PASS on the 26.5 iPad too, light and dark, 0 failed steps (pr-8940/retake26/; run alone at 16:19 UTC after two tries stopped on the disk guard): c1 to c5 match 27.2. Pin and Archive are glyphs in one glass group with ⋯, Unpin draws after the tap, and Archive asks first. One difference from 27.2: on 26.5, a picked task's Search stands in its own glass circle after the New agent, sub-task and ⋯ group, which looks like iPadOS 26's own placement of a search item. Noted, not a fail.
+
+VERDICT at e37185503: PASS.
