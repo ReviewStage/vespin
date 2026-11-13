@@ -404,4 +404,24 @@ describe("GitHub", () => {
       );
     }).pipe(Effect.provide(layer));
   });
+
+  it.effect("fails a refusal that names a retry-after as rate limited until then", () => {
+    const { layer } = harness(() =>
+      json({ message: "You have exceeded a secondary rate limit." }, 403, { "retry-after": "60" }),
+    );
+
+    return Effect.gen(function* () {
+      yield* TestClock.setTime(1_000_000);
+      const github = yield* GitHub;
+      const refused = yield* readRepository(github.asMember(Redacted.make("gho_member"))).pipe(
+        Effect.flip,
+      );
+
+      assert.strictEqual(refused._tag, "GitHubRateLimited");
+      assert.strictEqual(
+        refused._tag === "GitHubRateLimited" ? refused.resetsAt?.getTime() : undefined,
+        1_060_000,
+      );
+    }).pipe(Effect.provide(layer));
+  });
 });

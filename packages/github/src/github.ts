@@ -457,7 +457,7 @@ function retryAfterOf(headers: AnswerHeaders): Duration.Duration | undefined {
 }
 
 /** What an Octokit call's rejection means, as the failure union says it. */
-function failureOf(rejection: Rejection, identity: GitHubIdentityKind): GitHubFailure {
+function failureOf(rejection: Rejection, identity: GitHubIdentityKind, now: number): GitHubFailure {
   if (rejection.held !== undefined) {
     return new GitHubRateLimited({
       identity: rejection.held.identity,
@@ -486,11 +486,19 @@ function failureOf(rejection: Rejection, identity: GitHubIdentityKind): GitHubFa
     const reset = Number(headers["x-ratelimit-reset"]);
     const resource = headers["x-ratelimit-resource"];
     const exhausted = String(headers["x-ratelimit-remaining"]) === "0" && Number.isFinite(reset);
+    const retryAfter = retryAfterOf(headers);
+
+    // Note that GitHub's `retry-after` is when it may be asked again too, counted from the refusal.
+    const resetsAt = exhausted
+      ? new Date(reset * 1000)
+      : retryAfter === undefined
+        ? undefined
+        : new Date(now + Duration.toMillis(retryAfter));
 
     return new GitHubRateLimited({
       identity,
       resource: resource === undefined ? undefined : String(resource),
-      resetsAt: exhausted ? new Date(reset * 1000) : undefined,
+      resetsAt,
     });
   }
 
@@ -702,12 +710,14 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
 
       return yield* Effect.tryPromise({
         try: (signal) => send({ fetch: githubFetch(client, context, state.kept), signal }),
-        catch: (error) =>
-          failureOf(
-            Option.getOrElse(decodeRejection(error), () => UNREAD_REJECTION),
-            state.identity.kind,
+        catch: (error) => Option.getOrElse(decodeRejection(error), () => UNREAD_REJECTION),
+      }).pipe(
+        Effect.catch((rejection) =>
+          Effect.flatMap(Clock.currentTimeMillis, (now) =>
+            Effect.fail(failureOf(rejection, state.identity.kind, now)),
           ),
-      });
+        ),
+      );
     });
 
   const clientFor = (state: IdentityState, octokit: GitHubOctokitInstance): GitHubClient => ({
