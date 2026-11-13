@@ -27,7 +27,6 @@ import {
   navigationSplitViewStyle,
   navigationTitle,
   searchable,
-  searchToolbarBehavior,
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
@@ -430,7 +429,8 @@ function Column({
     <Toolbar
       modifiers={[
         searchable(text, {
-          placement: sidebar ? "sidebar" : "automatic",
+          // Note that a list's field stands in its own column's bar, under its title, as Mail's list holds its search, so the detail's bar stays the page's alone and is empty while nothing is picked.
+          placement: sidebar ? "sidebar" : "navigationBarDrawer",
           prompt: bar.search.placeholder,
           onChange: bar.search.onChange,
         }),
@@ -565,10 +565,6 @@ export function SplitView({
   detailStack,
 }: SplitViewProps) {
   const hidden = content === undefined ? "detailOnly" : "doubleColumn";
-  // Note that with three columns the list's search stands in the window's toolbar, a button at its trailing edge, as Mail's does on iPadOS 26, rather than as a field under the list's title.
-  const windowSearch = content === undefined ? undefined : contentBar?.search;
-  const searchWords = useSearchWords(windowSearch, searchKey);
-  const listBar = contentBar === undefined ? undefined : { ...contentBar, search: undefined };
 
   return (
     <NavigationSplitView
@@ -588,19 +584,7 @@ export function SplitView({
           visibility === "all" || (content === undefined && visibility === "doubleColumn"),
         );
       }}
-      modifiers={[
-        navigationSplitViewStyle("balanced"),
-        ...(windowSearch === undefined
-          ? []
-          : [
-              searchable(searchWords, {
-                placement: "toolbar",
-                prompt: windowSearch.placeholder,
-                onChange: windowSearch.onChange,
-              }),
-              searchToolbarBehavior("minimize"),
-            ]),
-      ]}
+      modifiers={[navigationSplitViewStyle("balanced")]}
     >
       <NavigationSplitView.Sidebar>
         {/* Note that the sidebar column is drawn afresh as it changes from the app's sidebar to the list or back, so its search field starts from the list's query rather than keeping what the other held. */}
@@ -614,7 +598,7 @@ export function SplitView({
       </NavigationSplitView.Sidebar>
       {content === undefined ? null : (
         <NavigationSplitView.Content>
-          <Column view={content} bar={listBar} searchKey={searchKey} />
+          <Column view={content} bar={contentBar} searchKey={searchKey} />
         </NavigationSplitView.Content>
       )}
       <NavigationSplitView.Detail>

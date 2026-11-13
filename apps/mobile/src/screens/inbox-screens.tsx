@@ -107,14 +107,7 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useListColumn, usePortraitDetailBar } from "./app-sidebar.js";
-import {
-  NO_THREAD_ACTS,
-  OpenAskCard,
-  openAskFiles,
-  ThreadComposer,
-  threadActs,
-  threadMenu,
-} from "./inbox-ask.js";
+import { OpenAskCard, openAskFiles, ThreadComposer, threadActs, threadMenu } from "./inbox-ask.js";
 import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
 
 /** The Inbox's name, at its head and on its back button. */
@@ -1091,16 +1084,11 @@ function InboxSplitScreen({
       <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
     );
 
-  // Note that with no thread picked the detail's bar keeps the thread's acts, dimmed, as Mail's bar stands over No Message Selected; a picked thread's page stands its own.
-  const detailBar = selected === undefined ? { acts: NO_THREAD_ACTS } : undefined;
-
   const first = useListColumn(list);
-  const firstDetailBar = usePortraitDetailBar(detailBar);
+  const firstDetailBar = usePortraitDetailBar(undefined);
   useHandColumns(
     SIDEBAR_PLACE.INBOX,
-    threeColumns
-      ? { content: list.view, contentBar: list.bar, detail, detailBar, root: selected }
-      : undefined,
+    threeColumns ? { content: list.view, contentBar: list.bar, detail, root: selected } : undefined,
   );
 
   return (
