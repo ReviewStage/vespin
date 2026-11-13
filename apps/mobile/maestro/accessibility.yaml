@@ -119,6 +119,9 @@ appId: dev.vespin.ios
     id: "settings-workspace"
 - waitForAnimationToEnd:
     timeout: 5000
+# Note that at this size the workspace's own rows can stand a screen tall, so the members are scrolled to.
+- scrollUntilVisible:
+    element: "Grace Hopper"
 - assertVisible: "Grace Hopper"
 - takeScreenshot: accessibility-settings-workspace
 # Settings' Machines page: each machine's facts line wrapped under its name.
