@@ -228,7 +228,7 @@ describe("a stylesheet", () => {
   it("refuses a box that rounds, draws a border, and clips, and passes one missing any of them", () => {
     const sheet = `.frame { border: 1px solid var(--ui-color-border); border-radius: var(--ui-radius-8); overflow: clip; }
       .edge { border: 1px solid var(--ui-color-border); border-radius: var(--ui-radius-8); }
-      .clip { border-width: 0; border-radius: var(--ui-radius-8); overflow: hidden; }
+      .clip { border-width: 0 !important; border-radius: var(--ui-radius-8); overflow: hidden; }
       .sides { border-width: 0 1px; border-radius: var(--ui-radius-8); overflow: hidden; }
       .square { border: 1px solid var(--ui-color-border); overflow: hidden; }`;
     expect(sheetRules(sheet)).toEqual([STYLE_RULE.EDGE_CLIP, STYLE_RULE.EDGE_CLIP]);

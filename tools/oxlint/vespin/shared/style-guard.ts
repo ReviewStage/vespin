@@ -687,10 +687,13 @@ const ZERO_WIDTH = /^0(?:px)?$/u;
  * Whether a border declaration draws an edge. Note that a width's
  * shorthand names up to four sides, so it draws none only where every side
  * is zero, and a border's shorthand draws none where its style is none or
- * hidden or its width is zero.
+ * hidden or its width is zero, its `!important` aside.
  */
 function drawsEdge(property: string, value: string): boolean {
-  const words = bareValue(value).trim().split(/\s+/u);
+  const words = bareValue(value)
+    .replace(/!\s*important\s*$/iu, "")
+    .trim()
+    .split(/\s+/u);
   if (property.endsWith("-width")) return !words.every((word) => ZERO_WIDTH.test(word));
   return !words.some((word) => NO_EDGE.test(word));
 }
