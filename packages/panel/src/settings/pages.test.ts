@@ -13,7 +13,7 @@ import { shownSettingsView } from "./settings-rows.js";
  */
 
 test("a link to the This Mac page shows it where the platform runs commands on the Mac, and Profile on a platform without", () => {
-  const without = DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.MAC_COMMANDS);
+  const without = DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.MACHINE_COMMANDS);
 
   assert.equal(
     shownSettingsView(SETTINGS_VIEW.THIS_MAC, DESKTOP_CAPABILITIES, NO_EXPERIMENTS),

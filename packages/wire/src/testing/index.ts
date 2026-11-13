@@ -32,6 +32,6 @@ export {
 
 export { jsonSchemaGoldenRoot, settleJsonSchemaGolden } from "./json-schema-golden.js";
 
-export { paddedTo, pngBytes, webmBytes } from "./media.js";
+export { mp4Bytes, paddedTo, pngBytes, webmBytes } from "./media.js";
 
 export { temporaryDirectory } from "./temporary-directory.js";

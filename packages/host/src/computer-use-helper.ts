@@ -2,7 +2,8 @@ import type {
   ComputerApp,
   ComputerOutcome,
   MacComputerAction,
-} from "@repo/features/mac-command-wire";
+} from "@repo/features/machine-command-wire";
+import { RECORDING_FAILURE, type RecordingFailure } from "@repo/features/recording-wire";
 import {
   type Cause,
   Clock,
@@ -32,7 +33,8 @@ import { ChildProcess, type ChildProcessSpawner } from "effect/process";
  *
  * The helper speaks in its own spelling (`bundle_id`, `icon_png`); what it
  * answers is read through a Schema and handed on in the wire's
- * (`ComputerOutcome`).
+ * (`ComputerOutcome`), but for a stopped recording's video, which the host
+ * posts up on a path of its own before the result.
  */
 
 /** What the helper refuses or fails with, by its own words for why. */
@@ -44,7 +46,26 @@ export const COMPUTER_HELPER_FAILURE = {
   NO_WINDOW: "no_window",
   NO_STATE: "no_state",
   FAILED: "failed",
+  /** No recording runs or waits to be read. */
+  RECORDING_NONE: "recording_none",
+  /** A recording already runs, so another cannot start. */
+  RECORDING_RUNNING: "recording_running",
+  /** The window drew nothing while it was recorded. */
+  RECORDING_EMPTY: "recording_empty",
+  /** The encoder failed. */
+  RECORDING_ENCODER: "recording_encoder",
+  /** No size the helper tried fit the byte bound. */
+  RECORDING_TOO_LARGE: "recording_too_large",
 } as const;
+
+/** Each of the helper's failures of a recording as the wire names it (`@repo/features/recording-wire`). */
+const RECORDING_FAILURE_OF: ReadonlyMap<string, RecordingFailure> = new Map([
+  [COMPUTER_HELPER_FAILURE.RECORDING_NONE, RECORDING_FAILURE.NONE],
+  [COMPUTER_HELPER_FAILURE.RECORDING_RUNNING, RECORDING_FAILURE.RUNNING],
+  [COMPUTER_HELPER_FAILURE.RECORDING_EMPTY, RECORDING_FAILURE.EMPTY],
+  [COMPUTER_HELPER_FAILURE.RECORDING_ENCODER, RECORDING_FAILURE.ENCODER],
+  [COMPUTER_HELPER_FAILURE.RECORDING_TOO_LARGE, RECORDING_FAILURE.TOO_LARGE],
+]);
 
 /**
  * The requests beyond the agent's actions: one app named, without launching
@@ -85,9 +106,18 @@ export interface ComputerPermissions {
   readonly accessibility: boolean;
 }
 
-/** What one request came to: what the action did, the app described, or why the helper did nothing. */
+/** A recording the helper stopped: how long it ran, its size, and its H.264 MP4 as base64, which stays on the Mac's disk until the next recording. */
+export interface ComputerHelperRecording {
+  readonly seconds: number;
+  readonly width: number;
+  readonly height: number;
+  readonly mp4: string;
+}
+
+/** What one request came to: what the action did, a recording stopped, the app described, or why the helper did nothing. */
 export type ComputerHelperAnswer =
   | { readonly outcome: ComputerOutcome }
+  | { readonly recording: ComputerHelperRecording }
   | { readonly described: ComputerApp; readonly pid?: number }
   | { readonly permissions: ComputerPermissions }
   | { readonly failure: string; readonly message: string };
@@ -156,6 +186,16 @@ const helperLineSchema = Schema.fromJsonString(
       accessibility: Schema.Boolean,
     }),
     Schema.Struct({ id: Schema.Number, ok: Schema.Literal(true), done: Schema.String }),
+    Schema.Struct({
+      id: Schema.Number,
+      ok: Schema.Literal(true),
+      recorded: Schema.Struct({
+        seconds: Schema.Number,
+        width: Schema.Number,
+        height: Schema.Number,
+        mp4: Schema.String,
+      }),
+    }),
   ]),
 );
 
@@ -175,7 +215,15 @@ function wireApp(app: typeof helperAppSchema.Type): ComputerApp {
 
 /** What a request came to, read off the helper's line for it. */
 function answerOf(line: HelperLine): ComputerHelperAnswer {
-  if (!line.ok) return { failure: line.error.kind, message: line.error.message };
+  if (!line.ok) {
+    const unrecorded = RECORDING_FAILURE_OF.get(line.error.kind);
+
+    return unrecorded === undefined
+      ? { failure: line.error.kind, message: line.error.message }
+      : { outcome: { unrecorded } };
+  }
+
+  if ("recorded" in line) return { recording: line.recorded };
 
   if ("apps" in line) return { outcome: { apps: line.apps.map(wireApp) } };
 

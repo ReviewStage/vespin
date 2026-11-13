@@ -728,7 +728,7 @@ export function ListRow({
    * screen with no hover draws it at rest.
    */
   latent?: boolean | undefined;
-  /** The app's hint hung from the row's press and the words it raises; a row that opens nothing raises none. */
+  /** The app's hint hung from the row's press, or from its words where it opens nothing, and the words it raises. */
   hint?: { readonly Hint: ListRowHint; readonly label: string } | undefined;
   /** Its density where it stands in a list of the app's own rather than a `List`, which sets its rows'. */
   density?: ListDensity | undefined;
@@ -800,6 +800,11 @@ export function ListRow({
     },
     [],
   );
+
+  // Note that a row that opens nothing hangs its hint from its words, whose parent, the item, is the row its card stands beside.
+  const wordsRef = useCallback((element: HTMLDivElement | null) => {
+    rowElement.current = element?.parentElement ?? null;
+  }, []);
 
   const pressRef = useCallback(
     (element: HTMLButtonElement | null) => {
@@ -1060,9 +1065,19 @@ export function ListRow({
         </button>
       )}
       {press === undefined ? (
-        <div className={MAIN_CLASS} aria-current={current}>
-          {face}
-        </div>
+        hint === undefined ? (
+          <div className={MAIN_CLASS} aria-current={current}>
+            {face}
+          </div>
+        ) : (
+          // Note that a row that opens nothing still hangs its hint, from its words, which take the focus so the keyboard reaches the hint too.
+          <hint.Hint label={hint.label} row={rowElement}>
+            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the words take the focus so the keyboard reaches the hint, as the pointer does. */}
+            <div ref={wordsRef} className={MAIN_CLASS} aria-current={current} tabIndex={0}>
+              {face}
+            </div>
+          </hint.Hint>
+        )
       ) : hint === undefined ? (
         press
       ) : (

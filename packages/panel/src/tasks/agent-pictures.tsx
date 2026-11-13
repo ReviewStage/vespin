@@ -1,3 +1,4 @@
+import type { ComputerAppKept } from "@repo/features/agent-parts";
 import {
   calledPicturesOf,
   recordedVideosOf,
@@ -86,6 +87,18 @@ const ComputerIconsContext = createContext<ReadonlyMap<string, string>>(new Map(
 
 /** Hands the transcript under it the icon each of its `computer` calls wears, by its call (`computerIconsByCall`). */
 export const ComputerIconsProvider = ComputerIconsContext.Provider;
+
+const NO_KEPT_APPS: ReadonlyMap<string, ComputerAppKept> = new Map();
+
+const KeptAppsContext = createContext(NO_KEPT_APPS);
+
+/** Hands what stands under it the apps the conversation's `computer` calls used, by bundle id (`computerAppsKept`), which a mention of one is named and drawn by where the window lists none of its own. */
+export const KeptAppsProvider = KeptAppsContext.Provider;
+
+/** The apps the conversation's `computer` calls used, by bundle id, each with its name and the icon a call kept; none outside a conversation. */
+export function useKeptApps(): ReadonlyMap<string, ComputerAppKept> {
+  return useContext(KeptAppsContext);
+}
 
 /** The icon a `computer` call's row wears: the one the transcript's earlier calls lend it, or its own; none where neither kept one. */
 export function useComputerIcon(callId: string, own: string | undefined): string | undefined {

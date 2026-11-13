@@ -8,7 +8,8 @@
 // in the light theme and the dark, for the desktop and the site alike. The
 // roles a brand leaves alone (the fills and edges drawn as alphas of the ink,
 // shadows, the chart hues, find's yellows) stay in @repo/ui's palettes.css,
-// but for the identity hues below, which the iOS app draws too. Each entry is one brand; `BRAND` names the one the product
+// but for the identity hues below and the strong fill (`FILL_STRONG`, the
+// member's own message), which the iOS app draws too. Each entry is one brand; `BRAND` names the one the product
 // wears, so a rebrand is a new entry and that one name, and a second theme
 // is a second entry the generator writes under a selector of its own.
 //
@@ -74,6 +75,7 @@ const BRAND_PALETTES = {
       CHIP_SELECTED: "#f0edeb",
       CHIP_EDGE: "#e1dedc",
       CHIP_EDGE_STRONG: "#b1aeac",
+      FILL_STRONG: "#0000000f",
       INK: "#080706",
       TEXT: "#171614",
       TEXT_BODY: "#282624",
@@ -109,6 +111,7 @@ const BRAND_PALETTES = {
       CHIP_SELECTED: "#262321",
       CHIP_EDGE: "#221f1d",
       CHIP_EDGE_STRONG: "#383532",
+      FILL_STRONG: "#ffffff17",
       INK: "#fffdfc",
       TEXT: "#f4f1ef",
       TEXT_BODY: "#e0dddb",
@@ -148,6 +151,7 @@ const BRAND_PALETTES = {
       CHIP_SELECTED: GEIST_LIGHT.GRAY[200],
       CHIP_EDGE: GEIST_LIGHT.GRAY[400],
       CHIP_EDGE_STRONG: GEIST_LIGHT.GRAY[500],
+      FILL_STRONG: GEIST_LIGHT.GRAY_ALPHA[200],
       INK: GEIST_BLACK,
       TEXT: GEIST_LIGHT.GRAY[1000],
       TEXT_BODY: GEIST_LIGHT.GRAY[1000],
@@ -183,6 +187,7 @@ const BRAND_PALETTES = {
       CHIP_SELECTED: GEIST_DARK.GRAY[300],
       CHIP_EDGE: GEIST_DARK.GRAY[400],
       CHIP_EDGE_STRONG: GEIST_DARK.GRAY[500],
+      FILL_STRONG: GEIST_DARK.GRAY_ALPHA[200],
       INK: GEIST_WHITE,
       TEXT: GEIST_DARK.GRAY[1000],
       TEXT_BODY: GEIST_DARK.GRAY[1000],

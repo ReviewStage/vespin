@@ -1,5 +1,5 @@
 /**
- * task-tree-model.ts -- the phone's Tasks list as the panel's sidebar stands it: Pinned, Following, the member's own sections, then My tasks grouped by repository, each list's child tasks nested under their parents; and the workspace's tasks a search finds.
+ * task-tree-model.ts -- the phone's Tasks list as the panel's sidebar stands it: Pinned, Following, the member's own sections, then My tasks grouped by repository, each list's child tasks nested under their parents; the groups a wide window's sidebar lists as places of their own; and the workspace's tasks a search finds.
  *
  * Every piece is the sidebar's own (`task-list-model.ts`,
  * `task-sections-model.ts`, `pin-order.ts`), read under the view the
@@ -216,6 +216,25 @@ export function taskTree(input: TaskTreeInput): TaskTree {
       rows: drawnTaskRows(group.tasks, ALL_OPEN, NONE_STANDING, every),
     })),
   };
+}
+
+/**
+ * The groups a wide window's app sidebar lists as places of their own, as
+ * Mail lists its mailboxes: Pinned, Following, and each of the member's
+ * sections, in the tree's order, each counted by its rows. The repository
+ * groups stay under Tasks, which lists every group.
+ */
+export function taskTreeCollections(tree: TaskTree): readonly TaskTreeGroup[] {
+  return [
+    ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
+    ...tree.sections,
+  ];
+}
+
+/** The collection a sidebar row picked, by its key; none where the tree no longer holds it, such as a section deleted or the last pin taken off. */
+export function taskTreeCollection(tree: TaskTree, key: string): TaskTreeGroup | undefined {
+  return taskTreeCollections(tree).find((group) => group.key === key);
 }
 
 /**

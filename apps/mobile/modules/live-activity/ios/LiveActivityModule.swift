@@ -6,7 +6,16 @@
 // dismissed, but for one it ended itself because a newer one started, so a
 // push-to-start sent twice never stands two activities. Each goes to JavaScript as an event (`src/live-activity/`),
 // and the latest token is sent again when it starts listening for it, since
-// iOS hands each once. A Stop pressed on the activity (`StopAgentIntent`, in
+// iOS hands each once. Each activity's update token is kept in the app's
+// defaults too, so one iOS handed while the app ran in the background, or
+// in a launch that ended before its JavaScript was up, is handed on at the
+// next launch. Note that iOS wakes the app for a short while when the
+// service push-to-starts an activity, often too short for the host to boot,
+// so a new update token is also sent to the service from Swift at once,
+// under the access token the share sheet reads (`ShareToken`), to the phone
+// JavaScript kept here once the service held it (`keepPhone`); where that
+// send fails, as with an access token past its 50 minutes, the next launch's
+// JavaScript sends the kept token. A Stop pressed on the activity (`StopAgentIntent`, in
 // the app's target) waits in the standard defaults; each is handed on while
 // JavaScript listens for Stops, and taken away once it answers. A fixture run starts
 // an activity of its own (`startFixture`), since no push reaches a
@@ -18,7 +27,17 @@
 import ActivityKit
 import ExpoModulesCore
 import Foundation
+import UIKit
+import VespinShareToken
 import WidgetKit
+
+/// The phone as the service names it, with where and how to reach the service, as the app's JavaScript keeps it once the service holds the phone.
+private struct KeptPhone: Codable {
+  let origin: String
+  let deviceToken: String
+  let environment: String
+  let headers: [String: String]
+}
 
 public final class LiveActivityModule: Module {
   /// The defaults key and the ping `StopAgentIntent` names.
@@ -26,6 +45,13 @@ public final class LiveActivityModule: Module {
   private static let stopAsked = Notification.Name("dev.vespin.live-activity.stop-asked")
   /// How old a Stop may be and still be handed on: one left from a launch long gone is dropped.
   private static let stopFreshness: Double = 2 * 60 * 1000
+  /// The defaults keys of each activity's update token, by the activity's id, and of the phone a token is sent beside.
+  private static let tokensKey = "dev.vespin.live-activity.tokens"
+  private static let phoneKey = "dev.vespin.live-activity.phone"
+  /// The service's path for an activity's update token (`HOSTED_SERVICE_PATH.ACCOUNT_LIVE_ACTIVITIES_ACTIVITY_TOKEN`).
+  private static let activityTokenPath = "/api/account/live-activities/activity-token"
+  /// The longest a send from Swift waits on the service, inside the few seconds iOS gives a woken app.
+  private static let sendTimeout: TimeInterval = 10
 
   // Note that the state below is read and written on the main actor alone.
   /// Which events JavaScript listens for, each started and stopped on its own.
@@ -45,7 +71,10 @@ public final class LiveActivityModule: Module {
     Events("onStartToken", "onActivityToken", "onActivityEnded", "onStop")
 
     OnCreate {
-      Task { @MainActor in self.watch() }
+      Task { @MainActor in
+        self.restoreTokens()
+        self.watch()
+      }
       self.stopObserver = NotificationCenter.default.addObserver(
         forName: Self.stopAsked, object: nil, queue: .main
       ) { [weak self] _ in Task { @MainActor in self?.handOnStops() } }
@@ -103,6 +132,18 @@ public final class LiveActivityModule: Module {
         AgentsActivityAttributes.ContentState.self, from: Data(contentState.utf8))
       _ = try Activity.request(
         attributes: AgentsActivityAttributes(), content: .init(state: state, staleDate: nil))
+    }
+
+    // The phone the service holds, as JSON, kept so a token iOS hands in the background can be sent from here; none once the account signs out.
+    Function("keepPhone") { (phone: String?) -> Void in
+      let defaults = UserDefaults.standard
+      guard let phone, let data = phone.data(using: .utf8),
+        (try? JSONDecoder().decode(KeptPhone.self, from: data)) != nil
+      else {
+        defaults.removeObject(forKey: Self.phoneKey)
+        return
+      }
+      defaults.set(data, forKey: Self.phoneKey)
     }
 
     // The Inbox widget's kind, as `InboxWidgetSnapshot.kind` names it in the widget extension.
@@ -168,12 +209,16 @@ public final class LiveActivityModule: Module {
   @MainActor private func took(activity id: String, token: String) {
     // A superseded activity's late token never reaches the service, which pushes to the newest alone.
     guard !superseded.contains(id) else { return }
+    let fresh = activityTokens[id] != token
     activityTokens[id] = token
+    keepTokens()
+    if fresh { send(activityToken: token) }
     if listening.contains("onActivityToken") { sendEvent("onActivityToken", ["token": token]) }
   }
 
   @MainActor private func ended(activity id: String) {
     let token = activityTokens.removeValue(forKey: id)
+    keepTokens()
     if superseded.remove(id) != nil { return }
     // The ended activity's own token, so the service clears it only while it still holds that one.
     if listening.contains("onActivityEnded") { sendEvent("onActivityEnded", ["token": token]) }
@@ -194,6 +239,46 @@ public final class LiveActivityModule: Module {
       handedStops.insert(id)
       sendEvent("onStop", ["request": id, "agentId": agentId])
     }
+  }
+
+  /// Takes back the tokens an earlier launch kept, for the activities that still stand, so JavaScript hands on any the service may lack.
+  @MainActor private func restoreTokens() {
+    let kept = UserDefaults.standard.dictionary(forKey: Self.tokensKey) as? [String: String] ?? [:]
+    let standing = Set(Activity<AgentsActivityAttributes>.activities.map(\.id))
+    activityTokens = kept.filter { standing.contains($0.key) }
+    keepTokens()
+  }
+
+  @MainActor private func keepTokens() {
+    UserDefaults.standard.set(activityTokens, forKey: Self.tokensKey)
+  }
+
+  /// Sends an activity's update token to the service at once while the app is in the background, in the time iOS gives it, where JavaScript kept a phone and the share sheet's access token is still good; a send that can't go or fails is left to the next launch. In front, the host sends it.
+  @MainActor private func send(activityToken token: String) {
+    guard UIApplication.shared.applicationState != .active,
+      let data = UserDefaults.standard.data(forKey: Self.phoneKey),
+      let phone = try? JSONDecoder().decode(KeptPhone.self, from: data),
+      let url = URL(string: phone.origin + Self.activityTokenPath),
+      let access = ShareToken.read(),
+      let body = try? JSONEncoder().encode([
+        "deviceToken": phone.deviceToken, "environment": phone.environment, "token": token,
+      ])
+    else { return }
+    var request = URLRequest(url: url, timeoutInterval: Self.sendTimeout)
+    request.httpMethod = "POST"
+    request.httpBody = body
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue("Bearer \(access)", forHTTPHeaderField: "Authorization")
+    for (name, value) in phone.headers { request.setValue(value, forHTTPHeaderField: name) }
+    // Note that the send asks for background time of its own, since the app may be suspended as soon as iOS's wake is spent.
+    let application = UIApplication.shared
+    var background = UIBackgroundTaskIdentifier.invalid
+    background = application.beginBackgroundTask(withName: "live-activity-token") {
+      application.endBackgroundTask(background)
+    }
+    URLSession.shared.dataTask(with: request) { _, _, _ in
+      DispatchQueue.main.async { application.endBackgroundTask(background) }
+    }.resume()
   }
 
   private static func hex(_ data: Data) -> String {

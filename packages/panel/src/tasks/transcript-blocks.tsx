@@ -135,6 +135,7 @@ import {
   type MarkdownComponents,
   type MarkdownNodeProps,
   type MarkdownSteps,
+  type MarkdownTaskTick,
   TRANSCRIPT_REMARK_STEPS,
 } from "@repo/ui/markdown";
 import { QUOTE_CLASS } from "@repo/ui/quote-face";
@@ -979,16 +980,21 @@ const GITHUB_REMARK_PLUGINS = [wholeRendering];
  * at the panel's scale, their code and tables the transcript's, their links
  * the transcript's: GitHub's own HTML read through the library's parse and
  * sanitizer, never set as HTML. Mentions, references, emoji, task lists,
- * and folded details stand as GitHub rendered them. A picture is the
- * place's to draw (`picture`), in its line where it shares one with words,
- * and stands as its link where the place draws none.
+ * and folded details stand as GitHub rendered them, an alert as the
+ * window's own, and a task item's box as one the reader ticks where the
+ * place hands `taskTick`. A picture is the place's to draw (`picture`), in
+ * its line where it shares one with words, and stands as its link where
+ * the place draws none.
  */
 export function GitHubWords({
   html,
   picture,
+  taskTick,
 }: {
   html: string;
   picture: GitHubPictureDrawer;
+  /** Draws each task item's box the reader can tick, by its place among the words' boxes; every box is read-only without it. */
+  taskTick?: MarkdownTaskTick | undefined;
 }): ReactNode {
   const components = useMemo<MarkdownComponents>(
     () => ({
@@ -1024,6 +1030,7 @@ export function GitHubWords({
       remarkPlugins={GITHUB_REMARK_PLUGINS}
       rehypePlugins={GITHUB_REHYPE_PLUGINS}
       normalizeHtmlIndentation={false}
+      taskTick={taskTick}
     />
   );
 }
@@ -1200,7 +1207,7 @@ function CutWords({
 /** Each kind of call's icon: a verb's own, or, for a call about something the window draws a glyph for, that glyph's likeness: the Code tab's brackets for code shown, the transcript's scroll for an agent read, as Copy full transcript wears it, never the terminal a shell command wears. A list of the agents is a list's own, rows each led by its mark, since it reads them all rather than one; a list of the models wears a chip, what an agent runs on. */
 const CALL_ICON = {
   [CALL_KIND.COMMAND]: TerminalIcon,
-  [CALL_KIND.MAC_COMMAND]: LaptopIcon,
+  [CALL_KIND.MACHINE_COMMAND]: LaptopIcon,
   [CALL_KIND.BROWSER]: GlobeIcon,
   [CALL_KIND.COMPUTER]: MonitorIcon,
   [CALL_KIND.READ_FILE]: FileTextIcon,
@@ -1530,7 +1537,7 @@ export function TranscriptTool({
         subjectIsCode={line.code}
         subjectInBody={(command && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject)}
         place={
-          (kind === CALL_KIND.MAC_COMMAND || kind === CALL_KIND.COMPUTER) &&
+          (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
           macOwner !== undefined ? (
             <ActorLine>
               {"On "}

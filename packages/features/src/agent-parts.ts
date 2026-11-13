@@ -55,6 +55,7 @@ import { drawnCall } from "./native-tool-calls.js";
 import { formatBytes } from "./number-format.js";
 import { TOOL_STATE, type ToolState } from "./tool-call-block.js";
 import {
+  computerAppBundleId,
   computerAppIcon,
   computerAppName,
   remoteCallOf,
@@ -310,6 +311,37 @@ export function computerIconsByCall(
   }
 
   return byCall;
+}
+
+/** An app a `computer` call used, as its answer named it: its name, and the icon a call kept for it, by the picture's id, where one did. */
+export interface ComputerAppKept {
+  readonly name: string;
+  readonly icon: string | undefined;
+}
+
+/**
+ * The apps the conversation's `computer` calls used, by the bundle id the
+ * Mac answered each with: the name the newest answer gave it, and the icon
+ * the newest call that kept one kept. A call the Mac answered no bundle id
+ * for, as an app with none, or that it refused, is left out.
+ */
+export function computerAppsKept(
+  messages: readonly AgentTranscriptMessage[],
+): ReadonlyMap<string, ComputerAppKept> {
+  const apps = new Map<string, ComputerAppKept>();
+
+  for (const message of messages) {
+    for (const part of agentParts(message)) {
+      if (part.kind !== AGENT_PART.TOOL || part.tool !== AGENT_TOOL.COMPUTER) continue;
+      const bundleId = computerAppBundleId(part.output);
+      const name = computerAppName(undefined, part.output);
+
+      if (bundleId === undefined || name === undefined) continue;
+      apps.set(bundleId, { name, icon: computerAppIcon(part.output) ?? apps.get(bundleId)?.icon });
+    }
+  }
+
+  return apps;
 }
 
 /**

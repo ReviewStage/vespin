@@ -39,6 +39,7 @@ import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { dropLink } from "./interactions.js";
 import {
   actionButton,
   type RowAction,
@@ -57,7 +58,7 @@ import {
   ToneGlyph,
   WorkingMark,
 } from "./marks.js";
-import { type PageFollowing, PageHeader } from "./page-header.js";
+import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -101,15 +102,17 @@ function EndWords({ words, ink }: { readonly words: string; readonly ink?: strin
   );
 }
 
-/** A row's lead glyph in an ink, at the title's size, so it grows with Dynamic Type beside it. */
-function LeadGlyph({ symbol, ink }: { readonly symbol: Glyph; readonly ink: string }) {
-  return (
-    <Image
-      {...glyphImage(symbol)}
-      color={ink}
-      modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE })]}
-    />
-  );
+/** A row's lead glyph in an ink, at a text style's size, so it grows with Dynamic Type beside the row's words: the muted line's unless the row asks for its title's. */
+function LeadGlyph({
+  symbol,
+  ink,
+  textStyle = TYPE_ROLE.ROW_LINE,
+}: {
+  readonly symbol: Glyph;
+  readonly ink: string;
+  readonly textStyle?: (typeof TYPE_ROLE)[keyof typeof TYPE_ROLE];
+}) {
+  return <Image {...glyphImage(symbol)} color={ink} modifiers={[font({ textStyle })]} />;
 }
 
 /** A row's 13 pt line under its title, set in to the title's words. */
@@ -137,16 +140,19 @@ type TaskHeadProps = {
   readonly createdBy?: string | undefined;
   /** Who follows it, as a chip under its fields; none while its workspace has Following off. */
   readonly following?: PageFollowing | undefined;
+  /** What a press on each of its chips offers, where the reader may change that field. */
+  readonly menus?: StandingMenus | undefined;
 };
 
 /**
  * A task's head as the first row of its page: its name as the page's
- * heading, its status, priority and assignee as small chips, who follows
+ * heading, its status, priority and assignee as small chips, each opening
+ * the menu of its field's values where it carries one, who follows
  * it as a chip that opens them, and who created it. Its path stands in the
  * bar above.
  */
 export function TaskHead(props: TaskHeadProps) {
-  const { name, status, priority, assignee, createdBy, following } = props;
+  const { name, status, priority, assignee, createdBy, following, menus } = props;
 
   return (
     <VStack
@@ -165,6 +171,7 @@ export function TaskHead(props: TaskHeadProps) {
         assignee={assignee}
         following={following}
         summary={createdBy}
+        menus={menus}
       />
     </VStack>
   );
@@ -309,8 +316,8 @@ type RelationRowProps = {
   readonly id: string;
   readonly name: string;
   readonly status: TaskStatus | undefined;
-  /** How the task stands to this one: "Sub-task", "Blocked by", "Blocks"; or, in a picker, its key or why it cannot be picked. */
-  readonly relation: string;
+  /** How the task stands to this one: "Blocked by", "Blocks"; or, in a picker, its key or why it cannot be picked; none where its section says it, as a task's Sub-tasks does. */
+  readonly relation?: string | undefined;
   /** Whether it cannot be picked, which mutes its words, as a picker dims a task that cannot take the relation. */
   readonly faded?: boolean | undefined;
   /** What a swipe from the trailing edge reveals, such as Remove relation. */
@@ -344,7 +351,7 @@ export function RelationRow({
       }
       title={name}
       ink={faded ? colors.TEXT_MUTED : colors.TEXT_BODY}
-      end={<EndWords words={relation} />}
+      end={relation === undefined ? undefined : <EndWords words={relation} />}
     />
   );
 
@@ -422,17 +429,20 @@ type GroupRowProps = {
   readonly count?: number | undefined;
   /** What a flow finds the row by, such as the Search tab's id where the sidebar stands for the tab bar. */
   readonly testId?: string | undefined;
+  /** Takes a row dragged onto it, on an iPad, and hands on the row's link, as a `ListSection`'s header does. */
+  readonly onDropLink?: ((url: string) => void) | undefined;
 };
 
-/** A place a wide window's sidebar picks, such as the Inbox or Tasks: its glyph, its name, and how many it holds. */
-export function GroupRow({ id, title, symbol, count, testId }: GroupRowProps) {
+/** A place a wide window's sidebar picks, such as the Inbox, Tasks, or a section of tasks: its glyph, its name, and how many it holds. */
+export function GroupRow({ id, title, symbol, count, testId, onDropLink }: GroupRowProps) {
   const colors = useColors();
 
   const row: ReactElement = (
     <RowHead
       unread={false}
       faded={false}
-      lead={<LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} />}
+      // Note that the glyph takes the title's size, as Mail's mailbox glyphs do, since a sidebar row is a place named by both.
+      lead={<LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.ROW_TITLE} />}
       title={title}
       ink={colors.TEXT_BODY}
       end={count === undefined ? undefined : <EndWords words={String(count)} />}
@@ -441,15 +451,14 @@ export function GroupRow({ id, title, symbol, count, testId }: GroupRowProps) {
 
   const heard = { label: title, value: count === undefined ? [] : [String(count)] };
 
-  if (testId === undefined) return <RowFrame id={id} row={row} heard={heard} />;
+  const modifiers = [
+    ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+    ...(onDropLink === undefined ? [] : [dropLink(onDropLink)]),
+  ];
 
-  return (
-    <RowFrame
-      id={id}
-      row={<HStack modifiers={[accessibilityIdentifier(testId)]}>{row}</HStack>}
-      heard={heard}
-    />
-  );
+  if (modifiers.length === 0) return <RowFrame id={id} row={row} heard={heard} />;
+
+  return <RowFrame id={id} row={<HStack modifiers={modifiers}>{row}</HStack>} heard={heard} />;
 }
 
 /** How many comment threads stand open on a block, and what opens them. */

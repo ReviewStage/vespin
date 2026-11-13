@@ -8,15 +8,28 @@ import { type Glyph, glyphImage } from "./glyph.js";
 /** The text style a glyph stands at beside an act's words, as SwiftUI sizes a symbol by its text. */
 type GlyphTextStyle = "body" | "callout" | "subheadline" | "footnote" | "caption";
 
-/** A glyph on its own, sized by a text style as a symbol beside words is. */
+/**
+ * A glyph on its own, sized by a text style as a symbol beside words is,
+ * and drawn in `color` where one is given. Note that the color is drawn into
+ * the symbol's own image (`originalColor`, from the app's `@expo/ui` patch),
+ * because a system menu draws an icon tinted any other way in its own ink.
+ */
 export function GlyphImage({
   glyph,
   textStyle = "body",
+  color,
 }: {
   readonly glyph: Glyph;
   readonly textStyle?: GlyphTextStyle | undefined;
+  readonly color?: string | undefined;
 }) {
-  return <Image {...glyphImage(glyph)} modifiers={[font({ textStyle })]} />;
+  return (
+    <Image
+      {...glyphImage(glyph)}
+      {...(color === undefined ? {} : { originalColor: color })}
+      modifiers={[font({ textStyle })]}
+    />
+  );
 }
 
 /**
@@ -28,12 +41,17 @@ export function GlyphLabel({
   title,
   glyph,
   textStyle,
+  color,
 }: {
   readonly title: string;
   readonly glyph: Glyph;
   readonly textStyle?: GlyphTextStyle | undefined;
+  /** The glyph's own color, which a menu keeps, such as a status's tone. */
+  readonly color?: string | undefined;
 }) {
-  return <Label title={title} icon={<GlyphImage glyph={glyph} textStyle={textStyle} />} />;
+  return (
+    <Label title={title} icon={<GlyphImage glyph={glyph} textStyle={textStyle} color={color} />} />
+  );
 }
 
 /**
@@ -45,10 +63,13 @@ export function actContent(
   label: string,
   glyph: Glyph | undefined,
   textStyle?: GlyphTextStyle,
+  color?: string,
 ): { readonly label: string } | { readonly children: ReactElement } {
   return glyph === undefined
     ? { label }
-    : { children: <GlyphLabel title={label} glyph={glyph} textStyle={textStyle} /> };
+    : {
+        children: <GlyphLabel title={label} glyph={glyph} textStyle={textStyle} color={color} />,
+      };
 }
 
 /** What a SwiftUI menu stands as: its words alone, or its words beside its glyph. */

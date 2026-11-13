@@ -576,7 +576,7 @@ function TranscriptRow({
           )}
           <CopyWordsMenu words={item.words}>
             <View style={styles.saidHeld}>
-              <View style={[styles.said, { backgroundColor: colors.SIDEBAR }]}>
+              <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
                 <Markdown
                   words={item.words}
                   typed
@@ -603,10 +603,18 @@ function TranscriptRow({
         </View>
       );
     case TRANSCRIPT_ITEM.WORKING:
+      // Note that an agent held for an answer says so in the attention ink with no spinner, since it waits on the reader rather than working.
       return (
         <View style={[styles.row, styles.headLine, { paddingVertical: SPACE.ROW }]}>
-          <ActivityIndicator size="small" color={colors.TEXT_MUTED} accessibilityElementsHidden />
-          <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+          {item.waiting === true ? null : (
+            <ActivityIndicator size="small" color={colors.TEXT_MUTED} accessibilityElementsHidden />
+          )}
+          <Text
+            style={{
+              fontSize: TEXT_SIZE.FOOTNOTE,
+              color: item.waiting === true ? colors.ATTENTION : colors.TEXT_MUTED,
+            }}
+          >
             {item.words}
           </Text>
         </View>
@@ -910,7 +918,15 @@ type AgentTranscriptProps = Omit<RowDrawing, "now"> & {
   readonly now?: number | undefined;
   /** The pages older than the oldest row, read as the reader scrolls up to it; none where nothing older stands. */
   readonly older?: OlderPages | undefined;
+  /** A call's row to scroll into view, such as the one a held approval waits on, each ask a serial of its own so the same call is shown again. */
+  readonly reveal?: TranscriptReveal | undefined;
 };
+
+/** A call's row the transcript is asked to bring into view, the ask told apart by its serial. */
+export type TranscriptReveal = { readonly callId: string; readonly serial: number };
+
+/** Where a revealed row stands in the screen, from its top: a little above the middle, clear of the composer docked over the foot. */
+const REVEAL_POSITION = 0.35;
 
 /**
  * An agent's transcript as one lazy list, the app's one React Native list,
@@ -926,6 +942,7 @@ export function AgentTranscript({
   empty,
   now,
   older,
+  reveal,
   ...drawing
 }: AgentTranscriptProps) {
   const colors = useColors();
@@ -966,6 +983,43 @@ export function AgentTranscript({
   const onScrollSettled = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     anchored.current = fromEnd(event.nativeEvent) < ANCHOR_REACH;
   }, []);
+
+  // The rows as they stand now, which a reveal reads without being asked anew as each lands.
+  const itemsNow = useRef(items);
+  useEffect(() => {
+    itemsNow.current = items;
+  }, [items]);
+
+  // Note that a revealed row lets the anchor go, so a row landing at the end does not scroll it away again.
+  useEffect(() => {
+    if (reveal === undefined) return;
+
+    const index = itemsNow.current.findIndex(
+      (item) => item.kind === TRANSCRIPT_ITEM.CALL && item.callId === reveal.callId,
+    );
+
+    if (index < 0) return;
+    anchored.current = false;
+    list.current?.scrollToIndex({ index, viewPosition: REVEAL_POSITION, animated: !reduceMotion });
+  }, [reveal, reduceMotion]);
+
+  // Note that a row not yet measured cannot be scrolled to by its index, so the list goes to where the rows' average height puts it, then to the row once it is drawn.
+  const onScrollToIndexFailed = useCallback(
+    (info: { readonly index: number; readonly averageItemLength: number }) => {
+      list.current?.scrollToOffset({
+        offset: info.averageItemLength * info.index,
+        animated: false,
+      });
+      requestAnimationFrame(() =>
+        list.current?.scrollToIndex({
+          index: info.index,
+          viewPosition: REVEAL_POSITION,
+          animated: false,
+        }),
+      );
+    },
+    [],
+  );
 
   // Note that a row landing, or a fold opened, at the newest row keeps it in view, while one landing as the reader reads back leaves their place.
   const onContentSizeChange = useCallback(() => {
@@ -1009,6 +1063,7 @@ export function AgentTranscript({
         // Note that a drag down into the keyboard lowers it, as Messages' transcript does, since the composer docked over the list holds no key that does.
         keyboardDismissMode="interactive"
         onContentSizeChange={onContentSizeChange}
+        onScrollToIndexFailed={onScrollToIndexFailed}
         onScroll={onScroll}
         onScrollBeginDrag={onScrollBegin}
         onScrollEndDrag={onScrollSettled}

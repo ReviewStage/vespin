@@ -1,14 +1,32 @@
-// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and the prominent round + that opens New task; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation.
+// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, in a compact window, the prominent round + that opens New task; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation.
 
 import { iosRouteHidesTabs } from "@repo/features/ios-app-links";
-import { GLYPH, useColors } from "@repo/ui-native";
+import { GLYPH, SplitOverTabs, UNDER_SPLIT_SCREEN, useColors } from "@repo/ui-native";
 import { usePathname, useRouter } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
+import { useEffect, useState } from "react";
 import { Platform } from "react-native";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
+import { placeOfRoute } from "../../screens/app-sidebar.js";
+import { AppSplit } from "../../screens/app-split.js";
 import { useThreeColumns, useWindowSizeClass } from "../../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
+
+/**
+ * The route standing in the tabs, by its parts: the one shown, or, while a
+ * sheet such as New task or Settings stands over the tabs, the one under it,
+ * so the split view behind the sheet keeps its place and its layer.
+ */
+function useTabRoute(pathname: string): readonly string[] {
+  const inTabs = placeOfRoute(pathname.split("/")[1]) !== undefined ? pathname : undefined;
+  const [kept, keep] = useState(pathname);
+  useEffect(() => {
+    if (inTabs !== undefined) keep(inTabs);
+  }, [inTabs]);
+
+  return (inTabs ?? kept).split("/").filter((part) => part !== "");
+}
 
 // Note that nothing here draws the bar: the system draws it in Liquid Glass
 // and minimizes it as a list scrolls down, and floats it at the top of a
@@ -25,7 +43,11 @@ import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 // stands Search last in the bar beside it. The round + opens New task as a
 // sheet over whatever tab stands, rather than standing a tab of its own: it
 // is held unselectable (`disabled`, which keeps its look and only stops the
-// system selecting it), and its press opens the sheet.
+// system selecting it), and its press opens the sheet. It stands only in a
+// compact window, the iPhone's and the folded Duo's: a regular one, an
+// iPad's or the open Duo's, stands New task as the compose button in its
+// list column's bar instead (`useComposeAction`), as Mail does, so a window
+// never offers it twice.
 //
 // The bar is `sidebarAdaptable` on an iPhone, which the iPhone Duo is in
 // either posture: folded, iOS 27 stands its tabs as a glass rail on the
@@ -36,13 +58,17 @@ import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 // reads the device's idiom rather than the window, as the layout never does,
 // because it chooses the system's own tab chrome, which iOS itself draws by
 // idiom. A window wide enough for three columns, an iPad's in landscape,
-// hides the bar, and each tab's root stands the app sidebar
-// (`screens/app-sidebar.tsx`) as its split view's first column instead, as
-// Mail does: the places, Pinned and the member's sections, the workspace
-// switcher, and Settings. Tabs stay mounted across the switch, so a fold, a
-// rotation, or a resize keeps the open thread or task. Nor is it on wherever
-// the app sidebar stands, so a phone-idiom window that wide never shows the
-// system's tab sidebar beside it.
+// hides the bar, and one split view stands over the tabs instead
+// (`screens/app-split.tsx`), the app sidebar its first column, as Mail does:
+// the workspace switcher, the places, and Pinned, Following, and the
+// member's sections as collections, then the list and the page the tab
+// standing hands it. A place
+// picked there switches the tab under it, so the sidebar never redraws as
+// the tabs change, and the split view steps behind the tabs while a tab has
+// pushed a page over its root, such as an agent's. Tabs stay mounted across
+// the switch, so a fold, a rotation, or a resize keeps the open thread or
+// task. Nor is it on wherever the app sidebar stands, so a phone-idiom window
+// that wide never shows the system's tab sidebar beside it.
 export default function TabsLayout() {
   const colors = useColors();
   const router = useRouter();
@@ -51,9 +77,15 @@ export default function TabsLayout() {
   useMemberPicturesFollow();
   const iconOnly = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
   const appSidebar = useThreeColumns();
-  const conversation = iosRouteHidesTabs(usePathname());
+  const pathname = usePathname();
+  const conversation = iosRouteHidesTabs(pathname);
+  const standing = useTabRoute(pathname);
+  // Note that a tab's item route stands at its root too, since a wide window hands it straight back to the split view (`useHandToSplit`).
+  const atRoot = standing.length <= 2 && placeOfRoute(standing[0]) !== undefined;
+  // Note that a tab under the split view leaves its content clear, because NativeTabs paints each tab in the navigation theme's light ground, which flashed over the split as a page pushed.
+  const underSplit = appSidebar ? UNDER_SPLIT_SCREEN.contentStyle : undefined;
 
-  return (
+  const tabs = (
     <NativeTabs
       hidden={appSidebar || (iconOnly && conversation)}
       minimizeBehavior="onScrollDown"
@@ -62,7 +94,7 @@ export default function TabsLayout() {
       badgeBackgroundColor={colors.ATTENTION_FILL}
       badgeTextColor={colors.ON_ACCENT}
     >
-      <NativeTabs.Trigger name="inbox" accessibilityLabel="Inbox">
+      <NativeTabs.Trigger name="inbox" accessibilityLabel="Inbox" contentStyle={underSplit}>
         <NativeTabs.Trigger.Icon xcasset={GLYPH.INBOX} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Inbox</NativeTabs.Trigger.Label>
         {/* Note that the badge is left out at none rather than marked hidden, since NativeTabs draws a badge that holds a value whatever its hidden says. */}
@@ -70,7 +102,7 @@ export default function TabsLayout() {
           <NativeTabs.Trigger.Badge>{String(waiting)}</NativeTabs.Trigger.Badge>
         )}
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="tasks" accessibilityLabel="Tasks">
+      <NativeTabs.Trigger name="tasks" accessibilityLabel="Tasks" contentStyle={underSplit}>
         <NativeTabs.Trigger.Icon xcasset={GLYPH.TASK} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Tasks</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
@@ -78,6 +110,7 @@ export default function TabsLayout() {
       <NativeTabs.Trigger
         name="search"
         role="search"
+        contentStyle={underSplit}
         accessibilityLabel="Search"
         testID="search-tab"
       >
@@ -89,6 +122,7 @@ export default function TabsLayout() {
         name="new-task"
         prominent
         disabled
+        hidden={!iconOnly}
         accessibilityLabel="New task"
         listeners={{ tabPress: () => router.push("/start-task") }}
       >
@@ -96,5 +130,14 @@ export default function TabsLayout() {
         <NativeTabs.Trigger.Label hidden={iconOnly}>New task</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
     </NativeTabs>
+  );
+
+  // Note that the tabs stand in the same place with or without the split view, so a rotation across the line keeps every tab's stack.
+  return (
+    <SplitOverTabs
+      tabs={tabs}
+      split={appSidebar ? <AppSplit place={placeOfRoute(standing[0])} front={atRoot} /> : undefined}
+      front={atRoot}
+    />
   );
 }

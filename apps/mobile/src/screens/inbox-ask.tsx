@@ -1,5 +1,6 @@
-// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, a notice's Got it, the composer that sends them with a note, replies, or starts a new thread with the agent, and Remind me, New thread, and Resolve.
+// inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, a notice's Got it, the composer that sends them with a note, replies, or starts a new thread with the agent, and its ⋯ menu as the panel's row menu: Copy link, Mark as read or unread, Remind me, and Resolve.
 
+import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
   fieldValueOf,
@@ -10,11 +11,10 @@ import {
   withStep,
   withValue,
 } from "@repo/features/inbox-draft";
-import { knownAsk, RECOMMENDED } from "@repo/features/inbox-list-model";
+import { INBOX_READ_MARK, isUnread, knownAsk, RECOMMENDED } from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
   INBOX_FIELD,
-  INBOX_FILE_TYPE,
   INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
@@ -28,6 +28,7 @@ import {
   optionsCarryMedia,
   recommendedLabels,
 } from "@repo/features/inbox-wire";
+import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   ANSWER_FIELD,
   type AnswerField,
@@ -99,7 +100,7 @@ const RECORDING_WORD = "Recording";
 function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedia {
   switch (piece.type) {
     case INBOX_OPTION_MEDIA.FILE: {
-      const recording = piece.mediaType === INBOX_FILE_TYPE.WEBM;
+      const recording = isVideoType(piece.mediaType);
 
       return {
         kind: recording ? CHOICE_MEDIA.VIDEO : CHOICE_MEDIA.PICTURE,
@@ -332,34 +333,44 @@ export function ThreadComposer({
   return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
 }
 
-/** What the ⋯ menu's act that turns the box to a new thread with the agent says. */
-const NEW_THREAD = "New thread";
+/** What the thread's ⋯ menu acts through: its read mark, its reminder's sheet, and its link copied. */
+export interface ThreadMenuDoors {
+  readonly onMark: (unread: boolean) => void;
+  readonly onRemind: () => void;
+  readonly onCopyLink: () => void;
+}
 
 /**
- * The thread's ⋯ menu: Remind me, on any thread, open or settled, as the
- * panel's menu offers it; New thread, which turns the box's next send into a
- * new thread with the agent while it replies; and Resolve while it stands
- * open.
+ * The thread's ⋯ menu, as the panel's row menu offers an item's acts in the
+ * same order (`inbox-item-actions.tsx`): Copy link; Mark as read or unread,
+ * whichever its mark is not, and Remind me, on any thread, open or settled;
+ * and Resolve while it stands open. A new thread with the agent stays the
+ * box's own, under its +.
  */
-export function threadMenu(item: InboxItem, answer: ThreadAnswer, onRemind: () => void): BarMenu {
+export function threadMenu(item: InboxItem, answer: ThreadAnswer, doors: ThreadMenuDoors): BarMenu {
+  const unread = isUnread(item);
+
   const resolve =
     item.status === INBOX_STATUS.OPEN
       ? [{ label: RESOLVE, symbol: GLYPH.RESOLVED, onPress: answer.resolve } as const]
       : [];
 
-  const newThread = answer.asNew
-    ? []
-    : [
-        {
-          label: NEW_THREAD,
-          symbol: GLYPH.NEW_THREAD,
-          onPress: () => answer.setAsNew(true),
-        } as const,
-      ];
-
   return {
     ...THREAD_MORE,
     choices: [],
-    actions: [{ ...REMIND_ME, onPress: onRemind }, ...newThread, ...resolve],
+    actions: [
+      {
+        label: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
+        symbol: GLYPH.LINK,
+        onPress: doors.onCopyLink,
+      },
+      {
+        label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
+        symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
+        onPress: () => doors.onMark(!unread),
+      },
+      { ...REMIND_ME, onPress: doors.onRemind },
+      ...resolve,
+    ],
   };
 }

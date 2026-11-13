@@ -66,6 +66,8 @@ export interface Exchange {
 /** One spawned process's script: its exchanges in order, and, where it crashes, what it last says. */
 export interface Script {
   readonly exchanges: readonly Exchange[];
+  /** The goal the thread holds as the launch opens it, which `thread/goal/get` answers wherever a launch asks; none by default. */
+  readonly goal?: Schema.Json;
   /** Ends the process's stdout once its exchanges are played (at once, with none), with this on stderr. */
   readonly exitWith?: string;
 }
@@ -86,6 +88,9 @@ export interface Spawned {
 }
 
 const RECORDING = new URL("./app-server.jsonl", import.meta.url);
+
+/** The request a launch reads the thread's goal by, which every script answers unless it plays it itself. */
+const GOAL_GET = "thread/goal/get";
 
 /**
  * P16's hermetic recording of codex 0.163.0's app-server as exchanges, per
@@ -203,6 +208,14 @@ export function fakeAppServer(scripts: readonly Script[]) {
         Effect.gen(function* () {
           record.received.push(message);
           const exchange = script.exchanges[next];
+
+          // Note that every launch reads the thread's goal as it opens it, so a script need not play that exchange.
+          if (message.method === GOAL_GET && exchange?.method !== GOAL_GET) {
+            const answer = { id: message.id ?? 0, result: { goal: script.goal ?? null } };
+            yield* Queue.offer(stdout, encoder.encode(`${JSON.stringify(answer)}\n`));
+
+            return;
+          }
 
           if (exchange === undefined || exchange.method !== message.method) {
             record.unexpected.push(message.method ?? "");

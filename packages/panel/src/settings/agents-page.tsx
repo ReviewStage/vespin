@@ -83,6 +83,7 @@ import { type RowWrite, refusalToast, rowWrite } from "./row-write.js";
 import { SchemaSettingRows } from "./schema-rows.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import { SwitchRow } from "./switch-row.js";
+import { VoiceSection } from "./voice-section.js";
 
 /**
  * agents-page.tsx -- Settings › Agents: the one model and effort every agent starts on.
@@ -505,6 +506,7 @@ export function AgentsPage({
   return (
     <>
       <AgentAuthSection signedIn={signedIn} onKeys={onKeys} />
+      {signedIn && view !== undefined ? <VoiceSection view={view} /> : null}
       <AgentsSection signedIn={signedIn} ownKeys={ownKeys} view={view} />
       {signedIn ? <AlwaysAllowedSection /> : null}
     </>

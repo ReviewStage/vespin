@@ -230,17 +230,30 @@ onFlowComplete:
 - scrollUntilVisible:
     element: "Goal"
     direction: DOWN
-# Its ⋯ sets its status, which its chip says at once.
-- tapOn: "More"
-- tapOn: "Status"
-- takeScreenshot: task-status-menu
-- tapOn: "Todo"
-- waitForAnimationToEnd
+# Its status chip opens the menu of statuses, the one it stands at checked,
+# and a pick says at once on the chip. Its priority and assignee chips open
+# theirs the same way; a tap off a menu closes it.
 - scrollUntilVisible:
     element: "Created by .*"
     direction: UP
-- assertVisible: "Todo"
+- tapOn: "Status, .*"
+- takeScreenshot: task-status-menu
+- tapOn: "Todo"
+- waitForAnimationToEnd
+- assertVisible: "Status, Todo"
 - takeScreenshot: task-status-set
+- tapOn: "Priority, .*"
+- assertVisible: "Urgent"
+- takeScreenshot: task-priority-menu
+- tapOn:
+    point: "50%, 90%"
+- waitForAnimationToEnd
+- tapOn: "Assignee, .*"
+- assertVisible: "No assignee"
+- takeScreenshot: task-assignee-menu
+- tapOn:
+    point: "50%, 90%"
+- waitForAnimationToEnd
 # Its ⋯ holds the panel's acts: Copy link, Rename, New sub-task, Open in
 # browser, and Permanently delete, red and last, which asks first.
 - tapOn: "More"
@@ -254,11 +267,15 @@ onFlowComplete:
 - takeScreenshot: task-delete-ask
 - tapOn: "Cancel"
 - waitForAnimationToEnd
-# New sub-task under its Sub-tasks opens New task as a sub-task of it, its
-# repository the task's own; Cancel on a sheet with nothing typed closes it.
+# Sub-tasks' + offers New sub-task and Link existing task; New sub-task
+# opens New task as a sub-task of it, its repository the task's own; Cancel
+# on a sheet with nothing typed closes it.
 - scrollUntilVisible:
-    element: "New sub-task"
+    element: "Add sub-task"
     direction: DOWN
+- tapOn: "Add sub-task"
+- assertVisible: "Link existing task"
+- takeScreenshot: task-sub-task-add
 - tapOn: "New sub-task"
 - assertVisible: "Describe the task"
 - assertVisible: "Relation, Sub-task of"

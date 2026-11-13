@@ -1,7 +1,7 @@
 import { LEGACY_APP_WORD, type WireBoundaryInput } from "@repo/wire";
 import { Schema as EffectSchema, Option } from "effect";
 import { INBOX_IMAGE_TYPE } from "./inbox-wire.js";
-import { WEBM_TYPE } from "./video-signature.js";
+import { MP4_TYPE, WEBM_TYPE } from "./video-signature.js";
 
 /**
  * conversation-picture-wire.ts -- a picture a transcript names: how a tool's stored output or a line's image names one the service kept beside the conversation, and why one was not kept.
@@ -52,14 +52,22 @@ export const PICTURE_OMISSION = {
 export type PictureOmission = (typeof PICTURE_OMISSION)[keyof typeof PICTURE_OMISSION];
 
 /**
- * What a transcript's picture may be: one of the three pictures, or a WebM
- * an agent recorded of what it did, shown as a picture is and kept under the
- * same bounds, which the transcript plays where it would draw a picture.
+ * What a transcript's picture may be: one of the three pictures, or a
+ * recording an agent made of what it did, a WebM of its browser or an H.264
+ * MP4 of an app on the developer's Mac, shown as a picture is and kept under
+ * the same bounds, which the transcript plays where it would draw a picture.
  */
 export const CONVERSATION_MEDIA_TYPE = {
   ...INBOX_IMAGE_TYPE,
   WEBM: WEBM_TYPE,
+  MP4: MP4_TYPE,
 } as const;
+
+/** The recordings a transcript plays, by the media type each is kept under. */
+const VIDEO_TYPES: ReadonlySet<string> = new Set([
+  CONVERSATION_MEDIA_TYPE.WEBM,
+  CONVERSATION_MEDIA_TYPE.MP4,
+]);
 
 export type ConversationMediaType =
   (typeof CONVERSATION_MEDIA_TYPE)[keyof typeof CONVERSATION_MEDIA_TYPE];
@@ -71,9 +79,9 @@ export const conversationMediaTypeSchema = EffectSchema.Literals(
 
 /** Whether a transcript's picture is a video, played rather than drawn. */
 export function isVideoType(
-  mediaType: ConversationMediaType,
-): mediaType is typeof CONVERSATION_MEDIA_TYPE.WEBM {
-  return mediaType === CONVERSATION_MEDIA_TYPE.WEBM;
+  mediaType: string,
+): mediaType is typeof CONVERSATION_MEDIA_TYPE.WEBM | typeof CONVERSATION_MEDIA_TYPE.MP4 {
+  return VIDEO_TYPES.has(mediaType);
 }
 
 /** A kept picture as a stored output names it: the row, the type its bytes were sniffed to be, its size in pixels, and its size in bytes. */

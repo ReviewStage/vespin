@@ -155,6 +155,7 @@ const PULL_REQUEST = {
 const ADA: GitHubPerson = { login: "ada", bot: false };
 const GRACE: GitHubPerson = { login: "grace", bot: false };
 const REVIEW_BOT: GitHubPerson = { login: "review-bot[bot]", bot: true };
+const STATUS_BOT: GitHubPerson = { login: "status-bot[bot]", bot: true };
 
 /** The new file the agent wrote, as its File tab and its diff both read it. */
 const INVITE_LINES: readonly string[] = [
@@ -784,8 +785,57 @@ const OVERVIEW_CHECKS = {
   },
 };
 
+/**
+ * A review bot's status comment, as such bots write one: an alert holding a
+ * folded section and a task item to tick, and a task item after it, as
+ * written and as GitHub renders it.
+ */
+const STATUS_COMMENT = {
+  body: [
+    "> [!IMPORTANT]",
+    "> ## Review skipped",
+    ">",
+    "> Auto reviews are off for branches other than the default branch.",
+    ">",
+    "> To review this one anyway, tick the box below or comment `@relay-status review`.",
+    ">",
+    "> <details>",
+    "> <summary><strong>Run configuration</strong></summary>",
+    ">",
+    "> - **Profile**: Chill",
+    "> - **Run ID**: `4f1c2a`",
+    ">",
+    "> </details>",
+    ">",
+    "> - [ ] Trigger review",
+    "",
+    "- [ ] **Autofix** · Keep fixing findings and required checks",
+  ].join("\n"),
+  html: [
+    '<div class="markdown-alert markdown-alert-important" dir="auto"><p class="markdown-alert-title" dir="auto"><svg class="octicon octicon-report mr-2" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Z"></path></svg>Important</p>',
+    '<h2 dir="auto">Review skipped</h2>',
+    '<p dir="auto">Auto reviews are off for branches other than the default branch.</p>',
+    '<p dir="auto">To review this one anyway, tick the box below or comment <code class="notranslate">@relay-status review</code>.</p>',
+    "<details>",
+    "<summary><strong>Run configuration</strong></summary>",
+    '<ul dir="auto">',
+    "<li><strong>Profile</strong>: Chill</li>",
+    '<li><strong>Run ID</strong>: <code class="notranslate">4f1c2a</code></li>',
+    "</ul>",
+    "</details>",
+    '<ul class="contains-task-list">',
+    '<li class="task-list-item"><input type="checkbox" id="" disabled="" class="task-list-item-checkbox" aria-label="Incomplete task"> Trigger review</li>',
+    "</ul>",
+    "</div>",
+    '<ul class="contains-task-list">',
+    '<li class="task-list-item"><input type="checkbox" id="" disabled="" class="task-list-item-checkbox" aria-label="Incomplete task"> <strong>Autofix</strong> · Keep fixing findings and required checks</li>',
+    "</ul>",
+  ].join("\n"),
+} as const;
+
 const OVERVIEW_CONVERSATION = {
   pullRequest: {
+    descriptionSubject: "PR_fixture",
     reviewers: [
       { by: GRACE, state: REVIEW_STATE.APPROVED },
       { by: REVIEW_BOT, state: REVIEW_STATE.COMMENTED },
@@ -800,6 +850,14 @@ const OVERVIEW_CONVERSATION = {
         at: STARTED_AT + 9 * MINUTE,
         url: `${PULL_REQUEST.url}#pullrequestreview-1`,
         threads: [EXPIRY_THREAD],
+      },
+      {
+        kind: CONVERSATION_ENTRY.COMMENT,
+        by: STATUS_BOT,
+        ...STATUS_COMMENT,
+        at: STARTED_AT + 10 * MINUTE,
+        url: `${PULL_REQUEST.url}#issuecomment-4`,
+        subject: "IC_status",
       },
       {
         kind: CONVERSATION_ENTRY.REVIEW,

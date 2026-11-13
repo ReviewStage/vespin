@@ -403,7 +403,7 @@ test("the Settings filter lists Memory after Cloud environment only while the li
 });
 
 test("on a platform without Mac commands, the Settings filter lists no This Mac page, and finds none of its rows", () => {
-  const offered = DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.MAC_COMMANDS);
+  const offered = DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.MACHINE_COMMANDS);
   const shown = SETTINGS_PAGES.filter((page) => page !== "This Mac");
   openPalette(undefined, undefined, offered);
   chooseFilter("Settings");

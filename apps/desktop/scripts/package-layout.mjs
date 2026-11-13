@@ -26,6 +26,8 @@ export const NATIVE_HELPERS = [
     frameworks: [
       "AppKit",
       "ApplicationServices",
+      "AVFoundation",
+      "CoreMedia",
       "ImageIO",
       "ScreenCaptureKit",
       "UniformTypeIdentifiers",

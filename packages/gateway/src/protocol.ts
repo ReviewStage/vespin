@@ -190,7 +190,7 @@ export const GATEWAY_EVENT = {
   /** How many changes made offline the service refused as they were sent again, since the windows last cleared the count, each time it moves. */
   OFFLINE_REFUSED_CHANGED: "offlineRefused.changed",
   /** The commands agents asked to run on this Mac that wait on the developer's answer, whole, each time one is asked or answered. */
-  MAC_COMMAND_ASKS_CHANGED: "macCommandAsks.changed",
+  MACHINE_COMMAND_ASKS_CHANGED: "macCommandAsks.changed",
 } as const;
 
 export type GatewayEventKind = (typeof GATEWAY_EVENT)[keyof typeof GATEWAY_EVENT];

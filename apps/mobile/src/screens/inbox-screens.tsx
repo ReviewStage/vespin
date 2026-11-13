@@ -1,6 +1,7 @@
 // inbox-screens.tsx -- the Inbox's list and its thread: the Stack's two screens in a compact window, one split view in a regular one.
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
@@ -28,13 +29,8 @@ import {
   RETRY,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
-import {
-  INBOX_FILE_TYPE,
-  INBOX_STATUS,
-  type InboxItem,
-  inboxWaitsOn,
-} from "@repo/features/inbox-wire";
-import { iosAppRouteOf } from "@repo/features/ios-app-links";
+import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
+import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import type { ModelProvider } from "@repo/features/models-wire";
@@ -73,6 +69,7 @@ import {
   type ThreadMessage,
   ThreadPage,
   ThreadPreview,
+  UNDER_SPLIT_SCREEN,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -88,21 +85,22 @@ import {
   useThreadMedia,
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
+import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
+import { useHandColumns, useInFront } from "../place-columns.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, useListColumn, useListLook } from "./app-sidebar.js";
 import { OpenAskCard, openAskFiles, ThreadComposer, threadMenu } from "./inbox-ask.js";
 import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
-import { useSidebarTasks } from "./task-screens.js";
 
 /** The Inbox's name, at its head and on its back button. */
 const INBOX_TITLE = "Inbox";
@@ -118,6 +116,9 @@ const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INB
 
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
 const MORE = { label: "More", symbol: GLYPH.MORE } as const;
+
+/** What a thread's path opens, as the panel's crumbs open its task and its agent. */
+const PATH_OPENS = { TASK: "Open task", AGENT: "Open agent" } as const;
 
 /** What a video the words draw in place is heard as, its file's name being the words' own alt. */
 const VIDEO_LABEL = "Video";
@@ -456,7 +457,7 @@ function ThreadDetail({
         })),
       ]),
       ...openAskFiles(item).map((file) => ({
-        kind: file.mediaType === INBOX_FILE_TYPE.WEBM ? INBOX_MEDIA.VIDEO : INBOX_MEDIA.PICTURE,
+        kind: isVideoType(file.mediaType) ? INBOX_MEDIA.VIDEO : INBOX_MEDIA.PICTURE,
         attachmentId: file.attachmentId,
         name: "",
         mediaType: file.mediaType,
@@ -509,10 +510,17 @@ function ThreadDetail({
   }, []);
 
   const navigation = useNavigation();
+  const inFront = useInFront();
 
-  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front: a stack's screen covered by another stays mounted.
+  // Whether this thread stands in front now, read when a start answers rather than when it was sent, since the reader may have switched tabs meanwhile.
+  const front = useRef(inFront);
+  useEffect(() => {
+    front.current = inFront;
+  }, [inFront]);
+
+  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front: a stack's screen covered by another stays mounted, as a wide window's split view keeps each tab's thread drawn behind the one shown.
   const openStarted = (id: string) => {
-    if (!shown.current || !navigation.isFocused()) return;
+    if (!shown.current || !navigation.isFocused() || !front.current) return;
 
     if (place.inStack) router.replace(`/inbox/${encodeURIComponent(id)}`);
     else place.onOpen(id);
@@ -520,9 +528,37 @@ function ThreadDetail({
 
   const answer = useThreadAnswer(listed, openStarted);
   const remind = useRemindSheet();
+  const inboxActs = useInboxActs();
+  const keeping = useKeeping();
   const inStack = place.inStack;
   const openRemind = place.inStack ? remind.open : place.onRemind;
-  const menu = threadMenu(item, answer, () => openRemind(item));
+
+  const menu = threadMenu(item, answer, {
+    onMark: (unread) => inboxActs.mark(item.id, unread),
+    onRemind: () => openRemind(item),
+    onCopyLink: () =>
+      keeping.copyWords(
+        linkOf(
+          { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+          workspaceStep,
+        ),
+      ),
+  });
+
+  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them; a compact window's stack names the path as its plain title, which can hold no menu, so there they lead the ⋯ menu instead.
+  const pathActions = [
+    {
+      label: PATH_OPENS.TASK,
+      symbol: GLYPH.TASK,
+      onPress: () =>
+        router.push(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: holder.task.id })),
+    },
+    {
+      label: PATH_OPENS.AGENT,
+      symbol: GLYPH.AGENT,
+      onPress: () => router.push(iosAgentRoute(item.agentId)),
+    },
+  ] as const;
 
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
@@ -605,6 +641,7 @@ function ThreadDetail({
     <ThreadPage
       path={path}
       status={holder.task.status}
+      pathActions={pathActions}
       title={cardTitle(item.title)}
       messages={drawn}
       repository={holder.task.repository}
@@ -656,6 +693,17 @@ function ThreadDetail({
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
+          <Stack.Toolbar.Menu inline>
+            {pathActions.map((action) => (
+              <Stack.Toolbar.MenuAction
+                key={action.label}
+                icon={glyphSymbol(action.symbol)}
+                onPress={action.onPress}
+              >
+                {action.label}
+              </Stack.Toolbar.MenuAction>
+            ))}
+          </Stack.Toolbar.Menu>
           {menu.actions.map((action) => (
             <Stack.Toolbar.MenuAction
               key={action.label}
@@ -811,10 +859,13 @@ function InboxStackList(words: InboxSearch) {
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
 // under its scopes' menu picker, since the column cuts segments short, with
-// its search and ⋯ menu in its bar and the selected thread beside it, and, where the window is wide enough for three
-// columns, the app sidebar before them, as Mail stands its mailboxes, a
-// mailbox's mail, and a message. The Stack's header steps aside, since the
-// split view draws each column's navigation bar itself.
+// its search and ⋯ menu in its bar and the selected thread beside it. Where
+// the window is wide enough for three columns, the two are handed to the
+// tabs' one split view, which stands them beside the app sidebar, as Mail
+// stands its mailboxes, a mailbox's mail, and a message, and this root draws
+// nothing of its own under it; otherwise the root stands its own split view.
+// The Stack's header steps aside, since the split view draws each column's
+// navigation bar itself.
 function InboxSplitScreen({
   selected,
   select,
@@ -829,55 +880,63 @@ function InboxSplitScreen({
     selected,
   );
 
-  const sidebar = useAppSidebar(SIDEBAR_PLACE.INBOX, useSidebarTasks());
+  const threeColumns = useThreeColumns();
+  const look = useListLook();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
+
+  const list = {
+    view: (
+      <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
+        {listing.listed.length === 0 ? (
+          <InboxEmpty
+            show={show}
+            search={search}
+            feed={listing.feed}
+            onRetry={() => void acts.refresh()}
+          />
+        ) : (
+          <InboxRows
+            look={look}
+            listed={listing.listed}
+            readerId={listing.readerId}
+            selected={selected}
+            onSelect={select}
+            onRefresh={acts.refresh}
+            onMark={acts.mark}
+            onRemind={remind.open}
+            onResolve={acts.resolve}
+          />
+        )}
+      </ScopePicker>
+    ),
+    bar: {
+      title: INBOX_TITLE,
+      menu,
+      search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
+    },
+  };
+
+  const detail =
+    selected === undefined ? (
+      <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.INBOX} />
+    ) : (
+      <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
+    );
+
+  const first = useListColumn(list);
+  useHandColumns(
+    SIDEBAR_PLACE.INBOX,
+    threeColumns ? { content: list.view, contentBar: list.bar, detail } : undefined,
+  );
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <Screen>
-        <SplitView
-          {...sidebar.columns({
-            view: (
-              <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
-                {listing.listed.length === 0 ? (
-                  <InboxEmpty
-                    show={show}
-                    search={search}
-                    feed={listing.feed}
-                    onRetry={() => void acts.refresh()}
-                  />
-                ) : (
-                  <InboxRows
-                    look={sidebar.listLook}
-                    listed={listing.listed}
-                    readerId={listing.readerId}
-                    selected={selected}
-                    onSelect={select}
-                    onRefresh={acts.refresh}
-                    onMark={acts.mark}
-                    onRemind={remind.open}
-                    onResolve={acts.resolve}
-                  />
-                )}
-              </ScopePicker>
-            ),
-            bar: {
-              title: INBOX_TITLE,
-              menu,
-              search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
-            },
-          })}
-          detail={
-            selected === undefined ? (
-              <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.INBOX} />
-            ) : (
-              <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
-            )
-          }
-        />
-      </Screen>
-      {sidebar.ask}
+      <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
+      {threeColumns ? null : (
+        <Screen>
+          <SplitView {...first} detail={detail} />
+        </Screen>
+      )}
       {remind.sheet}
     </>
   );

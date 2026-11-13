@@ -47,6 +47,8 @@ export function SelectRow<Value extends string | number>({
     faces?: React.ReactNode;
     icon?: React.ReactNode;
     hint?: string | undefined;
+    /** A short word after its name, such as how a voice presents; none where its name says it all. */
+    tag?: string | undefined;
     disabled?: string | undefined;
     /** The heading the option is listed under in the menu; none lists it under no heading. */
     section?: string | undefined;
@@ -101,6 +103,7 @@ export function SelectRow<Value extends string | number>({
         ...(option.faces === undefined ? undefined : { faces: option.faces }),
         ...(option.icon === undefined ? undefined : { icon: option.icon }),
         ...(option.hint === undefined ? undefined : { detail: option.hint, detailUnder: true }),
+        ...(option.tag === undefined ? undefined : { detail: option.tag }),
         disabled: option.disabled,
         section: option.section,
         replayMasked: option.masked,

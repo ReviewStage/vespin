@@ -359,6 +359,22 @@ it.effect(
     }),
 );
 
+it.effect(
+  "fails a launch whose CLI never answers the interrupt a mid-turn /goal line needs, rather than queue the command behind the turn",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService([], "Working toward the goal.");
+      const { prompted, write, run } = yield* launch(GOAL_CLEARED_TURN, service, ENV, [], false);
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* service.seen;
+      yield* Queue.take(prompted);
+      yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: "/goal clear" }] });
+
+      assert.deepEqual(yield* settled(run), Exit.succeed(RUNNER_END.FAILED));
+    }),
+);
+
 it.effect("skips a stop meant for another launch's turn, and takes the one naming its own", () =>
   Effect.gen(function* () {
     const service = fakeService([], STOPPED_COMMAND);

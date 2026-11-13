@@ -1,4 +1,4 @@
-# new-agent.yaml -- New agent on a task: its sheet opened from the task's Agents, the words typed, the model and effort picked, and the agent started, its page opened.
+# new-agent.yaml -- New agent on a task: its compose sheet opened from the task's Agents, the words typed, the model picked from its capsule over the keyboard, and the agent started, its page opened.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -21,25 +21,24 @@ appId: dev.vespin.ios
     direction: DOWN
 - tapOn: "New agent"
 - assertVisible: "Ask to make changes"
-- assertVisible: "Model"
+- assertVisible: "Opus 5.5.*"
 - waitForAnimationToEnd
 - takeScreenshot: new-agent-sheet
 - inputText: "Add a Resend button beside each pending invite."
 # Note that iOS's hideKeyboard is a short drag at the screen's middle, which
-# lowers the keyboard because the sheet's form lowers it on a drag
-# (`SettingsForm`); the words field's return key types a new line.
+# lowers the keyboard because the sheet's page lowers it on a drag
+# (`ComposeSheet`); the words field's return key types a new line.
 - hideKeyboard
-# The model's menu offers the catalog, each model once, by the panel's name
-# for it ("Sonnet 5.5"); a pick keeps the effort it lists nearest the one shown.
-# Note that the menu is opened from the model it shows, the fixture's first,
-# since the system's menu picker in a form opens from its value alone, never
-# from a press on its row's words.
-- tapOn: "Opus 5.5"
+# The model's capsule says the model and its effort, "Opus 5.5 · High", the
+# fixture's first model; its menu offers the catalog, each model once, by the
+# panel's name for it ("Sonnet 5.5"), then the model's efforts; a pick keeps
+# the effort it lists nearest the one shown.
+- tapOn: "Opus 5.5.*"
 - assertVisible: ".*Sonnet 5.5"
 - waitForAnimationToEnd
 - takeScreenshot: new-agent-models
 - tapOn: ".*Sonnet 5.5"
-- assertVisible: "Effort.*"
+- assertVisible: "Sonnet 5.5.*"
 - waitForAnimationToEnd
 - takeScreenshot: new-agent-picked
 - tapOn: "Start"

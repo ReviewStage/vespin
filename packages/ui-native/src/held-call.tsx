@@ -1,16 +1,19 @@
-// held-call.tsx -- a tool call the agent holds for the reader's answer: where it stands and Deny and Allow under its line in the transcript, and a banner over the composer while any call waits.
+// held-call.tsx -- a tool call the agent holds for the reader's answer: where it stands and Deny and Allow under its line in the transcript, the line over the composer saying a message denies it, and a banner there for a call no row draws.
 
-import { HStack, Image, Text, VStack } from "@expo/ui/swift-ui";
+import { HStack, Image, Button as SwiftUIButton, Text, VStack } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
+  accessibilityHint,
+  buttonStyle,
   font,
   foregroundStyle,
   frame,
   lineLimit,
 } from "@expo/ui/swift-ui/modifiers";
-import { APPROVAL_PRESS_WORDS } from "@repo/features/agent-approval-model";
+import { APPROVAL_PRESS_WORDS, DENIES_WAITING } from "@repo/features/agent-approval-model";
 import { APPROVAL_ANSWER } from "@repo/features/agent-approval-wire";
-import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
+import { useAccessibilitySize } from "./accessibility.js";
 import { AskNote } from "./ask-card.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, glyphImage } from "./glyph.js";
@@ -119,34 +122,65 @@ export function HeldCallBody({ held }: { readonly held: HeldCall }) {
   );
 }
 
+/** What a press on the denial line is heard to do. */
+const SHOW_WAITING_HINT = "Shows the call waiting in the transcript";
+
+/**
+ * Over the composer's field while a call waits and a message sent now would
+ * deny it, as the panel's composer says it: "Sending a message denies the
+ * waiting approval." in the muted ink. A press scrolls the transcript to the
+ * call's row, whose Deny and Allow answer it; where no row is drawn it is
+ * words alone.
+ */
+export function DeniesWaiting({ onShow }: { readonly onShow?: (() => void) | undefined }) {
+  const colors = useColors();
+
+  const words = (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.ROW_LINE }),
+        foregroundStyle(colors.TEXT_MUTED),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+      ]}
+    >
+      {DENIES_WAITING}
+    </Text>
+  );
+
+  if (onShow === undefined) return words;
+
+  return (
+    <SwiftUIButton
+      onPress={onShow}
+      modifiers={[
+        buttonStyle("plain"),
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        accessibilityHint(SHOW_WAITING_HINT),
+      ]}
+    >
+      {words}
+    </SwiftUIButton>
+  );
+}
+
 type HeldCallBannerProps = Pick<HeldCall, "answering" | "note" | "onAnswer"> & {
   /** How many calls wait, as the panel's working line says it: "Waiting on you · 1 approval". */
   readonly waiting: string;
   /** What the oldest call waiting asks, as the agent's CLI put it. */
   readonly asks: string;
-  /** That a message sent now denies the calls waiting, said under what is asked; none where Send would queue it instead. */
-  readonly denies?: string | undefined;
 };
 
 /**
  * What stands over the composer's field, inside its glass, while a call
- * waits, so a held agent is never missed however far the transcript has
- * scrolled: a raised hand and how many wait in the attention ink, what the
- * oldest asks, that a message sent now denies it where one would, and Deny
- * and Allow, which answer it.
+ * waits that no row of the transcript draws, such as a subagent's, so it is
+ * still answered: a raised hand and how many wait in the attention ink,
+ * what the oldest asks, and Deny and Allow. A call whose row is drawn is
+ * answered there alone, as on the panel. The page tells VoiceOver of every
+ * call waiting from its composer, which stands while this comes and goes.
  */
-export function HeldCallBanner({
-  waiting,
-  asks,
-  denies,
-  answering,
-  note,
-  onAnswer,
-}: HeldCallBannerProps) {
+export function HeldCallBanner({ waiting, asks, answering, note, onAnswer }: HeldCallBannerProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
-  // Note that the banner is told to VoiceOver as it stands, since an agent held for an answer waits on the reader wherever they are.
-  useAnnounced(`${waiting}, ${asks}`, true);
 
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
@@ -177,13 +211,6 @@ export function HeldCallBanner({
       >
         {asks}
       </Text>
-      {denies === undefined ? null : (
-        <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
-        >
-          {denies}
-        </Text>
-      )}
       {note === undefined ? null : <AskNote words={note} />}
       <ApprovalPresses answering={answering} onAnswer={onAnswer} />
     </VStack>
