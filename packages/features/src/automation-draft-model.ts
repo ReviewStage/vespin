@@ -465,11 +465,12 @@ export function withScheduleKind(
   return { ...schedule, kind, date: tomorrow };
 }
 
-/** The day a one-time schedule's date field reads typed words as, `YYYY-MM-DD`, counted from `now` in `zone` as a date mention's are ("Nov 27", "next fri"); nothing for words that name no day. */
+/** The day a one-time schedule's date field reads typed words as, `YYYY-MM-DD`, counted from `now` in `zone` as a date mention's are ("Nov 27", "next fri"); nothing for words that name no day, or a time or a range, which the field has no room for. */
 export function onceDateOf(words: string, now: Date, zone: string): string | undefined {
   const span = dateOfWords(words, now.getTime(), zone);
+  const wall = span === undefined ? undefined : dateWall(span, zone);
 
-  return span === undefined ? undefined : dateWall(span, zone)?.start.day;
+  return wall?.start.time === undefined && wall?.end === undefined ? wall?.start.day : undefined;
 }
 
 /** A one-time schedule's day as its field says it: "Nov 27, 2026"; nothing while none is picked. */

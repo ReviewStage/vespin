@@ -10,9 +10,11 @@
  * firing is recorded under its dedupe key, so a delivery sent again finds
  * it recorded, and a run still queued is acted on (`automation-runs.ts`).
  * A one-time schedule's automation is then paused for having run, never
- * deleted, so its run and the agent it started stay readable, and its
- * spent Vercel schedule is deleted; one whose date was moved on since it
- * fired is left to run again.
+ * deleted, so its run and the agent it started stay readable; one whose
+ * date was moved on since it fired is left to run again. Its spent Vercel
+ * schedule is left for the next save to delete or make anew
+ * (`automation-cadence.ts`), because deleting it here could delete one an
+ * edit made beside this delivery.
  * A delivery that fails is left unacknowledged, and the queue delivers it
  * again; its effect is run through the queues' one promise door
  * (`../queues/queue-consumer.ts`).
@@ -38,7 +40,6 @@ import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
 import type { StartServices } from "../agents/coder-host/start.js";
 import { QUEUE_ACKNOWLEDGED, queueConsumer } from "../queues/queue-consumer.js";
 import {
-  AutomationCadence,
   type AutomationFiringMessage,
   automationFiringMessageSchema,
   recordFiring,
@@ -68,34 +69,15 @@ function scheduledFiring(message: ScheduleMessage, now: number): AutomationFirin
   };
 }
 
-/** Whether the automation runs on a one-time schedule whose instant has come by `now`. */
-function onceSpent(automation: Automation, now: number): boolean {
+/** The date and time of the automation's one-time schedule where the occurrence due at `dueAt` is its run, its instant come by then; nothing for any other. */
+function spentAt(automation: Automation, dueAt: number): string | undefined {
   const { trigger } = automation;
 
-  if (trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE || !scheduleRunsOnce(trigger)) return false;
+  if (trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE || !scheduleRunsOnce(trigger)) return undefined;
   const instant = onceInstant(trigger);
 
-  return instant !== undefined && instant.getTime() <= now;
+  return instant !== undefined && instant.getTime() <= dueAt ? trigger.at : undefined;
 }
-
-/**
- * A one-time automation whose schedule has run paused, and its spent
- * Vercel schedule deleted. Note that a schedule Vercel failed to delete is
- * logged and left, because a one-time schedule fires no more, and the
- * delivery must not come again for it.
- */
-const pauseSpent = Effect.fnUntraced(function* (automation: Automation) {
-  yield* pauseSpentAutomation(automation.id);
-  yield* (yield* AutomationCadence)
-    .forget(automation)
-    .pipe(
-      Effect.catch((failure) =>
-        Effect.logWarning(
-          `a one-time automation's spent schedule stands: ${failure.code ?? "unreachable"}`,
-        ),
-      ),
-    );
-});
 
 /**
  * One delivery acted on: the firing it carries recorded under its dedupe
@@ -142,13 +124,13 @@ export const consumeAutomationRunMessage = /* @__PURE__ */ Effect.fn(
     yield* actOnAutomationRun(sessionsFor, run.value);
   }
 
-  // Note that the occurrence's own instant counts as come, so a delivery a moment early still pauses it.
-  if (
-    firing.firing.kind === AUTOMATION_FIRING.SCHEDULE &&
-    onceSpent(automation.value, Math.max(now, firing.firing.dueAt))
-  ) {
-    yield* pauseSpent(automation.value);
-  }
+  // Note that the pause holds to the date and time that fired, so a date moved on beside this delivery is left to run.
+  const spent =
+    firing.firing.kind === AUTOMATION_FIRING.SCHEDULE
+      ? spentAt(automation.value, firing.firing.dueAt)
+      : undefined;
+
+  if (spent !== undefined) yield* pauseSpentAutomation(firing.automationId, spent);
 });
 
 /**

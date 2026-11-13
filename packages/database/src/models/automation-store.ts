@@ -568,13 +568,19 @@ const writeNextRun = SqlSchema.void({
 });
 
 const writeSpent = SqlSchema.void({
-  Request: Schema.String,
-  execute: (id) =>
+  Request: Schema.Struct({ id: Schema.String, at: Schema.String }),
+  execute: ({ id, at }) =>
     Database.use((db) =>
       db
         .update(automation)
         .set({ enabled: false, nextRunAt: null })
-        .where(and(eq(automation.id, id), eq(automation.enabled, true))),
+        .where(
+          and(
+            eq(automation.id, id),
+            eq(automation.enabled, true),
+            sql`${automation.trigger}->>'at' = ${at}`,
+          ),
+        ),
     ),
 });
 
@@ -1298,11 +1304,12 @@ export function advanceAutomationSchedule(
 }
 
 /**
- * Pauses an automation whose one-time schedule has run, so it shows as
- * having run and is due never again; one already paused stays as it is.
+ * Pauses an automation whose one-time schedule at `at` has run, so it shows
+ * as having run and is due never again; one already paused, or moved to
+ * another date and time since, stays as it is.
  */
-export function pauseSpentAutomation(id: string): TaskStoreEffect<void> {
-  return writeSpent(id);
+export function pauseSpentAutomation(id: string, at: string): TaskStoreEffect<void> {
+  return writeSpent({ id, at });
 }
 
 /** The agents the automation's runs fired at or after `since` started, and that stand still. */

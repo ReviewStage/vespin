@@ -10,6 +10,7 @@ import {
   draftNextRuns,
   draftProblems,
   filterValuesOf,
+  onceDateOf,
   SCHEDULE_KIND,
   sameDraft,
   scheduleDraftOf,
@@ -125,6 +126,12 @@ test("a Once draft writes its date and time on its zone's clock as the trigger's
     "That time has passed. Pick one still to come.",
   );
   assert.deepEqual(draftProblems(past, false, NOW, past), {}, "a spent one may still be renamed");
+  assert.equal(onceDateOf("Jan 27", NOW, DEFAULTS.timezone), "2026-01-27");
+  assert.equal(
+    onceDateOf("Jan 27 at 5pm", NOW, DEFAULTS.timezone),
+    undefined,
+    "a time typed in the date's field is refused, not dropped",
+  );
 });
 
 test("a new draft runs at nine on weekdays in the window's zone, and a saved one opens as it was saved", () => {

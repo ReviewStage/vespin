@@ -1,6 +1,6 @@
 import { agentFailureWords } from "./agent-failure-words.js";
 import { AGENT_STATUS, type AgentStatus } from "./agent-wire.js";
-import { SCHEDULE_PRESET } from "./automation-schedule.js";
+import { onceInstant, SCHEDULE_PRESET } from "./automation-schedule.js";
 import {
   AUTOMATION_FIRING,
   AUTOMATION_RUN_REASON,
@@ -446,12 +446,13 @@ export function automationNext(automation: AutomationSummary): AutomationNext {
   const { trigger, lastRun } = automation;
   const scheduled = trigger.kind === AUTOMATION_TRIGGER.SCHEDULE;
 
-  // Note that a one-time automation turned off after its schedule fired was paused for having run, since nothing else fires it on its schedule.
+  // Note that the newest run must be the one its date and time fired, so a run of a schedule it had before is no run of this one.
   if (
     !automation.enabled &&
     scheduled &&
     scheduleRunsOnce(trigger) &&
-    lastRun?.firing.kind === AUTOMATION_FIRING.SCHEDULE
+    lastRun?.firing.kind === AUTOMATION_FIRING.SCHEDULE &&
+    lastRun.firing.dueAt === onceInstant(trigger)?.getTime()
   ) {
     return { kind: AUTOMATION_NEXT.RAN };
   }
