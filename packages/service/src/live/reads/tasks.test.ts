@@ -84,6 +84,7 @@ import {
 import { eq } from "drizzle-orm";
 import { Clock, Duration, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
+import { TestClock } from "effect/testing";
 import { agentSandboxName } from "../../agents/agent-sandbox-open.js";
 import { agentSummary, summaryAccounts, summaryDevices } from "../../agents/coder-host/status.js";
 import { continuedByOf, standingsOf } from "../../agents/coder-host/stop.js";
@@ -622,7 +623,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
   );
 
   it.effect(
-    "a plan waiting on an open task is marked blocked until every blocker is done or canceled, live as the held read reads it",
+    "a plan waiting on an open task is marked blocked until every blocker is done or canceled, and each names what it waits on and blocks, live as the held read reads it",
     () =>
       Effect.gen(function* () {
         const owner = yield* openUser;
@@ -632,6 +633,8 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
 
         for (const blocker of [shipped, cut]) {
           yield* addTaskBlock(owner, { blockerTaskId: blocker.id, blockedTaskId: waiting.id });
+          // Note that each block is added a second apart, so the earlier one reads first.
+          yield* TestClock.adjust("1 second");
         }
 
         const blocked = Effect.gen(function* () {
@@ -647,6 +650,33 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         });
 
         assert.deepEqual(yield* blocked, [waiting.id], "both blockers open");
+
+        const live = yield* liveListOf(owner, NOW);
+        const held = yield* heldListOf(owner, NOW);
+
+        const blocksOf = (
+          plans: readonly {
+            id: string;
+            blockedBy?: readonly string[];
+            blocks?: readonly string[];
+          }[],
+        ) =>
+          [waiting, shipped, cut].map(({ id }) => {
+            const plan = plans.find((each) => each.id === id);
+
+            return { blockedBy: plan?.blockedBy, blocks: plan?.blocks };
+          });
+
+        assert.deepEqual(
+          blocksOf(live.plans),
+          [
+            { blockedBy: [shipped.id, cut.id], blocks: undefined },
+            { blockedBy: undefined, blocks: [waiting.id] },
+            { blockedBy: undefined, blocks: [waiting.id] },
+          ],
+          "each row names its blockers, the earliest first, and what it blocks",
+        );
+        assert.deepEqual(blocksOf(held.plans), blocksOf(live.plans), "live as held");
         yield* updateTask(owner, shipped.id, { status: TASK_STATUS.DONE });
         assert.deepEqual(yield* blocked, [waiting.id], "one blocker still open");
         yield* updateTask(owner, cut.id, { status: TASK_STATUS.CANCELED });

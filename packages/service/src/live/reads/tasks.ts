@@ -3,7 +3,7 @@ import { queryBuilder } from "@repo/database/core/query";
 import { sandboxNamedFor } from "@repo/database/models/agent-sandboxes";
 import { PULL_REQUEST_OF_AGENT_BRANCH } from "@repo/database/models/agent-store";
 import { taskMadeByRun } from "@repo/database/models/run-tasks";
-import { taskBlockedFor } from "@repo/database/models/task-block-store";
+import { taskBlockedFor, taskBlockIdsFor } from "@repo/database/models/task-block-store";
 import { agentVisibleTo, taskReachableBy } from "@repo/database/models/workspace-store";
 import {
   agentPin,
@@ -52,6 +52,7 @@ import type { BootPhase } from "@repo/features/agent-boot";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-wire";
 import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
 import { NO_TASK_OWNER, TASK_LIST_READ } from "@repo/features/task-list-live";
+import { TASK_BLOCK_RELATION } from "@repo/features/task-wire";
 import { SANDBOX_IDLE } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
 import { and, asc, eq, exists, isNotNull, or, type SQL, sql } from "drizzle-orm";
@@ -147,7 +148,8 @@ function followersColumnOf<Value>(
 /**
  * The plans the account reaches, each with the reader's own pin, its
  * owner's name, whether it waits on an open task the account reaches
- * (`taskBlockedFor`), and whether an automation's run made it for itself
+ * (`taskBlockedFor`), the tasks it waits on and that wait on it
+ * (`taskBlockIdsFor`), and whether an automation's run made it for itself
  * (`taskMadeByRun`), which the run names in the transaction that inserts the
  * task (`automation-runs.ts`'s `runTaskOf`), so the plan's own row moving
  * reads it. Note that `archivedAt` is still answered, as null, because
@@ -180,6 +182,8 @@ function tasksStatement(userId: string, narrowed: SQL = sql`true`) {
         parentTaskId: task.parentTaskId,
         mode: task.mode,
         blocked: sql<boolean>`${taskBlockedFor(userId)}`,
+        blockedBy: taskBlockIdsFor(userId, TASK_BLOCK_RELATION.BLOCKED_BY),
+        blocks: taskBlockIdsFor(userId, TASK_BLOCK_RELATION.BLOCKS),
         madeByRun: sql<boolean>`${taskMadeByRun(task.id)}`,
         markedUnread: sql<boolean>`coalesce(${taskRead.markedUnread}, false)`,
         followerIds: followersColumnOf<string>(taskFollower.userId),
@@ -387,6 +391,7 @@ function movedPlans(moved: SyncMoved): SQL {
         ...moved.keys(taskPinSync, taskPin.taskId),
         ...moved.keys(taskReadSync, taskRead.taskId),
         ...moved.keys(taskBlockSync, taskBlock.blockedTaskId),
+        ...moved.keys(taskBlockSync, taskBlock.blockerTaskId),
         ...moved.keys(taskFollowerSync, taskFollower.taskId),
       ]),
       sql`${task.id} in ${blockedByMoved}`,

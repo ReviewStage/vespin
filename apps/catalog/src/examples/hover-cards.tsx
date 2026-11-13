@@ -1,9 +1,7 @@
-import { TASK_STATUS } from "@repo/features/task-wire";
+import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
 import {
   AVATAR_SIZE,
   Avatar,
-  BLOCKED_WORDS,
-  BlockedMark,
   BUTTON_VARIANT,
   Button,
   DocumentIcon,
@@ -25,9 +23,8 @@ import {
   TaskStatusMark,
   TooltipCard,
   UserIcon,
-  VisuallyHidden,
 } from "@repo/ui";
-import { CornerLeftUpIcon, GLYPH } from "@repo/ui/icons";
+import { CornerLeftUpIcon, GLYPH, HandIcon, OctagonMinusIcon } from "@repo/ui/icons";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -67,6 +64,44 @@ const CATALOG_SUB_TASKS = [
   { name: "Count accepted invitations", key: "ACME-46", status: TASK_STATUS.TODO },
   { name: "Document the invite API", key: "ACME-47", status: TASK_STATUS.BACKLOG },
 ] as const;
+
+/** One task a relation names on the catalog's task card. */
+interface CatalogRelated {
+  readonly name: string;
+  readonly key: string;
+  readonly status: TaskStatus;
+}
+
+/** One relation's tasks on a task card, as the panel's card draws them: a header of its glyph, its words, and its end, over a row for each task. */
+function CatalogRelation({
+  glyph,
+  words,
+  end,
+  tasks,
+}: {
+  glyph: ReactNode;
+  words: string;
+  end?: ReactNode;
+  tasks: readonly CatalogRelated[];
+}): React.JSX.Element {
+  return (
+    <>
+      <HoverCardRow glyph={glyph} label={words} end={end} />
+      <HoverCardList label={words}>
+        {tasks.map((each) => (
+          <li key={each.key}>
+            <HoverCardRow
+              glyph={<TaskStatusMark status={each.status} />}
+              label={each.name}
+              end={each.key}
+              onPress={() => undefined}
+            />
+          </li>
+        ))}
+      </HoverCardList>
+    </>
+  );
+}
 
 /** Whether the point `x`, `y` stands within the box spanning both rectangles, the gap between them included. */
 function withinBoth(x: number, y: number, one: DOMRect, other: DOMRect): boolean {
@@ -252,37 +287,34 @@ function HoverCards(): React.JSX.Element {
                   sub="ACME-42 · acme/relay · 3h"
                 />
                 <HoverCardRule />
-                <HoverCardRow
+                <CatalogRelation
                   glyph={<CornerLeftUpIcon aria-hidden="true" />}
-                  label={
-                    <>
-                      <VisuallyHidden>Parent: </VisuallyHidden>Ship invitations
-                    </>
-                  }
-                  end="ACME-1"
-                  onPress={() => undefined}
+                  words="Parent"
+                  tasks={[{ name: "Ship invitations", key: "ACME-1", status: TASK_STATUS.TODO }]}
                 />
-                <HoverCardRow
+                <CatalogRelation
                   glyph={<GLYPH.SUB_TASK />}
-                  label="Sub-tasks"
+                  words="Sub-tasks"
                   end={<ProgressCount done={1} total={5} label="1 of 5 sub-tasks finished" />}
+                  tasks={CATALOG_SUB_TASKS}
                 />
-                <HoverCardList label="Sub-tasks">
-                  {CATALOG_SUB_TASKS.map((subTask) => (
-                    <li key={subTask.key}>
-                      <HoverCardRow
-                        glyph={<TaskStatusMark status={subTask.status} />}
-                        label={subTask.name}
-                        end={subTask.key}
-                        onPress={() => undefined}
-                      />
-                    </li>
-                  ))}
-                </HoverCardList>
-                <HoverCardRow
-                  look={HOVER_CARD_ROW_LOOK.DETAIL}
-                  glyph={<BlockedMark aria-hidden="true" />}
-                  label={BLOCKED_WORDS}
+                <CatalogRelation
+                  glyph={<OctagonMinusIcon aria-hidden="true" />}
+                  words="Blocked by"
+                  tasks={[
+                    {
+                      name: "Pick a mail provider",
+                      key: "ACME-12",
+                      status: TASK_STATUS.IN_PROGRESS,
+                    },
+                  ]}
+                />
+                <CatalogRelation
+                  glyph={<HandIcon aria-hidden="true" />}
+                  words="Blocks"
+                  tasks={[
+                    { name: "Announce invitations", key: "ACME-50", status: TASK_STATUS.TODO },
+                  ]}
                 />
               </HoverCard>
             }

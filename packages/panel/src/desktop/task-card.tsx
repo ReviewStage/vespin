@@ -10,6 +10,7 @@ import {
 import {
   TASK_RELATION_KIND,
   type TaskPullRequestLine,
+  type TaskRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { repositoryPageUrl } from "@repo/features/tasks-model";
@@ -37,10 +38,8 @@ import {
   TIME_LOOK,
   Time,
   Tooltip,
-  VisuallyHidden,
 } from "@repo/ui";
 import { ACTOR_KIND, actorName, SOMEONE_REASON } from "@repo/ui/actor-model";
-import { GLYPH } from "@repo/ui/icons";
 import { priorityOf, statusOf } from "@repo/ui/tasks-page-model";
 import { ACTOR_SIZE, ActorMark, actorCard, UnassignedMark } from "../actor-ref.js";
 import { useCreator, useMemberDirectory, usePerson } from "../member-directory.js";
@@ -70,8 +69,9 @@ import { WorkspaceRef } from "./workspace-ref.js";
  * priority's mark and its assignee's face in the corner, icons alone, each
  * saying its words to a screen reader and to a pointer resting on it; it
  * only says where the task stands, so none of them is a picker. Then where it
- * stands among other tasks (`TaskRelations`): the task it is part of, its
- * sub-tasks, and that it is blocked. Then a row for each of its
+ * stands among other tasks (`TaskRelations`): its parent, its sub-tasks,
+ * the tasks it is blocked by, and the tasks it blocks, each under a header
+ * of its own. Then a row for each of its
  * agents, drawn as its tab draws it: its harness's mark wearing where it
  * stands, its tab's label, and a failure's mark at its end, with no word for where it stands, since no
  * agent anywhere else in the window says one. Then a row for each of its
@@ -269,41 +269,20 @@ export function PullRequestLine({
 /** The tasks a card reads its relations from where none are handed. */
 const NO_TASKS: readonly TaskSummary[] = [];
 
-/**
- * One task of the card's relations, as a row: its status's mark, its name,
- * and its key, which opens it. The task's parent leads with the Parent
- * relation's glyph instead, as the relation menu draws it, its word read to
- * a screen reader alone, so the name keeps the row's room.
- */
+/** One task of the card's relations, as a row: its status's mark, its name, and its key, which opens it. */
 function RelatedTaskLine({
   task,
   workspaceName,
-  parent = false,
   onOpen,
 }: {
   task: TaskSummary;
   workspaceName: string | undefined;
-  /** Whether the row names the task's parent. */
-  parent?: boolean;
   onOpen: (() => void) | undefined;
 }): React.JSX.Element {
   return (
     <HoverCardRow
-      glyph={
-        parent ? (
-          <TaskRelationIcon kind={TASK_RELATION_KIND.PARENT} />
-        ) : (
-          <TaskStatusMark status={statusOf(task)} />
-        )
-      }
-      label={
-        <>
-          {parent ? (
-            <VisuallyHidden>{`${TASK_RELATION_WORDS[TASK_RELATION_KIND.PARENT]}: `}</VisuallyHidden>
-          ) : null}
-          {task.name}
-        </>
-      }
+      glyph={<TaskStatusMark status={statusOf(task)} />}
+      label={task.name}
       end={<TaskKey workspaceName={workspaceName} number={task.number} />}
       onPress={onOpen}
     />
@@ -311,68 +290,116 @@ function RelatedTaskLine({
 }
 
 /**
- * What a card says of the task's place among others: the task it is part of,
- * a header with how many of its sub-tasks are finished over a row for each,
- * scrolling past a few rows' height, and, while another task it waits on is
- * still open, that it is blocked. Each task named opens as a press on it
- * does. Note that the summaries carry that a task is blocked and not which
- * tasks block it, so the row says no blocker: naming one is a read the card
- * does not make.
+ * One relation's tasks on the card, as Sub-tasks first drew them: a header
+ * row of the relation's glyph, as the relation menu draws it, its words, and
+ * what stands at its end, over a row for each task, scrolling past a few
+ * rows' height. Nothing where it names no task.
+ */
+function RelatedTaskGroup({
+  kind,
+  words,
+  end,
+  tasks,
+  workspaceName,
+  onOpenTask,
+}: {
+  kind: TaskRelationKind;
+  /** The header's words, which name the list for a screen reader too. */
+  words: string;
+  end?: React.ReactNode;
+  tasks: readonly TaskSummary[];
+  workspaceName: string | undefined;
+  onOpenTask: ((taskId: string) => void) | undefined;
+}): React.JSX.Element | null {
+  if (tasks.length === 0) return null;
+
+  return (
+    <>
+      <HoverCardRow glyph={<TaskRelationIcon kind={kind} />} label={words} end={end} />
+      <HoverCardList label={words}>
+        {tasks.map((each) => (
+          <li key={each.id} data-task-card-related={kind}>
+            <RelatedTaskLine
+              task={each}
+              workspaceName={workspaceName}
+              onOpen={onOpenTask === undefined ? undefined : () => onOpenTask(each.id)}
+            />
+          </li>
+        ))}
+      </HoverCardList>
+    </>
+  );
+}
+
+/** The tasks `ids` names that the window holds, in their order; one it does not hold is left out. */
+function heldTasks(
+  ids: readonly string[] | undefined,
+  related: readonly TaskSummary[],
+): readonly TaskSummary[] {
+  return (ids ?? []).flatMap((id) => related.filter((each) => each.id === id));
+}
+
+/**
+ * What a card says of the task's place among others, each relation a group
+ * as the task page's relations name them: its Parent, its Sub-tasks with how
+ * many are finished, the tasks it is Blocked by, and the tasks it Blocks.
+ * Each task named opens as a press on it does. A task a service before
+ * blocks marks blocked, naming no blocker, says only that it is blocked.
  */
 function TaskRelations({
   task,
   parent,
   subTasks,
+  blockedBy,
+  blocks,
   workspaceName,
   onOpenTask,
 }: {
   task: TaskSummary;
   parent: TaskSummary | undefined;
   subTasks: readonly TaskSummary[];
+  blockedBy: readonly TaskSummary[];
+  blocks: readonly TaskSummary[];
   workspaceName: string | undefined;
   onOpenTask: ((taskId: string) => void) | undefined;
 }): React.JSX.Element {
   const count = subTaskCount(subTasks);
+  const group = { workspaceName, onOpenTask };
 
   return (
     <>
-      {parent === undefined ? null : (
-        <div data-task-card-parent="">
-          <RelatedTaskLine
-            task={parent}
-            workspaceName={workspaceName}
-            parent
-            onOpen={onOpenTask === undefined ? undefined : () => onOpenTask(parent.id)}
+      <RelatedTaskGroup
+        kind={TASK_RELATION_KIND.PARENT}
+        words={TASK_RELATION_WORDS[TASK_RELATION_KIND.PARENT]}
+        tasks={parent === undefined ? [] : [parent]}
+        {...group}
+      />
+      <RelatedTaskGroup
+        kind={TASK_RELATION_KIND.SUB_TASK}
+        words="Sub-tasks"
+        end={
+          <ProgressCount
+            done={count.finished}
+            total={count.total}
+            label={`${count.finished} of ${count.total} sub-tasks finished`}
           />
-        </div>
-      )}
-      {subTasks.length === 0 ? null : (
-        <>
-          <HoverCardRow
-            glyph={<GLYPH.SUB_TASK />}
-            label="Sub-tasks"
-            end={
-              <ProgressCount
-                done={count.finished}
-                total={count.total}
-                label={`${count.finished} of ${count.total} sub-tasks finished`}
-              />
-            }
-          />
-          <HoverCardList label="Sub-tasks">
-            {subTasks.map((subTask) => (
-              <li key={subTask.id} data-task-card-sub-task="">
-                <RelatedTaskLine
-                  task={subTask}
-                  workspaceName={workspaceName}
-                  onOpen={onOpenTask === undefined ? undefined : () => onOpenTask(subTask.id)}
-                />
-              </li>
-            ))}
-          </HoverCardList>
-        </>
-      )}
-      {task.blocked === true ? (
+        }
+        tasks={subTasks}
+        {...group}
+      />
+      <RelatedTaskGroup
+        kind={TASK_RELATION_KIND.BLOCKED_BY}
+        words={TASK_RELATION_WORDS[TASK_RELATION_KIND.BLOCKED_BY]}
+        tasks={blockedBy}
+        {...group}
+      />
+      <RelatedTaskGroup
+        kind={TASK_RELATION_KIND.BLOCKS}
+        words={TASK_RELATION_WORDS[TASK_RELATION_KIND.BLOCKS]}
+        tasks={blocks}
+        {...group}
+      />
+      {task.blocked === true && blockedBy.length === 0 ? (
         <div data-task-card-blocked="">
           <HoverCardRow
             look={HOVER_CARD_ROW_LOOK.DETAIL}
@@ -446,7 +473,15 @@ export function TaskCard({
       : related.find((each) => each.id === task.parentTaskId);
 
   const subTasks = subTasksOf(related, task.id);
-  const placed = parent !== undefined || subTasks.length > 0 || task.blocked === true;
+  const blockedBy = heldTasks(task.blockedBy, related);
+  const blocks = heldTasks(task.blocks, related);
+
+  const placed =
+    parent !== undefined ||
+    subTasks.length > 0 ||
+    blockedBy.length > 0 ||
+    blocks.length > 0 ||
+    task.blocked === true;
 
   // Note that a task the app or an agent made says so in a workspace of one too, where its member's own needs no saying.
   const creatorShown =
@@ -480,6 +515,8 @@ export function TaskCard({
             task={task}
             parent={parent}
             subTasks={subTasks}
+            blockedBy={blockedBy}
+            blocks={blocks}
             workspaceName={workspaceName}
             onOpenTask={onOpenTask}
           />

@@ -775,6 +775,14 @@ const taskSummaryFields = {
    */
   blocked: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   /**
+   * The tasks this one waits on, by id, the earliest added first, each one
+   * the reader reaches; a list's row leaves it out where there are none, and
+   * a service before blocks leaves it out always.
+   */
+  blockedBy: EffectSchema.optionalKey(EffectSchema.Array(wireUuidSchema)),
+  /** The tasks that wait on this one, on the same terms as `blockedBy`. */
+  blocks: EffectSchema.optionalKey(EffectSchema.Array(wireUuidSchema)),
+  /**
    * True where an automation's run made the task for itself alone, which
    * the sidebar lets go once the run finished and holds nothing of the
    * reader's; absent for any other task, a same-agent automation's standing
@@ -1009,7 +1017,7 @@ const descriptionSectionEditSchema = EffectSchema.Struct({
 
 export type DescriptionSectionEdit = typeof descriptionSectionEditSchema.Type;
 
-/** One task with its saved document, its newest revision, who last changed each section, the saves coding agents made on it, oldest first, and the tasks it waits on and that wait on it. */
+/** One task with its saved document, its newest revision, who last changed each section, and the saves coding agents made on it, oldest first; its blocks are its summary's. */
 export const taskSchema = EffectSchema.Struct({
   ...taskSummaryFields,
   document: descriptionDocumentSchema,
@@ -1025,10 +1033,6 @@ export const taskSchema = EffectSchema.Struct({
       EffectSchema.isMaxLength(DESCRIPTION_SECTION_BOUNDS.MAX_SECTIONS),
     ),
   ),
-  /** The tasks this one waits on, by id, the earliest added first, each one the reader reaches; absent from a service before blocks. */
-  blockedBy: EffectSchema.optionalKey(EffectSchema.Array(wireUuidSchema)),
-  /** The tasks that wait on this one, on the same terms as `blockedBy`. */
-  blocks: EffectSchema.optionalKey(EffectSchema.Array(wireUuidSchema)),
 });
 
 export type Task = typeof taskSchema.Type;

@@ -489,9 +489,30 @@ interface RelationChange {
   readonly reach: RelationReach;
 }
 
+/** `ids` with `id` added at its end or taken away, as a block is. */
+function blockIdsMoved(ids: readonly string[] | undefined, id: string, added: boolean): string[] {
+  const rest = (ids ?? []).filter((each) => each !== id);
+
+  return added ? [...rest, id] : rest;
+}
+
+/** What a block added or taken away leaves of either task's lists of blocks: the waiting task's `blockedBy`, and the blocker's `blocks`. */
+function blockListFields(
+  row: PlanRow,
+  waiting: string,
+  blocker: string,
+  added: boolean,
+): Partial<PlanRow> {
+  if (row.id === waiting) return { blockedBy: blockIdsMoved(row.blockedBy, blocker, added) };
+
+  if (row.id === blocker) return { blocks: blockIdsMoved(row.blocks, waiting, added) };
+
+  return {};
+}
+
 /**
- * What one side of a relation leaves of a row of the list: the waiting
- * task's `blocked`, or the child's parent, as its kind names them, and
+ * What one side of a relation leaves of a row of the list: either task's
+ * lists of blocks and the waiting task's `blocked`, or the child's parent, as its kind names them, and
  * nothing of any other row. Note that a block taken away clears `blocked`
  * only where the waiting task's other blockers are known, as the open
  * task's are, because elsewhere another may still hold it back; the list
@@ -508,17 +529,19 @@ function relationFields(
       const [waiting, blocker] =
         side.kind === TASK_RELATION_KIND.BLOCKED_BY ? [taskId, otherId] : [otherId, taskId];
 
-      if (row.id !== waiting || !reach.blocking.includes(blocker)) return {};
+      const lists = blockListFields(row, waiting, blocker, side.added);
+
+      if (row.id !== waiting || !reach.blocking.includes(blocker)) return lists;
 
       const others =
         reach.opened?.taskId === waiting
           ? reach.opened.blockedBy.filter((id) => id !== blocker)
           : undefined;
 
-      if (!side.added && others === undefined) return {};
+      if (!side.added && others === undefined) return lists;
       const blocked = side.added || (others ?? []).some((id) => reach.blocking.includes(id));
 
-      return blocked === (row.blocked === true) ? {} : { blocked };
+      return blocked === (row.blocked === true) ? lists : { ...lists, blocked };
     }
 
     case TASK_RELATION_KIND.SUB_TASK:
@@ -1473,6 +1496,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       parentTaskId: task.parentTaskId ?? null,
       ...(task.mode === undefined ? undefined : { mode: task.mode }),
       ...((task.blockedBy ?? []).some(blocksNow) ? { blocked: true } : undefined),
+      ...(task.blockedBy === undefined ? undefined : { blockedBy: task.blockedBy }),
+      ...(task.blocks === undefined ? undefined : { blocks: task.blocks }),
     };
   }
 
@@ -1550,6 +1575,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       ...(related(TASK_CREATE_RELATION_KIND.BLOCKED_BY).some(blocksNow)
         ? { blocked: true }
         : undefined),
+      blockedBy: related(TASK_CREATE_RELATION_KIND.BLOCKED_BY),
+      blocks: related(TASK_CREATE_RELATION_KIND.BLOCKS),
     };
   }
 

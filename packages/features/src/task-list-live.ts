@@ -124,6 +124,9 @@ const taskLiveRowSchema = EffectSchema.Struct({
   mode: plan.mode,
   /** Whether it waits on an open task the reader reaches; absent from a service before blocks. */
   blocked: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** The tasks it waits on and that wait on it, each one the reader reaches, the earliest added first; absent from a service before they were carried. */
+  blockedBy: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
+  blocks: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   /** Whether an automation's run made it for itself alone; absent from a service before it. */
   madeByRun: EffectSchema.optionalKey(EffectSchema.Boolean),
   /**
@@ -505,6 +508,10 @@ function taskSummaryOf(row: TaskLiveRow, agents: AgentGroup | undefined, now: nu
       : { parentTaskId: row.parentTaskId }),
     ...(row.mode === undefined ? undefined : { mode: row.mode }),
     ...(row.blocked === true ? { blocked: true } : undefined),
+    ...(row.blockedBy === undefined || row.blockedBy.length === 0
+      ? undefined
+      : { blockedBy: row.blockedBy }),
+    ...(row.blocks === undefined || row.blocks.length === 0 ? undefined : { blocks: row.blocks }),
     ...(row.madeByRun === true ? { madeByRun: true } : undefined),
     ...followersOf(row),
     ...(agents === undefined ? undefined : { agents: agentsSummaryOf(agents, now) }),

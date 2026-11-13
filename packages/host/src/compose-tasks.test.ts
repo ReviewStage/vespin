@@ -1514,7 +1514,11 @@ it.effect(
       yield* call("TASKS_REFRESH", undefined);
       yield* listed();
       service.live.list.set({
-        plans: service.tasks.map((each) => ({ ...rowOfTask(each), blocked: each.id === INVITES })),
+        plans: service.tasks.map((each) => ({
+          ...rowOfTask(each),
+          blocked: each.id === INVITES,
+          ...(each.id === INVITES ? { blockedBy: [BILLING] } : { blocks: [INVITES] }),
+        })),
       });
       yield* nextPoll(settled);
       yield* openTask(INVITES);
@@ -1523,6 +1527,13 @@ it.effect(
         [INVITES, BILLING].map(
           (id) => last()?.tasks.find((row) => row.id === id)?.blocked === true,
         );
+
+      const blocks = () =>
+        [INVITES, BILLING].map((id) => {
+          const row = last()?.tasks.find((each) => each.id === id);
+
+          return { blockedBy: row?.blockedBy ?? [], blocks: row?.blocks ?? [] };
+        });
 
       const answered = yield* Deferred.make<void>();
       service.relationAnswered = Deferred.await(answered);
@@ -1541,11 +1552,24 @@ it.effect(
 
       yield* settled;
       const drawn = blocked();
+      const drawnBlocks = blocks();
       yield* Deferred.succeed(answered, undefined);
 
       assert.deepEqual(yield* Fiber.join(turning), { failure: TASK_CALL_FAILURE.UNANSWERED });
       assert.deepEqual(drawn, [false, true], "the block is drawn turned around while it is out");
+      assert.deepEqual(
+        drawnBlocks,
+        [
+          { blockedBy: [], blocks: [BILLING] },
+          { blockedBy: [INVITES], blocks: [] },
+        ],
+        "each task's lists of blocks are drawn turned around while it is out",
+      );
       assert.deepEqual(blocked(), [true, false]);
+      assert.deepEqual(blocks(), [
+        { blockedBy: [BILLING], blocks: [] },
+        { blockedBy: [], blocks: [INVITES] },
+      ]);
     }),
 );
 
