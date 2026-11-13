@@ -167,6 +167,7 @@ export type MachineCommandAsk =
   | {
       readonly kind: typeof MACHINE_COMMAND_KIND.COMPUTER;
       readonly conversationId: string;
+      readonly agentId?: string;
       readonly action: MacComputerAction;
       readonly timeoutSeconds?: number;
     };

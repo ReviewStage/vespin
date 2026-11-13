@@ -39,6 +39,7 @@ import {
   Deferred,
   Duration,
   Effect,
+  FiberHandle,
   FiberSet,
   Option,
   Schedule,
@@ -181,6 +182,9 @@ const DEVICE_LOOK_EVERY = Duration.seconds(15);
 /** How long the helper has to name an app before it is asked about, apart from the action's own time. */
 const DESCRIBE_WITHIN = Duration.seconds(10);
 
+/** How long the helper has to put the agent's cursor away, behind any action it is still on. */
+const RELEASE_WITHIN = Duration.seconds(10);
+
 /** The service's side of the commands, as this concern asks it. */
 export type MachineCommandClient = Pick<
   HostedMachineCommandClient,
@@ -229,6 +233,12 @@ export interface MachineCommandsDependencies {
   client: MachineCommandClient;
   /** The computer-use helper and its settings, where this Mac ships one; none takes no action on an app. */
   computer?: MacComputerUse;
+  /**
+   * Finishes once the agent given is no longer at work, its turn ended,
+   * failed, or stopped, as the account's task list says, which puts the
+   * agent's cursor away; none leaves the cursor to the helper's own clock.
+   */
+  turnEnded?: (agentId: string) => Effect.Effect<void>;
   /** This Mac as a device of the account, where this process can say which machine it runs on; none claims as the account alone. */
   device?: MachineCommandsDevice;
 }
@@ -522,6 +532,12 @@ interface RecordingOwner {
   readonly conversationId: string;
 }
 
+/** Whom the agent's cursor stands for: the account and the agent whose action moved it last, none for a conversation that is no agent's. */
+interface CursorHolder {
+  readonly userId: string;
+  readonly agentId: string | undefined;
+}
+
 /** The bytes a base64 text spells: three for every four characters, less its padding. */
 function base64Bytes(base64: string): number {
   const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
@@ -581,6 +597,13 @@ export function composeMachineCommands(
      * it is forgotten as the gate moves, so another account never receives it.
      */
     let recordingOwner: RecordingOwner | undefined;
+    /**
+     * Whom the agent's cursor stands for, which the helper keeps one of for
+     * the whole Mac, and the watch on that agent's turn, which puts the
+     * cursor away as the turn ends; another agent's action takes both over.
+     */
+    let cursorHolder: CursorHolder | undefined;
+    let cursorWatch: FiberHandle.FiberHandle<void> | undefined;
     /** The asks waiting on the developer, by the command's id, the earliest asked first, each with the account it was claimed for. */
 
     const asks = new Map<
@@ -890,6 +913,46 @@ export function composeMachineCommands(
         }
 
         yield* settled(command.id, sendable(computerResult(answer, app)));
+
+        if ("outcome" in answer) yield* heldBy({ userId, agentId: command.agentId });
+      });
+
+    /**
+     * The agent's cursor held for the agent whose action just ran: its turn
+     * watched, and the cursor put away as the turn ends, unless another
+     * agent's action took the cursor over first. An agent that already holds
+     * it keeps its watch.
+     */
+    const heldBy = (holder: CursorHolder) =>
+      Effect.gen(function* () {
+        const kept =
+          cursorHolder?.userId === holder.userId && cursorHolder.agentId === holder.agentId;
+
+        cursorHolder = holder;
+
+        if (kept || cursorWatch === undefined) return;
+        const { turnEnded } = dependencies;
+
+        // Note that a conversation that is no agent's, or a Mac that cannot watch turns, leaves the cursor to the helper's own clock.
+        if (holder.agentId === undefined || turnEnded === undefined) {
+          return yield* FiberHandle.clear(cursorWatch);
+        }
+
+        yield* FiberHandle.run(
+          cursorWatch,
+          Effect.andThen(turnEnded(holder.agentId), released(holder)),
+        );
+      });
+
+    /** The agent's cursor put away, where the holder given still holds it. */
+    const released = (holder: CursorHolder) =>
+      Effect.gen(function* () {
+        if (cursorHolder !== holder || computer === undefined) return;
+        cursorHolder = undefined;
+
+        yield* Effect.ignore(
+          computer.helper.ask({ op: COMPUTER_HELPER_OP.RELEASE_CURSOR }, RELEASE_WITHIN),
+        );
       });
 
     /**
@@ -1266,6 +1329,13 @@ export function composeMachineCommands(
           clearedAt = moves;
           allowedOnce.clear();
           recordingOwner = undefined;
+
+          // Note that the cursor of an account the gate left is put away at once, rather than by its turn's watch.
+          if (cursorHolder !== undefined) {
+            if (cursorWatch !== undefined) yield* FiberHandle.clear(cursorWatch);
+            yield* released(cursorHolder);
+          }
+
           yield* FiberSet.clear(running);
 
           // Note that the clear waits out any claim under way, during which the gate may have moved again, so the next turn starts from where it stands now.
@@ -1292,6 +1362,7 @@ export function composeMachineCommands(
     const lifetime = Effect.gen(function* () {
       const running = yield* FiberSet.make();
       const claims = yield* FiberSet.make();
+      cursorWatch = yield* FiberHandle.make<void>();
       // Note that the changes are subscribed to before the gate is first worked out, so one that lands meanwhile is heard rather than lost.
       const changes = yield* dependencies.changed;
       yield* gateMoved;
