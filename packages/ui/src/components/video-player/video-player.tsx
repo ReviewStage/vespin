@@ -1,5 +1,6 @@
 import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { playheadText } from "@repo/features/time-format";
+import { recordingHasSound } from "@repo/features/video-signature";
 import {
   IN_CONTEXT_KEY,
   IN_CONTEXT_SHORTCUTS,
@@ -18,6 +19,8 @@ import {
   PlayIcon,
   PreviousFrameIcon,
   RewindIcon,
+  SpeakerIcon,
+  SpeakerOffIcon,
 } from "../../icons/lucide-glyphs.js";
 import { motionHeld } from "../../motion-timing.js";
 import { notePictureOrigin } from "../../picture-expand.js";
@@ -59,8 +62,16 @@ import { Tooltip } from "../tooltip/hint.js";
  * pointer or the keyboard is in it; on a touch screen it always stands. Full
  * screen fills the screen with the frame, the bar with it, and Escape or its
  * button brings it back; where the browser fills it with nothing but a
- * video, as Safari on an iPhone, it opens the video in the browser's player. There is no volume, since an agent's recording of
- * its screen has no sound, and no Download, which the viewer's header has.
+ * video, as Safari on an iPhone, it opens the video in the browser's player. There is no Download, which the viewer's header has.
+ *
+ * An agent's recording of its screen has no sound, so a video plays muted
+ * and its bar offers no sound control, unless its header names a sound
+ * track (`recordingHasSound`), as a clip an agent made to be heard and drew
+ * as a waveform does: then it plays with its sound, and a Mute button after
+ * Play takes it away and gives it back. The choice holds for every player
+ * drawn after it, as the video sites keep it, so a clip muted inline stays
+ * muted in the viewer. There is no volume slider: the system's volume is the
+ * one a reader already reaches for.
  *
  * Where a picture would be drawn, the video plays in place (`INLINE`), in a
  * frame that hugs it at its own shape up to its column's width. A place that
@@ -103,6 +114,8 @@ const VIDEO_LABEL = {
   LOADING: "Loading the video",
   PLAY: "Play",
   PAUSE: "Pause",
+  MUTE: "Mute",
+  UNMUTE: "Unmute",
   PREVIOUS_FRAME: "Previous frame",
   NEXT_FRAME: "Next frame",
   SEEK: "Seek",
@@ -144,6 +157,13 @@ const WEBM_ID = {
 
 /** How much of a `data:` URL's base64 holds a WebM's header, read for its frame length: twelve kilobytes, a whole number of base64's four-character groups. */
 const HEADER_BASE64_CHARS = 16_384;
+
+/**
+ * How much of a `data:` URL's base64 is read for a sound track: 192
+ * kilobytes, a whole number of base64's four-character groups, which holds a
+ * WebM's tracks and a long MP4's index, each standing before its media.
+ */
+const SOUND_HEAD_BASE64_CHARS = 262_144;
 
 /** How far an arrow key seeks, in seconds. */
 const ARROW_SEEK_S = 5;
@@ -255,6 +275,9 @@ function keepPlace(dataUrl: string, place: Place): void {
   if (places.size > PLACES_KEPT && oldest !== undefined) places.delete(oldest);
 }
 
+/** Whether the reader took the sound away last, which every player drawn after it starts by. */
+let soundOff = false;
+
 /** The media type a `data:` URL names, as the picture reads spell one. */
 export function dataUrlMediaType(dataUrl: string): string {
   return dataUrl.slice(dataUrl.indexOf(":") + 1, dataUrl.indexOf(";"));
@@ -325,6 +348,17 @@ function frameSecondsOf(dataUrl: string): number {
   }
 
   return FALLBACK_FRAME_S;
+}
+
+/** Whether a recording's `data:` URL names a sound track in its header. */
+function soundOf(dataUrl: string): boolean {
+  const start = dataUrl.indexOf(",") + 1;
+  const head = atob(dataUrl.slice(start, start + SOUND_HEAD_BASE64_CHARS));
+  const bytes = new Uint8Array(head.length);
+
+  for (let at = 0; at < head.length; at += 1) bytes[at] = head.charCodeAt(at);
+
+  return recordingHasSound(bytes);
 }
 
 /** A video as Safari draws one, which on a phone fills the screen only in Safari's own player. */
@@ -644,12 +678,14 @@ const LOADING =
 /** The player as its place holds it: hugging the video at most its column's width, and in the viewer no taller than the card. */
 const PLAYER = "ui-video-player relative block w-fit max-w-full";
 
-/** The bar along a video's foot: play or pause, a frame back and on, how far of how long, the scrubber, the speed, Expand, and Full screen. */
+/** The bar along a video's foot: play or pause, mute where it has sound, a frame back and on, how far of how long, the scrubber, the speed, Expand, and Full screen. */
 function VideoBar({
   playback,
   frame,
   full,
+  muted,
   onToggle,
+  onMute,
   onStep,
   onSeek,
   onSpeed,
@@ -660,7 +696,10 @@ function VideoBar({
   /** How long a frame stands, in seconds, which the scrubber moves by. */
   frame: number;
   full: boolean;
+  /** Whether its sound is taken away, where it has sound; without any, the bar offers no Mute. */
+  muted: boolean | undefined;
   onToggle: () => void;
+  onMute: () => void;
   onStep: (by: number) => void;
   onSeek: (at: number) => void;
   onSpeed: () => void;
@@ -676,6 +715,13 @@ function VideoBar({
         icon={playback.playing ? <PauseIcon /> : <PlayIcon />}
         onPress={onToggle}
       />
+      {muted === undefined ? null : (
+        <BarButton
+          label={muted ? VIDEO_LABEL.UNMUTE : VIDEO_LABEL.MUTE}
+          icon={muted ? <SpeakerOffIcon /> : <SpeakerIcon />}
+          onPress={onMute}
+        />
+      )}
       <span className={BAR_EXTRA}>
         <BarButton
           label={VIDEO_LABEL.PREVIOUS_FRAME}
@@ -746,6 +792,8 @@ export function VideoPlayer({
   });
 
   const frameSeconds = useMemo(() => frameSecondsOf(dataUrl), [dataUrl]);
+  const sound = useMemo(() => soundOf(dataUrl), [dataUrl]);
+  const [muted, setMuted] = useState(soundOff);
   const [flash, setFlash] = useState<Flash>();
   // The video's own pixels once its size is read, which the viewer fits it by.
   const [natural, setNatural] = useState<VideoSize>();
@@ -829,7 +877,7 @@ export function VideoPlayer({
         playerKey(event, video.current, frameSeconds, (ask) => setFlash((was) => flashOn(was, ask)))
       }
     >
-      {/* Note that the player carries no captions track, because an agent's recording of its screen has no sound. */}
+      {/* Note that the player carries no captions track, because no recorder of an agent's writes one. */}
       {/* Note that the video stands before its address is made, so the frame holds its shape from the first paint. */}
       <video
         ref={video}
@@ -840,7 +888,7 @@ export function VideoPlayer({
         style={waiting}
         aria-label={label === "" ? VIDEO_LABEL.VIDEO : `${VIDEO_LABEL.VIDEO}: ${label}`}
         autoPlay={starts}
-        muted
+        muted={!sound || muted}
         playsInline
         preload={viewer ? "auto" : "metadata"}
         onClick={() => {
@@ -888,7 +936,12 @@ export function VideoPlayer({
           playback={playback}
           frame={frameSeconds}
           full={full}
+          muted={sound ? muted : undefined}
           onToggle={() => toggleOf(video.current)}
+          onMute={() => {
+            soundOff = !muted;
+            setMuted(soundOff);
+          }}
           onStep={(by) => {
             if (video.current !== null) stepFrame(video.current, frameSeconds, by);
           }}
