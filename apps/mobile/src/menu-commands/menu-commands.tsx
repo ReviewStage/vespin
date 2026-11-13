@@ -38,7 +38,12 @@ import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
-import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
+import {
+  type ThreadSteps,
+  useInboxActs,
+  useInboxThread,
+  useThreadSteps,
+} from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
@@ -61,6 +66,9 @@ const SHEET_ROUTE = {
   NEW_TASK: "/start-task",
   NEW_AGENT: "/start-agent",
 } as const;
+
+/** The Inbox tab's root, where a split view keeps the thread beside its list in its `selected` param. */
+const INBOX_ROUTE = "/inbox";
 
 /** The commands that act on no one thing, enabled whenever an account is signed in. */
 const SIGNED_IN_COMMANDS: readonly MenuCommand[] = [
@@ -101,6 +109,8 @@ interface Subject {
   readonly toggled: readonly MenuCommand[];
   /** The thread in front, by its id, which Mark as Read and Remind Me act on. */
   readonly threadId: string | undefined;
+  /** The threads either side of the one in front, which K and J open. */
+  readonly steps: ThreadSteps;
   readonly threadUnread: boolean;
 }
 
@@ -115,6 +125,7 @@ function useSubject(signedIn: boolean): Subject {
   const { selected } = useGlobalSearchParams<{ selected?: string }>();
   const focus: MenuFocus = signedIn ? menuFocusOf(pathname, selected) : { kind: MENU_SUBJECT.NONE };
   const thread = useInboxThread(focus.kind === MENU_SUBJECT.THREAD ? focus.id : undefined).listed;
+  const steps = useThreadSteps(thread?.item.id);
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
 
@@ -153,6 +164,10 @@ function useSubject(signedIn: boolean): Subject {
     if (thread.item.remindAt !== undefined) enabled.push(MENU_COMMAND.REMIND_CLEAR);
 
     if (isUnread(thread.item)) toggled.push(MENU_COMMAND.TOGGLE_READ);
+
+    if (steps.previous !== undefined) enabled.push(MENU_COMMAND.PREVIOUS_ITEM);
+
+    if (steps.next !== undefined) enabled.push(MENU_COMMAND.NEXT_ITEM);
   } else if (agent !== undefined) {
     address = linked(
       task === undefined
@@ -181,6 +196,7 @@ function useSubject(signedIn: boolean): Subject {
     enabled,
     toggled,
     threadId: thread?.item.id,
+    steps,
     threadUnread: thread !== undefined && isUnread(thread.item),
   };
 }
@@ -296,6 +312,14 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
   // Note that a sheet already standing is not opened again, so a key pressed twice never stacks two of it.
   const standing = (route: string) => pathname === route || pathname.startsWith(`${route}/`);
 
+  // A step opens the thread above or below where the one in front stands: in its place on a pushed page, so Back still lands on the list, and beside the list in a split view, as a tap on its row would.
+  const stepTo = (id: string | undefined) => {
+    if (id === undefined) return;
+
+    if (pathname === INBOX_ROUTE) router.setParams({ selected: id });
+    else router.replace(`${INBOX_ROUTE}/${encodeURIComponent(id)}`);
+  };
+
   const act = (command: MenuCommand, index: number | undefined) => {
     if (!enabled.includes(command)) return;
     const { task, threadId } = subject;
@@ -332,7 +356,7 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
         return;
       case MENU_COMMAND.INBOX:
-        return router.navigate("/inbox");
+        return router.navigate(INBOX_ROUTE);
       case MENU_COMMAND.TASKS:
         return router.navigate("/tasks");
       case MENU_COMMAND.SEARCH:
@@ -356,6 +380,10 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
         }
 
         return;
+      case MENU_COMMAND.PREVIOUS_ITEM:
+        return stepTo(subject.steps.previous);
+      case MENU_COMMAND.NEXT_ITEM:
+        return stepTo(subject.steps.next);
       case MENU_COMMAND.PIN:
         if (task === undefined) return;
         {

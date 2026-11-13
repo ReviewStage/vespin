@@ -195,6 +195,50 @@ export function useInboxListing(view: {
 }
 
 /**
+ * The Inbox's rows, by id, in the order a list drew them: the compact list's
+ * as a row is opened, the split view's list column's as it stands, each with
+ * its scope and its search, so an open thread's arrows and the iPad's K and J
+ * step through what the reader was looking at, as the panel's K and J step
+ * through the list held on screen. Note that it lives as long as the app
+ * does, and a thread it doesn't hold, such as one a notification opened,
+ * steps through the kept scope's live rows instead (`useThreadSteps`).
+ */
+let heldOrder: readonly string[] = [];
+
+/** Holds the order a list draws its rows in, for the steps from a thread it opened. */
+export function holdInboxOrder(ids: readonly string[]): void {
+  heldOrder = ids;
+}
+
+/** The threads either side of an open one, in the list's order; none at an end. */
+export type ThreadSteps = {
+  readonly previous?: string | undefined;
+  readonly next?: string | undefined;
+};
+
+/**
+ * The threads either side of an open one: in the order a list held as it
+ * was opened, or, for a thread that order doesn't hold, in the kept scope's
+ * live rows, the open thread kept among them, as the panel's list keeps the
+ * item its pane shows, which are then held for the next steps. None for no
+ * thread.
+ */
+export function useThreadSteps(id: string | undefined): ThreadSteps {
+  const { show } = useInboxScope();
+  const listing = useInboxListing({ show, search: "", chosen: id });
+  const held = id !== undefined && heldOrder.includes(id);
+  const order = held ? heldOrder : listing.listed.map(({ item }) => item.id);
+  const at = id === undefined ? -1 : order.indexOf(id);
+
+  // Note that a thread the held order doesn't hold starts a run of its own on the live rows, held from then on, so a step to a thread an older order also holds keeps to this run's order rather than jumping to that one's.
+  useEffect(() => {
+    if (id !== undefined && !held) heldOrder = order;
+  }, [id, held, order]);
+
+  return at < 0 ? {} : { previous: order[at - 1], next: order[at + 1] };
+}
+
+/**
  * How many threads wait on the reader, which the Inbox's tab carries, as the
  * panel's Inbox counts them (`waitsOnReaderNow`): every open thread that is
  * theirs and not its agent's turn, a notice among them, but one whose

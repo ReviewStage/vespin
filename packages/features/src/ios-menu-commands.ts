@@ -23,6 +23,8 @@ export const MENU_COMMAND = {
   SIDEBAR: "sidebar",
   MARK_DONE: "markDone",
   TOGGLE_READ: "toggleRead",
+  PREVIOUS_ITEM: "previousItem",
+  NEXT_ITEM: "nextItem",
   PIN: "pin",
   REMIND_HOUR: "remindHour",
   REMIND_TOMORROW: "remindTomorrow",

@@ -20,7 +20,7 @@ let menuCommandPosted = Notification.Name("dev.vespin.menu-commands.command")
 
 /// The menu each command of Vespin's own stands in.
 private enum Place {
-  case application, file, view, sidebar, subject, remind, help
+  case application, file, view, sidebar, subject, remind, steps, help
 }
 
 /// One of Vespin's commands: its id, which JavaScript routes it by, and how the menu draws it.
@@ -85,6 +85,13 @@ private let commands: [Command] = [
   Command(
     id: "openInBrowser", place: .subject, title: "Open in Browser", symbol: "ExternalLink", input: "o",
     modifiers: [.command, .alternate]),
+  // The panel's own pager keys, K and J, unmodified as the panel's are, so a thread steps as it does on the desktop.
+  Command(
+    id: "previousItem", place: .steps, title: "Previous Inbox Item", symbol: "ChevronUp",
+    input: "k", modifiers: []),
+  Command(
+    id: "nextItem", place: .steps, title: "Next Inbox Item", symbol: "ChevronDown",
+    input: "j", modifiers: []),
   Command(id: "help", place: .help, title: "Vespin Help", symbol: nil),
   Command(id: "feedback", place: .help, title: "Send Feedback", symbol: "MessageSquare"),
 ]
@@ -182,9 +189,12 @@ enum MenuBar {
     let remind = UIMenu(
       title: "Remind Me", image: glyph("Clock"), children: elements(.remind))
     let subjectCommands = elements(.subject)
+    // Note that K and J stand only in the Thread menu, since they step through the Inbox's threads alone and a key shown where it can't act is one that doesn't work.
+    let steps = subject == "thread" ? [inline(elements(.steps))] : []
     let menu = UIMenu(
       title: subjectTitles[subject] ?? "Task", identifier: subjectMenu,
-      children: [inline(Array(subjectCommands.prefix(3))), remind, inline(Array(subjectCommands.dropFirst(3)))])
+      children: [inline(Array(subjectCommands.prefix(3))), remind, inline(Array(subjectCommands.dropFirst(3)))]
+        + steps)
     builder.insertSibling(showingImages(menu), afterMenu: .view)
 
     insert(elements(.help), atStartOf: .help, title: "Help", after: .window, into: builder)
@@ -284,7 +294,36 @@ enum MenuBar {
   }
 }
 
+/// The first responder, found by asking it to name itself, since UIKit offers no public read of it.
+private weak var foundResponder: UIResponder?
+
+extension UIResponder {
+  @objc fileprivate func vespinNameFirstResponder(_ sender: Any?) {
+    foundResponder = self
+  }
+}
+
+/// Whether what has focus takes typed text, such as a reply's box, whose letters an unmodified key command must never take.
+@MainActor
+private func typingFocused() -> Bool {
+  foundResponder = nil
+  UIApplication.shared.sendAction(
+    #selector(UIResponder.vespinNameFirstResponder(_:)), to: nil, from: nil, for: nil)
+  return foundResponder is UIKeyInput
+}
+
 extension UIApplication {
+  /// K and J, which carry no modifier, give way to a field being typed in, so the letters reach it.
+  override public func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+    if action == #selector(vespinMenuCommand(_:)), let command = sender as? UIKeyCommand,
+      command.modifierFlags.isEmpty, typingFocused()
+    {
+      return false
+    }
+    return super.canPerformAction(action, withSender: sender)
+  }
+
+
   /// The action of every command of Vespin's, which reaches here at the end of the responder chain whatever is focused.
   @objc func vespinMenuCommand(_ sender: UICommand) {
     guard let id = sender.propertyList as? String, MenuBar.mayAct(id) else { return }
