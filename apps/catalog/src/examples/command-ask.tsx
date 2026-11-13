@@ -17,7 +17,7 @@ const SHORT_COMMAND = "git -C ~/code/app status --short";
 
 const LONG_COMMAND = [
   "cd ~/code/app && pnpm install --frozen-lockfile",
-  "pnpm exec vitest run packages/host/src/compose-mac-commands.test.ts --reporter=verbose",
+  "pnpm exec vitest run packages/host/src/compose-machine-commands.test.ts --reporter=verbose",
   "git log --oneline -20 && git status --short && pnpm exec tsc --noEmit",
   'for pkg in packages/*; do echo "$pkg"; (cd "$pkg" && pnpm run typecheck); done',
   `tail -n 200 ~/Library/Logs/${PRODUCT_NAME}/main.log`,

@@ -2,29 +2,39 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
-import { claimMacCommand, queueMacCommand } from "@repo/database/models/mac-command-store";
+import {
+  claimMachineCommand,
+  queueMachineCommand,
+} from "@repo/database/models/machine-command-store";
 import { user } from "@repo/database/schemas/auth";
 import { getTestDB } from "@repo/database/testing";
-import { MAC_COMMANDS_READ, macCommandsOfLiveRows } from "@repo/features/mac-command-live";
 import {
-  MAC_COMMAND_KIND,
-  type MacCommand,
-  type MacCommandKind,
-  macCommandKindsQuery,
-} from "@repo/features/mac-command-wire";
+  MACHINE_COMMANDS_READ,
+  machineCommandsOfLiveRows,
+} from "@repo/features/machine-command-live";
+import {
+  MACHINE_COMMAND_KIND,
+  type MachineCommand,
+  type MachineCommandKind,
+  machineCommandKindsQuery,
+} from "@repo/features/machine-command-wire";
 import { sql } from "drizzle-orm";
 import { Clock, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
-import { macCommandsRead } from "./mac-commands.js";
+import { machineCommandsRead } from "./machine-commands.js";
 
 /** The instant the clock reads now, which every command these tests queue is at or after. */
 const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis));
 
 /** The account's unclaimed commands of the kinds given as a Mac following them live decodes them, the statement run as Realtime runs it. */
-const liveCommandsOf = (userId: string, kinds: readonly MacCommandKind[]) =>
+const liveCommandsOf = (userId: string, kinds: readonly MachineCommandKind[]) =>
   Effect.gen(function* () {
     const statements = Option.getOrThrow(
-      macCommandsRead.statements({ userId, kinds: macCommandKindsQuery(kinds), device: "" }),
+      machineCommandsRead.statements({
+        userId,
+        kinds: machineCommandKindsQuery(kinds),
+        device: "",
+      }),
     );
 
     const sqlClient = yield* SqlClient.SqlClient;
@@ -33,8 +43,8 @@ const liveCommandsOf = (userId: string, kinds: readonly MacCommandKind[]) =>
       ...statements.commands.params,
     ]);
 
-    return macCommandsOfLiveRows(
-      yield* Schema.decodeUnknownEffect(MAC_COMMANDS_READ.rows)({ commands }),
+    return machineCommandsOfLiveRows(
+      yield* Schema.decodeUnknownEffect(MACHINE_COMMANDS_READ.rows)({ commands }),
     );
   });
 
@@ -49,9 +59,9 @@ const openAccounts = Effect.gen(function* () {
   return { owner, other };
 });
 
-const command = (timeoutSeconds = 60): MacCommand => ({
+const command = (timeoutSeconds = 60): MachineCommand => ({
   id: randomUUID(),
-  kind: MAC_COMMAND_KIND.SHELL,
+  kind: MACHINE_COMMAND_KIND.SHELL,
   command: "git branch --show-current",
   timeoutSeconds,
 });
@@ -66,7 +76,7 @@ const queueOtherKind = (userId: string) =>
     const id = randomUUID();
     const queuedAt = (yield* now).toISOString();
     yield* db.execute(
-      sql`INSERT INTO mac_command (id, user_id, kind, timeout_seconds, queued_at)
+      sql`INSERT INTO machine_command (id, user_id, kind, timeout_seconds, queued_at)
           VALUES (${id}, ${userId}, 'browser', 30, ${queuedAt})`,
     );
 
@@ -74,7 +84,7 @@ const queueOtherKind = (userId: string) =>
   });
 
 /** What every Mac's read names: shell alone. */
-const SHELL_ONLY = [MAC_COMMAND_KIND.SHELL];
+const SHELL_ONLY = [MACHINE_COMMAND_KIND.SHELL];
 
 it.layer(getTestDB())("the account's Mac commands' live read", (it) => {
   it.effect(
@@ -84,10 +94,10 @@ it.layer(getTestDB())("the account's Mac commands' live read", (it) => {
         const { owner, other } = yield* openAccounts;
         const since = yield* now;
         const [first, second] = [command(), command(30)];
-        yield* queueMacCommand(owner, first);
-        yield* queueMacCommand(owner, second);
+        yield* queueMachineCommand(owner, first);
+        yield* queueMachineCommand(owner, second);
         yield* queueOtherKind(owner);
-        yield* queueMacCommand(other, command());
+        yield* queueMachineCommand(other, command());
 
         assert.deepEqual(
           (yield* liveCommandsOf(owner, SHELL_ONLY)).map(({ id }) => id).toSorted(),
@@ -101,15 +111,15 @@ it.layer(getTestDB())("the account's Mac commands' live read", (it) => {
         );
 
         assert.deepEqual(
-          yield* claimMacCommand(other, second.id, since, SHELL_ONLY),
+          yield* claimMachineCommand(other, second.id, since, SHELL_ONLY),
           Option.none(),
         );
         assert.deepEqual(
-          yield* claimMacCommand(owner, second.id, since, SHELL_ONLY),
+          yield* claimMachineCommand(owner, second.id, since, SHELL_ONLY),
           Option.some(second),
         );
         assert.deepEqual(
-          yield* claimMacCommand(owner, second.id, since, SHELL_ONLY),
+          yield* claimMachineCommand(owner, second.id, since, SHELL_ONLY),
           Option.none(),
         );
         assert.deepEqual(yield* liveCommandsOf(owner, SHELL_ONLY), [first]);
@@ -120,14 +130,14 @@ it.layer(getTestDB())("the account's Mac commands' live read", (it) => {
     Effect.gen(function* () {
       const { owner } = yield* openAccounts;
       const queued = command();
-      yield* queueMacCommand(owner, queued);
+      yield* queueMachineCommand(owner, queued);
       const later = new Date((yield* Clock.currentTimeMillis) + 1);
 
       assert.deepEqual(
-        yield* claimMacCommand(owner, queued.id, later, [MAC_COMMAND_KIND.SHELL]),
+        yield* claimMachineCommand(owner, queued.id, later, [MACHINE_COMMAND_KIND.SHELL]),
         Option.none(),
       );
-      assert.deepEqual(yield* liveCommandsOf(owner, [MAC_COMMAND_KIND.SHELL]), [queued]);
+      assert.deepEqual(yield* liveCommandsOf(owner, [MACHINE_COMMAND_KIND.SHELL]), [queued]);
     }),
   );
 });

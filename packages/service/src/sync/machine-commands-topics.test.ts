@@ -3,20 +3,20 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import {
-  claimMacCommand,
-  queueMacCommand,
-  settleMacCommand,
-  withdrawMacCommand,
-} from "@repo/database/models/mac-command-store";
+  claimMachineCommand,
+  queueMachineCommand,
+  settleMachineCommand,
+  withdrawMachineCommand,
+} from "@repo/database/models/machine-command-store";
 import { user } from "@repo/database/schemas/auth";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { expectTopicsFire, getTestDB } from "@repo/database/testing";
-import { MAC_COMMAND_KIND } from "@repo/features/mac-command-wire";
+import { MACHINE_COMMAND_KIND } from "@repo/features/machine-command-wire";
 import { Effect, Option } from "effect";
-import { macCommandsRead } from "../live/reads/mac-commands.js";
+import { machineCommandsRead } from "../live/reads/machine-commands.js";
 
 /**
- * The Mac's live read of the commands it may claim (`macCommandsRead`) on
+ * The Mac's live read of the commands it may claim (`machineCommandsRead`) on
  * the migrated capture: a command queued, claimed, settled, and withdrawn,
  * each through its real writer, notifies the account's topic, which the
  * read is woken on, so a Mac holding the read hears an agent's command
@@ -41,7 +41,13 @@ const wakesTheMac = <A, E, R>(
 ) =>
   Effect.gen(function* () {
     const fired = yield* expectTopicsFire(write, topics);
-    const woken = macCommandsRead.topics({ userId, kinds: MAC_COMMAND_KIND.SHELL, device: "" });
+
+    const woken = machineCommandsRead.topics({
+      userId,
+      kinds: MACHINE_COMMAND_KIND.SHELL,
+      device: "",
+    });
+
     assert.ok(
       topics.some(([kind, id]) => woken.some((topic) => topic[0] === kind && topic[1] === id)),
       "the Mac's read is woken by a topic the write notifies",
@@ -58,12 +64,12 @@ it.layer(getTestDB())("what moves the commands a Mac may claim notifies", (it) =
         const userId = yield* openAccount;
         const account: readonly SyncTopic[] = [[TOPIC.ACCOUNT, userId]];
         const id = randomUUID();
-        const kinds = [MAC_COMMAND_KIND.SHELL];
+        const kinds = [MACHINE_COMMAND_KIND.SHELL];
 
         const queued = yield* wakesTheMac(
-          queueMacCommand(userId, {
+          queueMachineCommand(userId, {
             id,
-            kind: MAC_COMMAND_KIND.SHELL,
+            kind: MACHINE_COMMAND_KIND.SHELL,
             command: "git status",
             timeoutSeconds: 60,
           }),
@@ -74,7 +80,7 @@ it.layer(getTestDB())("what moves the commands a Mac may claim notifies", (it) =
         assert.equal(queued.txids.length, 1, "the queue notifies under one transaction");
 
         const claimed = yield* wakesTheMac(
-          claimMacCommand(userId, id, new Date(0), kinds),
+          claimMachineCommand(userId, id, new Date(0), kinds),
           account,
           userId,
         );
@@ -82,7 +88,7 @@ it.layer(getTestDB())("what moves the commands a Mac may claim notifies", (it) =
         assert.ok(Option.isSome(claimed.value), "the command was claimed");
 
         const settled = yield* wakesTheMac(
-          settleMacCommand(userId, id, {
+          settleMachineCommand(userId, id, {
             exitCode: 0,
             stdout: "nothing to commit\n",
             stderr: "",
@@ -94,7 +100,7 @@ it.layer(getTestDB())("what moves the commands a Mac may claim notifies", (it) =
         );
 
         assert.ok(settled.value, "the result was kept");
-        yield* wakesTheMac(withdrawMacCommand(userId, id), account, userId);
+        yield* wakesTheMac(withdrawMachineCommand(userId, id), account, userId);
       }),
   );
 });

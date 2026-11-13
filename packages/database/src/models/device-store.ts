@@ -23,12 +23,12 @@ import {
   hostUpdateSchema,
 } from "@repo/features/device-agent-wire";
 import {
-  type MacCommandMode,
-  type MacDeviceJoinRequest,
-  type MacDeviceSettings,
-  macCommandModeSchema,
-  macDeviceSettingsSchema,
-} from "@repo/features/mac-command-wire";
+  type MachineCommandMode,
+  type MachineDeviceJoinRequest,
+  type MachineDeviceSettings,
+  machineCommandModeSchema,
+  machineDeviceSettingsSchema,
+} from "@repo/features/machine-command-wire";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
@@ -346,11 +346,11 @@ const joinDevice = SqlSchema.findAll({
     platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     arch: Schema.Literals(Object.values(DEVICE_ARCH)),
     ...MachineColumnsSchema.fields,
-    commandMode: macCommandModeSchema,
+    commandMode: machineCommandModeSchema,
     alwaysAllowedApps: Schema.Array(Schema.String),
     now: Schema.Date,
   }),
-  Result: macDeviceSettingsSchema,
+  Result: machineDeviceSettingsSchema,
   execute: ({
     userId,
     id,
@@ -389,7 +389,7 @@ const joinDevice = SqlSchema.findAll({
           setWhere: sql`${device.userId} = ${userId}`,
         })
         .returning({
-          commandMode: sql<MacCommandMode>`${device.commandMode}`,
+          commandMode: sql<MachineCommandMode>`${device.commandMode}`,
           alwaysAllowedApps: sql<readonly string[]>`${device.alwaysAllowedApps}`,
         }),
     ),
@@ -398,7 +398,7 @@ const joinDevice = SqlSchema.findAll({
 const writeSettings = SqlSchema.findAll({
   Request: Schema.Struct({
     ...DeviceKeySchema.fields,
-    commandMode: macCommandModeSchema,
+    commandMode: machineCommandModeSchema,
     alwaysAllowedApps: Schema.Array(Schema.String),
   }),
   Result: Schema.Struct({ id: Schema.String }),
@@ -557,8 +557,8 @@ export function devicesNamed(ids: readonly string[]): DeviceEffect<ReadonlyMap<s
  */
 export function joinCommandDevice(
   userId: string,
-  joining: MacDeviceJoinRequest,
-): DeviceEffect<Option.Option<MacDeviceSettings>> {
+  joining: MachineDeviceJoinRequest,
+): DeviceEffect<Option.Option<MachineDeviceSettings>> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     Effect.map(
       joinDevice({
@@ -603,7 +603,7 @@ export function allowedAppsOf(userId: string): DeviceEffect<readonly MachineAllo
 export function saveCommandDeviceSettings(
   userId: string,
   id: string,
-  settings: MacDeviceSettings,
+  settings: MachineDeviceSettings,
 ): DeviceEffect<boolean> {
   return Effect.map(writeSettings({ userId, id, ...settings }), (rows) => rows.length > 0);
 }

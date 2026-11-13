@@ -48,7 +48,7 @@ const PAGE_CAPABILITY = {
   [SETTINGS_VIEW.SKILLS]: null,
   [SETTINGS_VIEW.MEMORY]: null,
   [SETTINGS_VIEW.APPEARANCE]: null,
-  [SETTINGS_VIEW.THIS_MAC]: HOST_CAPABILITY.MAC_COMMANDS,
+  [SETTINGS_VIEW.THIS_MAC]: HOST_CAPABILITY.MACHINE_COMMANDS,
   [SETTINGS_VIEW.EXPERIMENTAL]: null,
   [SETTINGS_VIEW.ABOUT]: null,
   // Each platform's own chords: a browser's tab lists its own for the ones its browser keeps, and none of the Mac app's alone.

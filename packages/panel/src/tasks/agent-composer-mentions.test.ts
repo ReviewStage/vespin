@@ -872,7 +872,7 @@ test("off a Mac that runs its commands, an @ in the box offers the apps the read
     run: {
       ...idle.run,
       capabilities: DESKTOP_CAPABILITIES.filter(
-        (capability) => capability !== HOST_CAPABILITY.MAC_COMMANDS,
+        (capability) => capability !== HOST_CAPABILITY.MACHINE_COMMANDS,
       ),
     },
   });

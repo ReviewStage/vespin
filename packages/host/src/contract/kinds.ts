@@ -698,13 +698,13 @@ export const MAC_SHELL_ACT_KIND = {
 export type MacShellActKind = (typeof MAC_SHELL_ACT_KIND)[keyof typeof MAC_SHELL_ACT_KIND];
 
 /**
- * A command an agent asked to run on this Mac (`../mac-command-ask.ts`),
+ * A command an agent asked to run on this Mac (`../machine-command-ask.ts`),
  * answered by the developer from the prompt the panel draws over the window:
  * allowed once, allowed always, which also writes Settings › This Mac to
  * Always allow, or denied. Answered by the host, which holds the ask.
  */
-const MAC_COMMAND_ACT_KIND = {
-  MAC_COMMAND_ANSWER: "macCommands.answer",
+const MACHINE_COMMAND_ACT_KIND = {
+  MACHINE_COMMAND_ANSWER: "macCommands.answer",
   COMPUTER_USE_STATUS: "macCommands.computerUseStatus",
   COMPUTER_USE_APPS: "macCommands.computerUseApps",
   COMPUTER_USE_APP_ICON: "macCommands.computerUseAppIcon",
@@ -923,7 +923,7 @@ export const PORT_ACT_KIND = {
   ...INSTALLED_SKILL_ACT_KIND,
   ...INTEGRATION_ACT_KIND,
   ...MAC_APP_ACT_KIND,
-  ...MAC_COMMAND_ACT_KIND,
+  ...MACHINE_COMMAND_ACT_KIND,
   ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
@@ -1129,7 +1129,7 @@ export const PORT_ACT_USE = {
   MCP_CLIENTS_RETRY: ACT_USE.READ,
   MCP_CLIENTS_REVOKE: ACT_USE.WRITE,
 
-  MAC_COMMAND_ANSWER: ACT_USE.WRITE,
+  MACHINE_COMMAND_ANSWER: ACT_USE.WRITE,
   COMPUTER_USE_STATUS: ACT_USE.FETCH,
   COMPUTER_USE_APPS: ACT_USE.FETCH,
   COMPUTER_USE_APP_ICON: ACT_USE.FETCH,

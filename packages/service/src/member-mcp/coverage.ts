@@ -398,7 +398,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     answerRequest: INTERNAL,
   },
   liveActivities: { startToken: INTERNAL, activityToken: INTERNAL, ended: INTERNAL },
-  macCommands: {
+  machineCommands: {
     waiting: INTERNAL,
     settle: INTERNAL,
     claim: INTERNAL,

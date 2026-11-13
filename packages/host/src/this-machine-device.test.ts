@@ -4,7 +4,7 @@ import { it } from "@effect/vitest";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import { Effect, Layer, Option } from "effect";
 import * as FileSystem from "effect/FileSystem";
-import { openThisMacDevice } from "./this-mac-device.js";
+import { openThisMachineDevice } from "./this-machine-device.js";
 
 /**
  * This install as a device of each account: the id it is to an account is
@@ -30,11 +30,11 @@ it.effect(
   "an account's id is kept across launches, starts as the host's own, and is replaced only when renewed",
   () =>
     Effect.gen(function* () {
-      const stateRoot = yield* temporaryDirectoryScoped("this-mac-device-");
+      const stateRoot = yield* temporaryDirectoryScoped("this-machine-device-");
       const createId = counter();
 
       const launch = (hostDeviceId: Option.Option<string>) =>
-        openThisMacDevice({ stateRoot, hostDeviceId: Effect.succeed(hostDeviceId), createId });
+        openThisMachineDevice({ stateRoot, hostDeviceId: Effect.succeed(hostDeviceId), createId });
 
       const first = yield* launch(Option.some("host-device"));
       const owner = yield* first.idFor("user-owner");
@@ -56,13 +56,13 @@ it.effect(
   "where the ids can't be written, an account keeps one id for the run, and a renewed one replaces it",
   () =>
     Effect.gen(function* () {
-      const scratch = yield* temporaryDirectoryScoped("this-mac-device-");
+      const scratch = yield* temporaryDirectoryScoped("this-machine-device-");
       const fileSystem = yield* FileSystem.FileSystem;
       // A state folder that is a file, so no id can ever be written under it.
       const stateRoot = `${scratch}/state`;
       yield* fileSystem.writeFileString(stateRoot, "");
 
-      const device = yield* openThisMacDevice({
+      const device = yield* openThisMachineDevice({
         stateRoot,
         hostDeviceId: Effect.succeed(Option.none()),
         createId: counter(),

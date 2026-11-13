@@ -21,11 +21,11 @@ import {
 import { INTEGRATION_ACTS, INTEGRATION_FOLLOWS, integrationActsContract } from "./integrations.js";
 import type { PortActKind } from "./kinds.js";
 import { macAppActsContract } from "./mac-apps.js";
-import { MAC_COMMAND_ACTS, macCommandActsContract } from "./mac-commands.js";
 import { macPhotoActsContract } from "./mac-photos.js";
 import { macResourcesActsContract } from "./mac-resources.js";
 import { macShellActsContract } from "./mac-shells.js";
 import { macTerminalActsContract } from "./mac-terminals.js";
+import { MACHINE_COMMAND_ACTS, machineCommandActsContract } from "./machine-commands.js";
 import { PORT_FORWARD_ACTS, portForwardActsContract } from "./port-forwards.js";
 import { pushesContract } from "./pushes.js";
 import { SETTINGS_ACTS, settingsActsContract } from "./settings.js";
@@ -46,10 +46,10 @@ import { WORKSPACE_ACTS, WORKSPACE_FOLLOWS, workspaceActsContract } from "./work
  */
 
 export {
-  MAC_COMMAND_DECISION,
-  type MacCommandAnswer,
-  type MacCommandDecision,
-} from "../mac-command-ask.js";
+  MACHINE_COMMAND_DECISION,
+  type MachineCommandAnswer,
+  type MachineCommandDecision,
+} from "../machine-command-ask.js";
 
 export { ACCOUNT_ACTS } from "./account.js";
 
@@ -117,8 +117,6 @@ export {
   isLiveFollow,
 } from "./live-follow.js";
 
-export { type ComputerUseStatus, MAC_COMMAND_ACTS, type MacApp } from "./mac-commands.js";
-
 export {
   MAC_PROCESS_KIND,
   type MacProcess,
@@ -127,6 +125,8 @@ export {
 } from "./mac-resources.js";
 
 export type { MacRunActionShell } from "./mac-shells.js";
+
+export { type ComputerUseStatus, MACHINE_COMMAND_ACTS, type MacApp } from "./machine-commands.js";
 
 export { PORT_FORWARD_ACTS } from "./port-forwards.js";
 
@@ -166,7 +166,7 @@ export const HOST_ACTS = {
   ...INSTALLED_SKILL_FOLLOWS,
   ...INTEGRATION_ACTS,
   ...INTEGRATION_FOLLOWS,
-  ...MAC_COMMAND_ACTS,
+  ...MACHINE_COMMAND_ACTS,
   ...PORT_FORWARD_ACTS,
   ...SETTINGS_ACTS,
   ...TASKS_ACTS,
@@ -188,7 +188,7 @@ export const actContract = {
   ...installedSkillActsContract,
   ...integrationActsContract,
   ...macAppActsContract,
-  ...macCommandActsContract,
+  ...machineCommandActsContract,
   ...macPhotoActsContract,
   ...macResourcesActsContract,
   ...macShellActsContract,

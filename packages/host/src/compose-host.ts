@@ -7,7 +7,7 @@ import {
   HostedDeviceAgentClient,
   HostedGitHubConnectionClient,
   HostedIntegrationsClient,
-  HostedMacCommandClient,
+  HostedMachineCommandClient,
   HostedMcpClientsClient,
   HostedTaskClient,
   HostedTerminalClient,
@@ -16,7 +16,7 @@ import {
 import { type ClientIdentity, clientNamedOnService } from "@repo/features/client-identity";
 import { HostedInstalledSkillClient } from "@repo/features/installed-skill-client";
 import { INTEGRATION_LANDING } from "@repo/features/integration-wire";
-import { MAC_COMMAND_MODE } from "@repo/features/mac-command-wire";
+import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
 import {
   carried,
   GATEWAY_EVENT,
@@ -48,10 +48,10 @@ import { composeAutomations } from "./compose-automations.js";
 import { composeInstalledSkills } from "./compose-installed-skills.js";
 import { composeIntegrations } from "./compose-integrations.js";
 import {
-  composeMacCommands,
-  type MacCommandsDevice,
+  composeMachineCommands,
   type MacComputerUse,
-} from "./compose-mac-commands.js";
+  type MachineCommandsDevice,
+} from "./compose-machine-commands.js";
 import { composeMirrors } from "./compose-mirrors.js";
 import { composePortForwards, type PortForwardsComposer } from "./compose-port-forwards.js";
 import { composeSettings, type SettingsComposer } from "./compose-settings.js";
@@ -94,7 +94,11 @@ import { liveSocketClient } from "./live-socket.js";
 import { HOST_NODE_CAPABILITY } from "./node-capabilities.js";
 import { offlineRefusedCount } from "./queued-writes.js";
 import { createGatewayService } from "./service.js";
-import { enrolledHostDeviceId, openThisMacDevice, type ThisMacDevice } from "./this-mac-device.js";
+import {
+  enrolledHostDeviceId,
+  openThisMachineDevice,
+  type ThisMachineDevice,
+} from "./this-machine-device.js";
 import { windowFocus } from "./window-focus.js";
 
 /**
@@ -111,7 +115,7 @@ const HOST_START_ORDER: readonly HostConcern[] = [
   HOST_CONCERN.AUTOMATIONS,
   HOST_CONCERN.INTEGRATIONS,
   HOST_CONCERN.INSTALLED_SKILLS,
-  HOST_CONCERN.MAC_COMMANDS,
+  HOST_CONCERN.MACHINE_COMMANDS,
   HOST_CONCERN.THIS_MAC_HOST,
   HOST_CONCERN.MIRRORS,
 ];
@@ -173,11 +177,11 @@ function macComputerUse(settings: SettingsComposer, helper: ComputerUseHelperSea
  * names it, and Settings' say over commands and apps, its command mode and
  * the apps allowed without asking, which the service's is written over.
  */
-function macCommandsDevice(
+function machineCommandsDevice(
   settings: SettingsComposer,
-  ids: ThisMacDevice,
+  ids: ThisMachineDevice,
   host: ThisMacHostSeam,
-): MacCommandsDevice {
+): MachineCommandsDevice {
   const stored = Effect.map(Effect.orDie(settings.store.snapshot()), (snapshot) => snapshot.stored);
 
   /** One setting written, answering whether it landed: a write Settings refused answers its reason. */
@@ -225,7 +229,7 @@ function macCommandsDevice(
 
 /** What each platform concern adds to the assembly's requirements when it is chosen. */
 interface PlatformConcernRequirements {
-  [HOST_PLATFORM_CONCERN.MAC_COMMANDS]: ChildProcessSpawner.ChildProcessSpawner;
+  [HOST_PLATFORM_CONCERN.MACHINE_COMMANDS]: ChildProcessSpawner.ChildProcessSpawner;
   [HOST_PLATFORM_CONCERN.THIS_MAC_HOST]: ChildProcessSpawner.ChildProcessSpawner | ThisMacHost;
   [HOST_PLATFORM_CONCERN.TERMINALS]: TerminalSocket;
   [HOST_PLATFORM_CONCERN.PORT_FORWARDS]: LoopbackListener | TerminalSocket;
@@ -523,11 +527,11 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
     // Note that this install is a device only where it can say which machine it is, which This Mac's host names; else its commands are claimed as the account alone.
     const thisMac = yield* Effect.serviceOption(ThisMacHost);
 
-    const thisMacDevice = yield* Option.match(thisMac, {
-      onNone: () => Effect.succeed(Option.none<ThisMacDevice>()),
+    const thisMachineDevice = yield* Option.match(thisMac, {
+      onNone: () => Effect.succeed(Option.none<ThisMachineDevice>()),
       onSome: (host) =>
         Effect.asSome(
-          openThisMacDevice({
+          openThisMachineDevice({
             stateRoot: kernel.stateRoot,
             hostDeviceId: enrolledHostDeviceId(
               host.stateRoot,
@@ -538,9 +542,9 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         ),
     });
 
-    const macCommands = platform.has(HOST_PLATFORM_CONCERN.MAC_COMMANDS)
+    const machineCommands = platform.has(HOST_PLATFORM_CONCERN.MACHINE_COMMANDS)
       ? yield* served(
-          composeMacCommands({
+          composeMachineCommands({
             kernel,
             account,
             accountId,
@@ -554,14 +558,17 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             allowAlways: Effect.map(
               settings.settingsWrite(
                 () =>
-                  settings.store.set(APP_SETTING_SCHEMA.macCommands.field, MAC_COMMAND_MODE.ALWAYS),
+                  settings.store.set(
+                    APP_SETTING_SCHEMA.macCommands.field,
+                    MACHINE_COMMAND_MODE.ALWAYS,
+                  ),
                 () => Effect.void,
                 "Could not save that setting on this system.",
                 undefined,
               ),
               (saved) => saved.reason === undefined,
             ),
-            client: new HostedMacCommandClient({
+            client: new HostedMachineCommandClient({
               serviceBaseUrl: kernel.hostedServiceBaseUrl,
               credential: account.credential,
             }),
@@ -569,17 +576,17 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
               onNone: () => ({}),
               onSome: (helper) => ({ computer: macComputerUse(settings, helper) }),
             }),
-            ...Option.match(Option.all([thisMacDevice, thisMac]), {
+            ...Option.match(Option.all([thisMachineDevice, thisMac]), {
               onNone: () => ({}),
-              onSome: ([ids, host]) => ({ device: macCommandsDevice(settings, ids, host) }),
+              onSome: ([ids, host]) => ({ device: machineCommandsDevice(settings, ids, host) }),
             }),
           }),
         )
       : {
-          ...unavailableConcern(HOST_PLATFORM_CONCERN.MAC_COMMANDS),
+          ...unavailableConcern(HOST_PLATFORM_CONCERN.MACHINE_COMMANDS),
           // Note that a host without the Mac commands holds no ask, so an answer finds none waiting and is answered all the same, as the Gateway's refusal of its method was.
           acts: {
-            MAC_COMMAND_ANSWER: () => Effect.void,
+            MACHINE_COMMAND_ANSWER: () => Effect.void,
             COMPUTER_USE_STATUS: () =>
               Effect.succeed({
                 permissions: { screenRecording: false, accessibility: false },
@@ -602,7 +609,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
               (snapshot) => snapshot?.stored.keepAwake ?? APP_SETTING_SCHEMA.keepAwake.default,
             ),
             settingsTold: settings.told,
-            ...Option.match(thisMacDevice, {
+            ...Option.match(thisMachineDevice, {
               onNone: () => ({}),
               onSome: (ids) => ({ deviceIdFor: ids.idFor }),
             }),
@@ -785,7 +792,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       [HOST_CONCERN.AUTOMATIONS]: automations,
       [HOST_CONCERN.INTEGRATIONS]: integrations,
       [HOST_CONCERN.INSTALLED_SKILLS]: installedSkills,
-      [HOST_CONCERN.MAC_COMMANDS]: macCommands,
+      [HOST_CONCERN.MACHINE_COMMANDS]: machineCommands,
       [HOST_CONCERN.THIS_MAC_HOST]: thisMacHost,
       [HOST_CONCERN.TERMINALS]: terminals,
       [HOST_CONCERN.PORT_FORWARDS]: portForwards,
@@ -838,7 +845,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       automations.acts,
       installedSkills.acts,
       integrations.acts,
-      macCommands.acts,
+      machineCommands.acts,
       portForwards.acts,
       tasks.acts,
       workspaces.acts,

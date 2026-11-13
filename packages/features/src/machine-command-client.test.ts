@@ -1,5 +1,5 @@
 /**
- * mac-command-client.test.ts -- the Mac's side of the commands its account's agents queue, as the Mac observes it.
+ * machine-command-client.test.ts -- the Mac's side of the commands its account's agents queue, as the Mac observes it.
  *
  * The live read names the kinds this Mac runs and the account it is for,
  * and reads a refused session as signed out; a claim answers the command
@@ -14,27 +14,27 @@ import { fakeCloudApi, HTTP_STATUS } from "@repo/wire/testing";
 import { Effect } from "effect";
 import { accountBearer } from "./account-call.js";
 import { LIVE_SIGNED_OUT } from "./live-wire.js";
-import { HostedMacCommandClient } from "./mac-command-client.js";
-import { MAC_COMMANDS_READ } from "./mac-command-live.js";
+import { HostedMachineCommandClient } from "./machine-command-client.js";
+import { MACHINE_COMMANDS_READ } from "./machine-command-live.js";
 import {
-  MAC_COMMAND_KIND,
-  type MacCommand,
-  type MacCommandResult,
-  macCommandKindsQuery,
-} from "./mac-command-wire.js";
+  MACHINE_COMMAND_KIND,
+  type MachineCommand,
+  type MachineCommandResult,
+  machineCommandKindsQuery,
+} from "./machine-command-wire.js";
 import { HOSTED_API_ERROR } from "./service-wire.js";
 
 const BASE_URL = "https://app.test";
 const COMMAND_ID = "11111111-1111-4111-8111-111111111111";
 
-const COMMAND: MacCommand = {
+const COMMAND: MachineCommand = {
   id: COMMAND_ID,
-  kind: MAC_COMMAND_KIND.SHELL,
+  kind: MACHINE_COMMAND_KIND.SHELL,
   command: "git status",
   timeoutSeconds: 60,
 };
 
-const RESULT: MacCommandResult = {
+const RESULT: MachineCommandResult = {
   exitCode: 0,
   stdout: "nothing to commit\n",
   stderr: "",
@@ -42,8 +42,8 @@ const RESULT: MacCommandResult = {
   timedOut: false,
 };
 
-function client(): HostedMacCommandClient {
-  return new HostedMacCommandClient({
+function client(): HostedMachineCommandClient {
+  return new HostedMachineCommandClient({
     serviceBaseUrl: BASE_URL,
     credential: accountBearer({
       readAccessToken: () => Effect.succeed("token-1"),
@@ -77,13 +77,13 @@ it.effect(
       };
 
       const api = fakeCloudApi({ "GET /api/live/mac-commands": { answer: () => sealed } });
-      const kinds = [MAC_COMMAND_KIND.SHELL];
+      const kinds = [MACHINE_COMMAND_KIND.SHELL];
 
       assert.deepEqual(
         yield* Effect.provide(
-          client().liveRead(MAC_COMMANDS_READ, {
+          client().liveRead(MACHINE_COMMANDS_READ, {
             userId: "user-mac",
-            kinds: macCommandKindsQuery(kinds),
+            kinds: machineCommandKindsQuery(kinds),
           }),
           api.layer,
         ),
@@ -102,9 +102,9 @@ it.effect(
 
       assert.deepEqual(
         yield* Effect.provide(
-          client().liveRead(MAC_COMMANDS_READ, {
+          client().liveRead(MACHINE_COMMANDS_READ, {
             userId: "user-mac",
-            kinds: macCommandKindsQuery(kinds),
+            kinds: machineCommandKindsQuery(kinds),
           }),
           refused.layer,
         ),

@@ -3,7 +3,7 @@ import * as FileSystem from "effect/FileSystem";
 import { readHostDevice } from "./host-device-record.js";
 
 /**
- * this-mac-device.ts -- the device this install of the app is to each account signed in on it, by its id: what its commands are claimed by, and what This Mac's host enrolls under.
+ * this-machine-device.ts -- the device this install of the app is to each account signed in on it, by its id: what its commands are claimed by, and what This Mac's host enrolls under.
  *
  * The ids are kept in the app's own state (`mac-device.json`), one per
  * account, so every install on a Mac is a machine of its own, as a
@@ -25,14 +25,14 @@ const decodeDeviceIds = Schema.decodeUnknownOption(DeviceIdsSchema);
 const encodeDeviceIds = Schema.encodeSync(DeviceIdsSchema);
 
 /** This install as a device of each account signed in on it. */
-export interface ThisMacDevice {
+export interface ThisMachineDevice {
   /** The id this install is to the account given: kept, or, where none is, the host's own or one minted, kept from then on. */
   readonly idFor: (userId: string) => Effect.Effect<string>;
   /** A new id minted and kept for the account given, in place of one the service refused as another account's. */
   readonly renewFor: (userId: string) => Effect.Effect<string>;
 }
 
-export interface ThisMacDeviceParts {
+export interface ThisMachineDeviceParts {
   /** The app's own state folder, where the ids are kept. */
   readonly stateRoot: string;
   /** The id This Mac's host enrolled under with this app's service, where it did; none where it never did, or with another service. */
@@ -54,7 +54,7 @@ export const enrolledHostDeviceId = (hostStateRoot: string, serviceOrigin: strin
   );
 
 /** This install as a device, its ids kept in the state folder given. */
-export const openThisMacDevice = Effect.fnUntraced(function* (parts: ThisMacDeviceParts) {
+export const openThisMachineDevice = Effect.fnUntraced(function* (parts: ThisMachineDeviceParts) {
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const oneAtATime = (yield* Semaphore.make(1)).withPermits(1);
@@ -106,5 +106,5 @@ export const openThisMacDevice = Effect.fnUntraced(function* (parts: ThisMacDevi
       }),
     );
 
-  return { idFor, renewFor } satisfies ThisMacDevice;
+  return { idFor, renewFor } satisfies ThisMachineDevice;
 });

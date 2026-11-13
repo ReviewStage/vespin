@@ -270,24 +270,24 @@ export const HOSTED_SERVICE_PATH = {
   /**
    * The shell commands the account's agents asked to run on the developer's
    * Mac: the ones waiting, held open while none is, each claimed for the
-   * Mac that read it (GET), and one's result (POST). `mac-command-wire.ts`
+   * Mac that read it (GET), and one's result (POST). `machine-command-wire.ts`
    * declares the bodies.
    */
-  MAC_COMMANDS: "/api/mac-commands",
-  /** One waiting command, named by its id, claimed for the Mac that heard of it live (POST). `mac-command-wire.ts` declares the bodies. */
-  MAC_COMMAND_CLAIM: "/api/mac-commands/claim",
+  MACHINE_COMMANDS: "/api/mac-commands",
+  /** One waiting command, named by its id, claimed for the Mac that heard of it live (POST). `machine-command-wire.ts` declares the bodies. */
+  MACHINE_COMMAND_CLAIM: "/api/mac-commands/claim",
   /** That a Mac of the account listens now for the kinds it names (POST), which a Mac following its commands live says on a timer, since its read writes nothing. */
-  MAC_COMMANDS_LISTENING: "/api/mac-commands/listening",
-  /** This Mac joining as the device its commands are claimed by, carrying its own settings up the first time (POST). `mac-command-wire.ts` declares the bodies. */
-  MAC_COMMAND_DEVICE: "/api/mac-commands/device",
-  /** A device's own settings for agents' commands and computer use, as the member changed them on it (POST). `mac-command-wire.ts` declares the bodies. */
-  MAC_COMMAND_DEVICE_SETTINGS: "/api/mac-commands/device/settings",
+  MACHINE_COMMANDS_LISTENING: "/api/mac-commands/listening",
+  /** This Mac joining as the device its commands are claimed by, carrying its own settings up the first time (POST). `machine-command-wire.ts` declares the bodies. */
+  MACHINE_COMMAND_DEVICE: "/api/mac-commands/device",
+  /** A device's own settings for agents' commands and computer use, as the member changed them on it (POST). `machine-command-wire.ts` declares the bodies. */
+  MACHINE_COMMAND_DEVICE_SETTINGS: "/api/mac-commands/device/settings",
   /**
    * The commands of the kinds named that no Mac of the account has claimed,
    * sealed for following (GET), or with `?poll=true` their rows inline.
    * `live-wire.ts` declares the answer.
    */
-  LIVE_MAC_COMMANDS: "/api/live/mac-commands",
+  LIVE_MACHINE_COMMANDS: "/api/live/mac-commands",
   /**
    * The account's automations: list them, newest first, or one task's where
    * `planId` names it (GET), or make one (POST). `automation-wire.ts`

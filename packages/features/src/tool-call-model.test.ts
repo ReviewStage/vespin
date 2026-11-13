@@ -159,7 +159,7 @@ test("a command run on the Mac is the command it ran, described as a command is,
     timedOut: true,
   });
 
-  assert.equal(killed.kind, CALL_KIND.MAC_COMMAND);
+  assert.equal(killed.kind, CALL_KIND.MACHINE_COMMAND);
   assert.equal(killed.subject, "pnpm dev");
   assert.equal(killed.description, "Start the dev server");
   assert.deepEqual(killed.input, { kind: TOOL_BLOCK.COMMAND, text: "pnpm dev" });

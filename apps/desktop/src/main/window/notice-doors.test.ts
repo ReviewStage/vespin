@@ -33,7 +33,7 @@ const ignore = () => undefined;
 /** A command waiting on this Mac, announced as `client-notices.ts` announces it, its click handed in. */
 function askNotice(askId: string, onClick: () => void = ignore): AgentNotice {
   return {
-    subject: { kind: NOTICE_KIND.MAC_COMMAND_ASK, askId },
+    subject: { kind: NOTICE_KIND.MACHINE_COMMAND_ASK, askId },
     title: "Run a command on your Mac?",
     body: "An agent is waiting for you to allow or deny a command.",
     onClick,

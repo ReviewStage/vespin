@@ -20,7 +20,7 @@ import { hostsRead } from "../live/reads/hosts.js";
 import { inboxItemsRead } from "../live/reads/inbox-items.js";
 import { installedSkillsRead } from "../live/reads/installed-skills.js";
 import { integrationStatusesRead } from "../live/reads/integration-statuses.js";
-import { macCommandsRead } from "../live/reads/mac-commands.js";
+import { machineCommandsRead } from "../live/reads/machine-commands.js";
 import { agentPagesRead, taskPagesRead } from "../live/reads/pages.js";
 import { pullRequestChaptersRead } from "../live/reads/pull-request-chapters.js";
 import { agentInboxRead, taskInboxRead } from "../live/reads/scope-inbox.js";
@@ -52,7 +52,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   taskCommentsRead,
   taskBrowserTabsRead,
   agentBrowserTabsRead,
-  macCommandsRead,
+  machineCommandsRead,
   integrationStatusesRead,
   sidebarRead,
   workspaceIntegrationsRead,

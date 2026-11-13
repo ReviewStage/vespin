@@ -8,7 +8,7 @@ import {
   HOST_UPDATE_FAILURE_MAX_CHARS,
   hostUpdateSchema,
 } from "./device-agent-wire.js";
-import { macDeviceSettingsSchema } from "./mac-command-wire.js";
+import { machineDeviceSettingsSchema } from "./machine-command-wire.js";
 import { countedNumber, wireUuidSchema } from "./service-wire.js";
 
 /**
@@ -375,7 +375,7 @@ export const machineAllowedAppsAnswerSchema = EffectSchema.Struct({
     EffectSchema.Struct({
       deviceId: wireUuidSchema,
       name: EffectSchema.String,
-      apps: macDeviceSettingsSchema.fields.alwaysAllowedApps,
+      apps: machineDeviceSettingsSchema.fields.alwaysAllowedApps,
     }),
   ),
 });

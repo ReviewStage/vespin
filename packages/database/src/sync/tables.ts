@@ -49,7 +49,7 @@ import { inboxMessage } from "../schemas/inbox-message.js";
 import { installedSkill } from "../schemas/installed-skill.js";
 import { integrationConnection } from "../schemas/integration.js";
 import { integrationInstallation } from "../schemas/integration-installation.js";
-import { macCommand } from "../schemas/mac-command.js";
+import { machineCommand } from "../schemas/machine-command.js";
 import { memory, memoryRecall } from "../schemas/memory.js";
 import { personalWorkspace } from "../schemas/personal-workspace.js";
 import { accountPreference } from "../schemas/preferences.js";
@@ -418,12 +418,12 @@ export const taskReadSync = defineSyncTable(taskRead, {
 /**
  * A command an agent queued for the account's Mac, on the account's topic,
  * which the Mac's read of the commands it may claim is woken on. Note that
- * the account's and each device's listener rows (`mac_command_listener`,
- * `mac_command_device_listener`), which every such read rewrites, are not
+ * the account's and each device's listener rows (`machine_command_listener`,
+ * `machine_command_device_listener`), which every such read rewrites, are not
  * captured: no read waits on them.
  */
-export const macCommandSync = defineSyncTable(macCommand, {
-  topics: [{ kind: TOPIC.ACCOUNT, column: macCommand.userId }],
+export const machineCommandSync = defineSyncTable(machineCommand, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: machineCommand.userId }],
 });
 
 /**
@@ -880,7 +880,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   taskPinSync,
   agentPinSync,
   taskReadSync,
-  macCommandSync,
+  machineCommandSync,
   accountPreferenceSync,
   accountSoundSync,
   accountSoundChoiceSync,
