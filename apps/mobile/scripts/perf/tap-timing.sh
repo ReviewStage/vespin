@@ -14,4 +14,4 @@ pkill -INT -f "recordVideo.*$O/screen.mp4"; sleep 3
 C=$(xcrun simctl get_app_container $U dev.vespin.ios data 2>/dev/null)
 cat $C/Documents/perf-probe-*.jsonl > $O/probe.jsonl 2>/dev/null; echo >> $O/probe.jsonl
 ffprobe -v error -select_streams v -show_entries frame=pts_time -of csv=p=0 $O/screen.mp4 > $O/frames.txt 2>/dev/null
-python3 $H/analyze.py $O
+python3 $H/analyze.py $O; rm -f $O/screen.mp4
