@@ -2834,8 +2834,10 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       yield* documents.end;
       yield* FiberHandle.clear(listFollow);
       yield* FiberMap.clear(coldReads);
+
       // Note that the cold tasks read are read again for the session signing in, as the windows' holds on them stand through a sign-out.
       for (const id of coldRead) coldWaiting.add(id);
+
       coldRead.clear();
       coldNone.clear();
       yield* Scope.close(taskList.scope, Exit.void);
