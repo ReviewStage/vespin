@@ -9,7 +9,7 @@ faq:
   - q: Do I have to watch my agents while they work?
     a: "No. Set them up to notify you when they need input, and review the pull request when they finish. Reading a transcript as it runs is rarely worth the time."
   - q: Can I answer agents from my phone or Slack?
-    a: "It depends on the tool. Cursor can send you a Slack message when an agent finishes ([Cursor docs](https://docs.cursor.com/background-agent/web-and-mobile)). Vespin's iOS app and Slack bot both let you answer an agent's question, with a button for each option on a decision."
+    a: "It depends on the tool. Cursor can send you a Slack message when an agent finishes ([Cursor docs](https://cursor.com/docs/integrations/slack)). Vespin's iOS app and Slack bot both let you answer an agent's question, with a button for each option on a decision."
   - q: What should an agent ask me, and what should it decide alone?
     a: "Ask about product and design choices, trade-offs that cost something either way, steps that are hard to undo, and anything only you can do, such as adding a secret. Have it decide the rest itself."
   - q: Do I still need worktrees or sandboxes?
@@ -20,7 +20,7 @@ Running agents in parallel is solved, and isolating each in a worktree or sandbo
 
 ## Running agents in parallel
 
-Each agent needs its own checkout. With Claude Code, `claude --worktree <name>` starts a session in its own [git worktree](https://git-scm.com/docs/git-worktree) on a new branch ([Claude Code docs](https://code.claude.com/docs/en/common-workflows#run-parallel-sessions-with-worktrees)). [Conductor](https://www.conductor.build/docs/guides/parallel-agents/run-multiple-claude-code-sessions) creates a worktree and branch for each workspace. [Cursor's cloud agents](https://docs.cursor.com/background-agent/web-and-mobile) run each task on a remote machine.
+Each agent needs its own checkout. With Claude Code, `claude --worktree <name>` starts a session in its own [git worktree](https://git-scm.com/docs/git-worktree) on a new branch ([Claude Code docs](https://code.claude.com/docs/en/common-workflows#run-parallel-sessions-with-worktrees)). [Conductor](https://www.conductor.build/docs/guides/parallel-agents/run-multiple-claude-code-sessions) creates a worktree and branch for each workspace. [Cursor's cloud agents](https://cursor.com/docs/cloud-agent) run each task on a remote machine.
 
 ## What goes wrong
 
@@ -36,7 +36,7 @@ An agent stops for a permission prompt, a question, a choice between two approac
 
 ### Get notified
 
-Have each agent tell you when it needs you. Claude Code runs a `Notification` hook when it needs permission or is waiting for input, and you can point it at a script or a desktop notification ([hooks reference](https://code.claude.com/docs/en/hooks)). Cursor can message you on Slack when an agent finishes ([Cursor's Slack integration](https://docs.cursor.com/slack)).
+Have each agent tell you when it needs you. Claude Code runs a `Notification` hook when it needs permission or is waiting for input, and you can point it at a script or a desktop notification ([hooks reference](https://code.claude.com/docs/en/hooks)). Cursor can message you on Slack when an agent finishes ([Cursor's Slack integration](https://cursor.com/docs/integrations/slack)).
 
 A notification you dismiss is gone, though, so notifications work best alongside a list.
 
