@@ -176,11 +176,21 @@ export interface GitHubPaging<Item> {
   readonly enough?: (items: ReadonlyArray<Item>) => boolean;
 }
 
+/**
+ * What a request names beside its route's own parameters: the headers it
+ * adds, such as an `accept` naming one of GitHub's media types
+ * (https://docs.github.com/en/rest/using-the-rest-api/getting-started-with-the-rest-api#media-types),
+ * as Octokit's `headers` request option takes them.
+ */
+export interface GitHubRequestOptions {
+  readonly headers?: Readonly<Record<string, string>>;
+}
+
 /** One identity's requests to GitHub. Answers are typed by Octokit's route table and decoded by the caller. */
 export interface GitHubClient {
   readonly request: <R extends keyof Endpoints>(
     route: R,
-    parameters?: Endpoints[R]["parameters"],
+    parameters?: Endpoints[R]["parameters"] & GitHubRequestOptions,
   ) => Effect.Effect<Endpoints[R]["response"], GitHubFailure>;
   /**
    * Every item of a listing, following GitHub's `link` headers, or as many
@@ -190,7 +200,7 @@ export interface GitHubClient {
    */
   readonly paginate: <R extends keyof PaginatingEndpoints>(
     route: R,
-    parameters: PaginatingEndpoints[R]["parameters"],
+    parameters: PaginatingEndpoints[R]["parameters"] & GitHubRequestOptions,
     options: GitHubPaging<GitHubPageItem<R>>,
   ) => Effect.Effect<ReadonlyArray<GitHubPageItem<R>>, GitHubFailure>;
   /** A GraphQL document's `data`, decoded by `schema`. */
@@ -606,12 +616,16 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
     });
 
   const clientFor = (state: IdentityState, octokit: GitHubOctokitInstance): GitHubClient => ({
-    request: <R extends keyof Endpoints>(route: R, parameters?: Endpoints[R]["parameters"]) =>
+    request: <R extends keyof Endpoints>(
+      route: R,
+      parameters?: Endpoints[R]["parameters"] & GitHubRequestOptions,
+    ) =>
       called(state, (request) => {
         // SAFETY: Octokit's `request` answers `Endpoints[R]["response"]` for a route of its table, with that route's parameters; its conditional overload cannot see that through the generic `R`.
         const send = octokit.request as (
           route: R,
-          parameters: Endpoints[R]["parameters"] & { readonly request: CallOptions },
+          parameters: Endpoints[R]["parameters"] &
+            GitHubRequestOptions & { readonly request: CallOptions },
         ) => Promise<Endpoints[R]["response"]>;
 
         return send(route, { ...parameters, request });
