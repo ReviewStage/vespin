@@ -135,6 +135,7 @@ import {
   type MarkdownComponents,
   type MarkdownNodeProps,
   type MarkdownSteps,
+  type MarkdownTaskTick,
   TRANSCRIPT_REMARK_STEPS,
 } from "@repo/ui/markdown";
 import { QUOTE_CLASS } from "@repo/ui/quote-face";
@@ -979,16 +980,21 @@ const GITHUB_REMARK_PLUGINS = [wholeRendering];
  * at the panel's scale, their code and tables the transcript's, their links
  * the transcript's: GitHub's own HTML read through the library's parse and
  * sanitizer, never set as HTML. Mentions, references, emoji, task lists,
- * and folded details stand as GitHub rendered them. A picture is the
- * place's to draw (`picture`), in its line where it shares one with words,
- * and stands as its link where the place draws none.
+ * and folded details stand as GitHub rendered them, an alert as the
+ * window's own, and a task item's box as one the reader ticks where the
+ * place hands `taskTick`. A picture is the place's to draw (`picture`), in
+ * its line where it shares one with words, and stands as its link where
+ * the place draws none.
  */
 export function GitHubWords({
   html,
   picture,
+  taskTick,
 }: {
   html: string;
   picture: GitHubPictureDrawer;
+  /** Draws each task item's box the reader can tick, by its place among the words' boxes; every box is read-only without it. */
+  taskTick?: MarkdownTaskTick | undefined;
 }): ReactNode {
   const components = useMemo<MarkdownComponents>(
     () => ({
@@ -1024,6 +1030,7 @@ export function GitHubWords({
       remarkPlugins={GITHUB_REMARK_PLUGINS}
       rehypePlugins={GITHUB_REHYPE_PLUGINS}
       normalizeHtmlIndentation={false}
+      taskTick={taskTick}
     />
   );
 }

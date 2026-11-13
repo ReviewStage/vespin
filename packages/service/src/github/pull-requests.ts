@@ -1298,8 +1298,16 @@ export interface GitHubReaction {
   readonly mine: boolean | undefined;
 }
 
-/** The reactions the member reading gave, by GitHub's GraphQL id of what wears them, as their own token reads them. */
-export type ViewerReactions = ReadonlyMap<string, ReadonlySet<Reaction>>;
+/**
+ * What the member reading's own token reads of the conversation, each by
+ * GitHub's GraphQL id of what it is on: the reactions they gave, and
+ * whether they may edit each comment, review, and review comment's words,
+ * which a task item's box is ticked by.
+ */
+export interface ViewerReads {
+  readonly given: ReadonlyMap<string, ReadonlySet<Reaction>>;
+  readonly editable: ReadonlyMap<string, boolean>;
+}
 
 /** One entry of a pull request's conversation, its author as GitHub names them. */
 interface GitHubConversationEntry {
@@ -1315,6 +1323,8 @@ interface GitHubConversationEntry {
   readonly reactions: readonly GitHubReaction[];
   /** GitHub's GraphQL id of the entry, which a reaction is added to; none where GitHub named none. */
   readonly subject: string | undefined;
+  /** Whether the member reading may edit its words, as their own token reads it; absent where it was not read. */
+  readonly editable?: boolean;
 }
 
 /** One comment of a review thread, its author as GitHub names them. */
@@ -1327,6 +1337,8 @@ interface GitHubThreadComment {
   readonly reactions: readonly GitHubReaction[];
   /** GitHub's GraphQL id of the entry, which a reaction is added to; none where GitHub named none. */
   readonly subject: string | undefined;
+  /** Whether the member reading may edit its words, as their own token reads it; absent where it was not read. */
+  readonly editable?: boolean;
 }
 
 /** One review thread as GitHub holds it: where it is, the hunk it was made on, where it stands, and its comments. */
@@ -2269,7 +2281,7 @@ export const pullRequestConversation = /* @__PURE__ */ Effect.fn("web/pullReques
     token: Redacted.Redacted,
     fullName: string,
     pullRequest: { readonly number: number; readonly url: string },
-    viewer: Effect.Effect<ViewerReactions | undefined, never, R> = Effect.succeed(undefined),
+    viewer: Effect.Effect<ViewerReads | undefined, never, R> = Effect.succeed(undefined),
   ): Effect.fn.Return<
     GitHubOverviewConversation,
     PullRequestReadFailure,
@@ -2306,7 +2318,8 @@ export const pullRequestConversation = /* @__PURE__ */ Effect.fn("web/pullReques
     );
 
     const kept = conversationOf(comments, reviews, graph, pullRequest.url);
-    const mark = viewerMarks(viewed);
+    const mark = viewerMarks(viewed?.given);
+    const editable = editableOf(viewed?.editable);
 
     return {
       reviewers: reviewersOf(reviews, []),
@@ -2315,11 +2328,13 @@ export const pullRequestConversation = /* @__PURE__ */ Effect.fn("web/pullReques
         ...entry,
         subject,
         reactions: mark(subject, reactions),
+        ...editable(subject),
         threads: threads.map((thread) => ({
           ...thread,
           comments: thread.comments.map((comment) => ({
             ...comment,
             reactions: mark(comment.subject, comment.reactions),
+            ...editable(comment.subject),
           })),
         })),
       })),
@@ -2336,13 +2351,24 @@ export const pullRequestConversation = /* @__PURE__ */ Effect.fn("web/pullReques
  */
 const VIEWER_GRACE = Duration.millis(750);
 
+/** Whether the member may edit what `subject` names, as their own read says, as a key to spread; none where it was not read. */
+function editableOf(
+  editable: ViewerReads["editable"] | undefined,
+): (subject: string | undefined) => { readonly editable?: boolean } {
+  return (subject) => {
+    const may = subject === undefined ? undefined : editable?.get(subject);
+
+    return may === undefined ? {} : { editable: may };
+  };
+}
+
 /**
  * The reactions marked with whether the member gave each, by what their own
  * read says of the subject wearing them; left unmarked where their read was
  * not made or did not reach that subject.
  */
 function viewerMarks(
-  viewer: ViewerReactions | undefined,
+  viewer: ViewerReads["given"] | undefined,
 ): (
   subject: string | undefined,
   reactions: readonly GitHubReaction[],
@@ -2363,18 +2389,23 @@ const ViewerGroupsSchema = Schema.optionalKey(
   ),
 );
 
-/** Something read for which reactions the member gave it, by its GraphQL id. */
-const ViewedSchema = Schema.Struct({ id: Schema.String, reactionGroups: ViewerGroupsSchema });
+/** Something read for which reactions the member gave it, and whether they may edit it, by its GraphQL id. */
+const ViewedSchema = Schema.Struct({
+  id: Schema.String,
+  reactionGroups: ViewerGroupsSchema,
+  viewerCanUpdate: Schema.optionalKey(Schema.Boolean),
+});
 
 const ViewedListSchema = Schema.optionalKey(
   Schema.Struct({ nodes: Schema.Array(Schema.NullOr(ViewedSchema)) }),
 );
 
 /**
- * Which reactions the member reading gave, read on their own GitHub token,
- * since a read on the App's token answers for the App's bot: the
- * description, the newest comments and reviews, and every thread comment,
- * each by its GraphQL id, as the conversation's own read bounds them.
+ * Which reactions the member reading gave, and which words they may edit,
+ * read on their own GitHub token, since a read on the App's token answers
+ * for the App's bot: the description's reactions, and the newest comments
+ * and reviews and every thread comment, each by its GraphQL id, as the
+ * conversation's own read bounds them.
  */
 const VIEWER_REACTIONS_QUERY = `query ViewerReactions($owner: String!, $name: String!, $number: Int!) {
   repository(owner: $owner, name: $name) {
@@ -2382,15 +2413,15 @@ const VIEWER_REACTIONS_QUERY = `query ViewerReactions($owner: String!, $name: St
       id
       reactionGroups { content viewerHasReacted }
       comments(last: ${OVERVIEW_BOUNDS.MAX_ENTRIES}) {
-        nodes { id reactionGroups { content viewerHasReacted } }
+        nodes { id viewerCanUpdate reactionGroups { content viewerHasReacted } }
       }
       reviews(last: ${OVERVIEW_BOUNDS.MAX_ENTRIES}) {
-        nodes { id reactionGroups { content viewerHasReacted } }
+        nodes { id viewerCanUpdate reactionGroups { content viewerHasReacted } }
       }
       reviewThreads(last: ${OVERVIEW_BOUNDS.MAX_THREADS}) {
         nodes {
           comments(first: ${OVERVIEW_BOUNDS.MAX_THREAD_COMMENTS}) {
-            nodes { id reactionGroups { content viewerHasReacted } }
+            nodes { id viewerCanUpdate reactionGroups { content viewerHasReacted } }
           }
         }
       }
@@ -2438,15 +2469,15 @@ function givenOf(groups: (typeof ViewedSchema.Type)["reactionGroups"]): Readonly
 }
 
 /**
- * Which reactions the member gave, read on their own token; none where
- * GitHub would not answer them, which leaves the conversation unmarked
- * rather than failing it, said once in the log.
+ * Which reactions the member gave, and which words they may edit, read on
+ * their own token; none where GitHub would not answer them, which leaves
+ * the conversation unmarked rather than failing it, said once in the log.
  */
 export function viewerReactionsOf(
   token: Redacted.Redacted,
   fullName: string,
   number: number,
-): Effect.Effect<ViewerReactions | undefined, never, HttpClient.HttpClient> {
+): Effect.Effect<ViewerReads | undefined, never, HttpClient.HttpClient> {
   const [owner = "", name = ""] = fullName.split("/");
 
   const request = githubPost(GRAPHQL_PATH, token, {
@@ -2474,10 +2505,16 @@ export function viewerReactionsOf(
         [pullRequest.id, givenOf(pullRequest.reactionGroups)],
       ]);
 
-      for (const node of viewed)
-        if (node !== null) given.set(node.id, givenOf(node.reactionGroups));
+      const editable = new Map<string, boolean>();
 
-      return given;
+      for (const node of viewed) {
+        if (node === null) continue;
+        given.set(node.id, givenOf(node.reactionGroups));
+
+        if (node.viewerCanUpdate !== undefined) editable.set(node.id, node.viewerCanUpdate);
+      }
+
+      return { given, editable };
     }),
     Effect.catch((failure) =>
       Effect.as(

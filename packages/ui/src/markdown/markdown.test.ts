@@ -18,7 +18,9 @@ import { MARKDOWN_LOOK, Markdown, type MarkdownProps, markdownStep, TaskBox } fr
  * the same step; a note follows a new address rewriter; a task box a
  * reader may tick is named by its item, asks with its item's place, and
  * flips back when the change is not saved; and one a reader may not tick is
- * the same box, read-only. Synthetic words.
+ * the same box, read-only; a box drawn from HTML asks by its place among the
+ * boxes; and a quote opening on an alert's marker reads as that alert.
+ * Synthetic words.
  */
 
 declare global {
@@ -191,6 +193,45 @@ test("a task box a reader cannot tick is the shared box, named by its item, tick
   assert.ok(first !== undefined, "each task item draws a box");
   await act(async () => first.click());
   assert.equal(first.getAttribute("aria-checked"), "true", "a press changes nothing");
+});
+
+test("words drawn from HTML ask a task box's tick by its place among the words' boxes and their count", async () => {
+  const asked: [number, number][] = [];
+
+  const { container } = drawn({
+    look: MARKDOWN_LOOK.TRANSCRIPT,
+    words:
+      '<ul><li><input type="checkbox" disabled> Trigger review</li><li><input type="checkbox" disabled> Autofix</li></ul>',
+    taskTick: ({ index, count, label, checked }) =>
+      createElement(TaskBox, {
+        label,
+        checked,
+        write: { run: () => asked.push([index, count]), asked: undefined },
+      }),
+  });
+
+  const second = container.querySelector<HTMLElement>('[role="checkbox"][aria-label="Autofix"]');
+  assert.ok(second !== null, "each task item draws a box");
+  await act(async () => second.click());
+  assert.deepEqual(asked, [[1, 2]]);
+});
+
+test("a quote opening on an alert's marker reads as that alert, its marker taken out, in a note and a transcript", () => {
+  for (const look of [MARKDOWN_LOOK.NOTE, MARKDOWN_LOOK.TRANSCRIPT]) {
+    const { container } = drawn({
+      look,
+      words:
+        "> [!WARNING]\n> Mind the gap.\n\n> Plain quote.\n\n> [!NOTE] **not alone** on its line",
+    });
+
+    assert.deepEqual(
+      [...container.querySelectorAll("[data-kind], blockquote")].map((quote) =>
+        quote.textContent?.replaceAll(/\s+/gu, " ").trim(),
+      ),
+      ["Warning Mind the gap.", "Plain quote.", "[!NOTE] not alone on its line"],
+      look,
+    );
+  }
 });
 
 test("words nested too deep to parse are drawn as plain text in every look, never parsed", () => {
