@@ -1,6 +1,5 @@
 // agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer's + and its ⋯ menu, its run actions and its Permanently delete among it, a page it showed, opened whole, the sheet of its options: its model, effort, Fast, permission mode, and MCP servers, and the sheet of its listening ports.
 
-import { DENIES_WAITING } from "@repo/features/agent-approval-model";
 import {
   AGENT_PERMISSION_MODE,
   type AgentPermissionMode,
@@ -42,6 +41,8 @@ import {
   Composer,
   type ComposerMenu,
   ConfirmAsk,
+  DeniesWaiting,
+  drawnCallIds,
   GLYPH,
   GlassDock,
   type Glyph,
@@ -63,12 +64,15 @@ import {
   shownMediaIds,
   type TRANSCRIPT_ITEM,
   type TranscriptItem,
+  type TranscriptReveal,
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
+  useAnnounced,
   useColors,
   withSending,
+  withWaitingLine,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
@@ -261,22 +265,31 @@ function CardMergeAsk({
   );
 }
 
-/** The agent's composer at the page's foot: a call waiting on an answer, the queue, the pictures attached, and what did not go over the field, and Stop in Send's place while the agent works. */
+/** The agent's composer at the page's foot: that a message denies the call waiting, a call waiting that no row draws, the queue, the pictures attached, and what did not go over the field, and Stop in Send's place while the agent works. */
 function AgentComposerBar({
   composer,
-  banner,
+  approvals,
+  onShowWaiting,
   addMenu,
   note,
 }: {
   readonly composer: AgentComposer;
-  readonly banner: AgentApprovals["banner"];
+  readonly approvals: Pick<AgentApprovals, "waiting" | "banner">;
+  /** Scrolls the transcript to the call waiting; none where no row draws one. */
+  readonly onShowWaiting: (() => void) | undefined;
   readonly addMenu: ComposerMenu;
   /** What the last act of the page's menu or the + that did not take said, where the composer's own says nothing. */
   readonly note: string | undefined;
 }) {
   const said = composer.note ?? note;
+  const { banner, waiting } = approvals;
+  // Note that the bar tells VoiceOver of a call waiting, since it stands while the call's row may lie out of the list's drawn window, and an agent held for an answer waits on the reader wherever they are.
+  useAnnounced(waiting === undefined ? undefined : `${waiting.words}, ${waiting.asks}`, true);
+  // Note that a message sent now denies the calls waiting only where Send would not queue it behind the turn.
+  const denies = waiting !== undefined && !composer.sendQueues;
 
   const head =
+    !denies &&
     banner === undefined &&
     composer.queued.length === 0 &&
     composer.paused === undefined &&
@@ -291,9 +304,8 @@ function AgentComposerBar({
             onPick={composer.skills.pick}
           />
         )}
-        {banner === undefined ? null : (
-          <HeldCallBanner {...banner} denies={composer.sendQueues ? undefined : DENIES_WAITING} />
-        )}
+        {banner === undefined ? null : <HeldCallBanner {...banner} />}
+        {denies ? <DeniesWaiting onShow={onShowWaiting} /> : null}
         <QueuedLines
           lines={composer.queued}
           paused={composer.paused}
@@ -424,9 +436,12 @@ function suggestedSendOf(
  * opens; a fold opens on what it holds, a page the agent showed opens
  * whole, and a pull request it opened opens its own screen, its card
  * offering Review, which opens it on GitHub, and Merge where it may merge
- * now, which asks first. Its composer floats over the transcript's foot:
- * while a call waits, a banner over its field answers the oldest, and says
- * that a message sent now denies it where Send would not queue it, and a
+ * now, which asks first. While a call waits, the working line says so
+ * ("Waiting on you · 1 approval"), and the call is answered once, on its
+ * own row. Its composer floats over the transcript's foot: while a call
+ * waits, a line over its field says that a message sent now denies it where
+ * Send would not queue it, a press scrolling to the call's row, and a call
+ * no row draws, such as a subagent's, is answered by a banner there; a
  * follow-up, with the photos the + attaches, steers the turn under way or
  * waits behind it as the member's Follow-up behavior says, and Stop stands
  * in Send's place while the agent works. The + is a menu (`agentAddMenu`):
@@ -529,7 +544,20 @@ export function AgentScreen() {
   useEffect(() => whole.ask(cuts), [whole, cuts]);
 
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
-  const approvals = useAgentApprovals(agent, id);
+  const drawn = useMemo(() => drawnCallIds(items), [items]);
+  const approvals = useAgentApprovals(agent, id, drawn);
+  const waitingWords = approvals.waiting?.words;
+  // The rows as the list draws them, the working line saying the agent waits on the member while a call does.
+  const rows = useMemo(() => withWaitingLine(items, waitingWords), [items, waitingWords]);
+  // The call's row the denial line last asked the list to bring into view.
+  const [reveal, setReveal] = useState<TranscriptReveal | undefined>(undefined);
+  const waitingCall = approvals.waiting?.callId;
+
+  const showWaiting =
+    waitingCall === undefined
+      ? undefined
+      : () => setReveal((was) => ({ callId: waitingCall, serial: (was?.serial ?? 0) + 1 }));
+
   const opened = useOpenedSuggestion({ suggestedBy, button });
   const sendSuggestion = useSuggestionSender();
   const suggested = suggestedSendOf(opened, id, sendSuggestion);
@@ -730,14 +758,16 @@ export function AgentScreen() {
         bar={
           <AgentComposerBar
             composer={composer}
-            banner={approvals.banner}
+            approvals={approvals}
+            onShowWaiting={showWaiting}
             addMenu={addMenu}
             note={actions.note ?? transcriptCopy.note ?? mode?.note ?? pick.note}
           />
         }
       >
         <AgentTranscript
-          items={items}
+          items={rows}
+          reveal={reveal}
           head={
             <AgentHead
               model={agent === undefined ? undefined : modelLabel(agent.model)}

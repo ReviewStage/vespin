@@ -211,7 +211,12 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
     }
   | { readonly kind: typeof TRANSCRIPT_ITEM.MEDIA; readonly media: readonly ShownMedia[] }
   | { readonly kind: typeof TRANSCRIPT_ITEM.FOOT; readonly words: string }
-  | { readonly kind: typeof TRANSCRIPT_ITEM.WORKING; readonly words: string }
+  | {
+      readonly kind: typeof TRANSCRIPT_ITEM.WORKING;
+      readonly words: string;
+      /** Whether the agent waits on the reader's answer rather than working, which the line says in the attention ink with no spinner. */
+      readonly waiting?: boolean | undefined;
+    }
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.PAGE;
       readonly title: string;
@@ -859,6 +864,30 @@ export function transcriptItems(
       words: WORKING_LINE,
     },
   ];
+}
+
+/**
+ * The items with their working line saying that the agent waits on the
+ * reader (`waitingOnYouWords`), as the panel's does, so an agent held for
+ * an answer never reads as working on; the items as they stand where none
+ * waits.
+ */
+export function withWaitingLine(
+  items: readonly TranscriptItem[],
+  waiting: string | undefined,
+): readonly TranscriptItem[] {
+  if (waiting === undefined) return items;
+
+  return items.map((item) =>
+    item.kind === TRANSCRIPT_ITEM.WORKING ? { ...item, words: waiting, waiting: true } : item,
+  );
+}
+
+/** The calls the items draw a row for, by id, so a call the agent holds that none draws, such as a subagent's, is answered elsewhere. */
+export function drawnCallIds(items: readonly TranscriptItem[]): ReadonlySet<string> {
+  return new Set(
+    items.flatMap((item) => (item.kind === TRANSCRIPT_ITEM.CALL ? [item.callId] : [])),
+  );
 }
 
 /** The toggles with a fold's, by its place, or a call's, by its id, turned the other way. */
