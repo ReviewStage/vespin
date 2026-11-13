@@ -48,9 +48,9 @@ import {
 } from "../agents/device-agents-procedures.js";
 import { type HostsProcedureSeams, hostsProcedures } from "../agents/hosts-procedures.js";
 import {
-  type MacCommandsProcedureSeams,
-  macCommandsProcedures,
-} from "../agents/mac-commands-procedures.js";
+  type MachineCommandsProcedureSeams,
+  machineCommandsProcedures,
+} from "../agents/machine-commands-procedures.js";
 import { type MessagesProcedureSeams, messagesProcedures } from "../agents/messages-procedures.js";
 import {
   type AutomationsProcedureSeams,
@@ -70,6 +70,10 @@ import {
   type GitHubTokenProcedureSeams,
   githubTokenProcedures,
 } from "../github/github-token-procedures.js";
+import {
+  type MergeQueueProcedureSeams,
+  mergeQueueProcedures,
+} from "../github/merge-queue-procedures.js";
 import {
   type RepositoryPinsProcedureSeams,
   repositoryPinsProcedures,
@@ -126,6 +130,7 @@ import {
   type SentryInstallProcedureSeams,
   sentryInstallProcedures,
 } from "../triggers/sentry/sentry-install-procedures.js";
+import { type VoiceProcedureSeams, voiceProcedures } from "../voice/voice-procedures.js";
 import {
   type WorkspaceEnvironmentProcedureSeams,
   workspaceEnvironmentProcedures,
@@ -146,6 +151,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   AgentsProcedureSeams &
   AutomationsProcedureSeams &
   DictationProcedureSeams &
+  VoiceProcedureSeams &
   EventsProcedureSeams &
   GitHubProcedureSeams &
   GitHubTokenProcedureSeams &
@@ -156,8 +162,9 @@ export type HostedRouterSeams = AccountProcedureSeams &
   LinkPreviewsProcedureSeams &
   LiveProcedureSeams &
   DeviceAgentsProcedureSeams &
-  MacCommandsProcedureSeams &
+  MachineCommandsProcedureSeams &
   McpClientsProcedureSeams &
+  MergeQueueProcedureSeams &
   MessagesProcedureSeams &
   ModelsProcedureSeams &
   DescriptionCommentsProcedureSeams &
@@ -205,7 +212,7 @@ export function hostedRouter(seams: HostedRouterSeams) {
     live: liveProcedures(seams),
     liveActivities: liveActivitiesProcedures(seams),
     deviceAgents: deviceAgentsProcedures(seams),
-    macCommands: macCommandsProcedures(seams),
+    machineCommands: machineCommandsProcedures(seams),
     mcpClients: mcpClientsProcedures(seams),
     messages: messagesProcedures(seams),
     models: modelsProcedures(seams),
@@ -219,10 +226,12 @@ export function hostedRouter(seams: HostedRouterSeams) {
     taskFiles: taskFilesProcedures(seams),
     taskFollowers: taskFollowersProcedures(seams),
     taskSections: taskSectionsProcedures(seams),
+    voice: voiceProcedures(seams),
     workspaceEnvironment: workspaceEnvironmentProcedures(seams),
     workspaceSandboxSetup: workspaceSandboxSetupProcedures(seams),
     workspaceGithub: workspaceGithubProcedures(seams),
     workspaceInvitations: workspaceInvitationsProcedures(seams),
+    workspaceMergeQueue: mergeQueueProcedures(seams),
     workspaceSentry: sentryInstallProcedures(seams),
     workspaceSlackBot: slackBotProcedures(seams),
     workspaces: workspacesProcedures(seams),

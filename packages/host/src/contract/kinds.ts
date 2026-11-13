@@ -221,6 +221,8 @@ export const AGENT_ACT_KIND = {
   /** Run agents on this Mac turned on or off, from This Mac's row in Settings › Hosts; only the desktop answers it. */
   HOSTS_THIS_MAC_SET: "hosts.thisMacSet",
   HOSTS_PAIRING_READ: "hosts.pairingRead",
+  /** The apps the account's own machines always allow agents to use, each machine's by its name, which an agent's `@` offers where it is typed off the agent's Mac; asked of the service on every host. */
+  HOSTS_ALLOWED_APPS: "hosts.allowedApps",
   HOSTS_PAIRING_APPROVE: "hosts.pairingApprove",
   HOSTS_PAIRING_DENY: "hosts.pairingDeny",
   AGENTS_LIST: "agents.list",
@@ -258,6 +260,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_BOOT: "agents.boot",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
+  /** A message of the member's the service refused let go, from its Delete or its Edit, which took its words back into the box (`agent-queue-writes.ts`). */
+  AGENTS_UNSEND: "agents.unsend",
   /** A button in an agent's reply as the transcript draws it, asked of the service as it is drawn (`reply-button-wire.ts`). */
   AGENTS_REPLY_BUTTON: "agents.replyButton",
   /** A suggestion in an agent's reply sent by the member from its draft, which the service runs once. */
@@ -634,6 +638,15 @@ export const BROWSER_LIVE_ACT_KIND = {
 } as const;
 
 /**
+ * An app on this Mac brought to the front, answered by the platform shell
+ * (`mac-apps.ts`).
+ */
+export const MAC_APP_ACT_KIND = {
+  /** An app an agent is using on this Mac, by its bundle id, brought forward so the developer can take over. */
+  MAC_APP_SHOW: "macApp.show",
+} as const;
+
+/**
  * The Mac's own Terminal opened for a local agent, answered by the platform
  * shell (`mac-terminals.ts`).
  */
@@ -685,14 +698,16 @@ export const MAC_SHELL_ACT_KIND = {
 export type MacShellActKind = (typeof MAC_SHELL_ACT_KIND)[keyof typeof MAC_SHELL_ACT_KIND];
 
 /**
- * A command an agent asked to run on this Mac (`../mac-command-ask.ts`),
+ * A command an agent asked to run on this Mac (`../machine-command-ask.ts`),
  * answered by the developer from the prompt the panel draws over the window:
  * allowed once, allowed always, which also writes Settings › This Mac to
  * Always allow, or denied. Answered by the host, which holds the ask.
  */
-const MAC_COMMAND_ACT_KIND = {
-  MAC_COMMAND_ANSWER: "macCommands.answer",
+const MACHINE_COMMAND_ACT_KIND = {
+  MACHINE_COMMAND_ANSWER: "macCommands.answer",
   COMPUTER_USE_STATUS: "macCommands.computerUseStatus",
+  COMPUTER_USE_APPS: "macCommands.computerUseApps",
+  COMPUTER_USE_APP_ICON: "macCommands.computerUseAppIcon",
   COMPUTER_USE_ASK_PERMISSIONS: "macCommands.computerUseAskPermissions",
 } as const;
 
@@ -837,6 +852,8 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
   WORKSPACE_REPOSITORY_SETUP_PUT: "workspace.repositorySetupPut",
   WORKSPACE_RUN_ACTIONS_PUT: "workspace.runActionsPut",
+  /** Every pull request GitHub's merge queues hold across a workspace's repositories, read as the Merge queue page opens and again while it stands; refused while the account's Merge queue experiment is off. */
+  WORKSPACE_MERGE_QUEUE_READ: "workspace.mergeQueueRead",
 } as const;
 
 /**
@@ -905,7 +922,8 @@ export const PORT_ACT_KIND = {
   ...CLI_ACT_KIND,
   ...INSTALLED_SKILL_ACT_KIND,
   ...INTEGRATION_ACT_KIND,
-  ...MAC_COMMAND_ACT_KIND,
+  ...MAC_APP_ACT_KIND,
+  ...MACHINE_COMMAND_ACT_KIND,
   ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
@@ -1011,6 +1029,7 @@ export const PORT_ACT_USE = {
   HOSTS_REMOVE: ACT_USE.WRITE,
   HOSTS_THIS_MAC_SET: ACT_USE.WRITE,
   HOSTS_PAIRING_READ: ACT_USE.FETCH,
+  HOSTS_ALLOWED_APPS: ACT_USE.FETCH,
   HOSTS_PAIRING_APPROVE: ACT_USE.WRITE,
   HOSTS_PAIRING_DENY: ACT_USE.WRITE,
   AGENTS_LIST: ACT_USE.READ,
@@ -1033,6 +1052,7 @@ export const PORT_ACT_USE = {
   AGENTS_CLEAR: ACT_USE.WRITE,
   AGENTS_BOOT: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
+  AGENTS_UNSEND: ACT_USE.WRITE,
   AGENTS_REPLY_BUTTON: ACT_USE.FETCH,
   AGENTS_REPLY_BUTTON_PRESS: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,
@@ -1109,8 +1129,10 @@ export const PORT_ACT_USE = {
   MCP_CLIENTS_RETRY: ACT_USE.READ,
   MCP_CLIENTS_REVOKE: ACT_USE.WRITE,
 
-  MAC_COMMAND_ANSWER: ACT_USE.WRITE,
+  MACHINE_COMMAND_ANSWER: ACT_USE.WRITE,
   COMPUTER_USE_STATUS: ACT_USE.FETCH,
+  COMPUTER_USE_APPS: ACT_USE.FETCH,
+  COMPUTER_USE_APP_ICON: ACT_USE.FETCH,
   COMPUTER_USE_ASK_PERMISSIONS: ACT_USE.WRITE,
 
   MAC_PHOTO_TO_JPEG: ACT_USE.FETCH,
@@ -1126,6 +1148,8 @@ export const PORT_ACT_USE = {
   MAC_SHELL_ACTIONS: ACT_USE.FETCH,
 
   MAC_TERMINAL_LOCAL_AGENT: ACT_USE.WRITE,
+
+  MAC_APP_SHOW: ACT_USE.WRITE,
 
   PORT_FORWARD_SET: ACT_USE.WRITE,
   PORT_SHARE_SET: ACT_USE.WRITE,
@@ -1260,6 +1284,7 @@ export const PORT_ACT_USE = {
   WORKSPACE_INSTALL_SCRIPT_PUT: ACT_USE.WRITE,
   WORKSPACE_REPOSITORY_SETUP_PUT: ACT_USE.WRITE,
   WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
+  WORKSPACE_MERGE_QUEUE_READ: ACT_USE.FETCH,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
 
 /**
@@ -1270,6 +1295,7 @@ export const PORT_ACT_USE = {
 export const PLATFORM_PORT_ACT_KIND = {
   ...BROWSER_LIVE_ACT_KIND,
   ...CLI_ACT_KIND,
+  ...MAC_APP_ACT_KIND,
   ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,

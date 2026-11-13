@@ -211,6 +211,20 @@ export const STOPPED_TURN: readonly Step[] = [
 ];
 
 /**
+ * A goal's turn, held open by its checker until the service's `/goal clear`
+ * interrupts it, then the clear run as a turn of its own, which no Stop hook
+ * comes before, as Claude Code runs a command.
+ */
+export const GOAL_CLEARED_TURN: readonly Step[] = [
+  { emit: INIT },
+  { emit: said("Working toward the goal.") },
+  { untilInterrupted: true },
+  { emit: result("error_during_execution") },
+  { awaitPrompt: true },
+  { emit: result("success") },
+];
+
+/**
  * A turn held at work until the test releases it, so the service's second message
  * arrives while it runs and is left for the next turn, which the CLI starts
  * on that message as soon as the first ends.

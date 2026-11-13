@@ -8,7 +8,9 @@ import {
 } from "@repo/features/skill-mention";
 import { skillWord } from "@repo/features/skill-word";
 import { isSlashCommand } from "@repo/features/slash-command";
+import { EXPERIMENT } from "@repo/settings";
 import type { MarkdownComponents, MarkdownNodeProps } from "@repo/ui/markdown";
+import { useQuery } from "@tanstack/react-query";
 import {
   createContext,
   type ReactNode,
@@ -20,7 +22,8 @@ import {
   useState,
 } from "react";
 import { afterPaint } from "../after-paint.js";
-import { CommandRef, SENT_COMMANDS } from "./command-ref.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
+import { CommandRef, sentCommands } from "./command-ref.js";
 import { WordFilesContext } from "./file-chips.js";
 import type { SkillSource } from "./skill-picker.js";
 import { opensFile, SkillRef, type SkillSubject, type SkillWithFile } from "./skill-ref.js";
@@ -280,8 +283,12 @@ export function SentWords({
 }): ReactNode {
   const skills = useKnownSkills(holdsSlashWord(text));
   const files = useContext(WordFilesContext);
-  // Note that the command a message opens with is its chip even where a skill shares its name, since the command is what ran.
-  const leading = leadingCommandToken(text, SENT_COMMANDS);
+
+  const goalsOn =
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.GOALS) }).data === true;
+
+  // Note that the command a message opens with is its chip even where a skill shares its name, since the command is what ran; `/goal` is words while the Goals experiment is off.
+  const leading = leadingCommandToken(text, sentCommands(goalsOn));
 
   const chips = [
     ...(leading === undefined ? [] : [commandChip(text, leading)]),

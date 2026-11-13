@@ -37,7 +37,11 @@
  * takes them back at the next launch (`requeue`): each a write's name, its
  * idempotency key, and its input. They are the account's own, so they
  * outlast a build of other row shapes where they still read, and leave with
- * the file at a sign-out.
+ * the file at a sign-out. So do the messages the service refused that wait
+ * on the member's Retry, Edit, or Delete, as the agents' record of messages
+ * on their way hands them out (`agent-queue-writes.ts`): their words, their
+ * key, their files' names, and why they did not go, each kept in the form
+ * that record reads back, which this file holds unread.
  */
 
 import { AUTOMATIONS_READ } from "@repo/features/automation-live";
@@ -146,12 +150,13 @@ const keptReadsSchema = Schema.Struct({
   [KEPT_READ.AUTOMATIONS]: Schema.optionalKey(keptRowsSchema.fields[KEPT_READ.AUTOMATIONS]),
 });
 
-/** What the file holds once opened: whose it is, the shapes its rows were kept at, the rows, and the writes waiting. */
+/** What the file holds once opened: whose it is, the shapes its rows were kept at, the rows, the writes waiting, and the messages refused. */
 const keptSchema = Schema.Struct({
   hash: Schema.String,
   accountId: Schema.String,
   reads: keptReadsSchema,
   queue: Schema.Array(queuedEntrySchema),
+  refused: Schema.optionalKey(Schema.Array(Schema.Unknown)),
 });
 
 /** The file opened as far as its account and its waiting writes, whatever shapes its rows were kept at. */
@@ -160,6 +165,7 @@ const envelopeSchema = Schema.Struct({
   accountId: Schema.String,
   reads: Schema.Unknown,
   queue: Schema.optionalKey(Schema.Array(queuedEntrySchema)),
+  refused: Schema.optionalKey(Schema.Array(Schema.Unknown)),
 });
 
 type Envelope = typeof envelopeSchema.Type;
@@ -192,6 +198,8 @@ export interface EntityStore {
   ) => Effect.Effect<void>;
   /** The row writes waiting for the service as the file held them when the store opened, oldest first. */
   readonly queue: readonly QueuedEntry[];
+  /** The messages the service refused as the file held them when the store opened, each in the form its reader kept it in. */
+  readonly refused: readonly unknown[];
   /** Deletes the file and keeps nothing more, as a sign-out does. */
   readonly forget: Effect.Effect<void>;
 }
@@ -207,6 +215,10 @@ export interface EntityStoreOptions {
   readonly queued?: () => readonly QueuedEntry[];
   /** Each moving of `queued`, which has the store write them `QUEUE_SETTLE` later. */
   readonly queueMoves?: Stream.Stream<void>;
+  /** The messages the service refused now, each in the form its reader keeps it in, which every save keeps beside the writes waiting. */
+  readonly refused?: () => readonly unknown[];
+  /** Each moving of `refused`, which has the store write them `QUEUE_SETTLE` later. */
+  readonly refusedMoves?: Stream.Stream<void>;
 }
 
 /** The SHA-256, in hex, of every kept row shape's JSON Schema, which a build that changes any of them changes. */
@@ -312,11 +324,15 @@ export function openEntityStore(
     // Note that the account's own waiting writes outlast other row shapes, and are kept again at the next save.
     const queue: readonly QueuedEntry[] = ours ? (read.queue ?? []) : [];
     const queued = options.queued ?? (() => queue);
+    const refusedKept: readonly unknown[] = ours ? (read.refused ?? []) : [];
+    const refusedNow = options.refused ?? (() => refusedKept);
+    /** What waits on the member or the service, the writes waiting and the messages refused, as one text a save compares. */
+    const waitingNow = () => JSON.stringify([queued(), refusedNow()]);
     let reads: Partial<KeptRows> = stored;
-    let dirty = kept === undefined && queue.length > 0;
+    let dirty = kept === undefined && (queue.length > 0 || refusedKept.length > 0);
     /** Whether rows kept since the last save moved nothing but where they stand (`keepUnmoved`), which only a save of something that moved, or the last, writes. */
     let unmoved = false;
-    let savedQueue = JSON.stringify(queue);
+    let savedQueue = JSON.stringify([queue, refusedKept]);
     let forgotten = false;
     const lock = yield* Semaphore.make(1);
     let savedAt = yield* Clock.currentTimeMillis;
@@ -325,7 +341,8 @@ export function openEntityStore(
       lock.withPermits(1)(
         Effect.flatMap(Clock.currentTimeMillis, (now) => {
           const waiting = queued();
-          const waitingText = JSON.stringify(waiting);
+          const refused = refusedNow();
+          const waitingText = JSON.stringify([waiting, refused]);
           const listsDue = dirty && (closing || now - savedAt >= Duration.toMillis(SAVE_EVERY));
           const moved = listsDue || waitingText !== savedQueue;
 
@@ -335,7 +352,7 @@ export function openEntityStore(
           savedQueue = waitingText;
           savedAt = now;
 
-          return encodeKept({ hash, accountId, reads, queue: waiting }).pipe(
+          return encodeKept({ hash, accountId, reads, queue: waiting, refused }).pipe(
             Effect.map((plain) => Base64.encode(cipher.encrypt(plain))),
             Effect.flatMap((sealed) =>
               writeSettingsFileAtomic(directory, sealed, undefined, ENTITY_STORE_FILE_NAME),
@@ -362,7 +379,7 @@ export function openEntityStore(
      */
     const saver = Effect.gen(function* () {
       while (!forgotten) {
-        if (JSON.stringify(queued()) !== savedQueue) {
+        if (waitingNow() !== savedQueue) {
           yield* Effect.sleep(QUEUE_SETTLE);
         } else if (dirty) {
           const left = savedAt + Duration.toMillis(SAVE_EVERY) - (yield* Clock.currentTimeMillis);
@@ -390,6 +407,13 @@ export function openEntityStore(
       );
     }
 
+    if (options.refusedMoves !== undefined) {
+      yield* Effect.forkScoped(
+        Stream.runForEach(options.refusedMoves, () => woken),
+        { startImmediately: true },
+      );
+    }
+
     yield* Effect.forkScoped(saver, { startImmediately: true });
     yield* Effect.addFinalizer(() => save(true));
 
@@ -403,6 +427,7 @@ export function openEntityStore(
     return {
       stored: (read) => stored[read],
       queue,
+      refused: refusedKept,
       keep: (kept, rows) =>
         Effect.andThen(
           Effect.sync(() => {

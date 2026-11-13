@@ -108,6 +108,9 @@ export const FAILURE_SURFACE = {
   BROWSER_OPEN: "browser.open",
   BUNDLE_LOAD: "bundle.load",
   CLI_INSTALL: "cli.install",
+  /** macOS asked for computer use's grants, by Settings › This Mac's Allow…, where the ask did not reach it. */
+  COMPUTER_USE_PERMISSIONS: "computer_use.permissions",
+  COMPUTER_USE_READ: "computer_use.read",
   COPY: "copy",
   DICTATION: "dictation",
   DIFF_READ: "diff.read",
@@ -142,6 +145,7 @@ export const FAILURE_SURFACE = {
   MEMORY_FORGET: "memory.forget",
   MEMORY_SAVE: "memory.save",
   MENTIONS_READ: "mentions.read",
+  MERGE_QUEUE_READ: "merge_queue.read",
   MESSAGE_EDIT: "message.edit",
   MESSAGE_REVEAL: "message.reveal",
   MODELS_READ: "models.read",

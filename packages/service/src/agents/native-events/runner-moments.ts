@@ -14,7 +14,11 @@ import {
   valueFromJsonText,
   type WireValue,
 } from "@repo/wire";
-import type { UsageLimitAgent, UsageLimitAnswer } from "@repo/wire/ui-messages";
+import {
+  GoalNoticeSchema,
+  type UsageLimitAgent,
+  type UsageLimitAnswer,
+} from "@repo/wire/ui-messages";
 import { Option, Schema } from "effect";
 import { NATIVE_ENDING, NATIVE_MOMENT, type NativeMoment } from "./native-moments.js";
 
@@ -75,6 +79,28 @@ export function withoutNul(value: WireValue): WireValue {
 /** What a picture in a tool's answer is kept as: the bytes went to the model once, and a transcript carries every byte it holds into each read. */
 export const PICTURE_STAND_IN = "[image]";
 
+const readTextBlock = Schema.decodeUnknownOption(
+  Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }),
+);
+
+/**
+ * Our own tool's answer as the text it answered: its first text block,
+ * which holds its whole JSON (`../tool-catalog/catalog.ts`'s `content`),
+ * its pictures left out. Note that no block after it is read, because a
+ * harness may add words of its own beside a picture, as Claude Code adds
+ * where it saved one (`[Image: source: …]`), and those joined to the JSON
+ * would leave no JSON to read.
+ */
+export function workspaceAnswerText(content: readonly WireValue[]): string {
+  for (const block of content) {
+    const read = readTextBlock(block);
+
+    if (Option.isSome(read)) return read.value.text;
+  }
+
+  return "";
+}
+
 const readType = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.String }));
 
 const readAccepted = Schema.decodeUnknownOption(
@@ -119,6 +145,9 @@ const readConnectionLost = Schema.decodeUnknownOption(Schema.Struct({ host: Sche
 const readConnectionRestored = Schema.decodeUnknownOption(
   Schema.Struct({ host: Schema.String, carryOn: Schema.Boolean }),
 );
+
+/** A move of the agent's goal the runner read where the harness's own stream says none (`claude-goals.ts`), its fields the goal notice's own. */
+const readGoal = Schema.decodeUnknownOption(GoalNoticeSchema);
 
 /**
  * The end a runner posted where it let a wait on wakeups go so its sandbox
@@ -243,6 +272,13 @@ export function runnerMoments(message: WireValue): Option.Option<readonly Native
       ]);
     case RUNNER_EVENT.END:
       return Option.some(endMoments(message));
+    case RUNNER_EVENT.GOAL:
+      return Option.some(
+        Option.match(readGoal(message), {
+          onSome: (notice): readonly NativeMoment[] => [{ kind: NATIVE_MOMENT.GOAL, notice }],
+          onNone: () => [],
+        }),
+      );
     // An ask and its settle are no moment of the run: the events route lands them apart (`runner-approvals.ts`).
     case RUNNER_EVENT.APPROVAL_REQUESTED:
     case RUNNER_EVENT.APPROVAL_RESOLVED:

@@ -25,6 +25,7 @@ import {
 } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import {
   installScrollTo,
@@ -36,6 +37,9 @@ import { AgentComposer } from "./agent-composer.js";
 import { FileTab } from "./file-tab.js";
 import { TaskMentions, type TaskMentionsValue } from "./task-mentions.js";
 import { type MessageSender, useAgentComposer } from "./use-agent-composer.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * A File tab's lines mentioned in the agent's message box on the same task's
@@ -120,10 +124,12 @@ const readFile = (request: TaskFileRequest): Promise<TasksFileAnswer> =>
 /** The agent's box on the composer's own control, its sends answered by `sender`. */
 function Box({ sender }: { sender: MessageSender }): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: TASK_ID,
     messages: [],
-    send: sender,
+    send: outboxed(sender),
   });
 
   return createElement(AgentComposer, {
@@ -137,7 +143,7 @@ function Box({ sender }: { sender: MessageSender }): ReactNode {
 async function page({ box = true }: { box?: boolean } = {}) {
   const sent: string[] = [];
 
-  const sender: MessageSender = (_agentId, text) => {
+  const sender: MessageSender = (_agentId, { text }) => {
     sent.push(text);
 
     return new Promise<AgentAgentAnswer>(ignore);

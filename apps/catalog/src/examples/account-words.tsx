@@ -72,7 +72,7 @@ function Rows(): React.JSX.Element {
         <SettingsRow
           key={row.key}
           label={row.name}
-          controls={SETTINGS_ROW_CONTROLS.BESIDE}
+          controls={SETTINGS_ROW_CONTROLS.BESIDE_UNTIL_NARROW}
           adornment={
             row.account === undefined ? undefined : <AccountWords>{row.account}</AccountWords>
           }

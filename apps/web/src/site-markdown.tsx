@@ -15,6 +15,7 @@ import {
   MARKDOWN_LOOK,
   Markdown,
   type MarkdownComponents,
+  type MarkdownSteps,
 } from "@repo/ui/markdown";
 import { Schema } from "effect";
 import type { Heading, Nodes, PhrasingContent, RootContent } from "mdast";
@@ -98,6 +99,80 @@ const INLINE_COMPONENTS: MarkdownComponents = { p: ({ children }) => <>{children
 /** A link from one guide to another, as written beside it: `<slug>.md`, perhaps with a fragment. */
 const GUIDE_LINK = /^([a-z0-9]+(?:-[a-z0-9]+)*)\.md(#.*)?$/;
 
+/** A drawn node, as far as a heading's id goes: an element's name, properties, and children, or a text's value. */
+interface DrawnNode {
+  readonly tagName?: string;
+  readonly value?: string;
+  readonly properties?: { id?: unknown };
+  readonly children?: readonly DrawnNode[];
+}
+
+/** An address written as raw HTML in a guide, `href="…"` or `href='…'`. */
+const HTML_HREF = /\bhref\s*=\s*["']([^"']*)["']/gi;
+
+const SUBHEADINGS: ReadonlySet<string> = new Set(["h2", "h3", "h4", "h5", "h6"]);
+
+/** The words a drawn node holds, its children's run together. */
+function drawnText(node: DrawnNode): string {
+  return node.value ?? (node.children ?? []).map(drawnText).join("");
+}
+
+/**
+ * The step that gives every heading under the page's own the id GitHub gives
+ * it (lower-case words, punctuation dropped, each space a hyphen, a repeat
+ * numbered past every id the document already holds), so `other-guide.md#a-section` opens that
+ * section on the page as it does on GitHub.
+ */
+function headingIds() {
+  return (tree: DrawnNode): void => {
+    const emitted = new Set<string>();
+
+    const visit = (node: DrawnNode): void => {
+      if (node.tagName !== undefined && SUBHEADINGS.has(node.tagName) && node.properties) {
+        const base = drawnText(node)
+          .trim()
+          .toLowerCase()
+          .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, "")
+          .replaceAll(" ", "-");
+
+        // Note that a repeat takes the next number no heading holds yet, because `Setup-1` may be written too.
+        let id = base;
+
+        for (let count = 1; emitted.has(id); count += 1) id = `${base}-${count}`;
+        emitted.add(id);
+        node.properties.id = id;
+      }
+
+      for (const child of node.children ?? []) visit(child);
+    };
+
+    visit(tree);
+  };
+}
+
+/** The steps a guide's tree takes: its own HTML parsed, then its headings given ids. */
+const GUIDE_STEPS = [MARKDOWN_HTML_STEP.PARSE, headingIds];
+
+/** The guides a guide's Markdown links to by file, its raw HTML's anchors included, each slug once. */
+function linkedGuides(markdown: string): readonly string[] {
+  const slugs = (nodes: readonly Nodes[]): string[] =>
+    nodes.flatMap((node) => {
+      const urls =
+        node.type === "link" || node.type === "definition"
+          ? [node.url]
+          : node.type === "html"
+            ? [...node.value.matchAll(HTML_HREF)].map((match) => match[1] ?? "")
+            : [];
+
+      return [
+        ...urls.flatMap((url) => GUIDE_LINK.exec(url)?.[1] ?? []),
+        ...("children" in node ? slugs(node.children) : []),
+      ];
+    });
+
+  return [...new Set(slugs([markdownTree(markdown)]))];
+}
+
 /**
  * Each address a guide names, as the site serves it: another guide, written
  * as its file beside this one (which GitHub and the guide's Markdown copy
@@ -116,13 +191,14 @@ function documentHtml(
   words: string,
   components?: MarkdownComponents,
   urlTransform: (url: string, key: string) => string = siteUrl,
+  steps: MarkdownSteps = DOCUMENT_STEPS,
 ): string {
   return renderToStaticMarkup(
     <Markdown
       look={MARKDOWN_LOOK.DOCUMENT}
       words={words}
       components={components}
-      rehypePlugins={DOCUMENT_STEPS}
+      rehypePlugins={steps}
       urlTransform={urlTransform}
     />,
   );
@@ -259,6 +335,8 @@ export interface GuideSource {
   readonly guide: Guide;
   /** Whether it is a draft, which a production build leaves out. */
   readonly draft: boolean;
+  /** The guides its body and answers link to by file, which the build must hold. */
+  readonly links: readonly string[];
 }
 
 /** Words a guide must say: more than spaces, which a quoted YAML value may be. */
@@ -318,7 +396,7 @@ function questionOf(entry: typeof GUIDE_QUESTION.Type): GuideQuestion {
   return {
     question: entry.q.trim(),
     answer,
-    html: documentHtml(answer, undefined, guideUrl),
+    html: documentHtml(answer, undefined, guideUrl, GUIDE_STEPS),
     text,
   };
 }
@@ -361,6 +439,7 @@ export function parseGuide(file: string, markdown: string): GuideSource {
 
   return {
     draft: front.draft === true,
+    links: linkedGuides([body, ...front.faq.map((entry) => entry.a)].join("\n\n")),
     guide: {
       slug,
       title: front.title.trim(),
@@ -368,7 +447,7 @@ export function parseGuide(file: string, markdown: string): GuideSource {
       published: front.published,
       updated: front.updated,
       related: front.related ?? [],
-      html: documentHtml(body, RELEASE_COMPONENTS, guideUrl),
+      html: documentHtml(body, RELEASE_COMPONENTS, guideUrl, GUIDE_STEPS),
       markdown: body,
       faq: front.faq.map(questionOf),
     },
@@ -378,26 +457,33 @@ export function parseGuide(file: string, markdown: string): GuideSource {
 /**
  * Every guide under `guides/`, by file name and words, drafts left out where
  * `drafts` is false. A guide that names a related guide no file holds, or
- * itself, fails the build.
+ * itself, or that links to a guide the build leaves out, fails the build.
  */
 export function parseGuides(
   files: readonly { readonly file: string; readonly words: string }[],
   drafts: boolean,
 ): readonly Guide[] {
-  const guides = files.flatMap(({ file, words }) => {
+  const sources = files.flatMap(({ file, words }) => {
     const source = parseGuide(file, words);
 
-    return drafts || !source.draft ? [source.guide] : [];
+    return drafts || !source.draft ? [source] : [];
   });
 
+  const guides = sources.map((source) => source.guide);
   const slugs = new Set(guides.map((guide) => guide.slug));
 
-  for (const guide of guides) {
+  for (const { guide, links } of sources) {
     const missing = guide.related.filter((slug) => !slugs.has(slug) || slug === guide.slug);
 
     if (missing.length > 0)
       throw new Error(
         `guides/${guide.slug}.md: \`related\` names no other guide: ${missing.join(", ")}`,
+      );
+    const unlinked = links.filter((slug) => !slugs.has(slug));
+
+    if (unlinked.length > 0)
+      throw new Error(
+        `guides/${guide.slug}.md: links to a guide this build doesn't publish: ${unlinked.join(", ")}`,
       );
   }
 

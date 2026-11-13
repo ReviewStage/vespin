@@ -8,6 +8,7 @@ import {
   HOST_UPDATE_FAILURE_MAX_CHARS,
   hostUpdateSchema,
 } from "./device-agent-wire.js";
+import { allowedAppLookSchema, machineDeviceSettingsSchema } from "./machine-command-wire.js";
 import { countedNumber, wireUuidSchema } from "./service-wire.js";
 
 /**
@@ -360,6 +361,29 @@ export const devicePresenceAnswerSchema = EffectSchema.Struct({
 });
 
 export type DevicePresenceAnswer = typeof devicePresenceAnswerSchema.Type;
+
+/**
+ * The apps the reader's own machines always allow agents to use, as an
+ * agent's `@` offers them where it is typed on no Mac of the agent's (GET):
+ * each machine that allows one, by its id and name, with those apps by
+ * bundle id, or by name where an app has none, and the name and icon the
+ * machine posted for each. A teammate's machine, one
+ * removed, and one that allows none are left out, and every machine while
+ * the reader has Computer use off.
+ */
+export const machineAllowedAppsAnswerSchema = EffectSchema.Struct({
+  machines: EffectSchema.Array(
+    EffectSchema.Struct({
+      deviceId: wireUuidSchema,
+      name: EffectSchema.String,
+      apps: machineDeviceSettingsSchema.fields.alwaysAllowedApps,
+      /** How the machine names and draws those apps, each it posted a look for; absent from a service older than it. */
+      looks: EffectSchema.optionalKey(EffectSchema.Array(allowedAppLookSchema)),
+    }),
+  ),
+});
+
+export type MachineAllowedAppsAnswer = typeof machineAllowedAppsAnswerSchema.Type;
 
 /** A host removed, by its id. */
 export const hostIdRequestSchema = EffectSchema.Struct({ id: wireUuidSchema });

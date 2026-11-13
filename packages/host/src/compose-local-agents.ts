@@ -502,6 +502,7 @@ export function composeLocalAgents(
       Effect.gen(function* () {
         // Note that a device whose last try failed says so through the next, so it reads failed rather than flickering back to setting up.
         let failure: string | undefined;
+        let tries = 0;
 
         for (;;) {
           const ready = yield* Effect.scoped(
@@ -526,7 +527,8 @@ export function composeLocalAgents(
           );
 
           if (Result.isSuccess(ready)) return true;
-          report(`the local agents' setup failed: ${ready.failure.detail}`);
+          tries += 1;
+          report(`the local agents' setup failed: ${ready.failure.detail}`, { attempt: tries });
           failure = ready.failure.detail;
           yield* keptStatus(SETUP_STEP.FAILED, failure);
           yield* asked(registered({ setup: DEVICE_SETUP.FAILED, setupFailure: failure }));

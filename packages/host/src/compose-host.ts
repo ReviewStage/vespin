@@ -7,7 +7,7 @@ import {
   HostedDeviceAgentClient,
   HostedGitHubConnectionClient,
   HostedIntegrationsClient,
-  HostedMacCommandClient,
+  HostedMachineCommandClient,
   HostedMcpClientsClient,
   HostedTaskClient,
   HostedTerminalClient,
@@ -16,6 +16,7 @@ import {
 import { type ClientIdentity, clientNamedOnService } from "@repo/features/client-identity";
 import { HostedInstalledSkillClient } from "@repo/features/installed-skill-client";
 import { INTEGRATION_LANDING } from "@repo/features/integration-wire";
+import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
 import {
   carried,
   GATEWAY_EVENT,
@@ -27,9 +28,13 @@ import {
 import {
   APP_SETTING_SCHEMA,
   computerUseAppsOf,
+  computerUseAppsStored,
   computerUseAppsWith,
-  MAC_COMMAND_MODE,
+  EXPERIMENT,
+  experimentOn,
+  NO_EXPERIMENTS,
 } from "@repo/settings";
+import type { SettingsUpdateResult } from "@repo/settings/wire";
 import { entityPool } from "@repo/sync";
 import { Effect, Exit, Layer, Option, Scope, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
@@ -42,7 +47,11 @@ import { composeAgents } from "./compose-agents.js";
 import { composeAutomations } from "./compose-automations.js";
 import { composeInstalledSkills } from "./compose-installed-skills.js";
 import { composeIntegrations } from "./compose-integrations.js";
-import { composeMacCommands, type MacComputerUse } from "./compose-mac-commands.js";
+import {
+  composeMachineCommands,
+  type MacComputerUse,
+  type MachineCommandsDevice,
+} from "./compose-machine-commands.js";
 import { composeMirrors } from "./compose-mirrors.js";
 import { composePortForwards, type PortForwardsComposer } from "./compose-port-forwards.js";
 import { composeSettings, type SettingsComposer } from "./compose-settings.js";
@@ -65,7 +74,8 @@ import {
   Reporter,
   ShutdownSignal,
   TerminalSocket,
-  type ThisMacHost,
+  ThisMacHost,
+  type ThisMacHostSeam,
 } from "./effect/seams.js";
 import { type EntityStore, forgetEntityStore, openEntityStore } from "./entity-store.js";
 import { ActRefused, type HostActTable } from "./host-acts.js";
@@ -84,6 +94,11 @@ import { liveSocketClient } from "./live-socket.js";
 import { HOST_NODE_CAPABILITY } from "./node-capabilities.js";
 import { offlineRefusedCount } from "./queued-writes.js";
 import { createGatewayService } from "./service.js";
+import {
+  enrolledHostDeviceId,
+  openThisMachineDevice,
+  type ThisMachineDevice,
+} from "./this-machine-device.js";
 import { windowFocus } from "./window-focus.js";
 
 /**
@@ -100,7 +115,7 @@ const HOST_START_ORDER: readonly HostConcern[] = [
   HOST_CONCERN.AUTOMATIONS,
   HOST_CONCERN.INTEGRATIONS,
   HOST_CONCERN.INSTALLED_SKILLS,
-  HOST_CONCERN.MAC_COMMANDS,
+  HOST_CONCERN.MACHINE_COMMANDS,
   HOST_CONCERN.THIS_MAC_HOST,
   HOST_CONCERN.MIRRORS,
 ];
@@ -120,14 +135,18 @@ type HostAssemblyRequirements =
 
 /**
  * Actions on apps as the Mac's commands take them: through the helper, under
- * This Mac's switch, and with the apps answered Always allow for, which an
- * app's Always allow adds to.
+ * the account's Computer use and This Mac's switch, and with the apps
+ * answered Always allow for, which an app's Always allow adds to.
  */
 function macComputerUse(settings: SettingsComposer, helper: ComputerUseHelperSeam): MacComputerUse {
   const stored = Effect.map(Effect.orDie(settings.store.snapshot()), (snapshot) => snapshot.stored);
 
   return {
     helper,
+    offered: Effect.map(
+      Effect.orElseSucceed(settings.store.snapshot(), () => ({ experiments: NO_EXPERIMENTS })),
+      (snapshot) => experimentOn(snapshot.experiments, EXPERIMENT.COMPUTER_USE),
+    ),
     enabled: Effect.map(
       stored,
       (values) => values.computerUse ?? APP_SETTING_SCHEMA.computerUse.default,
@@ -152,9 +171,65 @@ function macComputerUse(settings: SettingsComposer, helper: ComputerUseHelperSea
   };
 }
 
+/**
+ * This Mac as a device of the accounts signed in on it, as the Mac's
+ * commands join it: the ids this install keeps, the machine as its host
+ * names it, and Settings' say over commands and apps, its command mode and
+ * the apps allowed without asking, which the service's is written over.
+ */
+function machineCommandsDevice(
+  settings: SettingsComposer,
+  ids: ThisMachineDevice,
+  host: ThisMacHostSeam,
+): MachineCommandsDevice {
+  const stored = Effect.map(Effect.orDie(settings.store.snapshot()), (snapshot) => snapshot.stored);
+
+  /** One setting written, answering whether it landed: a write Settings refused answers its reason. */
+  const written = (write: Effect.Effect<SettingsUpdateResult, unknown>) =>
+    Effect.map(
+      settings.settingsWrite(
+        () => write,
+        () => Effect.void,
+        "Could not save that setting on this system.",
+        undefined,
+      ),
+      (result) => result.reason === undefined,
+    );
+
+  return {
+    ...ids,
+    machine: host.machine,
+    settings: Effect.map(stored, (values) => ({
+      commandMode: values.macCommands ?? APP_SETTING_SCHEMA.macCommands.default,
+      alwaysAllowedApps: computerUseAppsOf(values.computerUseApps),
+    })),
+    applySettings: (kept) =>
+      Effect.gen(function* () {
+        const values = yield* stored;
+        let landed = true;
+
+        if ((values.macCommands ?? APP_SETTING_SCHEMA.macCommands.default) !== kept.commandMode) {
+          landed = yield* written(
+            settings.store.set(APP_SETTING_SCHEMA.macCommands.field, kept.commandMode),
+          );
+        }
+
+        const apps = computerUseAppsStored(kept.alwaysAllowedApps);
+
+        if (apps !== computerUseAppsStored(computerUseAppsOf(values.computerUseApps))) {
+          landed =
+            (yield* written(settings.store.set(APP_SETTING_SCHEMA.computerUseApps.field, apps))) &&
+            landed;
+        }
+
+        return landed;
+      }),
+  };
+}
+
 /** What each platform concern adds to the assembly's requirements when it is chosen. */
 interface PlatformConcernRequirements {
-  [HOST_PLATFORM_CONCERN.MAC_COMMANDS]: ChildProcessSpawner.ChildProcessSpawner;
+  [HOST_PLATFORM_CONCERN.MACHINE_COMMANDS]: ChildProcessSpawner.ChildProcessSpawner;
   [HOST_PLATFORM_CONCERN.THIS_MAC_HOST]: ChildProcessSpawner.ChildProcessSpawner | ThisMacHost;
   [HOST_PLATFORM_CONCERN.TERMINALS]: TerminalSocket;
   [HOST_PLATFORM_CONCERN.PORT_FORWARDS]: LoopbackListener | TerminalSocket;
@@ -449,10 +524,27 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
 
     // Note that the helper is optional, so the Mac's commands stand where this process ships none.
     const computerHelper = yield* Effect.serviceOption(ComputerUseHelper);
+    // Note that this install is a device only where it can say which machine it is, which This Mac's host names; else its commands are claimed as the account alone.
+    const thisMac = yield* Effect.serviceOption(ThisMacHost);
 
-    const macCommands = platform.has(HOST_PLATFORM_CONCERN.MAC_COMMANDS)
+    const thisMachineDevice = yield* Option.match(thisMac, {
+      onNone: () => Effect.succeed(Option.none<ThisMachineDevice>()),
+      onSome: (host) =>
+        Effect.asSome(
+          openThisMachineDevice({
+            stateRoot: kernel.stateRoot,
+            hostDeviceId: enrolledHostDeviceId(
+              host.stateRoot,
+              new URL(kernel.hostedServiceBaseUrl).origin,
+            ).pipe(Effect.provideContext(fileSystemContext)),
+            createId: kernel.createId,
+          }).pipe(Effect.provideContext(fileSystemContext)),
+        ),
+    });
+
+    const machineCommands = platform.has(HOST_PLATFORM_CONCERN.MACHINE_COMMANDS)
       ? yield* served(
-          composeMacCommands({
+          composeMachineCommands({
             kernel,
             account,
             accountId,
@@ -466,14 +558,17 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
             allowAlways: Effect.map(
               settings.settingsWrite(
                 () =>
-                  settings.store.set(APP_SETTING_SCHEMA.macCommands.field, MAC_COMMAND_MODE.ALWAYS),
+                  settings.store.set(
+                    APP_SETTING_SCHEMA.macCommands.field,
+                    MACHINE_COMMAND_MODE.ALWAYS,
+                  ),
                 () => Effect.void,
                 "Could not save that setting on this system.",
                 undefined,
               ),
               (saved) => saved.reason === undefined,
             ),
-            client: new HostedMacCommandClient({
+            client: new HostedMachineCommandClient({
               serviceBaseUrl: kernel.hostedServiceBaseUrl,
               credential: account.credential,
             }),
@@ -481,20 +576,25 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
               onNone: () => ({}),
               onSome: (helper) => ({ computer: macComputerUse(settings, helper) }),
             }),
+            ...Option.match(Option.all([thisMachineDevice, thisMac]), {
+              onNone: () => ({}),
+              onSome: ([ids, host]) => ({ device: machineCommandsDevice(settings, ids, host) }),
+            }),
           }),
         )
       : {
-          ...unavailableConcern(HOST_PLATFORM_CONCERN.MAC_COMMANDS),
+          ...unavailableConcern(HOST_PLATFORM_CONCERN.MACHINE_COMMANDS),
           // Note that a host without the Mac commands holds no ask, so an answer finds none waiting and is answered all the same, as the Gateway's refusal of its method was.
           acts: {
-            MAC_COMMAND_ANSWER: () => Effect.void,
+            MACHINE_COMMAND_ANSWER: () => Effect.void,
             COMPUTER_USE_STATUS: () =>
               Effect.succeed({
                 permissions: { screenRecording: false, accessibility: false },
                 apps: [],
               }),
-            COMPUTER_USE_ASK_PERMISSIONS: () =>
-              Effect.succeed({ screenRecording: false, accessibility: false }),
+            COMPUTER_USE_APPS: () => Effect.succeed({ apps: [] }),
+            COMPUTER_USE_APP_ICON: () => Effect.succeed({}),
+            COMPUTER_USE_ASK_PERMISSIONS: () => Effect.fail(new ActRefused({})),
           },
         };
 
@@ -509,6 +609,10 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
               (snapshot) => snapshot?.stored.keepAwake ?? APP_SETTING_SCHEMA.keepAwake.default,
             ),
             settingsTold: settings.told,
+            ...Option.match(thisMachineDevice, {
+              onNone: () => ({}),
+              onSome: (ids) => ({ deviceIdFor: ids.idFor }),
+            }),
             hostListed: (deviceId) =>
               Effect.map(agentClient.hosts(), (answer) =>
                 "failure" in answer
@@ -598,11 +702,14 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         accountId: signedInId,
         queued: pool.queued,
         queueMoves: pool.queueMoves,
+        refused: agents.refused.kept,
+        refusedMoves: agents.refused.moves,
       }).pipe(Scope.provide(scope), Effect.provideContext(fileSystemContext));
 
       entities = { store, scope };
-      // Note that the writes kept waiting are laid back before any read draws, so the first answer draws under them.
+      // Note that the writes kept waiting, and the messages refused, are laid back before any read draws, so the first answer draws under them.
       yield* pool.requeue(store.queue, [...tasks.queueable, ...agents.queueable]);
+      yield* agents.refused.restored(signedInId, store.refused);
     });
 
     /** The store forgotten, its file deleted, as a sign-out does; a file no store stands over is deleted too. */
@@ -610,6 +717,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       const standing = entities;
       entities = undefined;
       yield* pool.letGoQueued;
+      yield* agents.refused.forgotten;
       offlineRefused.clear();
 
       if (standing !== undefined) {
@@ -684,7 +792,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       [HOST_CONCERN.AUTOMATIONS]: automations,
       [HOST_CONCERN.INTEGRATIONS]: integrations,
       [HOST_CONCERN.INSTALLED_SKILLS]: installedSkills,
-      [HOST_CONCERN.MAC_COMMANDS]: macCommands,
+      [HOST_CONCERN.MACHINE_COMMANDS]: machineCommands,
       [HOST_CONCERN.THIS_MAC_HOST]: thisMacHost,
       [HOST_CONCERN.TERMINALS]: terminals,
       [HOST_CONCERN.PORT_FORWARDS]: portForwards,
@@ -737,7 +845,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       automations.acts,
       installedSkills.acts,
       integrations.acts,
-      macCommands.acts,
+      machineCommands.acts,
       portForwards.acts,
       tasks.acts,
       workspaces.acts,

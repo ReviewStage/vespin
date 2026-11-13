@@ -63,7 +63,11 @@ const AGENT_EDIT_DESCRIPTION_TOOL = EDIT_DESCRIPTION_TOOL.name;
  * goes in a thread it posts to the inbox (`inbox.ts`), which the developer
  * also reads on its task; another agent is reached
  * with `message_agent` alone (`agent-message.ts`), which only the two of
- * them see.
+ * them see. Note that an agent another agent started posts its own threads,
+ * which carry its pictures and its context, and sends its starter each one's
+ * mention, and the starter posts no second thread on the same thing, because
+ * the two posting one pull request or ask left the developer two threads on
+ * it, and a starter relaying a worker's pictures could only point at them.
  * The worker's instructions stand beside the agent's: it owns one slice,
  * grounds what it says in paths, lines, and command output, and returns a
  * result the agent reads whole.
@@ -500,8 +504,8 @@ const PULL_REQUEST_BRANCH_WORDS =
 /** What the agent is told of messaging another agent: when its work meets theirs, short and complete, and how its message and theirs read. */
 const MESSAGE_AGENT_WORDS = `\`${MESSAGE_AGENT_TOOL.name}\` reaches an agent whose work meets yours, in a short and complete message only the two of you see.`;
 
-/** How an agent the agent starts reports back: its final message handed to the agent by itself, and `message_agent` before then. */
-const STARTED_REPORT_WORDS = `reports back to you by itself once its turn ends, as a line opening \`${AGENT_MESSAGE_LEAD} ·\` that says how its turn ended, which is yours to act on`;
+/** How an agent the agent starts reports back: its final message handed to the agent by itself, and the mention of each thread it posted, on which the agent posts no second one. */
+const STARTED_REPORT_WORDS = `reports back to you by itself once its turn ends, as a line opening \`${AGENT_MESSAGE_LEAD} ·\` that says how its turn ended, which is yours to act on. It posts its own threads, its pictures in them, and sends you each one's mention: post none of your own on the same thing, and keep yours to what no one agent you started holds, such as a decision across them`;
 
 /** How an agent another started reaches it before its final report: with `message_agent`, by the starter's id. */
 const STARTER_REACH_WORDS = `with \`${MESSAGE_AGENT_TOOL.name}\` and that agent's id`;
@@ -889,7 +893,7 @@ You have ${editing.places} places to write:
 
 Decide small things yourself. Carry on with whatever does not depend on an answer; where nothing does, end your turn saying in one line that you are waiting on a thread.${editing.decided} Show a picture with \`${AGENT_TOOL.SHOW_IMAGE}\`, or a self-contained HTML page with \`${AGENT_TOOL.SHOW_PAGE}\`, saved under \`${machine.sharedFiles}/\`.${place.comments}
 
-Where another agent started you, as your first message says, your final message reaches it by itself as your report, and you may reach it before then ${STARTER_REACH_WORDS}. A message carries no picture, so a picture the developer should see goes in a thread of your own.
+Where another agent started you, as your first message says, still post your own threads, their pictures drawn in them, and send that agent each one's mention ${STARTER_REACH_WORDS}, so it posts none of its own on the same thing; a question it can answer for you, such as what its plan meant, goes to it rather than to a thread. Your final message reaches it by itself as your report while it stands unarchived; an archived one hears nothing by itself, so message it with what it must know, which brings it back.
 
 ## Handing work to a worker
 

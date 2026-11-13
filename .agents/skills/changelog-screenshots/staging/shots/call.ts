@@ -141,7 +141,7 @@ function shotTranscript(): TaskTranscript {
 /** A command the planning model ran, in the plan's repository or on the developer's Mac, answered with `output`. */
 function command(
   id: string,
-  where: typeof TASK_WORK_TOOL.REPOSITORY | typeof TASK_WORK_TOOL.MAC_COMMAND,
+  where: typeof TASK_WORK_TOOL.REPOSITORY | typeof TASK_WORK_TOOL.MACHINE_COMMAND,
   line: string,
   output: string | undefined,
 ) {
@@ -149,7 +149,7 @@ function command(
     type: TASK_WORK_PART.TOOL,
     id,
     tool: where,
-    name: where === TASK_WORK_TOOL.MAC_COMMAND ? "run_on_mac" : "run_in_repository",
+    name: where === TASK_WORK_TOOL.MACHINE_COMMAND ? "run_on_mac" : "run_in_repository",
     state: output === undefined ? TASK_WORK_STATE.RUNNING : TASK_WORK_STATE.DONE,
     subject: line,
     input: JSON.stringify({ command: line }),
@@ -238,7 +238,7 @@ function shotWork(): TaskWorkTurn[] {
         subagent(askedAt + 14 * SECOND_MS),
         command(
           "shot-call-3",
-          TASK_WORK_TOOL.MAC_COMMAND,
+          TASK_WORK_TOOL.MACHINE_COMMAND,
           "git -C ~/code/relay log --oneline -3 -- src/members",
           JSON.stringify({
             stdout:

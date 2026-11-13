@@ -16,7 +16,7 @@ import { AttachmentViewer, type ViewerAction } from "./attachment-viewer.js";
 import {
   type GitHubPictureDrawer,
   GitHubPictureLink,
-  type GitHubPictureSize,
+  type GitHubPictureWritten,
 } from "./transcript-blocks.js";
 import { useOpenLink } from "./use-open-link.js";
 
@@ -200,31 +200,32 @@ export function EntryPictures({
 }
 
 /** The shape a picture's written width and height give it, as an `aspect-ratio`; none where either is unwritten. */
-function writtenAspect(size: GitHubPictureSize): string | undefined {
-  return size.width === undefined || size.height === undefined
+function writtenAspect(written: GitHubPictureWritten): string | undefined {
+  return written.width === undefined || written.height === undefined
     ? undefined
-    : `${size.width} / ${size.height}`;
+    : `${written.width} / ${written.height}`;
 }
 
 /**
  * One picture GitHub's rendering names, read through the service, drawn
  * from its `data:` URL once read: standing alone, as a description's picture is,
  * its press opening the entry's viewer; in a line of words or inside a
- * link, inline as GitHub drew it, at the size its author wrote on it. Its
- * link where GitHub answered none the window draws.
+ * link, inline as GitHub drew it, at the size and in the place in its line
+ * its author wrote on it. Its link where GitHub answered none the window
+ * draws.
  */
 function GitHubPicture({
   agentId,
   src,
   alt,
   inline,
-  size,
+  written,
 }: {
   agentId: string;
   src: string;
   alt: string;
   inline: boolean;
-  size: GitHubPictureSize;
+  written: GitHubPictureWritten;
 }): React.JSX.Element {
   const state = usePicture(pictureQuery(agentId, src, useGitHubImageRead()), pictureUnread);
   const door = useContext(EntryViewerContext);
@@ -241,32 +242,33 @@ function GitHubPicture({
   }
 
   // Note that a height written alone stands as written; with a width beside it, the height follows the width at their written shape, so a picture the column narrows keeps its shape.
-  const heightOnly = size.height !== undefined && size.width === undefined;
-  const aspect = writtenAspect(size);
+  const heightOnly = written.height !== undefined && written.width === undefined;
+  const aspect = writtenAspect(written);
 
   return state.kind === PICTURE_STATE.READY ? (
     <img
       className={`inline-block max-w-full rounded-ui-6 align-middle${heightOnly ? "" : " h-auto"}`}
       src={state.url}
       alt={alt}
-      width={size.width}
-      height={size.height}
-      style={aspect === undefined ? undefined : { aspectRatio: aspect }}
+      width={written.width}
+      height={written.height}
+      // Note that an `align` its author wrote outranks the middle the class stands it at, as GitHub draws it; an engine that reads no such place keeps the class's.
+      style={{ aspectRatio: aspect, verticalAlign: written.align }}
     />
   ) : (
-    <PictureSkeleton alt={alt} size={size} />
+    <PictureSkeleton alt={alt} written={written} />
   );
 }
 
 /** An inline picture while it is read: a block the size its author wrote on it, or the size a picture stands at, named by its alternative words. */
 function PictureSkeleton({
   alt,
-  size,
+  written,
 }: {
   alt: string;
-  size: GitHubPictureSize;
+  written: GitHubPictureWritten;
 }): React.JSX.Element {
-  const aspect = writtenAspect(size);
+  const aspect = writtenAspect(written);
 
   return (
     <span
@@ -276,8 +278,8 @@ function PictureSkeleton({
       // Note that with both sizes written it keeps their shape rather than their height, so it stands as tall as the picture the column narrows.
       style={
         aspect === undefined
-          ? { width: size.width, height: size.height }
-          : { width: size.width, aspectRatio: aspect }
+          ? { width: written.width, height: written.height }
+          : { width: written.width, aspectRatio: aspect }
       }
     >
       <Skeleton kind={SKELETON_KIND.BLOCK} />
@@ -288,9 +290,9 @@ function PictureSkeleton({
 /** How the tab draws a picture GitHub's rendering names: one it may read through the service as the agent's, and none else. */
 export function usePictureDrawer(agentId: string): GitHubPictureDrawer {
   return useCallback(
-    (src, alt, inline, size) =>
+    (src, alt, inline, written) =>
       githubImageOf(src) === undefined ? undefined : (
-        <GitHubPicture agentId={agentId} src={src} alt={alt} inline={inline} size={size} />
+        <GitHubPicture agentId={agentId} src={src} alt={alt} inline={inline} written={written} />
       ),
     [agentId],
   );

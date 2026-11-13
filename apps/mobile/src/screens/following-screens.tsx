@@ -10,6 +10,7 @@ import {
   BAR_TITLE,
   EmptyState,
   FollowerRow,
+  GLYPH,
   ListSection,
   type PageFollowing,
   Screen,
@@ -73,7 +74,11 @@ function OwnRows({ following }: { readonly following: TaskFollowing }) {
   if (reader === undefined) {
     return (
       <ListSection>
-        <ActionRow label={FOLLOWING_WORDS.FOLLOW} symbol="eye" onPress={following.follow} />
+        <ActionRow
+          label={FOLLOWING_WORDS.FOLLOW}
+          symbol={GLYPH.FOLLOW}
+          onPress={following.follow}
+        />
       </ListSection>
     );
   }
@@ -87,7 +92,7 @@ function OwnRows({ following }: { readonly following: TaskFollowing }) {
       />
       <ActionRow
         label={FOLLOWING_WORDS.UNFOLLOW}
-        symbol="eye.slash"
+        symbol={GLYPH.UNFOLLOW}
         disabled={reader.assignee}
         detail={reader.assignee ? FOLLOWING_WORDS.ASSIGNEE_STAYS : undefined}
         onPress={following.unfollow}
@@ -123,7 +128,7 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.SIDEBAR },
+          contentStyle: { backgroundColor: colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="right">
@@ -139,7 +144,7 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
       <>
         {bar}
         <Screen>
-          <EmptyState title={SHEET_WORDS.NOT_FOUND} symbol="questionmark.folder" />
+          <EmptyState title={SHEET_WORDS.NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         </Screen>
       </>
     );
@@ -168,7 +173,7 @@ export function TaskFollowingScreen({ taskId }: { readonly taskId: string }) {
           <ListSection>
             <ActionRow
               label={FOLLOWING_WORDS.ADD_FOLLOWER}
-              symbol="person.badge.plus"
+              symbol={GLYPH.INVITE}
               onPress={() => addFollower(taskId)}
             />
           </ListSection>

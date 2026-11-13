@@ -13,7 +13,7 @@ builds a control of its own.
   first, and in its long press menu, which lifts the row's preview
   (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open,
   and a row's link, which an iPad drags out of it (`interactions.ts`, the
-  hover, drag, and drop modifiers the app's native module registers), a
+  drag and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
   `WordsRow` for its description), `GroupRow` (a place a regular window's
   sidebar opens, such as the Inbox with its count), `SplitView` (the app's
@@ -98,25 +98,40 @@ builds a control of its own.
   `scripts/repository-checks.sh` fails when it drifts. `useColors()` picks the
   theme by the window's color scheme, since SwiftUI is handed plain values.
   The app reads as Vespin beside the desktop, not as iOS's defaults: a
-  screen, a list, and a sidebar stand on the brand's `GROUND` and `SIDEBAR`,
-  never the system's grays; lists stand plain, as the panel's do, never as
+  screen and a list stand on the brand's `GROUND` and `SIDEBAR`, never the
+  system's grays, and so do a split view's list and detail columns
+  themselves (`containerBackground`) and a sheet or popover to its edge
+  (`presentationBackground`); a split view's sidebar paints nothing, so it
+  stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
   inset cards; and the tint is the brand's copper, never the system's blue.
   Only a control's states and a label's hierarchy are the system's.
-- **Rows carry the panel's facts.** `ListRow` is an Inbox thread (the task's
-  status ring, the thread's title and time, and the glyph and words of what
-  it asks, then the task's name), `TaskRow` a task on one line (its status
+- **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
+  panel's three lines (the task's status ring and name, then the thread's
+  title and time, then the glyph and words of what it asks; an agent's own
+  thread, with no task, in two), `TaskRow` a task on one line (its status
   ring, its name, and at its end a thread that needs you, a failed agent,
   one at work, or its pull request, then its key), and `AgentRow` an agent
-  on a task's page; an avatar stands only where the panel's row has one. A
-  glyph is the SF Symbol closest to the panel's Lucide glyph for the same
-  thing (`inbox-line-model.ts`, `status-mark-model.ts`), except a mark of ours that
-  SF Symbols has no drawing of (a pull request in each state, a branch, a
-  decide ask), which is Lucide's own (`glyph.ts`'s `Glyph`, drawn by
-  `ToneGlyph`): `@repo/brand`'s generator outlines it, at the `lucide-react`
-  `@repo/ui` pins, into a custom symbol template, and the app's config writes
-  it into the asset catalog as a symbol set, so it sizes with Dynamic Type
-  and weighs with its words as an SF Symbol does. Tabs, menus, swipe
-  actions, and every generic glyph stay SF Symbols.
+  on a task's page; an avatar stands only where the panel's row has one.
+- **Every glyph is the panel's own Lucide glyph for the same place** (the
+  developer, Nov 12, 2026), named once in `glyph.ts`'s `GLYPH`, by what it
+  marks: a tab, a row's and a status's mark, a menu's item, a toolbar's
+  button, and a composer's button alike. `@repo/brand`'s generator outlines
+  each, at the `lucide-react` `@repo/ui` pins, into a custom symbol template
+  the app's config writes into the asset catalog as a symbol set, so it
+  sizes with Dynamic Type and weighs with its words as an SF Symbol does. A
+  glyph is a branded `Glyph`, minted only in that table, so no component
+  takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
+  items, which expo-router types as plain names, take `GLYPH.X` too
+  (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
+  where iOS draws the thing its own way (Share) or where the panel draws a
+  mark of its own rather than a Lucide glyph (a check box, a face, an MCP
+  server, the panel's product mark). A task's status ring is the panel's own
+  mark, cut into the asset catalog from `@repo/brand`'s table
+  (`task-status-marks.mjs`) that `@repo/ui`'s `TaskStatusMark` draws too. A SwiftUI button or menu
+  holding a glyph takes it as its label's icon (`glyph-label.tsx`), since
+  `systemImage` reads an SF Symbol alone, and a React Native view through
+  `expo-symbols`' `SymbolView`, which the app's patch reads from the asset
+  catalog too, so a glyph costs no SwiftUI host of its own.
 
 ## Vespin's look
 
@@ -156,12 +171,19 @@ navigation, tab bar, swipes, menus, sheets and glass.
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. A landscape iPad's sidebar heads its
   list with the switcher, its tile and its name, and stands Settings at its foot. Nothing draws a
-  copy of glass.
+  copy of glass, and glass is one layer: a bar's own, or one glass view
+  (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest). A
+  glass that holds buttons takes no press of its own (not `interactive`),
+  so only the button under a finger or the pointer reacts, and no button
+  is handed a hover effect: the system draws its own on each style, where
+  an added highlight drew a second platter on iPadOS 26.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
   unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from
   `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
-  words.
+  words. An Inbox thread stands roomier, as Mail's message rows do
+  (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
+  its lines), while a task's row keeps the list's tighter inset.
 - **Group headers** (`ListSection`) are small and muted with a count; a
   `foldable` one folds in place on a press, its chevron on the left.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
@@ -181,6 +203,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
   status, priority and assignee. Each stands
   on `SURFACE` inside a hairline.
+- **Grouped forms** (`SettingsForm` and the sheets that start work, pick
+  or remind) read as iOS Settings' cards: their rows stand in the panel's
+  raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
+  (`GROUPED`: the chip's hover gray in light, black in dark), and the sheet
+  around them stands on `GROUPED` too.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
   rows, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it; `AnswerFields`, a row per
@@ -194,8 +221,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   same model (`@repo/features/pull-request-model`): its state as a chip in
   GitHub's color, the merge queue's in the attention ink with its place
   ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
-  its checks and reviewers as rows, each glyph the SF Symbol closest to the
-  panel's (`pull-request-look.ts`); and its acts in the bar, an act that
+  its checks and reviewers as rows, each glyph the panel's own
+  (`pull-request-look.ts`); and its acts in the bar, an act that
   asks first asking in `ConfirmAsk`, but for the merge's press in a regular
   window, whose bar folds it into More: it stands under the checks as a
   large button (`MergeActRow`), as GitHub's own app draws Merge.

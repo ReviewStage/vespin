@@ -57,16 +57,45 @@
     }
   }
 
+  /* A row in a tone (`list-row.tsx`'s `tone`) wants a person, or can't go
+     on: its ground takes the tone's tint (`tokens/status-tone.css`) and its
+     leading mark the tone's ink (`list-row.tsx`), so it stands out of a list
+     at rest. Note that it draws no edge of its own, because a card's
+     hairline already bounds it. The pointer's fill stands under the tint
+     rather than in its place, so the row keeps saying so while it is
+     reached for. */
+  .ui-list-row[data-tone] {
+    background: var(--ui-tone-tint);
+  }
+
+  @media (hover: hover) {
+    .ui-list-row[data-tone]:has(> button.ui-list-row-main):hover:not(
+        [data-current="true"],
+        [data-selected="true"]
+      ) {
+      background:
+        linear-gradient(var(--ui-tone-tint), var(--ui-tone-tint)), var(--ui-color-fill-hover);
+    }
+  }
+
   /* A row whose menu is open is ringed, the way Finder rings the row a
      right-click is about, so the menu is plainly about it. */
   .ui-list-row[data-menu-open="true"] {
     box-shadow: inset 0 0 0 1px var(--ui-color-border-menu-open);
   }
 
-  /* The open row is drawn in the work sheet's ground, lifted by a hairline
-     and a soft shadow, as the sheet itself is. */
+  /* Note that a card's only row draws no ring of its own, because the card
+     takes the ring's ink on its own hairline instead (`list-row.tsx`'s
+     `LIST_CLASS`): a ring inside that hairline would stand as a second edge,
+     its corners off the card's. */
+  .ui-list[data-variant="card"] > li.ui-list-row[data-menu-open="true"]:only-of-type {
+    box-shadow: none;
+  }
+
+  /* The open row is lifted as a card is, in the surface's fill with a
+     hairline and a soft shadow. */
   .ui-list-row[data-current="true"][data-current-look="sheet"] {
-    background: var(--ui-color-ground);
+    background: var(--ui-color-surface);
     box-shadow:
       0 0 0 1px var(--ui-color-border),
       0 1px 2px var(--ui-color-shadow-soft);

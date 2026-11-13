@@ -18,6 +18,8 @@ export const AGENT_WAKEUP = {
   MAX_DURATION_SECONDS: 300,
   /** How long a wakeup's message is kept past its due time, so a delivery that keeps failing is tried again for that long and then given up. */
   RETAINED_PAST_DUE: Duration.hours(1),
+  /** The longest the queue keeps a message, Vercel Queues' bound on its retention (`@vercel/queue`'s `retentionSeconds`, at most 604,800 seconds), which a wakeup's delay and its time kept past due fit in together. */
+  RETAINED_LONGEST: Duration.days(7),
   /** How long a delivery whose send or store failed waits before it comes again. */
   FAILED_AGAIN: Duration.minutes(1),
   /** How long a publish is waited on before the booking is refused, so a stalled call to the queue never holds the agent's tool call past it; a send answers in milliseconds. */

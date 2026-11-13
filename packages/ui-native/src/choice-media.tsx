@@ -3,8 +3,8 @@
 import { SymbolView } from "expo-symbols";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
+import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { Picture } from "./markdown.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -34,10 +34,10 @@ export type ChoiceMedia = {
 /** Every tile's shape, a window's, as the panel's thumbs are: 16 by 10. */
 const TILE_ASPECT = 16 / 10;
 
-/** The SF Symbol a page's or an address's tile stands as, since neither has a picture of its own here. */
-const TILE_SYMBOL: Partial<Record<ChoiceMediaKind, SfSymbol>> = {
-  [CHOICE_MEDIA.PAGE]: "doc.richtext",
-  [CHOICE_MEDIA.LINK]: "safari",
+/** The glyph a page's or an address's tile stands as, the panel's own, since neither has a picture of its own here. */
+const TILE_SYMBOL: Partial<Record<ChoiceMediaKind, Glyph>> = {
+  [CHOICE_MEDIA.PAGE]: GLYPH.PAGE,
+  [CHOICE_MEDIA.LINK]: GLYPH.OPEN_EXTERNALLY,
 };
 
 /** What a page's tile is heard to do, since it opens in the app rather than Safari. */
@@ -84,7 +84,7 @@ function SymbolTile({ piece }: { readonly piece: ChoiceMedia }) {
       {...(piece.kind === CHOICE_MEDIA.PAGE ? { accessibilityHint: OPENS_PAGE } : {})}
       style={[styles.symbol, { backgroundColor: colors.WELL }]}
     >
-      <SymbolView name={symbol} size={MARK_SIZE.LEAD} tintColor={colors.TEXT_MUTED} />
+      <SymbolView name={glyphSymbol(symbol)} size={MARK_SIZE.LEAD} tintColor={colors.TEXT_MUTED} />
     </Pressable>
   );
 }

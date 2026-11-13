@@ -21,7 +21,7 @@ import {
   type ListedAgent,
   listedAgentOfPage,
 } from "@repo/features/agent-wire";
-import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -279,7 +279,7 @@ async function agentMediaSource(
 
   if (!("base64" in read)) throw new Error(`The picture was not read: ${read.failure}.`);
 
-  return read.contentType === CONVERSATION_MEDIA_TYPE.WEBM || read.contentType === MP4_TYPE
+  return isVideoType(read.contentType)
     ? cachedVideo(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
     : `data:${read.contentType};base64,${read.base64}`;
 }

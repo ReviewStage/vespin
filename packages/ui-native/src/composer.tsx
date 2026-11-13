@@ -29,8 +29,9 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glass-bar.js";
-import { dropPictures, HOVER_EFFECT, hoverEffect } from "./interactions.js";
-import type { SfSymbol } from "./sf-symbol.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { actContent } from "./glyph-label.js";
+import { dropPictures } from "./interactions.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -68,7 +69,6 @@ function roundModifiers(colors: ReturnType<typeof useColors>, enabled = true) {
     foregroundStyle(enabled ? colors.GROUND : colors.TEXT_MUTED),
     ...(enabled ? [] : [background(colors.CHIP_EDGE, SwiftModifiers.shapes.circle())]),
     ...PRESS_FRAME,
-    hoverEffect(HOVER_EFFECT.HIGHLIGHT),
   ];
 }
 
@@ -96,7 +96,7 @@ const ADD_LABEL = "Add";
 export type ComposerMenu = {
   readonly actions: readonly {
     readonly label: string;
-    readonly symbol: SfSymbol;
+    readonly symbol: Glyph;
     readonly onPress: () => void;
   }[];
   readonly submenus?: readonly BarMenu[] | undefined;
@@ -169,7 +169,7 @@ function SendButton({
   if (empty && onStop !== undefined) {
     return (
       <Button onPress={onStop} modifiers={[...roundModifiers(colors), accessibilityLabel("Stop")]}>
-        <Image systemName="stop.fill" size={MARK_SIZE.GLYPH - 2} modifiers={ROUND_MARK} />
+        <Image {...glyphImage(GLYPH.STOP_TURN)} size={MARK_SIZE.GLYPH - 2} modifiers={ROUND_MARK} />
       </Button>
     );
   }
@@ -178,14 +178,9 @@ function SendButton({
     return (
       <Button
         onPress={onDictate}
-        modifiers={[
-          buttonStyle("plain"),
-          ...PRESS_FRAME,
-          hoverEffect(HOVER_EFFECT.HIGHLIGHT),
-          accessibilityLabel("Dictate"),
-        ]}
+        modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel("Dictate")]}
       >
-        <Image systemName="mic" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+        <Image {...glyphImage(GLYPH.DICTATE)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
       </Button>
     );
   }
@@ -201,7 +196,7 @@ function SendButton({
         accessibilityLabel("Send"),
       ]}
     >
-      <Image systemName="arrow.up" size={MARK_SIZE.GLYPH} modifiers={ROUND_MARK} />
+      <Image {...glyphImage(GLYPH.SEND)} size={MARK_SIZE.GLYPH} modifiers={ROUND_MARK} />
     </Button>
   );
 }
@@ -214,7 +209,9 @@ function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
 
   return (
     <Menu
-      label={<Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />}
+      label={
+        <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+      }
       modifiers={[
         ...PRESS_FRAME,
         accessibilityLabel(ADD_LABEL),
@@ -224,8 +221,7 @@ function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
       {menu.actions.map((action) => (
         <Button
           key={action.label}
-          label={action.label}
-          systemImage={action.symbol}
+          {...actContent(action.label, action.symbol)}
           onPress={action.onPress}
         />
       ))}
@@ -300,14 +296,9 @@ function ComposerPieces(props: ComposerProps) {
       ) : onAdd === undefined ? null : (
         <Button
           onPress={onAdd}
-          modifiers={[
-            buttonStyle("plain"),
-            ...PRESS_FRAME,
-            hoverEffect(HOVER_EFFECT.HIGHLIGHT),
-            accessibilityLabel(ADD_LABEL),
-          ]}
+          modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel(ADD_LABEL)]}
         >
-          <Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+          <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
         </Button>
       )}
       <TextField
@@ -370,7 +361,7 @@ export function ComposerFoot(props: ComposerProps) {
   const glass = [
     padding({ all: BAR_EDGE }),
     glassEffect({
-      glass: { variant: "regular", interactive: true },
+      glass: { variant: "regular" },
       // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
       shape: "roundedRectangle",
       cornerRadius: BAR_RADIUS,

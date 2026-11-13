@@ -22,6 +22,7 @@ import {
   BAR_TITLE,
   BUZZ,
   EmptyState,
+  GLYPH,
   ListSection,
   Screen,
   SettingsForm,
@@ -141,7 +142,7 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.SIDEBAR },
+          contentStyle: { backgroundColor: colors.GROUPED },
           // Note that the sheet stays while the move is out, as the panel's dialog refuses to close, so its answer lands where it was asked.
           gestureEnabled: !moving,
         }}
@@ -164,7 +165,7 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
       <>
         {bar}
         <Screen>
-          <EmptyState title={WORDS.TASK_NOT_FOUND} symbol="questionmark.folder" />
+          <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         </Screen>
       </>
     );

@@ -10,6 +10,7 @@ import {
 import type {
   CompactedNotice,
   ConnectionLostNotice,
+  GoalNotice,
   UsageLimitNotice,
 } from "@repo/wire/ui-messages";
 import type { UIMessage } from "ai";
@@ -77,6 +78,8 @@ export const RUN_EVENT = {
   CONNECTION_RESTORED: "connection_restored",
   /** The harness compacted its session: a lasting notice where it happened. */
   COMPACTED: "compacted",
+  /** The agent's goal moved: set, judged, paused, resumed, or ended; a lasting notice where it happened. */
+  GOAL: "goal",
 } as const;
 
 /** The kinds of step that count as slow: a whole transcript read, a write the provider carries, or a task call's look into its repository. */
@@ -175,6 +178,7 @@ export type RunEventBody =
   | { readonly kind: typeof RUN_EVENT.USAGE_LIMIT_REACHED; readonly notice: UsageLimitNotice }
   | { readonly kind: typeof RUN_EVENT.CONNECTION_LOST; readonly notice: ConnectionLostNotice }
   | { readonly kind: typeof RUN_EVENT.COMPACTED; readonly notice: CompactedNotice }
+  | { readonly kind: typeof RUN_EVENT.GOAL; readonly notice: GoalNotice }
   | {
       readonly kind: typeof RUN_EVENT.CONNECTION_RESTORED;
       /** The sequence of the CONNECTION_LOST event whose notice this settles. */

@@ -67,7 +67,6 @@ import {
   type TabSends,
   tabTurnOf,
   transcriptRowKey,
-  unreadSentLines,
   workingLineWords,
 } from "./agent-model.js";
 import { inboxNoteReading } from "./inbox-model.js";
@@ -339,26 +338,6 @@ function sentUnder(clientKey: string, text: string): SentLine {
 function writtenFor(id: string, clientKey: string, text: string): AgentTranscriptMessage {
   return { ...developer(id, text), clientId: sentLineId(clientKey) };
 }
-
-test("a sent line is read back by the row written under its key alone, so two lines of the same words are each read back by their own", () => {
-  const description = developer("m-plan", "Go on.");
-  const first = sentUnder("key-1", "Go on.");
-  const second = sentUnder("key-2", "Go on.");
-  // The description already says the same words, and a row of the same words under another key is another line's.
-  assert.deepEqual(unreadSentLines([first, second], [description]), [first, second]);
-  const secondLanded = [description, writtenFor("m-2", "key-2", "Go on.")];
-  assert.deepEqual(unreadSentLines([first, second], secondLanded), [first]);
-  const both = [...secondLanded, writtenFor("m-1", "key-1", "Go on.")];
-  assert.deepEqual(unreadSentLines([first, second], both), []);
-  assert.equal(messageWords(both[2] ?? description), "Go on.");
-});
-
-test("a line refused for now is let go once its row lands, and one refused for good stands", () => {
-  const unsent = { ...sentUnder("key-1", "Stop."), state: SENT_LINE_STATE.FAILED };
-  const undelivered = { ...sentUnder("key-2", "Wait."), state: SENT_LINE_STATE.UNDELIVERED };
-  const rows = [writtenFor("m-1", "key-1", "Stop."), writtenFor("m-2", "key-2", "Wait.")];
-  assert.deepEqual(unreadSentLines([unsent, undelivered], rows), [undelivered]);
-});
 
 test("a developer's row is keyed by the id its line was drawn under, and every other row by its own", () => {
   const line = sentUnder("key-1", "Soon.");
@@ -713,6 +692,17 @@ test("the working line counts from the press of the line that opened the turn, t
   assert.equal(agentWorkingSince([ask, opened]), 500);
   assert.equal(agentWorkingSince([ask, opened, steer]), 500, "a steer awaiting its place");
   assert.equal(agentWorkingSince([opened]), 1_000, "a turn no line opened counts from its start");
+
+  // A call's small talk before its ask opens nothing: the ask the voice handed on does.
+  const call = { channel: "voice", voice_session_id: "call-1", author: "developer" };
+  const hello = { ...said("m-hello", "Hi there.", 100), metadata: call };
+
+  const handed = {
+    ...said("m-handed", "Add invitations.", 300),
+    metadata: { ...call, delegation_id: "delegation-1" },
+  };
+
+  assert.equal(agentWorkingSince([hello, handed, opened]), 300, "a spoken ask handed on");
 });
 
 test("a planning transcript's raw parts read as the agent tab reads them: the retired runtime's own worker call is a delegation, and a start names the agent it began once it answered one", () => {

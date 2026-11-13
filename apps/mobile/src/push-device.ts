@@ -180,10 +180,26 @@ export function registeredPushDevice(acts: ActPortClient, key: PushDeviceKey): P
   return done;
 }
 
-/** The phone registered under the account signed in, once a launch while iOS lets it notify; nothing while signed out. */
+/**
+ * The phone registered under the account signed in, once a launch while iOS
+ * lets it notify; nothing while signed out. Note that iOS's own prompt is
+ * asked once the account is signed in where it was never asked, as most apps
+ * ask it, since the phone takes no notification and no Live Activity until
+ * it is allowed; a refusal is left to Settings' step toward iOS's Settings.
+ * A fixture run stands for a phone that allowed it, so it asks nothing.
+ */
 export function usePushRegistration(signedIn: boolean): void {
   const acts = useHostActs();
+  const fixture = useFixtureRun();
+  const { standing, allow } = useNotificationPermission();
   const key = usePushDeviceKey();
+  // Whether this launch asked already, so the prompt is never asked twice while its answer is read.
+  const asked = useRef(false);
+  useEffect(() => {
+    if (!signedIn || fixture || standing !== NOTIFICATION_STANDING.UNASKED || asked.current) return;
+    asked.current = true;
+    allow();
+  }, [signedIn, fixture, standing, allow]);
   useEffect(() => {
     if (!signedIn) {
       // Note that a sign-out the app did not start, such as a refused renewal, runs no unregister, so the next account registers afresh.

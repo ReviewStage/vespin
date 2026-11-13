@@ -36,7 +36,7 @@ import {
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
-import { type AgentBoot, BOOT_PHASE } from "@repo/features/agent-boot";
+import { type AgentBoot, BOOT_PHASE, wireBootOf } from "@repo/features/agent-boot";
 import type { AgentQueue } from "@repo/features/agent-queue-wire";
 import {
   AGENT_BOUNDS,
@@ -221,11 +221,16 @@ const WAITING_STATUSES: ReadonlySet<AgentStatus> = new Set([
 type AgentStart = Pick<AgentStanding, "createdAt" | "blank">;
 
 /** The agent's first launch as its own transcript carries it, while its boot record stands. */
-const bootOnPage = (row: AgentBootRow): AgentBoot => ({
-  phase: row.phase,
-  since: row.phaseAt.getTime(),
-  ...(row.failure === undefined ? undefined : { failure: row.failure }),
-});
+const bootOnPage = (row: AgentBootRow): AgentBoot => {
+  const { phase, building } = wireBootOf(row.phase);
+
+  return {
+    phase,
+    since: row.phaseAt.getTime(),
+    ...(building ? { building: true } : undefined),
+    ...(row.failure === undefined ? undefined : { failure: row.failure }),
+  };
+};
 
 /**
  * The agent's status now, read from its newest turn and, on its own

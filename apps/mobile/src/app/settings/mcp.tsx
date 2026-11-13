@@ -20,6 +20,7 @@ import {
   ConfirmAsk,
   ConnectionRow,
   EmptyState,
+  GLYPH,
   ListSection,
   Screen,
   SettingsForm,
@@ -37,7 +38,7 @@ export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 const READING = readingWords("the connected apps");
 
 /** The glyph a page of connected apps stands under. */
-const MCP_SYMBOL = "app.connected.to.app.below.fill";
+const MCP_SYMBOL = GLYPH.MCP_CLIENTS;
 
 /** The apps the host holds for the account, as a `select`; none until read. */
 function heldClients(accountId: string) {
@@ -119,7 +120,7 @@ function McpPage({ accountId }: { readonly accountId: string }) {
       held?.failed === true ? (
         <EmptyState
           title={MCP_CLIENTS_WORDS.READ_FAILED}
-          symbol="exclamationmark.triangle"
+          symbol={GLYPH.FAILED}
           action={{
             label: VERB.RETRY,
             onPress: () =>

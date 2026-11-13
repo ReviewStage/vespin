@@ -49,7 +49,7 @@ export function SwitchRow({ label, detail, on, onSwitch, testId }: SwitchRowProp
       onIsOnChange={onSwitch}
       modifiers={[
         tint(colors.ACCENT),
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
       ]}
     >
@@ -88,7 +88,7 @@ export function HintPickRows({ label, options, picked, onPick }: HintPickRowsPro
       onSelectionChange={(id) => {
         if (id !== null) onPick(id);
       }}
-      modifiers={[pickerStyle("inline"), labelsHidden(), listRowBackground(colors.SURFACE)]}
+      modifiers={[pickerStyle("inline"), labelsHidden(), listRowBackground(colors.RAISED)]}
     >
       {options.map((option) => (
         <VStack key={option.id} alignment="leading" spacing={2} modifiers={[tag(option.id)]}>

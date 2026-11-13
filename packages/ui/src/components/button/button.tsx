@@ -674,6 +674,7 @@ export function Button({
 export function ButtonLink({
   href,
   variant,
+  size,
   corners,
   icon,
   label,
@@ -684,6 +685,8 @@ export function ButtonLink({
 }: LinkHintProps & {
   href: string;
   variant?: ButtonVariant;
+  /** Its height: the control's, or a row mark's beside a row's compact buttons. */
+  size?: ButtonSize | undefined;
   /** Its outline: the control's corner, or a pill. */
   corners?: ButtonCorners;
   /** Whether a press leaves the app, which a small ↗ after its words says, as an external text link's does. */
@@ -703,18 +706,16 @@ export function ButtonLink({
 
   return (
     <a
-      className={linkClasses(buttonLook({ variant, size: undefined, corners, iconOnly: false }))}
+      className={linkClasses(buttonLook({ variant, size, corners, iconOnly: false }))}
       data-variant={variant ?? BUTTON_VARIANT.QUIET}
+      data-size={size === BUTTON_SIZE.COMPACT ? BUTTON_SIZE.COMPACT : undefined}
       {...hint}
       href={href}
       aria-label={label}
       onClick={press}
       onAuxClick={onClick === undefined ? undefined : middlePressOf(press)}
     >
-      <span
-        className={faceClasses(boxSize(variant, undefined, false), false, false)}
-        {...PRESS_FACE}
-      >
+      <span className={faceClasses(boxSize(variant, size, false), false, false)} {...PRESS_FACE}>
         {icon}
         <span className={WORDS}>{children}</span>
         {external ? <ArrowUpRightIcon /> : null}

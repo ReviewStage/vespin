@@ -30,6 +30,7 @@ import { adminLinkFields } from "../admin/routing.js";
 import {
   HOME_WORDS,
   INBOX_WORDS,
+  MERGE_QUEUE_WORDS,
   NAMED_STEP,
   type NamedStep,
   type StepTitleTasks,
@@ -48,6 +49,7 @@ import {
 } from "../links-at-hand.js";
 import {
   adminRouteStands,
+  mergeQueueRouteStands,
   type RouteAccess,
   settingsPageRouteStands,
   useRouteAccess,
@@ -428,6 +430,27 @@ export const ROUTED_PLACE = {
     surfaces: () => [{ surface: PRODUCT_SURFACE.AUTOMATIONS }],
     // An automation's setup, its runs, and a run share its editor and what is written in it.
     draft: (params) => params.automationId,
+  },
+  MERGE_QUEUE: {
+    routes: ["/places/$workspace/merge-queue"],
+    claims: everyAddress,
+    // Note that it stands only while the account's Merge queue experiment is on, so Back and Forward pass over it once it is off.
+    gate: (params, access) =>
+      params.workspace === undefined || mergeQueueRouteStands(params.workspace, access),
+    stillThere: () => true,
+    binding: PLACE_BINDING.KEPT,
+    overThePlan: true,
+    inTaskPlace: false,
+    listedOnly: true,
+    title: (_tasks, under, views) => (views.mergeQueue ? { label: MERGE_QUEUE_WORDS } : under()),
+    named: () => undefined,
+    // Note that no link names it while it stands behind an experiment, so the tab keeps the address it was opened at.
+    links: () => [],
+    narrowBack: undefined,
+    narrowInstead: undefined,
+    // Note that it counts no surface opened while it stands behind an experiment, so the service's events read no value it does not know.
+    surfaces: () => [],
+    draft: noDraft,
   },
   VERSION_HISTORY: {
     routes: ["/version-history"],

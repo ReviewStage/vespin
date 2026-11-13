@@ -70,6 +70,7 @@ import {
   CONNECTION_LOST_TWICE,
   CREDENTIAL_REFUSED_TURN,
   FOLLOW_UP_TURNS,
+  GOAL_CLEARED_TURN,
   SHORT_TURN,
   STOPPED_COMMAND,
   STOPPED_TURN,
@@ -333,6 +334,44 @@ it.effect(
       assert.equal(cli.prompts.length, 2);
       assert.equal(cli.interrupts, 1);
       assert.equal(cli.closed, true);
+    }),
+);
+
+it.effect(
+  "a /goal line sent mid-turn, a clear or a new goal, interrupts the turn a goal holds open, and the launch goes on until the CLI runs it as a turn of its own",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService([], "Working toward the goal.");
+      const { prompted, write, run } = yield* launch(GOAL_CLEARED_TURN, service);
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* service.seen;
+      yield* Queue.take(prompted);
+      yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: "/goal clear" }] });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      // The cut-off turn's result, then the clear's own, before the launch's end.
+      assert.deepEqual(kinds(service.applied).slice(-3), [
+        "result/error_during_execution",
+        "result/success",
+        RUNNER_EVENT.END,
+      ]);
+    }),
+);
+
+it.effect(
+  "fails a launch whose CLI never answers the interrupt a mid-turn /goal line needs, rather than queue the command behind the turn",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService([], "Working toward the goal.");
+      const { prompted, write, run } = yield* launch(GOAL_CLEARED_TURN, service, ENV, [], false);
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* service.seen;
+      yield* Queue.take(prompted);
+      yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: "/goal clear" }] });
+
+      assert.deepEqual(yield* settled(run), Exit.succeed(RUNNER_END.FAILED));
     }),
 );
 
@@ -729,6 +768,45 @@ it.effect(
         [undefined, undefined],
       );
       assert.equal(cli.closed, true);
+    }),
+);
+
+it.effect(
+  "a message taken while the turn waits on a wakeup joins that turn, whose IDLE counts its files from the snapshot its first message opened on",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+
+      const { write, run } = yield* launch(
+        [...WAKEUP_WAIT.slice(0, -1), ...WARM_TURNS.slice(-4)],
+        service,
+        ENV,
+        [],
+        true,
+        fakeProbe(),
+        true,
+      );
+
+      const first = "6f1c2a4e-3b7d-4c8e-9a0b-1d2e3f405162";
+      yield* write(WARM_CONFIG);
+      yield* write({ ...FIRST_MESSAGE, uuid: first });
+
+      for (let step = 0; step < 5_000; step += 1) {
+        if (kinds(service.applied).includes(RUNNER_EVENT.WAITING)) break;
+        yield* Effect.yieldNow;
+      }
+
+      yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: "And this." }] });
+      yield* untilIdles(service, 1);
+      yield* write({ type: INPUT_LINE.RETIRE });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.IDLED);
+      assert.deepEqual(
+        service.applied.find(
+          ({ message }) => "type" in message && message.type === RUNNER_EVENT.IDLE,
+        )?.message,
+        { type: RUNNER_EVENT.IDLE, files: fakeFilesOf(fakeSnapshotOf(CONFIG.cwd, first).commit) },
+      );
     }),
 );
 

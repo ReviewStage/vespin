@@ -21,13 +21,14 @@
  */
 
 import { Predicate } from "effect";
+import { COMPUTER_ACTION, type ComputerAction } from "./machine-command-wire.js";
 import { countWords } from "./words.js";
 
 /** The kinds of call a row can be, across both tabs. */
 export const CALL_KIND = {
   COMMAND: "command",
   /** A command an agent ran on the developer's own Mac (`run_on_mac`), drawn as a command with where it ran beside it. */
-  MAC_COMMAND: "mac-command",
+  MACHINE_COMMAND: "mac-command",
   /** Actions an agent took in the browser in its own sandbox (`browser`), its line saying what it did and in which tab, with where it ran beside it. */
   BROWSER: "browser",
   /** One action an agent took on an app on the developer's own Mac (`computer`), its line saying what it did and to which app, the app's icon in its kind's icon's place. */
@@ -152,7 +153,7 @@ export type CallKind = (typeof CALL_KIND)[keyof typeof CALL_KIND];
 /** How a call of each kind says what it did, and whether its subject is code (a command, a path) rather than words. */
 export const CALL_WORDS = {
   [CALL_KIND.COMMAND]: { verb: "Ran", code: true },
-  [CALL_KIND.MAC_COMMAND]: { verb: "Ran", code: true },
+  [CALL_KIND.MACHINE_COMMAND]: { verb: "Ran", code: true },
   [CALL_KIND.BROWSER]: { verb: "Used the browser", code: false },
   [CALL_KIND.COMPUTER]: { verb: "Used an app", code: false },
   [CALL_KIND.READ_FILE]: { verb: "Read", code: true },
@@ -255,21 +256,30 @@ const BROWSER_ACTION_WORDS: ReadonlyMap<string, string> = new Map([
 ]);
 
 /** What each of the computer tool's actions says it did, before the app it did it to, on its call's line. */
-const COMPUTER_ACTION_WORDS: ReadonlyMap<string, string> = new Map([
-  ["list_apps", "Listed the apps"],
-  ["get_app_state", "Looked at"],
-  ["click", "Clicked in"],
-  ["type_text", "Typed in"],
-  ["press_key", "Pressed a key in"],
-  ["scroll", "Scrolled in"],
-  ["drag", "Dragged in"],
-  ["set_value", "Set a value in"],
-  ["perform_secondary_action", "Acted in"],
-]);
+const COMPUTER_ACTION_WORDS = {
+  [COMPUTER_ACTION.LIST_APPS]: "Listed the apps",
+  [COMPUTER_ACTION.GET_APP_STATE]: "Looked at",
+  [COMPUTER_ACTION.CLICK]: "Clicked in",
+  [COMPUTER_ACTION.TYPE_TEXT]: "Typed in",
+  [COMPUTER_ACTION.PRESS_KEY]: "Pressed a key in",
+  [COMPUTER_ACTION.SCROLL]: "Scrolled in",
+  [COMPUTER_ACTION.DRAG]: "Dragged in",
+  [COMPUTER_ACTION.SET_VALUE]: "Set a value in",
+  [COMPUTER_ACTION.PERFORM_SECONDARY_ACTION]: "Acted in",
+} as const satisfies { readonly [Action in ComputerAction]: string };
+
+const COMPUTER_ACTIONS: ReadonlySet<string> = new Set(Object.values(COMPUTER_ACTION));
+
+/** Whether a call's action is one this build knows. */
+function isComputerAction(action: string): action is ComputerAction {
+  return COMPUTER_ACTIONS.has(action);
+}
 
 /** What a computer call's line says it did, in place of its kind's verb; nothing for an action this build does not know, so the kind's own verb stands. */
 export function computerCallWords(action: string | undefined): string | undefined {
-  return action === undefined ? undefined : COMPUTER_ACTION_WORDS.get(action);
+  return action === undefined || !isComputerAction(action)
+    ? undefined
+    : COMPUTER_ACTION_WORDS[action];
 }
 
 /**
@@ -363,7 +373,7 @@ export function madeCallLine(kind: MadeCallKind): CallLine {
 
 /** Whether a call is a shell command, wherever it ran: its line may say its description, and its body draws it behind a prompt. */
 export function isCommandKind(kind: CallKind): boolean {
-  return kind === CALL_KIND.COMMAND || kind === CALL_KIND.MAC_COMMAND;
+  return kind === CALL_KIND.COMMAND || kind === CALL_KIND.MACHINE_COMMAND;
 }
 
 /**
@@ -375,7 +385,7 @@ export function isCommandKind(kind: CallKind): boolean {
 export function callPlace(kind: CallKind, server?: string): string | undefined {
   if (kind === CALL_KIND.MCP_TOOL || kind === CALL_KIND.SEARCH_TOOLS) return server;
 
-  if (kind === CALL_KIND.MAC_COMMAND || kind === CALL_KIND.COMPUTER) return ON_YOUR_MAC;
+  if (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) return ON_YOUR_MAC;
 
   return kind === CALL_KIND.BROWSER ? IN_THE_BROWSER : undefined;
 }
@@ -591,14 +601,14 @@ export function sameTurnRow<B>(a: TurnRow<B>, b: TurnRow<B>): boolean {
 }
 
 /** What a run's blocks hold, as its group's line counts them. */
-interface Held {
+export interface Held {
   readonly calls: number;
   readonly subagents: number;
   readonly startedAgents: number;
 }
 
-/** What a group's line says it holds: its calls, a coding agent's start among them, then its subagents, in the same words while the turn moves and once it has finished. */
-function groupSummary({ calls, subagents, startedAgents }: Held): string {
+/** What a group's line says it holds: its calls, a coding agent's start among them, then its subagents, in the same words while the turn moves and once it has finished; a whole turn folded closed says its work in the same words (`turnWorkSummary`). */
+export function groupSummary({ calls, subagents, startedAgents }: Held): string {
   const tools = calls + startedAgents;
 
   const said = [

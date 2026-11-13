@@ -94,8 +94,6 @@ import {
   Shortcut,
   SidebarPlaces,
   SidebarRule,
-  Skeleton,
-  SkeletonRegion,
   STATUS_TONE,
   TEXT_ELEMENT,
   TEXT_VARIANT,
@@ -112,6 +110,7 @@ import {
   ArrowDownFromLineIcon,
   ArrowUpToLineIcon,
   FolderPlusIcon,
+  GLYPH,
   MailOpenIcon,
 } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
@@ -125,7 +124,9 @@ import { LinkWorkspaceProvider, openInTabOf } from "../copy-link-item.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { unreadShown } from "../failure-report.js";
 import { useFindOpen } from "../find-in-tab.js";
+import { MERGE_QUEUE_WORDS } from "../history-titles.js";
 import { MemberDirectory, useMemberDirectory } from "../member-directory.js";
+import { useMergeQueueOn } from "../merge-queue-route.js";
 import {
   endWindowSpan,
   leaveWindowSpan,
@@ -138,6 +139,7 @@ import {
   useAutomationsDoor,
   useBoardDoor,
   useInboxDoor,
+  useMergeQueueDoor,
 } from "../places/routed-doors.js";
 import { ROUTED_PLACE, useWindowPlace } from "../places/routed-places.js";
 import type { NavigationHistory } from "../places/window-history.js";
@@ -193,10 +195,12 @@ import { SidebarInboxRow } from "./sidebar-inbox-row.js";
 import { SidebarPinnedTab } from "./sidebar-pinned-tab.js";
 import { SidebarRun, type SidebarRunsPlace } from "./sidebar-run.js";
 import {
+  LIST_SKELETON,
   NEW_SECTION,
   PINNED_DROP_ZONE,
   SidebarSections,
   TASKS_DROP_ZONE,
+  TaskRowsSkeleton,
   useSectionDialogs,
   useSectionEdits,
 } from "./sidebar-sections.js";
@@ -221,9 +225,6 @@ const WORK_RESERVE = 360;
 
 /** What the Automations row's count counts, as a reader hears it after the figure. */
 const RUNNING_NOUN = "running";
-
-/** The widths of the tasks' names while the list is first read, uneven as names are. */
-const LIST_SKELETON = ["72%", "54%", "64%", "46%"] as const;
 
 /**
  * The edge of the window's left column, the tasks' sidebar or Settings' page
@@ -1560,26 +1561,6 @@ function TaskGroups({
   }
 }
 
-/**
- * The tasks while the list is first read: a task row's room and its name's
- * type for each block, one line as a row's name is, so the rows land where
- * the blocks stood. Nothing stands for the repository headers, whose number
- * nobody knows yet.
- */
-function ListSkeleton(): React.JSX.Element {
-  return (
-    <SkeletonRegion label="Reading your tasks…">
-      <div className="sidebar-skeleton">
-        {LIST_SKELETON.map((width) => (
-          <div key={width} className="sidebar-skeleton-row">
-            <Skeleton width={width} />
-          </div>
-        ))}
-      </div>
-    </SkeletonRegion>
-  );
-}
-
 /** What the sidebar is drawn with while it floats, or could. */
 interface FloatingSidebar extends HoverPane {
   /** Whether the sidebar is on screen: pinned, or floating over the work. */
@@ -1724,6 +1705,33 @@ function SidebarAutomationsRow({
       onOpenInTab={onOpenInTab}
     >
       Automations
+    </NavItem>
+  );
+}
+
+/**
+ * The Merge queue page's row, after the Automations page's and drawn as it
+ * is: the queue's glyph and its name, with no count, since counting would
+ * read every repository's queue as the window opens. A press opens the
+ * window's Merge queue page, and the row is the place shown while it stands.
+ */
+function SidebarMergeQueueRow({
+  current,
+  disabled,
+  onOpen,
+}: {
+  current: boolean;
+  disabled: boolean;
+  onOpen: () => void;
+}): React.JSX.Element {
+  return (
+    <NavItem
+      icon={<GLYPH.QUEUED />}
+      current={current ? NAV_CURRENT.PAGE : undefined}
+      disabled={disabled}
+      onClick={onOpen}
+    >
+      {MERGE_QUEUE_WORDS}
     </NavItem>
   );
 }
@@ -1876,6 +1884,8 @@ function SidebarColumn({
   const board = useBoardDoor(tasks);
   const admin = useAdminDoor(tasks);
   const automations = useAutomationsDoor(tasks);
+  const mergeQueue = useMergeQueueDoor(tasks);
+  const mergeQueueOn = useMergeQueueOn();
   const inbox = useInboxDoor(tasks);
   const automationsStanding = useAutomationsPlace();
   const inAdmin = place === ROUTED_PLACE.ADMIN;
@@ -1883,6 +1893,7 @@ function SidebarColumn({
   const inAutomations = onTasks && automationsStanding.open;
   const inBoard = onTasks && !inAdmin && place === ROUTED_PLACE.BOARD;
   const inPerson = onTasks && !inAdmin && place === ROUTED_PLACE.PERSON;
+  const inMergeQueue = onTasks && !inAdmin && place === ROUTED_PLACE.MERGE_QUEUE;
   // Opening an automation sees its failed run, which the Automations row is marked for until then.
   const { place: automationsPlace } = automationsStanding;
 
@@ -1906,6 +1917,7 @@ function SidebarColumn({
   const standingIn =
     inInbox ||
     inAutomations ||
+    inMergeQueue ||
     inBoard ||
     inPerson ||
     inAdmin ||
@@ -1936,6 +1948,7 @@ function SidebarColumn({
   const openInbox = () => inbox.open();
   const openBoard = () => board.open();
   const openAutomations = () => automations.open();
+  const openMergeQueue = () => mergeQueue.open();
   const openAdmin = () => admin.open();
   const goHome = () => arriveFor(() => tasks.onGoHome());
   // Home is the place of no task bound, standing on its own route. New task's
@@ -2336,6 +2349,13 @@ function SidebarColumn({
           onOpen={chosen(openAutomations)}
           onOpenInTab={inTab({ kind: LINK_DESTINATION.AUTOMATIONS })}
         />
+        {mergeQueueOn ? (
+          <SidebarMergeQueueRow
+            current={inMergeQueue}
+            disabled={!tasks.signedIn}
+            onOpen={chosen(openMergeQueue)}
+          />
+        ) : null}
       </SidebarPlaces>
       <SidebarRule />
     </>
@@ -2577,7 +2597,7 @@ function SidebarColumn({
                       {/* The list is empty before its first read lands, so that it
               holds none says nothing until the service has answered. */}
                       {tasks.signedIn && unlisted && !tasks.listRead && !tasks.listFailed ? (
-                        <ListSkeleton />
+                        <TaskRowsSkeleton widths={LIST_SKELETON} />
                       ) : null}
                       {tasks.signedIn && unlisted && tasks.listRead && !tasks.listFailed ? (
                         <NoteLine look={NOTE_LINE_LOOK.ROWS}>No tasks yet.</NoteLine>

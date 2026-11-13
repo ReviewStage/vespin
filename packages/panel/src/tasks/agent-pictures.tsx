@@ -1,3 +1,4 @@
+import type { ComputerAppKept } from "@repo/features/agent-parts";
 import {
   calledPicturesOf,
   recordedVideosOf,
@@ -81,6 +82,28 @@ const AgentPicturesContext = createContext<AgentPictureDoor | undefined>(undefin
 
 /** Hands the transcript under it the door its pictures are read through. */
 export const AgentPicturesProvider = AgentPicturesContext.Provider;
+
+const ComputerIconsContext = createContext<ReadonlyMap<string, string>>(new Map());
+
+/** Hands the transcript under it the icon each of its `computer` calls wears, by its call (`computerIconsByCall`). */
+export const ComputerIconsProvider = ComputerIconsContext.Provider;
+
+const NO_KEPT_APPS: ReadonlyMap<string, ComputerAppKept> = new Map();
+
+const KeptAppsContext = createContext(NO_KEPT_APPS);
+
+/** Hands what stands under it the apps the conversation's `computer` calls used, by bundle id (`computerAppsKept`), which a mention of one is named and drawn by where the window lists none of its own. */
+export const KeptAppsProvider = KeptAppsContext.Provider;
+
+/** The apps the conversation's `computer` calls used, by bundle id, each with its name and the icon a call kept; none outside a conversation. */
+export function useKeptApps(): ReadonlyMap<string, ComputerAppKept> {
+  return useContext(KeptAppsContext);
+}
+
+/** The icon a `computer` call's row wears: the one the transcript's earlier calls lend it, or its own; none where neither kept one. */
+export function useComputerIcon(callId: string, own: string | undefined): string | undefined {
+  return useContext(ComputerIconsContext).get(callId) ?? own;
+}
 
 /**
  * The door to an agent's pictures, or a worker's where `callId` names the
@@ -443,6 +466,17 @@ function ShownStills({
   );
 }
 
+/**
+ * Where a call's pictures stand: under its row, open or closed, as an
+ * integration's and a browser call's do; or in its body under its answer,
+ * seen once the row is opened, as a computer call's window is, since the
+ * agent reads a window at nearly every step and shows the developer what
+ * matters itself.
+ */
+export const CALL_PICTURES_PLACE = { UNDER_ROW: "under-row", IN_BODY: "in-body" } as const;
+
+export type CallPicturesPlace = (typeof CALL_PICTURES_PLACE)[keyof typeof CALL_PICTURES_PLACE];
+
 /** What a set the agent showed is named, and what the pictures under a call's row are. */
 const SHOWN_LABEL = "Pictures the agent showed";
 const CALLED_LABEL = "Pictures the call answered";
@@ -459,16 +493,15 @@ function notKeptWords(byteCount: number): string {
  * model saw it all the same. The videos a browser call recorded stand
  * under them as a `show_image` call's would.
  */
-/** An app's icon a call kept beside the transcript, read through the transcript's door, in a call row's glyph seat; a screen's glyph stands there until it lands. */
+/** An app's icon a call kept beside the transcript, read through the transcript's door, in a call row's glyph seat; a screen's glyph stands there until it lands, and for good where no icon was kept. */
 export function KeptAppIcon({
   id,
   size = APP_ICON_SIZE.LINE,
 }: {
-  id: string;
+  id: string | undefined;
   size?: AppIconSize | undefined;
 }): ReactNode {
-  const door = useContext(AgentPicturesContext);
-  const state = usePicture(pictureQuery(door?.owner ?? "", id, door?.read), pictureUnread);
+  const state = useKeptPicture(id);
 
   return <AppIcon src={state.kind === PICTURE_STATE.READY ? state.url : undefined} size={size} />;
 }
@@ -490,10 +523,12 @@ export function CallPictures({
   tool,
   input,
   output,
+  place = CALL_PICTURES_PLACE.UNDER_ROW,
 }: {
   tool: string;
   input: Parameters<typeof calledPicturesOf>[1];
   output: Parameters<typeof calledPicturesOf>[2];
+  place?: CallPicturesPlace | undefined;
 }): ReactNode {
   const door = useContext(AgentPicturesContext);
   const { open, viewer } = useViewer(door);
@@ -514,7 +549,13 @@ export function CallPictures({
   // Note that a call's set draws every picture it answered, never six and a count, because one not kept says why only on its own tile and the viewer walks none of those.
   return (
     <>
-      <div className="mt-list-gap mr-0 mb-item-gap ml-transcript-gutter">
+      <div
+        className={
+          place === CALL_PICTURES_PLACE.IN_BODY
+            ? undefined
+            : "mt-list-gap mr-0 mb-item-gap ml-transcript-gutter"
+        }
+      >
         <PictureSet label={CALLED_LABEL} count={called.length} thumbnails>
           {called.map((each, index) =>
             each.kept ? (

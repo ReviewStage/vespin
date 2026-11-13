@@ -46,6 +46,7 @@ import { nativeHelperPath } from "../native/native-helper";
 import type { DesktopServices } from "../services/compose-desktop";
 import { windowPushes } from "../window/window-pushes";
 import { cliProcedures } from "./cli-acts";
+import { macAppProcedures } from "./mac-app-acts";
 import { macPhotoProcedures } from "./mac-photo-acts";
 import { macResourcesProcedures } from "./mac-resources-acts";
 import { macTerminalProcedures } from "./mac-terminal-acts";
@@ -163,6 +164,12 @@ export function registerDesktopIpc(services: DesktopServices): void {
       },
       createId: randomUUID,
       sleep: Effect.sleep,
+    }),
+    // Note that `open -b` brings a running app forward as the Dock does, at the window it was last in.
+    ...macAppProcedures({
+      showApp: async (bundleId) => {
+        await promisify(execFile)("/usr/bin/open", ["-b", bundleId]);
+      },
     }),
     ...macTerminalProcedures({
       home: os.homedir(),

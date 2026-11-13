@@ -111,7 +111,7 @@ struct WaitingLabel: View {
 
   var body: some View {
     if state.waiting > 0 {
-      Label("\(state.waiting) waiting on you", systemImage: "bubble.left.fill")
+      Label { Text("\(state.waiting) waiting on you") } icon: { Image("Inbox") }
         .font(.caption.weight(.medium))
         .foregroundStyle(Color("Attention"))
         .lineLimit(1)
@@ -152,6 +152,7 @@ struct AgentRow: View {
         }
       }
       Button(intent: StopAgentIntent(agentId: agent.id)) {
+        // The panel's Stop is a filled square, which SF Symbols' stop.fill draws, as the app's composer keeps it.
         Image(systemName: "stop.fill")
           .font(.caption)
           .frame(width: 28, height: 28)
@@ -190,7 +191,7 @@ extension AgentsActivityAttributes.ContentState {
   /// The count's words: how many are working, or that they all finished.
   var countText: String { running > 0 ? "\(running) working" : "Done" }
 
-  /// The panel's glyph: a half-filled ring while agents work, a check once none does.
+  /// The panel's glyph: a half-filled ring while agents work, a check once none does. Note that these stay SF Symbols, because the panel draws its status ring itself rather than with Lucide, as the app's own status marks do.
   var symbol: String { running > 0 ? "circle.righthalf.filled" : "checkmark.circle.fill" }
 
   /// Copper while an ask waits on the member, else the working or the finished tone.

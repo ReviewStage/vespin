@@ -569,6 +569,12 @@
   border-radius: 0 0 var(--sheet-radius, 0) var(--sheet-radius, 0);
 }
 
+/* A cloud Browser tab's intro (`page-intro.tsx`) stands over the page, at
+   the column's inset under the line saying who has the tab. */
+.cloud-browser-view > .ui-reveal {
+  padding: var(--ui-block-gap) var(--column-inset);
+}
+
 /* A cloud Browser tab's quiet line over its page (cloud-browser-pane.tsx)
    keeps to a readable measure. */
 .cloud-browser-body > .cloud-browser-notice > .ui-text {
@@ -1322,29 +1328,24 @@
   --pull-request-page-measure: 1040px; /* off-scale: detail-page.css's web measure */
 }
 
-/* A section's heading that folds it, and the comment box's, stuck to the
-   scroller's top while its section is in view, on the panel's own ground so
-   nothing shows through; the next section's heading pushes it off, since a
-   sticky box stands only inside its own section. It is held at the
-   scroller's band (`SCROLL_FADE_INSET.BAND`), because the fade begins
-   beneath that band: taller,
-   it would slice what passes under its foot, and shorter, it would fade
-   its own. The whole row presses as a `DisclosureSummary` does: the chevron
-   leading at its inset and the row filled under the pointer; what stands at
-   its end stands beside it (`DisclosureFrame`), on the same band. */
-.pull-request-section-fold > .ui-disclosure-summary,
-.pull-request-page .pull-request-comment-box > .pull-request-heading {
+/* A section's heading that folds it, stuck to the scroller's top while its
+   section is in view, on the panel's own ground so nothing shows through;
+   the next section's heading pushes it off, since a sticky box stands only
+   inside its own section. It is held at the scroller's band
+   (`SCROLL_FADE_INSET.BAND`), because the fade begins beneath that band:
+   taller, it would slice what passes under its foot, and shorter, it would
+   fade its own. The whole row presses as a `DisclosureSummary` does, the
+   chevron leading at its inset, but draws no fill of its own under the
+   pointer: its words light instead, so the heading stands on the page's
+   ground like the words under it. What stands at its end stands beside it
+   (`DisclosureFrame`), on the same band. */
+.pull-request-section-fold > .ui-disclosure-summary {
   position: sticky;
   top: 0;
   z-index: 1;
   box-sizing: border-box;
   height: var(--ui-scroll-band);
   background: var(--ui-color-ground);
-}
-
-.pull-request-page .pull-request-comment-box > .pull-request-heading {
-  align-items: center;
-  margin: 0;
 }
 
 .pull-request-section-fold > .ui-disclosure-summary {
@@ -1355,27 +1356,6 @@
   padding-inline: var(--ui-tight-gap);
   color: var(--ui-color-text-muted);
   white-space: nowrap;
-}
-
-/* The fill under the pointer, a disclosure row's (disclosure.css) at the
-   control's height and corner, drawn inside the band rather than on it, so
-   the band stays opaque to its corners while what scrolls passes under it.
-   Note that it sits under the row's words, the band being a stacking
-   context of its own, and lights only while the pointer is on the row,
-   since what stands at its end stands beside it. */
-.pull-request-section-fold > .ui-disclosure-summary::before {
-  position: absolute;
-  z-index: -1;
-  inset: calc((var(--ui-scroll-band) - var(--ui-control-height)) / 2) 0;
-  border-radius: var(--ui-control-radius);
-  content: "";
-  transition: background-color var(--ui-duration-hover) var(--ui-motion-exit);
-}
-
-@media (hover: hover) {
-  .pull-request-section-fold > .ui-disclosure-summary:hover::before {
-    background: var(--ui-color-fill-strong);
-  }
 }
 
 .pull-request-section-fold > .ui-disclosure-summary > .pull-request-heading {
@@ -1924,6 +1904,23 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
    Copy link to the right of it, the lead giving up its width before them. */
 .agent-turn-foot [data-worked] {
   min-width: 0;
+}
+
+/* A goal's trail (agent-goal.tsx) stands a little room off the words and
+   the trails around it, which a turn's parts would otherwise set flush, its
+   glyph and words set in as a call's line sets its own (`--transcript-gutter`),
+   so the two read as one column. */
+[data-goal-trail] {
+  padding-block: var(--ui-space-4);
+  padding-inline-start: var(--ui-space-4);
+  column-gap: var(--ui-icon-gap);
+}
+
+/* A goal's card (agent-goal.tsx) previews the checker's reason on its head
+   while folded, and lets it go once opened, where the reason stands whole,
+   so its head reads as a check's card's does. */
+[data-goal-card]:has([open]) .agent-goal-preview {
+  display: none;
 }
 
 /* A message's Forked to trail (fork-action.tsx) stands a list's gap under

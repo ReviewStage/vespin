@@ -215,13 +215,15 @@ const TASK = {
   ROUNDING: "4dae6081-2f5b-4c73-9e9b-5a6b7c8d9ea4",
 } as const;
 
-/** The account's tasks that hold no item, which fill out its Tasks list: a sub-task of the reference journey's, one in a second repository, one in a section of its own, and a teammate's it follows. */
+/** The account's tasks that hold no item, which fill out its Tasks list: a sub-task of the reference journey's, one in a second repository, one in a section of its own, a teammate's it follows, and one filed for later and one canceled, so every status's mark is drawn. */
 const LISTED = {
   COPY: "81e2a425-6d9f-4ab7-92df-9eafb0c1d2e8",
   ALERTS: "92f3b536-7eaf-4bc8-a3ea-afb0c1d2e3f9",
   LAUNCH: "a304c647-8fb0-4cd9-b4fb-b0c1d2e3f40a",
   SECTION: "b415d758-90c1-4dea-85ac-c1d2e3f4051b",
   BILLING: "c526e869-a1d2-4efb-96bd-d2e3f405162c",
+  EXPORT: "d637f97a-b2e3-4f0c-87ce-e3f405162737",
+  DIGEST_V1: "e748a08b-c3f4-4a1d-98df-f405162738f4",
 } as const;
 
 /** The agents that posted the items, one at work on each task. */
@@ -898,10 +900,12 @@ function listedTask(
 
 /**
  * The account's tasks that hold no item, which fill out its Tasks list as
- * the sidebar stands it: a sub-task under the reference journey's, a task
+ * the sidebar stands it: a sub-task under the reference journey's, which
+ * the launch's checklist waits on, a task
  * in a second repository, so the list draws its repositories' headings,
- * one the account keeps in a section of its own, and a teammate's it
- * follows, which the list draws under Following.
+ * one the account keeps in a section of its own, a teammate's it
+ * follows, which the list draws under Following, and one filed for later
+ * and one canceled, so the list draws every status's mark.
  */
 const LISTED_TASKS: readonly TaskSummary[] = [
   listedTask(LISTED.COPY, "Invite email copy", {
@@ -910,6 +914,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     number: 44,
     updatedAt: LANDED - 3 * HOUR,
     parentTaskId: TASK.INVITES,
+    blocks: [LISTED.LAUNCH],
   }),
   listedTask(LISTED.ALERTS, "Usage alerts", {
     repository: "ada/ledger",
@@ -923,6 +928,8 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     status: TASK_STATUS.IN_PROGRESS,
     number: 46,
     updatedAt: LANDED - 7 * HOUR,
+    blocked: true,
+    blockedBy: [LISTED.COPY],
   }),
   // Note that the account follows a teammate's task, which the Tasks list draws under Following.
   listedTask(LISTED.BILLING, "Billing export", {
@@ -937,6 +944,21 @@ const LISTED_TASKS: readonly TaskSummary[] = [
       { userId: GRACE.userId, assignee: true, machines: true },
       { userId: ADA.userId, assignee: false, machines: false },
     ],
+  }),
+  listedTask(LISTED.EXPORT, "Ledger CSV export", {
+    repository: "ada/ledger",
+    status: TASK_STATUS.BACKLOG,
+    number: 48,
+    updatedAt: LANDED - 2 * DAY,
+    priority: TASK_PRIORITY.LOW,
+  }),
+  listedTask(LISTED.DIGEST_V1, "Daily digest email", {
+    repository: "ada/relay",
+    status: TASK_STATUS.CANCELED,
+    number: 49,
+    createdAt: LANDED - 8 * DAY,
+    updatedAt: LANDED - 5 * DAY,
+    completedAt: LANDED - 5 * DAY,
   }),
 ];
 

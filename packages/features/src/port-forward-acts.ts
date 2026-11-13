@@ -1,12 +1,13 @@
 /**
- * port-forward-acts.ts -- what the panel's Forward to localhost control says to the desktop and hears back: forwarding turned on or off for one coding agent, and how each of its forwarded ports stands, as the host keeps it in app state.
+ * port-forward-acts.ts -- what the panel's Ports popover says to the desktop and hears back: one of a coding agent's ports forwarded to this Mac or let go, and how each of its ports stands, as the host keeps it in app state.
  *
- * The desktop's host forwards one agent's ports at a time: while forwarding
- * is on, every port the service detects listening in the agent's cloud
- * sandbox (`listening-ports-wire.ts`) is listened on at this Mac's
- * `127.0.0.1`, on the same port where it is free and the next free one
- * where it is not, and each connection it accepts is carried over the
- * service's tunnel (`sandbox-tunnel-wire.ts`). The acts carry ids, port
+ * The desktop's host forwards one agent's ports at a time, and of those only
+ * the ones the developer opened: each such port the service detects
+ * listening in the agent's cloud sandbox (`listening-ports-wire.ts`) is
+ * listened on at this Mac's `127.0.0.1`, on the same port where it is free
+ * and the next free one where it is not, and each connection it accepts is
+ * carried over the service's tunnel (`sandbox-tunnel-wire.ts`). The agent's
+ * other listening ports are kept beside them, not forwarded. The acts carry ids, port
  * numbers, and what serves each port; no byte a connection carries ever
  * enters an act, app state, or a trace, nor does a port's label enter a
  * trace.
@@ -34,11 +35,14 @@ export const PORT_FORWARD_STATE = {
   CONNECTED: "connected",
   /** No local port near it was free, so it is not forwarded. */
   UNAVAILABLE: "unavailable",
+  /** Listening in the sandbox, and not asked to reach this Mac. */
+  OFF: "off",
 } as const;
 
-/** Forwarding turned on or off for an agent; on for one turns it off for any other. */
+/** One of an agent's ports forwarded to this Mac or let go; forwarding one of an agent's turns every other agent's off. */
 export const portForwardSetParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
+  port: EffectSchema.Int,
   on: EffectSchema.Boolean,
 });
 
@@ -48,7 +52,7 @@ export const portShareSetParamsSchema = EffectSchema.Struct({
   port: EffectSchema.NullOr(EffectSchema.Int),
 });
 
-/** One port forwarded: the sandbox's, the local one it is listened on where it has one, how it stands, and what serves it where that was read. */
+/** One port listed: the sandbox's, the local one it is listened on where it has one, how it stands, and what serves it where that was read. */
 const forwardedPortSchema = EffectSchema.Struct({
   port: EffectSchema.Int,
   localPort: EffectSchema.optional(EffectSchema.Int),
@@ -57,10 +61,11 @@ const forwardedPortSchema = EffectSchema.Struct({
 });
 
 /**
- * An agent's forwarding as it stands: whether it is on, whether its sandbox
- * was running at the last look, its forwarded ports, the lowest first, and
- * the port shared by public link where one is; off, not running, and none
- * for any agent but the one forwarded.
+ * An agent's forwarding as it stands: whether any of its ports is forwarded,
+ * whether its sandbox was running at the last look, its listening ports,
+ * the lowest first, each forwarded or `OFF`, and the port shared by link
+ * where one is; off, not running, and none for any agent but the one
+ * forwarded.
  */
 export const portForwardingAnswerSchema = EffectSchema.Struct({
   on: EffectSchema.Boolean,

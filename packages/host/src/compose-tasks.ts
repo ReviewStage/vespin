@@ -489,9 +489,40 @@ interface RelationChange {
   readonly reach: RelationReach;
 }
 
+/** `ids` with `id` added at its end or taken away, as a block is. */
+function blockIdsMoved(ids: readonly string[], id: string, added: boolean): string[] {
+  const rest = ids.filter((each) => each !== id);
+
+  return added ? [...rest, id] : rest;
+}
+
 /**
- * What one side of a relation leaves of a row of the list: the waiting
- * task's `blocked`, or the child's parent, as its kind names them, and
+ * What a block added or taken away leaves of either task's lists of blocks:
+ * the waiting task's `blockedBy`, and the blocker's `blocks`. Note that a
+ * row that carries no list, from a service before rows carried them, is
+ * left without one, because the change drawn over nothing would read as the
+ * whole list and hide the blocks the row never named.
+ */
+function blockListFields(
+  row: PlanRow,
+  waiting: string,
+  blocker: string,
+  added: boolean,
+): Partial<PlanRow> {
+  if (row.id === waiting && row.blockedBy !== undefined) {
+    return { blockedBy: blockIdsMoved(row.blockedBy, blocker, added) };
+  }
+
+  if (row.id === blocker && row.blocks !== undefined) {
+    return { blocks: blockIdsMoved(row.blocks, waiting, added) };
+  }
+
+  return {};
+}
+
+/**
+ * What one side of a relation leaves of a row of the list: either task's
+ * lists of blocks and the waiting task's `blocked`, or the child's parent, as its kind names them, and
  * nothing of any other row. Note that a block taken away clears `blocked`
  * only where the waiting task's other blockers are known, as the open
  * task's are, because elsewhere another may still hold it back; the list
@@ -508,17 +539,19 @@ function relationFields(
       const [waiting, blocker] =
         side.kind === TASK_RELATION_KIND.BLOCKED_BY ? [taskId, otherId] : [otherId, taskId];
 
-      if (row.id !== waiting || !reach.blocking.includes(blocker)) return {};
+      const lists = blockListFields(row, waiting, blocker, side.added);
+
+      if (row.id !== waiting || !reach.blocking.includes(blocker)) return lists;
 
       const others =
         reach.opened?.taskId === waiting
           ? reach.opened.blockedBy.filter((id) => id !== blocker)
           : undefined;
 
-      if (!side.added && others === undefined) return {};
+      if (!side.added && others === undefined) return lists;
       const blocked = side.added || (others ?? []).some((id) => reach.blocking.includes(id));
 
-      return blocked === (row.blocked === true) ? {} : { blocked };
+      return blocked === (row.blocked === true) ? lists : { ...lists, blocked };
     }
 
     case TASK_RELATION_KIND.SUB_TASK:
@@ -1231,8 +1264,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
           yield* resendQueued;
         }),
-      // A list that could not be read says so beside the tasks it already drew rather than emptying them.
-      failed: () => write({ listStatus: TASKS_READ.FAILED, live: HOST_LIVE.OFFLINE }),
+      // A list that could not be read says so beside the tasks it already drew rather than emptying them. Note that it says nothing of the service's reach, which the network watch hears from every call, because a read the service refused was still answered.
+      failed: () => write({ listStatus: TASKS_READ.FAILED }),
       // A list that may be behind keeps drawing what it had, and says it is catching up until the next lands.
       behind: () => write({ live: HOST_LIVE.CATCHING_UP }),
       onTxWait: (wait) => {
@@ -1394,7 +1427,9 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    * where the list holds no row of it. Note that the row is the whole of
    * what the task carries but its description, so a field the row leaves out is one
    * the task no longer has, and that the last save is the description's own, kept
-   * with its body, as are its blocks, which a row of the list never carries.
+   * with its body. Its blocks are the row's where the row carries them, an
+   * empty list among them, and the description's from a service whose rows
+   * carry none.
    */
   function asListed(task: Task): Task {
     const listed = view.tasks.find((row) => row.id === task.id);
@@ -1410,8 +1445,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       ...(agentEdits === undefined ? undefined : { agentEdits }),
       ...(lastEdit === undefined ? undefined : { lastEdit }),
       ...(sectionEdits === undefined ? undefined : { sectionEdits }),
-      ...(blockedBy === undefined ? undefined : { blockedBy }),
-      ...(blocks === undefined ? undefined : { blocks }),
+      ...(row.blockedBy === undefined && blockedBy !== undefined ? { blockedBy } : undefined),
+      ...(row.blocks === undefined && blocks !== undefined ? { blocks } : undefined),
     };
   }
 
@@ -1473,6 +1508,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       parentTaskId: task.parentTaskId ?? null,
       ...(task.mode === undefined ? undefined : { mode: task.mode }),
       ...((task.blockedBy ?? []).some(blocksNow) ? { blocked: true } : undefined),
+      ...(task.blockedBy === undefined ? undefined : { blockedBy: task.blockedBy }),
+      ...(task.blocks === undefined ? undefined : { blocks: task.blocks }),
     };
   }
 
@@ -1550,6 +1587,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       ...(related(TASK_CREATE_RELATION_KIND.BLOCKED_BY).some(blocksNow)
         ? { blocked: true }
         : undefined),
+      blockedBy: related(TASK_CREATE_RELATION_KIND.BLOCKED_BY),
+      blocks: related(TASK_CREATE_RELATION_KIND.BLOCKS),
     };
   }
 

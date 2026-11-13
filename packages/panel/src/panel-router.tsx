@@ -55,6 +55,7 @@ import {
   BoardRouteLoading,
   HomePlace,
   InboxPlace,
+  MergeQueueRouteLoading,
   PersonRouteLoading,
   SettingsRouteLoading,
   ShellPlaces,
@@ -64,6 +65,7 @@ import {
 } from "./desktop/desktop-shell.js";
 import {
   adminRouteStands,
+  mergeQueueRouteStands,
   pathUnder,
   type RouteAccess,
   settingsPageRouteStands,
@@ -210,6 +212,31 @@ const boardRoute = createRoute({
   pendingComponent: BoardRouteLoading,
   ...LAZY_ROUTE,
 }).lazy(() => import("./desktop/board-route.lazy.js").then((loaded) => loaded.boardLazyRoute));
+
+/** The Merge queue page's address names the pull request it opened for, by its GitHub address, as `?pr=`. */
+const mergeQueueSearchSchema = Schema.toStandardSchemaV1(
+  Schema.Struct({ pr: Schema.optionalKey(Schema.String) }),
+);
+
+/**
+ * A workspace's Merge queue page, while the account's Merge queue
+ * experiment is on (`mergeQueueRouteStands`): an address of it otherwise
+ * gives way to that workspace's Home. Its page is a chunk of its own,
+ * opened seldom, its frame standing while it loads.
+ */
+const mergeQueueRoute = createRoute({
+  getParentRoute: () => workspaceRoute,
+  path: "merge-queue",
+  validateSearch: mergeQueueSearchSchema,
+  beforeLoad: ({ context, params }) => {
+    if (mergeQueueRouteStands(params.workspace, context.access)) return;
+    throw redirect({ to: "/$workspace", params: { workspace: params.workspace }, replace: true });
+  },
+  pendingComponent: MergeQueueRouteLoading,
+  ...LAZY_ROUTE,
+}).lazy(() =>
+  import("./desktop/merge-queue-route.lazy.js").then((loaded) => loaded.mergeQueueLazyRoute),
+);
 
 /**
  * A task's own place (`ROUTED_PLACE.TASK`), which the window's state draws
@@ -596,6 +623,7 @@ const routeTree = rootRoute.addChildren([
     workspaceRoute.addChildren([
       homeRoute,
       boardRoute,
+      mergeQueueRoute,
       taskRoute.addChildren([
         taskIndexRoute,
         taskPageRoute,

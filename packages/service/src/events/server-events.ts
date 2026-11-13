@@ -117,6 +117,7 @@ export const SERVER_EVENT = {
   AGENT_SETTINGS_CHANGE: "agent:settings_change",
   SKILL_CHANGE: "skill:change",
   DICTATION_USE: "dictation:use",
+  VOICE_CALL: "voice:call",
   MEMORY_FORGET: "memory:forget",
   MEMORY_SAVE: "memory:save",
   MEMORY_RECALL: "memory:recall",
@@ -303,6 +304,27 @@ const DICTATION_DURATION_BOUNDS = [
   [SERVER_DICTATION_DURATION.UNDER_1M, MINUTE_MS],
 ] as const;
 
+/**
+ * How long a voice call ran, as a bucket, named for its upper bound as the
+ * turn's are; OpenAI holds a call to two hours, so none runs over.
+ */
+export const SERVER_VOICE_CALL_DURATION = {
+  UNDER_1M: "under_1m",
+  UNDER_5M: "under_5m",
+  UNDER_15M: "under_15m",
+  UNDER_30M: "under_30m",
+  UNDER_1H: "under_1h",
+  UNDER_2H: "under_2h",
+} as const;
+
+const VOICE_CALL_DURATION_BOUNDS = [
+  [SERVER_VOICE_CALL_DURATION.UNDER_1M, MINUTE_MS],
+  [SERVER_VOICE_CALL_DURATION.UNDER_5M, 5 * MINUTE_MS],
+  [SERVER_VOICE_CALL_DURATION.UNDER_15M, 15 * MINUTE_MS],
+  [SERVER_VOICE_CALL_DURATION.UNDER_30M, 30 * MINUTE_MS],
+  [SERVER_VOICE_CALL_DURATION.UNDER_1H, 60 * MINUTE_MS],
+] as const;
+
 /** What a member did to a box's pairing or an enrolled machine. */
 export const SERVER_HOST_PAIRING_ACTION = {
   APPROVE: "approve",
@@ -454,6 +476,11 @@ export interface ServerEventProperties {
   [SERVER_EVENT.SKILL_CHANGE]: { action: Values<typeof SERVER_SKILL_ACTION> };
   /** One transcribed clip, by how long it ran; its words are never counted. */
   [SERVER_EVENT.DICTATION_USE]: { duration: Values<typeof SERVER_DICTATION_DURATION> };
+  /** One finished voice call, by how long it ran and the harness of the agent it spoke for; nothing it said is ever counted. */
+  [SERVER_EVENT.VOICE_CALL]: {
+    duration: Values<typeof SERVER_VOICE_CALL_DURATION>;
+    harness: Values<typeof SERVER_AGENT_HARNESS>;
+  };
   /** A member's forget of one of the workspace's memories; what it held is never counted. */
   [SERVER_EVENT.MEMORY_FORGET]: Record<string, never>;
   /** A memory kept, by what the keep came to and who kept it; its words are never counted. */
@@ -945,6 +972,13 @@ export function dictationDurationOf(ms: number): Values<typeof SERVER_DICTATION_
   const bucket = DICTATION_DURATION_BOUNDS.find(([, bound]) => ms < bound);
 
   return bucket === undefined ? SERVER_DICTATION_DURATION.UNDER_2M : bucket[0];
+}
+
+/** The bucket a voice call's length falls in. */
+export function voiceCallDurationOf(ms: number): Values<typeof SERVER_VOICE_CALL_DURATION> {
+  const bucket = VOICE_CALL_DURATION_BOUNDS.find(([, bound]) => ms < bound);
+
+  return bucket === undefined ? SERVER_VOICE_CALL_DURATION.UNDER_2H : bucket[0];
 }
 
 /**

@@ -79,6 +79,7 @@ import {
   type LiveActivityEndedParams,
   type LiveActivityTokenAnswerView,
   type LiveActivityTokenParams,
+  type MachineAllowedAppsAnswerView,
   type MemoriesAnswerView,
   type MemoryForgetParams,
   type MemorySaveAnswerView,
@@ -108,6 +109,10 @@ import {
   type SoundStateView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
+  type VoiceCallEndedAnswerView,
+  type VoiceCallEndedParams,
+  type VoiceSessionAnswerView,
+  type VoiceSessionParams,
 } from "./agent-view.js";
 import {
   AGENT_LIST_ARCHIVED,
@@ -235,6 +240,7 @@ import {
 } from "./sound-clip-wire.js";
 import type { TaskAgentRefusal } from "./task-wire.js";
 import { MP4_TYPE, PLAYABLE_VIDEO_TYPE, type PlayableVideoType } from "./video-signature.js";
+import { voiceCallEndedRequestSchema, voiceSessionRequestSchema } from "./voice-wire.js";
 
 /**
  * agent-client.ts -- the window's side of a task's coding agents, as the host asks the service for them.
@@ -529,6 +535,11 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.hosts.presence, undefined, {
       deadline: HOSTED_DEADLINE.PRESENCE,
     });
+  }
+
+  /** The apps the account's own machines always allow agents to use, each machine's by its name. */
+  machineAllowedApps(): Effect.Effect<MachineAllowedAppsAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.hosts.allowedApps, undefined);
   }
 
   /** A declared live read sealed for following, or polled where `poll` asks (`askLiveRead`). */
@@ -900,6 +911,34 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.dictation.transcribe, admitted, {
       deadline: HOSTED_DEADLINE.HELD,
     });
+  }
+
+  /**
+   * A voice call into an agent opened on the member's own OpenAI key
+   * (`voice-wire.ts`): the peer's SDP offer out, GPT-Live's SDP answer back,
+   * under the held deadline, since the service answers only once OpenAI has
+   * made the session; an offer the service would refuse by shape is refused
+   * here without traveling at all.
+   */
+  openVoiceSession(
+    params: VoiceSessionParams,
+  ): Effect.Effect<VoiceSessionAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(voiceSessionRequestSchema)(params));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(this.#hosted.voice.open, admitted, { deadline: HOSTED_DEADLINE.HELD });
+  }
+
+  /** A finished voice call's seconds, kept on the member's day; a report the service would refuse by shape is refused here without traveling. */
+  reportVoiceCall(
+    params: VoiceCallEndedParams,
+  ): Effect.Effect<VoiceCallEndedAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(voiceCallEndedRequestSchema)(params));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(this.#hosted.voice.ended, admitted);
   }
 
   /** The member's own GitHub token, as what tells it apart; never the token. */

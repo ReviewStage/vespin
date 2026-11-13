@@ -5,16 +5,19 @@
 //
 //   node packages/brand/scripts/generate-surface-shared.mjs
 //
-// It writes four committed outputs into packages/brand/src/generated, three
-// into @repo/ui's tokens, and three into @repo/ui-native's, all from the
-// tables further down:
+// It writes six committed outputs into packages/brand/src/generated, four
+// into @repo/ui's tokens, and four into @repo/ui-native's, all from the
+// tables further down and in task-status-marks.mjs:
 //
 //   src/motion-tokens.ts        the same durations and sizes, as numbers
 //   src/provider-mark-paths.ts  SVG path data for the sign-in provider marks
 //   src/brand-palette.ts        the brand's colors as plain values
 //   src/lucide-symbols.ts       Lucide's glyphs as SF Symbols templates, outlined
+//   src/task-status-marks.ts    a task's status marks, as @repo/ui draws them
+//   src/task-status-symbols.ts  the same marks as SF Symbols templates
 //   ui/src/tokens/motion-tokens.css  the --ui-* motion tokens the shared
 //                               components read, imported by @repo/ui/tokens.css
+//   ui/src/tokens/geist.css     Geist's steps as --geist-* properties
 //   ui/src/tokens/brand.css     the brand's colors on the --ui-color-* roles
 //   ui/src/tokens/identity.css  the identity hues on --ui-color-identity-*
 //   ui-native/src/tokens/brand-colors.ts  the iOS app's share of those
@@ -22,6 +25,8 @@
 //   ui-native/src/tokens/identity-hues.ts  the same identity hues, as values
 //   ui-native/src/tokens/lucide-symbols.ts  the names the iOS app's asset
 //                               catalog holds those templates under
+//   ui-native/src/tokens/task-status-symbols.ts  the names it holds the
+//                               status marks' templates under
 //
 // The React that traces the marks, and the rules that consume the tokens, stay
 // in each app: a shared component would pull desktop-only code into the web
@@ -33,7 +38,15 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { BRAND, IDENTITY } from "./brand-palette.mjs";
-import { symbolTemplate } from "./lucide-symbols.mjs";
+import { GEIST } from "./geist.mjs";
+import { markTemplate, symbolTemplate } from "./lucide-symbols.mjs";
+import {
+  TASK_MARK_BOX,
+  TASK_MARK_ELEMENT,
+  TASK_MARK_LINE_WIDTH,
+  TASK_MARK_ROLE,
+  TASK_STATUS_MARK,
+} from "./task-status-marks.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SURFACE = join(HERE, "..", "src", "generated");
@@ -103,15 +116,18 @@ const MOTION_PANE = "cubic-bezier(0.2, 0, 0, 1)";
 // reads too; this script writes them onto @repo/ui's roles and as values.
 
 // The roles the iOS app draws with: the accent, the grounds a screen, a list,
-// and a sidebar stand on, the inks, and the status inks. The rest (a chip's
-// hover, a focus ring) are the desktop's and the site's, which SwiftUI's own
-// control states stand in for on iOS.
+// and a sidebar stand on, the raised fill a grouped form's rows stand in
+// (OVERLAY) and the light ground under them (CHIP_HOVER), the inks, and the
+// status inks. The rest (a focus ring, a chip's selection) are the desktop's
+// and the site's, which SwiftUI's own control states stand in for on iOS.
 const NATIVE_ROLES = [
   "ACCENT",
   "ON_ACCENT",
   "ACCENT_TEXT",
   "GROUND",
   "SURFACE",
+  "OVERLAY",
+  "CHIP_HOVER",
   "SIDEBAR",
   "SIDEBAR_INK",
   "WELL",
@@ -171,17 +187,133 @@ const GOOGLE_MARK_LAYERS = [
 ];
 
 // ---------- Lucide symbols ----------
-// The panel's Lucide glyphs for the marks that are our own and that SF
-// Symbols has no drawing of, under the names the iOS app's asset catalog
-// holds them by: a pull request in each state, a branch, and a decide ask.
-// Every other glyph the app draws is an SF Symbol.
+// Every glyph the iOS app draws itself is the panel's own Lucide glyph for
+// the same place (the developer, Nov 12, 2026), written into the app's asset
+// catalog as a custom symbol under its Lucide name: the icons `@repo/ui-native`'s
+// `GLYPH` table names, by Lucide's own name for each. Only iOS's own chrome
+// (the back chevron, the share sheet, the search field) stays an SF Symbol.
+// An alias of Lucide's (`trash-2`) re-exports no drawing, so the table names
+// the icon it stands for (`trash`).
 const LUCIDE_SYMBOLS = {
-  GIT_PULL_REQUEST: "git-pull-request",
-  GIT_PULL_REQUEST_DRAFT: "git-pull-request-draft",
-  GIT_PULL_REQUEST_CLOSED: "git-pull-request-closed",
-  GIT_MERGE: "git-merge",
+  ALARM_CLOCK_CHECK: "alarm-clock-check",
+  ALARM_CLOCK_OFF: "alarm-clock-off",
+  APP_WINDOW: "app-window",
+  ARCHIVE: "archive",
+  ARCHIVE_RESTORE: "archive-restore",
+  ARROW_DOWN: "arrow-down",
+  ARROW_UP: "arrow-up",
+  BOOK_OPEN: "book-open",
+  BOOKMARK: "bookmark",
+  BOT: "bot",
+  BUILDING_COMPLEX: "building-complex",
+  CALENDAR: "calendar",
+  CALENDAR_CHECK: "calendar-check",
+  CALENDAR_CLOCK: "calendar-clock",
+  CALENDAR_COG: "calendar-cog",
+  CALENDAR_PLUS: "calendar-plus",
+  CALENDAR_X: "calendar-x",
+  CHECK: "check",
+  CHECK_CHECK: "check-check",
+  CHEVRON_DOWN: "chevron-down",
+  CHEVRON_RIGHT: "chevron-right",
+  CIRCLE_ALERT: "circle-alert",
+  CIRCLE_ARROW_UP: "circle-arrow-up",
+  CIRCLE_CHECK: "circle-check",
+  CIRCLE_DASHED: "circle-dashed",
+  CIRCLE_DOT: "circle-dot",
+  CIRCLE_PLUS: "circle-plus",
+  CIRCLE_SLASH: "circle-slash",
+  CIRCLE_STOP: "circle-stop",
+  CLOCK: "clock",
+  COPY: "copy",
+  CORNER_DOWN_RIGHT: "corner-down-right",
+  CORNER_LEFT_UP: "corner-left-up",
+  CPU: "cpu",
+  CROWN: "crown",
+  DOWNLOAD: "download",
+  ELLIPSIS: "ellipsis",
+  EXTERNAL_LINK: "external-link",
+  EYE: "eye",
+  EYE_OFF: "eye-off",
+  FILE: "file",
+  FILE_DIFF: "file-diff",
+  FILE_PEN: "file-pen",
+  FILE_PLUS: "file-plus",
+  FILE_TEXT: "file-text",
+  FOLDER: "folder",
+  FOLDER_GIT: "folder-git",
+  FOLDER_INPUT: "folder-input",
+  FOLDER_MINUS: "folder-minus",
+  FOLDER_PLUS: "folder-plus",
+  FOLDER_X: "folder-x",
   GIT_BRANCH: "git-branch",
+  GIT_MERGE: "git-merge",
+  GIT_PULL_REQUEST: "git-pull-request",
+  GIT_PULL_REQUEST_CLOSED: "git-pull-request-closed",
+  GIT_PULL_REQUEST_DRAFT: "git-pull-request-draft",
+  GLOBE: "globe",
+  HAND: "hand",
+  HEADING: "heading",
+  HOURGLASS: "hourglass",
+  HOUSE: "house",
+  IMAGE: "image",
+  INBOX: "inbox",
+  LAPTOP: "laptop",
+  LAYOUT_LIST: "layout-list",
+  LIGHTBULB: "lightbulb",
+  LINK: "link",
+  LIST_CHECKS: "list-checks",
+  LIST_END: "list-end",
+  LIST_TODO: "list-todo",
+  LIST_TREE: "list-tree",
+  LOG_OUT: "log-out",
+  MAIL: "mail",
+  MAIL_OPEN: "mail-open",
+  MESSAGE_SQUARE: "message-square",
+  MESSAGE_SQUARE_PLUS: "message-square-plus",
+  MESSAGES_SQUARE: "messages-square",
+  MIC: "mic",
+  MONITOR: "monitor",
+  NETWORK: "network",
+  OCTAGON_MINUS: "octagon-minus",
+  PANEL_LEFT: "panel-left",
+  PAPERCLIP: "paperclip",
+  PEN_LINE: "pen-line",
+  PENCIL: "pencil",
+  PENCIL_LINE: "pencil-line",
+  PIN: "pin",
+  PIN_OFF: "pin-off",
+  PLAY: "play",
+  PLUG: "plug",
+  PLUS: "plus",
+  ROTATE_CCW: "rotate-ccw",
+  ROTATE_CCW_CLOCK: "rotate-ccw-clock",
+  ROTATE_CW: "rotate-cw",
+  SCROLL_TEXT: "scroll-text",
+  SEARCH: "search",
+  SEARCH_X: "search-x",
+  SEND: "send",
+  SERVER: "server",
+  SETTINGS: "settings",
+  SHIELD_ALERT: "shield-alert",
+  SHIELD_ELLIPSIS: "shield-ellipsis",
+  SHIELD_USER: "shield-user",
+  SLIDERS_HORIZONTAL: "sliders-horizontal",
   SPLIT: "split",
+  SQUARE_CHECK: "square-check",
+  SQUARE_PEN: "square-pen",
+  TERMINAL: "terminal",
+  TIMER: "timer",
+  TRASH: "trash",
+  UNDO_2: "undo-2",
+  UNLINK: "unlink",
+  USER: "user",
+  USER_PLUS: "user-plus",
+  USERS: "users",
+  WIFI_OFF: "wifi-off",
+  WRENCH: "wrench",
+  X: "x",
+  ZAP: "zap",
 };
 
 // Note that the drawings are read from the lucide-react @repo/ui resolves,
@@ -197,9 +329,27 @@ const lucideSymbols = await Promise.all(
     const module = lucideFrom.resolve(`lucide-react/dist/esm/icons/${icon}.mjs`);
     const { __iconData } = await import(pathToFileURL(module).href);
 
+    // Note that an alias of Lucide's (`trash-2`) re-exports the component alone, so the table names the icon it stands for (`trash`).
+    if (__iconData === undefined)
+      throw new Error(
+        `generate-surface-shared: "${icon}" is an alias of a Lucide icon; name the icon it re-exports`,
+      );
+
     return { key, name: assetName(icon), svg: symbolTemplate(__iconData.node) };
   }),
 );
+
+// The status marks' symbols, named for the status: "IN_PROGRESS" as "TaskStatusInProgress".
+const taskStatusSymbols = Object.entries(TASK_STATUS_MARK).map(([key, parts]) => ({
+  key,
+  name: `TaskStatus${assetName(key.toLowerCase().replaceAll("_", "-"))}`,
+  svg: markTemplate(parts, {
+    box: TASK_MARK_BOX,
+    lineWidth: TASK_MARK_LINE_WIDTH,
+    roles: TASK_MARK_ROLE,
+    elements: TASK_MARK_ELEMENT,
+  }),
+}));
 
 // ---------- Emission ----------
 const CHECK_ONLY = process.argv.includes("--check");
@@ -345,6 +495,80 @@ ${tsRecord(lucideSymbols.map(({ key, name }) => [key, `"${name}"`]))}
 `;
 }
 
+// A mark's part as TypeScript, one property to a line and its dash array on
+// one, as Biome formats the committed file.
+function tsMarkPart(part, indent) {
+  const properties = Object.entries(part).map(
+    ([key, item]) =>
+      `${indent}  ${key}: ${Array.isArray(item) ? `[${item.join(", ")}]` : JSON.stringify(item)},`,
+  );
+
+  return `{\n${properties.join("\n")}\n${indent}}`;
+}
+
+// Each status's mark as TypeScript, its parts in drawing order.
+function tsStatusMarks() {
+  const marks = Object.entries(TASK_STATUS_MARK).map(
+    ([key, parts]) =>
+      `  ${key}: [\n${parts.map((part) => `    ${tsMarkPart(part, "    ")},`).join("\n")}\n  ],`,
+  );
+
+  return `{\n${marks.join("\n")}\n}`;
+}
+
+// A table of names as TypeScript, one to a line.
+const tsNames = (table) =>
+  `{\n${tsRecord(Object.entries(table).map(([key, name]) => [key, JSON.stringify(name)]))}\n}`;
+
+function taskStatusMarksTs() {
+  return `// Generated by packages/brand/scripts/generate-surface-shared.mjs. Do not edit by hand: change
+// the tables in task-status-marks.mjs and re-run it.
+//
+// A task's status as its mark draws it: each part an SVG element on a
+// ${TASK_MARK_BOX}-unit square, a line stroked ${TASK_MARK_LINE_WIDTH} wide, a fill, or a cut, the stroke
+// drawn in the ground's ink over a fill. @repo/ui draws them as SVG, and the
+// iOS app as the custom symbols task-status-symbols.ts holds.
+
+export const TASK_MARK_ROLE = ${tsNames(TASK_MARK_ROLE)} as const;
+
+export const TASK_MARK_ELEMENT = ${tsNames(TASK_MARK_ELEMENT)} as const;
+
+export const TASK_STATUS_MARK = ${tsStatusMarks()} as const;
+`;
+}
+
+function taskStatusSymbolsTs() {
+  const templates = taskStatusSymbols
+    .map(({ name, svg }) => `  {\n    name: "${name}",\n    svg: '${svg}',\n  },`)
+    .join("\n");
+
+  return `// Generated by packages/brand/scripts/generate-surface-shared.mjs. Do not edit by hand: change
+// the tables in task-status-marks.mjs and re-run it.
+//
+// A task's status marks as SF Symbols custom symbol templates, each one
+// outline whose cuts are holes, in three weights iOS interpolates
+// (scripts/lucide-symbols.mjs), which the iOS app's config writes into its
+// asset catalog as symbol sets.
+
+export const TASK_STATUS_SYMBOL_TEMPLATES: readonly { name: string; svg: string }[] = [
+${templates}
+];
+`;
+}
+
+function nativeTaskStatusSymbolsTs() {
+  return `// Generated by packages/brand/scripts/generate-surface-shared.mjs. Do not edit by hand: change
+// the tables in task-status-marks.mjs and re-run it.
+//
+// The names the iOS app's asset catalog holds a task's status marks under,
+// as symbol sets the app's config writes from @repo/brand's templates.
+
+export const TASK_STATUS_SYMBOL = {
+${tsRecord(taskStatusSymbols.map(({ key, name }) => [key, `"${name}"`]))}
+} as const;
+`;
+}
+
 // The brand's roles under their --ui-color-* names: the desktop writes each
 // once as light-dark(), as palettes.css does, and the site a block per theme,
 // for browsers older than light-dark().
@@ -385,6 +609,44 @@ ${block((key) => BRAND.DARK[key])}
 [data-ui-profile] {
   --ui-color-accent-on-light: ${BRAND.LIGHT.ACCENT};
   --ui-color-accent-on-dark: ${BRAND.DARK.ACCENT};
+}
+`;
+}
+
+// Geist's steps under --geist-<scale>-<step> names, laid out as brand.css
+// lays out the brand's: once as light-dark() on the desktop, and a block per
+// theme on the site. palettes.css names these rather than writing a hex.
+function uiGeistCss() {
+  const steps = Object.entries(GEIST).flatMap(([scale, values]) =>
+    Object.entries(values).map(([at, colors]) => [
+      `--geist-${scale.toLowerCase().replaceAll("_", "-")}-${at}`,
+      colors,
+    ]),
+  );
+
+  const block = (value) => steps.map(([name, colors]) => `  ${name}: ${value(colors)};`).join("\n");
+
+  const pair = (colors) =>
+    colors.LIGHT === colors.DARK ? colors.LIGHT : `light-dark(${colors.LIGHT}, ${colors.DARK})`;
+
+  return `/* Generated by packages/brand/scripts/generate-surface-shared.mjs. Do not edit by hand: change
+   geist.mjs and re-run it.
+
+   Geist's colors (https://vercel.com/geist/colors), every step of every
+   scale, both profiles, both themes. A role names one of these; none is
+   drawn with directly. */
+
+[data-ui-profile="desktop"] {
+${block(pair)}
+}
+
+[data-ui-profile="web"],
+[data-ui-profile="web"][data-ui-theme="light"] {
+${block((colors) => colors.LIGHT)}
+}
+
+[data-ui-profile="web"][data-ui-theme="dark"] {
+${block((colors) => colors.DARK)}
 }
 `;
 }
@@ -506,12 +768,16 @@ const outputs = [
   [join(SURFACE, "provider-mark-paths.ts"), providerMarkPathsTs()],
   [join(UI_TOKENS, "motion-tokens.css"), uiMotionTokensCss()],
   [join(SURFACE, "brand-palette.ts"), brandPaletteTs()],
+  [join(UI_TOKENS, "geist.css"), uiGeistCss()],
   [join(UI_TOKENS, "brand.css"), uiBrandCss()],
   [join(UI_NATIVE_TOKENS, "brand-colors.ts"), nativeBrandColorsTs()],
   [join(UI_TOKENS, "identity.css"), uiIdentityCss()],
   [join(UI_NATIVE_TOKENS, "identity-hues.ts"), nativeIdentityHuesTs()],
   [join(SURFACE, "lucide-symbols.ts"), lucideSymbolsTs()],
   [join(UI_NATIVE_TOKENS, "lucide-symbols.ts"), nativeLucideSymbolsTs()],
+  [join(SURFACE, "task-status-marks.ts"), taskStatusMarksTs()],
+  [join(SURFACE, "task-status-symbols.ts"), taskStatusSymbolsTs()],
+  [join(UI_NATIVE_TOKENS, "task-status-symbols.ts"), nativeTaskStatusSymbolsTs()],
 ];
 
 for (const [path, content] of outputs) {

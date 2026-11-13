@@ -254,7 +254,7 @@ it.layer(SUITE)("the wakeups coding agents book", (it) => {
         assert.deepEqual(sentTo(agentSessions, sessionId), ["The second booking."]);
 
         const short = yield* schedule(agent, { delaySeconds: 5, prompt: "Too soon." }, queue);
-        const long = yield* schedule(agent, { delaySeconds: 100_000, prompt: "Too late." }, queue);
+        const long = yield* schedule(agent, { delaySeconds: 700_000, prompt: "Too late." }, queue);
         // SAFETY: a wakeup the tool books answers under `wakeup`, its delay in seconds.
         assert.equal(
           (short as { wakeup: { delaySeconds: number } }).wakeup.delaySeconds,

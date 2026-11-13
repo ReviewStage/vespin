@@ -440,7 +440,7 @@ test("Open Vespin at login stands on This Mac under Startup, drawn as the choice
 
 test("a platform without Mac commands or updates lists no This Mac page, draws About without its Updates row, and its search finds none of them", () => {
   const missing: readonly HostCapability[] = [
-    HOST_CAPABILITY.MAC_COMMANDS,
+    HOST_CAPABILITY.MACHINE_COMMANDS,
     HOST_CAPABILITY.UPDATES,
   ];
 

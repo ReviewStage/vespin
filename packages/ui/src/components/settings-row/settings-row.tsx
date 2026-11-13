@@ -78,10 +78,21 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * (`SETTINGS_ROW_INDENT.MARK`) to its parent's words, its rule starting
  * there too, so the card reads as one subject with its parts under it.
  *
+ * A row whose words run to several lines, a note's, may stand its lead, its
+ * controls, and its end on its name's first line (`SETTINGS_ROW_ALIGN.FIRST_LINE`)
+ * rather than centered on its words, as a list of notes keeps each note's
+ * date at its top, so a column of such rows lines them up whatever each
+ * note's length.
+ *
  * A row that keeps its controls beside its words at any width says so
  * (`SETTINGS_ROW_CONTROLS.BESIDE`): its words wrap rather than its controls
  * dropping, as a list whose rows each end in a short button and a ⋯ keeps
- * every row's end on one line; under 380px its name still keeps to one line.
+ * every row's end on one line, or an editor's Save keeps it still while
+ * typed in; under 380px its name still keeps to one line. One that keeps
+ * them beside its words only until it is narrow says so
+ * (`SETTINGS_ROW_CONTROLS.BESIDE_UNTIL_NARROW`), as a list of credentials or
+ * integrations does: under 380px it drops them below its words as any card's
+ * row does, so a phone reads its name whole.
  *
  * A row whose one control is set by a press, a switch, says so
  * (`labelsControl`): its label is then that control's `<label>`, so a press
@@ -135,15 +146,25 @@ const FACE_LEAD = "w-avatar-card justify-center";
  * Where a card's or a list's row stands its controls where they would leave
  * its words less than a legible stretch: dropped below the words, or kept
  * beside them, the words wrapping instead, as a row of a list whose every row
- * ends in a short button and a ⋯ keeps them all on one line.
+ * ends in a short button and a ⋯ keeps them all on one line; or kept beside
+ * them only until the row is under 380px, where they drop as by default.
  */
 export const SETTINGS_ROW_CONTROLS = {
   DROP: "drop",
   BESIDE: "beside",
+  BESIDE_UNTIL_NARROW: "beside-until-narrow",
 } as const;
 
 export type SettingsRowControls =
   (typeof SETTINGS_ROW_CONTROLS)[keyof typeof SETTINGS_ROW_CONTROLS];
+
+/** Where a row stands its lead, its controls, and its end against its words: centered on them, or on its name's first line. */
+export const SETTINGS_ROW_ALIGN = {
+  CENTER: "center",
+  FIRST_LINE: "first-line",
+} as const;
+
+export type SettingsRowAlign = (typeof SETTINGS_ROW_ALIGN)[keyof typeof SETTINGS_ROW_ALIGN];
 
 /** What a row hands the controls it holds. */
 export interface SettingsRowControl {
@@ -235,6 +256,7 @@ export function SettingsRow({
   lead = SETTINGS_ROW_LEAD.MARK,
   labelsControl = false,
   controls = SETTINGS_ROW_CONTROLS.DROP,
+  align = SETTINGS_ROW_ALIGN.CENTER,
   landed = false,
   editing = false,
   children,
@@ -259,6 +281,8 @@ export function SettingsRow({
   labelsControl?: boolean | undefined;
   /** Where its controls stand where they would leave its words less than a legible stretch; dropped below them where none is named. */
   controls?: SettingsRowControls | undefined;
+  /** Where its lead, controls, and end stand against its words; centered on them where none is named. */
+  align?: SettingsRowAlign | undefined;
   /** Whether the row just arrived, which lights it once. */
   landed?: boolean | undefined;
   /** Whether its words are being typed in place (`TEXT_FIELD_SIZE.INLINE`), which rings the whole row in the accent, as an unsaved script's editor is edged, until its Save or Cancel. */
@@ -298,10 +322,12 @@ export function SettingsRow({
 
   // Note that a compact row's controls wrap below its words only where they cannot fit at all, so its line wraps as plainly as it can.
   const wraps = density === SETTINGS_ROW_DENSITY.COMPACT;
+  // Note that a row standing its parts on its name's first line overrides each box's centering, which cn's merge lets the later utility win.
+  const top = align === SETTINGS_ROW_ALIGN.FIRST_LINE ? "items-start" : undefined;
 
   const words = (
     <>
-      <div className="ui-settings-row-subject flex min-w-0 items-center gap-ui-12">
+      <div className={cn("ui-settings-row-subject flex min-w-0 items-center gap-ui-12", top)}>
         {led ? (
           <ItemMedia className={lead === SETTINGS_ROW_LEAD.FACE ? FACE_LEAD : undefined}>
             {leading}
@@ -319,7 +345,7 @@ export function SettingsRow({
           {described ? <ItemDescription id={descriptionId}>{description}</ItemDescription> : null}
         </ItemContent>
       </div>
-      <ItemActions>{children?.(control)}</ItemActions>
+      <ItemActions className={top}>{children?.(control)}</ItemActions>
     </>
   );
 
@@ -337,11 +363,16 @@ export function SettingsRow({
     >
       <Item size={density} className={indent === SETTINGS_ROW_INDENT.MARK ? "ps-0" : undefined}>
         {end === undefined ? (
-          <div className={wraps ? LINE_CLASS.WRAPPING : LINE_CLASS.PLAIN}>{words}</div>
+          <div className={cn(wraps ? LINE_CLASS.WRAPPING : LINE_CLASS.PLAIN, top)}>{words}</div>
         ) : (
-          <div className="ui-settings-row-line flex items-center">
-            <div className={wraps ? MAIN_CLASS.WRAPPING : MAIN_CLASS.PLAIN}>{words}</div>
-            <div className="ui-settings-row-end flex flex-none items-center gap-control-gap empty:hidden">
+          <div className={cn("ui-settings-row-line flex items-center", top)}>
+            <div className={cn(wraps ? MAIN_CLASS.WRAPPING : MAIN_CLASS.PLAIN, top)}>{words}</div>
+            <div
+              className={cn(
+                "ui-settings-row-end flex flex-none items-center gap-control-gap empty:hidden",
+                top,
+              )}
+            >
               {end(control)}
             </div>
           </div>

@@ -9,20 +9,29 @@
  * occurrence's `executionId`, which every delivery of it carries. Every
  * firing is recorded under its dedupe key, so a delivery sent again finds
  * it recorded, and a run still queued is acted on (`automation-runs.ts`).
+ * A one-time schedule's automation is then paused for having run, never
+ * deleted, so its run and the agent it started stay readable; one whose
+ * date was moved on since it fired is left to run again. Its spent Vercel
+ * schedule is left for the next save to delete or make anew
+ * (`automation-cadence.ts`), because deleting it here could delete one an
+ * edit made beside this delivery.
  * A delivery that fails is left unacknowledged, and the queue delivers it
  * again; its effect is run through the queues' one promise door
  * (`../queues/queue-consumer.ts`).
  */
 
 import {
+  type Automation,
   advanceAutomationSchedule,
   automationRunToAct,
+  pauseSpentAutomation,
 } from "@repo/database/models/automation-store";
-import { nextScheduledRun } from "@repo/features/automation-schedule";
+import { nextScheduledRun, onceInstant } from "@repo/features/automation-schedule";
 import {
   AUTOMATION_FIRING,
   AUTOMATION_RUN_STATUS,
   AUTOMATION_TRIGGER,
+  scheduleRunsOnce,
 } from "@repo/features/automation-wire";
 import { failureKind } from "@repo/runtime/effect";
 import type { WireValue } from "@repo/wire";
@@ -60,10 +69,23 @@ function scheduledFiring(message: ScheduleMessage, now: number): AutomationFirin
   };
 }
 
+/** The date and time of the automation's one-time schedule where the occurrence due at `dueAt` is its run, its instant come by then; nothing for any other. */
+function spentAt(automation: Automation, dueAt: number): string | undefined {
+  const { trigger } = automation;
+
+  if (trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE || !scheduleRunsOnce(trigger)) return undefined;
+  const instant = onceInstant(trigger);
+
+  return instant !== undefined && instant.getTime() <= dueAt ? trigger.at : undefined;
+}
+
 /**
  * One delivery acted on: the firing it carries recorded under its dedupe
- * key, a schedule's next instant written for the list to show, and the run
- * started where it is still queued; nothing for an automation gone.
+ * key, a schedule's next instant written for the list to show, the run
+ * started where it is still queued, and a one-time automation paused once
+ * its schedule's run is; nothing for an automation gone. Note that the pause
+ * comes after the run is acted on, because a run finds its automation
+ * paused and is skipped (`automation-runs.ts`).
  */
 export const consumeAutomationRunMessage = /* @__PURE__ */ Effect.fn(
   "web/consumeAutomationRunMessage",
@@ -101,6 +123,14 @@ export const consumeAutomationRunMessage = /* @__PURE__ */ Effect.fn(
   if (Option.isSome(run) && run.value.status === AUTOMATION_RUN_STATUS.QUEUED) {
     yield* actOnAutomationRun(sessionsFor, run.value);
   }
+
+  // Note that the pause holds to the date and time that fired, so a date moved on beside this delivery is left to run.
+  const spent =
+    firing.firing.kind === AUTOMATION_FIRING.SCHEDULE
+      ? spentAt(automation.value, firing.firing.dueAt)
+      : undefined;
+
+  if (spent !== undefined) yield* pauseSpentAutomation(firing.automationId, spent);
 });
 
 /**

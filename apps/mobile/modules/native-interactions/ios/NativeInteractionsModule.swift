@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: an iPad pointer's hover effect, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -15,11 +15,10 @@ import UniformTypeIdentifiers
 
 /// The names the modifiers are registered under, which `interactions.ts` names too.
 private enum ModifierName {
-  static let hoverEffect = "vespinHoverEffect"
   static let dragLink = "vespinDragLink"
   static let dropPictures = "vespinDropPictures"
   static let dropLink = "vespinDropLink"
-  static let all = [hoverEffect, dragLink, dropPictures, dropLink]
+  static let all = [dragLink, dropPictures, dropLink]
 }
 
 /// How a dropped picture is kept for JavaScript to read: a JPEG at the quality the photo picker reads one at (`use-attached-pictures.ts`).
@@ -31,9 +30,6 @@ public final class NativeInteractionsModule: Module {
 
     // Note that the modifiers are registered as the module is made, before any view draws, as the registry asks.
     OnCreate {
-      ViewModifierRegistry.register(ModifierName.hoverEffect) { params, appContext, _ in
-        return try HoverEffectModifier(from: params, appContext: appContext)
-      }
       ViewModifierRegistry.register(ModifierName.dragLink) { params, appContext, _ in
         return try DragLinkModifier(from: params, appContext: appContext)
       }
@@ -47,41 +43,6 @@ public final class NativeInteractionsModule: Module {
 
     OnDestroy {
       ModifierName.all.forEach { ViewModifierRegistry.unregister($0) }
-    }
-  }
-}
-
-// MARK: - Hover
-
-/// How the pointer meets a view on an iPad: the system's choice, a highlight behind it, or the view lifted under it.
-internal enum HoverEffectKind: String, Enumerable {
-  case automatic
-  case highlight
-  case lift
-}
-
-/// The pointer's hover over a view, which also shapes the pointer to the view's hover content shape.
-internal struct HoverEffectModifier: ViewModifier, Record {
-  @Field var effect: HoverEffectKind = .automatic
-
-  // Note that the effect goes through iOS 13.4's `hoverEffect(_:)`, named by
-  // reference, because the iOS 27 SDK marks that overload disfavored: a plain
-  // `content.hoverEffect(HoverEffect.lift)` binds to the generic
-  // `hoverEffect(_: some CustomHoverEffect)` and so to `HoverEffect`'s
-  // conformance to `CustomHoverEffect`, which iOS 26's SwiftUI doesn't export.
-  // dyld then refuses to launch the app on iOS 26 before any code runs (every
-  // TestFlight build from 18 to 24 on iPadOS 26.7.1). No other overload is
-  // labeled `hoverEffect(_:)`, so the reference can't pick the generic one.
-  func body(content: Content) -> some View {
-    let hover = Content.hoverEffect(_:)
-    return hover(content)(systemEffect)
-  }
-
-  private var systemEffect: HoverEffect {
-    switch effect {
-    case .automatic: return .automatic
-    case .highlight: return .highlight
-    case .lift: return .lift
     }
   }
 }

@@ -3,6 +3,7 @@
 import {
   AccountBarItem,
   type ColumnBar,
+  GLYPH,
   GroupRow,
   LIST_LOOK,
   type ListLook,
@@ -12,8 +13,8 @@ import {
   SWITCHER_LOOK,
   WorkspaceSwitcherItem,
 } from "@repo/ui-native";
-import { useRouter } from "expo-router";
-import type { ReactNode } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { useInboxBadge } from "../inbox/use-inbox.js";
 import { useOpenSettings, useSettingsAccount } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
@@ -36,26 +37,32 @@ export type SidebarPlace = (typeof SIDEBAR_PLACE)[keyof typeof SIDEBAR_PLACE];
  * either window.
  */
 const PLACES = [
-  { id: SIDEBAR_PLACE.INBOX, title: "Inbox", symbol: "tray", route: "/inbox", testId: undefined },
+  {
+    id: SIDEBAR_PLACE.INBOX,
+    title: "Inbox",
+    symbol: GLYPH.INBOX,
+    route: "/inbox",
+    testId: undefined,
+  },
   {
     id: SIDEBAR_PLACE.TASKS,
     title: "Tasks",
-    symbol: "checklist",
+    symbol: GLYPH.TASK,
     route: "/tasks",
     testId: undefined,
   },
   {
     id: SIDEBAR_PLACE.SEARCH,
     title: "Search",
-    symbol: "magnifyingglass",
+    symbol: GLYPH.SEARCH,
     route: "/search",
     testId: "search-tab",
   },
 ] as const;
 
 /** The acts the sidebar's bar holds, as the tab bar's round + and the account's photo name them. */
-const NEW_TASK = { label: "New task", symbol: "plus" } as const;
-const SETTINGS = { label: "Settings", symbol: "gearshape" } as const;
+const NEW_TASK = { label: "New task", symbol: GLYPH.NEW_TASK } as const;
+const SETTINGS = { label: "Settings", symbol: GLYPH.SETTINGS } as const;
 
 /** The member's tasks the sidebar lists under its places: Pinned, Following, and each of their sections, as the Tasks tab draws them. */
 export type SidebarTasks = {
@@ -79,6 +86,9 @@ type SidebarColumns = {
   readonly sidebarShown: boolean;
   readonly onSidebarShownChange: (shown: boolean) => void;
 };
+
+/** A sidebar row just tapped, and the selection the route held when it was. */
+type TappedRow = { readonly id: string; readonly over: string };
 
 /** Whether a picked row's id names one of the places rather than a task. */
 function placeOf(id: string): (typeof PLACES)[number] | undefined {
@@ -121,10 +131,18 @@ export function useAppSidebar(
   const threeColumns = useThreeColumns();
   const { shown, setShown } = useSidebarShown();
   const header = switcher === undefined ? undefined : <WorkspaceSwitcherItem {...switcher} />;
-  const selected = openTask !== undefined && tasks.ids.has(openTask) ? openTask : place;
+  const routed = openTask !== undefined && tasks.ids.has(openTask) ? openTask : place;
+  // Note that a pick stands selected at once, until the route moves or this screen next gains focus, because each tab draws its own sidebar, and the tab left behind drew its own place again for the frames before the window swapped.
+  const [tapped, setTapped] = useState<TappedRow | undefined>(undefined);
+  useFocusEffect(useCallback(() => setTapped(undefined), []));
+  // Note that a moved route drops the hold outright, so a later return to the selection it was made over can't raise it again.
+  useEffect(() => setTapped(undefined), [routed]);
+  const selected = tapped !== undefined && tapped.over === routed ? tapped.id : routed;
 
   const pick = (id: string) => {
     const picked = placeOf(id);
+
+    setTapped({ id, over: routed });
 
     if (picked !== undefined) router.navigate(picked.route);
     else router.navigate({ pathname: "/tasks", params: { selected: id } });

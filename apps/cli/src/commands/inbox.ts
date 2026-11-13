@@ -21,11 +21,11 @@ import type { AccountInboxAnswer } from "@repo/features/account-inbox-wire";
 import { CLI_EXIT } from "@repo/features/cli-exit";
 import { CLI_DO_ANSWER, cliInboxAnswer } from "@repo/features/cli-inbox-answer";
 import { cliRemindAt } from "@repo/features/cli-remind";
+import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { readerZone } from "@repo/features/date-mention";
 import { HOSTED_DEADLINE } from "@repo/features/hosted-link";
 import {
   INBOX_ASK,
-  INBOX_FILE_TYPE,
   INBOX_MESSAGE_AUTHOR,
   INBOX_OPTION_MEDIA,
   INBOX_REPLY,
@@ -125,8 +125,7 @@ const MEDIA_WORD = {
 function mediaLine(piece: InboxOptionMedia, at: number): string {
   switch (piece.type) {
     case INBOX_OPTION_MEDIA.FILE: {
-      const word =
-        piece.mediaType === INBOX_FILE_TYPE.WEBM ? MEDIA_WORD.RECORDING : MEDIA_WORD.PICTURE;
+      const word = isVideoType(piece.mediaType) ? MEDIA_WORD.RECORDING : MEDIA_WORD.PICTURE;
 
       return `      ${word}: ${piece.caption ?? `${at + 1}`}`;
     }

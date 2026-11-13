@@ -2,10 +2,11 @@ import type {
   ComputerApp,
   ComputerOutcome,
   MacComputerAction,
-} from "@repo/features/mac-command-wire";
+} from "@repo/features/machine-command-wire";
 import {
   type Cause,
-  type Duration,
+  Clock,
+  Duration,
   Effect,
   Exit,
   Option,
@@ -47,20 +48,33 @@ export const COMPUTER_HELPER_FAILURE = {
 
 /**
  * The requests beyond the agent's actions: one app named, without launching
- * it, so the developer can be asked about it; and the Mac's two grants,
+ * it, so the developer can be asked about it; the apps installed, without
+ * their icons, for the developer's @ list; and the Mac's two grants,
  * read, or asked for by macOS's own prompts, for Settings to show.
  */
 export const COMPUTER_HELPER_OP = {
   DESCRIBE_APP: "describe_app",
+  LIST_INSTALLED_APPS: "list_installed_apps",
   PERMISSIONS: "permissions",
   REQUEST_PERMISSIONS: "request_permissions",
 } as const;
 
+/**
+ * The app the developer allowed, pinned to an action on it so the helper
+ * acts on that app alone: by its bundle id, or by its process where it has
+ * none. The helper refuses an action whose app it finds no longer matches.
+ */
+export interface ComputerAppPin {
+  readonly pin_bundle_id?: string;
+  readonly pin_pid?: number;
+}
+
 export type ComputerHelperRequest =
-  | MacComputerAction
+  | (MacComputerAction & ComputerAppPin)
   | { readonly op: typeof COMPUTER_HELPER_OP.DESCRIBE_APP; readonly app: string }
   | {
       readonly op:
+        | typeof COMPUTER_HELPER_OP.LIST_INSTALLED_APPS
         | typeof COMPUTER_HELPER_OP.PERMISSIONS
         | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS;
     };
@@ -74,21 +88,27 @@ export interface ComputerPermissions {
 /** What one request came to: what the action did, the app described, or why the helper did nothing. */
 export type ComputerHelperAnswer =
   | { readonly outcome: ComputerOutcome }
-  | { readonly described: ComputerApp }
+  | { readonly described: ComputerApp; readonly pid?: number }
   | { readonly permissions: ComputerPermissions }
   | { readonly failure: string; readonly message: string };
 
 export interface ComputerUseHelperSeam {
-  /** One request answered within `within`, after every request asked before it. */
+  /**
+   * One request answered within `within`, after every request asked before
+   * it; where `stillLet` is given, read once the helper's turn is taken, a
+   * request it answers a reason for is refused with it rather than handed over.
+   */
   readonly ask: (
     request: ComputerHelperRequest,
     within: Duration.Duration,
+    stillLet?: Effect.Effect<string | undefined>,
   ) => Effect.Effect<ComputerHelperAnswer>;
 }
 
 /** How the helper names one app. */
 const helperAppSchema = Schema.Struct({
   name: Schema.String,
+  pid: Schema.optionalKey(Schema.Int),
   bundle_id: Schema.optionalKey(Schema.String),
   icon_png: Schema.optionalKey(Schema.String),
   refused: Schema.Boolean,
@@ -165,7 +185,11 @@ function answerOf(line: HelperLine): ComputerHelperAnswer {
     return { outcome: { app: wireApp(app), window, elements, truncated, shots } };
   }
 
-  if ("app" in line) return { described: wireApp(line.app) };
+  if ("app" in line) {
+    const { pid } = line.app;
+
+    return { described: wireApp(line.app), ...(pid === undefined ? undefined : { pid }) };
+  }
 
   if ("screen_recording" in line) {
     return {
@@ -174,6 +198,14 @@ function answerOf(line: HelperLine): ComputerHelperAnswer {
   }
 
   return { outcome: { done: line.done } };
+}
+
+/** What a request answers where the helper was still on an earlier one when its own time ran out. */
+const BUSY = "The computer-use helper was busy with an earlier request and did not answer in time.";
+
+/** What a request answers where what lets it moved while it waited its turn. */
+function refusedHere(message: string): ComputerHelperAnswer {
+  return { failure: COMPUTER_HELPER_FAILURE.REFUSED, message };
 }
 
 function failed(message: string): ComputerHelperAnswer {
@@ -263,26 +295,66 @@ export function computerUseHelperProcess(
         return Scope.close(was.scope, Exit.void);
       });
 
-    const ask = (request: ComputerHelperRequest, within: Duration.Duration) =>
-      turn.withPermit(
+    /** One request sent and its answer waited for, until `deadline`: the helper's turn already taken. */
+    const sent = (request: ComputerHelperRequest, deadline: number) =>
+      Effect.gen(function* () {
+        if (running === undefined) running = Option.getOrUndefined(yield* started);
+        const current = running;
+
+        if (current === undefined) return failed("The computer-use helper could not be started.");
+        asked += 1;
+        const id = asked;
+        const left = Math.max(0, deadline - (yield* Clock.currentTimeMillis));
+
+        // Note that a request whose time ran out while it waited its turn is never handed over, since the helper could act on it while its caller is told it failed.
+        if (left === 0)
+          return failed("The computer-use helper was busy until the request's time ran out.");
+        yield* Queue.offer(current.requests, `${JSON.stringify({ ...request, id })}\n`);
+
+        // Note that a wait interrupted, as when the gate closes, stops the helper too, since the request is already written to it and it would otherwise act after the gate closed.
+        const answer = yield* Effect.timeoutOption(
+          answerFor(current, id),
+          Duration.millis(left),
+        ).pipe(Effect.onInterrupt(() => ended(current)));
+
+        if (Option.isSome(answer) && Option.isSome(answer.value)) return answer.value.value;
+        yield* ended(current);
+
+        return failed(
+          Option.isNone(answer)
+            ? "The computer-use helper did not answer in time, so it was stopped."
+            : "The computer-use helper stopped before it answered.",
+        );
+      });
+
+    /**
+     * Note that the wait for the helper's turn counts against `within`, so a
+     * request behind one the helper is stuck on answers in its own time
+     * rather than waiting out the other's first, and its caller, such as an
+     * agent's call the service waits on, is never held past it.
+     */
+    const ask = (
+      request: ComputerHelperRequest,
+      within: Duration.Duration,
+      stillLet?: Effect.Effect<string | undefined>,
+    ) =>
+      Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
-          if (running === undefined) running = Option.getOrUndefined(yield* started);
-          const current = running;
+          const deadline = (yield* Clock.currentTimeMillis) + Duration.toMillis(within);
+          const took = yield* restore(Effect.timeoutOption(Semaphore.take(turn, 1), within));
 
-          if (current === undefined) return failed("The computer-use helper could not be started.");
-          asked += 1;
-          const id = asked;
-          yield* Queue.offer(current.requests, `${JSON.stringify({ ...request, id })}\n`);
-          const answer = yield* Effect.timeoutOption(answerFor(current, id), within);
+          if (Option.isNone(took)) return failed(BUSY);
 
-          if (Option.isSome(answer) && Option.isSome(answer.value)) return answer.value.value;
-          yield* ended(current);
+          // Note that what lets the request is read again once its turn is taken, since it may have moved while the request waited behind another.
+          const handed = Effect.gen(function* () {
+            const why = stillLet === undefined ? undefined : yield* stillLet;
 
-          return failed(
-            Option.isNone(answer)
-              ? "The computer-use helper did not answer in time, so it was stopped."
-              : "The computer-use helper stopped before it answered.",
-          );
+            if (why !== undefined) return refusedHere(why);
+
+            return yield* sent(request, deadline);
+          });
+
+          return yield* restore(handed).pipe(Effect.ensuring(Semaphore.release(turn, 1)));
         }),
       );
 

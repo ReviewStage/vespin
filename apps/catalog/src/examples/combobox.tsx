@@ -1,4 +1,6 @@
 import {
+  APP_ICON_SIZE,
+  AppIcon,
   COMBOBOX_LIST_HEIGHT,
   Combobox,
   ComboboxList,
@@ -23,7 +25,9 @@ import { CatalogSection } from "../section";
  * the words as typed offered after them, open on a query; in a narrow
  * column with a long title; and a list standing alone on a popover, as an
  * editor's `@` hangs one, a row that opens a further list wearing its
- * chevron, and its note where nothing matches; and a list too short to
+ * chevron, and its note where nothing matches, and the Mac and the apps on
+ * it the list offers, each app by its icon, the Mac and an app the Mac drew
+ * no icon for yet by a screen's glyph; and a list too short to
  * search, holding the keys itself, with a model that cannot be chosen now,
  * the one chosen checked, and a note after them; and rows a list engine of
  * the app's owns, each drawn as `ComboboxOptionItem`, the second lit as the
@@ -99,15 +103,49 @@ const MENTIONS: readonly ComboboxOption[] = [
   { id: "files", label: "Files and folders", icon: <FolderIcon />, detail: "2 files", opens: true },
 ];
 
+/** A synthetic app's icon, a rounded square with a phone in it, as a Mac's app sends one. */
+const PHONE_ICON = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="a" x2="0" y2="1"><stop offset="0" stop-color="#5ac8fa"/><stop offset="1" stop-color="#1d6fe0"/></linearGradient></defs><rect x="4" y="4" width="56" height="56" rx="13" fill="url(#a)"/><rect x="22" y="12" width="20" height="40" rx="5" fill="#0b0d12"/><rect x="24" y="15" width="16" height="34" rx="3" fill="#e8f2ff"/></svg>',
+)}`;
+
+/** A synthetic notes app's icon, a yellow-headed page. */
+const NOTES_ICON = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="4" y="4" width="56" height="56" rx="13" fill="#fff" stroke="#d8d8d8"/><path d="M4 17a13 13 0 0 1 13-13h30a13 13 0 0 1 13 13v5H4z" fill="#f7c948"/><rect x="12" y="32" width="40" height="3" rx="1.5" fill="#c9c9c9"/><rect x="12" y="42" width="30" height="3" rx="1.5" fill="#c9c9c9"/></svg>',
+)}`;
+
+/** Synthetic apps on the developer's Mac, as an agent's `@` offers them: the Mac itself first, then running apps, one always allowed, and one installed whose icon is still being read. */
+const APPS: readonly ComboboxOption[] = [
+  { id: "computer", label: "Computer", icon: <AppIcon size={APP_ICON_SIZE.LINE} /> },
+  {
+    id: "simulator",
+    label: "Simulator",
+    icon: <AppIcon src={PHONE_ICON} size={APP_ICON_SIZE.LINE} />,
+    detail: "Running",
+  },
+  {
+    id: "notes",
+    label: "Notes",
+    icon: <AppIcon src={NOTES_ICON} size={APP_ICON_SIZE.LINE} />,
+    detail: "Always allowed",
+  },
+  { id: "xcode", label: "Xcode", icon: <AppIcon size={APP_ICON_SIZE.LINE} /> },
+];
+
 /** A list standing alone over `options`, holding its own active option as an editor's caller would. */
-function Mentions({ options }: { options: readonly ComboboxOption[] }): React.JSX.Element {
+function Mentions({
+  options,
+  group = "Files and folders",
+}: {
+  options: readonly ComboboxOption[];
+  group?: string;
+}): React.JSX.Element {
   const [active, setActive] = useState(0);
 
   return (
     <div className="catalog-popover catalog-column">
       <ComboboxList
         label="Mention"
-        groups={options.length === 0 ? [] : [{ label: "Files and folders", options }]}
+        groups={options.length === 0 ? [] : [{ label: group, options }]}
         active={active}
         onActiveChange={setActive}
         onChoose={setActive}
@@ -227,6 +265,12 @@ function Comboboxes(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection id="combobox-list-empty" title="A list standing alone, nothing matching">
         <Mentions options={[]} />
+      </CatalogSection>
+      <CatalogSection
+        id="combobox-list-apps"
+        title="The apps on the developer's Mac, under an agent's words"
+      >
+        <Mentions options={APPS} group="Apps" />
       </CatalogSection>
       <CatalogSection
         id="combobox-list-steered"

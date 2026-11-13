@@ -62,7 +62,7 @@ export { AttachRow, MenuPickRow, SkillRow, WordsField } from "./form-rows.js";
 
 export { GlassBar, GlassDock } from "./glass-bar.js";
 
-export { type Glyph, isLucideSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
+export { GLYPH, type Glyph, glyphSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
 
 export { BUZZ, type Buzz, buzz } from "./haptics.js";
 
@@ -100,7 +100,7 @@ export {
 
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 
-export { markdownGithubPages } from "./markdown-model.js";
+export { markdownGithubPages, markdownReplyButtons } from "./markdown-model.js";
 
 export { MarkdownPage } from "./markdown-page.js";
 
@@ -191,8 +191,6 @@ export {
   WorkspaceRow,
 } from "./settings-form.js";
 
-export type { SfSymbol } from "./sf-symbol.js";
-
 export {
   type BarAction,
   type BarMenu,
@@ -203,6 +201,8 @@ export {
 } from "./split-view.js";
 
 export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
+
+export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 
 export { askForName, type NameAsk, shareLink, shareWords } from "./system-asks.js";
 
@@ -255,6 +255,7 @@ export {
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
+  withSending,
 } from "./transcript-model.js";
 
 export {

@@ -644,6 +644,42 @@
             "path"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "action": {
+              "type": "string",
+              "enum": [
+                "tick-task"
+              ]
+            },
+            "subject": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256
+            },
+            "index": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "checked": {
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "action",
+            "subject",
+            "index",
+            "count",
+            "checked"
+          ],
+          "additionalProperties": false
         }
       ],
       "description": "The change, named by its action, with the fields that action takes."

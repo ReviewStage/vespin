@@ -10,7 +10,11 @@
 
 import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { agentDefaultOf } from "@repo/features/account-preferences-live";
-import { type AgentTranscriptKey, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
+import {
+  type AgentTranscriptKey,
+  INBOX_SCOPE_KIND,
+  type SendingMessage,
+} from "@repo/features/agent-view";
 import type { ListedAgent } from "@repo/features/agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/inbox-list-model";
@@ -209,7 +213,7 @@ export const selectFailedRuns = (state: AppStateSnapshot) => state.inbox.failedR
 export const selectPullRequestPublished = (state: AppStateSnapshot) =>
   state[LIVE_READ.PULL_REQUEST_PUBLISHED];
 
-export const selectMacCommands = (state: AppStateSnapshot) => state.macCommands;
+export const selectMachineCommands = (state: AppStateSnapshot) => state.machineCommands;
 export const selectNotifications = (state: AppStateSnapshot) => state.notifications;
 export const selectNetwork = (state: AppStateSnapshot) => state.network;
 export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionReplay;
@@ -243,11 +247,10 @@ export const selectLiveMark = (state: AppStateSnapshot): LiveMark | undefined =>
   const { network } = state;
 
   if (!network.online) return LIVE_MARK.MAC_OFFLINE;
-  const live = state.tasks.live;
 
-  if (!network.reachable || live === HOST_LIVE.OFFLINE) return LIVE_MARK.SERVICE_OFFLINE;
+  if (!network.reachable) return LIVE_MARK.SERVICE_OFFLINE;
 
-  if (live === HOST_LIVE.CATCHING_UP) return LIVE_MARK.CATCHING_UP;
+  if (state.tasks.live === HOST_LIVE.CATCHING_UP) return LIVE_MARK.CATCHING_UP;
 
   return undefined;
 };
@@ -648,6 +651,28 @@ export function selectTranscript(
 ): (state: AppStateSnapshot) => AppHostRead<AppTranscript> | undefined {
   return (state) =>
     state[LIVE_READ.TRANSCRIPT][transcript.agentId]?.[transcript.callId ?? OWN_TRANSCRIPT];
+}
+
+/** The member's messages the service refused, in every agent's own transcript the host holds, as the windows mark them. */
+function refusedSends(state: AppStateSnapshot): readonly SendingMessage[] {
+  return Object.values(state[LIVE_READ.TRANSCRIPT]).flatMap(
+    (held) =>
+      held[OWN_TRANSCRIPT]?.rows?.sending?.filter((message) => message.refused !== undefined) ?? [],
+  );
+}
+
+/** The agents holding a message the service refused, by their ids, in the order the host holds them. */
+export function selectRefusedAgents(state: AppStateSnapshot): readonly string[] {
+  return Object.entries(state[LIVE_READ.TRANSCRIPT]).flatMap(([agentId, held]) =>
+    held[OWN_TRANSCRIPT]?.rows?.sending?.some((message) => message.refused !== undefined) === true
+      ? [agentId]
+      : [],
+  );
+}
+
+/** Whether a message to one of a task's agents stands refused, which its row marks, as a `select`. */
+export function selectTaskSendRefused(taskId: string): (state: AppStateSnapshot) => boolean {
+  return (state) => refusedSends(state).some((message) => message.taskId === taskId);
 }
 
 /** One task's description history as the host follows it (`ACT_KIND.TASKS_HISTORY_FOLLOW`): its newest page, then each older page read, as a `select`; none before it is read. */

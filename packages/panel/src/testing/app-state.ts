@@ -112,6 +112,7 @@ import {
   withQueryClient,
   writeAppState,
 } from "./copy-feedback.js";
+import { onOutbox, resetOutbox, withOutbox } from "./outbox.js";
 
 /** What the desktop offers: every capability there is. */
 export const DESKTOP_CAPABILITIES: readonly HostCapability[] = Object.values(HOST_CAPABILITY);
@@ -241,7 +242,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     [LIVE_READ.DESCRIPTION_COMMENTS]: NO_DESCRIPTION_COMMENTS,
     [LIVE_READ.HISTORY]: NO_KEYS_HELD,
     [LIVE_READ.DESCRIPTION_DOCUMENT]: NO_KEYS_HELD,
-    macCommands: { asks: [] },
+    machineCommands: { asks: [] },
     notifications: { status: NOTIFICATIONS_STATUS.UNKNOWN },
     sessionReplay: { permitted: false, halted: false },
     portForwarding: null,
@@ -1069,13 +1070,35 @@ export function holdTranscripts(
 ): TranscriptsHeld {
   const asked: AgentTranscriptKey[] = [];
   const closed: AgentTranscriptKey[] = [];
-  let held: AppTranscripts = NO_TRANSCRIPTS;
+  // Each transcript as it was laid, before the agent's messages on their way are laid over it.
+  let read: AppTranscripts = NO_TRANSCRIPTS;
 
-  const lay = (transcript: AgentTranscriptKey, read: AppHostRead<AppTranscript>) => {
+  /** Every transcript laid, an agent's own carrying its messages on their way, as the host lays it. */
+  const deliverLaid = () =>
+    deliver(
+      Object.fromEntries(
+        Object.entries(read).map(([agentId, held]) => {
+          const own = held[OWN_TRANSCRIPT];
+
+          return [
+            agentId,
+            own?.rows === undefined
+              ? held
+              : { ...held, [OWN_TRANSCRIPT]: { ...own, rows: withOutbox(agentId, own.rows) } },
+          ];
+        }),
+      ),
+    );
+
+  // A test's host starts with no message on its way, and lays each transcript again as one moves.
+  resetOutbox();
+  onOutbox(deliverLaid);
+
+  const lay = (transcript: AgentTranscriptKey, laid: AppHostRead<AppTranscript>) => {
     const { agentId } = transcript;
     const id = transcript.callId ?? OWN_TRANSCRIPT;
-    held = { ...held, [agentId]: { ...held[agentId], [id]: read } };
-    deliver(held);
+    read = { ...read, [agentId]: { ...read[agentId], [id]: laid } };
+    deliverLaid();
   };
 
   fakeActPort({

@@ -18,6 +18,7 @@ import {
   type InboxScopeKind,
   PULL_REQUEST_PART,
   type PullRequestPart,
+  type SendingMessage,
 } from "@repo/features/agent-view";
 import type {
   AgentMessagesAnswer,
@@ -72,14 +73,14 @@ import type { AppSettings } from "@repo/settings/wire";
 import { EXCESS_KEYS, keepIdentity, type UnparsedWireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Equal, Predicate, Result, Schema } from "effect";
-import type { MacCommandAsk } from "./mac-command-ask.js";
+import type { MachineCommandAsk } from "./machine-command-ask.js";
 
 export {
-  isMacShellAsk,
+  isMachineShellAsk,
   type MacAppAsk,
-  type MacCommandAsk,
-  type MacShellAsk,
-} from "./mac-command-ask.js";
+  type MachineCommandAsk,
+  type MachineShellAsk,
+} from "./machine-command-ask.js";
 
 /**
  * The launch profiles a window answers to. A fixture run stages the panel's
@@ -110,6 +111,10 @@ export const RUN_PROFILE = {
   AGENT_TRANSCRIPT: "agent-transcript",
   /** The same agent as an orchestrator days into its run, its transcript thousands of entries long and written to while it is open. */
   AGENT_LONG_RUN: "agent-long-run",
+  /** The same agent after two calls into it, the Voice experiment on: the member's, which handed it work, and a teammate's. */
+  AGENT_VOICE: "agent-voice",
+  /** The same agent mid-turn on a call, the Voice experiment on: a spoken ask awaiting the turn, and the caller's line growing as they speak. */
+  AGENT_VOICE_LIVE: "agent-voice-live",
   /** The same agent, its Pull request tab on the checks. */
   AGENT_CHECKS: "agent-checks",
   /** The same agent, its Pull request tab on Files changed. */
@@ -328,6 +333,12 @@ export interface AppTranscript {
   /** How many readable pages were told, which an ask counts from to know a page landed after it. */
   readonly pages: number;
   readonly failure?: AppTranscriptFailure;
+  /**
+   * The messages on their way to the agent, oldest first, from the moment
+   * each was sent until its row lands in `messages`, as the host draws them
+   * (`agent-queue-writes.ts`); none on a worker's transcript.
+   */
+  readonly sending?: readonly SendingMessage[];
 }
 
 /**
@@ -741,12 +752,12 @@ export interface AppHostReads {
 /**
  * The commands agents asked to run on this Mac that wait on the developer's
  * answer, the earliest first, as the host holds them while Settings › This
- * Mac asks every time (`compose-mac-commands.ts`): what the panel's prompt
+ * Mac asks every time (`compose-machine-commands.ts`): what the panel's prompt
  * draws. Main's, because the host holds the command whichever window is
  * open, and empty wherever this platform runs no commands.
  */
-interface AppMacCommandsSlice {
-  asks: readonly MacCommandAsk[];
+interface AppMachineCommandsSlice {
+  asks: readonly MachineCommandAsk[];
 }
 
 /**
@@ -922,7 +933,7 @@ export interface AppState {
   [LIVE_READ.HISTORY]: AppHistories;
   /** Each task's description the windows opened, held while a window has it open and a while after: what the task's page, a section's chip, and a mention's saved text draw. */
   [LIVE_READ.DESCRIPTION_DOCUMENT]: AppDescriptionDocuments;
-  macCommands: AppMacCommandsSlice;
+  machineCommands: AppMachineCommandsSlice;
   notifications: AppNotificationsSlice;
   network: AppNetworkSlice;
   sessionReplay: AppSessionReplaySlice;

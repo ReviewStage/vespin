@@ -25,12 +25,16 @@ import {
   typeInComposer,
 } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { agentsControl, pushedTranscripts } from "../testing/tasks-control.js";
 import { AgentComposer } from "./agent-composer.js";
 import { AGENT_LEAD, AgentMessage, AgentTab } from "./agent-tab.js";
 import { ReplyToSelection } from "./reply-to-selection.js";
 import { type HeldComposer, type MessageSender, useAgentComposer } from "./use-agent-composer.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * Words selected in an agent's message, answered from its box: Reply stands
@@ -123,10 +127,12 @@ function Tab({ sender }: { sender: MessageSender }): ReactNode {
   const replyDoor = useRef<((words: string) => void) | undefined>(undefined);
 
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
-    send: sender,
+    send: outboxed(sender),
   });
 
   drawnComposer = composer;
@@ -154,7 +160,7 @@ function Tab({ sender }: { sender: MessageSender }): ReactNode {
 async function mounted(answer: () => Promise<AgentAgentAnswer> = () => new Promise(ignore)) {
   const sent: string[] = [];
 
-  const sender: MessageSender = (_agentId, text) => {
+  const sender: MessageSender = (_agentId, { text }) => {
     sent.push(text);
 
     return answer();
@@ -509,7 +515,7 @@ test("on the agent's tab, Reply quotes its words into the tab's own box, and sta
     agents: [AGENT],
     // The transcript ends on a page with nothing on it, as an ended agent's does.
     // The message never answers, so it stays out.
-    onMessage: (_agentId, text) => {
+    onMessage: (_agentId, { text }) => {
       sent.push(text);
 
       return new Promise(ignore);

@@ -17,6 +17,7 @@ import {
   type DescriptionLastEdit,
   type DescriptionSectionEdit,
   isTaskSettled,
+  TASK_BLOCK_RELATION,
   TASK_MODE,
   TASK_PRIORITY,
   TASK_STATUS,
@@ -33,7 +34,7 @@ import {
   UNKNOWN_AGENT_LABEL,
   UNTITLED_TASK_NAME,
 } from "@repo/features/task-wire";
-import { and, desc, eq, gte, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { Data, DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import {
@@ -64,6 +65,7 @@ import {
   lockTasksForBlocks,
   readTaskBlocks,
   taskBlockedFor,
+  taskBlockIdsFor,
 } from "./task-block-store.js";
 import { followReassignedTask, followStartedTask } from "./task-follower-store.js";
 import { forwardTaskNumber } from "./task-number-store.js";
@@ -356,6 +358,8 @@ const TaskListRowSchema = Schema.Struct({
   pinPosition: Schema.NullOr(Schema.String),
   ...ReaderMarkSchema.fields,
   blocked: Schema.Boolean,
+  blockedBy: Schema.Array(Schema.String),
+  blocks: Schema.Array(Schema.String),
   madeByRun: Schema.Boolean,
 });
 
@@ -939,6 +943,8 @@ const findTasks = SqlSchema.findAll({
           pinPosition: taskPin.position,
           ...READER_MARK_COLUMNS,
           blocked: taskBlockedFor(userId),
+          blockedBy: taskBlockIdsFor(userId, TASK_BLOCK_RELATION.BLOCKED_BY),
+          blocks: taskBlockIdsFor(userId, TASK_BLOCK_RELATION.BLOCKS),
           madeByRun: taskMadeByRun(task.id),
         })
         .from(task)
@@ -1437,7 +1443,8 @@ export function createTaskOnce(
  * pinning, and settling one leave every row where it stood, and the order a
  * pin draws is the window's to draw from `pinPosition` and `pinnedAt`. A
  * task waiting on an open task the account reaches is marked blocked
- * (`taskBlockedFor`), and one an automation's run made for itself is marked
+ * (`taskBlockedFor`) and names the tasks it waits on and that wait on it
+ * (`taskBlockIdsFor`), and one an automation's run made for itself is marked
  * so (`taskMadeByRun`).
  */
 export function listTasks(userId: string): TaskStoreEffect<readonly TaskSummary[]> {
@@ -1455,6 +1462,8 @@ export function listTasks(userId: string): TaskStoreEffect<readonly TaskSummary[
         devices,
       ),
       ...(row.blocked ? { blocked: true } : undefined),
+      blockedBy: row.blockedBy,
+      blocks: row.blocks,
       ...(row.madeByRun ? { madeByRun: true } : undefined),
     }));
   });
@@ -2481,5 +2490,47 @@ export function deleteTaskCommitted(
         return Option.some({ txid: removed.value.txid });
       }),
     ),
+  );
+}
+
+/**
+ * The repositories the workspace's tasks work in that the account sees, each
+ * once whatever its case, the one a task changed most recently first, at
+ * most as many as asked: what a read across the workspace's repositories,
+ * such as their merge queues, asks GitHub about.
+ */
+const findWorkspaceTaskRepositories = SqlSchema.findAll({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    workspaceId: Schema.String,
+    limit: Schema.Number,
+  }),
+  Result: Schema.Struct({ repository: Schema.String }),
+  execute: ({ userId, workspaceId, limit }) =>
+    Database.use((db) =>
+      db
+        .select({ repository: sql<string>`min(${task.repository})` })
+        .from(task)
+        .where(
+          and(
+            eq(task.organizationId, workspaceId),
+            taskReachableBy(userId),
+            isNotNull(task.repository),
+          ),
+        )
+        .groupBy(sql`lower(${task.repository})`)
+        .orderBy(desc(sql`max(${task.updatedAt})`))
+        .limit(limit),
+    ),
+});
+
+/** The repositories the workspace's tasks the account sees work in, most recently changed first, at most `limit`; none for a workspace the account is not in. */
+export function readWorkspaceTaskRepositories(
+  userId: string,
+  workspaceId: string,
+  limit: number,
+): TaskStoreEffect<readonly string[]> {
+  return Effect.map(findWorkspaceTaskRepositories({ userId, workspaceId, limit }), (rows) =>
+    rows.map((row) => row.repository),
   );
 }

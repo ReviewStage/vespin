@@ -19,6 +19,7 @@ import {
   accessibilityValue,
   alignmentGuide,
   buttonStyle,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -43,8 +44,10 @@ import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { actContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { dragLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
+import { dragLink } from "./interactions.js";
 import {
   Avatar,
   type Face,
@@ -56,7 +59,6 @@ import {
   WorkingMark,
 } from "./marks.js";
 import { RowOpenContext, RowSelectedContext } from "./row-open.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -93,9 +95,6 @@ function heardValue(value: RowHeard["value"]): string {
     .join(HEARD_PART);
 }
 
-/** What parts a row's line from the task it names. */
-const LINE_PART = " · ";
-
 /** The words VoiceOver hears for a row's marks, each said where the mark is drawn. */
 const UNREAD_WORDS = "Unread";
 const PULL_REQUEST_HEARD = "Pull request";
@@ -113,20 +112,24 @@ export type RowActionTone = (typeof ROW_ACTION_TONE)[keyof typeof ROW_ACTION_TON
 export type RowAction = {
   /** The act's name, as the panel's menu names it: Mark done, Mark unread. */
   readonly label: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly tone: RowActionTone;
+  readonly onPress: () => void;
+};
+
+/** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark. */
+export type MenuChoice = {
+  readonly label: string;
+  readonly symbol?: Glyph | undefined;
+  readonly on: boolean;
   readonly onPress: () => void;
 };
 
 /** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them, and the acts under them, such as a task's Remove from section. */
 export type RowSubmenu = {
   readonly label: string;
-  readonly symbol: SfSymbol;
-  readonly choices: readonly {
-    readonly label: string;
-    readonly on: boolean;
-    readonly onPress: () => void;
-  }[];
+  readonly symbol: Glyph;
+  readonly choices: readonly MenuChoice[];
   readonly actions?: readonly RowAction[] | undefined;
 };
 
@@ -161,7 +164,7 @@ type ListRowProps = RowActs & {
   readonly id: string;
   /** The thread's title, the row's first line. */
   readonly title: string;
-  /** What holds the thread: its task, whose status ring leads the row and whose name ends its line, or an agent's own by its name alone. */
+  /** What holds the thread: its task, whose status ring and name stand on the row's first line, over its title, or an agent's own by its name alone. */
   readonly task?: { readonly name: string; readonly status?: TaskStatus | undefined } | undefined;
   /** What the thread's last line is, which picks the glyph leading it. */
   readonly line?: InboxLineKind | undefined;
@@ -211,8 +214,7 @@ export function actionButton(action: RowAction, colors: BrandColors) {
   return (
     <Button
       key={action.label}
-      label={action.label}
-      systemImage={action.symbol}
+      {...actContent(action.label, action.symbol)}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
       modifiers={destructive ? [] : [tint(colors.TEXT_MUTED)]}
@@ -225,14 +227,13 @@ function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
   return (
     <Menu
       key={submenu.label}
-      label={submenu.label}
-      systemImage={submenu.symbol}
+      label={menuLabel(submenu.label, submenu.symbol)}
       modifiers={ink === undefined ? [] : [tint(ink)]}
     >
       {submenu.choices.map((choice) => (
         <Toggle
           key={choice.label}
-          label={choice.label}
+          {...actContent(choice.label, choice.symbol)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />
@@ -267,7 +268,7 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
   return (
     <HStack spacing={SPACE.TIGHT}>
       <Image
-        systemName="clock"
+        {...glyphImage(GLYPH.TIME)}
         size={MARK_SIZE.GLYPH - 4}
         color={colors.ACCENT_TEXT}
         modifiers={[accessibilityHidden(true)]}
@@ -293,14 +294,18 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
  * selection does, since a clear row ground leaves the system no fill to draw,
  * so an iPad's selected row showed only the keyboard focus's black outline.
  */
-export function rowPlacement(colors: BrandColors, selected = false) {
+export function rowPlacement(
+  colors: BrandColors,
+  selected = false,
+  vertical: number = ROW_INSET.VERTICAL,
+) {
   return [
     listRowBackground(selected ? colors.SELECTED : "clear"),
     listRowInsets({
       leading: ROW_INSET.LEADING,
       trailing: SPACE.EDGE,
-      top: ROW_INSET.VERTICAL,
-      bottom: ROW_INSET.VERTICAL,
+      top: vertical,
+      bottom: vertical,
     }),
     listRowSeparatorTint(colors.CHIP_EDGE),
     alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT - ROW_INSET.LEADING),
@@ -347,9 +352,12 @@ export function RowFrame({
   menuActions = [],
   preview,
   link,
+  vertical,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
+  /** The row's top and bottom inset, where it stands roomier than the list's own, as an Inbox thread does. */
+  readonly vertical?: number | undefined;
 }) {
   const colors = useColors();
   const open = useContext(RowOpenContext);
@@ -359,7 +367,7 @@ export function RowFrame({
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
   const frameModifiers = [
     tag(id),
-    ...rowPlacement(colors, selected),
+    ...rowPlacement(colors, selected, vertical),
     ...(heard === undefined
       ? []
       : [
@@ -380,7 +388,7 @@ export function RowFrame({
       : [
           {
             label: VERB.OPEN,
-            symbol: "arrow.up.forward.app",
+            symbol: GLYPH.OPEN_EXTERNALLY,
             tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: () => open(id),
           },
@@ -495,18 +503,51 @@ function LineGlyph({ line }: { readonly line: InboxLineKind | undefined }) {
 }
 
 /**
- * An Inbox row's second line, under the title: an ask's glyph, where the
- * row's lead is the task's ring rather than it, the thread's last words, and
- * the task's name after them, all 13 pt in the muted ink, as the panel's row
- * reads: only the ask's glyph stands in the attention ink.
+ * An Inbox row's first line, over the title: the task's status ring in the
+ * lead column and the task's name, 13 pt in the muted ink, as the panel's row
+ * heads its title with the task. The unread dot's column stands empty, so
+ * the dot keeps its place beside the title.
+ */
+function TaskLine({ task }: { readonly task: NonNullable<ListRowProps["task"]> }) {
+  const colors = useColors();
+  const lines = useRowLines();
+  const leadWidth = useScaledSize(MARK_SIZE.LEAD);
+
+  return (
+    <HStack spacing={SPACE.TIGHT} alignment="center">
+      <UnreadDot unread={false} />
+      <HStack spacing={SPACE.ROW} alignment="center">
+        <HStack modifiers={[frame({ width: leadWidth })]}>
+          {task.status === undefined ? null : <TaskStatusMark status={task.status} />}
+        </HStack>
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            lineLimit(lines.line),
+          ]}
+        >
+          {task.name}
+        </Text>
+        <Spacer />
+      </HStack>
+    </HStack>
+  );
+}
+
+/**
+ * An Inbox row's last line, under the title: an ask's glyph, where the task's
+ * line leads the row rather than it, and the thread's last words, 13 pt in
+ * the muted ink, as the panel's row reads: only the ask's glyph stands in the
+ * attention ink.
  */
 function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
-  const { line, summary, task, glyph } = props;
+  const { line, summary, glyph } = props;
   const colors = useColors();
   const lines = useRowLines();
   const words = summary?.trim() === "" ? undefined : summary;
 
-  if (words === undefined && task === undefined) return null;
+  if (words === undefined) return null;
 
   return (
     <HStack
@@ -522,10 +563,7 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
           lineLimit(lines.line),
         ]}
       >
-        {words === undefined ? null : <Text>{words}</Text>}
-        {task === undefined ? null : (
-          <Text>{words === undefined ? task.name : `${LINE_PART}${task.name}`}</Text>
-        )}
+        {words}
       </Text>
       <Spacer />
     </HStack>
@@ -533,25 +571,28 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
 }
 
 /**
- * One Inbox thread: the copper dot in the margin while it is unread, its
- * task's status ring leading it (or, on an agent's own thread, the glyph of
- * what it asks), its title in 15 pt with the time at the line's end, and
- * under it the glyph and words of what it asks, then the task's name, in a
- * 13 pt muted line. A teammate's face stands before the time on a thread
+ * One Inbox thread, in the panel's three lines: its task, the task's status
+ * ring and name in a 13 pt muted line; its title in 15 pt with the time at
+ * the line's end and the copper dot in the margin while it is unread; and
+ * the glyph and words of what it asks, in a 13 pt muted line. An agent's own
+ * thread, which has no task, stands in two, the glyph of what it asks
+ * leading its title. A teammate's face stands before the time on a thread
  * that waits on them, and a thread put away until a reminder says when it
- * comes back in its time's place, as the panel's row does.
+ * comes back in its time's place, as the panel's row does. It stands
+ * roomier than a task's row, with Mail's breathing room above, below, and
+ * between its lines.
  */
 export function ListRow(props: ListRowProps) {
   const { id, title, task, line, unread = false, done = false, face, at, now, due } = props;
   const colors = useColors();
-  const ring = task?.status === undefined ? undefined : <TaskStatusMark status={task.status} />;
 
   const row: ReactElement = (
-    <VStack alignment="leading" spacing={2}>
+    <VStack alignment="leading" spacing={ROW_INSET.THREAD_LINE_GAP}>
+      {task === undefined ? null : <TaskLine task={task} />}
       <RowHead
         unread={unread}
         faded={done}
-        lead={ring ?? <LineGlyph line={line} />}
+        lead={task === undefined ? <LineGlyph line={line} /> : null}
         title={title}
         ink={titleInk(colors, unread, done)}
         end={
@@ -567,11 +608,19 @@ export function ListRow(props: ListRowProps) {
           </HStack>
         }
       />
-      <ThreadLine {...props} glyph={ring !== undefined} />
+      <ThreadLine {...props} glyph={task !== undefined} />
     </VStack>
   );
 
-  return <RowFrame {...props} id={id} row={row} heard={props.heard ?? threadHeard(props)} />;
+  return (
+    <RowFrame
+      {...props}
+      id={id}
+      row={row}
+      heard={props.heard ?? threadHeard(props)}
+      vertical={ROW_INSET.THREAD_VERTICAL}
+    />
+  );
 }
 
 /** What VoiceOver hears of an Inbox row: its title, then unread, what waits on you, its last words, its task and the task's status, whom it waits on, and when. */
@@ -679,12 +728,11 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
       onPress={onPress}
       modifiers={[
         buttonStyle("borderless"),
-        hoverEffect(HOVER_EFFECT.HIGHLIGHT),
         accessibilityLabel(open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS),
       ]}
     >
       <Image
-        systemName={open ? "chevron.down" : "chevron.right"}
+        {...glyphImage(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
         size={MARK_SIZE.GLYPH - 4}
         color={colors.TEXT_MUTED}
         modifiers={[frame({ width: MARK_SIZE.LEAD, height: MARK_SIZE.LEAD })]}
@@ -728,6 +776,7 @@ export function TaskRow(props: TaskRowProps) {
                   font({ textStyle: TYPE_ROLE.TIME }),
                   monospacedDigit(),
                   foregroundStyle(colors.TEXT_MUTED),
+                  fixedSize(),
                 ]}
               >
                 {taskKey}
@@ -746,7 +795,7 @@ export function TaskRow(props: TaskRowProps) {
       : [
           {
             label: fold.open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS,
-            symbol: fold.open ? "chevron.down" : "chevron.right",
+            symbol: fold.open ? GLYPH.UNFOLDED : GLYPH.FOLDED,
             tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: fold.onToggle,
           },

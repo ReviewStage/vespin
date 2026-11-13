@@ -34,13 +34,14 @@ export const CHECKOUT_DIFF_FORMAT = {
 
 export type CheckoutDiffFormat = (typeof CHECKOUT_DIFF_FORMAT)[keyof typeof CHECKOUT_DIFF_FORMAT];
 
-/** How the script ends where it diffs nothing: a commit it was handed is not in the checkout. */
+/** How the script ends where it prints nothing: a commit it was handed is not in the checkout, or the counts ran past the bound, which a cut would leave short. */
 export const CHECKOUT_DIFF_EXIT = {
   MISSING: 3,
+  TOO_LARGE: 4,
 } as const;
 
 export const CHECKOUT_DIFF_BOUNDS = {
-  /** The most bytes of diff the script prints; a diff cut here loses its last file, which the reading says. */
+  /** The most bytes of diff the script prints; a patch cut here loses its last file, which the reading says, and counts past it are not printed at all. */
   MAX_BYTES: 4 * 1024 * 1024,
 } as const;
 
@@ -113,6 +114,7 @@ export const CHECKOUT_DIFF_SCRIPT = [
   "fi",
   `if [ "$${FORMAT}" = "${CHECKOUT_DIFF_FORMAT.NUMSTAT}" ]; then`,
   '  git -c core.quotepath=false diff --no-color --no-ext-diff --numstat -z --find-renames "$from" "$to" > "$run/out"',
+  `  if [ "$(wc -c < "$run/out" | tr -d " ")" -gt ${CHECKOUT_DIFF_BOUNDS.MAX_BYTES} ]; then exit ${CHECKOUT_DIFF_EXIT.TOO_LARGE}; fi`,
   "else",
   '  git -c core.quotepath=false diff --no-color --no-ext-diff --no-textconv --find-renames "$from" "$to" > "$run/out"',
   "fi",
@@ -157,9 +159,11 @@ export function turnFilesSummary(output: string): TurnFilesSummary | undefined {
   let deletions = 0;
 
   for (let at = 0; at < fields.length; at += 1) {
-    const [added, removed, named] = (fields[at] ?? "").split("\t");
+    // Note that the path is all past the second tab, because a path may hold a tab of its own.
+    const [added, removed, ...rest] = (fields[at] ?? "").split("\t");
 
-    if (added === undefined || removed === undefined || named === undefined) continue;
+    if (added === undefined || removed === undefined || rest.length === 0) continue;
+    const named = rest.join("\t");
     // A rename names no path on its counts' line, but the two after it, the second where it moved to.
     const path = named === "" ? fields[at + 2] : named;
 

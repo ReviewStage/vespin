@@ -22,8 +22,8 @@ import type { AgentFork } from "./fork-model.js";
 
 /**
  * fork-action.test.ts -- Fork to new agent stands on an agent's own
- * messages, settled ones whole, wordless ones among them, and the reply a
- * running turn is still writing as far as it stood, on a tab of a task that
+ * messages, wordless ones among them, though never on the reply a running
+ * turn is still writing, on a tab of a task that
  * is not archived and that opens a draft, and nowhere else; its press forks
  * at that message; and under each message a line names the agents forked at
  * it, each opening its tab.
@@ -290,52 +290,27 @@ async function forkedAtInTab(
   return forks.map(({ agentId: _agent, opening: _opening, ...at }) => at);
 }
 
-test("while an agent works, the newest of its replies, which the running turn may still be writing, forks as far as it has been written, by its steps and the words and calls of the last, and every earlier one whole; once it settles, every reply forks whole", async () => {
+test("while an agent works, the reply it is still writing offers no fork and every finished one forks, the newest among them while the next turn has yet to begin", async () => {
   const LATEST = "6b3a4f5e-7d8c-4b9a-8c3d-4e5f6a7b8c9d";
+  const finished = reply(LATEST, "Adding the retry");
+  const { finishedAt: _finishedAt, ...writing } = finished;
 
-  const writing = {
-    ...reply(LATEST, "Adding the retry"),
-    parts: [
-      { type: "step-start" },
-      { type: "text", text: "Adding the retry" },
-      { type: "step-start" },
-      { type: "text", text: "Running the tests" },
-      {
-        type: "tool-bash",
-        toolCallId: "call-1",
-        state: "input-available",
-        input: { command: "pnpm test" },
-      },
-    ],
-  };
-
-  const settled = [
+  const before = [
     line("task", "Queue the invite email."),
     reply(TURN, "Moved it onto the queue."),
     line("line-1", "Now add a retry."),
-    writing,
   ];
 
   for (const working of [AGENT_STATUS.RUNNING, AGENT_STATUS.STARTING]) {
     assert.deepEqual(
-      await forkedAtInTab(working, settled),
-      [{ messageId: TURN }, { messageId: LATEST, messageSteps: 2, messageStepParts: 2 }],
-      `${working}: the newest reply is cut where it stands`,
+      await forkedAtInTab(working, [...before, writing]),
+      [{ messageId: TURN }],
+      `${working}: the reply still being written offers no fork`,
+    );
+    assert.deepEqual(
+      await forkedAtInTab(working, [...before, finished]),
+      [{ messageId: TURN }, { messageId: LATEST }],
+      `${working}: a finished reply forks while the next turn begins`,
     );
   }
-
-  assert.deepEqual(await forkedAtInTab(AGENT_STATUS.COMPLETED, settled), [
-    { messageId: TURN },
-    { messageId: LATEST },
-  ]);
-  // A reply that has begun no step yet holds nothing to keep, so it offers no fork until it does.
-  assert.deepEqual(
-    await forkedAtInTab(AGENT_STATUS.RUNNING, [
-      line("task", "Queue the invite email."),
-      reply(TURN, "Moved it onto the queue."),
-      line("line-1", "Now add a retry."),
-      { ...reply(LATEST, ""), parts: [] },
-    ]),
-    [{ messageId: TURN }],
-  );
 });

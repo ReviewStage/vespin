@@ -2,6 +2,7 @@ import { cssCustomProperties } from "../../css.js";
 import { PICTURE_STATE, type PictureState } from "../../picture-read.js";
 import { APP_ICON_SIZE, AppIcon } from "../app-icon/app-icon.js";
 import { CARD_CORNER, CARD_LOOK, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
+import { PictureStandIn } from "../picture-set/picture-set.js";
 import { PictureTile } from "../picture-tile/picture-tile.js";
 import { SPINNER_SIZE, SpinnerRing } from "../spinner/spinner.js";
 
@@ -16,8 +17,9 @@ import { SPINNER_SIZE, SpinnerRing } from "../spinner/spinner.js";
  * phone's does. The other apps stand behind it as the edges of cards, each
  * peeking out above the one before it, at most two, as a deck does, so the
  * stack says how many there are without taking the room. A window not read
- * yet holds its place at its shape with a spinner, and an app whose window
- * the agent never read stands as its icon alone. What names the apps, and
+ * yet holds its place at its shape with a spinner, one whose read did not
+ * land holds it with Retry and is no press, as a failed tile is, and an app
+ * whose window the agent never read stands as its icon alone. What names the apps, and
  * Stop, is the caller's row under it; its place over the box is the caller's
  * (`className`), and the stack is left out of the screen recording, since a
  * window can hold anything on the developer's screen.
@@ -43,7 +45,7 @@ export interface StackedApp {
     | undefined;
 }
 
-/** The window on top, at its own shape: its picture, a spinner while it is read, or the app's icon where it is gone or none was read. */
+/** The window on top, at its own shape: its picture, a spinner while it is read, Retry where the read did not land, or the app's icon where it is gone or none was read. */
 function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
   const window = app.window;
 
@@ -68,6 +70,13 @@ function WindowFace({ app }: { app: StackedApp }): React.JSX.Element {
     >
       {window?.state.kind === PICTURE_STATE.READING ? (
         <SpinnerRing size={SPINNER_SIZE.REGION} />
+      ) : window?.state.kind === PICTURE_STATE.FAILED ? (
+        <PictureStandIn
+          state={PICTURE_STATE.FAILED}
+          words={app.name}
+          onRetry={window.state.retry}
+          failure={window.state.failure}
+        />
       ) : (
         <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.CARD} />
       )}
@@ -94,6 +103,8 @@ export function AppWindowStack({
 
   if (top === undefined) return null;
   const behind = BEHIND_CLASS.slice(0, others.length);
+  // Note that a window whose read did not land is no press, since its Retry stands on it and the viewer holds no window it could not read.
+  const failed = top.window?.state.kind === PICTURE_STATE.FAILED;
 
   return (
     <section
@@ -120,9 +131,13 @@ export function AppWindowStack({
         className="ui-app-window-top relative col-start-1 row-start-1"
       >
         <span className="ui-app-window-ground flex min-w-app-window-least justify-center bg-muted">
-          <PictureTile name={top.name} onOpen={onOpen}>
+          {failed ? (
             <WindowFace app={top} />
-          </PictureTile>
+          ) : (
+            <PictureTile name={top.name} onOpen={onOpen}>
+              <WindowFace app={top} />
+            </PictureTile>
+          )}
         </span>
       </Card>
     </section>

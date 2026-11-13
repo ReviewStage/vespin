@@ -1,7 +1,10 @@
+import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { WORKSPACE_BOUNDS } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
+  ANNOUNCE,
   EmailChipsField,
+  ErrorLine,
   type FilePicker,
   Fill,
   FormField,
@@ -9,9 +12,6 @@ import {
   Inline,
   PhotoPick,
   Stack,
-  TEXT_TONE,
-  TEXT_VARIANT,
-  Text,
   TextField,
 } from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
@@ -20,7 +20,9 @@ import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { useMutation } from "@tanstack/react-query";
 import { type Ref, useEffect, useRef, useState } from "react";
 import { actMutation } from "../act-mutations.js";
+import { refusedShown } from "../failure-report.js";
 import { type Invitees, useInvitees, useSignedIn } from "../invitees.js";
+import { replayMaskedError } from "../settings/marks.js";
 import { useWorkspacePhotoPick } from "../workspace-photo.js";
 
 /**
@@ -294,11 +296,10 @@ export function TeamForm({
           </ReplayMask>
         )}
       </FormField>
-      {form.refusal === undefined ? null : (
-        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-          <ReplayMask>{form.refusal}</ReplayMask>
-        </Text>
-      )}
+      <ErrorLine
+        level={ANNOUNCE.ALERT}
+        error={replayMaskedError(refusedShown(form.refusal, FAILURE_SURFACE.WORKSPACE_CREATE))}
+      />
     </Stack>
   );
 }

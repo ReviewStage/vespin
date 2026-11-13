@@ -348,6 +348,29 @@ export function ConversationEmptyState({
 }
 
 /**
+ * What the log says at its top before its first line lands, as a line on
+ * its way's working line, standing on the log's own inset where that line
+ * will, so it stands still whatever docks over the composer. Its words are
+ * no live region, since a working line says itself.
+ */
+export function ConversationLead({
+  className,
+  children,
+}: {
+  /** The pane's own class on the block the line stands in, as the log's. */
+  className?: string | undefined;
+  children: ReactNode;
+}): ReactNode {
+  return (
+    <Conversation>
+      <ConversationContent className={className} streams>
+        {children}
+      </ConversationContent>
+    </Conversation>
+  );
+}
+
+/**
  * What floats over a log in a slot of its own, centered across it, on a
  * ground of its own ringed and lifted off the lines: the way back to the
  * newest line over its foot, and the line saying earlier lines could not be

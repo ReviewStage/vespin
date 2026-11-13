@@ -135,6 +135,7 @@ import {
   type MarkdownComponents,
   type MarkdownNodeProps,
   type MarkdownSteps,
+  type MarkdownTaskTick,
   TRANSCRIPT_REMARK_STEPS,
 } from "@repo/ui/markdown";
 import { QUOTE_CLASS } from "@repo/ui/quote-face";
@@ -859,20 +860,46 @@ const TRANSCRIPT_COMPONENTS: MarkdownComponents = {
  * place draws none, which draws its link instead. `inline` says it stands
  * in a line of words or inside a link the words keep, a press on which
  * follows the link, so the place draws it in that line as GitHub does, with
- * no press of its own. `size` is the width and height its author wrote on
- * it, in pixels, which GitHub draws it at, as a bot's 16-pixel glyph is.
+ * no press of its own. `written` is what its author wrote on it: its width
+ * and height in pixels, which GitHub draws it at, as a bot's 16-pixel glyph
+ * is, and where it stands in its line (`align`).
  */
 export type GitHubPictureDrawer = (
   src: string,
   alt: string,
   inline: boolean,
-  size: GitHubPictureSize,
+  written: GitHubPictureWritten,
 ) => ReactNode | undefined;
 
-/** The width and height a picture's author wrote on it, in pixels; either unset where none is written. */
-export interface GitHubPictureSize {
+/**
+ * Where a picture stands in its line by the `align` its author wrote, as a
+ * browser draws HTML's `align` and so GitHub does: `middle` sets the
+ * picture's middle on the words' baseline, as a bot's glyph beside a name
+ * is written (`-webkit-baseline-middle`, as Chromium and WebKit draw it),
+ * and `absmiddle` on the middle of their small letters. Keyed by HTML's own
+ * words; `left` and `right`, which float a picture, are left out.
+ */
+const WRITTEN_ALIGN = {
+  middle: "-webkit-baseline-middle",
+  center: "-webkit-baseline-middle",
+  absmiddle: "middle",
+  abscenter: "middle",
+  top: "top",
+  texttop: "text-top",
+  bottom: "baseline",
+  baseline: "baseline",
+  absbottom: "bottom",
+} as const;
+
+type WrittenAlign = (typeof WRITTEN_ALIGN)[keyof typeof WRITTEN_ALIGN];
+
+const ALIGN_BY_WORD: ReadonlyMap<string, WrittenAlign> = new Map(Object.entries(WRITTEN_ALIGN));
+
+/** What a picture's author wrote on it: its width and height in pixels, and where it stands in its line; each unset where none is written. */
+export interface GitHubPictureWritten {
   readonly width: number | undefined;
   readonly height: number | undefined;
+  readonly align: WrittenAlign | undefined;
 }
 
 /** A size attribute as the drawn tree hands it, a number or its words, read as pixels; none where it is no positive number, as a percentage is not. */
@@ -880,6 +907,11 @@ function pixelsOf(value: string | number | undefined): number | undefined {
   const pixels = Predicate.isNumber(value) ? value : Number(value);
 
   return Number.isFinite(pixels) && pixels > 0 ? pixels : undefined;
+}
+
+/** An `align` attribute's word, read as where the picture stands in its line; none where it names no place a line holds. */
+function alignOf(word: string): WrittenAlign | undefined {
+  return ALIGN_BY_WORD.get(word.toLowerCase());
 }
 
 /** Whether what is drawn stands inside a link of GitHub's words. */
@@ -894,13 +926,13 @@ function GitHubImage({
   src,
   alt,
   inWords,
-  size,
+  written,
   picture,
 }: {
   src: string;
   alt: string;
   inWords: boolean;
-  size: GitHubPictureSize;
+  written: GitHubPictureWritten;
   picture: GitHubPictureDrawer;
 }): ReactNode {
   const linked = useContext(InsideGitHubLink);
@@ -909,7 +941,7 @@ function GitHubImage({
   if (shown === undefined) return null;
 
   return (
-    picture(shown, alt, inWords || linked, size) ?? <GitHubPictureLink src={shown} alt={alt} />
+    picture(shown, alt, inWords || linked, written) ?? <GitHubPictureLink src={shown} alt={alt} />
   );
 }
 
@@ -948,16 +980,21 @@ const GITHUB_REMARK_PLUGINS = [wholeRendering];
  * at the panel's scale, their code and tables the transcript's, their links
  * the transcript's: GitHub's own HTML read through the library's parse and
  * sanitizer, never set as HTML. Mentions, references, emoji, task lists,
- * and folded details stand as GitHub rendered them. A picture is the
- * place's to draw (`picture`), in its line where it shares one with words,
- * and stands as its link where the place draws none.
+ * and folded details stand as GitHub rendered them, an alert as the
+ * window's own, and a task item's box as one the reader ticks where the
+ * place hands `taskTick`. A picture is the place's to draw (`picture`), in
+ * its line where it shares one with words, and stands as its link where
+ * the place draws none.
  */
 export function GitHubWords({
   html,
   picture,
+  taskTick,
 }: {
   html: string;
   picture: GitHubPictureDrawer;
+  /** Draws each task item's box the reader can tick, by its place among the words' boxes; every box is read-only without it. */
+  taskTick?: MarkdownTaskTick | undefined;
 }): ReactNode {
   const components = useMemo<MarkdownComponents>(
     () => ({
@@ -974,7 +1011,11 @@ export function GitHubWords({
           src={String(src ?? "")}
           alt={String(alt ?? "")}
           inWords={node?.properties[INLINE_PICTURE] === true}
-          size={{ width: pixelsOf(width), height: pixelsOf(height) }}
+          written={{
+            width: pixelsOf(width),
+            height: pixelsOf(height),
+            align: alignOf(String(node?.properties.align ?? "")),
+          }}
           picture={picture}
         />
       ),
@@ -989,6 +1030,7 @@ export function GitHubWords({
       remarkPlugins={GITHUB_REMARK_PLUGINS}
       rehypePlugins={GITHUB_REHYPE_PLUGINS}
       normalizeHtmlIndentation={false}
+      taskTick={taskTick}
     />
   );
 }
@@ -1165,7 +1207,7 @@ function CutWords({
 /** Each kind of call's icon: a verb's own, or, for a call about something the window draws a glyph for, that glyph's likeness: the Code tab's brackets for code shown, the transcript's scroll for an agent read, as Copy full transcript wears it, never the terminal a shell command wears. A list of the agents is a list's own, rows each led by its mark, since it reads them all rather than one; a list of the models wears a chip, what an agent runs on. */
 const CALL_ICON = {
   [CALL_KIND.COMMAND]: TerminalIcon,
-  [CALL_KIND.MAC_COMMAND]: LaptopIcon,
+  [CALL_KIND.MACHINE_COMMAND]: LaptopIcon,
   [CALL_KIND.BROWSER]: GlobeIcon,
   [CALL_KIND.COMPUTER]: MonitorIcon,
   [CALL_KIND.READ_FILE]: FileTextIcon,
@@ -1360,12 +1402,17 @@ const MacOwnerContext = createContext<Actor | undefined>(undefined);
 /** Names whose Mac the transcript under it ran its Mac commands on. */
 export const MacOwnerProvider = MacOwnerContext.Provider;
 
+/** Whose Mac the transcript ran its Mac commands on, as `MacOwnerProvider` names it; none where the window cannot tell. */
+export function useMacOwner(): Actor | undefined {
+  return useContext(MacOwnerContext);
+}
+
 export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> &
   Pick<ToolHeaderProps, "state" | "subject"> & {
     kind: CallKind;
     /** For a call of an integration's own tool, the integration, whose mark the row wears in its kind's icon's place. */
     provider?: IntegrationProvider | undefined;
-    /** For a call on an app on the developer's Mac, the picture its icon was kept as, which the row wears in its kind's icon's place. */
+    /** For a call on an app on the developer's Mac, the picture its icon was kept as, which the row wears in its kind's icon's place; a computer call with none wears the app icon's placeholder. */
     appIcon?: string | undefined;
     /** For a call of an MCP server's tool, the server's name, which the row says it ran on beside its line. */
     server?: string | undefined;
@@ -1389,6 +1436,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     cut?: CutBody | undefined;
     /** For a call the agent holds for an answer: where the ask stands in words, on the line; what the body says of who asks and why, over the input; and the answers' presses, under the row while it waits. None for the rest. */
     held?: HeldCall | undefined;
+    /** What the body holds under the call's answer, seen once the row is opened, such as the window a computer call read. */
+    answered?: ReactNode;
   };
 
 /** A call held for an answer, as its row draws it (`TranscriptTool`'s `held`). */
@@ -1452,6 +1501,7 @@ export function TranscriptTool({
   errorText,
   cut,
   held,
+  answered,
   ...props
 }: TranscriptToolProps): ReactNode {
   const Icon = CALL_ICON[kind];
@@ -1475,7 +1525,7 @@ export function TranscriptTool({
         icon={
           provider !== undefined ? (
             <ProviderMark provider={provider} />
-          ) : appIcon !== undefined ? (
+          ) : appIcon !== undefined || kind === CALL_KIND.COMPUTER ? (
             <KeptAppIcon id={appIcon} />
           ) : (
             <Icon aria-hidden="true" />
@@ -1487,7 +1537,7 @@ export function TranscriptTool({
         subjectIsCode={line.code}
         subjectInBody={(command && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject)}
         place={
-          (kind === CALL_KIND.MAC_COMMAND || kind === CALL_KIND.COMPUTER) &&
+          (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
           macOwner !== undefined ? (
             <ActorLine>
               {"On "}
@@ -1533,6 +1583,7 @@ export function TranscriptTool({
             )}
           </>
         )}
+        {answered}
       </ToolContent>
     </Tool>
   );

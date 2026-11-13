@@ -103,6 +103,7 @@ export const APP_COMMAND = {
   EXIT_AUTOMATIONS: "exit-automations",
   EXIT_BOARD: "exit-board",
   ADMIN: "admin",
+  MERGE_QUEUE: "merge-queue",
   EXIT_ADMIN: "exit-admin",
   BACK: "back",
   FORWARD: "forward",
@@ -151,6 +152,7 @@ export type MenuCommand = keyof typeof MENU_COMMAND_LABELS;
  */
 const PALETTE_COMMAND_LABELS = {
   [APP_COMMAND.ADMIN]: "Admin",
+  [APP_COMMAND.MERGE_QUEUE]: "Merge queue",
   [APP_COMMAND.GROUP_TASKS_BY_REPOSITORY]: "Group tasks by repository",
   [APP_COMMAND.LIST_TASKS_UNGROUPED]: "Show tasks in one list",
   [APP_COMMAND.SHOW_FINISHED_SUB_TASKS]: "Show completed sub-tasks",

@@ -387,7 +387,7 @@ const composedMobile = (options: MobileHostOptions) =>
       const notices = yield* linkClientNotices({
         state,
         host: operator.host,
-        presenter: { openMacCommandAsk: () => undefined, openPlace: () => undefined },
+        presenter: { openMachineCommandAsk: () => undefined, openPlace: () => undefined },
         onPanelFocusChanged: device.onAppActiveChanged,
         report,
       }).pipe(

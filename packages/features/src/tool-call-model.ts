@@ -36,6 +36,7 @@ import {
   integrationRemoteCallSchema,
 } from "./integration-wire.js";
 import { LINK_DESTINATION, type LinkDestination, linkOf } from "./link-grammar.js";
+import { COMPUTER_PERMISSION, type ComputerPermission } from "./machine-command-wire.js";
 import type { MentionHolder } from "./mention-holder.js";
 import type { ModelChoice } from "./models-wire.js";
 import { cardTitle } from "./plain-words.js";
@@ -201,6 +202,33 @@ export function computerAppName(
   return named ?? stringAt(input, "app");
 }
 
+const isComputerPermission = Schema.is(Schema.Literals(Object.values(COMPUTER_PERMISSION)));
+
+/** Whether a computer call answered that the Mac ran nothing, so it read no window and used no app. */
+export function computerCallRefused(output: WireValue | undefined): boolean {
+  return stringAt(output, "status") === MACHINE_COMMAND_NOT_RUN;
+}
+
+/** Why a computer call ran nothing because the Mac lacked a grant it needed, in the Mac's own words, with those grants; none for any other answer. */
+export function computerPermissionsMissing(
+  output: WireValue | undefined,
+): { readonly reason: string; readonly permissions: readonly ComputerPermission[] } | undefined {
+  if (!computerCallRefused(output) || !isRecord(output)) return undefined;
+  const listed = output.missingPermissions;
+
+  const permissions =
+    listed !== undefined && isWireArray(listed) ? listed.filter(isComputerPermission) : [];
+
+  const reason = stringAt(output, "reason");
+
+  return reason === undefined || permissions.length === 0 ? undefined : { reason, permissions };
+}
+
+/** The bundle id a computer call's answer names its app by, as the Mac answered it; none where it named none, as an app with no bundle answers. */
+export function computerAppBundleId(output: WireValue | undefined): string | undefined {
+  return isRecord(output) ? stringAt(output.app, "bundleId") : undefined;
+}
+
 /** The picture a computer call's answer kept its app's icon as, by id; none where it kept none. */
 export function computerAppIcon(output: WireValue | undefined): string | undefined {
   if (!isRecord(output) || !isRecord(output.app) || !isRecord(output.app.icon)) return undefined;
@@ -251,7 +279,7 @@ const TRUNCATED_NOTE = "(output truncated)";
 const TIMED_OUT_NOTE = "(killed at its timeout)";
 
 /** The status `run_on_mac` answers with when the Mac ran nothing. */
-const MAC_COMMAND_NOT_RUN = "not-run";
+const MACHINE_COMMAND_NOT_RUN = "not-run";
 
 /** The status `browser` answers with when it ran nothing. */
 const BROWSER_NOT_RUN = "not-run";
@@ -300,8 +328,8 @@ function browserOutput(output: WireValue): ToolBlock {
 }
 
 /** A command the Mac ran: as a terminal would have shown it, its timeout said where it was killed; or why it was not run. */
-function macCommandOutput(output: WireValue): ToolBlock {
-  if (stringAt(output, "status") === MAC_COMMAND_NOT_RUN) {
+function machineCommandOutput(output: WireValue): ToolBlock {
+  if (stringAt(output, "status") === MACHINE_COMMAND_NOT_RUN) {
     return textBlock(stringAt(output, "reason") ?? "");
   }
 
@@ -311,6 +339,13 @@ function macCommandOutput(output: WireValue): ToolBlock {
   if (!timedOut) return shown;
 
   return textBlock(shown.text === "" ? TIMED_OUT_NOTE : `${shown.text}\n${TIMED_OUT_NOTE}`);
+}
+
+/** A computer call's answer: why the Mac ran nothing where it ran nothing, and its JSON otherwise. */
+function computerOutput(output: WireValue): ToolBlock {
+  return computerCallRefused(output)
+    ? textBlock(stringAt(output, "reason") ?? "")
+    : jsonBlock(output);
 }
 
 /** A patch's answer: the files it changed, one a line, then every problem it reported. */
@@ -1243,11 +1278,11 @@ const AGENT_TOOL_VIEWS = {
     const description = commandDescription(stringAt(input, "description"));
 
     return {
-      kind: CALL_KIND.MAC_COMMAND,
+      kind: CALL_KIND.MACHINE_COMMAND,
       subject: command,
       ...(description === undefined ? undefined : { description }),
       input: { kind: TOOL_BLOCK.COMMAND, text: command },
-      output: output === undefined ? undefined : macCommandOutput(output),
+      output: output === undefined ? undefined : machineCommandOutput(output),
     };
   },
   [AGENT_TOOL.COMPUTER]: ({ input, output }) => {
@@ -1260,7 +1295,7 @@ const AGENT_TOOL_VIEWS = {
       ...(description === undefined ? undefined : { description }),
       ...(icon === undefined ? undefined : { appIcon: icon }),
       input: jsonBlock(input ?? {}),
-      output: output === undefined ? undefined : jsonBlock(output),
+      output: output === undefined ? undefined : computerOutput(output),
     };
   },
   [AGENT_TOOL.BROWSER]: ({ input, output }) => {

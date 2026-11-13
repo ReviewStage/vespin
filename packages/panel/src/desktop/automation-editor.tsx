@@ -3,7 +3,6 @@ import {
   automationDraft,
   changeOf,
   createRequestOf,
-  cronOf,
   DRAFT_FIELD,
   type DraftDefaults,
   type DraftProblems,
@@ -14,16 +13,20 @@ import {
   filterAdmitted,
   filterValuesOf,
   type GitHubTriggerSettings,
+  onceDateOf,
+  onceDateText,
   presetDraft,
   repositoryHeld,
   SCHEDULE_KIND,
   type ScheduleDraft,
   type ScheduleKind,
   sameDraft,
+  scheduleOf,
   withGithubEvent,
   withIntegrationEvent,
   withIntegrationFilters,
   withRepository,
+  withScheduleKind,
 } from "@repo/features/automation-draft-model";
 import { automationTriggerText, parseAutomationClock } from "@repo/features/automation-list-model";
 import { type AutomationPresetName, automationPreset } from "@repo/features/automation-presets";
@@ -228,9 +231,10 @@ import { type RunChoices, useRunChoices } from "./use-run-choices.js";
  * asked, or the same agent, chosen from the workspace's agents on its
  * repository. Its runs stand in the panel on
  * the right (`automation-runs-panel.tsx`), with Run now in the toolbar. A schedule is chosen as the
- * picker writes one, every hour, every day, on weekdays, or on one day of
- * the week, at a time in a zone, and a cron the picker did not write stands
- * as custom, kept as it was; its next two runs are said under it. What
+ * picker writes one, every hour, every day, on weekdays, on one day of
+ * the week, or once on a date, at a time in a zone, and a cron the picker
+ * did not write stands as custom, kept as it was; its next two runs are
+ * said under it. What
  * stops a draft saving is said at its field once a save is pressed. A
  * Sentry trigger picks its event, keeps to the projects, environments, and
  * levels named, and waits so many hours before the same issue runs again;
@@ -299,6 +303,7 @@ const SCHEDULE_KINDS: readonly { value: ScheduleKind; label: string }[] = [
   { value: SCHEDULE_KIND.DAILY, label: "Daily" },
   { value: SCHEDULE_KIND.WEEKDAYS, label: "Weekdays" },
   { value: SCHEDULE_KIND.WEEKLY, label: "Weekly" },
+  { value: SCHEDULE_KIND.ONCE, label: "Once" },
   { value: SCHEDULE_KIND.CUSTOM, label: "Custom" },
 ];
 
@@ -335,10 +340,12 @@ const GITHUB_EVENTS: readonly { value: GitHubTriggerEvent; label: string }[] = [
   { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED, label: "Pull request opened or updated" },
   { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED, label: "Pull request opened" },
   { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED, label: "Pull request labeled" },
+  { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED, label: "Pull request merged" },
   { value: GITHUB_TRIGGER_EVENT.ISSUE_OPENED, label: "Issue opened" },
   { value: GITHUB_TRIGGER_EVENT.ISSUE_LABELED, label: "Issue labeled" },
   { value: GITHUB_TRIGGER_EVENT.CHECK_FAILED, label: "Checks failed" },
   { value: GITHUB_TRIGGER_EVENT.PUSH, label: "Commits pushed" },
+  { value: GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED, label: "Release published" },
 ];
 
 /** The days of the week as cron numbers them. */
@@ -447,6 +454,9 @@ export function AutomationSwitch({
 /** What a time of day that cannot be read is told to be, under the time's row. */
 const UNREADABLE_TIME = "Write the time as 2:00 AM.";
 
+/** What a date that cannot be read is told to be, under the date's row, as the time's is; its example a fixed day, so the words never read the clock. */
+const UNREADABLE_DATE = "Write the date as Nov 27.";
+
 /**
  * The schedule's time of day, written as the summary says it ("2:00 AM")
  * rather than in the engine's own time input, which pads it ("02:00 AM").
@@ -494,6 +504,57 @@ function ClockField({
         const clock = parseAutomationClock(text);
 
         if (clock !== undefined) onClock(clock);
+      }}
+      onBlur={() => setTyped(unreadable ? typed : undefined)}
+    />
+  );
+}
+
+/**
+ * A one-time schedule's date, said as "Nov 27, 2026" and read as a date
+ * mention's words are ("Nov 27", "next fri") in the schedule's zone. What
+ * is typed stands as typed while it names no day, marked invalid and said
+ * to the editor (`onUnreadable`), as the time's field does; a day that
+ * reads changes the schedule at once.
+ */
+function DateField({
+  date,
+  timezone,
+  inputRef,
+  describedBy,
+  invalid,
+  onDate,
+  onUnreadable,
+}: {
+  date: string;
+  timezone: string;
+  inputRef: RefObject<HTMLInputElement | null>;
+  describedBy: string | undefined;
+  invalid: boolean | undefined;
+  onDate: (date: string) => void;
+  onUnreadable: (unreadable: boolean) => void;
+}): React.JSX.Element {
+  const [typed, setTyped] = useState<string | undefined>(undefined);
+  const unreadable = typed !== undefined && onceDateOf(typed, new Date(), timezone) === undefined;
+  useEffect(() => {
+    onUnreadable(unreadable);
+
+    return () => onUnreadable(false);
+  }, [unreadable, onUnreadable]);
+
+  return (
+    <TextField
+      ref={inputRef}
+      label="Date"
+      describedBy={describedBy}
+      invalid={invalid === true || unreadable}
+      value={typed ?? onceDateText(date)}
+      onEscape={() => inputRef.current?.blur()}
+      onChange={(text) => {
+        setTyped(text);
+        const day = onceDateOf(text, new Date(), timezone);
+
+        if (day !== undefined) onDate(day);
       }}
       onBlur={() => setTyped(unreadable ? typed : undefined)}
     />
@@ -838,27 +899,41 @@ function ScheduleRows({
   problem,
   onSchedule,
   onTimezone,
-  onUnreadableTime,
+  onUnreadable,
 }: {
   draft: AutomationDraft;
   /** What stops a save in the schedule, said under the row it is about. */
   problem: string | undefined;
   onSchedule: (schedule: ScheduleDraft) => void;
   onTimezone: (timezone: string) => void;
-  /** Hears whether the time's field holds words that are no time. */
-  onUnreadableTime: (unreadable: boolean) => void;
+  /** Hears what the date's or the time's field holds that is no date or time, said as what to write; nothing while both read. */
+  onUnreadable: (words: string | undefined) => void;
 }): React.JSX.Element {
-  // The cron's and the time's Escape lets go of the caret and keeps the press, as every field's here does.
+  // The cron's, the date's, and the time's Escape lets go of the caret and keeps the press, as every field's here does.
   const cron = useRef<HTMLInputElement>(null);
+  const day = useRef<HTMLInputElement>(null);
   const time = useRef<HTMLInputElement>(null);
   const { schedule, timezone } = draft;
   const zones = TIME_ZONES.includes(timezone) ? TIME_ZONES : [timezone, ...TIME_ZONES];
+  const once = schedule.kind === SCHEDULE_KIND.ONCE;
+  const [unreadableDate, setUnreadableDate] = useState(false);
+  const [unreadableTime, setUnreadableTime] = useState(false);
+
+  const unreadable = unreadableDate
+    ? UNREADABLE_DATE
+    : unreadableTime
+      ? UNREADABLE_TIME
+      : undefined;
+
+  // Note that the editor hears the date's words over the time's, since the date's row stands first.
+  useEffect(() => {
+    onUnreadable(unreadable);
+
+    return () => onUnreadable(undefined);
+  }, [unreadable, onUnreadable]);
 
   // Note that a zone we cannot read is said under the zone's row, and any other refusal under the cron's or the time's.
-  const read =
-    problem === undefined
-      ? undefined
-      : readSchedule({ cron: cronOf(schedule), timezone }, new Date());
+  const read = problem === undefined ? undefined : readSchedule(scheduleOf(draft), new Date());
 
   const zoneRefused =
     read !== undefined && Result.isFailure(read) && read.failure === SCHEDULE_REFUSAL.TIMEZONE;
@@ -867,13 +942,13 @@ function ScheduleRows({
     <>
       <SelectRow
         width={CHIP_WIDTH.MIN_FIELD}
-        label="Repeats"
+        label="Runs"
         labelReplayUnmasked
         detail={nextRunsText(draft)}
         value={schedule.kind}
         options={SCHEDULE_KINDS}
         parse={scheduleKindOf}
-        onChange={(kind) => onSchedule({ ...schedule, kind })}
+        onChange={(kind) => onSchedule(withScheduleKind(draft, kind, new Date()))}
       />
       <RevealChoice
         value={schedule.kind === SCHEDULE_KIND.CUSTOM ? SCHEDULE_FIELD.CRON : SCHEDULE_FIELD.CLOCK}
@@ -905,7 +980,11 @@ function ScheduleRows({
             <SettingsRow
               label={
                 <ReplayUnmask>
-                  {schedule.kind === SCHEDULE_KIND.WEEKLY ? "Day and time" : "Time"}
+                  {once
+                    ? "Date and time"
+                    : schedule.kind === SCHEDULE_KIND.WEEKLY
+                      ? "Day and time"
+                      : "Time"}
                 </ReplayUnmask>
               }
               error={zoneRefused ? undefined : inputProblem(problem)}
@@ -923,6 +1002,19 @@ function ScheduleRows({
                       noMatch={NO_MATCH.DAYS}
                       onPick={(id) => onSchedule({ ...schedule, weekday: Number(id) })}
                     />
+                  ) : null}
+                  {once ? (
+                    <span className={AUTOMATION_FIELD}>
+                      <DateField
+                        inputRef={day}
+                        date={schedule.date}
+                        timezone={timezone}
+                        describedBy={control["aria-describedby"]}
+                        invalid={control["aria-invalid"]}
+                        onDate={(date) => onSchedule({ ...schedule, date })}
+                        onUnreadable={setUnreadableDate}
+                      />
+                    </span>
                   ) : null}
                   {schedule.kind === SCHEDULE_KIND.HOURLY ? (
                     <Picker
@@ -949,7 +1041,7 @@ function ScheduleRows({
                         describedBy={control["aria-describedby"]}
                         invalid={control["aria-invalid"]}
                         onClock={(clock) => onSchedule({ ...schedule, ...clock })}
-                        onUnreadable={onUnreadableTime}
+                        onUnreadable={setUnreadableTime}
                       />
                     </span>
                   )}
@@ -989,7 +1081,7 @@ const PROMPT_ROWS = 5;
 /**
  * The rows a saved automation's groups stand before it is read, as a
  * scheduled one, the kind most are, runs on a new agent each time: Sharing's
- * Owner and Created by; Trigger's Type, Repeats, Time, and Time zone; and Where it runs'
+ * Owner and Created by; Trigger's Type, Runs, Time, and Time zone; and Where it runs'
  * Repository, Runs land in, Model on the account's default, MCP servers, and Archive
  * finished runs, each with the words under its name where it says them.
  */
@@ -1404,11 +1496,12 @@ const MOMENT_CHOICES: readonly { value: PullRequestMoment; label: string; detail
   },
 ];
 
-/** The GitHub events a pull request's drafts and forks speak to. */
+/** The GitHub events a pull request's forks speak to. */
 const PULL_REQUEST_EVENTS: ReadonlySet<GitHubTriggerEvent> = new Set([
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED,
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED,
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
+  GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED,
 ]);
 
 /** A list with a value in it or out of it, as a switch leaves it. */
@@ -1421,8 +1514,10 @@ function toggled<Value>(list: readonly Value[], value: Value, on: boolean): read
 /**
  * A GitHub trigger's settings, as rows of the Trigger card, a switch each
  * as Settings lists several: whose events fire it, the moments an update
- * fires on, and whether drafts are skipped and forks heard, each shown
- * only for the events it speaks to. A check names no sender, so it shows none.
+ * fires on, whether drafts are skipped and forks heard, and whether
+ * prereleases are heard, each shown only for the events it speaks to. A
+ * check names no sender, so it shows none, and a merged pull request is
+ * never a draft, so it shows no drafts switch.
  */
 function GitHubSettingsRows({
   event,
@@ -1466,13 +1561,15 @@ function GitHubSettingsRows({
         ))}
       </Reveal>
       <Reveal shown={PULL_REQUEST_EVENTS.has(event)}>
-        <SwitchRow
-          label="Skip drafts"
-          labelReplayUnmasked
-          detail={<ReplayUnmask>A draft starts a run once it is marked ready.</ReplayUnmask>}
-          checked={!settings.drafts}
-          onChange={(skip) => onSettings({ ...settings, drafts: !skip })}
-        />
+        <Reveal shown={event !== GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED}>
+          <SwitchRow
+            label="Skip drafts"
+            labelReplayUnmasked
+            detail={<ReplayUnmask>A draft starts a run once it is marked ready.</ReplayUnmask>}
+            checked={!settings.drafts}
+            onChange={(skip) => onSettings({ ...settings, drafts: !skip })}
+          />
+        </Reveal>
         <SwitchRow
           label="Include forks"
           labelReplayUnmasked
@@ -1484,6 +1581,14 @@ function GitHubSettingsRows({
           }
           checked={settings.forks}
           onChange={(forks) => onSettings({ ...settings, forks })}
+        />
+      </Reveal>
+      <Reveal shown={event === GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED}>
+        <SwitchRow
+          label="Include prereleases"
+          labelReplayUnmasked
+          checked={settings.prereleases}
+          onChange={(prereleases) => onSettings({ ...settings, prereleases })}
         />
       </Reveal>
     </Reveal>
@@ -2320,7 +2425,7 @@ function EditorForm({
   sentry,
   slackBot,
   onDraft,
-  onUnreadableTime,
+  onUnreadable,
   onSave,
 }: {
   draft: AutomationDraft;
@@ -2340,8 +2445,8 @@ function EditorForm({
   /** Whether the workspace's Slack bot is connected, which a run's result is sent by. */
   slackBot: boolean;
   onDraft: (patch: Partial<AutomationDraft>) => void;
-  /** Hears whether the schedule's time field holds words that are no time, which a save is refused over. */
-  onUnreadableTime: (unreadable: boolean) => void;
+  /** Hears what the schedule's date or time field holds that is no date or time, said as what to write, which a save is refused over. */
+  onUnreadable: (words: string | undefined) => void;
   /** Saves the automation as the toolbar's Save does, which ⌘ or Ctrl with Enter in the prompt asks for. */
   onSave: () => void;
 }): React.JSX.Element {
@@ -2412,7 +2517,7 @@ function EditorForm({
                   problem={problems[DRAFT_FIELD.SCHEDULE]}
                   onSchedule={(schedule) => onDraft({ schedule })}
                   onTimezone={(timezone) => onDraft({ timezone })}
-                  onUnreadableTime={onUnreadableTime}
+                  onUnreadable={onUnreadable}
                 />
               ) : kind === AUTOMATION_TRIGGER.GITHUB ? (
                 <>
@@ -2819,16 +2924,18 @@ export function AutomationEditor({
   const saved = automation === undefined ? undefined : automationDraft(automation, defaults);
   // Note that a draft is unsaved wherever it differs from the automation, even where what differs
   // cannot be written yet, so Save stands to say what is missing.
-  // Note that words the time's field holds that are no time are unsaved work too, though no draft holds them.
-  const [unreadableTime, setUnreadableTime] = useState(false);
-  const dirty = saved === undefined || !sameDraft(draft, saved) || unreadableTime;
+  // Note that words the date's or time's field holds that are no date or time are unsaved work too, though no draft holds them.
+  const [unreadable, setUnreadable] = useState<string | undefined>(undefined);
+  const dirty = saved === undefined || !sameDraft(draft, saved) || unreadable !== undefined;
 
   // Note that the saved agent is offered back only on the repository it was saved on, because an agent works in its own repository.
   const savedAgentId =
     saved !== undefined && saved.repository === draft.repository ? saved.agentId : null;
 
   // Note that a new draft nothing was changed in is no work to lose, so Escape may leave it.
-  const written = automation === undefined ? unreadableTime || !sameDraft(draft, start) : dirty;
+  const written =
+    automation === undefined ? unreadable !== undefined || !sameDraft(draft, start) : dirty;
+
   const narrow = room === SHELL_ROOM.NARROW;
   // One column's runs stand as a screen of their own over the setup, and the setup the whole width.
   const split = useScreenSplit(room);
@@ -2854,12 +2961,12 @@ export function AutomationEditor({
   useEffect(() => {
     if (linked?.runId !== undefined) showRuns.current();
   }, [linked]);
-  const drafted = draftProblems(draft, repositoryHeld(automation), new Date());
+  const drafted = draftProblems(draft, repositoryHeld(automation), new Date(), saved);
 
-  // Note that a time the field cannot read stops a save as the schedule's own problem does, since the draft holds only what read before it.
+  // Note that a date or time its field cannot read stops a save as the schedule's own problem does, since the draft holds only what read before it.
   const problems: DraftProblems =
-    unreadableTime && drafted[DRAFT_FIELD.SCHEDULE] === undefined
-      ? { ...drafted, [DRAFT_FIELD.SCHEDULE]: UNREADABLE_TIME }
+    unreadable !== undefined && drafted[DRAFT_FIELD.SCHEDULE] === undefined
+      ? { ...drafted, [DRAFT_FIELD.SCHEDULE]: unreadable }
       : drafted;
 
   const editDraft = (patch: Partial<AutomationDraft>) => {
@@ -3051,7 +3158,7 @@ export function AutomationEditor({
             sentry={sentry}
             slackBot={slackBot}
             onDraft={editDraft}
-            onUnreadableTime={setUnreadableTime}
+            onUnreadable={setUnreadable}
             onSave={save}
           />
         </AutomationSetup>

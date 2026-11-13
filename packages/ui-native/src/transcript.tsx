@@ -2,6 +2,7 @@
 
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
+import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
@@ -29,16 +30,16 @@ import {
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { useDockRoom } from "./glass-bar.js";
-import { isLucideSymbol } from "./glyph.js";
+import { GLYPH, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
-import { ToneGlyph } from "./marks.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
-import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
+import type { SuggestionLook } from "./suggestion-look.js";
+import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
+import { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
@@ -153,7 +154,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.EDGE - 4,
     paddingVertical: SPACE.ROW,
   },
-  callGlyph: { width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH },
   head: {
     paddingHorizontal: SPACE.EDGE,
     paddingTop: SPACE.TIGHT,
@@ -213,7 +213,7 @@ function StandingMark({
 
   return (
     <SymbolView
-      name="xmark.circle.fill"
+      name={glyphSymbol(GLYPH.FAILED)}
       size={size}
       tintColor={colors.DANGER}
       accessibilityElementsHidden
@@ -251,32 +251,18 @@ function BodyBlock({
   );
 }
 
-/**
- * A call's glyph at a row mark's size: an SF Symbol through the system's
- * symbol view, or one of Lucide's, such as a pull request's, through
- * SwiftUI's own image in a host of that square, since React Native's image
- * draws a symbol set blank.
- */
+/** A call's glyph at a row mark's size, the panel's own for its kind, through the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's row costs no SwiftUI host. */
 function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
-  const glyph = CALL_SYMBOL[callKind];
-
-  if (!isLucideSymbol(glyph)) {
-    return (
-      <SymbolView
-        name={glyph}
-        size={size}
-        tintColor={colors.TEXT_MUTED}
-        accessibilityElementsHidden
-      />
-    );
-  }
 
   return (
-    <InlineHost style={styles.callGlyph}>
-      <ToneGlyph glyph={glyph} tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} hidden />
-    </InlineHost>
+    <SymbolView
+      name={glyphSymbol(CALL_SYMBOL[callKind])}
+      size={size}
+      tintColor={colors.TEXT_MUTED}
+      accessibilityElementsHidden
+    />
   );
 }
 
@@ -388,23 +374,25 @@ function CallRow({
 /** What a webhook call's body is called, folded under the prompt it rode in with, and its block's title, as the panel names them. */
 const WEBHOOK_BODY = { LABEL: "Webhook body", KIND: "body" } as const;
 
-/** What a part of an automation's sender line that opens somewhere is offered to VoiceOver as, and the name its action goes by before its place in the line. */
+/** What a part of a sender line that opens somewhere is offered to VoiceOver as, and the name its action goes by before its place in the line. */
 const OPEN_WORD = "Open";
 const OPEN_ACTION = "open-";
 
 /**
- * Who sent an automation's prompt, as the panel's sender line names it: the
- * automation, then what its run was about and who asked for it, joined by
- * " · ". A part with an address opens it in Safari, as an underlined word in
- * the ink, and is offered to VoiceOver as one of the line's actions, since a
- * word inside a line is never an element of its own on iOS.
+ * Who sent a line, as the panel's sender line names it: an automation's
+ * prompt by the automation, then what its run was about and who asked for
+ * it; a line sent from a suggestion by the agent that suggested it, after
+ * its lead; each joined by " · ". A part with an address opens it as a link
+ * does, as an underlined word in the ink, and is offered to VoiceOver as one
+ * of the line's actions, since a word inside a line is never an element of
+ * its own on iOS.
  */
 function OriginFrom({
   parts,
-  onOpenAddress,
+  onOpenLink,
 }: {
   readonly parts: readonly OriginPart[];
-  readonly onOpenAddress: (address: string) => void;
+  readonly onOpenLink: (address: string) => void;
 }) {
   const colors = useColors();
 
@@ -426,17 +414,18 @@ function OriginFrom({
               ({ name }) => name === event.nativeEvent.actionName,
             )?.address;
 
-            if (address !== undefined) onOpenAddress(address);
+            if (address !== undefined) onOpenLink(address);
           },
         };
 
   return (
     <Text {...actions} style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
-      {parts.map(({ words, address }, at) => (
+      {parts.map(({ lead, words, after, address }, at) => (
         <Fragment key={at}>
           {at === 0 ? null : " · "}
+          {lead === undefined ? null : `${lead} `}
           <Text
-            onPress={address === undefined ? undefined : () => onOpenAddress(address)}
+            onPress={address === undefined ? undefined : () => onOpenLink(address)}
             style={{
               color: at === 0 || address !== undefined ? colors.TEXT : undefined,
               fontWeight: at === 0 ? "600" : undefined,
@@ -445,6 +434,7 @@ function OriginFrom({
           >
             {words}
           </Text>
+          {after}
         </Fragment>
       ))}
     </Text>
@@ -511,7 +501,7 @@ function FoldRow({
         style={styles.callLine}
       >
         <SymbolView
-          name={item.open ? "chevron.down" : "chevron.right"}
+          name={glyphSymbol(item.open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
           size={MARK_SIZE.GLYPH - 3}
           tintColor={colors.TEXT_MUTED}
           style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
@@ -552,6 +542,10 @@ interface RowDrawing {
   readonly pullRequestActs?: ((item: PullRequestItem) => readonly PullRequestAct[]) | undefined;
   /** The answer the agent holds a call for, by the call's id; none where it holds none. */
   readonly heldCall?: ((callId: string) => HeldCall | undefined) | undefined;
+  /** How a suggestion the agent wrote into its words stands, by its button and the words it was written with; every suggestion is drawn as its plain link where none is given. */
+  readonly suggestion?:
+    | ((link: ReplyButtonLink, words: string) => SuggestionLook | undefined)
+    | undefined;
 }
 
 /** A pull request an agent opened, as the transcript lists it. */
@@ -573,7 +567,7 @@ function TranscriptRow({
       return (
         <View style={[styles.row, styles.saidRow]}>
           {item.from === undefined ? null : (
-            <OriginFrom parts={item.from} onOpenAddress={drawing.onOpenAddress} />
+            <OriginFrom parts={item.from} onOpenLink={drawing.onOpenLink} />
           )}
           {item.sender === undefined ? null : (
             <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}>
@@ -626,6 +620,7 @@ function TranscriptRow({
                 words={item.words}
                 repository={drawing.repository}
                 onOpenLink={drawing.onOpenLink}
+                suggestion={drawing.suggestion}
               />
             </View>
           </CopyWordsMenu>
@@ -674,7 +669,7 @@ function TranscriptRow({
             ]}
           >
             <SymbolView
-              name="macwindow"
+              name={glyphSymbol(GLYPH.PAGE)}
               size={MARK_SIZE.WRITER}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
@@ -691,7 +686,7 @@ function TranscriptRow({
               </Text>
             </View>
             <SymbolView
-              name="chevron.right"
+              name={glyphSymbol(GLYPH.FOLDED)}
               size={MARK_SIZE.GLYPH - 3}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
@@ -770,7 +765,7 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
         <ActivityIndicator size="small" color={colors.WORKING} accessibilityElementsHidden />
       ) : state === GLYPH_STATE.FAILED ? (
         <SymbolView
-          name="xmark.circle.fill"
+          name={glyphSymbol(GLYPH.FAILED)}
           size={MARK_SIZE.GLYPH}
           tintColor={colors.DANGER}
           accessibilityElementsHidden
@@ -790,7 +785,7 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
         >
           <Text style={ink}>{model}</Text>
           <SymbolView
-            name="chevron.down"
+            name={glyphSymbol(GLYPH.UNFOLDED)}
             size={MARK_SIZE.GLYPH - 4}
             weight="semibold"
             tintColor={colors.TEXT_MUTED}
@@ -822,7 +817,7 @@ function JumpToLatest({
 
   const arrow = (
     <SymbolView
-      name="arrow.down"
+      name={glyphSymbol(GLYPH.JUMP_DOWN)}
       size={MARK_SIZE.GLYPH + 2}
       weight="semibold"
       tintColor={colors.TEXT}

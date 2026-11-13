@@ -93,6 +93,7 @@ import type { DescriptionEditor, TaskPullRequestLine } from "@repo/features/task
 import { dayAndTimeText, dueText } from "@repo/features/time-format";
 import { TOOL_STATE, type ToolState } from "@repo/features/tool-call-block";
 import { githubLineOf } from "@repo/features/transcript-lines";
+import { isAgentTurn, isVoiceLine, opensTurn } from "@repo/features/voice-call-lines";
 import { andList, countWords, readFailedWords, TERM } from "@repo/features/words";
 import type { FormerMember, WorkspaceMember } from "@repo/features/workspace-wire";
 import {
@@ -1667,11 +1668,13 @@ export function workerWorkingPhase(status: AgentStatus): WorkingPhase {
  * turn; none where the lines say nothing, as before a first turn.
  */
 export function agentWorkingSince(lines: readonly AgentTranscriptMessage[]): number | undefined {
-  const at = lines.findLastIndex((line) => line.role === MESSAGE_ROLE.ASSISTANT);
+  // Note that the voice's lines on a call are no turn, so the journal is the agent's newest turn whatever the voice said after it.
+  const at = lines.findLastIndex(isAgentTurn);
   const journal = lines[at];
 
+  // Note that a line said on a call opens a turn only where a delegation handed it on, so the talk before an ask counts nothing.
   const opens = (line: AgentTranscriptMessage) =>
-    line.role === MESSAGE_ROLE.USER && line.arrivedIn === undefined && line.sentAt !== undefined;
+    opensTurn(line) && line.arrivedIn === undefined && line.sentAt !== undefined;
 
   // A closed journal, or none, is followed by the line that opens the next turn, where one was sent.
   if (journal === undefined || journal.finishedAt !== undefined) {
@@ -1679,7 +1682,7 @@ export function agentWorkingSince(lines: readonly AgentTranscriptMessage[]): num
   }
 
   // An open journal was opened by the first line after the journal before it.
-  const before = lines.slice(0, at).findLastIndex((line) => line.role === MESSAGE_ROLE.ASSISTANT);
+  const before = lines.slice(0, at).findLastIndex(isAgentTurn);
 
   return lines.slice(before + 1, at).find(opens)?.sentAt ?? journal.startedAt;
 }
@@ -1726,7 +1729,7 @@ const SENTENCE_END = /[.!?](?=\s|$)/u;
 export function finishedReplyLead(
   messages: readonly AgentTranscriptMessage[],
 ): { readonly messageId: string; readonly lead: string } | undefined {
-  const reply = messages.findLast((message) => message.role === MESSAGE_ROLE.ASSISTANT);
+  const reply = messages.findLast(isAgentTurn);
 
   if (reply === undefined) return undefined;
   // Note that only words after the turn's last call are its reply, because words before it were the turn under way.
@@ -1757,8 +1760,10 @@ export function finishedReplyLead(
 export function lastTurnEnding(
   messages: readonly AgentTranscriptMessage[],
 ): { readonly messageId: string; readonly followUps: readonly string[] } | undefined {
-  // Note that a line a turn took in under way may stand after its journal, and only a line no turn took waits on the next.
-  const last = messages.findLast((message) => message.arrivedIn === undefined);
+  // Note that a line a turn took in under way may stand after its journal, and only a line no turn took waits on the next; the voice retelling the turn on a call waits on nothing.
+  const last = messages.findLast(
+    (message) => message.arrivedIn === undefined && !isVoiceLine(message),
+  );
 
   if (last?.role !== MESSAGE_ROLE.ASSISTANT) return undefined;
   const ending = endTurnOf(agentParts(last));
@@ -1768,7 +1773,7 @@ export function lastTurnEnding(
 
 /** Where a line the developer sent stands, before the service's row for it lands. */
 export const SENT_LINE_STATE = {
-  /** On its way, or taken and its row not yet read. */
+  /** On its way: sent, its row not yet read back. */
   PENDING: "pending",
   /** Refused for now: the box has words of its own, so the line keeps its words where it went, with Retry. */
   FAILED: "failed",
@@ -1779,9 +1784,10 @@ export const SENT_LINE_STATE = {
 type SentLineState = (typeof SENT_LINE_STATE)[keyof typeof SENT_LINE_STATE];
 
 /**
- * A line the developer sent that the transcript has not read back yet:
- * drawn as theirs the moment it goes, and let go once the service took it
- * and its own row for it landed.
+ * A line the developer sent that the transcript has not read back yet, as
+ * the host's record of their messages on their way draws it
+ * (`AppTranscript.sending`): drawn as theirs the moment it goes, and let go
+ * once its own row landed, or, refused, once it is sent again or let go.
  */
 export interface SentLine {
   /**
@@ -1807,61 +1813,6 @@ export interface SentLine {
   readonly rewound?: boolean | undefined;
   /** Whether the agent's files go back too as it is taken back before that line, to the snapshot its runner took before the line's turn. */
   readonly restoresFiles?: boolean | undefined;
-  /** Whether the service answered that the agent took it; until it does, a row read back may still be withdrawn. */
-  readonly taken?: boolean | undefined;
-}
-
-/** The ids the developer's rows of a transcript were written under, which a sent line's row is one of once it lands. */
-function landedLines(messages: readonly AgentTranscriptMessage[]): ReadonlySet<string> {
-  return new Set(
-    messages.flatMap((message) =>
-      message.role === MESSAGE_ROLE.USER && message.clientId !== undefined
-        ? [message.clientId]
-        : [],
-    ),
-  );
-}
-
-/**
- * The sent lines the transcript has not read back yet. A line is read back
- * by the row written under its id, which its send key names, so two lines
- * of the same words are each read back by their own row alone; a line
- * refused for good has no row to be read back by.
- */
-export function unreadSentLines(
-  sent: readonly SentLine[],
-  messages: readonly AgentTranscriptMessage[],
-): readonly SentLine[] {
-  const landed = landedLines(messages);
-
-  return sent.filter((line) => line.state === SENT_LINE_STATE.UNDELIVERED || !landed.has(line.id));
-}
-
-/** The sent lines whose row the transcript holds, written under the id their send key names. */
-export function landedSentLines(
-  sent: readonly SentLine[],
-  messages: readonly AgentTranscriptMessage[],
-): readonly SentLine[] {
-  const landed = landedLines(messages);
-
-  return sent.filter((line) => landed.has(line.id));
-}
-
-/**
- * The sent lines the box still holds: all but those the service took whose
- * row has landed. Note that a line whose row was read back is held, undrawn,
- * until its answer comes, because the service writes the row before the agent
- * is handed the line and withdraws it where the agent did not take it, so a
- * refusal may follow the row; and a line refused is held until Retry sends
- * it again, since its row, still drawn as the refusal lands, is on its way out.
- */
-export function heldSentLines(
-  sent: readonly SentLine[],
-  messages: readonly AgentTranscriptMessage[],
-): readonly SentLine[] {
-  const landed = landedLines(messages);
-
-  return sent.filter((line) => line.taken !== true || !landed.has(line.id));
 }
 
 /**

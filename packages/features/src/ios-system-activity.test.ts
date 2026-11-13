@@ -13,7 +13,10 @@ import {
   iosContinuedRouteOf,
   pullRequestActivity,
   SPOTLIGHT_DOMAIN,
+  type SpotlightIndexPort,
+  type SpotlightItem,
   spotlightChanges,
+  spotlightIndexKeeper,
   spotlightItems,
   taskActivity,
   threadActivity,
@@ -25,11 +28,17 @@ import { WORKSPACE_ROLE, type Workspace } from "./workspace-wire.js";
 /**
  * ios-system-activity.test.ts -- what a screen hands the system, Handoff's
  * activity and Spotlight's items, opens that same screen when it comes back
- * to the app; and the index takes only what changed, and lets a workspace's
- * items go once another is chosen.
+ * to the app; and the index takes only what changed, lets a workspace's
+ * items go once another is chosen, and takes a launch's lists even where
+ * the system never answers emptying it.
  */
 
 const READER = "user-ada";
+
+/** Every promise already settling has settled. */
+function settled(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
+}
 
 function workspace(id: string, slug: string, name: string): Workspace {
   return { id, slug, name, role: WORKSPACE_ROLE.MEMBER, github: null };
@@ -211,5 +220,42 @@ describe("the Spotlight index", () => {
       ],
       remove: ["https://vespin.dev/acme/task/task-1", "https://vespin.dev/acme/inbox/item-1"],
     });
+  });
+
+  it("indexes a signed-in launch's lists and each later change, though emptying a fresh index is never answered", async () => {
+    const held = new Map<string, SpotlightItem>();
+
+    const port: SpotlightIndexPort = {
+      replaceAll: async (items) => {
+        held.clear();
+
+        for (const item of items) held.set(item.id, item);
+      },
+      index: async (items) => {
+        for (const item of items) held.set(item.id, item);
+      },
+      remove: async (ids) => {
+        for (const id of ids) held.delete(id);
+      },
+      // Note that the simulator's CoreSpotlight skips a delete-all on an index never written ("no set exists") and its answer never came back to the app.
+      removeAll: () => new Promise<void>(() => undefined),
+    };
+
+    const keep = spotlightIndexKeeper(port, () => undefined);
+    keep(true, spotlightItems({ ...read, workspace: ACME }));
+    await settled();
+
+    expect([...held.keys()]).toEqual([
+      "https://vespin.dev/acme/task/task-1",
+      "https://vespin.dev/acme/inbox/item-1",
+    ]);
+
+    keep(
+      true,
+      spotlightItems({ ...read, tasks: [{ ...INVITES, name: "Resend invites" }], workspace: ACME }),
+    );
+    await settled();
+
+    expect(held.get("https://vespin.dev/acme/task/task-1")?.title).toBe("Resend invites");
   });
 });

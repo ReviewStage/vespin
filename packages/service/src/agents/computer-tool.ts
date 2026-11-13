@@ -1,6 +1,6 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
-import { macOwnerOf } from "@repo/database/models/mac-command-store";
+import { machineOwnerOf } from "@repo/database/models/machine-command-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
@@ -17,10 +17,10 @@ import {
   type ComputerApp,
   type ComputerOutcome,
   type ComputerShot,
-  MAC_COMMAND_KIND,
+  MACHINE_COMMAND_KIND,
   type MacComputerAction,
   macComputerActionSchema,
-} from "@repo/features/mac-command-wire";
+} from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { isRecord, type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
@@ -29,18 +29,18 @@ import { logStoreFailure } from "../http/store-failure.js";
 import { COMMAND_DESCRIPTION } from "./command-description.js";
 import {
   askMac,
-  MAC_COMMAND_STATUS,
-  type MacCommandAnswer,
-  macCommandNotRun,
-} from "./mac-command.js";
+  MACHINE_COMMAND_STATUS,
+  type MachineCommandAnswer,
+  machineCommandNotRun,
+} from "./machine-command.js";
 
 /**
  * computer-tool.ts -- the `computer` tool: an agent sees and uses one app on the developer's own Mac at a time, in the background, through the Mac's computer-use helper.
  *
  * Every agent may call it, the brain, a coding agent, and either's workers,
  * wherever it runs, since the Mac it reaches is the task's assignee's
- * (`macOwnerOf`), as `run_on_mac`'s is. One call is one action, queued as a
- * computer command (`mac-command.ts`'s `askMac`): the Mac asks the developer
+ * (`machineOwnerOf`), as `run_on_mac`'s is. One call is one action, queued as a
+ * computer command (`machine-command.ts`'s `askMac`): the Mac asks the developer
  * about the app the first time it is used, and the call waits for that
  * answer and the action within `COMPUTER_TOOL_TIMEOUT_SECONDS`.
  *
@@ -181,12 +181,17 @@ export const COMPUTER_TOOL = {
     "working: its window as numbered elements and a screenshot, and clicks, typing, keys, " +
     "scrolls, and drags on it. Start with list_apps or get_app_state; act on an element by the " +
     "number the app's last get_app_state gave it, or on a point in its screenshot's pixels, " +
-    "and read the app again after you act, since its numbers change with it. An app not " +
+    "and read the app again after you act, since its numbers change with it. A click answers " +
+    "that it was sent, not that the app took it: an app in the background, a browser above " +
+    "all, may drop a click at a point, so press an element by its number where one serves, " +
+    "and read the app again to see what a click did. An app not " +
     "running is opened behind the developer's windows. The developer's Mac asks them the " +
     "first time an agent uses each app, and they may decline, in which case the call answers " +
     "`not-run`; agents are never offered terminals, password managers, System Settings, or " +
-    `${PRODUCT_NAME}. Use run_on_mac for what a shell can do; use this for what only an app's ` +
-    "window shows or takes.",
+    `${PRODUCT_NAME}. Reach for it last: an integration's tools where one serves the app, ` +
+    "run_on_mac where a shell can do it, and browser for localhost and public pages. Use this " +
+    "for what only an app's window shows or takes, a browser on the developer's Mac among them, " +
+    "such as a page that needs their own signed-in session.",
   inputSchema: COMPUTER_INPUT,
 } as const;
 
@@ -246,7 +251,7 @@ function kept(
 const SHOWN_MEDIA_TYPE = "image/jpeg";
 
 /** What a call that reached the Mac and ran answers: what the action came to, its pictures kept or handed on. */
-type ComputerRan = { readonly status: typeof MAC_COMMAND_STATUS.RAN } & object;
+type ComputerRan = { readonly status: typeof MACHINE_COMMAND_STATUS.RAN } & object;
 
 /** An app as the result names it: its icon kept beside the transcript rather than spelled out. */
 function namedApp(
@@ -265,7 +270,7 @@ function answeredOutcome(
   transcript: ConversationTarget,
   outcome: ComputerOutcome,
 ): Effect.Effect<ComputerRan, never, DatabaseServices> {
-  const ran = { status: MAC_COMMAND_STATUS.RAN };
+  const ran = { status: MACHINE_COMMAND_STATUS.RAN };
 
   if ("done" in outcome) {
     const acted = outcome.app;
@@ -282,7 +287,10 @@ function answeredOutcome(
     return Effect.succeed({ ...ran, apps });
   }
 
-  const [shown, full]: readonly (ComputerShot | undefined)[] = outcome.shots;
+  // Note that each shot keeps its own place, the model's first and the kept one second, and one with no bytes is absent there alone, so neither the model nor the transcript is handed an empty picture or the other's.
+  const [first, second]: readonly (ComputerShot | undefined)[] = outcome.shots;
+  const shown = first?.jpeg === "" ? undefined : first;
+  const full = second?.jpeg === "" ? undefined : second;
 
   return Effect.gen(function* () {
     const app = yield* namedApp(transcript, outcome.app);
@@ -312,28 +320,28 @@ function answeredOutcome(
 /**
  * One `computer` call made in the conversation, whichever agent made it: its
  * input read against the tool's schema and made one action, then run on the
- * Mac of its task's assignee (`macOwnerOf`) as `askMac` runs a command. It
+ * Mac of its task's assignee (`machineOwnerOf`) as `askMac` runs a command. It
  * never fails: what the Mac would not run, or never answered, answers
  * `not-run` with why.
  */
 export function runComputerTool(
   target: ConversationTarget,
   input: UnparsedWireValue,
-): Effect.Effect<MacCommandAnswer | ComputerRan, never, DatabaseServices> {
+): Effect.Effect<MachineCommandAnswer | ComputerRan, never, DatabaseServices> {
   const read = readInput(input);
   const action = Result.isSuccess(read) ? actionOf(read.success) : undefined;
 
   if (action === undefined)
-    return Effect.succeed(macCommandNotRun(COMPUTER_TOOL_REFUSAL.UNREADABLE));
+    return Effect.succeed(machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNREADABLE));
 
   return Effect.gen(function* () {
-    const owner = yield* Effect.result(macOwnerOf(target));
+    const owner = yield* Effect.result(machineOwnerOf(target));
 
     // Note that a read that fails refuses, because an action on a guess could land on the wrong Mac.
-    if (Result.isFailure(owner)) return macCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
+    if (Result.isFailure(owner)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
 
     const answer = yield* askMac(owner.success, {
-      kind: MAC_COMMAND_KIND.COMPUTER,
+      kind: MACHINE_COMMAND_KIND.COMPUTER,
       conversationId: target.conversationId,
       action,
       timeoutSeconds: COMPUTER_TOOL_TIMEOUT_SECONDS,
@@ -345,14 +353,16 @@ export function runComputerTool(
   });
 }
 
-/** The model's copy of a read window in a call's result, where it carries one. */
+/** The model's copy of a read window in a call's result, where it carries one; none for an empty one, which would fail the model's turn. */
 export function computerScreenshot(
   output: UnparsedWireValue,
 ): { readonly mime: string; readonly data: string } | undefined {
   if (!isRecord(output) || !isRecord(output.screenshot)) return undefined;
   const { mime, data } = output.screenshot;
 
-  return Predicate.isString(mime) && Predicate.isString(data) ? { mime, data } : undefined;
+  return Predicate.isString(mime) && Predicate.isString(data) && data !== ""
+    ? { mime, data }
+    : undefined;
 }
 
 /** A call's result as the conversation keeps it: the model's copy of the window without its base64, the kept copy named by id. */
