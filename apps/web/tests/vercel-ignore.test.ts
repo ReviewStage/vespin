@@ -194,6 +194,7 @@ test("a push that changes anything a service installs or builds from is built", 
     "pnpm-lock.yaml",
     "CHANGELOG.md",
     "PRIVACY.md",
+    "apps/web/guides/run-agents.md",
     "vercel.json",
     "scripts/vercel-deployed-paths.mjs",
   ]) {
