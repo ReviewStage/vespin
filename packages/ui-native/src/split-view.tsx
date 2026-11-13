@@ -27,8 +27,9 @@ import {
   toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { type ReactNode, useEffect } from "react";
+import { type ReactElement, type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
+import { BarContent } from "./bar-content.js";
 import type { Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
@@ -121,8 +122,8 @@ export type BarPath = {
 export type ColumnBar = {
   readonly title?: string | undefined;
   readonly leading?: ReactNode | undefined;
-  /** Mail's expand button at the bar's leading edge, which stands the page alone across the window and back. */
-  readonly expand?: BarAction | undefined;
+  /** Glyph acts at the bar's leading edge, sharing one glass, as Mail's expand and compose stand over a message. */
+  readonly lead?: readonly BarAction[] | undefined;
   readonly path?: BarPath | undefined;
   /** A page's main acts as glyphs before its ⋯, as Mail's Reply and Trash stand, sharing the bar's one glass. */
   readonly acts?: readonly BarAction[] | undefined;
@@ -214,7 +215,7 @@ function BarActionButton({ action }: { readonly action: BarAction }) {
  * iPadOS 26 draws them in one shared glass with the ⋯ after them, as Mail
  * groups Reply, Forward and Trash, never a glass of their own each.
  */
-export function BarActItems({ acts }: { readonly acts: readonly BarAction[] }) {
+export function barActItems(acts: readonly BarAction[]): ReactElement[] {
   return acts.map((act) => (
     <ToolbarItem key={act.label} placement="topBarTrailing">
       <BarActionButton action={act} />
@@ -251,7 +252,7 @@ function useSearchWords(search: BarSearch | undefined, searchKey: string | undef
 function barHolds(bar: ColumnBar): boolean {
   return (
     bar.leading !== undefined ||
-    bar.expand !== undefined ||
+    (bar.lead ?? []).length > 0 ||
     (bar.acts ?? []).length > 0 ||
     bar.path !== undefined ||
     bar.menu !== undefined ||
@@ -306,29 +307,29 @@ function Column({
   ) : (
     <Toolbar>
       {stacked}
-      <Toolbar.Content>
+      <BarContent>
         {bar.leading === undefined ? null : (
           <ToolbarItem placement="topBarLeading">{bar.leading}</ToolbarItem>
         )}
-        {bar.expand === undefined ? null : (
-          <ToolbarItem placement="topBarLeading">
-            <BarActionButton action={bar.expand} />
+        {(bar.lead ?? []).map((act) => (
+          <ToolbarItem key={act.label} placement="topBarLeading">
+            <BarActionButton action={act} />
           </ToolbarItem>
-        )}
+        ))}
         {bar.path === undefined ? null : (
           <ToolbarItem placement="principal">
             <PathTitle path={bar.path.path} status={bar.path.status} />
           </ToolbarItem>
         )}
-        <BarActItems acts={bar.acts ?? []} />
-        {bar.menu === undefined ? null : (
-          <ToolbarItem placement="topBarTrailing">
-            <BarMenuItem menu={bar.menu} />
-          </ToolbarItem>
-        )}
+        {barActItems(bar.acts ?? [])}
         {bar.action === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
             <BarActionButton action={bar.action} />
+          </ToolbarItem>
+        )}
+        {bar.menu === undefined ? null : (
+          <ToolbarItem placement="topBarTrailing">
+            <BarMenuItem menu={bar.menu} />
           </ToolbarItem>
         )}
         {(bar.foot ?? []).map((action) => (
@@ -336,7 +337,7 @@ function Column({
             <BarActionButton action={action} />
           </ToolbarItem>
         ))}
-      </Toolbar.Content>
+      </BarContent>
     </Toolbar>
   );
 

@@ -34,6 +34,7 @@ import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
+import { BarContent } from "./bar-content.js";
 import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage } from "./glyph.js";
@@ -43,10 +44,10 @@ import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
 import {
   BAR_ITEM_MENU,
-  BarActItems,
   type BarAction,
   type BarMenu,
   BarMenuItem,
+  barActItems,
 } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
@@ -432,17 +433,17 @@ export function ThreadPage(props: ThreadPageProps) {
         </ScrollView>
         {foot}
       </VStack>
-      <Toolbar.Content>
+      <BarContent>
         <ToolbarItem placement="principal">
           <PathTitle path={path} status={status} actions={pathActions} />
         </ToolbarItem>
-        <BarActItems acts={acts} />
+        {barActItems(acts)}
         {menu === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
             <BarMenuItem menu={menu} />
           </ToolbarItem>
         )}
-      </Toolbar.Content>
+      </BarContent>
     </Toolbar>
   );
 }

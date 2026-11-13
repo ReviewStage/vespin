@@ -66,7 +66,9 @@ function keptViews(
  * moves, because the tab's route answers a few renders after the press,
  * which iPadOS 26 drew as most of a second. The detail's bar leads with
  * Mail's expand button, which stands the page alone across the window and
- * back, and the page's main acts stand in the same bar.
+ * back, with New task's compose beside it, as Mail keeps both over the
+ * message rather than over its list; the page's main acts stand in the same
+ * bar.
  */
 export function AppSplit({
   place,
@@ -112,9 +114,9 @@ export function AppSplit({
       <SplitView
         {...sidebar}
         content={<KeptColumns shown={standing} views={keptViews(kept, standing, front)} />}
-        contentBar={{ ...columns?.contentBar, action: compose }}
+        contentBar={columns?.contentBar}
         detail={<InFrontProvider value={front}>{columns?.detail}</InFrontProvider>}
-        detailBar={{ ...columns?.detailBar, expand }}
+        detailBar={{ ...columns?.detailBar, lead: [expand, compose] }}
         searchKey={standing}
         detailOnly={detailOnly}
         onDetailOnlyChange={setDetailOnly}
