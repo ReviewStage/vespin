@@ -9,14 +9,6 @@ import {
   SplitView,
 } from "@repo/ui-native";
 import { useEffect, useState } from "react";
-import {
-  clearDetail,
-  DetailPlaceProvider,
-  type HeldPage,
-  keepDetailPath,
-  PageKeyProvider,
-  useDetailStack,
-} from "../detail-stack.js";
 import { InFrontProvider, type PlaceColumns, usePlaceColumns } from "../place-columns.js";
 import {
   SIDEBAR_PLACE,
@@ -24,7 +16,7 @@ import {
   useAppSidebar,
   useComposeAction,
 } from "./app-sidebar.js";
-import { PushedPageView } from "./pushed-pages.js";
+import { useDetailStackColumn } from "./detail-stack-column.js";
 import { useSidebarTasks } from "./task-screens.js";
 
 /** A sidebar pick's place, and the place the route stood in when it was made. */
@@ -54,27 +46,6 @@ function keptViews(
       },
     ];
   });
-}
-
-/**
- * The pages a place pushed over its detail, each in its place and standing
- * in front only where it is the one on top and the split view stands.
- */
-function stackPages(place: SidebarPlace, pages: readonly HeldPage[], front: boolean) {
-  const top = pages.at(-1)?.key;
-
-  return pages.map(({ key, page }) => ({
-    key,
-    view: (
-      <DetailPlaceProvider value={place}>
-        <PageKeyProvider value={key}>
-          <InFrontProvider value={front && key === top}>
-            <PushedPageView page={page} />
-          </InFrontProvider>
-        </PageKeyProvider>
-      </DetailPlaceProvider>
-    ),
-  }));
 }
 
 /**
@@ -143,14 +114,12 @@ export function AppSplit({
     hold({ place: picked, over: place }),
   );
 
-  const stack = useDetailStack(standing);
-  const root = columns?.root;
-  // Note that pages pushed over a detail no longer standing are let go, so a row picked again later opens on its own page alone.
-  const stale = stack.pages.length > 0 && stack.over !== root;
-  useEffect(() => {
-    if (stale) clearDetail(standing);
-  }, [stale, standing]);
-  const pages = stale ? [] : stack.pages;
+  // Note that a place whose root has handed nothing yet names no root, so the pages it pushed while the window stood two columns stay over its detail.
+  const stack = useDetailStackColumn(
+    standing,
+    columns === undefined ? undefined : { id: columns.root },
+    front,
+  );
 
   return (
     <Screen>
@@ -158,16 +127,9 @@ export function AppSplit({
         {...sidebar}
         content={<KeptColumns shown={standing} views={keptViews(kept, standing, front)} />}
         contentBar={columns?.contentBar}
-        detail={
-          <DetailPlaceProvider value={standing}>
-            <InFrontProvider value={front && pages.length === 0}>{columns?.detail}</InFrontProvider>
-          </DetailPlaceProvider>
-        }
+        detail={stack.wrap(columns?.detail)}
         detailBar={{ ...columns?.detailBar, lead: [expand, compose] }}
-        detailStack={{
-          pages: stackPages(standing, pages, front),
-          onPathChange: (path) => keepDetailPath(standing, path),
-        }}
+        detailStack={stack.detailStack}
         searchKey={standing}
         detailOnly={detailOnly}
         onDetailOnlyChange={setDetailOnly}

@@ -12,6 +12,8 @@ import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
 import { placeOfRoute, SIDEBAR_PLACE } from "../../screens/app-sidebar.js";
 import { AppSplit } from "../../screens/app-split.js";
+import { PageDrawerProvider } from "../../screens/detail-stack-column.js";
+import { PushedPageView } from "../../screens/pushed-pages.js";
 import { useThreeColumns, useWindowSizeClass } from "../../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 
@@ -95,8 +97,8 @@ export default function TabsLayout() {
   const pathname = usePathname();
   const conversation = iosRouteHidesTabs(pathname);
   const { tab: standing, atRoot } = useTabStanding(useSegments(), appSidebar);
-  // Note that a page open in the detail's stack stays in front as the window leaves three columns, pushed over the window instead.
-  useStackToRoutes(appSidebar, placeOfRoute(standing));
+  // Note that a page open in the detail's stack stays in front as the window narrows past its place's stack, pushed over the window instead.
+  useStackToRoutes({ threeColumns: appSidebar, regular: !iconOnly }, placeOfRoute(standing));
   // Note that a tab under the split view leaves its content clear, because NativeTabs paints each tab in the navigation theme's light ground, which flashed over the split as a page pushed.
   const underSplit = appSidebar ? UNDER_SPLIT_SCREEN.contentStyle : undefined;
 
@@ -151,11 +153,14 @@ export default function TabsLayout() {
   );
 
   // Note that the tabs stand in the same place with or without the split view, so a rotation across the line keeps every tab's stack.
+  // Note that the pages a detail's stack pushes are drawn by one drawer handed to every split view, the app sidebar's and each tab root's alike.
   return (
-    <SplitOverTabs
-      tabs={tabs}
-      split={appSidebar ? <AppSplit place={placeOfRoute(standing)} front={atRoot} /> : undefined}
-      front={atRoot}
-    />
+    <PageDrawerProvider value={PushedPageView}>
+      <SplitOverTabs
+        tabs={tabs}
+        split={appSidebar ? <AppSplit place={placeOfRoute(standing)} front={atRoot} /> : undefined}
+        front={atRoot}
+      />
+    </PageDrawerProvider>
   );
 }

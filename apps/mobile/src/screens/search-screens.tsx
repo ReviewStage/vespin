@@ -29,6 +29,7 @@ import {
 } from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useStackRoot } from "../detail-stack.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useHandColumns } from "../place-columns.js";
@@ -408,6 +409,7 @@ function SearchSplitScreen({
     picking.choose,
   );
 
+  useStackRoot(SIDEBAR_PLACE.SEARCH, picking.picked?.id);
   useHandColumns(SIDEBAR_PLACE.SEARCH, {
     content: results,
     contentBar: {

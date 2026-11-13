@@ -80,7 +80,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { PUSHED_PAGE, useDetailPush } from "../detail-stack.js";
+import { PUSHED_PAGE, useDetailPush, useStackRoot } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
@@ -107,6 +107,7 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useListColumn } from "./app-sidebar.js";
+import { useDetailStackColumn } from "./detail-stack-column.js";
 import {
   NO_THREAD_ACTS,
   OpenAskCard,
@@ -1092,6 +1093,9 @@ function InboxSplitScreen({
   const detailBar = selected === undefined ? { acts: NO_THREAD_ACTS } : undefined;
 
   const first = useListColumn(list);
+  useStackRoot(SIDEBAR_PLACE.INBOX, selected);
+  // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
+  const stack = useDetailStackColumn(SIDEBAR_PLACE.INBOX, { id: selected }, true);
   useHandColumns(
     SIDEBAR_PLACE.INBOX,
     threeColumns
@@ -1104,7 +1108,12 @@ function InboxSplitScreen({
       <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
       {threeColumns ? null : (
         <Screen>
-          <SplitView {...first} detail={detail} detailBar={detailBar} />
+          <SplitView
+            {...first}
+            detail={stack.wrap(detail)}
+            detailBar={detailBar}
+            detailStack={stack.detailStack}
+          />
         </Screen>
       )}
       {remind.sheet}

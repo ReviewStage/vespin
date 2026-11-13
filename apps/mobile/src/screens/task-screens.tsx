@@ -115,7 +115,7 @@ import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
-import { PUSHED_PAGE, useDetailLeave, useDetailPush } from "../detail-stack.js";
+import { PUSHED_PAGE, useDetailLeave, useDetailPush, useStackRoot } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
@@ -159,6 +159,7 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, type SidebarTasks, useListColumn } from "./app-sidebar.js";
+import { useDetailStackColumn } from "./detail-stack-column.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -2019,6 +2020,9 @@ function TasksSplitScreen({
   };
 
   const first = useListColumn(list);
+  useStackRoot(SIDEBAR_PLACE.TASKS, selected);
+  // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
+  const stack = useDetailStackColumn(SIDEBAR_PLACE.TASKS, { id: selected }, true);
   useHandColumns(
     SIDEBAR_PLACE.TASKS,
     threeColumns
@@ -2031,7 +2035,12 @@ function TasksSplitScreen({
       <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
       {threeColumns ? null : (
         <Screen>
-          <SplitView {...first} detail={detail} detailBar={detailBar} />
+          <SplitView
+            {...first}
+            detail={stack.wrap(detail)}
+            detailBar={detailBar}
+            detailStack={stack.detailStack}
+          />
         </Screen>
       )}
       <StatusQuestionAsk question={status} />
