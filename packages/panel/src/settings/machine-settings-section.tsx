@@ -1,8 +1,7 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
-import type { MachineChangeParams } from "@repo/features/agent-view";
+import type { HostDoneAnswerView, MachineChangeParams } from "@repo/features/agent-view";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
 import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
-import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import {
   MACHINE_COMMAND_MODE_LIST,
   type MachineCommandMode,
@@ -16,7 +15,6 @@ import {
 } from "@repo/features/machine-name";
 import {
   MACHINE_SETTINGS_WORDS,
-  MACHINE_STANDING_WORDS,
   MACHINES_WORDS,
   removeCommandMachineQuestion,
 } from "@repo/features/machines-settings-words";
@@ -25,25 +23,14 @@ import { ACT_UNREACHED_WORDS, readFailedWords, readingWords } from "@repo/featur
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT, MACHINE_COMMAND_MODE_LABEL } from "@repo/settings";
 import {
-  APP_ICON_SIZE,
-  AppIcon,
   CONFIRM_LOSS,
   ConfirmDialog,
-  IconButton,
   SETTINGS_ROW_INDENT,
-  SETTINGS_ROW_STATE,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
-  SettingsRow,
-  SettingsRowMark,
   type SettingsRowSkeletonLayout,
-  SettingsRowStateLine,
   SettingsRowsSkeleton,
   SettingsSection,
-  STATUS_TONE,
-  Switch,
-  Tooltip,
-  TrashIcon,
   useConfirmDialog,
 } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
@@ -55,14 +42,16 @@ import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { machinesQuery, machinesRetryMutation } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
-import { macAppIconAddress, useAllowedApps } from "../tasks/mac-apps.js";
-import { DeviceGlyph } from "../tasks/runs-on.js";
-import { showToast } from "../toast.js";
+import { useAllowedApps } from "../tasks/mac-apps.js";
 import { appStateQuery, selectAccount, selectExperiment } from "../use-app-state.js";
+import { type AllowedApp, AllowedAppRow } from "./allowed-app-row.js";
+import { MachineMark, MachineStandingLine } from "./machine-standing.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
-import { PickerRow } from "./picker-row.js";
+import { refusalToast, rowWrite, type SettingRefusal } from "./row-write.js";
+import { SelectRow } from "./select-row.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
+import { SwitchRow } from "./switch-row.js";
 
 /**
  * machine-settings-section.tsx -- Settings › Machines' What agents may do: each of the member's machines with its own say over agents' terminal commands and apps, changed from any device or the web.
@@ -74,7 +63,11 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
  * settings, inset as its parts: how agents' terminal commands run there,
  * and, where the reader has Computer use on, whether agents may use its
  * apps and the apps they use unasked, each by its icon where the machine
- * drew one, with a Remove. Each change is the machine's own, kept by the
+ * drew one, with a Remove. Each row is the one Settings draws the same
+ * thing with elsewhere: the machine's mark and line as Your machines draws
+ * them (`machine-standing.tsx`), the mode's picker and the switch as every
+ * setting's (`SelectRow`, `SwitchRow`), and each app as This Mac lists it
+ * (`allowed-app-row.tsx`). Each change is the machine's own, kept by the
  * service, drawn at once, and taken by the machine as it lands, or as it
  * next joins where it is offline; This Mac's own page edits the same values.
  *
@@ -115,6 +108,11 @@ function modeOf(raw: string): MachineCommandMode | undefined {
   return MACHINE_COMMAND_MODE_LIST.find((mode) => mode === raw);
 }
 
+/** Why the service refused a machine's change, where it did. */
+function changeRefused(answer: HostDoneAnswerView): string | undefined {
+  return "failure" in answer ? MACHINE_SETTINGS_WORDS.CHANGE_FAILED : undefined;
+}
+
 /** A machine as the list of machines names it (`machineName`). */
 function listedOf(machine: MachineLine): ListedMachine {
   return {
@@ -132,64 +130,12 @@ interface RemoveAsked {
   readonly label: string;
 }
 
-/** A machine's line under its name: Online after Runs on's dot, or Offline tinted, and then what it is. */
-function StandingLine({ machine }: { machine: MachineLine }): React.JSX.Element {
-  const kind = DEVICE_PLATFORM_NAME[machine.platform ?? DEVICE_PLATFORM.DARWIN];
-
-  if (machine.listening) {
-    return (
-      <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-        {`${MACHINE_STANDING_WORDS[DEVICE_STANDING.ONLINE]} · ${kind}`}
-      </SettingsRowStateLine>
-    );
-  }
-
-  return (
-    <>
-      <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
-        {MACHINE_STANDING_WORDS[DEVICE_STANDING.OFFLINE]}
-      </SettingsRowStateLine>
-      {` · ${kind}`}
-    </>
-  );
-}
-
-/** One app a machine lets agents use unasked, by its icon and name where the machine drew them, and its Remove. */
-function AllowedAppRow({
-  app,
-  name,
-  iconPng,
-  onRemove,
-}: {
-  app: string;
-  name: string | undefined;
-  iconPng: string | undefined;
-  onRemove: () => void;
-}): React.JSX.Element {
-  const label = `Remove ${name ?? app}`;
-
-  return (
-    <SettingsRow
-      indent={SETTINGS_ROW_INDENT.MARK}
-      leading={<AppIcon src={macAppIconAddress(iconPng)} size={APP_ICON_SIZE.LEAD} />}
-      label={name ?? app}
-      description={name === undefined ? undefined : app}
-      end={() => (
-        <Tooltip label={label}>
-          <IconButton icon={<TrashIcon />} label={label} onClick={onRemove} />
-        </Tooltip>
-      )}
-    />
-  );
-}
-
-/** One machine: its row, with Remove where it may be removed here, and its settings inset under it. */
+/** One machine: its row, with Remove where it may be removed here, and its settings inset under it, each written as its row writes a setting. */
 function MachineRows({
   machine,
   label,
   apps,
   removable,
-  onChange,
   onRemove,
   locked,
 }: {
@@ -197,18 +143,34 @@ function MachineRows({
   /** What the list calls the machine (`machineName`). */
   label: string;
   /** How the machine names and draws its apps, by the app they are allowed by; none where Computer use is off, which draws no apps. */
-  apps: ReadonlyMap<string, { readonly name: string; readonly iconPng?: string }> | undefined;
+  apps: ReadonlyMap<string, AllowedApp> | undefined;
   removable: boolean;
-  onChange: (change: Omit<MachineChangeParams, "id">) => void;
   onRemove: () => void;
   /** Whether a removal is out, which every Remove waits out. */
   locked: boolean;
 }): React.JSX.Element | null {
+  const commands = useMutation(actMutation(ACT_KIND.MACHINES_CHANGE));
+
+  // Note that a switch puts itself back where its write is refused, and a toast says why, as every setting's switch does.
+  const appsSwitch = useMutation({
+    ...actMutation(ACT_KIND.MACHINES_CHANGE),
+    onSettled: refusalToast(changeRefused),
+  });
+
+  const { mutateAsync: sendRemoveApp } = useMutation(actMutation(ACT_KIND.MACHINES_CHANGE));
   const settings = machine.settings;
 
   if (settings === undefined) return null;
+  const { id } = machine;
   // Note that a switch a desktop older than it never carried up stands on, as that desktop's own setting starts.
   const appsOn = settings.computerUse !== false;
+
+  const removeApp = async (bundleId: string): Promise<SettingRefusal | undefined> => {
+    const answer = await sendRemoveApp({ id, removeApp: bundleId });
+    const words = changeRefused(answer);
+
+    return words === undefined ? undefined : { words, cause: answer };
+  };
 
   return (
     <>
@@ -227,64 +189,52 @@ function MachineRows({
             : []
         }
         row={{
-          leading: (
-            <SettingsRowMark>
-              <DeviceGlyph device={{ platform: machine.platform ?? DEVICE_PLATFORM.DARWIN }} />
-            </SettingsRowMark>
-          ),
+          leading: <MachineMark platform={machine.platform ?? DEVICE_PLATFORM.DARWIN} />,
           label: <ReplayMask>{label}</ReplayMask>,
-          description: <StandingLine machine={machine} />,
+          description: (
+            <MachineStandingLine
+              standing={machine.listening ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE}
+              platform={machine.platform ?? DEVICE_PLATFORM.DARWIN}
+            />
+          ),
         }}
       />
-      <PickerRow
+      <SelectRow
         indent={SETTINGS_ROW_INDENT.MARK}
         label={MACHINE_SETTINGS_WORDS.COMMANDS}
         labelReplayUnmasked
         value={settings.commandMode}
-        valueLabel={MACHINE_COMMAND_MODE_LABEL[settings.commandMode]}
-        rows={MODE_OPTIONS.map((option) => ({ id: option.value, label: option.label }))}
-        noMatch=""
-        replayUnmasked
-        onPick={(id) => {
-          const commandMode = modeOf(id);
-
-          if (commandMode !== undefined && commandMode !== settings.commandMode) {
-            onChange({ commandMode });
-          }
-        }}
+        options={MODE_OPTIONS}
+        parse={modeOf}
+        write={rowWrite(commands, {
+          ask: (commandMode: MachineCommandMode): MachineChangeParams => ({ id, commandMode }),
+          refused: changeRefused,
+          drawn: (asked) => asked.commandMode ?? settings.commandMode,
+        })}
       />
       {apps === undefined ? null : (
         <>
-          <SettingsRow
+          <SwitchRow
             indent={SETTINGS_ROW_INDENT.MARK}
             label={MACHINE_SETTINGS_WORDS.APPS}
-            description={MACHINE_SETTINGS_WORDS.APPS_DETAIL}
-            labelsControl
-          >
-            {(control) => (
-              <Switch
-                id={control.controlId}
-                checked={appsOn}
-                label={MACHINE_SETTINGS_WORDS.APPS}
-                describedBy={control["aria-describedby"]}
-                onChange={(computerUse) => onChange({ computerUse })}
-              />
-            )}
-          </SettingsRow>
+            labelReplayUnmasked
+            detail={MACHINE_SETTINGS_WORDS.APPS_DETAIL}
+            checked={appsOn}
+            write={rowWrite(appsSwitch, {
+              ask: (computerUse: boolean): MachineChangeParams => ({ id, computerUse }),
+              refused: changeRefused,
+              drawn: (asked) => asked.computerUse ?? appsOn,
+            })}
+          />
           {appsOn
-            ? settings.alwaysAllowedApps.map((app) => {
-                const look = apps.get(app);
-
-                return (
-                  <AllowedAppRow
-                    key={app}
-                    app={app}
-                    name={look?.name}
-                    iconPng={look?.iconPng}
-                    onRemove={() => onChange({ removeApp: app })}
-                  />
-                );
-              })
+            ? settings.alwaysAllowedApps.map((bundleId) => (
+                <AllowedAppRow
+                  key={bundleId}
+                  indent={SETTINGS_ROW_INDENT.MARK}
+                  app={apps.get(bundleId) ?? { bundleId, name: bundleId }}
+                  onRemove={removeApp}
+                />
+              ))
             : null}
         </>
       )}
@@ -307,7 +257,6 @@ export function MachineSettingsSection({
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.COMPUTER_USE) }).data === true;
 
   const allowed = useAllowedApps(signedIn);
-  const { mutateAsync: sendChange } = useMutation(actMutation(ACT_KIND.MACHINES_CHANGE));
 
   const { mutateAsync: sendRemove, ...removingWrite } = useMutation(
     actMutation(ACT_KIND.MACHINES_REMOVE),
@@ -329,21 +278,6 @@ export function MachineSettingsSection({
     confirmFailure(FAILURE_SURFACE.MACHINE_REMOVE),
   );
 
-  /** A machine changed as asked, drawn at once by the host, and a toast saying so where the service refused it or never answered. */
-  const change = (machine: MachineLine, changed: Omit<MachineChangeParams, "id">) => {
-    void sendChange({ id: machine.id, ...changed })
-      .catch(() => undefined)
-      .then((answer) => {
-        if (answer !== undefined && !("failure" in answer)) return;
-        showToast({
-          words: MACHINE_SETTINGS_WORDS.CHANGE_FAILED,
-          replayUnmasked: true,
-          tone: STATUS_TONE.DANGER,
-          failure: { surface: FAILURE_SURFACE.MACHINE_CHANGE, cause: answer },
-        });
-      });
-  };
-
   const machines = read.data?.filter((machine) => machine.settings !== undefined);
   const naming: ThisMac = thisMac;
   const listed = machines?.map(listedOf) ?? [];
@@ -352,13 +286,10 @@ export function MachineSettingsSection({
   const looks = new Map(
     allowed.machines.map((each) => [
       each.deviceId,
-      new Map(
+      new Map<string, AllowedApp>(
         (each.looks ?? []).map((look) => [
           look.app,
-          {
-            name: look.name,
-            ...(look.iconPng === undefined ? undefined : { iconPng: look.iconPng }),
-          },
+          { bundleId: look.app, name: look.name, iconPng: look.iconPng },
         ]),
       ),
     ]),
@@ -394,7 +325,6 @@ export function MachineSettingsSection({
                   label={label}
                   apps={computerUse ? (looks.get(machine.id) ?? new Map()) : undefined}
                   removable={!machine.host && !own}
-                  onChange={(changed) => change(machine, changed)}
                   onRemove={() => {
                     setAsked({ accountId, machine, label });
                     removing.ask();

@@ -10,21 +10,15 @@ import {
   type SettingsRowsInput,
 } from "@repo/settings";
 import {
-  APP_ICON_SIZE,
-  AppIcon,
   BUTTON_VARIANT,
   Button,
   ErrorState,
-  IconButton,
   SETTINGS_ROW_STATE,
   SettingsLine,
   SettingsRow,
   SettingsRowStateLine,
   SettingsSection,
-  Tooltip,
-  TrashIcon,
 } from "@repo/ui";
-import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
@@ -32,6 +26,7 @@ import { actFailureWords, askAct } from "../act.js";
 import { refusalShown, unreadShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { appStateIn, selectAppSettingsView } from "../use-app-state.js";
+import { AllowedAppRow } from "./allowed-app-row.js";
 import type { SettingRefusal } from "./row-write.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import type { SettingsWrites } from "./writes.js";
@@ -75,47 +70,6 @@ const GRANTS = [
   label: string;
   missing: string;
 }[];
-
-/** An app's icon as the Mac sent it, a PNG's base64, as an address; none where it sent none. */
-function iconAddress(iconPng: string | undefined): string | undefined {
-  return iconPng === undefined ? undefined : `data:image/png;base64,${iconPng}`;
-}
-
-/** One app allowed without asking, by its icon and name, and its Remove, busy until the setting is written, and why where the write was refused. */
-function AllowedApp({
-  app,
-  onRemove,
-}: {
-  app: ComputerUseStatus["apps"][number];
-  onRemove: (bundleId: string) => Promise<SettingRefusal | undefined>;
-}): React.JSX.Element {
-  // A Remove that did not answer, as the row says it.
-  const remove = useAsyncAction(
-    (rejected): SettingRefusal => ({ words: rejectionWords(rejected), cause: rejected }),
-  );
-
-  const label = `Remove ${app.name}`;
-
-  return (
-    <SettingsRow
-      leading={<AppIcon src={iconAddress(app.iconPng)} size={APP_ICON_SIZE.LEAD} />}
-      label={app.name}
-      description={app.bundleId}
-      error={refusalShown(remove.refusal, FAILURE_SURFACE.SETTING_WRITE)}
-      end={() => (
-        <Tooltip label={label}>
-          <IconButton
-            icon={<TrashIcon />}
-            label={label}
-            busy={remove.running}
-            busyLabel={`Removing ${app.name}`}
-            onClick={() => void remove.run(() => onRemove(app.bundleId))}
-          />
-        </Tooltip>
-      )}
-    />
-  );
-}
 
 export function ComputerUseSection({
   view,
@@ -259,7 +213,7 @@ export function ComputerUseSection({
             None yet. Choose Always allow when an agent asks to use an app, and it stands here.
           </SettingsLine>
         ) : (
-          apps.map((app) => <AllowedApp key={app.bundleId} app={app} onRemove={remove} />)
+          apps.map((app) => <AllowedAppRow key={app.bundleId} app={app} onRemove={remove} />)
         )}
       </SettingsSection>
     </>

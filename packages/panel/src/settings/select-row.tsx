@@ -1,5 +1,11 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import type { ChipWidth, FootRow, RowActions, SettingsRowDensity } from "@repo/ui";
+import type {
+  ChipWidth,
+  FootRow,
+  RowActions,
+  SettingsRowDensity,
+  SettingsRowIndent,
+} from "@repo/ui";
 import type { ShownError } from "@repo/ui/reported-failure";
 import { refusalShown } from "../failure-report.js";
 import { PickerRow } from "./picker-row.js";
@@ -27,6 +33,7 @@ export function SelectRow<Value extends string | number>({
   anchor,
   busy: restBusy,
   density,
+  indent,
   width,
   error,
   action,
@@ -69,6 +76,8 @@ export function SelectRow<Value extends string | number>({
   busy?: boolean;
   /** How the row stands; in a settings card where none is named. */
   density?: SettingsRowDensity | undefined;
+  /** Whether the row stands inset under the row above, one of its things. */
+  indent?: SettingsRowIndent | undefined;
   /** How wide its chip stands; the settings column where none is named. */
   width?: ChipWidth | undefined;
   /** What stops the caller's own save at this row, said where no write of the row's was refused. */
@@ -91,6 +100,7 @@ export function SelectRow<Value extends string | number>({
       saves={write?.savedAt}
       error={refusalShown(write?.refusal, FAILURE_SURFACE.SETTING_WRITE) ?? error}
       density={density}
+      indent={indent}
       width={width}
       action={action}
       value={String(value)}

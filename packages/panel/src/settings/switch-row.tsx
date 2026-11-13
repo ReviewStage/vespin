@@ -1,5 +1,11 @@
 import { searchAnchorProps } from "@repo/settings/settings-anchors";
-import { SavedTick, SettingsRow, type SettingsRowDensity, Switch } from "@repo/ui";
+import {
+  SavedTick,
+  SettingsRow,
+  type SettingsRowDensity,
+  type SettingsRowIndent,
+  Switch,
+} from "@repo/ui";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { useEffect } from "react";
 import type { RowChange } from "./row-write.js";
@@ -25,6 +31,7 @@ export function SwitchRow({
   disabled,
   locked,
   density,
+  indent,
   write,
   onChange,
 }: RowChange<boolean> & {
@@ -42,6 +49,8 @@ export function SwitchRow({
   locked?: string | undefined;
   /** How the row stands; in a settings card where none is named. */
   density?: SettingsRowDensity | undefined;
+  /** Whether the row stands inset under the row above, one of its things. */
+  indent?: SettingsRowIndent | undefined;
 }): React.JSX.Element {
   const ahead = write?.ahead;
   const agreed = write !== undefined && !write.busy && ahead?.value === checked;
@@ -57,6 +66,7 @@ export function SwitchRow({
       adornment={<SavedTick saves={write?.savedAt ?? 0} />}
       description={detail}
       density={density}
+      indent={indent}
       labelsControl
     >
       {(control) => (

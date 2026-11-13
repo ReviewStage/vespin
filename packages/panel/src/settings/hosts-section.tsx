@@ -1,11 +1,11 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
 import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
-import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import type { HostLine } from "@repo/features/host-live";
 import { HOST_UNINSTALL_COMMAND, hostInstallCommand } from "@repo/features/host-wire";
 import { isThisMac, type ListedMachine, machineName, THIS_MAC } from "@repo/features/machine-name";
 import {
+  type HostStanding,
   MACHINE_STANDING_WORDS,
   MACHINES_WORDS,
   removeMachineQuestion,
@@ -37,9 +37,7 @@ import {
   SettingsBlock,
   SettingsLine,
   SettingsRow,
-  SettingsRowMark,
   type SettingsRowSkeletonLayout,
-  type SettingsRowState,
   SettingsRowStateLine,
   SettingsRowsSkeleton,
   SettingsSection,
@@ -65,11 +63,11 @@ import { type PresenceBook, presenceStanding, useDevicePresence } from "../devic
 import { confirmFailure } from "../failure-report.js";
 import { hostsQuery, hostsRetryMutation } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
-import { DeviceGlyph } from "../tasks/runs-on.js";
 import { showToast } from "../toast.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
 import { MachineSettingsSection } from "./machine-settings-section.js";
+import { MachineMark, MachineStandingLine } from "./machine-standing.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
@@ -180,52 +178,23 @@ function machineOf(host: HostLine): ListedMachine {
   return { deviceId: host.id, name: host.name, machineId: host.machineId, model: host.model };
 }
 
-/** What each standing a host's line says leads with, and its tint: online after the finished session's dot, setting up plain, offline and failed tinted. */
-const STANDING_LINE = {
-  [DEVICE_STANDING.ONLINE]: {
-    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.ONLINE],
-    state: SETTINGS_ROW_STATE.CONNECTED,
-  },
-  [DEVICE_STANDING.OFFLINE]: {
-    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.OFFLINE],
-    state: SETTINGS_ROW_STATE.ATTENTION,
-  },
-  [DEVICE_STANDING.SETTING_UP]: {
-    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.SETTING_UP],
-    state: SETTINGS_ROW_STATE.PLAIN,
-  },
-  [DEVICE_STANDING.FAILED]: {
-    words: MACHINE_STANDING_WORDS[DEVICE_STANDING.FAILED],
-    state: SETTINGS_ROW_STATE.ATTENTION,
-  },
-} as const;
-
 /**
- * What a host's line leads with, and its tint, as every surface reads the
- * host (`presenceStanding`): setting up for a host that just joined and is
- * not read yet, offline for one the read does not name, though it is the
+ * Where a host stands, as every surface reads the host
+ * (`presenceStanding`): setting up for a host that just joined and is not
+ * read yet, offline for one the read does not name, though it is the
  * account's own, and none while its standing cannot be told.
  */
-function standingOf(
-  host: HostLine,
-  book: PresenceBook,
-  joined: boolean,
-): { readonly words: string; readonly state: SettingsRowState } | undefined {
+function standingOf(host: HostLine, book: PresenceBook, joined: boolean): HostStanding | undefined {
   const standing =
     presenceStanding(book, host.id) ??
     (joined ? DEVICE_STANDING.SETTING_UP : DEVICE_STANDING.OFFLINE);
 
   return standing === DEVICE_STANDING.UNKNOWN || standing === DEVICE_STANDING.CHECKING
     ? undefined
-    : STANDING_LINE[standing];
+    : standing;
 }
 
-/**
- * A host's line under its name, its standing first, as Integrations leads with
- * Connected, and then what it is. Note that an online line draws its words
- * inside the dot's line, because words after it sit off the dot's baseline,
- * and a tinted one tints its standing alone.
- */
+/** A host's line under its name, its standing first, as Integrations leads with Connected, and then what it is (`MachineStandingLine`). */
 function StandingLine({
   host,
   book,
@@ -236,33 +205,7 @@ function StandingLine({
   /** Whether the host joined while the page stands. */
   joined: boolean;
 }): React.JSX.Element {
-  // Note that a service older than platforms listed only Linux servers.
-  const kind = DEVICE_PLATFORM_NAME[host.platform ?? DEVICE_PLATFORM.LINUX];
-  const standing = standingOf(host, book, joined);
-
-  if (standing === undefined) return <>{kind}</>;
-
-  if (standing.state === SETTINGS_ROW_STATE.CONNECTED) {
-    const line = `${standing.words} · ${kind}`;
-
-    return <SettingsRowStateLine state={standing.state}>{line}</SettingsRowStateLine>;
-  }
-
-  return (
-    <>
-      <SettingsRowStateLine state={standing.state}>{standing.words}</SettingsRowStateLine>
-      {` · ${kind}`}
-    </>
-  );
-}
-
-/** A machine's mark, by its platform, as Runs on draws it. */
-function MachineMark({ platform }: { platform: HostLine["platform"] }): React.JSX.Element {
-  return (
-    <SettingsRowMark>
-      <DeviceGlyph device={{ platform: platform ?? DEVICE_PLATFORM.LINUX }} />
-    </SettingsRowMark>
-  );
+  return <MachineStandingLine standing={standingOf(host, book, joined)} platform={host.platform} />;
 }
 
 /** What This Mac's switch is called, and what it says while off. */
@@ -568,9 +511,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   const askRemove = (host: HostLine, label: string) => {
     // Note that a host the sweep marked away hears of its removal only once it is back, whatever its setup says.
     const offline =
-      host.away === true ||
-      standingOf(host, book, joinedNow(host))?.words ===
-        MACHINE_STANDING_WORDS[DEVICE_STANDING.OFFLINE];
+      host.away === true || standingOf(host, book, joinedNow(host)) === DEVICE_STANDING.OFFLINE;
 
     setAsked({ accountId, host, label, offline });
     removing.ask();
