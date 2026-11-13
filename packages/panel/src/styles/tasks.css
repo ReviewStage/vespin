@@ -633,9 +633,9 @@
 }
 
 .cloud-browser-cursor[data-shown]:not([data-still]) .cloud-browser-cursor-sway {
-  /* One smooth sway there and back each 3s, starting upright midway through
+  /* One smooth sway there and back each 2s, starting upright midway through
      its first leg, as the agent's cursor on a Mac sways (ComputerUse.swift). */
-  animation: cloud-browser-cursor-sway 1.5s ease-in-out -0.75s infinite alternate;
+  animation: cloud-browser-cursor-sway 1s ease-in-out -0.5s infinite alternate;
   animation-play-state: var(--ui-loop-motion);
 }
 
@@ -711,10 +711,10 @@
 
 @keyframes cloud-browser-cursor-sway {
   from {
-    rotate: 3deg;
+    rotate: 4.5deg;
   }
   to {
-    rotate: -3deg;
+    rotate: -4.5deg;
   }
 }
 

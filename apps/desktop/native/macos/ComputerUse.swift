@@ -729,8 +729,8 @@ private let CURSOR_GLIDE_SECONDS = 0.25
 /// How long the cursor stands after the agent's last action where nothing says the agent's turn ended, as where the app quit mid-turn; the turn's end puts it away first (`release_cursor`).
 private let CURSOR_HOLD_SECONDS = 120.0
 /// How far the cursor turns about its tip either way while it rests, and how long one sway there and back takes, as the browser's pointer sways while the agent works (`cloud-browser-cursor`).
-private let CURSOR_SWAY_DEGREES = 3.0
-private let CURSOR_SWAY_SECONDS = 3.0
+private let CURSOR_SWAY_DEGREES = 4.5
+private let CURSOR_SWAY_SECONDS = 2.0
 /// How often the cursor's window redraws while it sways: 30 a second, which a sway of a few degrees over seconds needs no more than, so a cursor held a while costs little.
 private let CURSOR_FRAME_NANOSECONDS: UInt64 = 33_333_333
 /// The cursor's box, and where in it the arrow's tip stands.
