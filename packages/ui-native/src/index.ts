@@ -129,7 +129,7 @@ export { monogramOf } from "./monogram.js";
 
 export { type HintOption, HintPickRows, RenameAsk, SwitchRow } from "./option-rows.js";
 
-export { type PageFollowing, PageHeader } from "./page-header.js";
+export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
 export {
   PROVIDER_MARK_ASSET,
