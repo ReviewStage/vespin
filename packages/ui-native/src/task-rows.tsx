@@ -10,6 +10,7 @@ import {
   Text,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHint,
   accessibilityIdentifier,
@@ -62,7 +63,7 @@ import {
 } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What parts the pieces of an agent's line. */
@@ -117,8 +118,27 @@ function LeadGlyph({
   return <Image {...glyphImage(symbol)} color={ink} modifiers={[font({ textStyle })]} />;
 }
 
-/** A row's 13 pt line under its title, set in to the title's words. */
+/**
+ * A row's 13 pt line under its title, set in to the title's words: its facts
+ * side by side, or at the accessibility sizes one under another, as Settings
+ * and Mail stack a row's details, since side by side each fact broke
+ * mid-word ("Work / ing", "#1 / 28").
+ */
 function RowLine({ children }: { readonly children: ReactNode }) {
+  const stacked = useAccessibilitySize();
+
+  if (stacked) {
+    return (
+      <VStack
+        alignment="leading"
+        spacing={2}
+        modifiers={[padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING })]}
+      >
+        {children}
+      </VStack>
+    );
+  }
+
   return (
     <HStack
       spacing={SPACE.TIGHT + 1}
@@ -279,6 +299,8 @@ export function AgentRow(props: AgentRowProps) {
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
+  // Note that the facts stand one to a line at the accessibility sizes (`RowLine`), where the needs-you count leads its own line with no separator.
+  const stacked = useAccessibilitySize();
 
   const row: ReactElement = (
     <VStack alignment="leading" spacing={2}>
@@ -301,7 +323,7 @@ export function AgentRow(props: AgentRowProps) {
                 foregroundStyle(colors.ACCENT_TEXT),
               ]}
             >
-              {`${told ? LINE_PART : ""}${needsYouWords(waiting)}`}
+              {`${told && !stacked ? LINE_PART : ""}${needsYouWords(waiting)}`}
             </Text>
           )}
         </RowLine>
@@ -547,7 +569,14 @@ function CommentCount({ comments }: { readonly comments: WordsComments }) {
       onPress={comments.onOpen}
       modifiers={[buttonStyle("borderless"), accessibilityLabel(comments.heard)]}
     >
-      <HStack spacing={SPACE.TIGHT}>
+      {/* Note that the count stands in Apple's least target, the shape on that frame rather than on the button, since a borderless button takes a press only where its label is hit. */}
+      <HStack
+        spacing={SPACE.TIGHT}
+        modifiers={[
+          frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
+      >
         <Image
           {...glyphImage(GLYPH.COMMENT)}
           size={MARK_SIZE.GLYPH - 2}
