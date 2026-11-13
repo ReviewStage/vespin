@@ -18,8 +18,9 @@ import { Pool } from "pg";
 /**
  * demo-seed.ts -- `pnpm --filter @repo/web demo:seed`: the demo's acme world written into the freshly migrated Postgres on loopback that `DATABASE_URL` names.
  *
- * `run.sh --demo` calls it once per run, after `db:migrate` and `auth:seed`
- * against the same database. It reads:
+ * It runs once per fresh database, after `db:migrate` and `auth:seed`
+ * against the same database (`server/README.md`'s "The local server" says
+ * how). It reads:
  *
  * - `DATABASE_URL`, which must name a Postgres on this machine's loopback
  *   (`127.0.0.1`, `localhost`, or `::1`); anything else is refused before a
@@ -29,7 +30,7 @@ import { Pool } from "pg";
  * - `PROVIDER_KEY_ENCRYPTION_KEYS`, needed only with a credential: the ring
  *   it is sealed under, which the local server must hold too.
  * - `APP_DEMO_HOST_STATE` and `APP_DEMO_SERVICE_ORIGIN`, optional and
- *   given together: the state folder of the host the run starts on this Mac
+ *   given together: the state folder of a host started on this machine
  *   (`vespin-host run` under `APP_HOST_STATE_ROOT`), and the local server's
  *   origin it calls. The host is enrolled as Dean's, every task runs its
  *   agents on it, and its record is written into that folder once the seed

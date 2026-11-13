@@ -109,7 +109,8 @@ import {
 /**
  * demo-seed.ts -- the demo's seed: the acme world (`demo-world.ts`) written into a freshly migrated database through the store's own models, with Dean's model credential and his host on this Mac where the run hands them in.
  *
- * `run.sh --demo` signs in as `DEMO_DEAN` and opens on what this writes:
+ * The local server's sign-in signs in as `DEMO_DEAN`, who opens on what
+ * this writes:
  * Dean's own workspace and acme beside it, with seven teammates as
  * members; twenty-one tasks across every status and priority, one broken
  * into sub-tasks and some waiting on others, each with a description and comments
@@ -1074,10 +1075,10 @@ function seedHost(host: DemoHost) {
  * chose. A database that holds any account already is refused, a seeded
  * one among them, so a seed runs once per database. Note that the seed is
  * no one transaction, since Better Auth writes through a pool of its own,
- * so one that fails partway leaves a database to throw away, as `run.sh
- * --demo` throws its own away on every exit; the credential is sealed
- * first, so a ring that does not parse fails it before anything is
- * written, and saved before the agents, because each records the payer a
+ * so one that fails partway leaves a database to throw away, as
+ * `tools/demo-postgres` throws its own away on every exit; the credential
+ * is sealed first, so a ring that does not parse fails it before anything
+ * is written, and saved before the agents, because each records the payer a
  * Start would by what Dean keeps. The tasks an agent made are written
  * after it, under its id (`seedAgents`).
  */
