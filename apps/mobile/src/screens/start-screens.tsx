@@ -35,6 +35,7 @@ import {
   glyphSymbol,
   MenuChip,
   type PickOption,
+  runsOnGlyph,
   STATUS_MARK_SYMBOL,
   useColors,
 } from "@repo/ui-native";
@@ -250,10 +251,30 @@ function RunsOnChip({
   if (pick.devices.length === 0) return null;
   const options = runsOnOptions(pick.devices);
 
+  // Note that each place leads with the panel's runs-on mark: the cloud's, or its device's by its platform.
+  const glyphOf = (place: string) =>
+    runsOnGlyph({
+      cloud: place === CLOUD,
+      platform: pick.devices.find((device) => device.deviceId === place)?.platform,
+    });
+
   return (
     <MenuChip
       label={labelOf(options, runsOn) ?? WORDS.RUNS_ON}
-      menu={{ groups: [{ title: WORDS.RUNS_ON, choices: choicesOf(options, runsOn, onRunsOn) }] }}
+      symbol={glyphOf(runsOn)}
+      menu={{
+        groups: [
+          {
+            title: WORDS.RUNS_ON,
+            choices: options.map((option) => ({
+              label: option.label,
+              symbol: glyphOf(option.id),
+              on: option.id === runsOn,
+              onPress: () => onRunsOn(option.id),
+            })),
+          },
+        ],
+      }}
     />
   );
 }

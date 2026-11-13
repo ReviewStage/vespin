@@ -1,6 +1,6 @@
 // task-screens.tsx -- the Tasks tab's tree and a task's Overview: the Stack's two screens in a compact window, and the app sidebar, the tree, and the task side by side in a regular one.
 
-import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
@@ -94,6 +94,7 @@ import {
   RowList,
   type RowSubmenu,
   type RowSwipe,
+  runsOnGlyph,
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
@@ -1414,6 +1415,7 @@ export function TaskAgentRow({
       harness={harness}
       state={agentState(agent.status)}
       runsOn={runsOn}
+      runsOnGlyph={runsOnGlyph({ cloud: agent.machine !== AGENT_MACHINE.DEVICE })}
       waiting={waiting}
       pullRequest={
         pullRequest === undefined

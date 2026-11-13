@@ -194,6 +194,8 @@ type AgentRowProps = {
   readonly state: AgentRowState;
   /** Where it runs: "Cloud", or the device's name. */
   readonly runsOn: string;
+  /** The glyph that leads where it runs, as the panel's row draws it: the cloud's, or its device's. */
+  readonly runsOnGlyph?: Glyph | undefined;
   /** How many of its threads wait on the reader; none said at none. */
   readonly waiting: number;
   /** The pull request it opened, its state's glyph and number in its line, pressed to open it. */
@@ -285,7 +287,14 @@ export function AgentRow(props: AgentRowProps) {
         lead={<AgentTile name={name} harness={harness} size={MARK_SIZE.LEAD} />}
         title={name}
         ink={colors.TEXT}
-        end={<EndWords words={runsOn} />}
+        end={
+          <HStack spacing={SPACE.TIGHT}>
+            {props.runsOnGlyph === undefined ? null : (
+              <ToneGlyph glyph={props.runsOnGlyph} tone={STATUS_TONE.NEUTRAL} hidden />
+            )}
+            <EndWords words={runsOn} />
+          </HStack>
+        }
       />
       {!told && waiting === 0 ? null : (
         <RowLine>
