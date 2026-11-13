@@ -53,7 +53,7 @@ import {
   type ComputerPermissions,
   type ComputerUseHelperSeam,
 } from "./computer-use-helper.js";
-import type { MAC_COMMAND_ACTS } from "./contract/index.js";
+import type { MAC_COMMAND_ACTS, MacApp } from "./contract/index.js";
 import { Environment, Reporter } from "./effect/seams.js";
 import type { HostActTable } from "./host-acts.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
@@ -957,6 +957,62 @@ export function composeMacCommands(
         ),
       );
 
+    /**
+     * The apps the composer's @ list offers on this Mac: those running
+     * first, each with its icon, then those installed, each once by its
+     * bundle id, none agents are never offered, and each marked where the
+     * developer answered Always allow; none while Settings has agents use no
+     * apps here. Note that the list is answered to this Mac's own panel
+     * alone and never posted anywhere: what leaves the Mac is only the one
+     * app a mention names, in the message it is written into.
+     */
+    const appsOnThisMac = (use: MacComputerUse): Effect.Effect<{ apps: readonly MacApp[] }> =>
+      Effect.gen(function* () {
+        if (!(yield* use.enabled)) return { apps: [] };
+        const allowed = new Set(yield* use.allowedApps);
+        const running = yield* use.helper.ask({ op: COMPUTER_ACTION.LIST_APPS }, DESCRIBE_WITHIN);
+
+        const installed = yield* use.helper.ask(
+          { op: COMPUTER_HELPER_OP.LIST_INSTALLED_APPS },
+          DESCRIBE_WITHIN,
+        );
+
+        const listed = (answer: ComputerHelperAnswer, runs: boolean): readonly MacApp[] =>
+          "outcome" in answer && "apps" in answer.outcome
+            ? answer.outcome.apps
+                .filter((app) => !app.refused)
+                .map(({ name, bundleId, iconPng }) => ({
+                  name,
+                  ...(bundleId === undefined ? undefined : { bundleId }),
+                  running: runs,
+                  allowed: allowed.has(bundleId ?? name),
+                  ...(iconPng === undefined ? undefined : { iconPng }),
+                }))
+            : [];
+
+        const seen = new Set<string>();
+
+        const apps = [...listed(running, true), ...listed(installed, false)].filter((app) => {
+          const key = app.bundleId ?? app.name;
+          const fresh = !seen.has(key);
+          seen.add(key);
+
+          return fresh;
+        });
+
+        return { apps };
+      });
+
+    /** One app's icon as the helper draws it, launching nothing; none where it finds no such app. */
+    const appIcon = (use: MacComputerUse, app: string) =>
+      Effect.map(
+        use.helper.ask({ op: COMPUTER_HELPER_OP.DESCRIBE_APP, app }, DESCRIBE_WITHIN),
+        (named) =>
+          "described" in named && named.described.iconPng !== undefined
+            ? { iconPng: named.described.iconPng }
+            : {},
+      );
+
     const methods: PlatformConcernMethods<typeof HOST_PLATFORM_CONCERN.MAC_COMMANDS> = {};
 
     const acts: HostActTable<typeof MAC_COMMAND_ACTS> = {
@@ -974,6 +1030,12 @@ export function composeMacCommands(
           permissions: permissionsRead(COMPUTER_HELPER_OP.PERMISSIONS),
           apps: computer === undefined ? Effect.succeed([]) : allowedAppsNamed(computer),
         }),
+      /** The apps the composer's @ list offers on this Mac (`appsOnThisMac`). */
+      COMPUTER_USE_APPS: () =>
+        computer === undefined ? Effect.succeed({ apps: [] }) : appsOnThisMac(computer),
+      /** One app's icon, for a row of the @ list that names an app installed but not running. */
+      COMPUTER_USE_APP_ICON: ({ app }) =>
+        computer === undefined ? Effect.succeed({}) : appIcon(computer, app),
       /** macOS asked for the grants it lacks, by its own prompts, and the grants as they stand once it was asked. */
       COMPUTER_USE_ASK_PERMISSIONS: () => permissionsRead(COMPUTER_HELPER_OP.REQUEST_PERMISSIONS),
     };

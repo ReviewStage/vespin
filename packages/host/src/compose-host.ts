@@ -493,6 +493,8 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
                 permissions: { screenRecording: false, accessibility: false },
                 apps: [],
               }),
+            COMPUTER_USE_APPS: () => Effect.succeed({ apps: [] }),
+            COMPUTER_USE_APP_ICON: () => Effect.succeed({}),
             COMPUTER_USE_ASK_PERMISSIONS: () =>
               Effect.succeed({ screenRecording: false, accessibility: false }),
           },

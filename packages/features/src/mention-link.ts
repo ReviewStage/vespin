@@ -117,6 +117,11 @@ import { DESCRIPTION_SECTION_BOUNDS } from "./task-wire.js";
  * the tool's own name
  * as the server lists it.
  *
+ * An app on the developer's Mac has no page either, so it takes that form
+ * too: `mention://mac-app/<app>`, the app by its bundle id, or by its name
+ * where it has none, and its label its name. It points an agent at the app
+ * for the `computer` tool, on whichever of the developer's Macs serves it.
+ *
  * A date has no page of its own either, so it takes the `mention:` form too:
  * `mention://date/<start>`, and `mention://date/<start>/<end>` for a range, each
  * end ISO 8601 as Notion holds a date's (`date-mention.ts`): a day,
@@ -148,6 +153,8 @@ export const MENTION_KIND = {
   APP: "app",
   /** A day, a time on one, or a range of either. */
   DATE: "date",
+  /** An app on the developer's Mac, which the agent may use through `computer`. */
+  MAC_APP: "mac-app",
 } as const;
 
 const MENTION_BOUNDS = {
@@ -163,6 +170,8 @@ const MENTION_BOUNDS = {
   MAX_URL_CHARS: 2_000,
   /** The most characters of a page's address its readable name keeps, from its end. */
   MAX_LINK_NAME_CHARS: 60,
+  /** The most characters an app's bundle id or name may spell, as the `computer` tool takes one. */
+  MAX_APP_CHARS: 255,
   /** The most mentions one message is read for; any past them stay words. */
   MAX_MENTIONS: 20,
 } as const;
@@ -355,6 +364,15 @@ const mentionSchema = EffectSchema.Union([
     kind: EffectSchema.Literal(MENTION_KIND.APP),
     taskId: taskIdSchema,
   }),
+  // Note that routing's R3 adds the Mac here, a `machine` beside the app, once a command can name the Mac it runs on.
+  EffectSchema.Struct({
+    kind: EffectSchema.Literal(MENTION_KIND.MAC_APP),
+    /** The app by its bundle id, or by its name where it has none. */
+    app: EffectSchema.String.check(
+      EffectSchema.isNonEmpty(),
+      EffectSchema.isMaxLength(MENTION_BOUNDS.MAX_APP_CHARS),
+    ),
+  }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(MENTION_KIND.DATE),
     start: dateMomentSchema,
@@ -381,6 +399,9 @@ export type TaskMention = Extract<
 
 /** A mention of a person: a member of the workspace, or someone who left it. */
 export type PersonMention = Extract<Mention, { readonly kind: typeof MENTION_KIND.PERSON }>;
+
+/** A mention of an app on the developer's Mac. */
+export type MacAppMention = Extract<Mention, { readonly kind: typeof MENTION_KIND.MAC_APP }>;
 
 /** A mention of an MCP server or one of its tools, or a page of its provider's. */
 export type ServerMention = Extract<Mention, { readonly provider: string }>;
@@ -472,6 +493,14 @@ function schemeFields({ host, steps, hash, search }: SchemeLink) {
       const moments = { kind: MENTION_KIND.DATE, start: decodedStep(start ?? "") };
 
       return end === undefined ? moments : { ...moments, end: decodedStep(end) };
+    }
+
+    case SCHEME_LINK_HOST.MAC_APP: {
+      const [app, ...rest] = steps;
+
+      if (rest.length > 0 || hash !== "" || search !== "") return undefined;
+
+      return { kind: MENTION_KIND.MAC_APP, app: decodedStep(app ?? "") };
     }
 
     case SCHEME_LINK_HOST.PLAN: {
@@ -878,6 +907,9 @@ export function encodeMention(mention: Mention, place: MentionPlace): string {
       return linkOf({ kind: LINK_DESTINATION.PERSON, userId: mention.userId }, workspace);
     case MENTION_KIND.APP:
       return `${linkOf({ kind: LINK_DESTINATION.TASK, planId: mention.taskId }, workspace)}/${APP_STEP}`;
+    // An app on a Mac has no page of its own, so it keeps the app's own form.
+    case MENTION_KIND.MAC_APP:
+      return schemeLinkOf(SCHEME_LINK_HOST.MAC_APP, encodedStep(mention.app));
     // A date has no page of its own, so it keeps the app's own form; its ends spell nothing a target must encode.
     case MENTION_KIND.DATE:
       return schemeLinkOf(
@@ -1018,6 +1050,8 @@ function bareName(mention: Mention): string {
       return BARE_NAME.APP;
     case MENTION_KIND.DATE:
       return dateLabel(mention);
+    case MENTION_KIND.MAC_APP:
+      return mention.app;
   }
 }
 

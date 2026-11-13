@@ -33,6 +33,10 @@ export const QUERY_ROOT = {
   MERGE_QUEUE: "merge-queue",
   /** Settings › This Mac's computer use: the Mac's grants and the apps agents use without asking, as the host reads them through the helper. */
   COMPUTER_USE_STATUS: "computer-use-status",
+  /** The apps on this Mac the composer's `@` list offers (`tasks/mac-apps.ts`). */
+  COMPUTER_USE_APPS: "computer-use-apps",
+  /** One app's icon on this Mac, by its bundle id or its name (`tasks/mac-apps.ts`). */
+  COMPUTER_USE_APP_ICON: "computer-use-app-icon",
   INSTALLED_SKILL: "installed-skill",
   INSTALLED_SKILL_PREVIEW: "installed-skill-preview",
   TASK_NEWEST_REVISION: "task-newest-revision",

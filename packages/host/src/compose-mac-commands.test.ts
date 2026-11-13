@@ -1075,3 +1075,61 @@ it.effect(
       });
     }),
 );
+
+it.effect(
+  "the composer's @ list offers the running apps first, then the installed ones not already listed, none agents are never offered, each marked where always allowed, and nothing with the switch off",
+  () =>
+    Effect.gen(function* () {
+      const notes: ComputerApp = { name: "Notes", bundleId: "com.apple.Notes", refused: false };
+
+      const helper: ComputerUseHelperSeam = {
+        ask: (request) =>
+          Effect.succeed(
+            request.op === COMPUTER_ACTION.LIST_APPS
+              ? { outcome: { apps: [SIMULATOR, TERMINAL] } }
+              : {
+                  outcome: {
+                    apps: [
+                      notes,
+                      {
+                        name: SIMULATOR.name,
+                        bundleId: "com.apple.iphonesimulator",
+                        refused: false,
+                      },
+                    ],
+                  },
+                },
+          ),
+      };
+
+      for (const enabled of [true, false]) {
+        const { composer } = yield* subject(
+          scriptedService(),
+          scriptedSpawner(() => ({ exitCode: 0 })),
+          {
+            mode: MAC_COMMAND_MODE.ASK,
+            signedIn: true,
+            computer: { helper, enabled, allowed: ["com.apple.Notes"] },
+          },
+        );
+
+        const listed = yield* composer.acts.COMPUTER_USE_APPS({});
+
+        assert.deepEqual(
+          listed.apps,
+          enabled
+            ? [
+                {
+                  name: "Simulator",
+                  bundleId: "com.apple.iphonesimulator",
+                  running: true,
+                  allowed: false,
+                  iconPng: "iVBORw0KGgo=",
+                },
+                { name: "Notes", bundleId: "com.apple.Notes", running: false, allowed: true },
+              ]
+            : [],
+        );
+      }
+    }),
+);
