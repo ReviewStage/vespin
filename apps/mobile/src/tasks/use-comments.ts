@@ -253,6 +253,8 @@ export function useCommentSettle(taskId: string): (thread: DescriptionCommentThr
               ? commentRefusalNote(answer.refused)
               : COMMENT_NOTE.NOT_CHANGED,
         unanswered: COMMENT_NOTE.NOT_CHANGED,
+        // Note that a resolve or reopen sent again lands the thread where it was asked to stand, so the notice offers Try again.
+        retry: true,
         went: BUZZ.SUCCESS,
       },
     );
