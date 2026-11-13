@@ -16,8 +16,6 @@ import { GITHUB_DELIVERY_READ } from "@repo/service/github/github-delivery-read-
 import {
   MAINTENANCE_SWEEP,
   MAINTENANCE_SWEEP_PATH,
-  WORKSPACE_DRIVE_CLEANUP,
-  WORKSPACE_DRIVE_CLEANUP_PATH,
 } from "@repo/service/maintenance/maintenance-bounds";
 import { MEMBER_MCP_FUNCTION, MEMBER_MCP_METADATA_ROUTE } from "@repo/service/member-mcp/app";
 import { MEMBER_MCP_PATH } from "@repo/service/member-mcp/resource";
@@ -59,7 +57,6 @@ const FUNCTION_GROUP = {
   WORKSPACE_MCP: "workspace-mcp",
   MEMBER_MCP: "member-mcp",
   MAINTENANCE_SWEEP: "maintenance-sweep",
-  WORKSPACE_DRIVE_CLEANUP: "workspace-drive-cleanup",
   PAGE_SANDBOX: "page-sandbox",
   PREVIEW_PROXY: "preview-proxy",
   PULL_REQUEST_CHAPTERS: "pull-request-chapters",
@@ -101,12 +98,6 @@ const GROUPS: readonly GroupDefinition[] = [
     file: FUNCTION_GROUP.MAINTENANCE_SWEEP,
     maxDuration: MAINTENANCE_SWEEP.MAX_DURATION_SECONDS,
     routes: [routeKeyOf(MAINTENANCE_SWEEP_PATH)],
-  },
-  // The daily cleanup prunes every workspace's drive in the one call, each in a sandbox of its own, past the platform's default duration.
-  {
-    file: FUNCTION_GROUP.WORKSPACE_DRIVE_CLEANUP,
-    maxDuration: WORKSPACE_DRIVE_CLEANUP.MAX_DURATION_SECONDS,
-    routes: [routeKeyOf(WORKSPACE_DRIVE_CLEANUP_PATH)],
   },
   // A Generate runs one model call of up to three minutes, past the platform's default duration.
   {

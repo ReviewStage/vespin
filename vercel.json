@@ -228,6 +228,10 @@
           "dest": "/api/default.js?route=maintenance/provider-keys-rewrap"
         },
         {
+          "src": "/api/maintenance/workspace-drives",
+          "dest": "/api/default.js?route=maintenance/workspace-drives"
+        },
+        {
           "src": "/api/previews/sign-in",
           "dest": "/api/default.js?route=previews/sign-in"
         },
@@ -262,10 +266,6 @@
         {
           "src": "/api/previews/proxy",
           "dest": "/api/preview-proxy.js?route=previews/proxy"
-        },
-        {
-          "src": "/api/maintenance/workspace-drives",
-          "dest": "/api/workspace-drive-cleanup.js?route=maintenance/workspace-drives"
         },
         {
           "src": "/api/browser/live",

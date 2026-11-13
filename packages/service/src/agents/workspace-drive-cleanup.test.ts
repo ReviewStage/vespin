@@ -1,5 +1,5 @@
 /**
- * workspace-drive-cleanup.test.ts -- the daily cleanup, over the test's own database and `Sandbox` kept in memory: a repository no agent of the workspace started in lately loses its folder and its row, and one an agent started in is kept. Synthetic accounts throughout.
+ * workspace-drive-cleanup.test.ts -- a workspace's drive cleanup as the queue's consumer runs it, over the test's own database and `Sandbox` kept in memory: a repository no agent of the workspace started in lately loses its folder and its row, and one an agent started in is kept. Synthetic accounts throughout.
  */
 
 import assert from "node:assert/strict";
@@ -14,18 +14,15 @@ import { user } from "@repo/database/schemas/auth";
 import { getTestDB, openAgentOnOwnTask, openWorkspace } from "@repo/database/testing";
 import { Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { Effect, Layer } from "effect";
-import { AgentImage } from "./coder-host/agent-image.js";
+import { Effect } from "effect";
+import { QUEUE_ACKNOWLEDGED } from "../queues/queue-consumer.js";
+import { githubReaching } from "../testing/github-app-fake.js";
 import type { SandboxRunner } from "./machine/sandbox-machine.js";
 import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
-import { cleanWorkspaceDrives } from "./workspace-drive-cleanup.js";
+import { WorkspaceDriveFills } from "./workspace-drive.js";
+import { consumeWorkspaceDriveCleanup } from "./workspace-drive-builds.js";
 
 const { VARIABLE } = REPOSITORY_SANDBOX_CONTRACT;
-
-const IMAGE = Layer.succeed(AgentImage, {
-  reference: Effect.succeed("agent-image:fixture"),
-  runner: Effect.succeed([]),
-});
 
 /** The prune's commands run straight on the test's own runtime. */
 const run: SandboxRunner = (effect) => Effect.runPromise(effect);
@@ -38,7 +35,7 @@ const openAccount = Effect.gen(function* () {
   return id;
 });
 
-it.layer(getTestDB())("the daily workspace drive cleanup", (it) => {
+it.layer(getTestDB())("a workspace's drive cleanup", (it) => {
   it.effect(
     "drops the folder and row of a repository no agent started in, and keeps a used one",
     () =>
@@ -55,8 +52,12 @@ it.layer(getTestDB())("the daily workspace drive cleanup", (it) => {
         );
         const memory = memorySandbox();
 
-        const cleaned = yield* cleanWorkspaceDrives(run).pipe(
-          Effect.provide(IMAGE),
+        const answer = yield* consumeWorkspaceDriveCleanup(workspaceId).pipe(
+          Effect.provide(githubReaching([]).layer),
+          Effect.provideService(WorkspaceDriveFills, {
+            run,
+            image: Effect.succeed("agent-image:fixture"),
+          }),
           Effect.provideService(Sandbox, memory.service),
         );
 
@@ -66,7 +67,7 @@ it.layer(getTestDB())("the daily workspace drive cleanup", (it) => {
           return keep === undefined ? [] : [keep];
         });
 
-        assert.deepEqual(cleaned, { pruned: 1, dropped: 1, passed: 0, failed: 0 });
+        assert.deepEqual(answer, QUEUE_ACKNOWLEDGED);
         assert.deepEqual(kept, ["acme/api"]);
         assert.deepEqual(yield* workspaceDriveRepositories(workspaceId), ["acme/api"]);
       }),

@@ -2771,11 +2771,12 @@ schedule runs only on production unless it is enabled on a Preview branch by han
 
 Once a day, at 08:00 UTC, the `workspace-drive-cleanup` schedule calls
 `apps/web/server/routes/maintenance/workspace-drives.ts` under the same
-`CRON_SECRET`, in a function group of its own (`workspace-drive-cleanup`, 800
-seconds). It prunes from each workspace's drive the repositories no agent of
-the workspace started in for 30 days (`src/agents/workspace-drive-cleanup.ts`),
-a few workspaces at once, a drive a fill holds or a prune that failed logged
-and passed by for the next day's run.
+`CRON_SECRET`. It only publishes: one cleanup message on the
+`workspace-drive-builds` queue for each workspace whose drive holds a
+repository no agent of the workspace started in for 30 days
+(`src/agents/workspace-drive-cleanup.ts`). The queue's consumer
+(`src/agents/workspace-drive-builds.ts`) prunes that drive, and comes again
+shortly where a fill holds it.
 
 The sweep ends what no request will. `MaintenanceSweeps`
 (`src/maintenance/maintenance-sweep.ts`) runs its sweeps in turn and

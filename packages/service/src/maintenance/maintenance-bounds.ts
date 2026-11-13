@@ -40,14 +40,3 @@ export const MAINTENANCE_SWEEP = {
   /** The schedule the root `vercel.json` calls the sweep on, which its Sentry monitor expects a check-in against. */
   CRONTAB: "* * * * *",
 } as const;
-
-export const WORKSPACE_DRIVE_CLEANUP = {
-  /**
-   * The function duration the cleanup's bundle declares: the platform's
-   * longest, since it prunes every workspace's drive in the one call, and
-   * each prune opens a sandbox on its drive.
-   */
-  MAX_DURATION_SECONDS: 800,
-  /** The schedule the root `vercel.json` calls the cleanup on: once a day, at 08:00 UTC. */
-  CRONTAB: "0 8 * * *",
-} as const;

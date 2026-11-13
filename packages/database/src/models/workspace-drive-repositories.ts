@@ -64,9 +64,9 @@ const deleteRepositories = SqlSchema.void({
 });
 
 const findUnusedRepositories = SqlSchema.findAll({
-  Request: Schema.Date,
+  Request: Schema.Struct({ since: Schema.Date, organizationId: Schema.UndefinedOr(Schema.String) }),
   Result: Schema.Struct({ organizationId: Schema.String, repository: Schema.String }),
-  execute: (since) =>
+  execute: ({ since, organizationId }) =>
     Database.use((db) =>
       db
         .select({
@@ -75,17 +75,22 @@ const findUnusedRepositories = SqlSchema.findAll({
         })
         .from(workspaceDriveRepository)
         .where(
-          notExists(
-            db
-              .select({ id: agentTable.id })
-              .from(agentTable)
-              .where(
-                and(
-                  eq(agentTable.organizationId, workspaceDriveRepository.organizationId),
-                  eq(sql`lower(${agentTable.repository})`, workspaceDriveRepository.repository),
-                  gte(agentTable.createdAt, since),
+          and(
+            organizationId === undefined
+              ? undefined
+              : eq(workspaceDriveRepository.organizationId, organizationId),
+            notExists(
+              db
+                .select({ id: agentTable.id })
+                .from(agentTable)
+                .where(
+                  and(
+                    eq(agentTable.organizationId, workspaceDriveRepository.organizationId),
+                    eq(sql`lower(${agentTable.repository})`, workspaceDriveRepository.repository),
+                    gte(agentTable.createdAt, since),
+                  ),
                 ),
-              ),
+            ),
           ),
         )
         .orderBy(
@@ -141,13 +146,15 @@ export interface UnusedWorkspaceDriveRepositories {
 /**
  * Every workspace drive's repositories that no agent of its workspace started
  * in at or past `since`, by workspace, each lower-cased `owner/name` in name
- * order; a workspace with none is left out. Note that only an agent's own
- * repository counts, since a fill adds only that one to the drive.
+ * order, of the one workspace given or of every one; a workspace with none
+ * is left out. Note that only an agent's own repository counts, since a fill
+ * adds only that one to the drive.
  */
 export function unusedWorkspaceDriveRepositories(
   since: Date,
+  organizationId?: string,
 ): AgentStoreEffect<readonly UnusedWorkspaceDriveRepositories[]> {
-  return Effect.map(findUnusedRepositories(since), (rows) => {
+  return Effect.map(findUnusedRepositories({ since, organizationId }), (rows) => {
     const byWorkspace = new Map<string, string[]>();
 
     for (const row of rows) {
