@@ -188,6 +188,8 @@ export * from "./components/inline-ref/inline-ref.js";
 
 export * from "./components/inline-ref/inline-ref-fit.js";
 
+export * from "./components/intro-card/intro-card.js";
+
 export * from "./components/keep-focus/keep-focus.js";
 
 export * from "./components/landing/landing-page.js";
