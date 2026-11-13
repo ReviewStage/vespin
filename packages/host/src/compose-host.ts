@@ -13,6 +13,7 @@ import {
   HostedTerminalClient,
   HostedWorkspaceClient,
 } from "@repo/features";
+import { AGENT_STATUS } from "@repo/features/agent-wire";
 import { type ClientIdentity, clientNamedOnService } from "@repo/features/client-identity";
 import { HostedInstalledSkillClient } from "@repo/features/installed-skill-client";
 import { INTEGRATION_LANDING } from "@repo/features/integration-wire";
@@ -459,6 +460,28 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         }),
       );
 
+    /** Waits until the task list says an agent's turn is over: ended, failed, or stopped. An agent it does not list is waited on, since a cursor put away early is worse than one the helper's own clock puts away. */
+    const turnEnded = (agentId: string) =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          // Note that each drawing of the list is listened to before the list is read, so one drawn between the two is not missed.
+          const drawings = yield* tasks.pullRequestListings;
+
+          const over = () => {
+            const status = agentListed(agentId)?.status;
+
+            return (
+              status !== undefined &&
+              status !== AGENT_STATUS.RUNNING &&
+              status !== AGENT_STATUS.STARTING
+            );
+          };
+
+          if (over()) return;
+          yield* Stream.runHead(Stream.filter(drawings, over));
+        }),
+      );
+
     const agents = yield* served(
       composeAgents({
         kernel,
@@ -573,6 +596,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
               serviceBaseUrl: kernel.hostedServiceBaseUrl,
               credential: account.credential,
             }),
+            turnEnded,
             ...Option.match(computerHelper, {
               onNone: () => ({}),
               onSome: (helper) => ({ computer: macComputerUse(settings, helper) }),

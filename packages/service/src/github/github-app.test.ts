@@ -1227,10 +1227,10 @@ it.effect(
       const [exchange] = fake.sent;
       assert.ok(exchange);
       assert.equal(exchange.url, "https://github.com/login/oauth/access_token");
-      const asked = new URLSearchParams(exchange.body);
-      assert.equal(asked.get("code"), "one-time");
-      assert.equal(asked.get("code_verifier"), VERIFIER);
-      assert.equal(asked.get("redirect_uri"), CALLBACK);
+      const asked: Readonly<Record<string, string>> = JSON.parse(exchange.body);
+      assert.equal(asked.code, "one-time");
+      assert.equal(asked.code_verifier, VERIFIER);
+      assert.equal(asked.redirect_uri, CALLBACK);
       const read = fake.sent.find((sent) => sent.url.includes("/user/installations"));
       assert.equal(read?.headers.get("authorization"), `Bearer ${GITHUB_FIXTURE_AUTHORIZED_TOKEN}`);
       const revoked = fake.sent.filter((sent) => sent.method === "DELETE");

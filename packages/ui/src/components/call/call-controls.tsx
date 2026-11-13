@@ -15,6 +15,7 @@
  */
 
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { useEffect, useRef } from "react";
 import { GLYPH } from "../../icons/glyph-registry.js";
 import {
   MicrophoneIcon,
@@ -24,6 +25,7 @@ import {
   WaveformIcon,
 } from "../../icons/lucide-glyphs.js";
 import { STATUS_TONE } from "../../status-tone.js";
+import { useMotionHeld } from "../../use-motion-held.js";
 import {
   BUTTON_CORNERS,
   BUTTON_VARIANT,
@@ -34,7 +36,6 @@ import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
 import { TIME_LOOK, Time } from "../time/time.js";
 import { Tooltip } from "../tooltip/hint.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
-import { WorkingMark } from "../working-mark/working-mark.js";
 
 /** What a reader is told while the agent works; the sighted read the mark and the line. */
 const AGENT_WORKING_LABEL = `${PRODUCT_NAME} is working on it`;
@@ -104,13 +105,65 @@ const MUTE = {
 } as const;
 
 /**
- * A call's two lines as its bar draws them: the voice's word ("Listening",
- * "Speaking"), and the agent's line while it works, with the command it runs
- * where it has one.
+ * A call's line as its bar draws it: the stage's word while the call comes
+ * up or goes down ("Connecting…", "Ending…"), and otherwise the agent's line
+ * while it works, with the command it runs where it has one.
  */
 export interface CallStatus {
-  readonly voiceWord: string;
+  /** The stage's word while the call is not up; none while it is. */
+  readonly stageWord: string | undefined;
   readonly agent: { readonly action: string | undefined } | undefined;
+}
+
+/** How loud each side of a call is, in the unit interval: the caller's microphone, and the agent's voice. */
+export interface CallLevel {
+  readonly you: number;
+  readonly voice: number;
+}
+
+/**
+ * A call's levels as they change: `draw` is handed each frame's, and the
+ * function returned stops them. The owner runs one loop for every mute that
+ * draws them, and none while no mute does.
+ */
+export type CallLevels = (draw: (level: CallLevel) => void) => () => void;
+
+/** The level a voice reads as speaking at, where reduced motion draws the ring whole or not at all. */
+const SPEAKING_LEVEL = 0.06;
+
+/** The custom property a mute's ring is as wide as (`call-controls.css`). */
+const LEVEL_PROPERTY = "--ui-call-level";
+
+/**
+ * Draws a mute's voice on its ring, written straight to the ring's custom
+ * property each frame rather than through a render: the agent's voice on the
+ * speaker, and the caller's on the microphone while it is on, since a muted
+ * microphone reaches nobody. Reduced motion holds the ring at its width while
+ * the voice speaks rather than growing it.
+ */
+function useCallRing(device: CallDevice, muted: boolean, levels: CallLevels | undefined) {
+  const ring = useRef<HTMLSpanElement>(null);
+  const held = useMotionHeld();
+  const silent = levels === undefined || (device === CALL_DEVICE.MICROPHONE && muted);
+
+  useEffect(() => {
+    const element = ring.current;
+
+    if (levels === undefined || silent || element === null) return;
+
+    const stop = levels((level) => {
+      const loud = device === CALL_DEVICE.MICROPHONE ? level.you : level.voice;
+      const width = held ? Number(loud > SPEAKING_LEVEL) : loud;
+      element.style.setProperty(LEVEL_PROPERTY, width.toFixed(3));
+    });
+
+    return () => {
+      stop();
+      element.style.removeProperty(LEVEL_PROPERTY);
+    };
+  }, [device, held, levels, silent]);
+
+  return ring;
 }
 
 /** A mute as its owner hands it: whether it is on, and its press. */
@@ -155,33 +208,39 @@ export function TalkButton({
 /**
  * A mute the call offers, round in the call bar and square in an agent's
  * composer row: named for what the press will do, and its glyph struck
- * through, lit in neutral gray, while muted.
+ * through, lit in neutral gray, while muted. Handed the call's `levels`, it
+ * wears its voice's ring (`useCallRing`), which follows its corners.
  */
 export function CallMute({
   device,
   muted,
   corners = BUTTON_CORNERS.ROUND,
+  levels,
   onPress,
 }: {
   device: CallDevice;
   muted: boolean;
   corners?: ButtonCorners | undefined;
+  levels?: CallLevels | undefined;
   onPress: () => void;
 }): React.JSX.Element {
   const mute = MUTE[device];
   const label = muted ? mute.unmute : mute.mute;
+  const ring = useCallRing(device, muted, levels);
 
   return (
-    <Tooltip label={label}>
-      <IconButton
-        variant={BUTTON_VARIANT.QUIET}
-        corners={corners}
-        icon={muted ? <mute.Muted /> : <mute.Live />}
-        label={label}
-        pressed={muted}
-        onClick={onPress}
-      />
-    </Tooltip>
+    <span className="ui-call-mute flex flex-none" ref={ring}>
+      <Tooltip label={label}>
+        <IconButton
+          variant={BUTTON_VARIANT.QUIET}
+          corners={corners}
+          icon={muted ? <mute.Muted /> : <mute.Live />}
+          label={label}
+          pressed={muted}
+          onClick={onPress}
+        />
+      </Tooltip>
+    </span>
   );
 }
 
@@ -327,12 +386,15 @@ export function CallComposerControls({
   live,
   microphone,
   speaker,
+  levels,
   onEnd,
 }: {
   /** The call's status; none draws the three presses alone, as an agent's composer does, which keeps its row uncrowded. */
   live?: CallLiveProps | undefined;
   microphone: CallMuteState;
   speaker: CallMuteState;
+  /** The call's levels, which ring the mutes as each voice speaks; none draws them still. */
+  levels?: CallLevels | undefined;
   onEnd: () => void;
 }): React.JSX.Element {
   return (
@@ -345,12 +407,14 @@ export function CallComposerControls({
         device={CALL_DEVICE.SPEAKER}
         corners={BUTTON_CORNERS.SQUARE}
         muted={speaker.muted}
+        levels={levels}
         onPress={speaker.onPress}
       />
       <CallMute
         device={CALL_DEVICE.MICROPHONE}
         corners={BUTTON_CORNERS.SQUARE}
         muted={microphone.muted}
+        levels={levels}
         onPress={microphone.onPress}
       />
       <EndCallButton onPress={onEnd} />
@@ -360,35 +424,24 @@ export function CallComposerControls({
 
 /**
  * The call bar's own row, laid out as a composer's controls are: the call's
- * two lines at its left and its controls at its right. Its least height
- * holds both lines, so it never moves as the agent's line comes and goes,
- * but where it is too narrow for the call on one row. It answers its own
+ * line at its left and its controls at its right, which set its height, so
+ * it never moves as the agent's line comes and goes. It answers its own
  * width, as the sidebar's card, the floating card, and the floating window
  * draw it, each at a width of its own.
  */
 const BAR =
-  "ui-call-bar @container/ui-call-bar mx-auto my-0 flex min-h-call-row max-w-page-measure flex-wrap items-center gap-x-block-gap gap-y-control-gap";
+  "ui-call-bar @container/ui-call-bar mx-auto my-0 flex max-w-page-measure flex-wrap items-center gap-x-block-gap gap-y-control-gap";
 
 /**
- * The call's two lines, each cut short on one line, so a long command never
- * wraps the row or pushes the controls, and the mark is never cut. Too
- * narrow for the status beside the controls (the sidebar's card at its
- * narrowest, an off-scale 210px), the status takes a row of its own, the
- * voice's word whole, and the controls stand under it at the right.
+ * The call's line, in the caption's muted voice, cut short on one line, so a
+ * long command never wraps the row or pushes the controls. Too narrow for it
+ * beside the controls (the sidebar's card at its narrowest, an off-scale
+ * 210px), it takes a row of its own, and the controls stand under it at the
+ * right.
  */
 const STATUS =
-  "ui-call-bar-status flex min-w-0 flex-1 flex-col gap-ui-2 whitespace-nowrap @max-[210px]/ui-call-bar:basis-full";
+  "ui-call-bar-status flex min-w-0 flex-1 items-center text-caption whitespace-nowrap text-muted-foreground @max-[210px]/ui-call-bar:basis-full";
 
-/**
- * The agent's line, in the caption's muted voice. Narrower than an
- * off-scale 280px, a call card's controls at its head's step, the working
- * mark goes, the line's own words saying the agent works, so its command
- * keeps the mark's room.
- */
-const AGENT =
-  "ui-call-bar-agent flex min-w-0 items-center gap-control-gap text-caption text-muted-foreground";
-
-const AGENT_MARK = "ui-call-bar-agent-mark flex @max-[280px]/ui-call-bar:hidden";
 const AGENT_ACTION = "ui-call-bar-agent-action font-mono";
 
 /**
@@ -402,21 +455,33 @@ const CONTROLS =
 const MUTES = "ui-call-bar-mutes flex flex-none items-center gap-tight-gap";
 
 /**
- * The call's two lines: the voice's word, and the agent's while it works:
- * "Thinking", or "Working" and the command it runs. Where `titled`, the
- * command carries its whole words as the system's own hint, for the floating
- * window, which is too small to hold a tooltip.
+ * The call's line: "Connecting…" or "Ending…" while the call is not up, and
+ * while it is, the agent's line while it works, "Thinking", or "Working" and
+ * the command it runs, with nothing while the agent is idle. The agent's
+ * tile, beside the call's name, wears the working mark, so the line draws
+ * none of its own. Where `titled`, the command carries its whole words as
+ * the system's own hint, for the floating window, which is too small to
+ * hold a tooltip.
  */
-function CallStatusLines({
+function CallStatusLine({
   status,
-  muted,
   titled,
 }: {
   status: CallStatus | undefined;
-  muted: boolean;
   titled: boolean;
 }): React.JSX.Element {
   const agent = status?.agent;
+  const stageWord = status?.stageWord;
+
+  if (stageWord !== undefined || agent === undefined) {
+    return (
+      <span className={STATUS}>
+        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} truncate>
+          {stageWord}
+        </Text>
+      </span>
+    );
+  }
 
   return (
     <span className={STATUS}>
@@ -424,57 +489,43 @@ function CallStatusLines({
         as={TEXT_ELEMENT.SPAN}
         variant={TEXT_VARIANT.INHERIT}
         truncate
-        className="ui-call-bar-voice data-[muted=true]:text-muted-foreground"
-        data-muted={String(muted)}
+        title={titled ? agent.action : undefined}
       >
-        {status?.voiceWord}
+        {agent.action === undefined ? (
+          AGENT_THINKING
+        ) : (
+          <>
+            {AGENT_WORKING} · <span className={AGENT_ACTION}>{agent.action}</span>
+          </>
+        )}
       </Text>
-      {agent === undefined ? null : (
-        <span className={AGENT}>
-          <span className={AGENT_MARK}>
-            <WorkingMark />
-          </span>
-          <Text
-            as={TEXT_ELEMENT.SPAN}
-            variant={TEXT_VARIANT.INHERIT}
-            truncate
-            title={titled ? agent.action : undefined}
-          >
-            {agent.action === undefined ? (
-              AGENT_THINKING
-            ) : (
-              <>
-                {AGENT_WORKING} · <span className={AGENT_ACTION}>{agent.action}</span>
-              </>
-            )}
-          </Text>
-          <VisuallyHidden role="status">{AGENT_WORKING_LABEL}</VisuallyHidden>
-        </span>
-      )}
+      <VisuallyHidden role="status">{AGENT_WORKING_LABEL}</VisuallyHidden>
     </span>
   );
 }
 
 /**
  * The strip of a call's controls, laid out the way a composer's own are:
- * the call's status at the left, and at the right Stop while the agent
- * works, then the speaker and microphone mutes, round, each struck through
- * and lit while on, and End call beside them, apart from both so muting
- * never hangs up. A narrow bar stacks its status over its controls rather
- * than cutting the voice's word (`STATUS`).
+ * the call's line at the left, and at the right Stop while the agent works,
+ * then the speaker and microphone mutes, round, each struck through and lit
+ * while on, and End call beside them, apart from both so muting never hangs
+ * up. A narrow bar stacks its line over its controls (`STATUS`).
  */
 export function CallBar({
   status,
   microphone,
   speaker,
+  levels,
   onStop,
   onEnd,
   titled = false,
 }: {
-  /** The call's status, absent while the voice names none, which draws the controls alone. */
+  /** The call's line, absent while the call names none, which draws the controls alone. */
   status: CallStatus | undefined;
   microphone: CallMuteState;
   speaker: CallMuteState;
+  /** The call's levels, which ring the mutes as each voice speaks; none draws them still. */
+  levels?: CallLevels | undefined;
   /** Stops the agent's turn; drawn only while the status says the agent works. */
   onStop: () => void;
   onEnd: () => void;
@@ -483,14 +534,20 @@ export function CallBar({
 }): React.JSX.Element {
   return (
     <footer className={BAR}>
-      <CallStatusLines status={status} muted={microphone.muted} titled={titled} />
+      <CallStatusLine status={status} titled={titled} />
       <div className={CONTROLS}>
         {status?.agent === undefined ? null : <StopAgentButton onPress={onStop} />}
         <div className={MUTES}>
-          <CallMute device={CALL_DEVICE.SPEAKER} muted={speaker.muted} onPress={speaker.onPress} />
+          <CallMute
+            device={CALL_DEVICE.SPEAKER}
+            muted={speaker.muted}
+            levels={levels}
+            onPress={speaker.onPress}
+          />
           <CallMute
             device={CALL_DEVICE.MICROPHONE}
             muted={microphone.muted}
+            levels={levels}
             onPress={microphone.onPress}
           />
         </div>

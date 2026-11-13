@@ -20,7 +20,6 @@ import {
   placedMessages,
   type TurnStretch,
   turnStretches,
-  turnWorkSummary,
   wholeCallOf,
 } from "@repo/features/agent-parts";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
@@ -73,7 +72,7 @@ import { GOAL_LINE } from "@repo/features/slash-command";
 import { sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { WORKED_SEPARATOR, WORKED_WORDS, workingTime } from "@repo/features/time-format";
+import { workingTime } from "@repo/features/time-format";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import {
   calledAgent,
@@ -151,7 +150,6 @@ import {
   MessageLine,
   NewSessionLine,
   OneLine,
-  RetoldTurn,
   STATUS_TONE,
   SUBJECT_FIT,
   SubjectLine,
@@ -1873,11 +1871,8 @@ export function AgentMessage({
   taskId,
   forkable = true,
   piece,
-  folded = false,
 }: {
   message: AgentTranscriptMessage;
-  /** Whether it is a finished turn a spoken ask opened, drawn folded closed since the voice retells it on the call (`callItemsOf`). */
-  folded?: boolean;
   /** The piece of a long turn this draws (`turn-pieces.ts`), its stretches read for it; the whole message where none. */
   piece?: TurnPiece | undefined;
   /** Whether its tab may offer to fork at it. */
@@ -1904,8 +1899,8 @@ export function AgentMessage({
 }): ReactNode {
   const words = messageWords(message);
   const forkOffered = useForkOffered();
-  // Note that a line the caller said aloud on a call is drawn as a typed one, but offers no Edit while the Voice experiment is on, since it stands as it was said.
-  const spoken = useVoiceShown() && spokenLineOf(message) !== undefined;
+  // Note that a line the caller said aloud on a call is drawn as a typed one, but offers no Edit, since it stands as it was said.
+  const spoken = spokenLineOf(message) !== undefined;
   const sending = useLineSending(message.id);
   const marked = useLineMarked(message.id);
   const status = useLineStatus(message.id);
@@ -2111,7 +2106,7 @@ export function AgentMessage({
     />
   );
 
-  const drawn = stretches.map((stretch, index) => {
+  return stretches.map((stretch, index) => {
     if (stretch.line !== undefined) {
       const line = stretch.line;
 
@@ -2147,17 +2142,6 @@ export function AgentMessage({
       </Message>
     );
   });
-
-  // A turn the voice retells on a call reads once: folded closed under what a finished turn's line says of it, how long it worked and the work it did, one press opening it where it stands.
-  if (!folded || moving || startedAt === undefined || finishedAt === undefined) return drawn;
-  const work = turnWorkSummary(message);
-  const worked = `${WORKED_WORDS}${workingTime(finishedAt - startedAt)}`;
-
-  return (
-    <RetoldTurn summary={work === "" ? worked : `${worked}${WORKED_SEPARATOR}${work}`}>
-      {drawn}
-    </RetoldTurn>
-  );
 }
 
 /**
@@ -2576,11 +2560,10 @@ function useLogEntries(
       const key = transcriptRowKey(message);
       const arrived = arrivals.get(message.id) ?? NO_ARRIVED;
 
-      // Note that only an agent's turn holding more parts than two pieces' worth can be cut, so no other is read again here, and that a turn folded closed under a call is one row, its fold holding it whole.
+      // Note that only an agent's turn holding more parts than two pieces' worth can be cut, so no other is read again here.
       if (
         message.role !== MESSAGE_ROLE.ASSISTANT ||
-        message.parts.length + arrived.length <= PIECE_ROWS * 2 ||
-        placing.calls.folded.has(message.id)
+        message.parts.length + arrived.length <= PIECE_ROWS * 2
       ) {
         return [{ key, row, index }];
       }
@@ -3199,7 +3182,6 @@ function AgentTranscriptView({
                           taskId={message === description ? taskId : undefined}
                           lead={lead}
                           moving={message.id === writing}
-                          folded={calls.folded.has(message.id)}
                           delegation={delegation}
                           todos={todos}
                           briefTitle={briefTitle}

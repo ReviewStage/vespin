@@ -242,7 +242,7 @@
   /* Note that a sheet stands as every card does (`@repo/ui`'s `Card`): its
      hairline ring and Geist's card shadow. */
   box-shadow:
-    0 0 0 1px var(--ui-color-border),
+    0 0 0 1px var(--ui-color-card-edge),
     var(--ui-shadow-card);
 }
 

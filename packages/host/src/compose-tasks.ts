@@ -1211,6 +1211,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   const coldNone = new Set<string>();
   /** The ids read into the list as cold tasks, which a session signing in reads again, since its windows hold them still. */
   const coldRead = new Set<string>();
+  /** The ids read outside the list now, which a sign-out meanwhile reads again for the session signing in. */
+  const coldPending = new Set<string>();
   /** The ids opened while the list could not be read outside of: signed out, or not answered yet, since until then every task is outside it. Each is read once the list answers, where it holds it not. */
   const coldWaiting = new Set<string>();
 
@@ -1258,7 +1260,14 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         yield* collections.cold(rows.value, mark);
       });
 
-      return Effect.asVoid(FiberMap.run(coldReads, id, read, { onlyIfMissing: true }));
+      coldPending.add(id);
+
+      const pending = Effect.ensuring(
+        read,
+        Effect.sync(() => coldPending.delete(id)),
+      );
+
+      return Effect.asVoid(FiberMap.run(coldReads, id, pending, { onlyIfMissing: true }));
     });
 
   /** The sync id the list drawn from disk was kept at, which the next follow reads past once; none once it has. */
@@ -2833,10 +2842,11 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       yield* FiberMap.clear(editWaits);
       yield* documents.end;
       yield* FiberHandle.clear(listFollow);
-      yield* FiberMap.clear(coldReads);
 
-      // Note that the cold tasks read are read again for the session signing in, as the windows' holds on them stand through a sign-out.
-      for (const id of coldRead) coldWaiting.add(id);
+      // Note that the cold tasks read, and those still being read, are read again for the session signing in, as the windows' holds on them stand through a sign-out.
+      for (const id of [...coldRead, ...coldPending]) coldWaiting.add(id);
+
+      yield* FiberMap.clear(coldReads);
 
       coldRead.clear();
       coldNone.clear();

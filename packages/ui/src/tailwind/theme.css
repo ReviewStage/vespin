@@ -707,6 +707,8 @@
   --color-card-surface: var(--ui-color-surface);
   --color-card-code: var(--ui-color-code-ground);
   --color-card-drop: var(--ui-color-focus-ring);
+  /* The one edge every card wears (`--ui-color-card-edge`). */
+  --color-card-edge: var(--ui-color-card-edge);
   --spacing-card: var(--ui-card-inset);
   --spacing-card-snug: var(--ui-card-inset-snug);
   --spacing-card-compact: var(--ui-card-inset-compact);
@@ -969,13 +971,7 @@
   /* A composer's card (`components/composer-frame/`), lifted as every card
      is, by Geist's card shadow under its border. */
   --shadow-composer: var(--ui-shadow-card);
-  /* A call's bar (`components/call/`), as tall as its two lines; and a
-     caption's small glyph. */
-  --spacing-call-row: calc(
-    var(--ui-type-section-leading) +
-    var(--ui-space-2) +
-    var(--ui-type-caption-leading)
-  );
+  /* A caption's small glyph. */
   --spacing-icon-12: var(--ui-icon-12);
 
   /* The page patterns (`components/layout/`, `settings-*`,

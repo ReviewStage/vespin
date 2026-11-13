@@ -71,7 +71,7 @@ test("the call bar offers Stop only while the agent works, and hands its press t
 
   const bar = (agent: { action: string | undefined } | undefined) =>
     createElement(CallBar, {
-      status: { voiceWord: "Listening", agent },
+      status: { stageWord: undefined, agent },
       microphone: mute,
       speaker: mute,
       onStop: () => (stopped += 1),

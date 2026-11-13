@@ -120,8 +120,8 @@ function DefaultValue({
   );
 }
 
-/** A machine's glyph wearing the dot of whether it listened lately, as its submenu row and the Default machine row draw it. */
-function MachineGlyph({ online }: { online: boolean }): React.JSX.Element {
+/** A machine's glyph wearing the dot of whether it listened lately, as its submenu row, the Default machine row, and a refused call's offers draw it. */
+export function MachineGlyph({ online }: { online: boolean }): React.JSX.Element {
   return (
     <DeviceStandingGlyph
       device={undefined}

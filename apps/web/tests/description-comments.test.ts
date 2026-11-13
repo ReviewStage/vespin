@@ -82,9 +82,9 @@ import { SqlClient } from "effect/sql";
  */
 
 const ORIGIN = "https://app.test";
-const EDIT = (taskId: string) => `/api/plans/${taskId}/description`;
+const EDIT = (taskId: string) => `/api/tasks/${taskId}/description`;
 
-const commentsPath = (taskId: string) => `/api/plans/${taskId}/comments`;
+const commentsPath = (taskId: string) => `/api/tasks/${taskId}/comments`;
 const threadPath = (taskId: string, threadId: string) => `${commentsPath(taskId)}/${threadId}`;
 
 const DESCRIPTION_TEXT =
@@ -201,14 +201,14 @@ const commentsAnswer = (request: Request, clock: Clock.Clock, after?: Layer.Laye
     };
   });
 
-/** One request answered on the test's own clock: the comments resource, or the plans resource's edit. */
-const answer = (routes: "comments" | "plans", request: Request) =>
+/** One request answered on the test's own clock: the comments resource, or the tasks resource's edit. */
+const answer = (routes: "comments" | "tasks", request: Request) =>
   Effect.gen(function* () {
     if (routes === "comments") return yield* commentsAnswer(request, yield* Clock.Clock);
     const services = yield* webServicesOver(yield* Clock.Clock);
 
-    const plans = hostedFetch({
-      plans: tasksProcedures({
+    const tasks = hostedFetch({
+      tasks: tasksProcedures({
         resolveUserId,
         workspaces: yield* fakeWorkspaceSeams,
         sessionSandboxes: sessionSandboxesLayer,
@@ -216,7 +216,7 @@ const answer = (routes: "comments" | "plans", request: Request) =>
       }),
     });
 
-    const response = yield* Effect.promise(() => plans(request, services));
+    const response = yield* Effect.promise(() => tasks(request, services));
 
     return {
       status: response.status,
@@ -424,7 +424,7 @@ it.layer(getTestDB())("a description's comment threads through the routes", (it)
         const deleted = DESCRIPTION_TEXT.replace(`${WORDS} `, "");
 
         const deleting = yield* answer(
-          "plans",
+          "tasks",
           request(
             EDIT(taskId),
             owner,
@@ -447,7 +447,7 @@ it.layer(getTestDB())("a description's comment threads through the routes", (it)
 
         const from = DESCRIPTION_TEXT.indexOf(WORDS);
         yield* answer(
-          "plans",
+          "tasks",
           request(
             EDIT(taskId),
             owner,

@@ -9,7 +9,7 @@
  * `agents-app.ts`'s header, the group these moved from, and of the
  * shells below.
  *
- * A Start (`POST /api/plans/{id}/agents`) takes the one path a start takes
+ * A Start (`POST /api/tasks/{id}/agents`) takes the one path a start takes
  * (`coder-host/start.ts`), reaching the agent's sessions for the account
  * the request resolved to (`coder-host/runtime-sessions.ts`), and answers
  * 201 for the agent it made or 200 for the one a retry under the same key

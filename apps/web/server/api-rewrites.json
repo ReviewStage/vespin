@@ -71,8 +71,8 @@
     "dest": "/api/default.js?route=auth/[...all]&route-path=auth/$1"
   },
   {
-    "src": "/api/plans/([^/]+)/attachments/([^/]+)",
-    "dest": "/api/default.js?route=plans/attachment&id=$1&attachment=$2"
+    "src": "/api/tasks/([^/]+)/attachments/([^/]+)",
+    "dest": "/api/default.js?route=tasks/attachment&id=$1&attachment=$2"
   },
   {
     "src": "/api/agents/([^/]+)/subagents/([^/]+)/pictures/([^/]+)",

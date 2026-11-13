@@ -149,7 +149,7 @@ on any Settings page leaves Settings.
   follows it to every Mac; a pinned tab's is this Mac's, as the tab's pin is.
   A folded Pinned is not dragged. ⌘K offers Pin task or
   Unpin task for the task on screen, through its row menu's own Pin.
-- A pin is the account's own (`PATCH /api/plans/{id}`), so a task of a
+- A pin is the account's own (`PATCH /api/tasks/{id}`), so a task of a
   shared workspace one member pinned stands under Pinned for them alone, the
   pin follows the account to every Mac, and a Pin or Unpin is drawn at once
   and put back, with a quiet note under the task's row, when the service
@@ -193,7 +193,7 @@ Dictate, and Start.
   it stands the task's path: its repository, or "Choose a repository" while
   it has none, then its parent task where it has one, then its key. A
   press on the repository's crumb drops the composer's searchable menu, as
-  ⌘K's Change repository does: a pick is saved through `PATCH /api/plans/{id}`, and a
+  ⌘K's Change repository does: a pick is saved through `PATCH /api/tasks/{id}`, and a
   refusal is said under the path. A task can be used without a repository.
   Under the title stand the status, priority, and assignee chips.
 - **The task's menu**, from the ⋯ in the side panel's bar while the Description tab
@@ -295,7 +295,7 @@ sidebar does (`desktop/side-panel.tsx`, `tasks/use-side-panel.ts`).
   named in place, by a mention, a code block of an Inbox thread, or ⌘K,
   opens whole in a File tab, one per file, the lines named lit; opening a
   file already open chooses its tab and moves the lit lines. The file is read
-  (`GET /api/plans/{id}/file`, `packages/service/src/tasks/task-file.ts`) from GitHub at the
+  (`GET /api/tasks/{id}/file`, `packages/service/src/tasks/task-file.ts`) from GitHub at the
   head of the default branch through the Vespin GitHub App, a `.env` file never
   read (`packages/service/src/tasks/shown-file.ts`); a file changed since is
   drawn as it is now, and one not on that branch, or not read at all, says so
@@ -529,7 +529,7 @@ The service lays each save over what others wrote meanwhile
   empty or unchanged renames nothing.
 - **Saving.** The editor hands its text over once per pause in the typing,
   and the text saves a second after the developer stops and as the editor
-  closes, as the document's base and value (`POST /api/plans/{id}/edit`),
+  closes, as the document's base and value (`POST /api/tasks/{id}/description`),
   through the description's one write, under the row's lock, as the developer's
   revision ("History" below). The base is the text the editor opened on,
   then the developer's own last save; one save is out at a time, and the
@@ -595,7 +595,7 @@ right-click alike) and behind the "Edited by" line, takes the whole window
 the way Settings does (`desktop/desktop-version-history.tsx`): a column as
 wide as the sidebar, with Back at its head, "Version history", and the
 revisions newest first, fifty a page
-(`GET /api/plans/{id}/revisions`), each as who wrote it ("You" or an agent by its row), how many changes it
+(`GET /api/tasks/{id}/description/revisions`), each as who wrote it ("You" or an agent by its row), how many changes it
 made, and how long ago; the newest is labeled "Current", and the description from before
 history reads "Earlier". The list is read while the view stands and again
 whenever the description is edited meanwhile. The chosen revision, the newest when
@@ -603,7 +603,7 @@ the view opens, or, opened from a section's line, the revision that made the
 save it names (the oldest whose latest save is at or after the save's
 moment, older pages read until one shows it, and the newest where one cannot
 be read), is read with the content before it
-(`GET /api/plans/{id}/revisions/{seq}`), and drawn read-only under the task's
+(`GET /api/tasks/{id}/description/revisions/{seq}`), and drawn read-only under the task's
 name as it stands, beside the list (`tasks/version-view.tsx`), under a bar with its moment and Restore this
 version; the up and down arrows step through the list. A row's ⋯, standing
 in its time's place while the row is hovered or focused, and its right-click
@@ -626,7 +626,7 @@ was opened.
 
 Restore this version asks first, in the window's dialog, and then puts the
 revision's text back through the description's one locked save
-(`POST /api/plans/{id}/revisions/{seq}/restore`, `restoreRevision` in
+(`POST /api/tasks/{id}/description/revisions/{seq}/restore`, `restoreRevision` in
 `packages/service/src/tasks/description-notes.ts`). The restore is a revision of the developer's
 ("You") naming the one it brought back, "Restored the version from Oct 11,
 2:14 PM"; it joins no revision and none joins it, so a restore is undone by

@@ -24,7 +24,16 @@ import {
 import { GATEWAY_EVENT, type GatewayEventKind } from "@repo/gateway";
 import { isRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
-import { ConfigProvider, Duration, Effect, Layer, Predicate, PubSub, Stream } from "effect";
+import {
+  ConfigProvider,
+  Deferred,
+  Duration,
+  Effect,
+  Layer,
+  Predicate,
+  PubSub,
+  Stream,
+} from "effect";
 import { TestClock } from "effect/testing";
 import {
   composeMachineCommands,
@@ -102,13 +111,22 @@ const TERMINAL: ComputerApp = { name: "Terminal", bundleId: "com.apple.Terminal"
 /** A third command's id, for a case that queues one past `COMMAND` and `SECOND`. */
 const THIRD_ID = "4b8e2d61-3c7a-4f95-9e0d-1a6b5c8f7e24";
 
-const computerCommand = (id: string, conversationId: string, app: string): MachineCommand => ({
-  id,
-  kind: MACHINE_COMMAND_KIND.COMPUTER,
-  conversationId,
-  action: { op: COMPUTER_ACTION.CLICK, app, element_index: 3 },
-  timeoutSeconds: 60,
-});
+const computerCommand = (
+  id: string,
+  conversationId: string,
+  app: string,
+  agentId?: string,
+): MachineCommand => {
+  const command = {
+    id,
+    kind: MACHINE_COMMAND_KIND.COMPUTER,
+    conversationId,
+    action: { op: COMPUTER_ACTION.CLICK, app, element_index: 3 },
+    timeoutSeconds: 60,
+  };
+
+  return agentId === undefined ? command : { ...command, agentId };
+};
 
 /** A recording the helper stopped: ten seconds of a phone's screen, its MP4 six bytes in base64. */
 const RECORDED = { seconds: 10, width: 603, height: 1311, mp4: "AAECAwQF" };
@@ -354,6 +372,8 @@ interface Gate {
   };
   /** The device this Mac joins as, and the apps Settings allows without asking; none claims as the account alone. */
   device?: { id: string; apps: string[]; applyFails?: number };
+  /** What finishes as an agent's turn ends, as the task list would say; none watches no turn. */
+  turnEnded?: (agentId: string) => Effect.Effect<void>;
 }
 
 /**
@@ -415,6 +435,8 @@ const subject = (
       }),
       client: service.client,
     };
+
+    if (gate.turnEnded !== undefined) dependencies.turnEnded = gate.turnEnded;
 
     if (gate.computer !== undefined) {
       dependencies.computer = {
@@ -1695,5 +1717,55 @@ it.effect(
             : [],
         );
       }
+    }),
+);
+
+it.effect(
+  "the agent's cursor is put away as the turn of the agent whose actions moved it last ends, and never as the turn of an agent it was taken from ends",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+      const service = scriptedService();
+      service.queue(computerCommand(COMMAND.id, AGENT, "Simulator", AGENT), NOW);
+      service.queue(computerCommand(SECOND.id, OTHER_AGENT, "Simulator", OTHER_AGENT), NOW);
+      // The second agent acts twice, so its watch outlives an action of its own.
+      service.queue(computerCommand(THIRD_ID, OTHER_AGENT, "Simulator", OTHER_AGENT), NOW);
+      const firstEnded = yield* Deferred.make<void>();
+      const secondEnded = yield* Deferred.make<void>();
+
+      const releases = () =>
+        scripted.asked.filter((request) => request.op === COMPUTER_HELPER_OP.RELEASE_CURSOR).length;
+
+      const { composer } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        {
+          mode: MACHINE_COMMAND_MODE.ALWAYS,
+          signedIn: true,
+          computer: {
+            helper: scripted.helper,
+            enabled: true,
+            allowed: ["com.apple.iphonesimulator"],
+          },
+          turnEnded: (agentId) => Deferred.await(agentId === AGENT ? firstEnded : secondEnded),
+        },
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          assert.equal(service.settledResults.size, 3, "every action ran");
+
+          // The first agent's turn ends after the second took the cursor over.
+          yield* Deferred.succeed(firstEnded, undefined);
+          yield* settled;
+          assert.equal(releases(), 0, "the cursor stands for the second agent");
+
+          yield* Deferred.succeed(secondEnded, undefined);
+          yield* settled;
+          assert.equal(releases(), 1, "the cursor is put away as its holder's turn ends");
+        }),
+      );
     }),
 );

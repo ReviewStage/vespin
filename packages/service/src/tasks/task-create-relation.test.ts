@@ -70,7 +70,7 @@ const starting = (bearers: ReadonlyMap<string, string>) =>
     );
 
     const handle = hostedFetch({
-      plans: tasksProcedures({
+      tasks: tasksProcedures({
         resolveUserId: (incoming: Request) =>
           Effect.succeed(
             Option.fromNullishOr(bearers.get(incoming.headers.get("authorization") ?? "")),
@@ -87,7 +87,7 @@ const starting = (bearers: ReadonlyMap<string, string>) =>
     return (bearer: string, body: TaskCreateRequest, idempotencyKey?: string) =>
       Effect.promise(async () => {
         const response = await handle(
-          new Request(new URL("/api/plans", ORIGIN), {
+          new Request(new URL("/api/tasks", ORIGIN), {
             method: "POST",
             headers: {
               authorization: bearer,

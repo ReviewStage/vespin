@@ -8,7 +8,10 @@
  * an agent's status moves with the clock alone and a live query reads no
  * clock. So it is drawn again each time either moves, and at the nearest
  * instant the clock alone moves it (the drawing's `edge`): the one clock
- * left here, armed only while such an agent stands. One drawer stands for
+ * left here, armed only while such an agent stands. The follow's answers
+ * past a sync id are drawn once a tick (`drawnPerTick`), since every draw
+ * builds the whole list and pushes it to every window; a write, a whole
+ * answer, and an edge draw at once. One drawer stands for
  * the scope (`taskListDrawer`), so each drawing builds again only the plans
  * and agents a moved row or that instant reaches, and every other is the
  * object drawn before.
@@ -43,7 +46,7 @@ import type {
 } from "@repo/features/task-wire";
 import { type Confirmation, type EntityPool, fieldKind, type HeldRows } from "@repo/sync";
 import { Effect, type Scope } from "effect";
-import { drawnAtEdges } from "./live-collection.js";
+import { drawnAtEdges, drawnPerTick } from "./live-collection.js";
 import { confirmWrite, type SyncStanding, syncIdOf, type TxWait } from "./live-follow.js";
 
 /** A plan's row as the list's statement answers it. */
@@ -90,15 +93,22 @@ export interface TaskListCollections {
   readonly synced: () => TaskListLiveRows;
   /** Whether the list draws the task or the agent `id` names, from its follow or as a cold one. */
   readonly holds: (id: string) => boolean;
-  /** Where the follow's answers stand now, which a read outside the list is marked with as it is asked. */
-  readonly mark: () => number;
+  /** Marks a read outside the list as it is asked: where the follow's answers stand, and its own place among such reads. */
+  readonly mark: () => ColdMark;
   /**
    * Takes one task read outside the list, its plan and its agents, as cold
    * rows drawn beside the list's, and draws it, the read asked at `mark`;
-   * each the follow holds is the follow's alone, and each it let go since
-   * `mark` is gone, not drawn back by an answer read before it went.
+   * each the follow holds is the follow's alone, each it let go since
+   * `mark` is gone, not drawn back by an answer read before it went, and
+   * each a read asked later already drew stands as that one drew it.
    */
-  readonly cold: (rows: TaskListLiveRows, mark: number) => Effect.Effect<void>;
+  readonly cold: (rows: TaskListLiveRows, mark: ColdMark) => Effect.Effect<void>;
+}
+
+/** Where a read outside the list was asked: the follow's answers given by then, and how many such reads were asked before it. */
+export interface ColdMark {
+  readonly answers: number;
+  readonly asked: number;
 }
 
 /**
@@ -130,6 +140,9 @@ export function taskListCollections(
     /** How many answers the follow gave, and the answer each id it let go was let go at. */
     let answers = 0;
     const letGoAt = new Map<string, number>();
+    /** How many reads outside the list were asked, and the newest read each cold row was drawn from. */
+    let coldAsked = 0;
+    const coldDrawnBy = new Map<string, number>();
     // Note that a write still standing once the scope closed draws nothing, since a sign-out closed it and its rows were the account's that left.
     let open = true;
     yield* Effect.addFinalizer(() =>
@@ -144,7 +157,8 @@ export function taskListCollections(
       return wait === undefined ? undefined : (txid) => confirmWrite(wait, txid);
     };
 
-    const redraw = () => Effect.suspend(() => drawn);
+    // Note that only the list's own follow stands on these kinds, so the pool redraws them for a write the member made, or its answer taken in the list's place: at once, so a press never waits a tick.
+    const redraw = () => Effect.suspend(() => ticks.drawn);
 
     // Note that every plan made is the list's, since it holds every task the account reaches.
     const plans: HeldRows<PlanRow> = yield* pool.stand(PLAN, {
@@ -207,6 +221,8 @@ export function taskListCollections(
       return edge;
     });
 
+    const ticks = yield* drawnPerTick(drawn);
+
     return {
       answer: (rows, standing) =>
         Effect.suspend(() => {
@@ -242,7 +258,8 @@ export function taskListCollections(
             const agentsMoved = yield* agents.answer(rows.agents, answered(agentKeys));
             // Note that a cold task the follow now answers is the follow's alone, so one it later lets go is gone from the list too.
             yield* settleCold;
-            yield* drawn;
+            // Note that a whole answer, the list's first or one read again, draws at once, and one past a sync id rides the tick, since a busy account's agents answer many a second.
+            yield* standing?.past === undefined ? ticks.drawn : ticks.soon;
 
             return plansMoved.length + agentsMoved.length > 0;
           });
@@ -250,14 +267,24 @@ export function taskListCollections(
       synced: () => ({ plans: plans.synced(), agents: agents.synced() }),
       holds: (id) =>
         plans.holds(id) || agents.holds(id) || coldPlans.holds(id) || coldAgents.holds(id),
-      mark: () => answers,
+      mark: () => {
+        coldAsked += 1;
+
+        return { answers, asked: coldAsked };
+      },
       cold: (rows, mark) =>
         Effect.gen(function* () {
-          const standing = (row: { readonly id: string }) => (letGoAt.get(row.id) ?? 0) <= mark;
+          // Note that two reads outside the list may answer one row, a task's and one of its agents', so a row a later-asked read drew is not drawn back as an earlier one read it.
+          const standing = (row: { readonly id: string }) =>
+            (letGoAt.get(row.id) ?? 0) <= mark.answers &&
+            (coldDrawnBy.get(row.id) ?? 0) <= mark.asked;
+
           const planRows = rows.plans.filter((row) => !plans.holds(row.id) && standing(row));
           const agentRows = rows.agents.filter((row) => !agents.holds(row.id) && standing(row));
 
           if (planRows.length + agentRows.length === 0) return;
+
+          for (const row of [...planRows, ...agentRows]) coldDrawnBy.set(row.id, mark.asked);
           coldPlanKeys = [...new Set([...coldPlanKeys, ...planRows.map((row) => row.id)])];
           coldAgentKeys = [...new Set([...coldAgentKeys, ...agentRows.map((row) => row.id)])];
           yield* coldPlans.answer(planRows, { held: coldPlanKeys });

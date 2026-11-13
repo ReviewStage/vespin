@@ -109,7 +109,7 @@ import { dispatched } from "./support/platform-landing";
  */
 
 const ORIGIN = "https://app.test";
-const TASKS = "/api/plans";
+const TASKS = "/api/tasks";
 const ONE_TASK = (taskId: string) => `${TASKS}/${taskId}`;
 const FILE = (taskId: string) => `${ONE_TASK(taskId)}/file`;
 const SKILLS = (taskId: string) => `${ONE_TASK(taskId)}/skills`;
@@ -255,7 +255,7 @@ const answer = (signedIn: SignedIn, github: FakeGitHub, request: Request, landed
 
     const routed = hostedFetch({
       messages: messagesProcedures(seams),
-      plans: tasksProcedures(seams),
+      tasks: tasksProcedures(seams),
       taskFiles: taskFilesProcedures(seams),
     });
 
@@ -1432,7 +1432,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const steered = (method?: string) =>
           ask(
             request(PAGES(taskId), owner, {
-              query: { [DISPATCH_QUERY.PATH]: "plans/plan" },
+              query: { [DISPATCH_QUERY.PATH]: "tasks/plan" },
               ...(method === undefined ? undefined : { method }),
             }),
           );

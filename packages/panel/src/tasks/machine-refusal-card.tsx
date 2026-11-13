@@ -23,14 +23,16 @@ import { GLYPH } from "@repo/ui/icons";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import type { UnparsedWireValue } from "@repo/wire";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useContext, useRef, useState } from "react";
 import { type ActResult, askAct, toastActFailure } from "../act.js";
 import { sendMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, ActorRef } from "../actor-ref.js";
+import { workspaceToolsQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { showToast } from "../toast.js";
+import { MachineGlyph } from "./agent-machines.js";
 import { TranscriptAgent } from "./line-cards.js";
 
 /**
@@ -41,9 +43,12 @@ import { TranscriptAgent } from "./line-cards.js";
  * why as data (`why`) and names the machines that could take it now
  * (`others`), beside the words the model reads (`machineRefusalOf`). The
  * card says why in its own words, as a failure note does (`Banner`'s
- * card, its mark in the danger ink), and offers each other machine by name,
- * a teammate's wearing its owner's face. A press makes that machine the
- * agent's default, through the same request the Default machine row sends
+ * card, its mark in the danger ink), and offers each other machine as the
+ * Default machine menu lists it: its glyph wearing the dot of whether it
+ * listens now, a teammate's face, then its name, the line above saying
+ * what a press does; a machine the agent's tools no longer list keeps the
+ * dot it had when it was offered. A press makes that machine the agent's
+ * default, through the same request the Default machine row sends
  * (`agent-machines.tsx`), then tells the agent to try again there, as a
  * member's own message does, naming the machine's id so the agent may name
  * it in its call; one taken holds the card's other presses off. With no
@@ -56,9 +61,8 @@ import { TranscriptAgent } from "./line-cards.js";
 
 /** What the card says and sends. */
 const MACHINE_REFUSAL_WORDS = {
-  OFFER: "Make another machine this agent's default and try again:",
+  OFFER: "Make one of these this agent's default and try again:",
   NO_OTHER: "No other machine can take it now.",
-  USE: "Use",
   USING: "Setting the default",
   REFUSED: "The default machine could not be changed.",
   UNSENT: "The default machine changed, but the agent could not be told to try again.",
@@ -136,9 +140,10 @@ function refused(words: string, agentId: string, cause: unknown): void {
 
 /**
  * The agent's default made the machine given, then the agent told to try
- * again there; answers whether the default moved, so a press refused there
- * is offered again. A message refused after the default moved is said in a
- * toast, and the press stands taken, since the member's own may say it.
+ * again there; answers whether both went, so a press refused at either is
+ * offered again, each refusal said in a toast. Note that pressing again
+ * after a message refused sets the same default once more, which changes
+ * nothing, and sends the message again.
  */
 async function moveDefault(
   agentId: string,
@@ -159,9 +164,10 @@ async function moveDefault(
   // Note that a send that never reached the host is said as unsent too, since the default already moved.
   const sent = await send(tryAgainLine(machine)).catch((cause: unknown) => ({ failure: cause }));
 
-  if ("failure" in sent) refused(MACHINE_REFUSAL_WORDS.UNSENT, agentId, sent.failure);
+  if (!("failure" in sent)) return true;
+  refused(MACHINE_REFUSAL_WORDS.UNSENT, agentId, sent.failure);
 
-  return true;
+  return false;
 }
 
 /** The card under a terminal command or an action on an app that routing refused; nothing for any other call. */
@@ -177,9 +183,11 @@ export function MachineRefusalCard({
   const { members, readerId, former } = useMemberDirectory();
   // Note that a press taken is kept in a ref as well as drawn, so a second press before the draw sends nothing.
   const taken = useRef(false);
-  // The machine pressed, and whether its default moved; none before a press, or after one refused.
+  // The machine pressed, and whether its default moved and the agent was told; none before a press, or after one refused.
   const [pressed, setPressed] = useState<{ id: string; moved: boolean } | undefined>(undefined);
   const press = useAsyncAction(rejectionWords);
+  // Note that a machine's dot is read live, since a card may be read long after the refusal that offered it.
+  const listing = useQuery(workspaceToolsQuery(agentId)).data?.machines;
 
   const { mutateAsync: sendMessage } = useMutation(
     sendMutation(ACT_KIND.AGENTS_MESSAGE, () => SENTRY_SEND_SPAN.AGENT_SEND),
@@ -200,9 +208,9 @@ export function MachineRefusalCard({
 
     void press.run(() =>
       moveDefault(agentId, machine, send).then(
-        (moved) => {
-          taken.current = moved;
-          setPressed(moved ? { id: machine.id, moved } : undefined);
+        (went) => {
+          taken.current = went;
+          setPressed(went ? { id: machine.id, moved: true } : undefined);
         },
         (cause: unknown) => {
           taken.current = false;
@@ -226,14 +234,9 @@ export function MachineRefusalCard({
             key={machine.id}
             variant={BUTTON_VARIANT.OUTLINE}
             icon={
-              machine.owner.userId === readerId ? (
-                <GLYPH.DESKTOP aria-hidden="true" />
-              ) : (
-                <ActorMark
-                  actor={personActor(machine.owner, members, readerId, former)}
-                  size={ACTOR_SIZE.INLINE}
-                />
-              )
+              <MachineGlyph
+                online={listing?.find((listed) => listed.id === machine.id)?.online ?? true}
+              />
             }
             {...(pressed?.id === machine.id && !pressed.moved
               ? { busy: true, busyLabel: MACHINE_REFUSAL_WORDS.USING }
@@ -241,7 +244,14 @@ export function MachineRefusalCard({
             disabled={pressed !== undefined}
             onClick={() => use(machine)}
           >
-            {MACHINE_REFUSAL_WORDS.USE}{" "}
+            {machine.owner.userId === readerId ? null : (
+              <>
+                <ActorMark
+                  actor={personActor(machine.owner, members, readerId, former)}
+                  size={ACTOR_SIZE.INLINE}
+                />{" "}
+              </>
+            )}
             <ReplayWords masked>
               {machineName({ deviceId: machine.id, name: machine.name }, listed, thisMac)}
             </ReplayWords>

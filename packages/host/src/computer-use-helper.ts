@@ -70,14 +70,16 @@ const RECORDING_FAILURE_OF: ReadonlyMap<string, RecordingFailure> = new Map([
 /**
  * The requests beyond the agent's actions: one app named, without launching
  * it, so the developer can be asked about it; the apps installed, without
- * their icons, for the developer's @ list; and the Mac's two grants,
- * read, or asked for by macOS's own prompts, for Settings to show.
+ * their icons, for the developer's @ list; the Mac's two grants,
+ * read, or asked for by macOS's own prompts, for Settings to show; and the
+ * agent's cursor put away as its turn ends, which no model is offered.
  */
 export const COMPUTER_HELPER_OP = {
   DESCRIBE_APP: "describe_app",
   LIST_INSTALLED_APPS: "list_installed_apps",
   PERMISSIONS: "permissions",
   REQUEST_PERMISSIONS: "request_permissions",
+  RELEASE_CURSOR: "release_cursor",
 } as const;
 
 /**
@@ -97,7 +99,8 @@ export type ComputerHelperRequest =
       readonly op:
         | typeof COMPUTER_HELPER_OP.LIST_INSTALLED_APPS
         | typeof COMPUTER_HELPER_OP.PERMISSIONS
-        | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS;
+        | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS
+        | typeof COMPUTER_HELPER_OP.RELEASE_CURSOR;
     };
 
 /** Whether macOS lets the helper capture other apps' windows and post input to them. */
