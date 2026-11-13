@@ -94,6 +94,17 @@ function keep(kept: Kept, url: string, answer: Answer): void {
   }
 }
 
+/**
+ * The answer as `fetch` would hand it, at the URL it was asked of, as
+ * `fetch` names it: a `Response` built here names none, and Octokit's
+ * paginator reads the URL of a listing's page that wraps its items.
+ */
+function at(response: Response, url: string): Response {
+  Object.defineProperty(response, "url", { value: url });
+
+  return response;
+}
+
 /** The kept answer, with the rate-limit headers and date of the `304` that confirmed it. */
 function fromKept(answer: KeptAnswer, confirmed: Answer): Response {
   const headers = new globalThis.Headers(answer.headers);
@@ -159,11 +170,11 @@ export function githubFetch(
     );
 
     if (answer.status === STATUS.NOT_MODIFIED && known !== undefined) {
-      return fromKept(known, answer);
+      return at(fromKept(known, answer), url);
     }
 
     if (method === "GET" && answer.status === STATUS.OK) keep(kept, url, answer);
 
-    return toResponse(answer);
+    return at(toResponse(answer), url);
   };
 }

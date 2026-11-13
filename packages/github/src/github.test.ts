@@ -385,4 +385,23 @@ describe("GitHub", () => {
       });
     }).pipe(Effect.provide(layer));
   });
+
+  it.effect("reads a listing whose page wraps its items", () => {
+    const { layer } = harness(() =>
+      Response.json({ total_count: 1, repository_selection: "all", repositories: [{ id: 7 }] }),
+    );
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+
+      const listed = yield* github
+        .asMember(Redacted.make("gho_member"))
+        .paginate("GET /installation/repositories", { per_page: 100 }, { maxPages: 2 });
+
+      assert.deepStrictEqual(
+        listed.map((repository) => repository.id),
+        [7],
+      );
+    }).pipe(Effect.provide(layer));
+  });
 });
