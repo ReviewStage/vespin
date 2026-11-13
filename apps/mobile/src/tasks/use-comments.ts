@@ -410,8 +410,10 @@ export function useCommentStart(
       });
 
       if (!went) return undefined;
-      setSentLocal(undefined);
       const now = startDraftOf(taskId, block);
+      // Note that a newer send's key, kept by a screen a rotation drew, stays with the draft until that send settles.
+      const pending = now?.sent?.threadId === threadId ? undefined : now?.sent;
+      setSentLocal(pending);
 
       // Note that the draft goes only while it still holds the words this send carried, so words typed meanwhile, on this screen or one a rotation drew, stay in the field and kept.
       if (now === undefined || now.revision === revision) {
@@ -419,7 +421,7 @@ export function useCommentStart(
         keepStartDraft(taskId, block, undefined);
       } else {
         setLocal(now.words);
-        keepStartDraft(taskId, block, { ...now, sent: undefined });
+        keepStartDraft(taskId, block, { ...now, sent: pending });
       }
 
       return threadId;
