@@ -551,7 +551,7 @@ type RepositorySetUnreached =
     };
 
 /** One installation token for several repositories: each as GitHub spells it, in the order named, and the token, good for an hour from its mint. */
-interface GitHubRepositoriesToken {
+export interface GitHubRepositoriesToken {
   readonly repositories: readonly GitHubRepository[];
   readonly token: Redacted.Redacted;
   readonly access: { readonly kind: typeof GITHUB_ACCESS.APP };
@@ -766,6 +766,24 @@ export interface GitHubAppService {
     member: string | undefined,
   ) => Effect.Effect<
     Result.Result<GitHubRepositoriesToken, RepositorySetUnreached>,
+    GitHubWorkspaceReadFailure,
+    HttpClient.HttpClient | DatabaseServices
+  >;
+  /**
+   * One pull request read token for each installation of the workspace that
+   * reaches any of the repositories named, beside the repositories it
+   * reaches of them in the order named: minted as the App for the whole
+   * installation, with contents and pull requests read, and kept as a
+   * repository's is, so a read asked again within the hour mints nothing. A
+   * repository no installation of the workspace reaches is left out, never
+   * read on a member's own token; none reached mints none. What reads
+   * several repositories in one GraphQL request, such as their merge queues.
+   */
+  readonly repositoriesPullRequestTokens: (
+    organizationId: string,
+    fullNames: readonly string[],
+  ) => Effect.Effect<
+    readonly GitHubRepositoriesToken[],
     GitHubWorkspaceReadFailure,
     HttpClient.HttpClient | DatabaseServices
   >;
@@ -2393,6 +2411,41 @@ function githubAppService(
           };
 
           return Result.succeed(token);
+        }),
+      repositoriesPullRequestTokens: (organizationId, fullNames) =>
+        Effect.gen(function* () {
+          const byInstallation = new Map<number, ReachedThroughApp[]>();
+
+          for (const fullName of fullNames) {
+            const reached = yield* standingReach(
+              new ReachKey({ organizationId, fullName, member: undefined }),
+            );
+
+            // Note that with no member named only the App reaches a repository, so a token reach is none here.
+            if (Result.isFailure(reached) || reached.success.access !== GITHUB_ACCESS.APP) continue;
+            const on = reached.success.installation.id;
+            byInstallation.set(on, [...(byInstallation.get(on) ?? []), reached.success]);
+          }
+
+          return yield* Effect.forEach([...byInstallation], ([installationId, reached]) =>
+            Effect.map(
+              Cache.get(
+                tokens,
+                new TokenKey({
+                  organizationId,
+                  member: undefined,
+                  installationId,
+                  repository: undefined,
+                  permissions: INSTALLATION_TOKEN_PERMISSIONS.PULL_REQUESTS,
+                }),
+              ),
+              ({ token }): GitHubRepositoriesToken => ({
+                repositories: reached.map((one) => one.repository),
+                token,
+                access: { kind: GITHUB_ACCESS.APP },
+              }),
+            ),
+          );
         }),
       userPusher: (userId, fullName) =>
         Effect.gen(function* () {
