@@ -197,9 +197,10 @@ function appNamed(apps: readonly UsedApp[], name: string): UsedApp | undefined {
 
 /**
  * The apps in use as a stack floating over the box, or its pill; nothing
- * where the agent's turn used no app. Note that the stack is its own
- * component, so the viewer it opened goes with it as the turn ends rather
- * than standing open into the next.
+ * where the agent's turn used no app. Note that the stack is drawn anew for
+ * each turn the agent works (`turn`), so the viewer it opened, and the app
+ * the reader brought forward, go with the turn rather than standing into
+ * the next.
  */
 export function ComputerDock({
   agentId,
@@ -215,10 +216,28 @@ export function ComputerDock({
 }): ReactNode {
   const inUse = useMemo(() => appsInUse(messages, working), [messages, working]);
   const top = inUse?.apps[0];
+  // How many turns the agent has started working while the stack stood, which keys the stack.
+  const [turn, setTurn] = useState(0);
+  const [wasWorking, setWasWorking] = useState(working);
+
+  if (wasWorking !== working) {
+    setWasWorking(working);
+
+    if (working) setTurn(turn + 1);
+  }
 
   if (inUse === undefined || top === undefined) return null;
 
-  return <AppsFloat agentId={agentId} inUse={inUse} top={top} working={working} onRoom={onRoom} />;
+  return (
+    <AppsFloat
+      key={turn}
+      agentId={agentId}
+      inUse={inUse}
+      top={top}
+      working={working}
+      onRoom={onRoom}
+    />
+  );
 }
 
 /** Says to `onRoom` how much room the element takes over the transcript's end, its margin under it included, as it changes and once it goes. */
@@ -269,18 +288,18 @@ function AppsFloat({
   const onThatMac = useOnThatMac(agentId);
   const { mutate: showApp } = useMutation(pressMutation(ACT_KIND.MAC_APP_SHOW));
   const [putDown, setPutDown] = useState(() => STACKS_DOWN.has(agentId));
-  // Note that the stack the reader brought back once the agent was done stands only until the agent works again.
+  // Note that the stack is drawn anew as the agent works again (`ComputerDock`), so one the reader brought back once it was done stands only until then.
   const [doneOpen, setDoneOpen] = useState(false);
-  const [wasWorking, setWasWorking] = useState(working);
+  // Note that an app the reader brought forward stays in front only until the agent moves to another app, even one it moves back from.
+  const [picked, setPicked] = useState<string>();
+  const [pickedOver, setPickedOver] = useState(top.app);
 
-  if (wasWorking !== working) {
-    setWasWorking(working);
-    setDoneOpen(false);
+  if (pickedOver !== top.app) {
+    setPickedOver(top.app);
+    setPicked(undefined);
   }
 
-  // Note that an app the reader brought forward stays in front only while the agent stays in the app it was in then.
-  const [picked, setPicked] = useState<{ readonly top: string; readonly app: string }>();
-  const front = (picked?.top === top.app ? appNamed(inUse.apps, picked.app) : undefined) ?? top;
+  const front = (picked === undefined ? undefined : appNamed(inUse.apps, picked)) ?? top;
   const window = useKeptPicture(front.window?.id);
   const icons = useKeptPictures(inUse.apps.map((each) => each.icon));
   const down = working ? putDown : !doneOpen;
@@ -326,7 +345,7 @@ function AppsFloat({
             apps={apps}
             shown={front.app}
             using={using}
-            onPick={(name) => setPicked({ top: top.app, app: name })}
+            onPick={setPicked}
             onMinimize={putAway}
             onOpen={() => {
               // Note that an app in front whose window was never read opens the newest window another app's call kept.
