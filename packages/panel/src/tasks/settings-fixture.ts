@@ -57,6 +57,7 @@ import {
   type IntegrationStatus,
 } from "@repo/features/integration-wire";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
 import type { MemorySummary } from "@repo/features/memory-wire";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { FIRST_PARTY_OAUTH_CLIENT_ID } from "@repo/features/oauth-client-ids";
@@ -81,6 +82,7 @@ import {
   type AppInstalledSkills,
   type AppIntegrations,
   type AppIntegrationTools,
+  type AppMachines,
   type AppMcpClients,
   type AppMemories,
   type AppModels,
@@ -135,6 +137,7 @@ const STAGED_EXPERIMENTS = {
   [EXPERIMENT.REWIND_FILES]: true,
   [EXPERIMENT.TURN_CHANGES]: true,
   [EXPERIMENT.GOALS]: true,
+  [EXPERIMENT.COMPUTER_USE]: true,
 } as const;
 
 /** The staged hosts, by id. */
@@ -945,6 +948,20 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
 
 /** Every read the staged pages ask, answered as the service would answer it for this account. */
 const ANSWERS: StagedAnswers = {
+  // How the staged Mac names the apps it always allows, as Settings › Machines and an agent's `@` list read them.
+  [ACT_KIND.HOSTS_ALLOWED_APPS]: () => ({
+    machines: [
+      {
+        deviceId: FIXTURE_HOST.MAC,
+        name: "studio-mini",
+        apps: ["com.apple.Notes", "com.apple.calculator"],
+        looks: [
+          { app: "com.apple.Notes", name: "Notes" },
+          { app: "com.apple.calculator", name: "Calculator" },
+        ],
+      },
+    ],
+  }),
   // A box waiting on its code, as a pairing's link opened over Settings › Hosts reads it.
   [ACT_KIND.HOSTS_PAIRING_READ]: () => ({
     name: "fra-02",
@@ -1130,6 +1147,47 @@ const STAGED_HOSTS: AppHosts = {
       ],
       installScriptUrl: STAGED_INSTALL_SCRIPT,
     },
+  },
+};
+
+/** A Mac the account signed in on that runs no agents, whose app has gone quiet. */
+const STAGED_LAPTOP = "7d3c2a10-0000-4000-8000-0000000000a1";
+
+/**
+ * The account's staged machines with their own settings for agents, as the
+ * host holds them for Settings › Machines: the Mac that runs its agents,
+ * online, asking before each command and always allowing two apps, and a
+ * laptop that only runs the app, offline, running no commands and using no
+ * apps.
+ */
+const STAGED_MACHINES: AppMachines = {
+  [ACCOUNT_ID]: {
+    rows: [
+      {
+        id: FIXTURE_HOST.MAC,
+        name: "studio-mini",
+        platform: DEVICE_PLATFORM.DARWIN,
+        host: true,
+        listening: true,
+        settings: {
+          commandMode: MACHINE_COMMAND_MODE.ASK,
+          computerUse: true,
+          alwaysAllowedApps: ["com.apple.Notes", "com.apple.calculator"],
+        },
+      },
+      {
+        id: STAGED_LAPTOP,
+        name: "MacBook Air",
+        platform: DEVICE_PLATFORM.DARWIN,
+        host: false,
+        listening: false,
+        settings: {
+          commandMode: MACHINE_COMMAND_MODE.NEVER,
+          computerUse: false,
+          alwaysAllowedApps: [],
+        },
+      },
+    ],
   },
 };
 
@@ -1368,6 +1426,7 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
     [LIVE_READ.ACCOUNT_PREFERENCES]: STAGED_PREFERENCES,
     [LIVE_READ.DEVICE_PRESENCE]: beatsStaged(),
     [LIVE_READ.HOSTS]: STAGED_HOSTS,
+    [LIVE_READ.MACHINES]: STAGED_MACHINES,
     [LIVE_READ.INSTALLED_SKILLS]: STAGED_SKILLS,
     [LIVE_READ.INTEGRATIONS]: STAGED_INTEGRATIONS,
     [LIVE_READ.WORKSPACE_INVITATIONS]: HELD_INVITATIONS,

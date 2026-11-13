@@ -226,6 +226,19 @@ export const AGENT_ACT_KIND = {
   /** The beats a window holds asked again now, as the window comes back online. */
   HOSTS_PRESENCE_REFRESH: "hosts.presenceRefresh",
   HOSTS_REMOVE: "hosts.remove",
+  /**
+   * The account's machines as Settings › Machines reads and changes them,
+   * each with its own settings for agents' commands and apps: held for the
+   * window while it holds the stream open and a while after, read again at
+   * once as Try again asks, one changed, and one removed. The hold's stream
+   * carries nothing: what it holds reaches the panel on app state
+   * (`LIVE_READ.MACHINES`), where a change is drawn over its machine, and a
+   * removal drawn gone, the moment it is asked.
+   */
+  MACHINES_FOLLOW: "machines.follow",
+  MACHINES_RETRY: "machines.retry",
+  MACHINES_CHANGE: "machines.change",
+  MACHINES_REMOVE: "machines.remove",
   /** Run agents on this Mac turned on or off, from This Mac's row in Settings › Hosts; only the desktop answers it. */
   HOSTS_THIS_MAC_SET: "hosts.thisMacSet",
   HOSTS_PAIRING_READ: "hosts.pairingRead",
@@ -1055,6 +1068,10 @@ export const PORT_ACT_USE = {
   HOSTS_PRESENCE_FOLLOW: ACT_USE.READ,
   HOSTS_PRESENCE_REFRESH: ACT_USE.READ,
   HOSTS_REMOVE: ACT_USE.WRITE,
+  MACHINES_FOLLOW: ACT_USE.READ,
+  MACHINES_RETRY: ACT_USE.READ,
+  MACHINES_CHANGE: ACT_USE.WRITE,
+  MACHINES_REMOVE: ACT_USE.WRITE,
   HOSTS_THIS_MAC_SET: ACT_USE.WRITE,
   HOSTS_PAIRING_READ: ACT_USE.FETCH,
   HOSTS_ALLOWED_APPS: ACT_USE.FETCH,

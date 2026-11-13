@@ -27,6 +27,28 @@ export const MACHINES_WORDS = {
   UNINSTALL_FIELD: "Uninstall command",
 } as const;
 
+/** What the page says of each machine's own say over agents there, which any of the member's devices changes. */
+export const MACHINE_SETTINGS_WORDS = {
+  TITLE: "What agents may do",
+  CAPTION:
+    "Each machine's own settings for agents' terminal commands and apps. A machine takes a change as soon as it's online.",
+  NONE: `No machine has joined yet. Sign in to ${PRODUCT_NAME} on a Mac to add it here.`,
+  COMMANDS: "Terminal commands",
+  APPS: "Let agents use its apps",
+  APPS_DETAIL: "Agents ask before using an app unless it's always allowed below.",
+  CHANGE_FAILED: "Could not change this machine. Try again.",
+} as const;
+
+/** What a machine's Remove asks of the machine called `label` that runs no agents: it stops taking commands, and stands again where the app still runs there. */
+export function removeCommandMachineQuestion(label: string) {
+  return {
+    title: `Remove ${label}?`,
+    body: `Agents' terminal commands and computer use stop going to it. If ${PRODUCT_NAME} still runs on it, it's added back the next time it starts.`,
+    verb: "Remove machine",
+    running: "Removing",
+  } as const;
+}
+
 /** What a machine's line leads with, by where it stands; a standing not yet told says nothing. */
 export const MACHINE_STANDING_WORDS = {
   [DEVICE_STANDING.ONLINE]: "Online",

@@ -69,6 +69,7 @@ import { DeviceGlyph } from "../tasks/runs-on.js";
 import { showToast } from "../toast.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
+import { MachineSettingsSection } from "./machine-settings-section.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
@@ -110,6 +111,10 @@ import { SECTION, settingsSectionHead } from "./settings-sections.js";
  * since nothing enrolls it again unasked. A Mac whose host is another
  * account's says so where turning it on or off is refused. A browser tab has no This
  * Mac, so it draws none.
+ *
+ * Under the list stands what agents may do on each of the member's
+ * machines, a host or a Mac that only runs the app alike
+ * (`machine-settings-section.tsx`).
  *
  * The list is the host's (`LIVE_READ.HOSTS`): followed live while the page
  * stands and a while after, so a host joining, leaving, renamed, or moving
@@ -728,10 +733,12 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         <>
           {add}
           {list}
+          <MachineSettingsSection signedIn={signedIn} />
         </>
       ) : (
         <>
           {list}
+          <MachineSettingsSection signedIn={signedIn} />
           {add}
         </>
       )}
