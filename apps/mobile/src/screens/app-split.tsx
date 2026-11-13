@@ -5,14 +5,14 @@ import { useEffect, useState } from "react";
 import { InFrontProvider, type PlaceColumns, usePlaceColumns } from "../place-columns.js";
 import {
   SIDEBAR_PLACE,
-  type SidebarPick,
   type SidebarPlace,
   useAppSidebar,
+  useComposeAction,
 } from "./app-sidebar.js";
 import { useSidebarTasks } from "./task-screens.js";
 
-/** A sidebar pick, and the place the route stood in when it was made. */
-type HeldPick = SidebarPick & { readonly over: SidebarPlace | undefined };
+/** A sidebar pick's place, and the place the route stood in when it was made. */
+type HeldPick = { readonly place: SidebarPlace; readonly over: SidebarPlace | undefined };
 
 /** The places, in the order their columns stand kept. */
 const PLACES = [SIDEBAR_PLACE.INBOX, SIDEBAR_PLACE.TASKS, SIDEBAR_PLACE.SEARCH] as const;
@@ -40,8 +40,7 @@ function keptViews(
 /**
  * The tabs' one split view: the app sidebar, with the place `place` names
  * selected, beside the list and the detail that place's root hands over
- * (`useHandColumns`), and the question a sidebar row's Mark done asks
- * first. Note that every place handed so far keeps its list drawn, hidden
+ * (`useHandColumns`), the list's bar ending in New task. Note that every place handed so far keeps its list drawn, hidden
  * behind the one shown, so a tab comes back scrolled where it was left, as
  * Mail keeps each mailbox, while the sidebar stays where it is. Note that
  * the detail column draws the shown place's page alone, because a page such
@@ -78,32 +77,28 @@ export function AppSplit({
     handed.flatMap(([each, columns]) => (columns === undefined ? [] : [[each, columns] as const])),
   );
 
-  const routedTask = place === undefined ? undefined : kept.get(place)?.openTask;
   const [held, hold] = useState<HeldPick | undefined>(undefined);
-  // Note that a moved route, or a task picked in the list instead, drops the hold outright, so the route's own selection stands from then on.
-  useEffect(() => hold(undefined), [place, routedTask]);
+  // Note that a moved route drops the hold outright, so the route's own place stands from then on.
+  useEffect(() => hold(undefined), [place]);
   const pick = held !== undefined && held.over === place ? held : undefined;
   const standing = pick?.place ?? place ?? SIDEBAR_PLACE.INBOX;
   const columns = kept.get(standing);
-  const sidebarTasks = useSidebarTasks();
+  const compose = useComposeAction();
 
-  const sidebar = useAppSidebar(standing, sidebarTasks, pick?.task ?? columns?.openTask, (picked) =>
-    hold({ ...picked, over: place }),
+  const sidebar = useAppSidebar(standing, useSidebarTasks(), (picked) =>
+    hold({ place: picked, over: place }),
   );
 
   return (
-    <>
-      <Screen>
-        <SplitView
-          {...sidebar}
-          content={<KeptColumns shown={standing} views={keptViews(kept, standing, front)} />}
-          contentBar={columns?.contentBar}
-          detail={<InFrontProvider value={front}>{columns?.detail}</InFrontProvider>}
-          detailBar={columns?.detailBar}
-          searchKey={standing}
-        />
-      </Screen>
-      {sidebarTasks.ask}
-    </>
+    <Screen>
+      <SplitView
+        {...sidebar}
+        content={<KeptColumns shown={standing} views={keptViews(kept, standing, front)} />}
+        contentBar={{ ...columns?.contentBar, action: compose }}
+        detail={<InFrontProvider value={front}>{columns?.detail}</InFrontProvider>}
+        detailBar={columns?.detailBar}
+        searchKey={standing}
+      />
+    </Screen>
   );
 }

@@ -1,4 +1,4 @@
-// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and the prominent round + that opens New task; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation.
+// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, in a compact window, the prominent round + that opens New task; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation.
 
 import { iosRouteHidesTabs } from "@repo/features/ios-app-links";
 import { GLYPH, SplitOverTabs, UNDER_SPLIT_SCREEN, useColors } from "@repo/ui-native";
@@ -43,7 +43,11 @@ function useTabRoute(pathname: string): readonly string[] {
 // stands Search last in the bar beside it. The round + opens New task as a
 // sheet over whatever tab stands, rather than standing a tab of its own: it
 // is held unselectable (`disabled`, which keeps its look and only stops the
-// system selecting it), and its press opens the sheet.
+// system selecting it), and its press opens the sheet. It stands only in a
+// compact window, the iPhone's and the folded Duo's: a regular one, an
+// iPad's or the open Duo's, stands New task as the compose button in its
+// list column's bar instead (`useComposeAction`), as Mail does, so a window
+// never offers it twice.
 //
 // The bar is `sidebarAdaptable` on an iPhone, which the iPhone Duo is in
 // either posture: folded, iOS 27 stands its tabs as a glass rail on the
@@ -56,8 +60,9 @@ function useTabRoute(pathname: string): readonly string[] {
 // idiom. A window wide enough for three columns, an iPad's in landscape,
 // hides the bar, and one split view stands over the tabs instead
 // (`screens/app-split.tsx`), the app sidebar its first column, as Mail does:
-// the places, Pinned and the member's sections, the workspace switcher, and
-// Settings, then the list and the page the tab standing hands it. A place
+// the workspace switcher, the places, and Pinned, Following, and the
+// member's sections as collections, then the list and the page the tab
+// standing hands it. A place
 // picked there switches the tab under it, so the sidebar never redraws as
 // the tabs change, and the split view steps behind the tabs while a tab has
 // pushed a page over its root, such as an agent's. Tabs stay mounted across
@@ -117,6 +122,7 @@ export default function TabsLayout() {
         name="new-task"
         prominent
         disabled
+        hidden={!iconOnly}
         accessibilityLabel="New task"
         listeners={{ tabPress: () => router.push("/start-task") }}
       >

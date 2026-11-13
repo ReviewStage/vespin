@@ -18,6 +18,7 @@ import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
 import {
   EmptyState,
   GLYPH,
+  glyphSymbol,
   LIST_LOOK,
   ListSection,
   RowList,
@@ -34,9 +35,10 @@ import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
-import { useThreeColumns } from "../use-window-size-class.js";
+import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
+import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
 import { InboxItemRows } from "./inbox-screens.js";
 import { StatusQuestionAsk, TaskAgentRow, TaskRows, useAgentArchiveAsk } from "./task-screens.js";
@@ -233,6 +235,9 @@ function SearchStackScreen(words: SearchWords) {
 
   const field = useRefilledSearchField(query);
   const switcher = useWorkspaceSwitcher();
+  const compose = useComposeAction();
+  // Note that a regular window's tab bar has no round +, so its Search offers New task in its bar, as the other tabs' lists do.
+  const regular = useWindowSizeClass() !== WINDOW_SIZE_CLASS.COMPACT;
   // Note that what is typed is read through a ref the commit writes, so the focus effect runs only as the tab opens, never on a key or on Cancel clearing the field.
   const typed = useRef(query);
   useEffect(() => {
@@ -255,6 +260,15 @@ function SearchStackScreen(words: SearchWords) {
         />
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
+      {regular ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(compose.symbol)}
+            accessibilityLabel={compose.label}
+            onPress={compose.onPress}
+          />
+        </Stack.Toolbar>
+      ) : null}
       <Screen>{results}</Screen>
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
