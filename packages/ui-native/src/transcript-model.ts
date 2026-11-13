@@ -51,6 +51,7 @@ import { fileName } from "@repo/features/code-ref-words";
 import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
+import { SUGGESTION_LEAD, suggestionWords } from "@repo/features/reply-button-wire";
 import { callHeading, WORKING_LINE, workedForText } from "@repo/features/time-format";
 import {
   BLOCK_TITLE,
@@ -64,6 +65,7 @@ import {
   type ToolState,
 } from "@repo/features/tool-call-block";
 import { shownPageVersion, type ToolCallView, toolCallView } from "@repo/features/tool-call-model";
+import { suggestedByOf, suggestionStartOf } from "@repo/features/transcript-lines";
 import {
   CALL_KIND,
   type CallKind,
@@ -147,9 +149,11 @@ export interface ShownMedia {
   readonly video: boolean;
 }
 
-/** One part of the line naming who sent an automation's prompt: its words, and the address a press opens, where it has one. */
+/** One part of the line naming who sent a line: words before it and after it in the muted ink, such as "Suggested by" and who started an agent, where it has any; its words; and the address a press opens, where it has one. */
 export interface OriginPart {
+  readonly lead?: string | undefined;
   readonly words: string;
+  readonly after?: string | undefined;
   readonly address: string | undefined;
 }
 
@@ -173,7 +177,7 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly words: string;
       /** Who sent it, where the reader did not. */
       readonly sender: string | undefined;
-      /** Who sent an automation's prompt, part by part, where the line is one; it stands in the sender's place. */
+      /** Who sent an automation's prompt, or the agent whose suggestion a line was sent from, part by part; it stands over the sender. */
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
       readonly body?: string | undefined;
@@ -251,6 +255,8 @@ export interface TranscriptReading {
   readonly wholePart?: ((cut: AgentPartCut) => WholePartRead | undefined) | undefined;
   /** What the transcript opens on where an automation's run started the agent, drawn on its first line; none for any other agent, or while older pages are still unread. */
   readonly origin?: TranscriptOrigin | undefined;
+  /** The address of an agent whose suggestion a line was sent from, which the line's head opens; none where it can't be named, when the head names the agent alone. */
+  readonly suggestionAddress?: ((agentId: string) => string | undefined) | undefined;
 }
 
 /** What an automation is called where it can't be named: by the panel's words (`namedAutomationActor`). */
@@ -352,7 +358,41 @@ function showedPictures(part: Extract<AgentPart, { kind: typeof AGENT_PART.TOOL 
 
 type ItemBase = Pick<TranscriptItem, "place" | "depth">;
 
-/** A line someone sent, as its item. */
+/** What the line under a suggestion's card says of who started the agent from it, after the suggesting agent, as the panel's says it. */
+const STARTED_BY = {
+  YOU: ", started by you",
+  MEMBER: (name: string) => `, started by ${name}`,
+} as const;
+
+/**
+ * Who a line sent from a suggestion came from, as the panel heads it: Suggested
+ * by the agent whose reply held it, opening that agent; and, on the first
+ * line of an agent started from it, who started it, the reader where it is
+ * their own, in the sender's place. None for any other line. Note that the
+ * line's own metadata says so, as on the panel, so no experiment gates it:
+ * only a send from a suggestion writes one.
+ */
+function suggestionFrom(
+  line: AgentTranscriptMessage,
+  reading: TranscriptReading,
+  sender: string | undefined,
+): readonly OriginPart[] | undefined {
+  const suggestedBy = suggestedByOf(line);
+
+  if (suggestedBy === undefined) return undefined;
+
+  const by = {
+    lead: SUGGESTION_LEAD,
+    words: suggestedBy.name,
+    address: reading.suggestionAddress?.(suggestedBy.agent_id),
+  };
+
+  if (suggestionStartOf(line) === undefined) return [by];
+
+  return [{ ...by, after: sender === undefined ? STARTED_BY.YOU : STARTED_BY.MEMBER(sender) }];
+}
+
+/** A line someone sent, as its item: one sent from a suggestion headed by who suggested it, its words without the lead that names that agent to the agent reading them. */
 function saidItem(
   line: AgentTranscriptMessage,
   base: ItemBase,
@@ -363,11 +403,17 @@ function saidItem(
       ? undefined
       : line.sentBy.name;
 
+  const from = suggestionFrom(line, reading, sender);
+  const words = messageWords(line);
+  // Note that a started agent's first line names who started it in its head, so its sender stands nowhere else.
+  const started = from !== undefined && suggestionStartOf(line) !== undefined;
+
   return {
     ...base,
     kind: TRANSCRIPT_ITEM.SAID,
-    words: messageWords(line),
-    sender,
+    words: from === undefined ? words : suggestionWords(words),
+    sender: started ? undefined : sender,
+    from,
     sent: line.sentAt === undefined ? undefined : callHeading(line.sentAt, reading.now),
   };
 }

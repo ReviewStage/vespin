@@ -1,7 +1,7 @@
 import { WHOLE_PART } from "@repo/features/agent-parts";
 import { CHECK_SUMMARY, PART_CUT_FIELD, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PULL_REQUEST_MARK_QUEUED } from "@repo/features/pull-request-model";
-import { MESSAGE_ROLE } from "@repo/wire";
+import { MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { describe, expect, it } from "vitest";
 import {
   NO_TOGGLES,
@@ -98,6 +98,67 @@ describe("transcriptItems", () => {
         body: '{"event":"opened"}',
       },
       { kind: TRANSCRIPT_ITEM.SAID, words: "Thanks.", sender: undefined },
+    ]);
+  });
+
+  it("heads a line sent from a suggestion by the agent that suggested it", () => {
+    const suggestedBy = { agent_id: "a1", name: "Triage", button_id: "b1" };
+    const lead = "Suggested by [@Triage](https://vespin.dev/acme/agent/a1):\n\n";
+
+    const lines = [
+      {
+        id: "start",
+        role: MESSAGE_ROLE.USER,
+        parts: [{ type: "text", text: `${lead}Fix the crash.` }],
+        metadata: {
+          channel: MESSAGE_CHANNEL.START,
+          brief: START_LINE_BRIEF.PROMPT,
+          suggested_by: suggestedBy,
+        },
+        sentBy: { name: "Ada", userId: "u1" },
+      },
+      {
+        id: "sent",
+        role: MESSAGE_ROLE.USER,
+        parts: [{ type: "text", text: `${lead}Ship it.` }],
+        metadata: { channel: MESSAGE_CHANNEL.SUGGESTION, suggested_by: suggestedBy },
+        sentBy: { name: "Grace", userId: "u2" },
+      },
+    ] as const;
+
+    const reading = {
+      writing: false,
+      readerId: "u1",
+      toggles: NO_TOGGLES,
+      now: 2,
+      pullRequests: [],
+    };
+
+    expect(
+      transcriptItems(lines, {
+        ...reading,
+        suggestionAddress: (agentId) => `https://vespin.dev/acme/agent/${agentId}`,
+      }),
+    ).toMatchObject([
+      {
+        words: "Fix the crash.",
+        sender: undefined,
+        from: [
+          {
+            lead: "Suggested by",
+            words: "Triage",
+            after: ", started by you",
+            address: "https://vespin.dev/acme/agent/a1",
+          },
+        ],
+      },
+      {
+        words: "Ship it.",
+        sender: "Grace",
+        from: [
+          { lead: "Suggested by", words: "Triage", address: "https://vespin.dev/acme/agent/a1" },
+        ],
+      },
     ]);
   });
 
