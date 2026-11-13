@@ -21,6 +21,7 @@ import {
   type Effect,
   Layer,
   Logger,
+  type Option,
   type Path,
   type Result,
   type Stream,
@@ -31,6 +32,7 @@ import type { HttpClient } from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
 import type { AccountSourceSeam } from "../account-source.js";
 import type { ComputerUseHelperSeam } from "../computer-use-helper.js";
+import type { LaunchdJob } from "../daemon/launchd-job.js";
 import type { RunMode as RunModeFacts } from "../run-mode.js";
 import type { SecretCipher as SecretCipherSeam } from "../settings-store.js";
 
@@ -332,6 +334,12 @@ export interface ThisMacHostSeam {
   >;
   /** Where macOS stands on the agent now. */
   readonly status: Effect.Effect<ThisMacAgentStatus>;
+  /** launchd's count of the agent's runs and how its last run exited, as `launchctl print` states them; none where launchd holds no such job or could not be asked. */
+  readonly job: Effect.Effect<
+    Option.Option<LaunchdJob>,
+    never,
+    ChildProcessSpawner.ChildProcessSpawner
+  >;
   /** Whether this app's own version registered the agent; another's leaves it running the bundle an update replaced until it is registered again. */
   readonly registeredHere: Effect.Effect<boolean>;
   /** The agent registered, which starts the host, the job the account install loaded booted out first so two never run; a failure says why in our own words, never a command's output. */
