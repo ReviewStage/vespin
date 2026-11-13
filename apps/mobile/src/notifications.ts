@@ -39,6 +39,7 @@ import {
 import { useRouter } from "expo-router";
 import { useEffect } from "react";
 import { pressFromNotification } from "./inbox/use-thread-answer.js";
+import { useOnTab } from "./tab-route.js";
 
 /** The reply typed in place that any post's alert offers, opening the app on its thread to send it. */
 const REPLY_ACTIONS: NotificationAction[] = [
@@ -69,6 +70,7 @@ setNotificationHandler({
  */
 export function useInboxNotifications(signedIn: boolean): void {
   const router = useRouter();
+  const onTab = useOnTab();
   const response = useLastNotificationResponse();
   useEffect(() => {
     setNotificationCategoryAsync(PUSH_CATEGORY.REPLY, REPLY_ACTIONS).catch((cause: unknown) =>
@@ -88,8 +90,8 @@ export function useInboxNotifications(signedIn: boolean): void {
     if (opened === undefined) return;
 
     if (opened.press !== undefined) pressFromNotification(opened.press);
-    router.push(opened.route);
-  }, [signedIn, response, router]);
+    router.push(onTab(opened.route));
+  }, [signedIn, response, router, onTab]);
 }
 
 /** Every notification of the account removed and the badge cleared, as a sign-out does, so nothing of it stays on a phone signed out of it. */

@@ -36,6 +36,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari } from "../open-link.js";
 import { useInFront } from "../place-columns.js";
+import { useOnTab } from "../tab-route.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
 import { systemActivityModule } from "./system-activity-module.js";
 
@@ -121,6 +122,7 @@ function useSpotlightIndex(signedIn: boolean): void {
 /** Opens each continued activity or tapped item on its screen once an account is signed in, or in Safari where the app draws none. */
 function useContinuedActivities(signedIn: boolean): void {
   const router = useRouter();
+  const onTab = useOnTab();
   const [waiting, setWaiting] = useState<readonly ContinuedActivity[]>(NONE);
   useEffect(() => {
     if (systemActivityModule === null) return undefined;
@@ -139,10 +141,10 @@ function useContinuedActivities(signedIn: boolean): void {
     for (const continued of waiting) {
       const route = iosContinuedRouteOf(continued);
 
-      if (route !== undefined) router.push(route);
+      if (route !== undefined) router.push(onTab(route));
       else if (openableLinkOf(continued.link) === OPENABLE_LINK.WEB) openInSafari(continued.link);
     }
-  }, [signedIn, waiting, router]);
+  }, [signedIn, waiting, router, onTab]);
 }
 
 /** Spotlight held to the member's lists and what the system hands back opened, for as long as the app stands. */

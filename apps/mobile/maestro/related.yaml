@@ -1,0 +1,64 @@
+# related.yaml -- a thread's task and agent, from its ⋯ menu, and the task its words name as a chip, each pushed onto the Inbox's own stack in a compact window, so Back lands on the thread again, as Mail and Messages push; a regular window selects them on Tasks beside its list instead, which `tasks.yaml` walks.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, whose invite recording thread stands
+# on the Teammate invitations task under its invitations agent, and whose
+# first message names that task as a chip (`@repo/host/fixture-inbox`).
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn: "Recorded the invite flow"
+- assertVisible: ".*walked the invite flow.*"
+- waitForAnimationToEnd
+- takeScreenshot: related-thread
+# Only a compact window pushes the thread over the list, with its back button.
+- runFlow:
+    when:
+      visible:
+        id: "BackButton"
+    commands:
+      # The ⋯ menu leads with the thread's path: Open task, then Open agent.
+      - tapOn:
+          text: "More"
+          index: -1
+      - tapOn: "Open task"
+      - assertVisible: "Agents"
+      - waitForAnimationToEnd
+      - takeScreenshot: related-task
+      - tapOn:
+          id: "BackButton"
+      - assertVisible: ".*walked the invite flow.*"
+      - waitForAnimationToEnd
+      - takeScreenshot: related-task-back
+      - tapOn:
+          text: "More"
+          index: -1
+      - tapOn: "Open agent"
+      - extendedWaitUntil:
+          visible: "Add a way to resend an invite that expired."
+          timeout: 30000
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - takeScreenshot: related-agent
+      - tapOn:
+          id: "BackButton"
+      - assertVisible: ".*walked the invite flow.*"
+      - waitForAnimationToEnd
+      - takeScreenshot: related-agent-back
+      # Note that iOS hears a chip as part of its line rather than as an
+      # element of its own (`heardLine`), so the line is pressed at its
+      # middle, where the task's chip stands.
+      - tapOn: ".*walked the invite flow.*"
+      - assertVisible: "Agents"
+      - waitForAnimationToEnd
+      - takeScreenshot: related-chip
+      - tapOn:
+          id: "BackButton"
+      - assertVisible: ".*walked the invite flow.*"
+      - waitForAnimationToEnd
+      - takeScreenshot: related-chip-back

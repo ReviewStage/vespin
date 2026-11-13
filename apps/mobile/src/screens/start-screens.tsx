@@ -43,6 +43,7 @@ import { useShownAgent } from "../agents/use-agent.js";
 import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
+import { useOnTab } from "../tab-route.js";
 import {
   CLOUD,
   inTree,
@@ -323,6 +324,7 @@ function useSheetStart(
   setNote: (note: string | undefined) => void,
 ): UseSheetStartResult {
   const router = useRouter();
+  const onTab = useOnTab();
   const write = useWrite();
   const [starting, setStarting] = useState(false);
 
@@ -359,9 +361,11 @@ function useSheetStart(
         if (!went || answer === undefined || "refused" in answer) return;
         kept.release();
         router.dismiss();
-        router.navigate(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: answer.taskId }));
+        router.navigate(
+          onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: answer.taskId })),
+        );
 
-        if (answer.agentId !== undefined) router.push(iosAgentRoute(answer.agentId));
+        if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
       })
       .finally(() => setStarting(false));
   };

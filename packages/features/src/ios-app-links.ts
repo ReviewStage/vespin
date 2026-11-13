@@ -157,6 +157,55 @@ export function iosPullRequestRoute(agentId: string, number: number): string {
 }
 
 /**
+ * The tabs whose stacks the app's pages are pushed onto, each mounting the
+ * thread, task, and agent screens in a route group of its own name
+ * (`(inbox)`, `(tasks)`, `(search)`), so one tab's link can open on another's
+ * stack.
+ */
+export const IOS_TAB = {
+  INBOX: "inbox",
+  TASKS: "tasks",
+  SEARCH: "search",
+} as const;
+
+export type IosTab = (typeof IOS_TAB)[keyof typeof IOS_TAB];
+
+/** The tab `name` names, as a route's first segment or a route group's name; none for any other. */
+function tabNamed(name: string | undefined): IosTab | undefined {
+  return Object.values(IOS_TAB).find((tab) => tab === name);
+}
+
+/** The tab a route group is, by its segment as the router reads it (`(inbox)`); none for any other segment, such as a sheet's. */
+export function iosTabOfGroup(segment: string | undefined): IosTab | undefined {
+  const group = /^\(([^()]+)\)$/u.exec(segment ?? "")?.[1];
+
+  return tabNamed(group);
+}
+
+/** The tab a route of the app's is its own by its first segment: the Inbox's for a thread, Tasks' for a task, an agent, and the pages under them. */
+export function iosRouteTab(route: string): IosTab | undefined {
+  return tabNamed(route.split(/[/?#]/u).find((segment) => segment !== ""));
+}
+
+/**
+ * A route of the app's named on the tab whose stack opens it: `standing`,
+ * the tab the person is on, for a page every tab mounts, a thread, a task,
+ * an agent, or a page under them, so Back returns where it was opened from,
+ * as Mail and Messages push; the route's own tab for a tab's root, which no
+ * other tab mounts, and wherever no tab stands. A route outside the tabs,
+ * such as a sheet's, comes back as it is.
+ */
+export function iosRouteOnTab(route: string, standing: IosTab | undefined): string {
+  const [first, second] = route.split(/[/?#]/u).filter((segment) => segment !== "");
+  const own = tabNamed(first);
+
+  if (own === undefined) return route;
+  const tab = second !== undefined && standing !== undefined ? standing : own;
+
+  return `/(${tab})${route}`;
+}
+
+/**
  * Whether the route is a conversation, which a compact window's tab bar
  * steps aside for, as Messages hides its tabs in a chat so the composer
  * stands alone at the foot: a thread (`/inbox/<id>`), an agent's page, or
