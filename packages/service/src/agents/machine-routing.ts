@@ -16,7 +16,9 @@
  * that listened last. A default that cannot take the call, or is gone,
  * refuses it, rather than moving it to another machine without a word, and
  * the refusal names the machines that could; so does a name two machines
- * share. A Mac from before machines
+ * share. A recording's stop goes to the machine the recording started on
+ * (`machine_recording`), whatever the call names, and is refused with that
+ * machine's name where it cannot take it. A Mac from before machines
  * claimed commands listens as its account alone, so where none of the
  * owner's machines listens as a device but the account does, the call is
  * queued for the account, as it was before.
@@ -155,6 +157,8 @@ export interface RouteAsk {
   readonly name?: string | undefined;
   readonly accountListening: (userId: string) => TaskStoreEffect<boolean>;
   readonly noMachine: string;
+  /** The machine the conversation's recording runs on, which a stop goes to whatever else would choose; none for every other call. */
+  readonly recordingOn?: string | undefined;
 }
 
 /**
@@ -163,7 +167,7 @@ export interface RouteAsk {
  */
 export function routeOf(
   target: ConversationTarget,
-  { kind, name, accountListening, noMachine }: RouteAsk,
+  { kind, name, accountListening, noMachine, recordingOn }: RouteAsk,
 ): TaskStoreEffect<MachineRoute> {
   return Effect.gen(function* () {
     const routing = yield* machineRoutingOf(target);
@@ -194,6 +198,29 @@ export function routeOf(
             machine: routed(machine),
           };
     };
+
+    // Note that a stop goes where its recording runs, since only that Mac holds the video, and no other machine can say anything of it.
+    if (recordingOn !== undefined) {
+      const recorder = candidates.find((machine) => machine.id === recordingOn);
+
+      if (recorder === undefined) {
+        return {
+          kind: MACHINE_ROUTE.REFUSED,
+          reason:
+            "Not run: the machine this recording runs on was removed, or its owner no longer lets this task's agents use it.",
+        };
+      }
+
+      const why = whyNot(recorder, kind, online);
+
+      if (why === undefined) return { kind: MACHINE_ROUTE.MACHINE, machine: routed(recorder) };
+
+      return {
+        kind: MACHINE_ROUTE.REFUSED,
+        reason: `Not run: ${why} The recording runs there, so only it can stop it.`,
+        machine: routed(recorder),
+      };
+    }
 
     if (name !== undefined) {
       const [machine, ...more] = named(candidates, name);

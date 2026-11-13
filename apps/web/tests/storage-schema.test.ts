@@ -92,6 +92,7 @@ const DECLARED_TABLES = [
   "machine_command",
   "machine_command_device_listener",
   "machine_command_listener",
+  "machine_recording",
   "memory",
   "memory_recall",
   "member",

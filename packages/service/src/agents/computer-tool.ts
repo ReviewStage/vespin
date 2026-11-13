@@ -1,5 +1,10 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
+import {
+  machineRecordingOf,
+  pinMachineRecording,
+  unpinMachineRecording,
+} from "@repo/database/models/machine-command-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
@@ -43,6 +48,7 @@ import {
   machineCommandNotRun,
   routedCall,
 } from "./machine-command.js";
+import { MACHINE_ROUTE, type MachineRoute } from "./machine-routing.js";
 import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-keep.js";
 
 /**
@@ -466,6 +472,35 @@ function keptMacRecording(
 }
 
 /**
+ * The conversation's recording pin as an answer leaves it: a recording
+ * started on a machine pins it there, over the pin before; one started on
+ * an account's Macs from before machines claimed unpins it, since no one
+ * machine holds it; and a machine answering a stop with no recording to
+ * read unpins it, so a pin that outlived its video never holds a stop.
+ * Note that a stop that read a video keeps the pin, because the Mac keeps
+ * that video for a stop called again.
+ */
+function repinned(
+  target: ConversationTarget,
+  route: MachineRoute,
+  outcome: ComputerOutcome,
+): Effect.Effect<void, never, DatabaseServices> {
+  if ("done" in outcome && outcome.done === COMPUTER_ACTION.RECORD) {
+    return Effect.ignore(
+      route.kind === MACHINE_ROUTE.MACHINE
+        ? pinMachineRecording(target, route.machine.id)
+        : unpinMachineRecording(target),
+    );
+  }
+
+  if ("unrecorded" in outcome && outcome.unrecorded === RECORDING_FAILURE.NONE) {
+    return Effect.ignore(unpinMachineRecording(target));
+  }
+
+  return Effect.void;
+}
+
+/**
  * One `computer` call made in the conversation, whichever agent made it: its
  * input read against the tool's schema and made one action, then run on the
  * machine it is routed to (`routedCall`) as `askMachine` runs a command;
@@ -485,8 +520,21 @@ export function runComputerTool(
     return Effect.succeed(machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNREADABLE));
   const { caption, machine } = read.success;
 
+  const stops = read.success.action === COMPUTER_ACTION.STOP_RECORDING;
+
   return Effect.gen(function* () {
-    const route = yield* Effect.result(routedCall(target, MACHINE_COMMAND_KIND.COMPUTER, machine));
+    const route = yield* Effect.result(
+      Effect.flatMap(
+        stops ? machineRecordingOf(target) : Effect.succeed(Option.none<string>()),
+        (recordingOn) =>
+          routedCall(
+            target,
+            MACHINE_COMMAND_KIND.COMPUTER,
+            machine,
+            Option.getOrUndefined(recordingOn),
+          ),
+      ),
+    );
 
     // Note that a read that fails refuses, because an action on a guess could land on the wrong Mac.
     if (Result.isFailure(route)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
@@ -500,6 +548,7 @@ export function runComputerTool(
 
     if (!("computer" in answer)) return answer;
     const outcome = answer.computer;
+    yield* repinned(target, route.success, outcome);
 
     const named = <T extends object>(ran: T) =>
       answer.machine === undefined ? ran : { ...ran, machine: answer.machine };

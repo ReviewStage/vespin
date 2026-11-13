@@ -92,13 +92,19 @@ const openMachine = (
 /** Where a call of the kind given, naming the machine given, goes, with the account's own listener answering as given. */
 const route = (
   target: { readonly userId: string; readonly conversationId: string },
-  ask: { readonly kind?: MachineCommandKind; readonly name?: string; readonly account?: boolean },
+  ask: {
+    readonly kind?: MachineCommandKind;
+    readonly name?: string;
+    readonly account?: boolean;
+    readonly recordingOn?: string;
+  },
 ) =>
   routeOf(target, {
     kind: ask.kind ?? MACHINE_COMMAND_KIND.SHELL,
     name: ask.name,
     accountListening: () => Effect.succeed(ask.account ?? false),
     noMachine: NO_MACHINE,
+    recordingOn: ask.recordingOn,
   });
 
 it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
@@ -212,6 +218,37 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
           reason: `${NO_MACHINE} No other machine can take it now.`,
         });
         assert.equal(claimed.kind, MACHINE_ROUTE.MACHINE);
+      }),
+  );
+
+  it.effect(
+    "a recording's stop goes to the machine it started on whatever it names, and is refused with that machine's name where it cannot take it",
+    () =>
+      Effect.gen(function* () {
+        const { owner, target } = yield* openPeople;
+        yield* openMachine(owner, "Laptop", true);
+        const studio = yield* openMachine(owner, "Studio", false);
+        const stop = { kind: MACHINE_COMMAND_KIND.COMPUTER, name: "Laptop", recordingOn: studio };
+        const offline = yield* route(target, stop);
+
+        yield* Database.use((db) =>
+          db
+            .update(device)
+            .set({ removedAt: new Date(0) })
+            .where(eq(device.id, studio)),
+        );
+
+        assert.deepEqual(offline, {
+          kind: MACHINE_ROUTE.REFUSED,
+          reason:
+            "Not run: Studio is offline, or Vespin isn't running on it. The recording runs there, so only it can stop it.",
+          machine: { id: studio, name: "Studio", owner: { userId: owner, name: "Ana" } },
+        });
+        assert.deepEqual(yield* route(target, stop), {
+          kind: MACHINE_ROUTE.REFUSED,
+          reason:
+            "Not run: the machine this recording runs on was removed, or its owner no longer lets this task's agents use it.",
+        });
       }),
   );
 });

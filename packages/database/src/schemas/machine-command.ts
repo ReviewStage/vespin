@@ -9,6 +9,7 @@ import { check, index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/p
 import { bound, bytea, timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 import { device } from "./device.js";
+import { conversations } from "./storage.js";
 
 /**
  * machine-command.ts -- a command an agent asked to run on the developer's Mac, queued until a Mac of the account runs it.
@@ -87,4 +88,26 @@ export const machineCommandDeviceListener = pgTable("machine_command_device_list
     .primaryKey()
     .references(() => device.id, { onDelete: "cascade" }),
   seenAt: timestamptz("seen_at").notNull(),
+});
+
+/**
+ * The machine a conversation's last recording of an app was started on,
+ * so its stop goes to the Mac that holds the video whatever the agent's
+ * default machine or a call names since. One row per conversation: a
+ * `record` that starts on a machine writes it over the one before, and the
+ * machine answering a stop with no recording to read clears it. Note that
+ * it outlives a recording that stopped by itself at its limit, because the
+ * Mac keeps that video for the stop that reads it.
+ */
+export const machineRecording = pgTable("machine_recording", {
+  conversationId: uuid("conversation_id")
+    .primaryKey()
+    .references(() => conversations.id, { onDelete: "cascade" }),
+  userId: text("user_id")
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  deviceId: uuid("device_id")
+    .notNull()
+    .references(() => device.id, { onDelete: "cascade" }),
+  startedAt: timestamptz("started_at").notNull(),
 });

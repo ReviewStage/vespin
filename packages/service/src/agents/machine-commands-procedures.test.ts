@@ -21,10 +21,12 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
+import { registerDevice } from "@repo/database/models/device-store";
 import {
   claimMachineCommands,
   machineCommandResult,
   machineCommandsWaiting,
+  machineRecordingOf,
   macListeningSince,
   markMachineListening,
   queueMachineCommand,
@@ -33,11 +35,12 @@ import {
 import { user } from "@repo/database/schemas/auth";
 import { conversations } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
-import { getTestDB } from "@repo/database/testing";
+import { DEVICE_LAYOUT, getTestDB } from "@repo/database/testing";
 import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import {
   COMPUTER_ACTION,
   COMPUTER_BOUNDS,
+  type ComputerOutcome,
   MACHINE_COMMAND_BOUNDS,
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
@@ -45,8 +48,9 @@ import {
   type MachineCommandResult,
   type MachineDeviceJoinRequest,
 } from "@repo/features/machine-command-wire";
+import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { MP4_TYPE } from "@repo/features/video-signature";
-import { unparsedWire } from "@repo/wire";
+import { type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { mp4Bytes, pngBytes } from "@repo/wire/testing";
 import { Clock, type Context, Effect, Fiber, Layer, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
@@ -714,6 +718,75 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           const kept = yield* readConversationPicture(row.id, answer.picture.id);
           assert.ok(Option.isSome(kept), "kept beside the transcript");
           assert.deepEqual(kept.value.bytes, video);
+        }),
+      ),
+  );
+
+  it.effect(
+    "a recording's stop goes to the Mac it started on, whatever would be chosen since, until that Mac has none to read",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          const userId = "user-pinned-recording";
+          yield* account(userId);
+          const db = yield* Database;
+
+          const [row] = yield* db
+            .insert(conversations)
+            .values({ userId, kind: CONVERSATION_KIND.AGENT })
+            .returning({ id: conversations.id });
+
+          assert.ok(row);
+          const target = { userId, conversationId: row.id };
+          const [laptop, studio] = [randomUUID(), randomUUID()];
+
+          for (const [id, name] of [
+            [laptop, "Laptop"],
+            [studio, "Studio"],
+          ] as const) {
+            yield* registerDevice(userId, { id, name, ...DEVICE_LAYOUT });
+          }
+
+          // The Studio listened last, so a call naming no machine would go to it.
+          yield* markMachineListening(userId, laptop);
+          yield* TestClock.adjust("1 second");
+          yield* markMachineListening(userId, studio);
+
+          const answeredOn = (
+            deviceId: string,
+            input: UnparsedWireValue,
+            computer: ComputerOutcome,
+          ) =>
+            wokenOnHub(
+              runComputerTool(target, input),
+              Effect.gen(function* () {
+                const kinds = [MACHINE_COMMAND_KIND.COMPUTER];
+                const [claimed] = yield* claimMachineCommands(userId, new Date(0), kinds, deviceId);
+
+                assert.ok(claimed !== undefined, "queued for the Mac that answers");
+                yield* settleMachineCommand(userId, claimed.id, { computer });
+              }),
+            );
+
+          yield* answeredOn(
+            laptop,
+            { action: COMPUTER_ACTION.RECORD, app: "Simulator", machine: "Laptop" },
+            { done: COMPUTER_ACTION.RECORD },
+          );
+          const pinned = yield* machineRecordingOf(target);
+
+          yield* answeredOn(
+            laptop,
+            { action: COMPUTER_ACTION.STOP_RECORDING },
+            { unrecorded: RECORDING_FAILURE.NONE },
+          );
+
+          assert.deepEqual(pinned, Option.some(laptop));
+          assert.deepEqual(
+            yield* machineRecordingOf(target),
+            Option.none(),
+            "a Mac with no recording to read lets the pin go",
+          );
         }),
       ),
   );

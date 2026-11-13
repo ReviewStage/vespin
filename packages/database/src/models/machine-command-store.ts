@@ -43,6 +43,7 @@ import {
   machineCommand,
   machineCommandDeviceListener,
   machineCommandListener,
+  machineRecording,
 } from "../schemas/machine-command.js";
 import { conversations, messages, standingLine } from "../schemas/storage.js";
 import { task } from "../schemas/task.js";
@@ -619,6 +620,67 @@ const findCommandMachines = SqlSchema.findAll({
     ),
 });
 
+const upsertPinnedRecording = SqlSchema.void({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    conversationId: Schema.String,
+    deviceId: Schema.String,
+    now: Schema.Date,
+  }),
+  execute: ({ userId, conversationId, deviceId, now }) =>
+    Database.use((db) =>
+      db
+        .insert(machineRecording)
+        .select((qb) =>
+          qb
+            .select({
+              conversationId: sql<string>`${conversations.id}`.as("conversation_id"),
+              userId: sql<string>`${conversations.userId}`.as("user_id"),
+              deviceId: sql<string>`${deviceId}::uuid`.as("device_id"),
+              startedAt: sql<Date>`${now}::timestamptz`.as("started_at"),
+            })
+            .from(conversations)
+            .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId))),
+        )
+        .onConflictDoUpdate({
+          target: machineRecording.conversationId,
+          set: { deviceId, startedAt: now },
+        }),
+    ),
+});
+
+const findPinnedRecording = SqlSchema.findOneOption({
+  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
+  Result: Schema.Struct({ deviceId: Schema.String }),
+  execute: ({ userId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .select({ deviceId: machineRecording.deviceId })
+        .from(machineRecording)
+        .where(
+          and(
+            eq(machineRecording.conversationId, conversationId),
+            eq(machineRecording.userId, userId),
+          ),
+        ),
+    ),
+});
+
+const deletePinnedRecording = SqlSchema.void({
+  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
+  execute: ({ userId, conversationId }) =>
+    Database.use((db) =>
+      db
+        .delete(machineRecording)
+        .where(
+          and(
+            eq(machineRecording.conversationId, conversationId),
+            eq(machineRecording.userId, userId),
+          ),
+        ),
+    ),
+});
+
 const deleteCommand = SqlSchema.void({
   Request: CommandKeySchema,
   execute: ({ userId, id }) =>
@@ -853,4 +915,33 @@ export function machineCommandResult(
 /** Withdraws a command, settled or not, once its call stops waiting on it. */
 export function withdrawMachineCommand(userId: string, id: string): TaskStoreEffect<void> {
   return deleteCommand({ userId, id });
+}
+
+/**
+ * Pins the conversation's recording to the machine it started on, over any
+ * pin before it, so its stop goes there; nothing where the conversation is
+ * not the account's.
+ */
+export function pinMachineRecording(
+  target: ConversationTarget,
+  deviceId: string,
+): TaskStoreEffect<void> {
+  return Effect.flatMap(DateTime.nowAsDate, (now) =>
+    upsertPinnedRecording({ ...target, deviceId, now }),
+  );
+}
+
+/** The machine the conversation's recording was started on, where one is pinned; none for another account's conversation. */
+export function machineRecordingOf(
+  target: ConversationTarget,
+): TaskStoreEffect<Option.Option<string>> {
+  return Effect.map(
+    findPinnedRecording(target),
+    Option.map((row) => row.deviceId),
+  );
+}
+
+/** Unpins the conversation's recording, where the account's conversation has one. */
+export function unpinMachineRecording(target: ConversationTarget): TaskStoreEffect<void> {
+  return deletePinnedRecording(target);
 }

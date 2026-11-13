@@ -368,12 +368,14 @@ export function routedCall(
   target: ConversationTarget,
   kind: MachineCommandKind,
   name: string | undefined,
+  recordingOn?: string,
 ): TaskStoreEffect<MachineRoute> {
   return routeOf(target, {
     kind,
     name,
     accountListening: macListening,
     noMachine: MACHINE_COMMAND_KIND_REFUSAL[kind].NO_MAC,
+    recordingOn,
   });
 }
 

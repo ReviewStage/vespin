@@ -54,10 +54,13 @@ import {
   machineCommandResult,
   machineCommandsWaiting,
   machineOwnerOf,
+  machineRecordingOf,
   macListeningSince,
   markMachineListening,
+  pinMachineRecording,
   queueMachineCommand,
   settleMachineCommand,
+  unpinMachineRecording,
 } from "../machine-command-store.js";
 import { createTask } from "../task-store.js";
 
@@ -260,6 +263,48 @@ it.layer(getTestDB())("the Mac command store", (it) => {
             [quiet, true],
           ],
         );
+      }),
+  );
+
+  it.effect(
+    "a conversation's recording is pinned to the machine it last started on, read and unpinned by its own account alone",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const conversationId = randomUUID();
+
+        yield* Database.use((db) =>
+          db
+            .insert(conversations)
+            .values({ id: conversationId, userId: owner, kind: CONVERSATION_KIND.AGENT }),
+        );
+
+        const [laptop, studio] = [
+          yield* openDevice(owner, "Laptop"),
+          yield* openDevice(owner, "Studio"),
+        ];
+
+        const target = { userId: owner, conversationId };
+        const asOther = { userId: other, conversationId };
+        const before = yield* machineRecordingOf(target);
+        yield* pinMachineRecording(target, laptop);
+        yield* pinMachineRecording(target, studio);
+        yield* pinMachineRecording(asOther, laptop);
+        const pinned = yield* machineRecordingOf(target);
+        const readByOther = yield* machineRecordingOf(asOther);
+        yield* unpinMachineRecording(asOther);
+        const afterOthersUnpin = yield* machineRecordingOf(target);
+        yield* unpinMachineRecording(target);
+
+        assert.deepEqual(before, Option.none());
+        assert.deepEqual(
+          pinned,
+          Option.some(studio),
+          "a new recording's machine replaces the last",
+        );
+        assert.deepEqual(readByOther, Option.none(), "another account reads none");
+        assert.deepEqual(afterOthersUnpin, Option.some(studio), "nor pins or unpins it");
+        assert.deepEqual(yield* machineRecordingOf(target), Option.none());
       }),
   );
 
