@@ -19,8 +19,8 @@ import {
   useColors,
   useFailureNotices,
 } from "@repo/ui-native";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useMemo, useState } from "react";
 import { useMemberPictures } from "../member-pictures.js";
 import { useOpenLink } from "../open-link.js";
 import { useOnOwnTab } from "../tab-route.js";
@@ -47,26 +47,28 @@ const WORDS = {
 const READING_DESCRIPTION = readingWords("the description");
 
 /**
- * The threads whose page stands on some tab, by their ids. Note that a new
+ * The threads whose page stands in front, by their ids. Note that a new
  * thread opens before the service has taken it, so a refusal reopens its
  * field only where the person still looks at it, and says so in the failure
  * notice anywhere else.
  */
 const standingThreads = new Set<string>();
 
-/** A refused start, as the route that reopens its field carries it; none where the route names none. */
-function refusedOf(params: {
-  readonly words?: string;
-  readonly note?: string;
-  readonly key?: string;
-  readonly thread?: string;
-}): RefusedStart | undefined {
-  const { words, note, key, thread } = params;
-
-  return words === undefined || note === undefined || key === undefined || thread === undefined
-    ? undefined
-    : { words, note, key, threadId: thread };
+/** A start the service refused, kept for the field it reopens: what was sent, and the block and the description's text it was measured in. */
+interface HeldRefusal {
+  readonly start: RefusedStart;
+  readonly text: string;
+  readonly block: DescriptionBlock;
 }
+
+/**
+ * The refused starts a reopened field takes up, by the thread id each went
+ * under, which the route names. Note that the field takes the block and text
+ * the send was measured in rather than finding the block again in the
+ * description as it now stands, which an edit since may have moved, and that
+ * the text is too large for a route to carry.
+ */
+const refusedStarts = new Map<string, HeldRefusal>();
 
 /** A comment screen's path, as the bar names it: the task's name and its key. */
 function commentPath(overview: TaskOverview | undefined): readonly string[] {
@@ -104,13 +106,16 @@ export function CommentThreadScreen() {
   const reply = useCommentReply(taskId, id);
   const pictureOf = useMemberPictures();
 
-  useEffect(() => {
-    standingThreads.add(id);
+  // Note that a thread counts as standing only while it is in front, since a page pushed over it, or another tab, keeps it mounted.
+  useFocusEffect(
+    useCallback(() => {
+      standingThreads.add(id);
 
-    return () => {
-      standingThreads.delete(id);
-    };
-  }, [id]);
+      return () => {
+        standingThreads.delete(id);
+      };
+    }, [id]),
+  );
 
   const agentNames = new Map(
     (overview?.agents ?? []).map(({ agent }) => [agent.id, agentName(agent)] as const),
@@ -181,10 +186,7 @@ export function NewCommentScreen() {
     from: string;
     to: string;
     quote: string;
-    words?: string;
-    note?: string;
-    key?: string;
-    thread?: string;
+    again?: string;
   }>();
 
   const { task: taskId = "", from = "", to = "", quote = "" } = params;
@@ -206,18 +208,33 @@ export function NewCommentScreen() {
   );
 
   // Note that the block is kept as it stood when first found, with the text it was measured in, because an edit elsewhere moves its offsets while it is being commented on, and the service carries a span measured in that text over to the text as it stands.
-  const [held, setHeld] = useState<{ readonly text: string; readonly block: DescriptionBlock }>();
+  const [kept] = useState(() =>
+    params.again === undefined ? undefined : refusedStarts.get(params.again),
+  );
+
+  const [held, setHeld] = useState<
+    { readonly text: string; readonly block: DescriptionBlock } | undefined
+  >(kept === undefined ? undefined : { text: kept.text, block: kept.block });
 
   if (held === undefined && found !== undefined) setHeld({ text: body, block: found });
   const block = held?.block;
-  const [again] = useState(() => refusedOf(params));
   const notices = useFailureNotices();
-  const start = useCommentStart(overview?.task.id ?? taskId, held?.text ?? body, block, again);
+
+  const start = useCommentStart(
+    overview?.task.id ?? taskId,
+    held?.text ?? body,
+    block,
+    kept?.start,
+  );
+
   const path = commentPath(overview);
   const task = overview?.task.id ?? taskId;
 
   // Note that the start is a declared write, drawn under its own id at once, so its thread opens in this screen's place as it goes; a refusal reopens this field on the words, under the same key, where the thread still stands in front.
   const send = () => {
+    if (held === undefined) return;
+    const measured = held;
+
     const threadId = start.send((refused) => {
       if (!standingThreads.has(refused.threadId)) {
         notices.say({ kind: NOTICE_KIND.REFUSED, words: refused.note });
@@ -225,18 +242,10 @@ export function NewCommentScreen() {
         return;
       }
 
+      refusedStarts.set(refused.threadId, { start: refused, ...measured });
       router.replace({
         pathname: onOwnTab("/tasks/comments/new"),
-        params: {
-          task,
-          from,
-          to,
-          quote,
-          words: refused.words,
-          note: refused.note,
-          key: refused.key,
-          thread: refused.threadId,
-        },
+        params: { task, from, to, quote, again: refused.threadId },
       });
     });
 
