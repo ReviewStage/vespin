@@ -18,7 +18,7 @@ import {
   PLAYABLE_VIDEO_TYPE,
   type PlayableVideoType,
 } from "@repo/features/video-signature";
-import { paddedTo, pngBytes, webmBytes } from "@repo/wire/testing";
+import { mp4Bytes, paddedTo, pngBytes, webmBytes } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { Effect, Exit, Option } from "effect";
 import { Database } from "../../core/query.js";
@@ -136,22 +136,25 @@ it.layer(getTestDB())("a description's pictures", (it) => {
       }),
   );
 
-  it.effect(
-    "a recording is kept as it was sent up to a video's bound, which a picture is not",
-    () =>
+  it.effect.each([
+    { contentType: PICTURE_MEDIA_TYPE.WEBM, bytes: webmBytes(1280, 800) },
+    { contentType: PICTURE_MEDIA_TYPE.MP4, bytes: mp4Bytes(1206, 2622) },
+  ] as const)(
+    "a recording ($contentType) is kept as it was sent up to a video's bound, which a picture is not",
+    (recording) =>
       Effect.gen(function* () {
         const { owner, teammate, taskId } = yield* openSharedTask;
 
         const video: Picture = {
-          contentType: PICTURE_MEDIA_TYPE.WEBM,
-          bytes: paddedTo(webmBytes(1280, 800), PICTURE_BOUNDS.MAX_VIDEO_BYTES),
+          contentType: recording.contentType,
+          bytes: paddedTo(recording.bytes, PICTURE_BOUNDS.MAX_VIDEO_BYTES),
         };
 
         const id = keptId(yield* keepDescriptionAttachment(owner, taskId, video));
 
         const read = yield* readDescriptionAttachment(teammate, taskId, id);
         assert.ok(Option.isSome(read));
-        assert.equal(read.value.contentType, PICTURE_MEDIA_TYPE.WEBM);
+        assert.equal(read.value.contentType, recording.contentType);
         assert.equal(read.value.bytes.length, PICTURE_BOUNDS.MAX_VIDEO_BYTES);
 
         const tooLong = {
