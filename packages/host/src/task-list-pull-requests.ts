@@ -19,7 +19,13 @@
 import { agentPullRequestOf, pullRequestLinesOf } from "@repo/features/task-list-live";
 import type { ListedPullRequest, TaskPullRequests } from "@repo/features/task-wire";
 import { KEPT_BY_SCOPE, type RowCollection, scopedCollection } from "@repo/sync";
-import { createLiveQueryCollection, eq, groupKeys, toArray } from "@tanstack/db";
+import {
+  createLiveQueryCollection,
+  eq,
+  groupKeys,
+  toArray,
+  type WithVirtualProps,
+} from "@tanstack/db";
 import { Effect, type Scope } from "effect";
 import { listedOf, type QueryCollection } from "./drawn-rows.js";
 import type { AgentRow } from "./task-list-collections.js";
@@ -32,6 +38,14 @@ export interface TaskListPullRequests {
   readonly taskPullRequests: () => readonly TaskPullRequests[];
   /** Each plan's lines by its id, the very object `taskPullRequests` holds for it, for a plan's own query to join. */
   readonly byTask: QueryCollection<PlanPullRequests>;
+  /** Each plan an agent names, with its agents gathered under it, for a plan's own query to join. */
+  readonly agentsByTask: QueryCollection<PlanAgents>;
+}
+
+/** One plan an agent names, and its agents. */
+export interface PlanAgents {
+  readonly taskId: string;
+  readonly agents: WithVirtualProps<AgentRow, string>[];
 }
 
 /** One plan an agent names, and every pull request its agents opened; none where they opened none. */
@@ -111,6 +125,7 @@ export function taskListPullRequests(
       agentPullRequests,
       taskPullRequests,
       byTask,
+      agentsByTask: groups,
     };
   });
 }

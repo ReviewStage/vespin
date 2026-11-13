@@ -88,9 +88,10 @@ export const PLAN = fieldKind((row: PlanRow) => row.id);
 /** An agent as the pool holds it, by its id. */
 export const AGENT = fieldKind((row: AgentRow) => row.id);
 
-/** An agent whose starting grace has ended, by its id, as the list holds it beside the agents' rows. */
+/** An agent whose starting grace has ended, by its id, with its plan's, as the list holds it beside the agents' rows. */
 export interface PastGrace {
   readonly agentId: string;
+  readonly planId: string;
 }
 
 /** The list as the rows make it, every agent on a plan beside it, and the plans a write stands over. */
@@ -141,6 +142,22 @@ export interface TaskListCollections {
 export interface ColdMark {
   readonly answers: number;
   readonly asked: number;
+}
+
+/** The most rows the list's live queries take in one stretch, so a first answer of a large account never holds the process for the whole build. */
+const DRAWN_CHUNK = 500;
+
+/** Hands `keys` to `draw` a chunk at a time, yielding between chunks; at once where they fit one. */
+function inChunks(
+  keys: readonly string[],
+  draw: (keys: readonly string[]) => void,
+): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    for (let at = 0; at < keys.length; at += DRAWN_CHUNK) {
+      if (at > 0) yield* Effect.yieldNow;
+      draw(keys.slice(at, at + DRAWN_CHUNK));
+    }
+  });
 }
 
 /**
@@ -277,7 +294,11 @@ export function taskListCollections(
           q
             .from({ agent: drawnAgents.collection })
             .fn.where(({ agent }) => agentGraceEnd(agent) !== undefined)
-            .fn.select(({ agent }) => ({ agentId: agent.id, end: agentGraceEnd(agent) })),
+            .fn.select(({ agent }) => ({
+              agentId: agent.id,
+              planId: agent.planId,
+              end: agentGraceEnd(agent),
+            })),
         gcTime: KEPT_BY_SCOPE,
         startSync: true,
       }),
@@ -291,6 +312,7 @@ export function taskListCollections(
       agents: drawnAgents.collection,
       pastGrace,
       pullRequests: pullRequests.byTask,
+      agentsByTask: pullRequests.agentsByTask,
       continuations,
     });
 
@@ -304,19 +326,22 @@ export function taskListCollections(
       const ended: PastGrace[] = [];
       let next: number | undefined;
 
-      for (const { agentId, end } of waiting.values()) {
+      for (const { agentId, planId, end } of waiting.values()) {
         if (end === undefined) continue;
         waits.add(agentId);
 
         if (at < end) next = next === undefined ? end : Math.min(next, end);
-        else if (!pastGrace.has(agentId)) ended.push({ agentId });
+        else if (pastGrace.get(agentId)?.planId !== planId) ended.push({ agentId, planId });
       }
 
-      const gone = [...pastGrace.keys()].filter((id) => !waits.has(id));
-
-      if (ended.length > 0) pastGrace.insert(ended);
+      // Note that an agent moved to another plan is marked again under it, so it is let go first.
+      const gone = [...pastGrace.keys()].filter(
+        (id) => !waits.has(id) || ended.some((each) => each.agentId === id),
+      );
 
       if (gone.length > 0) pastGrace.delete(gone);
+
+      if (ended.length > 0) pastGrace.insert(ended);
 
       return next;
     };
@@ -381,8 +406,8 @@ export function taskListCollections(
             const agentsMoved = yield* agents.answer(rows.agents, answered(agentKeys));
             // Note that a cold task the follow now answers is the follow's alone, so one it later lets go is gone from the list too.
             yield* settleCold;
-            plansDrawn(plansMoved);
-            agentsDrawn(agentsMoved);
+            yield* inChunks(plansMoved, plansDrawn);
+            yield* inChunks(agentsMoved, agentsDrawn);
             // Note that a whole answer, the list's first or one read again, draws at once, and one past a sync id rides the tick, since a busy account's agents answer many a second.
             yield* standing?.past === undefined ? ticks.drawn : ticks.soon;
 

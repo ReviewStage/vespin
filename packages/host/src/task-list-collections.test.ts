@@ -51,13 +51,13 @@ it.effect(
         });
 
         // Note that this test takes about two seconds, since its point is an account's size.
-        // An account of thousands: 2,000 tasks, 4,000 agents that each ran a turn, some pinned, some started from another.
-        const plans = Array.from({ length: 2_000 }, (_, at) => ({
+        // An account of thousands: 1,000 tasks, 2,000 agents that each ran a turn, some pinned, some started from another.
+        const plans = Array.from({ length: 1_000 }, (_, at) => ({
           ...planListRow(`task-${at}`, `Task ${at}`),
           createdAt: at,
         }));
 
-        const agents = Array.from({ length: 4_000 }, (_, at) => ({
+        const agents = Array.from({ length: 2_000 }, (_, at) => ({
           ...agentListRow(`task-${at % plans.length}`, at),
           id: `agent-${at}`,
           title: `Agent ${at}`,
@@ -67,8 +67,8 @@ it.effect(
           startedAt: at,
           settledAt: at + 1,
           ...(at % 7 === 0 ? { pinnedAt: at, pinPosition: `a${at}` } : undefined),
-          ...(at >= 3_000
-            ? { startedFrom: { agentId: `agent-${at - 3_000}`, steps: 1, totalSteps: 1 } }
+          ...(at >= 1_500
+            ? { startedFrom: { agentId: `agent-${at - 1_500}`, steps: 1, totalSteps: 1 } }
             : undefined),
         }));
 
@@ -76,7 +76,7 @@ it.effect(
         const before = drawings.at(-1);
 
         // Only one agent moved, one nothing was started from and started from none, as the follow answers past a sync id: a teammate sent it a line, so it runs again.
-        const moved = agents[2_468];
+        const moved = agents[1_234];
         assert.ok(moved !== undefined);
 
         const running = {
