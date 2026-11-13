@@ -1,0 +1,7 @@
+#8945 at e812b9f6e (built e812b9f6e, own bundle on Nov 12's app), landscape 27.2 iPad, light and dark, f8945l.yaml, 0 failed steps (pr-8945/ipad27/).
+PASS:
+1. On Open (the default) the list bar shows the filter glyph as an outline beside ⋯, and no scope row stands over the list.
+2. The filter menu lists Questions 7, Open 9 (checked), All, Reminders.
+3. Questions fills the glyph and narrows the list to the seven threads that ask.
+4. Open again brings the outline back.
+Same in light and dark. 26.5: not run (memory).
