@@ -42,7 +42,9 @@ import { OneLine } from "../one-line/one-line.js";
  * its arrows walking the lines and Enter going to one.
  *
  * Note that the pointer moving draws nothing and adds no element. Every
- * line's pill stands drawn, hidden, from the rail's first draw, and the
+ * line's pill is drawn, hidden, once the rail is first pointed at or
+ * focused, so a long transcript opens without them, and stands drawn from
+ * then on; the
  * pointer crossing a line writes the transform and opacity of the few pills
  * near it and near where the stack stood (`placeStack`), outside
  * React. An element added or taken away anywhere in the app restyles most
@@ -455,6 +457,8 @@ function WideRail({
   const layout = useRef<RailLayout | undefined>(undefined);
   const pillHeight = useRef(0);
   const opened = useRef(false);
+  // Whether the rail has been pointed at or focused yet, which draws its pills.
+  const [armed, setArmed] = useState(false);
   const listId = useId();
   const bubble = useBubble(column, slots, marks);
   const open = (pointed || focused) && !shut;
@@ -476,6 +480,10 @@ function WideRail({
     const box = stack.current;
 
     if (read === undefined || box === null || to < 0) return;
+
+    // Note that the pills are drawn with the first hover or focus, after it measured, so their height is read once they stand.
+    if (pillHeight.current === 0) pillHeight.current = pills.current[0]?.offsetHeight ?? 0;
+
     const pill = pillHeight.current;
     const span = STACK_REACH * pill + pill;
     const center = Math.max(span, Math.min(read.middles[to] ?? 0, read.room - span));
@@ -564,6 +572,7 @@ function WideRail({
 
   const options = useMemo(
     () =>
+      armed &&
       marks.map((mark, index) => (
         <StackOption
           key={mark.key}
@@ -576,7 +585,7 @@ function WideRail({
           onHover={hover}
         />
       )),
-    [marks, listId, selected, choose, hover],
+    [armed, marks, listId, selected, choose, hover],
   );
 
   // The line under the pointer, read off where the lines were laid out as the hover began.
@@ -595,6 +604,7 @@ function WideRail({
       aria-label={RAIL_LABEL}
       className={COLUMN}
       onPointerEnter={(event) => {
+        setArmed(true);
         measure();
         point(event.clientY);
         setShut(false);
@@ -615,6 +625,7 @@ function WideRail({
         {...field.field}
         onKeyDown={(event) => field.onKeyDown(event)}
         onFocus={() => {
+          setArmed(true);
           measure();
           // Note that the stack is put at the focus's line here, since the keys may hold that line already, which no draw would move it to.
           const target = pointed ? inFront.current : lastShown(marks);
