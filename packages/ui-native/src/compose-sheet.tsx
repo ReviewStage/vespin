@@ -184,11 +184,11 @@ type ComposeSheetProps = {
   readonly chips: ReactNode;
 };
 
-/** The sheet's page: the line over the words, what heads them, the words, the skills a `/` offers, the pictures attached, and the notes, clear of the bar at its foot. */
+/** The sheet's page: the line over the words, what heads them, the words, the skills a `/` offers, the pictures attached, and the notes, clear of the bar at its foot, taking a drop of pictures. */
 function ComposePage(props: ComposeSheetProps) {
   const colors = useColors();
   const room = useDockRoom();
-  const { title, head, words, skills, pictures, onDetach, notes } = props;
+  const { title, head, words, skills, pictures, onDetach, notes, onDropPictures } = props;
   const muted = [font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)];
 
   return (
@@ -200,6 +200,8 @@ function ComposePage(props: ComposeSheetProps) {
           modifiers={[
             frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
             padding({ horizontal: SPACE.EDGE, top: SPACE.ROW, bottom: room + SPACE.ROW }),
+            // Note that the page takes a drop of pictures as the bar does, so one dropped on the words or the pictures attached is attached too.
+            ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
           ]}
         >
           {title === undefined ? null : <Text modifiers={muted}>{title}</Text>}
