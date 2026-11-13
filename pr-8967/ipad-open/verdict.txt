@@ -1,0 +1,3 @@
+#8967 at 614b5a5b4 (own bundle on Nov 12's app), open-a-row retake, landscape 27.2 iPad, light, open8967.yaml, 0 failed steps (pr-8967/ipad-open/).
+PASS: from the Tasks list column, Weekly digest email and Launch checklist each open in the detail column on a tap, the tapped row selected, the bar showing the path chip, ⋯ and Search, and the page drawn in full (chips, Following, Sub-tasks, Agents). The list keeps its groups and Teammate invitations's fold chevron.
+Note: the Teammate invitations open shot (step 4) did not upload, though no step failed. Its detail page is shown open in the split in pr-8940/r1/8940-ipad27-light-4-after-top-left-tap.jpg on the round 1 bundle.
