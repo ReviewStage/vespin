@@ -1,4 +1,4 @@
-// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place.
+// NativeInteractionsModule.swift -- the SwiftUI modifiers @expo/ui lacks, registered with its modifier registry so `@repo/ui-native` can hand them to any view: the keyboard focus's ring left off a list, a row dragged out as its link, pictures dropped from Photos or Files, and a link dropped on a place.
 //
 // Each modifier is a `Record` built from the parameters JavaScript gives
 // (`packages/ui-native/src/interactions.ts`), as @expo/ui's own are, and one
@@ -15,10 +15,11 @@ import UniformTypeIdentifiers
 
 /// The names the modifiers are registered under, which `interactions.ts` names too.
 private enum ModifierName {
+  static let focusEffectDisabled = "vespinFocusEffectDisabled"
   static let dragLink = "vespinDragLink"
   static let dropPictures = "vespinDropPictures"
   static let dropLink = "vespinDropLink"
-  static let all = [dragLink, dropPictures, dropLink]
+  static let all = [focusEffectDisabled, dragLink, dropPictures, dropLink]
 }
 
 /// How a dropped picture is kept for JavaScript to read: a JPEG at the quality the photo picker reads one at (`use-attached-pictures.ts`).
@@ -30,6 +31,9 @@ public final class NativeInteractionsModule: Module {
 
     // Note that the modifiers are registered as the module is made, before any view draws, as the registry asks.
     OnCreate {
+      ViewModifierRegistry.register(ModifierName.focusEffectDisabled) { params, appContext, _ in
+        return try FocusEffectDisabledModifier(from: params, appContext: appContext)
+      }
       ViewModifierRegistry.register(ModifierName.dragLink) { params, appContext, _ in
         return try DragLinkModifier(from: params, appContext: appContext)
       }
@@ -44,6 +48,21 @@ public final class NativeInteractionsModule: Module {
     OnDestroy {
       ModifierName.all.forEach { ViewModifierRegistry.unregister($0) }
     }
+  }
+}
+
+// MARK: - Focus
+
+/// A view drawn with no keyboard focus effect, such as a sidebar whose selected row already stands on its own fill.
+///
+/// Note that an iPad with a keyboard or a pointer otherwise rings the
+/// selected row of a `List` that keeps a selection, a ring as wide as the
+/// row and drawn over its fill, which iPadOS's own sidebars (Mail, Files)
+/// don't draw. The selection itself still moves with the arrow keys, and the
+/// row's fill shows where it stands.
+internal struct FocusEffectDisabledModifier: ViewModifier, Record {
+  func body(content: Content) -> some View {
+    content.focusEffectDisabled()
   }
 }
 

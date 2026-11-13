@@ -1,4 +1,4 @@
-// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): a view dragged out as its link, and pictures or a link dropped on a view.
+// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): the keyboard focus's ring left off a list, a view dragged out as its link, and pictures or a link dropped on a view.
 
 import {
   createModifier,
@@ -9,10 +9,16 @@ import { flow, Option, Schema } from "effect";
 
 /** The names the native module registers each modifier under, which its Swift names too. */
 const MODIFIER = {
+  FOCUS_EFFECT_DISABLED: "vespinFocusEffectDisabled",
   DRAG_LINK: "vespinDragLink",
   DROP_PICTURES: "vespinDropPictures",
   DROP_LINK: "vespinDropLink",
 } as const;
+
+/** A view drawn with no keyboard focus ring, such as a list whose selected row already stands on its own fill. */
+export function focusEffectDisabled(): ModifierConfig {
+  return createModifier(MODIFIER.FOCUS_EFFECT_DISABLED, {});
+}
 
 /** A view dragged out as its link: another app takes it as a URL, and a place here that takes a link reads it back. */
 export function dragLink(url: string): ModifierConfig {
