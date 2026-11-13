@@ -6,9 +6,10 @@
  * no OpenAI API key saved it says to add one and its press opens Settings ›
  * Agents (`../openai-key.tsx`), as Dictate's does. Talk into this agent
  * while a call into another stands asks first, since the other call ends.
- * On a call into this agent the same place holds the call's presses (the
- * speaker and microphone mutes, and End call), with no status beside them,
- * since the row stays uncrowded (Dean, Nov 13), and Dictate
+ * On a call into this agent the same place holds the call's presses (Stop
+ * while the agent's turn can be stopped, the speaker and microphone mutes,
+ * and End call), with no status beside them, since the row stays uncrowded
+ * (Dean, Nov 13), and Dictate
  * goes, since the call holds the microphone; a dictation under way as the
  * call starts ends, keeping the words already said. The field stays the
  * agent's as ever, so a typed line goes to the agent as any line does. A
@@ -22,6 +23,7 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { EXPERIMENT } from "@repo/settings";
 import {
   CallComposerControls,
+  type CallStopState,
   CONFIRM_LOSS,
   ConfirmDialog,
   TALK_LABEL,
@@ -63,11 +65,13 @@ export interface AgentTalk {
 /**
  * The box's calls into the agent `into` names, as above; none while the
  * Voice experiment is off or the box calls no agent. A press ends the box's
- * dictation first, keeping its words where any were recorded.
+ * dictation first, keeping its words where any were recorded. `stop` is the
+ * box's own Stop, which a call into the agent offers beside End call.
  */
 export function useAgentTalk(
   into: TalkInto | undefined,
   dictation: DictationControl,
+  stop: CallStopState | undefined,
 ): AgentTalk | undefined {
   const on = useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.VOICE) }).data;
   const voice = useVoiceCall();
@@ -101,6 +105,7 @@ export function useAgentTalk(
       onCall: true,
       press: (
         <CallComposerControls
+          stop={stop}
           microphone={{
             muted: call.microphoneMuted,
             onPress: () => voice.setMicrophoneMuted(!call.microphoneMuted),
