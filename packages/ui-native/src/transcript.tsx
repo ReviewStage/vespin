@@ -115,6 +115,9 @@ const OLDER_WORDS = {
 const styles = StyleSheet.create({
   list: { flex: 1 },
   content: { paddingVertical: SPACE.ROW },
+  // Note that while there are no rows the content fills the list, so the empty state has room to center in.
+  emptyContent: { flexGrow: 1 },
+  emptyHost: { flex: 1 },
   row: { paddingHorizontal: SPACE.EDGE, paddingVertical: SPACE.TIGHT },
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
@@ -1043,10 +1046,10 @@ export function AgentTranscript({
             {older === undefined ? null : <OlderRow older={older} />}
           </>
         }
-        // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app.
+        // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app. The host fills the room the list leaves rather than matching its content, since the state asks for all the height it is offered, so a host sized to its content stood at no height and a brand-new agent's page was blank.
         ListEmptyComponent={
           empty === undefined ? undefined : (
-            <InlineHost matchContents={{ vertical: true }}>
+            <InlineHost style={styles.emptyHost}>
               <EmptyState {...empty} />
             </InlineHost>
           )
@@ -1055,6 +1058,7 @@ export function AgentTranscript({
         // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
         contentContainerStyle={[
           styles.content,
+          items.length === 0 ? styles.emptyContent : undefined,
           { paddingLeft: left + sides, paddingRight: right + sides },
         ]}
         contentInsetAdjustmentBehavior="automatic"
