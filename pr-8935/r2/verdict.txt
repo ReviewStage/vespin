@@ -1,0 +1,3 @@
+#8935 round 2 retake (j8935, Nov 13 23:23-23:26 UTC): undo.yaml (wrap-undo) on the iPhone 18 Pro, light, at e59c269c5 (verified head == built), on Nov 12's native app.
+Result: PASS on the flow's assertions. Maestro reported no failed step and no rig error. That covers: Got it -> notice with Undo -> Undo -> the notice leaves within 5 s -> Got it offered again; and Resolve from the thread's More -> Undo -> the thread opens again with Resolve offered.
+No stills: undo.yaml's takeScreenshot names carry no ${P} prefix and landed outside the collector's takeScreenshot/ path, so nothing was pushed, and the disk guard then removed the run folder. Retake with stills only if the owner wants pictures.
