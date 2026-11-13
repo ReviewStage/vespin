@@ -54,7 +54,7 @@ export interface WaitingBanner {
 export interface Waiting {
   /** As the panel's working line says it: "Waiting on you · 1 approval". */
   readonly words: string;
-  /** What the oldest call waiting asks, as the agent's CLI put it, which VoiceOver hears with the words. */
+  /** What the newest call waiting asks, as the agent's CLI put it, which VoiceOver hears with the words, so each call that starts waiting is told as it comes. */
   readonly asks: string;
   readonly callId: string | undefined;
 }
@@ -204,7 +204,7 @@ export function useAgentApprovals(
     const onRow = (ask: Held) =>
       ask.approval.subagentId === undefined && drawn.has(ask.approval.toolUseId);
 
-    const first = waiting[0];
+    const newest = waiting.at(-1);
     const oldestDrawn = waiting.find(onRow);
     const oldest = waiting.find((ask) => !onRow(ask));
 
@@ -223,11 +223,11 @@ export function useAgentApprovals(
           : heldCallOf(ask, (press) => answer(ask.approval.id, press));
       },
       waiting:
-        first === undefined
+        newest === undefined
           ? undefined
           : {
               words: waitingOnYouWords(waiting.length),
-              asks: first.approval.title,
+              asks: newest.approval.title,
               callId: oldestDrawn?.approval.toolUseId,
             },
       banner:
