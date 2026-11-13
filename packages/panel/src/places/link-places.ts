@@ -32,6 +32,7 @@ import {
   type LinkDestination,
   type LinkDestinationKind,
   linkOf,
+  machineOfFragment,
   type ReadLink,
 } from "@repo/features/link-grammar";
 import type { WireBoundaryInput } from "@repo/wire";
@@ -285,7 +286,15 @@ export const LINK_ROUTED_PLACE = {
     onStandingTask: ON_STANDING_TASK.GO,
     routes: [],
     ownPlaceRoutes: ["/places/$workspace/person/$userId"],
-    read: ({ params }) => placeOf({ kind: LINK_DESTINATION.PERSON, userId: params.userId }),
+    read: ({ params, hash }) => {
+      const machineId = machineOfFragment(hash);
+
+      return placeOf({
+        kind: LINK_DESTINATION.PERSON,
+        userId: params.userId,
+        ...(machineId !== undefined && { machineId }),
+      });
+    },
   },
   INBOX: {
     kind: LINK_DESTINATION.INBOX,
