@@ -26,6 +26,7 @@ import {
   lineLimit,
   listRowBackground,
   onDisappear,
+  presentationBackground,
   presentationDetents,
   presentationDragIndicator,
 } from "@expo/ui/swift-ui/modifiers";
@@ -365,6 +366,8 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
     presentation = SWITCHER_PRESENTATION.POPOVER,
   } = props;
 
+  const colors = useColors();
+
   const [presented, setPresented] = useState(false);
   // Note that the popover's list mounts on its first open and stays, since a closed popover's content stays mounted, every workspace's photo with it, and a list mounted anew on each open would draw each photo's letter tile again.
   const [opened, setOpened] = useState(false);
@@ -407,6 +410,7 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
           modifiers={[
             presentationDetents(["medium", "large"]),
             presentationDragIndicator("visible"),
+            presentationBackground(colors.SIDEBAR),
           ]}
         >
           <SwitcherList props={props} closed={closed} />
@@ -422,6 +426,8 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
         <Group
           modifiers={[
             frame({ width: POPOVER_WIDTH, height: popoverHeight(props) }),
+            // Note that the popover stands on the list's own ground, its arrow and rim too, rather than the system's glass around a solid list.
+            presentationBackground(colors.SIDEBAR),
             onDisappear(gone),
           ]}
         >
