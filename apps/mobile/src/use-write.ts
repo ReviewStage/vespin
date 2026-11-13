@@ -24,7 +24,17 @@ import {
   selectLiveMark,
 } from "@repo/host/app-state-reads";
 import { actRefusalSentence } from "@repo/host/contract";
-import { BUZZ, type Buzz, buzz, NOTICE_KIND, useFailureNotices } from "@repo/ui-native";
+import {
+  BUZZ,
+  type Buzz,
+  buzz,
+  NO_WRITES,
+  NOTICE_KIND,
+  useFailureNotices,
+  type WritesBook,
+  writeSent,
+  writeSettled,
+} from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
@@ -273,21 +283,6 @@ export function refusalOf<Answer>(
   }).then(() => said.words);
 }
 
-/** No refusal said. */
-const NO_REFUSALS: ReadonlyMap<string, never> = new Map<string, never>();
-
-/** `held` with no refusal for `row`, the same map where it had none. */
-function without<Refusal>(
-  held: ReadonlyMap<string, Refusal>,
-  row: string,
-): ReadonlyMap<string, Refusal> {
-  if (!held.has(row)) return held;
-  const kept = new Map(held);
-  kept.delete(row);
-
-  return kept;
-}
-
 /** Writes a screen sends one after another, on rows of their own, and the refusals it says for them. */
 export interface LatestWrites<Refusal> {
   /** Why each row's newest write was refused, by the row it changes, until that row's next write is sent. */
@@ -316,9 +311,9 @@ export interface LatestWrites<Refusal> {
 export function useLatestWrites<Refusal>(
   unanswered: (cause: unknown) => Refusal,
 ): LatestWrites<Refusal> {
-  const [refusals, setRefusals] = useState<ReadonlyMap<string, Refusal>>(NO_REFUSALS);
-  /** How many writes each row has been sent, so an answer to an earlier one is told apart from the row's newest. */
-  const sent = useRef(new Map<string, number>());
+  // Note that the book is held in a ref as well as drawn, because two writes in one frame both read the state the last draw left, and only the ref is written before the second lands.
+  const book = useRef<WritesBook<Refusal>>(NO_WRITES);
+  const [refusals, setRefusals] = useState<ReadonlyMap<string, Refusal>>(NO_WRITES.refusals);
   const newestUnanswered = useRef(unanswered);
   useEffect(() => {
     newestUnanswered.current = unanswered;
@@ -326,14 +321,13 @@ export function useLatestWrites<Refusal>(
 
   const run = useCallback(
     (row: string, act: () => PromiseLike<Refusal | undefined>): Promise<boolean> => {
-      const write = (sent.current.get(row) ?? 0) + 1;
-      sent.current.set(row, write);
-      setRefusals((held) => without(held, row));
+      const sent = writeSent(book.current, row);
+      book.current = sent.book;
+      setRefusals(sent.book.refusals);
 
       const settle = (said: Refusal | undefined): boolean => {
-        if (said !== undefined && write === sent.current.get(row)) {
-          setRefusals((held) => new Map(held).set(row, said));
-        }
+        book.current = writeSettled(book.current, row, sent.write, said);
+        setRefusals(book.current.refusals);
 
         return said === undefined;
       };

@@ -105,6 +105,14 @@ export {
 } from "./keep-model.js";
 
 export {
+  NO_WRITES,
+  type WriteSent,
+  type WritesBook,
+  writeSent,
+  writeSettled,
+} from "./latest-writes-model.js";
+
+export {
   ListRow,
   ROW_ACTION_TONE,
   type RowAction,
