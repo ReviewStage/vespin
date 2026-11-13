@@ -127,7 +127,13 @@ export function useAppSidebar(
   const switcher = useWorkspaceSwitcher();
   const threeColumns = useThreeColumns();
   const { shown, setShown } = useSidebarShown();
-  const header = switcher === undefined ? undefined : <WorkspaceSwitcherItem {...switcher} />;
+
+  // Note that the sidebar's switcher holds no account row, since Settings stands at the sidebar's own foot, as the panel's sidebar keeps the account apart from its workspace menu.
+  const header =
+    switcher === undefined ? undefined : (
+      <WorkspaceSwitcherItem {...switcher} account={undefined} />
+    );
+
   const selected = openTask !== undefined && tasks.ids.has(openTask) ? openTask : place;
 
   const pick = (id: string) => {

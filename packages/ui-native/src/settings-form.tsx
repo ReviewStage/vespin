@@ -389,7 +389,7 @@ type ActionRowProps = {
   readonly destructive?: boolean | undefined;
   /** Whether it takes no press, such as while another act on the page is out. */
   readonly disabled?: boolean | undefined;
-  /** What the row is heard as, where its words alone would be heard as another row's, such as a workspace's Settings… beside the account's; its words where none is given. */
+  /** What the row is heard as, where its words alone would be heard as another row's, such as two rows that say the same words; its words where none is given. */
   readonly heard?: string | undefined;
   /** A line under its name in the muted ink, such as why it takes no press; none for none. */
   readonly detail?: string | undefined;

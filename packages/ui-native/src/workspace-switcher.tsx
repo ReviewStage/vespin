@@ -1,4 +1,4 @@
-// workspace-switcher.tsx -- the switcher a tab's root bar names the workspace with: its tile, opening the list of every workspace by its tile or photo, the account by its photo opening Settings, New workspace, and the chosen workspace's Settings… under its name, in a popover on an iPad and a sheet on an iPhone.
+// workspace-switcher.tsx -- the switcher a tab's root bar names the workspace with: its tile, opening the panel's list of every workspace by its tile or photo, then New workspace and Workspace settings, and the account by its photo opening Settings where nothing else leads there, in a popover on an iPad and a sheet on an iPhone.
 
 import {
   BottomSheet,
@@ -85,9 +85,6 @@ export type SwitcherAccount = {
 /** What the account's row says under its name: where it goes. */
 const SETTINGS = "Settings";
 
-/** What opens the chosen workspace's settings, under its name, as the menu it replaced said it. Note that it is heard as the panel's words, so VoiceOver, which may not read the section's name, never takes it for the account's Settings. */
-const WORKSPACE_SETTINGS = "Settings…";
-
 /** A workspace's tile, and the account's photo, at the head of their rows. */
 const ROW_MARK_SIZE = 30;
 
@@ -98,12 +95,11 @@ const POPOVER_WIDTH = 320;
  * How tall the popover's rows and their gaps stand, in points, at the
  * default text size: its least height, which the list's own measure raises
  * once it has laid out, since a list has no height of its own for a popover
- * to fit. A row with its mark and two lines, one with a line, the
- * gap above and below the list and between its sections, and a section's
- * name over it. `POPOVER_TALLEST` keeps a long list of workspaces, or a
+ * to fit. A row with its mark and two lines, one with a line, and the
+ * gap above and below the list and between its sections. `POPOVER_TALLEST` keeps a long list of workspaces, or a
  * large text size, on the screen, scrolling inside it.
  */
-const POPOVER_ROW = { MARKED: 52, PLAIN: 44, EDGE: 20, BETWEEN: 32, TITLED: 22 } as const;
+const POPOVER_ROW = { MARKED: 52, PLAIN: 44, EDGE: 20, BETWEEN: 32 } as const;
 
 /** The tallest the popover stands, so a long list of workspaces scrolls inside it rather than running off an iPad's screen. */
 const POPOVER_TALLEST = 560;
@@ -121,11 +117,11 @@ type WorkspaceSwitcherProps = {
   /** The one the phone works in, which the bar names and the list checks. */
   readonly chosen: SwitcherWorkspace;
   readonly onChoose: (id: string) => void;
-  /** The signed-in account, whose row under the workspaces opens Settings; none while nobody is signed in. */
+  /** The signed-in account, whose row last in the list opens Settings; none while nobody is signed in, or where the window leads to Settings itself, as a landscape iPad's sidebar does at its foot. */
   readonly account?: SwitcherAccount | undefined;
-  /** The acts after the account, such as New workspace. */
+  /** The acts after the workspaces, such as New workspace. */
   readonly actions: readonly SwitcherAction[];
-  /** Opens the chosen workspace's settings, its Settings… standing last in a section under its name; none where it has no settings page. */
+  /** Opens the chosen workspace's settings, Workspace settings standing after the acts, as the panel's menu has it; none where it has no settings page. */
   readonly onWorkspaceSettings?: (() => void) | undefined;
   /** How its button stands; the tile and the name where none is given. */
   readonly look?: SwitcherLook | undefined;
@@ -154,15 +150,13 @@ function popoverHeight({
 }: WorkspaceSwitcherProps) {
   const marked = workspaces.length + (account === undefined ? 0 : 1);
   const plain = actions.length + (onWorkspaceSettings === undefined ? 0 : 1);
-  const middle = account !== undefined || actions.length > 0;
-  const gaps = (middle ? 1 : 0) + (onWorkspaceSettings === undefined ? 0 : 1);
+  const gaps = (plain > 0 ? 1 : 0) + (account === undefined ? 0 : 1);
 
   const height =
     POPOVER_ROW.EDGE * 2 +
     marked * POPOVER_ROW.MARKED +
     plain * POPOVER_ROW.PLAIN +
-    gaps * POPOVER_ROW.BETWEEN +
-    (onWorkspaceSettings === undefined ? 0 : POPOVER_ROW.TITLED);
+    gaps * POPOVER_ROW.BETWEEN;
 
   return height;
 }
@@ -230,9 +224,10 @@ function SwitcherRow({
 /**
  * The list the switcher opens, as Notion's opens: every workspace by its own
  * tile or photo, its name, and who shares it, the chosen one checked in
- * copper; then the account by its photo and name, opening Settings, and the
- * acts, such as New workspace; and last a section under the chosen
- * workspace's name holding its Settings…. Each row closes the list and says
+ * copper; then the acts, such as New workspace, and Workspace settings, in
+ * the panel's two groups and its words (`workspaceMenuGroups`); and last,
+ * where a caller hands one, the account by its photo and name, opening
+ * Settings. Each row closes the list and says
  * what it does through `closed`, which runs a choice at once and an act that
  * opens a screen once the list has gone.
  */
@@ -263,16 +258,8 @@ function SwitcherList({
           />
         ))}
       </Section>
-      {account === undefined && actions.length === 0 ? null : (
+      {actions.length === 0 && onWorkspaceSettings === undefined ? null : (
         <Section>
-          {account === undefined ? null : (
-            <SwitcherRow
-              mark={<Avatar name={account.name} picture={account.picture} size={markSize} />}
-              name={account.name}
-              line={SETTINGS}
-              onPress={() => closed(account.onPress, true)}
-            />
-          )}
           {actions.map((action) => (
             <ActionRow
               key={action.label}
@@ -281,15 +268,22 @@ function SwitcherList({
               onPress={() => closed(action.onPress, true)}
             />
           ))}
+          {onWorkspaceSettings === undefined ? null : (
+            <ActionRow
+              label={WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS}
+              symbol={GLYPH.SETTINGS}
+              onPress={() => closed(onWorkspaceSettings, true)}
+            />
+          )}
         </Section>
       )}
-      {onWorkspaceSettings === undefined ? null : (
-        <Section title={chosen.name}>
-          <ActionRow
-            label={WORKSPACE_SETTINGS}
-            symbol={GLYPH.SETTINGS}
-            heard={WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS}
-            onPress={() => closed(onWorkspaceSettings, true)}
+      {account === undefined ? null : (
+        <Section>
+          <SwitcherRow
+            mark={<Avatar name={account.name} picture={account.picture} size={markSize} />}
+            name={account.name}
+            line={SETTINGS}
+            onPress={() => closed(account.onPress, true)}
           />
         </Section>
       )}

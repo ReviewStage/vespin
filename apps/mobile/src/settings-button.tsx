@@ -31,7 +31,7 @@ export const SETTINGS_ROUTE = {
   SKILL: "/settings/skill",
   /** Add skill's paste. */
   SKILL_ADD: "/settings/skill-add",
-  /** The workspace the app works in, as the Settings… under the workspace switcher's workspace opens it. */
+  /** The workspace the app works in, as the workspace switcher's Workspace settings opens it. */
   WORKSPACE: "/settings/workspace",
 } as const;
 
