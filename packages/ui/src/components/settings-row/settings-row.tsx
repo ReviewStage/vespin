@@ -508,7 +508,8 @@ export function SettingsRowStateLine({
 /**
  * A note's words as a row's label, a memory's: held to two lines, a longer
  * note fading out at the end of its second as a list row's long title does,
- * and said whole, as `words`, in the hint over it only where it is cut.
+ * and said whole, as `words`, in the hint over it only where it is cut. A cut
+ * note is a Tab stop, so the keyboard raises its hint as the pointer does.
  */
 export function SettingsRowNote({
   words,
@@ -523,7 +524,7 @@ export function SettingsRowNote({
 
   return (
     <Tooltip label={clipped ? words : undefined}>
-      <span className="block min-w-0">
+      <span className="block min-w-0" tabIndex={clipped ? 0 : undefined}>
         <span ref={measured} className="ui-settings-row-note block" data-overflow={String(clipped)}>
           {children}
         </span>

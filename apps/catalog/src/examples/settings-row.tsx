@@ -28,6 +28,7 @@ import {
   type SettingsRowControl,
   SettingsRowControlHold,
   SettingsRowMark,
+  SettingsRowNote,
   SettingsRowStateLine,
   SettingsRowsFold,
   SettingsRowValue,
@@ -67,6 +68,10 @@ import { CatalogSection } from "../section";
  * narrower than 380px; and integrations that fold the rows they own under
  * their own row, closed until pressed, beside one that owns none.
  */
+
+/** A note long enough to be cut at two lines of its row, as plain words for its hint. */
+const NOTE =
+  "Migrations are generated with pnpm db:generate and checked in beside the change that needs them, never written by hand, so every branch's database can be rebuilt from its own history, and a reviewer reads the schema change beside the code.";
 
 /** A switch holding its own state, named `label` and described and failed by its row. */
 function HeldSwitch({ label, control }: { label: string; control: SettingsRowControl }) {
@@ -273,7 +278,13 @@ function StateRows(): React.JSX.Element {
         {() => <SettingsRowValue>Admin</SettingsRowValue>}
       </SettingsRow>
       <SettingsRow
-        label="Migrations are generated with the schema tool and checked in beside the change that needs them, never written by hand, so every branch's database can be rebuilt from its own history."
+        label={
+          <SettingsRowNote words={NOTE}>
+            Migrations are generated with <code>pnpm db:generate</code> and checked in beside the
+            change that needs them, never written by hand, so every branch&apos;s database can be
+            rebuilt from its own history, and a reviewer reads the schema change beside the code.
+          </SettingsRowNote>
+        }
         description="Saved 2 days ago by Ada Lovelace"
         align={SETTINGS_ROW_ALIGN.FIRST_LINE}
         controls={SETTINGS_ROW_CONTROLS.BESIDE}
