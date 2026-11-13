@@ -1379,7 +1379,8 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
   const first = merged.lines[0];
   const snapshot = launch.open || first === undefined ? undefined : yield* launch.snapshot(first);
 
-  if (!launch.open) launch.opening = snapshot?.commit;
+  // Note that a turn after a compaction keeps the opening no IDLE has read yet, because the agent's turn it continues began there.
+  if (!launch.open && launch.opening === undefined) launch.opening = snapshot?.commit;
   launch.open = true;
   const outgoing: Outgoing = { ...merged, snapshot };
 

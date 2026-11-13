@@ -4,9 +4,9 @@
 
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { afterEach, test } from "vitest";
 import {
   CHECKOUT_DIFF_FORMAT,
@@ -64,7 +64,7 @@ function numbered(count: number, at?: { readonly line: number; readonly words: s
  * start of `shared.txt`. Answers the turn's diff of its snapshot to the
  * working tree, as the script reads it, by path and lines added.
  */
-function turnAcrossAMerge() {
+function turnAcrossAMerge(upstreamAdds?: string) {
   const cwd = mkdtempSync(join(tmpdir(), "checkout-diff-"));
   made.push(cwd);
   const write = (path: string, words: string) => writeFileSync(join(cwd, path), `${words}\n`);
@@ -80,6 +80,13 @@ function turnAcrossAMerge() {
   git(cwd, "checkout", "--quiet", "-b", "upstream");
   write("upstream.txt", numbered(10, { line: 2, words: "from upstream" }));
   write("shared.txt", numbered(40, { line: 38, words: "from upstream" }));
+
+  if (upstreamAdds !== undefined) {
+    mkdirSync(dirname(join(cwd, upstreamAdds)), { recursive: true });
+    write(upstreamAdds, "from upstream");
+    git(cwd, "--literal-pathspecs", "add", "--", upstreamAdds);
+  }
+
   gitAs(cwd, UPSTREAM_COMMITTER, "commit", "--quiet", "-am", "upstream");
   git(cwd, "update-ref", "refs/remotes/origin/main", "HEAD");
   git(cwd, "checkout", "--quiet", "-b", "agent", "main");
@@ -152,6 +159,11 @@ test("a turn's counts name each file where it stands, a rename where it moved to
 
 test("a turn that merged its upstream in names only the agent's own files, leaving out every file the merge changed, one the agent changed too among them", () => {
   assert.deepEqual(turnAcrossAMerge(), [["agent.txt", 1]]);
+});
+
+test("a file upstream added whose name reads as a pathspec is left out by its name alone, the agent's own file kept", () => {
+  // Note that `:/agent.txt` read as a pathspec names the root's `agent.txt`, the agent's.
+  assert.deepEqual(turnAcrossAMerge(":/agent.txt"), [["agent.txt", 1]]);
 });
 
 test("a commit the turn made that reached upstream, as an agent's push to the default branch does, stays the turn's", () => {

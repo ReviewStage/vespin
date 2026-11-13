@@ -870,11 +870,14 @@ const warmed = Effect.fn("agent-runner/warmed")(function* (launch: Launch) {
       if ((yield* Ref.get(launch.unanswered)).size > 0) return undefined;
       yield* Ref.set(launch.turnRunning, false);
       yield* Ref.set(launch.warm, true);
-      const files = yield* turnFilesOf(launch);
+      const from = yield* Ref.get(launch.opening);
+      const files = from === undefined ? undefined : yield* launch.filesSince(from);
       yield* launch.sink.emit({
         type: RUNNER_EVENT.IDLE,
         ...(files === undefined ? undefined : { files }),
       });
+      // Note that the opening is let go only once the IDLE carries its files, because a stop that ends the launch meanwhile cuts the IDLE off, and the END says them instead.
+      yield* Ref.set(launch.opening, undefined);
 
       // Counted, so the cap an earlier IDLE armed is dropped.
       return yield* Ref.updateAndGet(launch.waits, (count) => count + 1);

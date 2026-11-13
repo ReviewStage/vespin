@@ -105,7 +105,7 @@ export const CHECKOUT_DIFF_SCRIPT = [
   '    GIT_INDEX_FILE="$run/before" git read-tree "$from"',
   '    if [ -s "$run/upstream" ]; then',
   '      GIT_INDEX_FILE="$run/before" xargs -0 git update-index --force-remove -- < "$run/upstream"',
-  '      xargs -0 git ls-tree -r -z --full-tree "$to" -- < "$run/upstream" > "$run/after"',
+  '      xargs -0 git --literal-pathspecs ls-tree -r -z --full-tree "$to" -- < "$run/upstream" > "$run/after"',
   '      GIT_INDEX_FILE="$run/before" git update-index -z --index-info < "$run/after"',
   "    fi",
   '    from=$(GIT_INDEX_FILE="$run/before" git write-tree)',
