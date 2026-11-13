@@ -89,6 +89,7 @@ import {
   LIST_COLUMN,
   type ListColumn,
   mayHoldSettled,
+  settledRowsDrawn,
   TASK_PROPERTY,
   TASKS_GROUP,
   TASKS_GROUPING,
@@ -113,6 +114,7 @@ import {
   memo,
   type ReactNode,
   type RefObject,
+  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -1027,6 +1029,14 @@ export function TasksList({
         now,
       }),
   );
+
+  // Note that a view drawing no row a settled task may stand in has no end to scroll to, so it asks the next page of settled tasks itself, until one draws or the last is read, and one drawing such a row leaves its run to tell its end (`use-settled-pages.ts`).
+  const drawsSettled = settledRowsDrawn(groups);
+  const { onSettledEnd } = frame;
+
+  useEffect(() => {
+    onSettledEnd?.(!drawsSettled);
+  }, [drawsSettled, groups, onSettledEnd]);
 
   // Note that every door a row is handed stands across draws, so a row held while what it is handed does (`memo`) holds.
   const standingDoor = useStandingDoor(tasks);

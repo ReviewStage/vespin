@@ -507,6 +507,11 @@ export function mayHoldSettled(head: TasksGroupHead): boolean {
   return head.kind !== TASKS_GROUP.STATUS || isTaskSettled(head.status);
 }
 
+/** Whether any group that may hold settled tasks draws one row, whose run has an end to scroll to. */
+export function settledRowsDrawn(groups: readonly TasksGroup[]): boolean {
+  return groups.some((group) => mayHoldSettled(group.head) && group.tasks.length > 0);
+}
+
 /** What the filter and the display leave of the tasks: those that stand, and the settled the window leaves out as finished before it. */
 interface StandingTasks {
   readonly standing: readonly TaskSummary[];

@@ -1053,7 +1053,7 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
             userId: owner,
             name: `Shipped ${index}`,
             number: 1000 + index,
-            document: "",
+            description: "",
             status: index % 2 === 0 ? TASK_STATUS.DONE : TASK_STATUS.CANCELED,
             completedAt: index === SETTLED_PAGE_SIZE - 1 ? null : at,
             updatedAt: at,

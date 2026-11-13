@@ -101,6 +101,7 @@ import { ReplayMask } from "@repo/ui/session-replay-marks";
 import {
   COMPLETED_WINDOW,
   mayHoldSettled,
+  settledRowsDrawn,
   TASK_PROPERTY,
   TASKS_GROUP,
   type TaskProperty,
@@ -1011,6 +1012,14 @@ export function TasksBoard({
         now,
       }),
   );
+
+  // Note that a view drawing no row a settled task may stand in has no end to scroll to, so it asks the next page of settled tasks itself, until one draws or the last is read, and one drawing such a row leaves its run to tell its end (`use-settled-pages.ts`).
+  const drawsSettled = settledRowsDrawn(columns);
+  const { onSettledEnd } = frame;
+
+  useEffect(() => {
+    onSettledEnd?.(!drawsSettled);
+  }, [drawsSettled, columns, onSettledEnd]);
 
   // Note that every door a card is handed stands across draws, so a card held while what it is handed does (`memo`) holds.
   const standingDoor = useStandingDoor(tasks);

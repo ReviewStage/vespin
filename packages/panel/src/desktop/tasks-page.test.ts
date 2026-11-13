@@ -479,6 +479,33 @@ test("Show completed stands Done with a foot counting the tasks finished before 
   assert.deepEqual((await mountPage()).querySelectorAll(".tasks-list-group").length, 5);
 });
 
+test("a Status filter naming Canceled reads the settled a page at a time until a page draws one or the last is read", async () => {
+  // Each page asked, by the cursor it reads past: the first answers a page after it, the second none.
+  const paged: (string | undefined)[] = [];
+
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_SETTLED_PAGE]: ({ before }) => {
+      paged.push(before?.taskId);
+
+      return Promise.resolve(
+        before === undefined ? { next: { finishedAt: 1, taskId: "t-35" } } : {},
+      );
+    },
+  });
+
+  const page = await mountPage();
+  openOptions(page, "Filter");
+  choose("Status", "Canceled");
+  closeMenus();
+
+  // Note that the pages land as their answers settle.
+  for (let turn = 0; turn < 3; turn += 1) await act(async () => undefined);
+
+  assert.deepEqual(groups(page), [], "no Canceled task is drawn");
+  assert.deepEqual(paged, [undefined, "t-35"], "no Canceled task drawn, so the next page is read");
+});
+
 test("the Filter narrows the List to the values chosen, several in one visit, a chip says so and its × lifts it, and it is kept on this Mac", async () => {
   const page = await mountPage();
   openOptions(page, "Filter");
