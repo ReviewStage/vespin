@@ -23,6 +23,7 @@ import { LIVE_READ, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import { PAGE_OWNER, PAGE_SHOWER } from "@repo/features/page-wire";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
+import { subTaskCount, subTasksOf } from "@repo/features/task-list-model";
 import { TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_SECTION_WRITE, type TaskSection } from "@repo/features/task-section-wire";
 import {
@@ -870,6 +871,47 @@ it.effect("a task the list does not hold is read into it as it opens, and only o
       "the task outside the list is read once, and the one in it never",
     );
   }),
+);
+
+it.effect(
+  "a task opened draws its finished sub-task and its blocker from outside the list, the sub-task counted finished",
+  () =>
+    Effect.gen(function* () {
+      const shipped = "2d6f3b1a-8e4c-4f2a-9b7d-1c5e8a3f6b90";
+
+      const invites = {
+        ...task(INVITES, "Teammate invitations", "# Teammate invitations", 30),
+        blockedBy: [BILLING],
+      };
+
+      const billing = {
+        ...task(BILLING, "Billing export", "# Billing export", 10),
+        status: TASK_STATUS.DONE,
+        blocks: [INVITES],
+      };
+
+      const emails = {
+        ...task(shipped, "Invitation emails", "# Invitation emails", 20),
+        status: TASK_STATUS.DONE,
+        parentTaskId: INVITES,
+      };
+
+      const service = fakeService([invites, billing, emails]);
+      const { call, last, openTask } = yield* subject(service);
+      // The list the host follows holds the open task alone, as one that keeps only active tasks live.
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listAnswers(service, { plans: [rowOfTask(invites)], agents: [], issues: [] });
+
+      yield* openTask(INVITES);
+      const listed = last()?.tasks ?? [];
+
+      assert.deepEqual(
+        listed.map((each) => each.id).toSorted(),
+        [INVITES, BILLING, shipped].toSorted(),
+        "the sub-task and the blocker outside the list are drawn",
+      );
+      assert.deepEqual(subTaskCount(subTasksOf(listed, INVITES)), { finished: 1, total: 1 });
+    }),
 );
 
 it.effect(

@@ -73,6 +73,7 @@ import { TASK_HISTORY_READ } from "../task-history-live.js";
 import {
   TASK_LIST_READ,
   TASK_PAGE_READ,
+  TASK_RELATIONS_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_READ,
 } from "../task-list-live.js";
@@ -100,6 +101,7 @@ export const liveContract = {
   [TASK_ROWS_READ.name]: liveProcedure(TASK_ROWS_READ),
   [TASK_SEARCH_READ.name]: liveProcedure(TASK_SEARCH_READ),
   [TASK_PAGE_READ.name]: liveProcedure(TASK_PAGE_READ),
+  [TASK_RELATIONS_READ.name]: liveProcedure(TASK_RELATIONS_READ),
   [AUTOMATIONS_READ.name]: liveProcedure(AUTOMATIONS_READ),
   [AUTOMATION_WORKSPACE_RUNS_READ.name]: liveProcedure(AUTOMATION_WORKSPACE_RUNS_READ),
   [AUTOMATION_RUNS_READ.name]: liveProcedure(AUTOMATION_RUNS_READ),
