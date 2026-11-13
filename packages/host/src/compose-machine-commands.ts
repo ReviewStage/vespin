@@ -513,6 +513,9 @@ const RECORDING_UNSENT: MachineCommandRefusal = {
 /** What a stop answers where this Mac holds no recording of the conversation that asks: none runs, as the helper says where none ever did. */
 const NO_RECORDING: MachineCommandResult = { computer: { unrecorded: RECORDING_FAILURE.NONE } };
 
+/** Why a stop is refused as its turn comes, where a record taken ahead of it made another conversation the recording's owner. */
+const NOT_OWNER_WORDS = "no recording of this conversation runs: start one with record.";
+
 /** Who a recording is: the account and the agent's conversation that started it, which alone may stop it and receive its video. */
 interface RecordingOwner {
   readonly userId: string;
@@ -834,15 +837,14 @@ export function composeMachineCommands(
 
         const { action } = command;
         const owner: RecordingOwner = { userId, conversationId: command.conversationId };
+        const stops = action.op === COMPUTER_ACTION.STOP_RECORDING;
+
+        const owns = () =>
+          recordingOwner?.userId === owner.userId &&
+          recordingOwner.conversationId === owner.conversationId;
 
         // Note that a stop from any conversation but the one that recorded is answered as no recording, before the helper is asked, so a video never reaches another agent or account.
-        if (
-          action.op === COMPUTER_ACTION.STOP_RECORDING &&
-          (recordingOwner?.userId !== owner.userId ||
-            recordingOwner.conversationId !== owner.conversationId)
-        ) {
-          return yield* settled(command.id, NO_RECORDING);
-        }
+        if (stops && !owns()) return yield* settled(command.id, NO_RECORDING);
 
         const missing = yield* lacking(computer, action.op);
 
@@ -867,12 +869,14 @@ export function composeMachineCommands(
         // Note that the switch is read again here, since the developer may have switched apps off while the app was asked about.
         if (!(yield* computer.enabled)) return yield* settled(command.id, APPS_SWITCHED_OFF);
 
-        // Note that the switch is read once more as the helper's turn comes, since the action may wait behind another first.
-        const answer = yield* computer.helper.ask(
-          request,
-          Duration.millis(left),
-          Effect.map(computer.enabled, (on) => (on ? undefined : APPS_OFF_WORDS)),
-        );
+        // Note that the switch, and a stop's owner, are read once more as the helper's turn comes, since the action may wait behind another first, a record that makes another conversation the owner among them.
+        const stillLet = Effect.map(computer.enabled, (on) => {
+          if (!on) return APPS_OFF_WORDS;
+
+          return stops && !owns() ? NOT_OWNER_WORDS : undefined;
+        });
+
+        const answer = yield* computer.helper.ask(request, Duration.millis(left), stillLet);
 
         if ("recording" in answer)
           return yield* settled(command.id, yield* posted(command.id, answer.recording));
