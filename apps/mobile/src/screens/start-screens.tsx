@@ -349,6 +349,9 @@ export function NewAgentScreen({
   const startAgent = useStartAgent(taskId);
   const sendSuggestion = useSuggestionSender();
   const suggester = useShownAgent(opened?.suggestion.agentId ?? "");
+  // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
+  const suggestedTask = suggester?.planId;
+  const placed = opened === undefined || suggestedTask !== undefined;
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
@@ -368,7 +371,7 @@ export function NewAgentScreen({
     );
 
     return "reached" in result
-      ? { agentId: result.reached, taskId }
+      ? { agentId: result.reached, taskId: suggestedTask ?? taskId }
       : { refused: result.failure.text };
   };
 
@@ -388,7 +391,12 @@ export function NewAgentScreen({
 
   return (
     <>
-      <SheetBar title={WORDS.NEW_AGENT} ready={drafted && !starting} onStart={start} kept={kept} />
+      <SheetBar
+        title={WORDS.NEW_AGENT}
+        ready={drafted && placed && !starting}
+        onStart={start}
+        kept={kept}
+      />
       <Screen>
         <SettingsForm>
           <DraftSection

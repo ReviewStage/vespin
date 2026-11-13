@@ -603,18 +603,29 @@ function chipHeardAsWritten(chip: MarkdownChip): string {
   return chip.heard;
 }
 
-/** A run's words as VoiceOver hears them, each chip as `chipHeard` says it. */
-function heardRun(run: MarkdownRun, chipHeard: (chip: MarkdownChip) => string): string {
+/** A suggestion as VoiceOver hears it where nothing more is known of it: by the words it was written with. */
+function suggestionHeardAsWritten(suggestion: MarkdownSuggestion): string {
+  return suggestion.words;
+}
+
+/** How a line's chips and suggestions are heard. */
+interface LineHearing {
+  readonly chip: (chip: MarkdownChip) => string;
+  readonly suggestion: (suggestion: MarkdownSuggestion) => string;
+}
+
+/** A run's words as VoiceOver hears them, each chip and suggestion as `hearing` says it. */
+function heardRun(run: MarkdownRun, hearing: LineHearing): string {
   switch (run.kind) {
     case MARKDOWN_RUN.WORDS:
     case MARKDOWN_RUN.CODE:
       return run.text;
     case MARKDOWN_RUN.LINK:
-      return run.runs.map((each) => heardRun(each, chipHeard)).join("");
+      return run.runs.map((each) => heardRun(each, hearing)).join("");
     case MARKDOWN_RUN.CHIP:
-      return chipHeard(run.chip);
+      return hearing.chip(run.chip);
     case MARKDOWN_RUN.SUGGESTION:
-      return run.suggestion.words;
+      return hearing.suggestion(run.suggestion);
     case MARKDOWN_RUN.BREAK:
       return "\n";
   }
@@ -638,8 +649,11 @@ function holdsChip(run: MarkdownRun): boolean {
 export function heardLine(
   runs: readonly MarkdownRun[],
   chipHeard: (chip: MarkdownChip) => string = chipHeardAsWritten,
+  suggestionHeard: (suggestion: MarkdownSuggestion) => string = suggestionHeardAsWritten,
 ): string | undefined {
-  return runs.some(holdsChip) ? runs.map((run) => heardRun(run, chipHeard)).join("") : undefined;
+  const hearing = { chip: chipHeard, suggestion: suggestionHeard };
+
+  return runs.some(holdsChip) ? runs.map((run) => heardRun(run, hearing)).join("") : undefined;
 }
 
 /** Markdown as the blocks the app draws, read as the panel reads it; words nested too deep to parse safely are one block of plain text. */

@@ -481,6 +481,22 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
   }
 }
 
+/** A suggestion as VoiceOver hears it: as its chip stands once its button is read, else by the words it was written with. */
+function suggestionRunHeard(suggestion: MarkdownSuggestion, drawing: Drawing): string {
+  const look = drawing.suggestion(suggestion.link, suggestion.words);
+
+  return look === undefined ? suggestion.words : suggestionHeard(look);
+}
+
+/** A line's words as VoiceOver hears them, each chip and suggestion as it now stands; none where the line holds neither. */
+function lineHeard(runs: readonly MarkdownRun[], drawing: Drawing): string | undefined {
+  return heardLine(
+    runs,
+    (chip) => chipHeard(chip, drawing),
+    (suggestion) => suggestionRunHeard(suggestion, drawing),
+  );
+}
+
 /** What opens from a line of words: each chip and link that goes anywhere, by the words it is heard as. */
 type LineOpening = { readonly name: string; readonly label: string; readonly onOpen: () => void };
 
@@ -518,17 +534,16 @@ function collectOpenings(
         });
       }
     } else if (run.kind === MARKDOWN_RUN.SUGGESTION) {
-      const { link, words, target } = run.suggestion;
-      const look = drawing.suggestion(link, words);
-      const onOpen = look === undefined ? open(target, drawing) : look.onPress;
-      const label = look === undefined ? words : suggestionHeard(look);
+      const look = drawing.suggestion(run.suggestion.link, run.suggestion.words);
+      const onOpen = look === undefined ? open(run.suggestion.target, drawing) : look.onPress;
+      const label = suggestionRunHeard(run.suggestion, drawing);
 
       if (onOpen !== undefined && label !== "") {
         openings.push({ name: `open-${openings.length}`, label: `${OPEN_WORD} ${label}`, onOpen });
       }
     } else if (run.kind === MARKDOWN_RUN.LINK) {
       const onOpen = open(run.target, drawing);
-      const heard = heardLine(run.runs, (chip) => chipHeard(chip, drawing));
+      const heard = lineHeard(run.runs, drawing);
       const words = heard ?? runsText(run.runs, drawing);
 
       if (onOpen !== undefined && words !== "") {
@@ -550,12 +565,8 @@ function runText(run: MarkdownRun, drawing: Drawing): string {
       return runsText(run.runs, drawing);
     case MARKDOWN_RUN.CHIP:
       return chipHeard(run.chip, drawing);
-    case MARKDOWN_RUN.SUGGESTION: {
-      const look = drawing.suggestion(run.suggestion.link, run.suggestion.words);
-
-      return look === undefined ? run.suggestion.words : suggestionHeard(look);
-    }
-
+    case MARKDOWN_RUN.SUGGESTION:
+      return suggestionRunHeard(run.suggestion, drawing);
     case MARKDOWN_RUN.BREAK:
       return " ";
     default: {
@@ -596,7 +607,7 @@ function Line({
 
   return (
     <Text
-      accessibilityLabel={heardLine(runs, (chip) => chipHeard(chip, drawing))}
+      accessibilityLabel={lineHeard(runs, drawing)}
       {...(heading === true ? { accessibilityRole: "header" as const } : {})}
       {...actions}
       style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
