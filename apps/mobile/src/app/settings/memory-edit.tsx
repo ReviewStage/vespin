@@ -44,7 +44,8 @@ const MEMORY_SYMBOL = GLYPH.MEMORY;
 
 export default function MemoryEditScreen() {
   // Note that a refused save reopens the page holding its words and why, as its notice's Try again opens it.
-  const { memory, words, refused } = useLocalSearchParams<{
+  const { workspace, memory, words, refused } = useLocalSearchParams<{
+    workspace?: string;
     memory?: string;
     words?: string;
     refused?: string;
@@ -52,14 +53,16 @@ export default function MemoryEditScreen() {
 
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
   const { chosen } = useChosenWorkspace(workspaces);
+  // Note that a refused save reopens in the workspace it was for, even where another has been chosen since.
+  const target = workspaces.find((each) => each.id === workspace) ?? chosen;
 
-  if (chosen === undefined) return null;
+  if (target === undefined) return null;
 
   // Note that the page is drawn anew for each workspace, so a draft never carries into another.
   return (
     <MemoryEditor
-      key={chosen.id}
-      workspaceId={chosen.id}
+      key={target.id}
+      workspaceId={target.id}
       memoryId={memory}
       draft={words}
       refused={refused}
@@ -165,6 +168,7 @@ function MemoryEditor({
               router.push({
                 pathname: SETTINGS_ROUTE.MEMORY_EDIT,
                 params: {
+                  workspace: workspaceId,
                   ...(memory !== undefined && { memory: memory.id }),
                   words: text,
                   refused: refusal,
@@ -229,7 +233,7 @@ function MemoryEditor({
             >
               <WordsField
                 placeholder={MEMORY_EDITOR_WORDS.PLACEHOLDER}
-                initialWords={saved}
+                initialWords={draft ?? saved}
                 autoFocus
                 onWords={setWords}
                 testId={WORDS_TEST_ID}
