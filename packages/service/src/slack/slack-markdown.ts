@@ -14,8 +14,8 @@ const CUT_MARK = "…";
 /** The line an agent's final message parts its Slack messages with: `---` alone, outside a code fence. */
 const MESSAGE_BREAK = /^\s*---\s*$/u;
 
-/** A line that opens or closes a Markdown code fence. */
-const CODE_FENCE = /^\s*(?:```|~~~)/u;
+/** A line that opens or closes a Markdown code fence: its marker, three or more of one fence character, and what follows it. */
+const CODE_FENCE = /^ {0,3}(`{3,}|~{3,})(.*)$/u;
 
 /** The most messages one final message is posted as; what runs past the last is posted in it. */
 const SLACK_MESSAGES = 6;
@@ -60,13 +60,23 @@ function withPlainMentions(markdown: string): string {
  */
 export function slackMessagesOf(markdown: string): readonly string[] {
   const parts: string[][] = [[]];
-  let fenced = false;
+  // The marker of the fence the line stands in; none outside one.
+  let opened: string | undefined;
 
   for (const line of markdown.split("\n")) {
-    if (CODE_FENCE.test(line)) fenced = !fenced;
+    const fence = CODE_FENCE.exec(line);
 
-    if (!fenced && MESSAGE_BREAK.test(line)) parts.push([]);
+    if (opened === undefined && MESSAGE_BREAK.test(line)) parts.push([]);
     else parts.at(-1)?.push(line);
+
+    // Note that a fence closes only on a bare marker of its own character at least as long, as CommonMark closes one.
+    if (fence === null) continue;
+    const [, marker = "", after = ""] = fence;
+
+    if (opened === undefined) opened = marker;
+    else if (marker[0] === opened[0] && marker.length >= opened.length && after.trim() === "") {
+      opened = undefined;
+    }
   }
 
   const messages = parts.flatMap((lines) => {

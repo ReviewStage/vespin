@@ -232,7 +232,7 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
           agent,
           RUN_STATUS.SUCCEEDED,
           T0 + 60_000,
-          "Yes, black cold brew counts.\n\n---\n\n```\n---\n```\n\n---\n\n",
+          "Yes, black cold brew counts.\n\n---\n\n````\n```\n---\n````\n\n---\n\n",
         ).pipe(Effect.provide(posting));
         yield* runOn(automation, agent.id, T0 + 86_400_000);
         yield* endedAt(agent, RUN_STATUS.SUCCEEDED, T0 + 86_460_000, "Two threads need you.").pipe(
@@ -243,14 +243,14 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
           Option.map(kept, (thread) => thread.agentId),
           Option.some(agent.id),
         );
-        // The answer's parts between lines of `---` are posted one to a message, a fenced `---` and an empty part left as they are.
+        // The answer's parts between lines of `---` are posted one to a message, a `---` within a fence, a shorter fence-like line among it, and an empty part left as they are.
         const [, answer, fenced, nextDigest, ...more] = slack.posted;
         assert.equal(more.length, 0);
         assert.equal(answer?.channel, DM_CHANNEL);
         assert.equal(answer?.thread_ts, digest);
         assert.equal(answer?.text, "Yes, black cold brew counts.");
         assert.equal(fenced?.thread_ts, digest);
-        assert.equal(fenced?.text, "```\n---\n```");
+        assert.equal(fenced?.text, "````\n```\n---\n````");
         assert.ok(!(answer?.blocks ?? "").includes("Open in Vespin"));
         assert.ok((fenced?.blocks ?? "").includes("Open in Vespin"));
         assert.equal(nextDigest?.channel, SLACK_USER);
