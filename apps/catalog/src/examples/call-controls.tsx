@@ -1,5 +1,5 @@
 /**
- * call-controls.tsx -- Talk at rest and with no OpenAI API key; each mute round and square, off and on, and ringed as its voice speaks, Stop, and the one red End call; a box's call status connecting, live, muted, and ending; a call bar at a card's width and at its narrowest, connecting, idle, while the agent thinks and works, and muted; and the call card at the sidebar's foot, narrow, and in the floating window, its agent's chip over its task.
+ * call-controls.tsx -- Talk at rest and with no OpenAI API key; each mute round and square, off and on, and ringed as its voice speaks, Stop, and the one red End call; a call bar at a card's width and at its narrowest, connecting, idle, while the agent thinks and works, and muted; and the call card at the sidebar's foot, narrow, and in the floating window, its agent's chip over its task.
  */
 
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -11,12 +11,10 @@ import {
   type ButtonCorners,
   CALL_CARD_SURFACE,
   CALL_DEVICE,
-  CALL_STAGE,
   CallBar,
   CallCard,
   type CallDevice,
   type CallLevels,
-  CallLive,
   CallMute,
   type CallStatus,
   EndCallButton,
@@ -31,10 +29,6 @@ import {
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
-
-/** When the catalog's call started, and the moment its count stands still at: 4m 12s in. */
-const CALL_STARTED_AT = Date.UTC(2026, 9, 24, 15, 0, 0);
-const CALL_NOW = CALL_STARTED_AT + 252_000;
 
 /** The task the catalog's card is about, and the agent it is with. */
 const TASK_NAME = "Voice mode for agents";
@@ -215,22 +209,6 @@ function CallControls(): React.JSX.Element {
             levels={SPEAKING}
             on
           />
-        </Inline>
-      </CatalogSection>
-      <CatalogSection
-        id="call-live"
-        title="A call's status in a box's foot: connecting, live, muted, and ending"
-      >
-        <Inline gap={GAP.SECTION}>
-          <CallLive stage={CALL_STAGE.CONNECTING} />
-          <CallLive
-            stage={CALL_STAGE.LIVE}
-            startedAt={CALL_STARTED_AT}
-            muted={false}
-            now={CALL_NOW}
-          />
-          <CallLive stage={CALL_STAGE.LIVE} startedAt={CALL_STARTED_AT} muted now={CALL_NOW} />
-          <CallLive stage={CALL_STAGE.ENDING} />
         </Inline>
       </CatalogSection>
       <CatalogSection
