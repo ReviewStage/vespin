@@ -52,6 +52,7 @@ function routedLifecycle(cloud: MachineLifecycle, mac: DeviceMachineService): Ma
     kill: (handle) => of(handle.machine).kill(handle),
     readFile: (session, path, bound) =>
       bySession(session, (machine) => machine.readFile(session, path, bound)),
+    writeFile: (session, file) => bySession(session, (machine) => machine.writeFile(session, file)),
     restoreCheckout: (session, snapshot) =>
       bySession(session, (machine) => machine.restoreCheckout(session, snapshot)),
     diffCheckout: (session, range) =>

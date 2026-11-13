@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  ArrowUpLeft,
   ArrowUpRight,
   AudioLines,
   Bold,
@@ -47,6 +48,7 @@ import {
   MessageSquare,
   MessageSquarePlus,
   Mic,
+  MicOff,
   Minimize,
   Minimize2,
   Minus,
@@ -81,6 +83,8 @@ import {
   Type,
   Unlink,
   User,
+  Volume2,
+  VolumeOff,
   X,
 } from "lucide-react";
 
@@ -279,6 +283,18 @@ export const LaptopIcon = lucideGlyph(Laptop, "filter-icon");
 
 /** The microphone itself — what macOS's own access ask is about. */
 export const MicrophoneIcon = lucideGlyph(Mic, "settings-icon");
+
+/** The microphone struck through: a call's microphone muted, so the caller is not heard. */
+export const MicrophoneOffIcon = lucideGlyph(MicOff, "settings-icon");
+
+/** A speaker sounding: a call's voice heard on this device. */
+export const SpeakerIcon = lucideGlyph(Volume2, "icon-button-glyph");
+
+/** A speaker struck through: a call's voice muted on this device alone. */
+export const SpeakerOffIcon = lucideGlyph(VolumeOff, "icon-button-glyph");
+
+/** An arrow back up and to the left: the way back to the agent a call is about. */
+export const ReturnIcon = lucideGlyph(ArrowUpLeft, "icon-button-glyph");
 
 /** A picture, on the control that attaches one. */
 export const ImageIcon = lucideGlyph(Image, "icon-button-glyph");

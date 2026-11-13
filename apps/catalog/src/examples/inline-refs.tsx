@@ -1,4 +1,5 @@
 import {
+  AppIcon,
   AVATAR_OUTLINE,
   AVATAR_SIZE,
   Avatar,
@@ -27,13 +28,19 @@ import { CatalogSection } from "../section";
  * level with a line glyph, all in running words that they wrap across as the
  * words do; long names wrapping in a narrow column, each glyph kept to its
  * name's first word, and a pull request's key and a date kept whole with
- * their glyph and standing there; the same long names in a slot one line tall, fading out
- * where they are cut, a path at its start;
+ * their glyph and standing there; an app on the developer's Mac by its
+ * icon; the same long names in a slot one line tall, fading out where they
+ * are cut, a path at its start;
  * and a pill as the subject of a line, as wide as its name until the line
  * runs out. A screen reader hears each pill's kind before its name. Each hangs its card, or
  * its name in a pill, in the window's tooltip, once the pointer rests on
  * it or the keyboard reaches it.
  */
+
+/** A synthetic app's icon, a rounded square with a phone in it, as a Mac's app sends one. */
+const PHONE_ICON = `data:image/svg+xml,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><defs><linearGradient id="a" x2="0" y2="1"><stop offset="0" stop-color="#5ac8fa"/><stop offset="1" stop-color="#1d6fe0"/></linearGradient></defs><rect x="4" y="4" width="56" height="56" rx="13" fill="url(#a)"/><rect x="22" y="12" width="20" height="40" rx="5" fill="#0b0d12"/><rect x="24" y="15" width="16" height="34" rx="3" fill="#e8f2ff"/></svg>',
+)}`;
 
 const TASK_CARD = (
   <HoverCard>
@@ -157,6 +164,17 @@ function InlineRefs(): React.JSX.Element {
             name={INLINE_REF_NAME.WHOLE}
           />
           .
+        </Text>
+        <Text>
+          Check the build in{" "}
+          <InlineRef
+            look={INLINE_REF_LOOK.PILL}
+            glyph={<AppIcon src={PHONE_ICON} />}
+            kind="app"
+            label="Simulator"
+            name={INLINE_REF_NAME.WHOLE}
+          />{" "}
+          on the developer's Mac.
         </Text>
       </CatalogSection>
       <CatalogSection id="inline-ref-narrow" title="Long names in a narrow column">

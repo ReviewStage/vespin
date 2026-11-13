@@ -1,5 +1,10 @@
 import { isLinkOpen, LINK_OPEN, LINK_OPEN_LABEL, LINK_OPEN_LIST } from "@repo/features/link-open";
+import {
+  MACHINE_COMMAND_MODE,
+  MACHINE_COMMAND_MODE_LIST,
+} from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { DEFAULT_LIVE_VOICE } from "@repo/features/voices";
 import type { UnparsedWireValue } from "@repo/wire";
 import {
   APP_SETTING_ID,
@@ -25,6 +30,7 @@ import {
   COMMIT_AUTHOR_LIST,
   isCommitAuthor,
 } from "./commit-author.js";
+import { COMPUTER_USE_DETAIL, COMPUTER_USE_LABEL, isComputerUseAppsJson } from "./computer-use.js";
 import {
   DIFF_FONT,
   DIFF_FONT_LABEL,
@@ -39,6 +45,8 @@ import {
   INLINE_DIFF,
   INLINE_DIFF_LABEL,
 } from "./diff-view.js";
+import { EXPERIMENT, experimentOn } from "./experiments.js";
+import { isIntrosSeenJson } from "./intros.js";
 import {
   isKeepAwake,
   KEEP_AWAKE_DEFAULT,
@@ -48,12 +56,10 @@ import {
   KEEP_AWAKE_OPTION_LABEL,
 } from "./keep-awake.js";
 import {
-  isMacCommandMode,
-  MAC_COMMAND_MODE,
-  MAC_COMMAND_MODE_LABEL,
-  MAC_COMMAND_MODE_LIST,
-  MAC_COMMANDS_LABEL,
-} from "./mac-commands.js";
+  isMachineCommandMode,
+  MACHINE_COMMAND_MODE_LABEL,
+  MACHINE_COMMANDS_LABEL,
+} from "./machine-commands.js";
 import { isOnboardingSurveyJson } from "./onboarding-survey.js";
 import {
   isPermissionMode,
@@ -69,10 +75,10 @@ import {
   PULL_REQUEST_OPEN_LIST,
 } from "./pull-request-open.js";
 import {
-  accountHiddenSetting,
   accountToggleSetting,
   buildToggleSetting,
   choiceSetting,
+  hiddenSetting,
   optional,
   toggleSetting,
 } from "./schema-builders.js";
@@ -86,6 +92,13 @@ import {
 import { isSetupPlaceJson } from "./setup-place.js";
 import { isSoundWhen, SOUND_WHEN, SOUND_WHEN_LABEL, SOUND_WHEN_LIST } from "./sound-when.js";
 import { isTheme, THEME, THEME_LIST, type Theme } from "./theme.js";
+import {
+  isLiveVoice,
+  OFFERED_VOICE_LIST,
+  voiceGroup,
+  voiceOptionLabel,
+  voiceTag,
+} from "./voice-choice.js";
 import { isZoomPercent, ZOOM_ACTUAL_SIZE, ZOOM_PERCENTS } from "./zoom.js";
 
 export {
@@ -157,12 +170,12 @@ function themeLabel(themes: readonly { readonly id: string; readonly label: stri
  * stored is read as a mode: on, which ran every command without asking,
  * as Ask, and off as Never.
  */
-function macCommandModeGuard(value: UnparsedWireValue) {
-  if (value === true) return optional(MAC_COMMAND_MODE.ASK, isMacCommandMode);
+function machineCommandModeGuard(value: UnparsedWireValue) {
+  if (value === true) return optional(MACHINE_COMMAND_MODE.ASK, isMachineCommandMode);
 
-  if (value === false) return optional(MAC_COMMAND_MODE.NEVER, isMacCommandMode);
+  if (value === false) return optional(MACHINE_COMMAND_MODE.NEVER, isMachineCommandMode);
 
-  return optional(value, isMacCommandMode);
+  return optional(value, isMachineCommandMode);
 }
 
 /** A platform that asks for the microphone and routes it itself, as dictation listens on it. */
@@ -227,17 +240,45 @@ export const APP_SETTING_SCHEMA = {
   }),
   macCommands: choiceSetting({
     field: "macCommands",
-    id: APP_SETTING_ID.MAC_COMMANDS,
-    label: MAC_COMMANDS_LABEL,
-    values: MAC_COMMAND_MODE_LIST,
+    id: APP_SETTING_ID.MACHINE_COMMANDS,
+    label: MACHINE_COMMANDS_LABEL,
+    values: MACHINE_COMMAND_MODE_LIST,
     token: (mode) => mode,
-    optionLabel: (mode) => MAC_COMMAND_MODE_LABEL[mode],
-    guard: macCommandModeGuard,
-    default: MAC_COMMAND_MODE.ASK,
+    optionLabel: (mode) => MACHINE_COMMAND_MODE_LABEL[mode],
+    guard: machineCommandModeGuard,
+    default: MACHINE_COMMAND_MODE.ASK,
     page: SETTINGS_PAGE.THIS_MAC,
     order: 2,
     // Nothing to run per write: the host reads the setting before each read for commands and as each command is about to run.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
+  }),
+  computerUse: toggleSetting({
+    field: "computerUse",
+    id: APP_SETTING_ID.COMPUTER_USE,
+    label: COMPUTER_USE_LABEL,
+    detail: COMPUTER_USE_DETAIL,
+    default: true,
+    page: SETTINGS_PAGE.THIS_MAC,
+    order: 3,
+    // Note that the switch stands only where Computer use is on, as every gated feature's row does.
+    visible: (view) => experimentOn(view.settings.experiments, EXPERIMENT.COMPUTER_USE),
+    // Nothing to run per write: the host reads the switch as each action on an app arrives.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+  }),
+  /*
+   * The apps the developer answered Always allow for, by bundle id, as JSON
+   * (`computer-use.ts`). This Mac's own, since its apps are, and drawn by no
+   * schema row, since only the prompt's Always allow and the apps' list
+   * write it.
+   */
+  computerUseApps: hiddenSetting({
+    field: "computerUseApps",
+    id: APP_SETTING_ID.COMPUTER_USE_APPS,
+    page: SETTINGS_PAGE.THIS_MAC,
+    order: 4,
+    // Nothing to run per write: the host reads the apps as each action on an app arrives.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    guard: isComputerUseAppsJson,
   }),
   /*
    * Whether This Mac's host keeps the Mac awake for its agents. Kept on
@@ -262,6 +303,36 @@ export const APP_SETTING_SCHEMA = {
     visible: desktopAppDrawn,
     // Nothing to run per write: This Mac's host is handed the choice as the settings are told again.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
+  }),
+  /*
+   * The voice a call speaks with, the account's so a call on the web, on a
+   * Mac, or on a phone speaks alike, and read when a call opens its session:
+   * GPT-Live fixes a voice at creation, so a new choice is heard on the next
+   * call. It rides the preferences snapshot as a part of its own, as the
+   * sounds' choices do, and stands under the harnesses on Agents, since a
+   * call runs on the account's OpenAI key kept there, only while the Voice
+   * experiment is on.
+   */
+  voice: choiceSetting({
+    field: "voice",
+    id: APP_SETTING_ID.VOICE,
+    label: "Voice",
+    detail: "A new voice applies on the next call.",
+    values: OFFERED_VOICE_LIST,
+    token: (voice) => voice,
+    optionLabel: voiceOptionLabel,
+    optionGroup: voiceGroup,
+    optionTag: voiceTag,
+    search: "Search voices",
+    guard: (value: UnparsedWireValue) => optional(value, isLiveVoice),
+    default: DEFAULT_LIVE_VOICE,
+    page: SETTINGS_PAGE.AGENTS,
+    section: SETTING_SECTION.VOICE,
+    order: 30,
+    // Nothing to run per write: a call reads the choice as it opens its session.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: (view) =>
+      view.accountDrawn && experimentOn(view.settings.experiments, EXPERIMENT.VOICE),
   }),
   /*
    * Where an app link opened in a browser goes: it stays on the web, or the
@@ -536,7 +607,7 @@ export const APP_SETTING_SCHEMA = {
    * preference riding a part of the snapshot of its own, as setup finished
    * does; drawn nowhere, since only setup's steps write it.
    */
-  setupPlace: accountHiddenSetting({
+  setupPlace: hiddenSetting({
     field: "setupPlace",
     id: APP_SETTING_ID.SETUP_PLACE,
     page: SETTINGS_PAGE.ACCOUNT,
@@ -551,7 +622,7 @@ export const APP_SETTING_SCHEMA = {
    * from. An account preference riding a part of the snapshot of its own, as
    * setup's place does; drawn nowhere, since only setup's survey writes it.
    */
-  onboardingSurvey: accountHiddenSetting({
+  onboardingSurvey: hiddenSetting({
     field: "onboardingSurvey",
     id: APP_SETTING_ID.ONBOARDING_SURVEY,
     page: SETTINGS_PAGE.ACCOUNT,
@@ -559,6 +630,22 @@ export const APP_SETTING_SCHEMA = {
     // Nothing to run per write: setup reads it as it draws the survey.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     guard: isOnboardingSurveyJson,
+  }),
+  /*
+   * Which one-card intros the account has seen, as the JSON list of their
+   * ids (`intros.ts`), so a card dismissed on one device never stands again
+   * on another. An account preference riding a part of the snapshot of its
+   * own, as setup's place does; drawn nowhere, since only a card's Got it
+   * writes it.
+   */
+  introsSeen: hiddenSetting({
+    field: "introsSeen",
+    id: APP_SETTING_ID.INTROS_SEEN,
+    page: SETTINGS_PAGE.ACCOUNT,
+    order: 930,
+    // Nothing to run per write: each page reads it as it draws its intro.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    guard: isIntrosSeenJson,
   }),
   lineNumbers: toggleSetting({
     field: "lineNumbers",

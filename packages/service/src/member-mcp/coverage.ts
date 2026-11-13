@@ -58,6 +58,8 @@ export const MEMBER_MCP_EXCLUSION_REASON = {
   RETIRED: "retired",
   /** A member could use a tool for it, and none exists yet. */
   NOT_YET_BUILT: "not-yet-built",
+  /** Who follows a task, and whose machines its agents may use, is a member's own choice in the app: an agent reads followers and never adds, removes, or switches one. */
+  MEMBER_ONLY: "member-only",
 } as const;
 
 export type MemberMcpExclusionReason =
@@ -72,6 +74,7 @@ const {
   INTERNAL,
   RETIRED,
   NOT_YET_BUILT,
+  MEMBER_ONLY,
 } = MEMBER_MCP_EXCLUSION_REASON;
 
 /** Each tool's procedures: at least one, so no row stands empty. */
@@ -278,6 +281,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     providerKeys: SECRET,
     saveProviderKey: SECRET,
     setProviderKeyForAgents: SECRET,
+    useResetCredit: SECRET,
     renameSubscription: SECRET,
     reorderSubscriptions: SECRET,
     removeProviderKey: SECRET,
@@ -286,6 +290,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     cancelChatGptDeviceLogin: NEEDS_BROWSER,
   },
   admin: {
+    catalog: INTERNAL,
     cost: INTERNAL,
     day: INTERNAL,
     favorite: INTERNAL,
@@ -312,8 +317,13 @@ export const MEMBER_MCP_EXCLUSIONS = {
     renameTerminal: SCREEN_ONLY,
     endTerminal: SCREEN_ONLY,
     clear: NOT_YET_BUILT,
+    // A button in an agent's reply is drawn and pressed in its transcript; a member's agent starts or messages one with its own tools.
+    readButton: SCREEN_ONLY,
+    pressButton: SCREEN_ONLY,
   },
   dictation: { transcribe: SCREEN_ONLY },
+  // A call's lines are recorded by the window holding the call, as GPT-Live hears them; a member's agent messages an agent with its own tools.
+  messages: { recordVoiceLine: SCREEN_ONLY },
   events: { record: INTERNAL },
   github: {
     connect: NEEDS_BROWSER,
@@ -325,6 +335,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   hosts: {
     list: INTERNAL,
     presence: INTERNAL,
+    // The apps a member's machines always allow are offered in an agent's `@` list; a member's agent reads its own machine's with `computer`.
+    allowedApps: SCREEN_ONLY,
     remove: INTERNAL,
     readPairing: INTERNAL,
     approvePairing: INTERNAL,
@@ -386,7 +398,16 @@ export const MEMBER_MCP_EXCLUSIONS = {
     answerRequest: INTERNAL,
   },
   liveActivities: { startToken: INTERNAL, activityToken: INTERNAL, ended: INTERNAL },
-  macCommands: { waiting: INTERNAL, settle: INTERNAL, claim: INTERNAL, listening: INTERNAL },
+  machineCommands: {
+    waiting: INTERNAL,
+    settle: INTERNAL,
+    recording: INTERNAL,
+    claim: INTERNAL,
+    listening: INTERNAL,
+    join: INTERNAL,
+    saveDeviceSettings: INTERNAL,
+    saveDeviceAppLooks: INTERNAL,
+  },
   pullRequests: { reviewOptions: SCREEN_ONLY },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
   // A page the member hovers, read for their own screen: an agent reads a page with its own tools.
@@ -397,9 +418,18 @@ export const MEMBER_MCP_EXCLUSIONS = {
     keepPicture: SCREEN_ONLY,
     pageFrame: SCREEN_ONLY,
   },
+  taskFollowers: {
+    follow: MEMBER_ONLY,
+    unfollow: MEMBER_ONLY,
+    setMachines: MEMBER_ONLY,
+    add: MEMBER_ONLY,
+  },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
+  workspaceMergeQueue: { read: NOT_YET_BUILT },
   workspaceSentry: { install: NEEDS_BROWSER },
+  // A call's session and its seconds are the panel's own, which holds the microphone and the WebRTC peer.
+  voice: { open: SCREEN_ONLY, ended: SCREEN_ONLY },
   workspaceSlackBot: { connect: NEEDS_BROWSER },
   workspaces: {
     setExperiment: INTERNAL,

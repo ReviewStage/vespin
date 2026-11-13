@@ -16,7 +16,10 @@ import { refusedAtLimit } from "./agent-model.js";
  * one word say it without a row of buttons under every such line. The
  * alert's menu is headed by why it did not go and offers Retry, which sends
  * it again as the newest line, Edit, which takes its words back into the
- * box, and Delete, each on that line alone, as a chat app's do. A message
+ * box, and Delete, each on that line alone, as a chat app's do. A line
+ * refused for now outlasts a reload and a relaunch, its words and why kept
+ * for the account that sent it (`failed-lines.ts`), so its mark is drawn
+ * again where it went, Retry still sending it under its key. A message
  * to an agent whose session has ended is refused for good, and its box
  * closes on it: its line is marked the same way, its menu saying why with
  * nothing to press, since Continue in new agent carries its words on. The

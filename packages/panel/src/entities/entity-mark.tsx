@@ -7,8 +7,9 @@ import {
   type EntityOf,
   type KnownNames,
 } from "@repo/features/entity-kind";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
-import { ProviderMark } from "@repo/ui";
+import { AppIcon, ProviderMark } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, APP_ACTOR } from "@repo/ui/actor-model";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -17,16 +18,17 @@ import { useAutomation } from "../automation-directory.js";
 import { TILE_SIZE, WorkspaceTile } from "../desktop/workspace-tile.js";
 import { usePerson } from "../member-directory.js";
 import { providerOf } from "../tasks/agent-model.js";
+import { KeptAppIcon, useKeptApps } from "../tasks/agent-pictures.js";
 import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { FileTypeIcon } from "../tasks/file-type-icon.js";
 import { InboxItemChipGlyph } from "../tasks/inbox-item-chip.js";
 import { IssueMark } from "../tasks/issue-mark.js";
+import { useAllowedAppIcon, useMacAppIcon } from "../tasks/mac-apps.js";
 import { ReadAgentModel } from "../tasks/mentioned-agent-card.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { SkillMark } from "../tasks/skill-ref.js";
 import { AgentGlyph, AgentMark, PlanGlyph } from "../tasks/tab-look.js";
 import { useAgentStatus, useTaskStatus } from "../tasks/use-known-names.js";
-import type { LinkStanding } from "../tasks/use-link-standing.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { EntityGlyph } from "./entity-glyph.js";
 
@@ -190,6 +192,25 @@ function WorkspaceMark({ slug }: { slug: string }): React.JSX.Element {
   return <WorkspaceTile workspace={listed ?? { id: slug, name: slug }} size={TILE_SIZE.INLINE} />;
 }
 
+/**
+ * An app on the developer's Mac by its icon, as this Mac draws it; off the
+ * Mac, as a machine of the reader's that always allows it posted it, else
+ * the icon a `computer` call kept for the app in the conversation; a
+ * screen's glyph where there is none.
+ */
+function MacAppMark({ app }: { app: string }): React.JSX.Element {
+  const onMac = useMacAppIcon(app);
+  const posted = useAllowedAppIcon(app);
+  const own = onMac ?? posted;
+  const kept = useKeptApps().get(app)?.icon;
+
+  return own === undefined && kept !== undefined ? (
+    <KeptAppIcon id={kept} />
+  ) : (
+    <AppIcon src={own} />
+  );
+}
+
 /** An automation's mark, or one of its runs': the automation's tile. */
 const AUTOMATION_MARK: EntityMark<
   EntityOf<typeof ENTITY_KIND.AUTOMATION | typeof ENTITY_KIND.AUTOMATION_RUN>
@@ -250,6 +271,8 @@ const ENTITY_MARK: EntityMarks = {
   [ENTITY_KIND.REPOSITORY]: () => <EntityGlyph kind={ENTITY_KIND.REPOSITORY} />,
   [ENTITY_KIND.WORKSPACE]: (workspace) => <WorkspaceMark slug={workspace.workspace} />,
   [ENTITY_KIND.DATE]: () => <EntityGlyph kind={ENTITY_KIND.DATE} />,
+  [ENTITY_KIND.MAC_APP]: (macApp) => <MacAppMark app={macApp.app} />,
+  [ENTITY_KIND.COMPUTER]: () => <EntityGlyph kind={ENTITY_KIND.COMPUTER} />,
 };
 
 /** An entity's mark drawn through its kind's own entry. */

@@ -31,7 +31,7 @@ export const HOST_CONCERN = {
   AUTOMATIONS: "automations",
   INTEGRATIONS: "integrations",
   INSTALLED_SKILLS: "installedSkills",
-  MAC_COMMANDS: "macCommands",
+  MACHINE_COMMANDS: "macCommands",
   THIS_MAC_HOST: "thisMacHost",
   TERMINALS: "terminals",
   PORT_FORWARDS: "portForwards",
@@ -42,7 +42,7 @@ export type HostConcern = (typeof HOST_CONCERN)[keyof typeof HOST_CONCERN];
 
 /** The concerns a host may leave out, for want of what they reach on its platform. */
 export const HOST_PLATFORM_CONCERN = {
-  MAC_COMMANDS: HOST_CONCERN.MAC_COMMANDS,
+  MACHINE_COMMANDS: HOST_CONCERN.MACHINE_COMMANDS,
   THIS_MAC_HOST: HOST_CONCERN.THIS_MAC_HOST,
   TERMINALS: HOST_CONCERN.TERMINALS,
   PORT_FORWARDS: HOST_CONCERN.PORT_FORWARDS,
@@ -64,7 +64,7 @@ export const isPlatformConcern = (concern: HostConcern): concern is HostPlatform
 
 /** What each platform concern offers the client, which a host that left it out does not; This Mac's host offers nothing the panel draws by. */
 const CAPABILITY_OF_CONCERN = {
-  [HOST_PLATFORM_CONCERN.MAC_COMMANDS]: HOST_CAPABILITY.MAC_COMMANDS,
+  [HOST_PLATFORM_CONCERN.MACHINE_COMMANDS]: HOST_CAPABILITY.MACHINE_COMMANDS,
   [HOST_PLATFORM_CONCERN.TERMINALS]: HOST_CAPABILITY.TERMINALS,
   [HOST_PLATFORM_CONCERN.PORT_FORWARDS]: HOST_CAPABILITY.PORT_FORWARDS,
   [HOST_PLATFORM_CONCERN.MIRRORS]: HOST_CAPABILITY.LOCAL_TERMINALS,
@@ -118,8 +118,8 @@ export function hostCapabilities(
 
 /** The methods each platform concern answers, which a host that left it out refuses. */
 const PLATFORM_CONCERN_METHODS = {
-  // Note that the Mac commands are answered only as a declared act (`MAC_COMMAND_ANSWER`), as This Mac's host is.
-  [HOST_PLATFORM_CONCERN.MAC_COMMANDS]: [],
+  // Note that the Mac commands are answered only as a declared act (`MACHINE_COMMAND_ANSWER`), as This Mac's host is.
+  [HOST_PLATFORM_CONCERN.MACHINE_COMMANDS]: [],
   // Note that This Mac's host tells the windows itself, and is asked only to turn on or off, a declared act (`HOSTS_THIS_MAC_SET`).
   [HOST_PLATFORM_CONCERN.THIS_MAC_HOST]: [],
   [HOST_PLATFORM_CONCERN.TERMINALS]: [

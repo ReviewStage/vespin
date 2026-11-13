@@ -5,7 +5,7 @@ import { formatBytes } from "@repo/features/number-format";
 import { fencedSkillFile, SKILLS_LINE } from "@repo/features/skills-settings-words";
 import { VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
-import { EmptyState, MarkdownPage, Screen } from "@repo/ui-native";
+import { EmptyState, GLYPH, MarkdownPage, Screen } from "@repo/ui-native";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { useEffect, useState } from "react";
 import { useHostActs } from "../../host/host-provider.js";
@@ -71,7 +71,7 @@ export default function SkillScreen() {
         ) : read.kind === SKILL_READ.FAILED ? (
           <EmptyState
             title={SKILLS_LINE.VIEW_FAILED}
-            symbol="exclamationmark.triangle"
+            symbol={GLYPH.FAILED}
             action={{
               label: VERB.RETRY,
               onPress: () => {
@@ -81,7 +81,7 @@ export default function SkillScreen() {
             }}
           />
         ) : (
-          <EmptyState title={name} symbol="book.closed" loading />
+          <EmptyState title={name} symbol={GLYPH.SKILL} loading />
         )}
       </Screen>
     </>

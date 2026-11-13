@@ -11,6 +11,7 @@ import { AGENT_TRANSCRIPT_READ } from "@repo/features/agent-transcript-live";
 import {
   AGENT_CALL_FAILURE,
   type AgentAgentAnswer,
+  type AgentMessageAnswerView,
   type AgentQueueAnswerView,
   type DevicePresenceAnswerView,
   type HostDoneAnswerView,
@@ -23,6 +24,7 @@ import {
   AGENT_STATUS,
   type AgentNewestAnswer,
   type AgentPage,
+  type AgentQueueChange,
   type AgentSummary,
   CHANGED_FILE_STATUS,
   CHECK_SUMMARY,
@@ -274,6 +276,8 @@ type CommittedIn = { readonly txid?: string };
 /** The service as a script, writing down every ask in the order it was made. */
 function fakeService() {
   const asked: string[] = [];
+  /** Each change of a queue the service was asked, as it was asked. */
+  const queueChanges: AgentQueueChange[] = [];
   let scope: typeof LIVE_ANSWERED | { readonly failure: "not-found" } | undefined;
   let cursor = AGENT_CURSOR_START;
 
@@ -337,6 +341,9 @@ function fakeService() {
   let queueAnswer: AgentQueueAnswerView = { queue: { messages: [], revision: 1 } };
   /** What a change of an agent's queue waits on before the service answers it; nothing from the start. */
   let queueGate: Effect.Effect<void> = Effect.void;
+  // What a message sent answers once its gate lets it; none answers the agent as it stands.
+  let messageAnswer: AgentMessageAnswerView | undefined;
+  let messageSendGate: Effect.Effect<void> = Effect.void;
   /** What a forget answers, once its gate lets it; the memories left, with no transaction, from the start. */
   let forgetAnswer: MemoriesAnswerView = { memories: [] };
   /** What a forget waits on before the service answers it; nothing from the start. */
@@ -518,6 +525,7 @@ function fakeService() {
           Effect.sync(() => removeAnswer),
         ),
       ),
+    machineAllowedApps: () => Effect.succeed({ machines: [] }),
     readHostPairing: () => Effect.succeed({ failure: "unanswered" }),
     approveHostPairing: () => Effect.succeed({ failure: "unanswered" }),
     denyHostPairing: () => Effect.succeed({ failure: "unanswered" }),
@@ -595,14 +603,19 @@ function fakeService() {
         return { messages: SAID.messages, before: "3" };
       }),
     message: (agentId, request) =>
-      Effect.sync(() => {
-        const files = (request.attachments ?? []).map((file) => file.name).join(",");
-        asked.push(
-          `message:${agentId}:${request.clientKey}:${request.text}${files === "" ? "" : `:files ${files}`}`,
-        );
+      Effect.andThen(
+        Effect.suspend(() => messageSendGate),
+        Effect.sync((): AgentMessageAnswerView => {
+          const files = (request.attachments ?? []).map((file) => file.name).join(",");
+          asked.push(
+            `message:${agentId}:${request.clientKey}:${request.text}${files === "" ? "" : `:files ${files}`}`,
+          );
 
-        return sentTxid === undefined ? { agent: AGENT } : { agent: AGENT, txid: sentTxid };
-      }),
+          if (messageAnswer !== undefined) return messageAnswer;
+
+          return sentTxid === undefined ? { agent: AGENT } : { agent: AGENT, txid: sentTxid };
+        }),
+      ),
     choose: (agentId, choice) =>
       Effect.map(changeGate, () => {
         asked.push(`choose:${agentId}:${choice.model}:${choice.effort}`);
@@ -638,6 +651,7 @@ function fakeService() {
         Effect.suspend(() => queueGate),
         Effect.sync(() => {
           asked.push(`queue:${agentId}:${change.change}`);
+          queueChanges.push(change);
 
           return queueAnswer;
         }),
@@ -669,6 +683,8 @@ function fakeService() {
 
         return { agent: { ...AGENT, status: AGENT_STATUS.STARTING } };
       }),
+    replyButton: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    pressReplyButton: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
         asked.push(`delete:${agentId}`);
@@ -786,6 +802,7 @@ function fakeService() {
 
         return { keys: [] };
       }),
+    useResetCredit: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     renameSubscription: (rename) =>
       Effect.sync(() => {
         asked.push(`rename:${rename.subscriptionId}`);
@@ -1012,6 +1029,7 @@ function fakeService() {
   return {
     client,
     asked,
+    queueChanges,
     live,
     /** Whether the service answers a transcript's live read, or that the account reaches no such agent; none answers unanswered. */
     sealTranscript: (
@@ -1047,6 +1065,11 @@ function fakeService() {
     /** What a message on an inbox thread waits on before the service answers it. */
     holdMessages: (gate: Effect.Effect<void>) => {
       messageGate = gate;
+    },
+    /** What a message sent to an agent answers from now on, once `gate` lets it. */
+    answerMessage: (answer: AgentMessageAnswerView, gate: Effect.Effect<void> = Effect.void) => {
+      messageAnswer = answer;
+      messageSendGate = gate;
     },
     /** What a change of an agent's queue answers from now on, once `gate` lets it. */
     answerQueue: (answer: AgentQueueAnswerView, gate: Effect.Effect<void> = Effect.void) => {
@@ -1303,6 +1326,7 @@ export function subject(
     sendsNetwork?: boolean;
     accountId?: () => string | undefined;
     listed?: (txid: string | undefined) => Effect.Effect<void>;
+    agentListed?: (agentId: string) => AgentSummary | undefined;
     repositoriesMoved?: Effect.Effect<void>;
     pool?: EntityPool;
   } = {},
@@ -1341,6 +1365,7 @@ export function subject(
         unshare: () => Effect.succeed({ shared: null }),
       },
       ...(options.listed === undefined ? undefined : { listed: options.listed }),
+      ...(options.agentListed === undefined ? undefined : { agentListed: options.agentListed }),
       pool,
     }).pipe(Effect.provide(noNetwork));
 
@@ -1402,11 +1427,13 @@ export function subject(
       acts: { ...composer.acts, ...accountAsks.acts },
       /** The composer's row writes that may wait, as a relaunch lays its queue back by. */
       queueable: composer.queueable,
+      refused: composer.refused,
       transcripts,
       /** Each of `transcript`'s rows the host laid, in order. */
       held: (transcript?: { readonly agentId: string; readonly callId?: string }) =>
         transcripts(transcript).map((each) => each.rows),
       asked: service.asked,
+      queueChanges: service.queueChanges,
       startCommits: service.startCommits,
       leaveStartsUnanswered: service.leaveStartsUnanswered,
       answerRemoves: service.answerRemoves,
@@ -1426,6 +1453,7 @@ export function subject(
       holdChanges: service.holdChanges,
       holdMessages: service.holdMessages,
       answerQueue: service.answerQueue,
+      answerMessage: service.answerMessage,
       sealScope: service.sealScope,
       sealAccount: service.sealAccount,
       sealItems: service.sealItems,

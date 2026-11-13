@@ -18,7 +18,9 @@
  * Codex's app-server runs no command from a turn's words, so a `/name`
  * reaches its model as words, but for `/compact`, which the line asks of
  * the runner as Codex's own compaction (`thread/compact/start`), the words
- * after it dropped, since that takes none.
+ * after it dropped, since that takes none, and `/goal`, which the line asks
+ * of the runner as a change of Codex's thread goal (`thread/goal/set` or
+ * `thread/goal/clear`), read from the words after it.
  */
 
 import { SLASH_COMMAND } from "@repo/features/slash-command";
@@ -33,6 +35,8 @@ export const COMMAND_ROUTE = {
   ESCAPED: "escaped",
   /** As the session's compaction, which the line asks of the runner. */
   COMPACT: "compact",
+  /** Bare, as a change of the session's goal, which the line asks of the runner. */
+  GOAL: "goal",
 } as const;
 
 export type CommandRoute = (typeof COMMAND_ROUTE)[keyof typeof COMMAND_ROUTE];
@@ -86,7 +90,9 @@ export function claudeCodeCommandRoute(name: string): CommandRoute {
 
 /** How Codex is handed a message opening with the command named. */
 export function codexCommandRoute(name: string): CommandRoute {
-  return name === SLASH_COMMAND.COMPACT ? COMMAND_ROUTE.COMPACT : COMMAND_ROUTE.WORDS;
+  if (name === SLASH_COMMAND.COMPACT) return COMMAND_ROUTE.COMPACT;
+
+  return name === SLASH_COMMAND.GOAL ? COMMAND_ROUTE.GOAL : COMMAND_ROUTE.WORDS;
 }
 
 /**
@@ -97,7 +103,7 @@ export function codexCommandRoute(name: string): CommandRoute {
 export function routeBesideReplay(route: CommandRoute): CommandRoute {
   if (route === COMMAND_ROUTE.BARE) return COMMAND_ROUTE.ESCAPED;
 
-  if (route === COMMAND_ROUTE.COMPACT) return COMMAND_ROUTE.WORDS;
+  if (route === COMMAND_ROUTE.COMPACT || route === COMMAND_ROUTE.GOAL) return COMMAND_ROUTE.WORDS;
 
   return route;
 }

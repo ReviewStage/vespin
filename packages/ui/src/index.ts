@@ -10,6 +10,12 @@ export * from "./components/anchored-popover/press-away.js";
 
 export * from "./components/announcer/announcer.js";
 
+export * from "./components/app-ask/app-ask.js";
+
+export * from "./components/app-icon/app-icon.js";
+
+export * from "./components/app-window-stack/app-window-stack.js";
+
 export * from "./components/approval-actions/approval-actions.js";
 
 export * from "./components/arrival/arrival.js";
@@ -57,6 +63,12 @@ export * from "./components/breadcrumbs/crumb.js";
 export * from "./components/button/button.js";
 
 export * from "./components/calendar/calendar.js";
+
+export * from "./components/call/call-card.js";
+
+export * from "./components/call/call-controls.js";
+
+export * from "./components/caption-field/caption-field.js";
 
 export * from "./components/card/card.js";
 
@@ -176,6 +188,8 @@ export * from "./components/inline-ref/inline-ref.js";
 
 export * from "./components/inline-ref/inline-ref-fit.js";
 
+export * from "./components/intro-card/intro-card.js";
+
 export * from "./components/keep-focus/keep-focus.js";
 
 export * from "./components/landing/landing-page.js";
@@ -267,6 +281,8 @@ export * from "./components/picture-tile/picture-tile.js";
 export * from "./components/popover-icon-button/popover-icon-button.js";
 
 export * from "./components/popover-panel/popover-panel.js";
+
+export * from "./components/port-table/port-table.js";
 
 export * from "./components/portal-fence/portal-fence.js";
 
@@ -370,6 +386,8 @@ export * from "./components/steps/steps.js";
 
 export * from "./components/subject-line/subject-line.js";
 
+export * from "./components/suggestion/suggestion.js";
+
 export * from "./components/suggestion-card/suggestion-card.js";
 
 export * from "./components/swatch/swatch.js";
@@ -412,17 +430,23 @@ export * from "./components/tooltip/hint.js";
 
 export * from "./components/tooltip/tooltip.js";
 
+export * from "./components/track-list/track-list.js";
+
 export * from "./components/turn-end/turn-end.js";
 
 export * from "./components/turn-into-menu/turn-into-menu.js";
 
 export * from "./components/unread-mark/unread-mark.js";
 
+export * from "./components/upload-cover/upload-cover.js";
+
 export * from "./components/usage-meters/usage-meters.js";
 
 export * from "./components/video-player/video-player.js";
 
 export * from "./components/visually-hidden/visually-hidden.js";
+
+export * from "./components/voice-call/voice-call.js";
 
 export * from "./components/waiting-line/waiting-line.js";
 

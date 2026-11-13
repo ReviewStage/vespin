@@ -156,7 +156,7 @@ struct ShareSheet: View {
         Label {
           Text(started.name ?? model.words).lineLimit(3)
         } icon: {
-          Image(systemName: "checkmark.circle.fill").foregroundStyle(.secondary)
+          Image("CircleCheck").foregroundStyle(.secondary)
         }
       } footer: {
         Text(
@@ -233,9 +233,11 @@ struct ShareSheet: View {
         Button {
           model.remove(picture)
         } label: {
-          Image(systemName: "xmark.circle.fill")
-            .symbolRenderingMode(.palette)
-            .foregroundStyle(.white, .black.opacity(0.6))
+          Image("X")
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.white)
+            .frame(width: 22, height: 22)
+            .background(.black.opacity(0.6), in: Circle())
         }
         .buttonStyle(.plain)
         .padding(4)

@@ -19,10 +19,12 @@ import {
   SLASH_COMMAND,
   type SlashCommand,
 } from "@repo/features/slash-command";
+import { EXPERIMENT } from "@repo/settings";
 import type { ShortcutChord } from "@repo/settings/shortcuts";
 import { type ComposerNote, type ComposerRefusal, NOTE_LINE_LOOK, NoteLine } from "@repo/ui";
 import type { Actor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
+import { useQuery } from "@tanstack/react-query";
 import { absurd } from "effect";
 import {
   type ComponentProps,
@@ -38,6 +40,7 @@ import { modEnterSends } from "../enter-sends.js";
 import { failureShown } from "../failure-report.js";
 import { useIntegrationStatuses } from "../integration-statuses.js";
 import { PANEL_SPAN } from "../panel-spans.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import type { AgentModeControl } from "./agent-approvals.js";
 import { AgentContextRing, ContextRingIcon } from "./agent-context.js";
 import { contextHint } from "./agent-context-model.js";
@@ -188,7 +191,7 @@ import { useModifierHeld } from "./use-modifier-held.js";
  * its status, its model chip and permission mode, its servers, its payer's
  * owner, and its place and forwarding chips, both owners read through one
  * hook (`agent-box.tsx`'s `useAgentBox`) and spread onto the box as it is,
- * so a chip added there stands on both.
+ * so a chip added there stands on both (`[check: vespin/agent-box-reads-agent]`).
  * Its owner hands what only an answer has (`answer`), an open question's controls
  * over the field, the checkbox that starts a new thread under the card, Send
  * lit by a pick as by words and reading Got it or Start thread in words, what
@@ -347,6 +350,7 @@ export function AgentComposer({
   mode,
   approvalsWaiting = 0,
   onClear,
+  startsGoal = false,
   onContinueInCloud,
 }: {
   /** The agent the box writes to, which its `@` list does not offer; none for a draft not yet started. */
@@ -424,8 +428,10 @@ export function AgentComposer({
   mode?: AgentModeControl | undefined;
   /** How many of the agent's tool calls wait on an answer, which a message sent now denies. */
   approvalsWaiting?: number;
-  /** Starts the agent's harness on a fresh session (`/clear`), answering whether the service took it; none where the box runs no session commands, as New task's and a draft agent's, which have no session yet and run `/model` alone. */
+  /** Starts the agent's harness on a fresh session (`/clear`), answering whether the service took it; none where the box runs no session commands, as New task's and a draft agent's, which have no session yet and run `/model` alone, and `/goal` where they start an agent on their words (`startsGoal`). */
   onClear?: (() => Promise<boolean>) | undefined;
+  /** Whether the box, with no session yet, starts an agent whose first message may set its goal (`/goal`), as New task's and a draft agent's do; not one whose words are wrapped in a brief or a note before the agent reads them. */
+  startsGoal?: boolean | undefined;
   /** The agent continued in the cloud with the message given, which a note of its machine gone offline offers (`FAILURE_REASON.CONTINUE_IN_CLOUD`); none where no such move is offered. */
   onContinueInCloud?: ((carry: MoveCarry) => void) | undefined;
 }): React.JSX.Element {
@@ -467,8 +473,17 @@ export function AgentComposer({
   // Note that a box clearing its session holds, so a message sent at once never reaches the session it ends.
   const held = composer.sending || closed || clearing;
   const editingQueued = queueing?.editing === true;
-  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session.
-  const reach = { model: model !== undefined, session: onClear !== undefined };
+
+  const goalsOn =
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.GOALS) }).data === true;
+
+  // Note that `/model` needs only the model chip, so New task's box and a draft's run it, while `/compact` and `/clear` need a session, and `/goal` a session or a first message, while the Goals experiment is on.
+  const reach = {
+    model: model !== undefined,
+    session: onClear !== undefined,
+    goal: goalsOn && (onClear !== undefined || startsGoal),
+  };
+
   const statuses = useIntegrationStatuses();
 
   const box = useMessageBox({
@@ -487,7 +502,7 @@ export function AgentComposer({
     skills,
     // Note that an edit of a queued message runs no command, chosen as typed, since it saves back into its place.
     commands:
-      editingQueued || (!reach.model && !reach.session)
+      editingQueued || (!reach.model && !reach.session && !reach.goal)
         ? undefined
         : { reach, onRun: (name) => runCommand(name, true) },
     keywords,
@@ -662,17 +677,19 @@ export function AgentComposer({
    * One of the box's own commands, chosen from the `/` list or typed as the
    * message's first word: `/model` opens the model chip's menu, its search
    * focused, `/clear` and `/new` start the
-   * agent's harness on a fresh session, and `/compact` chosen from the list
-   * is written into the words, where the developer may add what to keep
-   * before sending it, the service handing it to the harness as its
-   * compaction (`harness-commands.ts`). Whatever runs empties the box.
+   * agent's harness on a fresh session, and `/compact` or `/goal` chosen
+   * from the list is written into the words, where the developer may add
+   * what to keep or the goal's condition before sending it, the service
+   * handing it to the harness as its compaction or its goal
+   * (`harness-commands.ts`). Whatever runs empties the box.
    */
   const runCommand = (name: SlashCommand, chosen: boolean) => {
     switch (name) {
-      case SLASH_COMMAND.COMPACT: {
+      case SLASH_COMMAND.COMPACT:
+      case SLASH_COMMAND.GOAL: {
         const words = leadingCommand(composer.draft)?.words ?? "";
 
-        if (chosen) editor.current?.replace(`/${SLASH_COMMAND.COMPACT} ${words}`);
+        if (chosen) editor.current?.replace(`/${name} ${words}`);
 
         return;
       }
@@ -718,6 +735,7 @@ export function AgentComposer({
       case SLASH_COMMAND.MODEL:
         return reach.model ? typed.name : undefined;
       case SLASH_COMMAND.COMPACT:
+      case SLASH_COMMAND.GOAL:
         return undefined;
       case SLASH_COMMAND.CLEAR:
       case SLASH_COMMAND.NEW:

@@ -2,8 +2,12 @@
 
 import { Button, ContextMenu, Host, Image, Menu, RNHostView } from "@expo/ui/swift-ui";
 import { accessibilityIdentifier, accessibilityLabel } from "@expo/ui/swift-ui/modifiers";
-import { createContext, type ReactElement, type ReactNode, useContext } from "react";
-import { StyleSheet } from "react-native";
+import type { DraftCopy } from "@repo/features/draft-text";
+import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
+import { StyleSheet, View } from "react-native";
+import { type Glyph, glyphImage } from "./glyph.js";
+import { actContent } from "./glyph-label.js";
+import { InlineHost } from "./inline-host.js";
 import {
   KEEP_ACT,
   KEEP_SYMBOL,
@@ -12,7 +16,6 @@ import {
   type Kept,
   keepActs,
 } from "./keep-model.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { MARK_SIZE } from "./tokens/space.js";
 
 /** What a message's own Copy is called, as the panel's Copy under a message names it. */
@@ -22,27 +25,29 @@ const COPY_MESSAGE = "Copy message";
 const SHARE_LABEL = "Share";
 
 const styles = StyleSheet.create({
-  // Note that the menu's host spans the width it stands in, since a host sized by its SwiftUI alone would stand no wider than nothing.
+  // Note that the menu and its host span the width they stand in, since a host sized by its SwiftUI alone would stand no wider than nothing.
   host: { alignSelf: "stretch" },
 });
 
 /** One act of a held thing's menu: its words, its glyph, and what a press does. */
 export interface HeldAct {
   readonly label: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly onPress: () => void;
 }
 
 /**
  * What the app does with what is held: copies a picture or a text file's
  * words, saves a picture or a recording to Photos, or shares any of them in
- * the system's share sheet; and copies a message's words. The app answers
- * them with the device's own pasteboard, Photos, and share sheet, and says
- * what did not go; nothing here reaches the device.
+ * the system's share sheet; copies a message's words; and copies a draft's
+ * body as rich text, its marks and links kept. The app answers them with
+ * the device's own pasteboard, Photos, and share sheet, and says what did
+ * not go; nothing here reaches the device.
  */
 export interface Keeping {
   readonly keep: (kept: Kept, act: KeepAct) => void;
   readonly copyWords: (words: string) => void;
+  readonly copyRich: (copy: DraftCopy) => void;
 }
 
 const KeepingDoor = createContext<Keeping | undefined>(undefined);
@@ -86,9 +91,14 @@ function useCopyWordsActs(words: string): readonly HeldAct[] {
   ];
 }
 
+/** What the app does with what is held, for a piece that copies on a press of its own, such as a draft's Copy; none where no app answers it. */
+export function useKeeping(): Keeping | undefined {
+  return useContext(KeepingDoor);
+}
+
 function HeldActButtons({ acts }: { readonly acts: readonly HeldAct[] }) {
   return acts.map((act) => (
-    <Button key={act.label} label={act.label} systemImage={act.symbol} onPress={act.onPress} />
+    <Button key={act.label} {...actContent(act.label, act.symbol)} onPress={act.onPress} />
   ));
 }
 
@@ -120,7 +130,12 @@ export function HeldSwiftMenu({
  * React Native views a long press opens its acts on, as Photos and Messages
  * open one on a picture: SwiftUI's own menu, hosted at the width the views
  * stand in and the height they draw, the views hosted back inside it, so a
- * press still reaches them. The views alone where they offer no act.
+ * press still reaches them. The views alone where they offer no act. Note
+ * that the hosted views stand in a box exactly as wide as the row offers,
+ * measured outside the host, because a host that takes its height from its
+ * views lays them out with no width of its own, so a view sized by a share
+ * of its width, such as a picture's or a recording's well at its shape,
+ * stood at no height at all.
  */
 export function HeldMenu({
   acts,
@@ -129,14 +144,20 @@ export function HeldMenu({
   readonly acts: readonly HeldAct[];
   readonly children: ReactElement;
 }) {
+  const [width, setWidth] = useState<number | undefined>(undefined);
+
   if (acts.length === 0) return children;
 
   return (
-    <Host matchContents={{ vertical: true }} style={styles.host}>
-      <HeldSwiftMenu acts={acts}>
-        <RNHostView matchContents={{ vertical: true }}>{children}</RNHostView>
-      </HeldSwiftMenu>
-    </Host>
+    <View style={styles.host} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+      <InlineHost matchContents={{ vertical: true }} style={styles.host}>
+        <HeldSwiftMenu acts={acts}>
+          <RNHostView matchContents={{ vertical: true }}>
+            <View style={width === undefined ? undefined : { width }}>{children}</View>
+          </RNHostView>
+        </HeldSwiftMenu>
+      </InlineHost>
+    </View>
   );
 }
 
@@ -148,7 +169,11 @@ export function HeldActsButton({ acts }: { readonly acts: readonly HeldAct[] }) 
     <Host matchContents>
       <Menu
         label={
-          <Image systemName={KEEP_SYMBOL[KEEP_ACT.SHARE]} size={MARK_SIZE.LEAD + 4} color="white" />
+          <Image
+            {...glyphImage(KEEP_SYMBOL[KEEP_ACT.SHARE])}
+            size={MARK_SIZE.LEAD + 4}
+            color="white"
+          />
         }
         modifiers={[accessibilityLabel(SHARE_LABEL), accessibilityIdentifier("viewer-share")]}
       >

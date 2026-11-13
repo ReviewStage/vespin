@@ -217,7 +217,10 @@ const ISSUES_PERMISSION = "issues";
  * issue a link names; contents and pull requests read, which reads what a
  * coding agent published; or contents and pull requests write, which is what
  * its push and pull request need. CI read stands beside the last two where
- * the installation grants it.
+ * the installation grants it. Issues and pull requests write comment as the
+ * App's bot on an issue or a pull request and react to a comment there,
+ * pull requests write alone on a pull request only, where the installation
+ * grants no issues at write.
  */
 const INSTALLATION_TOKEN_PERMISSIONS = {
   LIST: { metadata: "read" },
@@ -227,6 +230,8 @@ const INSTALLATION_TOKEN_PERMISSIONS = {
   PULL_REQUESTS_READING_CI: { contents: "read", pull_requests: "read", ...CI_READ_PERMISSIONS },
   WRITE: { contents: "write", pull_requests: "write" },
   WRITE_READING_CI: { contents: "write", pull_requests: "write", ...CI_READ_PERMISSIONS },
+  COMMENT: { issues: "write", pull_requests: "write" },
+  COMMENT_ON_PULL_REQUESTS: { pull_requests: "write" },
 } as const;
 
 type InstallationTokenPermissions =
@@ -332,6 +337,8 @@ interface GitHubInstallation {
   readonly ciReadable: boolean;
   /** Whether the installation grants the App issues, at read or write, which an issue's read is minted with. */
   readonly issuesReadable: boolean;
+  /** Whether the installation grants the App issues at write, which a comment on an issue as the App's bot is minted with. */
+  readonly issuesWritable: boolean;
   /** Whether the account it is on suspended it, which leaves it minting nothing until it is brought back. */
   readonly suspended: boolean;
 }
@@ -551,7 +558,7 @@ type RepositorySetUnreached =
     };
 
 /** One installation token for several repositories: each as GitHub spells it, in the order named, and the token, good for an hour from its mint. */
-interface GitHubRepositoriesToken {
+export interface GitHubRepositoriesToken {
   readonly repositories: readonly GitHubRepository[];
   readonly token: Redacted.Redacted;
   readonly access: { readonly kind: typeof GITHUB_ACCESS.APP };
@@ -740,6 +747,22 @@ export interface GitHubAppService {
     HttpClient.HttpClient | DatabaseServices
   >;
   /**
+   * A token the App's bot comments with on an issue or a pull request of a
+   * repository the workspace's installation reaches, and reacts to a
+   * comment there with: never a member's own token, kept as a repository's
+   * is, with issues and pull requests write, or pull requests write alone
+   * where the installation grants no issues at write; none where the installation
+   * does not reach it.
+   */
+  readonly repositoryCommentToken: (
+    organizationId: string,
+    fullName: string,
+  ) => Effect.Effect<
+    Option.Option<GitHubRepositoryToken>,
+    GitHubWorkspaceReadFailure,
+    HttpClient.HttpClient | DatabaseServices
+  >;
+  /**
    * The repositories named, read afresh as `repositoryReach` reads one,
    * where the workspace's one installation of the App reaches them all, in
    * the order named; else the first that is not reached, is reached only on
@@ -766,6 +789,24 @@ export interface GitHubAppService {
     member: string | undefined,
   ) => Effect.Effect<
     Result.Result<GitHubRepositoriesToken, RepositorySetUnreached>,
+    GitHubWorkspaceReadFailure,
+    HttpClient.HttpClient | DatabaseServices
+  >;
+  /**
+   * One pull request read token for each installation of the workspace that
+   * reaches any of the repositories named, beside the repositories it
+   * reaches of them in the order named: minted as the App for the whole
+   * installation, with contents and pull requests read, and kept as a
+   * repository's is, so a read asked again within the hour mints nothing. A
+   * repository no installation of the workspace reaches is left out, never
+   * read on a member's own token; none reached mints none. What reads
+   * several repositories in one GraphQL request, such as their merge queues.
+   */
+  readonly repositoriesPullRequestTokens: (
+    organizationId: string,
+    fullNames: readonly string[],
+  ) => Effect.Effect<
+    readonly GitHubRepositoriesToken[],
     GitHubWorkspaceReadFailure,
     HttpClient.HttpClient | DatabaseServices
   >;
@@ -1133,6 +1174,7 @@ function installationOf(record: InstallationRecord): GitHubInstallation {
     repositorySelection: record.repository_selection,
     ciReadable: Object.keys(CI_READ_PERMISSIONS).every((permission) => permission in granted),
     issuesReadable: ISSUES_PERMISSION in granted,
+    issuesWritable: granted[ISSUES_PERMISSION] === "write",
     suspended: record.suspended_at !== undefined && record.suspended_at !== null,
   };
 }
@@ -2361,6 +2403,12 @@ function githubAppService(
               : INSTALLATION_TOKEN_PERMISSIONS.WRITE,
           TOKEN_KEEPING.FRESH,
         ),
+      repositoryCommentToken: (organizationId, fullName) =>
+        repositoryToken(organizationId, fullName, undefined, (on) =>
+          on.issuesWritable
+            ? INSTALLATION_TOKEN_PERMISSIONS.COMMENT
+            : INSTALLATION_TOKEN_PERMISSIONS.COMMENT_ON_PULL_REQUESTS,
+        ),
       repositorySetReach: (organizationId, fullNames, member) =>
         Effect.map(
           setReach(fullNames, (fullName) => reach(organizationId, fullName, member)),
@@ -2393,6 +2441,41 @@ function githubAppService(
           };
 
           return Result.succeed(token);
+        }),
+      repositoriesPullRequestTokens: (organizationId, fullNames) =>
+        Effect.gen(function* () {
+          const byInstallation = new Map<number, ReachedThroughApp[]>();
+
+          for (const fullName of fullNames) {
+            const reached = yield* standingReach(
+              new ReachKey({ organizationId, fullName, member: undefined }),
+            );
+
+            // Note that with no member named only the App reaches a repository, so a token reach is none here.
+            if (Result.isFailure(reached) || reached.success.access !== GITHUB_ACCESS.APP) continue;
+            const on = reached.success.installation.id;
+            byInstallation.set(on, [...(byInstallation.get(on) ?? []), reached.success]);
+          }
+
+          return yield* Effect.forEach([...byInstallation], ([installationId, reached]) =>
+            Effect.map(
+              Cache.get(
+                tokens,
+                new TokenKey({
+                  organizationId,
+                  member: undefined,
+                  installationId,
+                  repository: undefined,
+                  permissions: INSTALLATION_TOKEN_PERMISSIONS.PULL_REQUESTS,
+                }),
+              ),
+              ({ token }): GitHubRepositoriesToken => ({
+                repositories: reached.map((one) => one.repository),
+                token,
+                access: { kind: GITHUB_ACCESS.APP },
+              }),
+            ),
+          );
         }),
       userPusher: (userId, fullName) =>
         Effect.gen(function* () {

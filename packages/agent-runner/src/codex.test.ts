@@ -55,7 +55,11 @@ import {
   type Script,
   type Spawned,
 } from "./testing/fake-app-server.js";
-import { fakeCheckoutSnapshots, fakeSnapshotOf } from "./testing/fake-checkout-snapshots.js";
+import {
+  fakeCheckoutSnapshots,
+  fakeFilesOf,
+  fakeSnapshotOf,
+} from "./testing/fake-checkout-snapshots.js";
 import { fakeClaudeCode } from "./testing/fake-claude-code.js";
 import { fakeProbe } from "./testing/fake-probe.js";
 import { makeFakeService } from "./testing/fake-service.js";
@@ -179,6 +183,32 @@ function exchange(exchanges: readonly Exchange[], index: number): Exchange {
   return found;
 }
 
+/** The objective the goal scenarios set. */
+const OBJECTIVE = "every billing test passes";
+
+/** The thread's goal as app-server says it: its status, its spend, and the moment it changed. */
+function threadGoal(
+  status: string,
+  tokensUsed: number,
+  { updatedAt = 2, tokenBudget = null }: { updatedAt?: number; tokenBudget?: number | null } = {},
+) {
+  return {
+    threadId: THREAD,
+    objective: OBJECTIVE,
+    status,
+    tokenBudget,
+    tokensUsed,
+    timeUsedSeconds: 60,
+    createdAt: 1,
+    updatedAt,
+  };
+}
+
+/** App-server's word that the thread's goal changed. */
+function goalUpdated(goal: ReturnType<typeof threadGoal>) {
+  return { method: "thread/goal/updated", params: { threadId: THREAD, turnId: null, goal } };
+}
+
 const OPEN = [exchange(FIRST, 0), exchange(FIRST, 1), exchange(FIRST, 2)];
 const RESUME = [exchange(RESUMED, 0), exchange(RESUMED, 1), exchange(RESUMED, 2)];
 
@@ -225,6 +255,8 @@ function launch(
   extra: {
     readonly http?: Layer.Layer<HttpClient.HttpClient>;
     readonly probe?: ReturnType<typeof fakeProbe>;
+    /** Whether each turn changed files (`fakeFilesOf`). */
+    readonly changed?: boolean;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -248,7 +280,7 @@ function launch(
           extra.http ?? service.layer,
           claude.layer,
           probe.layer,
-          fakeCheckoutSnapshots().layer,
+          fakeCheckoutSnapshots(false, extra.changed === true).layer,
           Logger.layer([recorder]),
         ),
       ),
@@ -488,11 +520,11 @@ it.effect(
 );
 
 it.effect(
-  "keeps a warm launch up past its completed turn, posting IDLE, and ends it as idled on Vespin's retire",
+  "keeps a warm launch up past its completed turn, posting IDLE with the files the turn changed, and ends it as idled on Vespin's retire",
   () =>
     Effect.gen(function* () {
       const service = fakeService();
-      const { spawned, write, run } = yield* launch([WORKFLOW], service);
+      const { spawned, write, run } = yield* launch([WORKFLOW], service, ENV, { changed: true });
       yield* write({ ...CONFIG, warm: true });
       yield* write(message("The probe's first turn.", LINE.FIRST));
       yield* write(message("Also, before your final reply, append the line.", LINE.STEERED));
@@ -513,6 +545,11 @@ it.effect(
         RUNNER_EVENT.IDLE,
         RUNNER_EVENT.END,
       ]);
+      // The turn's files ride its IDLE, read from the snapshot its first line opened on; the idled END ended no turn, so carries none.
+      assert.deepEqual(service.applied.at(-2)?.message, {
+        type: RUNNER_EVENT.IDLE,
+        files: fakeFilesOf(fakeSnapshotOf(CONFIG.cwd, LINE.FIRST).commit),
+      });
       assert.deepEqual(service.applied.at(-1)?.message, {
         type: RUNNER_EVENT.END,
         reason: RUNNER_END.IDLED,
@@ -930,6 +967,194 @@ it.effect("compacts the thread in a compaction line's place, its words dropped",
     assert.deepEqual(received(process, "turn/start"), []);
     assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
   }),
+);
+
+it.effect(
+  "sets the thread's goal from a goal line, takes up each turn app-server runs toward it, and ends once it is met",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService("turn/completed");
+      const started = RESUMED_TURN.reply.find((line) => line.method === "turn/started");
+
+      if (started === undefined) throw new Error("the resumed turn has no turn/started");
+
+      const goal = (status: string, tokensUsed: number) =>
+        goalUpdated(threadGoal(status, tokensUsed, { tokenBudget: 500_000 }));
+
+      const script: Script = {
+        exchanges: [
+          ...RESUME,
+          {
+            method: "thread/goal/set",
+            // App-server runs a turn toward the goal, then goes on with another of its own, in which the goal is met.
+            reply: [
+              { id: 3, result: { goal: goal("active", 0).params.goal } },
+              goal("active", 0),
+              started,
+              goal("active", 40_000),
+              ...RESUMED_TURN_END,
+              started,
+              goal("complete", 90_000),
+              ...RESUMED_TURN_END,
+            ],
+          },
+        ],
+      };
+
+      const { spawned, write, run } = yield* launch([script], service);
+      yield* write({ ...CONFIG, threadId: THREAD });
+      yield* write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE.FIRST,
+        content: [{ type: "text", text: `/goal ${OBJECTIVE}` }],
+        goal: true,
+      });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      const [process] = spawned;
+      assert.deepEqual(process?.unexpected, []);
+      assert.deepEqual(received(process, "thread/goal/set"), [
+        { threadId: THREAD, origin: "user", objective: OBJECTIVE, status: "active" },
+      ]);
+      assert.deepEqual(received(process, "turn/start"), []);
+      // The goal line opened the agent's turn, so its ACCEPTED carries the checkout as it stood before the turn app-server started.
+      assert.deepEqual(
+        service.applied.flatMap(({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.ACCEPTED ? [posted] : [],
+        ),
+        [
+          {
+            type: RUNNER_EVENT.ACCEPTED,
+            uuid: LINE.FIRST,
+            snapshot: fakeSnapshotOf(CONFIG.cwd, LINE.FIRST),
+          },
+        ],
+      );
+      // Only the goal's moves are posted as its events, not each change of its token count.
+      assert.deepEqual(
+        service.applied.flatMap(({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.GOAL
+            ? [[posted.event, posted.tokens]]
+            : [],
+        ),
+        [
+          ["set", 0],
+          ["met", 90_000],
+        ],
+      );
+    }),
+);
+
+it.effect(
+  "says a goal paused mid-turn once, past an update app-server queued before the pause and sends after its answer",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService("agent-probe-hermetic");
+
+      const goal = (status: string, tokensUsed: number, updatedAt: number) =>
+        threadGoal(status, tokensUsed, { updatedAt });
+
+      const updated = goalUpdated;
+
+      const script: Script = {
+        exchanges: [
+          ...RESUME,
+          {
+            method: "thread/goal/set",
+            reply: [
+              { id: 3, result: { goal: goal("active", 0, 2) } },
+              updated(goal("active", 0, 2)),
+              ...RESUMED_TURN.reply.slice(1, -2),
+            ],
+          },
+          {
+            method: "thread/goal/set",
+            // App-server answers first, then sends what its thread's listener holds in order: the turn's own count of the goal, active, then the pause.
+            reply: [
+              { id: 4, result: { goal: goal("paused", 40_000, 5) } },
+              updated(goal("active", 40_000, 5)),
+              updated(goal("paused", 40_000, 5)),
+              ...RESUMED_TURN_END,
+            ],
+          },
+        ],
+      };
+
+      const { spawned, write, run } = yield* launch([script], service);
+      yield* write({ ...CONFIG, threadId: THREAD });
+      yield* write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE.FIRST,
+        content: [{ type: "text", text: `/goal ${OBJECTIVE}` }],
+        goal: true,
+      });
+      yield* service.seen;
+      yield* write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE.STEERED,
+        content: [{ type: "text", text: "/goal pause" }],
+        goal: true,
+      });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.deepEqual(spawned[0]?.unexpected, []);
+      assert.deepEqual(
+        service.applied.flatMap(({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.GOAL ? [posted.event] : [],
+        ),
+        ["set", "paused"],
+      );
+    }),
+);
+
+it.effect(
+  "takes a resumed thread's standing goal as it stands, posting nothing of it, and ends the agent's turn on a goal line that starts none",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService("turn/completed");
+      const paused = threadGoal("paused", 40_000);
+
+      // App-server says the goal a resumed thread holds again as it resumes it.
+      const resumed = exchange(RESUMED, 2);
+
+      const script: Script = {
+        goal: paused,
+        exchanges: [
+          exchange(RESUMED, 0),
+          exchange(RESUMED, 1),
+          {
+            ...resumed,
+            reply: [...resumed.reply, goalUpdated(paused)],
+          },
+          {
+            method: "thread/goal/clear",
+            reply: [
+              { id: 3, result: { cleared: true } },
+              { method: "thread/goal/cleared", params: { threadId: THREAD } },
+            ],
+          },
+        ],
+      };
+
+      const { spawned, write, run } = yield* launch([script], service);
+      yield* write({ ...CONFIG, threadId: THREAD });
+      yield* write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE.FIRST,
+        content: [{ type: "text", text: "/goal clear" }],
+        goal: true,
+      });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.deepEqual(spawned[0]?.unexpected, []);
+      assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
+      assert.deepEqual(
+        service.applied.flatMap(({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.GOAL ? [posted.event] : [],
+        ),
+        ["cleared"],
+      );
+    }),
 );
 
 it.effect("starts the next turn for a message Vespin sent just before the turn completed", () =>

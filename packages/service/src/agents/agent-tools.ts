@@ -69,6 +69,7 @@ import {
 } from "@repo/features/agent-wire";
 import { deviceAgentRegisterRequestSchema } from "@repo/features/device-agent-wire";
 import { githubRepositoryFullNameSchema } from "@repo/features/github-repositories-wire";
+import { cleanMachineName } from "@repo/features/machine-name";
 import { agentName, modelLabel } from "@repo/features/model-label";
 import { type ModelChoice, modelChoiceSchema } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -113,6 +114,7 @@ import {
 } from "../providers/model-catalog.js";
 import { taskChangeAsked, taskChangeSettled, taskChangeWritten } from "../tasks/task-change.js";
 import { createTaskAsked } from "../tasks/task-create-relation.js";
+import { followerReadingsOf } from "../tasks/task-following.js";
 import { archivedAgent, changedAgent } from "./agent-change.js";
 import { agentStarterName, startsFromAgent } from "./agent-reach.js";
 import { calledId } from "./called-id.js";
@@ -1291,7 +1293,9 @@ export const LIST_TASKS_TOOL = {
     "it stands (its status) and how much it matters (its priority), who it is assigned to (its " +
     "assignee's mention link, null for no one), " +
     "the repository its agents work in (null for none yet), who started it, whether it is " +
-    "the task you work on, the sectionId of the sidebar section the " +
+    "the task you work on, its followers (each with their name and id, whether " +
+    "they are its assignee, and whether its agents may use their machines; absent where your " +
+    "workspace keeps none), the sectionId of the sidebar section the " +
     "developer you work for keeps it in (null for none, under Tasks), the newest first and at most " +
     `${TASKS_LIST_LIMIT} a page, with ` +
     "nextOffset where more stand; and beside them every section that developer keeps in this " +
@@ -1606,16 +1610,18 @@ function runOfCaller(calling: Agent) {
  * that its final message reaches that agent by itself once its turn ends
  * (`coder-host/starter-report.ts`), that it messages it before then with
  * `message_agent` by that agent's id, as every word between two agents goes
- * (`coder-host/agent-message.ts`), then the note it was given. Note that it
- * is not told to keep off the developer's threads: it posts in one what it
- * would post there, as any agent may.
+ * (`coder-host/agent-message.ts`), and that it posts its own threads and
+ * sends that agent each one's mention, so the developer never hears of one
+ * thing from both agents, then the note it was given.
  */
 function startedByNote(starter: Agent, note: string | undefined): string {
   const lead =
     `You were started by another agent of your workspace, ${agentIntroduction(starter)}, ` +
     "not by the developer. Your final message reaches it by itself once your turn ends, so make " +
     "that message your report: what you did, what you published, and what you need of it. To " +
-    `reach it before then, call ${AGENT_TOOL.MESSAGE_AGENT} with its agentId, ${starter.id}.`;
+    `reach it before then, call ${AGENT_TOOL.MESSAGE_AGENT} with its agentId, ${starter.id}. ` +
+    "Post your own threads to the developer, with their pictures, as your instructions say, and " +
+    "send that agent each thread's mention, so it posts none of its own on the same thing.";
 
   return note === undefined ? lead : `${lead}\n\n${note}`;
 }
@@ -2262,8 +2268,13 @@ const runsOnOfStart = Effect.fnUntraced(function* (
 > {
   if (runsOn === undefined || !("device" in runsOn)) return Result.succeed(runsOn);
   const devices = yield* devicesSeenSince(userId, new Date(0));
-  const wanted = runsOn.device.trim().toLowerCase();
-  const matched = devices.filter((device) => device.name.trim().toLowerCase() === wanted);
+  // Note that both sides are read as a machine's name is kept (`cleanMachineName`), so a name typed with its double space, or one kept before names were cleaned, still matches.
+  const wanted = cleanMachineName(runsOn.device).toLowerCase();
+
+  const matched = devices.filter(
+    (device) => cleanMachineName(device.name).toLowerCase() === wanted,
+  );
+
   const [only] = matched;
 
   if (matched.length === 1 && only !== undefined) {
@@ -3120,8 +3131,15 @@ export function runListTasks(
       );
 
       const { step, name } = yield* workspaceNamingOf(userId, workspace.value);
+      const page = matching.slice(offset, offset + TASKS_LIST_LIMIT);
 
-      const tasks = matching.slice(offset, offset + TASKS_LIST_LIMIT).map((task) => ({
+      const followers = yield* followerReadingsOf(
+        userId,
+        workspace.value,
+        page.map((task) => task.id),
+      );
+
+      const tasks = page.map((task) => ({
         id: task.id,
         ...taskStandingOf(task, { step, name }),
         name: task.name,
@@ -3129,6 +3147,9 @@ export function runListTasks(
         startedBy: task.createdBy?.name ?? null,
         isYourTask: task.id === ownTask,
         sectionId: sectionOf.get(task.id) ?? null,
+        ...(followers === undefined
+          ? undefined
+          : { followers: (followers.get(task.id) ?? []).map((follower) => ({ ...follower })) }),
       }));
 
       const next = offset + TASKS_LIST_LIMIT;

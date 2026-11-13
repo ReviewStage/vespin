@@ -102,7 +102,7 @@ import {
   type RunSlackDelivery,
 } from "@repo/database/models/automation-store";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
-import { heardFromAnotherAccount } from "@repo/database/models/mac-command-store";
+import { heardFromAnotherAccount } from "@repo/database/models/machine-command-store";
 import { readMessageByClientId } from "@repo/database/models/message-reads";
 import {
   claimSlackThreadTurn,
@@ -240,6 +240,7 @@ const MEDIA_EXTENSION = {
   [CONVERSATION_MEDIA_TYPE.JPEG]: "jpg",
   [CONVERSATION_MEDIA_TYPE.WEBP]: "webp",
   [CONVERSATION_MEDIA_TYPE.WEBM]: "webm",
+  [CONVERSATION_MEDIA_TYPE.MP4]: "mp4",
 } as const satisfies Record<ConversationMediaType, string>;
 
 /** The emoji the bot reacts with to a message it acted on: 👀, as Slack names it. */

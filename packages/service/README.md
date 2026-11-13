@@ -736,8 +736,7 @@ GitHub (`https://api.githubcopilot.com/mcp/x/all`, every toolset), Gmail
 (`https://calendarmcp.googleapis.com/mcp/v1`), Google Drive
 (`https://drivemcp.googleapis.com/mcp/v1`), Granola
 (`https://mcp.granola.ai/mcp`), Linear (`https://mcp.linear.app/mcp`), Mercury
-(`https://mcp.mercury.com/mcp`), Mintlify (`https://mcp.mintlify.com`, its admin
-server rather than a docs site's own search server), Neon (`https://mcp.neon.tech/mcp`), Notion
+(`https://mcp.mercury.com/mcp`), Neon (`https://mcp.neon.tech/mcp`), Notion
 (`https://mcp.notion.com/mcp`), PostHog (`https://mcp.posthog.com/mcp?mode=tools`, each tool by its own
 name rather than its default single `exec`), Resend (`https://mcp.resend.com/mcp`),
 Sentry (`https://mcp.sentry.dev/mcp`), Slack (`https://mcp.slack.com/mcp`),
@@ -969,7 +968,6 @@ vercel connect create mcp.sentry.dev --name sentry             # Sentry
 vercel connect create mcp.stripe.com --name stripe             # Stripe; asks for its scope below
 vercel connect create granola --name granola                   # Granola
 vercel connect create mcp.mercury.com --name vespin-mercury    # Mercury, whose clients' names may not begin with "Mercury"
-vercel connect create mcp.mintlify.com --name mintlify         # Mintlify; asks for its scopes below
 # Neon: an OAuth connector over a client registered by hand, below
 vercel connect create posthog --name posthog                   # PostHog
 vercel connect create mcp.resend.com --name vespin-resend      # Resend; asks for its scope below
@@ -990,20 +988,16 @@ target rather than by address. A connector created this way asks for no
 scopes, and the provider grants its own default, which is enough for
 Notion, Sentry, Granola, and Vercel. Mercury grants a write scope,
 and a refresh token (`offline_access`), only when asked; Y Combinator's
-server asks for `mcp:access` and Stripe's for `mcp`; and PostHog's,
-Supabase's, and Mintlify's granular scopes are better asked for in full
-than left to a default. Those six connectors
+server asks for `mcp:access` and Stripe's for `mcp`; and PostHog's and
+Supabase's granular scopes are better asked for in full than left to a
+default. Those five connectors
 ask for every scope their server publishes (`scopes_supported` in its
 `/.well-known/oauth-protected-resource`), set on the connector's
 `data.userAuthorization.scopes`, less the ones that administer the account
 rather than work in it: PostHog's `access_control:write`,
 `organization:write`, `account:write`, `user:write`, `integration:write`, and
-`llm_provider_key:read`, Supabase's `secrets:read`, which would hand an
-agent a project's API keys, its service role key among them, and Mintlify's
-`members:write`, `billing:read`, and `integrations:write`; Mintlify's
-connector asks for the rest of what it publishes (`docs:read`, `docs:write`,
-`nav:write`, `config:write`, `session:write`, `deployment:read`,
-`deployment:write`, `members:read`, `analytics:read`, and `offline_access`). A token keeps
+`llm_provider_key:read`, and Supabase's `secrets:read`, which would hand an
+agent a project's API keys, its service role key among them. A token keeps
 the scopes it was granted, so a narrowed connector reaches a member only
 when they connect again. Resend's resource publishes none, and its
 authorization server (`https://api.resend.com`) publishes `full_access`
@@ -1029,10 +1023,7 @@ A grant is then bounded by what the developer allows on the provider's
 consent page alone. Mercury's `transactions:request` and `transfers:request`
 scopes request a payment or transfer that an approver still confirms in
 Mercury. Y Combinator's server serves only accounts YC has enabled MCP
-access for. Mintlify's completes a sign-in only for the clients it
-knows or a redirect domain the organization allows (its dashboard's MCP ›
-Configure › Redirect URIs, https://www.mintlify.com/docs/ai/mintlify-mcp),
-so an organization may have to allow Connect's callback domain first. Stripe's consent page grants one or more live accounts and
+access for. Stripe's consent page grants one or more live accounts and
 sandboxes, each with its own permissions, and an administrator can turn MCP
 access off for the whole Stripe team; a refund or a movement of money
 answers the agent with a link for the developer to approve it in Stripe's
@@ -1066,7 +1057,7 @@ connector is a plain OAuth connector over it, with Neon's two scopes
 (Neon's consent page still asks whether to allow writes):
 
 ```
-(umask 077; curl -s https://mcp.neon.tech/api/register -H 'content-type: application/json' -d '{"client_name":"Vespin","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"client_secret_post","scope":"read write"}' > ~/neon-client.json)
+(umask 077; curl -s https://mcp.neon.tech/api/register -H 'content-type: application/json' -d '{"client_name":"Vespin","logo_uri":"https://vespin.dev/app-icon-512.png","client_uri":"https://vespin.dev","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"client_secret_post","scope":"read write"}' > ~/neon-client.json)
 # ~/neon.json, from its client_id and client_secret, written under the same umask:
 # {"serverUrl":"https://mcp.neon.tech","clientId":"…","clientSecret":"…","tokenEndpointAuthMethod":"client_secret_post","pkceRequired":true,"userAuthorization":{"enabled":true,"scopes":["read","write"]},"refreshTokens":{"enabled":true}}
 vercel connect create mcp.neon.tech --name neon --connector-type oauth --data @"$HOME/neon.json" --json
@@ -1089,7 +1080,7 @@ is. Each grant belongs to the one Executor organization the developer picks
 on its consent page.
 
 ```
-(umask 077; curl -s https://app.executor.sh/api/auth/oauth2/register -H 'content-type: application/json' -d '{"client_name":"Vespin","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none","scope":"mcp offline_access"}' > ~/executor-client.json)
+(umask 077; curl -s https://app.executor.sh/api/auth/oauth2/register -H 'content-type: application/json' -d '{"client_name":"Vespin","logo_uri":"https://vespin.dev/app-icon-512.png","client_uri":"https://vespin.dev","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none","scope":"mcp offline_access"}' > ~/executor-client.json)
 jq '{data:{clientId:.client_id,tokenEndpointAuthMethod:"none",pkceRequired:true,codeChallengeMethod:"S256",defaultResource:"https://mcp.executor.sh/mcp",userAuthorization:{enabled:true,scopes:["mcp","offline_access"]}}}' ~/executor-client.json > ~/executor-patch.json
 (umask 077; vercel api "/v1/connect/connectors/<connector-id>?teamId=<team-id>" > ~/executor-before.json)   # the backup
 vercel api "/v2/connect/connectors/<connector-id>?teamId=<team-id>" -X PATCH --input ~/executor-patch.json
@@ -1145,9 +1136,18 @@ Set `GMAIL_ALLOWED_ACCOUNTS`, `GOOGLE_CALENDAR_ALLOWED_ACCOUNTS`, and
 until the app is verified, so no other account is offered a sign-in Google
 would refuse or count against the unverified cap.
 
-**Granola's, PostHog's, Supabase's, and Y Combinator's connectors.** Each
-is created as above and then corrected in place, its UID unchanged, because
-the client Connect registers for it fails at the provider:
+**Granola's, Mercury's, PostHog's, Supabase's, and Y Combinator's
+connectors.** Each is created as above and then corrected in place, its UID
+unchanged, because the client Connect registers for it fails at the
+provider or names us wrongly there:
+
+- Mercury's consent page names a client "Mercury MCP for" its
+  `client_name`, and Connect's registration names it after the connector,
+  so it read "Mercury MCP for vespin-mercury". A public client named
+  `Vespin` is registered by hand at `https://mcp.mercury.com/register`
+  (`"token_endpoint_auth_method":"none"`, with the connector's scopes as
+  its `scope`), and the connector is PATCHed to it as Granola's is below.
+  Mercury drops its `logo_uri`.
 
 - Granola and PostHog publish client ID metadata documents and
   `private_key_jwt`, and Connect signs a client assertion whose audience
@@ -1158,6 +1158,7 @@ the client Connect registers for it fails at the provider:
   `https://oauth.posthog.com/oauth/register/`) with
   `"token_endpoint_auth_method":"none"`, and the connector is PATCHed to it:
   `{"data":{"clientId":"…","tokenEndpointAuthMethod":"none","pkceRequired":true,"codeChallengeMethod":"S256"}}`.
+  PostHog's registration also names our logo (below).
 - Supabase's authorization server publishes no client ID metadata document
   support and answered Connect's client "Unrecognized client_id". It takes
   confidential clients alone, so one is registered by hand at
@@ -1165,6 +1166,11 @@ the client Connect registers for it fails at the provider:
   `"token_endpoint_auth_method":"client_secret_post"`, and the connector is
   PATCHed to its `clientId` and `clientSecret` with
   `"tokenEndpointAuthMethod":"client_secret_post"` and `"pkceRequired":true`.
+  Supabase has since forgotten a client registered this way, although its
+  secret never expires (`client_secret_expires_at` 0): its authorize answered
+  "Unrecognized client_id" (422) and every grant stood expired. A Supabase
+  sign-in that fails so is mended by registering again and PATCHing the
+  connector to the new client.
 - Y Combinator's protected resource is its origin
   (`https://api.ycombinator.com/.well-known/oauth-protected-resource`
   answers `"resource":"https://api.ycombinator.com"`, and the path-scoped
@@ -1174,7 +1180,16 @@ the client Connect registers for it fails at the provider:
   `{"data":{"defaultResource":"https://api.ycombinator.com"}}`.
 
 Each registration names `https://connect.vercel.com/callback`, the redirect
-a connector without a `redirectUri` of its own replays, and is written under
+a connector without a `redirectUri` of its own replays, and
+`"logo_uri":"https://vespin.dev/app-icon-512.png"` with
+`"client_uri":"https://vespin.dev"`, the logo the client metadata documents
+Connect publishes for its own clients carry, so a consent page that draws a
+client's logo draws ours rather than a placeholder. PostHog's and Executor's
+registrations keep it; Granola's, Mercury's, Neon's, and Supabase's drop
+it, and Supabase's consent page draws its own mark instead. No provider here lets a registered client be changed, so
+giving one a logo means a new client and the connector PATCHed to it, and
+every member who connected it signs in again, since a refresh token answers
+only the client it was issued to. Each registration is written under
 `umask 077`, and every registration file is deleted once its PATCH is in,
 as Neon's is, since nothing reads it again and Supabase's holds its secret.
 The backup a PATCH is taken against is written the same way, since a
@@ -1184,7 +1199,7 @@ provider connects, the one way back if it does not
 Granola's, for example:
 
 ```
-(umask 077; curl -s https://mcp-auth.granola.ai/oauth2/register -H 'content-type: application/json' -d '{"client_name":"Vespin","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"}' > ~/granola-client.json)
+(umask 077; curl -s https://mcp-auth.granola.ai/oauth2/register -H 'content-type: application/json' -d '{"client_name":"Vespin","logo_uri":"https://vespin.dev/app-icon-512.png","client_uri":"https://vespin.dev","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"}' > ~/granola-client.json)
 jq '{data:{clientId:.client_id,tokenEndpointAuthMethod:"none",pkceRequired:true,codeChallengeMethod:"S256"}}' ~/granola-client.json > ~/granola-patch.json
 (umask 077; vercel api "/v1/connect/connectors/<connector-id>?teamId=<team-id>" > ~/granola-before.json)   # the backup
 vercel api "/v2/connect/connectors/<connector-id>?teamId=<team-id>" -X PATCH --input ~/granola-patch.json
@@ -1199,7 +1214,7 @@ again straight through connects.
 
 Then set the provider's variable (`EXECUTOR_CONNECTOR_UID`, `GMAIL_CONNECTOR_UID`,
 `GOOGLE_CALENDAR_CONNECTOR_UID`, `GOOGLE_DRIVE_CONNECTOR_UID`, `GRANOLA_CONNECTOR_UID`,
-`LINEAR_CONNECTOR_UID`, `MERCURY_CONNECTOR_UID`, `MINTLIFY_CONNECTOR_UID`, `NEON_CONNECTOR_UID`,
+`LINEAR_CONNECTOR_UID`, `MERCURY_CONNECTOR_UID`, `NEON_CONNECTOR_UID`,
 `NOTION_CONNECTOR_UID`, `POSTHOG_CONNECTOR_UID`, `RESEND_CONNECTOR_UID`, `SENTRY_CONNECTOR_UID`,
 `SLACK_CONNECTOR_UID`, `STRIPE_CONNECTOR_UID`, `SUPABASE_CONNECTOR_UID`,
 `VERCEL_CONNECTOR_UID`, `YCOMBINATOR_CONNECTOR_UID`) to that UID in the `vespin` project for
@@ -1297,7 +1312,7 @@ its own workspace alone, so production offers Slack only to the accounts
 that workspace's people sign in with. Each provider has an optional
 allowlist variable beside its connector's (`<PROVIDER>_ALLOWED_ACCOUNTS`:
 `EXECUTOR_ALLOWED_ACCOUNTS`, `GRANOLA_ALLOWED_ACCOUNTS`, `LINEAR_ALLOWED_ACCOUNTS`,
-`MERCURY_ALLOWED_ACCOUNTS`, `MINTLIFY_ALLOWED_ACCOUNTS`, `NEON_ALLOWED_ACCOUNTS`,
+`MERCURY_ALLOWED_ACCOUNTS`, `NEON_ALLOWED_ACCOUNTS`,
 `NOTION_ALLOWED_ACCOUNTS`, `POSTHOG_ALLOWED_ACCOUNTS`, `RESEND_ALLOWED_ACCOUNTS`,
 `SENTRY_ALLOWED_ACCOUNTS`, `SLACK_ALLOWED_ACCOUNTS`,
 `STRIPE_ALLOWED_ACCOUNTS`, `SUPABASE_ALLOWED_ACCOUNTS`,
@@ -1580,7 +1595,7 @@ and the erasure call itself runs over the ambient
 `HttpClient` rather than an injected transport, so nothing in `AccountProcedureSeams`
 carries one — a test provides its own fake `HttpClient` layer instead.
 
-The preferences snapshot carries sixteen parts. `preferences` is the settings
+The preferences snapshot carries seventeen parts. `preferences` is the settings
 snapshot the desktop syncs, replaced whole by a write that names it.
 `linkOpen`, where the account's app links open (null reads as the browser),
 `pullRequestOpen`, where its pull requests open (`app` or `github`, null
@@ -1595,11 +1610,12 @@ sound plays as an agent finishes (`off`, `background`, or `always`, null
 reads as off), `completionSound`, which sound (null reads as `chime`),
 `askSound`, which sound plays as something new needs the account (null
 reads as `knock`),
+`voice`, which voice a call speaks with (null reads as `marin`),
 `turnNotifications`, whether a notification is posted then (null reads as
 off), and `onboardingSurvey`, what the account answered in setup's survey as
 its JSON (null until it answers), are synced settings kept as parts of their
 own (`link_open`, `pull_request_open`, `agent_enter`, `commit_author`, `agent_permission_mode`, `setup_finished`,
-`setup_place`, `sound_when`, `completion_sound`, `ask_sound`, `turn_notifications`,
+`setup_place`, `sound_when`, `completion_sound`, `ask_sound`, `voice`, `turn_notifications`,
 `onboarding_survey`), so a build that predates them neither
 refuses the snapshot nor clears them by writing `preferences` back whole.
 `agent` is the account's default model and effort for an agent —
@@ -2325,15 +2341,19 @@ A GitHub trigger fires on the Vespin App's own webhook
 pull request opened or labeled, a pull request ready for review opened,
 reopened, marked ready, or pushed to (`pull-request-updated`; a draft fires
 nothing until it is marked ready, and an opened pull request is both this and
-`pull-request-opened`), an issue opened or labeled, a check suite that
-completed as `failure` or `timed_out`, and a push to a branch, each in any of
+`pull-request-opened`), a pull request merged (`pull-request-merged`: a
+`pull_request` delivery closed with `merged` true), an issue opened or
+labeled, a check suite that completed as `failure` or `timed_out`, a push to
+a branch, and a release published (`release-published`, which the App must
+subscribe to `release` deliveries for), each in any of
 the automation's repositories (matched the way GitHub folds a name's case),
 of an owner still a member of
 the automation's workspace, filtered by the trigger's labels (the label just applied, or
 any label of what was opened) and branches (a pull request's base, a check
-suite's or a push's branch). Only the repository, the number, title, and
-address of the issue or pull request, the branch, and a failed check's
-commit by its address are read; never a body. The run's agent starts in the
+suite's or a push's branch), and a release by its tags, exactly as named.
+Only the repository, the number, title, and
+address of the issue or pull request, the branch, a release's tag, name, and
+address, and a failed check's commit by its address are read; never a body. The run's agent starts in the
 repository the event named, as the automation spells it among its
 repositories; a run whose automation no longer lists that repository by the
 time the sweep acts on it is skipped as `repository-changed`. A run is queued under the delivery's `X-GitHub-Delivery`, which a
@@ -2343,18 +2363,21 @@ inside GitHub's ten seconds. Each event is read with who sent it: Vespin's
 agents where the sender is the App's own bot (`<slug>[bot]`), another bot,
 or a person; and, for a pull request, its moment (opened or reopened, marked
 ready, pushed to), whether it is a draft, and whether it comes from a fork
-(its head in another repository, or in none). The trigger's settings choose
-among them (`senders`, `moments`, `drafts`, `forks` in
+(its head in another repository, or in none); and, for a release, whether it
+is a prerelease. A merged pull request is read by whose pull request it is,
+by the same rules, never by who merged it, which is most often the merge
+queue's bot. The trigger's settings choose
+among them (`senders`, `moments`, `drafts`, `forks`, `prereleases` in
 `@repo/features/automation-wire`): people's events alone, every moment, and
-no draft or fork where it names none. An automation cannot fire itself
+no draft, fork, or prerelease where it names none. An automation cannot fire itself
 whatever its settings say: a push by Vespin's agents, to a branch or to a pull
 request, fires nothing, and neither does a failed check on an agent's branch (`agent/`, or `luke/` before it),
 where an agent works and already watches its checks.
 The agent is handed the event by number, address, and branch, its title
 fenced as the event's own text to read as data, its angle brackets spelled
-as entities so it cannot close the fence, and reads the rest with `gh`. The App must subscribe to the Issues and Push events beside the pull
+as entities so it cannot close the fence, and reads the rest with `gh`. The App must subscribe to the Issues, Push, and Release events beside the pull
 request and check events it already reads, a setting of the App on GitHub
-rather than of this repository; until it does, those two triggers never
+rather than of this repository; until it does, those triggers never
 fire.
 
 ## The tasks group

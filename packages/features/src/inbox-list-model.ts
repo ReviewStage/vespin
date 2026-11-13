@@ -2,7 +2,9 @@
  * inbox-list-model.ts -- the Inbox's list as pure decisions, for every client that draws it: which items each scope lists and in what order, what each row's line says, and what the list's head and its empty list say.
  *
  * The list holds every item of every holder it is handed, the latest
- * changed first, in one run with no groups, the items its scope takes: what
+ * changed first, in one run with no groups unless the reader asked for
+ * their pinned tasks' items first, under a heading of their own that folds
+ * (`inboxPinnedRuns`), the items its scope takes: what
  * needs the reader, what they are not done with, everything, or what they
  * set a reminder on, each scope counting its own. An item is the reader's
  * where it waits on them, or where the service does not say; only the
@@ -15,7 +17,7 @@
 
 import { Predicate } from "effect";
 import { ATTACHMENT_VIEW, attachmentView } from "./attachment-model.js";
-import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
+import { isVideoType } from "./conversation-picture-wire.js";
 import { fileMarker, fileMarkers, isPictureName, markersAsNames } from "./file-marker.js";
 import { fillInWords, WRITE_AN_ANSWER } from "./inbox-ask-words.js";
 import {
@@ -857,7 +859,29 @@ function inboxListed(holder: InboxHolder, item: InboxItem): InboxListed {
 export interface InboxListView {
   readonly readerId: string | undefined;
   readonly items: readonly InboxListed[];
+  /** Where the pinned tasks' items stand first, each run's count and which are folded (`inboxPinnedRuns`); none where every item stands in one run. */
+  readonly runs?: InboxRunsView | undefined;
 }
+
+/** The two runs a list stands its items in where the pinned tasks' items stand first: theirs, then everything else. */
+export const INBOX_RUN = {
+  PINNED: "pinned",
+  REST: "rest",
+} as const;
+
+export type InboxRun = (typeof INBOX_RUN)[keyof typeof INBOX_RUN];
+
+/** Every run, in the order a list stands them. */
+export const INBOX_RUNS: readonly InboxRun[] = [INBOX_RUN.PINNED, INBOX_RUN.REST];
+
+/** A list's runs as it drew them: how many items each holds, folded or not, and which the reader folded. */
+export interface InboxRunsView {
+  readonly counts: Readonly<Record<InboxRun, number>>;
+  readonly folded: ReadonlySet<InboxRun>;
+}
+
+/** No run folded. */
+const NO_FOLDS: ReadonlySet<InboxRun> = new Set();
 
 /**
  * Whether an item is the reader's: it waits on them (`inboxWaitsOn`), or on
@@ -995,7 +1019,13 @@ function scopedItem(
  * exclude it once another is chosen, while the steps through the list are
  * given the item the pane shows, which keeps its place among them so K, J,
  * and Next still reach the rows either side of it. An item whose place is
- * held (`places`) stands there, rather than where it changed last.
+ * held (`places`) stands there, rather than where it changed last. Where
+ * the reader asks for their pinned tasks first (`pinnedFirst`), a pinned
+ * task's items stand before every other, the latest first within each, so
+ * an agent's reply on a pinned task lands at the top of Pinned rather than
+ * the top of everything; and the runs the reader folded (`folded`) are
+ * said with the list, whose rows and steps leave their items out
+ * (`inboxShownItems`). A search folds nothing, so no match is hidden.
  */
 export function inboxList(
   tasks: readonly InboxGroup[],
@@ -1010,10 +1040,17 @@ export function inboxList(
     readonly search?: readonly string[] | undefined;
     /** Where the items held still stand (`inboxPlaces`), each other item where it is now; none holds every item where it is now. */
     readonly places?: ReadonlyMap<string, InboxPlace> | undefined;
+    /** Whether the pinned tasks' items stand first (`inboxPinnedRuns`); none lists every item in one run. */
+    readonly pinnedFirst?: boolean | undefined;
+    /** The runs the reader folded where the pinned tasks' items stand first; none folds nothing. */
+    readonly folded?: ReadonlySet<InboxRun> | undefined;
   },
 ): InboxListView {
   const { readerId, whose = EVERYONES, search = NO_SEARCH, places = NO_PLACES } = view;
+  const pinnedFirst = view.pinnedFirst === true;
   const at = (item: InboxItem): number => places.get(item.id)?.at ?? item.updatedAt;
+  // Note that a pinned task's item outranks any other where the pinned stand first, the latest first within each.
+  const rank = ({ holder }: InboxListed): number => (pinnedFirst && isPinned(holder) ? 1 : 0);
 
   const items = tasks
     .flatMap(({ holder, items }) =>
@@ -1025,9 +1062,86 @@ export function inboxList(
         )
         .map((item) => inboxListed(holder, item)),
     )
-    .toSorted((a, b) => at(b.item) - at(a.item));
+    .toSorted((a, b) => rank(b) - rank(a) || at(b.item) - at(a.item));
 
-  return { items, readerId };
+  const pinned = pinnedFirst ? items.filter(({ holder }) => isPinned(holder)).length : 0;
+
+  // Note that a reader with nothing pinned listed sees the one run they would see without it, and no fold.
+  if (pinned === 0) return { items, readerId };
+
+  const folded = search.length > 0 ? NO_FOLDS : (view.folded ?? NO_FOLDS);
+
+  return {
+    items,
+    readerId,
+    runs: {
+      counts: { [INBOX_RUN.PINNED]: pinned, [INBOX_RUN.REST]: items.length - pinned },
+      folded,
+    },
+  };
+}
+
+/** Whether a holder's task is pinned in the reader's sidebar. */
+function isPinned(holder: InboxHolder): boolean {
+  return holder.task.pinnedAt !== undefined;
+}
+
+/** The run a listed item stands in where the pinned tasks' items stand first. */
+export function inboxRunOf({ holder }: InboxListed): InboxRun {
+  return isPinned(holder) ? INBOX_RUN.PINNED : INBOX_RUN.REST;
+}
+
+/** One run as a list draws it: which it is, the rows it draws, how many items it holds, and whether it is folded. */
+export interface InboxPinnedRun {
+  readonly run: InboxRun;
+  readonly items: readonly InboxListed[];
+  readonly count: number;
+  readonly folded: boolean;
+}
+
+/**
+ * Where a list stands its pinned tasks' items first (`inboxList`'s
+ * `pinnedFirst`), its runs, each drawn under a heading of its own: Pinned,
+ * then everything else where it holds anything; none where it does not, or
+ * where no item listed is a pinned task's, so a reader with nothing pinned
+ * sees the one run they would see without it.
+ */
+export function inboxPinnedRuns(view: InboxListView): readonly InboxPinnedRun[] | undefined {
+  const { runs } = view;
+
+  if (runs === undefined) return undefined;
+
+  return INBOX_RUNS.flatMap((run) =>
+    runs.counts[run] === 0
+      ? []
+      : [
+          {
+            run,
+            items: runs.folded.has(run)
+              ? NO_LISTED
+              : view.items.filter((listed) => inboxRunOf(listed) === run),
+            count: runs.counts[run],
+            folded: runs.folded.has(run),
+          },
+        ],
+  );
+}
+
+/** No item listed. */
+const NO_LISTED: readonly InboxListed[] = [];
+
+/**
+ * The items a list draws rows for, which its keys, its selection, and K and
+ * J reach: every item it lists but those of a run folded under its heading
+ * (`inboxPinnedRuns`), bar `kept`, the item the pane shows, which keeps its
+ * place among the steps though its row is folded away.
+ */
+export function inboxShownItems(view: InboxListView, kept?: string): readonly InboxListed[] {
+  const folded = view.runs?.folded;
+
+  if (folded === undefined || folded.size === 0) return view.items;
+
+  return view.items.filter((listed) => !folded.has(inboxRunOf(listed)) || listed.item.id === kept);
 }
 
 /**
@@ -1185,7 +1299,7 @@ export function inboxSteps(
   view: InboxListView,
   chosen: string | undefined,
 ): InboxSteps | undefined {
-  const rowed = view.items;
+  const rowed = inboxShownItems(view, chosen);
   const at = rowed.findIndex(({ item }) => item.id === chosen);
 
   if (at < 0) return undefined;
@@ -1277,7 +1391,7 @@ export function inboxCommentFiles(
 ): InboxCommentFiles {
   const picture = (file: InboxMessageFile) =>
     attachmentView({ name: file.name, mediaType: file.mediaType, url: "" }) ===
-      ATTACHMENT_VIEW.IMAGE || file.mediaType === CONVERSATION_MEDIA_TYPE.WEBM;
+      ATTACHMENT_VIEW.IMAGE || isVideoType(file.mediaType);
 
   const drawn = new Set(
     words === undefined ? [] : picturesDrawn(words, itemId).map((each) => each.attachmentId),

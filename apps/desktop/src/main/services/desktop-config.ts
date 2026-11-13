@@ -1,5 +1,6 @@
 import type { AppLinkInbox } from "@repo/features/app-links";
 import type { RunMode } from "@repo/host";
+import type { HostReporter } from "@repo/host/effect";
 import type { BuildCommit } from "@repo/settings/update";
 import type { MenuBarChange } from "../app-menu";
 
@@ -42,7 +43,7 @@ export interface DesktopConfig {
   readonly resourceDirectory: string;
   readonly hostedServiceBaseUrl: string;
   readonly launch: DesktopLaunch;
-  readonly report: (message: string) => void;
+  readonly report: HostReporter["report"];
   /**
    * An address handed to the operating system. The client performs its own
    * opens with it — the releases page, a privacy pane, a provider's keys

@@ -1,13 +1,18 @@
-// integrations.tsx -- Settings' Integrations page: each of the account's servers under Connected and Not connected, as the panel's page lists them; Connect opening the provider's sign-in in the system's authentication sheet, a sign-in waited on with Cancel, and Disconnect asked first.
+// integrations.tsx -- Settings' Integrations page: each of the account's servers under Connected and Not connected, as the panel's page lists them; a connected server's tools read to say whether it works, with Try again where they couldn't be read; Connect opening the provider's sign-in in the system's authentication sheet, a sign-in waited on with Cancel, an account renamed where the provider holds several, and Disconnect asked first.
 
 import {
+  namedServers,
   SERVER_ROW,
   type ServerRow,
   searchServers,
   serverGroups,
   serverRows,
 } from "@repo/features/agent-servers-model";
-import { CONNECTION_HEALTH, type ConnectionHealth } from "@repo/features/integration-health";
+import {
+  CONNECTION_HEALTH,
+  type ConnectionHealth,
+  connectionHealth,
+} from "@repo/features/integration-health";
 import {
   disconnectQuestion,
   grantLabel,
@@ -21,18 +26,23 @@ import { INTEGRATION_CALL_FAILURE } from "@repo/features/integration-view";
 import {
   INTEGRATION_GRANT,
   INTEGRATION_GRANT_OF,
+  INTEGRATION_LABEL_MAX,
+  INTEGRATION_NAME,
   INTEGRATION_PURPOSE,
   INTEGRATION_STATUS,
   type IntegrationProvider,
+  integrationAccountLabel,
   integrationConnectionOf,
 } from "@repo/features/integration-wire";
 import { readingWords, VERB } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import {
+  askForName,
   ConfirmAsk,
   type ConnectionLine,
   ConnectionRow,
   EmptyState,
+  GLYPH,
   ListSection,
   type MemberRowAct,
   Screen,
@@ -45,6 +55,10 @@ import {
   type IntegrationStatuses,
   useIntegrationStatuses,
 } from "../../integrations/use-integration-statuses.js";
+import {
+  type IntegrationToolReads,
+  useIntegrationTools,
+} from "../../integrations/use-integration-tools.js";
 import { useWrite } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
@@ -53,28 +67,59 @@ export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 const READING = readingWords("the integrations");
 
 /** The glyph a page of integrations stands under. */
-const INTEGRATIONS_SYMBOL = "puzzlepiece.extension";
+const INTEGRATIONS_SYMBOL = GLYPH.PLUG;
 
-/** A server's health on the phone, which reads no tools: its connection's standing alone says whether it is connected. */
+/** The health of a server whose name this build can't read, which no tools read stands under. */
 const UNREAD_HEALTH: ConnectionHealth = { kind: CONNECTION_HEALTH.CHECKING };
 
 /** No server switched off, since the page switches none for an agent. */
 const NONE_OFF: readonly string[] = [];
+
+/** What the rename alert asks, by the provider whose account it renames: "Rename Notion account". */
+function renameTitle(provider: IntegrationProvider): string {
+  return `${INTEGRATION_ROW_WORDS.RENAME} ${INTEGRATION_NAME[provider]} account`;
+}
+
+/**
+ * A label cut to what the service keeps, on whole characters so an emoji
+ * isn't split, and trimmed again so a cut never leaves a space at its end.
+ */
+function cutLabel(typed: string): string {
+  let kept = "";
+
+  for (const character of typed) {
+    if (kept.length + character.length > INTEGRATION_LABEL_MAX) break;
+    kept += character;
+  }
+
+  return kept.trim();
+}
 
 /** Whether the provider rides the account's own GitHub sign-in, which the desktop and the web connect. */
 function bySignIn(provider: IntegrationProvider): boolean {
   return INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN;
 }
 
+/** What a connected row says while its server's tools are read, and once they answered with tools, as the panel's row says it. */
+function connectedWords(health: ConnectionHealth): string {
+  return health.kind === CONNECTION_HEALTH.CHECKING
+    ? INTEGRATION_ROW_WORDS.CHECKING
+    : INTEGRATION_STATUS_WORDS[INTEGRATION_STATUS.CONNECTED];
+}
+
 /** A row's lines: where it stands or what it is for, the server's or the sign-in's own words under that, and why the last act on it did not go. */
-function rowLines(row: ServerRow, refusal: string | undefined): readonly ConnectionLine[] {
+function rowLines(
+  row: ServerRow,
+  health: ConnectionHealth,
+  refusal: string | undefined,
+): readonly ConnectionLine[] {
   const standing: ConnectionLine | undefined =
     row.problem !== undefined
       ? { text: row.problem, problem: true }
       : row.note !== undefined
         ? { text: row.note }
         : row.kind === SERVER_ROW.SWITCH
-          ? { text: INTEGRATION_STATUS_WORDS[INTEGRATION_STATUS.CONNECTED] }
+          ? { text: connectedWords(health) }
           : row.kind === SERVER_ROW.RECONNECT
             ? { text: INTEGRATION_STATUS_WORDS[INTEGRATION_STATUS.EXPIRED], problem: true }
             : row.kind === SERVER_ROW.CONNECT
@@ -93,11 +138,29 @@ export default function IntegrationsScreen() {
   const statuses = useIntegrationStatuses();
   const [query, setQuery] = useState("");
   const [asked, setAsked] = useState<ServerRow | undefined>(undefined);
-  const page = useIntegrationActs(statuses, setAsked);
+
+  // Note that every connected server's tools are read while the page stands, as the panel's page reads them, since a grant that stands says nothing of whether its server takes it.
+  const tools = useIntegrationTools(
+    namedServers({
+      statusOf: statuses.statusOf,
+      accountsOf: statuses.accountsOf,
+      standing: (status) => status === INTEGRATION_STATUS.CONNECTED,
+    }).map((server) => server.connection),
+  );
+
+  const healthOf = (server: string): ConnectionHealth => {
+    const provider = integrationConnectionOf(server)?.provider;
+
+    return provider === undefined
+      ? UNREAD_HEALTH
+      : connectionHealth(provider, tools.readOf(server));
+  };
+
+  const page = useIntegrationActs(statuses, tools, healthOf, setAsked);
 
   const rows = serverRows({
     statusOf: statuses.statusOf,
-    healthOf: () => UNREAD_HEALTH,
+    healthOf,
     signInOf: (server) => statuses.signIns.get(server),
     accountsOf: statuses.accountsOf,
     readFailed: statuses.readFailed,
@@ -111,7 +174,7 @@ export default function IntegrationsScreen() {
       statuses.readFailed ? (
         <EmptyState
           title={INTEGRATIONS_PAGE_WORDS.READ_FAILED}
-          symbol="exclamationmark.triangle"
+          symbol={GLYPH.FAILED}
           action={{ label: VERB.RETRY, onPress: page.retry }}
         />
       ) : (
@@ -120,7 +183,7 @@ export default function IntegrationsScreen() {
     ) : rows.length === 0 ? (
       <EmptyState title={INTEGRATIONS_PAGE_WORDS.NONE_OFFERED} symbol={INTEGRATIONS_SYMBOL} />
     ) : found.length === 0 ? (
-      <EmptyState title={INTEGRATIONS_PAGE_WORDS.NO_MATCH(query)} symbol="magnifyingglass" />
+      <EmptyState title={INTEGRATIONS_PAGE_WORDS.NO_MATCH(query)} symbol={GLYPH.SEARCH} />
     ) : (
       <SettingsForm>
         {serverGroups(found).map((group) => (
@@ -129,7 +192,7 @@ export default function IntegrationsScreen() {
               <ConnectionRow
                 key={row.connection}
                 name={row.name}
-                lines={rowLines(row, page.refusals.get(row.connection))}
+                lines={rowLines(row, healthOf(row.connection), page.refusals.get(row.connection))}
                 act={page.actOf(row)}
                 menu={page.menuOf(row)}
               />
@@ -178,12 +241,19 @@ export default function IntegrationsScreen() {
 /**
  * What each row offers, and why its last act did not go: a grant (Connect,
  * Reconnect, or Try again) at its end, which opens the sign-in and waits on
- * it; Cancel at the end of one waited on, Reopen in its menu; and, on one
- * connected, Add another account where the provider offers it and
- * Disconnect, which asks first (`onAsk`). A server that rides the account's
- * GitHub sign-in offers nothing here, as the desktop and the web connect it.
+ * it; Retry at the end of a connected one whose tools couldn't be read;
+ * Cancel at the end of one waited on, Reopen in its menu; and, on one
+ * connected, Rename where the provider holds several accounts, Add another
+ * account where the provider offers it, and Disconnect, which asks first
+ * (`onAsk`). A server that rides the account's GitHub sign-in offers only its
+ * Retry here, as the desktop and the web connect it.
  */
-function useIntegrationActs(statuses: IntegrationStatuses, onAsk: (row: ServerRow) => void) {
+function useIntegrationActs(
+  statuses: IntegrationStatuses,
+  tools: IntegrationToolReads,
+  healthOf: (server: string) => ConnectionHealth,
+  onAsk: (row: ServerRow) => void,
+) {
   const acts = useHostActs();
   const write = useWrite();
   // Why each row's last act did not go, by its server, said under it in place.
@@ -277,9 +347,48 @@ function useIntegrationActs(statuses: IntegrationStatuses, onAsk: (row: ServerRo
     );
   };
 
+  /**
+   * Asks for an account's new label in the system's name alert, opened on
+   * the label it has, as the panel renames it in place; the host draws the
+   * label asked at once, and a refusal puts the old one back and is said
+   * under the row. Note that a label past what the service keeps is cut to
+   * it (`cutLabel`), as the panel's field takes no more.
+   */
+  const askRename = (row: ServerRow, account: NonNullable<ServerRow["account"]>) =>
+    askForName({
+      title: renameTitle(row.provider),
+      act: INTEGRATION_ROW_WORDS.RENAME,
+      name: integrationAccountLabel(account),
+      onName: (typed) => {
+        const label = cutLabel(typed);
+        said(row.connection, undefined);
+        void write(
+          () =>
+            acts[ACT_KIND.INTEGRATIONS_RENAME]({
+              provider: row.provider,
+              connection: row.connection,
+              label,
+            }),
+          {
+            refused: (answer) =>
+              "failure" in answer ? INTEGRATION_REFUSED.RENAME(row.name) : undefined,
+            inPlace: (words) => said(row.connection, words),
+          },
+        );
+      },
+    });
+
   const actOf = (
     row: ServerRow,
   ): { label: string; disabled: boolean; onPress: () => void } | undefined => {
+    // Note that a connected server whose tools our own service couldn't read offers to read them again, as the panel's row offers Retry, whoever granted it.
+    if (
+      row.kind === SERVER_ROW.SWITCH &&
+      healthOf(row.connection).kind === CONNECTION_HEALTH.FAILED
+    ) {
+      return { label: VERB.RETRY, disabled: false, onPress: () => tools.retry(row.connection) };
+    }
+
     if (bySignIn(row.provider)) return undefined;
     const disabled = busy.has(row.connection);
 
@@ -305,24 +414,31 @@ function useIntegrationActs(statuses: IntegrationStatuses, onAsk: (row: ServerRo
   };
 
   const menuOf = (row: ServerRow): readonly MemberRowAct[] => {
-    if (bySignIn(row.provider)) return [];
+    // Note that a row whose act is out offers no menu until it answers, as its button is held; a Disconnect asked then would go nowhere.
+    if (bySignIn(row.provider) || busy.has(row.connection)) return [];
 
     if (row.kind === SERVER_ROW.SIGNING_IN) {
       return [{ label: SIGN_IN_ACTION.REOPEN, onPress: () => connect(row) }];
     }
 
     const connected = statuses.statusOf(row.connection) === INTEGRATION_STATUS.CONNECTED;
-    const expired = row.kind === SERVER_ROW.RECONNECT;
+    // Note that an expired account is told by its standing, as the panel's ⋯ tells it, so one whose sign-in again failed keeps its menu.
+    const expired = statuses.statusOf(row.connection) === INTEGRATION_STATUS.EXPIRED;
 
     if (!connected && !expired) return [];
 
-    // Note that a working connection is signed in again from its menu, as the panel's ⋯ offers it; a broken one carries Reconnect as its own button.
+    const { account } = row;
+
+    // Note that the menu stands in the panel's ⋯ order: Rename and Add another account, then Reconnect, then Disconnect. A working connection is signed in again from it; a broken one carries Reconnect as its own button.
     return [
-      ...(row.kind === SERVER_ROW.SWITCH
-        ? [{ label: INTEGRATION_ROW_WORDS.RECONNECT, onPress: () => connect(row) }]
+      ...(row.accounts > 1 && account !== undefined
+        ? [{ label: INTEGRATION_ROW_WORDS.RENAME, onPress: () => askRename(row, account) }]
         : []),
       ...(statuses.canAdd(row.provider)
         ? [{ label: INTEGRATION_ROW_WORDS.ADD_ACCOUNT, onPress: () => connect(row, true) }]
+        : []),
+      ...(row.kind === SERVER_ROW.SWITCH
+        ? [{ label: INTEGRATION_ROW_WORDS.RECONNECT, onPress: () => connect(row) }]
         : []),
       { label: INTEGRATION_ROW_WORDS.DISCONNECT, destructive: true, onPress: () => onAsk(row) },
     ];

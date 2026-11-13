@@ -36,6 +36,7 @@ import {
   integrationRemoteCallSchema,
 } from "./integration-wire.js";
 import { LINK_DESTINATION, type LinkDestination, linkOf } from "./link-grammar.js";
+import { COMPUTER_PERMISSION, type ComputerPermission } from "./machine-command-wire.js";
 import type { MentionHolder } from "./mention-holder.js";
 import type { ModelChoice } from "./models-wire.js";
 import { cardTitle } from "./plain-words.js";
@@ -46,6 +47,7 @@ import {
   CALL_KIND,
   type CallKind,
   commandDescription,
+  computerCallWords,
   pageName,
 } from "./turn-rows.js";
 
@@ -91,6 +93,8 @@ export interface ToolCallView {
   readonly output: ToolBlock | undefined;
   /** For a call of an integration's own tool, the integration, whose mark its row wears in its kind's icon's place. */
   readonly provider?: IntegrationProvider;
+  /** For a call on an app on the developer's Mac, the picture its icon was kept as beside the transcript, which its row wears in its kind's icon's place. */
+  readonly appIcon?: string;
   /** For a call of an MCP server's tool, or a search of its tools, the server's name as its card gives it, which the row says it ran on. */
   readonly server?: string;
   /** For the same calls, the connection they ran on, which the window names by the account's own name where it holds more than one (`connection-names.tsx`); `server` stands where it does not know it. */
@@ -188,6 +192,50 @@ function stringAt(value: WireValue | undefined, key: string): string | undefined
   return isRecord(value) && isWireString(value[key]) ? value[key] : undefined;
 }
 
+/** The app a computer call's answer names, as the Mac named it; while it runs, or where it answered none, as the call named it. */
+export function computerAppName(
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): string | undefined {
+  const named = isRecord(output) ? stringAt(output.app, "name") : undefined;
+
+  return named ?? stringAt(input, "app");
+}
+
+const isComputerPermission = Schema.is(Schema.Literals(Object.values(COMPUTER_PERMISSION)));
+
+/** Whether a computer call answered that the Mac ran nothing, so it read no window and used no app. */
+export function computerCallRefused(output: WireValue | undefined): boolean {
+  return stringAt(output, "status") === MACHINE_COMMAND_NOT_RUN;
+}
+
+/** Why a computer call ran nothing because the Mac lacked a grant it needed, in the Mac's own words, with those grants; none for any other answer. */
+export function computerPermissionsMissing(
+  output: WireValue | undefined,
+): { readonly reason: string; readonly permissions: readonly ComputerPermission[] } | undefined {
+  if (!computerCallRefused(output) || !isRecord(output)) return undefined;
+  const listed = output.missingPermissions;
+
+  const permissions =
+    listed !== undefined && isWireArray(listed) ? listed.filter(isComputerPermission) : [];
+
+  const reason = stringAt(output, "reason");
+
+  return reason === undefined || permissions.length === 0 ? undefined : { reason, permissions };
+}
+
+/** The bundle id a computer call's answer names its app by, as the Mac answered it; none where it named none, as an app with no bundle answers. */
+export function computerAppBundleId(output: WireValue | undefined): string | undefined {
+  return isRecord(output) ? stringAt(output.app, "bundleId") : undefined;
+}
+
+/** The picture a computer call's answer kept its app's icon as, by id; none where it kept none. */
+export function computerAppIcon(output: WireValue | undefined): string | undefined {
+  if (!isRecord(output) || !isRecord(output.app) || !isRecord(output.app.icon)) return undefined;
+
+  return stringAt(output.app.icon.picture, "id");
+}
+
 /** The one file a call's `filePath` names, as a list; none where it names none. */
 function filesAt(input: WireValue | undefined): readonly string[] {
   const path = stringAt(input, "filePath");
@@ -231,7 +279,7 @@ const TRUNCATED_NOTE = "(output truncated)";
 const TIMED_OUT_NOTE = "(killed at its timeout)";
 
 /** The status `run_on_mac` answers with when the Mac ran nothing. */
-const MAC_COMMAND_NOT_RUN = "not-run";
+const MACHINE_COMMAND_NOT_RUN = "not-run";
 
 /** The status `browser` answers with when it ran nothing. */
 const BROWSER_NOT_RUN = "not-run";
@@ -280,8 +328,8 @@ function browserOutput(output: WireValue): ToolBlock {
 }
 
 /** A command the Mac ran: as a terminal would have shown it, its timeout said where it was killed; or why it was not run. */
-function macCommandOutput(output: WireValue): ToolBlock {
-  if (stringAt(output, "status") === MAC_COMMAND_NOT_RUN) {
+function machineCommandOutput(output: WireValue): ToolBlock {
+  if (stringAt(output, "status") === MACHINE_COMMAND_NOT_RUN) {
     return textBlock(stringAt(output, "reason") ?? "");
   }
 
@@ -291,6 +339,13 @@ function macCommandOutput(output: WireValue): ToolBlock {
   if (!timedOut) return shown;
 
   return textBlock(shown.text === "" ? TIMED_OUT_NOTE : `${shown.text}\n${TIMED_OUT_NOTE}`);
+}
+
+/** A computer call's answer: why the Mac ran nothing where it ran nothing, and its JSON otherwise. */
+function computerOutput(output: WireValue): ToolBlock {
+  return computerCallRefused(output)
+    ? textBlock(stringAt(output, "reason") ?? "")
+    : jsonBlock(output);
 }
 
 /** A patch's answer: the files it changed, one a line, then every problem it reported. */
@@ -774,6 +829,33 @@ function namedCall(
   };
 }
 
+/** The status `look_at_picture` answers with when it wrote a description's PDF into the agent's machine. */
+const LOOK_WRITTEN = "written";
+
+/**
+ * A `look_at_picture` call as its row reads it: a picture in a thread or in
+ * the description, or, where the answer says it wrote a PDF into the agent's
+ * machine, a read of that PDF named by its file's name, the last part of the
+ * path the answer gives. A refusal stays a look, its reason in its answer.
+ */
+function lookCall(input: WireValue | undefined, output: WireValue | undefined): ToolCallView {
+  if (stringAt(output, "status") === LOOK_WRITTEN) {
+    const name = stringAt(output, "path")?.split("/").at(-1);
+
+    return {
+      ...namedCall(CALL_KIND.READ_DESCRIPTION_PDF, input, output, undefined),
+      subject: name ?? "",
+    };
+  }
+
+  const kind =
+    threadPictureOf(input) === undefined
+      ? CALL_KIND.LOOK_AT_PICTURE
+      : CALL_KIND.LOOK_AT_THREAD_PICTURE;
+
+  return namedCall(kind, input, output, undefined);
+}
+
 /** A call about one agent named by the agent's title its answer gives, as the agent's tab names it; nothing before the answer, whose input holds only an id. */
 function answeredAgentCall(
   kind: CallKind,
@@ -1130,15 +1212,7 @@ const SEARCH_MEMORY_CALL: ToolReader = ({ input, output }) => {
  * reaches here (`native-tool-calls.ts`).
  */
 const AGENT_TOOL_VIEWS = {
-  [AGENT_TOOL.LOOK_AT_PICTURE]: ({ input, output }) =>
-    namedCall(
-      threadPictureOf(input) === undefined
-        ? CALL_KIND.LOOK_AT_PICTURE
-        : CALL_KIND.LOOK_AT_THREAD_PICTURE,
-      input,
-      output,
-      undefined,
-    ),
+  [AGENT_TOOL.LOOK_AT_PICTURE]: ({ input, output }) => lookCall(input, output),
   [AGENT_TOOL.LIST_AGENTS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
   [AGENT_TOOL.READ_AGENT]: ({ input, output }) =>
@@ -1204,11 +1278,24 @@ const AGENT_TOOL_VIEWS = {
     const description = commandDescription(stringAt(input, "description"));
 
     return {
-      kind: CALL_KIND.MAC_COMMAND,
+      kind: CALL_KIND.MACHINE_COMMAND,
       subject: command,
       ...(description === undefined ? undefined : { description }),
       input: { kind: TOOL_BLOCK.COMMAND, text: command },
-      output: output === undefined ? undefined : macCommandOutput(output),
+      output: output === undefined ? undefined : machineCommandOutput(output),
+    };
+  },
+  [AGENT_TOOL.COMPUTER]: ({ input, output }) => {
+    const description = computerCallWords(stringAt(input, "action"));
+    const icon = computerAppIcon(output);
+
+    return {
+      kind: CALL_KIND.COMPUTER,
+      subject: computerAppName(input, output) ?? "",
+      ...(description === undefined ? undefined : { description }),
+      ...(icon === undefined ? undefined : { appIcon: icon }),
+      input: jsonBlock(input ?? {}),
+      output: output === undefined ? undefined : computerOutput(output),
     };
   },
   [AGENT_TOOL.BROWSER]: ({ input, output }) => {

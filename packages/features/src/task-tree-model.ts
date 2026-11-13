@@ -1,5 +1,5 @@
 /**
- * task-tree-model.ts -- the phone's Tasks list as the panel's sidebar stands it: Pinned, the member's own sections, then My tasks grouped by repository, each list's child tasks nested under their parents; and the workspace's tasks a search finds.
+ * task-tree-model.ts -- the phone's Tasks list as the panel's sidebar stands it: Pinned, Following, the member's own sections, then My tasks grouped by repository, each list's child tasks nested under their parents; the groups a wide window's sidebar lists as places of their own; and the workspace's tasks a search finds.
  *
  * Every piece is the sidebar's own (`task-list-model.ts`,
  * `task-sections-model.ts`, `pin-order.ts`), read under the view the
@@ -21,6 +21,7 @@ import {
   DEFAULT_TASK_LIST_VIEW,
   type DrawnTaskRow,
   drawnTaskRows,
+  followingTasks,
   homedTaskRows,
   orderTasks,
   repositoryHeadingsDrawn,
@@ -42,9 +43,13 @@ import { taskKey } from "./workspace-key.js";
 /** What heads the reader's pinned tasks, as the sidebar's section is called. */
 const PINNED_HEAD = "Pinned";
 
-/** What a group of the tree stands for: Pinned, one of the member's sections, or a repository under My tasks. */
+/** What heads the tasks the reader follows that no other list holds, as the sidebar's group is called. */
+export const FOLLOWING_HEAD = "Following";
+
+/** What a group of the tree stands for: Pinned, Following, one of the member's sections, or a repository under My tasks. */
 export const TASK_TREE_GROUP = {
   PINNED: "pinned",
+  FOLLOWING: "following",
   SECTION: "section",
   REPOSITORY: "repository",
 } as const;
@@ -54,7 +59,7 @@ export type TaskTreeGroupKind = (typeof TASK_TREE_GROUP)[keyof typeof TASK_TREE_
 /** One list of the tree: its kind, a key it is told apart by, its heading, and its rows in order, child tasks nested. */
 export interface TaskTreeGroup {
   readonly kind: TaskTreeGroupKind;
-  /** The group's own id: Pinned's kind, a section's id, or a repository's full name, none for the tasks with none. */
+  /** The group's own id: Pinned's or Following's kind, a section's id, or a repository's full name, none for the tasks with none. */
   readonly key: string;
   /** What heads it; none for a repository group where the tree draws no repository headings. */
   readonly title: string | undefined;
@@ -63,9 +68,10 @@ export interface TaskTreeGroup {
   readonly icon?: TaskSection["icon"];
 }
 
-/** The phone's Tasks list: Pinned where anything is pinned, the member's sections, and My tasks' repository groups. */
+/** The phone's Tasks list: Pinned where anything is pinned, Following where the reader follows a task no other list holds, the member's sections, and My tasks' repository groups. */
 export interface TaskTree {
   readonly pinned: TaskTreeGroup | undefined;
+  readonly following: TaskTreeGroup | undefined;
   readonly sections: readonly TaskTreeGroup[];
   /** What heads the tasks no pin or section holds. */
   readonly tasksHead: string;
@@ -104,9 +110,11 @@ const NONE_STANDING = () => false;
 
 /**
  * The tree the phone's Tasks tab draws, as the sidebar draws it under its
- * first view: Pinned in the order dragged, each section with its tasks to do
- * and in progress in its own order, and the reader's other tasks to do and
- * in progress grouped by repository, each child task moved under its parent
+ * first view: Pinned in the order dragged, Following with the tasks to do and
+ * in progress the reader follows that no other list holds (`followingTasks`),
+ * each section with its tasks to do and in progress in its own order, and
+ * the reader's other tasks to do and in progress grouped by repository,
+ * each child task moved under its parent
  * wherever a list holds it (`homedTaskRows`) and nested there, but one
  * pinned or put in a section of its own, which stays where it was put.
  */
@@ -127,11 +135,13 @@ export function taskTree(input: TaskTreeInput): TaskTree {
     sectionInView(drawn, DEFAULT_TASK_LIST_VIEW, readerId),
   );
 
-  const rest = tasksAssignedTo(
-    free.filter((task) => !sectioned.taskIds.has(task.id)),
-    DEFAULT_TASK_LIST_VIEW.assignedTo,
-    readerId,
-  ).filter((task) => taskInView(task, DEFAULT_TASK_LIST_VIEW));
+  const unplaced = free.filter((task) => !sectioned.taskIds.has(task.id));
+
+  const rest = tasksAssignedTo(unplaced, DEFAULT_TASK_LIST_VIEW.assignedTo, readerId).filter(
+    (task) => taskInView(task, DEFAULT_TASK_LIST_VIEW),
+  );
+
+  const followed = followingTasks(unplaced, rest, DEFAULT_TASK_LIST_VIEW, readerId);
 
   const grouped = taskSections(
     rest,
@@ -142,13 +152,31 @@ export function taskTree(input: TaskTreeInput): TaskTree {
   const groups = grouped.grouping === TASK_GROUPING.REPOSITORY ? grouped.groups : [];
 
   const homed = homedTaskRows(
-    [pinned, ...sections.map((drawn) => drawn.tasks), ...groups.map((group) => group.tasks)],
+    [
+      pinned,
+      ...sections.map((drawn) => drawn.tasks),
+      followed,
+      ...groups.map((group) => group.tasks),
+    ],
     every,
     1 + sections.length,
   );
 
+  const followingRows = drawnTaskRows(
+    homed[1 + sections.length] ?? [],
+    ALL_OPEN,
+    NONE_STANDING,
+    every,
+  );
+
   const drawn = (at: number) => drawnTaskRows(homed[at] ?? [], ALL_OPEN, NONE_STANDING, every);
-  const headings = repositoryHeadingsDrawn(groups);
+
+  // A repository group whose every task moved under a parent another list holds is left out, as the sidebar leaves it, and the headings read the groups left.
+  const homedGroups = groups
+    .map((group, at) => ({ ...group, tasks: homed[at + 2 + sections.length] ?? [] }))
+    .filter((group) => group.tasks.length > 0);
+
+  const headings = repositoryHeadingsDrawn(homedGroups);
 
   return {
     pinned:
@@ -160,6 +188,15 @@ export function taskTree(input: TaskTreeInput): TaskTree {
             title: PINNED_HEAD,
             rows: drawn(0),
           },
+    following:
+      followingRows.length === 0
+        ? undefined
+        : {
+            kind: TASK_TREE_GROUP.FOLLOWING,
+            key: TASK_TREE_GROUP.FOLLOWING,
+            title: FOLLOWING_HEAD,
+            rows: followingRows,
+          },
     sections: sections.map((section, at) => ({
       kind: TASK_TREE_GROUP.SECTION,
       key: section.section.id,
@@ -168,17 +205,36 @@ export function taskTree(input: TaskTreeInput): TaskTree {
       rows: drawn(at + 1),
     })),
     tasksHead: input.tasksHead,
-    tasks: groups.map((group, at) => ({
+    tasks: homedGroups.map((group) => ({
       kind: TASK_TREE_GROUP.REPOSITORY,
       key: group.repository ?? "",
       title: !headings
         ? undefined
         : group.repository === null
           ? input.noRepository
-          : repositoryLabel(group.repository, groups),
-      rows: drawn(at + 1 + sections.length),
+          : repositoryLabel(group.repository, homedGroups),
+      rows: drawnTaskRows(group.tasks, ALL_OPEN, NONE_STANDING, every),
     })),
   };
+}
+
+/**
+ * The groups a wide window's app sidebar lists as places of their own, as
+ * Mail lists its mailboxes: Pinned, Following, and each of the member's
+ * sections, in the tree's order, each counted by its rows. The repository
+ * groups stay under Tasks, which lists every group.
+ */
+export function taskTreeCollections(tree: TaskTree): readonly TaskTreeGroup[] {
+  return [
+    ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
+    ...tree.sections,
+  ];
+}
+
+/** The collection a sidebar row picked, by its key; none where the tree no longer holds it, such as a section deleted or the last pin taken off. */
+export function taskTreeCollection(tree: TaskTree, key: string): TaskTreeGroup | undefined {
+  return taskTreeCollections(tree).find((group) => group.key === key);
 }
 
 /**

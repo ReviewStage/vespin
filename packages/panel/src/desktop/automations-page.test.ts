@@ -1007,7 +1007,7 @@ test("an automation's toolbar too narrow for its acts' words beside its name fol
     });
 
   // A 760 window's toolbar, past the traffic lights.
-  const narrow = layContainersAt({ "automation-toolbar": 570 });
+  const narrow = layContainersAt({ "automation-toolbar": 570 }, { only: ["./desktop.css"] });
 
   try {
     act(() => relayout());
@@ -1019,7 +1019,7 @@ test("an automation's toolbar too narrow for its acts' words beside its name fol
     narrow.remove();
   }
 
-  const wide = layContainersAt({ "automation-toolbar": 1100 });
+  const wide = layContainersAt({ "automation-toolbar": 1100 }, { only: ["./desktop.css"] });
 
   try {
     act(() => relayout());
@@ -1225,7 +1225,7 @@ test("Escape keeps a new page whose schedule was changed, though nothing was typ
   const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
   await settle();
 
-  pick(page, "Repeats", "Daily");
+  pick(page, "Runs", "Daily");
   act(() => runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS));
 
   assert.equal(world.places.length, 1);
@@ -1243,7 +1243,7 @@ async function mountNewScheduled(): Promise<HTMLElement> {
 
 test("a schedule repeated weekly is saved on Monday at nine, as its day and time are first drawn", async () => {
   const page = await mountNewScheduled();
-  pick(page, "Repeats", "Weekly");
+  pick(page, "Runs", "Weekly");
   act(() => button("Create automation").click());
   await settle();
 
@@ -1557,7 +1557,7 @@ test("a schedule's time zone is saved as searched for and picked", async () => {
 
 test("a custom cron is saved as written, in the zone the schedule already had", async () => {
   const page = await mountWeeklySweep();
-  pick(page, "Repeats", "Custom");
+  pick(page, "Runs", "Custom");
   type(page.querySelector("input[aria-label='Cron']"), "15 2 * * 1-5");
   act(() => button("Save").click());
   await settle();

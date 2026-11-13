@@ -58,7 +58,12 @@ import { SANDBOX_TOUCH_EVERY } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { TURN_STATUS, valueFromJsonText, type WireRecord, type WireValue } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import { COMPACTED_PART, type StoredUIMessage } from "@repo/wire/ui-messages";
+import {
+  COMPACTED_PART,
+  GOAL_EVENT,
+  GOAL_PART,
+  type StoredUIMessage,
+} from "@repo/wire/ui-messages";
 import { MockLanguageModelV4 } from "ai/test";
 import { asc, eq } from "drizzle-orm";
 import { Clock, Duration, Effect, ErrorReporter, Layer, Option } from "effect";
@@ -846,7 +851,7 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a warm launch's IDLE settles its turn as a turn's end does and is told once, its heartbeats touch no sandbox, and the END that retires it later settles nothing more",
+    "a warm launch's IDLE settles its turn as a turn's end does, keeping the files it says the turn changed, and is told once, its heartbeats touch no sandbox, and the END that retires it later settles nothing more",
     () =>
       Effect.gen(function* () {
         const told: RunnerEnded[] = [];
@@ -860,6 +865,13 @@ it.layer(SUITE)("the runner events route", (it) => {
         const agent = yield* agentWithBearer;
         const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
 
+        const files = {
+          files: [{ path: "src/queue.ts", additions: 12, deletions: 3 }],
+          total: 1,
+          additions: 12,
+          deletions: 3,
+        };
+
         const turn = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           { type: "system", subtype: "init", ...envelope },
@@ -869,7 +881,7 @@ it.layer(SUITE)("the runner events route", (it) => {
             ...envelope,
           },
           { type: "result", subtype: "success", is_error: false, ...envelope },
-          { type: RUNNER_EVENT.IDLE },
+          { type: RUNNER_EVENT.IDLE, files },
         ];
 
         const retired = [{ type: RUNNER_EVENT.END, reason: RUNNER_END.IDLED }];
@@ -887,10 +899,18 @@ it.layer(SUITE)("the runner events route", (it) => {
         yield* post(agent.bearer, events.slice(turn.length));
         const ended = yield* transcriptOf(agent.target.conversationId);
 
+        const kept = yield* Effect.flatMap(Database, (db) =>
+          db
+            .select({ files: turns.files })
+            .from(turns)
+            .where(eq(turns.conversationId, agent.target.conversationId)),
+        );
+
         assert.deepEqual(
           idle.turns.map(({ status, failureDetail }) => ({ status, failureDetail })),
           [{ status: TURN_STATUS.SETTLED, failureDetail: null }],
         );
+        assert.deepEqual(kept, [{ files }], "the END that retired it later kept the IDLE's files");
         assert.deepEqual(idle.rows.at(-1)?.parts.map(drawn), [["step-start"], ["text", "Done."]]);
         assert.deepEqual(ended, idle);
         assert.deepEqual(
@@ -1339,6 +1359,98 @@ it.layer(SUITE)("the runner events route", (it) => {
       }),
   );
 
+  it.effect(
+    "a goal's setting, the checker's verdict, and its settling stand in its turn as goal notices, not as words",
+    () =>
+      Effect.gen(function* () {
+        const post = yield* standing;
+        const agent = yield* agentWithBearer;
+        const top = { parent_tool_use_id: null, session_id: SESSION };
+        const condition = "every billing test passes";
+
+        const messagesOfTurn = [
+          { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
+          // Claude Code's own answer to `/goal`, which it writes as a synthetic assistant message.
+          {
+            type: "assistant",
+            local_command_run: { command: "goal", args: condition },
+            message: {
+              model: "<synthetic>",
+              content: [{ type: "text", text: `Goal set: ${condition}` }],
+            },
+            ...top,
+          },
+          {
+            type: "assistant",
+            message: { id: "m1", content: [{ type: "text", text: "On it." }] },
+            ...top,
+          },
+          {
+            type: "user",
+            isSynthetic: true,
+            message: {
+              role: "user",
+              content: [
+                { type: "text", text: `Stop hook feedback:\n[${condition}]: 2 tests still fail.` },
+              ],
+            },
+            ...top,
+          },
+          {
+            type: RUNNER_EVENT.GOAL,
+            event: GOAL_EVENT.MET,
+            condition,
+            reason: "All pass.",
+            turns: 2,
+            tokens: 900,
+            tokenBudget: null,
+          },
+          { type: "result", subtype: "success", is_error: false, ...top },
+          { type: RUNNER_EVENT.END, reason: RUNNER_END.TURN_ENDED },
+        ];
+
+        // SAFETY: each message above is one the pinned SDK or the runner emits, written in its JSON shape.
+        const events = messagesOfTurn.map(
+          (message, sequence) => ({ sequence, message }) as RunnerEvent,
+        );
+
+        yield* post(agent.bearer, events);
+        const { rows } = yield* transcriptOf(agent.target.conversationId);
+        const parts = rows.flatMap((row) => row.parts);
+        assert.deepEqual(
+          parts.flatMap((part) => (part.type === GOAL_PART && "data" in part ? [part.data] : [])),
+          [
+            {
+              event: GOAL_EVENT.SET,
+              condition,
+              reason: null,
+              turns: null,
+              tokens: null,
+              tokenBudget: null,
+            },
+            {
+              event: GOAL_EVENT.NOT_MET,
+              condition,
+              reason: "2 tests still fail.",
+              turns: null,
+              tokens: null,
+              tokenBudget: null,
+            },
+            {
+              event: GOAL_EVENT.MET,
+              condition,
+              reason: "All pass.",
+              turns: 2,
+              tokens: 900,
+              tokenBudget: null,
+            },
+          ],
+        );
+        // The CLI's answer to `/goal` is the goal's notice alone, not words of the agent's.
+        assert.ok(!JSON.stringify(parts).includes("Goal set:"));
+      }),
+  );
+
   it.effect("a compaction that failed is why its failed turn says it failed", () =>
     Effect.gen(function* () {
       const post = yield* standing;
@@ -1436,7 +1548,7 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a Vespin tool's pictures stay out of its stored answer, and a CLI tool's stand in for theirs",
+    "a Vespin tool's pictures and the words the CLI saves them under stay out of its stored answer, and a CLI tool's pictures stand in for theirs",
     () =>
       Effect.gen(function* () {
         const post = yield* standing;
@@ -1479,7 +1591,12 @@ it.layer(SUITE)("the runner events route", (it) => {
                 {
                   type: "tool_result",
                   tool_use_id: "toolu_look",
-                  content: [{ type: "text", text: '{"status":"looked"}' }, image],
+                  // Note that the CLI writes where it saved the picture after it, as 2.1.322 does.
+                  content: [
+                    { type: "text", text: '{"status":"looked"}' },
+                    image,
+                    { type: "text", text: "[Image: source: /home/agent/.claude/shot.png]" },
+                  ],
                 },
               ],
             },

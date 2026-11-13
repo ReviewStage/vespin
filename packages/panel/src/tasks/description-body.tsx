@@ -17,11 +17,14 @@ import {
 import { agoText, dateOfText, momentText, sinceText } from "@repo/features/time-format";
 import { readingWords } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   Button,
   DocumentRule,
   EDITABLE_BLOCK_CLASS,
   IconButton,
+  RevealArea,
+  revealArea,
   SavedTick,
   Skeleton,
   SkeletonRegion,
@@ -54,10 +57,12 @@ import {
 } from "react";
 import { KEPT, type Kept, notKept } from "../act.js";
 import { ActorStack } from "../actor-ref.js";
+import { useAppCommand } from "../app-commands.js";
 import { LINK_COPY, useCopyToast } from "../copy-feedback.js";
 import {
   DESCRIPTION_PLACEHOLDER,
   type DescriptionEditorHandle,
+  HISTORY_STEP,
 } from "../description-editor/contract.js";
 import { useEditedLinksHost } from "../link-menu.js";
 import {
@@ -1138,7 +1143,7 @@ function DescriptionBodyColumn({
   children: React.ReactNode;
 }): React.JSX.Element {
   return (
-    <div ref={ref} className={BODY_CLASS}>
+    <div ref={ref} className={BODY_CLASS} {...revealArea()}>
       {children}
     </div>
   );
@@ -1244,6 +1249,7 @@ export const DescriptionBody = memo(function DescriptionBody({
   agents,
   standing: taskStanding,
   head,
+  intro,
   titleActions = true,
   shown = true,
 }: {
@@ -1270,6 +1276,8 @@ export const DescriptionBody = memo(function DescriptionBody({
   standing?: TaskStandingDoor;
   /** What the task's own page draws at the head of its text, under its byline, as its agents, in the room the document gives it; nothing elsewhere. A key on it is its own, so the page may key it by the task. */
   head?: ((room: DescriptionRoom) => React.ReactNode) | undefined;
+  /** The page's first-visit card (`PageIntro`), right under the head's rule and over the text, where the description is drawn; nothing elsewhere. */
+  intro?: React.ReactNode;
   /** Whether the title draws its ⋯; a phone's task draws none, its header's ⋯ holding all it offers (`task-pane-switcher.tsx`). */
   titleActions?: boolean;
   /** Whether the description is the tab its column shows, rather than kept hidden behind another; shown unless said. */
@@ -1399,6 +1407,47 @@ export const DescriptionBody = memo(function DescriptionBody({
 
     return () => window.removeEventListener("keydown", select);
   }, [editable]);
+
+  // ⌘Z and ⇧⌘Z in the drawn text open the editor a step back or forward
+  // through the history it left as it closed, while the text is still the one
+  // it left, as a document editor's undo reaches the page whether or not the
+  // caret is in it. Note that they are offered only while the focus stands on
+  // the page or nowhere, where they answer over the window's own undo, and a
+  // field's typing keeps its own.
+  const onPage = useCallback(() => {
+    const focused = document.activeElement;
+
+    return (
+      focused === null || focused === document.body || scroller.current?.contains(focused) === true
+    );
+  }, []);
+
+  const [focusOnPage, setFocusOnPage] = useState(onPage);
+  useEffect(() => {
+    if (!editable) return;
+    const heard = () => setFocusOnPage(onPage());
+    document.addEventListener("focusin", heard);
+    document.addEventListener("focusout", heard);
+
+    return () => {
+      document.removeEventListener("focusin", heard);
+      document.removeEventListener("focusout", heard);
+    };
+  }, [editable, onPage]);
+
+  const stepping =
+    editable && shown && focusOnPage && editing.editor === undefined ? editing.history : undefined;
+
+  useAppCommand(
+    APP_COMMAND.UNDO,
+    stepping?.undoes === true ? () => editing.stepHistory(HISTORY_STEP.UNDO) : undefined,
+    onPage,
+  );
+  useAppCommand(
+    APP_COMMAND.REDO,
+    stepping?.redoes === true ? () => editing.stepHistory(HISTORY_STEP.REDO) : undefined,
+    onPage,
+  );
 
   // An ask to show a section scrolls the document's own scroller to it, or
   // to the top where the description no longer holds it.
@@ -1667,88 +1716,92 @@ export const DescriptionBody = memo(function DescriptionBody({
       />
     );
 
+  // Note that the column is a reveal area, so the intro rolls up as Got it is pressed and the text closes over it.
   const column = (
     <DocumentScroll ref={scroller}>
-      <DescriptionBodyColumn ref={bodyHost}>
-        <WordsDatePickerRoom>
-          {taskStanding === undefined ? null : <TaskPath task={task} door={taskStanding} />}
-          {titled ? (
-            // Keyed by the plan, so words typed for one are saved to it as another opens.
-            <EditableTitle
-              key={task.id}
-              // A refused name stays in the title, beside the refusal, until the next rename.
-              name={rename?.asked ?? task.name}
-              entry={entry === EDITOR_PLACE.TITLE}
-              editing={editing}
-              alone={!documented}
-              actions={titleMenu}
-              onRename={onRename}
-              onDraft={onDraftName}
-            />
-          ) : (
-            <TaskTitle name={task.name} actions={titleMenu} />
-          )}
-          {taskStanding === undefined ? null : (
-            <TaskStandingChips
-              task={task}
-              onSet={taskStanding.onSet}
-              relations={taskStanding.relations}
-              inSight={taskStanding.inSight}
-            />
-          )}
-          <DescriptionByline
-            task={task}
-            onSince={documented ? onSince : undefined}
-            edit={documented ? edited : undefined}
-            place={place}
-            saves={documented ? editing.saves : undefined}
-            onShowHistory={onShowHistory}
-            onPreloadHistory={onPreloadHistory}
-            comments={documented && commentsHere}
-          />
-          {documented ? <ChangedLine looks={looks} marks={marks} /> : null}
-          <Fragment key={HEAD_KEY}>{head?.(room)}</Fragment>
-          {/* A hairline parts the head from the description's text, as Notion's parts a page's properties from its body. */}
-          {documented ? <DocumentRule /> : null}
-          {!documented || units === undefined ? null : editing.editor === undefined ? (
-            editable && views.length === 0 ? (
-              <EmptyDocumentBlock entry={entry === EDITOR_PLACE.EMPTY} editing={editing}>
-                <EmptyDescriptionWords />
-              </EmptyDocumentBlock>
+      <RevealArea root={body}>
+        <DescriptionBodyColumn ref={bodyHost}>
+          <WordsDatePickerRoom>
+            {taskStanding === undefined ? null : <TaskPath task={task} door={taskStanding} />}
+            {titled ? (
+              // Keyed by the plan, so words typed for one are saved to it as another opens.
+              <EditableTitle
+                key={task.id}
+                // A refused name stays in the title, beside the refusal, until the next rename.
+                name={rename?.asked ?? task.name}
+                entry={entry === EDITOR_PLACE.TITLE}
+                editing={editing}
+                alone={!documented}
+                actions={titleMenu}
+                onRename={onRename}
+                onDraft={onDraftName}
+              />
             ) : (
-              sections
-            )
-          ) : (
-            <DescriptionDocumentEditor
+              <TaskTitle name={task.name} actions={titleMenu} />
+            )}
+            {taskStanding === undefined ? null : (
+              <TaskStandingChips
+                task={task}
+                onSet={taskStanding.onSet}
+                relations={taskStanding.relations}
+                inSight={taskStanding.inSight}
+              />
+            )}
+            <DescriptionByline
               task={task}
-              editor={editing.editor}
-              editing={editing}
-              drawn={views.length === 0 ? <EmptyDescriptionWords /> : sections}
-              hostOf={editorHostOf}
-              mentions={mentionDoors}
-              scroller={scroller}
-              handle={editorHandle}
-              closedOn={closedOn}
-              onComment={drawnSections === undefined ? undefined : commentOnWords}
+              onSince={documented ? onSince : undefined}
+              edit={documented ? edited : undefined}
+              place={place}
+              saves={documented ? editing.saves : undefined}
+              onShowHistory={onShowHistory}
+              onPreloadHistory={onPreloadHistory}
+              comments={documented && commentsHere}
             />
-          )}
-          {!documented ||
-          comments === undefined ||
-          !commentsHere ||
-          drawnSections === undefined ? null : (
-            <DescriptionCommentLayer
-              body={body}
-              scroller={scroller}
-              shown={shown}
-              unitClass={UNIT_CLASS}
-              sections={drawnSections}
-              text={task.document.body}
-              doors={{ control: comments, agents, me: reader.readerId }}
-              editor={editing.editor === undefined ? undefined : editorHandle}
-            />
-          )}
-        </WordsDatePickerRoom>
-      </DescriptionBodyColumn>
+            {documented ? <ChangedLine looks={looks} marks={marks} /> : null}
+            <Fragment key={HEAD_KEY}>{head?.(room)}</Fragment>
+            {/* A hairline parts the head from the description's text, as Notion's parts a page's properties from its body. */}
+            {documented ? <DocumentRule /> : null}
+            {documented ? intro : null}
+            {!documented || units === undefined ? null : editing.editor === undefined ? (
+              editable && views.length === 0 ? (
+                <EmptyDocumentBlock entry={entry === EDITOR_PLACE.EMPTY} editing={editing}>
+                  <EmptyDescriptionWords />
+                </EmptyDocumentBlock>
+              ) : (
+                sections
+              )
+            ) : (
+              <DescriptionDocumentEditor
+                task={task}
+                editor={editing.editor}
+                editing={editing}
+                drawn={views.length === 0 ? <EmptyDescriptionWords /> : sections}
+                hostOf={editorHostOf}
+                mentions={mentionDoors}
+                scroller={scroller}
+                handle={editorHandle}
+                closedOn={closedOn}
+                onComment={drawnSections === undefined ? undefined : commentOnWords}
+              />
+            )}
+            {!documented ||
+            comments === undefined ||
+            !commentsHere ||
+            drawnSections === undefined ? null : (
+              <DescriptionCommentLayer
+                body={body}
+                scroller={scroller}
+                shown={shown}
+                unitClass={UNIT_CLASS}
+                sections={drawnSections}
+                text={task.document.body}
+                doors={{ control: comments, agents, me: reader.readerId }}
+                editor={editing.editor === undefined ? undefined : editorHandle}
+              />
+            )}
+          </WordsDatePickerRoom>
+        </DescriptionBodyColumn>
+      </RevealArea>
       {/* Files carried over the text, drawn or open, are taken anywhere over it, a line marking where they land. */}
       <TextFileDrop
         body={body}
@@ -1765,6 +1818,7 @@ export const DescriptionBody = memo(function DescriptionBody({
       taskId={task.id}
       text={task.document.body}
       sectionNote={(heading) => pictureNoteOf(marks, heading)}
+      editable={editable}
     >
       {column}
     </DescriptionPictures>

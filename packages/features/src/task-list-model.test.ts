@@ -188,6 +188,23 @@ test("the rows assigned to one member are the tasks they are on, and every row f
   expect(tasksAssignedTo(rows, { kind: ASSIGNED_TO.ANYONE }, DEAN)).toHaveLength(2);
 });
 
+test("Following holds the tasks the reader follows, whoever is on them", () => {
+  const rows = [
+    {
+      ...assigned("Dean's on it, Charles follows", 10, DEAN, DEAN),
+      followers: [
+        { userId: DEAN, assignee: true, machines: true },
+        { userId: CHARLES, assignee: false, machines: false },
+      ],
+    },
+    assigned("Charles is on it, follows nothing", 20, CHARLES, CHARLES),
+  ];
+
+  expect(
+    tasksAssignedTo(rows, { kind: ASSIGNED_TO.FOLLOWING }, CHARLES).map((each) => each.name),
+  ).toEqual(["Dean's on it, Charles follows"]);
+});
+
 test("Me holds the reader's tasks and the tasks no one is on that they created, but not a teammate's unassigned task or one they made for someone else", () => {
   const rows = [
     assigned("Charles made it, Dean's on it", 10, DEAN, CHARLES),

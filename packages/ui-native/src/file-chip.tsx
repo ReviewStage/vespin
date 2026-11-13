@@ -15,9 +15,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView, type WebViewNavigation } from "react-native-webview";
 import { useAccessibilitySize } from "./accessibility.js";
+import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -25,11 +25,11 @@ import { TEXT_SIZE } from "./tokens/type.js";
 /** The type a PDF is read as, which its chip names as a PDF. */
 const PDF_TYPE = "application/pdf";
 
-/** The SF Symbol a file's chip leads with: a page of words for a PDF or a text file, a blank page for any other. */
+/** The glyph a file's chip leads with, as the panel's: a page of words for a PDF or a text file, a blank page for any other. */
 const FILE_SYMBOL = {
-  DOCUMENT: "doc.text",
-  OTHER: "doc",
-} as const satisfies Record<string, SfSymbol>;
+  DOCUMENT: GLYPH.FILE_TEXT,
+  OTHER: GLYPH.FILE,
+} as const satisfies Record<string, Glyph>;
 
 /** What a file's chip and its viewer say. */
 const FILE_WORDS = {
@@ -209,7 +209,7 @@ function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
             style={[styles.barPress, styles.barEnd]}
           >
             <SymbolView
-              name="square.and.arrow.up"
+              name={glyphSymbol(GLYPH.SHARE)}
               size={MARK_SIZE.LEAD + 2}
               tintColor={colors.TEXT}
             />
@@ -315,7 +315,7 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
             <ActivityIndicator color={colors.TEXT_MUTED} style={{ width: MARK_SIZE.LEAD }} />
           ) : (
             <SymbolView
-              name={isDocument(mediaType) ? FILE_SYMBOL.DOCUMENT : FILE_SYMBOL.OTHER}
+              name={glyphSymbol(isDocument(mediaType) ? FILE_SYMBOL.DOCUMENT : FILE_SYMBOL.OTHER)}
               size={MARK_SIZE.LEAD}
               tintColor={colors.TEXT_MUTED}
             />

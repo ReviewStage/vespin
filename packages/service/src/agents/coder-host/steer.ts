@@ -20,7 +20,7 @@ import { readConversationPicture } from "@repo/database/models/conversation-pict
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { readTaskDescription } from "@repo/database/models/task-store";
-import { releaseWaitedTurns } from "@repo/database/models/turn-state";
+import { releaseWaitedTurns, type WaitedTurn } from "@repo/database/models/turn-state";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import {
   type AwaitingLineMetadata,
@@ -39,7 +39,6 @@ import { MENTION_KIND, withoutMemberLinks } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
-import { EXPERIMENT } from "@repo/settings";
 import { sentLineId } from "@repo/wire/host-ids";
 import { Clock, Effect, Option, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -60,6 +59,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { agentSpansAnnotated } from "../../observability/sentry.js";
+import { followAsMessaged } from "../../tasks/task-following.js";
 import { controlsAgent, writesToAgent } from "../agent-reach.js";
 import { keptHandedImages, senderLabel, turnContent } from "../attached-files.js";
 import { mentionedContext, mentionedServers, NO_MENTIONED_READS } from "../mentioned-context.js";
@@ -73,7 +73,7 @@ import {
   type SessionUnreachable,
   type TypedTurn,
 } from "../sessions/agent-sessions.js";
-import { experimentOnIn } from "../workspace-experiment-on.js";
+import { experimentsOnIn } from "../workspace-experiment-on.js";
 import { workspaceStepOf, writtenMention } from "../written-mentions.js";
 import { messageCredentialMissing } from "./agent-runtime-choice.js";
 import { harnessOf, nativeRuntimeOfSession } from "./native-runtime.js";
@@ -161,6 +161,8 @@ export interface SteerLine {
   readonly serverWords?: string | undefined;
   /** The words what the line mentions is read from where they are not all of `text`: a Start's own prompt, never a source agent's replay beside it, and none at all for a Start handed only the description; `text` otherwise. */
   readonly mentionWords?: string | undefined;
+  /** The caller's lines of a call the line is, by the keys they were recorded under, oldest first: a delegation's, which starts its turn on those rows, under the newest's key, rather than writing its words again. */
+  readonly adopts?: readonly string[] | undefined;
 }
 
 /** Another coding agent as the row of a line it sends keeps it: by its name, id, and model. */
@@ -441,6 +443,7 @@ const heldWhileBooting = Effect.fnUntraced(function* (
         ...(line.metadata === undefined ? undefined : { metadata: line.metadata }),
         ...(line.serverWords === undefined ? undefined : { serverWords: line.serverWords }),
         ...(line.mentionWords === undefined ? undefined : { mentionWords: line.mentionWords }),
+        ...(line.adopts === undefined ? undefined : { adopts: line.adopts }),
       },
     }),
   );
@@ -478,13 +481,17 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   writer: Effect.Effect<StoreWriter>,
   userId: string,
   agent: Agent,
-  line: SteerLine,
+  asked: SteerLine,
   delivery: SteerDelivery = STEER_DELIVERY.HELD_WHILE_BOOTING,
 ): Effect.fn.Return<
   SteerWritten,
   HostedRefusal,
   DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox
 > {
+  // Note that a delegation goes under its newest line's key, so the row it adopts is the line the harness names back as its turn takes it.
+  const newest = asked.adopts?.at(-1);
+  const line = newest === undefined ? asked : { ...asked, clientKey: newest };
+
   // An agent on its starter's own GitHub token, or on its starter's Mac, takes words from its starter alone.
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   // The line is written in the agent's conversation, which is its starter's whichever member sends it.
@@ -530,7 +537,9 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
   if (delivery === STEER_DELIVERY.HELD_WHILE_BOOTING) {
-    const queued = yield* heldWhileBooting(userId, agent, line);
+    // Note that a held delegation waits under the send's own key, never its newest line's, because an edit in the
+    // queue drops the lines it names, and the edit's words would then find that line's row and go as a repeat.
+    const queued = yield* heldWhileBooting(userId, agent, asked);
 
     if (queued !== undefined) return queued;
   }
@@ -596,14 +605,18 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
 
   const reads = yield* Effect.fromResult(reached.reads);
 
-  const mentioned = reviewers
-    ? undefined
-    : mentionedContext(
-        pointed,
-        task,
-        reads,
-        yield* experimentOnIn(agent.organizationId, EXPERIMENT.DESCRIPTIONS),
-      );
+  const experiments = reviewers ? undefined : yield* experimentsOnIn(agent);
+
+  const mentioned =
+    experiments === undefined
+      ? undefined
+      : mentionedContext(
+          pointed,
+          task,
+          reads,
+          experiments.descriptionsOn,
+          experiments.computerUseOn,
+        );
 
   const running = yield* Effect.fromResult(read.running);
   const label = yield* Effect.fromResult(read.label);
@@ -621,6 +634,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   const message = {
     conversationId: agent.conversationId,
     turn: SESSION_TURN.TYPED,
+    ...(line.metadata?.channel === MESSAGE_CHANNEL.VOICE ? { spoken: true } : undefined),
     message: turnContent(line.text, attachments, mentioned, label),
     // The line's own id, which a native harness's runner names back as it takes the message.
     lineId: sentLineId(line.clientKey),
@@ -766,6 +780,12 @@ const lostLineMessage = (target: ConversationTarget, agent: Agent, line: LostLin
     const message: SessionMessage<TypedTurn> = {
       conversationId: target.conversationId,
       turn: SESSION_TURN.TYPED,
+      // Note that a row's metadata may be a runtime note, which names no channel.
+      ...(line.metadata !== null &&
+      "channel" in line.metadata &&
+      line.metadata.channel === MESSAGE_CHANNEL.VOICE
+        ? { spoken: true }
+        : undefined),
       message: turnContent(read.text, files.flat(), read.mentioned, label),
       lineId: line.clientId,
     };
@@ -854,6 +874,21 @@ export const resumeWaitedTurns = /* @__PURE__ */ Effect.fn("web/resumeWaitedTurn
   now: number,
 ) {
   const released = yield* releaseWaitedTurns(new Date(now), WAITED_TURNS.RESUME_LIMIT);
+  yield* handWaitedTurnsOn(released);
+
+  return released.length;
+});
+
+/**
+ * Turns whose wait for a limit's reset was cleared handed on as its reset
+ * does: a queued turn published for its pickup, and a running one handed to
+ * a launch as a limited turn's retry (`turnRetried`), past the answer, since
+ * a launch may take most of a minute. Both the sweep, once a reset passes,
+ * and a reset credit spent before it (`chatgpt-reset-credits.ts`) hand theirs on so.
+ */
+export const handWaitedTurnsOn = /* @__PURE__ */ Effect.fnUntraced(function* (
+  released: readonly WaitedTurn[],
+) {
   const queue = yield* TurnQueue;
   yield* Effect.forEach(
     released,
@@ -876,8 +911,6 @@ export const resumeWaitedTurns = /* @__PURE__ */ Effect.fn("web/resumeWaitedTurn
           ),
     { discard: true },
   );
-
-  return released.length;
 });
 
 /**
@@ -987,6 +1020,9 @@ export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords"
     ...line,
     sender: { kind: MESSAGE_SENDER.MEMBER, userId },
   });
+
+  // A member who messages one of the task's agents follows the task, with their machines on where they did not yet; a repeat wrote nothing new.
+  if (written.outcome !== STEER_OUTCOME.REPEATED) yield* followAsMessaged(userId, agent.taskId);
 
   if (written.sent !== undefined) {
     yield* recordServerEvent(

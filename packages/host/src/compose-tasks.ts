@@ -1,4 +1,9 @@
-import type { HostedTaskClient, TaskCallResult, TaskWritten } from "@repo/features";
+import type {
+  FollowersWritten,
+  HostedTaskClient,
+  TaskCallResult,
+  TaskWritten,
+} from "@repo/features";
 import {
   type AgentBrowserTab,
   BROWSER_TABS_PLACE,
@@ -49,15 +54,20 @@ import {
 } from "@repo/features/task-wire";
 import {
   type CodeLines,
+  FOLLOWER_CALL_FAILURE,
+  type FollowerCallFailure,
   HOST_LIVE,
   IDLE_TASKS_VIEW,
   TASK_CALL_FAILURE,
   TASKS_READ,
+  type TasksAddFollowerParams,
   type TasksBlockAnswer,
   type TasksBlockParams,
   type TasksChangeRelationAnswer,
   type TasksChangeRelationParams,
   type TasksCommentAnswer,
+  type TasksFollowersAnswer,
+  type TasksFollowParams,
   type TasksMarkReadParams,
   type TasksMoveAnswer,
   type TasksMoveParams,
@@ -66,6 +76,7 @@ import {
   type TasksPageSourceAnswer,
   type TasksPinParams,
   type TasksRenameParams,
+  type TasksSetFollowerMachinesParams,
   type TasksSetParentAnswer,
   type TasksSetParentParams,
   type TasksSetRepositoryAnswer,
@@ -90,7 +101,7 @@ import {
   ROW_GONE,
   type WriteDeclaration,
 } from "@repo/sync";
-import { keepIdentity } from "@repo/wire";
+import { keepIdentity, type TaskFollowerWire } from "@repo/wire";
 import {
   Cache,
   Clock,
@@ -377,6 +388,10 @@ export type TasksClient = Pick<
   | "setStanding"
   | "move"
   | "edit"
+  | "follow"
+  | "unfollow"
+  | "setFollowerMachines"
+  | "addFollower"
 >;
 
 export interface TasksDependencies {
@@ -474,9 +489,40 @@ interface RelationChange {
   readonly reach: RelationReach;
 }
 
+/** `ids` with `id` added at its end or taken away, as a block is. */
+function blockIdsMoved(ids: readonly string[], id: string, added: boolean): string[] {
+  const rest = ids.filter((each) => each !== id);
+
+  return added ? [...rest, id] : rest;
+}
+
 /**
- * What one side of a relation leaves of a row of the list: the waiting
- * task's `blocked`, or the child's parent, as its kind names them, and
+ * What a block added or taken away leaves of either task's lists of blocks:
+ * the waiting task's `blockedBy`, and the blocker's `blocks`. Note that a
+ * row that carries no list, from a service before rows carried them, is
+ * left without one, because the change drawn over nothing would read as the
+ * whole list and hide the blocks the row never named.
+ */
+function blockListFields(
+  row: PlanRow,
+  waiting: string,
+  blocker: string,
+  added: boolean,
+): Partial<PlanRow> {
+  if (row.id === waiting && row.blockedBy !== undefined) {
+    return { blockedBy: blockIdsMoved(row.blockedBy, blocker, added) };
+  }
+
+  if (row.id === blocker && row.blocks !== undefined) {
+    return { blocks: blockIdsMoved(row.blocks, waiting, added) };
+  }
+
+  return {};
+}
+
+/**
+ * What one side of a relation leaves of a row of the list: either task's
+ * lists of blocks and the waiting task's `blocked`, or the child's parent, as its kind names them, and
  * nothing of any other row. Note that a block taken away clears `blocked`
  * only where the waiting task's other blockers are known, as the open
  * task's are, because elsewhere another may still hold it back; the list
@@ -493,17 +539,19 @@ function relationFields(
       const [waiting, blocker] =
         side.kind === TASK_RELATION_KIND.BLOCKED_BY ? [taskId, otherId] : [otherId, taskId];
 
-      if (row.id !== waiting || !reach.blocking.includes(blocker)) return {};
+      const lists = blockListFields(row, waiting, blocker, side.added);
+
+      if (row.id !== waiting || !reach.blocking.includes(blocker)) return lists;
 
       const others =
         reach.opened?.taskId === waiting
           ? reach.opened.blockedBy.filter((id) => id !== blocker)
           : undefined;
 
-      if (!side.added && others === undefined) return {};
+      if (!side.added && others === undefined) return lists;
       const blocked = side.added || (others ?? []).some((id) => reach.blocking.includes(id));
 
-      return blocked === (row.blocked === true) ? {} : { blocked };
+      return blocked === (row.blocked === true) ? lists : { ...lists, blocked };
     }
 
     case TASK_RELATION_KIND.SUB_TASK:
@@ -568,6 +616,32 @@ function withOlderPage(
   const revisions = [...held.revisions.filter((line) => line.seq >= before), ...page.revisions];
 
   return page.earlier === undefined ? { revisions } : { revisions, earlier: page.earlier };
+}
+
+/** One follower as a task's row holds them: their account, and their machines switch. */
+type RowFollower = Pick<TaskFollowerWire, "userId" | "machines">;
+
+/** Who the reader is, read as a write of their own is asked; none while nobody is signed in, when it draws nothing. */
+interface ReaderStamp {
+  readonly readerId: string | undefined;
+}
+
+/** A row's followers, the earliest first; none while its workspace has Following off. */
+function rowFollowersOf(row: PlanRow): readonly RowFollower[] | undefined {
+  const ids = row.followerIds;
+
+  if (ids === undefined || ids === null) return undefined;
+  const machines = row.followerMachines ?? [];
+
+  return ids.map((userId, index) => ({ userId, machines: machines[index] === true }));
+}
+
+/** The row's fields that hold its followers, in their order. */
+function rowFollowerFields(followers: readonly RowFollower[]): Partial<PlanRow> {
+  return {
+    followerIds: followers.map((each) => each.userId),
+    followerMachines: followers.map((each) => each.machines),
+  };
 }
 
 /**
@@ -1190,8 +1264,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
           yield* resendQueued;
         }),
-      // A list that could not be read says so beside the tasks it already drew rather than emptying them.
-      failed: () => write({ listStatus: TASKS_READ.FAILED, live: HOST_LIVE.OFFLINE }),
+      // A list that could not be read says so beside the tasks it already drew rather than emptying them. Note that it says nothing of the service's reach, which the network watch hears from every call, because a read the service refused was still answered.
+      failed: () => write({ listStatus: TASKS_READ.FAILED }),
       // A list that may be behind keeps drawing what it had, and says it is catching up until the next lands.
       behind: () => write({ live: HOST_LIVE.CATCHING_UP }),
       onTxWait: (wait) => {
@@ -1353,7 +1427,9 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    * where the list holds no row of it. Note that the row is the whole of
    * what the task carries but its description, so a field the row leaves out is one
    * the task no longer has, and that the last save is the description's own, kept
-   * with its body, as are its blocks, which a row of the list never carries.
+   * with its body. Its blocks are the row's where the row carries them, an
+   * empty list among them, and the description's from a service whose rows
+   * carry none.
    */
   function asListed(task: Task): Task {
     const listed = view.tasks.find((row) => row.id === task.id);
@@ -1369,8 +1445,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       ...(agentEdits === undefined ? undefined : { agentEdits }),
       ...(lastEdit === undefined ? undefined : { lastEdit }),
       ...(sectionEdits === undefined ? undefined : { sectionEdits }),
-      ...(blockedBy === undefined ? undefined : { blockedBy }),
-      ...(blocks === undefined ? undefined : { blocks }),
+      ...(row.blockedBy === undefined && blockedBy !== undefined ? { blockedBy } : undefined),
+      ...(row.blocks === undefined && blocks !== undefined ? { blocks } : undefined),
     };
   }
 
@@ -1432,6 +1508,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       parentTaskId: task.parentTaskId ?? null,
       ...(task.mode === undefined ? undefined : { mode: task.mode }),
       ...((task.blockedBy ?? []).some(blocksNow) ? { blocked: true } : undefined),
+      ...(task.blockedBy === undefined ? undefined : { blockedBy: task.blockedBy }),
+      ...(task.blocks === undefined ? undefined : { blocks: task.blocks }),
     };
   }
 
@@ -1509,6 +1587,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       ...(related(TASK_CREATE_RELATION_KIND.BLOCKED_BY).some(blocksNow)
         ? { blocked: true }
         : undefined),
+      blockedBy: related(TASK_CREATE_RELATION_KIND.BLOCKED_BY),
+      blocks: related(TASK_CREATE_RELATION_KIND.BLOCKS),
     };
   }
 
@@ -2098,6 +2178,94 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     refused: (failure): TasksChangeRelationAnswer => ({ failure }),
   });
 
+  /**
+   * A follower write, the reader's own follow, unfollow, or switch, or
+   * another member added, drawn on the task's row at once over the
+   * followers the row holds, and the followers the service answered taken in
+   * its place. A row whose workspace has Following off holds no followers,
+   * so nothing is drawn on it.
+   */
+  const followersChanged = <Input extends { readonly taskId: string }>(declared: {
+    readonly drawn: (input: Input) => (followers: readonly RowFollower[]) => readonly RowFollower[];
+    readonly call: (
+      input: Input,
+    ) => Effect.Effect<
+      TaskCallResult<FollowersWritten, FollowerCallFailure>,
+      never,
+      HttpClient.HttpClient
+    >;
+  }): WriteDeclaration<PlanRow, FieldChange<PlanRow>, Input, TasksFollowersAnswer> => ({
+    kind: PLAN,
+    keys: (input) => [input.taskId],
+    change: (input) => (row) => {
+      const followers = rowFollowersOf(row);
+
+      return row.id !== input.taskId || followers === undefined
+        ? {}
+        : rowFollowerFields(declared.drawn(input)(followers));
+    },
+    send: (input) =>
+      gate()
+        ? serial(
+            Effect.map(served(declared.call(input)), (changed) => {
+              if (!changed.ok) return { refused: { failure: changed.failure } };
+              const { followers, txid } = changed.answer;
+
+              return {
+                answer: { followers },
+                txid,
+                taken: (row: PlanRow) =>
+                  row.id === input.taskId ? rowFollowerFields(followers) : {},
+              };
+            }),
+          )
+        : Effect.succeed({ refused: { failure: FOLLOWER_CALL_FAILURE.UNANSWERED } }),
+  });
+
+  /** The reader follows the task, its machines off, drawn last among its followers; one following already stands as it was. */
+  const followed = followersChanged({
+    drawn:
+      ({ readerId }: TasksFollowParams & ReaderStamp) =>
+      (followers) =>
+        readerId === undefined || followers.some((each) => each.userId === readerId)
+          ? followers
+          : [...followers, { userId: readerId, machines: false }],
+    call: ({ taskId }) => client.follow(taskId),
+  });
+
+  /** The reader stops following the task, drawn gone from its followers. */
+  const unfollowed = followersChanged({
+    drawn:
+      ({ readerId }: TasksFollowParams & ReaderStamp) =>
+      (followers) =>
+        followers.filter((each) => each.userId !== readerId),
+    call: ({ taskId }) => client.unfollow(taskId),
+  });
+
+  /** The reader's own switch on the task, drawn on its follower at once. */
+  const machinesSet = followersChanged({
+    drawn:
+      ({ readerId, machines }: TasksSetFollowerMachinesParams & ReaderStamp) =>
+      (followers) =>
+        followers.map((each) => (each.userId === readerId ? { ...each, machines } : each)),
+    call: ({ taskId, machines }) => client.setFollowerMachines(taskId, machines),
+  });
+
+  /** Another member added as a follower, their machines off, drawn last among the followers; one following already stands as it was. */
+  const followerAdded = followersChanged({
+    drawn:
+      ({ userId }: TasksAddFollowerParams) =>
+      (followers) =>
+        followers.some((each) => each.userId === userId)
+          ? followers
+          : [...followers, { userId, machines: false }],
+    call: ({ taskId, userId }) => client.addFollower(taskId, userId),
+  });
+
+  // A write of the reader's own reads, as it is asked, who the reader is, which its draw names.
+  const stampReader = <Read>(read: Read) =>
+    Effect.sync(() => ({ ...read, readerId: dependencies.accountId() }));
+
   /** What the list knows now of the two tasks a relation joins, which its draw reads. */
   function relationReachOf(taskId: string, otherId: string): RelationReach {
     const openId = view.activeTaskId;
@@ -2405,6 +2573,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         Effect.sync(() => ({ ...read, reach: relationReachOf(read.taskId, read.block.taskId) })),
     }),
     TASKS_SET_PARENT: declaredWrite(dependencies.pool, parentSet),
+    TASKS_FOLLOW: declaredWrite(dependencies.pool, followed, { read: stampReader }),
+    TASKS_UNFOLLOW: declaredWrite(dependencies.pool, unfollowed, { read: stampReader }),
+    TASKS_SET_FOLLOWER_MACHINES: declaredWrite(dependencies.pool, machinesSet, {
+      read: stampReader,
+    }),
+    TASKS_ADD_FOLLOWER: declaredWrite(dependencies.pool, followerAdded),
     TASKS_CHANGE_RELATION: declaredWrite(dependencies.pool, relationChanged, {
       read: (read) =>
         Effect.sync(() => ({

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { ServiceReach } from "@repo/features";
+import { type AgentBoot, BOOT_PHASE } from "@repo/features/agent-boot";
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND, TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   AGENT_BOUNDS,
@@ -33,6 +34,7 @@ import {
 import { GATEWAY_METHOD } from "@repo/gateway";
 import { entityPool } from "@repo/sync";
 import { isRecord, type WireRecord, type WireValue } from "@repo/wire";
+import { sentLineId } from "@repo/wire/host-ids";
 import { Deferred, Duration, Effect, Exit, Fiber, Predicate, Scope, SubscriptionRef } from "effect";
 import { TestClock } from "effect/testing";
 import type { AppTranscript } from "./app-state.js";
@@ -730,15 +732,21 @@ const EDITED = {
 };
 
 /** A held transcript whose newest page and first page past it carry the queue holding "Run the tests" at its first revision. */
-function queueFollowed() {
+function queueFollowed(accountId?: () => string | undefined, boot?: AgentBoot) {
   return Effect.gen(function* () {
-    const harness = yield* subject();
+    const harness = yield* subject(accountId === undefined ? {} : { accountId });
+    const booted = boot === undefined ? {} : { boot };
     harness.sealTranscript(LIVE_ANSWERED);
     harness.pageNewest({
       ...newestPage("1:0", "Reading the invites."),
       queue: queueOf("Run the tests", 1),
+      ...booted,
     });
-    harness.pageNow({ ...pageNow("1:0", { holds: false }), queue: queueOf("Run the tests", 1) });
+    harness.pageNow({
+      ...pageNow("1:0", { holds: false }),
+      queue: queueOf("Run the tests", 1),
+      ...booted,
+    });
     yield* harness.acts.AGENTS_TRANSCRIPT.hold(FOLLOWED);
     yield* settled;
     transcriptRows(harness.live, 1);
@@ -772,7 +780,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const { acts, held, answerQueue, pageNow: script, live } = yield* queueFollowed();
-      answerQueue({ queue: queueOf("Run the tests and fix them", 2) });
+      answerQueue({ queue: queueOf("Run the tests and fix them", 3) });
       yield* acts.AGENTS_QUEUE(EDITED);
       assert.deepEqual(queuedTexts(held), ["Run the tests and fix them"]);
 
@@ -790,6 +798,264 @@ it.effect(
       live.transcript.set({ queueRevision: [{ revision: 3 }] });
       yield* nextPoll;
       assert.deepEqual(queuedTexts(held), ["Run the tests, then open the pull request"]);
+    }),
+);
+
+/** The key a message sent from a window goes under. */
+const SENT_KEY = "a3f1c2d4-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
+
+/** A message sent to the agent, as the window asks it. */
+const SENT = { agentId: AGENT_ID, text: "Deploy to staging", clientKey: SENT_KEY };
+
+/** Where the message saying `text` stands in each transcript laid from the `from`th on: queued, sending, both, or neither. */
+function placesOf(
+  held: () => readonly (AppTranscript | undefined)[],
+  from: number,
+  text: string,
+): readonly string[] {
+  return held()
+    .slice(from)
+    .map((transcript) => {
+      const queued = transcript?.word?.queue?.messages.some((each) => each.text === text) === true;
+      const sending = transcript?.sending?.some((each) => each.text === text) === true;
+
+      return queued && sending ? "both" : queued ? "queued" : sending ? "sending" : "neither";
+    });
+}
+
+/** The places a message stood in, each once, in the order it stood in them. */
+function placesIn(places: readonly string[]): readonly string[] {
+  return places.filter((place, at) => places[at - 1] !== place);
+}
+
+it.effect(
+  "a message sent while the agent's machine boots stands in its queue from the moment it is sent, where the service puts it, and never in the transcript",
+  () =>
+    Effect.gen(function* () {
+      const { acts, held, answerMessage, answerQueue, queueChanges } = yield* queueFollowed(
+        undefined,
+        { phase: BOOT_PHASE.STARTING, since: NOW },
+      );
+
+      const from = held().length;
+      const answered = yield* Deferred.make<void>();
+
+      const queued = {
+        id: "6b1e0c9d-2a3f-4b5c-8d7e-9f0a1b2c3d4e",
+        text: SENT.text,
+        queuedBy: "user-dana",
+        sendKey: SENT_KEY,
+      };
+
+      answerMessage(
+        {
+          agent: AGENT,
+          queued: { messages: [...queueOf("Run the tests", 1).messages, queued], revision: 2 },
+        },
+        Deferred.await(answered),
+      );
+
+      const sent = yield* Effect.forkChild(acts.AGENTS_MESSAGE(SENT));
+      yield* settled;
+      yield* Deferred.succeed(answered, undefined);
+      yield* Fiber.join(sent);
+      yield* settled;
+
+      assert.deepEqual(placesIn(placesOf(held, from, SENT.text)), ["queued"]);
+
+      // An edit asked under the key it was drawn by reaches the row the service stored it under.
+      answerQueue({ queue: { messages: queueOf("Run the tests", 1).messages, revision: 3 } });
+      yield* acts.AGENTS_QUEUE({
+        agentId: AGENT_ID,
+        change: { change: QUEUE_CHANGE.DELETE, messageId: SENT_KEY },
+      });
+      assert.deepEqual(queueChanges.at(-1), { change: QUEUE_CHANGE.DELETE, messageId: queued.id });
+    }),
+);
+
+it.effect(
+  "a message sent to an agent just made, before its transcript's first page says it boots, stands in its queue too",
+  () =>
+    Effect.gen(function* () {
+      const harness = yield* subject({
+        agentListed: () => ({ ...AGENT, status: AGENT_STATUS.STARTING, turnId: null }),
+      });
+
+      const answered = yield* Deferred.make<void>();
+      harness.answerMessage({ agent: AGENT }, Deferred.await(answered));
+      const sent = yield* Effect.forkChild(harness.acts.AGENTS_MESSAGE(SENT));
+      yield* settled;
+
+      // The first page lands after the send was asked.
+      harness.sealTranscript(LIVE_ANSWERED);
+      harness.pageNewest({
+        ...newestPage("1:0", "Reading the invites."),
+        queue: queueOf("Run the tests", 1),
+      });
+      harness.pageNow({ ...pageNow("1:0", { holds: false }), queue: queueOf("Run the tests", 1) });
+      yield* harness.acts.AGENTS_TRANSCRIPT.hold(FOLLOWED);
+      yield* settled;
+      transcriptRows(harness.live, 1);
+      yield* settled;
+
+      assert.deepEqual(placesIn(placesOf(harness.held, 0, SENT.text)), ["queued"]);
+      yield* Deferred.succeed(answered, undefined);
+      yield* Fiber.interrupt(sent);
+    }),
+);
+
+it.effect(
+  "a queued message steered moves out of the queue and into the transcript as the member's line in one draw, before the service answers",
+  () =>
+    Effect.gen(function* () {
+      const { acts, held, answerQueue } = yield* queueFollowed();
+      const from = held().length;
+      const answered = yield* Deferred.make<void>();
+      answerQueue({ queue: { messages: [], revision: 2 } }, Deferred.await(answered));
+
+      const steer = yield* Effect.forkChild(
+        acts.AGENTS_QUEUE({
+          agentId: AGENT_ID,
+          change: { change: QUEUE_CHANGE.STEER, messageId: QUEUED_ID },
+        }),
+      );
+
+      yield* settled;
+      assert.deepEqual(
+        held()
+          .at(-1)
+          ?.sending?.map((each) => each.id),
+        [sentLineId(QUEUED_ID)],
+        "it stands under the id its row lands under",
+      );
+
+      yield* Deferred.succeed(answered, undefined);
+      yield* Fiber.join(steer);
+      yield* settled;
+      assert.deepEqual(placesIn(placesOf(held, from, "Run the tests")), ["sending"]);
+    }),
+);
+
+it.effect(
+  "a message the service refused stands where it went, marked with why, until it is sent again under its key, which draws it on its way in its place, or let go",
+  () =>
+    Effect.gen(function* () {
+      const { acts, held, answerMessage } = yield* queueFollowed();
+      answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+      yield* acts.AGENTS_MESSAGE(SENT);
+      yield* settled;
+      const refused = () => held().at(-1)?.sending ?? [];
+      assert.deepEqual(
+        refused().map((each) => each.refused?.failure),
+        [AGENT_CALL_FAILURE.UNANSWERED],
+      );
+
+      // Sent again under its key, it stands once, on its way.
+      const from = held().length;
+      const answered = yield* Deferred.make<void>();
+      answerMessage({ agent: AGENT }, Deferred.await(answered));
+      const again = yield* Effect.forkChild(acts.AGENTS_MESSAGE(SENT));
+      yield* settled;
+      assert.deepEqual(
+        refused().map((each) => each.refused?.failure),
+        [undefined],
+      );
+      assert.ok(
+        held()
+          .slice(from)
+          .every((transcript) => transcript?.sending?.length === 1),
+        "the line never leaves the transcript, nor stands twice",
+      );
+
+      // Refused once more, and let go.
+      answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+      yield* Deferred.succeed(answered, undefined);
+      yield* Fiber.join(again);
+      yield* acts.AGENTS_MESSAGE(SENT);
+      yield* acts.AGENTS_UNSEND({ agentId: AGENT_ID, lineId: sentLineId(SENT_KEY) });
+      yield* settled;
+      assert.deepEqual(refused(), []);
+    }),
+);
+
+it.effect(
+  "a message the service refused is drawn where it went again after a relaunch, from what the account's store kept, its key the one it went under",
+  () =>
+    Effect.gen(function* () {
+      const before = yield* queueFollowed();
+      before.answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+      yield* before.acts.AGENTS_MESSAGE(SENT);
+      yield* settled;
+      // Note that what the store keeps goes through JSON, as the sealed file does.
+      const kept = JSON.parse(JSON.stringify(before.refused.kept()));
+
+      const after = yield* queueFollowed();
+      yield* after.refused.restored("user-dana", kept);
+      yield* settled;
+
+      const drawn = after.held().at(-1)?.sending ?? [];
+      assert.deepEqual(
+        drawn.map(({ text, clientKey, refused }) => ({
+          text,
+          clientKey,
+          failure: refused?.failure,
+        })),
+        [{ text: SENT.text, clientKey: SENT.clientKey, failure: AGENT_CALL_FAILURE.UNANSWERED }],
+      );
+    }),
+);
+
+it.effect(
+  "a message one account sent, on its way or refused, is never drawn for another account signed in to the same host",
+  () =>
+    Effect.gen(function* () {
+      let signedIn = "user-dana";
+      const { acts, held, answerMessage, answerQueue } = yield* queueFollowed(() => signedIn);
+
+      // On its way: drawn for its sender, and for nobody else.
+      const answered = yield* Deferred.make<void>();
+      answerMessage({ agent: AGENT }, Deferred.await(answered));
+
+      const going = yield* Effect.forkChild(
+        acts.AGENTS_MESSAGE({ ...SENT, clientKey: "b4e2d3c5-6f7a-4b8c-9d0e-1f2a3b4c5d6e" }),
+      );
+
+      yield* settled;
+      assert.equal(held().at(-1)?.sending?.length, 1);
+      signedIn = "user-ravi";
+      answerQueue({ queue: queueOf("Run the tests and fix them", 2) });
+      // Note that the change waits behind the send, but is drawn as it is asked, which draws the transcript again.
+      const resumed = yield* Effect.forkChild(acts.AGENTS_QUEUE(EDITED));
+      yield* settled;
+      assert.equal(held().at(-1)?.sending, undefined);
+      signedIn = "user-dana";
+      yield* Deferred.succeed(answered, undefined);
+      yield* Fiber.join(going);
+      yield* Fiber.join(resumed);
+
+      // Refused: kept for its sender, and drawn for nobody else.
+      answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+      yield* acts.AGENTS_MESSAGE(SENT);
+      yield* settled;
+      assert.equal(
+        held()
+          .at(-1)
+          ?.sending?.filter((each) => each.refused !== undefined).length,
+        1,
+      );
+      signedIn = "user-ravi";
+      answerQueue({ queue: queueOf("Run the tests, then ship it", 3) });
+      yield* acts.AGENTS_QUEUE({
+        agentId: AGENT_ID,
+        change: {
+          change: QUEUE_CHANGE.EDIT,
+          messageId: QUEUED_ID,
+          text: "Run the tests, then ship it",
+        },
+      });
+      yield* settled;
+      assert.deepEqual(queuedTexts(held), ["Run the tests, then ship it"]);
+      assert.equal(held().at(-1)?.sending, undefined);
     }),
 );
 

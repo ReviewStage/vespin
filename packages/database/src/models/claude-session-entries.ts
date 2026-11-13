@@ -155,9 +155,12 @@ const findPage = SqlSchema.findAll({
     entry: Schema.NullOr(Schema.fromJsonString(EntrySchema)),
   }),
   execute: ({ userId, conversationId, projectKey, sessionId, subpath, after }) =>
-    Effect.flatMap(
-      SqlClient.SqlClient,
-      (client) => client`
+    Effect.flatMap(SqlClient.SqlClient, (client) => {
+      // Note that the subpath is matched and ordered by as the key's index holds it, so each step reads one entry rather than the rest of the session.
+      const ofSubpath =
+        subpath === null ? client`stored.subpath is null` : client`stored.subpath = ${subpath}`;
+
+      return client`
         with recursive walk(id, n, running) as (
           (select stored.id, 1, octet_length(stored.entry::text)::bigint
             from claude_session_entries stored
@@ -165,18 +168,18 @@ const findPage = SqlSchema.findAll({
             where conversations.id = ${conversationId} and conversations.user_id = ${userId}
               and stored.conversation_id = ${conversationId}
               and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
-              and stored.subpath is not distinct from ${subpath}
+              and ${ofSubpath}
               and stored.id > ${after ?? 0}
-            order by stored.id limit 1)
+            order by stored.subpath, stored.id limit 1)
           union all
           (select step.id, walk.n + 1, walk.running + octet_length(step.entry::text)
             from walk cross join lateral (
               select stored.id, stored.entry from claude_session_entries stored
                 where stored.conversation_id = ${conversationId}
                   and stored.project_key = ${projectKey} and stored.session_id = ${sessionId}
-                  and stored.subpath is not distinct from ${subpath}
+                  and ${ofSubpath}
                   and stored.id > walk.id
-                order by stored.id limit 1
+                order by stored.subpath, stored.id limit 1
             ) step
             where walk.n <= ${PAGE_ENTRIES} and (walk.n = 1 or walk.running <= ${PAGE_BYTES}))
         )
@@ -184,8 +187,8 @@ const findPage = SqlSchema.findAll({
           case when walk.n <= ${PAGE_ENTRIES} and (walk.n = 1 or walk.running <= ${PAGE_BYTES})
             then stored.entry::text end as entry
           from walk join claude_session_entries stored on stored.id = walk.id
-          order by walk.id`,
-    ),
+          order by walk.id`;
+    }),
 });
 
 const findSessions = SqlSchema.findAll({

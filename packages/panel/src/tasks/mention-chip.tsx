@@ -31,6 +31,7 @@ import {
   taskNumberOf,
   withTaskId,
 } from "@repo/features/link-grammar";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import {
   type DescriptionMention,
@@ -88,12 +89,7 @@ import { useInboxItemTitle } from "./inbox-item-chip.js";
 import { OpenedByRow, PullRequestCard } from "./pull-request-card.js";
 import { WrittenAs } from "./selection-markdown.js";
 import { useKnownNames, useWordTargets } from "./use-known-names.js";
-import {
-  type LinkStanding,
-  useLinkStanding,
-  useNumberedTaskId,
-  useWordsWorkspaceId,
-} from "./use-link-standing.js";
+import { useLinkStanding, useNumberedTaskId, useWordsWorkspaceId } from "./use-link-standing.js";
 import { useOpenLink } from "./use-open-link.js";
 import { useWordsDates } from "./words-dates.js";
 
@@ -267,6 +263,8 @@ const WHOLE_KINDS: ReadonlySet<Mention["kind"]> = new Set([
   MENTION_KIND.PERSON,
   MENTION_KIND.SERVER,
   MENTION_KIND.TOOL,
+  MENTION_KIND.MAC_APP,
+  MENTION_KIND.COMPUTER,
 ]);
 
 /** What a gone section's card says of it. */
@@ -309,6 +307,8 @@ function pressOf(
     case MENTION_KIND.SERVER:
     case MENTION_KIND.TOOL:
     case MENTION_KIND.DATE:
+    case MENTION_KIND.MAC_APP:
+    case MENTION_KIND.COMPUTER:
       return undefined;
     case MENTION_KIND.TASK:
       return () => doors.onOpenTask(mention);
@@ -1008,8 +1008,10 @@ export function linkChip(
   label: string,
   doors: MentionDoors,
   at?: MarkdownSpan | undefined,
+  /** What stands after a mention's name in place of where its provider says it stands: a suggestion's Started or Sent. */
+  after?: ReactNode,
 ): React.JSX.Element | undefined {
-  const chip = chipOfLink(href, label, doors, at);
+  const chip = chipOfLink(href, label, doors, at, after);
 
   // Note that a selection taking the chip reads it back as the link it was written as, which a reply quotes.
   return chip === undefined ? undefined : (
@@ -1056,6 +1058,7 @@ function chipOfLink(
   label: string,
   doors: MentionDoors,
   at: MarkdownSpan | undefined,
+  after: ReactNode,
 ): React.JSX.Element | undefined {
   const bare = isBareLink(label, href);
   const placed = pageDoors(doors, href);
@@ -1075,6 +1078,7 @@ function chipOfLink(
         name={chip.name}
         doors={placed}
         bare={bare}
+        state={after}
       />
     );
   }
@@ -1360,7 +1364,8 @@ function NodeChip({
   doors: MentionDoors;
   edit: MentionNodeEdit | undefined;
 }): React.JSX.Element {
-  const written = `${MENTION_SIGIL}${mention.name}`;
+  // Note that a link written as plain words is drawn under its own words, as the read view draws it.
+  const written = mention.label ?? `${MENTION_SIGIL}${mention.name}`;
   const chip = linkChipOf(written, mention.target, doors.place.repository);
 
   // A date's chip held in an editor opens its picker, which names the node anew; every other chip is the one its link draws in words.

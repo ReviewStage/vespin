@@ -272,6 +272,34 @@
   margin: var(--sheet-gap) var(--sheet-gap) var(--sheet-gap) 0;
 }
 
+/* The sheet clips nothing (above), so a scroller standing in its corners
+   would draw its scrollbar square past the curve onto the frame. A
+   scroller's own corners clip its bar, so one standing there rounds the
+   corners its bar runs into: the Inbox's thread log, at the sheet's end
+   from its top to its foot, and a Settings page's rows, at its foot. A
+   thread in the side panel stands under the panel's bar, clear of its
+   sheet's top, and keeps its corners square. */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-main
+  .desktop-task[data-page="inbox"]
+  > .page-find
+  .desktop-inbox
+  > .conversation
+  > .ui-scroll-area {
+  border-start-end-radius: var(--sheet-radius);
+  border-end-end-radius: var(--sheet-radius);
+}
+
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell
+  > .desktop-settings
+  > .settings-page
+  .ui-settings-page {
+  border-end-start-radius: var(--sheet-radius);
+  border-end-end-radius: var(--sheet-radius);
+}
+
 :where(:root):not([data-ui-room="narrow"])
   .desktop-shell[data-sidebar-collapsed="true"]
   > .desktop-main {
@@ -549,6 +577,18 @@
   transition:
     transform var(--ui-duration-pane) var(--ui-motion-pane),
     opacity var(--ui-duration-pane) var(--ui-motion-pane);
+}
+
+/* Open beside a wide room's work, the sidebar stands beneath the work rather
+   than over it. Note that the sheet's hairline and shadow fall just past its
+   left edge, onto the sidebar's column, so a sidebar raised over the work
+   paints its ground across them and the sheet's left edge goes missing. Left
+   unraised, it lays no stacking context of its own, so its resize edge still
+   stands over the work by its own `z-index`. */
+:where(:root):not([data-ui-room="narrow"])
+  .desktop-shell[data-sidebar-collapsed="false"]
+  .desktop-sidebar {
+  z-index: auto;
 }
 
 .desktop-shell[data-sidebar-collapsed="true"] .desktop-sidebar {

@@ -304,10 +304,9 @@ export interface SandboxUser {
 /**
  * A sandbox opened from an image or a snapshot: its name, what it is opened
  * from, the drive it opens with where it asks one, its tags, how large a run
- * is, how long its kept snapshot lasts after its last use, and its
- * variables. Each run lasts `SANDBOX_IDLE` past its last touch, which no
- * caller chooses. It keeps its newest snapshot alone, which is all a resume
- * reads; a drive it opened with is mounted again at every resume.
+ * is, and its variables. Each run lasts `SANDBOX_IDLE` past its last touch,
+ * which no caller chooses. It is not persistent: a stop discards its disk
+ * and keeps no snapshot, so only its drive outlives the run.
  */
 export interface SandboxCreate {
   readonly name: string;
@@ -316,8 +315,6 @@ export interface SandboxCreate {
   readonly tags: Readonly<Record<string, string>>;
   /** How many vCPUs it runs on; where unsaid, the provider's default. */
   readonly vcpus?: number;
-  /** How long its kept snapshot lasts after its last use; where unsaid, the package's default. */
-  readonly snapshotLapse?: import("effect").Duration.Duration;
   readonly env: Readonly<Record<string, string>>;
   /** The user made in it as it is created, where it names one. */
   readonly user?: SandboxUser;

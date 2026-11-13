@@ -8,6 +8,7 @@ import {
 import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { TASK_BOUNDS, type TaskSummary } from "@repo/features/task-wire";
 import type { ToolTarget } from "@repo/features/tool-call-model";
+import { TRANSCRIPT_COPY } from "@repo/features/transcript-copy";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   DraftMark,
@@ -49,14 +50,13 @@ import { AgentTabCard } from "../tasks/agent-tab-card.js";
 import { AgentTabSkeleton } from "../tasks/agent-tab-skeleton.js";
 import { DraftAgentTab } from "../tasks/draft-agent-tab.js";
 import { useFailedAgents } from "../tasks/failed-lines.js";
-import { agentForkDoors, ForkProvider } from "../tasks/fork-action.js";
+import { agentForkDoors, ForkProvider, type SuggestDoor } from "../tasks/fork-action.js";
 import type { AgentFork } from "../tasks/fork-model.js";
 import { RunActionsButton, runSubmenu, useRunActions } from "../tasks/run-actions-button.js";
 import { stripTabTitle, UNREAD_TAB_NAMES } from "../tasks/strip-tab-kinds.js";
 import { agentEndMark, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import type { MAIN_TAB } from "../tasks/task-tab-model.js";
 import type { AgentThreads } from "../tasks/threads-dock.js";
-import { TRANSCRIPT_COPY } from "../tasks/transcript-copy.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { MainTab, MainTabsControl } from "../tasks/use-main-tabs.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
@@ -84,7 +84,7 @@ import { WaitingCount } from "./task-row-parts.js";
 /**
  * main-tabs.tsx -- the task's topbar and its column's tabs: the topbar naming the task, its name opening its details, and the task's ⋯, each agent's tab and the draft agent's under it, the "+" that opens one, and what an agent's or the draft's tab shows in the column.
  *
- * A task opens on its agents, as Conductor opens a workspace on its chats:
+ * A task opens on its agents:
  * the topbar names the task across its page (`TaskTopbar`), and the column's
  * bar holds the agents' tabs (`MainTabBars`). Each part draws what
  * `use-main-tabs.ts` holds and hands every press back to it. The strip is
@@ -492,8 +492,7 @@ export const DETAILS_WORDS = { HINT: "Task details", PLACE: "agents" } as const;
  * is the task's own menu (`descriptionMenu`), whichever the page shows,
  * renamed where it stands while `rename` is editing, and led on a run's task
  * by the path to the automation whose run made it (`trail`); then `actions`. No ⋯ stands on the bar, as none stands on the tab rows under
- * it: every menu there is a right-click. The window's side panel toggle
- * stands at its end (`desktop-shell.tsx`).
+ * it: every menu there is a right-click.
  */
 export function TaskTopbar({
   task,
@@ -818,6 +817,7 @@ export function MainTabContent({
   cards,
   onFork,
   onContinue,
+  onSuggest,
   threads,
 }: {
   tab: Exclude<MainTab, typeof MAIN_TAB.OVERVIEW>;
@@ -838,6 +838,8 @@ export function MainTabContent({
   onContinue?:
     | ((agentId: string, words: string, attachments: readonly AgentAttachment[]) => void)
     | undefined;
+  /** Opens the task's draft from a suggestion in an agent's reply; none where no draft opens. */
+  onSuggest?: SuggestDoor | undefined;
   /** The threads the agent posted that wait on the developer, docked over its box; none where nothing waits. */
   threads?: AgentThreads | undefined;
 }): React.JSX.Element {
@@ -877,6 +879,7 @@ export function MainTabContent({
                   control: agents,
                   onFork,
                   onContinue,
+                  onSuggest,
                   cards: cards.agent(agentId),
                   onOpenTarget,
                 })

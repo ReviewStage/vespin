@@ -1,6 +1,8 @@
 import {
+  INBOX_RUNS,
   INBOX_SHOW,
   INBOX_WHOSE,
+  type InboxRun,
   type InboxShow,
   type InboxWhose,
   MINE,
@@ -10,7 +12,7 @@ import { useCallback, useState } from "react";
 import { keptKey, useKept } from "../use-kept.js";
 
 /**
- * folded-groups.ts -- which of the sidebar's groups the developer folded, Pinned and the repositories', kept across launches, and what the Inbox lists and how wide its list stands kept the same way.
+ * folded-groups.ts -- which of the sidebar's groups the developer folded, Pinned, Following, and the repositories', kept across launches, and what the Inbox lists and how wide its list stands kept the same way.
  *
  * A fold is this window's alone, as the sidebar's width is, so it is kept in
  * the renderer's own storage rather than on the account: a group folded on
@@ -23,9 +25,10 @@ import { keptKey, useKept } from "../use-kept.js";
  * its row stand folded until it is opened, so the tasks opened are kept,
  * each by its id, under a key of their own. A fixture run starts with every group open
  * and keeps nothing, so its frames never wear a developer's folds. The
- * Inbox's view choices are kept on the same terms, the scope it shows and
+ * Inbox's view choices are kept on the same terms, the scope it shows,
  * whom the items it lists are addressed to, a teammate by their account's
- * id, and so is its list's width; a task's own Inbox lists every item it holds, and keeps no
+ * id, whether its pinned tasks' items stand first, and which of those runs
+ * are folded, and so is its list's width; a task's own Inbox lists every item it holds, and keeps no
  * choice. A choice kept before its scope was is read
  * as the scope that now lists what it listed: a tab kept before the scopes, Needs you or
  * Unread, as Open, and All open or Everything as All; and the Needs you
@@ -47,10 +50,13 @@ import { keptKey, useKept } from "../use-kept.js";
 const STORAGE_KEY = {
   GROUPS: "app.sidebarFoldedGroups",
   PINNED: "app.sidebarPinnedFolded",
+  FOLLOWING: "app.sidebarFollowingFolded",
   SECTIONS: "app.sidebarFoldedSections",
   OPENED_TASKS: "app.sidebarOpenedTasks",
   INBOX_SHOW: "app.inboxShow",
   INBOX_WHOSE: "app.inboxWhose",
+  INBOX_PINNED_FIRST: "app.inboxPinnedFirst",
+  INBOX_FOLDED_RUNS: "app.inboxFoldedRuns",
   INBOX_LIST_WIDTH: "app.inboxListWidth",
   RUNS_PANEL: "app.automationRunsPanel",
   FILE_TREE_WIDTH: "app.fileTreeWidth",
@@ -103,11 +109,14 @@ export const INBOX_LIST_WIDTH = {
 /** The folded groups, each by its repository, its creator, or its assignee, null for the plans with none. */
 const storedFolds = Schema.fromJsonString(Schema.Array(Schema.NullOr(Schema.String)));
 
-/** Whether Pinned is folded. */
+/** Whether Pinned, or Following, is folded. */
 const storedFlag = Schema.fromJsonString(Schema.Boolean);
 
 /** The account's sections folded, or the tasks opened, by id. */
 const storedTasks = Schema.fromJsonString(Schema.Array(Schema.String));
+
+/** The Inbox's runs folded, Pinned or everything else. */
+const storedRuns = Schema.fromJsonString(Schema.Array(Schema.Literals(INBOX_RUNS)));
 
 /** How wide the Inbox's list stands. */
 const storedWidth = Schema.fromJsonString(Schema.Finite);
@@ -150,8 +159,11 @@ const storedShow = Schema.fromJsonString(
 const KEPT = {
   INBOX_SHOW: keptKey<InboxShow>(STORAGE_KEY.INBOX_SHOW, storedShow),
   WHOSE: keptKey<InboxWhose>(STORAGE_KEY.INBOX_WHOSE, storedWhose),
+  PINNED_FIRST: keptKey(STORAGE_KEY.INBOX_PINNED_FIRST, storedFlag),
+  FOLDED_RUNS: keptKey<readonly InboxRun[]>(STORAGE_KEY.INBOX_FOLDED_RUNS, storedRuns),
   FOLDED_GROUPS: keptKey(STORAGE_KEY.GROUPS, storedFolds),
   PINNED_FOLDED: keptKey(STORAGE_KEY.PINNED, storedFlag),
+  FOLLOWING_FOLDED: keptKey(STORAGE_KEY.FOLLOWING, storedFlag),
   FOLDED_SECTIONS: keptKey(STORAGE_KEY.SECTIONS, storedTasks),
   OPENED_TASKS: keptKey(STORAGE_KEY.OPENED_TASKS, storedTasks),
   INBOX_LIST_WIDTH: keptKey(STORAGE_KEY.INBOX_LIST_WIDTH, storedWidth),
@@ -164,6 +176,7 @@ const KEPT = {
 interface Folds {
   readonly groups: readonly (string | null)[];
   readonly pinned: boolean;
+  readonly following: boolean;
   /** The account's own sections folded, by id. */
   readonly sections: readonly string[];
   /** The tasks whose child tasks stand open under them, by id. */
@@ -173,6 +186,7 @@ interface Folds {
 const OPEN: Folds = {
   groups: [],
   pinned: false,
+  following: false,
   sections: [],
   openedTasks: [],
 };
@@ -188,6 +202,8 @@ export interface FoldedGroups {
   toggle: (repository: string | null) => void;
   pinnedFolded: boolean;
   togglePinned: () => void;
+  followingFolded: boolean;
+  toggleFollowing: () => void;
   /** Whether one of the account's sections is folded, by its id. */
   sectionFolded: (sectionId: string) => boolean;
   toggleSection: (sectionId: string) => void;
@@ -203,10 +219,11 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
   // kept folds were read, as `sidebar-collapse.ts` says of its own.
   const [groups, keepGroups] = useKept(KEPT.FOLDED_GROUPS, OPEN.groups);
   const [pinned, keepPinned] = useKept(KEPT.PINNED_FOLDED, OPEN.pinned);
+  const [following, keepFollowing] = useKept(KEPT.FOLLOWING_FOLDED, OPEN.following);
   const [sections, keepSections] = useKept(KEPT.FOLDED_SECTIONS, OPEN.sections);
   const [openedTasks, keepOpenedTasks] = useKept(KEPT.OPENED_TASKS, OPEN.openedTasks);
   const [stagedFolds, setStagedFolds] = useState<Folds>(OPEN);
-  const folds = staged ? stagedFolds : { groups, pinned, sections, openedTasks };
+  const folds = staged ? stagedFolds : { groups, pinned, following, sections, openedTasks };
 
   const fold = (next: Partial<Folds>) => {
     if (staged) {
@@ -218,6 +235,8 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
     if (next.groups !== undefined) keepGroups(next.groups);
 
     if (next.pinned !== undefined) keepPinned(next.pinned);
+
+    if (next.following !== undefined) keepFollowing(next.following);
 
     if (next.sections !== undefined) keepSections(next.sections);
 
@@ -231,6 +250,8 @@ export function useFoldedGroups(staged: boolean): FoldedGroups {
     toggle,
     pinnedFolded: folds.pinned,
     togglePinned: () => fold({ pinned: !folds.pinned }),
+    followingFolded: folds.following,
+    toggleFollowing: () => fold({ following: !folds.following }),
     sectionFolded: (sectionId) => folds.sections.includes(sectionId),
     toggleSection: (sectionId) => fold({ sections: toggled(folds.sections, sectionId) }),
     taskOpened: (taskId) => folds.openedTasks.includes(taskId),
@@ -245,7 +266,15 @@ interface InboxShowChoice {
 }
 
 /** What the window's Inbox lists, and the presses that change it. */
-export interface InboxViewChoices extends InboxShowChoice, InboxWhoseChoice {}
+export interface InboxViewChoices extends InboxShowChoice, InboxWhoseChoice {
+  /** Whether the pinned tasks' items stand first, under a heading of their own. */
+  pinnedFirst: boolean;
+  onPinnedFirst: (pinnedFirst: boolean) => void;
+  /** The runs folded under their headings while the pinned tasks' items stand first. */
+  folded: readonly InboxRun[];
+  /** Folds a run, or opens it. */
+  onFold: (run: InboxRun, folded: boolean) => void;
+}
 
 /** Whom the items the window's Inbox lists are addressed to, and the press that lists another's. */
 export interface InboxWhoseChoice {
@@ -253,12 +282,27 @@ export interface InboxWhoseChoice {
   onWhose: (whose: InboxWhose) => void;
 }
 
-/** The Inbox's view choices, Open addressed to the reader, which is Needs you, until first changed, and kept as each is pressed. */
+/** No run folded. */
+const NO_RUNS: readonly InboxRun[] = [];
+
+/** The Inbox's view choices, Open addressed to the reader, which is Needs you, its pinned tasks' items first with no run folded, until first changed, and kept as each is pressed. */
 export function useInboxViewChoices(): InboxViewChoices {
   const [show, onShow] = useKept(KEPT.INBOX_SHOW, INBOX_SHOW.OPEN);
   const [whose, onWhose] = useKept(KEPT.WHOSE, MINE);
+  const [pinnedFirst, onPinnedFirst] = useKept(KEPT.PINNED_FIRST, true);
+  const [folded, keepFolded] = useKept(KEPT.FOLDED_RUNS, NO_RUNS);
 
-  return { show, onShow, whose, onWhose };
+  const onFold = useCallback(
+    (run: InboxRun, fold: boolean) =>
+      keepFolded(
+        fold
+          ? [...folded.filter((each) => each !== run), run]
+          : folded.filter((each) => each !== run),
+      ),
+    [folded, keepFolded],
+  );
+
+  return { show, onShow, whose, onWhose, pinnedFirst, onPinnedFirst, folded, onFold };
 }
 
 /** A width held within the list's bounds, in whole pixels. */

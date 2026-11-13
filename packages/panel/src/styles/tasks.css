@@ -170,16 +170,10 @@
 /* A fence open in the editor stands in the code card's frame, as the drawn
    text draws it (`@repo/ui`'s `CodeCard`): its border, its ground, the
    card's own header, drawn by the panel (`description-editor/code-block-view.ts`),
-   and its lines in the card's type and inset, so opening the text moves no
-   block. Note that the header stays put while long lines scroll sideways
-   under it, that the lines wear the card's body class, so the prose's bare
-   fence (`@repo/ui`'s prose.css) leaves them alone and a phone fades them as
-   it fades the card's, and that the lines stand uncolored while they are
-   edited. */
-/* Note that only a figure's own side margins are dropped, since its gaps
-   above and below are the text's rhythm (`@repo/ui`'s prose.css). */
+   and its lines, which wear the card's own classes (`@repo/ui/code-face`), so
+   opening the text moves no block: the same type, inset, colors, and gaps.
+   Note that the header stays put while long lines scroll sideways under it. */
 .description-document-text .description-code-block {
-  margin-inline: 0;
   border: 1px solid var(--ui-color-border);
   border-radius: var(--ui-control-radius);
   background: var(--ui-color-code-ground);
@@ -194,27 +188,6 @@
 .description-document-text .description-code-head .ui-code-card-header {
   border-start-start-radius: inherit;
   border-start-end-radius: inherit;
-}
-
-.description-document-text .description-code-block > pre {
-  margin: 0;
-  padding: var(--ui-row-inset) 0;
-  overflow-x: auto;
-  overscroll-behavior-x: contain;
-  color: var(--ui-color-code-text);
-  font-family: var(--ui-font-mono);
-  text-align: left;
-  tab-size: 2;
-}
-
-/* Note that the lines take the card's smaller type, never the block, whose
-   own size the gap above it is measured in (`@repo/ui`'s prose.css). */
-.description-document-text .description-code-block > pre > code {
-  display: block;
-  padding: 0 var(--ui-list-inset);
-  font-size: var(--ui-type-caption-size);
-  line-height: var(--ui-type-reading-leading);
-  white-space: pre;
 }
 
 /* A divider is pressed anywhere in the gap around its line, as a Notion or
@@ -310,12 +283,12 @@
 }
 
 /* What the editor keeps byte for byte but does not draw as its own: inline
-   HTML, a footnote, a link's definition, a block of HTML. */
+   HTML, a footnote, a link's definition, a block of HTML. It reads as the
+   read view draws it, its source as a paragraph's words, so opening the
+   text moves nothing; it is one block, selected or deleted whole. */
 .description-raw-block {
   margin: 0;
-  color: var(--ui-color-text-muted);
-  font: inherit;
-  white-space: pre-wrap;
+  white-space: normal;
 }
 
 /* What stands under the editor (`markdown-editor.tsx`'s
@@ -594,6 +567,12 @@
 :where(:root):not([data-ui-room="narrow"]) :is(.page-view-room, .file-view-body) {
   overflow: clip;
   border-radius: 0 0 var(--sheet-radius, 0) var(--sheet-radius, 0);
+}
+
+/* A cloud Browser tab's intro (`page-intro.tsx`) stands over the page, at
+   the column's inset under the line saying who has the tab. */
+.cloud-browser-view > .ui-reveal {
+  padding: var(--ui-block-gap) var(--column-inset);
 }
 
 /* A cloud Browser tab's quiet line over its page (cloud-browser-pane.tsx)
@@ -1349,29 +1328,24 @@
   --pull-request-page-measure: 1040px; /* off-scale: detail-page.css's web measure */
 }
 
-/* A section's heading that folds it, and the comment box's, stuck to the
-   scroller's top while its section is in view, on the panel's own ground so
-   nothing shows through; the next section's heading pushes it off, since a
-   sticky box stands only inside its own section. It is held at the
-   scroller's band (`SCROLL_FADE_INSET.BAND`), because the fade begins
-   beneath that band: taller,
-   it would slice what passes under its foot, and shorter, it would fade
-   its own. The whole row presses as a `DisclosureSummary` does: the chevron
-   leading at its inset and the row filled under the pointer; what stands at
-   its end stands beside it (`DisclosureFrame`), on the same band. */
-.pull-request-section-fold > .ui-disclosure-summary,
-.pull-request-page .pull-request-comment-box > .pull-request-heading {
+/* A section's heading that folds it, stuck to the scroller's top while its
+   section is in view, on the panel's own ground so nothing shows through;
+   the next section's heading pushes it off, since a sticky box stands only
+   inside its own section. It is held at the scroller's band
+   (`SCROLL_FADE_INSET.BAND`), because the fade begins beneath that band:
+   taller, it would slice what passes under its foot, and shorter, it would
+   fade its own. The whole row presses as a `DisclosureSummary` does, the
+   chevron leading at its inset, but draws no fill of its own under the
+   pointer: its words light instead, so the heading stands on the page's
+   ground like the words under it. What stands at its end stands beside it
+   (`DisclosureFrame`), on the same band. */
+.pull-request-section-fold > .ui-disclosure-summary {
   position: sticky;
   top: 0;
   z-index: 1;
   box-sizing: border-box;
   height: var(--ui-scroll-band);
   background: var(--ui-color-ground);
-}
-
-.pull-request-page .pull-request-comment-box > .pull-request-heading {
-  align-items: center;
-  margin: 0;
 }
 
 .pull-request-section-fold > .ui-disclosure-summary {
@@ -1382,27 +1356,6 @@
   padding-inline: var(--ui-tight-gap);
   color: var(--ui-color-text-muted);
   white-space: nowrap;
-}
-
-/* The fill under the pointer, a disclosure row's (disclosure.css) at the
-   control's height and corner, drawn inside the band rather than on it, so
-   the band stays opaque to its corners while what scrolls passes under it.
-   Note that it sits under the row's words, the band being a stacking
-   context of its own, and lights only while the pointer is on the row,
-   since what stands at its end stands beside it. */
-.pull-request-section-fold > .ui-disclosure-summary::before {
-  position: absolute;
-  z-index: -1;
-  inset: calc((var(--ui-scroll-band) - var(--ui-control-height)) / 2) 0;
-  border-radius: var(--ui-control-radius);
-  content: "";
-  transition: background-color var(--ui-duration-hover) var(--ui-motion-exit);
-}
-
-@media (hover: hover) {
-  .pull-request-section-fold > .ui-disclosure-summary:hover::before {
-    background: var(--ui-color-fill-strong);
-  }
 }
 
 .pull-request-section-fold > .ui-disclosure-summary > .pull-request-heading {
@@ -1858,15 +1811,17 @@ summary button[data-tool-agent-ref]:focus-visible {
 /* On a phone, whose scroll bars stay hidden until a swipe, a code block's
    lines cut at its edge fade as a table's columns do, on the window's one
    scroll fade (`@repo/ui`'s `ScrollArea`), so a line cut short reads as one
-   to scroll. */
+   to scroll, its scrollbar's strip kept whole over the fade. */
 :where(:root)[data-ui-room="narrow"] .desktop-shell :is(.ui-markdown pre, .ui-code-card-body) {
-  mask-image: linear-gradient(
-    to right,
-    transparent,
-    #000 var(--ui-scroll-area-fade-start),
-    #000 calc(100% - var(--ui-scroll-area-fade-end)),
-    transparent
-  );
+  mask:
+    linear-gradient(
+      to right,
+      transparent,
+      #000 var(--ui-scroll-area-fade-start),
+      #000 calc(100% - var(--ui-scroll-area-fade-end)),
+      transparent
+    ),
+    var(--ui-scrollbar-keep-horizontal);
   animation-name: ui-scroll-area-fade-start, ui-scroll-area-fade-end;
   animation-timing-function: linear;
   animation-fill-mode: both;
@@ -1949,6 +1904,23 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
    Copy link to the right of it, the lead giving up its width before them. */
 .agent-turn-foot [data-worked] {
   min-width: 0;
+}
+
+/* A goal's trail (agent-goal.tsx) stands a little room off the words and
+   the trails around it, which a turn's parts would otherwise set flush, its
+   glyph and words set in as a call's line sets its own (`--transcript-gutter`),
+   so the two read as one column. */
+[data-goal-trail] {
+  padding-block: var(--ui-space-4);
+  padding-inline-start: var(--ui-space-4);
+  column-gap: var(--ui-icon-gap);
+}
+
+/* A goal's card (agent-goal.tsx) previews the checker's reason on its head
+   while folded, and lets it go once opened, where the reason stands whole,
+   so its head reads as a check's card's does. */
+[data-goal-card]:has([open]) .agent-goal-preview {
+  display: none;
 }
 
 /* A message's Forked to trail (fork-action.tsx) stands a list's gap under
@@ -2540,6 +2512,21 @@ svg.lucide {
   outline-offset: 2px;
 }
 
+/* ProseMirror's own hack nodes beside a picture, a separator before it and a
+   separator and line break after it at its line's end, which each stand on a
+   line of their own beside the picture's block and draw an empty line with a
+   caret of the picture's height. The editor never puts the caret there
+   (`picture-node.ts`'s `pictureCaret`), so they draw nothing. */
+.description-document-text
+:is(
+  .ProseMirror-separator:has(+ .editor-picture),
+  .editor-picture + .ProseMirror-separator,
+  .editor-picture + .ProseMirror-separator + .ProseMirror-trailingBreak,
+  .editor-picture + .ProseMirror-trailingBreak
+) {
+  display: none;
+}
+
 /* A version's changes (`version-view.tsx`, `markdown-message.tsx`'s change
    marks): words written in on a green wash, words struck out struck on a red
    one and dimmed, so neither reads by its color alone. The washes are the
@@ -2654,15 +2641,32 @@ svg.lucide {
   pointer-events: none;
 }
 
-/* The button stands in the gutter past the column's end, centered on its
-   block's first line as a folded line's count is on its words' first line,
-   which stands in its place on a line holding threads. */
-.comment-block-button {
+/* The block's button and a folded line's count stand in the gutter at the
+   column's end, each centered on the first line of what it is on, so a
+   count, which stands in the button's place on a line holding threads,
+   reads as the line it starts. Both are the same icon button, a count's
+   figures standing on its glyph (`CornerCount`), so every glyph in the gutter
+   stands in one column, and a count of more figures, at most "99+", grows
+   out from its glyph's corner and still ends inside the gutter
+   (desktop.css). */
+.comment-block-button,
+.comment-count {
   position: absolute;
-  left: calc(100% + var(--ui-space-2));
+  left: 100%;
   translate: 0 -50%;
+}
+
+/* The button shows only while the pointer is over the description. Beside
+   the margin's cards, where no count stands, it stands centered in the gap
+   before them, which is as wide as the gutter. */
+.comment-block-button {
   opacity: 0;
   transition: opacity var(--ui-duration-hover) var(--ui-motion-exit);
+}
+
+.comment-block-button[data-beside-cards] {
+  left: auto;
+  right: calc(var(--ui-space-8) - var(--comment-gutter));
 }
 
 .comment-block-button:focus-within {
@@ -2681,26 +2685,6 @@ svg.lucide {
   .comment-block-button {
     opacity: 1;
   }
-}
-
-/* Where the margin folds: a line's comments counted at its end, in the
-   gutter past the column where the block's button stands, a quiet button
-   lit while its threads stand under it; the open thread floats under it.
-   The count, a glyph and its figures, is drawn tighter than a toolbar's
-   button, and a web gutter is a finger's target across (desktop.css), which
-   it fills; its press still takes the whole target on a touch screen, inside
-   the column. It ends a scrollbar's room short of the scroller's edge, so a
-   scrollbar drawn over the page, macOS's, never stands under it, and a count
-   of more figures grows in toward the words rather than out under it. It
-   stands centered on the first line its words stand on, wherever they go on
-   from there, so every count reads as the line it starts. */
-.comment-count {
-  --ui-control-inset: var(--ui-space-6);
-  --ui-icon-gap: var(--ui-space-4);
-  position: absolute;
-  right: calc(var(--ui-space-8) - var(--comment-gutter));
-  display: flex;
-  translate: 0 -50%;
 }
 
 /* The open thread ends a gap short of the column's end, where the counts in
@@ -2939,4 +2923,29 @@ svg.lucide {
    from the words under it is set here, as a quote's in the box is. */
 blockquote.comment-quote {
   margin-bottom: var(--ui-control-gap);
+}
+
+/* The apps' windows an agent is using float over the end of what docks
+   over its box, above every dock's row, over the transcript's foot, as a
+   picture in a picture does (`computer-dock.tsx`), and while they do the
+   transcript's end makes room for the tallest stack of them, so its newest
+   line stands clear of them. */
+.agent-tab-foot {
+  position: relative;
+}
+.agent-computer-float {
+  position: absolute;
+  z-index: 1;
+  inset-block-end: 100%;
+  inset-inline-end: var(--ui-space-16);
+  margin-block-end: var(--ui-space-8);
+}
+.agent-tab:has(.agent-computer-float) .agent-log-over-composer {
+  padding-bottom: calc(
+    var(--ui-scroll-fade) +
+    var(--ui-space-4) +
+    var(--spacing-app-window-tall) +
+    var(--spacing-app-window-peek-twice) +
+    var(--ui-space-8)
+  );
 }

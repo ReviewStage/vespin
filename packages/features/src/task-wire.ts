@@ -1,4 +1,4 @@
-import { literalsReadingUnknown, WireValueSchema } from "@repo/wire";
+import { literalsReadingUnknown, taskFollowerSchema, WireValueSchema } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import {
   AGENT_MACHINE,
@@ -775,12 +775,27 @@ const taskSummaryFields = {
    */
   blocked: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   /**
+   * The tasks this one waits on, by id, the earliest added first, each one
+   * the reader reaches, empty where there are none; absent from a service
+   * before blocks, and from a list's row before rows carried them.
+   */
+  blockedBy: EffectSchema.optionalKey(EffectSchema.Array(wireUuidSchema)),
+  /** The tasks that wait on this one, on the same terms as `blockedBy`. */
+  blocks: EffectSchema.optionalKey(EffectSchema.Array(wireUuidSchema)),
+  /**
    * True where an automation's run made the task for itself alone, which
    * the sidebar lets go once the run finished and holds nothing of the
    * reader's; absent for any other task, a same-agent automation's standing
    * task among them, and from a service before it.
    */
   madeByRun: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+  /**
+   * The members following the task, the earliest to follow first, each
+   * with whether they are its assignee and whether its agents may use their
+   * machines (`@repo/wire`'s `taskFollowerSchema`); absent while its
+   * workspace has Following off, and from a service before it.
+   */
+  followers: EffectSchema.optionalKey(EffectSchema.Array(taskFollowerSchema)),
 };
 
 /**
@@ -1002,7 +1017,7 @@ const descriptionSectionEditSchema = EffectSchema.Struct({
 
 export type DescriptionSectionEdit = typeof descriptionSectionEditSchema.Type;
 
-/** One task with its saved document, its newest revision, who last changed each section, the saves coding agents made on it, oldest first, and the tasks it waits on and that wait on it. */
+/** One task with its saved document, its newest revision, who last changed each section, and the saves coding agents made on it, oldest first; its blocks are its summary's. */
 export const taskSchema = EffectSchema.Struct({
   ...taskSummaryFields,
   document: descriptionDocumentSchema,
@@ -1018,10 +1033,6 @@ export const taskSchema = EffectSchema.Struct({
       EffectSchema.isMaxLength(DESCRIPTION_SECTION_BOUNDS.MAX_SECTIONS),
     ),
   ),
-  /** The tasks this one waits on, by id, the earliest added first, each one the reader reaches; absent from a service before blocks. */
-  blockedBy: EffectSchema.optionalKey(EffectSchema.Array(wireUuidSchema)),
-  /** The tasks that wait on this one, on the same terms as `blockedBy`. */
-  blocks: EffectSchema.optionalKey(EffectSchema.Array(wireUuidSchema)),
 });
 
 export type Task = typeof taskSchema.Type;
@@ -1050,12 +1061,44 @@ export const heldTaskListAnswerSchema = EffectSchema.Struct({
 export type HeldTaskListAnswer = typeof heldTaskListAnswerSchema.Type;
 
 /**
+ * Another member added as a follower of a task (POST), as the mention dock
+ * row's Add asks it: by their account's id, a member of the task's
+ * workspace, who follows with their machines off until they switch them on.
+ */
+export const taskFollowerAddRequestSchema = EffectSchema.Struct({
+  userId: taskAssigneeIdSchema,
+});
+
+export type TaskFollowerAddRequest = typeof taskFollowerAddRequestSchema.Type;
+
+/** The account's own switch (PUT): whether the task's agents may use its machines. */
+export const taskFollowerMachinesRequestSchema = EffectSchema.Struct({
+  machines: EffectSchema.Boolean,
+});
+
+export type TaskFollowerMachinesRequest = typeof taskFollowerMachinesRequestSchema.Type;
+
+/**
  * The id of the transaction a write committed in, as Postgres counts it, in
  * decimal: present where the write changed a row, so the desktop following
  * the task list waits for it to arrive before it confirms the write, and
  * absent where nothing changed, as Neon's mutations guide says.
  */
 export const taskTxidSchema = EffectSchema.String.check(EffectSchema.isPattern(/^[0-9]+$/u));
+
+/**
+ * A task's followers as a follow, an unfollow, an add, or a switch leaves
+ * them, the earliest to follow first, and the transaction the write
+ * committed in, which a reader following the task list waits for before it
+ * confirms the write; none where nothing changed.
+ */
+export const taskFollowersAnswerSchema = EffectSchema.Struct({
+  taskId: wireUuidSchema,
+  followers: EffectSchema.Array(taskFollowerSchema),
+  txid: EffectSchema.optionalKey(taskTxidSchema),
+});
+
+export type TaskFollowersAnswer = typeof taskFollowersAnswerSchema.Type;
 
 /**
  * A started, opened, or changed task (POST, GET, PATCH), with its document

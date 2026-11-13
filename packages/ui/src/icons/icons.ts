@@ -6,7 +6,8 @@
  * at. A screen asks for a concept (`GLYPH.TASK`) and seats it
  * (`<GlyphSlot size={ICON_SIZE.MEDIUM}>`); it reaches for a Lucide name only
  * for a glyph that is no concept of its own. Nothing outside `@repo/ui` imports
- * `lucide-react`, bar the files that still do until each screen moves here.
+ * `lucide-react`: `vespin/no-lucide-outside-door` holds that, from a baseline
+ * of the files that still do, which only shrinks as each screen moves here.
  *
  * `@repo/ui`'s own glyphs (`face/glyphs.tsx`) are reached through `GLYPH`, and
  * through the barrel under their old names until the last screen that imports

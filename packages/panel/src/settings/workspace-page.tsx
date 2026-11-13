@@ -19,6 +19,9 @@ import {
   INVITATION_WORDS,
   LEAVE_WORDS,
   MEMBER_WORDS,
+  PHOTO_WORDS,
+  TRANSFER_WORDS,
+  transferQuestionTitle,
   WORKSPACE_READ_FAILED,
 } from "@repo/features/workspace-settings-words";
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
@@ -86,7 +89,6 @@ import {
   ShieldIcon,
   UserIcon,
   UserRoundIcon,
-  XIcon,
 } from "@repo/ui/icons";
 import { inputProblem } from "@repo/ui/reported-failure";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
@@ -151,12 +153,6 @@ import {
  * and a read that failed says so with Retry.
  */
 
-/** The photo's removal, which its tile offers and the confirm asks. */
-const PHOTO_WORDS = {
-  REMOVE: "Remove photo",
-  REMOVE_BODY: "The photo is deleted, and the workspace is marked by its first letter instead.",
-} as const;
-
 const INVITE_LINK_COPIED = "Invite link copied";
 
 /** What the owner's delete says: its press, its running verb, its row's line, and what goes for everyone and what stays installed. */
@@ -173,13 +169,6 @@ export const DELETE_WORDS = {
     "The GitHub App, the Slack bot, and the Sentry integration stay installed on GitHub, Slack, and Sentry. Remove them there if you no longer need them.",
 } as const;
 
-/** What the handover says: its press, its question's body, and its running verb. The old owner becomes an admin, one way. */
-const TRANSFER_WORDS = {
-  VERB: "Transfer ownership",
-  RUNNING: "Transferring",
-  BODY: "You become an admin. The new owner can change anyone's role and remove anyone, you included, and only they can give it back.",
-} as const;
-
 type TransferAskResult = { gate: string; question: DialogQuestion };
 
 /**
@@ -189,12 +178,10 @@ type TransferAskResult = { gate: string; question: DialogQuestion };
  * name typed, since only the new owner can give it back.
  */
 function transferAsk(workspace: Workspace, heir: string | undefined): TransferAskResult {
-  const to = heir === undefined ? "" : ` to ${heir}`;
-
   return {
     gate: workspace.name,
     question: {
-      title: `Transfer ownership of ${workspace.name}${to}?`,
+      title: transferQuestionTitle(workspace.name, heir),
       body: TRANSFER_WORDS.BODY,
       verb: TRANSFER_WORDS.VERB,
       running: TRANSFER_WORDS.RUNNING,
@@ -439,7 +426,6 @@ function MemberRow({
     ? [
         {
           label: MEMBER_WORDS.REMOVE,
-          icon: <GLYPH.REMOVE />,
           danger: true,
           onSelect: remove.ask,
         },
@@ -634,7 +620,7 @@ function HeirChip({
           chevron
           ref={door}
           id={id}
-          aria-label={`New owner: ${chosen.name}`}
+          aria-label={`${TRANSFER_WORDS.NEW_OWNER}: ${chosen.name}`}
           {...menu.trigger()}
         >
           <ReplayMask>
@@ -647,7 +633,7 @@ function HeirChip({
       </div>
       {menu.drawn === undefined ? null : (
         <ActionMenu
-          label="New owner"
+          label={TRANSFER_WORDS.NEW_OWNER}
           menu={menu.drawn}
           groups={[
             memberRows(admins, undefined).map((row) => ({
@@ -738,7 +724,7 @@ function OwnerLeave({
       {/* Note that the new owner goes unnamed in the title, because the field below chooses them. */}
       {heir === undefined ? null : (
         <ConfirmDialog open confirm={transfer} {...transferAsk(workspace, undefined)}>
-          <FormField label="New owner">
+          <FormField label={TRANSFER_WORDS.NEW_OWNER}>
             {(field) => (
               <HeirChip
                 id={field.id}
@@ -1030,7 +1016,6 @@ function Invitations({ workspaceId }: { workspaceId: string }): React.JSX.Elemen
           actions={[
             {
               label: INVITATION_WORDS.CANCEL,
-              icon: <XIcon />,
               danger: true,
               onSelect: () => {
                 setCanceling(one);
@@ -1301,7 +1286,6 @@ function ManagedSentry({
           ? "Disconnect"
           : `Disconnect ${installation.account}`,
       replayMasked: installation.account !== undefined && sentry.installations.length > 1,
-      icon: <GLYPH.DISCONNECT />,
       danger: true,
       onSelect: () => {
         setLeaving(installation);
@@ -1451,7 +1435,6 @@ function ManagedSlackBot({
           [
             {
               label: "Disconnect",
-              icon: <GLYPH.DISCONNECT />,
               danger: true,
               onSelect: () => disconnect.ask(),
             },
@@ -1813,7 +1796,8 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
               }}
               // An upload still under way would put a photo back after its removal, so none is asked meanwhile.
               onRemove={set && !uploading ? remove.ask : undefined}
-              disabled={uploading || remove.busy}
+              disabled={remove.busy}
+              uploading={uploading}
             />
           ) : (
             <ReplayMask>
@@ -1846,13 +1830,13 @@ function WorkspaceIdentity({ workspace }: { workspace: Workspace }): React.JSX.E
         open
         confirm={remove}
         question={{
-          title: `Remove ${workspace.name}'s photo?`,
+          title: PHOTO_WORDS.DELETE_QUESTION(workspace.name),
           replayUnmasked: true,
           titleReplayMasked: true,
-          body: PHOTO_WORDS.REMOVE_BODY,
-          verb: PHOTO_WORDS.REMOVE,
-          running: "Removing",
-          loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+          body: PHOTO_WORDS.DELETE_BODY,
+          verb: PHOTO_WORDS.DELETE,
+          running: PHOTO_WORDS.DELETE_RUNNING,
+          loss: CONFIRM_LOSS.IRREVERSIBLE,
         }}
       />
       {slugging.dialog}

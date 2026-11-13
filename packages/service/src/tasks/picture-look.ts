@@ -1,6 +1,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { readDescriptionAttachment } from "@repo/database/models/description-attachments";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
 import { type DescriptionFile, isPdfFile } from "@repo/features/description-attachment-wire";
 import { type InboxAttachmentRef, inboxAttachmentOf } from "@repo/features/inbox-attachment-link";
@@ -40,11 +41,13 @@ import type { DescriptionDocumentBinding } from "./description-notes.js";
  *
  * A description may hold a video an agent recorded, which no model is handed in any
  * form: a look at one is refused, pointing the model at its alt text and
- * caption; so is a look at a PDF kept there, whose refusal names it a file
- * the model cannot open, and the MCP door hands on a look only of an image's type,
+ * caption, and the MCP door hands on a look only of an image's type,
  * turning any other into that refusal (`lookNamedOnly`), so a video could
  * not reach a model even were it answered, as an image nor as its base64
- * spelled out.
+ * spelled out. A PDF kept there is no picture either, and is never handed to
+ * the model by us: a look at one writes it into the agent's own machine
+ * through the writer its caller hands in (`PdfWrite`), within a PDF's bound,
+ * and answers where it stands, so the agent reads it with its own tools.
  *
  * The result and its view name a picture and nothing of a description, so a
  * look at any other picture we keep answers in the same words.
@@ -63,12 +66,18 @@ export const PICTURE_LOOK_REFUSAL = {
   NO_THREAD_PICTURE: "Not looked: that thread holds no such picture.",
   VIDEO:
     "Not looked: that address is a video, which is never shown to a model. Its alt text and caption in the description's text say what it shows.",
-  PDF: "Not looked: that address is a PDF kept in the description, a file you cannot open yet. Its name is the alt text of its ![name](address) line, under the heading it stands in; tell the member you could not read it rather than guess at what it holds.",
+  PDF_ELSEWHERE:
+    "Not written: that address is a PDF kept in another task's description, and you may read only the PDFs of your own task's description. Its name is the alt text of its ![name](address) line; ask the member for what you need of it rather than guess at what it holds.",
+  PDF_TOO_LARGE: `Not written: that PDF is larger than ${(AGENT_BOUNDS.MAX_PDF_BYTES / 1_000_000).toFixed(1)} MB, the most written into your machine; ask the member for what you need of it rather than guess at what it holds.`,
+  PDF_UNWRITTEN:
+    "Not written: the PDF could not be written into your machine just now. The call may be made again.",
   UNAVAILABLE: "Not looked: the picture could not be read just now. The call may be made again.",
 } as const;
 
 export const PICTURE_LOOK_STATUS = {
   LOOKED: "looked",
+  /** A description's PDF, written into the agent's machine at the path the result names. */
+  WRITTEN: "written",
   NOT_LOOKED: "not-looked",
 } as const;
 
@@ -79,7 +88,19 @@ export type PictureLookResult =
       readonly mediaType: PictureType;
       readonly image: string;
     }
+  | { readonly status: typeof PICTURE_LOOK_STATUS.WRITTEN; readonly path: string }
   | { readonly status: typeof PICTURE_LOOK_STATUS.NOT_LOOKED; readonly reason: string };
+
+/**
+ * Where a look at a description's PDF puts it: written into the agent's own
+ * machine, answering `written` and its path there, or `not-looked` and why,
+ * the PDF of another task's description among them. The caller holds it to
+ * whatever reach a PDF has, which may be narrower than a picture's.
+ */
+export type PdfWrite = (pdf: {
+  readonly attachmentId: string;
+  readonly bytes: Uint8Array;
+}) => Effect.Effect<PictureLookResult>;
 
 /** A thread's picture's address, as its message writes it. */
 const THREAD_ADDRESS = `${LINK_ORIGIN}/<workspace>/task/<task>/inbox/<thread>/files/<picture>`;
@@ -89,10 +110,12 @@ const LOOK_WORDS = {
   on: {
     address: `The picture's address exactly as the description's or the thread's text writes it, inside its ![alt](address): ${LINK_ORIGIN}/<workspace>/task/<task>/files/<picture> in a description, or under /plan/ in place of /task/ for a picture written before the rename; ${THREAD_ADDRESS} in a thread's message.`,
     tool: "See one of the pictures in a description of your workspace, your own task's or another's, or in a message of a thread",
+    pdf: " A PDF in your own task's description, written ![name.pdf](address) at a description picture's address, is not shown: it is written into your machine and the answer is `written` and its path, which you read with your own tools, such as your file reader, or `pdftotext` where installed.",
   },
   off: {
     address: `The picture's address exactly as the thread's text writes it, inside its ![alt](address): ${THREAD_ADDRESS}.`,
     tool: "See one of the pictures in a message of a thread",
+    pdf: "",
   },
 } as const;
 
@@ -113,20 +136,20 @@ const THREAD_LOOK_INPUT = lookInputOf(LOOK_WORDS.off.address);
 // Note that either input reads one way, since they differ in their words alone.
 const readInput = readEither(LOOK_INPUT);
 
-/** The tool's words, opening as the workspace's experiments word them. */
-function lookWordsOf(opening: string): string {
+/** The tool's words, as the workspace's experiments word them. */
+function lookWordsOf(words: { readonly tool: string; readonly pdf: string }): string {
   return (
-    `${opening} ${AGENT_TOOL.READ_THREAD} reads, such as a screenshot or a mockup, by the address its text writes it at. ` +
+    `${words.tool} ${AGENT_TOOL.READ_THREAD} reads, such as a screenshot or a mockup, by the address its text writes it at. ` +
     'Every picture is written as ![alt text](address "caption"), and its alt text and caption ' +
     "already say what it shows: look only when they do not tell you enough for what you are " +
-    "doing. Answers the picture, or `not-looked` and why."
+    `doing. Answers the picture, or \`not-looked\` and why.${words.pdf}`
   );
 }
 
 /** The tool as a coding agent is offered it where its workspace has Task descriptions on: its name, its words, and its input schema. */
 export const LOOK_AT_PICTURE_TOOL = {
   name: AGENT_TOOL.LOOK_AT_PICTURE,
-  description: lookWordsOf(LOOK_WORDS.on.tool),
+  description: lookWordsOf(LOOK_WORDS.on),
   inputSchema: LOOK_INPUT,
 } as const;
 
@@ -136,7 +159,7 @@ export function lookAtPictureToolOf(on: { readonly descriptionsOn: boolean }) {
 
   return {
     name: AGENT_TOOL.LOOK_AT_PICTURE,
-    description: lookWordsOf(LOOK_WORDS.off.tool),
+    description: lookWordsOf(LOOK_WORDS.off),
     inputSchema: THREAD_LOOK_INPUT,
   } as const;
 }
@@ -167,10 +190,11 @@ const isImageType = Schema.is(pictureTypeSchema);
 /** Whether a kept file is a picture, an image or a video, rather than any other file a message carried. */
 const isPictureMediaType = Schema.is(pictureMediaTypeSchema);
 
-/** A picture as a look answers it: an image's type and its bytes in base64, or the refusal of a video or a PDF, whose bytes go nowhere. */
-function looked(picture: DescriptionFile): PictureLookResult {
-  if (isPdfFile(picture)) return pictureNotLooked(PICTURE_LOOK_REFUSAL.PDF);
-
+/** A picture as a look answers it: an image's type and its bytes in base64, or the refusal of a video, whose bytes go nowhere. */
+function looked(picture: {
+  readonly contentType: string;
+  readonly bytes: Uint8Array;
+}): PictureLookResult {
   if (!isImageType(picture.contentType)) {
     return pictureNotLooked(PICTURE_LOOK_REFUSAL.VIDEO);
   }
@@ -182,14 +206,32 @@ function looked(picture: DescriptionFile): PictureLookResult {
   };
 }
 
+/** A description's file as a look answers it: a PDF handed to the writer given, within a PDF's bound, and a picture as `looked` answers it. */
+function lookedFile(
+  file: DescriptionFile,
+  attachmentId: string,
+  writePdf: PdfWrite,
+): Effect.Effect<PictureLookResult> {
+  if (!isPdfFile(file)) return Effect.succeed(looked(file));
+
+  // Note that a PDF is bounded as it is kept, so this holds only one kept before the bound narrowed.
+  if (file.bytes.byteLength > AGENT_BOUNDS.MAX_PDF_BYTES) {
+    return Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.PDF_TOO_LARGE));
+  }
+
+  return writePdf({ attachmentId, bytes: file.bytes });
+}
+
 /**
  * One call of `look_at_picture`: the picture the address names, where it is
- * an image of the description the call is bound to that the account reads;
- * `not-looked` and why otherwise, a video among them.
+ * an image of the description the call is bound to that the account reads,
+ * or the PDF it names written by the writer given; `not-looked` and why
+ * otherwise, a video among them.
  */
 export function runLookAtPicture(
   description: DescriptionDocumentBinding,
   input: UnparsedWireValue,
+  writePdf: PdfWrite,
 ): Effect.Effect<PictureLookResult, never, DatabaseServices> {
   const read = readInput(input);
 
@@ -202,10 +244,10 @@ export function runLookAtPicture(
   }
 
   return readDescriptionAttachment(description.userId, description.taskId, named.attachmentId).pipe(
-    Effect.map((picture) =>
-      Option.isNone(picture)
-        ? pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_PICTURE)
-        : looked(picture.value),
+    Effect.flatMap((file) =>
+      Option.isNone(file)
+        ? Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.NO_PICTURE))
+        : lookedFile(file.value, named.attachmentId, writePdf),
     ),
     Effect.tapError(logStoreFailure),
     Effect.catch(() => Effect.succeed(pictureNotLooked(PICTURE_LOOK_REFUSAL.UNAVAILABLE))),

@@ -20,6 +20,7 @@
 import CoreSpotlight
 import ExpoModulesCore
 import Foundation
+import OSLog
 import UIKit
 import UniformTypeIdentifiers
 
@@ -68,6 +69,62 @@ final class ContinuedLinks {
   }
 }
 
+/// A `replaceAll`'s two answers, the delete-all's and the items', settling its promise once both are in, or a while after the items' where the delete-all never answers, refused where either was. Note that the system documents no order between the two completions, so neither is assumed to come first; and that the delete-all is waited on only so long, because the system was seen never to answer one on an index it held nothing of. Its state is read and written on its own queue alone.
+final class Replacement: @unchecked Sendable {
+  /// How long the delete-all may still answer once the items are added.
+  private static let grace: DispatchTimeInterval = .seconds(5)
+
+  private let queue = DispatchQueue(label: "dev.vespin.spotlight.replacement")
+  private let settle: @Sendable (Error?) -> Void
+  private var emptying: Result<Void, Error>?
+  private var adding: Result<Void, Error>?
+  private var settled = false
+
+  init(_ settle: @escaping @Sendable (Error?) -> Void) {
+    self.settle = settle
+  }
+
+  func emptied(_ error: Error?) {
+    queue.async {
+      self.emptying = Self.result(error)
+      self.settleOnceAnswered()
+    }
+  }
+
+  func added(_ error: Error?) {
+    queue.async {
+      self.adding = Self.result(error)
+      self.settleOnceAnswered()
+      self.queue.asyncAfter(deadline: .now() + Self.grace) { self.settleUnemptied() }
+    }
+  }
+
+  private static func result(_ error: Error?) -> Result<Void, Error> {
+    error.map { .failure($0) } ?? .success(())
+  }
+
+  private static func failure(_ result: Result<Void, Error>?) -> Error? {
+    guard case .failure(let error) = result else { return nil }
+    return error
+  }
+
+  /// Settles once both have answered, or at once where the items were refused.
+  private func settleOnceAnswered() {
+    guard !settled, let adding else { return }
+    let refusal = Self.failure(adding) ?? Self.failure(emptying)
+    guard emptying != nil || refusal != nil else { return }
+    settled = true
+    settle(refusal)
+  }
+
+  /// Settles with the items' answer alone where the delete-all has not answered by the grace's end.
+  private func settleUnemptied() {
+    guard !settled, let adding else { return }
+    settled = true
+    settle(Self.failure(adding))
+  }
+}
+
 public final class SystemActivityModule: Module {
   /// Our activity type, declared in the app's `NSUserActivityTypes` (`@repo/features/ios-system-activity`).
   static let activityType = "dev.vespin.viewing"
@@ -75,6 +132,11 @@ public final class SystemActivityModule: Module {
   static let pullRequestKey = "pullRequest"
   /// The app's own index, apart from the default one so its protection is its own.
   private static let indexName = "dev.vespin.spotlight"
+  /// Where the index's answers are said in the device log.
+  private static let log = Logger(subsystem: "dev.vespin.ios", category: "spotlight")
+
+  /// The queue every Spotlight call runs on, apart from Expo's one shared async queue.
+  private static let calls = DispatchQueue(label: "dev.vespin.spotlight.calls")
 
   private lazy var index = CSSearchableIndex(name: Self.indexName, protectionClass: .complete)
   // Note that the activity is read and written on the main thread alone.
@@ -110,17 +172,32 @@ public final class SystemActivityModule: Module {
       self.withdraw(webpageUrl)
     }.runOnQueue(.main)
 
-    AsyncFunction("index") { (items: [SpotlightRecord]) async throws in
-      try await self.index.indexSearchableItems(items.map(Self.searchableItem))
-    }
+    // Note that each Spotlight call runs on the module's own serial queue (`calls`), so the system takes them in the order JavaScript made them while no call holds Expo's one shared async queue, which every other module's calls wait on. Each is answered by its own completion alone, and none waits on the answer to the one before, because the system was seen never to answer a delete-all on an index it held nothing of, and every call awaiting it then never reached the index.
+    // Note that a refused delete-all refuses the whole call (`Replacement`), so the index is never taken as holding the lists alone while an earlier account's items may stand in it.
+    AsyncFunction("replaceAll") { (items: [SpotlightRecord], promise: Promise) in
+      let replacement = Replacement(Self.answer(promise))
+      self.index.deleteAllSearchableItems { error in
+        if let error {
+          Self.log.error("Spotlight's delete-all was refused: \(error.localizedDescription, privacy: .public)")
+        } else {
+          Self.log.notice("Spotlight's delete-all was answered")
+        }
+        replacement.emptied(error)
+      }
+      self.index.indexSearchableItems(items.map(Self.searchableItem), completionHandler: replacement.added)
+    }.runOnQueue(Self.calls)
 
-    AsyncFunction("remove") { (ids: [String]) async throws in
-      try await self.index.deleteSearchableItems(withIdentifiers: ids)
-    }
+    AsyncFunction("index") { (items: [SpotlightRecord], promise: Promise) in
+      self.index.indexSearchableItems(items.map(Self.searchableItem), completionHandler: Self.answer(promise))
+    }.runOnQueue(Self.calls)
 
-    AsyncFunction("removeAll") { () async throws in
-      try await self.index.deleteAllSearchableItems()
-    }
+    AsyncFunction("remove") { (ids: [String], promise: Promise) in
+      self.index.deleteSearchableItems(withIdentifiers: ids, completionHandler: Self.answer(promise))
+    }.runOnQueue(Self.calls)
+
+    AsyncFunction("removeAll") { (promise: Promise) in
+      self.index.deleteAllSearchableItems(completionHandler: Self.answer(promise))
+    }.runOnQueue(Self.calls)
   }
 
   /// What the system handed back, as JavaScript reads it: the link, and a pull request's number; none for an activity that is not ours.
@@ -138,9 +215,20 @@ public final class SystemActivityModule: Module {
     }
   }
 
+  /// Settles `promise` with what the index answered, said in the device log too, since JavaScript's console does not reach it in a Release build.
+  private static func answer(_ promise: Promise) -> @Sendable (Error?) -> Void {
+    return { error in
+      guard let error else { return promise.resolve() }
+      log.error("A Spotlight call was refused: \(error.localizedDescription, privacy: .public)")
+      promise.reject(error)
+    }
+  }
+
   private static func searchableItem(_ record: SpotlightRecord) -> CSSearchableItem {
     let attributes = CSSearchableItemAttributeSet(contentType: .text)
     attributes.title = record.title
+    // Note that the name is the title too, because Spotlight has matched a query against an item's display name alone since iOS 17, so an item with a title alone is held but never found.
+    attributes.displayName = record.title
     attributes.contentDescription = record.summary
     return CSSearchableItem(
       uniqueIdentifier: record.id, domainIdentifier: record.domain, attributeSet: attributes)

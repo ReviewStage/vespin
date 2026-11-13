@@ -1,6 +1,8 @@
 // _layout.tsx -- Settings' own stack inside its sheet: the main list, and the pages it pushes, under the system's inline headers in the brand's tint on the sidebar's ground.
 
 import { FEEDBACK_WORDS } from "@repo/features/feedback";
+import { HOST_CONNECT_WORDS } from "@repo/features/host-connect-words";
+import { MCP_CLIENTS_WORDS } from "@repo/features/mcp-clients-words";
 import { SETTINGS_PAGE_TITLE, SETTINGS_VIEW } from "@repo/settings/settings-views";
 import { BAR_TITLE, useColors } from "@repo/ui-native";
 import { Stack } from "expo-router";
@@ -26,7 +28,7 @@ export default function SettingsLayout() {
         headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         headerBackButtonDisplayMode: "minimal",
         headerShadowVisible: false,
-        contentStyle: { backgroundColor: colors.SIDEBAR },
+        contentStyle: { backgroundColor: colors.GROUPED },
       }}
     >
       <Stack.Screen name="index" options={{ title: "Settings" }} />
@@ -44,9 +46,11 @@ export default function SettingsLayout() {
         options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.INTEGRATIONS] }}
       />
       <Stack.Screen name="machines" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.HOSTS] }} />
+      <Stack.Screen name="machine-connect" options={{ title: HOST_CONNECT_WORDS.TITLE }} />
       <Stack.Screen name="skills" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.SKILLS] }} />
       <Stack.Screen name="skill" />
       <Stack.Screen name="skill-add" />
+      <Stack.Screen name="mcp" options={{ title: MCP_CLIENTS_WORDS.TITLE }} />
       <Stack.Screen name="memory" options={{ title: SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY] }} />
       <Stack.Screen name="memory-edit" />
       <Stack.Screen name="feedback" options={{ title: FEEDBACK_WORDS.TITLE }} />

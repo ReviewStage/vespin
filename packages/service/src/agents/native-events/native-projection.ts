@@ -699,6 +699,7 @@ class Fold {
         ? { usageByModel: [{ model, ...turn.usage }] }
         : undefined),
       responseIds: [],
+      ...(moment.files === undefined ? undefined : { files: moment.files }),
       at: this.#context.now,
       attempt: this.#context.attempt,
     });
@@ -966,6 +967,10 @@ class Fold {
             this.#tell(this.turn(), { kind: RUN_EVENT.COMPACTED, notice: moment.notice }),
           );
         }
+
+        return;
+      case NATIVE_MOMENT.GOAL:
+        this.#setTurn(this.#tell(this.turn(), { kind: RUN_EVENT.GOAL, notice: moment.notice }));
 
         return;
       case NATIVE_MOMENT.COMPACTION_FAILED: {

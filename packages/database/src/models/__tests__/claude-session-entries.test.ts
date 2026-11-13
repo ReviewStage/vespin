@@ -5,7 +5,7 @@ import { Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { CONVERSATION_RUNTIME } from "../../storage-vocabulary.js";
-import { getTestDB, startTask } from "../../testing/index.js";
+import { getTestDB, plansOf, startTask } from "../../testing/index.js";
 import { createAgent } from "../agent-store.js";
 import {
   appendSessionEntries,
@@ -43,7 +43,7 @@ const loaded = (userId: string, conversationId: string, key: typeof MAIN | typeo
   loadSessionEntries(userId, conversationId, key).pipe(Effect.map(Option.getOrElse(() => [])));
 
 /** A key's transcript read page by page from its first, each page's entries in its own list. */
-const paged = (userId: string, conversationId: string, key: typeof MAIN) =>
+const paged = (userId: string, conversationId: string, key: typeof MAIN | typeof SUBAGENT) =>
   Effect.gen(function* () {
     const pages: Array<ReadonlyArray<unknown>> = [];
     let after: number | null = null;
@@ -99,6 +99,10 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
         entry("c"),
       ]);
       assert.deepEqual(yield* loaded(userId, conversationId, SUBAGENT), [entry("s")]);
+      assert.deepEqual(yield* paged(userId, conversationId, MAIN), [
+        [entry("a"), entry("b"), entry("c")],
+      ]);
+      assert.deepEqual(yield* paged(userId, conversationId, SUBAGENT), [[entry("s")]]);
       assert.deepEqual(
         (yield* listSessionEntrySessions(userId, conversationId, PROJECT)).map(
           (listed) => listed.sessionId,
@@ -184,6 +188,24 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
         assert.ok(pages.every((page) => page.length > 0));
         assert.deepEqual(pages.flat(), large);
         assert.deepEqual(yield* paged(other.userId, owner.conversationId, MAIN), [[]]);
+      }),
+  );
+
+  it.effect(
+    "a page of a transcript takes each entry off the key's index, sorting only the page",
+    () =>
+      Effect.gen(function* () {
+        for (const key of [MAIN, SUBAGENT]) {
+          const [page] = yield* plansOf(
+            loadSessionEntryPage(`user-${randomUUID()}`, randomUUID(), key, null),
+          );
+
+          const plan = page?.plan ?? "";
+
+          assert.doesNotMatch(plan, /Filter: .*subpath/);
+          // Note that the one sort is the page's own order, never a step's over the rest of the session.
+          assert.equal(plan.match(/Sort Key/g)?.length, 1);
+        }
       }),
   );
 

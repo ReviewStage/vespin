@@ -21,7 +21,7 @@ import {
   recordAutomationRun,
   updateAutomation,
 } from "@repo/database/models/automation-store";
-import { heardFromAnotherAccount } from "@repo/database/models/mac-command-store";
+import { heardFromAnotherAccount } from "@repo/database/models/machine-command-store";
 import { readMessageByClientId, sentLineStands } from "@repo/database/models/message-reads";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask, readTask } from "@repo/database/models/task-store";
@@ -1120,6 +1120,32 @@ it.layer(SUITE)("an automation's runs", (it) => {
           agentSessions.opened.filter((each) => each.account === owner),
           [],
         );
+      }),
+  );
+
+  it.effect(
+    "a one-time schedule's delivery starts its run, then pauses the automation with nothing due, keeping the run",
+    () =>
+      Effect.gen(function* () {
+        const { owner, automation, now, workspaceId } = yield* openAutomation({
+          trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, at: "1970-01-01T00:00", timezone: "UTC" },
+        });
+
+        const agentSessions = fakeAgentSessions();
+
+        yield* consumeAutomationRunMessage(
+          agentSessions.sessionsFor,
+          scheduleMessage(automation, workspaceId, now),
+        ).pipe(Effect.provide(services));
+
+        const runs = yield* listAutomationRuns(owner, automation.id);
+        assert.deepEqual(
+          runs.map((run) => run.status),
+          [AUTOMATION_RUN_STATUS.STARTED],
+          "the pause comes after the run, which it does not skip",
+        );
+        const after = Option.getOrThrow(yield* readAutomationToRun(automation.id));
+        assert.deepEqual([after.enabled, after.nextRunAt], [false, null]);
       }),
   );
 

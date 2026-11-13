@@ -66,4 +66,8 @@ export const ROW_INSET = {
   TEXT: SPACE.EDGE + MARK_SIZE.LEAD + SPACE.ROW,
   /** A row's top and bottom. */
   VERTICAL: 9,
+  /** An Inbox thread's top and bottom, roomier than a task's, as Mail's message rows stand. */
+  THREAD_VERTICAL: 11,
+  /** Between an Inbox thread's title and the line under it, as Mail's subject sits under its sender. */
+  THREAD_LINE_GAP: 3,
 } as const;

@@ -11,10 +11,10 @@ import {
   useWindowDimensions,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceTransparency } from "./accessibility.js";
 import { useColors } from "./tokens/colors.js";
-import { SPACE } from "./tokens/space.js";
+import { READING_WIDTH, SPACE } from "./tokens/space.js";
 
 /** The room a docked bar takes above the screen's bottom safe area before it is measured, in points: a bare field's, with its gap. */
 const DOCK_ROOM_UNMEASURED = 72;
@@ -56,7 +56,9 @@ const styles = StyleSheet.create({
   content: { flexGrow: 1 },
   // A dock's content takes the screen, the bar floating over its foot.
   dock: { flex: 1 },
-  docked: { position: "absolute", left: 0, right: 0, bottom: 0 },
+  docked: { position: "absolute", left: 0, right: 0, bottom: 0, alignItems: "center" },
+  // The bar's column, as wide as the dock and no wider than the reading width a wide window centers its content at.
+  column: { width: "100%" },
   bar: {
     marginHorizontal: SPACE.ROW + 2,
     padding: BAR_EDGE,
@@ -183,7 +185,7 @@ export function GlassBar({
   const bar = solid ? (
     <SolidBar>{content}</SolidBar>
   ) : (
-    <GlassView glassEffectStyle="regular" isInteractive style={styles.bar}>
+    <GlassView glassEffectStyle="regular" style={styles.bar}>
       {content}
     </GlassView>
   );
@@ -211,7 +213,10 @@ export function GlassBar({
  * bars do, and rising with the keyboard so the field stays above it. The
  * content leaves room at its own foot for the bar as tall as it stands
  * (`useDockRoom`): a composer's head, such as a call waiting on an answer
- * and the queue, grows it well past a bare field.
+ * and the queue, grows it well past a bare field. In a wide window the bar
+ * stands in the content's own centered column, at the reading width, as
+ * Messages' field stands under its conversation, rather than across the
+ * whole window.
  */
 export function GlassDock({
   children,
@@ -223,12 +228,16 @@ export function GlassDock({
   // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
   const keyboard = useKeyboardHeight();
   const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
+  // Note that the column holds the window's side safe areas too, which the bar's own safe area view pads inside it, so its glass spans the reading width.
+  const { left, right } = useSafeAreaInsets();
 
   return (
     <View style={styles.dock}>
       <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
       <View style={[styles.docked, { bottom: keyboard }]}>
-        <DockMeasure.Provider value={setRoom}>{bar}</DockMeasure.Provider>
+        <View style={[styles.column, { maxWidth: READING_WIDTH + left + right }]}>
+          <DockMeasure.Provider value={setRoom}>{bar}</DockMeasure.Provider>
+        </View>
       </View>
     </View>
   );

@@ -1,12 +1,22 @@
 // button.tsx -- the app's buttons, chips, and pills: the system's own buttons, a filled one in the brand's accent and the rest in the ink, and the small capsules a person picks among or reads a task's fields on.
 
-import { HStack, Image, Picker, Button as SwiftUIButton, Text, VStack } from "@expo/ui/swift-ui";
+import {
+  HStack,
+  Image,
+  Menu,
+  Picker,
+  Button as SwiftUIButton,
+  Text,
+  Toggle,
+  VStack,
+} from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHint,
   accessibilityLabel,
+  accessibilityValue,
   background,
   buttonStyle,
   controlSize,
@@ -25,10 +35,10 @@ import {
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactNode } from "react";
-import type { Glyph } from "./glyph.js";
-import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
+import { type Glyph, glyphImage } from "./glyph.js";
+import { actContent } from "./glyph-label.js";
+import type { MenuChoice } from "./list-row.js";
 import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -60,7 +70,7 @@ const CAPSULE_PADDING = { horizontal: 12, vertical: 6 } as const;
 
 type ButtonProps = {
   readonly label: string;
-  readonly symbol?: SfSymbol | undefined;
+  readonly symbol?: Glyph | undefined;
   readonly look?: ButtonLook | undefined;
   readonly size?: ButtonSize | undefined;
   /** Whether the act deletes or undoes something, which the system draws red. */
@@ -91,8 +101,7 @@ export function Button(props: ButtonProps) {
 
   return (
     <SwiftUIButton
-      label={label}
-      {...(symbol === undefined ? {} : { systemImage: symbol })}
+      {...actContent(label, symbol)}
       role={props.destructive === true ? "destructive" : "default"}
       onPress={props.onPress}
       modifiers={[
@@ -166,7 +175,7 @@ function CapsuleWords({
 
 type ChipProps = {
   readonly label: string;
-  readonly symbol?: SfSymbol | undefined;
+  readonly symbol?: Glyph | undefined;
   /** How many it holds, drawn after its words, such as a scope's count. */
   readonly count?: number | undefined;
   /** Whether the chip stands chosen, which fills it with the ink. */
@@ -189,8 +198,7 @@ export function Chip({ label, symbol, count, selected = false, hint, onPress }: 
 
   return (
     <SwiftUIButton
-      label={count === undefined ? label : `${label} ${count}`}
-      {...(symbol === undefined ? {} : { systemImage: symbol })}
+      {...actContent(count === undefined ? label : `${label} ${count}`, symbol, "subheadline")}
       onPress={onPress}
       modifiers={[
         buttonStyle(selected ? "borderedProminent" : "bordered"),
@@ -198,7 +206,6 @@ export function Chip({ label, symbol, count, selected = false, hint, onPress }: 
         controlSize("small"),
         tint(colors.TEXT),
         ...(selected ? [foregroundStyle(colors.GROUND)] : []),
-        hoverEffect(HOVER_EFFECT.LIFT),
         ...(selected ? [accessibilityAddTraits(["isSelected"])] : []),
         ...(hint === undefined ? [] : [accessibilityHint(hint)]),
       ]}
@@ -287,9 +294,18 @@ type FieldChipProps = {
   /** A person, whose face leads the chip, their picture where one is known. */
   readonly face?: Face | undefined;
   /** A glyph leading the chip where neither does, in the muted ink. */
-  readonly symbol?: SfSymbol | undefined;
+  readonly symbol?: Glyph | undefined;
   /** A mark leading the chip in its tone where none of the above does, such as a pull request's state. */
   readonly mark?: { readonly glyph: Glyph; readonly tone: StatusTone } | undefined;
+  /** What a press offers, the field's other values, where the reader may change it; a chip with none takes no press. */
+  readonly menu?: FieldMenu | undefined;
+};
+
+/** A field's values as its chip's menu offers them: the field's name, which VoiceOver hears before its value, and each value, the one it holds checked. */
+export type FieldMenu = {
+  /** The field's name, such as Status, heard before the chip's words. */
+  readonly label: string;
+  readonly choices: readonly MenuChoice[];
 };
 
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
@@ -301,7 +317,9 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   }
 
   if (props.symbol !== undefined) {
-    return <Image systemName={props.symbol} size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />;
+    return (
+      <Image {...glyphImage(props.symbol)} size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />
+    );
   }
 
   if (props.mark !== undefined) {
@@ -313,26 +331,135 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   return null;
 }
 
-/** A task's field read as a small capsule, such as its status, priority, or assignee: on the surface inside a hairline, never pressed, and heard as its words once, its mark saying the same. */
+/**
+ * A task's field read as a small capsule, such as its status, priority, or
+ * assignee: on the surface inside a hairline, and heard as its words once,
+ * its mark saying the same. Where it carries a menu, a press opens the
+ * system's pull-down menu of the field's values over it, the one it holds
+ * checked, as Reminders' and Linear's fields open theirs, and VoiceOver
+ * hears the field's name and its value as one label; with none it takes no
+ * press.
+ */
 export function FieldChip(props: FieldChipProps) {
   const colors = useColors();
+  const { menu } = props;
 
-  return (
+  const capsule = (
     <HStack
       spacing={SPACE.TIGHT + 2}
       modifiers={[
         ...capsuleModifiers(colors, false),
-        accessibilityElement("ignore"),
-        accessibilityLabel(props.label),
+        ...(menu === undefined
+          ? [accessibilityElement("ignore"), accessibilityLabel(props.label)]
+          : []),
       ]}
     >
       {fieldMark(props, colors)}
       <CapsuleWords label={props.label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
     </HStack>
   );
+
+  if (menu === undefined) return capsule;
+
+  return (
+    <Menu
+      label={capsule}
+      modifiers={[
+        // Note that a borderless menu takes only its own press, since a list row holding the system's buttons hands any press on it to all of them.
+        buttonStyle("borderless"),
+        // Note that the field's name and its value are one label, "Status, Todo", because Maestro and Voice Control match a label and never a value.
+        accessibilityLabel(`${menu.label}, ${props.label}`),
+      ]}
+    >
+      {menu.choices.map((choice, at) => (
+        <Toggle
+          // Note that a choice is keyed by its place, since two members may share a name.
+          key={at}
+          {...actContent(choice.label, choice.symbol)}
+          isOn={choice.on}
+          onIsOnChange={() => choice.onPress()}
+        />
+      ))}
+    </Menu>
+  );
 }
 
-/** A task's status as its chip: the ring and the status's name. */
-export function StatusChip({ status }: { readonly status: TaskStatus }) {
-  return <FieldChip label={TASK_STATUS_WORDS[status]} status={status} />;
+/** A task's status as its chip: the ring and the status's name, opening its menu where it carries one. */
+export function StatusChip({
+  status,
+  menu,
+}: {
+  readonly status: TaskStatus;
+  readonly menu?: FieldMenu | undefined;
+}) {
+  return <FieldChip label={TASK_STATUS_WORDS[status]} status={status} menu={menu} />;
+}
+
+/** How far each face of a face pile tucks under the one after it, in points. */
+const FACE_OVERLAP = 4;
+
+type FollowingChipProps = {
+  /** What it says: Following where the reader follows, Follow where they don't. */
+  readonly label: string;
+  /** The faces it shows, the earliest first. */
+  readonly faces: readonly Face[];
+  /** How many more follow than it shows, drawn as +N after the faces; none at 0. */
+  readonly more: number;
+  /** What a press opens, heard after its words. */
+  readonly hint: string;
+  /** What VoiceOver hears beside its words, such as who follows. */
+  readonly heard: string;
+  readonly onPress: () => void;
+};
+
+/**
+ * Who follows a task as a capsule beside its fields: a face pile, each face
+ * overlapping the one before it and a +N count last and on top, then
+ * Following or Follow; pressed, it opens who follows. It stands as the
+ * fields' chips do, on the surface inside a hairline, but takes a press, as
+ * the system's borderless button over it.
+ */
+export function FollowingChip({ label, faces, more, hint, heard, onPress }: FollowingChipProps) {
+  const colors = useColors();
+
+  return (
+    <SwiftUIButton
+      onPress={onPress}
+      modifiers={[
+        buttonStyle("borderless"),
+        accessibilityLabel(label),
+        accessibilityValue(heard),
+        accessibilityHint(hint),
+      ]}
+    >
+      <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, false)}>
+        {faces.length === 0 ? null : (
+          <HStack spacing={-FACE_OVERLAP}>
+            {faces.map((face, at) => (
+              <Avatar
+                // Note that a face is keyed by its place, since two followers may share a name.
+                key={at}
+                name={face.name}
+                picture={face.picture}
+                size={MARK_SIZE.FACE}
+              />
+            ))}
+            {more === 0 ? null : (
+              <Text
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.TIME, weight: "medium" }),
+                  monospacedDigit(),
+                  foregroundStyle(colors.TEXT_MUTED),
+                  padding({ leading: FACE_OVERLAP + 2 }),
+                ]}
+              >
+                {`+${more}`}
+              </Text>
+            )}
+          </HStack>
+        )}
+        <CapsuleWords label={label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
+      </HStack>
+    </SwiftUIButton>
+  );
 }

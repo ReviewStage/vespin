@@ -425,7 +425,7 @@ function AttachmentBody({
         <ZoomImage
           zoom={zoom}
           src={diagram.picture ?? file.url}
-          alt={image ? file.name : diagramAlt(text ?? "")}
+          alt={image ? (file.alt ?? file.name) : diagramAlt(text ?? "")}
         />
       </div>
     );
@@ -438,7 +438,11 @@ function AttachmentBody({
         className="attachment-viewer-body min-h-0 flex-auto grid place-items-center overflow-hidden bg-veil"
         {...DIALOG_VEIL}
       >
-        <VideoPlayer dataUrl={file.url} label={file.name} place={VIDEO_PLAYER_PLACE.VIEWER} />
+        <VideoPlayer
+          dataUrl={file.url}
+          label={file.alt ?? file.name}
+          place={VIDEO_PLAYER_PLACE.VIEWER}
+        />
       </div>
     );
   }

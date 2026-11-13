@@ -57,7 +57,7 @@ export function electronNoticeDoors(dependencies: {
 
   const post: AgentNoticeDoorsSurface["post"] = (notice) => {
     if (!system.Notification.isSupported()) return;
-    const silent = notice.subject.kind !== NOTICE_KIND.MAC_COMMAND_ASK;
+    const silent = notice.subject.kind !== NOTICE_KIND.MACHINE_COMMAND_ASK;
     const posted = new system.Notification({ title: notice.title, body: notice.body, silent });
     const release = () => standing.delete(posted);
     standing.add(posted);

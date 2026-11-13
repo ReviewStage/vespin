@@ -38,7 +38,7 @@
 
 import { markdownTooDeep } from "@repo/features/markdown-nesting";
 import { Predicate } from "effect";
-import type { ElementContent, Root } from "hast";
+import type { Element, ElementContent, Root } from "hast";
 import type { Root as MarkdownRoot, PhrasingContent, RootContent } from "mdast";
 import { memo, type ReactNode, useMemo, useRef } from "react";
 import remarkGfm from "remark-gfm";
@@ -57,9 +57,12 @@ import { cn } from "../cn.js";
 import { FileText } from "../components/file-text/file-text.js";
 import { INLINE_REF_FIT, InlineRefFitScope } from "../components/inline-ref/inline-ref-fit.js";
 import { QUOTE_CLASS } from "../quote-face.js";
+import { ALERT_KIND, alertKindOf, alertQuotes, MarkdownAlert } from "./markdown-alerts.js";
 import { MARKDOWN_CLASS, markdownClass } from "./markdown-class.js";
 import {
   type MarkdownTaskBox,
+  type MarkdownTaskTick,
+  orderedTaskInput,
   placeTaskItems,
   readTaskInput,
   TaskBox,
@@ -67,9 +70,18 @@ import {
   taskInput,
 } from "./markdown-tasks.js";
 
-export type { MarkdownTaskBox, TaskBoxItem } from "./markdown-tasks.js";
+export type { AlertKind } from "./markdown-alerts.js";
+
+export type {
+  MarkdownTaskBox,
+  MarkdownTaskTick,
+  TaskBoxItem,
+  TaskBoxOrdinal,
+} from "./markdown-tasks.js";
 
 export { TaskBox } from "./markdown-tasks.js";
+
+export { ALERT_KIND };
 
 /** How a place's words are drawn: as a note, a transcript, or a site's document. */
 export const MARKDOWN_LOOK = {
@@ -117,6 +129,36 @@ export const MARKDOWN_HTML_STEP = {
   HARDEN: streamdownStep("harden"),
 } as const;
 
+/** The sanitizer's schema as a transcript's steps extend it: the elements it keeps, and each one's attributes. */
+interface SanitizeSchema {
+  readonly tagNames?: readonly string[] | null | undefined;
+  readonly attributes?: Readonly<Record<string, readonly unknown[]>> | null | undefined;
+}
+
+/**
+ * A transcript's three HTML steps where it names none, its own elements
+ * kept by the sanitizer, as Streamdown builds them itself. Note that they are
+ * built here, because Streamdown keeps a place's allowed tags only on steps
+ * of its own, and a transcript adds steps after them.
+ */
+function transcriptHtmlSteps(allowedTags: AllowedTags | undefined): MarkdownSteps {
+  if (allowedTags === undefined || Object.keys(allowedTags).length === 0) {
+    return Object.values(MARKDOWN_HTML_STEP);
+  }
+
+  // SAFETY: Streamdown's sanitize step is the sanitizer and the schema it is attached with.
+  const [sanitize, schema] = MARKDOWN_HTML_STEP.SANITIZE as [unknown, SanitizeSchema];
+
+  const kept: SanitizeSchema = {
+    ...schema,
+    tagNames: [...(schema.tagNames ?? []), ...Object.keys(allowedTags)],
+    attributes: { ...schema.attributes, ...allowedTags },
+  };
+
+  // SAFETY: a step's tuple is the step, then the options it is attached with.
+  return [MARKDOWN_HTML_STEP.PARSE, [sanitize, kept] as MarkdownStep, MARKDOWN_HTML_STEP.HARDEN];
+}
+
 /**
  * GitHub's dialect, which is the one coding agents write: tables,
  * strikethrough, and task lists, with a single tilde left as the character it
@@ -149,7 +191,15 @@ const FLOW_COMPONENTS: Components = {
   h4: ({ children }) => heading(4, children),
   h5: ({ children }) => heading(5, children),
   h6: ({ children }) => heading(6, children),
-  blockquote: ({ children }) => <blockquote className={QUOTE_CLASS}>{children}</blockquote>,
+  blockquote: ({ children, node }) => {
+    const alert = alertKindOf(node);
+
+    return alert === undefined ? (
+      <blockquote className={QUOTE_CLASS}>{children}</blockquote>
+    ) : (
+      <MarkdownAlert kind={alert}>{children}</MarkdownAlert>
+    );
+  },
   hr: () => <hr />,
   ul: ({ children }) => <ul>{children}</ul>,
   ol: ({ children, start }) => <ol start={start}>{children}</ol>,
@@ -168,6 +218,11 @@ const NO_WRITE: TaskWrite = { run: () => undefined, asked: undefined };
 
 /** The box of an item whose words lost their drawer between draws: asking nothing, and drawing the words' own state. */
 const untickable: MarkdownTaskBox = ({ label, checked }) => (
+  <TaskBox label={label} checked={checked} write={NO_WRITE} />
+);
+
+/** The box of an item drawn from HTML whose words lost their ticker between draws: asking nothing, and drawing the words' own state. */
+const untickableOrdinal: MarkdownTaskTick = ({ label, checked }) => (
   <TaskBox label={label} checked={checked} write={NO_WRITE} />
 );
 
@@ -198,6 +253,30 @@ function inlineChildren(children: readonly ElementContent[]): ElementContent[] {
     const kept = inlineChildren(child.children);
 
     return INLINE_TAGS.has(child.tagName) ? [{ ...child, children: kept }] : kept;
+  });
+}
+
+/**
+ * The rehype step that stands each block of HTML in a note as a paragraph of
+ * its own, in a quote as at the top. Note that a note draws HTML as its
+ * words, which reach the tree as bare words between its blocks, the only
+ * words that stand there, so a block of HTML ran together with the next and
+ * had no gap above it; as a paragraph each reads as its own line, as the
+ * description's editor draws it.
+ */
+const htmlBlocksAsParagraphs = () => (tree: Root) => {
+  paragraphedHtml(tree);
+};
+
+function paragraphedHtml(holder: Root | Element): void {
+  holder.children = holder.children.map((child) => {
+    if (child.type === "text" && child.value.trim() !== "") {
+      return { type: "element", tagName: "p", properties: {}, children: [child] };
+    }
+
+    if (child.type === "element" && child.tagName === "blockquote") paragraphedHtml(child);
+
+    return child;
   });
 }
 
@@ -362,6 +441,8 @@ export interface MarkdownProps {
   normalizeHtmlIndentation?: boolean | undefined;
   /** Draws each of a note's task items' boxes a reader can tick, as a description the developer can edit does; every checkbox is read-only without it. */
   taskBox?: MarkdownTaskBox | undefined;
+  /** Draws each of a transcript's task items' boxes a reader can tick by its place among the words' boxes, as GitHub's rendering of a comment the member may tick does; every checkbox is read-only without it. Note that a streaming transcript counts each block's boxes apart. */
+  taskTick?: MarkdownTaskTick | undefined;
 }
 
 /**
@@ -387,6 +468,8 @@ function WholeWords({
   const steps = useMemo(
     () => [
       placeTaskItems,
+      alertQuotes,
+      ...(look === MARKDOWN_LOOK.NOTE ? [htmlBlocksAsParagraphs] : []),
       ...(rehypePlugins ?? []),
       ...(look === MARKDOWN_LOOK.INLINE ? [unwrapBlocks] : []),
     ],
@@ -423,6 +506,7 @@ function WholeWords({
 function ParsedMarkdown({
   className,
   streaming = false,
+  taskTick,
   ...whole
 }: MarkdownProps): React.JSX.Element {
   const {
@@ -437,11 +521,10 @@ function ParsedMarkdown({
     normalizeHtmlIndentation,
   } = whole;
 
-  // Note that a transcript's task boxes are drawn as a note's read-only ones, named by their items
-  // where the place hands steps of its own, since Streamdown keeps its allowed tags only on its own.
+  // Note that a transcript's task boxes are drawn as a note's read-only ones, named by their items, and its alerts as a note's.
   const transcriptSteps = useMemo(
-    () => (rehypePlugins === undefined ? undefined : [...rehypePlugins, placeTaskItems]),
-    [rehypePlugins],
+    () => [...(rehypePlugins ?? transcriptHtmlSteps(allowedTags)), placeTaskItems, alertQuotes],
+    [rehypePlugins, allowedTags],
   );
 
   const lineSteps = useMemo(
@@ -449,10 +532,18 @@ function ParsedMarkdown({
     [remarkPlugins],
   );
 
-  const transcriptComponents = useMemo<Components>(
-    () => ({ ...FLOW_COMPONENTS, input: readTaskInput, ...components }),
-    [components],
-  );
+  // Note that the ticker is read as a box draws, so a new one each render redraws nothing.
+  const ticker = useRef(taskTick);
+  ticker.current = taskTick;
+  const ticks = taskTick !== undefined;
+
+  const transcriptComponents = useMemo<Components>(() => {
+    const input = ticks
+      ? orderedTaskInput((item) => ticker.current?.(item) ?? untickableOrdinal(item))
+      : readTaskInput;
+
+    return { ...FLOW_COMPONENTS, input, ...components };
+  }, [components, ticks]);
 
   if (look === MARKDOWN_LOOK.TRANSCRIPT || look === MARKDOWN_LOOK.TRANSCRIPT_LINE) {
     const line = look === MARKDOWN_LOOK.TRANSCRIPT_LINE;
@@ -468,7 +559,7 @@ function ParsedMarkdown({
           components={transcriptComponents}
           {...(steps === undefined ? {} : { remarkPlugins: steps })}
           {...(line ? { parseMarkdownIntoBlocksFn: oneBlock } : {})}
-          {...(transcriptSteps === undefined ? {} : { rehypePlugins: transcriptSteps })}
+          rehypePlugins={transcriptSteps}
           {...(allowedTags === undefined ? {} : { allowedTags })}
           {...(literalTagContent === undefined ? {} : { literalTagContent })}
           {...(urlTransform === undefined ? {} : { urlTransform })}

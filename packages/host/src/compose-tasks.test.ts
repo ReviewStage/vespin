@@ -1471,33 +1471,81 @@ it.effect(
     }),
 );
 
-it.effect("a block the service answered stands on the open task through the list's next draw", () =>
-  Effect.gen(function* () {
-    const service = fakeService([
-      task(INVITES, "Teammate invitations", "# Draft", 10),
-      task(BILLING, "Billing", "# Draft", 11),
-    ]);
+it.effect(
+  "a block the service answered stands on the open task through the list's next draw, and one the list takes away leaves it",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService([
+        task(INVITES, "Teammate invitations", "# Draft", 10),
+        task(BILLING, "Billing", "# Draft", 11),
+      ]);
 
-    const { call, listed, openTask, description } = yield* subject(service);
-    yield* call("TASKS_REFRESH", undefined);
-    yield* listed();
-    yield* openTask(INVITES);
-    const blockedBy = () => description(INVITES)?.blockedBy;
+      const { call, listed, settled, openTask, description } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listed();
+      yield* openTask(INVITES);
+      const blockedBy = () => description(INVITES)?.blockedBy;
 
-    const answered = yield* call("TASKS_BLOCK", {
-      taskId: INVITES,
-      block: {
-        change: TASK_BLOCK_CHANGE.ADD,
-        relation: TASK_BLOCK_RELATION.BLOCKED_BY,
-        taskId: BILLING,
-      },
-    });
+      const answered = yield* call("TASKS_BLOCK", {
+        taskId: INVITES,
+        block: {
+          change: TASK_BLOCK_CHANGE.ADD,
+          relation: TASK_BLOCK_RELATION.BLOCKED_BY,
+          taskId: BILLING,
+        },
+      });
 
-    yield* listed();
+      yield* listed();
 
-    assert.deepEqual(answered, { blockedBy: [BILLING], blocks: [] });
-    assert.deepEqual(blockedBy(), [BILLING]);
-  }),
+      assert.deepEqual(answered, { blockedBy: [BILLING], blocks: [] });
+      assert.deepEqual(blockedBy(), [BILLING]);
+
+      // A teammate takes the block away, which the list's next draw carries.
+      service.live.list.set({
+        plans: service.tasks.map((each) => ({ ...rowOfTask(each), blockedBy: [], blocks: [] })),
+      });
+      yield* nextPoll(settled);
+
+      assert.deepEqual(blockedBy(), []);
+    }),
+);
+
+it.effect(
+  "a block added on a service whose rows name no blocks keeps the open task's other blockers",
+  () =>
+    Effect.gen(function* () {
+      const design = "5d2c8e1f-7a3b-4c9d-8e6f-1a2b3c4d5e6f";
+
+      const service = fakeService([
+        { ...task(INVITES, "Teammate invitations", "# Draft", 10), blockedBy: [design] },
+        task(BILLING, "Billing", "# Draft", 11),
+        task(design, "Design", "# Draft", 12),
+      ]);
+
+      const { call, listed, openTask, description } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listed();
+      yield* openTask(INVITES);
+
+      const adding = yield* Effect.forkChild(
+        call("TASKS_BLOCK", {
+          taskId: INVITES,
+          block: {
+            change: TASK_BLOCK_CHANGE.ADD,
+            relation: TASK_BLOCK_RELATION.BLOCKED_BY,
+            taskId: BILLING,
+          },
+        }),
+      );
+
+      yield* Fiber.join(adding);
+      yield* listed();
+
+      assert.deepEqual(
+        [...(description(INVITES)?.blockedBy ?? [])].sort(),
+        [design, BILLING].sort(),
+      );
+    }),
 );
 
 it.effect(
@@ -1514,7 +1562,13 @@ it.effect(
       yield* call("TASKS_REFRESH", undefined);
       yield* listed();
       service.live.list.set({
-        plans: service.tasks.map((each) => ({ ...rowOfTask(each), blocked: each.id === INVITES })),
+        plans: service.tasks.map((each) => ({
+          ...rowOfTask(each),
+          blocked: each.id === INVITES,
+          ...(each.id === INVITES
+            ? { blockedBy: [BILLING], blocks: [] }
+            : { blockedBy: [], blocks: [INVITES] }),
+        })),
       });
       yield* nextPoll(settled);
       yield* openTask(INVITES);
@@ -1523,6 +1577,13 @@ it.effect(
         [INVITES, BILLING].map(
           (id) => last()?.tasks.find((row) => row.id === id)?.blocked === true,
         );
+
+      const blocks = () =>
+        [INVITES, BILLING].map((id) => {
+          const row = last()?.tasks.find((each) => each.id === id);
+
+          return { blockedBy: row?.blockedBy ?? [], blocks: row?.blocks ?? [] };
+        });
 
       const answered = yield* Deferred.make<void>();
       service.relationAnswered = Deferred.await(answered);
@@ -1541,11 +1602,24 @@ it.effect(
 
       yield* settled;
       const drawn = blocked();
+      const drawnBlocks = blocks();
       yield* Deferred.succeed(answered, undefined);
 
       assert.deepEqual(yield* Fiber.join(turning), { failure: TASK_CALL_FAILURE.UNANSWERED });
       assert.deepEqual(drawn, [false, true], "the block is drawn turned around while it is out");
+      assert.deepEqual(
+        drawnBlocks,
+        [
+          { blockedBy: [], blocks: [BILLING] },
+          { blockedBy: [INVITES], blocks: [] },
+        ],
+        "each task's lists of blocks are drawn turned around while it is out",
+      );
       assert.deepEqual(blocked(), [true, false]);
+      assert.deepEqual(blocks(), [
+        { blockedBy: [BILLING], blocks: [] },
+        { blockedBy: [], blocks: [INVITES] },
+      ]);
     }),
 );
 
@@ -2800,7 +2874,8 @@ it.effect(
       yield* call("TASKS_REFRESH", undefined);
       yield* settled;
       assert.equal(last()?.listStatus, TASKS_READ.FAILED);
-      assert.equal(last()?.live, HOST_LIVE.OFFLINE, "a service that answers no read is offline");
+      // A read that failed leaves whether the service answers to the network watch, since a refused read was still answered.
+      assert.equal(last()?.live, undefined);
 
       service.live.list.refuse(undefined);
       yield* TestClock.adjust(Duration.seconds(5));

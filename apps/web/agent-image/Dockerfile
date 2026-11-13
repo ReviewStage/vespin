@@ -10,14 +10,15 @@
 # sandbox's API runs commands as. The `agent` user each harness runs as is the SDK's, made as a
 # sandbox opens (`packages/service/src/agents/machine/vercel-machine.ts`).
 #
-# The versions and paths are `@repo/agent-runner/pins`'s; these `ARG`s must match its versions.
+# The versions and paths are `@repo/agent-runner/pins`'s, whose versions
+# `tools/oxlint/vespin/guards/agent-pins.ts` holds these `ARG`s to.
 
 FROM vcr.vercel.com/vercel/sandbox/node:24
 
 ARG PLAYWRIGHT_VERSION=1.64.1
 ARG CLAUDE_AGENT_SDK_VERSION=0.3.322
 ARG CLAUDE_CODE_VERSION=2.1.322
-ARG CODEX_VERSION=0.167.1
+ARG CODEX_VERSION=0.167.2
 ARG GH_STACK_VERSION=v0.2.1
 
 USER root

@@ -52,7 +52,11 @@ import {
 } from "./protocol.js";
 import { runAgent } from "./runner.js";
 import { fakeAppServer } from "./testing/fake-app-server.js";
-import { fakeCheckoutSnapshots, fakeSnapshotOf } from "./testing/fake-checkout-snapshots.js";
+import {
+  fakeCheckoutSnapshots,
+  fakeFilesOf,
+  fakeSnapshotOf,
+} from "./testing/fake-checkout-snapshots.js";
 import { fakeClaudeCode } from "./testing/fake-claude-code.js";
 import { fakeProbe } from "./testing/fake-probe.js";
 import { ANSWER, type Answer, makeFakeService } from "./testing/fake-service.js";
@@ -66,6 +70,7 @@ import {
   CONNECTION_LOST_TWICE,
   CREDENTIAL_REFUSED_TURN,
   FOLLOW_UP_TURNS,
+  GOAL_CLEARED_TURN,
   SHORT_TURN,
   STOPPED_COMMAND,
   STOPPED_TURN,
@@ -163,6 +168,7 @@ function launch(
   chain: readonly string[] | null = [],
   answering = true,
   probe = fakeProbe(),
+  changed = false,
 ) {
   return Effect.gen(function* () {
     const cli = yield* fakeClaudeCode(steps, chain, answering);
@@ -178,7 +184,7 @@ function launch(
           service.layer,
           fakeAppServer([]).layer,
           probe.layer,
-          fakeCheckoutSnapshots().layer,
+          fakeCheckoutSnapshots(false, changed).layer,
         ),
       ),
       Effect.forkScoped,
@@ -328,6 +334,44 @@ it.effect(
       assert.equal(cli.prompts.length, 2);
       assert.equal(cli.interrupts, 1);
       assert.equal(cli.closed, true);
+    }),
+);
+
+it.effect(
+  "a /goal line sent mid-turn, a clear or a new goal, interrupts the turn a goal holds open, and the launch goes on until the CLI runs it as a turn of its own",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService([], "Working toward the goal.");
+      const { prompted, write, run } = yield* launch(GOAL_CLEARED_TURN, service);
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* service.seen;
+      yield* Queue.take(prompted);
+      yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: "/goal clear" }] });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      // The cut-off turn's result, then the clear's own, before the launch's end.
+      assert.deepEqual(kinds(service.applied).slice(-3), [
+        "result/error_during_execution",
+        "result/success",
+        RUNNER_EVENT.END,
+      ]);
+    }),
+);
+
+it.effect(
+  "fails a launch whose CLI never answers the interrupt a mid-turn /goal line needs, rather than queue the command behind the turn",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService([], "Working toward the goal.");
+      const { prompted, write, run } = yield* launch(GOAL_CLEARED_TURN, service, ENV, [], false);
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* service.seen;
+      yield* Queue.take(prompted);
+      yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: "/goal clear" }] });
+
+      assert.deepEqual(yield* settled(run), Exit.succeed(RUNNER_END.FAILED));
     }),
 );
 
@@ -724,6 +768,45 @@ it.effect(
         [undefined, undefined],
       );
       assert.equal(cli.closed, true);
+    }),
+);
+
+it.effect(
+  "a message taken while the turn waits on a wakeup joins that turn, whose IDLE counts its files from the snapshot its first message opened on",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService();
+
+      const { write, run } = yield* launch(
+        [...WAKEUP_WAIT.slice(0, -1), ...WARM_TURNS.slice(-4)],
+        service,
+        ENV,
+        [],
+        true,
+        fakeProbe(),
+        true,
+      );
+
+      const first = "6f1c2a4e-3b7d-4c8e-9a0b-1d2e3f405162";
+      yield* write(WARM_CONFIG);
+      yield* write({ ...FIRST_MESSAGE, uuid: first });
+
+      for (let step = 0; step < 5_000; step += 1) {
+        if (kinds(service.applied).includes(RUNNER_EVENT.WAITING)) break;
+        yield* Effect.yieldNow;
+      }
+
+      yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: "And this." }] });
+      yield* untilIdles(service, 1);
+      yield* write({ type: INPUT_LINE.RETIRE });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.IDLED);
+      assert.deepEqual(
+        service.applied.find(
+          ({ message }) => "type" in message && message.type === RUNNER_EVENT.IDLE,
+        )?.message,
+        { type: RUNNER_EVENT.IDLE, files: fakeFilesOf(fakeSnapshotOf(CONFIG.cwd, first).commit) },
+      );
     }),
 );
 
@@ -1484,11 +1567,21 @@ it.effect("ends a stopped launch within one post's bound while Vespin is still u
 );
 
 it.effect(
-  "posts each message's uuid as accepted ahead of handing it to the CLI, which takes it as the prompt's own",
+  "posts each message's uuid as accepted ahead of handing it to the CLI, which takes it as the prompt's own, and ends with the files the turn changed",
   () =>
     Effect.gen(function* () {
       const service = fakeService([], "Working on the first message.");
-      const { cli, prompted, release, write, run } = yield* launch(FOLLOW_UP_TURNS, service);
+
+      const { cli, prompted, release, write, run } = yield* launch(
+        FOLLOW_UP_TURNS,
+        service,
+        ENV,
+        [],
+        true,
+        fakeProbe(),
+        true,
+      );
+
       const first = "6f1c2a4e-3b7d-4c8e-9a0b-1d2e3f405162";
       yield* write(CONFIG);
       yield* write({ ...FIRST_MESSAGE, uuid: first });
@@ -1517,6 +1610,12 @@ it.effect(
       assert.equal(cli.prompts[0]?.uuid, first);
       assert.notEqual(cli.prompts[1]?.uuid, undefined);
       assert.deepEqual(service.applied[0]?.message, accepted[0]?.message);
+      // The turn the launch's end ended says what it changed since the snapshot its first message opened on.
+      assert.deepEqual(service.applied.at(-1)?.message, {
+        type: RUNNER_EVENT.END,
+        reason: RUNNER_END.TURN_ENDED,
+        files: fakeFilesOf(fakeSnapshotOf(CONFIG.cwd, first).commit),
+      });
     }),
 );
 

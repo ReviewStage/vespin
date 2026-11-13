@@ -201,6 +201,7 @@ import {
 import {
   AgentMachine,
   type AgentMachineService,
+  ATTACHMENT_FILE_MODE,
   type DeliveredCredentials,
   type FoundPlace,
   type MachineKept,
@@ -412,7 +413,7 @@ const SETUP_RAN_MARK = `${DRIVE_STATE_FOLDER}/setup-ran`;
 /**
  * The workspace's cloud setup scripts run in a sandbox just created, after
  * its checkout, by bash as its default user, as a detached command nothing
- * waits on, as Conductor runs its setup
+ * waits on: its setup
  * script once a workspace is created and checked out: the install script as
  * root from the workspace folder, on every boot, since what it installs
  * stands outside the drive, then, where it succeeded and the drive holds no
@@ -873,6 +874,18 @@ export function sandboxLifecycle(api: SandboxService): MachineLifecycle {
         ),
       ),
 
+    // Note that the API writes as the sandbox's default user, so the file's mode is what lets `agent` read it.
+    writeFile: (session, file) =>
+      Effect.gen(function* () {
+        const running = yield* runningSession(session);
+        const path = `${ATTACHMENT_DIRECTORY}/${file.name}`;
+        yield* api.writeFiles(running, [
+          { path, contents: file.contents, mode: ATTACHMENT_FILE_MODE },
+        ]);
+
+        return path;
+      }),
+
     restoreCheckout: (session, snapshot) => restoreCheckout(api, { sessionId: session, snapshot }),
 
     diffCheckout: (session, range) => diffCheckout(api, { sessionId: session, range }),
@@ -1171,11 +1184,6 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         yield* Effect.logWarning(
           `An agent's sandbox was not created from its ${attempt.from}${attempt.drive === undefined ? "" : " with a forked drive"}, which was gone`,
         );
-
-        // A workspace's drive gone is broken until someone fills it, since nothing refills it on a timer.
-        if (attempt.from === CREATED_FROM.WORKSPACE && checkout !== undefined) {
-          yield* reportedBroken(checkout.read.workspaceId, DRIVE_BROKEN.GONE);
-        }
       }
 
       // The image is always the last attempt, and is never passed by.

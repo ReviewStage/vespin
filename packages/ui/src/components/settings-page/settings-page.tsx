@@ -50,6 +50,12 @@ import { TOOLBAR_INSET, TOOLBAR_LOOK, Toolbar, type ToolbarLook } from "../toolb
  * (`usePageScroll`) with the column of sections, whose resizing
  * moves where such a list stands.
  *
+ * A page stands at Settings' measure, a step narrower than a document's,
+ * or, where it holds records a reader compares across a table's columns,
+ * at the wide measure (`SETTINGS_PAGE_WIDTH.WIDE`), capped so a row's words
+ * stay readable in a big window; its head and every section follow it, and
+ * a table still wider than that scrolls sideways in its own frame.
+ *
  * A page whose name is not yet known, Settings while its chunk loads, stands
  * as a whole page of placeholders (`SettingsPageSkeleton`): the page itself,
  * a block for its title, and its sections' blocks.
@@ -76,6 +82,14 @@ import { TOOLBAR_INSET, TOOLBAR_LOOK, Toolbar, type ToolbarLook } from "../toolb
  */
 const SKELETON_TITLE_WIDTH = "calc(5 * var(--ui-control-height))";
 
+/** How wide a settings page's column stands: Settings' measure, or the wide measure for a page of records compared across a table's columns. */
+export const SETTINGS_PAGE_WIDTH = {
+  MEASURE: "measure",
+  WIDE: "wide",
+} as const;
+
+export type SettingsPageWidth = (typeof SETTINGS_PAGE_WIDTH)[keyof typeof SETTINGS_PAGE_WIDTH];
+
 /** A column of `children`, one section each, under `title` and its `description`, beside them `actions`, or on a phone under a bar ending with them. */
 export function SettingsPage({
   title,
@@ -83,6 +97,7 @@ export function SettingsPage({
   actions,
   lead,
   look = TOOLBAR_LOOK.WINDOW,
+  width = SETTINGS_PAGE_WIDTH.MEASURE,
   titleReplayUnmasked = false,
   children,
 }: {
@@ -98,6 +113,8 @@ export function SettingsPage({
   lead?: ReactNode;
   /** How the bar lays its slots: the window's, or a phone's one control a corner. */
   look?: ToolbarLook | undefined;
+  /** How wide its column stands, its head and sections alike. */
+  width?: SettingsPageWidth | undefined;
   /** The sections, a section's gap apart. */
   children: ReactNode;
 }): React.JSX.Element {
@@ -126,6 +143,7 @@ export function SettingsPage({
       />
       <div
         ref={page}
+        data-width={width}
         className="ui-settings-page @container/ui-settings-page box-border min-h-0 min-w-0 grow basis-0 overflow-x-clip overflow-y-auto overscroll-contain scroll-py-page-inset [scrollbar-gutter:stable]"
       >
         <div

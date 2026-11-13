@@ -1,5 +1,6 @@
 import type { CodeLines, CodeToken } from "@repo/features/tasks-view";
 import { Fragment, type ReactNode, useId, useState } from "react";
+import { CODE_BODY_CLASS, CODE_CARD_CLASS, CODE_LINES_CLASS } from "../../code-face.js";
 import { cssCustomProperties } from "../../css.js";
 import { useUntilFound } from "../../use-until-found.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
@@ -84,13 +85,8 @@ const ROW_CLASS = {
   [CODE_ROW.CONTEXT]: "ui-code-card-row block px-list-inset",
 } as const satisfies Record<CodeRow, string>;
 
-/** The lines, whole and scrolling sideways, each run in its color for the appearance it stands in. */
-const BODY =
-  "ui-code-card-body m-0 overflow-x-auto overscroll-x-contain py-row-inset font-mono text-caption leading-reading wrap-normal whitespace-pre text-code [tab-size:2] [&_span]:text-code-run [&>code]:[font:inherit]";
-
-/** The lines of a block drawn plain, inset as the card is; and of one drawn as rows, each row inset itself. */
-const BODY_LINES = `${BODY} px-list-inset`;
-const BODY_ROWS = `${BODY} px-0 [&>code]:block [&>code]:min-w-fit`;
+/** The lines of a block drawn as rows, each row inset itself. */
+const BODY_ROWS = `${CODE_BODY_CLASS} px-0 [&>code]:block [&>code]:min-w-fit`;
 
 /** A run's color in each appearance, as the properties the sheet picks between; nothing for the code's own ink. */
 function runColors({ color, lightColor }: CodeToken): React.CSSProperties | undefined {
@@ -282,7 +278,7 @@ export function CodeCard({
       look={CARD_LOOK.CODE}
       corner={CARD_CORNER.CONTROL}
       padding={CARD_PADDING.FLUSH}
-      className="ui-code-card m-0"
+      className={CODE_CARD_CLASS}
       aria-label={label}
       {...data}
     >
@@ -299,7 +295,7 @@ export function CodeCard({
       ) : (
         <pre
           id={bodyId}
-          className={rows === undefined ? BODY_LINES : BODY_ROWS}
+          className={rows === undefined ? CODE_LINES_CLASS : BODY_ROWS}
           data-rows={rows === undefined ? undefined : true}
         >
           <code>

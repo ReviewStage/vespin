@@ -14,8 +14,8 @@ import { SENTRY_LEVEL, SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "./trigger-
  * tasks: when its trigger fires, the service starts a coding agent on the
  * task's repository with the automation's prompt as the agent's prompt, the
  * firing described beneath it, exactly as a developer's own Start with a
- * task would. A trigger is a schedule, a cron expression read in an IANA
- * time zone, or an event of the task's repository our GitHub App is
+ * task would. A trigger is a schedule, a cron expression or one date and
+ * time read in an IANA time zone, or an event of the task's repository our GitHub App is
  * told of, filtered by label or branch, a call to the automation's own
  * webhook address, or an event of an integration installed on the
  * automation's workspace (`trigger-catalog.ts`), filtered by its fields. Every firing is a run, kept whether it started an agent,
@@ -38,9 +38,9 @@ export const AUTOMATION_BOUNDS = {
   MAX_CRON_CHARS: 120,
   /** The most characters of an IANA time zone name. */
   MAX_TIMEZONE_CHARS: 64,
-  /** The most labels or branches a GitHub trigger filters on. */
+  /** The most labels, branches, or tags a GitHub trigger filters on. */
   MAX_FILTER_VALUES: 10,
-  /** The most characters of one label or branch a filter names. */
+  /** The most characters of one label, branch, or tag a filter names. */
   MAX_FILTER_VALUE_CHARS: 100,
   /** The most repositories one automation's runs work in; a run starts in the first until full multi-repo. */
   MAX_REPOSITORIES: 10,
@@ -58,7 +58,7 @@ export const AUTOMATION_BOUNDS = {
 
 /** What fires an automation. */
 export const AUTOMATION_TRIGGER = {
-  /** A cron schedule in a time zone, fired by the service's once-a-minute sweep. */
+  /** A cron schedule, or one date and time, in a time zone, fired by Vercel Schedules (`automation-cadence.ts`). */
   SCHEDULE: "schedule",
   /** An event of the task's repository, delivered by our GitHub App's webhook. */
   GITHUB: "github",
@@ -82,6 +82,10 @@ export const GITHUB_TRIGGER_EVENT = {
   CHECK_FAILED: "check-failed",
   /** Commits pushed to a branch. */
   PUSH: "push",
+  /** A pull request merged into its base. */
+  PULL_REQUEST_MERGED: "pull-request-merged",
+  /** A release published, a prerelease among them where the trigger asks. */
+  RELEASE_PUBLISHED: "release-published",
 } as const;
 
 export type GitHubTriggerEvent = (typeof GITHUB_TRIGGER_EVENT)[keyof typeof GITHUB_TRIGGER_EVENT];
@@ -104,24 +108,64 @@ const filterValuesSchema = EffectSchema.Array(
   ),
 ).check(EffectSchema.isMaxLength(AUTOMATION_BOUNDS.MAX_FILTER_VALUES));
 
+/** A schedule's zone: an IANA name, read where the schedule is (`automation-schedule.ts`). */
+const scheduleTimezoneSchema = EffectSchema.Trim.check(
+  EffectSchema.isNonEmpty(),
+  EffectSchema.isMaxLength(AUTOMATION_BOUNDS.MAX_TIMEZONE_CHARS),
+);
+
 /**
- * A schedule: five-field cron, read in the IANA zone named, so "9 every
- * weekday" stays nine o'clock across a daylight-saving change. Whether the
- * expression parses and the zone exists is the schedule module's check
- * (`automation-schedule.ts` beside this module), since it is the one
- * that reads them.
+ * A repeating schedule: five-field cron, read in the IANA zone named, so "9
+ * every weekday" stays nine o'clock across a daylight-saving change.
  */
-export const scheduleTriggerSchema = EffectSchema.Struct({
+const cronScheduleTriggerSchema = EffectSchema.Struct({
   kind: EffectSchema.Literal(AUTOMATION_TRIGGER.SCHEDULE),
   cron: EffectSchema.Trim.check(
     EffectSchema.isNonEmpty(),
     EffectSchema.isMaxLength(AUTOMATION_BOUNDS.MAX_CRON_CHARS),
   ),
-  timezone: EffectSchema.Trim.check(
-    EffectSchema.isNonEmpty(),
-    EffectSchema.isMaxLength(AUTOMATION_BOUNDS.MAX_TIMEZONE_CHARS),
-  ),
+  timezone: scheduleTimezoneSchema,
 });
+
+/**
+ * A schedule that runs once: a date and a time of day, `YYYY-MM-DDTHH:mm`
+ * with no offset, read as the wall clock of the IANA zone named, as Vercel
+ * Schedules reads a one-time schedule's `at`.
+ */
+const onceScheduleTriggerSchema = EffectSchema.Struct({
+  kind: EffectSchema.Literal(AUTOMATION_TRIGGER.SCHEDULE),
+  at: EffectSchema.String.check(EffectSchema.isPattern(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/u)),
+  timezone: scheduleTimezoneSchema,
+});
+
+/**
+ * A schedule: cron that repeats, or one date and time it runs at once, each
+ * read in the zone it names. Whether the expression parses, the date is a
+ * real one, and the zone exists is the schedule module's check
+ * (`automation-schedule.ts` beside this module), since it is the one that
+ * reads them. Note that the one-time form is a member beside the cron form
+ * rather than a field of it, because a client before it, reading a row it
+ * does not know, leaves that row out (`live-read.ts`) and keeps reading the
+ * cron automations beside it.
+ */
+export const scheduleTriggerSchema = EffectSchema.Union([
+  cronScheduleTriggerSchema,
+  onceScheduleTriggerSchema,
+]);
+
+/** A schedule, repeating or once. */
+export type ScheduleTrigger = typeof scheduleTriggerSchema.Type;
+
+/** A schedule that runs once, at its date and time. */
+export type OnceScheduleTrigger = typeof onceScheduleTriggerSchema.Type;
+
+/** A schedule that repeats on its cron. */
+export type CronScheduleTrigger = typeof cronScheduleTriggerSchema.Type;
+
+/** Whether a schedule runs once rather than on a cron. */
+export function scheduleRunsOnce(schedule: ScheduleTrigger): schedule is OnceScheduleTrigger {
+  return "at" in schedule;
+}
 
 /** Who caused a GitHub event, as a trigger chooses whose events fire it. */
 export const GITHUB_SENDER = {
@@ -156,14 +200,16 @@ export const PULL_REQUEST_DEFAULT_MOMENTS: readonly PullRequestMoment[] =
 
 /**
  * An event of the automation's repositories. `labels` keeps a labeled
- * event to those labels and `branches` an event to those branches (a pull
- * request's base, a push's or a check's branch); an empty or absent list
- * keeps nothing out. `defaultBranch` keeps it to the repository's default
- * branch, whatever it is called, as GitHub's delivery names it; beside
- * `branches`, an event on either is kept. `senders` says whose events fire it, people's alone
- * where absent; `moments` which moments of a pull request an update fires
- * on, every one where absent. A draft pull request fires it only where
- * `drafts` is true, and one from a fork only where `forks` is.
+ * event to those labels, `branches` an event to those branches (a pull
+ * request's base, a push's or a check's branch), and `tags` a release to
+ * those tags; an empty or absent list keeps nothing out. `defaultBranch`
+ * keeps it to the repository's default branch, whatever it is called, as
+ * GitHub's delivery names it; beside `branches`, an event on either is
+ * kept. `senders` says whose events fire it, people's alone where absent
+ * (for a merged pull request, whose pull request it is); `moments` which
+ * moments of a pull request an update fires on, every one where absent. A
+ * draft pull request fires it only where `drafts` is true, one from a fork
+ * only where `forks` is, and a prerelease only where `prereleases` is.
  */
 export const githubTriggerSchema = EffectSchema.Struct({
   kind: EffectSchema.Literal(AUTOMATION_TRIGGER.GITHUB),
@@ -179,6 +225,8 @@ export const githubTriggerSchema = EffectSchema.Struct({
   ),
   drafts: EffectSchema.optionalKey(EffectSchema.Boolean),
   forks: EffectSchema.optionalKey(EffectSchema.Boolean),
+  tags: EffectSchema.optionalKey(filterValuesSchema),
+  prereleases: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 /** A call to the automation's own address; the secret that admits it is the store's, never on this wire. */
@@ -235,7 +283,7 @@ const storedGithubTriggerSchema = EffectSchema.Struct({
 });
 
 export const automationTriggerSchema = EffectSchema.Union([
-  scheduleTriggerSchema,
+  ...scheduleTriggerSchema.members,
   storedGithubTriggerSchema,
   webhookTriggerSchema,
   sentryTriggerSchema,
@@ -357,7 +405,7 @@ export const AUTOMATION_FIRING = {
 
 /**
  * What fired a run, in brief: the instant a schedule was due, the GitHub
- * event with the issue or pull request it names, a webhook call with how
+ * event with the issue, pull request, or release it names, a webhook call with how
  * large its body was, an integration's event with the subject it is about
  * (a Sentry issue), or a "Run now" with who asked for it. Only what the
  * run's history shows is kept; a webhook's body reaches the agent's prompt
@@ -377,6 +425,8 @@ export const automationFiringSchema = EffectSchema.Union([
     number: EffectSchema.optionalKey(EffectSchema.Int),
     title: EffectSchema.optionalKey(EffectSchema.String),
     branch: EffectSchema.optionalKey(EffectSchema.String),
+    /** A release's tag, where the event is a release. */
+    tag: EffectSchema.optionalKey(EffectSchema.String),
     url: EffectSchema.optionalKey(EffectSchema.String),
   }),
   EffectSchema.Struct({

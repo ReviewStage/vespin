@@ -12,7 +12,10 @@
  * leaves. A sign-in given up on brings the server's toast back, and one that
  * could not begin says so in its place, with Retry. One the developer
  * dismissed is not said again until the server has stood otherwise and
- * expires anew.
+ * expires anew. While a surface that reconnects servers in place holds them
+ * back (`useHoldExpiredServerToasts`), as setup does, none is said, and
+ * those said are withdrawn, so none stands over its presses; each server
+ * still expired is said once nothing holds them.
  */
 
 import { type NamedServer, namedServers } from "@repo/features/agent-servers-model";
@@ -21,6 +24,7 @@ import { INTEGRATION_NAME, INTEGRATION_STATUS } from "@repo/features/integration
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { VERB } from "@repo/features/words";
 import { STATUS_TONE } from "@repo/ui";
+import { Store, useSelector } from "@tanstack/react-store";
 import { useEffect, useRef } from "react";
 import { GRANT_OUTCOME, useIntegrationGrant } from "./integration-grant.js";
 import { type IntegrationStatuses, useIntegrationStatuses } from "./integration-statuses.js";
@@ -58,6 +62,9 @@ interface Said {
   says: Says;
 }
 
+/** How many surfaces hold the toasts back now, which say nothing while any does. */
+const holds = new Store(0);
+
 /** Where `connection` stands: a sign-in waited on or pending is a reconnect under way, ahead of the read's word. */
 function standsOf(statuses: IntegrationStatuses, connection: string): Stands {
   const status = statuses.statusOf(connection);
@@ -76,16 +83,30 @@ function standsOf(statuses: IntegrationStatuses, connection: string): Stands {
  * moved, because a toast outlives the render that showed it.
  */
 export function useExpiredServerToasts(): void {
+  const held = useSelector(holds, (count) => count > 0);
   const statuses = useIntegrationStatuses();
   const grant = useIntegrationGrant(statuses);
   const toast = useToast();
   const withdraw = useWithdrawToast();
   const said = useRef(new Map<string, Said>());
   const dismissed = useRef(new Set<string>());
-  const latest = useRef({ grant, toast, withdraw });
-  latest.current = { grant, toast, withdraw };
+  const latest = useRef({ grant, toast, withdraw, held });
+  latest.current = { grant, toast, withdraw, held };
 
   useEffect(() => {
+    // Note that a dismissal ends once its server stands clear, held or not, so one reconnected while held is said when it expires anew.
+    for (const connection of dismissed.current) {
+      if (standsOf(statuses, connection) === STANDS.CLEAR) dismissed.current.delete(connection);
+    }
+
+    // Note that what was said is withdrawn rather than left standing, so each server still expired is said anew once released.
+    if (held) {
+      for (const entry of said.current.values()) latest.current.withdraw(entry.subject);
+      said.current.clear();
+
+      return;
+    }
+
     /** The server's toast turned to say `says`, shown by `show` under a subject of its own, in place of what it said. */
     const say = (server: NamedServer, says: Says, show: (subject: string) => void) => {
       const was = said.current.get(server.connection);
@@ -104,7 +125,8 @@ export function useExpiredServerToasts(): void {
 
       if (entry !== undefined) entry.says = SAYS.BEGINNING;
       void latest.current.grant.begin(server.connection).then((outcome) => {
-        if (outcome === GRANT_OUTCOME.BEGUN) return;
+        // Note that a reconnect begun before a hold says nothing once held, since the server is said anew on release.
+        if (outcome === GRANT_OUTCOME.BEGUN || latest.current.held) return;
         say(server, SAYS.FAILED, (subject) =>
           latest.current.toast({
             words:
@@ -201,4 +223,17 @@ export function useExpiredServerToasts(): void {
     },
     [],
   );
+}
+
+/**
+ * Holds the expired servers' toasts back while the caller stands, as setup
+ * does, whose steps reconnect a server in place; each server still expired
+ * is said once nothing holds them.
+ */
+export function useHoldExpiredServerToasts(): void {
+  useEffect(() => {
+    holds.setState((count) => count + 1);
+
+    return () => holds.setState((count) => count - 1);
+  }, []);
 }

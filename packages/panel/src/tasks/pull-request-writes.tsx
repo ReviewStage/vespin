@@ -148,6 +148,7 @@ const ACTION_WORDS = {
   [PULL_REQUEST_ACTION.REMOVE_LABEL]: "Remove label",
   [PULL_REQUEST_ACTION.ADD_REACTION]: "Add reaction",
   [PULL_REQUEST_ACTION.REMOVE_REACTION]: "Remove reaction",
+  [PULL_REQUEST_ACTION.TICK_TASK]: "Tick task",
 } as const satisfies Record<PullRequestAction, string>;
 
 /** The line's own words. */
@@ -437,6 +438,9 @@ const CLOSE_UNKNOWN_QUESTION: DialogQuestion = {
   body: `Could not read whether this pull request is in the merge queue. If it is, closing it takes it out, and reopening it does not queue it again. ${QUEUE_WARNING}`,
 };
 
+/** What the pill's menu offers to open the Merge queue page on a queued pull request. */
+const VIEW_QUEUE_WORDS = "View merge queue";
+
 /** What the toast says once a pull request is closed, and its one way back. */
 const CLOSED_TOAST = {
   WORDS: "Pull request closed",
@@ -463,6 +467,7 @@ export function PullRequestStateMenu({
   queued,
   shown = true,
   writes,
+  onViewQueue,
 }: {
   pullRequest: Pick<AgentPullRequest, "number" | "state" | "checks">;
   /** Where GitHub's merge queue holds it, as the merge control read it or, until that lands, as what was published says; none where it holds it nowhere. */
@@ -470,6 +475,8 @@ export function PullRequestStateMenu({
   /** Whether the panel the pill stands in is on screen; a question asked goes with it. */
   shown?: boolean;
   writes: PullRequestWrites;
+  /** Opens the Merge queue page on this pull request, which the menu offers first while it stands in the queue; none where the page is not offered. */
+  onViewQueue?: (() => void) | undefined;
 }): React.JSX.Element {
   const inQueue =
     queued !== null && queued !== undefined && pullRequest.state === PULL_REQUEST_STATE.OPEN;
@@ -558,13 +565,21 @@ export function PullRequestStateMenu({
     );
   };
 
-  const items: MenuAction[] = actions.map((action) => ({
+  const changes: MenuAction[] = actions.map((action) => ({
     label: ACTION_WORDS[action],
     icon: ACTION_GLYPHS[action],
     danger: action === PULL_REQUEST_ACTION.CLOSE,
     disabled: writes.pending !== undefined,
     onSelect: () => select(action),
   }));
+
+  // Note that the queue's own page leads the menu while the pull request stands in it, as GitHub links a queued pull request to its queue.
+  const queuePage: MenuAction[] =
+    inQueue && onViewQueue !== undefined
+      ? [{ label: VIEW_QUEUE_WORDS, icon: <GLYPH.QUEUED />, onSelect: onViewQueue }]
+      : [];
+
+  const items = [...queuePage, ...changes];
 
   return (
     <>

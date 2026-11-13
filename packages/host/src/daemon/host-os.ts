@@ -16,7 +16,7 @@ import {
   type DevicePlatform,
 } from "@repo/features/device-agent-wire";
 import type { AgentCliPins } from "../local-agent-setup.js";
-import { macDeviceName } from "../node/mac-device-name.js";
+import { machineDeviceName } from "../node/mac-device-name.js";
 import { linuxMachine, macMachine } from "../node/machine-identity.js";
 
 /**
@@ -73,7 +73,7 @@ export const DARWIN_HOST: HostOs = {
   name: "macOS",
   platform: DEVICE_PLATFORM.DARWIN,
   arches: [DEVICE_ARCH.ARM64],
-  deviceName: macDeviceName,
+  deviceName: machineDeviceName,
   machine: macMachine,
   // Note that the arch is not read, since a Mac host is built for Apple silicon alone (`arches`).
   agentClis: () => ({ claude: CLAUDE_CODE_MAC_PIN, codex: CODEX_MAC_PIN, gh: GH_MAC_PIN }),

@@ -15,7 +15,6 @@ import { agentName } from "@repo/features/model-label";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readingWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
-import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
   BUTTON_VARIANT,
   Button,
@@ -53,6 +52,7 @@ import { pressWrite, type RowDoors, type UndoWrite } from "../undo-stack.js";
 import { appStateQuery, selectAccount, selectTasks } from "../use-app-state.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
+import { SECTION as SECTION_HEAD, settingsSectionHead } from "./settings-sections.js";
 
 /**
  * always-allowed-section.tsx -- Settings › Agents' Always allowed: the shell commands the account's Claude Code agents run without asking, added from the heading and edited in place, each removed from its ⋯.
@@ -91,7 +91,6 @@ import { MenuRow } from "./menu-row.js";
 
 /** What the section says. */
 const SECTION = {
-  TITLE: "Always allowed",
   CAPTION: "Commands your Claude Code agents run without asking.",
   ADD: "Add command",
   EDIT: "Edit command",
@@ -345,7 +344,7 @@ function CommandRow({
         edit === undefined
           ? [
               { label: SECTION.EDIT, icon: <GLYPH.RENAME />, onSelect: onEdit },
-              { label: SECTION.REMOVE, icon: <GLYPH.REMOVE />, onSelect: onRemove },
+              { label: SECTION.REMOVE, onSelect: onRemove },
             ]
           : []
       }
@@ -536,9 +535,8 @@ export function AlwaysAllowedSection(): React.JSX.Element {
 
   return (
     <SettingsSection
-      title={SECTION.TITLE}
+      {...settingsSectionHead(SECTION_HEAD.ALWAYS_ALLOWED)}
       caption={SECTION.CAPTION}
-      anchor={SETTINGS_SEARCH_ROW.ALWAYS_ALLOWED}
       action={
         <Button
           variant={BUTTON_VARIANT.OUTLINE}

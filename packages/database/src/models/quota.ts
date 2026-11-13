@@ -64,3 +64,45 @@ export function spendDictationMeter(input: {
     seconds: input.seconds,
   });
 }
+
+const VoiceUsageWriteSchema = Schema.Struct({
+  userId: Schema.String,
+  day: Schema.String,
+  seconds: Schema.Number,
+});
+
+/** One finished voice call on the account's day: one more call, and its seconds added to the day's voice seconds, each counted up as `spendDictationUsage` counts its own. */
+const spendVoiceUsage = SqlSchema.void({
+  Request: VoiceUsageWriteSchema,
+  execute: (write) =>
+    Database.use((db) =>
+      db
+        .insert(hostedUsage)
+        .values({ userId: write.userId, day: write.day, calls: 1, voiceSeconds: write.seconds })
+        .onConflictDoUpdate({
+          target: [hostedUsage.userId, hostedUsage.day],
+          set: {
+            calls: ONE_MORE_CALL,
+            voiceSeconds: sql`${hostedUsage.voiceSeconds} + ${write.seconds}`,
+          },
+        }),
+    ),
+});
+
+/**
+ * Counts one finished voice call against the account's UTC day: a call, and
+ * its seconds beside it, as the caller's panel timed them, since the call ran
+ * between the panel and OpenAI and never through the service. Nothing is
+ * refused on it, as nothing is on dictation's.
+ */
+export function spendVoiceMeter(input: {
+  readonly userId: string;
+  readonly seconds: number;
+  readonly now: number;
+}): Effect.Effect<void, StoreFailure, DatabaseServices> {
+  return spendVoiceUsage({
+    userId: input.userId,
+    day: utcDayKey(input.now),
+    seconds: input.seconds,
+  });
+}

@@ -4,6 +4,7 @@ import {
   type InboxGroup,
   type InboxListView,
   type InboxPlace,
+  type InboxRun,
   type InboxWhose,
   inboxList,
   inboxPlaces,
@@ -22,8 +23,8 @@ import { type HeldOrder, useHeldOrder } from "./use-held-order.js";
  * (`isDone`) rather than leaving under the reader, as a mail app keeps the
  * open thread's row; an item the scope leaves out that a link, or Back,
  * chooses gets a row the same way, so the reader always sees where they
- * are. Choosing another item lets it go, and so does another scope or
- * Addressed to; hiding the list does not, so an item settled while it was
+ * are. Choosing another item lets it go, and so does another scope,
+ * Addressed to, or order; hiding the list does not, so an item settled while it was
  * hidden still has its row, gray, while it stays chosen. While the pointer is over
  * the list every row keeps the place it was first drawn in, when its item
  * changed, so nothing moves under the reader's
@@ -62,6 +63,9 @@ interface DrawnFrom {
   readonly shown: boolean;
 }
 
+/** No run folded. */
+const NO_RUNS: ReadonlySet<InboxRun> = new Set();
+
 /** The places held of `chosen` alone, or of every row while the pointer is over the list. */
 function heldPlaces(
   places: ReadonlyMap<string, InboxPlace>,
@@ -86,6 +90,14 @@ function sameSearch(a: readonly string[] = [], b: readonly string[] = []): boole
   return a.length === b.length && a.every((word, at) => word === b[at]);
 }
 
+/** Whether two lists fold the same runs. */
+function sameFolds(
+  a: ReadonlySet<InboxRun> = NO_RUNS,
+  b: ReadonlySet<InboxRun> = NO_RUNS,
+): boolean {
+  return a.size === b.size && [...a].every((run) => b.has(run));
+}
+
 /** Whether a list drawn under one filter lists the same items as under another, for the same reader. */
 function sameScope(was: InboxFilter | undefined, now: InboxFilter): boolean {
   return (
@@ -97,9 +109,14 @@ function sameScope(was: InboxFilter | undefined, now: InboxFilter): boolean {
   );
 }
 
-/** Whether a list drawn under one filter lists the same items as under another, in the same order: every list stands the latest first. */
+/** Whether a list drawn under one filter lists the same items as under another, in the same order: the latest first, the pinned tasks' first where it asks, under the same folds. */
 function sameOrder(was: InboxFilter | undefined, now: InboxFilter): boolean {
-  return sameScope(was, now);
+  return (
+    was !== undefined &&
+    sameScope(was, now) &&
+    was.pinnedFirst === now.pinnedFirst &&
+    sameFolds(was.folded, now.folded)
+  );
 }
 
 /**

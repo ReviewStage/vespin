@@ -397,7 +397,6 @@ export function IntegrationRow({
 
   const leave = {
     label: INTEGRATION_ROW_WORDS.DISCONNECT,
-    icon: <GLYPH.DISCONNECT />,
     danger: true,
     onSelect: disconnect.ask,
   };
@@ -433,8 +432,8 @@ export function IntegrationRow({
         anchor={connection}
         {...(bySignIn ? { heading: ROW_LINE.GITHUB_SIGN_IN } : undefined)}
         row={{
-          // Note that every row of a provider ends in a short button, a ⋯, or both, so on a narrow page each keeps its end beside its name and lets its words wrap, rather than one row dropping its end below them.
-          controls: SETTINGS_ROW_CONTROLS.BESIDE,
+          // Note that every row of a provider ends in a short button, a ⋯, or both, so each keeps its end beside its name and lets its words wrap, rather than one row dropping its end below them; on a phone's width they drop as every row's do, so the name reads whole.
+          controls: SETTINGS_ROW_CONTROLS.BESIDE_UNTIL_NARROW,
           leading: (
             <SettingsRowMark>
               <ProviderMark provider={provider} />

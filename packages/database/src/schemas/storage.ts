@@ -1,3 +1,4 @@
+import type { TurnFilesSummaryView } from "@repo/features/turn-files-wire";
 import type { RunModelUsage, RunUsage } from "@repo/features/turn-run";
 import {
   MESSAGE_ROLE,
@@ -144,6 +145,23 @@ export function turnlessUserLine(table: {
   readonly turnId: SQLWrapper;
 }): SQL {
   return sql`(${table.role} = ${literal(MESSAGE_ROLE.USER)} and ${table.turnId} is null)`;
+}
+
+/**
+ * That a row of `messages` is a line said on a call that no delegation has
+ * handed to a turn: it names the call it was said on and no turn took or
+ * awaits it. Such a row is the conversation's record of what was said, never
+ * a line awaiting its turn or one already sent, so those reads leave it out;
+ * a delegation that adopts the caller's line (`writer.ts`'s `claimLine`) has
+ * it await the turn its hand-over opens, and those reads take it from then
+ * on.
+ */
+export function recordedSpokenLine(table: {
+  readonly metadata: SQLWrapper;
+  readonly turnId: SQLWrapper;
+  readonly awaitsTurnId: SQLWrapper;
+}): SQL {
+  return sql`(${table.metadata} ->> 'voice_session_id' is not null and ${table.turnId} is null and ${table.awaitsTurnId} is null)`;
 }
 
 /**
@@ -399,6 +417,15 @@ export const turns = pgTable(
     snapshotCommit: text("snapshot_commit"),
     snapshotHead: text("snapshot_head"),
     snapshotBranch: text("snapshot_branch"),
+    /**
+     * The files the turn changed, as its runner diffed its checkout from the
+     * snapshot before the turn when the turn ended (`@repo/agent-runner`'s
+     * `checkout-diff.ts`): the first of them with their lines added and
+     * removed, and the totals over all of them. Null where the turn changed
+     * none, its checkout was not recorded, its runner predates the summary,
+     * or it ended before the column.
+     */
+    files: jsonb("files").$type<TurnFilesSummaryView>(),
   },
   (table) => [
     index("turns_by_user").on(table.userId),

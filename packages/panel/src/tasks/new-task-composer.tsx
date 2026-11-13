@@ -806,6 +806,8 @@ export function NewTaskComposer({
       <AgentComposer
         status={AGENT_STATUS.STARTING}
         composer={composer}
+        // Note that an automation's words are wrapped in its brief, so they can't open on `/goal`.
+        startsGoal={!forAutomation}
         wording={startsBare ? BARE_WORDS : PURPOSE_WORDS[purpose]}
         // Note that an automation's agent is held without words, since its brief fences them as the request, files alone saying none.
         sendable={

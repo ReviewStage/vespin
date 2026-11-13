@@ -45,8 +45,8 @@
   /* The one cursor rule (docs/DESIGN.md): a control gives the Mac's arrow,
      as Finder, Mail and Notes do, and only a real link the pointing hand.
      A control reads `--ui-cursor-press` (`cursor-press`), a link
-     `--ui-cursor-link` (`cursor-link`); the hand is spelled nowhere
-     else. */
+     `--ui-cursor-link` (`cursor-link`); the style guard refuses the hand
+     spelled anywhere else (`pointer-cursor`). */
   --ui-cursor-press: default;
   --ui-cursor-link: pointer;
   --ui-icon-gap: var(--ui-space-8);
@@ -73,9 +73,12 @@
   /* How far a list's row travels as it arrives or leaves (`ListMotion`). */
   --ui-list-travel: var(--ui-space-16);
   /* The measure a page is read at, about seventy characters of body text: a
-     document, a detail page, a collection. Settings reads a step narrower. */
+     document, a detail page, a collection. Settings reads a step narrower,
+     and a page of records compared across a table's columns, or the web's
+     wider column, a step wider. */
   --ui-page-measure: 720px;
   --ui-settings-measure: 640px;
+  --ui-wide-measure: 1040px;
 
   --ui-type-body-size: 13px;
   --ui-type-body-leading: 20px;
@@ -352,9 +355,12 @@
   /* How far a list's row travels as it arrives or leaves (`ListMotion`). */
   --ui-list-travel: var(--ui-space-16);
   /* The measure a page is read at, about seventy characters of body text: a
-     document, a detail page, a collection. Settings reads a step narrower. */
+     document, a detail page, a collection. Settings reads a step narrower,
+     and a page of records compared across a table's columns, or the web's
+     wider column, a step wider. */
   --ui-page-measure: 720px;
   --ui-settings-measure: 640px;
+  --ui-wide-measure: 1040px;
 
   --ui-type-body-size: 16px;
   --ui-type-body-leading: 24px;

@@ -1,7 +1,7 @@
 /**
  * admin-procedures.ts -- the admin dashboard's reads and its one star write, as one hosted resource.
  *
- * The reads answer the dashboard's screens (metrics, cost, reliability, the
+ * The reads answer the dashboard's screens (the catalog, metrics, cost, reliability, the
  * roster, one account, one day, the workspaces, and one workspace); the write is the Users
  * tab's star, PUT to set it and DELETE to take it back. Each answers for its
  * own query and its own refusals (`admin-*.ts`) and is answered as it was
@@ -17,6 +17,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { hosted } from "../orpc/base.js";
 import type { ModelCatalog } from "../providers/model-catalog.js";
+import { type AdminCatalogOptions, handleAdminCatalog } from "./admin-catalog.js";
 import { type AdminCostOptions, handleAdminCost } from "./admin-cost.js";
 import { type AdminDayOptions, handleAdminDay } from "./admin-day.js";
 import { type AdminFavoriteOptions, handleAdminFavorite } from "./admin-favorite.js";
@@ -32,6 +33,8 @@ import { type AdminViewerResolver, adminGateMiddleware } from "./gate.js";
 export interface AdminProcedureSeams {
   /** The browser session the request rides in on; a refusal is an outage, never a sign-out. */
   resolveViewer: AdminViewerResolver;
+  /** The catalog the Limits, Tools, and Prompts screens draw, read from the deploy's code alone. */
+  readCatalog: AdminCatalogOptions["readCatalog"];
   readMetrics: AdminMetricsOptions["readMetrics"];
   /** The Cost screen's read, which prices at the model catalog the instance holds. */
   readCost: AdminCostOptions<DatabaseServices | ModelCatalog>["readCost"];
@@ -48,6 +51,9 @@ export function adminProcedures(seams: AdminProcedureSeams) {
   const gated = hosted.admin.use(adminGateMiddleware(seams.resolveViewer));
 
   return {
+    catalog: gated.catalog.effect(function* () {
+      return yield* handleAdminCatalog({ readCatalog: seams.readCatalog });
+    }),
     cost: gated.cost.effect(function* ({ input }) {
       return yield* handleAdminCost({ query: input, readCost: seams.readCost });
     }),

@@ -34,6 +34,7 @@ import {
   type AutomationRunReason,
   GITHUB_TRIGGER_EVENT,
   type GitHubTriggerEvent,
+  scheduleRunsOnce,
 } from "@repo/features/automation-wire";
 import {
   GITHUB_ACCESS,
@@ -147,6 +148,8 @@ const GITHUB_EVENT_WORDS = {
   [GITHUB_TRIGGER_EVENT.ISSUE_LABELED]: "an issue was labeled",
   [GITHUB_TRIGGER_EVENT.CHECK_FAILED]: "a check suite failed",
   [GITHUB_TRIGGER_EVENT.PUSH]: "commits were pushed",
+  [GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED]: "a pull request was merged",
+  [GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED]: "a release was published",
 } as const satisfies Record<GitHubTriggerEvent, string>;
 
 /** The GitHub events about one pull request or issue, whose run is named by it rather than by the model. */
@@ -154,6 +157,7 @@ const SUBJECT_EVENTS: ReadonlySet<GitHubTriggerEvent> = new Set([
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED,
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED,
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
+  GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED,
   GITHUB_TRIGGER_EVENT.ISSUE_OPENED,
   GITHUB_TRIGGER_EVENT.ISSUE_LABELED,
 ]);
@@ -180,15 +184,22 @@ function subjectTitle(firing: AutomationFiring): string | undefined {
   return named.slice(0, AGENT_BOUNDS.MAX_TITLE_CHARS).trim();
 }
 
+/** The schedule a run's prompt names: its cron or its one date and time, in its zone, where the trigger is still a schedule. */
+function scheduleWords(trigger: Automation["trigger"]): string {
+  if (trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE) return "its schedule";
+
+  return scheduleRunsOnce(trigger)
+    ? `its one-time schedule (${trigger.at} in ${trigger.timezone})`
+    : `its schedule (\`${trigger.cron}\` in ${trigger.timezone})`;
+}
+
 /** Why this run was fired, in the words the agent's prompt closes with. */
 function firingSentence(automation: Automation, run: ActedRun): string {
   const { firing } = run;
 
   switch (firing.kind) {
     case AUTOMATION_FIRING.SCHEDULE:
-      return automation.trigger.kind === AUTOMATION_TRIGGER.SCHEDULE
-        ? `its schedule (\`${automation.trigger.cron}\` in ${automation.trigger.timezone}) was due at ${new Date(firing.dueAt).toISOString()}`
-        : `its schedule was due at ${new Date(firing.dueAt).toISOString()}`;
+      return `${scheduleWords(automation.trigger)} was due at ${new Date(firing.dueAt).toISOString()}`;
     case AUTOMATION_FIRING.MANUAL:
       return "its owner asked for a run now";
     case AUTOMATION_FIRING.GITHUB:
@@ -203,7 +214,7 @@ function firingSentence(automation: Automation, run: ActedRun): string {
 /**
  * What the agent is told of a GitHub event beside the sentence: its
  * repository, the issue or pull request by number and address, the branch,
- * and the title, every one fenced as the event's own text, since whoever
+ * a release's tag, and the title, every one fenced as the event's own text, since whoever
  * pushed the branch or opened the issue chose them and the agent is to
  * read them as data under the developer's prompt, never as instructions;
  * the rest the agent reads itself with `gh`, or `gh api` on a member's token.
@@ -218,6 +229,7 @@ function githubEventLines(run: ActedRun, access: GitHubAccess): readonly string[
     ...(firing.number === undefined ? [] : [`Number: #${firing.number}`]),
     ...(firing.url === undefined ? [] : [`Address: ${firing.url}`]),
     ...(firing.branch === undefined ? [] : [`Branch: ${firing.branch}`]),
+    ...(firing.tag === undefined ? [] : [`Tag: ${firing.tag}`]),
     ...(firing.title === undefined ? [] : [`Title: ${firing.title}`]),
   ];
 

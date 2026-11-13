@@ -7,6 +7,7 @@ import {
   opensMenu,
   SettingsFoldRow,
   SettingsRow,
+  type SettingsRowAlign,
   type SettingsRowControl,
   type SettingsRowControls,
   type SettingsRowIndent,
@@ -28,7 +29,7 @@ import { replayMaskedError } from "./marks.js";
  * row. The ⋯ is always drawn, muted as a toolbar's glyphs are until the pointer
  * is on it, because a ⋯ shown only on hover leaves an empty gap at the end of
  * the row. A row with no act that applies now draws no ⋯ and opens nothing, and
- * a row given `alone` that holds exactly one act draws it as an icon button
+ * a row given `alone` that holds exactly one act with a glyph draws it as an icon button
  * of its own (named and tipped by the act's words, in a group named by the
  * row's label, as a `ListRow`'s acts are) rather than a ⋯ over one item. An
  * act that cannot be taken back asks first through the confirm dialog, which
@@ -67,6 +68,8 @@ interface MenuRowWords {
   editing?: boolean;
   /** Where its control and ⋯ stand where they would leave its words less than a legible stretch; dropped below them where none is named. */
   controls?: SettingsRowControls;
+  /** Where its lead, control, and ⋯ stand against words that run to several lines; centered on them where none is named. */
+  align?: SettingsRowAlign;
   /** Whether the row stands inset under the row above, one of its things, as GitHub's accounts stand under GitHub's. */
   indent?: SettingsRowIndent;
   /** What the row folds open under its words from a chevron after its ⋯ (`SettingsFoldRow`), the chevron's name, and whether it starts open. */
@@ -120,7 +123,9 @@ export function MenuRow({
   const menu = useMenu(true);
   const door = useRef<HTMLButtonElement | null>(null);
   const groups = groupsOf(actions);
-  const only = alone && groups.length === 1 && groups[0]?.length === 1 ? groups[0][0] : undefined;
+  // Note that a lone act with no glyph, as Remove and Disconnect wear none, stands under the ⋯ as a row's acts do, since its red words repeated down a list outweigh the row.
+  const lone = alone && groups.length === 1 && groups[0]?.length === 1 ? groups[0][0] : undefined;
+  const only = lone?.icon === undefined ? undefined : lone;
   const acting = groups.length > 0 && only === undefined;
 
   const more =
@@ -198,6 +203,7 @@ export function MenuRow({
             landed={row.landed}
             editing={row.editing}
             controls={row.controls}
+            align={row.align}
             below={row.below === undefined || row.below === null ? undefined : () => row.below}
             end={(control) => (
               <>

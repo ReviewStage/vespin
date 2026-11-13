@@ -93,9 +93,18 @@ test("a task's card says where it stands by marks a reader hears, as the board's
   assert.equal(document.querySelector("[data-task-card] button[aria-haspopup]"), null);
 });
 
-test("a task's card names the task it is part of and its sub-tasks, counts those finished, says it is blocked, and each task named opens", () => {
+test("a task's card names its parent, its sub-tasks with those finished counted, what it is blocked by and blocks, each under its header, and each task named opens", () => {
   const parent: TaskSummary = { ...TASK, id: "t-1", name: "Ship invitations", number: 1 };
-  const child = { ...TASK, parentTaskId: parent.id, blocked: true } as const;
+  const blocker: TaskSummary = { ...TASK, id: "t-2", name: "Pick a mail provider", number: 2 };
+  const waiter: TaskSummary = { ...TASK, id: "t-3", name: "Announce invitations", number: 3 };
+
+  const child = {
+    ...TASK,
+    parentTaskId: parent.id,
+    blocked: true,
+    blockedBy: [blocker.id],
+    blocks: [waiter.id],
+  } as const;
 
   const done: TaskSummary = {
     ...TASK,
@@ -103,7 +112,7 @@ test("a task's card names the task it is part of and its sub-tasks, counts those
     name: "Write the email",
     number: 43,
     status: TASK_STATUS.DONE,
-    parentTaskId: TASK.id,
+    parentTaskId: child.id,
   };
 
   const open: TaskSummary = {
@@ -112,36 +121,34 @@ test("a task's card names the task it is part of and its sub-tasks, counts those
     name: "Send the email",
     number: 44,
     createdAt: 3,
-    parentTaskId: TASK.id,
+    parentTaskId: child.id,
   };
 
   const opened: string[] = [];
 
-  const card = drawn(child, [parent, done, open], (taskId) => opened.push(taskId));
-  const words = (selector: string) => card.querySelector(selector)?.textContent;
-  assert.equal(words("[data-task-card-parent]"), "Part of Ship invitationsACME-1");
-  assert.deepEqual(
-    [...card.querySelectorAll("[data-task-card-sub-task]")].map((each) => each.textContent),
-    ["Write the emailACME-43", "Send the emailACME-44"],
-  );
-  assert.match(
-    card.querySelector("ul[aria-label='Sub-tasks']")?.parentElement?.textContent ?? "",
-    /Write the email/u,
-  );
+  const card = drawn(child, [parent, blocker, waiter, done, open], (taskId) => opened.push(taskId));
+
+  const group = (header: string) =>
+    [...card.querySelectorAll(`ul[aria-label='${header}'] li`)].map((each) => each.textContent);
+
+  assert.deepEqual(group("Parent"), ["Ship invitationsACME-1"]);
+  assert.deepEqual(group("Sub-tasks"), ["Write the emailACME-43", "Send the emailACME-44"]);
+  assert.deepEqual(group("Blocked by"), ["Pick a mail providerACME-2"]);
+  assert.deepEqual(group("Blocks"), ["Announce invitationsACME-3"]);
   assert.match(card.textContent ?? "", /Sub-tasks1\/2/u);
-  assert.equal(words("[data-task-card-blocked]"), "Blocked");
+  assert.equal(card.querySelector("[data-task-card-blocked]"), null, "its blockers say it");
 
-  act(() => card.querySelector<HTMLButtonElement>("[data-task-card-sub-task] button")?.click());
-  act(() => card.querySelector<HTMLButtonElement>("[data-task-card-parent] button")?.click());
-  assert.deepEqual(opened, ["t-43", "t-1"]);
+  for (const header of ["Sub-tasks", "Parent", "Blocked by", "Blocks"]) {
+    act(() => card.querySelector<HTMLButtonElement>(`ul[aria-label='${header}'] button`)?.click());
+  }
 
-  const alone = drawn(TASK);
+  assert.deepEqual(opened, ["t-43", "t-1", "t-2", "t-3"]);
   assert.equal(
-    alone.querySelector(
-      "[data-task-card-parent], [data-task-card-sub-task], [data-task-card-blocked]",
-    ),
-    null,
+    drawn({ ...TASK, blocked: true }).querySelector("[data-task-card-blocked]")?.textContent,
+    "Blocked",
+    "a service before blocks names no blocker",
   );
+  assert.equal(drawn(TASK).querySelector("ul[aria-label], [data-task-card-blocked]"), null);
 });
 
 test("a pull request's line on the card counts its size as every figure is counted, green then red", () => {

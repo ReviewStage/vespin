@@ -1,5 +1,4 @@
 import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
-import { INSTALLED_SKILL_SCOPE } from "@repo/features/installed-skill-wire";
 import { removeSkillQuestion } from "@repo/features/skills-settings-words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { CONFIRM_LOSS } from "@repo/ui";
@@ -13,9 +12,8 @@ import { CONFIRM_LOSS } from "@repo/ui";
  */
 
 /**
- * What Remove asks first (`removeSkillQuestion`): a personal skill's
- * question is red, since its files are deleted past undoing; a workspace
- * skill's asks in the accent, as any act on others does.
+ * What Delete asks first (`removeSkillQuestion`): red for every skill,
+ * since its files are deleted past undoing whoever it was shared with.
  */
 export function removeQuestion(
   skill: Pick<InstalledSkillSummary, "name" | "scope">,
@@ -23,9 +21,6 @@ export function removeQuestion(
 ) {
   return {
     ...removeSkillQuestion(skill, workspace),
-    loss:
-      skill.scope === INSTALLED_SKILL_SCOPE.WORKSPACE
-        ? CONFIRM_LOSS.AFFECTS_OTHERS
-        : CONFIRM_LOSS.IRREVERSIBLE,
+    loss: CONFIRM_LOSS.IRREVERSIBLE,
   };
 }

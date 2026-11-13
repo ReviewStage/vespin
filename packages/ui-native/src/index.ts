@@ -1,5 +1,7 @@
 // index.ts -- @repo/ui-native: the iOS app's components over @expo/ui's SwiftUI, its Markdown in React Native views, and the brand's tokens they draw with.
 
+export { useAnnounced } from "./accessibility.js";
+
 export { AccountBarItem, AccountButton, type BarAccount } from "./account-button.js";
 
 export {
@@ -25,6 +27,7 @@ export {
   type ButtonSize,
   Chip,
   FieldChip,
+  FollowingChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -35,6 +38,13 @@ export {
 export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
+
+export {
+  type ChipMenu,
+  type ChipMenuGroup,
+  ComposeSheet,
+  MenuChip,
+} from "./compose-sheet.js";
 
 export { Composer, ComposerFoot, type ComposerMenu } from "./composer.js";
 
@@ -57,15 +67,23 @@ export {
 
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
 
-export { AttachRow, MenuPickRow, SkillRow, WordsField } from "./form-rows.js";
+export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
 
 export { GlassBar, GlassDock } from "./glass-bar.js";
 
-export { type Glyph, isLucideSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
+export {
+  GLYPH,
+  type Glyph,
+  glyphSymbol,
+  type LucideSymbol,
+  type MarkLook,
+  sectionGlyph,
+} from "./glyph.js";
 
 export { BUZZ, type Buzz, buzz } from "./haptics.js";
 
 export {
+  DeniesWaiting,
   HELD_ANSWER,
   type HeldAnswer,
   type HeldCall,
@@ -99,6 +117,8 @@ export {
 
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 
+export { markdownGithubPages, markdownReplyButtons } from "./markdown-model.js";
+
 export { MarkdownPage } from "./markdown-page.js";
 
 export {
@@ -113,11 +133,13 @@ export {
   WorkingMark,
 } from "./marks.js";
 
+export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
+
 export { monogramOf } from "./monogram.js";
 
 export { type HintOption, HintPickRows, RenameAsk, SwitchRow } from "./option-rows.js";
 
-export { PageHeader } from "./page-header.js";
+export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
 export {
   PROVIDER_MARK_ASSET,
@@ -137,6 +159,7 @@ export {
   ConfirmAsk,
   MarkRow,
   MergeActRow,
+  type MergeMethodChoice,
   PullRequestHead,
   WORDS_ASK_KIND,
   WordsAsk,
@@ -162,13 +185,17 @@ export { SealedPage } from "./sealed-page.js";
 export {
   AccountRow,
   ActionRow,
+  CodeRow,
   type ConnectionLine,
   ConnectionRow,
+  FollowerRow,
   MemberRow,
   type MemberRowAct,
   MenuRow,
   type MenuRowAct,
   NoteRow,
+  type PersonPickOption,
+  PersonPickRows,
   type PickOption,
   PickRows,
   PUSH_ROW_GOES,
@@ -177,10 +204,10 @@ export {
   SettingsForm,
   ToggleRow,
   ValueRow,
+  type WorkspacePickOption,
+  WorkspacePickRows,
   WorkspaceRow,
 } from "./settings-form.js";
-
-export type { SfSymbol } from "./sf-symbol.js";
 
 export {
   type BarAction,
@@ -188,12 +215,18 @@ export {
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  KeptColumns,
+  type KeptView,
+  SplitOverTabs,
   SplitView,
+  UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 
 export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 
-export { askForName, type NameAsk, shareLink } from "./system-asks.js";
+export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
+
+export { askForName, type NameAsk, shareLink, shareWords } from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,
@@ -232,9 +265,15 @@ export { MARK_SIZE, SPACE } from "./tokens/space.js";
 
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
-export { AgentHead, AgentTranscript, type OlderPages } from "./transcript.js";
+export {
+  AgentHead,
+  AgentTranscript,
+  type OlderPages,
+  type TranscriptReveal,
+} from "./transcript.js";
 
 export {
+  drawnCallIds,
   NO_TOGGLES,
   openCuts,
   shownMediaIds,
@@ -243,6 +282,9 @@ export {
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
+  transcriptOriginOf,
+  withSending,
+  withWaitingLine,
 } from "./transcript-model.js";
 
 export {
@@ -260,11 +302,13 @@ export { Video } from "./video.js";
 export {
   newWorkspaceAction,
   SWITCHER_LOOK,
+  SWITCHER_PRESENTATION,
   type SwitcherAccount,
   type SwitcherAction,
   type SwitcherLook,
-  type SwitcherWorkspace,
+  type SwitcherPresentation,
   WorkspaceSwitcher,
-  WorkspaceSwitcherMenu,
-  WorkspaceTile,
+  WorkspaceSwitcherItem,
 } from "./workspace-switcher.js";
+
+export { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";

@@ -2,7 +2,8 @@
  * sandbox-door.ts -- the door to a native agent's sandbox a tool of our MCP server reads a file through.
  *
  * `post_thread`, `edit_description`, `show_image`, and `show_page` read a
- * file the agent names by its path through a door made here, over the
+ * file the agent names by its path through a door made here, and
+ * `look_at_picture` writes a description's PDF in through it, over the
  * agent's machine (`../machine/agent-machine.ts`, the one its row names, a
  * sandbox or its starter's Mac): the place its session runs in, and the
  * one file asked for, read as the agent's own user, never
@@ -31,7 +32,7 @@ export type SandboxDoorRunner<R = HttpClient.HttpClient> = <A, E>(
   effect: Effect.Effect<A, E, R>,
 ) => Promise<A>;
 
-/** The doors to the admitted agent's sandbox: one to read a file through, which also makes a recording's MP4 there. */
+/** The doors to the admitted agent's sandbox: one to read a file through, which also makes a recording's MP4 there and writes a file under its attachments folder. */
 export interface AgentSandboxDoors {
   readonly files: InboxSandboxDoor;
 }
@@ -78,6 +79,8 @@ export function agentSandboxDoors<R>(
           },
           phoneVideo: async ({ path }: { readonly path: string }) =>
             (await ask((each) => each.phoneVideo(sessionId, path))) ?? null,
+          writeFile: (file: { readonly name: string; readonly contents: Uint8Array }) =>
+            ask((each) => each.writeFile(sessionId, file)),
         }),
     };
   };

@@ -177,6 +177,8 @@ export interface RoutedViews {
   readonly person: Pick<PersonRoute, "userId" | "name" | "workspace">;
   /** The Automations page standing, none while none does. */
   readonly automations: AutomationsPlace | undefined;
+  /** Whether the Merge queue page stands. */
+  readonly mergeQueue: boolean;
   /** Whether the Inbox stands, the item chosen in it as its address names it, of whichever workspace (`listedInboxChoice`), and the task its list is narrowed to. */
   readonly inbox: Pick<InboxRoute, "open" | "chosen" | "narrowed">;
 }
@@ -186,12 +188,14 @@ export function useRoutedViews(): RoutedViews {
   const { open } = useBoardRoute();
   const { userId, name, workspace } = usePersonRoute();
   const automations = useAutomationsPlace();
+  const mergeQueue = useWindowPlace().place === ROUTED_PLACE.MERGE_QUEUE;
   const inbox = useInboxRoute();
 
   return {
     board: open,
     person: { userId, name, workspace },
     automations: automations.open ? automations.place : undefined,
+    mergeQueue,
     inbox: { open: inbox.open, chosen: inbox.chosen, narrowed: inbox.narrowed },
   };
 }

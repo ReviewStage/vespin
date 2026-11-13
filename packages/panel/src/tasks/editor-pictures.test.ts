@@ -13,9 +13,10 @@ import type { TiptapEditorHTMLElement } from "@tiptap/core";
 import { Effect } from "effect";
 import { act, createElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, beforeEach, test } from "vitest";
+import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { appCommandOffered, runAppCommand } from "../app-commands.js";
 import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
+import { fakeAppPlatform } from "../testing/app-platform.js";
 import { readExperiments } from "../testing/app-state.js";
 import { editorBundleLanded, installEditorLayout } from "../testing/composer.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
@@ -30,14 +31,15 @@ beforeAll(() => readExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS)));
 
 /**
  * editor-pictures.test.ts -- a picture laid into the description's editor is drawn
- * at once from the Mac's own bytes, dimmed, with "Uploading" where its
- * caption will stand, and as the kept picture once the service kept it; a
- * keep that failed says why with Retry and Remove, and Remove takes it out;
+ * at once from the Mac's own bytes under the upload's cover, heard as
+ * uploading, and as the kept picture once the service kept it; a keep that
+ * failed says why on the picture with Retry and Remove, and Remove takes it out;
  * a video of another description pasted in is kept on this one as it is, waiting
  * as a quiet box rather than a picture its bytes cannot draw; and Insert
  * image is offered while the text is edited, and only then; and
- * a selected picture's tools are each still named in a narrow column.
- * Synthetic description and pictures.
+ * a selected picture's tools are each still named in a narrow column; and
+ * a drag over the text of files it keeps none of is refused, where one
+ * carrying a picture among them is taken. Synthetic description and pictures.
  */
 
 const TASK_ID = "4b1c2d3e-5f6a-4b7c-8d9e-0f1a2b3c4d5e";
@@ -95,6 +97,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.restoreAllMocks();
+
   for (const root of roots.splice(0)) act(() => root.unmount());
   saved.length = 0;
   keeping = undefined;
@@ -176,7 +180,7 @@ async function answerKeep(value: TasksPictureKeepAnswer): Promise<void> {
   await settle();
 }
 
-test("a pasted picture is drawn at once, dimmed, saying it is uploading, and as the kept picture once the service kept it", async () => {
+test("a pasted picture is drawn at once, heard as uploading, and as the kept picture once the service kept it", async () => {
   const container = await editing();
 
   await pasteScreenshot(container);
@@ -188,8 +192,8 @@ test("a pasted picture is drawn at once, dimmed, saying it is uploading, and as 
     uploading?.querySelector("img")?.getAttribute("src")?.startsWith("data:image/png;base64,"),
   );
   assert.equal(
-    uploading?.querySelector(".picture-status")?.textContent?.includes("Uploading"),
-    true,
+    uploading?.querySelector("[role='progressbar']")?.getAttribute("aria-label"),
+    "Uploading Screenshot",
   );
 
   await answerKeep({ id: KEPT_ID });
@@ -200,19 +204,20 @@ test("a pasted picture is drawn at once, dimmed, saying it is uploading, and as 
   assert.ok(kept?.getAttribute("src")?.startsWith("data:image/png;base64,"));
 });
 
-test("a keep that failed says why with Retry and Remove, and Remove takes the picture out", async () => {
+test("a keep that failed says why on the picture with Retry and Remove, and Remove takes the picture out", async () => {
   const container = await editing();
   await pasteScreenshot(container);
   await keepAsked();
 
   await answerKeep({ failure: PICTURE_KEEP_FAILURE.TOO_MANY });
 
-  const failed = container.querySelector(".picture-block[data-upload='failed'] [role='alert']");
+  const failed = container.querySelector(".picture-block[data-upload='failed']");
   assert.equal(
-    failed?.textContent,
-    "This description already holds as many pictures as it can.RetryRemove",
+    failed?.querySelector("[role='alert']")?.textContent,
+    "This description already holds as many pictures as it can.",
   );
-  const [retry, remove] = [...(failed?.querySelectorAll("button") ?? [])];
+  const retry = failed?.querySelector("button[aria-label='Retry Screenshot']");
+  const remove = failed?.querySelector<HTMLButtonElement>("button[aria-label='Remove Screenshot']");
   assert.equal(retry?.textContent, "Retry");
   assert.equal(remove?.textContent, "Remove");
   act(() => remove?.click());
@@ -379,4 +384,94 @@ test("in a column too narrow for their names, a selected picture's tools are eac
     [...tools.querySelectorAll("button")].map((button) => button.textContent),
     ["Alt text", "Caption", "Enlarge", "Delete"],
   );
+});
+
+test("a picture selected alone and copied goes to the clipboard as the picture beside its words", async () => {
+  const written: { readonly png?: Promise<string> | undefined }[] = [];
+  fakeAppPlatform({
+    copyRich: (rich) => {
+      written.push(rich);
+
+      return Promise.resolve();
+    },
+  });
+  const container = await editing();
+  await pasteScreenshot(container);
+  await keepAsked();
+  await answerKeep({ id: KEPT_ID });
+  selectPicture(container);
+
+  const copy = new Event("copy", { bubbles: true, cancelable: true });
+  Object.defineProperty(copy, "clipboardData", {
+    value: { clearData: () => undefined, setData: () => undefined },
+  });
+  act(() => {
+    container.querySelector(".ProseMirror")?.dispatchEvent(copy);
+  });
+
+  assert.deepEqual(await Promise.all(written.map((each) => each.png)), ["iVBORw0KGgo="]);
+});
+
+test("Enlarge on a selected picture hands the focus back to the text, the picture selected, so the viewer closing leaves it there", async () => {
+  const container = await editing();
+  await pasteScreenshot(container);
+  await keepAsked();
+  await answerKeep({ id: KEPT_ID });
+  const tools = selectPicture(container);
+
+  const enlarge =
+    [...tools.querySelectorAll("button")].find((button) => button.textContent === "Enlarge") ??
+    assert.fail("Enlarge is offered");
+
+  // A press focuses the button it lands on, as the Mac's does.
+  act(() => {
+    enlarge.focus();
+    enlarge.click();
+  });
+
+  const text = container.querySelector(".ProseMirror");
+  assert.ok(document.activeElement === text, "the text holds the focus");
+  assert.equal(
+    container.querySelector(".editor-picture-drawn")?.getAttribute("data-selected"),
+    "true",
+  );
+});
+
+test("a drag over the text of files it keeps none of is refused, and one carrying a picture among them is taken", () => {
+  // Note that jsdom lays nothing out, so each block stands in one box, which the drag lands on.
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockReturnValue(new DOMRect(0, 0, 400, 20));
+
+  const container = drawn(
+    createElement(DescriptionBody, {
+      task: TASK,
+      edit: descriptionEditMutation(TASK.id, () => Promise.resolve({ saved: true })),
+      sectionLinks: SECTION_LINKS,
+    }),
+  );
+
+  const section =
+    container.querySelector('[role="group"][aria-label="Approach"]') ??
+    assert.fail("the section stands");
+
+  const dragOver = (types: readonly string[]) => {
+    const transfer = {
+      types: ["Files"],
+      items: types.map((type) => ({ kind: "file", type })),
+      files: [],
+      dropEffect: "copy",
+    };
+
+    const event = new Event("dragover", { bubbles: true, cancelable: true });
+    Object.defineProperties(event, {
+      dataTransfer: { value: transfer },
+      clientX: { value: 10 },
+      clientY: { value: 10 },
+    });
+    act(() => section.dispatchEvent(event));
+
+    return { held: event.defaultPrevented, effect: transfer.dropEffect };
+  };
+
+  assert.deepEqual(dragOver(["application/zip"]), { held: true, effect: "none" });
+  assert.deepEqual(dragOver(["application/zip", "image/png"]), { held: true, effect: "copy" });
 });

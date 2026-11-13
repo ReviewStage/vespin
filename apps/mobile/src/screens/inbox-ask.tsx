@@ -1,5 +1,6 @@
 // inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, a notice's Got it, the composer that sends them with a note, replies, or starts a new thread with the agent, and Remind me, New thread, and Resolve.
 
+import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
   fieldValueOf,
@@ -14,7 +15,6 @@ import { knownAsk, RECOMMENDED } from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
   INBOX_FIELD,
-  INBOX_FILE_TYPE,
   INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
@@ -42,6 +42,7 @@ import {
   type ChoiceMedia,
   Composer,
   ComposerFoot,
+  GLYPH,
   StepList,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
@@ -50,7 +51,7 @@ import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
 /** The ⋯ menu a thread's bar holds. */
-const THREAD_MORE = { label: "More", symbol: "ellipsis" } as const;
+const THREAD_MORE = { label: "More", symbol: GLYPH.MORE } as const;
 
 /** Each field type an answer ask names, as the card draws it. */
 const FIELD_KIND = {
@@ -98,7 +99,7 @@ const RECORDING_WORD = "Recording";
 function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedia {
   switch (piece.type) {
     case INBOX_OPTION_MEDIA.FILE: {
-      const recording = piece.mediaType === INBOX_FILE_TYPE.WEBM;
+      const recording = isVideoType(piece.mediaType);
 
       return {
         kind: recording ? CHOICE_MEDIA.VIDEO : CHOICE_MEDIA.PICTURE,
@@ -185,7 +186,7 @@ export function OpenAskCard({
     return (
       <>
         <AskActs
-          acts={[{ label: INBOX_BOX_WORDS.GOT_IT, symbol: "checkmark", onPress: acknowledge }]}
+          acts={[{ label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK, onPress: acknowledge }]}
         />
         {said}
       </>
@@ -236,10 +237,10 @@ export function OpenAskCard({
           ticked={ticked}
           onToggle={(at) => onDraft(withStep(ask, draft, at))}
           acts={[
-            { label: ASK_PRESS.DONE, symbol: "checkmark", onPress: () => press(INBOX_REPLY.DONE) },
+            { label: ASK_PRESS.DONE, symbol: GLYPH.CHECK, onPress: () => press(INBOX_REPLY.DONE) },
             {
               label: ASK_PRESS.NOT_DONE,
-              symbol: "arrow.uturn.backward",
+              symbol: GLYPH.UNDO,
               onPress: () => press(INBOX_REPLY.NOT_DONE),
             },
           ]}
@@ -343,12 +344,18 @@ const NEW_THREAD = "New thread";
 export function threadMenu(item: InboxItem, answer: ThreadAnswer, onRemind: () => void): BarMenu {
   const resolve =
     item.status === INBOX_STATUS.OPEN
-      ? [{ label: RESOLVE, symbol: "checkmark.circle", onPress: answer.resolve } as const]
+      ? [{ label: RESOLVE, symbol: GLYPH.RESOLVED, onPress: answer.resolve } as const]
       : [];
 
   const newThread = answer.asNew
     ? []
-    : [{ label: NEW_THREAD, symbol: "plus.bubble", onPress: () => answer.setAsNew(true) } as const];
+    : [
+        {
+          label: NEW_THREAD,
+          symbol: GLYPH.NEW_THREAD,
+          onPress: () => answer.setAsNew(true),
+        } as const,
+      ];
 
   return {
     ...THREAD_MORE,

@@ -10,9 +10,11 @@ import {
 import type {
   CompactedNotice,
   ConnectionLostNotice,
+  GoalNotice,
   UsageLimitNotice,
 } from "@repo/wire/ui-messages";
 import type { UIMessage } from "ai";
+import type { TurnFilesSummaryView } from "../turn-files-wire.js";
 import type { RunModelUsage, RunStatus, RunUsage, TurnFailure } from "./requests.js";
 import { spokenProse } from "./spoken-prose.js";
 import type { TurnTrigger } from "./turn.js";
@@ -76,6 +78,8 @@ export const RUN_EVENT = {
   CONNECTION_RESTORED: "connection_restored",
   /** The harness compacted its session: a lasting notice where it happened. */
   COMPACTED: "compacted",
+  /** The agent's goal moved: set, judged, paused, resumed, or ended; a lasting notice where it happened. */
+  GOAL: "goal",
 } as const;
 
 /** The kinds of step that count as slow: a whole transcript read, a write the provider carries, or a task call's look into its repository. */
@@ -174,6 +178,7 @@ export type RunEventBody =
   | { readonly kind: typeof RUN_EVENT.USAGE_LIMIT_REACHED; readonly notice: UsageLimitNotice }
   | { readonly kind: typeof RUN_EVENT.CONNECTION_LOST; readonly notice: ConnectionLostNotice }
   | { readonly kind: typeof RUN_EVENT.COMPACTED; readonly notice: CompactedNotice }
+  | { readonly kind: typeof RUN_EVENT.GOAL; readonly notice: GoalNotice }
   | {
       readonly kind: typeof RUN_EVENT.CONNECTION_RESTORED;
       /** The sequence of the CONNECTION_LOST event whose notice this settles. */
@@ -269,6 +274,8 @@ export type RunEventBody =
       readonly usageByModel?: readonly RunModelUsage[];
       /** The id of every response the turn was answered with, in order. */
       readonly responseIds: readonly string[];
+      /** The files the turn changed, as its runner diffed its checkout when it ended (`turn-files-wire.ts`); absent where it changed none or none was read. */
+      readonly files?: TurnFilesSummaryView;
       readonly at: number;
       /** The attempt the end is told by, which must be the one the turn runs under, so a launch the turn no longer runs under ends nothing; absent for a turn no launch runs, read as 0. */
       readonly attempt?: number;

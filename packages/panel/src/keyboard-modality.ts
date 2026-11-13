@@ -4,6 +4,33 @@
 
 import { useEffect } from "react";
 
+/** Input types whose arrows move a caret rather than focus. */
+const CARET_INPUTS: ReadonlySet<string> = new Set([
+  "text",
+  "search",
+  "email",
+  "url",
+  "tel",
+  "password",
+  "number",
+]);
+
+/** Whether `target` holds a caret, where the arrows move it within the words and focus stays put. */
+function holdsCaret(target: EventTarget | null): boolean {
+  if (target instanceof HTMLTextAreaElement) return true;
+
+  if (target instanceof HTMLInputElement) return CARET_INPUTS.has(target.type);
+
+  return target instanceof HTMLElement && target.isContentEditable;
+}
+
+/** Whether `event` is a key that moves focus: Tab anywhere, and an arrow outside words being typed. */
+function movesFocus(event: KeyboardEvent): boolean {
+  if (event.key === "Tab") return true;
+
+  return event.key.startsWith("Arrow") && !holdsCaret(event.target);
+}
+
 /**
  * `:focus-visible` is a heuristic about how focus arrived, and in a window
  * the app focuses programmatically it guesses wrong: the engine can read the
@@ -11,14 +38,16 @@ import { useEffect } from "react";
  * press, most reliably the first time the window is ever focused. Modality
  * is tracked outright instead, on the root as `data-keyboard`, so a ring or
  * a keyboard-only hint is drawn only once someone has actually moved focus
- * with the keyboard. Each window's root mounts it once.
+ * with the keyboard. Note that an arrow in a field moves the caret, not
+ * focus, so it marks nothing. Each window's root mounts it once.
  */
 export function useKeyboardModality(): void {
   useEffect(() => {
     const root = document.documentElement;
 
     const keyboardMoved = (event: KeyboardEvent) => {
-      if (event.key === "Tab" || event.key.startsWith("Arrow")) root.dataset.keyboard = "true";
+      if (!movesFocus(event)) return;
+      root.dataset.keyboard = "true";
     };
 
     const pointerUsed = () => {

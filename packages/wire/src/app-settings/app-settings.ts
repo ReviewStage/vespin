@@ -8,7 +8,7 @@ import { Schema } from "effect";
  * longer offers stay, so a count an older build still sends under one validates.
  */
 export const APP_SETTING_ID = {
-  /** Offered by no build: the voice a call spoke with, removed with calls. */
+  /** The voice a call speaks with, chosen in Settings › Agents while the Voice experiment is on. */
   VOICE: "voice",
   /** Offered by no build: a call's captions, removed before calls were. */
   VOICE_CAPTIONS: "voice_captions",
@@ -25,8 +25,10 @@ export const APP_SETTING_ID = {
   SHOW_IN_DOCK: "show_in_dock",
   OPEN_AT_LOGIN: "open_at_login",
   AGENT_NOTIFICATIONS: "agent_notifications",
-  MAC_COMMANDS: "mac_commands",
+  MACHINE_COMMANDS: "mac_commands",
   KEEP_AWAKE: "keep_awake",
+  COMPUTER_USE: "computer_use",
+  COMPUTER_USE_APPS: "computer_use_apps",
   /** Offered by no build: Forward cloud agents' ports automatically, removed since ports are forwarded only from the agent's plug. */
   FORWARD_PORTS: "forward_ports",
   /** Offered by no build: Run agents on this Mac, removed since Runs on chooses where each agent runs. */
@@ -60,6 +62,7 @@ export const APP_SETTING_ID = {
   SETUP_FINISHED: "setup_finished",
   SETUP_PLACE: "setup_place",
   ONBOARDING_SURVEY: "onboarding_survey",
+  INTROS_SEEN: "intros_seen",
   SOUND_WHEN: "sound_when",
   COMPLETION_SOUND: "completion_sound",
   ASK_SOUND: "ask_sound",

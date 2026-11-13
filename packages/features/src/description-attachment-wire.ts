@@ -9,7 +9,7 @@ import {
   pictureOfDataUrl,
 } from "./picture-wire.js";
 import { wireUuidSchema } from "./service-wire.js";
-import { WEBM_TYPE } from "./video-signature.js";
+import { MP4_TYPE, WEBM_TYPE } from "./video-signature.js";
 
 /**
  * description-attachment-wire.ts -- a description's files on the wire: how many a description may hold, what an upload carries, and what it answers.
@@ -34,6 +34,7 @@ export const DESCRIPTION_ATTACHMENT_BOUNDS = {
 const DESCRIPTION_ATTACHMENT_TYPE = {
   ...AGENT_ATTACHMENT_TYPE,
   WEBM: WEBM_TYPE,
+  MP4: MP4_TYPE,
 } as const;
 
 /** A description's attachment's media type as the wire carries it. */

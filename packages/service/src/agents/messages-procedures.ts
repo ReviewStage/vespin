@@ -9,7 +9,10 @@
  * deadline of its own, and the hold ends when the store's does, answering
  * the page as it stands. Beside them, the write the same path takes: a
  * message to an agent (`POST /api/agents/{id}/messages`), handed to its
- * session through the one steer path (`coder-host/steer.ts`).
+ * session through the one steer path (`coder-host/steer.ts`), and a line of
+ * a call into it recorded as it stands (`POST /api/agents/{id}/voice-lines`),
+ * under the same reach a message takes, which opens no turn: a delegation's
+ * message names the caller's lines it is, and starts its turn on them.
  *
  * Every row a read touches is one of a workspace the caller is a member of:
  * an agent or a task of any other workspace answers exactly as one that
@@ -39,7 +42,12 @@ import { childTitlesOf } from "@repo/database/models/child-titles";
 import { readRewoundRevision } from "@repo/database/models/conversation-rewind";
 import { childConversationId } from "@repo/database/models/ids";
 import { listProviderKeyRows } from "@repo/database/models/provider-key-store";
-import { type ConversationTarget, storeWriter } from "@repo/database/models/writer";
+import {
+  type ConversationTarget,
+  STORE_WRITE_REFUSAL,
+  storeWriter,
+} from "@repo/database/models/writer";
+import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import {
   AGENT_BOUNDS,
   AGENT_CURSOR_START,
@@ -68,9 +76,11 @@ import {
   type UserIdResolver,
 } from "../http/http-effect.js";
 import { accountMiddleware, type HostedContext, hosted } from "../orpc/base.js";
+import { admitsPlanWriter, controlsAgent } from "./agent-reach.js";
 import { queueOnPage } from "./coder-host/agent-queue.js";
 import { cutMessage, wholePartOf } from "./coder-host/part-cut.js";
 import { changeAgentQueue } from "./coder-host/queue-change.js";
+import { spokenLineMetadata } from "./coder-host/spoken-line.js";
 import { startedBlank } from "./coder-host/status.js";
 import { STEER_OUTCOME, steerMemberWords } from "./coder-host/steer.js";
 import { summaryOf } from "./coder-host/stop.js";
@@ -382,7 +392,11 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       .use(tooLongMiddleware)
       .send.effect(function* ({ input, context }) {
         const { agent } = yield* reachedAgent(context.userId, input.params.id);
-        const { retry, ...line } = input.body;
+        const { retry, channel, delegationId, lines, ...words } = input.body;
+        const metadata = spokenLineMetadata({ channel, delegationId });
+        const spoken = metadata === undefined ? words : { ...words, metadata };
+        // A delegation starts its turn on the caller's lines already recorded, rather than writing its words again.
+        const line = lines === undefined ? spoken : { ...spoken, adopts: lines };
 
         const { txid, outcome } = yield* steerMemberWords(
           writer,
@@ -401,6 +415,45 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
 
         // The transaction that wrote the line, which the host waits to see live before it confirms the send.
         return txid === undefined ? { agent: summary } : { agent: summary, txid };
+      }),
+
+    recordVoiceLine: hosted.messages
+      .use(accountMiddleware(seams.resolveUserId))
+      .recordVoiceLine.effect(function* ({ input, context }) {
+        const { agent, target } = yield* reachedAgent(context.userId, input.params.id);
+
+        // A line of a call is the caller's words to the agent, so it takes the reach a typed message takes:
+        // an agent on its starter's own GitHub token, or on its starter's Mac, takes words from its starter alone.
+        if (!controlsAgent(context.userId, agent)) {
+          return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+        }
+
+        yield* admitsPlanWriter(context.userId, agent);
+        const { id, callId, speaker, text } = input.body;
+
+        const written = yield* hostedStoreOrUnavailable(
+          Effect.flatMap(writer, (write) =>
+            write.recordVoiceLine(target, {
+              key: id,
+              callId,
+              speaker,
+              text,
+              sender: { kind: MESSAGE_SENDER.MEMBER, userId: context.userId },
+            }),
+          ),
+        );
+
+        if (Result.isFailure(written)) {
+          return yield* Effect.fail(
+            written.failure.refusal === STORE_WRITE_REFUSAL.NO_CONVERSATION
+              ? HOSTED_REFUSAL.NOT_FOUND
+              : HOSTED_REFUSAL.INVALID_REQUEST,
+          );
+        }
+
+        const { txid } = written.success;
+
+        return txid === undefined ? {} : { txid };
       }),
 
     queue: hosted.messages.use(accountMiddleware(seams.resolveUserId)).queue.effect(function* ({

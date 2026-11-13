@@ -42,6 +42,8 @@ import {
   CHECK_SUMMARY_LOOK,
   ConfirmAsk,
   EmptyState,
+  GLYPH,
+  glyphSymbol,
   LIST_LOOK,
   ListSection,
   MarkRow,
@@ -203,10 +205,21 @@ function shownPressOf(
   };
 }
 
+/** The ways to merge the pull request offers a choice of as it stands: the repository's, while its press merges or arms auto-merge; none otherwise. */
+function methodsOffered(pullRequest: AgentOverviewPullRequest | undefined): readonly MergeMethod[] {
+  const live = pullRequest !== undefined && isLivePullRequest(pullRequest);
+  const action = live ? mergeActionFor(pullRequest) : undefined;
+  const chooses = action === MERGE_ACTION.MERGE || action === MERGE_ACTION.ENABLE_AUTO_MERGE;
+
+  return chooses ? (pullRequest?.merging?.methods ?? []) : [];
+}
+
 /**
  * The bar's acts: the merge's one press where the screen hands it one, and
  * the ⋯ menu, which opens the pull request on GitHub, chooses how to merge
- * where the repository allows more than one way, and reads it again.
+ * where the repository allows more than one way and the press stands in the
+ * bar, and reads it again. A regular window chooses the way on the press
+ * under the checks instead.
  */
 function PullRequestToolbar({
   pullRequest,
@@ -224,13 +237,8 @@ function PullRequestToolbar({
   readonly onRefresh: () => void;
 }) {
   const colors = useColors();
-  const live = pullRequest !== undefined && isLivePullRequest(pullRequest);
-  const action = live ? mergeActionFor(pullRequest) : undefined;
-  const methods = pullRequest?.merging?.methods ?? [];
-
-  const chooses =
-    methods.length > 1 &&
-    (action === MERGE_ACTION.MERGE || action === MERGE_ACTION.ENABLE_AUTO_MERGE);
+  const methods = methodsOffered(pullRequest);
+  const chooses = press !== undefined && methods.length > 1;
 
   // Note that these stand in the top bar in every window, never the bottom: expo-router shows a navigation controller's toolbar and never hides it again, so a bottom bar outlived the page. A regular window hands no press, since its top bar folds it into More, and draws it under the checks instead.
   return (
@@ -245,9 +253,12 @@ function PullRequestToolbar({
           {press.words}
         </Stack.Toolbar.Button>
       )}
-      <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={MENU_WORDS.MORE}>
+      <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
         {url === undefined ? null : (
-          <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(url)}>
+          <Stack.Toolbar.MenuAction
+            icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
+            onPress={() => openInSafari(url)}
+          >
             {MENU_WORDS.OPEN_ON_GITHUB}
           </Stack.Toolbar.MenuAction>
         )}
@@ -262,7 +273,7 @@ function PullRequestToolbar({
               </Stack.Toolbar.MenuAction>
             ))
           : null}
-        <Stack.Toolbar.MenuAction icon="arrow.clockwise" onPress={onRefresh}>
+        <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.RETRY)} onPress={onRefresh}>
           {MENU_WORDS.REFRESH}
         </Stack.Toolbar.MenuAction>
       </Stack.Toolbar.Menu>
@@ -368,7 +379,7 @@ export function PullRequestScreen() {
         <Screen>
           <EmptyState
             title={failed ? PULL_REQUEST_READ_WORDS.FAILED : PULL_REQUEST_READ_WORDS.READING}
-            symbol={failed ? "exclamationmark.triangle" : "arrow.triangle.pull"}
+            symbol={failed ? GLYPH.FAILED : GLYPH.PULL_REQUEST}
             loading={!failed}
             action={
               failed ? { label: MENU_WORDS.TRY_AGAIN, onPress: () => void retry() } : undefined
@@ -480,6 +491,11 @@ export function PullRequestScreen() {
                 label={press.words}
                 prominent={press.prominent}
                 disabled={press.disabled}
+                methods={methodsOffered(pullRequest).map((each) => ({
+                  label: MERGE_METHOD_WORDS[each],
+                  on: each === method,
+                  onPress: () => setChosen(each),
+                }))}
                 onPress={press.onPress}
               />
             </ListSection>
@@ -496,7 +512,7 @@ export function PullRequestScreen() {
             ))}
             <MarkRow
               id={COMMENTS_ROW}
-              mark={{ symbol: "bubble.left", tone: STATUS_TONE.NEUTRAL }}
+              mark={{ symbol: GLYPH.THREAD, tone: STATUS_TONE.NEUTRAL }}
               title={
                 conversation === undefined
                   ? failedOf(parts.conversation)

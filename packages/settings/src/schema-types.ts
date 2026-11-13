@@ -30,7 +30,7 @@ export const SETTINGS_PAGE = {
   SKILLS: "skills",
   /** A workspace the account is in: its name and the account's role, its members, and its GitHub repositories, each the service's rather than a stored setting. */
   WORKSPACE: "workspace",
-  /** What the workspace's cloud agents start with: the environment variables it hands them, their values never shown, its install script, and each repository's setup and archive scripts, the service's rather than a stored setting. */
+  /** What the workspace's cloud agents start with: the environment variables it hands them, their values never shown, its install script, and each repository's setup script, the service's rather than a stored setting. */
   ENVIRONMENT: "environment",
   /** What this Mac lets agents do on it, the stored switch for running commands here, and whether the app opens as it starts. */
   THIS_MAC: "this-mac",
@@ -63,6 +63,8 @@ export const SETTING_SECTION = {
   PRIVACY: "privacy",
   /** Whether the app opens as this Mac starts, a group of its own on This Mac, under its own rows. */
   STARTUP: "startup",
+  /** The voice a call speaks with, a card of its own on Agents under the harnesses' cards, drawn while the Voice experiment is on. */
+  VOICE: "voice",
   /** The microphone dictation listens on, a group of its own on This Mac, under the permission that lets the app listen. */
   MICROPHONE: "microphone",
   /** How an agent's message box sends while its turn runs, and who authors its commits, a group of its own on Preferences, under General. */
@@ -137,6 +139,10 @@ export interface SettingOption {
   label: string;
   /** What the option does, said under its name; none where its name says it. */
   hint?: string | undefined;
+  /** The heading it stands under where the set is drawn in groups, such as a voice's language. */
+  group?: string | undefined;
+  /** A short word of what it is, said after its name, such as how a voice presents. */
+  tag?: string | undefined;
 }
 
 /**

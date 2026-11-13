@@ -553,7 +553,7 @@ test("a schedule Vespin cannot read is not created, and the refusal is announced
 
   type(page.querySelector("input[aria-label='Automation name']"), "Nightly sweep");
   writePrompt(page, "Sweep the stale branches.");
-  pick(page, "Repeats", "Custom");
+  pick(page, "Runs", "Custom");
   type(page.querySelector("input[aria-label='Cron']"), "every night");
   act(() => button("Create automation").click());
   await settle();

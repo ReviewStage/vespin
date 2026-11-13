@@ -25,6 +25,20 @@ or linking GitHub later, authorizes the Vespin GitHub App; we store its
 OAuth tokens encrypted on the Service and never send them to your Mac or
 browser.
 
+### Voice calls
+
+When you talk to an agent by voice, your audio goes from the app to OpenAI, on
+your own OpenAI API key, and nowhere else; the key never leaves the Service,
+and we never store the audio. What you and the voice say is kept as text in
+the agent's conversation, one message for each thing either of you said, so
+the agent's transcript shows both sides of the call. What you say reaches the
+agent as its messages, as a typed line does. What the voice says stays in the
+transcript and is never handed to the agent's model. While a call is under way,
+the Service keeps one record of who is calling which agent and the state of the
+call's session, and deletes it when the call ends. Past its end we keep nothing
+else of a call but its length, which counts toward your day and in our usage
+counts.
+
 ### Workspaces, tasks, and descriptions
 
 Every account gets a first workspace, and you can create or join others.
@@ -36,10 +50,11 @@ full revision history, comments on the description, inbox items and their answer
 pages that agents make, pictures and short videos added to any of these, and,
 if the Memory experiment is on, short facts agents save about how your team
 works. Every member of the workspace can see all of this. Agents record their
-videos as WebM, which iPhones cannot play, so for each video an agent records
+browser's videos as WebM, which iPhones cannot play, so for each video an agent records
 in a cloud sandbox, we also keep an MP4 copy, made in that agent's sandbox.
 The copy is shown to the same people as its video, is deleted with it, and is
-the version the iPhone app plays.
+the version the iPhone app plays. A video of an app on your Mac (see "Apps on
+your Mac") is an MP4 already, which every app plays, so it has no copy.
 
 ### Agent conversations
 
@@ -47,7 +62,8 @@ For each turn an agent runs, we store your message, any files you attach, the
 agent's reply and reasoning summaries, each tool call with its input and
 output, and the model, token counts, and timing. Tool output can include files
 from your repository, command output, web pages, screenshots of the agent's
-browser, and answers from your integrations. We also store the agent harness's
+browser, windows of apps on your Mac you let agents use, and answers from your
+integrations. We also store the agent harness's
 own record of its session, Claude Code's transcript or Codex's thread, its
 thinking text included, so the agent can resume it and an agent continued or
 forked from it goes on from it. Transcripts and descriptions are stored
@@ -106,8 +122,8 @@ model and its transcript. Agents on your Mac are never handed them.
 ### Integrations and connected apps
 
 If you connect an integration (such as Linear, Notion, Sentry, Slack, Gmail,
-Google Calendar, Google Drive, Granola, Mercury, Mintlify, Neon, PostHog,
-Resend, Stripe, Supabase, Vercel, Y Combinator, or Executor), Vercel Connect stores its token
+Google Calendar, Google Drive, Granola, Mercury, Neon, PostHog, Resend, Stripe,
+Supabase, Vercel, Y Combinator, or Executor), Vercel Connect stores its token
 for your account, encrypted, and we keep the connection's state and a display
 name. While connected, your agents can read and change whatever your grant at
 that service allows, without asking you first, and everything the service
@@ -126,6 +142,43 @@ its exit code, and up to 20,000 characters each of its output and errors are
 returned to the agent, stored in its transcript, and sent to the agent's model
 provider. **This output is not redacted**: if a command prints a password,
 token, key, or file contents, that goes too.
+
+### Apps on your Mac
+
+If you turn on Computer use in Settings › Experimental and allow it in
+Settings › This Mac, agents can see and use apps on your Mac: Vespin asks you the first time an
+agent wants each app, and you can answer Allow once, Always allow, or Deny.
+For an app you allow, the agent reads its window's controls and their text and
+a screenshot of the window, and clicks and types in it. The screenshot is sent
+to the agent's model provider, and a full-size copy and the app's icon are
+stored with the agent's transcript and deleted with it. Vespin never offers
+agents terminals, password managers, System Settings, or Vespin itself, but
+**anything an allowed app's window shows goes too**, a message or a password
+on screen included. You can take an app off the always-allowed list, or turn
+computer use off, in Settings › This Mac.
+
+An agent may also record an app you allowed as a video, up to two minutes, to
+show you a flow it drove there. Vespin on your Mac records that app's window,
+with the agent's pointer drawn over it, and keeps the video on your Mac's disk
+until the agent's next recording replaces it. When the agent stops recording,
+the video is uploaded and stored with the agent's transcript, where members
+who can open the task can play it, and is deleted with it; a copy is also saved
+on the machine the agent runs on, its cloud sandbox or your Mac, so it can post
+the video to an inbox thread or add it to the task's description, where it is
+kept and deleted as any other video there is. The video is never sent to the
+agent's model provider, and session recordings never include it. Like a
+screenshot, **anything the app's window shows while it records goes too**.
+
+When you type `@` in a message to an agent, Vespin lists the apps running and
+installed on that Mac so you can point the agent at one. The list is read on
+your Mac and never leaves it; only an app you pick is sent, by its name and
+bundle id, as part of your message, which the agent and anyone who can open
+the task can read.
+
+The apps you always allow on a Mac are kept with that Mac's settings on our
+servers, by bundle id, with each app's name and icon as the Mac shows them,
+so that `@` in the web app, or on another of your machines, can list them.
+Only you see them, and only while Computer use is on for you.
 
 ### Agents on your own machines
 
@@ -209,19 +262,22 @@ A machine you run Vespin's host on, This Mac or one you installed it on,
 sends Sentry the host's own lines about its setup and running: that it
 connected, fetched the tools its agents run on, became ready, or could not,
 in Vespin's own words, with the host's version and operating system. A line
-saying something failed is sent as an error report. These never carry your
+saying something failed is sent as an error report, except a step that is
+tried again on its own, which is sent as a warning until it has failed five
+times in a row and as an error report then. These never carry your
 agents' messages, their work, what a tool or a terminal printed, or a
 credential. The Mac app sends the same of setting up This Mac's host. The
 host on This Mac also keeps these lines in `~/Library/Logs/Vespin Host/` on
 your Mac.
 
 The Vespin iOS app sends Sentry error reports, crash reports (a crash is sent
-the next time you open the app), and reports of a screen that could not be
-drawn. It uses Sentry's default data collection, so reports may include error
+the next time you open the app, a crash as the app starts, before its first
+screen, among them), and reports of a screen that could not be drawn. It uses Sentry's default data collection, so reports may include error
 messages, stack traces, the addresses of the app's own requests, device and
 iOS details, the app's version and build, and your IP address. A report
 naming a sign-in token in an address is dropped, and reports name your
-account by its id only. The app sends no performance traces, screenshots, or
+account by its id only, or not at all for a crash before you are signed in
+again at launch. The app sends no performance traces, screenshots, or
 recordings of the screen.
 
 ### Feedback
@@ -340,9 +396,10 @@ data, and post them to our team's Slack.
 ### Information stored on your Mac
 
 The Mac app keeps its window layout and the drafts of messages you have not
-sent. While you are signed in, it also keeps a copy of your workspaces' lists
-and changes you made offline in one file, `entities.sealed`, encrypted under a
-key in the macOS Keychain and deleted when you sign out. Your sign-in
+sent. While you are signed in, it also keeps a copy of your workspaces' lists,
+changes you made offline, and the words of messages to agents that were not
+delivered, with the names of their files, in one file, `entities.sealed`,
+encrypted under a key in the macOS Keychain and deleted when you sign out. Your sign-in
 tokens are kept encrypted the same way. Transcripts and pictures you
 open are held in memory only.
 
@@ -405,7 +462,7 @@ We do not use your code or conversations to train AI models.
 We do not sell your personal information or use it for advertising. We share
 data with:
 
-- **AI providers:** your agents, web search, dictation, and pull request
+- **AI providers:** your agents, web search, dictation, voice calls, and pull request
   chapters run on Anthropic or OpenAI, always on the API key or subscription
   you saved, never ours. Titles, of your agents, tasks, and the threads you
   start, are generated on Anthropic under Vespin's own API key, from excerpts
@@ -439,15 +496,16 @@ data with:
 
 Your data is stored on servers provided by our infrastructure partners: our
 database is hosted by Neon, and agents' checkouts and session files live in
-Vercel Sandboxes, in their snapshots, and on Vercel Drives: each agent's
+Vercel Sandboxes and on Vercel Drives: each agent's
 checkout on a drive of its own, and one drive per workspace holding the default
 branch of every repository it connects, member-token ones included, which each
 new cloud agent forks. A copy of a workspace repository's default branch, with
 its dependencies installed, may also remain on a drive of its own made before
-workspace drives, which nothing reads or writes any more.
-We use encryption in transit (TLS), encrypt saved credentials as described
-above, and keep the tokens agents use outside their sandboxes, adding them at
-the sandbox's network firewall. Transcripts, descriptions, and other content are not
+workspace drives, which nothing reads or writes any more. A sandbox's own
+disk is discarded when it stops, so only its drive outlives it; a sandbox made
+before that changed keeps a snapshot of its disk instead.
+We use encryption in transit (TLS) and encrypt saved credentials as described
+above. Transcripts, descriptions, and other content are not
 end-to-end encrypted.
 
 While we strive to protect your information, no method of electronic storage
@@ -460,11 +518,13 @@ affected users and relevant authorities as required by applicable law.
 We retain your data for as long as your account is active and as needed to
 provide the Service. Deleting a task deletes it at once with its history,
 pages, inbox items, and pictures, and its agents' transcripts. Deleting an
-agent deletes its transcript at once. Deleting or archiving an agent asks
-Vercel to delete its sandbox and the drive holding its checkout; where that
-fails or does not finish in time, the delete or archive goes ahead anyway, and
-the drive may remain. A sandbox's snapshots otherwise expire and are removed
-seven days after they were last used. The workspace's drive of every
+agent deletes its transcript at once. Deleting an agent asks Vercel to delete
+its sandbox and the drive holding its checkout; where that fails or does not
+finish in time, the delete goes ahead anyway, and the sandbox and drive may
+remain. Archiving an agent deletes neither: its sandbox and drive are deleted once
+they have gone seven days unused, as any agent's are. A sandbox keeps no snapshot; the snapshots of one made
+before that changed otherwise expire and are removed seven days after they
+were last used. The workspace's drive of every
 repository it connects is kept for the workspace's agents until the workspace
 is deleted. A repository's default-branch drive made before workspace drives
 is no longer read; deleting its workspace asks Vercel to delete it where one of
@@ -480,8 +540,9 @@ made before default-branch drives expires thirty days after its last use. When y
   but for the tasks in workspaces with other members (below), and we ask
   Vercel to delete your agents' sandboxes and the drives holding their
   checkouts; where that fails or does not finish in time, your account is
-  deleted anyway and a drive may remain. Their snapshots otherwise expire and
-  are removed seven days after they were last used.
+  deleted anyway and a drive may remain. The snapshots of a sandbox made
+  before sandboxes stopped keeping them otherwise expire and are removed seven
+  days after they were last used.
 - **Workspaces you own and are the only member of** are deleted at once with
   their tasks, transcripts, and automations, as a deleted task is, and we ask
   Vercel to delete every one of their agents' sandboxes and the drives holding

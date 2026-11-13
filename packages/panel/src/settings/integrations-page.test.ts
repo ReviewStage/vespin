@@ -477,7 +477,6 @@ test("a provider the deployment does not offer the account has no row, and every
     "Granola",
     "Linear",
     "Mercury",
-    "Mintlify",
     "Neon",
     "Notion",
     "PostHog",
@@ -491,7 +490,7 @@ test("a provider the deployment does not offer the account has no row, and every
   assert.equal(
     [...page.querySelectorAll("button")].filter((button) => button.textContent === "Connect")
       .length,
-    18,
+    17,
   );
 });
 

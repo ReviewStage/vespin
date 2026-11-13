@@ -14,6 +14,7 @@ import type { SkillOption } from "@repo/features/skill-mention";
 import { TASK_SKILL_SOURCE } from "@repo/features/task-wire";
 import { pasteCutWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
+import { EXPERIMENT } from "@repo/settings";
 import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { Effect } from "effect";
@@ -23,6 +24,7 @@ import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { installShownFailureReporter } from "../failure-report.js";
 import { OpenSettingsProvider } from "../open-settings.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
+import { stateWith } from "../testing/app-state.js";
 import {
   composerEditor,
   editorBundleLanded,
@@ -32,14 +34,18 @@ import {
   QUIET_COMPOSER,
   typeInComposer,
 } from "../testing/composer.js";
-import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
+import { testQueryClientNow, withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { AgentComposer } from "./agent-composer.js";
 import { type RepositoryRemedyDoors, RepositoryRemedyProvider } from "./repository-remedy.js";
 import type { SkillSource } from "./skill-picker.js";
 import { type MessageSender, useAgentComposer } from "./use-agent-composer.js";
 import type { AgentModelControl } from "./use-agent-model.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * The agent's message box as the developer works it, on the editor bundle's
@@ -107,22 +113,27 @@ function Box({
   messages = [],
   skills = reading,
   onClear,
+  startsGoal,
   model,
 }: {
   sender: MessageSender;
   skills?: SkillSource;
   /** What `/clear` does, where the box runs commands. */
   onClear?: () => Promise<boolean>;
+  /** Whether the box starts an agent whose first message may set its goal, as New task's does. */
+  startsGoal?: boolean;
   /** The model chip's control, which `/model` opens; none where the box draws no chip. */
   model?: AgentModelControl;
   /** The transcript as the tab reads it, which a sent line is read back from. */
   messages?: readonly AgentTranscriptMessage[];
 }): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages,
-    send: sender,
+    send: outboxed(sender),
   });
 
   return createElement(
@@ -133,6 +144,7 @@ function Box({
       composer,
       skills,
       onClear,
+      startsGoal,
       model,
     }),
     // What Continue would carry, as the tab hands it on.
@@ -146,12 +158,13 @@ async function mounted(
   options: {
     readonly skills?: SkillSource;
     readonly onClear?: () => Promise<boolean>;
+    readonly startsGoal?: boolean;
     readonly model?: AgentModelControl;
   } = {},
 ) {
   const sent: { text: string; clientKey: string }[] = [];
 
-  const sender: MessageSender = (_agentId, text, clientKey) => {
+  const sender: MessageSender = (_agentId, { text, clientKey }) => {
     sent.push({ text, clientKey });
 
     return answer();
@@ -322,29 +335,6 @@ async function answeredInTurn() {
   };
 }
 
-test("a message sent while one is out goes once the one before it answers, so the agent hears them in order", async () => {
-  const box = await answeredInTurn();
-  typeInComposer(box.container, "First");
-  pressInComposer(box.container, "Enter");
-  await settle();
-  typeInComposer(box.container, "Second");
-  pressInComposer(box.container, "Enter");
-  await settle();
-  assert.equal(box.shown(), "", "both left the box at once");
-  assert.deepEqual(
-    box.sent.map((each) => each.text),
-    ["First"],
-    "the second waits for the first's answer",
-  );
-
-  await box.answer(0, TAKEN);
-  assert.deepEqual(
-    box.sent.map((each) => each.text),
-    ["First", "Second"],
-  );
-  assert.notEqual(box.sent[0]?.clientKey, box.sent[1]?.clientKey);
-});
-
 test("a message sent with Send hands the caret to the box as it opens again", async () => {
   const box = await answeredLater();
   typeInComposer(box.container, "Fix the bug");
@@ -477,6 +467,8 @@ test("a / opens the repository's skills over the caret, the keys move through th
 });
 
 test("a / opening the message lists the box's commands ahead of the skills, a skill named as one left out, and a command typed as the first word runs rather than sending, the box held until a /clear is answered, but /compact, which goes as a message", async () => {
+  // The Goals experiment offers /goal.
+  writeAppState(stateWith({ [EXPERIMENT.GOALS]: true }, {}));
   let cleared = 0;
   let answerClear: (took: boolean) => void = ignore;
 
@@ -510,7 +502,7 @@ test("a / opening the message lists the box's commands ahead of the skills, a sk
 
   typeInComposer(box.container, "/");
   await settle();
-  assert.deepEqual(names(), ["/model", "/compact", "/clear", "/release", "/deploy"]);
+  assert.deepEqual(names(), ["/model", "/compact", "/clear", "/goal", "/release", "/deploy"]);
   typeInComposer(box.container, "new");
   await settle();
   // An alias finds its command.
@@ -606,6 +598,26 @@ test("a skill named as a command the box does not run, as /compact in New task's
   );
 
   assert.deepEqual(rows, ["Use to squash commits."]);
+});
+
+test("a box starting an agent, with no session yet, lists /goal beside /model but no command that needs a session", async () => {
+  // The Goals experiment offers /goal.
+  writeAppState(stateWith({ [EXPERIMENT.GOALS]: true }, {}));
+
+  const box = await mounted(undefined, {
+    model: MODEL,
+    startsGoal: true,
+    skills: () => Promise.resolve({ skills: [] }),
+  });
+
+  const names = () =>
+    [...box.container.querySelectorAll('[role="listbox"] [role="option"]')].map(
+      (row) => row.querySelector(".ui-combobox-option-label")?.textContent,
+    );
+
+  typeInComposer(box.container, "/");
+  await settle();
+  assert.deepEqual(names(), ["/model", "/goal"]);
 });
 
 test("a row of the skills' list leads with a book, says what it is for and where it comes from, and hangs the skill's card beside it", async () => {
@@ -798,7 +810,7 @@ async function mountedRefusedForMove() {
   const sent: { text: string; clientKey: string }[] = [];
   const moves: { resolve: (moved: boolean) => void }[] = [];
 
-  const sender: MessageSender = (_agentId, text, clientKey) => {
+  const sender: MessageSender = (_agentId, { text, clientKey }) => {
     sent.push({ text, clientKey });
 
     return Promise.resolve(
@@ -1000,7 +1012,16 @@ test("a message refused for want of a connected credential is reported as the se
   assert.equal(issues, 0);
 });
 
-test("messages still waiting to go as the agent refuses one for good are all kept for Continue, in the order sent", async () => {
+test("a message the host never heard comes back into the box, since nothing drew it", async () => {
+  const box = await mounted(() => Promise.reject(new Error("the act port closed")));
+  typeInComposer(box.container, "Fix the bug");
+  pressInComposer(box.container, "Enter");
+  await settle();
+
+  assert.equal(box.shown(), "Fix the bug");
+});
+
+test("every message refused as the agent ends for good is kept for Continue, in the order sent", async () => {
   const box = await answeredInTurn();
   typeInComposer(box.container, "Fix tests");
   pressInComposer(box.container, "Enter");
@@ -1010,11 +1031,7 @@ test("messages still waiting to go as the agent refuses one for good are all kep
   await settle();
 
   await box.answer(0, { failure: AGENT_CALL_FAILURE.AGENT_RETIRED });
-  assert.deepEqual(
-    box.sent.map((each) => each.text),
-    ["Fix tests"],
-    "the one behind it is not sent",
-  );
+  await box.answer(1, { failure: AGENT_CALL_FAILURE.AGENT_RETIRED });
   assert.equal(box.container.querySelector("output")?.dataset.unsent, "Fix tests\n\nUpdate docs");
 });
 
@@ -1042,10 +1059,12 @@ test("while the agent's turn is starting, its status not yet running, a box that
   /** The box while a turn starts: the tab says it works, as a line the box sent still on its way does, while the agent's status still reads the turn before. */
   function Starting(): ReactNode {
     const composer = useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
       agentId: "agent-1",
       taskId: "plan-1",
       messages: [],
-      send: () => new Promise(ignore),
+      send: outboxed(() => new Promise(ignore)),
     });
 
     return createElement(AgentComposer, {
@@ -1082,14 +1101,16 @@ test("while the agent's turn runs, a touch held on Send sends the other way: a b
   /** The box while a turn runs, Enter steering, each way a message leaves recorded. */
   function Running(): ReactNode {
     const composer = useAgentComposer({
+      sending: useOutbox("agent-1"),
+      unsend: unsendOutbox,
       agentId: "agent-1",
       taskId: "plan-1",
       messages: [],
-      send: (_agentId, text) => {
+      send: outboxed((_agentId, { text }) => {
         done.push(`sent ${text}`);
 
         return new Promise(ignore);
-      },
+      }),
     });
 
     return createElement(AgentComposer, {

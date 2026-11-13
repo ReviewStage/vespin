@@ -152,6 +152,8 @@ test("a section stands under the place's own toolbar, titled Admin, with Open in
     { name: "Cost", chosen: false },
     { name: "Reliability", chosen: false },
     { name: "Agents", chosen: false },
+    { name: "Tools", chosen: false },
+    { name: "Prompts", chosen: false },
     { name: "Workspaces", chosen: false },
     { name: "Users", chosen: true },
     { name: "Limits", chosen: false },

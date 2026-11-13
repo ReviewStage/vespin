@@ -56,6 +56,7 @@ import type {
   SessionStore,
 } from "@anthropic-ai/claude-agent-sdk";
 import { CommandPrefixSchema } from "@repo/wire";
+import { GOAL_ASK, goalAskOf } from "@repo/wire/ui-messages";
 import {
   Cause,
   Deferred,
@@ -83,6 +84,7 @@ import {
 } from "./approvals.js";
 import { CheckoutSnapshots } from "./checkout-snapshot.js";
 import { ClaudeCode, type ClaudeCodeService, type ClaudeCodeSession } from "./claude-code.js";
+import { type GoalWatchedFile, goalWatchedFile, goalWatchedStore } from "./claude-goals.js";
 import { runCodex } from "./codex.js";
 import { type EventSink, openEventSink } from "./events.js";
 import {
@@ -126,7 +128,9 @@ import {
   RunnerConfigSchema,
   type RunnerEnd,
   type RunnerEndEvent,
+  type RunnerGoal,
   type RunnerWaiting,
+  type TurnFilesSummary,
 } from "./protocol.js";
 import {
   awaitProvider,
@@ -341,6 +345,7 @@ function queryOptions(
   from: ResumePoint,
   store: SessionStore | undefined,
   approvals: Approvals,
+  goalFile: GoalWatchedFile | undefined,
 ): Options {
   const mode = config.permissionMode ?? PERMISSION_MODE.FULL_ACCESS;
 
@@ -380,7 +385,7 @@ function queryOptions(
     // SDK server the runner relays over the CLI's own stdio (`mcp-relay.ts`), as is each integration's.
     mcpServers: { ...servers },
     sandbox: { enabled: false },
-    hooks: { Stop: [{ hooks: [onStop] }], ...memoryWatch.hooks },
+    hooks: { Stop: [{ hooks: [onStop] }], ...memoryWatch.hooks, ...goalFile?.hooks },
   };
 
   if (config.effort !== undefined) options.effort = config.effort;
@@ -444,6 +449,10 @@ interface Launch {
   readonly approvals: Approvals;
   readonly trace: LaunchTrace;
   readonly inFlight: MutableRef.MutableRef<InFlight | undefined>;
+  /** The goals the transcript says settled since the last `result`, posted ahead of the next (`claude-goals.ts`). */
+  readonly goals: MutableRef.MutableRef<readonly RunnerGoal[]>;
+  /** The CLI's own transcript file, read for the goals it settles at each `result`, where the launch keeps no store; none where it does. */
+  readonly goalFile: GoalWatchedFile | undefined;
   /** Whether the CLI is in a turn: from a message the service sent, or from the CLI's own output, a wakeup's turn included. */
   readonly turnRunning: Ref.Ref<boolean>;
   /** The messages the service sent that no `result` has answered yet, by their uuid. */
@@ -468,6 +477,10 @@ interface Launch {
   readonly firstSequence: number;
   /** The checkout recorded before a turn the line named opens (`checkout-snapshot.ts`); none where it could not be. */
   readonly snapshot: (lineId: string) => Effect.Effect<CheckoutSnapshot | undefined>;
+  /** The snapshot the turn under way opened on, until its end reads the turn's files from it; none between turns or where none was recorded. */
+  readonly opening: Ref.Ref<string | undefined>;
+  /** The files a turn changed since the snapshot named (`checkout-snapshot.ts`'s `summarize`). */
+  readonly filesSince: (from: string) => Effect.Effect<TurnFilesSummary | undefined>;
   /** The API's host, as the CLI reaches it, which a lost connection is probed for. */
   readonly providerHost: string;
   /** Where that host is probed: the proxy the CLI goes through, or the host itself. */
@@ -504,6 +517,17 @@ function control<Answer>(step: string, call: () => Promise<Answer>) {
   );
 }
 
+/** What a launch whose CLI never answered the interrupt a mid-turn `/goal` line needs says it failed of. */
+const GOAL_UNINTERRUPTED = "the CLI never answered the interrupt a goal line needs";
+
+/** Whether a message is a `/goal` line that sets or clears the goal, rather than one that asks where it stands. */
+function movesGoal(content: Extract<InputLine, { type: "message" }>["content"]): boolean {
+  const text = content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
+  const ask = goalAskOf(text);
+
+  return ask !== undefined && ask.kind !== GOAL_ASK.NONE;
+}
+
 /** Hands one of the service's messages to the CLI, marking the launch in a turn. Called under the admission. */
 const handToCli = Effect.fn("agent-runner/handToCli")(function* (
   launch: Launch,
@@ -515,6 +539,12 @@ const handToCli = Effect.fn("agent-runner/handToCli")(function* (
   yield* Ref.set(launch.warm, false);
   // The checkout is recorded before the CLI can touch it; a line a running turn takes in opens no turn to rewind to.
   const snapshot = running ? undefined : yield* launch.snapshot(uuid);
+
+  // Note that a turn waiting on a wakeup or a background command keeps the opening no IDLE has read yet, because the message joins the agent's turn that began there.
+  if (!running && (yield* Ref.get(launch.opening)) === undefined) {
+    yield* Ref.set(launch.opening, snapshot?.commit);
+  }
+
   yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
   // Posted ahead of the hand-off, so it is numbered before anything the CLI says of the message.
   yield* launch.sink.emit({
@@ -556,6 +586,16 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
             reconnecting.held.push({ uuid, prompt, content });
 
             return;
+          }
+
+          // Note that Claude Code runs a command only as a turn of its own, where a line taken mid-turn is words to the model, and a goal holds its turn open, so a `/goal` that sets or clears it interrupts the turn first; held unanswered ahead of it, so the turn it cuts off leaves the launch up for the command.
+          if (movesGoal(content) && (yield* Ref.get(launch.turnRunning))) {
+            yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
+
+            // An interrupt the CLI never answers fails the launch, as a stop's ends it, rather than queue the command behind a turn that holds.
+            if (!(yield* control("interrupt", () => launch.session.interrupt()))) {
+              return yield* endFailed(launch, GOAL_UNINTERRUPTED);
+            }
           }
 
           yield* handToCli(launch, uuid, prompt, content);
@@ -704,6 +744,15 @@ const takeMessage = Effect.fn("agent-runner/takeMessage")(function* (
     );
   }
 
+  // A goal the turn settled is said before the `result` that ends the turn, so it lands in that turn.
+  if (message.type === SDK_MESSAGE.RESULT) {
+    const file = launch.goalFile;
+
+    if (file !== undefined) yield* Effect.promise(() => file.settle());
+
+    for (const goal of MutableRef.getAndSet(launch.goals, [])) yield* launch.sink.emit(goal);
+  }
+
   yield* launch.sink.emit(launch.annotate(message));
 
   if (message.type !== SDK_MESSAGE.RESULT) return;
@@ -843,6 +892,13 @@ const stillWarm = Effect.fn("agent-runner/stillWarm")(function* (launch: Launch)
   );
 });
 
+/** The files the turn under way changed since the snapshot it opened on, its opening let go so no later end reads them again; none where no snapshot stands. */
+const turnFilesOf = Effect.fn("agent-runner/turnFilesOf")(function* (launch: Launch) {
+  const from = yield* Ref.getAndSet(launch.opening, undefined);
+
+  return from === undefined ? undefined : yield* launch.filesSince(from);
+});
+
 /**
  * The agent's turn over, and the launch kept warm rather than ended: its
  * IDLE posted, so the service settles the turn, and a watch armed that ends it
@@ -856,7 +912,14 @@ const warmed = Effect.fn("agent-runner/warmed")(function* (launch: Launch) {
       if ((yield* Ref.get(launch.unanswered)).size > 0) return undefined;
       yield* Ref.set(launch.turnRunning, false);
       yield* Ref.set(launch.warm, true);
-      yield* launch.sink.emit({ type: RUNNER_EVENT.IDLE });
+      const from = yield* Ref.get(launch.opening);
+      const files = from === undefined ? undefined : yield* launch.filesSince(from);
+      yield* launch.sink.emit({
+        type: RUNNER_EVENT.IDLE,
+        ...(files === undefined ? undefined : { files }),
+      });
+      // Note that the opening is let go only once the IDLE carries its files, because a stop that ends the launch meanwhile cuts the IDLE off, and the END says them instead.
+      yield* Ref.set(launch.opening, undefined);
 
       // Counted, so the cap an earlier IDLE armed is dropped.
       return yield* Ref.updateAndGet(launch.waits, (count) => count + 1);
@@ -991,11 +1054,12 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   );
 
   const prompts = yield* Queue.unbounded<SDKUserMessage, Cause.Done>();
+  const goals = MutableRef.make<readonly RunnerGoal[]>([]);
 
   const store =
     config.transcriptsUrl === undefined
       ? undefined
-      : transcriptStore(config.transcriptsUrl, bearer, trace.headers);
+      : goalWatchedStore(transcriptStore(config.transcriptsUrl, bearer, trace.headers), goals);
 
   const resumed = yield* resumePointOf(claudeCode, config, store).pipe(Effect.result);
 
@@ -1010,6 +1074,8 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   // The CLI is spawned and initialized before the service's lines are taken, which wait in
   // their queue meanwhile, so its first message goes to a CLI ready for it.
   const memoryWatch = claudeCodeMemoryWatch();
+  // Note that a launch keeping no store reads the goals the CLI settles off its own transcript file.
+  const goalFile = store === undefined ? goalWatchedFile(goals) : undefined;
 
   const options = queryOptions(
     config,
@@ -1020,6 +1086,7 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     from,
     store,
     approvals,
+    goalFile,
   );
 
   const started = yield* trace
@@ -1049,6 +1116,8 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
     approvals,
     trace,
     inFlight,
+    goals,
+    goalFile,
     turnRunning: yield* Ref.make(false),
     unanswered: yield* Ref.make<ReadonlySet<string>>(new Set()),
     heard: yield* Ref.make(0),
@@ -1065,6 +1134,8 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
       config.agentId === undefined
         ? Effect.succeed(undefined)
         : snapshots.take(config.cwd, config.agentId, lineId),
+    opening: yield* Ref.make<string | undefined>(undefined),
+    filesSince: (from) => snapshots.summarize(config.cwd, from),
     providerHost: provider.host,
     probeTarget: probeTargetOf(context.env, provider),
     reconnecting: yield* Ref.make<Reconnecting | undefined>(undefined),
@@ -1117,8 +1188,10 @@ const runClaudeCode = Effect.fn("agent-runner/runClaudeCode")(function* (
   session.close();
   yield* Fiber.interrupt(posting);
   const failure = yield* Ref.get(launch.failure);
+  // A turn the end cut short, or ended without an IDLE, still says what it changed.
+  const files = yield* turnFilesOf(launch);
 
-  return { end, failure } satisfies LaunchOutcome;
+  return { end, failure, ...(files === undefined ? undefined : { files }) } satisfies LaunchOutcome;
 });
 
 /**
@@ -1248,12 +1321,13 @@ const runLaunch = Effect.fn("agent-runner/runLaunch")(function* (read: ReadLaunc
       ? yield* runCodex({ ...context, config })
       : yield* runClaudeCode({ ...context, config });
 
-  const { end, failure } = outcome;
+  const { end, failure, files } = outcome;
 
   const last: RunnerEndEvent = {
     type: RUNNER_EVENT.END,
     reason: end,
     ...(failure === "" ? undefined : { detail: failure }),
+    ...(files === undefined ? undefined : { files }),
   };
 
   yield* sink.emit(last);

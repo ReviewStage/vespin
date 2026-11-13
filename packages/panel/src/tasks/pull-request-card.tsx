@@ -9,6 +9,11 @@ import {
   type ReviewState,
 } from "@repo/features/agent-wire";
 import { pullRequestAddressOf } from "@repo/features/link-grammar";
+import {
+  PULL_REQUEST_MOMENT,
+  type PullRequestMoment,
+  type StandingPullRequest,
+} from "@repo/features/link-standing-model";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { CHECK_SUMMARY_WORDS, REVIEW_WORDS } from "@repo/features/pull-request-model";
 import { countWords, TERM } from "@repo/features/words";
@@ -38,12 +43,7 @@ import { AgentActorRef, type AgentSubject } from "./agent-ref.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { useNamer } from "./pull-request-people.js";
 import type { HeldPeople } from "./use-agents.js";
-import {
-  PULL_REQUEST_MOMENT,
-  type PullRequestMoment,
-  type StandingPullRequest,
-  usePlaceStanding,
-} from "./use-link-standing.js";
+import { usePlaceStanding } from "./use-link-standing.js";
 
 /**
  * pull-request-card.tsx -- the one card a pull request hangs wherever the window names one: its mark and title, its key and where it stands, its size and checks, its branches and labels, who opened it, the agent whose it is, and its reviewers.

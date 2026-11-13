@@ -1515,6 +1515,32 @@ export function menuItem(label: string): HTMLElement {
   return item;
 }
 
+/** The words of the open item's replies that did not go, standing on its thread marked Not delivered, in order. */
+export function undeliveredWords(page: HTMLElement): (string | null)[] {
+  return [...itemPane(page).querySelectorAll<HTMLElement>(".inbox-thread > li")].flatMap((entry) =>
+    entry.querySelector('button[aria-label="Not delivered"]') === null
+      ? []
+      : [wordsOf(entry.querySelector("[data-inbox-message-text]"))],
+  );
+}
+
+/** Picks `label`, Retry, Edit, or Delete, from the red alert's menu beside the open item's reply reading `words` that did not go, none for an answer with no words. */
+export async function pickOnUndelivered(page: HTMLElement, words: string | null, label: string) {
+  const entry = [...itemPane(page).querySelectorAll<HTMLElement>(".inbox-thread > li")].find(
+    (each) =>
+      each.querySelector('button[aria-label="Not delivered"]') !== null &&
+      wordsOf(each.querySelector("[data-inbox-message-text]")) === words,
+  );
+
+  const mark =
+    entry?.querySelector<HTMLButtonElement>('button[aria-label="Not delivered"]') ??
+    assert.fail(`the reply "${words}" wears the red alert`);
+
+  await act(async () => mark.click());
+  await act(async () => menuItem(label).click());
+  await settle();
+}
+
 /** The workspace the marking tests list, whose Mark all as read names it. */
 export const ACME: Workspace = {
   id: "workspace-acme",

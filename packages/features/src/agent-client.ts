@@ -79,12 +79,14 @@ import {
   type LiveActivityEndedParams,
   type LiveActivityTokenAnswerView,
   type LiveActivityTokenParams,
+  type MachineAllowedAppsAnswerView,
   type MemoriesAnswerView,
   type MemoryForgetParams,
   type MemorySaveAnswerView,
   type MemorySaveParams,
   type ProviderKeyForAgentsParams,
   type ProviderKeyRemoveParams,
+  type ProviderKeyResetCreditParams,
   type ProviderKeySaveParams,
   type ProviderKeysAnswerView,
   type PushDeviceDoneAnswerView,
@@ -93,6 +95,10 @@ import {
   type PushDeviceNotifyParams,
   type PushDeviceRegisterParams,
   type PushDeviceStatusAnswerView,
+  type ReplyButtonAnswerView,
+  type ReplyButtonParams,
+  type ReplyButtonPressAnswerView,
+  type ReplyButtonPressParams,
   type SoundAddAnswerView,
   type SoundAddParams,
   type SoundChoiceAnswerView,
@@ -103,6 +109,10 @@ import {
   type SoundStateView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
+  type VoiceCallEndedAnswerView,
+  type VoiceCallEndedParams,
+  type VoiceSessionAnswerView,
+  type VoiceSessionParams,
 } from "./agent-view.js";
 import {
   AGENT_LIST_ARCHIVED,
@@ -196,6 +206,7 @@ import {
   chatGptDeviceLoginRequestSchema,
   PROVIDER_KEY_QUERY,
   providerKeyForAgentsRequestSchema,
+  providerKeyResetCreditRequestSchema,
   providerKeySaveRequestSchema,
   subscriptionLabelRequestSchema,
   subscriptionOrderRequestSchema,
@@ -229,6 +240,7 @@ import {
 } from "./sound-clip-wire.js";
 import type { TaskAgentRefusal } from "./task-wire.js";
 import { MP4_TYPE, PLAYABLE_VIDEO_TYPE, type PlayableVideoType } from "./video-signature.js";
+import { voiceCallEndedRequestSchema, voiceSessionRequestSchema } from "./voice-wire.js";
 
 /**
  * agent-client.ts -- the window's side of a task's coding agents, as the host asks the service for them.
@@ -525,6 +537,11 @@ export class HostedAgentClient {
     });
   }
 
+  /** The apps the account's own machines always allow agents to use, each machine's by its name. */
+  machineAllowedApps(): Effect.Effect<MachineAllowedAppsAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.hosts.allowedApps, undefined);
+  }
+
   /** A declared live read sealed for following, or polled where `poll` asks (`askLiveRead`). */
   liveRead<Read extends AnyLiveRead>(read: Read, params: LiveReadAsked<Read>, poll?: HostedPoll) {
     return askLiveRead(this.#hosted.live, read, params, poll);
@@ -748,6 +765,17 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.account.setProviderKeyForAgents, admitted);
   }
 
+  /** One of a ChatGPT plan's reset credits spent under the press's key, answering the keys as they then stand and how the spend went. */
+  useResetCredit(
+    params: ProviderKeyResetCreditParams,
+  ): Effect.Effect<ProviderKeysAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(providerKeyResetCreditRequestSchema)(params));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(this.#hosted.account.useResetCredit, admitted);
+  }
+
   /** One of the account's subscriptions named, or its name cleared, answering the keys as they then stand; a request the service would refuse by shape never travels. */
   renameSubscription(
     params: SubscriptionLabelParams,
@@ -883,6 +911,34 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.dictation.transcribe, admitted, {
       deadline: HOSTED_DEADLINE.HELD,
     });
+  }
+
+  /**
+   * A voice call into an agent opened on the member's own OpenAI key
+   * (`voice-wire.ts`): the peer's SDP offer out, GPT-Live's SDP answer back,
+   * under the held deadline, since the service answers only once OpenAI has
+   * made the session; an offer the service would refuse by shape is refused
+   * here without traveling at all.
+   */
+  openVoiceSession(
+    params: VoiceSessionParams,
+  ): Effect.Effect<VoiceSessionAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(voiceSessionRequestSchema)(params));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(this.#hosted.voice.open, admitted, { deadline: HOSTED_DEADLINE.HELD });
+  }
+
+  /** A finished voice call's seconds, kept on the member's day; a report the service would refuse by shape is refused here without traveling. */
+  reportVoiceCall(
+    params: VoiceCallEndedParams,
+  ): Effect.Effect<VoiceCallEndedAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(voiceCallEndedRequestSchema)(params));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(this.#hosted.voice.ended, admitted);
   }
 
   /** The member's own GitHub token, as what tells it apart; never the token. */
@@ -1308,6 +1364,27 @@ export class HostedAgentClient {
   /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */
   warm(agentId: string): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.agents.warm, { id: agentId });
+  }
+
+  /** One button in an agent's reply as the window draws it, or why it is not drawn. */
+  replyButton(
+    params: ReplyButtonParams,
+  ): Effect.Effect<ReplyButtonAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.readButton, {
+      id: params.agentId,
+      button: params.buttonId,
+    });
+  }
+
+  /** One suggestion in an agent's reply sent from its draft as the member, run once: the button as its send then stands, or why the send was refused. */
+  pressReplyButton(
+    params: ReplyButtonPressParams,
+  ): Effect.Effect<ReplyButtonPressAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(
+      this.#hosted.agents.pressButton,
+      { params: { id: params.agentId, button: params.buttonId }, body: params.sent },
+      { deadline: HOSTED_DEADLINE.START },
+    );
   }
 
   /** Takes one agent back to just before one of the developer's lines, stopping it first where it still works, answering it as it then stands. */

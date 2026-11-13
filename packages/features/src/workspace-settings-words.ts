@@ -89,3 +89,37 @@ export const LEAVE_WORDS = {
       ? "Your own workspace isn't affected."
       : `Your own workspace, ${name}, isn't affected.`,
 } as const;
+
+/** What the handover says: its press, its question's body, its running verb, and the field naming whom it goes to. The old owner becomes an admin, one way. */
+export const TRANSFER_WORDS = {
+  VERB: "Transfer ownership",
+  RUNNING: "Transferring",
+  BODY: "You become an admin. The new owner can change anyone's role and remove anyone, you included, and only they can give it back.",
+  NEW_OWNER: "New owner",
+} as const;
+
+/** The handover's question: its title names the new owner where the door already knows them. */
+export function transferQuestionTitle(workspace: string, heir: string | undefined): string {
+  return `Transfer ownership of ${workspace}${heir === undefined ? "" : ` to ${heir}`}?`;
+}
+
+/** How many pixels a side a workspace's photo is drawn to before it is sent: well past the largest tile's 32, so it stays sharp on a Retina screen. */
+export const WORKSPACE_PHOTO_EDGE = 256;
+
+/** What a workspace's photo offers, and what its removal asks. */
+export const PHOTO_WORDS = {
+  ADD: "Add photo",
+  CHANGE: "Change photo",
+  REPLACE: "Replace photo",
+  DELETE: "Delete photo",
+  DELETE_QUESTION: (workspace: string) => `Delete ${workspace}'s photo?`,
+  DELETE_BODY: "The workspace is marked by its first letter instead.",
+  DELETE_RUNNING: "Deleting",
+} as const;
+
+/** Why a picked picture did not become the workspace's photo, in the words said under its row. */
+export const PHOTO_REFUSAL = {
+  KIND: (name: string) => `${name} isn't a PNG, JPEG, or WebP image.`,
+  UNREADABLE: (name: string) => `${name} could not be read.`,
+  TOO_LARGE: (name: string) => `${name} is too large for a workspace photo.`,
+} as const;

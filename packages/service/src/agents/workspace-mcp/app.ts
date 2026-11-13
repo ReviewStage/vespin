@@ -40,7 +40,7 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { RENAMED_TOOL, WORKSPACE_MCP_SERVER } from "@repo/features/agent-tools";
 import { integrationConnectionOf } from "@repo/features/integration-wire";
-import { MAC_COMMAND_BOUNDS } from "@repo/features/mac-command-wire";
+import { MACHINE_COMMAND_BOUNDS } from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { failureKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
@@ -104,7 +104,7 @@ export function workspaceIntegrationMcpUrl(origin: string, connection: string): 
 /** The function the server is deployed as. */
 export const WORKSPACE_MCP_FUNCTION = {
   /** The duration its bundle declares: the longest `run_on_mac` a call may wait on, and two minutes for the store and the Mac's answer around it. */
-  MAX_DURATION_SECONDS: MAC_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS + 120,
+  MAX_DURATION_SECONDS: MACHINE_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS + 120,
 } as const;
 
 /**

@@ -1,9 +1,10 @@
-// markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, links, mention chips, and pictures that open full screen and zoom.
+// markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, drafts to send elsewhere, links, mention chips, and pictures that open full screen and zoom.
 
-import { Host, Image as SwiftUIImage } from "@expo/ui/swift-ui";
-import { accessibilityHidden, frame } from "@expo/ui/swift-ui/modifiers";
 import { readerZone } from "@repo/features/date-mention";
-import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
+import { ENTITY_KIND, type EntityKind, entityWordHeard } from "@repo/features/entity-kind";
+import type { LinkStanding } from "@repo/features/link-standing-model";
+import { pullRequestMarkState } from "@repo/features/pull-request-model";
+import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useMemo, useState } from "react";
 import {
@@ -20,8 +21,10 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { type Glyph, isLucideSymbol } from "./glyph.js";
+import { DraftCard } from "./draft-card.js";
+import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
+import { ISSUE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { KEPT_KIND } from "./keep-model.js";
 import {
   COLUMN_ALIGN,
@@ -34,62 +37,63 @@ import {
   type MarkdownBlock,
   type MarkdownChip,
   type MarkdownRun,
+  type MarkdownSuggestion,
   markdownBlocks,
 } from "./markdown-model.js";
-import { type BrandColors, useColors } from "./tokens/colors.js";
-import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
+import {
+  SUGGESTION_LOOK,
+  SUGGESTION_SENT_WORDS,
+  type SuggestionLook,
+  suggestionHeard,
+} from "./suggestion-look.js";
+import { type BrandColors, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
 /**
  * The glyph each kind of entity leads its chip with, as the panel's
- * `entity-mark.tsx` gives each kind its own: a pull request's is Lucide's
- * own, as the panel's chip draws it before GitHub has said where the pull
- * request stands, and the rest the SF Symbol closest to the panel's.
+ * `entity-mark.tsx` gives each kind its own Lucide glyph; a person, the app,
+ * and an MCP server or tool, which the panel marks with a face or a mark of
+ * its own, lead with SF Symbols' nearest.
  */
 const ENTITY_SYMBOL: Readonly<Record<EntityKind, Glyph>> = {
-  [ENTITY_KIND.PLAN]: "checklist",
-  [ENTITY_KIND.SECTION]: "number",
-  [ENTITY_KIND.VERSION]: "clock.arrow.circlepath",
-  [ENTITY_KIND.COMMENT]: "text.bubble",
-  [ENTITY_KIND.PAGE]: "doc.richtext",
-  [ENTITY_KIND.AGENT]: "sparkles",
-  [ENTITY_KIND.WORKER]: "gearshape.2",
-  [ENTITY_KIND.APP]: "app",
-  [ENTITY_KIND.CHANGES]: "plusminus",
-  [ENTITY_KIND.PULL_REQUEST]: LUCIDE_SYMBOL.GIT_PULL_REQUEST,
-  [ENTITY_KIND.PULL_REQUEST_THREAD]: "text.bubble",
-  [ENTITY_KIND.ISSUE]: "smallcircle.filled.circle",
-  [ENTITY_KIND.LINK]: "link",
-  [ENTITY_KIND.MESSAGE]: "message",
-  [ENTITY_KIND.HOME]: "house",
-  [ENTITY_KIND.BOARD]: "checklist",
-  [ENTITY_KIND.INBOX]: "tray",
-  [ENTITY_KIND.INBOX_ITEM]: "tray.full",
-  [ENTITY_KIND.AUTOMATIONS]: "bolt",
-  [ENTITY_KIND.AUTOMATION]: "bolt",
-  [ENTITY_KIND.AUTOMATION_RUN]: "bolt.circle",
-  [ENTITY_KIND.SETTINGS]: "gearshape",
-  [ENTITY_KIND.PERSON]: "person.crop.circle",
-  [ENTITY_KIND.ADMIN]: "person.badge.shield.checkmark",
-  [ENTITY_KIND.FILE]: "doc",
-  [ENTITY_KIND.FOLDER]: "folder",
-  [ENTITY_KIND.SERVER]: "server.rack",
-  [ENTITY_KIND.TOOL]: "wrench.and.screwdriver",
-  [ENTITY_KIND.SKILL]: "wand.and.stars",
-  [ENTITY_KIND.REPOSITORY]: "book.closed",
-  [ENTITY_KIND.WORKSPACE]: "building.2",
-  [ENTITY_KIND.DATE]: "calendar",
+  [ENTITY_KIND.PLAN]: GLYPH.TASK,
+  [ENTITY_KIND.SECTION]: GLYPH.HEADING,
+  [ENTITY_KIND.VERSION]: GLYPH.TASK,
+  [ENTITY_KIND.COMMENT]: GLYPH.COMMENT,
+  [ENTITY_KIND.PAGE]: GLYPH.PAGE,
+  [ENTITY_KIND.AGENT]: GLYPH.AGENT,
+  [ENTITY_KIND.WORKER]: GLYPH.AGENT,
+  [ENTITY_KIND.APP]: GLYPH.APP,
+  [ENTITY_KIND.CHANGES]: GLYPH.CHANGES,
+  [ENTITY_KIND.PULL_REQUEST]: GLYPH.PULL_REQUEST,
+  [ENTITY_KIND.PULL_REQUEST_THREAD]: GLYPH.COMMENT,
+  [ENTITY_KIND.ISSUE]: GLYPH.ISSUE,
+  [ENTITY_KIND.LINK]: GLYPH.GLOBE,
+  [ENTITY_KIND.MESSAGE]: GLYPH.COMMENT,
+  [ENTITY_KIND.HOME]: GLYPH.HOME,
+  [ENTITY_KIND.BOARD]: GLYPH.TASK,
+  [ENTITY_KIND.INBOX]: GLYPH.INBOX,
+  [ENTITY_KIND.INBOX_ITEM]: GLYPH.THREAD,
+  [ENTITY_KIND.AUTOMATIONS]: GLYPH.AUTOMATION,
+  [ENTITY_KIND.AUTOMATION]: GLYPH.AUTOMATION,
+  [ENTITY_KIND.AUTOMATION_RUN]: GLYPH.AUTOMATION,
+  [ENTITY_KIND.SETTINGS]: GLYPH.SETTINGS,
+  [ENTITY_KIND.PERSON]: GLYPH.FACE,
+  [ENTITY_KIND.ADMIN]: GLYPH.ADMIN,
+  [ENTITY_KIND.FILE]: GLYPH.FILE,
+  [ENTITY_KIND.FOLDER]: GLYPH.FOLDER,
+  [ENTITY_KIND.SERVER]: GLYPH.MCP_SERVER,
+  [ENTITY_KIND.TOOL]: GLYPH.MCP_TOOL,
+  [ENTITY_KIND.SKILL]: GLYPH.SKILL,
+  [ENTITY_KIND.REPOSITORY]: GLYPH.REPOSITORY,
+  [ENTITY_KIND.WORKSPACE]: GLYPH.WORKSPACE,
+  [ENTITY_KIND.DATE]: GLYPH.DATE,
+  // Note that an app on a Mac is never read from the phone, so it wears an app's shape rather than its icon.
+  [ENTITY_KIND.MAC_APP]: GLYPH.APP,
+  [ENTITY_KIND.COMPUTER]: GLYPH.COMPUTER,
 };
-
-/**
- * The font size a chip's custom symbol is set at, as a share of its square.
- * Note that a symbol set at the square's own size overflows it, since its
- * template stands at one and a half cap heights, so it is set smaller and
- * centered in the square rather than hung from its baseline.
- */
-const CHIP_SYMBOL_SCALE = 0.85;
 
 /** Each heading level's size and weight, a step above the 15 pt words as the denser scale reads, never past a page's own heading. */
 const HEADING_LOOK: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, TextStyle>> = {
@@ -158,11 +162,71 @@ interface Drawing {
   readonly lineWidth: number;
   readonly openLink: (address: string) => void;
   /** The address a picture is drawn from, by the address its words name it by; none while it is on its way. */
-  readonly pictureSource: (written: string) => string | undefined;
+  readonly pictureSource: (written: string) => string | null | undefined;
   /** The video a picture's address names, played in its place; none where the address names a picture. */
   readonly videoAt: (written: string) => MarkdownVideo | undefined;
   /** Whether a heading is heard as one, on a page of words alone, where VoiceOver's Headings rotor walks its sections. */
   readonly headings: boolean;
+  /** What GitHub holds of the pull request or issue a chip's page names, as the host read it; none while unread or unanswered. */
+  readonly linkStanding: (page: string) => LinkStanding | undefined;
+  /** How a suggestion's link stands, by its button and the words it was written with; none where it is drawn as the plain link it is. */
+  readonly suggestion: (link: ReplyButtonLink, words: string) => SuggestionLook | undefined;
+}
+
+/** A chip of a GitHub page as its standing draws it: its mark, its name, and its state's words after it. */
+type StandingLook = {
+  readonly glyph: Glyph;
+  readonly tone: StatusTone;
+  readonly name: string;
+  readonly state: string | undefined;
+  /** What VoiceOver hears: its kind, the name it now shows, and its state. */
+  readonly heard: string;
+};
+
+/** A GitHub chip's words as VoiceOver hears them once its standing is read, as the panel hears the label it shows: its kind and the name it shows, then its state. */
+function standingHeard(chip: MarkdownChip, name: string, state: string | undefined): string {
+  const word = entityWordHeard(chip.entity, name);
+  const named = word === undefined ? name : `${word} ${name}`;
+
+  return state === undefined ? named : `${named}, ${state}`;
+}
+
+/**
+ * How a chip of a GitHub page stands, as the panel's chip draws it: a pull
+ * request by its number alone, its title fading mid-word in a chip, with
+ * its state's mark and words; an issue by its number and title, with its
+ * state's mark and words; none where GitHub has answered nothing of it.
+ */
+function standingLook(chip: MarkdownChip, drawing: Drawing): StandingLook | undefined {
+  const standing = chip.github === undefined ? undefined : drawing.linkStanding(chip.github);
+
+  if (standing?.pullRequest !== undefined) {
+    const look = PULL_REQUEST_LOOK[pullRequestMarkState(standing.pullRequest)];
+    const name = `#${standing.pullRequest.number}`;
+
+    return {
+      ...look,
+      glyph: look.symbol,
+      name,
+      state: standing.state,
+      heard: standingHeard(chip, name, standing.state),
+    };
+  }
+
+  if (standing?.issue !== undefined) {
+    const look = ISSUE_LOOK[standing.issue.state];
+    const name = `#${standing.issue.number} ${standing.title}`;
+    const heard = standingHeard(chip, name, standing.state);
+
+    return { ...look, glyph: look.symbol, name, state: standing.state, heard };
+  }
+
+  return undefined;
+}
+
+/** A chip as VoiceOver hears it: as its standing shows it once GitHub has answered, else by its kind and written name. */
+function chipHeard(chip: MarkdownChip, drawing: Drawing): string {
+  return standingLook(chip, drawing)?.heard ?? chip.heard;
 }
 
 function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
@@ -176,10 +240,10 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
 }
 
 /**
- * A chip's glyph in a `size`-point square in `color`: an SF Symbol through
- * the system's symbol view, or one of Lucide's custom symbols through
- * SwiftUI's own image in a host of that square. Note that React Native's
- * image draws a symbol set blank, since it reads only image sets by name.
+ * A chip's glyph in a `size`-point square in `color`, through the system's
+ * symbol view, which the app's patch (`patches/expo-symbols@58.0.4.patch`)
+ * lets read Lucide's custom symbols from the asset catalog as well as SF
+ * Symbols, so a chip costs no SwiftUI host of its own.
  */
 function ChipGlyph({
   glyph,
@@ -190,19 +254,13 @@ function ChipGlyph({
   readonly size: number;
   readonly color: string;
 }) {
-  if (!isLucideSymbol(glyph)) {
-    return <SymbolView name={glyph} size={size} tintColor={color} accessibilityElementsHidden />;
-  }
-
   return (
-    <Host style={{ width: size, height: size }}>
-      <SwiftUIImage
-        assetName={glyph}
-        size={size * CHIP_SYMBOL_SCALE}
-        color={color}
-        modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}
-      />
-    </Host>
+    <SymbolView
+      name={glyphSymbol(glyph)}
+      size={size}
+      tintColor={color}
+      accessibilityElementsHidden
+    />
   );
 }
 
@@ -217,6 +275,8 @@ function MentionChip({
   const { colors, fontScale } = drawing;
   const onPress = open(chip.target, drawing);
   const size = TEXT_SIZE.FOOTNOTE;
+  const standing = standingLook(chip, drawing);
+  const heard = standing?.heard ?? chip.heard;
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
@@ -224,7 +284,7 @@ function MentionChip({
         onPress={onPress}
         disabled={onPress === undefined}
         accessibilityRole={onPress === undefined ? "text" : "link"}
-        accessibilityLabel={chip.heard}
+        accessibilityLabel={heard}
         style={[
           styles.chip,
           {
@@ -235,7 +295,63 @@ function MentionChip({
         ]}
       >
         <ChipGlyph
-          glyph={ENTITY_SYMBOL[chip.entity]}
+          glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
+          size={size * fontScale}
+          color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
+        />
+        <Text
+          numberOfLines={1}
+          style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
+        >
+          {standing?.name ?? chip.name}
+        </Text>
+        {standing?.state === undefined ? null : (
+          <Text numberOfLines={1} style={{ fontSize: size, color: colors.TEXT_MUTED }}>
+            {standing.state}
+          </Text>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+/** The steer arrow a suggestion leads with, as the panel's pill and its Started or Sent do. */
+const SUGGESTION_SYMBOL = GLYPH.SUGGEST;
+
+/**
+ * A suggestion as its chip, standing in the line of words in the mention
+ * chip's shape: offered, the steer arrow and its label, which a press opens
+ * filled in; or reached, the agent's chip with Started or Sent after it,
+ * which a press opens.
+ */
+function SuggestionChip({
+  look,
+  drawing,
+}: {
+  readonly look: SuggestionLook;
+  readonly drawing: Drawing;
+}) {
+  const { colors, fontScale } = drawing;
+  const size = TEXT_SIZE.FOOTNOTE;
+  const offered = look.look === SUGGESTION_LOOK.OFFERED;
+
+  return (
+    <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
+      <Pressable
+        onPress={look.onPress}
+        accessibilityRole="button"
+        accessibilityLabel={suggestionHeard(look)}
+        style={[
+          styles.chip,
+          {
+            maxWidth: drawing.lineWidth,
+            backgroundColor: colors.WELL,
+            borderColor: colors.CHIP_EDGE,
+          },
+        ]}
+      >
+        <ChipGlyph
+          glyph={offered ? SUGGESTION_SYMBOL : ENTITY_SYMBOL[ENTITY_KIND.AGENT]}
           size={size * fontScale}
           color={colors.TEXT_MUTED}
         />
@@ -243,10 +359,43 @@ function MentionChip({
           numberOfLines={1}
           style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
         >
-          {chip.name}
+          {offered ? look.label : look.name}
         </Text>
+        {offered ? null : (
+          <>
+            <ChipGlyph
+              glyph={SUGGESTION_SYMBOL}
+              size={size * fontScale}
+              color={colors.TEXT_MUTED}
+            />
+            <Text numberOfLines={1} style={{ fontSize: size, color: colors.TEXT_MUTED }}>
+              {SUGGESTION_SENT_WORDS[look.suggests]}
+            </Text>
+          </>
+        )}
       </Pressable>
     </View>
+  );
+}
+
+/** A suggestion's link where no suggestion stands, as the plain link to the agent whose reply holds it. */
+function SuggestionLink({
+  suggestion,
+  drawing,
+}: {
+  readonly suggestion: MarkdownSuggestion;
+  readonly drawing: Drawing;
+}) {
+  const onPress = open(suggestion.target, drawing);
+
+  return (
+    <Text
+      onPress={onPress}
+      accessibilityRole={onPress === undefined ? "text" : "link"}
+      style={{ color: drawing.colors.TEXT_BODY, textDecorationLine: "underline" }}
+    >
+      {suggestion.words}
+    </Text>
   );
 }
 
@@ -302,9 +451,35 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
 
     case MARKDOWN_RUN.CHIP:
       return <MentionChip chip={run.chip} drawing={drawing} />;
+    case MARKDOWN_RUN.SUGGESTION: {
+      const look = drawing.suggestion(run.suggestion.link, run.suggestion.words);
+
+      return look === undefined ? (
+        <SuggestionLink suggestion={run.suggestion} drawing={drawing} />
+      ) : (
+        <SuggestionChip look={look} drawing={drawing} />
+      );
+    }
+
     case MARKDOWN_RUN.BREAK:
       return <Text>{"\n"}</Text>;
   }
+}
+
+/** A suggestion as VoiceOver hears it: as its chip stands once its button is read, else by the words it was written with. */
+function suggestionRunHeard(suggestion: MarkdownSuggestion, drawing: Drawing): string {
+  const look = drawing.suggestion(suggestion.link, suggestion.words);
+
+  return look === undefined ? suggestion.words : suggestionHeard(look);
+}
+
+/** A line's words as VoiceOver hears them, each chip and suggestion as it now stands; none where the line holds neither. */
+function lineHeard(runs: readonly MarkdownRun[], drawing: Drawing): string | undefined {
+  return heardLine(
+    runs,
+    (chip) => chipHeard(chip, drawing),
+    (suggestion) => suggestionRunHeard(suggestion, drawing),
+  );
 }
 
 /** What opens from a line of words: each chip and link that goes anywhere, by the words it is heard as. */
@@ -339,13 +514,22 @@ function collectOpenings(
       if (onOpen !== undefined) {
         openings.push({
           name: `open-${openings.length}`,
-          label: `${OPEN_WORD} ${run.chip.heard}`,
+          label: `${OPEN_WORD} ${chipHeard(run.chip, drawing)}`,
           onOpen,
         });
       }
+    } else if (run.kind === MARKDOWN_RUN.SUGGESTION) {
+      const look = drawing.suggestion(run.suggestion.link, run.suggestion.words);
+      const onOpen = look === undefined ? open(run.suggestion.target, drawing) : look.onPress;
+      const label = suggestionRunHeard(run.suggestion, drawing);
+
+      if (onOpen !== undefined && label !== "") {
+        openings.push({ name: `open-${openings.length}`, label: `${OPEN_WORD} ${label}`, onOpen });
+      }
     } else if (run.kind === MARKDOWN_RUN.LINK) {
       const onOpen = open(run.target, drawing);
-      const words = heardLine(run.runs) ?? runsText(run.runs);
+      const heard = lineHeard(run.runs, drawing);
+      const words = heard ?? runsText(run.runs, drawing);
 
       if (onOpen !== undefined && words !== "") {
         openings.push({ name: `open-${openings.length}`, label: `${OPEN_WORD} ${words}`, onOpen });
@@ -357,15 +541,17 @@ function collectOpenings(
 }
 
 /** A run's plain words, as a link's text is heard. */
-function runText(run: MarkdownRun): string {
+function runText(run: MarkdownRun, drawing: Drawing): string {
   switch (run.kind) {
     case MARKDOWN_RUN.WORDS:
     case MARKDOWN_RUN.CODE:
       return run.text;
     case MARKDOWN_RUN.LINK:
-      return runsText(run.runs);
+      return runsText(run.runs, drawing);
     case MARKDOWN_RUN.CHIP:
-      return run.chip.heard;
+      return chipHeard(run.chip, drawing);
+    case MARKDOWN_RUN.SUGGESTION:
+      return suggestionRunHeard(run.suggestion, drawing);
     case MARKDOWN_RUN.BREAK:
       return " ";
     default: {
@@ -376,8 +562,8 @@ function runText(run: MarkdownRun): string {
 }
 
 /** Runs' plain words, joined. */
-function runsText(runs: readonly MarkdownRun[]): string {
-  return runs.map(runText).join("");
+function runsText(runs: readonly MarkdownRun[], drawing: Drawing): string {
+  return runs.map((run) => runText(run, drawing)).join("");
 }
 
 /** A line of words: a paragraph's, a heading's, or a table cell's. */
@@ -406,7 +592,7 @@ function Line({
 
   return (
     <Text
-      accessibilityLabel={heardLine(runs)}
+      accessibilityLabel={lineHeard(runs, drawing)}
       {...(heading === true ? { accessibilityRole: "header" as const } : {})}
       {...actions}
       style={[{ fontSize: PROSE_SIZE, color: drawing.colors.TEXT_BODY }, style]}
@@ -442,7 +628,7 @@ function Marker({
         accessibilityState={{ checked }}
       >
         <SymbolView
-          name={checked ? "checkmark.square.fill" : "square"}
+          name={glyphSymbol(checked ? GLYPH.BOX_TICKED : GLYPH.BOX)}
           size={PROSE_SIZE * fontScale}
           tintColor={checked ? colors.ACCENT : colors.TEXT_MUTED}
         />
@@ -615,9 +801,14 @@ function CodeView({ text, drawing }: { readonly text: string; readonly drawing: 
 /** The most a full-screen picture zooms in to, as a pinch takes it. */
 const VIEWER_MAX_ZOOM = 4;
 
+/** What a picture that could not be read says in its well, its own words first, as the panel's stand-in says it. */
+function unreadWords(alt: string): string {
+  return alt.trim() === "" ? "This picture could not be read." : `${alt} · could not be read.`;
+}
+
 type PictureProps = {
-  /** The address the picture is drawn from; none while its bytes are still on their way, which stands its well alone. */
-  readonly source: string | undefined;
+  /** The address the picture is drawn from; none while its bytes are still on their way, which stands its well alone, and `null` where it could not be read, which says so in its well. */
+  readonly source: string | null | undefined;
   /** What the picture shows, heard in its place. */
   readonly alt: string;
   /** A tile's fixed shape, width over height, the picture standing whole inside it; the picture's own shape where none is given. */
@@ -643,7 +834,7 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
   const heard = alt === "" ? "Picture" : alt;
 
   const acts = useKeptActs(
-    source === undefined ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard },
+    source == null ? undefined : { kind: KEPT_KIND.PICTURE, source, name: heard },
   );
 
   const well = [
@@ -655,6 +846,19 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
     return (
       <View style={[well, styles.pending]} accessible accessibilityLabel={heard}>
         <ActivityIndicator color={colors.TEXT_MUTED} />
+      </View>
+    );
+  }
+
+  // Note that a picture that could not be read says so in its well, as the panel's stand-in does, rather than spin as one still on its way.
+  if (source === null) {
+    const words = unreadWords(alt);
+
+    return (
+      <View style={[well, styles.pending]} accessible accessibilityLabel={words}>
+        <Text style={{ fontSize: PROSE_SIZE, color: colors.TEXT_MUTED, textAlign: "center" }}>
+          {words}
+        </Text>
       </View>
     );
   }
@@ -785,6 +989,8 @@ function BlockView({
       return <TableView key={drawing.fontScale} block={block} drawing={drawing} />;
     case MARKDOWN_BLOCK.CODE:
       return <CodeView text={block.text} drawing={drawing} />;
+    case MARKDOWN_BLOCK.DRAFT:
+      return <DraftCard draft={block.draft} onOpenLink={drawing.openLink} />;
     case MARKDOWN_BLOCK.RULE:
       return (
         <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.CHIP_EDGE }} />
@@ -813,12 +1019,18 @@ type MarkdownProps = {
   readonly onOpenLink: (address: string) => void;
   /** Whether a person typed the words line by line, whose line breaks are kept; an agent's join as Markdown reads them. */
   readonly typed?: boolean | undefined;
-  /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way. Each is drawn from the address it names where none is given. */
-  readonly pictureSource?: ((written: string) => string | undefined) | undefined;
+  /** The address a picture is drawn from, by the address its words name it by, such as a `data:` address of a thread's own file; none while it is on its way, and `null` where it could not be read. Each is drawn from the address it names where none is given. */
+  readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** The video a picture's address names, such as a recording a thread carried, played in its place; every address names a picture where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
   /** Whether its headings are heard as headings, on a page of words alone; a message's are styled alone. */
   readonly headings?: boolean | undefined;
+  /** What GitHub holds of a pull request or issue a chip names, by its page (`markdownGithubPages`), which the chip says where it stands; every chip says what its link says where none is given. */
+  readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
+  /** How a suggestion an agent wrote into its reply stands, by its button (`markdownReplyButtons`) and its words; every suggestion is drawn as its plain link where none is given. */
+  readonly suggestion?:
+    | ((link: ReplyButtonLink, words: string) => SuggestionLook | undefined)
+    | undefined;
 };
 
 /** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, and where it opens where the player cannot read it. */
@@ -831,6 +1043,16 @@ export interface MarkdownVideo {
 /** Each picture drawn from the address its words name it by. */
 function namedSource(written: string): string {
   return written;
+}
+
+/** No standing read for any page. */
+function noStanding(): undefined {
+  return undefined;
+}
+
+/** No suggestion standing for any link. */
+function noSuggestion(): undefined {
+  return undefined;
 }
 
 /** No address naming a video. */
@@ -853,6 +1075,8 @@ export function Markdown({
   pictureSource = namedSource,
   videoAt = noVideo,
   headings = false,
+  linkStanding = noStanding,
+  suggestion = noSuggestion,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
@@ -870,6 +1094,8 @@ export function Markdown({
     pictureSource,
     videoAt,
     headings,
+    linkStanding,
+    suggestion,
   };
 
   return (

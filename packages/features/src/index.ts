@@ -95,12 +95,12 @@ export {
 } from "./integration-client.js";
 
 export {
-  HostedMacCommandClient,
-  type HostedMacCommandClientOptions,
-  MAC_COMMAND_CALL_FAILURE,
-  MAC_COMMAND_NOT_CLAIMED,
-  type MacCommandCallFailure,
-} from "./mac-command-client.js";
+  HostedMachineCommandClient,
+  type HostedMachineCommandClientOptions,
+  MACHINE_COMMAND_CALL_FAILURE,
+  MACHINE_COMMAND_NOT_CLAIMED,
+  type MachineCommandCallFailure,
+} from "./machine-command-client.js";
 
 export {
   HostedMcpClientsClient,
@@ -130,6 +130,7 @@ export {
 export { webSocketOrigin } from "./socket-origin.js";
 
 export {
+  type FollowersWritten,
   HostedTaskClient,
   type HostedTaskClientOptions,
   type TaskCallResult,

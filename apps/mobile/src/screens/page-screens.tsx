@@ -4,7 +4,7 @@ import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { VERB } from "@repo/features/words";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
-import { EmptyState, Screen, SealedPage } from "@repo/ui-native";
+import { EmptyState, GLYPH, glyphSymbol, Screen, SealedPage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams } from "expo-router";
 import { usePageHtml } from "../agents/use-agent.js";
@@ -65,8 +65,11 @@ export function PageScreen({
       <Stack.Screen options={{ title: named }} />
       {address === undefined ? null : (
         <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel="More">
-            <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(address)}>
+          <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel="More">
+            <Stack.Toolbar.MenuAction
+              icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
+              onPress={() => openInSafari(address)}
+            >
               {VERB.OPEN_IN_BROWSER}
             </Stack.Toolbar.MenuAction>
           </Stack.Toolbar.Menu>
@@ -79,7 +82,7 @@ export function PageScreen({
         <Screen>
           <EmptyState
             title={"failed" in read ? PAGE_WORDS.FAILED : PAGE_WORDS.READING}
-            symbol={"failed" in read ? "exclamationmark.triangle" : "macwindow"}
+            symbol={"failed" in read ? GLYPH.FAILED : GLYPH.PAGE}
             loading={!("failed" in read)}
           />
         </Screen>

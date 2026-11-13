@@ -23,7 +23,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PRODUCT_NAME } from "../../features/src/product-name.ts";
 import { bayerAt } from "../src/dither.ts";
-import { BRAND } from "./brand-palette.mjs";
+import { ARTWORK_BRAND as BRAND } from "./brand-palette.mjs";
 import { DMG_WINDOW } from "./dmg-window.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));

@@ -95,6 +95,7 @@ import {
   takenCloses,
   threadItem,
   threadMessage,
+  undeliveredWords,
   WHOSE_KEY,
   wordsOf,
   world,
@@ -358,7 +359,7 @@ test("Enter on a focused option sends the reply carrying the pick and never pres
     [
       "controls",
       "line: Add a note",
-      "row: Add files and more, Runs on: Cloud, Off, Ports: Ports not forwarded, Opus 5.5 High, Dictate, Composer actions, Send",
+      "row: Add files and more, Runs on: Cloud, Off, Ports: Ports, Opus 5.5 High, Dictate, Composer actions, Send",
     ],
     "the note line stands on its own under the options, over the row of presses",
   );
@@ -867,7 +868,7 @@ test("an answer moves no row while the list is shown, and the list sorts anew on
   assert.notDeepEqual(placesOf(page), before, "sorted anew");
 });
 
-test("an answer the service refuses brings its item back as it was, needing you, with its box's words and why it did not go", async () => {
+test("an answer that did not go brings its item back as it was, needing you, the reply standing on its thread marked Not delivered and its box empty", async () => {
   const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
   const { answer } = gatedAnswers();
@@ -877,24 +878,27 @@ test("an answer the service refuses brings its item back as it was, needing you,
 
   await act(async () => answer({ failure: AGENT_CALL_FAILURE.UNANSWERED }));
   await settle();
-  const pane = itemPane(page);
   await vi.waitFor(() => assert.equal(needsYouMark(rowNamed(page, "Alert at 80%?")), "*"));
-  assert.equal(composerEditor(pane).textContent, "Use 90%", "the box keeps its words");
-  assert.ok(
-    pane.querySelector('.agent-composer [role="alert"]')?.textContent,
-    "the box says why the answer did not go",
-  );
+  assert.deepEqual(undeliveredWords(page), ["Use 90%"]);
+  assert.equal(composerEditor(itemPane(page)).textContent, "", "the box holds none of it");
 });
 
-test("an answer no reply came back for is taken as sent once its thread holds a message under its key: its box empties and says nothing", async () => {
-  const { page } = mount({ chosen: ON_THRESHOLD });
+test("an answer no reply came back for stays on its thread marked Not delivered, through a reload, until a read holds a message under its key, which lets it go", async () => {
+  const before = mount({ chosen: ON_THRESHOLD });
   await settle();
   const { answer, sent } = gatedAnswers();
-  answerWithNote(page, "Use 90%");
+  answerWithNote(before.page, "Use 90%");
   await settle();
   await act(async () => answer({ failure: AGENT_CALL_FAILURE.UNANSWERED }));
   await settle();
-  assert.equal(composerEditor(itemPane(page)).textContent, "Use 90%");
+  assert.deepEqual(undeliveredWords(before.page), ["Use 90%"]);
+  act(() => world.root?.unmount());
+  world.root = undefined;
+
+  const { page } = mount({ chosen: ON_THRESHOLD });
+  await settle();
+  assert.deepEqual(undeliveredWords(page), ["Use 90%"], "a reload keeps it");
+  assert.equal(composerEditor(itemPane(page)).textContent, "");
 
   // A message in the same words under no key of this send's is not its answer, which may not have landed.
   const [reply, ...rest] = THRESHOLD_ANSWERED.thread ?? [];
@@ -904,7 +908,7 @@ test("an answer no reply came back for is taken as sent once its thread holds a 
     { items: [THRESHOLD_ANSWERED, RETRY] },
   );
   await settle();
-  assert.equal(composerEditor(itemPane(page)).textContent, "Use 90%");
+  assert.deepEqual(undeliveredWords(page), ["Use 90%"]);
 
   // The service wrote the answer and handed it on all the same, and the plan's push names it by its key.
   const clientKey = sent[0]?.clientKey ?? assert.fail("the answer went under a key");
@@ -916,11 +920,8 @@ test("an answer no reply came back for is taken as sent once its thread holds a 
 
   world.main.push({ kind: INBOX_SCOPE_KIND.PLAN, id: BILLING.id }, { items: [landed, RETRY] });
   await settle();
-  const pane = itemPane(page);
-  await vi.waitFor(() =>
-    assert.equal(composerEditor(pane).textContent, "", "the words that went back are let go"),
-  );
-  assert.equal(pane.querySelector('.agent-composer [role="alert"]'), null);
+  await vi.waitFor(() => assert.deepEqual(undeliveredWords(page), [], "the reply is let go"));
+  assert.equal(composerEditor(itemPane(page)).textContent, "");
 });
 
 test("a nod on a notice the agent posted over first is not taken: the notice stands open again, and a toast says so", async () => {
@@ -1066,7 +1067,7 @@ test("picking an option in the draft reply stands it picked and lights Send, the
   assert.equal(composerEditor(pane).getAttribute("aria-label"), "Reply");
   assert.deepEqual(boxParts(pane), [
     "line: Reply",
-    "row: Add files and more, Runs on: Cloud, Off, Ports: Ports not forwarded, Opus 5.5 High, Dictate, Composer actions, Send",
+    "row: Add files and more, Runs on: Cloud, Off, Ports: Ports, Opus 5.5 High, Dictate, Composer actions, Send",
   ]);
 });
 
@@ -1132,7 +1133,7 @@ test("an ask of words alone is a plain box with no controls, its line asking for
   assert.equal(pane.querySelector("[data-inbox-draft-ask]"), null, "and no Answer press");
   assert.deepEqual(boxParts(pane), [
     "line: Reply",
-    "row: Add files and more, Runs on: Cloud, Off, Ports: Ports not forwarded, Opus 5.5 High, Dictate, Composer actions, Send",
+    "row: Add files and more, Runs on: Cloud, Off, Ports: Ports, Opus 5.5 High, Dictate, Composer actions, Send",
   ]);
   assert.equal(sendHeld(pane), true, "an empty box sends nothing");
   assert.equal(footWords(pane), "");
@@ -1186,7 +1187,7 @@ test("a form's fields attach to the reply as they are filled, with no Submit, an
     [
       "controls",
       "line: Add a note",
-      "row: Add files and more, Runs on: Cloud, Off, Ports: Ports not forwarded, Opus 5.5 High, Dictate, Composer actions, Send",
+      "row: Add files and more, Runs on: Cloud, Off, Ports: Ports, Opus 5.5 High, Dictate, Composer actions, Send",
     ],
     "the note line stands on its own under the form, over the row of presses",
   );

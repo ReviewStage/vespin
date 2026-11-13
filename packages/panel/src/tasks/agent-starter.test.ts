@@ -374,7 +374,7 @@ async function macPlace(
 ): Promise<HTMLElement> {
   const row = createElement(TranscriptTool, {
     state: TOOL_STATE.OUTPUT_AVAILABLE,
-    kind: CALL_KIND.MAC_COMMAND,
+    kind: CALL_KIND.MACHINE_COMMAND,
     subject: "pnpm test",
     input: { kind: TOOL_BLOCK.COMMAND, text: "pnpm test" },
     output: { kind: TOOL_BLOCK.TEXT, text: "ok" },

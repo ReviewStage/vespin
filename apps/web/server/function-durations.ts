@@ -5,7 +5,7 @@ import { TERMINAL_RELAY } from "@repo/features/terminal-wire";
 import { AGENT_WAKEUP } from "@repo/service/agents/coder-host/agent-wakeup-bounds";
 import { TURN_DELIVERY } from "@repo/service/agents/coder-host/turn-delivery-bounds";
 import { SANDBOX_RELEASE } from "@repo/service/agents/sandbox-release-bounds";
-import { WORKSPACE_DRIVE_FILL } from "@repo/service/agents/workspace-drive-fill-bounds";
+import { WORKSPACE_DRIVE_BUILD } from "@repo/service/agents/workspace-drive-build-bounds";
 import { WORKSPACE_MCP_FUNCTION, WORKSPACE_MCP_PATH } from "@repo/service/agents/workspace-mcp/app";
 import { AUTOMATION_RUNS } from "@repo/service/automations/automation-run-bounds";
 import {
@@ -136,9 +136,10 @@ const STANDALONE_ROUTES: readonly string[] = [
  * queue invokes is reached by nothing else: the automation-runs consumer and
  * the agent-turns consumer, and the agent-wakeups consumer, each under the
  * Fluid default a Start's function runs under, the sandbox-releases
- * consumer, under its own short bound, the workspace-drive-fills
- * consumer, under the platform's longest, and the github-delivery-reads
- * consumer, under the Fluid default.
+ * consumer, under its own short bound, the github-delivery-reads
+ * consumer, under the Fluid default, and the workspace-drive-builds
+ * consumer, under the platform's longest, since a fill runs up to ten
+ * minutes.
  */
 const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
   {
@@ -170,18 +171,18 @@ const QUEUE_CONSUMERS: readonly FunctionDefinition[] = [
     queueTopic: SANDBOX_RELEASE.TOPIC,
   },
   {
-    file: routeKeyOf(WORKSPACE_DRIVE_FILL.PATH),
-    maxDuration: WORKSPACE_DRIVE_FILL.MAX_DURATION_SECONDS,
-    routes: [routeKeyOf(WORKSPACE_DRIVE_FILL.PATH)],
-    dispatches: false,
-    queueTopic: WORKSPACE_DRIVE_FILL.TOPIC,
-  },
-  {
     file: routeKeyOf(GITHUB_DELIVERY_READ.PATH),
     maxDuration: GITHUB_DELIVERY_READ.MAX_DURATION_SECONDS,
     routes: [routeKeyOf(GITHUB_DELIVERY_READ.PATH)],
     dispatches: false,
     queueTopic: GITHUB_DELIVERY_READ.TOPIC,
+  },
+  {
+    file: routeKeyOf(WORKSPACE_DRIVE_BUILD.PATH),
+    maxDuration: WORKSPACE_DRIVE_BUILD.MAX_DURATION_SECONDS,
+    routes: [routeKeyOf(WORKSPACE_DRIVE_BUILD.PATH)],
+    dispatches: false,
+    queueTopic: WORKSPACE_DRIVE_BUILD.TOPIC,
   },
 ];
 

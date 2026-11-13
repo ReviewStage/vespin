@@ -17,6 +17,8 @@
     "./admin/routing": "./src/admin/routing.js",
     "./admin/sources.css": "./src/admin/sources.css",
     "./admin/screens/agents": "./src/admin/screens/agents.js",
+    "./admin/screens/prompts": "./src/admin/screens/prompts.js",
+    "./admin/screens/tools": "./src/admin/screens/tools.js",
     "./admin/screens/account": "./src/admin/screens/account.js",
     "./admin/screens/cost": "./src/admin/screens/cost.js",
     "./admin/screens/limits": "./src/admin/screens/limits.js",
@@ -124,14 +126,14 @@
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@repo/gateway": "workspace:*",
-    "@tailwindcss/vite": "4.3.3",
+    "@tailwindcss/vite": "4.3.5",
     "@types/hast": "3.0.5",
     "@types/node": "catalog:",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "ai": "catalog:",
     "jsdom": "^30.0.1",
-    "tailwindcss": "4.3.3",
+    "tailwindcss": "4.3.5",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }

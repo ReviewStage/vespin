@@ -150,11 +150,13 @@ const POST_THREAD_WORDS =
   "a file in your sandbox as {path, caption}, a picture or a recording as a body's picture is, a page you showed with show_page as {page, version} by the id and version it answered, " +
   `or an https address to open, such as a preview, as {url, label}; at most ${INBOX_BOUNDS.MAX_ASK_MEDIA} across the options, the message's own pictures counted; ` +
   "an option's extra screens go in its own media, never an option of their own, and a picture or recording an option carries stands on its card, so never draw it in body as well; " +
+  "an option's media shows that option alone, so a page or picture that holds them all, such as a mockup with a tab for each design, goes on no option's card: " +
+  "give each option a screenshot of its own design, and name the page that compares them in body by its mention; " +
   `options with media also offer "${NONE_OF_THESE}", which you never offer yourself, and an answer of none reaches you as "Chose ${NONE_OF_THESE.toLowerCase()}."; ` +
   "for a go-ahead on one step you propose, two short options such as Approve and Request changes), " +
   "do (a to-do: something only they can do by hand, such as changing a GitHub setting, adding a secret, or testing by hand what you could not test yourself; " +
-  `its steps, at most ${INBOX_BOUNDS.MAX_POSTED_STEPS}, say exactly what to do, a command to run in a fenced block in its step, after the words saying where to run it, which they copy whole, and they tick each before they mark it done, or say they couldn't), ` +
-  `or answer (one to ${INBOX_BOUNDS.MAX_POSTED_FIELDS} typed fields, text, number, select with its options and the one you recommend, or boolean, each named by its label and required where it must be filled; ` +
+  "its steps say exactly what to do, a command to run in a fenced block in its step, after the words saying where to run it, which they copy whole, and they tick each before they mark it done, or say they couldn't), " +
+  "or answer (one or more typed fields, text, number, select with its options and the one you recommend, or boolean, each named by its label and required where it must be filled; " +
   "or no fields for an answer in their own words); a text field takes one exact value they type, such as an ID, a name, an address, or a price, " +
   "never a description of what they saw or think, anything else to add, or the numbers of options to pick, because the reply box under every ask already takes their words: " +
   `offer up to ${INBOX_BOUNDS.MAX_OPTIONS} options as a decide, multiple where several may be picked, and ask for picks among more as an answer in their own words; ` +
@@ -344,8 +346,8 @@ export const INBOX_REFUSAL = {
   UNREADABLE_POST:
     "Not posted: the post does not read. key is a lowercase slug of letters, digits, dots, dashes, and underscores; " +
     `body is Markdown of at most ${INBOX_BOUNDS.MAX_MESSAGE_CHARS} characters; title is one line of at most ${INBOX_BOUNDS.MAX_TITLE_CHARS}; ` +
-    `ask is decide with two to ${INBOX_BOUNDS.MAX_OPTIONS} options, do with at most ${INBOX_BOUNDS.MAX_POSTED_STEPS} steps, ` +
-    `or answer with one to ${INBOX_BOUNDS.MAX_POSTED_FIELDS} fields or none.`,
+    `ask is decide with two to ${INBOX_BOUNDS.MAX_OPTIONS} options, do with at most ${INBOX_BOUNDS.MAX_STEPS} steps, ` +
+    `or answer with one to ${INBOX_BOUNDS.MAX_FIELDS} fields or none.`,
   NO_TITLE:
     "Not posted: you have no thread under that key, and the first post under a key names its title.",
   TOO_MANY_PICTURES: `Not posted: a message draws at most ${INBOX_BOUNDS.MAX_MESSAGE_PICTURES} pictures from your sandbox.`,

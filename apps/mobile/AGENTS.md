@@ -204,17 +204,39 @@ the Home Screen's search; Handoff shows only between real devices.
 
 ## The native interactions module
 
-What `@expo/ui` has no modifier for, an iPad pointer's hover effect and drag
-and drop, is the app's own native module, autolinked from
+What `@expo/ui` has no modifier for, drag and drop, is the app's own native module, autolinked from
 `modules/native-interactions/`: its Swift registers each modifier with
 `@expo/ui`'s registry (`ViewModifierRegistry`) as the module is made, and
 `@repo/ui-native` hands them to its views (`src/interactions.ts`), so no
 screen names one. A row drags out as its vespin.dev link, a task's onto a
-group's header, in the Tasks list or the iPad's sidebar, moves it there, and pictures dropped on
+group's header in the Tasks list, or onto Pinned or a section in the iPad's sidebar, moves it there, and pictures dropped on
 an agent's composer or a sheet that starts work are kept as JPEGs and
 attached. A view handed a modifier the build does not register draws as it
-would without it. No Maestro flow can drag or hover, so these are checked by
-hand on an iPad with a trackpad.
+would without it. A pointer's hover is the system's own on each button, with
+none added, since an added highlight drew a second platter of glass over a
+button's own on iPadOS 26. No Maestro flow can drag or hover, so these are
+checked by hand on an iPad with a trackpad.
+
+## The photo scaler
+
+A workspace's photo is picked in the system's photo picker, cropped there to
+a square, and drawn at the panel's size (`WORKSPACE_PHOTO_EDGE`) as a JPEG
+within the service's bound by the app's own native module, autolinked from
+`modules/photo-scale/`, through ImageIO as the share extension scales a
+shared picture, so a HEIC from the library is read and no metadata goes with
+it (`src/workspace-photo.ts`). A build without the module says the photo
+could not be read rather than sending one at full size.
+
+## The rich copy module
+
+A draft's Copy message puts one pasteboard item holding the body's HTML, the
+rich text the system reads from it, and the plain words beside it, a link's
+address after its label, as the desktop writes them (`src/keeping.ts`). That
+item is the app's own native module, autolinked from
+`modules/rich-pasteboard/`, since expo-clipboard takes the plain words from
+the system's reading of the HTML, which drops each link's address. A build
+without the module copies through expo-clipboard. Pasting into Messages
+(plain) and Slack or Mail (rich) is checked by hand on a device.
 
 ## The share extension
 
@@ -271,7 +293,8 @@ pull request with UI shows its screenshots to the developer in a thread.
 - **Every control comes from `@repo/ui-native`**, the app's design system
   (`packages/ui-native/AGENTS.md`), as the web's come from `@repo/ui`. A
   screen composes its components and imports neither `@expo/ui` nor
-  `expo-glass-effect`; the app still declares both,
+  `expo-glass-effect`, which lint refuses
+  (`vespin/no-raw-press-outside-ui-native`); the app still declares both,
   since Expo links a native module from the app's own dependencies.
 - **The app is a shell.** A module whose imports name no Expo, React Native,
   or expo-router API is logic and belongs in a package. A relative import ends
@@ -282,12 +305,24 @@ pull request with UI shows its screenshots to the developer in a thread.
   the window's width into a compact or regular size class. A compact window
   keeps the system's tab bar with stack navigation. A regular one, whether
   it is an iPad's, the unfolded iPhone Duo's, or a Split View pane, stands
-  list and detail side by side in `NavigationSplitView`; where it is wide
-  enough for three columns, an iPad's in landscape, it hides the tab bar and
-  stands the app sidebar first (`src/screens/app-sidebar.tsx`: the places,
-  Pinned and the member's sections, the workspace switcher, and Settings),
-  as Mail does. Whether the first column stands is one answer every tab
-  shares (`src/sidebar-shown.ts`).
+  list and detail side by side in `NavigationSplitView`, and New task is
+  the list column bar's one trailing compose button, beside its search and
+  ⋯, rather than the tab bar's round +, which only a compact window keeps.
+  Where the window is wide enough for three columns, an iPad's in
+  landscape, it hides the tab bar and stands the app sidebar first, as
+  Mail stands its mailboxes (`src/screens/app-sidebar.tsx`): the workspace
+  switcher heading the list, the Inbox with its count, Tasks, and Search,
+  then Pinned, Following, and each of the member's sections as one row with
+  its count, never a task's own row. A row fills the list column (Tasks
+  every group, a collection only its own tasks), the detail shows the
+  list's selection, and a task dragged onto Pinned or a section is put
+  there. The sidebar's bar holds only the system's toggle: Settings opens
+  from the switcher's menu and ⌘,. The last pick is kept
+  (`src/sidebar-pick.ts`), so a rotation and the next launch come back to
+  it. A portrait iPad and the open Duo keep the tab bar, and their Tasks
+  list draws Pinned, Following, and the sections as groups. Whether the
+  first column stands is one answer every tab shares
+  (`src/sidebar-shown.ts`).
 - **Words match the panel's**: Inbox, Tasks, New task, Mark done, ask, and
   `docs/DESIGN.md`'s copy rules.
 - **Every write goes through `useWrite`** (`src/use-write.ts`). What went

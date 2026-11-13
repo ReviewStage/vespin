@@ -22,7 +22,7 @@ import { pagePlaceSchema, pageVersionNumberSchema } from "./page-wire.js";
 import { countedNumber, memberRefSchema, wireUuidSchema } from "./service-wire.js";
 import { CODE_PATH_MAX_CHARS, codeLineSchema, workspaceIdSchema } from "./task-wire.js";
 import { boundedText, filledText } from "./text-schema.js";
-import { WEBM_TYPE } from "./video-signature.js";
+import { MP4_TYPE, WEBM_TYPE } from "./video-signature.js";
 
 /**
  * inbox-wire.ts -- the developer's inbox: what a task's coding agents need of the developer, posted by the agents and answered on the desktop.
@@ -130,15 +130,8 @@ export const INBOX_BOUNDS = {
   MAX_OPTIONS: 6,
   /** The most characters an option's detail may spell: the trade-off in a sentence or two. */
   MAX_OPTION_DETAIL_CHARS: 600,
-  /**
-   * The most fields a form may hold as a read or an answer carries it: a
-   * bound on a stored row and a request body, never on how much an agent
-   * may ask, and wider than an agent may post (`MAX_POSTED_FIELDS`), so a
-   * build reads a form a later service lets an agent ask.
-   */
+  /** The most fields a form may ask: a bound on a stored row and a request body, never on how much an agent may ask. */
   MAX_FIELDS: 50,
-  /** The most fields an agent's `answer` ask may name for now, until the builds that read `MAX_FIELDS` are out. */
-  MAX_POSTED_FIELDS: 8,
   /** The most characters a form's text field may take. */
   MAX_FIELD_VALUE_CHARS: 1_000,
   /** The most characters the developer's note may spell. */
@@ -159,15 +152,8 @@ export const INBOX_BOUNDS = {
   MAX_MESSAGES_READ: 50,
   /** The most pictures the agent's message on a thread may carry, each held to the image bound: as many as a post's image blocks once could be. */
   MAX_MESSAGE_PICTURES: 8,
-  /**
-   * The most steps a `do` ask may hold as a read or an answer carries it: a
-   * bound on a stored row and a request body, never on how long a to-do
-   * may be, and wider than an agent may post (`MAX_POSTED_STEPS`), so a
-   * build reads a to-do a later service lets an agent post.
-   */
+  /** The most steps a `do` ask may list: a bound on a stored row and a request body, never on how long a to-do may be. */
   MAX_STEPS: 50,
-  /** The most steps an agent's `do` ask may list for now, until the builds that read `MAX_STEPS` are out. */
-  MAX_POSTED_STEPS: 8,
   /** The most characters one step of a `do` ask may spell, in Markdown. */
   MAX_STEP_CHARS: 600,
   /** The most characters a post's addressee may spell: a member's mention link written whole. */
@@ -232,12 +218,13 @@ export type InboxImageType = (typeof INBOX_IMAGE_TYPE)[keyof typeof INBOX_IMAGE_
 
 /**
  * The types a file of an item's may be kept and served under: any a
- * message's file travels as, or a WebM the agent recorded of what it did and
- * drew in its words as it draws a picture.
+ * message's file travels as, or a recording the agent made of what it did,
+ * a WebM or an H.264 MP4, drawn in its words as it draws a picture.
  */
 export const INBOX_FILE_TYPE = {
   ...AGENT_ATTACHMENT_TYPE,
   WEBM: WEBM_TYPE,
+  MP4: MP4_TYPE,
 } as const;
 
 export type InboxFileType = (typeof INBOX_FILE_TYPE)[keyof typeof INBOX_FILE_TYPE];
@@ -869,49 +856,27 @@ const DECIDE_INPUT_FIELDS = {
   recommended: EffectSchema.optionalKey(recommendedInputSchema),
 };
 
-/** A `do` ask's steps in Markdown, in order, at most `most`. */
-function doSteps(most: number) {
-  return EffectSchema.Array(filledText(INBOX_BOUNDS.MAX_STEP_CHARS)).check(
-    EffectSchema.isMaxLength(most),
-  );
-}
-
-/** An `answer` ask's fields, one to `most`, where it asks typed values. */
-function answerFields(most: number) {
-  return EffectSchema.optionalKey(
-    EffectSchema.Array(inboxFieldSchema).check(
-      EffectSchema.isMinLength(1),
-      EffectSchema.isMaxLength(most),
-    ),
-  );
-}
-
 /**
- * A `do` ask's own keys as it is kept and read: its steps in Markdown, in
- * order. Note that none is a `do` ask too, because a version 4 to-do named
- * no step and its item's words say what to do; marking it done ticks nothing.
+ * A `do` ask's own keys: its steps in Markdown, in order. Note that none is
+ * a `do` ask too, because a version 4 to-do named no step and its item's
+ * words say what to do; marking it done ticks nothing.
  */
 const DO_FIELDS = {
   type: EffectSchema.Literal(INBOX_ASK.DO),
-  steps: doSteps(INBOX_BOUNDS.MAX_STEPS),
+  steps: EffectSchema.Array(filledText(INBOX_BOUNDS.MAX_STEP_CHARS)).check(
+    EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_STEPS),
+  ),
 };
 
-/** A `do` ask's own keys as the agent posts it: those it is kept by, its steps held to what an agent may post. */
-const DO_INPUT_FIELDS = {
-  type: DO_FIELDS.type,
-  steps: doSteps(INBOX_BOUNDS.MAX_POSTED_STEPS),
-};
-
-/** An `answer` ask's own keys as it is kept and read: the fields of a form, where it asks typed values, and none where the reply's words are the answer. */
+/** An `answer` ask's own keys: the fields of a form, where it asks typed values, and none where the reply's words are the answer. */
 const ANSWER_FIELDS = {
   type: EffectSchema.Literal(INBOX_ASK.ANSWER),
-  fields: answerFields(INBOX_BOUNDS.MAX_FIELDS),
-};
-
-/** An `answer` ask's own keys as the agent posts it: those it is kept by, its fields held to what an agent may post. */
-const ANSWER_INPUT_FIELDS = {
-  type: ANSWER_FIELDS.type,
-  fields: answerFields(INBOX_BOUNDS.MAX_POSTED_FIELDS),
+  fields: EffectSchema.optionalKey(
+    EffectSchema.Array(inboxFieldSchema).check(
+      EffectSchema.isMinLength(1),
+      EffectSchema.isMaxLength(INBOX_BOUNDS.MAX_FIELDS),
+    ),
+  ),
 };
 
 /** What a message asks of its reader, one of three: decide among options, do steps, or answer. */
@@ -923,11 +888,11 @@ const inboxAskSchema = EffectSchema.Union([
 
 export type InboxAsk = typeof inboxAskSchema.Type;
 
-/** An ask as the agent posts it: one it is kept as, but a `decide`'s recommendation one label or a list of them, and its steps or fields held to what an agent may post. */
+/** An ask as the agent posts it: one it is kept as, but a `decide`'s recommendation one label or a list of them. */
 const inboxAskInputSchema = EffectSchema.Union([
   EffectSchema.Struct(DECIDE_INPUT_FIELDS),
-  EffectSchema.Struct(DO_INPUT_FIELDS),
-  EffectSchema.Struct(ANSWER_INPUT_FIELDS),
+  EffectSchema.Struct(DO_FIELDS),
+  EffectSchema.Struct(ANSWER_FIELDS),
 ]);
 
 export type InboxAskInput = typeof inboxAskInputSchema.Type;

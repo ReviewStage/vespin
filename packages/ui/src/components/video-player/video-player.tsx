@@ -1,4 +1,4 @@
-import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
+import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { playheadText } from "@repo/features/time-format";
 import {
   IN_CONTEXT_KEY,
@@ -262,7 +262,7 @@ export function dataUrlMediaType(dataUrl: string): string {
 
 /** Whether a `data:` URL a picture read answered holds a video, played rather than drawn. */
 export function isVideoDataUrl(dataUrl: string): boolean {
-  return dataUrlMediaType(dataUrl) === CONVERSATION_MEDIA_TYPE.WEBM;
+  return isVideoType(dataUrlMediaType(dataUrl));
 }
 
 /**

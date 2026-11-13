@@ -46,6 +46,7 @@ import { nativeHelperPath } from "../native/native-helper";
 import type { DesktopServices } from "../services/compose-desktop";
 import { windowPushes } from "../window/window-pushes";
 import { cliProcedures } from "./cli-acts";
+import { macAppProcedures } from "./mac-app-acts";
 import { macPhotoProcedures } from "./mac-photo-acts";
 import { macResourcesProcedures } from "./mac-resources-acts";
 import { macTerminalProcedures } from "./mac-terminal-acts";
@@ -164,6 +165,12 @@ export function registerDesktopIpc(services: DesktopServices): void {
       createId: randomUUID,
       sleep: Effect.sleep,
     }),
+    // Note that `open -b` brings a running app forward as the Dock does, at the window it was last in.
+    ...macAppProcedures({
+      showApp: async (bundleId) => {
+        await promisify(execFile)("/usr/bin/open", ["-b", bundleId]);
+      },
+    }),
     ...macTerminalProcedures({
       home: os.homedir(),
       openInTerminal: (folder) =>
@@ -192,7 +199,15 @@ export function registerDesktopIpc(services: DesktopServices): void {
         await promisify(execFile)(nativeHelperPath("open-login-items"));
       },
       copyText: (words) => clipboard.writeText(words),
-      copyRich: ({ html, text }) => clipboard.write({ html, text }),
+      // Note that a PNG that draws no picture leaves the words to go alone, as they went before.
+      copyRich: ({ html, text, png }) => {
+        const image =
+          png === undefined ? undefined : nativeImage.createFromBuffer(Buffer.from(png, "base64"));
+
+        clipboard.write(
+          image === undefined || image.isEmpty() ? { html, text } : { html, text, image },
+        );
+      },
       copyImage: (png) => {
         const image = nativeImage.createFromBuffer(Buffer.from(png, "base64"));
 

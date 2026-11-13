@@ -19,6 +19,11 @@ import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import { writeAccountPreferences } from "@repo/database/models/account-store";
 import {
+  agentBootBuilding,
+  agentBootOf,
+  beginAgentBoot,
+} from "@repo/database/models/agent-boot-store";
+import {
   claimAgentRunnerLease,
   releaseAgentRunnerLease,
 } from "@repo/database/models/agent-runner-lease";
@@ -55,6 +60,7 @@ import {
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { runnerLinesPast } from "@repo/database/models/runner-line-store";
 import { queuedTurnOf, recordTurnSnapshot } from "@repo/database/models/turn-state";
+import { workspaceDriveRepositories } from "@repo/database/models/workspace-drive-repositories";
 import { setWorkspaceVariable } from "@repo/database/models/workspace-environment-store";
 import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { listScriptRuns } from "@repo/database/models/workspace-sandbox-script-run-store";
@@ -69,6 +75,7 @@ import { messages, turns } from "@repo/database/schemas/storage";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
+import { BOOT_PHASE } from "@repo/features/agent-boot";
 import { AGENT_FAILURE, AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import {
   DEVICE_AGENT_LINE_KIND,
@@ -92,7 +99,7 @@ import { SANDBOX_IDLE, Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { EXPERIMENT } from "@repo/settings";
-import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
+import { MESSAGE_CHANNEL, MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { eq, sql } from "drizzle-orm";
@@ -127,6 +134,7 @@ import {
 } from "../../core.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../../environment.js";
 import { recordingProductAnalytics, SERVER_EVENT } from "../../events/server-events.js";
+import type { GitHubApp } from "../../github/github-app.js";
 import { keptAfterResponse } from "../../http/after-response.js";
 import { sentryReportingLayer } from "../../observability/sentry.js";
 import {
@@ -170,7 +178,8 @@ import {
   SESSION_RESET_OUTCOME,
   SESSION_SEND_OUTCOME,
 } from "../sessions/agent-sessions.js";
-import { WORKSPACE_DRIVE, workspaceDriveName } from "../workspace-drive.js";
+import { WORKSPACE_DRIVE, WorkspaceDriveFills, workspaceDriveName } from "../workspace-drive.js";
+import { consumeWorkspaceDriveBuild } from "../workspace-drive-builds.js";
 import { runnerTokenDigest } from "../workspace-mcp/bearer.js";
 import { AgentImage } from "./agent-image.js";
 import { turnPayerOf } from "./agent-runtime-choice.js";
@@ -394,25 +403,33 @@ const runnerLetGo = (api: ReturnType<typeof runnerSandboxApi>, userId: string, s
     });
   });
 
-const message = (agent: Agent, text: string, lineId?: string) => ({
+const message = (agent: Agent, text: string, lineId?: string, spoken = false) => ({
   conversationId: agent.conversationId,
   turn: "typed" as const,
   message: text,
+  ...(spoken ? { spoken } : undefined),
   ...(lineId === undefined ? undefined : { lineId }),
 });
 
 /** A message written as the line awaiting the turn its send queues or joins, as a Start's first line and a steer are (`start.ts`'s `openingLine`, `steer.ts`), and handed on under its line id. */
-const writtenLine = (agent: Agent, text: string) =>
+const writtenLine = (agent: Agent, text: string, spoken = false) =>
   Effect.gen(function* () {
     const clientKey = randomUUID();
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     yield* writer.writeAwaitingLine(
       { userId: agent.userId, conversationId: agent.conversationId },
-      { text, clientKey, sender: { kind: MESSAGE_SENDER.APP } },
+      {
+        text,
+        clientKey,
+        sender: { kind: MESSAGE_SENDER.APP },
+        ...(spoken
+          ? { metadata: { author: MESSAGE_AUTHOR.DEVELOPER, channel: MESSAGE_CHANNEL.VOICE } }
+          : undefined),
+      },
       Effect.succeed(true),
     );
 
-    return message(agent, text, sentLineId(clientKey));
+    return message(agent, text, sentLineId(clientKey), spoken);
   });
 
 /**
@@ -716,7 +733,7 @@ const repositoryAgent = (
       ),
     );
 
-    return { userId, agent, sessions };
+    return { userId, agent, sessions, http };
   });
 
 /** The contents access a repository token is cut to: a checkout's reads, the firewall's writes. */
@@ -835,6 +852,33 @@ const isUserMade = (run: { readonly args: readonly string[] }) =>
 /** The agent's own sandbox still standing, by the agent's tag. */
 const sandboxOfAgent = (api: ReturnType<typeof runnerSandboxApi>, agent: Agent) =>
   api.sandboxes.find((each) => !each.deleted && each.tags[AGENT_TAG] === agent.id);
+
+/**
+ * The agent's first launch held for its workspace's drive, then its
+ * workspace's build delivered once, its fill on the fake Vercel given and
+ * the agent's machine booted through its sessions.
+ */
+const builtFor = (
+  agent: Agent,
+  sessions: Effect.Success<ReturnType<typeof sessionsFor>>,
+  http: Layer.Layer<HttpClient.HttpClient | Sandbox | GitHubApp>,
+) =>
+  Effect.gen(function* () {
+    const at = yield* DateTime.nowAsDate;
+    yield* beginAgentBoot(agent.id, at, undefined);
+    assert.ok(Option.isSome(yield* agentBootBuilding(agent.id, at)));
+
+    return yield* consumeWorkspaceDriveBuild(agent.organizationId, () =>
+      Effect.succeed(sessions),
+    ).pipe(
+      Effect.provide(
+        Layer.mergeAll(
+          http,
+          Layer.succeed(WorkspaceDriveFills, { run: rootRunner, image: Effect.succeed(IMAGE) }),
+        ),
+      ),
+    );
+  });
 
 /** A host's rule in a policy the fake took, as far as a swap reads it. */
 interface SentRule {
@@ -998,6 +1042,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             "reply_to_comment",
             "update_comment",
             "run_on_mac",
+            "computer",
             "browser",
             "list_ports",
             "share_port",
@@ -4022,6 +4067,39 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a message spoken on a call opens its turn with the words for a reply read aloud, and a typed one's turn does not",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
+        const spoken = yield* sessions.send(
+          opened.sessionId,
+          yield* writtenLine(agent, "Is it done?", true),
+        );
+
+        assert.equal(spoken.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const [typed, voice] = yield* textsOf(api.commands[0]);
+        assert.ok(!typed?.join("\n").includes("This turn is spoken"), typed?.join("\n") ?? "");
+        assert.ok(voice?.[0]?.startsWith("## This turn is spoken"), voice?.[0] ?? "");
+        assert.ok(voice?.[0]?.includes("no Markdown"), voice?.[0] ?? "");
+        assert.deepEqual(voice?.slice(1), ["Is it done?"]);
+      }),
+  );
+
+  it.effect(
     "a message queued behind another its runner has not yet taken hands only what that one does not, the task's words handed once",
     () =>
       Effect.gen(function* () {
@@ -4253,7 +4331,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
-    "a Start in a workspace with no drive yet is created from the image on an empty drive of its own and clones its repository whole onto it, filling no workspace drive, and reports the drive gone",
+    "a Start in a workspace with no drive yet is created from the image on an empty drive of its own and clones its repository whole onto it, filling no workspace drive, and reports nothing broken",
     () =>
       Effect.gen(function* () {
         vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
@@ -4288,7 +4366,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.deepEqual(api.drives, [drive], "no drive but its own was made or filled");
         assert.deepEqual(
           reported.filter((each) => each.broken !== undefined),
-          [{ workspaceId: agent.organizationId, broken: "gone" }],
+          [],
         );
         const visible = JSON.stringify([api.commands, api.runs, api.sandboxes]);
         assert.equal(visible.includes(GITHUB_FIXTURE_INSTALLATION_TOKEN), false);
@@ -4480,6 +4558,49 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
         assert.equal(api.commands.length, 1);
       }),
   );
+  it.effect(
+    "a workspace's drive build fills the repository its building boot is missing, then boots it on a fork of the drive",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { agent, sessions, http } = yield* repositoryAgent(api, ownInstallation());
+        const answer = yield* builtFor(agent, sessions, http);
+
+        assert.deepEqual(answer, { acknowledged: true });
+        assert.deepEqual(yield* workspaceDriveRepositories(agent.organizationId), [RELAY_FOLDER]);
+        assert.equal(
+          mountedDrive(api, sandboxOfAgent(api, agent))?.forkedFrom,
+          workspaceDriveName(agent.organizationId),
+        );
+        assert.notEqual(Option.getOrThrow(yield* agentBootOf(agent.id)).phase, BOOT_PHASE.BUILDING);
+      }),
+  );
+
+  it.effect(
+    "a workspace's drive build that failed still boots its building boot, from the image",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { agent, sessions, http } = yield* repositoryAgent(api, ownInstallation());
+        let syncing = false;
+        api.hooks.onRun = async (env) => {
+          syncing = Object.hasOwn(env, REPOSITORY_SANDBOX_CONTRACT.VARIABLE.SYNC_LIST);
+        };
+
+        api.hooks.runExit = () => (syncing ? 1 : 0);
+        const answer = yield* builtFor(agent, sessions, http);
+
+        assert.deepEqual(answer, { acknowledged: true });
+        assert.deepEqual(yield* workspaceDriveRepositories(agent.organizationId), []);
+        const own = sandboxOfAgent(api, agent);
+        assert.ok(own !== undefined);
+        assert.equal(mountedDrive(api, own)?.forkedFrom, undefined);
+        assert.notEqual(Option.getOrThrow(yield* agentBootOf(agent.id)).phase, BOOT_PHASE.BUILDING);
+      }),
+  );
+
   it.effect(
     "a message after a drive agent's sandbox stopped makes it again from the image with the drive its first open forked mounted, never resuming its snapshot, and its turns' restore points are still offered",
     () =>
