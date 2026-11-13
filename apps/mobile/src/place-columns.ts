@@ -1,7 +1,13 @@
 // place-columns.ts -- the list and the detail each tab's root hands the one split view a window wide enough for three columns stands, beside the app sidebar the tabs' layout draws.
 
 import type { ColumnBar } from "@repo/ui-native";
-import { type ReactNode, useLayoutEffect, useSyncExternalStore } from "react";
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useLayoutEffect,
+  useSyncExternalStore,
+} from "react";
 import type { SidebarPlace } from "./screens/app-sidebar.js";
 
 /** What a tab's root stands beside the app sidebar: its list and the page it picked, each under its bar. */
@@ -13,6 +19,13 @@ export type PlaceColumns = {
   /** The task the place has open, which the sidebar draws selected where it lists it. */
   readonly openTask?: string | undefined;
 };
+
+/**
+ * Whether the columns a view stands in are the ones in front: the place the
+ * window stands in, while no page a tab pushed covers the split view. Every
+ * view outside the split view stands in front of its own, as a screen does.
+ */
+const InFront = createContext(true);
 
 /** Each place's columns, as its root last drew them. */
 const held = new Map<SidebarPlace, PlaceColumns>();
@@ -53,4 +66,12 @@ export function useHandColumns(place: SidebarPlace, columns: PlaceColumns | unde
 /** A place's columns as its root last handed them; none before it has. */
 export function usePlaceColumns(place: SidebarPlace): PlaceColumns | undefined {
   return useSyncExternalStore(subscribe, () => held.get(place));
+}
+
+/** Stands what it holds in front, or behind, for the hooks under it that ask (`useInFront`). */
+export const InFrontProvider = InFront.Provider;
+
+/** Whether the view calling it stands in front, so what it tells the system, such as a Handoff activity, is told only while it is seen. */
+export function useInFront(): boolean {
+  return useContext(InFront);
 }

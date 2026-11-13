@@ -195,6 +195,8 @@ export {
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  KeptColumns,
+  type KeptView,
   SplitOverTabs,
   SplitView,
   UNDER_SPLIT_SCREEN,

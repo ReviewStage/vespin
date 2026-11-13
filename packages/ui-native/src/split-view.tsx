@@ -12,15 +12,17 @@ import {
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityHidden,
   containerBackground,
   disabled,
+  hidden,
   navigationBarTitleDisplayMode,
   navigationSplitViewStyle,
   navigationTitle,
   searchable,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import type { Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
@@ -120,8 +122,8 @@ type SplitViewProps = {
   /** The selected row's page, or an `EmptyState` before one is picked. */
   readonly detail: ReactNode;
   readonly detailBar?: ColumnBar | undefined;
-  /** Names what the list and the detail show, such as the place the app sidebar picked, so both are drawn afresh, their search fields included, as it changes while the sidebar stands. */
-  readonly columnsKey?: string | undefined;
+  /** Names whose search the list's bar holds, such as the place the app sidebar picked, so the field takes that list's own query as it changes. */
+  readonly searchKey?: string | undefined;
   /** Whether the sidebar stands beside the other columns; hidden, the system's own button in the next column's bar brings it back. */
   readonly sidebarShown: boolean;
   /** Called as a person shows or hides the sidebar, with the system's button, a swipe, or a drag. */
@@ -188,14 +190,23 @@ function Column({
   view,
   bar = {},
   sidebar = false,
+  searchKey,
 }: {
   readonly view: ReactNode;
   readonly bar?: ColumnBar | undefined;
   /** Whether it is the sidebar, whose search the system stands in the sidebar's own place. */
   readonly sidebar?: boolean | undefined;
+  /** Names whose search the bar holds; the field takes that one's query as it changes, and keeps what is typed otherwise. */
+  readonly searchKey?: string | undefined;
 }) {
   const colors = useColors();
   const text = useNativeState(bar.search?.text ?? "");
+  const query = bar.search?.text ?? "";
+
+  // Note that the field is handed a query only as its search changes hands, so typing never fights its own echo.
+  useEffect(() => {
+    text.set(query);
+  }, [searchKey]);
 
   const stacked = (
     <ZStack
@@ -278,7 +289,7 @@ export function SplitView({
   contentBar,
   detail,
   detailBar,
-  columnsKey,
+  searchKey,
   sidebarShown,
   onSidebarShownChange,
 }: SplitViewProps) {
@@ -307,13 +318,40 @@ export function SplitView({
       </NavigationSplitView.Sidebar>
       {content === undefined ? null : (
         <NavigationSplitView.Content>
-          <Column key={columnsKey} view={content} bar={contentBar} />
+          <Column view={content} bar={contentBar} searchKey={searchKey} />
         </NavigationSplitView.Content>
       )}
       <NavigationSplitView.Detail>
-        <Column key={columnsKey} view={detail} bar={detailBar} />
+        <Column view={detail} bar={detailBar} />
       </NavigationSplitView.Detail>
     </NavigationSplitView>
+  );
+}
+
+/** One of the views a column keeps, by the name it is shown under. */
+export type KeptView = { readonly key: string; readonly view: ReactNode };
+
+/**
+ * A column's views, one shown and the rest kept drawn behind it, hidden and
+ * out of VoiceOver's reach, as the iPad's Mail keeps each mailbox's list
+ * scrolled where it was left: so the list a person comes back to stands as
+ * they left it, scrolled, its rows folded or not, rather than drawn anew.
+ */
+export function KeptColumns({
+  shown,
+  views,
+}: {
+  readonly shown: string;
+  readonly views: readonly KeptView[];
+}) {
+  return (
+    <ZStack>
+      {views.map(({ key, view }) => (
+        <ZStack key={key} modifiers={[hidden(key !== shown), accessibilityHidden(key !== shown)]}>
+          {view}
+        </ZStack>
+      ))}
+    </ZStack>
   );
 }
 

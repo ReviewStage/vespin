@@ -127,7 +127,7 @@ export default function TabsLayout() {
   return (
     <SplitOverTabs
       tabs={tabs}
-      split={appSidebar ? <AppSplit place={placeOfRoute(standing[0])} /> : undefined}
+      split={appSidebar ? <AppSplit place={placeOfRoute(standing[0])} front={atRoot} /> : undefined}
       front={atRoot}
     />
   );

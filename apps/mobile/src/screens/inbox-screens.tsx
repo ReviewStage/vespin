@@ -91,7 +91,7 @@ import {
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
-import { useHandColumns } from "../place-columns.js";
+import { useHandColumns, useInFront } from "../place-columns.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
@@ -510,10 +510,11 @@ function ThreadDetail({
   }, []);
 
   const navigation = useNavigation();
+  const inFront = useInFront();
 
-  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front: a stack's screen covered by another stays mounted.
+  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front: a stack's screen covered by another stays mounted, as a wide window's split view keeps each tab's thread drawn behind the one shown.
   const openStarted = (id: string) => {
-    if (!shown.current || !navigation.isFocused()) return;
+    if (!shown.current || !navigation.isFocused() || !inFront) return;
 
     if (place.inStack) router.replace(`/inbox/${encodeURIComponent(id)}`);
     else place.onOpen(id);
