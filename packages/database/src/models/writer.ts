@@ -2035,18 +2035,19 @@ const connectionLost = /* @__PURE__ */ Effect.fnUntraced(function* (
   ]);
 });
 
-/** A compaction stays among the journal's parts where it happened. */
-const compacted = /* @__PURE__ */ Effect.fnUntraced(function* (
+/** A compaction or a goal's move stays among the journal's parts where it happened. */
+const noticeKept = /* @__PURE__ */ Effect.fnUntraced(function* (
   context: WriterContext,
-  event: Extract<RunEvent, { kind: typeof RUN_EVENT.COMPACTED }>,
+  event: Extract<RunEvent, { kind: typeof RUN_EVENT.COMPACTED | typeof RUN_EVENT.GOAL }>,
 ): Effect.fn.Return<StoreWriteResult, StoreFailure, DatabaseServices> {
   const opened = yield* journal(context, event.turnId);
 
   if (Result.isFailure(opened)) return Result.fail(opened.failure);
   const row = opened.success;
   const id = String(event.sequence);
+  const type = event.kind === RUN_EVENT.COMPACTED ? COMPACTED_PART : GOAL_PART;
 
-  if (row.parts.some((part) => part.type === COMPACTED_PART && part.id === id)) {
+  if (row.parts.some((part) => part.type === type && part.id === id)) {
     return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
   }
 
@@ -2054,30 +2055,7 @@ const compacted = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   return yield* amendJournal(context, event.turnId, row, [
     ...row.parts,
-    { type: COMPACTED_PART, id, data: event.notice },
-  ]);
-});
-
-/** A goal's move stays among the journal's parts where it happened, as a compaction does. */
-const goalMoved = /* @__PURE__ */ Effect.fnUntraced(function* (
-  context: WriterContext,
-  event: Extract<RunEvent, { kind: typeof RUN_EVENT.GOAL }>,
-): Effect.fn.Return<StoreWriteResult, StoreFailure, DatabaseServices> {
-  const opened = yield* journal(context, event.turnId);
-
-  if (Result.isFailure(opened)) return Result.fail(opened.failure);
-  const row = opened.success;
-  const id = String(event.sequence);
-
-  if (row.parts.some((part) => part.type === GOAL_PART && part.id === id)) {
-    return Result.succeed(STORE_WRITE_EFFECT.REPEATED);
-  }
-
-  if (row.finishedAt !== null) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FINISHED });
-
-  return yield* amendJournal(context, event.turnId, row, [
-    ...row.parts,
-    { type: GOAL_PART, id, data: event.notice },
+    { type, id, data: event.notice },
   ]);
 });
 
@@ -2153,9 +2131,8 @@ function consume(context: WriterContext, event: RunEvent): Write<StoreWriteResul
     case RUN_EVENT.CONNECTION_RESTORED:
       return connectionRestored(context, event);
     case RUN_EVENT.COMPACTED:
-      return compacted(context, event);
     case RUN_EVENT.GOAL:
-      return goalMoved(context, event);
+      return noticeKept(context, event);
     // The rest of the stream is the relay's, about a run's moments rather
     // than the record.
     case RUN_EVENT.SLOW_STEP:

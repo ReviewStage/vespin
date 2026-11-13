@@ -40,14 +40,12 @@ import type {
 } from "../description-editor/contract.js";
 import { SettingsPageLink } from "../open-settings.js";
 import {
-  COMMAND_NAMES,
   type CommandReach,
   CommandRef,
+  chippedCommands,
   commandOption,
-  GOAL_NAMES,
   matchingCommands,
   runsCommand,
-  SESSION_NAMES,
 } from "./command-ref.js";
 import { MENTION_MENU_SIDE, type MentionMenuSide, wordBox } from "./mention-picker.js";
 import { opensFile, SkillRef, type SkillWithFile, skillOption } from "./skill-ref.js";
@@ -131,13 +129,6 @@ const COMMAND_MENU_LABEL = "Commands and skills";
 
 /** No skill is known, before the read lands or where it did not. */
 const NO_NAMES: ReadonlySet<string> = new Set();
-
-/** The command names a box draws as chips, by what it reaches: the session's commands, `/goal` where a goal may be set, both, or none. */
-function chippedCommands(reach: CommandReach | undefined): ReadonlySet<string> {
-  if (reach?.session === true) return reach.goal ? COMMAND_NAMES : SESSION_NAMES;
-
-  return reach?.goal === true ? GOAL_NAMES : NO_NAMES;
-}
 
 /** The highlight as it was moved, held against the word it was moved in, so a word typed on starts it again at the first row. */
 interface Highlight {
@@ -349,6 +340,14 @@ export function useSkillPicker({
   const known = skills !== undefined && "skills" in skills ? skills.skills : undefined;
   const unread = skills !== undefined && "unread" in skills;
 
+  const reach = commands?.reach;
+
+  // Note that only the commands a box runs stand as chips, so a box with no session sends `/compact` as the words it is, while one starting an agent still takes `/goal`.
+  const chipped = useMemo(
+    () => (reach === undefined ? NO_NAMES : chippedCommands(reach)),
+    [reach?.model, reach?.session, reach?.goal],
+  );
+
   const names = useMemo(
     () => (known === undefined ? NO_NAMES : new Set(known.map((each) => each.name))),
     [known],
@@ -471,8 +470,7 @@ export function useSkillPicker({
         !open || rows.length === 0 ? undefined : comboboxOptionId(listId, at),
     },
     names,
-    // Note that only the commands a box runs stand as chips, so a box with no session sends `/compact` as the words it is, one starting an agent still takes `/goal`, and none takes `/goal` with the Goals experiment off.
-    commands: chippedCommands(commands?.reach),
+    commands: chipped,
     onTrigger: setTrigger,
     onKey,
     known,

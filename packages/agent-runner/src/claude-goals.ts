@@ -40,7 +40,6 @@ const GoalStatusEntrySchema = Schema.Struct({
     sentinel: Schema.optionalKey(Schema.Boolean),
     reason: Schema.optionalKey(Schema.String),
     iterations: Schema.optionalKey(Schema.Number),
-    tokens: Schema.optionalKey(Schema.Number),
   }),
 });
 
@@ -78,7 +77,8 @@ function goalSettledBy(
     condition: status.condition,
     reason: status.reason ?? null,
     turns: status.iterations ?? null,
-    tokens: status.tokens ?? null,
+    // Note that Claude Code's goal is counted in turns, so its tokens go unsaid, as a running goal's do.
+    tokens: null,
     tokenBudget: null,
   };
 }

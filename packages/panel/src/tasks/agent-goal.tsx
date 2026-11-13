@@ -1,26 +1,9 @@
 /**
- * agent-goal.tsx -- an agent's goal as its tab draws it: the row docked over the message box, and the notices its moves leave in the transcript.
+ * agent-goal.tsx -- an agent's goal as its tab draws it: the row docked over the message box, built as the pull request's row is (`agent-published.tsx`), and the notices its moves leave in the transcript.
  *
- * The row is a card of one row, as the pull request's is over it
- * (`agent-published.tsx`): the goal's condition on one line, where it stands
- * at the row's end, the goal whole and how far it has run in the card its
- * hint hangs, and its acts at its end as a queued message's are: Pause,
- * Resume and Clear. The row moves the moment a `/goal` line goes, an act's
- * or one typed in the box, rather than once the harness says the goal moved
- * (`goalAsShown`). A goal that wants the
- * developer says so on its own row, in its tone (`goalTone`): paused or out
- * of budget in the attention tone, a paused one's play standing at its end where
- * Pause stood, and
- * a blocked one in the danger tone. The notices are what the goal
- * did, where it did it: each verdict of the checker, and an end other than
- * met, as a card a check's line is drawn as (`line-cards.tsx`), the
- * checker's reason in its fold, the reason's first line on its head while it
- * is folded, and its end once met, and a pause, a resume, or a clear as a
- * trail across the transcript, as a new session's is, a little room around
- * each. Its setting draws nothing, since the developer's `/goal` message says
- * it just above. The goal is read from those notices
- * (`@repo/features/agent-goal-model`). While the Goals experiment is off,
- * neither stands anywhere.
+ * The goal is read from those notices (`@repo/features/agent-goal-model`),
+ * and the row moves the moment a `/goal` line goes rather than once the
+ * harness answers. While the Goals experiment is off, neither stands anywhere.
  */
 
 import {
@@ -29,6 +12,7 @@ import {
   GOAL_ASK_WAIT_MS,
   goalAsShown,
   goalSettled,
+  goalVerdict,
   readGoal,
 } from "@repo/features/agent-goal-model";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
@@ -62,7 +46,7 @@ import {
 import { CircleCheckIcon, CircleSlashIcon, GLYPH } from "@repo/ui/icons";
 import { GOAL_EVENT, type GoalNotice } from "@repo/wire/ui-messages";
 import { useQuery } from "@tanstack/react-query";
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { createContext, type ReactNode, useContext, useEffect, useMemo, useState } from "react";
 import { PLAN_BODY_LAYOUT, Plan, PlanContent, PlanHeader, PlanIcon } from "../ai-elements/plan.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
@@ -94,6 +78,9 @@ const TRAILS: ReadonlySet<GoalNotice["event"]> = new Set([
   GOAL_EVENT.CLEARED,
 ]);
 
+/** The conditions the transcript's goals stand under (`goalConditions`), which a verdict must name to be drawn as a goal's: Claude Code says a project's own Stop hook in the same shape. */
+export const GoalConditions = createContext<ReadonlySet<string>>(new Set());
+
 /** How much of its budget the goal spent, as its card says it once it settled: "184k tokens", "184k of 500k tokens". */
 function tokenWords(tokens: number, budget: number | null): string {
   return budget === null
@@ -101,22 +88,12 @@ function tokenWords(tokens: number, budget: number | null): string {
     : `${TOKENS.format(tokens)} of ${TOKENS.format(budget)} tokens`;
 }
 
-/**
- * Whether the harness counts the goal's turns, as Claude Code's checker does
- * with each verdict; Codex counts tokens instead, said only as the goal moves,
- * so a running Codex goal's count is never fresh and goes unsaid until it
- * settles.
- */
+/** Whether the harness counts the goal's turns (Claude Code) rather than its tokens (Codex, the one harness whose notices carry tokens). */
 function countsTurns(goal: AgentGoal): boolean {
   return goal.tokens === null;
 }
 
-/**
- * The tone of a goal that wants the developer: paused or out of budget,
- * which only they can set going again, or one the checker found can't be
- * met; none for a goal under way, stopped, or met, which wants nothing of
- * them.
- */
+/** The tone of a goal that wants the developer: paused or out of budget in the attention tone, blocked in the danger tone. */
 function goalTone(goal: AgentGoal): StatusTone | undefined {
   switch (goal.state) {
     case AGENT_GOAL_STATE.PAUSED:
@@ -149,7 +126,6 @@ function GoalStanding({ goal, working }: { goal: AgentGoal; working: boolean }):
     case AGENT_GOAL_STATE.PAUSED:
       return <span className={`${STANDING_CLASS} font-label text-attention`}>Paused</span>;
     case AGENT_GOAL_STATE.MET:
-      // Note that the tick says the goal was met, in the ink a passed check wears, and its words say what it took.
       return (
         <span className={`${STANDING_CLASS} text-muted-foreground`}>
           <CircleCheckIcon
@@ -157,7 +133,7 @@ function GoalStanding({ goal, working }: { goal: AgentGoal; working: boolean }):
             aria-hidden="true"
           />
           <VisuallyHidden>Met in</VisuallyHidden>
-          {goal.tokens === null ? turnWords(goal.turns) : `${TOKENS.format(goal.tokens)} tokens`}
+          {countsTurns(goal) ? turnWords(goal.turns) : `${TOKENS.format(goal.tokens ?? 0)} tokens`}
         </span>
       );
     case AGENT_GOAL_STATE.IMPOSSIBLE:
@@ -206,15 +182,7 @@ function GoalCard({ goal, working }: { goal: AgentGoal; working: boolean }): Rea
   );
 }
 
-/**
- * The goal over the message box, while one stands: nothing where the agent
- * has none. `onPause`, `onResume` and `onClear` send the harness its
- * command, and are none where the reader may not write to the agent or the
- * harness takes no such command (only Codex pauses a goal). Its acts stand
- * at its end as a queued message's do (`agent-queue-dock.tsx`), on hover:
- * Pause while it runs and Clear until it settles; a paused goal's play, in
- * Pause's place, stands at rest, since the agent waits on it.
- */
+/** The goal over the message box, while one stands. Each act is none where the reader may not write to the agent or the harness takes no such command; a paused goal's play stands at rest, since the agent waits on it. */
 export function GoalDock({
   messages,
   going,
@@ -226,8 +194,8 @@ export function GoalDock({
 }: {
   /** The transcript as the service stored it: a line still on its way, or refused, says nothing of the goal. */
   messages: readonly AgentTranscriptMessage[];
-  /** The lines the developer sent that the transcript has not read back yet, a goal line among them moving the goal at once. */
-  going: readonly { readonly id: string; readonly text: string }[];
+  /** The words of the lines the developer sent that the transcript has not read back yet, a goal line among them moving the goal at once. */
+  going: readonly string[];
   /** Whether older pages of the transcript stand unread, which may hold the goal's setting. */
   older: boolean;
   /** Whether the agent is at work now, which a running goal's row counts its time by. */
@@ -325,11 +293,13 @@ function trailGlyph(event: GoalNotice["event"]): ReactNode {
 }
 
 /** One move of the goal where it happened in the transcript: nothing for its setting, a trail for its end once met and each move of its standing, and a card for each verdict and any other end, the reason in its fold. */
-export function GoalNoticeView({ notice }: { notice: GoalNotice }): ReactNode {
+export function GoalNoticeView({ notice: stored }: { notice: GoalNotice }): ReactNode {
   const goalsOn = useGoalsOn();
+  const conditions = useContext(GoalConditions);
+  const notice = stored.event === GOAL_EVENT.NOT_MET ? goalVerdict(stored, conditions) : stored;
 
-  // Note that the goal's setting draws nothing, because the developer's own `/goal` message says it just above, and the row says it took.
-  if (!goalsOn || notice.event === GOAL_EVENT.SET) return null;
+  // Note that the goal's setting draws nothing, because the developer's own `/goal` message says it just above, and a project's own Stop hook draws nothing, as before goals.
+  if (!goalsOn || notice === undefined || notice.event === GOAL_EVENT.SET) return null;
 
   if (TRAILS.has(notice.event)) {
     return (

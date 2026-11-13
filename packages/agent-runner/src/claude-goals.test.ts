@@ -2,10 +2,10 @@
  * claude-goals.test.ts -- which of Claude Code's transcript entries the store's appends hold as a settled goal, and that every entry still reaches the store.
  */
 
-import { appendFileSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { appendFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionStore } from "@anthropic-ai/claude-agent-sdk";
+import { temporaryDirectory } from "@repo/wire/testing";
 import { GOAL_EVENT } from "@repo/wire/ui-messages";
 import { MutableRef } from "effect";
 import { describe, expect, it } from "vitest";
@@ -68,7 +68,7 @@ describe("goalWatchedStore", () => {
         condition: CONDITION,
         reason: "All pass.",
         turns: 2,
-        tokens: 988,
+        tokens: null,
         tokenBudget: null,
       },
       {
@@ -103,8 +103,8 @@ describe("goalWatchedStore", () => {
 });
 
 describe("goalWatchedFile", () => {
-  it("holds the goals the CLI's own transcript settles once the session starts, never one an earlier launch settled, and leaves a line not yet ended for the next read", async () => {
-    const folder = mkdtempSync(join(tmpdir(), "claude-goals-"));
+  it("holds the goals the CLI's own transcript settles once the session starts, never one an earlier launch settled, and leaves a line not yet ended for the next read", async (t) => {
+    const folder = await temporaryDirectory(t, "claude-goals-");
     const path = join(folder, "session.jsonl");
 
     const line = (
@@ -113,41 +113,37 @@ describe("goalWatchedFile", () => {
 
     const held = MutableRef.make<readonly RunnerGoal[]>([]);
 
-    try {
-      // A goal met in an earlier launch of the session.
-      writeFileSync(path, line(goalStatus({ met: true, reason: "Met before." })));
-      const watched = goalWatchedFile(held);
-      const [start] = watched.hooks.SessionStart?.[0]?.hooks ?? [];
-      await start?.(
-        {
-          hook_event_name: "SessionStart",
-          session_id: "s",
-          transcript_path: path,
-          cwd: folder,
-          source: "resume",
-        },
-        undefined,
-        { signal: new AbortController().signal },
-      );
+    // A goal met in an earlier launch of the session.
+    writeFileSync(path, line(goalStatus({ met: true, reason: "Met before." })));
+    const watched = goalWatchedFile(held);
+    const [start] = watched.hooks.SessionStart?.[0]?.hooks ?? [];
+    await start?.(
+      {
+        hook_event_name: "SessionStart",
+        session_id: "s",
+        transcript_path: path,
+        cwd: folder,
+        source: "resume",
+      },
+      undefined,
+      { signal: new AbortController().signal },
+    );
 
-      const met = goalStatus({ met: true, reason: "All pass.", iterations: 2 });
-      appendFileSync(path, line({ type: "user", uuid: "u" }) + line(met));
-      appendFileSync(path, JSON.stringify(goalStatus({ failed: true })));
-      await watched.settle();
+    const met = goalStatus({ met: true, reason: "All pass.", iterations: 2 });
+    appendFileSync(path, line({ type: "user", uuid: "u" }) + line(met));
+    appendFileSync(path, JSON.stringify(goalStatus({ failed: true })));
+    await watched.settle();
 
-      expect(MutableRef.get(held)).toEqual([
-        {
-          type: RUNNER_EVENT.GOAL,
-          event: GOAL_EVENT.MET,
-          condition: CONDITION,
-          reason: "All pass.",
-          turns: 2,
-          tokens: null,
-          tokenBudget: null,
-        },
-      ]);
-    } finally {
-      rmSync(folder, { recursive: true, force: true });
-    }
+    expect(MutableRef.get(held)).toEqual([
+      {
+        type: RUNNER_EVENT.GOAL,
+        event: GOAL_EVENT.MET,
+        condition: CONDITION,
+        reason: "All pass.",
+        turns: 2,
+        tokens: null,
+        tokenBudget: null,
+      },
+    ]);
   });
 });

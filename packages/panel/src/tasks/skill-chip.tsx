@@ -23,7 +23,7 @@ import {
 } from "react";
 import { afterPaint } from "../after-paint.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
-import { CommandRef, SENT_COMMANDS, SENT_SESSION_COMMANDS } from "./command-ref.js";
+import { CommandRef, sentCommands } from "./command-ref.js";
 import { WordFilesContext } from "./file-chips.js";
 import type { SkillSource } from "./skill-picker.js";
 import { opensFile, SkillRef, type SkillSubject, type SkillWithFile } from "./skill-ref.js";
@@ -288,7 +288,7 @@ export function SentWords({
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.GOALS) }).data === true;
 
   // Note that the command a message opens with is its chip even where a skill shares its name, since the command is what ran; `/goal` is words while the Goals experiment is off.
-  const leading = leadingCommandToken(text, goalsOn ? SENT_COMMANDS : SENT_SESSION_COMMANDS);
+  const leading = leadingCommandToken(text, sentCommands(goalsOn));
 
   const chips = [
     ...(leading === undefined ? [] : [commandChip(text, leading)]),

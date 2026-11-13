@@ -7,10 +7,11 @@ import { GOAL_EVENT, GOAL_PART, type GoalNotice } from "@repo/wire/ui-messages";
 import { describe, expect, it } from "vitest";
 import {
   AGENT_GOAL_STATE,
-  agentGoal,
   GOAL_ASK_WAIT_MS,
   goalAsShown,
+  goalConditions,
   goalControlLine,
+  goalVerdict,
   readGoal,
 } from "./agent-goal-model.js";
 import { AGENT_SENDER, type AgentTranscriptMessage } from "./agent-wire.js";
@@ -47,17 +48,27 @@ function line(id: string): AgentTranscriptMessage {
   return { id, role: MESSAGE_ROLE.USER, parts: [{ type: "text", text: "go on" }] };
 }
 
-describe("agentGoal", () => {
-  it("counts the checker's verdicts as turns and keeps its newest reason, past a project's own Stop hook", () => {
-    const goal = agentGoal([
+/** The goal a transcript leaves standing, as `readGoal` reads it. */
+function goalOf(messages: readonly AgentTranscriptMessage[], older = false) {
+  return readGoal(messages, older).goal;
+}
+
+describe("readGoal", () => {
+  it("counts the checker's verdicts as turns and keeps its newest reason, past a project's own Stop hook, which is no goal's verdict to draw", () => {
+    // A project's own blocking Stop hook says its feedback in the same shape, under its own prompt.
+    const hook = notice(GOAL_EVENT.NOT_MET, { condition: "lint is clean", reason: "Run lint." });
+
+    const messages = [
       turn("t1", [
         notice(GOAL_EVENT.SET),
         notice(GOAL_EVENT.NOT_MET, { reason: "3 tests fail." }),
-        // A project's own blocking Stop hook says its feedback in the same shape, under its own prompt.
-        notice(GOAL_EVENT.NOT_MET, { condition: "lint is clean", reason: "Run lint." }),
+        hook,
         notice(GOAL_EVENT.NOT_MET, { reason: "1 test fails." }),
       ]),
-    ]);
+    ];
+
+    const goal = goalOf(messages);
+    expect(goalVerdict(hook, goalConditions(messages))).toBeUndefined();
 
     expect(goal).toEqual({
       condition: CONDITION,
@@ -67,14 +78,13 @@ describe("agentGoal", () => {
       tokens: null,
       tokenBudget: null,
       reason: "1 test fails.",
-      messageId: "t1",
     });
   });
 
   it("reads a verdict whose condition holds the words that part it from its reason as the goal's", () => {
     const condition = "lint says [ok]: nothing to fix";
 
-    const goal = agentGoal([
+    const goal = goalOf([
       turn("t1", [
         notice(GOAL_EVENT.SET, { condition }),
         // The service split the CLI's feedback at its first "]: ", inside the condition.
@@ -90,15 +100,15 @@ describe("agentGoal", () => {
 
   it("takes a goal up from a move its harness said where its setting is on an older page, unread, but never from a verdict alone", () => {
     const met = [turn("t9", [notice(GOAL_EVENT.MET, { reason: "All pass.", turns: 4 })])];
-    expect(agentGoal(met, true)).toMatchObject({
+    expect(goalOf(met, true)).toMatchObject({
       condition: CONDITION,
       state: AGENT_GOAL_STATE.MET,
       turns: 4,
     });
     // A verdict alone may be a project's own Stop hook's word, which moves nothing.
     const verdict = [turn("t9", [notice(GOAL_EVENT.NOT_MET, { reason: "Run lint." })])];
-    expect(agentGoal(verdict, true)).toBeUndefined();
-    expect(agentGoal(met, false)).toBeUndefined();
+    expect(goalOf(verdict, true)).toBeUndefined();
+    expect(goalOf(met, false)).toBeUndefined();
   });
 
   it("stands settled until the developer writes again, and stands nowhere once cleared", () => {
@@ -109,19 +119,19 @@ describe("agentGoal", () => {
       ]),
     ];
 
-    expect(agentGoal(met)).toMatchObject({
+    expect(goalOf(met)).toMatchObject({
       state: AGENT_GOAL_STATE.MET,
       turns: 2,
       reason: "All pass.",
     });
-    expect(agentGoal([...met, line("l2")])).toBeUndefined();
+    expect(goalOf([...met, line("l2")])).toBeUndefined();
     // A pause, resume, or clear the transcript draws no message for leaves it standing too, as the row's own act did.
     expect(
-      agentGoal([...met, { ...line("p"), parts: [{ type: "text", text: "/goal pause" }] }]),
+      goalOf([...met, { ...line("p"), parts: [{ type: "text", text: "/goal pause" }] }]),
     ).toMatchObject({ state: AGENT_GOAL_STATE.MET });
     // A wakeup the app sent is no line of the developer's, and leaves the goal's end standing.
     expect(
-      agentGoal([...met, { ...line("w"), sentBy: { kind: AGENT_SENDER.APP, name: "Vespin" } }]),
+      goalOf([...met, { ...line("w"), sentBy: { kind: AGENT_SENDER.APP, name: "Vespin" } }]),
     ).toMatchObject({
       state: AGENT_GOAL_STATE.MET,
     });
@@ -140,7 +150,7 @@ describe("agentGoal", () => {
       { ...line("s"), arrivedIn: { journalId: "t1", afterStep: 1 } },
     ];
 
-    expect(agentGoal(steered)).toMatchObject({ state: AGENT_GOAL_STATE.MET });
+    expect(goalOf(steered)).toMatchObject({ state: AGENT_GOAL_STATE.MET });
 
     const cleared = [
       turn("t1", [notice(GOAL_EVENT.SET)]),
@@ -148,7 +158,7 @@ describe("agentGoal", () => {
       turn("t2", [notice(GOAL_EVENT.CLEARED)]),
     ];
 
-    expect(agentGoal(cleared)).toBeUndefined();
+    expect(goalOf(cleared)).toBeUndefined();
   });
 });
 
@@ -166,25 +176,25 @@ describe("goalAsShown", () => {
     const paused = [...running, said("u1", "/goal pause", 5_000)];
 
     // A line still on its way sets a goal at once.
-    expect(
-      goalAsShown(readGoal([]), [{ id: "s1", text: `/goal ${CONDITION}` }], false, 0)?.state,
-    ).toBe(AGENT_GOAL_STATE.ACTIVE);
-    // Pause stands while the harness has said nothing of it.
-    expect(goalAsShown(readGoal(paused), [], false, 6_000)?.state).toBe(AGENT_GOAL_STATE.PAUSED);
-    // An ask the harness never answers stops moving the goal once it waited, unless the agent still works on it.
-    expect(goalAsShown(readGoal(paused), [], false, 5_000 + GOAL_ASK_WAIT_MS)?.state).toBe(
+    expect(goalAsShown(readGoal([]), [`/goal ${CONDITION}`], false, 0)?.state).toBe(
       AGENT_GOAL_STATE.ACTIVE,
     );
+    // Pause stands while the harness has said nothing of it.
+    expect(goalAsShown(readGoal(paused), [], false, 6_000)?.state).toBe(AGENT_GOAL_STATE.PAUSED);
+    // An ask the harness never answers stops moving the goal once it waited, the agent at work or not.
     expect(goalAsShown(readGoal(paused), [], true, 5_000 + GOAL_ASK_WAIT_MS)?.state).toBe(
-      AGENT_GOAL_STATE.PAUSED,
+      AGENT_GOAL_STATE.ACTIVE,
+    );
+    // A goal set while the agent works waits past that, for a cold start to read it.
+    const set = [said("u0", `/goal ${CONDITION}`, 5_000)];
+    expect(goalAsShown(readGoal(set), [], true, 5_000 + GOAL_ASK_WAIT_MS)?.state).toBe(
+      AGENT_GOAL_STATE.ACTIVE,
     );
     // The harness's word settles it: here, it resumed the goal again.
     const answered = [...paused, turn("t2", [notice(GOAL_EVENT.RESUMED)])];
     expect(goalAsShown(readGoal(answered), [], false, 6_000)?.state).toBe(AGENT_GOAL_STATE.ACTIVE);
     // Clear takes the row away at once.
-    expect(goalAsShown(readGoal(running), [{ id: "s2", text: "/goal clear" }], true, 0)).toBe(
-      undefined,
-    );
+    expect(goalAsShown(readGoal(running), ["/goal clear"], true, 0)).toBe(undefined);
   });
 });
 

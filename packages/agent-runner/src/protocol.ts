@@ -24,7 +24,7 @@ import type {
   SessionCronSummary,
 } from "@anthropic-ai/claude-agent-sdk";
 import type { WireValue } from "@repo/wire";
-import type { GoalEvent } from "@repo/wire/ui-messages";
+import type { GoalNotice } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 import type { ServerNotification } from "./codex-protocol/index.js";
 import type { CodexErrorInfo } from "./codex-protocol/v2/index.js";
@@ -970,18 +970,8 @@ export interface RunnerWaiting {
  * settled in (`claude-goals.ts`); the checker's verdicts before it are on the
  * stream itself, as the CLI's `Stop hook feedback` lines.
  */
-export interface RunnerGoal {
+export interface RunnerGoal extends GoalNotice {
   readonly type: typeof RUNNER_EVENT.GOAL;
-  readonly event: GoalEvent;
-  readonly condition: string;
-  /** The harness's reason, where it gave one. */
-  readonly reason: string | null;
-  /** The turns the goal ran, as the harness counted them; null where it did not say. */
-  readonly turns: number | null;
-  /** The tokens the goal spent, as the harness counted them; null where it did not say. */
-  readonly tokens: number | null;
-  /** The goal's token budget; null where it has none or the harness did not say. */
-  readonly tokenBudget: number | null;
 }
 
 /** The CONNECTION_LOST event: the provider's host the launch could not reach and now probes. */

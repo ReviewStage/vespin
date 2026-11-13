@@ -342,7 +342,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService([], "Working toward the goal.");
-      const { cli, prompted, write, run } = yield* launch(GOAL_CLEARED_TURN, service);
+      const { prompted, write, run } = yield* launch(GOAL_CLEARED_TURN, service);
       yield* write(CONFIG);
       yield* write(FIRST_MESSAGE);
       yield* service.seen;
@@ -350,8 +350,12 @@ it.effect(
       yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: "/goal clear" }] });
 
       assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
-      assert.equal(cli.interrupts, 1);
-      assert.equal(cli.prompts.length, 2);
+      // The cut-off turn's result, then the clear's own, before the launch's end.
+      assert.deepEqual(kinds(service.applied).slice(-3), [
+        "result/error_during_execution",
+        "result/success",
+        RUNNER_EVENT.END,
+      ]);
     }),
 );
 
