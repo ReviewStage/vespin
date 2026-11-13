@@ -16,6 +16,12 @@
     color: var(--ui-color-text-muted);
   }
 
+  /* Note that a card's head row stays bare, because the card already wears
+     the outline: the row ringed again would draw a second edge inside it. */
+  .ui-stepped-back .ui-choice-card-head > .ui-choice {
+    box-shadow: none;
+  }
+
   .ui-stepped-back :is(.ui-choice-detail, .ui-checkbox[data-read-only="true"]) {
     color: var(--ui-color-text-muted);
   }

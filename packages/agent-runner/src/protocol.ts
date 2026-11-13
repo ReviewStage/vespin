@@ -899,27 +899,14 @@ export const RUNNER_WARM = {
   IDLE_CAP_MS: 60 * 60 * 1_000,
 } as const;
 
-/** The bounds of a turn's summary of files (`TurnFilesSummary`). */
-export const TURN_FILES_BOUNDS = {
-  /** The most files a summary names; the rest are counted in its totals alone. */
-  MAX_FILES: 50,
-} as const;
-
-/** One file a turn changed, where it stands after the turn, with the lines the turn added to it and removed from it. */
-export interface TurnFile {
-  readonly path: string;
-  readonly additions: number;
-  readonly deletions: number;
-}
-
 /**
  * The files a turn changed, as git diffs its checkout from the snapshot
- * before it to the checkout as the turn left it (`checkout-diff.ts`): the
- * first `TURN_FILES_BOUNDS.MAX_FILES` files, and how many files and lines
- * the turn changed over all of them.
+ * before it to the checkout as the turn left it (`checkout-diff.ts`): how
+ * many files it changed, and the lines it added and removed over all of
+ * them. It names no file; the turn's Turn changes tab reads them from the
+ * same diff.
  */
 export interface TurnFilesSummary {
-  readonly files: readonly TurnFile[];
   readonly total: number;
   readonly additions: number;
   readonly deletions: number;

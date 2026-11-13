@@ -1,5 +1,5 @@
 /**
- * task-following.ts -- the members following a task: a member follows it or stops, switches whether its agents may use their machines, or adds another member; a member's message makes them follow; and the followers an agent's task tools read.
+ * task-following.ts -- the members following a task: a member follows it or stops, switches whether its agents may use their machines, or adds or removes another member; a member's message makes them follow; and the followers an agent's task tools read.
  *
  * Every door of following stands over this one module: the hosted
  * `taskFollowers` procedures, the member words path (`steerMemberWords` and a
@@ -116,11 +116,20 @@ export function addTaskFollowerAsked(
 
 /** The account stops following the task; its assignee is refused as not permitted, since they follow it while assigned. */
 export function unfollowTaskAsked(userId: string, taskId: string): FollowingEffect {
+  return removeTaskFollowerAsked(userId, taskId, userId);
+}
+
+/** A follower of the task taken away, the account itself or another member, as the Following popover's Remove asks; the assignee is refused as not permitted. */
+export function removeTaskFollowerAsked(
+  userId: string,
+  taskId: string,
+  followerId: string,
+): FollowingEffect {
   return Effect.gen(function* () {
     yield* followingOnFor(userId, taskId);
 
     const unfollowed = yield* hostedStoreOrUnavailable(
-      unfollowTask(userId, taskId).pipe(
+      unfollowTask(userId, taskId, followerId).pipe(
         Effect.map((written) => Result.succeed(written)),
         Effect.catchTag("TaskFollowerIsAssignee", (refused) =>
           Effect.succeed(Result.fail(refused)),
