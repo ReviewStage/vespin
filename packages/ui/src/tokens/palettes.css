@@ -294,3 +294,12 @@
   --ui-color-chart-4: #e4106e;
   --ui-color-chart-5: #8f8f8f;
 }
+
+/* A card's edge, in whichever palette stands: the border's hairline. It is
+   defined here once, so `@repo/ui`'s `Card` (`border-card-edge`) and the
+   frames that draw a card's look without it (a diff's file card, the
+   editor's open code block, the window's sheets) wear the same edge, as
+   they stand on the same shadow (`--ui-shadow-card`). */
+[data-ui-profile] {
+  --ui-color-card-edge: var(--ui-color-border);
+}

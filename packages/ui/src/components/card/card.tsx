@@ -142,12 +142,13 @@ const LOOK_CLASS: Record<CardLook, string> = {
 
 /**
  * The one edge every card wears, defined here once so no card draws its own:
- * the border's hairline, but for a well's, which is there but unseen, so
+ * the card's edge (`--ui-color-card-edge`), which the frames that cannot
+ * draw this component read too, but for a well's, which is there but unseen, so
  * ringed as a drop target the card keeps its size, the ring fading in as a
  * hover does, unless the card lifts, whose own transition says it.
  */
 function edgeClass(look: CardLook): string {
-  return look === CARD_LOOK.WELL ? "border-transparent" : "border-border";
+  return look === CARD_LOOK.WELL ? "border-transparent" : "border-card-edge";
 }
 
 /** The shadow a card stands on, by `CARD_SHADOW`. */

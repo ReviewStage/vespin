@@ -174,7 +174,7 @@
    opening the text moves no block: the same type, inset, colors, and gaps.
    Note that the header stays put while long lines scroll sideways under it. */
 .description-document-text .description-code-block {
-  border: 1px solid var(--ui-color-border);
+  border: 1px solid var(--ui-color-card-edge);
   border-radius: var(--ui-control-radius);
   background: var(--ui-color-code-ground);
   box-shadow: var(--ui-shadow-card);
