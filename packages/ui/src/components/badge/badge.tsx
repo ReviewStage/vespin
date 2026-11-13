@@ -1,3 +1,4 @@
+import { labelFill, PROVIDER_COLOR } from "@repo/features/label-fill";
 import { Predicate } from "effect";
 import type { CSSProperties, ReactNode } from "react";
 import { cssCustomProperties } from "../../css.js";
@@ -25,11 +26,8 @@ import type { VisuallyHiddenUnder } from "../visually-hidden/visually-hidden.js"
  * spelling GitHub and Linear answer; any other is drawn in the muted ink.
  * Where the color is how a reader tells one from another, a pull request's
  * labels in its header, the badge is filled with it instead (`fill`), as
- * GitHub draws a label: a solid fill in the light appearance, its words dark
- * or white by how light the fill reads (Rec. 709, at GitHub's own threshold),
- * edged a shade darker so a white label still stands on a white ground; and
- * in the dark a tint of the color, its words in the color itself, lifted
- * toward white where it is too dark to read. A filled badge keeps its words
+ * GitHub draws a label, in the inks `@repo/features/label-fill` reads from
+ * the color for each appearance. A filled badge keeps its words
  * on one line, fading them out at their end where the row cuts them short,
  * in their own direction (`<bdi>`), and any other spelling draws it neutral.
  *
@@ -44,9 +42,6 @@ import type { VisuallyHiddenUnder } from "../visually-hidden/visually-hidden.js"
  * utilities cannot say: the words given up under a room's width.
  */
 
-/** The one spelling of a provider's color a swatch paints: six hex digits, with or without its `#`. */
-const SWATCH_COLOR = /^#?([0-9a-f]{6})$/iu;
-
 /** The face a badge stands on: the chip's own, a provider's color, or the ink. */
 const BADGE_FACE = {
   PLAIN: "plain",
@@ -57,73 +52,19 @@ const BADGE_FACE = {
 /** A provider's color as a dot before the words, in the muted ink until the badge names one it can paint. */
 const SWATCH = "ui-badge-swatch size-badge-swatch flex-none rounded-full bg-muted-foreground";
 
-/** How light a fill reads, past which GitHub writes on it in dark words rather than white. */
-const LIGHT_FILL = 0.453;
-
-/** The words written on a light fill, and on a dark one. */
-const DARK_WORDS = "#24292f";
-const LIGHT_WORDS = "#ffffff";
-
-/** How light a filled badge's words must read on the dark ground; a darker color is lifted toward white until they do. */
-const DARK_GROUND_WORDS = 0.6;
-
-/** How much darker a light fill's edge is than its fill. */
-const EDGE_SHADE = 0.15;
-
-/** The alpha a tint and its edge wear on the dark ground, as two hex digits: an eighth, and a quarter. */
-const TINT_ALPHA = "20";
-const EDGE_ALPHA = "40";
-
-type Rgb = readonly [number, number, number];
-
-/** A provider's color as its three channels; none for any spelling but six hex digits. */
-function channelsOf(color: string): Rgb | undefined {
-  const hex = SWATCH_COLOR.exec(color.trim())?.[1];
-
-  if (hex === undefined) return undefined;
-  const channel = (at: number) => Number.parseInt(hex.slice(at, at + 2), 16);
-
-  return [channel(0), channel(2), channel(4)];
-}
-
-/** How light a color reads, from nought to one. */
-function lightnessOf([red, green, blue]: Rgb): number {
-  return (red * 0.2126 + green * 0.7152 + blue * 0.0722) / 255;
-}
-
-/** A color moved toward `toward` (0 or 255) by `by`, from nought to one. */
-function mixed([red, green, blue]: Rgb, toward: number, by: number): Rgb {
-  const move = (channel: number) => Math.round(channel + (toward - channel) * by);
-
-  return [move(red), move(green), move(blue)];
-}
-
-/** A color spelled as six hex digits after a `#`. */
-function hexOf(rgb: Rgb): string {
-  return `#${rgb.map((channel) => channel.toString(16).padStart(2, "0")).join("")}`;
-}
-
-/** The fill, edge, and words a filled badge is drawn in, in each appearance; none for a color it cannot paint. */
+/** The fill, edge, and words a filled badge is drawn in, in each appearance (`labelFill`); none for a color it cannot paint. */
 function fillColors(color: string): CSSProperties | undefined {
-  const rgb = channelsOf(color);
+  const inks = labelFill(color);
 
-  if (rgb === undefined) return undefined;
-  const fill = hexOf(rgb);
-  const lightness = lightnessOf(rgb);
-
-  // Note that the lift is how far toward white the words move for their lightness to reach the bound.
-  const lift =
-    lightness >= DARK_GROUND_WORDS ? 0 : (DARK_GROUND_WORDS - lightness) / (1 - lightness);
-
-  const words = hexOf(mixed(rgb, 255, lift));
+  if (inks === undefined) return undefined;
 
   return cssCustomProperties({
-    "--ui-badge-fill-light": fill,
-    "--ui-badge-edge-light": hexOf(mixed(rgb, 0, EDGE_SHADE)),
-    "--ui-badge-words-light": lightness > LIGHT_FILL ? DARK_WORDS : LIGHT_WORDS,
-    "--ui-badge-fill-dark": `${fill}${TINT_ALPHA}`,
-    "--ui-badge-edge-dark": `${words}${EDGE_ALPHA}`,
-    "--ui-badge-words-dark": words,
+    "--ui-badge-fill-light": inks.light.fill,
+    "--ui-badge-edge-light": inks.light.edge,
+    "--ui-badge-words-light": inks.light.words,
+    "--ui-badge-fill-dark": inks.dark.fill,
+    "--ui-badge-edge-dark": inks.dark.edge,
+    "--ui-badge-words-dark": inks.dark.words,
   });
 }
 
@@ -169,7 +110,7 @@ export function Badge({
   /** The state's words, which the color only repeats; a filled badge's are one string. */
   children: ReactNode;
 }): React.JSX.Element {
-  const color = swatch === undefined ? undefined : SWATCH_COLOR.exec(swatch)?.[1];
+  const color = swatch === undefined ? undefined : PROVIDER_COLOR.exec(swatch)?.[1];
   const filled = fill === undefined ? undefined : fillColors(fill);
   const marked = icon != null || swatch !== undefined || tone !== STATUS_TONE.NEUTRAL;
   // Note that the tone's dot stands only where the words stand alone, because a glyph or a swatch already says the state.

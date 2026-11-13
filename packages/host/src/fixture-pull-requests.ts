@@ -108,7 +108,8 @@ function pullRequestOf(
   number: number,
   title: string,
   head: string,
-  standing: Pick<AgentOverviewPullRequest, "merge" | "merging" | "requested">,
+  standing: Pick<AgentOverviewPullRequest, "merge" | "merging" | "requested"> &
+    Partial<Pick<AgentOverviewPullRequest, "labels">>,
 ): AgentOverviewPullRequest {
   return {
     number,
@@ -133,6 +134,12 @@ const READY = pullRequestOf(
   {
     merge: MERGE_STATE.CLEAN,
     requested: [],
+    // Note that its labels run from a light fill to a dark one, so a shot shows each kind of words, dark and white.
+    labels: [
+      { name: "enhancement", color: "a2eeef" },
+      { name: "invites", color: "1d76db" },
+      { name: "needs design", color: "1d1d1f" },
+    ],
     merging: {
       methods: [MERGE_METHOD.SQUASH, MERGE_METHOD.MERGE],
       autoMergeAllowed: true,

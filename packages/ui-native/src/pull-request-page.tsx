@@ -5,6 +5,7 @@ import {
   Host,
   HStack,
   Menu,
+  ScrollView,
   Button as SwiftUIButton,
   Text,
   TextField,
@@ -30,12 +31,12 @@ import {
   textInputAutocapitalization,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import type { GitHubPerson, PullRequestState } from "@repo/features/agent-wire";
+import type { GitHubPerson, PullRequestLabel, PullRequestState } from "@repo/features/agent-wire";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
 import { agoText } from "@repo/features/time-format";
 import { type ReactElement, useEffect, useState } from "react";
 import { useScaledSize } from "./accessibility.js";
-import { FieldChip } from "./button.js";
+import { FieldChip, LabelChip } from "./button.js";
 import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { RowFrame, RowHead } from "./list-row.js";
@@ -78,6 +79,8 @@ type PullRequestHeadProps = {
   readonly sentence?: string | undefined;
   /** Who opened it and when; none until its read lands. */
   readonly opened?: Opened | undefined;
+  /** Its labels, in the order GitHub lists them; none until its read lands or where it has none. */
+  readonly labels?: readonly PullRequestLabel[] | undefined;
 };
 
 /** One branch, as the panel's header names it: Lucide's branch glyph, then its name in the monospaced face. */
@@ -146,9 +149,10 @@ function OpenedLine({ opened }: { readonly opened: Opened }) {
  * A pull request's heading, as a list's first row: its title in 20 pt
  * semibold with its number muted after it, then where it stands as a chip,
  * its state's glyph in GitHub's color and its word, then who opened it and
- * when, by their face, then its branches on a line of their own, the one it
- * merges into first, then GitHub's sentence of whether it would merge, in
- * the body's ink.
+ * when, by their face, then its labels filled with their colors, scrolling
+ * sideways where they run past the row, then its branches on a line of
+ * their own, the one it merges into first, then GitHub's sentence of
+ * whether it would merge, in the body's ink.
  */
 export function PullRequestHead({
   title,
@@ -159,6 +163,7 @@ export function PullRequestHead({
   branches,
   sentence,
   opened,
+  labels = [],
 }: PullRequestHeadProps) {
   const colors = useColors();
   const look = PULL_REQUEST_LOOK[pullRequestMarkState({ state, queued })];
@@ -188,6 +193,15 @@ export function PullRequestHead({
         <FieldChip label={stateLabel} mark={{ glyph: look.symbol, tone: look.tone }} />
       </HStack>
       {opened === undefined ? null : <OpenedLine opened={opened} />}
+      {labels.length === 0 ? null : (
+        <ScrollView axes="horizontal" showsIndicators={false}>
+          <HStack spacing={SPACE.TIGHT}>
+            {labels.map((label) => (
+              <LabelChip key={label.name} name={label.name} color={label.color} />
+            ))}
+          </HStack>
+        </ScrollView>
+      )}
       {branches === undefined ? null : (
         <HStack spacing={SPACE.TIGHT + 2}>
           <Branch name={branches.base} />

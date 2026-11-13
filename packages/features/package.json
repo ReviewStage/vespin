@@ -162,6 +162,7 @@
     "./landing-outcome": "./src/landing-outcome.js",
     "./link-home": "./src/link-home.js",
     "./link-preview-view": "./src/link-preview-view.js",
+    "./label-fill": "./src/label-fill.js",
     "./link-preview-wire": "./src/link-preview-wire.js",
     "./link-site": "./src/link-site.js",
     "./link-open": "./src/link-open.js",

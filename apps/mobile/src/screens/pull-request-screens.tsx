@@ -471,6 +471,7 @@ export function PullRequestScreen() {
                       mergedAt: pullRequest.mergedAt,
                     }
               }
+              labels={pullRequest?.labels}
             />
             {writes.note === undefined ? null : (
               <WriteNoteRow words={writes.note.words} said={writes.note.said} />
