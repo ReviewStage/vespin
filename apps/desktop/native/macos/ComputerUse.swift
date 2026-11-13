@@ -78,6 +78,11 @@ private let MANUAL_ACCESSIBILITY = "AXManualAccessibility"
 private let WEB_AREA_ROLE = "AXWebArea"
 /// How long an app is given to build its pages' tree the first time it is asked to.
 private let WEB_TREE_WAIT_SECONDS = 0.5
+/// The modifiers a menu item's shortcut names (`AXMenuItemCmdModifiers`), as the menu manager numbers them: ⌘ is meant unless `noCommand` is set.
+private let MENU_MODIFIER = (shift: 1, option: 2, control: 4, noCommand: 8)
+/// How deep into an app's menus, and through how many of their elements, a shortcut's item is looked for.
+private let MAX_MENU_DEPTH = 6
+private let MAX_MENU_ELEMENTS = 3000
 /// How long a press is given to show in the window's elements, and how often they are read again in that time.
 private let PRESS_SETTLE_SECONDS = 1.5
 private let PRESS_LOOK_SECONDS = 0.3
@@ -1024,8 +1029,9 @@ private func windowLines(_ app: NSRunningApplication) -> String {
 /**
  Presses an element through Accessibility, which needs no point and no
  focus, and answers pressed once the window's elements read differently from
- `before`, read just ahead of the press. Note that a press answered as taken
- is not proof it acted, since a browser may answer one it never acts on, so a
+ how they read just before the press, after the cursor has glided, so a page
+ that changes by itself meanwhile is not read as the press. Note that a press
+ answered as taken is not proof it acted, since a browser may answer one it never acts on, so a
  window that reads the same for `PRESS_SETTLE_SECONDS` answers
  pressed_unconfirmed. That is never an error, since many a press that acted
  changes nothing in its window, as a Send or one opening another window, and
@@ -1034,8 +1040,9 @@ private func windowLines(_ app: NSRunningApplication) -> String {
  pressed it already, so it is answered rather than pressed twice.
  */
 private func confirmedPress(
-    _ element: AXUIElement, of app: NSRunningApplication, named name: String, before: String
+    _ element: AXUIElement, of app: NSRunningApplication, named name: String
 ) async throws -> [String: Any]? {
+    let before = windowLines(app)
     let result = AXUIElementPerformAction(element, kAXPressAction as CFString)
     if result == .actionUnsupported { return nil }
     guard result == .success else {
@@ -1094,12 +1101,8 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
     let plain = button == BUTTON.left && count == 1
     if let index = integer(request, "element_index") {
         let element = try current.element(index)
-        // Note that the window is read before the cursor glides, so nothing the press does is read as the state before it.
-        let before = plain ? windowLines(app) : nil
         if let point = current.cursorPoint(index) { await cursorTo(point) }
-        if let before,
-            let answer = try await confirmedPress(element, of: app, named: "Element \(index)", before: before)
-        {
+        if plain, let answer = try await confirmedPress(element, of: app, named: "Element \(index)") {
             return answer
         }
         clickPoint(try current.center(index), session: current, button: button, count: count)
@@ -1110,11 +1113,9 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
     }
     let point = current.point(x: x, y: y)
     let target = plain ? pagePressTarget(at: point, of: app, session: current) : nil
-    let before = target.map { _ in windowLines(app) }
     await cursorTo(point)
-    if let target, let before,
-        let answer = try await confirmedPress(
-            target, of: app, named: "The page's element at \(Int(x)), \(Int(y))", before: before)
+    if let target,
+        let answer = try await confirmedPress(target, of: app, named: "The page's element at \(Int(x)), \(Int(y))")
     {
         return answer
     }
@@ -1174,17 +1175,63 @@ private func chord(_ name: String) throws -> (key: CGKeyCode, flags: CGEventFlag
     return (key, flags)
 }
 
+/**
+ The enabled item of the app's own menus whose shortcut is `key` with
+ `flags`, where the chord holds ⌘ and names one character; nothing where
+ none does. Note that the menu bar's first menu is the system's own, whose
+ items, such as Log Out, are never the app's to press, so it is passed over.
+ */
+private func menuItem(for key: String, flags: CGEventFlags, of app: NSRunningApplication) -> AXUIElement? {
+    guard flags.contains(.maskCommand), !flags.contains(.maskSecondaryFn), key.count == 1,
+        let bar = elementAttribute(AXUIElementCreateApplication(app.processIdentifier), kAXMenuBarAttribute)
+    else { return nil }
+    var modifiers = 0
+    if flags.contains(.maskShift) { modifiers |= MENU_MODIFIER.shift }
+    if flags.contains(.maskAlternate) { modifiers |= MENU_MODIFIER.option }
+    if flags.contains(.maskControl) { modifiers |= MENU_MODIFIER.control }
+    var pending = children(bar).dropFirst().map { (element: $0, depth: 0) }
+    var next = 0
+    while next < pending.count, next < MAX_MENU_ELEMENTS {
+        let found = pending[next]
+        next += 1
+        if text(found.element, kAXMenuItemCmdCharAttribute)?.uppercased() == key.uppercased(),
+            (attribute(found.element, kAXMenuItemCmdModifiersAttribute) as? Int) == modifiers,
+            (attribute(found.element, kAXEnabledAttribute) as? Bool) != false
+        {
+            return found.element
+        }
+        if found.depth < MAX_MENU_DEPTH {
+            pending += children(found.element).map { (element: $0, depth: found.depth + 1) }
+        }
+    }
+    return nil
+}
+
+/**
+ Presses a chord. Note that a ⌘ shortcut the app's menus hold is pressed
+ through its menu item, answered as any press is, since an app in the
+ background has no key window for a posted ⌘ key to reach, and pressing the
+ item keeps the app behind. Any other chord is posted to the app's window and
+ answers sent, since nothing tells whether the app took it.
+ */
 private func pressKey(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
     let app = try actedApp(request)
     let current = try session(app)
-    let pressed = try chord(try string(request, "key"))
+    let name = try string(request, "key")
+    let pressed = try chord(name)
+    let key = name.split(separator: "+").last.map { $0.lowercased() } ?? ""
+    if let item = menuItem(for: key, flags: pressed.flags, of: app),
+        let answer = try await confirmedPress(item, of: app, named: "The menu item for \(name)")
+    {
+        return answer
+    }
     for down in [true, false] {
         let event = CGEvent(keyboardEventSource: source, virtualKey: pressed.key, keyDown: down)
         event?.flags = pressed.flags
         post(event, to: current)
     }
-    return ["done": "pressed"]
+    return ["done": "sent"]
 }
 
 private let DIRECTION = (up: "up", down: "down", left: "left", right: "right")
