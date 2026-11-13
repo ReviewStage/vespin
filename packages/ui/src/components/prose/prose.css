@@ -427,3 +427,66 @@ blockquote.markdown-quote > * + * {
 .ui-markdown-flow > hr {
   margin-block: 1.5em;
 }
+
+/* GitHub's alerts (`markdown-alerts.tsx`): a quote opening on `[!NOTE]` and
+   its kin, drawn as GitHub draws one, a rule and a title in its kind's ink
+   over words in the flow's own. Its blocks, and those of a folded section
+   and a definition, which GitHub's rendering nests its words in, stand the
+   flow's gap apart as the flow's own do, so a bot's comment reads with the
+   description's rhythm wherever it nests its words; the title sits close
+   over what it names, as a heading does. These stand outside the components
+   layer, as the flow's own gaps do and for the same reason. */
+.ui-markdown-alert {
+  --ui-markdown-alert-ink: var(--ui-color-working);
+
+  margin: 0;
+  padding-left: 0.8em;
+  border-left: 3px solid var(--ui-markdown-alert-ink);
+  text-align: left;
+}
+
+.ui-markdown-alert[data-kind="tip"] {
+  --ui-markdown-alert-ink: var(--ui-color-complete);
+}
+
+.ui-markdown-alert[data-kind="important"] {
+  --ui-markdown-alert-ink: var(--ui-color-merged);
+}
+
+.ui-markdown-alert[data-kind="warning"] {
+  --ui-markdown-alert-ink: var(--ui-color-attention);
+}
+
+.ui-markdown-alert[data-kind="caution"] {
+  --ui-markdown-alert-ink: var(--ui-color-danger-text);
+}
+
+.ui-markdown-alert-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45em;
+  color: var(--ui-markdown-alert-ink);
+  font-weight: var(--ui-type-emphasis-weight);
+}
+
+.ui-markdown-alert-title > svg {
+  flex: none;
+  width: 1em;
+  height: 1em;
+}
+
+.ui-markdown-flow :is(.ui-markdown-alert, details, dd) > * {
+  margin-block: 0;
+}
+
+.ui-markdown-flow :is(.ui-markdown-alert, details, dd) > * + * {
+  margin-top: 1em;
+}
+
+.ui-markdown-flow :is(.ui-markdown-alert-title, summary) + * {
+  margin-top: 0.5em;
+}
+
+.ui-markdown-flow :is(.ui-markdown-alert, details, dd) > .ui-markdown-heading + :not(hr) {
+  margin-top: 0.25em;
+}

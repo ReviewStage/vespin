@@ -17,7 +17,9 @@
  * GitHub writes as a table of rows its own stylesheet tints, becomes a
  * fenced block of its lines (`SUGGESTED_CHANGE_LANGUAGE`), each removed one
  * marked `-` and each added one `+`, which the window tints itself, so none
- * of GitHub's classes need reach the sanitizer. It also drops every `<source>`,
+ * of GitHub's classes need reach the sanitizer. An alert (`> [!NOTE]`),
+ * which GitHub writes as a box of its classes with a title of its own,
+ * becomes the quote it was written as, which the window draws as its alert. It also drops every `<source>`,
  * because a browser draws a matching source in place of its `<img>`: the
  * window would ask GitHub's image proxy itself, which its policy refuses,
  * rather than draw the `<img>` the place reads through the service, and the
@@ -197,6 +199,38 @@ const SUGGESTION_ROW = [
   ["blob-code-addition", "+"],
 ] as const;
 
+/** The kind GitHub names on an alert's box: `markdown-alert-note` and the rest. */
+const ALERT_CLASS = /^markdown-alert-(note|tip|important|warning|caution)$/u;
+
+/** The class GitHub wears on an alert's title, its glyph and its kind's word, which the window draws itself. */
+const ALERT_TITLE_CLASS = "markdown-alert-title";
+
+/**
+ * An alert GitHub rendered as the quote it was written as: its marker
+ * (`[!NOTE]`) alone in the paragraph that opens it, in its title's place,
+ * over its words, which `@repo/ui/markdown`'s step marks as an alert again
+ * once the sanitizer has passed.
+ */
+function alertQuote(box: HtmlNode, kind: string): HtmlNode {
+  const words = (box.children ?? []).filter(
+    (child) => !(child.type === "element" && classesOf(child).includes(ALERT_TITLE_CLASS)),
+  );
+
+  const marker: HtmlNode = {
+    type: "element",
+    tagName: "p",
+    properties: {},
+    children: [{ type: "text", value: `[!${kind.toUpperCase()}]` }],
+  };
+
+  return {
+    type: "element",
+    tagName: "blockquote",
+    properties: {},
+    children: [marker, ...redressChildren(words)],
+  };
+}
+
 /** Every element under a node, in order, the node first. */
 function elementsOf(node: HtmlNode): readonly HtmlNode[] {
   if (node.type !== "element") return [];
@@ -345,6 +379,14 @@ function redressed(node: HtmlNode): readonly HtmlNode[] {
 
   // A suggested change is GitHub's own diff table, whose looks are all its classes.
   if (node.tagName === "div" && classes.includes(SUGGESTION_BLOB)) return [suggestion(node)];
+
+  // An alert is GitHub's own box, whose kind is its class and whose title is its glyph.
+  const alert =
+    node.tagName === "div"
+      ? classes.map((each) => ALERT_CLASS.exec(each)?.[1]).find(Boolean)
+      : undefined;
+
+  if (alert !== undefined) return [alertQuote(node, alert)];
   // A diagram's source stands in a block naming its language (`<pre lang="mermaid">`).
   const named = node.tagName === "pre" ? node.properties?.lang : undefined;
 

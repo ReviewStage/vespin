@@ -269,6 +269,7 @@ import {
   useAgentPullRequestSource,
 } from "./pull-request-source.js";
 import { PullRequestStack } from "./pull-request-stack.js";
+import { useTaskTicks } from "./pull-request-task-ticks.js";
 import {
   ThreadReply,
   ThreadResolve,
@@ -1094,18 +1095,24 @@ function Anchored({ children }: { children: ReactNode }): ReactNode {
 function EntryWords({
   entry,
   picture,
+  subject,
 }: {
   entry: Pick<ConversationEntry, "html" | "body">;
   picture: GitHubPictureDrawer;
+  /** GitHub's id for what the words are on, which their task items are ticked by (`pull-request-task-ticks.tsx`); none where they cannot be. */
+  subject?: string | undefined;
 }): React.JSX.Element | null {
+  const { taskTick, note } = useTaskTicks(subject);
+
   if (entry.html !== null) {
     return (
       <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
         <EntryPictures html={entry.html}>
           <Anchored>
-            <GitHubWords html={entry.html} picture={picture} />
+            <GitHubWords html={entry.html} picture={picture} taskTick={taskTick} />
           </Anchored>
         </EntryPictures>
+        {note}
       </div>
     );
   }
@@ -1469,7 +1476,7 @@ function ThreadComment({
   const own = usePendingActs(start === undefined ? draft : undefined);
   const acts = start ?? own;
   const writer = useNamer()(comment.by);
-  const words = <EntryWords entry={comment} picture={picture} />;
+  const words = <EntryWords entry={comment} picture={picture} subject={comment.subject} />;
 
   const reply: AnnotationReply | undefined = first
     ? undefined
@@ -1837,7 +1844,7 @@ function EntryCard({
           </>
         }
       >
-        <EntryWords entry={entry} picture={picture} />
+        <EntryWords entry={entry} picture={picture} subject={entry.subject} />
         <Reactions reactions={entry.reactions} subject={entry.subject} />
       </Comment>
       {threads.length === 0 ? null : (
@@ -2272,6 +2279,30 @@ function ChecksPart({
   );
 }
 
+/** The description's words as GitHub rendered them, its task items ticked as a comment's are, by the pull request's own id (`subject`). */
+function DescriptionWords({
+  html,
+  picture,
+  subject,
+}: {
+  html: string;
+  picture: GitHubPictureDrawer;
+  subject: string | undefined;
+}): React.JSX.Element {
+  const { taskTick, note } = useTaskTicks(subject);
+
+  return (
+    <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
+      <EntryPictures html={html}>
+        <Anchored>
+          <GitHubWords html={html} picture={picture} taskTick={taskTick} />
+        </Anchored>
+      </EntryPictures>
+      {note}
+    </div>
+  );
+}
+
 /** The description, as the pull request's read carries it, edited in place where the member may edit it (`./pull-request-description.tsx`), with the reactions it wears once the conversation's read, which carries them, lands; a skeleton while its read is out, and nothing where it failed, whose failure stands under the title. */
 function DescriptionPart({
   agentId,
@@ -2296,13 +2327,7 @@ function DescriptionPart({
 
   const words =
     part.kind !== PART.LANDED || part.value.html === "" ? undefined : (
-      <div className="pull-request-words min-w-0 select-text text-body-size leading-reading text-foreground">
-        <EntryPictures html={part.value.html}>
-          <Anchored>
-            <GitHubWords html={part.value.html} picture={picture} />
-          </Anchored>
-        </EntryPictures>
-      </div>
+      <DescriptionWords html={part.value.html} picture={picture} subject={subject} />
     );
 
   return (

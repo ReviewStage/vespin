@@ -49,6 +49,7 @@ import {
   send,
   unreadable,
 } from "./github-app.js";
+import { TASK_TICK, tickTaskItem } from "./task-items.js";
 
 /** GitHub's GraphQL endpoint, under the API's origin. */
 const GRAPHQL_PATH = "/graphql";
@@ -935,6 +936,107 @@ export const reactOnPullRequest = /* @__PURE__ */ Effect.fn("web/reactOnPullRequ
     { id: subject, content },
     Schema.Unknown,
   );
+});
+
+/** What a tick names, by its GraphQL id: its kind, its words, and the pull request it is on. */
+const TICK_SUBJECT_QUERY = `query($id: ID!) {
+  node(id: $id) {
+    __typename
+    ... on PullRequest { id body }
+    ... on IssueComment { body issue { id } }
+    ... on PullRequestReview { body pullRequest { id } }
+    ... on PullRequestReviewComment { body pullRequest { id } }
+  }
+}`;
+
+const TickSubjectSchema = Schema.Struct({
+  node: Schema.NullOr(
+    Schema.Struct({
+      __typename: Schema.String,
+      id: Schema.optionalKey(Schema.String),
+      body: Schema.optionalKey(Schema.String),
+      issue: NodeIdOfSchema,
+      pullRequest: NodeIdOfSchema,
+    }),
+  ),
+});
+
+/** The mutation that gives each kind a tick may name new words, by GitHub's name for the kind. */
+const TICK_MUTATIONS: ReadonlyMap<string, string> = new Map([
+  [
+    "PullRequest",
+    `mutation($id: ID!, $body: String!) {
+  updatePullRequest(input: { pullRequestId: $id, body: $body }) { pullRequest { id } }
+}`,
+  ],
+  [
+    "IssueComment",
+    `mutation($id: ID!, $body: String!) {
+  updateIssueComment(input: { id: $id, body: $body }) { issueComment { id } }
+}`,
+  ],
+  [
+    "PullRequestReview",
+    `mutation($id: ID!, $body: String!) {
+  updatePullRequestReview(input: { pullRequestReviewId: $id, body: $body }) { pullRequestReview { id } }
+}`,
+  ],
+  [
+    "PullRequestReviewComment",
+    `mutation($id: ID!, $body: String!) {
+  updatePullRequestReviewComment(input: { pullRequestReviewCommentId: $id, body: $body }) { pullRequestReviewComment { id } }
+}`,
+  ],
+]);
+
+/** What the member is told where the words hold no task item at the place named, as where they changed on GitHub since they were read. */
+const TASK_GONE = "That task item changed on GitHub. Reload to see it as it stands.";
+
+/** A tick as the tab asks it: what it is on, by its GraphQL id, the item's place among its task items, and whether it is ticked. */
+export interface TaskTickRequest {
+  readonly subject: string;
+  readonly index: number;
+  readonly checked: boolean;
+}
+
+/**
+ * A task item ticked or cleared, on the member's token, as GitHub's own
+ * checkbox does: the words of what the tick names, first confirmed this
+ * pull request's, its description, a comment, a review, or a review
+ * comment, are read and written again with that one item's mark changed
+ * (`tickTaskItem`), so nothing else on GitHub is edited through this one's
+ * tab, and GitHub refuses it in its own words where the member may not
+ * edit them. An item already standing as asked writes nothing. Note that
+ * GitHub offers no write conditional on a comment's words, so an edit
+ * landing between the read and the write is still written over, as it is
+ * on GitHub's own page.
+ */
+export const tickTask = /* @__PURE__ */ Effect.fn("web/tickTask")(function* (
+  token: Redacted.Redacted,
+  pullRequestId: string,
+  tick: TaskTickRequest,
+): Effect.fn.Return<void, GitHubWriteFailure, HttpClient.HttpClient> {
+  const read = yield* githubWrite(
+    token,
+    TICK_SUBJECT_QUERY,
+    { id: tick.subject },
+    TickSubjectSchema,
+  );
+
+  const node = read.node;
+  const on = node?.pullRequest?.id ?? node?.issue?.id ?? node?.id;
+  const mutation = node === null ? undefined : TICK_MUTATIONS.get(node.__typename);
+
+  if (node === null || on !== pullRequestId || mutation === undefined) {
+    return yield* refusalOf([NOT_THIS_SUBJECT]);
+  }
+
+  const ticked = tickTaskItem(node.body ?? "", tick.index, tick.checked);
+
+  if (ticked.kind === TASK_TICK.MISSING) return yield* refusalOf([TASK_GONE]);
+
+  if (ticked.kind === TASK_TICK.ALREADY) return;
+  yield* githubWrite(token, mutation, { id: tick.subject, body: ticked.body }, Schema.Unknown);
 });
 
 const MARK_VIEWED_MUTATION = `mutation($id: ID!, $path: String!) {

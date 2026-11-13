@@ -40,6 +40,8 @@ export const PULL_REQUEST_WRITE_BOUNDS = {
   MAX_PATH_CHARS: 4_096,
   /** The most files whose viewed marks one read carries, as many as a read of the changes lists. */
   MAX_VIEWED_FILES: 300,
+  /** The highest place among a comment's task items a tick names, the first 0; GitHub's own bound on a comment's words holds far fewer. */
+  MAX_TASK_INDEX: 10_000,
 } as const;
 
 /** How a pull request is merged, as GitHub offers each where the repository allows it. */
@@ -133,6 +135,8 @@ export const PULL_REQUEST_ACTION = {
   MARK_FILE_VIEWED: "mark-file-viewed",
   /** One of the pull request's files the member marked viewed unmarked. */
   UNMARK_FILE_VIEWED: "unmark-file-viewed",
+  /** A task item (`- [ ]`) of the description, a comment, a review, or a review comment ticked or cleared, as GitHub's own checkbox does by editing its words. */
+  TICK_TASK: "tick-task",
 } as const;
 
 export type PullRequestAction = (typeof PULL_REQUEST_ACTION)[keyof typeof PULL_REQUEST_ACTION];
@@ -341,6 +345,22 @@ export const pullRequestActionRequestSchema = EffectSchema.Union([
   EffectSchema.Struct({
     action: EffectSchema.Literal(PULL_REQUEST_ACTION.UNMARK_FILE_VIEWED),
     path: filePathSchema,
+  }),
+  /**
+   * The task item at `index` among the words' task items, the first 0, as
+   * GitHub renders them in order, ticked where `checked` asks or cleared,
+   * on what `subject` names by GitHub's id for it: the pull request itself,
+   * whose description it is, or one of its comments, reviews, or review
+   * comments, as a reaction names it.
+   */
+  EffectSchema.Struct({
+    action: EffectSchema.Literal(PULL_REQUEST_ACTION.TICK_TASK),
+    subject: subjectIdSchema,
+    index: EffectSchema.Int.check(
+      EffectSchema.isGreaterThanOrEqualTo(0),
+      EffectSchema.isLessThanOrEqualTo(PULL_REQUEST_WRITE_BOUNDS.MAX_TASK_INDEX),
+    ),
+    checked: EffectSchema.Boolean,
   }),
 ]);
 

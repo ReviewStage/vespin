@@ -148,6 +148,7 @@ const ACTION_WORDS = {
   [PULL_REQUEST_ACTION.REMOVE_LABEL]: "Remove label",
   [PULL_REQUEST_ACTION.ADD_REACTION]: "Add reaction",
   [PULL_REQUEST_ACTION.REMOVE_REACTION]: "Remove reaction",
+  [PULL_REQUEST_ACTION.TICK_TASK]: "Tick task",
 } as const satisfies Record<PullRequestAction, string>;
 
 /** The line's own words. */

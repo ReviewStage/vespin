@@ -12,9 +12,10 @@ import { MARKDOWN_CLASS } from "./markdown-class.js";
 /** The class the box a reader can tick stands in, in the bullet's gutter (`prose.css`), the description's editor's box alike. */
 const TASK_BOX_CLASS = MARKDOWN_CLASS.TASK_BOX;
 
-/** A task item's checkbox as drawn: the offset its item starts at in the words, where they say it, and the item's own words, which name it. */
+/** A task item's checkbox as drawn: the offset its item starts at in the words, where they say it, its place among the words' boxes, and the item's own words, which name it. */
 interface TaskItem {
   readonly at: number | undefined;
+  readonly index: number;
   readonly label: string;
 }
 
@@ -36,6 +37,16 @@ export interface TaskBoxItem {
   readonly label: string;
   readonly checked: boolean;
 }
+
+/** A task item a reader can tick by its place among the words' boxes, the first 0, as words drawn from HTML are, whose items say no offset: its words, which name it, and whether the words tick it. */
+export interface TaskBoxOrdinal {
+  readonly index: number;
+  readonly label: string;
+  readonly checked: boolean;
+}
+
+/** Draws the box of a task item a reader can tick by its place among the words' boxes (`TaskBoxOrdinal`). */
+export type MarkdownTaskTick = (item: TaskBoxOrdinal) => React.ReactNode;
 
 /**
  * Draws a task item's box a reader can tick: the place's own component,
@@ -66,22 +77,28 @@ function itemWords(node: ElementContent): string {
  * own, so a nested list's box names its own item rather than the one around it,
  * and that a box from HTML has no offset, so it is named but never ticked.
  */
-function placeTasks(parent: Root | Element, item: Element | undefined): void {
+function placeTasks(
+  parent: Root | Element,
+  item: Element | undefined,
+  counted: { boxes: number },
+): void {
   for (const child of parent.children) {
     if (child.type !== "element") continue;
     const own = child.tagName === "li" ? child : item;
     const at = own?.position?.start.offset;
 
     if (child.tagName === "input" && child.properties.type === "checkbox" && own) {
-      TASK_ITEMS.set(child, { at, label: own.children.map(itemWords).join("").trim() });
+      const label = own.children.map(itemWords).join("").trim();
+      TASK_ITEMS.set(child, { at, index: counted.boxes, label });
+      counted.boxes += 1;
     }
 
-    placeTasks(child, own);
+    placeTasks(child, own, counted);
   }
 }
 
-/** The rehype step that names each task item's checkbox by its item's offset. */
-export const placeTaskItems = () => (tree: Root) => placeTasks(tree, undefined);
+/** The rehype step that names each task item's checkbox by its item's offset and its place among the words' boxes. */
+export const placeTaskItems = () => (tree: Root) => placeTasks(tree, undefined, { boxes: 0 });
 
 /**
  * A task item's checkbox that ticks or clears its item through `write`. It
@@ -113,7 +130,12 @@ export function TaskBox({
  * the reader can tick stands in. Note that a read-only box keeps its words' own
  * ink, where the browser's disabled box fades its tick past reading.
  */
-export const readTaskInput: NonNullable<Components["input"]> = ({ node, ...props }) => {
+function readTaskBox({
+  node,
+  ...props
+}: React.InputHTMLAttributes<HTMLInputElement> & {
+  node?: Element | undefined;
+}): React.JSX.Element {
   const item = node === undefined ? undefined : TASK_ITEMS.get(node);
 
   if (props.type !== "checkbox") return <input {...props} />;
@@ -128,7 +150,9 @@ export const readTaskInput: NonNullable<Components["input"]> = ({ node, ...props
       />
     </span>
   );
-};
+}
+
+export const readTaskInput: NonNullable<Components["input"]> = readTaskBox;
 
 /** How a note draws a task item's checkbox where its reader can tick it, as `drawBox` draws it. */
 export function taskInput(drawBox: MarkdownTaskBox): NonNullable<Components["input"]> {
@@ -141,6 +165,27 @@ export function taskInput(drawBox: MarkdownTaskBox): NonNullable<Components["inp
     ) : (
       <Fragment key={String(props.checked === true)}>
         {drawBox({ at, label: item.label, checked: props.checked === true })}
+      </Fragment>
+    );
+  };
+}
+
+/**
+ * How words drawn from HTML draw a task item's checkbox where their reader
+ * can tick it, as `drawBox` draws it, by its place among the words' boxes.
+ * Note that the box is drawn afresh whenever the words' own state changes,
+ * as a note's is.
+ */
+export function orderedTaskInput(drawBox: MarkdownTaskTick): NonNullable<Components["input"]> {
+  return ({ node, ...props }) => {
+    const item = node === undefined ? undefined : TASK_ITEMS.get(node);
+    const checked = props.checked === true;
+
+    if (props.type !== "checkbox" || item === undefined) return readTaskBox({ node, ...props });
+
+    return (
+      <Fragment key={String(checked)}>
+        {drawBox({ index: item.index, label: item.label, checked })}
       </Fragment>
     );
   };
