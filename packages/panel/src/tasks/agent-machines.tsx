@@ -155,7 +155,7 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
   // Note that only a teammate's machine wears its owner's face, since the reader's own needs no saying whose it is.
   const faceOf = (owner: DefaultMachine["owner"]) =>
     owner.userId === readerId ? undefined : (
-      <ActorMark actor={personActor(owner, members, readerId, former)} size={ACTOR_SIZE.MARK} />
+      <ActorMark actor={personActor(owner, members, readerId, former)} size={ACTOR_SIZE.INLINE} />
     );
 
   return {

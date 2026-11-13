@@ -34,7 +34,9 @@ import {
   useSecond,
   VisuallyHidden,
 } from "@repo/ui";
+import { actorName } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
+import { ReplayWords } from "@repo/ui/session-replay-marks";
 import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { presenceStanding, useDevicePresence } from "../device-presence.js";
@@ -111,7 +113,7 @@ function macWords(name: string, standing: DeviceStanding | undefined): string {
 }
 
 /** What the card says under its head of an agent on a device. */
-const DEVICE_NOTE = "This agent runs on this device. Set when it was started.";
+const DEVICE_NOTE = "This agent runs on this machine. Set when it was started.";
 
 /** What a Cloud chip's popover says: its title, its facts' labels, its rows' labels, and the move's heading. */
 const CLOUD_WORDS = {
@@ -285,7 +287,7 @@ export function AgentPlace({
 const SET_UP_ROW = "set-up-a-host";
 
 /** What the row says that sends a member with no device to add one. */
-const SET_UP_WORDS = { LABEL: "Set up a Mac", DETAIL: "Settings › Machines" } as const;
+const SET_UP_WORDS = { LABEL: "Add a machine", DETAIL: "Settings › Machines" } as const;
 
 /**
  * The places a move offers, as a start's Runs on lists them
@@ -400,7 +402,8 @@ function PlaceChip({
   /** A teammate's face beside the chip's glyph, where the machine is theirs; none on the card, whose head names the machine alone. */
   face?: ReactNode;
   words: string;
-  sub: string | undefined;
+  /** The card's line under its head: whose machine it is where it is a teammate's, else whether it is online. */
+  sub: ReactNode;
   note: string;
   quiet?: boolean;
   move: PlaceMove | undefined;
@@ -413,14 +416,15 @@ function PlaceChip({
     </HoverCard>
   );
 
+  // Note that the face stands beside the glyph as a sibling, so the chip sizes the glyph as it sizes every other.
   const chipGlyph =
     face === undefined ? (
       glyph
     ) : (
-      <Inline gap={GAP.ICON} wrap={false}>
+      <>
         {glyph}
         {face}
-      </Inline>
+      </>
     );
 
   if (move !== undefined) {
@@ -492,9 +496,18 @@ function MacChip({
       here={mac.deviceId}
       move={move}
       glyph={glyph}
-      face={teammate ? <ActorMark actor={ownerActor} size={ACTOR_SIZE.MARK} /> : undefined}
+      face={teammate ? <ActorMark actor={ownerActor} size={ACTOR_SIZE.INLINE} /> : undefined}
       words={macWords(name, standing)}
-      sub={standing === DEVICE_STANDING.ONLINE ? RUNS_ON_WORDS.ONLINE : undefined}
+      sub={
+        teammate ? (
+          <Inline gap={GAP.ICON} wrap={false}>
+            <ActorMark actor={ownerActor} size={ACTOR_SIZE.MARK} />
+            <ReplayWords masked>{actorName(ownerActor)}</ReplayWords>
+          </Inline>
+        ) : standing === DEVICE_STANDING.ONLINE ? (
+          RUNS_ON_WORDS.ONLINE
+        ) : undefined
+      }
       note={DEVICE_NOTE}
       quiet={quiet}
       narrow={narrow}

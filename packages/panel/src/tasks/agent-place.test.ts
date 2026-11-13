@@ -224,7 +224,7 @@ test("where a move is offered, Agent runs in opens the places, Cloud wearing its
   assert.deepEqual(moved, [{ machine: AGENT_MACHINE.DEVICE, deviceId: DEVICE }]);
 
   const bare = await placeMenuOf({ ...withMac, devices: [] }, opened);
-  act(() => bare.find((row) => row.textContent?.includes("Set up a Mac"))?.click());
+  act(() => bare.find((row) => row.textContent?.includes("Add a machine"))?.click());
   assert.deepEqual(opened, [{ page: SETTINGS_VIEW.HOSTS }]);
   assert.equal(moved.length, 1);
 });
