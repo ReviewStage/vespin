@@ -968,6 +968,7 @@ const LAYER_CLASSES = [
 export function markTemplate(parts, { box, lineWidth, roles, elements, layers }) {
   const scale = BOX / box;
   const unlit = layers === undefined ? [] : parts.filter(({ layer }) => layer === layers.UNLIT);
+
   const groups =
     unlit.length === 0 ? [parts] : [parts.filter((part) => !unlit.includes(part)), unlit];
 

@@ -10,6 +10,14 @@ import type { PictureOf } from "./member-pictures.js";
 /** What a photo's file is named with, before the picture it holds. */
 const PHOTO_PREFIX = "menu-photo";
 
+/**
+ * How long a photo's file stands before it's read again, in milliseconds: a
+ * day. Note that a picture's address can stay the same when the member
+ * changes their photo, as GitHub's does, so a file kept for good would show
+ * the old face until iOS cleared the app's caches.
+ */
+const PHOTO_LIFETIME = 24 * 60 * 60 * 1000;
+
 /** FNV-1a's offset basis and prime, for a short, steady name from a picture's address. */
 const FNV_OFFSET = 0x81_1c_9d_c5;
 const FNV_PRIME = 0x01_00_01_93;
@@ -31,25 +39,38 @@ function addressName(address: string): string {
 
 /**
  * Where a picture stands as a file of the app's caches, named by its address
- * at the size a menu draws it, so a changed picture is a new file and the
- * same one is read again from disk.
+ * at the size a menu draws it, so a changed address is a new file and the
+ * same one is read again from disk while it's fresh.
  */
 function photoFile(address: string): File {
   return new File(Paths.cache, `${PHOTO_PREFIX}-${addressName(address)}`);
 }
 
-/** The picture's file, downloaded once: the file already written, the download under way, or one begun now; none where it can't be read. */
+/** Whether a photo's file was written within its lifetime. */
+function fresh(file: File): boolean {
+  const written = file.info().modificationTime;
+
+  return written !== undefined && Date.now() - written < PHOTO_LIFETIME;
+}
+
+/**
+ * The picture's file: the one already written while it's fresh, the
+ * download under way, or one begun now, which writes over a stale file. A
+ * download that fails keeps the stale file where there is one, and answers
+ * none where there isn't.
+ */
 function downloaded(address: string): Promise<string | undefined> {
   const file = photoFile(address);
 
-  if (file.exists) return Promise.resolve(file.uri);
+  if (file.exists && fresh(file)) return Promise.resolve(file.uri);
   const under = downloading.get(file.uri);
 
   if (under !== undefined) return under;
+  const kept = file.exists ? file.uri : undefined;
 
-  const download = File.downloadFileAsync(address, file)
+  const download = File.downloadFileAsync(address, file, { idempotent: true })
     .then((written) => written.uri)
-    .catch(() => undefined)
+    .catch(() => kept)
     .finally(() => downloading.delete(file.uri));
 
   downloading.set(file.uri, download);
