@@ -51,11 +51,17 @@ import {
 import { BOOT_PHASE, type WireBootPhase } from "@repo/features/agent-boot";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-wire";
 import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
-import { NO_TASK_OWNER, TASK_LIST_READ, TASK_ROWS_READ } from "@repo/features/task-list-live";
-import { TASK_BLOCK_RELATION } from "@repo/features/task-wire";
+import {
+  NO_TASK_OWNER,
+  SETTLED_PAGE_SIZE,
+  TASK_LIST_READ,
+  TASK_PAGE_READ,
+  TASK_ROWS_READ,
+} from "@repo/features/task-list-live";
+import { TASK_BLOCK_RELATION, TASK_STATUS } from "@repo/features/task-wire";
 import { SANDBOX_IDLE } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
-import { and, asc, eq, exists, isNotNull, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, eq, exists, inArray, isNotNull, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Duration } from "effect";
 import type { SyncMoved } from "../../sync/live-query.js";
@@ -542,6 +548,65 @@ export const taskRowsRead = bindLiveRead(TASK_ROWS_READ, {
         userId,
         or(eq(agentTable.id, id), sql`${agentTable.taskId} in (${ofTask})`) ?? sql`false`,
       ),
+    };
+  },
+});
+
+/**
+ * When a settled task was finished, as the wire carries an instant, whole
+ * epoch milliseconds read at UTC (`live-statement.ts`): its `completedAt`,
+ * else its last save for one finished before that was kept.
+ */
+const FINISHED_AT = sql<number>`floor(extract(epoch from (coalesce(${task.completedAt}, ${task.updatedAt}) at time zone 'UTC')) * 1000)::float8`;
+
+/**
+ * The tasks one page of a workspace's settled ones holds (`taskPage`): those
+ * the account reaches, Done or Canceled, finished before the cursor where
+ * one is named, the newest finished first and by id between those finished
+ * at one instant, at most a page of them. Note that the order and the cursor
+ * read the instant in whole milliseconds, as the wire carries it, so a task
+ * finished within the millisecond of the cursor's is neither read twice nor
+ * left out.
+ */
+function settledPage(userId: string, workspaceId: string, beforeAt: string, beforeId: string) {
+  const at = Number(beforeAt);
+
+  const past =
+    beforeId === "" || beforeAt === "" || !Number.isFinite(at)
+      ? sql`true`
+      : sql`(${FINISHED_AT}, ${task.id}) < (${at}::float8, ${beforeId}::uuid)`;
+
+  return queryBuilder
+    .select({ id: task.id })
+    .from(task)
+    .where(
+      and(
+        taskReachableBy(userId),
+        eq(task.organizationId, workspaceId),
+        inArray(task.status, [TASK_STATUS.DONE, TASK_STATUS.CANCELED]),
+        past,
+      ),
+    )
+    .orderBy(sql`${FINISHED_AT} desc`, sql`${task.id} desc`)
+    .limit(SETTLED_PAGE_SIZE);
+}
+
+/**
+ * One page of a workspace's settled tasks (`taskPage`), past the cursor the
+ * reader names: the list's own statements narrowed to the page's tasks and
+ * every agent of them, on the list's rule of who reads them, so a task the
+ * account does not reach reads no row. It is read once, as a list asks for
+ * the page, and never followed, so it wakes as the list does.
+ */
+export const taskPageRead = bindLiveRead(TASK_PAGE_READ, {
+  reads: TASK_LIST_TABLES,
+  topics: ({ userId }) => readerAndWorkspaceTopics(userId),
+  statements: ({ userId, workspaceId, beforeAt, beforeId }) => {
+    const page = settledPage(userId, workspaceId, beforeAt, beforeId);
+
+    return {
+      plans: tasksStatement(userId, sql`${task.id} in (${page})`),
+      agents: agentsStatement(userId, sql`${agentTable.taskId} in (${page})`),
     };
   },
 });

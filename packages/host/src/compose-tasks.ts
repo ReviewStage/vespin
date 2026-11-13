@@ -33,7 +33,12 @@ import {
 import { markedAs, readMarkOf } from "@repo/features/read-mark";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import { revisionsOfLiveRows, TASK_HISTORY_READ } from "@repo/features/task-history-live";
-import { TASK_LIST_READ, TASK_ROWS_READ } from "@repo/features/task-list-live";
+import {
+  settledPageCursorOf,
+  TASK_LIST_READ,
+  TASK_PAGE_READ,
+  TASK_ROWS_READ,
+} from "@repo/features/task-list-live";
 import { pagesOfLiveRows, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
 import {
@@ -1205,6 +1210,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   yield* Effect.addFinalizer(() => Scope.close(taskList.scope, Exit.void));
 
   const decodeTaskRows = Schema.decodeUnknownOption(TASK_ROWS_READ.rows);
+  const decodeTaskPage = Schema.decodeUnknownOption(TASK_PAGE_READ.rows);
   /** Each read out now of a task the list does not hold, by the id a window opened, which every ask meanwhile joins. */
   const coldReads = yield* FiberMap.make<string>();
   /** The ids the service answered no task for, as one the account does not reach, so a second open reads nothing; a read it did not answer is asked again at the next open. */
@@ -2526,6 +2532,45 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
         yield* openedOutside(taskId);
 
         return { taskId };
+      }),
+    // A page of a workspace's settled tasks is read into the list as cold
+    // tasks, as a task opened outside it is, so a list that shows finished
+    // work draws them where the list holds them not; the cursor the next page
+    // reads past is answered to the list that asked, and held nowhere.
+    TASKS_SETTLED_PAGE: ({ workspaceId, before }) =>
+      Effect.gen(function* () {
+        const userId = dependencies.accountId();
+        const { collections } = taskList;
+
+        if (!gate() || userId === undefined || view.listStatus !== TASKS_READ.READY) {
+          return { failure: TASK_CALL_FAILURE.UNANSWERED };
+        }
+
+        // Note that the read is marked before it is asked, as an open's is, so a task the follow lets go meanwhile is not drawn back by its answer.
+        const mark = collections.mark();
+
+        const params = {
+          workspaceId,
+          userId,
+          ...(before === undefined
+            ? undefined
+            : { beforeAt: String(before.finishedAt), beforeId: before.taskId }),
+        };
+
+        const sealed = yield* served(client.liveRead(TASK_PAGE_READ, params, {}));
+
+        if ("failure" in sealed) return { failure: TASK_CALL_FAILURE.UNANSWERED };
+        const { plans, agents } = sealed.queries;
+        const rows = decodeTaskPage({ plans: plans.rows, agents: agents.rows });
+
+        if (Option.isNone(rows)) return { failure: TASK_CALL_FAILURE.UNANSWERED };
+
+        // Note that a list a sign-out replaced meanwhile draws nothing of the page.
+        if (taskList.collections === collections) yield* collections.cold(rows.value, mark);
+
+        const next = settledPageCursorOf(rows.value.plans);
+
+        return next === undefined ? {} : { next };
       }),
     // A page of the history is answered to the caller that asked, and an
     // older page is laid on the task's held history too, past the revisions

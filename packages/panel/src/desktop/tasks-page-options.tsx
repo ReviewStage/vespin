@@ -130,6 +130,8 @@ export interface TasksViewFrame {
   readonly display: TasksDisplay;
   /** Changes the view's display, as the line under a settled group does. */
   readonly onDisplay: (display: TasksDisplay) => void;
+  /** Hears whether a run of rows that may hold settled tasks stands scrolled to its end, which reads the next page of them while the view shows them in full (`use-settled-pages.ts`); none reads none. */
+  readonly onSettledEnd?: ((atEnd: boolean) => void) | undefined;
   /** Where the view's chosen tasks are held across the page's visits; the view's own while nothing outlives it. */
   readonly chosen?: ChosenTasksStore | undefined;
   /** What each run of the view's rows measured, by the run's key, held across the page's visits; none while nothing outlives the view. */

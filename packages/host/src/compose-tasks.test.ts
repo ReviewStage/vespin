@@ -872,6 +872,46 @@ it.effect("a task the list does not hold is read into it as it opens, and only o
   }),
 );
 
+it.effect(
+  "a page of settled tasks is read into the list beside the follow's, each it holds staying its own",
+  () =>
+    Effect.gen(function* () {
+      const invites = {
+        ...task(INVITES, "Teammate invitations", "# Invites", 10),
+        status: TASK_STATUS.DONE,
+      };
+
+      const billing = {
+        ...task(BILLING, "Billing export", "# Billing export", 20),
+        status: TASK_STATUS.DONE,
+      };
+
+      const service = fakeService([billing, invites]);
+      const { call, last } = yield* subject(service);
+      // The list the host follows holds the billing task alone, renamed since the page was kept, as one that keeps only recent tasks live.
+      yield* call("TASKS_REFRESH", undefined);
+      const renamed = { ...billing, name: "Billing export, renamed" };
+      yield* listAnswers(service, { plans: [rowOfTask(renamed)], agents: [], issues: [] });
+
+      assert.deepEqual(
+        yield* call("TASKS_SETTLED_PAGE", { workspaceId: billing.workspaceId }),
+        {},
+        "a page shorter than a page's tasks is the last",
+      );
+
+      assert.deepEqual(
+        last()
+          ?.tasks.map((each) => [each.id, each.name])
+          .toSorted(),
+        [
+          [BILLING, "Billing export, renamed"],
+          [INVITES, "Teammate invitations"],
+        ].toSorted(),
+        "the settled task outside the list is drawn, and the one in it as the follow answers it",
+      );
+    }),
+);
+
 it.effect("a task the list takes up and then lets go is read again as it opens", () =>
   Effect.gen(function* () {
     const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);

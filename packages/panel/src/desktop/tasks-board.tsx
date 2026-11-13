@@ -100,6 +100,7 @@ import { FIND_SKIP_ATTRIBUTE } from "@repo/ui/find-skip";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import {
   COMPLETED_WINDOW,
+  mayHoldSettled,
   TASK_PROPERTY,
   TASKS_GROUP,
   type TaskProperty,
@@ -736,6 +737,7 @@ function TaskBoardColumnView({
   onSelect,
   onStanding,
   onShowOlder,
+  onSettledEnd,
 }: {
   tasks: TasksControl;
   /** What a card reads of the tab (`useTaskRowTab`). */
@@ -768,6 +770,8 @@ function TaskBoardColumnView({
   onStanding: (task: TaskSummary, standing: TaskStanding) => void;
   /** Shows every settled task, as the column's "+ N older" line asks. */
   onShowOlder: () => void;
+  /** Hears the column come to its end, where it may hold settled tasks, which reads the next page of them (`use-settled-pages.ts`). */
+  onSettledEnd: ((atEnd: boolean) => void) | undefined;
 }): React.JSX.Element {
   // Note that a card is carried by its press alone, so a press on one of its chips, its ⋯, or a menu they drop stays that control's.
   const drag = useTaskDrag(undefined, {
@@ -916,6 +920,7 @@ function TaskBoardColumnView({
                   handle={run}
                   measurements={measured?.get(columnValue(column.head))}
                   onMeasurements={(rows) => measured?.set(columnValue(column.head), rows)}
+                  onAtEnd={onSettledEnd}
                 >
                   {(index, place) => {
                     const task = cards[index]?.value;
@@ -1150,6 +1155,7 @@ export function TasksBoard({
                 onSelect={tasks.onSelect}
                 onStanding={setStanding}
                 onShowOlder={() => frame.onDisplay({ ...display, completed: COMPLETED_WINDOW.ALL })}
+                onSettledEnd={mayHoldSettled(column.head) ? frame.onSettledEnd : undefined}
               />
             ))}
           </div>

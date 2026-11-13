@@ -38,7 +38,7 @@ import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
-import { TASK_LIST_READ, TASK_ROWS_READ } from "@repo/features/task-list-live";
+import { TASK_LIST_READ, TASK_PAGE_READ, TASK_ROWS_READ } from "@repo/features/task-list-live";
 import { AGENT_PAGES_READ, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
 import type {
@@ -1251,6 +1251,7 @@ export function fakeService(tasks: Task[]): FakeService {
       read: { readonly name: string },
       params: {
         readonly id: string;
+        readonly workspaceId?: string;
         readonly page?: string;
         readonly userId?: string;
         readonly sync?: string;
@@ -1268,6 +1269,22 @@ export function fakeService(tasks: Task[]): FakeService {
             plans: service.tasks.filter((each) => each.id === params.id).map(rowOfTask),
             agents: [],
           });
+
+          return Effect.succeed(rows.first());
+        }
+
+        // A page of the workspace's settled tasks, every one the fake holds in a page of its own, with no agents.
+        if (read.name === TASK_PAGE_READ.name) {
+          service.reads.push(`task-page:${params.workspaceId}`);
+          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+
+          const settled = service.tasks.filter(
+            (each) =>
+              each.workspaceId === params.workspaceId &&
+              (each.status === TASK_STATUS.DONE || each.status === TASK_STATUS.CANCELED),
+          );
+
+          rows.set({ plans: settled.map(rowOfTask), agents: [] });
 
           return Effect.succeed(rows.first());
         }

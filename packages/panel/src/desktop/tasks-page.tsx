@@ -17,6 +17,7 @@ import {
   filteredFields,
   keptTasksDisplay,
   NO_TASKS_FILTER,
+  showsSettledInFull,
   TASK_MAKER_ORDER,
   TASK_PROPERTY_ORDER,
   TASKS_GROUPING,
@@ -45,6 +46,7 @@ import {
   TasksViewOptions,
   VIEW_OPTIONS,
 } from "./tasks-page-options.js";
+import { useSettledPages } from "./use-settled-pages.js";
 
 /**
  * tasks-page.tsx -- the window's Tasks page: the listed workspace's tasks as a List or as the Board, chosen by a switch beside its title, narrowed by its Filter and laid out by its View options.
@@ -209,6 +211,13 @@ export function TasksPage({
   const display = view === TASKS_VIEW.LIST ? listDisplay : boardDisplay;
   const onDisplay = view === TASKS_VIEW.LIST ? onListDisplay : onBoardDisplay;
   const choose = (next: TasksView) => keepView(next);
+
+  // Note that settled tasks past those the list holds are read from the service a page at a time while the view shows them in full.
+  const onSettledEnd = useSettledPages(
+    workspaceId,
+    tasks.shown && showsSettledInFull(filter, display),
+  );
+
   const shared = (tasks.workspace?.memberCount ?? 1) > 1;
   const listed = tasks.listed.tasks;
   const filterAsk = useMenuAsk();
@@ -331,6 +340,7 @@ export function TasksPage({
     filter,
     display,
     onDisplay,
+    onSettledEnd,
     chosen: held?.chosenIn(view),
     measured: held?.measuredIn(view),
     column: held?.column,

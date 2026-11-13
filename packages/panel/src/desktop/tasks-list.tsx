@@ -88,6 +88,7 @@ import {
   COMPLETED_WINDOW,
   LIST_COLUMN,
   type ListColumn,
+  mayHoldSettled,
   TASK_PROPERTY,
   TASKS_GROUP,
   TASKS_GROUPING,
@@ -790,6 +791,7 @@ function TasksListGroup({
   drops,
   draggable,
   onShowOlder,
+  onSettledEnd,
   tasks,
   properties,
   place,
@@ -805,6 +807,8 @@ function TasksListGroup({
   draggable: boolean;
   /** Shows every settled task, as the group's "+ N older" line asks. */
   onShowOlder: () => void;
+  /** Hears the list come to its end, where the group may hold settled tasks, which reads the next page of them (`use-settled-pages.ts`). */
+  onSettledEnd: ((atEnd: boolean) => void) | undefined;
   tasks: TasksControl;
   /** The cells the rows draw, which a quick add's line stands its own on. */
   properties: readonly TaskRowCell[];
@@ -881,6 +885,7 @@ function TasksListGroup({
             handle={run}
             measurements={measured?.get(runKey)}
             onMeasurements={(rows) => measured?.set(runKey, rows)}
+            onAtEnd={onSettledEnd}
           >
             {(index, at) => {
               const entry = drawn[index];
@@ -1198,6 +1203,7 @@ export function TasksList({
                     onShowOlder={() =>
                       frame.onDisplay({ ...display, completed: COMPLETED_WINDOW.ALL })
                     }
+                    onSettledEnd={mayHoldSettled(group.head) ? frame.onSettledEnd : undefined}
                     tasks={tasks}
                     properties={properties}
                     place={runsPlace}

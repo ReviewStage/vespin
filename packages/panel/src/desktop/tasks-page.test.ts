@@ -28,7 +28,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { runAppCommand } from "../app-commands.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
-import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
+import { fakeActPort, fakeActPortCalls, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import {
   handHostReads,
@@ -445,12 +445,25 @@ function closeMenus(): void {
   }
 }
 
-test("Show completed stands Done with a foot counting the tasks finished before its window, which shows them all, kept on this Mac", async () => {
+test("Show completed stands Done with a foot counting the tasks finished before its window, which shows them all, read from the service a page at a time, kept on this Mac", async () => {
+  // Each page of settled tasks the page asks the host for, by its workspace.
+  const paged: string[] = [];
+
+  fakeActPort({
+    ...fakeActPortCalls(),
+    [ACT_KIND.TASKS_SETTLED_PAGE]: ({ workspaceId }) => {
+      paged.push(workspaceId);
+
+      return Promise.resolve({});
+    },
+  });
+
   const page = await mountPage();
   openOptions(page, "View options");
   choose("Show completed", "Past week");
   closeMenus();
   assert.deepEqual(groups(page).at(-1), ["Done", []]);
+  assert.deepEqual(paged, [], "no page is read while the window holds the older back");
 
   const older = [...page.querySelectorAll<HTMLButtonElement>(".tasks-list-group button")].find(
     (button) => button.textContent === "Show 1 more",
@@ -458,6 +471,7 @@ test("Show completed stands Done with a foot counting the tasks finished before 
 
   act(() => (older ?? assert.fail("no Show more line under Done")).click());
   assert.deepEqual(groups(page).at(-1), ["Done", ["ACME-35"]]);
+  assert.deepEqual(paged, [ACME.id], "the newest page of the settled is read as they all show");
 
   act(() => {
     for (const root of roots.splice(0)) root.unmount();
