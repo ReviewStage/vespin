@@ -28,16 +28,24 @@ import { Clock, Effect, Option } from "effect";
 import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
+import { device } from "../../schemas/device.js";
 import { macCommand } from "../../schemas/mac-command.js";
 import { conversations, messages } from "../../schemas/storage.js";
 import { CONVERSATION_KIND, MESSAGE_SENDER, type MessageSender } from "../../storage-vocabulary.js";
-import { getTestDB, joinWorkspace, leaveWorkspace, openWorkspace } from "../../testing/index.js";
+import {
+  DEVICE_LAYOUT,
+  getTestDB,
+  joinWorkspace,
+  leaveWorkspace,
+  openWorkspace,
+} from "../../testing/index.js";
 import {
   claimAutomationRun,
   createAutomation,
   failClaimedRun,
   recordAutomationRun,
 } from "../automation-store.js";
+import { registerDevice } from "../device-store.js";
 import {
   claimMacCommand,
   claimMacCommands,
@@ -58,7 +66,8 @@ import { createTask } from "../task-store.js";
  * row its call has stopped waiting for is never claimed, a read claims and
  * waits on only the kinds it names, so a row of a kind no read names now
  * is left be, a row queued before kinds were reads as a shell command, and
- * a Mac counts as listening from its last read on. The live statement
+ * a Mac counts as listening from its last read on. A command queued for a
+ * device is claimed by that device alone. The live statement
  * delivers what a Mac following live would claim: the account's unclaimed
  * commands of its kinds and no one else's.
  *
@@ -111,6 +120,15 @@ const queueOtherKind = (userId: string) =>
     return id;
   });
 
+/** Registers a Mac of the account; its id. */
+const openDevice = (userId: string, name: string) =>
+  Effect.gen(function* () {
+    const id = randomUUID();
+    yield* registerDevice(userId, { id, name, ...DEVICE_LAYOUT });
+
+    return id;
+  });
+
 /** What every Mac's read names: shell alone. */
 const SHELL_ONLY = [MAC_COMMAND_KIND.SHELL];
 
@@ -141,6 +159,60 @@ it.layer(getTestDB())("the Mac command store", (it) => {
         assert.equal(settledAgain, false, "the first result stands");
         assert.deepEqual(yield* macCommandResult(owner, queued.id), Option.some(RESULT));
         assert.deepEqual(yield* macCommandResult(other, queued.id), Option.none());
+      }),
+  );
+
+  it.effect(
+    "a command queued for a device is claimed by that device alone, never by another account naming it",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const since = yield* now;
+
+        const [laptop, studio, othersMac] = [
+          yield* openDevice(owner, "Laptop"),
+          yield* openDevice(owner, "Studio"),
+          yield* openDevice(other, "Other's Mac"),
+        ];
+
+        const queued = command();
+        const queuedForStudio = yield* queueMacCommand(owner, queued, studio);
+        const queuedForOthersMac = yield* queueMacCommand(owner, command(), othersMac);
+        const retired = yield* openDevice(owner, "Retired");
+
+        yield* Database.use((db) =>
+          db
+            .update(device)
+            .set({ removedAt: new Date(0) })
+            .where(eq(device.id, retired)),
+        );
+
+        const queuedForRemoved = yield* queueMacCommand(owner, command(), retired);
+
+        const byOtherNamingIt = yield* claimMacCommand(other, queued.id, since, SHELL_ONLY, studio);
+        const byOtherDevice = yield* claimMacCommands(other, since, SHELL_ONLY, othersMac);
+        const byAccountAlone = yield* claimMacCommands(owner, since, SHELL_ONLY);
+
+        const byAnotherOfTheirs = yield* claimMacCommand(
+          owner,
+          queued.id,
+          since,
+          SHELL_ONLY,
+          laptop,
+        );
+
+        const waitsForStudio = yield* macCommandsWaiting(owner, since, SHELL_ONLY, studio);
+        const byStudio = yield* claimMacCommands(owner, since, SHELL_ONLY, studio);
+
+        assert.equal(queuedForStudio, true);
+        assert.equal(queuedForOthersMac, false, "nothing is queued for another account's Mac");
+        assert.equal(queuedForRemoved, false, "nothing is queued for a removed Mac");
+        assert.deepEqual(byOtherNamingIt, Option.none(), "another account claims nothing");
+        assert.deepEqual(byOtherDevice, []);
+        assert.deepEqual(byAccountAlone, [], "a Mac claiming as the account takes no device's");
+        assert.deepEqual(byAnotherOfTheirs, Option.none(), "another Mac of theirs takes none");
+        assert.equal(waitsForStudio, true);
+        assert.deepEqual(byStudio, [queued]);
       }),
   );
 

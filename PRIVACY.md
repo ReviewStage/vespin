@@ -33,8 +33,11 @@ and we never store the audio. What you and the voice say is kept as text in
 the agent's conversation, one message for each thing either of you said, so
 the agent's transcript shows both sides of the call. What you say reaches the
 agent as its messages, as a typed line does. What the voice says stays in the
-transcript and is never handed to the agent's model. We keep nothing else of a
-call but its length, which counts toward your day and in our usage counts.
+transcript and is never handed to the agent's model. While a call is under way,
+the Service keeps one record of who is calling which agent and the state of the
+call's session, and deletes it when the call ends. Past its end we keep nothing
+else of a call but its length, which counts toward your day and in our usage
+counts.
 
 ### Workspaces, tasks, and descriptions
 
@@ -152,6 +155,12 @@ agents terminals, password managers, System Settings, or Vespin itself, but
 **anything an allowed app's window shows goes too**, a message or a password
 on screen included. You can take an app off the always-allowed list, or turn
 computer use off, in Settings › This Mac.
+
+When you type `@` in a message to an agent, Vespin lists the apps running and
+installed on that Mac so you can point the agent at one. The list is read on
+your Mac and never leaves it; only an app you pick is sent, by its name and
+bundle id, as part of your message, which the agent and anyone who can open
+the task can read.
 
 ### Agents on your own machines
 

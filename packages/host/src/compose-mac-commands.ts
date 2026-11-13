@@ -1,4 +1,5 @@
 import { type HostedMacCommandClient, MAC_COMMAND_CALL_FAILURE } from "@repo/features";
+import type { DeviceArch, DeviceMachine, DevicePlatform } from "@repo/features/device-agent-wire";
 import {
   MAC_COMMANDS_READ,
   type MacCommandsLiveAnswer,
@@ -15,18 +16,20 @@ import {
   isMacShellCommand,
   MAC_COMMAND_BOUNDS,
   MAC_COMMAND_KIND,
+  MAC_COMMAND_MODE,
   type MacCommandKind,
+  type MacCommandMode,
   type MacCommandRead,
   type MacCommandRefusal,
   type MacCommandResult,
   type MacComputerCommand,
+  type MacDeviceSettings,
   type MacShellResult,
   macCommandKindsQuery,
   macCommandResultSchema,
 } from "@repo/features/mac-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
-import { MAC_COMMAND_MODE, type MacCommandMode } from "@repo/settings";
 import {
   Clock,
   Config,
@@ -53,7 +56,7 @@ import {
   type ComputerPermissions,
   type ComputerUseHelperSeam,
 } from "./computer-use-helper.js";
-import type { MAC_COMMAND_ACTS } from "./contract/index.js";
+import type { MAC_COMMAND_ACTS, MacApp } from "./contract/index.js";
 import { Environment, Reporter } from "./effect/seams.js";
 import type { HostActTable } from "./host-acts.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
@@ -67,6 +70,7 @@ import {
 } from "./mac-command-ask.js";
 import { type MacShell, runMacCommand } from "./mac-command-runner.js";
 import type { RunMode } from "./run-mode.js";
+import type { ThisMacDevice } from "./this-mac-device.js";
 
 /**
  * compose-mac-commands.ts -- runs on this Mac the commands the account's agents queue for it, for as long as an account is signed in and Settings lets agents run commands or use apps here, asking the developer first where Settings says to.
@@ -118,6 +122,17 @@ import type { RunMode } from "./run-mode.js";
  * before the helper takes it. What the helper answers is posted only where
  * the wire takes it (`macCommandResultSchema`), and refused otherwise.
  *
+ * Where this process can say which machine it runs on (`MacCommandsDevice`),
+ * the Mac joins as a device of the account signed in, under the id this
+ * install keeps for it (`this-mac-device.ts`), and every read, claim, and
+ * presence names that device, so the service hands it what was queued for
+ * it or for no machine, and never what was meant for another of the
+ * account's. The join carries this Mac's own settings for commands and apps
+ * up where the service holds none for it yet, and the service's are written
+ * over Settings where they differ; from then on each change to them here is
+ * written to the service. Until it has joined, or where it cannot, the Mac
+ * claims as the account alone, as it did before devices claimed.
+ *
  * A live read writes nothing, so the Mac says it listens for its kinds
  * itself, every `LISTENING_EVERY`, well inside the service's freshness
  * window: the one timer that remains, because presence is a fact about this
@@ -155,14 +170,33 @@ const DEFAULT_SHELL = "/bin/zsh";
 
 const VARIABLE = { HOME: "HOME", SHELL: "SHELL" } as const;
 
+/** How often the Mac looks again at whether it has joined, and whether its settings here differ from the service's, beside each change that may move either: a join or a write the service did not answer is tried again so. */
+const DEVICE_LOOK_EVERY = Duration.seconds(15);
+
 /** How long the helper has to name an app before it is asked about, apart from the action's own time. */
 const DESCRIBE_WITHIN = Duration.seconds(10);
 
 /** The service's side of the commands, as this concern asks it. */
 export type MacCommandClient = Pick<
   HostedMacCommandClient,
-  "liveRead" | "claim" | "listening" | "settle"
+  "liveRead" | "claim" | "listening" | "settle" | "join" | "saveDeviceSettings"
 >;
+
+/** This Mac as a device of the accounts signed in on it: the ids it joins as, the machine it names itself as, and its own say over commands and apps. */
+export interface MacCommandsDevice extends ThisMacDevice {
+  /** The machine as it names itself to the service. */
+  readonly machine: Effect.Effect<
+    {
+      readonly name: string;
+      readonly platform: DevicePlatform;
+      readonly arch: DeviceArch;
+    } & DeviceMachine
+  >;
+  /** This Mac's own say over commands and apps, as Settings holds it now. */
+  readonly settings: Effect.Effect<MacDeviceSettings>;
+  /** The service's say written over Settings, where it differs. */
+  readonly applySettings: (settings: MacDeviceSettings) => Effect.Effect<void>;
+}
 
 export interface MacCommandsDependencies {
   kernel: Pick<HostKernel, "emit" | "now"> & { runMode: Pick<RunMode, "sendsNetwork"> };
@@ -183,7 +217,26 @@ export interface MacCommandsDependencies {
   client: MacCommandClient;
   /** The computer-use helper and its settings, where this Mac ships one; none takes no action on an app. */
   computer?: MacComputerUse;
+  /** This Mac as a device of the account, where this process can say which machine it runs on; none claims as the account alone. */
+  device?: MacCommandsDevice;
 }
+
+/** The device this Mac joined as for an account, and the settings the service keeps for it as last read or written. */
+interface Joined {
+  readonly userId: string;
+  readonly deviceId: string;
+  readonly settings: MacDeviceSettings;
+}
+
+/** The device the Mac joined as for the account given; none where it has not joined for it. */
+const joinedAs = (joined: Joined | undefined, userId: string) =>
+  joined?.userId === userId ? joined.deviceId : undefined;
+
+/** Whether two says over commands and apps are the same, the apps in order. */
+const sameSettings = (one: MacDeviceSettings, other: MacDeviceSettings) =>
+  one.commandMode === other.commandMode &&
+  one.alwaysAllowedApps.length === other.alwaysAllowedApps.length &&
+  one.alwaysAllowedApps.every((app, index) => app === other.alwaysAllowedApps[index]);
 
 /** What actions on apps run through and under: the helper, and the settings that let them. */
 export interface MacComputerUse {
@@ -777,9 +830,14 @@ export function composeMacCommands(
      * commands running would wait out the claim, holding up the next
      * account's follow past its own commands' claim window.
      */
-    const claimed = (running: FiberSet.FiberSet, userId: string, command: MacCommandRead) =>
+    const claimed = (
+      running: FiberSet.FiberSet,
+      userId: string,
+      device: string | undefined,
+      command: MacCommandRead,
+    ) =>
       Effect.gen(function* () {
-        const answer = yield* asked(client.claim(command.id)).pipe(
+        const answer = yield* asked(client.claim(command.id, device)).pipe(
           Effect.repeat({
             schedule: Schedule.spaced(CLAIM_RETRY.every),
             times: CLAIM_RETRY.times,
@@ -801,12 +859,21 @@ export function composeMacCommands(
         yield* FiberSet.run(running, decided(granted, userId));
       }).pipe(Effect.uninterruptible);
 
-    /** The unclaimed commands of the kinds the gate stands open for, their rows inline, held past `after` where it names one, for its account. */
-    const seal = (standing: GateStanding, poll: boolean, after?: string) =>
+    /** The unclaimed commands of the kinds the gate stands open for that the device the Mac joined as may claim, their rows inline, held past `after` where it names one, for its account. */
+    const seal = (
+      standing: GateStanding,
+      device: string | undefined,
+      poll: boolean,
+      after?: string,
+    ) =>
       asked(
         client.liveRead(
           MAC_COMMANDS_READ,
-          { userId: standing.userId, kinds: macCommandKindsQuery(kindsOf(standing)) },
+          {
+            userId: standing.userId,
+            kinds: macCommandKindsQuery(kindsOf(standing)),
+            ...(device === undefined ? undefined : { device }),
+          },
           poll ? { after } : undefined,
         ),
       );
@@ -816,12 +883,77 @@ export function composeMacCommands(
      * every `LISTENING_EVERY` for as long as the follow stands, which ends
      * as the gate moves from them.
      */
-    const presence = (standing: GateStanding) =>
+    const presence = (standing: GateStanding, device: string | undefined) =>
       Effect.gen(function* () {
         for (;;) {
-          yield* asked(client.listening(kindsOf(standing)));
+          yield* asked(client.listening(kindsOf(standing), device));
           yield* Effect.sleep(LISTENING_EVERY);
         }
+      });
+
+    /** The device the Mac joined as, and the settings the service keeps for it; none before it has joined for the account signed in. */
+    const joined = yield* SubscriptionRef.make<Joined | undefined>(undefined);
+
+    /** Waits until the device the Mac claims as for `userId` is no longer `device`: it joined, or joined again under another id. */
+    const rejoined = (userId: string, device: string | undefined) =>
+      SubscriptionRef.changes(joined).pipe(
+        Stream.filter((now) => joinedAs(now, userId) !== device),
+        Stream.runHead,
+      );
+
+    /**
+     * The Mac joined as a device of the account signed in, where it has not
+     * yet: under the id this install keeps for it, or a new one where the
+     * service refused that as another account's, carrying this Mac's own
+     * settings up, and the service's written over Settings where they
+     * differ. Once joined, its settings here written to the service where
+     * they moved since. A join or a write the service did not answer is let
+     * be, for the next look to try again.
+     */
+    const reconciled = (device: MacCommandsDevice) =>
+      Effect.gen(function* () {
+        const userId = dependencies.accountId();
+
+        if (userId === undefined || !kernel.runMode.sendsNetwork || !account.capabilitiesActive())
+          return;
+        const standing = yield* SubscriptionRef.get(joined);
+        const here = yield* device.settings;
+
+        if (standing?.userId === userId) {
+          if (sameSettings(here, standing.settings)) return;
+          const saved = yield* asked(client.saveDeviceSettings(standing.deviceId, here));
+
+          if ("failure" in saved) return;
+          yield* SubscriptionRef.set(joined, { ...standing, settings: here });
+
+          return;
+        }
+
+        const machine = yield* device.machine;
+
+        const joinAs = (deviceId: string) =>
+          Effect.map(asked(client.join({ deviceId, ...machine, settings: here })), (answer) => ({
+            deviceId,
+            answer,
+          }));
+
+        let attempt = yield* joinAs(yield* device.idFor(userId));
+
+        if (
+          "failure" in attempt.answer &&
+          attempt.answer.failure === MAC_COMMAND_CALL_FAILURE.NOT_FOUND
+        ) {
+          attempt = yield* joinAs(yield* device.renewFor(userId));
+        }
+
+        const { deviceId, answer } = attempt;
+
+        // Note that a join answered after the account changed is let go, for the next look to join the account signed in now.
+        if ("failure" in answer || dependencies.accountId() !== userId) return;
+        // Note that the device is held before Settings is written, so the change the write tells finds the two the same and writes nothing back.
+        yield* SubscriptionRef.set(joined, { userId, deviceId, settings: answer.settings });
+
+        if (!sameSettings(here, answer.settings)) yield* device.applySettings(answer.settings);
       });
 
     /**
@@ -837,6 +969,7 @@ export function composeMacCommands(
       running: FiberSet.FiberSet,
       claims: FiberSet.FiberSet,
       standing: GateStanding,
+      device: string | undefined,
       first: MacCommandsLiveAnswer,
     ) =>
       Effect.suspend(() => {
@@ -849,23 +982,27 @@ export function composeMacCommands(
             tried = new Set(commands.map((command) => command.id));
 
             for (const command of fresh) {
-              yield* FiberSet.run(claims, claimed(running, userId, command));
+              yield* FiberSet.run(claims, claimed(running, userId, device, command));
             }
           });
 
         const rows = decodedLiveRows(
-          { poll: (after) => seal(standing, true, after) },
+          { poll: (after) => seal(standing, device, true, after) },
           first,
           MAC_COMMANDS_READ.rows,
         );
 
         const following = Stream.runForEach(rows, (read) => claimNew(macCommandsOfLiveRows(read)));
 
-        const follow = Effect.raceFirst(following, presence(standing)).pipe(
+        const follow = Effect.raceFirst(following, presence(standing, device)).pipe(
           Effect.catch(() => waitOrRegained(LIVE_RESTART)),
         );
 
-        return Effect.raceFirst(follow, Effect.asVoid(left(standing)));
+        // Note that a follow ends as the Mac joins, or joins again, so the next names the device it claims as.
+        return Effect.raceFirst(
+          follow,
+          Effect.raceFirst(Effect.asVoid(left(standing)), Effect.asVoid(rejoined(userId, device))),
+        );
       });
 
     /** How many times the gate had moved when the running set was last cleared. */
@@ -899,7 +1036,8 @@ export function composeMacCommands(
         const standing = yield* SubscriptionRef.get(gate);
 
         if (standing === undefined) return yield* Effect.asVoid(opened);
-        const sealed = yield* seal(standing, false);
+        const device = joinedAs(yield* SubscriptionRef.get(joined), standing.userId);
+        const sealed = yield* seal(standing, device, false);
 
         if ("failure" in sealed) {
           return yield* Effect.raceFirst(
@@ -908,7 +1046,7 @@ export function composeMacCommands(
           );
         }
 
-        yield* followed(running, claims, standing, sealed);
+        yield* followed(running, claims, standing, device, sealed);
       });
 
     const lifetime = Effect.gen(function* () {
@@ -918,6 +1056,27 @@ export function composeMacCommands(
       const changes = yield* dependencies.changed;
       yield* gateMoved;
       yield* Effect.forkScoped(Stream.runForEach(changes, () => gateMoved));
+
+      // Note that the Mac joins, and keeps its settings with the service's, whatever the gate says, since Never is itself one of them.
+      if (dependencies.device !== undefined) {
+        const device = dependencies.device;
+
+        const looks = Stream.merge(
+          Stream.succeed(undefined),
+          Stream.merge(
+            yield* dependencies.changed,
+            Stream.fromSchedule(Schedule.spaced(DEVICE_LOOK_EVERY)),
+          ),
+        );
+
+        yield* Effect.forkScoped(
+          Stream.runForEach(looks, () =>
+            Effect.catchDefect(reconciled(device), () =>
+              Effect.sync(() => report("this Mac could not join as a device")),
+            ),
+          ),
+        );
+      }
 
       // A turn that died is reported and the reads rest before the next.
       const guarded = Effect.catchDefect(turn(running, claims), () =>
@@ -957,6 +1116,62 @@ export function composeMacCommands(
         ),
       );
 
+    /**
+     * The apps the composer's @ list offers on this Mac: those running
+     * first, each with its icon, then those installed, each once by its
+     * bundle id, none agents are never offered, and each marked where the
+     * developer answered Always allow; none while Settings has agents use no
+     * apps here. Note that the list is answered to this Mac's own panel
+     * alone and never posted anywhere: what leaves the Mac is only the one
+     * app a mention names, in the message it is written into.
+     */
+    const appsOnThisMac = (use: MacComputerUse): Effect.Effect<{ apps: readonly MacApp[] }> =>
+      Effect.gen(function* () {
+        if (!(yield* use.enabled)) return { apps: [] };
+        const allowed = new Set(yield* use.allowedApps);
+        const running = yield* use.helper.ask({ op: COMPUTER_ACTION.LIST_APPS }, DESCRIBE_WITHIN);
+
+        const installed = yield* use.helper.ask(
+          { op: COMPUTER_HELPER_OP.LIST_INSTALLED_APPS },
+          DESCRIBE_WITHIN,
+        );
+
+        const listed = (answer: ComputerHelperAnswer, runs: boolean): readonly MacApp[] =>
+          "outcome" in answer && "apps" in answer.outcome
+            ? answer.outcome.apps
+                .filter((app) => !app.refused)
+                .map(({ name, bundleId, iconPng }) => ({
+                  name,
+                  ...(bundleId === undefined ? undefined : { bundleId }),
+                  running: runs,
+                  allowed: allowed.has(bundleId ?? name),
+                  ...(iconPng === undefined ? undefined : { iconPng }),
+                }))
+            : [];
+
+        const seen = new Set<string>();
+
+        const apps = [...listed(running, true), ...listed(installed, false)].filter((app) => {
+          const key = app.bundleId ?? app.name;
+          const fresh = !seen.has(key);
+          seen.add(key);
+
+          return fresh;
+        });
+
+        return { apps };
+      });
+
+    /** One app's icon as the helper draws it, launching nothing; none where it finds no such app. */
+    const appIcon = (use: MacComputerUse, app: string) =>
+      Effect.map(
+        use.helper.ask({ op: COMPUTER_HELPER_OP.DESCRIBE_APP, app }, DESCRIBE_WITHIN),
+        (named) =>
+          "described" in named && named.described.iconPng !== undefined
+            ? { iconPng: named.described.iconPng }
+            : {},
+      );
+
     const methods: PlatformConcernMethods<typeof HOST_PLATFORM_CONCERN.MAC_COMMANDS> = {};
 
     const acts: HostActTable<typeof MAC_COMMAND_ACTS> = {
@@ -974,6 +1189,12 @@ export function composeMacCommands(
           permissions: permissionsRead(COMPUTER_HELPER_OP.PERMISSIONS),
           apps: computer === undefined ? Effect.succeed([]) : allowedAppsNamed(computer),
         }),
+      /** The apps the composer's @ list offers on this Mac (`appsOnThisMac`). */
+      COMPUTER_USE_APPS: () =>
+        computer === undefined ? Effect.succeed({ apps: [] }) : appsOnThisMac(computer),
+      /** One app's icon, for a row of the @ list that names an app installed but not running. */
+      COMPUTER_USE_APP_ICON: ({ app }) =>
+        computer === undefined ? Effect.succeed({}) : appIcon(computer, app),
       /** macOS asked for the grants it lacks, by its own prompts, and the grants as they stand once it was asked. */
       COMPUTER_USE_ASK_PERMISSIONS: () => permissionsRead(COMPUTER_HELPER_OP.REQUEST_PERMISSIONS),
     };

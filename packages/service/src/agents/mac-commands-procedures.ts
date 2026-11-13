@@ -14,11 +14,17 @@
  * `POST /api/mac-commands/claim`, answered with the command or not found
  * where another Mac took it first or it waited past the claim window, and
  * says it listens for its kinds with `POST /api/mac-commands/listening` on
- * a timer of its own, since its read writes nothing. Every request resolves the
+ * a timer of its own, since its read writes nothing. Before either, it joins
+ * as the device its commands are claimed by with `POST
+ * /api/mac-commands/device`, carrying its own settings up where the service
+ * holds none for it yet and answered the ones it keeps, writes them as the
+ * member changes them on it with `POST /api/mac-commands/device/settings`,
+ * and names that device in its claims and presence. Every request resolves the
  * bearer before it touches a row, and every row it touches is the
  * bearer's account's own.
  */
 
+import { joinCommandDevice, saveCommandDeviceSettings } from "@repo/database/models/device-store";
 import { markMacListening, settleMacCommand } from "@repo/database/models/mac-command-store";
 import { macCommandKindsRead } from "@repo/features/mac-command-wire";
 import { Effect, Option } from "effect";
@@ -61,17 +67,35 @@ export function macCommandsProcedures(seams: MacCommandsProcedureSeams) {
       return { settled: true } as const;
     }),
     claim: macCommands.claim.effect(function* ({ context, input }) {
-      const claimed = yield* hostedStoreOrUnavailable(claimedMacCommand(context.userId, input.id));
+      const claimed = yield* hostedStoreOrUnavailable(
+        claimedMacCommand(context.userId, input.id, input.deviceId),
+      );
 
       if (Option.isNone(claimed)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
       return { command: claimed.value };
     }),
     // Note that the kinds a presence names are read past, since every Mac that listens runs shell.
-    listening: macCommands.listening.effect(function* ({ context }) {
-      yield* hostedStoreOrUnavailable(markMacListening(context.userId));
+    listening: macCommands.listening.effect(function* ({ context, input }) {
+      yield* hostedStoreOrUnavailable(markMacListening(context.userId, input.deviceId));
 
       return { listening: true } as const;
+    }),
+    join: macCommands.join.effect(function* ({ context, input }) {
+      const joined = yield* hostedStoreOrUnavailable(joinCommandDevice(context.userId, input));
+
+      if (Option.isNone(joined)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+      return { settings: joined.value };
+    }),
+    saveDeviceSettings: macCommands.saveDeviceSettings.effect(function* ({ context, input }) {
+      const saved = yield* hostedStoreOrUnavailable(
+        saveCommandDeviceSettings(context.userId, input.deviceId, input.settings),
+      );
+
+      if (!saved) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+      return { saved: true } as const;
     }),
   };
 }

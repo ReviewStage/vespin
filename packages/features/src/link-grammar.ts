@@ -374,6 +374,8 @@ export const SCHEME_LINK_HOST = {
   FOLDER: "folder",
   MCP: "mcp",
   DATE: "date",
+  MAC_APP: "mac-app",
+  COMPUTER: "computer",
 } as const;
 
 export type SchemeLinkHost = (typeof SCHEME_LINK_HOST)[keyof typeof SCHEME_LINK_HOST];

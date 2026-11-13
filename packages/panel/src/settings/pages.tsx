@@ -13,8 +13,6 @@ import {
   LaptopIcon,
   PlugIcon,
   ProductMark,
-  SETTINGS_PAGE_WIDTH,
-  type SettingsPageWidth,
   SpeakerIcon,
 } from "@repo/ui";
 import {
@@ -82,14 +80,6 @@ const THIS_DEVICE_HEADING = "This device";
 /** Any page's name and glyph: what the Settings sidebar, a page's title, and the command palette name it by. */
 export function settingsPageOf(view: SettingsView): SettingsPage {
   return { title: SETTINGS_PAGE_TITLE[view], icon: SETTINGS_PAGE_ICON[view] };
-}
-
-/** The pages that hold records a reader compares across a table's columns, which stand at the wide measure; every other page reads at Settings' own. */
-const WIDE_SETTINGS_PAGES: ReadonlySet<SettingsView> = new Set([SETTINGS_VIEW.MEMORY]);
-
-/** How wide a page's column stands. */
-export function settingsPageWidthOf(view: SettingsView): SettingsPageWidth {
-  return WIDE_SETTINGS_PAGES.has(view) ? SETTINGS_PAGE_WIDTH.WIDE : SETTINGS_PAGE_WIDTH.MEASURE;
 }
 
 /** The Settings sidebar's groups with the pages this platform and the account's experiments offer, a group left with none dropped. */

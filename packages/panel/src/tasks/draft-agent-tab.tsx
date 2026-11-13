@@ -6,7 +6,7 @@ import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { useAsyncAction } from "@repo/ui/use-async-action";
 import { useEffect, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
-import { ConversationEmptyState } from "../ai-elements/conversation.js";
+import { ConversationLead } from "../ai-elements/conversation.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { agentName, unrunnableChoice } from "./agent-model.js";
@@ -58,7 +58,8 @@ import { WorkingLine } from "./working-time.js";
  * on its whole transcript the same way, its chip naming the source alone.
  * While a fork's or a continue's Start is out, which copies the source's
  * work before the new agent starts and may take a while, the tab stands on
- * a working line saying so, counting from the send, over the held box;
+ * a working line at the log's top saying so, counting from the send, as the
+ * agent's own tab says its start, over the held box;
  * once it lands the tab gives way to the new agent's, and a Start that did
  * not land leaves the line for the note and Retry under the box, the words
  * kept.
@@ -256,12 +257,12 @@ export function DraftAgentTab({
   return (
     <AgentTabFrame label={TAB_WORDS.NEW_AGENT}>
       {sentAt === undefined || fork === undefined ? null : (
-        <ConversationEmptyState>
+        <ConversationLead>
           <StartingLine
             source={source === undefined ? undefined : agentName(source, control.models)}
             sentAt={sentAt}
           />
-        </ConversationEmptyState>
+        </ConversationLead>
       )}
       <AgentTabFoot>
         {fork === undefined ? null : (

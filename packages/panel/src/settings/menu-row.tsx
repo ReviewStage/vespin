@@ -7,6 +7,7 @@ import {
   opensMenu,
   SettingsFoldRow,
   SettingsRow,
+  type SettingsRowAlign,
   type SettingsRowControl,
   type SettingsRowControls,
   type SettingsRowIndent,
@@ -67,6 +68,8 @@ interface MenuRowWords {
   editing?: boolean;
   /** Where its control and ⋯ stand where they would leave its words less than a legible stretch; dropped below them where none is named. */
   controls?: SettingsRowControls;
+  /** Where its lead, control, and ⋯ stand against words that run to several lines; centered on them where none is named. */
+  align?: SettingsRowAlign;
   /** Whether the row stands inset under the row above, one of its things, as GitHub's accounts stand under GitHub's. */
   indent?: SettingsRowIndent;
   /** What the row folds open under its words from a chevron after its ⋯ (`SettingsFoldRow`), the chevron's name, and whether it starts open. */
@@ -200,6 +203,7 @@ export function MenuRow({
             landed={row.landed}
             editing={row.editing}
             controls={row.controls}
+            align={row.align}
             below={row.below === undefined || row.below === null ? undefined : () => row.below}
             end={(control) => (
               <>

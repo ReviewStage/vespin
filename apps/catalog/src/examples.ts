@@ -71,6 +71,7 @@ import { HOVER_CARDS_EXAMPLE } from "./examples/hover-cards";
 import { ICONS_EXAMPLE } from "./examples/icons";
 import { INLINE_EDITS_EXAMPLE } from "./examples/inline-edits";
 import { INLINE_REFS_EXAMPLE } from "./examples/inline-refs";
+import { INTRO_CARDS_EXAMPLE } from "./examples/intro-cards";
 import { KEEP_FOCUS_EXAMPLE } from "./examples/keep-focus";
 import { LANDING_EXAMPLE } from "./examples/landing";
 import { LAYOUT_EXAMPLE } from "./examples/layout";
@@ -245,6 +246,7 @@ export const EXAMPLES: readonly Example[] = [
   HOVER_CARDS_EXAMPLE,
   INLINE_EDITS_EXAMPLE,
   INLINE_REFS_EXAMPLE,
+  INTRO_CARDS_EXAMPLE,
   SUGGESTION_CARDS_EXAMPLE,
   SWATCHES_EXAMPLE,
   TEXT_BUTTONS_EXAMPLE,

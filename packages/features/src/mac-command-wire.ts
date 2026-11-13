@@ -1,4 +1,5 @@
 import { Effect, Schema as EffectSchema, Option } from "effect";
+import { DEVICE_ARCH, DEVICE_PLATFORM, deviceMachineFields } from "./device-agent-wire.js";
 import { wireUuidSchema } from "./service-wire.js";
 
 /**
@@ -523,9 +524,35 @@ export const macCommandSettledAnswerSchema = EffectSchema.Struct({
   settled: EffectSchema.Literal(true),
 });
 
-/** One command the Mac heard of over Realtime, claimed by its id (POST). */
+/**
+ * Whether an agent's command runs on a Mac: never, after the developer
+ * allows it, or always. The Mac's own setting and the service's copy for
+ * its device name the same three. Note that the order is the menu's, from
+ * least freedom to most.
+ */
+export const MAC_COMMAND_MODE = {
+  /** The Mac takes no commands. */
+  NEVER: "never",
+  /** Each command is shown to the developer first, and runs only once they allow it. */
+  ASK: "ask",
+  /** Any command from any of the account's agents runs without asking. */
+  ALWAYS: "always",
+} as const;
+
+export type MacCommandMode = (typeof MAC_COMMAND_MODE)[keyof typeof MAC_COMMAND_MODE];
+
+export const MAC_COMMAND_MODE_LIST: readonly MacCommandMode[] = Object.values(MAC_COMMAND_MODE);
+
+export const macCommandModeSchema = EffectSchema.Literals(MAC_COMMAND_MODE_LIST);
+
+/**
+ * One command the Mac heard of over Realtime, claimed by its id (POST), as
+ * the device it joined as, where it did: a device claims what was queued
+ * for it or for none, a Mac naming none only what was queued for none.
+ */
 export const macCommandClaimRequestSchema = EffectSchema.Struct({
   id: wireUuidSchema,
+  deviceId: EffectSchema.optionalKey(wireUuidSchema),
 });
 
 /** The command claimed for this Mac, to run; `not-found` where another Mac took it, its call withdrew it, or it waited too long. */
@@ -536,4 +563,56 @@ export const macCommandClaimAnswerSchema = EffectSchema.Struct({
 /** That the service counts this Mac listening now, for the kinds it named (POST). */
 export const macCommandListeningAnswerSchema = EffectSchema.Struct({
   listening: EffectSchema.Literal(true),
+});
+
+/**
+ * A machine's own say over agents' terminal commands and computer use, as
+ * the service keeps it for the device: how commands run there, the same
+ * three modes its own setting names, and the apps agents use there without
+ * asking, by bundle id, or by name where an app has none.
+ */
+export const macDeviceSettingsSchema = EffectSchema.Struct({
+  commandMode: macCommandModeSchema,
+  alwaysAllowedApps: EffectSchema.Array(appName).check(
+    EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_APPS),
+  ),
+});
+
+export type MacDeviceSettings = typeof macDeviceSettingsSchema.Type;
+
+/**
+ * This Mac joining as the device its commands are claimed by (POST): the
+ * id it keeps for the account, and its name, platform and architecture,
+ * which create the device under the account where the account never had
+ * the id, which machine it runs on as its host names one
+ * (`deviceMachineFields`), so two installs on one Mac can be told for one,
+ * and its own settings as it holds them, which the service keeps
+ * only where it holds none for the device yet, so a machine carries them up
+ * once and reads the service's from then on.
+ */
+export const macDeviceJoinRequestSchema = EffectSchema.Struct({
+  deviceId: wireUuidSchema,
+  name: EffectSchema.String.check(EffectSchema.isMinLength(1), EffectSchema.isMaxLength(200)),
+  platform: EffectSchema.Literals(Object.values(DEVICE_PLATFORM)),
+  arch: EffectSchema.Literals(Object.values(DEVICE_ARCH)),
+  ...deviceMachineFields,
+  settings: macDeviceSettingsSchema,
+});
+
+export type MacDeviceJoinRequest = typeof macDeviceJoinRequestSchema.Type;
+
+/** The device's settings as the service keeps them once it joined; `not-found` where another account holds the id. */
+export const macDeviceJoinAnswerSchema = EffectSchema.Struct({
+  settings: macDeviceSettingsSchema,
+});
+
+/** The device's settings as the member changed them on it (POST); `not-found` where the account holds no such device. */
+export const macDeviceSettingsRequestSchema = EffectSchema.Struct({
+  deviceId: wireUuidSchema,
+  settings: macDeviceSettingsSchema,
+});
+
+/** That the service keeps the device's settings as written (POST). */
+export const macDeviceSettingsAnswerSchema = EffectSchema.Struct({
+  saved: EffectSchema.Literal(true),
 });

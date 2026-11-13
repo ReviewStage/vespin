@@ -86,6 +86,7 @@ import {
   type RowSwipe,
   Screen,
   SplitView,
+  STATUS_MARK_SYMBOL,
   shareLink,
   type TaskFold,
   TaskHead,
@@ -243,6 +244,7 @@ function statusSubmenu(
     symbol: GLYPH.STATUS,
     choices: STATUS_ORDER.map((status) => ({
       label: TASK_STATUS_WORDS[status],
+      symbol: STATUS_MARK_SYMBOL[status],
       on: task.status === status,
       onPress: () => setStatus(task.id, status),
     })),
@@ -1767,6 +1769,7 @@ export function TaskScreen() {
                 {submenu.choices.map((choice) => (
                   <Stack.Toolbar.MenuAction
                     key={choice.label}
+                    {...(choice.symbol === undefined ? {} : { icon: glyphSymbol(choice.symbol) })}
                     isOn={choice.on}
                     onPress={choice.onPress}
                   >

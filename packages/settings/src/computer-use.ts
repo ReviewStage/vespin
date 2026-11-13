@@ -32,6 +32,11 @@ export function computerUseAppsOf(stored: string | undefined): readonly string[]
   return stored === undefined ? [] : Option.getOrElse(decodeAllowedApps(stored), () => []);
 }
 
+/** The stored value allowing the apps given, each once, in their order. */
+export function computerUseAppsStored(apps: readonly string[]): string {
+  return encodeAllowedApps([...new Set(apps)]);
+}
+
 /** The stored value with one more app allowed, each app once. */
 export function computerUseAppsWith(stored: string | undefined, app: string): string {
   return encodeAllowedApps([...new Set([...computerUseAppsOf(stored), app])]);

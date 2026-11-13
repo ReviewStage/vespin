@@ -859,20 +859,46 @@ const TRANSCRIPT_COMPONENTS: MarkdownComponents = {
  * place draws none, which draws its link instead. `inline` says it stands
  * in a line of words or inside a link the words keep, a press on which
  * follows the link, so the place draws it in that line as GitHub does, with
- * no press of its own. `size` is the width and height its author wrote on
- * it, in pixels, which GitHub draws it at, as a bot's 16-pixel glyph is.
+ * no press of its own. `written` is what its author wrote on it: its width
+ * and height in pixels, which GitHub draws it at, as a bot's 16-pixel glyph
+ * is, and where it stands in its line (`align`).
  */
 export type GitHubPictureDrawer = (
   src: string,
   alt: string,
   inline: boolean,
-  size: GitHubPictureSize,
+  written: GitHubPictureWritten,
 ) => ReactNode | undefined;
 
-/** The width and height a picture's author wrote on it, in pixels; either unset where none is written. */
-export interface GitHubPictureSize {
+/**
+ * Where a picture stands in its line by the `align` its author wrote, as a
+ * browser draws HTML's `align` and so GitHub does: `middle` sets the
+ * picture's middle on the words' baseline, as a bot's glyph beside a name
+ * is written (`-webkit-baseline-middle`, as Chromium and WebKit draw it),
+ * and `absmiddle` on the middle of their small letters. Keyed by HTML's own
+ * words; `left` and `right`, which float a picture, are left out.
+ */
+const WRITTEN_ALIGN = {
+  middle: "-webkit-baseline-middle",
+  center: "-webkit-baseline-middle",
+  absmiddle: "middle",
+  abscenter: "middle",
+  top: "top",
+  texttop: "text-top",
+  bottom: "baseline",
+  baseline: "baseline",
+  absbottom: "bottom",
+} as const;
+
+type WrittenAlign = (typeof WRITTEN_ALIGN)[keyof typeof WRITTEN_ALIGN];
+
+const ALIGN_BY_WORD: ReadonlyMap<string, WrittenAlign> = new Map(Object.entries(WRITTEN_ALIGN));
+
+/** What a picture's author wrote on it: its width and height in pixels, and where it stands in its line; each unset where none is written. */
+export interface GitHubPictureWritten {
   readonly width: number | undefined;
   readonly height: number | undefined;
+  readonly align: WrittenAlign | undefined;
 }
 
 /** A size attribute as the drawn tree hands it, a number or its words, read as pixels; none where it is no positive number, as a percentage is not. */
@@ -880,6 +906,11 @@ function pixelsOf(value: string | number | undefined): number | undefined {
   const pixels = Predicate.isNumber(value) ? value : Number(value);
 
   return Number.isFinite(pixels) && pixels > 0 ? pixels : undefined;
+}
+
+/** An `align` attribute's word, read as where the picture stands in its line; none where it names no place a line holds. */
+function alignOf(word: string): WrittenAlign | undefined {
+  return ALIGN_BY_WORD.get(word.toLowerCase());
 }
 
 /** Whether what is drawn stands inside a link of GitHub's words. */
@@ -894,13 +925,13 @@ function GitHubImage({
   src,
   alt,
   inWords,
-  size,
+  written,
   picture,
 }: {
   src: string;
   alt: string;
   inWords: boolean;
-  size: GitHubPictureSize;
+  written: GitHubPictureWritten;
   picture: GitHubPictureDrawer;
 }): ReactNode {
   const linked = useContext(InsideGitHubLink);
@@ -909,7 +940,7 @@ function GitHubImage({
   if (shown === undefined) return null;
 
   return (
-    picture(shown, alt, inWords || linked, size) ?? <GitHubPictureLink src={shown} alt={alt} />
+    picture(shown, alt, inWords || linked, written) ?? <GitHubPictureLink src={shown} alt={alt} />
   );
 }
 
@@ -974,7 +1005,11 @@ export function GitHubWords({
           src={String(src ?? "")}
           alt={String(alt ?? "")}
           inWords={node?.properties[INLINE_PICTURE] === true}
-          size={{ width: pixelsOf(width), height: pixelsOf(height) }}
+          written={{
+            width: pixelsOf(width),
+            height: pixelsOf(height),
+            align: alignOf(String(node?.properties.align ?? "")),
+          }}
           picture={picture}
         />
       ),

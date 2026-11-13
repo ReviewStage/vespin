@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { MAC_COMMAND_CALL_FAILURE, MAC_COMMAND_NOT_CLAIMED } from "@repo/features";
+import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { LIVE_POLL_URL, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import type { MacCommandsLiveAnswer } from "@repo/features/mac-command-live";
 import {
@@ -8,14 +9,17 @@ import {
   COMPUTER_PERMISSION,
   type ComputerApp,
   MAC_COMMAND_KIND,
+  MAC_COMMAND_MODE,
   type MacCommand,
   type MacCommandKind,
+  type MacCommandMode,
   type MacCommandResult,
+  type MacDeviceJoinRequest,
+  type MacDeviceSettings,
   macCommandKindsRead,
   storedMacCommandText,
 } from "@repo/features/mac-command-wire";
 import { GATEWAY_EVENT, type GatewayEventKind } from "@repo/gateway";
-import { MAC_COMMAND_MODE, type MacCommandMode } from "@repo/settings";
 import { isRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
 import { ConfigProvider, Duration, Effect, Layer, Predicate, PubSub, Stream } from "effect";
@@ -155,6 +159,8 @@ function scriptedService(
     readonly unansweredClaims?: number;
     /** What happens as a claim is made, before the service grants it, such as the setting being switched off. */
     readonly duringClaim?: Effect.Effect<void>;
+    /** The settings the service keeps for a device that joins, where it keeps any; none keeps what the join carries. */
+    readonly deviceSettings?: MacDeviceSettings;
   } = {},
 ) {
   let unanswered = options.unansweredClaims ?? 0;
@@ -163,6 +169,10 @@ function scriptedService(
   const reads: { readonly userId: string; readonly kinds: readonly MacCommandKind[] }[] = [];
   const claims: string[] = [];
   const beats: (readonly MacCommandKind[])[] = [];
+  /** The device each read, claim, and presence named, in order; none for one naming none. */
+  const named: { readonly by: string; readonly device: string | undefined }[] = [];
+  const joins: MacDeviceJoinRequest[] = [];
+  const savedSettings: MacDeviceSettings[] = [];
   const settledResults = new Map<string, MacCommandResult>();
 
   const answer = (rows: boolean): MacCommandsLiveAnswer => ({
@@ -194,12 +204,17 @@ function scriptedService(
     // SAFETY: the Mac's commands are the one live read the client is asked for, answering the script's rows.
     liveRead: (<Read>(
       _read: Read,
-      { userId, kinds }: { readonly userId: string; readonly kinds?: string },
+      {
+        userId,
+        kinds,
+        device,
+      }: { readonly userId: string; readonly kinds?: string; readonly device?: string },
       poll?: { readonly after?: string | undefined },
     ) =>
       Effect.gen(function* () {
         const after = poll?.after;
         reads.push({ userId, kinds: macCommandKindsRead(kinds) });
+        named.push({ by: "read", device });
 
         if (options.signedOut === true) return LIVE_SIGNED_OUT;
 
@@ -209,11 +224,12 @@ function scriptedService(
 
         return answer(after !== String(version));
       })) as MacCommandClient["liveRead"],
-    claim: (id) =>
+    claim: (id, device) =>
       Effect.andThen(
         options.duringClaim ?? Effect.void,
         Effect.sync(() => {
           claims.push(id);
+          named.push({ by: "claim", device });
 
           // A claim lost on its way, as a network fault loses one, reaches nothing.
           if (unanswered > 0) {
@@ -234,11 +250,24 @@ function scriptedService(
           return { command };
         }),
       ),
-    listening: (kinds) =>
+    listening: (kinds, device) =>
       Effect.sync(() => {
         beats.push(kinds);
+        named.push({ by: "presence", device });
 
         return { listening: true } as const;
+      }),
+    join: (request) =>
+      Effect.sync(() => {
+        joins.push(request);
+
+        return { settings: options.deviceSettings ?? request.settings };
+      }),
+    saveDeviceSettings: (_deviceId, settings) =>
+      Effect.sync(() => {
+        savedSettings.push(settings);
+
+        return { saved: true } as const;
       }),
     settle: (id, result) =>
       Effect.sync(() => {
@@ -253,6 +282,9 @@ function scriptedService(
     reads,
     claims,
     beats,
+    named,
+    joins,
+    savedSettings,
     settledResults,
     /** A command queued for the account, as an agent's call queues it. */
     queue: (command: MacCommand, queuedAt: number) => {
@@ -284,6 +316,8 @@ interface Gate {
   saveFails?: boolean;
   /** The computer-use helper this Mac ships, its switch, and the apps allowed without asking; none ships no helper. */
   computer?: { helper: ComputerUseHelperSeam; enabled: boolean; allowed: string[] };
+  /** The device this Mac joins as, and the apps Settings allows without asking; none claims as the account alone. */
+  device?: { id: string; apps: string[] };
 }
 
 /**
@@ -351,6 +385,27 @@ const subject = (
             gate.computer?.allowed.push(app);
 
             return true;
+          }),
+      };
+    }
+
+    if (gate.device !== undefined) {
+      dependencies.device = {
+        idFor: () => Effect.sync(() => gate.device?.id ?? ""),
+        renewFor: () => Effect.die("no join is refused here"),
+        machine: Effect.succeed({
+          name: "Studio",
+          platform: DEVICE_PLATFORM.DARWIN,
+          arch: DEVICE_ARCH.ARM64,
+        }),
+        settings: Effect.sync(() => ({
+          commandMode: gate.mode,
+          alwaysAllowedApps: [...(gate.device?.apps ?? [])],
+        })),
+        applySettings: (settings: MacDeviceSettings) =>
+          Effect.sync(() => {
+            if (gate.device !== undefined) gate.device.apps = [...settings.alwaysAllowedApps];
+            gate.mode = settings.commandMode;
           }),
       };
     }
@@ -435,6 +490,68 @@ it.effect(
       });
       assert.ok(service.settledResults.has(SECOND.id), "the second command ran");
       assert.ok(service.settledResults.has(LATER.id), "the later command ran");
+    }),
+);
+
+it.effect(
+  "a Mac that joins as its device claims as it, takes the service's settings over its own, and writes its own changes back",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+
+      const service = scriptedService({
+        deviceSettings: {
+          commandMode: MAC_COMMAND_MODE.ALWAYS,
+          alwaysAllowedApps: ["com.apple.Notes"],
+        },
+      });
+
+      service.queue(COMMAND, NOW);
+      const studio = "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13";
+
+      const gate: Gate = {
+        mode: MAC_COMMAND_MODE.ALWAYS,
+        signedIn: true,
+        device: { id: studio, apps: [] },
+      };
+
+      const { composer, moved } = yield* subject(service, spawner, gate);
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+
+          gate.mode = MAC_COMMAND_MODE.NEVER;
+          yield* moved;
+          yield* settled;
+        }),
+      );
+
+      assert.deepEqual(service.joins, [
+        {
+          deviceId: studio,
+          name: "Studio",
+          platform: DEVICE_PLATFORM.DARWIN,
+          arch: DEVICE_ARCH.ARM64,
+          settings: { commandMode: MAC_COMMAND_MODE.ALWAYS, alwaysAllowedApps: [] },
+        },
+      ]);
+      assert.deepEqual(gate.device?.apps, ["com.apple.Notes"], "the service's apps are kept here");
+      assert.deepEqual(
+        service.named.filter((each) => each.by === "claim"),
+        [{ by: "claim", device: studio }],
+      );
+      assert.equal(
+        service.named.at(-1)?.device,
+        studio,
+        "the follow names the device it joined as",
+      );
+      assert.deepEqual(service.savedSettings, [
+        { commandMode: MAC_COMMAND_MODE.NEVER, alwaysAllowedApps: ["com.apple.Notes"] },
+      ]);
     }),
 );
 
@@ -1073,5 +1190,63 @@ it.effect(
           { bundleId: "com.example.Gone", name: "com.example.Gone" },
         ],
       });
+    }),
+);
+
+it.effect(
+  "the composer's @ list offers the running apps first, then the installed ones not already listed, none agents are never offered, each marked where always allowed, and nothing with the switch off",
+  () =>
+    Effect.gen(function* () {
+      const notes: ComputerApp = { name: "Notes", bundleId: "com.apple.Notes", refused: false };
+
+      const helper: ComputerUseHelperSeam = {
+        ask: (request) =>
+          Effect.succeed(
+            request.op === COMPUTER_ACTION.LIST_APPS
+              ? { outcome: { apps: [SIMULATOR, TERMINAL] } }
+              : {
+                  outcome: {
+                    apps: [
+                      notes,
+                      {
+                        name: SIMULATOR.name,
+                        bundleId: "com.apple.iphonesimulator",
+                        refused: false,
+                      },
+                    ],
+                  },
+                },
+          ),
+      };
+
+      for (const enabled of [true, false]) {
+        const { composer } = yield* subject(
+          scriptedService(),
+          scriptedSpawner(() => ({ exitCode: 0 })),
+          {
+            mode: MAC_COMMAND_MODE.ASK,
+            signedIn: true,
+            computer: { helper, enabled, allowed: ["com.apple.Notes"] },
+          },
+        );
+
+        const listed = yield* composer.acts.COMPUTER_USE_APPS({});
+
+        assert.deepEqual(
+          listed.apps,
+          enabled
+            ? [
+                {
+                  name: "Simulator",
+                  bundleId: "com.apple.iphonesimulator",
+                  running: true,
+                  allowed: false,
+                  iconPng: "iVBORw0KGgo=",
+                },
+                { name: "Notes", bundleId: "com.apple.Notes", running: false, allowed: true },
+              ]
+            : [],
+        );
+      }
     }),
 );

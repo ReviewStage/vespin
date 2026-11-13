@@ -143,7 +143,6 @@ import {
   SubjectLine,
   TaskStatusMark,
   TEXT_ELEMENT,
-  TEXT_TONE,
   TEXT_VARIANT,
   Text,
   TurnEnd,
@@ -191,6 +190,7 @@ import {
   Conversation,
   ConversationContent,
   ConversationEmptyState,
+  ConversationLead,
   ConversationRows,
   ConversationScrollButton,
   FLOATING_OVER_LOG_CLASS,
@@ -2687,11 +2687,14 @@ function AgentTranscriptView({
   bringIn,
   holding = false,
   boot,
+  starting,
   payerSubscriptionId,
 }: {
   messages: readonly AgentTranscriptMessage[];
-  /** What the empty transcript says in its starting line's place while the agent's first launch stands (`AgentBootLine`); none otherwise. */
+  /** What the empty transcript says in its centered line once the agent's first launch failed (`AgentBootLine`); none otherwise. */
   boot?: ReactNode;
+  /** The working line the empty transcript stands at its top while the agent's first launch is under way (`AgentBootLine`); the lead's starting line where none. */
+  starting?: ReactNode;
   /** The plan the agent runs on, whose reset credit its pause's notice offers where the plan is the reader's own. */
   payerSubscriptionId?: string | undefined;
   /** Whether the log waits to draw for what stands around it, saying it is loading meanwhile. */
@@ -3095,13 +3098,23 @@ function AgentTranscriptView({
   // The log's first page, and what stands around it, wait in the tab's own placeholder, which it opened on (`AgentTab`).
   if (holding || (reading && ended === undefined)) return <TranscriptSkeleton />;
 
+  // Note that a start under way says so at the log's top, where its first line lands, rather than centered in whatever room the docks leave, so it stands still as they come and go.
+  if (ended === undefined && boot === undefined) {
+    return (
+      <ConversationLead className={overComposer ? LOG_OVER_COMPOSER_CLASS : undefined}>
+        {starting ?? <WorkingLine startedAt={undefined} words={lead.startingLine} />}
+        {endTrail}
+      </ConversationLead>
+    );
+  }
+
   // Note that the centered column is wider than the empty state's own, so a one-line failure stays one line.
   return (
     <ConversationEmptyState wide>
       {
         <>
           {ended === undefined ? (
-            (boot ?? <Text tone={TEXT_TONE.MUTED}>{lead.startingLine}</Text>)
+            boot
           ) : signInCard !== undefined ? (
             signInCard
           ) : (
@@ -3336,7 +3349,7 @@ function AgentTabView({
 
   // Whether the agent works and how its turn ended are read from its newest turn's record alone (`tabTurnOf`).
   const standing = tabTurnOf(agent, composer);
-  // Note that a first launch still booting says so in the empty transcript's centered line (`AgentBootLine`), so no working line or end line stands under it.
+  // Note that a first launch still booting says so in the empty transcript's own line (`AgentBootLine`), so no working line or end line stands under it.
   // Note that an agent just made, before its first turn and before its first page lands, is booting by its summary, counted from when it was made as its boot's first attempt is, so Starting… stands at once rather than after a placeholder.
   const unread = transcript.pageStatus === undefined && !transcript.failed;
   const firstBoot = unread && agent.status === AGENT_STATUS.STARTING && agent.turnId === null;
@@ -3345,6 +3358,19 @@ function AgentTabView({
   const bootLine: BootLine | undefined = firstBoot
     ? { kind: BOOT_LINE.STARTING, since: agent.createdAt }
     : bootLineOf(transcript.boot);
+
+  // Note that a boot under way says so as the log's working line, at its top, and a failed one in its centered line with Retry.
+  const bootDrawn =
+    bootLine === undefined ? undefined : (
+      <AgentBootLine
+        line={bootLine}
+        machine={agent.machine ?? AGENT_MACHINE.VERCEL}
+        host={agent.mac?.name}
+        retry={startedByReader ? agent.id : undefined}
+      />
+    );
+
+  const bootFailed = bootLine?.kind === BOOT_LINE.FAILED;
 
   // Note that the sign-in card's Retry is offered only where the box stands, as Try again is.
   const signIn: GitHubSignInDoors | undefined =
@@ -3524,14 +3550,8 @@ function AgentTabView({
                               failed={transcript.failed}
                               failedWith={transcript.failedWith}
                               working={standing.working && !booting}
-                              boot={
-                                bootLine === undefined ? undefined : (
-                                  <AgentBootLine
-                                    line={bootLine}
-                                    retry={startedByReader ? agent.id : undefined}
-                                  />
-                                )
-                              }
+                              boot={bootFailed ? bootDrawn : undefined}
+                              starting={bootFailed ? undefined : bootDrawn}
                               phase={standing.phase}
                               waitsUntil={standing.waitsUntil}
                               turnId={standing.turnId ?? agent.turnId}

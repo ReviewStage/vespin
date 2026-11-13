@@ -1,5 +1,5 @@
 /**
- * device-store.ts -- an account's devices that can run its local agents: registered, beaten with where a host's update stands, and read for the ones there now.
+ * device-store.ts -- an account's devices that can run its local agents or take its agents' commands: registered, beaten with where a host's update stands, read for the ones there now, and joined with their own settings for commands.
  *
  * Every function is an effect over the ambient `SqlClient`, keyed by the
  * account, so no account moves, beats, or reads another's Mac. A register
@@ -22,8 +22,15 @@ import {
   type HostUpdate,
   hostUpdateSchema,
 } from "@repo/features/device-agent-wire";
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt } from "drizzle-orm";
-import { DateTime, Effect, type Option, Schema } from "effect";
+import {
+  type MacCommandMode,
+  type MacDeviceJoinRequest,
+  type MacDeviceSettings,
+  macCommandModeSchema,
+  macDeviceSettingsSchema,
+} from "@repo/features/mac-command-wire";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
 import { device } from "../schemas/device.js";
@@ -325,6 +332,87 @@ const findLayout = SqlSchema.findOneOption({
 });
 
 /**
+ * The account's device of the id, created where no row holds it, with the
+ * settings given kept only where it holds none yet, answering the settings
+ * it keeps. Note that a row standing is otherwise left as it is, its name
+ * and when it was last seen among it, since a host's own register and beat
+ * write those, and that another account's device answers no row.
+ */
+const joinDevice = SqlSchema.findAll({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    id: Schema.String,
+    name: Schema.String,
+    platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
+    arch: Schema.Literals(Object.values(DEVICE_ARCH)),
+    ...MachineColumnsSchema.fields,
+    commandMode: macCommandModeSchema,
+    alwaysAllowedApps: Schema.Array(Schema.String),
+    now: Schema.Date,
+  }),
+  Result: macDeviceSettingsSchema,
+  execute: ({
+    userId,
+    id,
+    name,
+    platform,
+    arch,
+    machineId,
+    model,
+    commandMode,
+    alwaysAllowedApps,
+    now,
+  }) =>
+    Database.use((db) =>
+      db
+        .insert(device)
+        .values({
+          id,
+          userId,
+          name,
+          platform,
+          arch,
+          ...machineColumns({ machineId, model }),
+          commandMode,
+          alwaysAllowedApps,
+          lastSeenAt: now,
+        })
+        .onConflictDoUpdate({
+          target: device.id,
+          set: {
+            ...machineColumns({ machineId, model }),
+            // Note that a Mac whose host was removed still takes commands as the app, so its join stands the row again, as an enroll does; it is listed as a host only once a host keys it again.
+            removedAt: null,
+            commandMode: sql`coalesce(${device.commandMode}, excluded.command_mode)`,
+            alwaysAllowedApps: sql`coalesce(${device.alwaysAllowedApps}, excluded.always_allowed_apps)`,
+          },
+          setWhere: sql`${device.userId} = ${userId}`,
+        })
+        .returning({
+          commandMode: sql<MacCommandMode>`${device.commandMode}`,
+          alwaysAllowedApps: sql<readonly string[]>`${device.alwaysAllowedApps}`,
+        }),
+    ),
+});
+
+const writeSettings = SqlSchema.findAll({
+  Request: Schema.Struct({
+    ...DeviceKeySchema.fields,
+    commandMode: macCommandModeSchema,
+    alwaysAllowedApps: Schema.Array(Schema.String),
+  }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, id, commandMode, alwaysAllowedApps }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ commandMode, alwaysAllowedApps })
+        .where(and(eq(device.id, id), eq(device.userId, userId)))
+        .returning({ id: device.id }),
+    ),
+});
+
+/**
  * Registers the Mac under the account, or renames, relocates, and beats it
  * where the account holds it already, with the machine it runs on where it
  * named one (`machineColumns`); false where another account holds the id,
@@ -430,4 +518,42 @@ export function devicesNamed(ids: readonly string[]): DeviceEffect<ReadonlyMap<s
     findNamed({ ids: [...new Set(ids)] }),
     (devices) => new Map(devices.map((device) => [device.id, device])),
   );
+}
+
+/**
+ * Joins a machine of the account as the device its commands are claimed
+ * by: the device created where the account never had the id, and the
+ * machine's own settings kept only where the service holds none for it
+ * yet, so a machine carries them up once and reads the service's from
+ * then on. Answers the settings the device keeps; nothing where another
+ * account holds the id, and nothing was written.
+ */
+export function joinCommandDevice(
+  userId: string,
+  joining: MacDeviceJoinRequest,
+): DeviceEffect<Option.Option<MacDeviceSettings>> {
+  return Effect.flatMap(DateTime.nowAsDate, (now) =>
+    Effect.map(
+      joinDevice({
+        userId,
+        id: joining.deviceId,
+        name: joining.name,
+        platform: joining.platform,
+        arch: joining.arch,
+        ...machineColumns(joining),
+        ...joining.settings,
+        now,
+      }),
+      (rows) => Option.fromUndefinedOr(rows[0]),
+    ),
+  );
+}
+
+/** Keeps the settings the member gave the account's device; false where the account holds no such device. */
+export function saveCommandDeviceSettings(
+  userId: string,
+  id: string,
+  settings: MacDeviceSettings,
+): DeviceEffect<boolean> {
+  return Effect.map(writeSettings({ userId, id, ...settings }), (rows) => rows.length > 0);
 }

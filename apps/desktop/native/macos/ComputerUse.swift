@@ -16,6 +16,8 @@ import UniformTypeIdentifiers
 /// - `permissions`, `request_permissions`: whether it may capture windows and
 ///   post input, the second raising macOS's own prompts first.
 /// - `list_apps`: the running apps a person uses, each with its icon.
+/// - `list_installed_apps`: the apps installed in the usual folders, by name
+///   and bundle id, without icons, which `describe_app` draws one at a time.
 /// - `describe_app {app}`: one app, running or installed, as `list_apps`
 ///   names each, launching nothing, so the developer can be asked about it.
 /// - `get_app_state {app, shots}`: an app's frontmost window as a numbered
@@ -213,14 +215,20 @@ private func listApps() -> [String: Any] {
     ["apps": runningApps().map(describe)]
 }
 
+/// The folders an app not yet running is looked for in, by its name: the usual ones, the developer's own, and Xcode's tools.
+private let APP_FOLDERS: [URL] =
+    ["/Applications", "/System/Applications", "/System/Applications/Utilities",
+     "/Applications/Utilities", "/Applications/Xcode.app/Contents/Developer/Applications",
+     "/Applications/Xcode.app/Contents/Applications"]
+    .map { URL(fileURLWithPath: $0) }
+    + [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")]
+
 /// Where an app not yet running is installed, found by its bundle id or by its name in the usual folders.
 private func installedURL(_ name: String) -> URL? {
     if let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: name) { return url }
-    let folders = ["/Applications", "/System/Applications", "/System/Applications/Utilities",
-                   "/Applications/Utilities", "/Applications/Xcode.app/Contents/Developer/Applications"]
     let file = name.hasSuffix(".app") ? name : "\(name).app"
-    return folders
-        .map { URL(fileURLWithPath: $0).appendingPathComponent(file) }
+    return APP_FOLDERS
+        .map { $0.appendingPathComponent(file) }
         .first { FileManager.default.fileExists(atPath: $0.path) }
 }
 
@@ -298,6 +306,40 @@ private func describeApp(_ request: [String: Any]) throws -> [String: Any] {
     if let bundleId = bundle?.bundleIdentifier { described["bundle_id"] = bundleId }
     if let png = pngBase64(NSWorkspace.shared.icon(forFile: url.path), edge: ICON_EDGE) { described["icon_png"] = png }
     return ["app": described]
+}
+
+/// An installed app as `list_apps` names one, without its icon, which takes far longer to draw than the folders take to read.
+private func describeInstalled(_ url: URL) -> [String: Any] {
+    let bundleId = Bundle(url: url)?.bundleIdentifier
+    var described: [String: Any] = [
+        "name": FileManager.default.displayName(atPath: url.path).replacingOccurrences(of: ".app", with: ""),
+        "refused": isRefused(bundleId),
+    ]
+    if let bundleId { described["bundle_id"] = bundleId }
+    return described
+}
+
+/**
+ The apps installed in the usual folders (`APP_FOLDERS`), each once by its
+ bundle id, by name. Note that only each folder's own apps are read, not
+ the folders inside it, so the list is read in a moment whatever the disk
+ holds; an app filed deeper is still found by `describe_app` through its
+ bundle id.
+ */
+private func listInstalledApps() -> [String: Any] {
+    var seen = Set<String>()
+    let urls = APP_FOLDERS.flatMap { folder in
+        ((try? FileManager.default.contentsOfDirectory(
+            at: folder, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? [])
+            .filter { $0.pathExtension == "app" }
+    }
+    let apps = urls.map(describeInstalled).filter { app in
+        seen.insert((app["bundle_id"] as? String) ?? (app["name"] as? String) ?? "").inserted
+    }
+    let sorted = apps.sorted {
+        (($0["name"] as? String) ?? "").localizedCaseInsensitiveCompare(($1["name"] as? String) ?? "") == .orderedAscending
+    }
+    return ["apps": sorted]
 }
 
 // MARK: - Accessibility tree
@@ -1013,6 +1055,7 @@ private let OPERATIONS: [String: ([String: Any]) async throws -> [String: Any]] 
     "permissions": { _ in permissions() },
     "request_permissions": { _ in requestPermissions() },
     "list_apps": { _ in listApps() },
+    "list_installed_apps": { _ in listInstalledApps() },
     "describe_app": describeApp,
     "get_app_state": getAppState,
     "click": click,
