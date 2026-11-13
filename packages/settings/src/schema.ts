@@ -1,5 +1,6 @@
 import { isLinkOpen, LINK_OPEN, LINK_OPEN_LABEL, LINK_OPEN_LIST } from "@repo/features/link-open";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { DEFAULT_LIVE_VOICE } from "@repo/features/voices";
 import type { UnparsedWireValue } from "@repo/wire";
 import {
   APP_SETTING_ID,
@@ -88,6 +89,13 @@ import {
 import { isSetupPlaceJson } from "./setup-place.js";
 import { isSoundWhen, SOUND_WHEN, SOUND_WHEN_LABEL, SOUND_WHEN_LIST } from "./sound-when.js";
 import { isTheme, THEME, THEME_LIST, type Theme } from "./theme.js";
+import {
+  isLiveVoice,
+  OFFERED_VOICE_LIST,
+  voiceGroup,
+  voiceOptionLabel,
+  voiceTag,
+} from "./voice-choice.js";
 import { isZoomPercent, ZOOM_ACTUAL_SIZE, ZOOM_PERCENTS } from "./zoom.js";
 
 export {
@@ -292,6 +300,31 @@ export const APP_SETTING_SCHEMA = {
     visible: desktopAppDrawn,
     // Nothing to run per write: This Mac's host is handed the choice as the settings are told again.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
+  }),
+  /*
+   * The voice a call speaks with, kept on this device as it always was, and
+   * read when a call opens its session: GPT-Live fixes a voice at creation,
+   * so a new choice is heard on the next call. The Voice page is the
+   * experiment's, so its one row stands only while the experiment is on.
+   */
+  voice: choiceSetting({
+    field: "voice",
+    id: APP_SETTING_ID.VOICE,
+    label: "Voice",
+    detail: "A new voice applies on the next call.",
+    values: OFFERED_VOICE_LIST,
+    token: (voice) => voice,
+    optionLabel: voiceOptionLabel,
+    optionGroup: voiceGroup,
+    optionTag: voiceTag,
+    search: "Search voices",
+    guard: (value: UnparsedWireValue) => optional(value, isLiveVoice),
+    default: DEFAULT_LIVE_VOICE,
+    page: SETTINGS_PAGE.VOICE,
+    section: SETTING_SECTION.CONVERSATION,
+    order: 30,
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    visible: (view) => experimentOn(view.settings.experiments, EXPERIMENT.VOICE),
   }),
   /*
    * Where an app link opened in a browser goes: it stays on the web, or the

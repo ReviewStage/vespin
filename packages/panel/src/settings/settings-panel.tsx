@@ -34,6 +34,7 @@ import { settingsRowsInput, shownWorkspace } from "./settings-rows.js";
 import { WindowShortcutSections } from "./shortcuts-page.js";
 import { SkillsPage } from "./skills-page.js";
 import { UpdatesSection } from "./updates.js";
+import { VoicePage } from "./voice-page.js";
 import { WorkspacePage, type WorkspaceSettingsControl } from "./workspace-page.js";
 import { useSettingsWrites } from "./writes.js";
 
@@ -182,6 +183,8 @@ export function SettingsPanel({
           {SIGNED_OUT_WORDS}
         </Text>
       )}
+
+      {view === SETTINGS_VIEW.VOICE && panelView ? <VoicePage view={panelView} /> : null}
 
       {view === SETTINGS_VIEW.APPEARANCE && panelView ? (
         <AppearanceSection view={panelView} writes={writes} />

@@ -155,7 +155,7 @@ function SchemaChoiceRow({
         ...option,
         ...(faces === undefined ? undefined : { faces: faces(option.value) }),
         ...(icons === undefined ? undefined : { icon: icons(option.value) }),
-        section: menu?.section?.(option.value),
+        section: menu?.section?.(option.value) ?? option.group,
       })),
   ];
 

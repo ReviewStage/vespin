@@ -150,6 +150,7 @@ export const SECTION = {
   COMPUTER_USE_APPS: "computer-use-apps",
   STARTUP: "startup",
   DICTATION: "dictation",
+  VOICE_CONVERSATION: "voice-conversation",
   NOTIFICATIONS: "notifications",
   YOUR_SOUNDS: "your-sounds",
   APPEARANCE_GROUP: "appearance-group",
@@ -318,6 +319,11 @@ const SETTINGS_SECTIONS = {
     found: SECTION_FOUND.ROWS,
     rows: SECTION_ROWS.SCHEMA,
     head: "Dictation",
+  },
+  [SECTION.VOICE_CONVERSATION]: {
+    found: SECTION_FOUND.ROWS,
+    rows: SECTION_ROWS.SCHEMA,
+    head: "Conversation",
   },
   [SECTION.EXPERIMENTS_WORKSPACE]: {
     found: SECTION_FOUND.HEAD,

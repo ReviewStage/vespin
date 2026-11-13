@@ -181,6 +181,8 @@ export {
 
 export { isTheme, THEME, THEME_LIST, type Theme } from "./theme.js";
 
+export { voiceSamplePath } from "./voice-choice.js";
+
 export {
   isZoomPercent,
   ZOOM_ACTUAL_SIZE,

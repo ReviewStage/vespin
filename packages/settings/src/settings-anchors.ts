@@ -38,6 +38,8 @@ export const SETTINGS_SEARCH_ROW = {
   ALWAYS_ALLOWED: "always-allowed",
   API_KEY_ANTHROPIC: "api-key-anthropic",
   API_KEY_OPENAI: "api-key-openai",
+  /** Voice's OpenAI key row, which opens Agents where the key is kept. */
+  VOICE_API_KEY: "voice-api-key",
   /** Skills' first group, whose heading holds its Add skill. */
   ADD_SKILL: "add-skill",
   /** Our MCP & CLI page's Connected, the outside agents the account let in. */

@@ -15,6 +15,7 @@ import {
   ProductMark,
   SETTINGS_PAGE_WIDTH,
   type SettingsPageWidth,
+  SpeakerIcon,
 } from "@repo/ui";
 import {
   CloudCogIcon,
@@ -51,6 +52,7 @@ const SETTINGS_PAGE_ICON = {
   // Note that the outside agents' and the command's page is marked for the product, never the protocol alone, because the MCP glyph marks the servers the window's own agents use.
   [SETTINGS_VIEW.MCP]: <ProductMark small glyph />,
   [SETTINGS_VIEW.SKILLS]: <GLYPH.SKILL />,
+  [SETTINGS_VIEW.VOICE]: <SpeakerIcon />,
   [SETTINGS_VIEW.MEMORY]: <GLYPH.MEMORY />,
   [SETTINGS_VIEW.APPEARANCE]: <DisplayIcon />,
   [SETTINGS_VIEW.THIS_MAC]: <LaptopIcon />,

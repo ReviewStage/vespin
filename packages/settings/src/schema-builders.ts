@@ -236,6 +236,10 @@ export function choiceSetting<
     optionLabel?: (value: Value) => string;
     /** What a value does, said under its name on the control; none where its name says it. */
     optionHint?: (value: Value) => string;
+    /** The heading a value stands under, for a choice drawn in groups; values sharing one stand together in `values`' order. */
+    optionGroup?: (value: Value) => string | undefined;
+    /** A short word of what a value is, after its name where the control draws one. */
+    optionTag?: (value: Value) => string | undefined;
     default: Default;
     /** The word for no choice at all, required where the default is nothing. */
     absent?: string;
@@ -282,11 +286,18 @@ export function choiceSetting<
     value: (stored) => tokenOf(stored),
     search: spec.search,
     options: (): readonly SettingOption[] =>
-      spec.values.map((value) => ({
-        value: spec.token(value),
-        label: optionLabel(value),
-        ...(spec.optionHint === undefined ? undefined : { hint: spec.optionHint(value) }),
-      })),
+      spec.values.map((value) => {
+        const group = spec.optionGroup?.(value);
+        const tag = spec.optionTag?.(value);
+
+        return {
+          value: spec.token(value),
+          label: optionLabel(value),
+          ...(spec.optionHint === undefined ? undefined : { hint: spec.optionHint(value) }),
+          ...(group === undefined ? undefined : { group }),
+          ...(tag === undefined ? undefined : { tag }),
+        };
+      }),
     stored: (token) => byToken.get(token),
   };
 

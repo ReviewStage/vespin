@@ -337,6 +337,15 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           ],
         }
       : undefined,
+    // Voice's OpenAI key row, which opens Agents where the key is kept: drawn once an account is signed in.
+    input.accountDrawn
+      ? {
+          id: SETTINGS_SEARCH_ROW.VOICE_API_KEY,
+          label: "OpenAI key",
+          page: SETTINGS_VIEW.VOICE,
+          haystack: ["OpenAI key", "voice call talk speak api key add agents codex"],
+        }
+      : undefined,
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.API_KEY_OPENAI,
