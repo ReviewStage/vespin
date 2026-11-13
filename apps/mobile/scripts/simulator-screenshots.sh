@@ -121,10 +121,17 @@ APPEARANCES=(light dark)
 # minute, so this script runs as few `maestro test`s as it can.
 export MAESTRO_DRIVER_STARTUP_TIMEOUT=180000
 
-# Boots the simulator `$1` and hands it the app.
+# Boots the simulator `$1`, hands it the app, and boots it once more. Note
+# that the second boot is what lets the app's Spotlight index be written:
+# until the simulator restarts after an app is installed, it drops every
+# donation the app makes ("Set existence required and no set exists"), so
+# `maestro/spotlight.yaml` searched an index that held nothing. It costs one
+# restart a simulator, not one a flow.
 prepare_simulator() {
     xcrun simctl bootstatus "$1" -b
     xcrun simctl install "$1" "$app"
+    xcrun simctl shutdown "$1"
+    xcrun simctl bootstatus "$1" -b
 }
 
 # Sets the simulator `$1`'s appearance to `$2`. Note that the simulator's own
