@@ -2172,8 +2172,8 @@ export function CommandPalette({
   const tasksShown =
     open && tasks.signedIn && (filter === PALETTE_FILTER.ALL || filter === PALETTE_FILTER.TASKS);
 
-  // Note that the tasks the list holds not are asked of the service as typing pauses, and join the list the rows below are built from.
-  useServiceTaskSearch(sought, tasksShown);
+  // Note that the tasks the list holds not are asked of the service as typing pauses, and again once the list is first read, and join the list the rows below are built from.
+  useServiceTaskSearch(sought, tasksShown && tasks.listRead);
 
   const taskList = useMemo(
     () =>
