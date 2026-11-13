@@ -95,7 +95,6 @@ const HOMES = [
   { words: "Open Vespin links in", page: "Preferences" },
   { words: "Commit author", page: "Preferences" },
   { words: "Show a notification", page: "Preferences" },
-  { words: "Let agents run commands on this Mac", page: "This Mac" },
   { words: "Prefer the Mac's microphone", page: "This Mac" },
   { words: "Open Vespin at login", page: "This Mac" },
   { words: "Check for updates", page: "About", found: "Updates" },
@@ -452,9 +451,7 @@ test("a platform without Mac commands or updates lists no This Mac page, draws A
   assert.equal(about.includes("Changelog"), true);
   assert.equal(about.includes("Check for updates"), false);
 
-  for (const words of ["Let agents run commands on this Mac", "Updates"]) {
-    assert.deepEqual(foundUnder(page, words), [], `${words} is found nowhere`);
-  }
+  assert.deepEqual(foundUnder(page, "Updates"), [], "Updates is found nowhere");
 });
 
 test("a browser, which is no installed app, draws Appearance without Zoom and This Mac without Startup, heads its device group This device, and its search finds neither, while it lists Keyboard shortcuts as the desktop does; the desktop draws them all", () => {
