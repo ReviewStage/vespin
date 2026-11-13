@@ -38,7 +38,7 @@ This gets you the most control, and you pay for it in upkeep. The machines and t
 
 ## How we run Codex in Vespin
 
-We built Vespin so you can run agents like this without looking after the machines. You describe a task, and Codex or Claude Code agents work on it. Each agent gets its own cloud sandbox with its own checkout of the repository and keeps it between turns, so a follow-up picks up where the last turn stopped. An agent can run on your Mac instead if you'd rather. You pick a GPT or Claude model for each agent, and several agents can work on one task. That's how we wrote these guides: seven agents in parallel, one per page, each with its own pull request, and a person approving every page.
+We built Vespin so you can run agents like this without looking after the machines. You describe a task, and Codex or Claude Code agents work on it. Each agent gets its own cloud sandbox with its own checkout of the repository and keeps it between turns, so a follow-up picks up where the last turn stopped. An agent can run on your Mac instead if you'd rather. You pick a GPT or Claude model for each agent, and several agents can work on one task.
 
 Codex runs on your ChatGPT plan, which you connect in Settings › Agents through Codex's own device-code login. That works on Business plans too. Without a plan, it runs on your OpenAI API key. We don't pay for agents, so you need one or the other.
 
