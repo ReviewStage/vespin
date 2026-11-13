@@ -89,10 +89,18 @@ appId: dev.vespin.ios
 # Note that iOS never hears a chip as an element of its own, since it stands
 # in its line as a view, so the line is found by what it is heard as
 # (`heardLine`), "Pull request: pull request #128 …", and pressed at its
-# middle, where the chip stands.
-- scrollUntilVisible:
-    element: ".*#128 Invite a teammate by email"
-    direction: DOWN
+# middle, where the chip stands. Note that the page is swiped at its right
+# side rather than scrolled from the screen's center, since a landscape iPad's
+# center falls in the list column beside the task, which never holds the chip.
+- repeat:
+    while:
+      notVisible: ".*#128 Invite a teammate by email"
+    times: 8
+    commands:
+      - swipe:
+          start: 85%, 70%
+          end: 85%, 35%
+      - waitForAnimationToEnd
 - tapOn: ".*#128 Invite a teammate by email"
 - extendedWaitUntil:
     visible: "Ready to merge"
