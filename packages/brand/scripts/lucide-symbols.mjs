@@ -23,17 +23,24 @@ const BASELINE = 146;
 const CAP_HEIGHT = BASELINE - CAPLINE;
 const WEIGHT_CENTER = { ULTRALIGHT: 265, REGULAR: 465, BLACK: 665 };
 
-// Note that Lucide's 24-unit square stands at one and a half cap heights,
-// centered on the cap height's middle, because that is the size SF Symbols
-// draws its own outlined glyphs at beside text (a circle spans about 1.25 cap
-// heights, as Lucide's 20-unit drawings then do).
+// Note that Lucide's 24-unit square stands at one and a half cap heights at
+// the medium scale, the size SF Symbols draws its own outlined glyphs at
+// beside text (a circle spans about 1.25 cap heights, as Lucide's 20-unit
+// drawings then do). The template draws only the small row, which stands
+// about a fifth smaller than medium, and iOS derives the medium and large
+// scales from it as it does its own symbols', so the square is drawn here
+// at the small scale's share of that size. Drawn at the medium size, every
+// glyph stood a quarter larger than the SF Symbol beside it, and largest in
+// a bar, which asks for the large scale.
 const BOX = 24;
-const BOX_SIZE = CAP_HEIGHT * 1.5;
+const SMALL_SCALE = 0.8;
+const BOX_SIZE = CAP_HEIGHT * 1.5 * SMALL_SCALE;
 const SCALE = BOX_SIZE / BOX;
 const BOX_TOP = CAPLINE + CAP_HEIGHT / 2 - BOX_SIZE / 2;
 
-// Each weight's stroke, in Lucide's units: Regular is Lucide's own 2, which
-// stands as thick as SF Symbols' regular strokes at this size; Black stops
+// Each weight's stroke, in Lucide's units, so it scales with the square:
+// Regular is Lucide's own 2, which stands as thick as SF Symbols' regular
+// strokes at each scale iOS derives; Black stops
 // short of 4, where a stroke's inner side would close Lucide's tightest
 // curve, the pull request's corner of radius 2.
 const STROKE = { ULTRALIGHT: 0.6, REGULAR: 2, BLACK: 3.4 };
