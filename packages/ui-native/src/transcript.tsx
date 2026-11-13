@@ -1,10 +1,18 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
+import { Image, Button as SwiftButton } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
+import {
+  accessibilityLabel,
+  buttonStyle,
+  controlSize,
+  frame,
+  tint,
+} from "@expo/ui/swift-ui/modifiers";
 import type { AgentStatus } from "@repo/features/agent-wire";
-import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
+import { agentStateWords } from "@repo/features/glyph-state";
 import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
-import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
 import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -24,13 +32,12 @@ import {
   useAccessibilitySize,
   useAnnounced,
   useReduceMotion,
-  useReduceTransparency,
   useScaledSize,
 } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { useDockRoom } from "./glass-bar.js";
-import { GLYPH, glyphSymbol } from "./glyph.js";
+import { GLYPH, glyphImage, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
@@ -68,8 +75,11 @@ const ANCHOR_REACH = 48;
  */
 const TAB_BAR_ROOM = 64;
 
-/** How wide the round control that brings the newest row into view stands, in points: the system's least target. */
+/** How wide the round control that brings the newest row into view stands, in points, at the reader's default text size: the system's least target. */
 const JUMP_SIZE = 44;
+
+/** How far the system's glass circle stands past the arrow's frame inside it, on each axis, so it draws at the control's size around it. */
+const JUMP_EDGE = 12;
 
 /** What the control that brings the newest row into view says. */
 const JUMP_TO_LATEST = "Jump to latest";
@@ -164,13 +174,6 @@ const styles = StyleSheet.create({
   headModel: { flexDirection: "row", alignItems: "center", gap: 3 },
   older: { alignItems: "center", gap: SPACE.TIGHT * 2, paddingVertical: SPACE.ROW },
   jump: { position: "absolute", alignSelf: "center" },
-  jumpFace: {
-    width: JUMP_SIZE,
-    height: JUMP_SIZE,
-    borderRadius: JUMP_SIZE / 2,
-    alignItems: "center",
-    justifyContent: "center",
-  },
 });
 
 /** How far the list stands from its newest row's end, in points. */
@@ -736,6 +739,7 @@ function TranscriptRow({
 type AgentHeadProps = {
   /** The model the agent runs on, as the panel's chip names it. */
   readonly model: string | undefined;
+  /** Where the agent stands, a change of which is told to VoiceOver. */
   readonly status: AgentStatus | undefined;
   /** Opens the picker that changes the model, as a press on the panel's chip does; none where the reader may not change it. */
   readonly onModel?: (() => void) | undefined;
@@ -745,44 +749,30 @@ type AgentHeadProps = {
 const CHANGE_MODEL = "Change model";
 
 /**
- * The line over the transcript, the agent's title standing in the system's
- * bar over it: where the agent stands and the model it runs on, as the
- * panel's tab and its model chip say them; nothing before either is known.
- * Where the model may be changed, its name is a press with a chevron after
- * it, as the panel's chip draws one, opening the picker.
+ * The line over the transcript: the model the agent runs on, as the panel's
+ * model chip names it, where the model may be changed a press with a
+ * chevron after it, as the chip draws one, opening the picker; nothing
+ * before the model is known. Note that where the agent stands is said in
+ * the system's bar under its name (`BarTitle`), which stays in view as the
+ * transcript scrolls, so the line no longer repeats it; a change of state is
+ * still told to VoiceOver here, as it lands.
  */
 export function AgentHead({ model, status, onModel }: AgentHeadProps) {
   const colors = useColors();
-  const state = status === undefined ? undefined : agentGlyphState(status);
+  const chevron = useScaledSize(MARK_SIZE.GLYPH - 4);
   const words = status === undefined ? undefined : agentStateWords(status);
-  const pressed = onModel !== undefined && model !== undefined && model !== "";
 
-  const said = [words, pressed ? undefined : model]
-    .filter((each) => each !== undefined && each !== "")
-    .join(" · ");
-
-  // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Finished or Failed, since the reader may stand anywhere in the transcript.
+  // Note that a change of state is told to VoiceOver as it lands, such as Working turning to Failed, since the reader may stand anywhere in the transcript.
   useAnnounced(words);
 
-  if (said === "" && !pressed) return null;
+  if (model === undefined || model === "") return null;
   const ink = { fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED };
 
   return (
     <View style={[styles.head, styles.headLine]}>
-      {state === GLYPH_STATE.WORKING ? (
-        <ActivityIndicator size="small" color={colors.WORKING} accessibilityElementsHidden />
-      ) : state === GLYPH_STATE.FAILED ? (
-        <SymbolView
-          name={glyphSymbol(GLYPH.FAILED)}
-          size={MARK_SIZE.GLYPH}
-          tintColor={colors.DANGER}
-          accessibilityElementsHidden
-        />
-      ) : null}
-      {said === "" ? null : (
-        <Text style={ink}>{pressed && words !== undefined ? `${said} ·` : said}</Text>
-      )}
-      {pressed ? (
+      {onModel === undefined ? (
+        <Text style={ink}>{model}</Text>
+      ) : (
         <Pressable
           onPress={onModel}
           accessibilityRole="button"
@@ -794,24 +784,24 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
           <Text style={ink}>{model}</Text>
           <SymbolView
             name={glyphSymbol(GLYPH.UNFOLDED)}
-            size={MARK_SIZE.GLYPH - 4}
+            size={chevron}
             weight="semibold"
             tintColor={colors.TEXT_MUTED}
             accessibilityElementsHidden
           />
         </Pressable>
-      ) : null}
+      )}
     </View>
   );
 }
 
 /**
- * The control that brings the newest row into view, as Messages and the
- * chat apps draw it: a round button of Liquid Glass holding a down arrow,
- * centered over the list's foot, standing only once the reader has scrolled
- * back. Note that where Liquid Glass is unavailable, before iOS 26, or the
- * reader turned on Reduce Transparency, it is drawn solid on the surface's
- * ground inside the quiet ink rather than a hand-drawn copy of glass.
+ * The control that brings the newest row into view, as Messages draws it:
+ * the system's own glass button, round, holding a down arrow, centered over
+ * the list's foot, standing only once the reader has scrolled back. Note
+ * that it is SwiftUI's `glass` style rather than a glass view of ours under
+ * a press, so the system draws its press, its pointer hover, and its solid
+ * face where the reader turned on Reduce Transparency.
  */
 function JumpToLatest({
   bottom,
@@ -821,45 +811,31 @@ function JumpToLatest({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
-  const solid = useReduceTransparency() || !isLiquidGlassAvailable();
-
-  const arrow = (
-    <SymbolView
-      name={glyphSymbol(GLYPH.JUMP_DOWN)}
-      size={MARK_SIZE.GLYPH + 2}
-      weight="semibold"
-      tintColor={colors.TEXT}
-      accessibilityElementsHidden
-    />
-  );
+  const round = useScaledSize(JUMP_SIZE);
+  const arrow = useScaledSize(MARK_SIZE.GLYPH + 2);
 
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={JUMP_TO_LATEST}
-      hitSlop={SPACE.TIGHT}
-      style={[styles.jump, { bottom }]}
-    >
-      {solid ? (
-        <View
-          style={[
-            styles.jumpFace,
-            {
-              backgroundColor: colors.SURFACE,
-              borderColor: colors.TEXT_MUTED,
-              borderWidth: StyleSheet.hairlineWidth,
-            },
+    <View style={[styles.jump, { bottom }]}>
+      <InlineHost matchContents>
+        <SwiftButton
+          onPress={onPress}
+          modifiers={[
+            buttonStyle("glass"),
+            SwiftModifiers.buttonBorderShape("circle"),
+            controlSize("large"),
+            tint(colors.TEXT),
+            accessibilityLabel(JUMP_TO_LATEST),
           ]}
         >
-          {arrow}
-        </View>
-      ) : (
-        <GlassView glassEffectStyle="regular" isInteractive style={styles.jumpFace}>
-          {arrow}
-        </GlassView>
-      )}
-    </Pressable>
+          <Image
+            {...glyphImage(GLYPH.JUMP_DOWN)}
+            size={arrow}
+            color={colors.TEXT}
+            modifiers={[frame({ width: round - JUMP_EDGE, height: round - JUMP_EDGE })]}
+          />
+        </SwiftButton>
+      </InlineHost>
+    </View>
   );
 }
 

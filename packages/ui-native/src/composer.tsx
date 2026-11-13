@@ -28,6 +28,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { useScaledSize } from "./accessibility.js";
 import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
@@ -83,6 +84,9 @@ const FIELD_TRAILING = SPACE.TIGHT;
 
 /** The most lines the field grows to before it scrolls its words. */
 const FIELD_LINES = 6;
+
+/** The +'s mark at the reader's default text size, which it grows from with Dynamic Type as a system glyph does. */
+const ADD_SIZE = MARK_SIZE.LEAD + 2;
 
 /** What the + is named by, whether it opens one act or a menu. */
 const ADD_LABEL = "Add";
@@ -204,14 +208,13 @@ function SendButton({
 /** The + as a menu, as SwiftUI draws one from a press: its acts, a rule, then its choices within and its switches. */
 function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testId: string }) {
   const colors = useColors();
+  const addSize = useScaledSize(ADD_SIZE);
   const submenus = menu.submenus ?? [];
   const switches = menu.switches ?? [];
 
   return (
     <Menu
-      label={
-        <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
-      }
+      label={<Image {...glyphImage(GLYPH.ADD)} size={addSize} color={colors.TEXT_MUTED} />}
       modifiers={[...PRESS_FRAME, accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
     >
       {menu.actions.map((action) => (
@@ -258,6 +261,7 @@ export function AddPress({
   readonly testId?: string | undefined;
 }) {
   const colors = useColors();
+  const addSize = useScaledSize(ADD_SIZE);
 
   if (menu !== undefined) return <AddMenu menu={menu} testId={testId} />;
 
@@ -273,7 +277,7 @@ export function AddPress({
         accessibilityIdentifier(testId),
       ]}
     >
-      <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+      <Image {...glyphImage(GLYPH.ADD)} size={addSize} color={colors.TEXT_MUTED} />
     </Button>
   );
 }

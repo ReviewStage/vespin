@@ -12,6 +12,7 @@ import {
 } from "@repo/features/agent-ports-model";
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { agentStateWords } from "@repo/features/glyph-state";
 import { agentActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import { agentName, modelLabel } from "@repo/features/model-label";
@@ -38,6 +39,7 @@ import {
   AskNote,
   AttachedPictures,
   BAR_TITLE,
+  BarTitle,
   Composer,
   type ComposerMenu,
   ConfirmAsk,
@@ -647,28 +649,28 @@ export function AgentScreen() {
 
   return (
     <>
+      {/* Note that the agent's name stands over where it stands, Working or Failed, as Mail's mailbox stands over how fresh it is, so the state stays in view as the transcript scrolls. */}
       <Stack.Screen
         options={{
           title,
+          headerTitle: () => (
+            <BarTitle
+              title={title}
+              subtitle={status === undefined ? undefined : agentStateWords(status)}
+            />
+          ),
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         }}
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
-          {address === undefined ? null : (
-            <Stack.Toolbar.Menu inline>
+          {/* Note that the page's link and its transcript's copy stand in one group, as Mail groups a message's copy and share, and the agent's two ends stand together last, Archive over Delete. */}
+          <Stack.Toolbar.Menu inline>
+            {address === undefined ? null : (
               <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LINK)} onPress={actions.copyLink}>
                 {MENU_WORDS.COPY_LINK}
               </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
-                onPress={() => openInSafari(address)}
-              >
-                {VERB.OPEN_IN_BROWSER}
-              </Stack.Toolbar.MenuAction>
-            </Stack.Toolbar.Menu>
-          )}
-          <Stack.Toolbar.Menu inline>
+            )}
             <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.COPY)} title={COPY_TRANSCRIPT_WORDS.COPY}>
               <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.CONCISE)}>
                 {COPY_TRANSCRIPT_WORDS.CONCISE}
@@ -683,6 +685,14 @@ export function AgentScreen() {
                 {COPY_TRANSCRIPT_WORDS.SHARE}
               </Stack.Toolbar.MenuAction>
             </Stack.Toolbar.Menu>
+            {address === undefined ? null : (
+              <Stack.Toolbar.MenuAction
+                icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
+                onPress={() => openInSafari(address)}
+              >
+                {VERB.OPEN_IN_BROWSER}
+              </Stack.Toolbar.MenuAction>
+            )}
           </Stack.Toolbar.Menu>
           {agent === undefined ? null : (
             <Stack.Toolbar.Menu inline>
@@ -741,10 +751,6 @@ export function AgentScreen() {
               >
                 {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
-            </Stack.Toolbar.Menu>
-          )}
-          {agent === undefined ? null : (
-            <Stack.Toolbar.Menu inline>
               <Stack.Toolbar.MenuAction
                 icon={glyphSymbol(GLYPH.DELETE)}
                 destructive

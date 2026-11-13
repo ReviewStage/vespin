@@ -40,11 +40,13 @@ export const PROSE_SIZE = TEXT_SIZE.SUBHEADLINE;
 /**
  * The navigation bar's words, which the system draws at a fixed size whatever
  * the reader's setting, as its own titles stand: a screen's name at 17
- * semibold, and a pushed page's path small and muted over its heading.
+ * semibold, a pushed page's path small and muted over its heading, and the
+ * quiet line under a title (`BarTitle`), as Mail's mailbox says how fresh it is.
  */
 export const BAR_TITLE = {
   SCREEN: { fontSize: TEXT_SIZE.HEADLINE, fontWeight: "600" },
   PATH: { fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "500" },
+  SUBTITLE: { fontSize: TEXT_SIZE.CAPTION, fontWeight: "400" },
 } as const;
 
 /**
