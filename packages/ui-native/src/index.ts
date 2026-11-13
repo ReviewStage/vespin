@@ -139,7 +139,7 @@ export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-
 
 export { monogramOf } from "./monogram.js";
 
-export { type HintOption, HintPickRows, RenameAsk, SwitchRow } from "./option-rows.js";
+export { RenameAsk, SwitchRow } from "./option-rows.js";
 
 export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
@@ -195,6 +195,7 @@ export { ScreenFailure } from "./screen-failure.js";
 export { SealedPage } from "./sealed-page.js";
 
 export {
+  AccountHead,
   AccountRow,
   ActionRow,
   CodeRow,
@@ -229,6 +230,7 @@ export {
   type ColumnBar,
   KeptColumns,
   type KeptView,
+  menuWithout,
   SplitOverTabs,
   SplitView,
   UNDER_SPLIT_SCREEN,

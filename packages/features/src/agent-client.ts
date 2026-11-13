@@ -109,8 +109,6 @@ import {
   type SoundStateView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
-  type VoiceCallEndedAnswerView,
-  type VoiceCallEndedParams,
   type VoiceSessionAnswerView,
   type VoiceSessionParams,
 } from "./agent-view.js";
@@ -240,7 +238,7 @@ import {
 } from "./sound-clip-wire.js";
 import type { TaskAgentRefusal } from "./task-wire.js";
 import { MP4_TYPE, PLAYABLE_VIDEO_TYPE, type PlayableVideoType } from "./video-signature.js";
-import { voiceCallEndedRequestSchema, voiceSessionRequestSchema } from "./voice-wire.js";
+import { voiceSessionRequestSchema } from "./voice-wire.js";
 
 /**
  * agent-client.ts -- the window's side of a task's coding agents, as the host asks the service for them.
@@ -915,10 +913,10 @@ export class HostedAgentClient {
 
   /**
    * A voice call into an agent opened on the member's own OpenAI key
-   * (`voice-wire.ts`): the peer's SDP offer out, GPT-Live's SDP answer back,
-   * under the held deadline, since the service answers only once OpenAI has
-   * made the session; an offer the service would refuse by shape is refused
-   * here without traveling at all.
+   * (`voice-wire.ts`): the peer's SDP offer out, the call's id and GPT-Live's
+   * SDP answer back, under the held deadline, since the service answers only
+   * once OpenAI has made the session; an offer the service would refuse by
+   * shape is refused here without traveling at all.
    */
   openVoiceSession(
     params: VoiceSessionParams,
@@ -928,17 +926,6 @@ export class HostedAgentClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 
     return hostedCall(this.#hosted.voice.open, admitted, { deadline: HOSTED_DEADLINE.HELD });
-  }
-
-  /** A finished voice call's seconds, kept on the member's day; a report the service would refuse by shape is refused here without traveling. */
-  reportVoiceCall(
-    params: VoiceCallEndedParams,
-  ): Effect.Effect<VoiceCallEndedAnswerView, never, HttpClient.HttpClient> {
-    const admitted = Result.getOrUndefined(readEither(voiceCallEndedRequestSchema)(params));
-
-    if (admitted === undefined) return Effect.succeed(UNANSWERED);
-
-    return hostedCall(this.#hosted.voice.ended, admitted);
   }
 
   /** The member's own GitHub token, as what tells it apart; never the token. */
