@@ -63,7 +63,7 @@ const layers = StyleSheet.create({
  * the menu as a bar item and draws its own round button inside the bar's
  * glass, where Mail's ⋯ stands in the bar's glass alone.
  */
-const BAR_ITEM_MENU = [menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")];
+export const BAR_ITEM_MENU = [menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")];
 
 /** An act a bar holds by its symbol alone, such as Settings. */
 export type BarAction = {
