@@ -6,10 +6,10 @@ import { afterEach, expect, test, vi } from "vitest";
 import { TranscriptRail, type TranscriptRailMark } from "./transcript-rail.js";
 
 /**
- * transcript-rail.test.ts -- the rail is one navigation of the lines sent
- * into a conversation, each a press named by who sent it and its words,
- * which asks to go to that line; on a phone it is one press listing them,
- * and a line chosen there asks to go to it too. Synthetic lines.
+ * transcript-rail.test.ts -- the rail is one press opening a list of the
+ * lines sent into a conversation, each named by who sent it and its words,
+ * whose keys go to a line; on a phone it is one press listing them, and a
+ * line chosen there asks to go to it too. Synthetic lines.
  */
 
 declare global {
@@ -57,17 +57,24 @@ function drawRail(narrow: boolean, went: string[]): void {
   );
 }
 
-test("each line is a press named by who sent it and its words, going to that line", () => {
+test("the rail is one press opening a list of every line by who sent it and its words, its keys and a press going to a line", () => {
   const went: string[] = [];
   drawRail(false, went);
-  const rail = document.querySelector('nav[aria-label="Messages to the agent"]');
-  const presses = [...(rail?.querySelectorAll("button") ?? [])];
-  expect(presses.map((press) => press.getAttribute("aria-label"))).toEqual([
-    "You: Build the invite flow.",
-    "review-bot: One note on expiry.",
-    "You: Answer a used link with a 409.",
+  const press = document.querySelector('nav[aria-label="Messages to the agent"] button');
+  act(() => (press instanceof HTMLElement ? press.focus() : undefined));
+  const options = [...document.querySelectorAll('[role="option"]')];
+  expect(options.map((option) => option.textContent)).toEqual([
+    "YouBuild the invite flow.",
+    "review-botOne note on expiry.",
+    "YouAnswer a used link with a 409.",
   ]);
-  act(() => presses[1]?.click());
+  // The keyboard opens on the last line in view, the arrows walk the lines, and Enter goes to one.
+  act(() => {
+    press?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true }));
+  });
+  act(() => {
+    press?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+  });
   expect(went).toEqual(["review"]);
 });
 

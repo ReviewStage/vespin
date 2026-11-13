@@ -1,9 +1,10 @@
-import { type ReactNode, type RefObject, useLayoutEffect, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useId, useLayoutEffect, useRef, useState } from "react";
 import { cn } from "../../cn.js";
-import { DROPDOWN_MENU_ITEM, DROPDOWN_MENU_ITEM_LIT } from "../../shadcn/dropdown-menu.js";
+import { useDisclosure } from "../../use-disclosure.js";
+import { ComboboxList, type ComboboxOption, comboboxOptionId } from "../combobox/combobox.js";
+import { useComboboxField } from "../combobox/use-combobox-field.js";
 import { dropBelowStart, MENU_DETAIL, Menu, type MenuEntry, useMenu } from "../menu/menu.js";
-import { OneLine } from "../one-line/one-line.js";
-import { rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
+import { MENU_SURFACE_INSET, MenuSurface } from "../menu/menu-surface.js";
 
 /**
  * transcript-rail.tsx -- a map of the lines sent into a conversation, down its leading edge: a line for each, a bubble round those in view, and a list of them on the pointer's rest.
@@ -18,18 +19,20 @@ import { rovingItem, useRovingKeys } from "../roving-keys/roving-keys.js";
  * the view, gliding as the conversation scrolls, so the rail says where the
  * reader is.
  *
- * The pointer on the rail opens it into a list of its lines, each under its
- * sender's face and name with its words beside them, the row under the
- * pointer opening where the pointer stands; a press asks the caller to go
- * to that line (`onJump`). The list is one Tab stop, the arrows walking its
- * rows (`useRovingKeys`), and it opens as the keyboard reaches it too.
+ * The pointer on the rail opens it into a list of its lines on a menu's
+ * surface (`MenuSurface`), each under its sender's face and name with its
+ * words after them, the line under the pointer active; a press asks the
+ * caller to go to that line (`onJump`). The list is the app's own
+ * (`ComboboxList`), steered from the rail as a field steers a menu's
+ * (`useComboboxField`): the rail is one Tab stop, opening the list as the
+ * keyboard reaches it, its arrows walking the lines and Enter going to one.
  *
  * A phone has no pointer to rest and no gutter to hover in, so there the
  * rail is one press, its lines a glance at where the reader stands, that
  * lists every line in a sheet (`Menu`), as the app's lists of people list
  * them: each under its sender's face and name, the caller's tag beside the
- * name (the reader's own badge, how long ago), and its words under them on
- * at most two lines.
+ * name (a GitHub App's badge, how long ago), and its words under them on at
+ * most two lines.
  *
  * A conversation of fewer than two lines has nothing to find, so no rail
  * stands beside it.
@@ -44,24 +47,31 @@ export interface TranscriptRailMark {
   readonly words: string;
   /** Its sender's face, which leads its row in the list. */
   readonly face?: React.JSX.Element | undefined;
-  /** What stands beside its sender's name in a phone's list: the reader's own badge, how long ago it was sent. */
+  /** What stands beside its sender's name in a phone's list: a GitHub App's badge, how long ago it was sent. */
   readonly tag?: ReactNode;
   /** Whether its line stands in the view now, which the bubble wraps. */
   readonly shown: boolean;
 }
 
-/** What the rail is named for a reader, and what a phone's sheet is headed with. */
+/** What the rail is named for a reader, and what its list and a phone's sheet are headed with. */
 const RAIL_LABEL = "Messages to the agent";
+
+/** What the rail's one press is named for a reader. */
+const PRESS_LABEL = "Go to a message";
 
 /** The fewest lines a rail stands for. */
 const FEWEST = 2;
+
+/** How far the bubble stands out past the lines it wraps, above the first and below the last, in pixels. */
+const BUBBLE_PAD = 2;
 
 /** The rail's column at the conversation's leading edge, taking the pointer only on its lines and its open list. */
 const COLUMN =
   "ui-transcript-rail pointer-events-none absolute inset-y-0 left-0 z-1 flex w-ui-24 items-center";
 
-/** The lines, centered down the column, each at most a pitch tall and shrinking to a hairline's pitch where more stand than its height holds. */
-const LINES = "pointer-events-auto flex max-h-full w-full flex-col py-ui-12";
+/** The rail's one press: its lines, centered down the column, each at most a pitch tall and shrinking to a hairline's pitch where more stand than its height holds. */
+const PRESS =
+  "pointer-events-auto flex max-h-full w-full cursor-default appearance-none flex-col border-0 bg-transparent p-0 py-ui-12";
 
 const LINE_SLOT = "flex h-ui-8 min-h-ui-2 w-full shrink items-center pl-ui-6";
 
@@ -69,23 +79,19 @@ const LINE = "block h-ui-2 w-ui-12 rounded-ui-full bg-muted-foreground opacity-6
 
 /** The bubble round the lines in view: the column's whole height, clipped to them, so it glides on its clip rather than its size. */
 const BUBBLE =
-  "pointer-events-none absolute inset-y-0 rounded-ui-full bg-secondary ring-1 ring-border transition-[clip-path,opacity] duration-(--ui-duration-pane) ease-pane";
+  "pointer-events-none absolute inset-y-0 bg-secondary transition-[clip-path,opacity] duration-(--ui-duration-pane) ease-pane";
 
-/** The list the rail opens into, standing over the rail on a menu's surface, its rows scrolling inside it. */
-const LIST =
-  "ui-transcript-rail-list absolute top-1/2 left-ui-4 flex max-h-[calc(100%-var(--spacing-ui-16))] w-popover-wide -translate-y-1/2 flex-col overflow-y-auto overscroll-contain rounded-menu border border-border-strong bg-background p-menu-inset text-foreground shadow-menu transition-[opacity,translate] duration-(--ui-duration-quick) ease-motion-exit";
+/** Where the open list stands: over the rail, centered down the column. */
+const LIST_PLACE = "pointer-events-none absolute inset-y-0 left-ui-4 flex items-center";
 
-const LIST_SHUT = "pointer-events-none -translate-x-ui-4 opacity-0";
-const LIST_OPEN = "pointer-events-auto translate-x-0 opacity-100";
-
-const ROW = cn(DROPDOWN_MENU_ITEM, DROPDOWN_MENU_ITEM_LIT, "ui-transcript-rail-row cursor-press");
+const LIST_SURFACE = "pointer-events-auto w-popover-wide";
 
 /** A phone's rail: one press down the gutter, its lines a glance, opening the list of lines. */
 const NARROW_COLUMN =
-  "ui-transcript-rail pointer-events-none absolute inset-y-0 left-0 z-1 flex w-ui-12 items-center";
+  "ui-transcript-rail pointer-events-none absolute inset-y-0 left-0 z-1 flex w-ui-16 items-center";
 
 const NARROW_PRESS =
-  "pointer-events-auto flex max-h-full w-full cursor-press appearance-none flex-col items-start overflow-hidden border-0 bg-transparent p-0 py-ui-8 pl-ui-2";
+  "pointer-events-auto flex max-h-full w-full cursor-press appearance-none flex-col items-start overflow-hidden border-0 bg-transparent p-0 py-ui-8 pl-ui-4";
 
 const NARROW_SLOT = "flex h-ui-6 min-h-ui-2 shrink items-center";
 const NARROW_LINE = "block h-ui-2 w-ui-8 rounded-ui-full bg-muted-foreground opacity-60";
@@ -94,11 +100,6 @@ const NARROW_LINE = "block h-ui-2 w-ui-8 rounded-ui-full bg-muted-foreground opa
 interface BubbleClip {
   readonly top: number;
   readonly bottom: number;
-}
-
-/** What a reader hears a line as: who sent it, then its words. */
-function markName(mark: TranscriptRailMark): string {
-  return `${mark.sender}: ${mark.words}`;
 }
 
 /** Every line as a phone's sheet lists it: its sender's face, name, and tag over its words. */
@@ -117,6 +118,30 @@ function sheetEntries(
       onSelect: () => onJump(mark.key),
     })),
   ];
+}
+
+/** Every line as the rail's list names it: its sender's face and name, its words after them. */
+function listOptions(marks: readonly TranscriptRailMark[]): ComboboxOption[] {
+  return marks.map((mark) => ({
+    id: mark.key,
+    label: mark.sender,
+    icon: mark.face ?? null,
+    detail: mark.words,
+  }));
+}
+
+/** The line whose slot stands at `y` on the screen, or the last where `y` is past them all. */
+function lineAt(slots: readonly (HTMLElement | null)[], y: number): number {
+  const at = slots.findIndex((slot) => slot !== null && y < slot.getBoundingClientRect().bottom);
+
+  return at === -1 ? slots.length - 1 : at;
+}
+
+/** The last line standing in the view, or the last line where none does: where the keyboard opens the list. */
+function lastShown(marks: readonly TranscriptRailMark[]): number {
+  const at = marks.findLastIndex((mark) => mark.shown);
+
+  return at === -1 ? marks.length - 1 : at;
 }
 
 /**
@@ -144,8 +169,8 @@ function useBubble(
       const to = last === undefined ? null : slots.current[last];
 
       if (from == null || to == null) return setClip(undefined);
-      const top = from.offsetTop;
-      const bottom = box.clientHeight - (to.offsetTop + to.offsetHeight);
+      const top = Math.max(from.offsetTop - BUBBLE_PAD, 0);
+      const bottom = Math.max(box.clientHeight - (to.offsetTop + to.offsetHeight) - BUBBLE_PAD, 0);
 
       setClip((was) => (was?.top === top && was.bottom === bottom ? was : { top, bottom }));
     };
@@ -160,7 +185,7 @@ function useBubble(
   return clip;
 }
 
-/** The bubble round the lines in view, placed across its column by `inset`. */
+/** The bubble round the lines in view, placed across its column by `inset`, its corners a small round's. */
 function Bubble({
   clip,
   inset,
@@ -175,7 +200,7 @@ function Bubble({
       style={
         clip === undefined
           ? undefined
-          : { clipPath: `inset(${clip.top}px 0 ${clip.bottom}px 0 round var(--radius-ui-full))` }
+          : { clipPath: `inset(${clip.top}px 0 ${clip.bottom}px 0 round var(--radius-ui-6))` }
       }
     />
   );
@@ -196,7 +221,7 @@ function NarrowRail({
 
   return (
     <div ref={column} className={NARROW_COLUMN}>
-      <Bubble clip={clip} inset="left-0 w-ui-12" />
+      <Bubble clip={clip} inset="left-0 w-ui-16" />
       <button
         type="button"
         aria-label={RAIL_LABEL}
@@ -237,67 +262,66 @@ function WideRail({
 }): React.JSX.Element {
   const [pointed, setPointed] = useState(false);
   const [focused, setFocused] = useState(false);
+  // Whether a line was gone to, or Escape pressed, since the rail last opened: the list stands shut until the pointer comes again or a key asks for it.
+  const [shut, setShut] = useState(false);
+  const [active, setActive] = useState(-1);
   const column = useRef<HTMLElement | null>(null);
   const slots = useRef<(HTMLElement | null)[]>([]);
-  const list = useRef<HTMLDivElement | null>(null);
-  // Where the pointer came onto the rail: the line it stood over, and its height on the screen.
-  const arrival = useRef<{ index: number; y: number } | undefined>(undefined);
-  const roving = useRovingKeys<HTMLElement>();
+  const listId = useId();
   const clip = useBubble(column, slots, marks);
-  const open = pointed || focused;
+  const open = (pointed || focused) && !shut;
+  const drawn = useDisclosure(open);
 
-  // Note that the list opens with the row of the line under the pointer under it, so the pointer lands on that line's row.
-  useLayoutEffect(() => {
-    const box = list.current;
-    const at = arrival.current;
+  const choose = (index: number) => {
+    const mark = marks[index];
 
-    if (!pointed || box === null || at === undefined) return;
-    const row = box.children[at.index];
-
-    if (!(row instanceof HTMLElement)) return;
-    const boxTop = box.getBoundingClientRect().top;
-    box.scrollTop = row.offsetTop + row.offsetHeight / 2 - (at.y - boxTop);
-  }, [pointed]);
-
-  const arrive = (event: React.PointerEvent<HTMLElement>) => {
-    const index = slots.current.findIndex((slot) => {
-      const box = slot?.getBoundingClientRect();
-
-      return box !== undefined && event.clientY < box.bottom;
-    });
-
-    arrival.current = { index: index === -1 ? marks.length - 1 : index, y: event.clientY };
-    setPointed(true);
+    if (mark === undefined) return;
+    setShut(true);
+    onJump(mark.key);
   };
+
+  const field = useComboboxField({
+    open,
+    active,
+    count: marks.length,
+    controls: open ? listId : undefined,
+    activeId: open && active >= 0 ? comboboxOptionId(listId, active) : undefined,
+    onActiveChange: setActive,
+    onChoose: choose,
+    onEnter: () => setShut(false),
+    onEscape: () => setShut(true),
+    // Note that an arrow pressed with the list shut opens it again, on the line it last stood on.
+    onKey: (event) => {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") setShut(false);
+    },
+  });
 
   return (
     <nav
-      ref={(element) => {
-        column.current = element;
-        roving.ref(element);
-      }}
+      ref={column}
       aria-label={RAIL_LABEL}
       className={COLUMN}
-      data-roving={roving["data-roving"]}
-      onKeyDown={roving.onKeyDown}
-      onPointerEnter={arrive}
+      onPointerEnter={(event) => {
+        setActive(lineAt(slots.current, event.clientY));
+        setShut(false);
+        setPointed(true);
+      }}
       onPointerLeave={() => setPointed(false)}
-      onFocus={(event) => {
-        roving.onFocus(event);
-        setFocused(true);
-      }}
-      onBlur={(event) => {
-        if (
-          !(
-            event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)
-          )
-        ) {
-          setFocused(false);
-        }
-      }}
     >
       <Bubble clip={clip} inset="left-ui-2 w-ui-20" />
-      <div aria-hidden className={LINES}>
+      <button
+        type="button"
+        aria-label={PRESS_LABEL}
+        className={PRESS}
+        {...field.field}
+        onKeyDown={(event) => field.onKeyDown(event)}
+        onFocus={() => {
+          if (!pointed) setActive(lastShown(marks));
+          setShut(false);
+          setFocused(true);
+        }}
+        onBlur={() => setFocused(false)}
+      >
         {marks.map((mark, index) => (
           <span
             key={mark.key}
@@ -309,33 +333,27 @@ function WideRail({
             <span className={LINE} />
           </span>
         ))}
-      </div>
-      <div ref={list} className={cn(LIST, open ? LIST_OPEN : LIST_SHUT)}>
-        {marks.map((mark) => (
-          <button
-            key={mark.key}
-            type="button"
-            aria-label={markName(mark)}
-            aria-current={mark.shown ? "location" : undefined}
-            className={ROW}
-            {...rovingItem()}
-            // Note that a press of the pointer takes no focus, so the list shuts once the pointer leaves it rather than staying open on the row pressed.
-            onMouseDown={(event) => event.preventDefault()}
-            onClick={() => onJump(mark.key)}
+      </button>
+      {drawn.mounted ? (
+        <div className={LIST_PLACE}>
+          <MenuSurface
+            ref={drawn.ref}
+            className={LIST_SURFACE}
+            inset={MENU_SURFACE_INSET.NONE}
+            leaving={drawn.leaving}
           >
-            {mark.face === undefined ? null : <span className="flex flex-none">{mark.face}</span>}
-            <OneLine className="min-w-0 flex-initial" words={mark.sender}>
-              {mark.sender}
-            </OneLine>
-            <OneLine
-              className="min-w-0 flex-[0_1000_auto] text-muted-foreground"
-              words={mark.words}
-            >
-              {mark.words}
-            </OneLine>
-          </button>
-        ))}
-      </div>
+            <ComboboxList
+              id={listId}
+              label={RAIL_LABEL}
+              groups={[{ label: RAIL_LABEL, options: listOptions(marks) }]}
+              headed={false}
+              active={active}
+              onActiveChange={setActive}
+              onChoose={choose}
+            />
+          </MenuSurface>
+        </div>
+      ) : null}
     </nav>
   );
 }

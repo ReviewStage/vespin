@@ -242,7 +242,7 @@ function drawnSteps(container: Element): string[] {
   );
 }
 
-test("an agent continued from another opens on the description's card, the folded Continued card under who started it, and the note as the developer's line, with no marker drawn, and its rail marks the brief and the note", async () => {
+test("an agent continued from another opens on the description's card, the folded Continued card under who started it, and the note as the developer's line, with no marker drawn, and its rail lists the brief and the note", async () => {
   const agent = summary({
     id: "8c1a6a4f-3d2e-4d8b-8b66-6f4c7a2e3b21",
     brief: AGENT_BRIEF.DESCRIPTION,
@@ -285,10 +285,14 @@ test("an agent continued from another opens on the description's card, the folde
   assert.ok(!container.textContent?.includes("The work you continue from"));
   assert.ok(!container.textContent?.includes("Note from the developer"));
 
-  // The rail beside the log marks the brief and the note as they are drawn, never the replay the first line carries.
+  // The rail beside the log lists the brief and the note as they are drawn, never the replay the first line carries.
+  const rail = container.querySelector('nav[aria-label="Messages to the agent"] button');
+  act(() => (rail instanceof HTMLElement ? rail.focus() : undefined));
   const marks = [
-    ...container.querySelectorAll('nav[aria-label="Messages to the agent"] button'),
-  ].map((mark) => mark.getAttribute("aria-label") ?? "");
+    ...container.querySelectorAll(
+      '[role="listbox"][aria-label="Messages to the agent"] [role="option"]',
+    ),
+  ].map((mark) => mark.textContent ?? "");
 
   assert.equal(marks.length, 2);
   assert.match(marks[0] ?? "", /Invite flow Let admins withdraw invites\.$/u);
