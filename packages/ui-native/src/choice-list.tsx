@@ -15,6 +15,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
 import { Fragment } from "react";
+import { useAccessibilitySize } from "./accessibility.js";
 import { CARD_WORDS_INSET, CardDivider } from "./ask-card.js";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
 import { PickedCheck } from "./settings-form.js";
@@ -92,7 +93,7 @@ function nextPicked(
   return picked.includes(label) ? picked.filter((each) => each !== label) : [...picked, label];
 }
 
-/** One option's row: its label in 15 pt with the tag, its detail in 13 pt muted, and the copper check at its end once picked. */
+/** One option's row: its label in 15 pt with the tag beside it, or under it at an accessibility size, its detail in 13 pt muted, and the copper check at its end once picked. */
 function ChoiceRow({
   choice,
   picked,
@@ -105,6 +106,14 @@ function ChoiceRow({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+  // Note that at an accessibility size the tag stands under the label rather than beside it, so the label keeps its lines instead of wrapping around a tag.
+  const stacked = useAccessibilitySize();
+
+  const label = (
+    <Text modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT)]}>
+      {choice.label}
+    </Text>
+  );
 
   return (
     <Button
@@ -127,14 +136,17 @@ function ChoiceRow({
         ]}
       >
         <VStack alignment="leading" spacing={2}>
-          <HStack spacing={SPACE.TIGHT + 2}>
-            <Text
-              modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT)]}
-            >
-              {choice.label}
-            </Text>
-            {recommended ? <RecommendedTag /> : null}
-          </HStack>
+          {stacked ? (
+            <VStack alignment="leading" spacing={SPACE.TIGHT}>
+              {label}
+              {recommended ? <RecommendedTag /> : null}
+            </VStack>
+          ) : (
+            <HStack spacing={SPACE.TIGHT + 2}>
+              {label}
+              {recommended ? <RecommendedTag /> : null}
+            </HStack>
+          )}
           {choice.detail === undefined ? null : (
             <Text
               modifiers={[

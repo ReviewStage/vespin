@@ -244,3 +244,22 @@ appId: dev.vespin.ios
 - assertVisible: "Resolved"
 - waitForAnimationToEnd
 - takeScreenshot: resolve-sent
+
+# The decide card at an accessibility size (AX3, Accessibility XL), from a
+# fresh launch: each option's label keeps its lines, and the Recommended tag
+# stands under its label rather than beside it.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXL
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 15000
+- tapOn: "Who can withdraw an invite?"
+# Note that at this size the card may stand below the thread's first screen, so the flow scrolls to the recommended option rather than asserting it at once.
+- scrollUntilVisible:
+    element: "Both, Recommended.*"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: answer-decide-ax3
