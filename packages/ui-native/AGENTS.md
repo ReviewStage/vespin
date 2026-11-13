@@ -170,7 +170,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   agent's page names the agent in the bar in the ink instead, as Messages
   names a conversation, since its transcript opens at its newest row, with
   where it stands (Working, Failed) in the quiet ink under it (`BarTitle`),
-  as Mail's mailbox stands over how fresh it is.
+  as Mail's mailbox stands over how fresh it is; its path's one step, Open
+  task, leads its ⋯ menu as a thread's does, and nothing else stands in its
+  bar, since its acts (Stop, +, the model) stand in the dock and the head.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
