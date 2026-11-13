@@ -1184,11 +1184,6 @@ export function sandboxMachine(api: SandboxService, run: SandboxRunner): AgentMa
         yield* Effect.logWarning(
           `An agent's sandbox was not created from its ${attempt.from}${attempt.drive === undefined ? "" : " with a forked drive"}, which was gone`,
         );
-
-        // A workspace's drive gone is broken until someone fills it, since nothing refills it on a timer.
-        if (attempt.from === CREATED_FROM.WORKSPACE && checkout !== undefined) {
-          yield* reportedBroken(checkout.read.workspaceId, DRIVE_BROKEN.GONE);
-        }
       }
 
       // The image is always the last attempt, and is never passed by.

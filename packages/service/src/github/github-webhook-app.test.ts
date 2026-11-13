@@ -41,7 +41,6 @@ import { Clock, DateTime, Effect, Layer, Option, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { afterEach, vi } from "vitest";
-import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
 import { WorkspaceDriveFills, workspaceDriveName } from "../agents/workspace-drive.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import { keptAfterResponse } from "../http/after-response.js";
@@ -445,7 +444,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
   );
 
   it.effect(
-    "repositories added to an installation have its workspace's drive filled with them past the answer",
+    "repositories added to an installation fill nothing, and repositories removed from it regenerate its workspace's drive past the answer",
     () =>
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
@@ -462,34 +461,33 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         yield* connectWorkspaceGitHub(workspaceId, installation);
         const filling = { sandbox: memorySandbox(), after: keptAfterResponse() };
 
-        const added = {
-          action: "added",
-          installation: { id: installation.id },
-          repositories_added: [{ full_name: RELAY_FULL_NAME }],
-        };
+        const grantChange = (action: string) =>
+          Effect.gen(function* () {
+            const answered = yield* answer(
+              github,
+              SECRET,
+              delivery("installation_repositories", {
+                action,
+                installation: { id: installation.id },
+                [`repositories_${action}`]: [{ full_name: RELAY_FULL_NAME }],
+              }),
+              {},
+              filling,
+            );
 
-        const answered = yield* answer(
-          github,
-          SECRET,
-          delivery("installation_repositories", added),
-          {},
-          filling,
-        );
+            yield* filling.after.run.pipe(Effect.provide(github.layer));
 
-        yield* filling.after.run.pipe(Effect.provide(github.layer));
+            return { answered, drives: [...filling.sandbox.state.drives.keys()] };
+          });
 
-        const drive = workspaceDriveName(workspaceId);
+        const added = yield* grantChange("added");
+        const removed = yield* grantChange("removed");
 
-        // A fill's sync lists its batch's repositories one a line, each led by its folder.
-        const folders = filling.sandbox.state.commands.flatMap((command) =>
-          (command.ask.env?.[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.SYNC_LIST] ?? "")
-            .split("\n")
-            .flatMap((line) => (line === "" ? [] : [line.split(" ")[0]])),
-        );
-
-        assert.deepEqual(answered, { status: 200, body: { read: 0 } });
-        assert.deepEqual([...filling.sandbox.state.drives.keys()], [drive]);
-        assert.deepEqual(folders, ["acme/relay"]);
+        assert.deepEqual(added, { answered: { status: 200, body: { read: 0 } }, drives: [] });
+        assert.deepEqual(removed, {
+          answered: { status: 200, body: { read: 0 } },
+          drives: [workspaceDriveName(workspaceId)],
+        });
       }),
   );
 

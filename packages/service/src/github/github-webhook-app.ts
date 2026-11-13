@@ -183,31 +183,21 @@ const INSTALLATION_ACTION_STATUS: ReadonlyMap<string, GitHubInstallationStatus> 
   ["unsuspend", GITHUB_INSTALLATION_STATUS.ACTIVE],
 ]);
 
-/** The installation actions after which the repositories it grants changed, as GitHub spells them. */
+/** The installation actions after which repositories it granted left it, as GitHub spells them. */
 const GRANT_CHANGE_ACTION = {
-  CREATED: "created",
   DELETED: "deleted",
-  UNSUSPEND: "unsuspend",
-  /** An `installation_repositories` delivery's: repositories given to the installation. */
-  ADDED: "added",
   /** An `installation_repositories` delivery's: repositories taken from it. */
   REMOVED: "removed",
 } as const;
 
-/** The actions, by event, after which the workspace's drive is regenerated, since the repositories it connects changed. */
+/**
+ * The actions, by event, after which the workspace's drive is regenerated,
+ * since repositories left it. A grant fills nothing: a start in a repository
+ * the drive lacks clones it (`workspace-drive.ts`).
+ */
 const DRIVE_CHANGE_ACTIONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  [
-    WEBHOOK_EVENT.INSTALLATION,
-    new Set<string>([
-      GRANT_CHANGE_ACTION.CREATED,
-      GRANT_CHANGE_ACTION.DELETED,
-      GRANT_CHANGE_ACTION.UNSUSPEND,
-    ]),
-  ],
-  [
-    WEBHOOK_EVENT.INSTALLATION_REPOSITORIES,
-    new Set<string>([GRANT_CHANGE_ACTION.ADDED, GRANT_CHANGE_ACTION.REMOVED]),
-  ],
+  [WEBHOOK_EVENT.INSTALLATION, new Set<string>([GRANT_CHANGE_ACTION.DELETED])],
+  [WEBHOOK_EVENT.INSTALLATION_REPOSITORIES, new Set<string>([GRANT_CHANGE_ACTION.REMOVED])],
 ]);
 
 /** A pull request's actions that change what a task's row says of it: where it stands, its merge queue among it, its title, or its size. */
@@ -448,7 +438,7 @@ function installationTarget(
     : { installationId: read.success.installation.id, status };
 }
 
-/** The installation a delivery says now grants other repositories; nothing for any other event or action. */
+/** The installation a delivery says repositories left; nothing for any other event or action. */
 function installationRegranted(event: string, payload: UnparsedWireValue): number | undefined {
   const actions = DRIVE_CHANGE_ACTIONS.get(event);
 
