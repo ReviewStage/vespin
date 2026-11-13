@@ -61,6 +61,7 @@ import {
   type ListLook,
   ListRow,
   type MarkdownVideo,
+  menuWithout,
   PATH_PART,
   previewMessages,
   ROW_ACTION_TONE,
@@ -108,7 +109,14 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useListColumn, useListLook } from "./app-sidebar.js";
-import { OpenAskCard, openAskFiles, ThreadComposer, threadMenu } from "./inbox-ask.js";
+import {
+  NO_THREAD_ACTS,
+  OpenAskCard,
+  openAskFiles,
+  ThreadComposer,
+  threadActs,
+  threadMenu,
+} from "./inbox-ask.js";
 import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
 
 /** The Inbox's name, at its head and on its back button. */
@@ -619,8 +627,8 @@ function ThreadDetail({
   const inStack = place.inStack;
   const openRemind = place.inStack ? remind.open : place.onRemind;
 
-  const menu = threadMenu(item, answer, {
-    onMark: (unread) => inboxActs.mark(item.id, unread),
+  const doors = {
+    onMark: (unread: boolean) => inboxActs.mark(item.id, unread),
     onRemind: () => openRemind(item),
     onCopyLink: () =>
       keeping.copyWords(
@@ -629,7 +637,11 @@ function ThreadDetail({
           workspaceStep,
         ),
       ),
-  });
+  };
+
+  const menu = threadMenu(item, answer, doors);
+  // Note that a split view's detail bar stands the thread's main acts as glyphs, as Mail's stands Reply and Trash, and ⋯ keeps the rest; a compact window's stack keeps them all in ⋯.
+  const acts = threadActs(item, answer, doors);
 
   // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them; a compact window's stack names the path as its plain title, which can hold no menu, so there they lead the ⋯ menu instead.
   const pathActions = [
@@ -761,7 +773,8 @@ function ThreadDetail({
       {...(inStack
         ? {}
         : {
-            menu,
+            acts,
+            menu: menuWithout(menu, acts),
             foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
           })}
     />
@@ -916,14 +929,14 @@ function InboxStackList() {
   const { show, search, listing, acts, scopes, menu, remind, choosing } =
     useInboxScreen(UNSEARCHED);
 
-  // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does.
+  // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
   return (
     <>
       <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }} />
       {choosing !== undefined ? null : <SettingsBarButton switcher={switcher} />}
       <Stack.Toolbar placement="right">
         {choosing !== undefined ? (
-          <Stack.Toolbar.Button variant="done" onPress={choosing.done.onPress}>
+          <Stack.Toolbar.Button variant="plain" onPress={choosing.done.onPress}>
             {choosing.done.label}
           </Stack.Toolbar.Button>
         ) : (
@@ -1062,10 +1075,13 @@ function InboxSplitScreen({
       <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
     );
 
+  // Note that with no thread picked the detail's bar keeps the thread's acts, dimmed, as Mail's bar stands over No Message Selected; a picked thread's page stands its own.
+  const detailBar = selected === undefined ? { acts: NO_THREAD_ACTS } : undefined;
+
   const first = useListColumn(list);
   useHandColumns(
     SIDEBAR_PLACE.INBOX,
-    threeColumns ? { content: list.view, contentBar: list.bar, detail } : undefined,
+    threeColumns ? { content: list.view, contentBar: list.bar, detail, detailBar } : undefined,
   );
 
   return (
@@ -1073,7 +1089,7 @@ function InboxSplitScreen({
       <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
       {threeColumns ? null : (
         <Screen>
-          <SplitView {...first} detail={detail} />
+          <SplitView {...first} detail={detail} detailBar={detailBar} />
         </Screen>
       )}
       {remind.sheet}

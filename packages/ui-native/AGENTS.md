@@ -21,7 +21,11 @@ builds a control of its own.
   rounded selection fill set in from the sidebar's edges), `SplitView` (the app's
   sidebar, the list, and the detail, or the list and the detail, each column
   under its own `ColumnBar`: its inline title, what leads it such as the
-  workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
+  workspace switcher, its `lead` glyphs such as Mail's expand button (the
+  detail alone, `detailOnly`) and compose,
+  a path, a page's main acts as glyphs in the bar's one glass before its ⋯
+  (two or three, dimmed rather than gone with nothing picked, the rest left
+  in ⋯ by `menuWithout`), a `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says, and `SplitOverTabs`, the one split view a window wide enough
   for three columns stands over the hidden tabs, in front of a tab's root and
