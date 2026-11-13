@@ -21,6 +21,7 @@ import { DialogContent, Dialog as ShadcnDialog } from "../../shadcn/dialog.js";
 import { trappedTab } from "../../trapped-tab.js";
 import { ANNOUNCE, announce, type Retire } from "../announcer/announcer.js";
 import { IconButton } from "../button/button.js";
+import { EdgeClip } from "../edge-clip/edge-clip.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { closesCard } from "./close-chord.js";
 import {
@@ -236,7 +237,9 @@ export const DIALOG_VEIL = { [VEIL_ATTRIBUTE]: "" } as const;
  * edge, as a picture's card does. It fills the room its owner leaves it, or
  * hugs what it holds (`hug`), as a video shown at its own shape is, no
  * narrower than a media card so its head's buttons still fit, and no
- * larger than that room.
+ * larger than that room. Note that the edge is the card's and the clip a
+ * box inside it, because a box that clips what it holds and draws its own
+ * edge loses its edge's corners to a video playing at its foot.
  */
 export function DialogCard({
   hug = false,
@@ -248,10 +251,10 @@ export function DialogCard({
 }): React.JSX.Element {
   return (
     <div
-      className={`ui-dialog-card flex min-h-0 min-w-0 flex-col overflow-hidden rounded-dialog border border-border-strong bg-popover text-popover-foreground shadow-dialog ${hug ? "max-h-full max-w-full min-w-dialog-media-min" : "size-full"}`}
+      className={`ui-dialog-card flex min-h-0 min-w-0 flex-col rounded-dialog border border-border-strong bg-popover text-popover-foreground shadow-dialog ${hug ? "max-h-full max-w-full min-w-dialog-media-min" : "size-full"}`}
       data-hug={hug}
     >
-      {children}
+      <EdgeClip>{children}</EdgeClip>
     </div>
   );
 }
