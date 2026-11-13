@@ -93,10 +93,15 @@ export type ComputerHelperAnswer =
   | { readonly failure: string; readonly message: string };
 
 export interface ComputerUseHelperSeam {
-  /** One request answered within `within`, after every request asked before it. */
+  /**
+   * One request answered within `within`, after every request asked before
+   * it; where `stillLet` is given, read once the helper's turn is taken, a
+   * request it answers a reason for is refused with it rather than handed over.
+   */
   readonly ask: (
     request: ComputerHelperRequest,
     within: Duration.Duration,
+    stillLet?: Effect.Effect<string | undefined>,
   ) => Effect.Effect<ComputerHelperAnswer>;
 }
 
@@ -197,6 +202,11 @@ function answerOf(line: HelperLine): ComputerHelperAnswer {
 
 /** What a request answers where the helper was still on an earlier one when its own time ran out. */
 const BUSY = "The computer-use helper was busy with an earlier request and did not answer in time.";
+
+/** What a request answers where what lets it moved while it waited its turn. */
+function refusedHere(message: string): ComputerHelperAnswer {
+  return { failure: COMPUTER_HELPER_FAILURE.REFUSED, message };
+}
 
 function failed(message: string): ComputerHelperAnswer {
   return { failure: COMPUTER_HELPER_FAILURE.FAILED, message };
@@ -323,7 +333,11 @@ export function computerUseHelperProcess(
      * rather than waiting out the other's first, and its caller, such as an
      * agent's call the service waits on, is never held past it.
      */
-    const ask = (request: ComputerHelperRequest, within: Duration.Duration) =>
+    const ask = (
+      request: ComputerHelperRequest,
+      within: Duration.Duration,
+      stillLet?: Effect.Effect<string | undefined>,
+    ) =>
       Effect.uninterruptibleMask((restore) =>
         Effect.gen(function* () {
           const deadline = (yield* Clock.currentTimeMillis) + Duration.toMillis(within);
@@ -331,9 +345,16 @@ export function computerUseHelperProcess(
 
           if (Option.isNone(took)) return failed(BUSY);
 
-          return yield* restore(sent(request, deadline)).pipe(
-            Effect.ensuring(Semaphore.release(turn, 1)),
-          );
+          // Note that what lets the request is read again once its turn is taken, since it may have moved while the request waited behind another.
+          const handed = Effect.gen(function* () {
+            const why = stillLet === undefined ? undefined : yield* stillLet;
+
+            if (why !== undefined) return refusedHere(why);
+
+            return yield* sent(request, deadline);
+          });
+
+          return yield* restore(handed).pipe(Effect.ensuring(Semaphore.release(turn, 1)));
         }),
       );
 

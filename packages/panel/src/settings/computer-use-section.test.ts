@@ -9,7 +9,13 @@ import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { type AnyAct, FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
+import {
+  type AnyAct,
+  FAKE_ANSWER,
+  type FakeActAnswer,
+  fakeActs,
+  fakeActsAnswer,
+} from "../testing/app-bridge.js";
 import { DESKTOP_CAPABILITIES } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { ComputerUseSection } from "./computer-use-section.js";
@@ -211,4 +217,23 @@ test("an app removed, then allowed again once the store dropped it, is kept by t
   act(() => button("Remove Figma").click());
   await vi.waitFor(() => assert.equal(written.length, 2));
   assert.equal(written[1]?.value, JSON.stringify([SIMULATOR]));
+});
+
+test("an Allow… that did not reach macOS says why under the grant it was for", async () => {
+  const answering = fakeActsAnswer();
+  fakeActs({
+    act: (request) =>
+      request.kind === ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS
+        ? Promise.resolve({
+            status: FAKE_ANSWER.REFUSED,
+            reason: "The helper could not be started.",
+          })
+        : answering(request),
+  });
+  const page = await mount();
+
+  await vi.waitFor(() => assert.ok(page.textContent?.includes("Allow…")));
+  act(() => button("Allow…").click());
+
+  await vi.waitFor(() => assert.ok(page.textContent?.includes("The helper could not be started.")));
 });

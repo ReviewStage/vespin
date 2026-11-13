@@ -30,6 +30,9 @@ import {
   computerUseAppsOf,
   computerUseAppsStored,
   computerUseAppsWith,
+  EXPERIMENT,
+  experimentOn,
+  NO_EXPERIMENTS,
 } from "@repo/settings";
 import type { SettingsUpdateResult } from "@repo/settings/wire";
 import { entityPool } from "@repo/sync";
@@ -128,14 +131,18 @@ type HostAssemblyRequirements =
 
 /**
  * Actions on apps as the Mac's commands take them: through the helper, under
- * This Mac's switch, and with the apps answered Always allow for, which an
- * app's Always allow adds to.
+ * the account's Computer use and This Mac's switch, and with the apps
+ * answered Always allow for, which an app's Always allow adds to.
  */
 function macComputerUse(settings: SettingsComposer, helper: ComputerUseHelperSeam): MacComputerUse {
   const stored = Effect.map(Effect.orDie(settings.store.snapshot()), (snapshot) => snapshot.stored);
 
   return {
     helper,
+    offered: Effect.map(
+      Effect.orElseSucceed(settings.store.snapshot(), () => ({ experiments: NO_EXPERIMENTS })),
+      (snapshot) => experimentOn(snapshot.experiments, EXPERIMENT.COMPUTER_USE),
+    ),
     enabled: Effect.map(
       stored,
       (values) => values.computerUse ?? APP_SETTING_SCHEMA.computerUse.default,

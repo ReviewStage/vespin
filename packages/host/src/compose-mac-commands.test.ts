@@ -314,8 +314,13 @@ interface Gate {
   account?: string;
   /** Whether the prompt's Allow all commands fails to keep the setting, as a file that cannot be written does. */
   saveFails?: boolean;
-  /** The computer-use helper this Mac ships, its switch, and the apps allowed without asking; none ships no helper. */
-  computer?: { helper: ComputerUseHelperSeam; enabled: boolean; allowed: string[] };
+  /** The computer-use helper this Mac ships, its switch, whether the account has Computer use on (on unless said), and the apps allowed without asking; none ships no helper. */
+  computer?: {
+    helper: ComputerUseHelperSeam;
+    enabled: boolean;
+    offered?: boolean;
+    allowed: string[];
+  };
   /** The device this Mac joins as, and the apps Settings allows without asking; none claims as the account alone. */
   device?: { id: string; apps: string[]; applyFails?: number };
 }
@@ -379,6 +384,7 @@ const subject = (
       dependencies.computer = {
         helper: gate.computer.helper,
         enabled: Effect.sync(() => gate.computer?.enabled === true),
+        offered: Effect.sync(() => gate.computer?.offered !== false),
         allowedApps: Effect.sync(() => [...(gate.computer?.allowed ?? [])]),
         allowApp: (app: string) =>
           Effect.sync(() => {
@@ -1015,6 +1021,58 @@ it.effect(
 );
 
 it.effect(
+  "an app allowed once for one agent and then always for another is asked about again for the first once it is removed",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+
+      const gate: Gate = {
+        mode: MAC_COMMAND_MODE.ALWAYS,
+        signedIn: true,
+        computer: { helper: scripted.helper, enabled: true, allowed: [] },
+      };
+
+      const service = scriptedService();
+      const first = computerCommand(COMMAND.id, AGENT, "Simulator");
+      service.queue(first, NOW);
+
+      const { composer, asks, answer } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        gate,
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* answer(first.id, MAC_COMMAND_DECISION.ALLOW_ONCE);
+          yield* settled;
+
+          const second = computerCommand(SECOND.id, OTHER_AGENT, "Simulator");
+          service.queue(second, NOW);
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+          yield* answer(second.id, MAC_COMMAND_DECISION.ALLOW_ALWAYS);
+          yield* settled;
+          assert.deepEqual(gate.computer?.allowed, ["com.apple.iphonesimulator"]);
+
+          gate.computer?.allowed.splice(0);
+          const third = computerCommand(THIRD_ID, AGENT, "Simulator");
+          service.queue(third, NOW);
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+          assert.deepEqual(
+            asks(),
+            [{ id: third.id, app: "Simulator" }],
+            "a Remove takes back the first agent's once grant too",
+          );
+        }),
+      );
+    }),
+);
+
+it.effect(
   "an action on an app not yet allowed is asked about by the app, Always allow adds the app and runs the action, another agent's action on it then asks nothing, and once it is removed the first agent is asked again; every read names computer too",
   () =>
     Effect.gen(function* () {
@@ -1155,6 +1213,42 @@ it.effect(
       assert.ok(shell !== undefined && "refused" in shell, "a shell command is not run");
       assert.deepEqual(spawner.spawned, []);
       assert.deepEqual(told, [], "nothing was asked");
+    }),
+);
+
+it.effect(
+  "Computer use turned on asks macOS once for the grants the Mac lacks, and nothing before",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR], { screenRecording: false, accessibility: true });
+      const computer = { helper: scripted.helper, enabled: true, offered: false, allowed: [] };
+
+      const { composer, moved } = yield* subject(
+        scriptedService(),
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        { mode: MAC_COMMAND_MODE.ASK, signedIn: true, computer },
+      );
+
+      const requested = () =>
+        scripted.asked.filter((request) => request.op === COMPUTER_HELPER_OP.REQUEST_PERMISSIONS)
+          .length;
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          assert.equal(requested(), 0, "nothing is asked while Computer use is off");
+
+          computer.offered = true;
+          yield* moved;
+          yield* settled;
+          assert.equal(requested(), 1);
+
+          yield* moved;
+          yield* settled;
+          assert.equal(requested(), 1, "a later change asks nothing again");
+        }),
+      );
     }),
 );
 

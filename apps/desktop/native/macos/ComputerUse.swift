@@ -14,7 +14,8 @@ import UniformTypeIdentifiers
 /// line on stdout, each answer carrying its request's `id`:
 ///
 /// - `permissions`, `request_permissions`: whether it may capture windows and
-///   post input, the second raising macOS's own prompts first.
+///   post input, the second raising macOS's own prompts first and opening the
+///   System Settings pane of the first grant still missing.
 /// - `list_apps`: the running apps a person uses, each with its icon.
 /// - `list_installed_apps`: the apps installed in the usual folders, by name
 ///   and bundle id, without icons, which `describe_app` draws one at a time.
@@ -149,10 +150,17 @@ private func permissions() -> [String: Any] {
     ["screen_recording": CGPreflightScreenCaptureAccess(), "accessibility": AXIsProcessTrusted()]
 }
 
+/// The Privacy & Security panes of System Settings where each grant is switched on.
+private let SCREEN_RECORDING_PANE = "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture"
+private let ACCESSIBILITY_PANE = "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"
+
+/// Asks macOS for the grants the app lacks, by its own prompts, which also list the app in each pane, then opens the pane of the first still missing, since macOS prompts only once and the switch is the developer's to flip there.
 private func requestPermissions() -> [String: Any] {
     if !CGPreflightScreenCaptureAccess() { _ = CGRequestScreenCaptureAccess() }
     let prompt = kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String
     _ = AXIsProcessTrustedWithOptions([prompt: true] as CFDictionary)
+    let missing = !CGPreflightScreenCaptureAccess() ? SCREEN_RECORDING_PANE : !AXIsProcessTrusted() ? ACCESSIBILITY_PANE : nil
+    if let pane = missing, let url = URL(string: pane) { NSWorkspace.shared.open(url) }
     return permissions()
 }
 
@@ -539,7 +547,15 @@ private func captureWindow(_ app: NSRunningApplication, frame numbered: CGRect?)
         $0.owningApplication?.processID == pid && $0.windowLayer == 0 && $0.frame.width > 1
     }
     if let numbered {
-        guard let paired = windows.first(where: { sameFrame($0.frame, numbered) }) else {
+        // Note that two windows at one frame are refused too, since either could be the one numbered.
+        let paired = windows.filter { sameFrame($0.frame, numbered) }
+        guard paired.count <= 1 else {
+            throw HelperError(
+                kind: ERROR_KIND.noWindow,
+                message:
+                    "\(appName(app)) has two windows at the same place, so it can't tell which to capture. Ask the developer to move one of them.")
+        }
+        guard let paired = paired.first else {
             throw HelperError(
                 kind: ERROR_KIND.noWindow,
                 message:
