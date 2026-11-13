@@ -76,6 +76,12 @@ private let commands: [Command] = [
     id: "markDone", place: .subject, title: "Mark Done", symbol: "Check", input: "d",
     modifiers: [.command, .shift], nonRepeatable: true),
   Command(
+    id: "resolve", place: .subject, title: "Resolve", symbol: "CircleCheck", input: "a",
+    modifiers: [.command, .control], nonRepeatable: true),
+  Command(
+    id: "stopAgent", place: .subject, title: "Stop", symbol: "CircleStop", input: ".",
+    nonRepeatable: true),
+  Command(
     id: "toggleRead", place: .subject, title: "Mark as Unread", toggledTitle: "Mark as Read",
     symbol: "Mail", toggledSymbol: "MailOpen", input: "u",
     modifiers: [.command, .shift]),
