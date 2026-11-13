@@ -309,7 +309,8 @@ export function taskListFollowing(): TaskListFollowing {
     write: (version, view) => feed.write({ version, view }),
     trouble: feed.trouble,
     stop: () => {
-      for (const collection of Object.values(collections)) void collection.cleanup();
+      for (const collection of Object.values(collections))
+        void collection.cleanup({ dependents: true });
     },
   };
 }
