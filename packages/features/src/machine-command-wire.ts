@@ -309,13 +309,18 @@ export type MacComputerAction = typeof macComputerActionSchema.Type;
 
 /**
  * One action waiting for the Mac: its id, the conversation of the agent that
- * asked, which the Mac's Allow once holds an app for, the action, and how long the developer
- * may take to allow the app and the action to run, together.
+ * asked, which the Mac's Allow once holds an app for, that agent where the
+ * conversation is one, whose turn's end puts the agent's cursor away, the
+ * action, and how long the developer may take to allow the app and the
+ * action to run, together. Note that an older desktop ignores the agent, as
+ * an answer ignores a key a newer service added, and its cursor fades on the
+ * helper's own clock.
  */
 const macComputerCommandSchema = EffectSchema.Struct({
   id: wireUuidSchema,
   kind: EffectSchema.Literal(MACHINE_COMMAND_KIND.COMPUTER),
   conversationId: wireUuidSchema,
+  agentId: EffectSchema.optionalKey(wireUuidSchema),
   action: macComputerActionSchema,
   timeoutSeconds: commandTimeout,
 });
@@ -330,10 +335,14 @@ export const machineCommandSchema = EffectSchema.Union([
 
 /**
  * What a computer command asks, as the queue keeps it in the text a shell
- * command's command stands in: its conversation and its action, as JSON.
+ * command's command stands in: its conversation, its agent, and its action, as JSON.
  */
 const storedComputerRequestSchema = EffectSchema.fromJsonString(
-  EffectSchema.Struct({ conversationId: wireUuidSchema, action: macComputerActionSchema }),
+  EffectSchema.Struct({
+    conversationId: wireUuidSchema,
+    agentId: EffectSchema.optionalKey(wireUuidSchema),
+    action: macComputerActionSchema,
+  }),
 );
 
 const decodeStoredComputerRequest = EffectSchema.decodeUnknownOption(storedComputerRequestSchema);
@@ -349,12 +358,12 @@ export interface StoredMachineCommand {
 
 /** What a command asks, as the queue keeps it. */
 export function storedMachineCommandText(command: MachineCommand): string {
-  return command.kind === MACHINE_COMMAND_KIND.SHELL
-    ? command.command
-    : encodeStoredComputerRequest({
-        conversationId: command.conversationId,
-        action: command.action,
-      });
+  if (command.kind === MACHINE_COMMAND_KIND.SHELL) return command.command;
+  const { conversationId, agentId, action } = command;
+
+  return encodeStoredComputerRequest(
+    agentId === undefined ? { conversationId, action } : { conversationId, agentId, action },
+  );
 }
 
 /** A command the queue kept, read back; none where a computer request no longer reads, which no Mac could run. */
@@ -365,7 +374,10 @@ export function machineCommandOfStored(stored: StoredMachineCommand): MachineCom
 
   return Option.match(decodeStoredComputerRequest(command), {
     onNone: () => undefined,
-    onSome: ({ conversationId, action }) => ({ id, kind, conversationId, action, timeoutSeconds }),
+    onSome: ({ conversationId, agentId, action }) =>
+      agentId === undefined
+        ? { id, kind, conversationId, action, timeoutSeconds }
+        : { id, kind, conversationId, agentId, action, timeoutSeconds },
   });
 }
 
