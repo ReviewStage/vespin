@@ -229,7 +229,7 @@ test("where a move is offered, Agent runs in opens the places, Cloud wearing its
   assert.equal(moved.length, 1);
 });
 
-test("the Default machine row names the agent's default with its dot, offline as such, and a pick of another machine sets it", async () => {
+test("the Default machine row names the agent's default with its dot, offline as such, a teammate's face before a machine of theirs, and a pick of another machine sets it", async () => {
   const sent: unknown[] = [];
   const owner = { userId: "user-ada", name: "Ada Lovelace" };
 
@@ -289,7 +289,8 @@ test("the Default machine row names the agent's default with its dot, offline as
   );
   await settle();
 
-  assert.deepEqual(rows, ["Agent runs inCloud", "Default machineLaptop"]);
+  // Note that the machines are a teammate's, Ada's, so each wears her face, "A", before its name.
+  assert.deepEqual(rows, ["Agent runs inCloud", "Default machineALaptop"]);
   assert.equal(standing, "Offline");
   assert.equal(machines.length, 2);
   assert.deepEqual(sent, [{ agentId: AGENT_ID, machineId: "studio" }]);

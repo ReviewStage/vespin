@@ -15,9 +15,11 @@ import {
   ChipPopover,
   type ChipPopoverFact,
   type ChipPopoverMenu,
+  GAP,
   HoverCard,
   HoverCardHead,
   HoverCardNote,
+  Inline,
   type MenuRow,
   POPOVER_ALIGN,
   POPOVER_WIDTH,
@@ -34,8 +36,10 @@ import {
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import type { ReactNode } from "react";
+import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { presenceStanding, useDevicePresence } from "../device-presence.js";
 import { useThisMac } from "../machine-name.js";
+import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { useOpenSettings } from "../open-settings.js";
 import { Picker } from "../settings/picker-row.js";
 import { useDefaultMachineRow } from "./agent-machines.js";
@@ -254,7 +258,7 @@ export function AgentPlace({
   move,
   narrow = false,
 }: {
-  agent: Pick<AgentSummary, "id" | "mac" | "machine" | "sandbox" | "sandboxVcpus">;
+  agent: Pick<AgentSummary, "id" | "mac" | "machine" | "sandbox" | "sandboxVcpus" | "startedBy">;
   /** The move the chip offers, which drops its menu of places (`move-agent.tsx`'s `useMovePlace`); none where it takes no press. */
   move?: PlaceMove | undefined;
   /** Whether the box is too narrow for the chip's words, so it draws its glyph alone. */
@@ -274,7 +278,7 @@ export function AgentPlace({
 
   if (agent.mac === undefined) return null;
 
-  return <MacChip mac={agent.mac} move={move} narrow={narrow} />;
+  return <MacChip mac={agent.mac} owner={agent.startedBy} move={move} narrow={narrow} />;
 }
 
 /** The id of the row that opens Settings › Machines, which no place's id is. */
@@ -383,6 +387,7 @@ function PlaceMenuChip({
 function PlaceChip({
   here,
   glyph,
+  face,
   words,
   sub,
   note,
@@ -392,6 +397,8 @@ function PlaceChip({
 }: {
   here: string | undefined;
   glyph: ReactNode;
+  /** A teammate's face beside the chip's glyph, where the machine is theirs; none on the card, whose head names the machine alone. */
+  face?: ReactNode;
   words: string;
   sub: string | undefined;
   note: string;
@@ -406,11 +413,21 @@ function PlaceChip({
     </HoverCard>
   );
 
+  const chipGlyph =
+    face === undefined ? (
+      glyph
+    ) : (
+      <Inline gap={GAP.ICON} wrap={false}>
+        {glyph}
+        {face}
+      </Inline>
+    );
+
   if (move !== undefined) {
     return (
       <PlaceMenuChip
         here={here}
-        glyph={glyph}
+        glyph={chipGlyph}
         words={words}
         card={card}
         move={move}
@@ -422,7 +439,7 @@ function PlaceChip({
   return (
     <Tooltip label={`${RUNS_ON}${words}`} card={card}>
       <StaticChip tone={quiet ? undefined : STATUS_TONE.ATTENTION} iconOnly={narrow}>
-        {glyph}
+        {chipGlyph}
         <VisuallyHidden>{RUNS_ON}</VisuallyHidden>
         <ChipName>{words}</ChipName>
       </StaticChip>
@@ -433,14 +450,19 @@ function PlaceChip({
 /** The chip of an agent on a device, held against the window's clock, so a Mac that goes quiet reads offline without another read. */
 function MacChip({
   mac,
+  owner,
   move,
   narrow,
 }: {
   mac: NonNullable<AgentSummary["mac"]>;
+  /** Whose machine it is: the agent's starter, since an agent runs on its starter's own machine. */
+  owner: AgentSummary["startedBy"];
   move: PlaceMove | undefined;
   narrow: boolean;
 }): React.JSX.Element {
   const presence = useDevicePresence(true);
+  const { readerId } = useMemberDirectory();
+  const ownerActor = usePerson(owner);
   const thisMac = useThisMac();
   // Note that the clock only redraws the label as a beat ages, since the standing is read off the book's own monotonic clock.
   useSecond();
@@ -455,17 +477,22 @@ function MacChip({
   // Note that the platform is read off the move's list, because the agent's own record names none.
   const listed = move?.devices.find((device) => device.deviceId === mac.deviceId);
 
+  const glyph =
+    standing === undefined ? (
+      <DeviceGlyph device={listed} />
+    ) : (
+      <DeviceStandingGlyph device={listed} standing={standing} hinted={false} />
+    );
+
+  // Note that a teammate's machine wears its owner's face beside its glyph, as a machine of theirs does in the Default machine list; the reader's own needs no saying whose it is.
+  const teammate = owner !== undefined && readerId !== undefined && owner.userId !== readerId;
+
   return (
     <PlaceChip
       here={mac.deviceId}
       move={move}
-      glyph={
-        standing === undefined ? (
-          <DeviceGlyph device={listed} />
-        ) : (
-          <DeviceStandingGlyph device={listed} standing={standing} hinted={false} />
-        )
-      }
+      glyph={glyph}
+      face={teammate ? <ActorMark actor={ownerActor} size={ACTOR_SIZE.MARK} /> : undefined}
       words={macWords(name, standing)}
       sub={standing === DEVICE_STANDING.ONLINE ? RUNS_ON_WORDS.ONLINE : undefined}
       note={DEVICE_NOTE}

@@ -4,6 +4,8 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { DefaultMachine, WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
+  GAP,
+  Inline,
   type MenuRow,
   STATUS_TONE,
   SUBMENU_WIDTH,
@@ -94,12 +96,27 @@ function setDefaultMachine(agentId: string, machineId: string): void {
   );
 }
 
-/** The value the row ends in, muted as the Agent runs in row's is: the machine's name, or None. */
-function DefaultValue({ name }: { name: string | undefined }): React.JSX.Element {
-  return (
+/** The value the row ends in, muted as the Agent runs in row's is: a teammate's face where the machine is theirs, then its name; or None. */
+function DefaultValue({
+  name,
+  face,
+}: {
+  name: string | undefined;
+  face: React.ReactNode;
+}): React.JSX.Element {
+  const words = (
     <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
       {name === undefined ? DEFAULT_MACHINE_WORDS.NONE : <ReplayWords masked>{name}</ReplayWords>}
     </Text>
+  );
+
+  if (face === undefined) return words;
+
+  return (
+    <Inline gap={GAP.ICON} wrap={false}>
+      {face}
+      {words}
+    </Inline>
   );
 }
 
@@ -135,6 +152,12 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
   const chosen = standing.machine;
   const online = machines.find((machine) => machine.id === chosen?.id)?.online ?? standing.on;
 
+  // Note that only a teammate's machine wears its owner's face, since the reader's own needs no saying whose it is.
+  const faceOf = (owner: DefaultMachine["owner"]) =>
+    owner.userId === readerId ? undefined : (
+      <ActorMark actor={personActor(owner, members, readerId, former)} size={ACTOR_SIZE.MARK} />
+    );
+
   return {
     id: DEFAULT_MACHINE_ROW,
     label: DEFAULT_MACHINE_WORDS.LABEL,
@@ -144,7 +167,12 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
       ) : (
         <MachineGlyph online={online} />
       ),
-    end: <DefaultValue name={chosen === undefined ? undefined : nameOf(chosen)} />,
+    end: (
+      <DefaultValue
+        name={chosen === undefined ? undefined : nameOf(chosen)}
+        face={chosen === undefined ? undefined : faceOf(standing.owner)}
+      />
+    ),
     submenu:
       machines.length === 0
         ? undefined
@@ -156,12 +184,7 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
                 id: machine.id,
                 label: nameOf(machine),
                 icon: <MachineGlyph online={machine.online} />,
-                end: (
-                  <ActorMark
-                    actor={personActor(machine.owner, members, readerId, former)}
-                    size={ACTOR_SIZE.MARK}
-                  />
-                ),
+                before: faceOf(machine.owner),
                 replayMasked: true,
               }),
             ),

@@ -170,6 +170,8 @@ export interface MenuRow {
   icon?: React.ReactNode;
   /** Faces drawn ahead of the label in place of a mark, in a column a pair of faces wide so the rows' names line up: a commit's author and co-author. */
   faces?: React.ReactNode;
+  /** A small mark drawn right before the label, after the row's mark: a teammate's face on a machine of theirs. */
+  before?: React.ReactNode;
   /** Words a search matches beside the label, such as a model's provider. */
   terms?: readonly string[];
   /** Muted words after the label: the effort a model runs at, an owner, "(Fast)", where an agent stands. */
@@ -517,6 +519,18 @@ function highlightOver(input: {
   return input.first;
 }
 
+/** A row's words led by its `before` mark where it has one, as the row draws them. */
+function ledLabel(row: MenuRow, label: React.ReactNode): React.ReactNode {
+  if (row.before === undefined || row.before === null) return label;
+
+  return (
+    <span className="ui-searchable-menu-led inline-flex min-w-0 items-center gap-icon-gap">
+      {row.before}
+      <span className="min-w-0">{label}</span>
+    </span>
+  );
+}
+
 /** What a row prints at its end: why it cannot be picked now, unless its marks say it, or its shortcut, then its own marks; or nothing. */
 function rowHint(row: MenuRow): React.ReactNode {
   const why = row.why === MENU_ROW_WHY.MARK ? undefined : row.disabled;
@@ -553,7 +567,7 @@ function optionGroups(
     replayUnmasked: unmasked,
     options: section.rows.map(({ row, index }) => ({
       id: row.id,
-      label: rowWords(row, unmasked, markedLabel(row, query)),
+      label: ledLabel(row, rowWords(row, unmasked, markedLabel(row, query))),
       words: row.label,
       ...(row.faces === undefined
         ? { icon: row.icon }
@@ -600,7 +614,7 @@ function rowWords(row: MenuRow, unmasked: boolean, words: React.ReactNode): Reac
 function submenuOptions(open: Submenu, unmasked: boolean): ComboboxOption[] {
   return open.rows.map((row) => ({
     id: row.id,
-    label: rowWords(row, unmasked, row.label),
+    label: ledLabel(row, rowWords(row, unmasked, row.label)),
     icon: row.icon,
     detail: rowWords(row, unmasked, row.detail),
     detailWords: Predicate.isString(row.detail) ? row.detail : undefined,
