@@ -559,6 +559,21 @@ const PICKED_MARK = GLYPH.CHECK;
 /** The check's size, as small and heavy as the system's own. */
 const PICKED_MARK_SIZE = 15;
 
+/** The picked row's copper check at its end, as iOS's own Settings checks a choice: the one pick look every list of choices draws, a decide ask's card among them. */
+export function PickedCheck() {
+  const colors = useColors();
+  const markSize = useScaledSize(PICKED_MARK_SIZE);
+
+  return (
+    <Image
+      {...glyphImage(PICKED_MARK)}
+      size={markSize}
+      color={colors.ACCENT}
+      modifiers={[font({ size: markSize, weight: "semibold" })]}
+    />
+  );
+}
+
 /**
  * A choice among a few, each a row of its own with what it does under its
  * name where it says, and the picked one checked in copper, as iOS's own
@@ -572,7 +587,6 @@ const PICKED_MARK_SIZE = 15;
  */
 export function PickRows({ options, picked, onPick }: PickRowsProps) {
   const colors = useColors();
-  const markSize = useScaledSize(PICKED_MARK_SIZE);
 
   // Note that the rows stand in a fragment, each its own row of the form, because a group around them made one element of them all, which neither VoiceOver nor a flow could pick from.
   return (
@@ -603,14 +617,7 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
               )}
             </VStack>
             <Spacer />
-            {option.id === picked ? (
-              <Image
-                {...glyphImage(PICKED_MARK)}
-                size={markSize}
-                color={colors.ACCENT}
-                modifiers={[font({ size: markSize, weight: "semibold" })]}
-              />
-            ) : null}
+            {option.id === picked ? <PickedCheck /> : null}
           </HStack>
         </SwiftUIButton>
       ))}
@@ -641,7 +648,6 @@ type WorkspacePickRowsProps = {
  */
 export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRowsProps) {
   const colors = useColors();
-  const markSize = useScaledSize(PICKED_MARK_SIZE);
 
   return (
     <>
@@ -678,14 +684,7 @@ export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRows
               )}
             </VStack>
             <Spacer />
-            {workspace.id === picked ? (
-              <Image
-                {...glyphImage(PICKED_MARK)}
-                size={markSize}
-                color={colors.ACCENT}
-                modifiers={[font({ size: markSize, weight: "semibold" })]}
-              />
-            ) : null}
+            {workspace.id === picked ? <PickedCheck /> : null}
           </HStack>
         </SwiftUIButton>
       ))}

@@ -241,8 +241,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   small bordered capsule at its end; and the Account page heads with the
   account's photo, name and address centered on the ground, closing with
   Sign out and Delete account centered in red, as Apple Account's does.
-- **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
-  rows, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
+- **Cards** are kept for what a person acts on: the ask (`ChoiceList`, a
+  row per option checked at its end in copper once picked, as `PickRows`
+  checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it; `AnswerFields`, a row per
   field: a text or number field under its label, the field plain inside the
   card and prompting with its label while empty, a select's menu picker at

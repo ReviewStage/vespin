@@ -22,7 +22,7 @@ appId: dev.vespin.ios
       fixture: inbox
 - assertVisible: "Who can withdraw an invite?"
 - waitForAnimationToEnd
-# A decide: the options as a card of radio rows, the recommended tagged; a
+# A decide: the options as a card of rows, the recommended tagged; a
 # pick lights Send, which sends it with the note typed, and the thread reads
 # it answered at once: the card gone, and the answer's stamp under "You".
 - tapOn: "Who can withdraw an invite?"
