@@ -11,14 +11,12 @@ import {
   ItemMedia,
   ItemTitle,
 } from "../../shadcn/item.js";
-import { useClipped } from "../../use-clipped.js";
 import { ANNOUNCE } from "../announcer/announcer.js";
 import { ErrorLine } from "../error-line/error-line.js";
 import { LANDED, landedMark } from "../landed/landed.js";
 import { GAP, type Gap, Inline } from "../layout/layout.js";
 import { PROGRESS_SIZE, Progress, type ProgressTone } from "../progress/progress.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
-import { Tooltip } from "../tooltip/hint.js";
 import { type UsageMeterRow, UsageMeters } from "../usage-meters/usage-meters.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
 
@@ -502,34 +500,6 @@ export function SettingsRowStateLine({
     >
       {children}
     </span>
-  );
-}
-
-/**
- * A note's words as a row's label, a memory's: held to two lines, a longer
- * note fading out at the end of its second as a list row's long title does,
- * and said whole, as `words`, in the hint over it only where it is cut. A cut
- * note is a Tab stop, so the keyboard raises its hint as the pointer does.
- */
-export function SettingsRowNote({
-  words,
-  children,
-}: {
-  /** The note's plain words, which the hint says and its cut is measured by. */
-  words: string;
-  /** The note as drawn, its marks and all. */
-  children: ReactNode;
-}): React.JSX.Element {
-  const [measured, clipped] = useClipped(words);
-
-  return (
-    <Tooltip label={clipped ? words : undefined}>
-      <span className="block min-w-0" tabIndex={clipped ? 0 : undefined}>
-        <span ref={measured} className="ui-settings-row-note block" data-overflow={String(clipped)}>
-          {children}
-        </span>
-      </span>
-    </Tooltip>
   );
 }
 

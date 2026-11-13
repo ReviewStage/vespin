@@ -69,7 +69,6 @@ import {
   type SelectionAct,
   SelectionBar,
   SettingsLine,
-  SettingsRowNote,
   type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowsSkeleton,
@@ -148,9 +147,9 @@ import { MenuRow } from "./menu-row.js";
  *
  * The memories stand in a Settings card, a row each (`MenuRow`), as
  * Always allowed's commands do, at Settings' own measure. A row: the box it
- * is chosen by; its words, drawn as the notes are since a memory is
- * Markdown (`pnpm db:generate` in backticks), held to two lines and said
- * whole in the hint over them where they are cut (`SettingsRowNote`); under
+ * is chosen by; its words whole, drawn as the notes are since a memory is
+ * Markdown (`pnpm db:generate` in backticks) and runs to a few lines at
+ * most (`MEMORY_BOUNDS.MAX_CHARS`); under
  * them, "Saved 2h ago by" whose they are, "from" the agent that saved them,
  * as that agent's mention chip, wearing its harness's mark, whose press
  * opens the agent's transcript at the line that kept it, or the task's chip
@@ -409,7 +408,7 @@ function MemoryRow({
       {...(menu.heading === undefined ? undefined : { heading: menu.heading })}
       row={{
         leading: <Checkbox label={`Select: ${words}`} checked={chosen} onChange={onChoose} />,
-        label: <MemoryWords text={memory.text} words={words} found={found} />,
+        label: <MemoryWords text={memory.text} found={found} />,
         description: <SavedLine shown={shown} workspaceStep={workspaceStep} />,
         control: <MemoryUse memory={memory} />,
         controls: SETTINGS_ROW_CONTROLS.BESIDE,
@@ -741,24 +740,17 @@ function saveAnswered(answer: MemorySaveAnswerView): ActionResult {
     : { status: ACTION_RESULT_STATUS.REJECTED, reason: refusal };
 }
 
-/** A memory's words as its row draws them: lit where the search landed, held to two lines, and said whole in the hint over them where they are cut. */
+/** A memory's words as its row draws them, whole: lit where the search landed. */
 function MemoryWords({
   text,
-  words,
   found,
 }: {
   text: string;
-  /** The words as plain text, which the hint says. */
-  words: string;
   /** The words the search asks for, lit where they landed. */
   found: readonly string[];
 }): React.JSX.Element {
-  return (
-    <SettingsRowNote words={words}>
-      {/* A memory's words stand inside its row, so they stay words going nowhere, links among them. */}
-      <MarkdownMessage words={text} className="memory-text" found={found} link={null} />
-    </SettingsRowNote>
-  );
+  // Note that a memory's words stand inside its row, so they stay words going nowhere, links among them.
+  return <MarkdownMessage words={text} className="memory-text" found={found} link={null} />;
 }
 
 /** The words the card is writing, which memory they replace, and what the service last said of them. */

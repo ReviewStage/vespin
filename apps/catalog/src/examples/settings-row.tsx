@@ -28,7 +28,6 @@ import {
   type SettingsRowControl,
   SettingsRowControlHold,
   SettingsRowMark,
-  SettingsRowNote,
   SettingsRowStateLine,
   SettingsRowsFold,
   SettingsRowValue,
@@ -69,7 +68,7 @@ import { CatalogSection } from "../section";
  * their own row, closed until pressed, beside one that owns none.
  */
 
-/** A note long enough to be cut at two lines of its row, as plain words for its hint. */
+/** A note long enough to run to several lines of its row. */
 const NOTE =
   "Migrations are generated with pnpm db:generate and checked in beside the change that needs them, never written by hand, so every branch's database can be rebuilt from its own history, and a reviewer reads the schema change beside the code.";
 
@@ -278,13 +277,7 @@ function StateRows(): React.JSX.Element {
         {() => <SettingsRowValue>Admin</SettingsRowValue>}
       </SettingsRow>
       <SettingsRow
-        label={
-          <SettingsRowNote words={NOTE}>
-            Migrations are generated with <code>pnpm db:generate</code> and checked in beside the
-            change that needs them, never written by hand, so every branch&apos;s database can be
-            rebuilt from its own history, and a reviewer reads the schema change beside the code.
-          </SettingsRowNote>
-        }
+        label={NOTE}
         description="Saved 2 days ago by Ada Lovelace"
         align={SETTINGS_ROW_ALIGN.FIRST_LINE}
         controls={SETTINGS_ROW_CONTROLS.BESIDE}
