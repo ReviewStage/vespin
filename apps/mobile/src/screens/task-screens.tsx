@@ -1712,7 +1712,7 @@ function OverviewPage({
   };
 
   return (
-    <RowList look={LIST_LOOK.PLAIN} onSelect={open} onRefresh={onRefresh}>
+    <RowList look={LIST_LOOK.DETAIL} onSelect={open} onRefresh={onRefresh}>
       <ListSection>
         <OverviewHead overview={overview} />
       </ListSection>

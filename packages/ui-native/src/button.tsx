@@ -115,24 +115,23 @@ export function Button(props: ButtonProps) {
   );
 }
 
-/**
- * A small capsule's look: filled with the ink where it stands chosen, and
- * otherwise the surface inside a hairline edge, its words 13 pt.
- */
-function capsuleModifiers(colors: BrandColors, filled: boolean) {
+/** The system's small capsule a chip's button stands in, bordered or filled as its style says. */
+const SMALL_CAPSULE = [SwiftModifiers.buttonBorderShape("capsule"), controlSize("small")];
+
+/** The system's small bordered capsule, as an unchosen `Chip` stands. */
+const BORDERED_CAPSULE = [buttonStyle("bordered"), ...SMALL_CAPSULE];
+
+/** A read-only capsule's look: the surface inside a hairline edge, its words 13 pt. */
+function capsuleModifiers(colors: BrandColors) {
   return [
     padding(CAPSULE_PADDING),
-    background(filled ? colors.TEXT : colors.SURFACE, SwiftModifiers.shapes.capsule()),
-    ...(filled
-      ? []
-      : [
-          strokeBorder({
-            content: colors.CHIP_EDGE,
-            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
-            shape: "capsule",
-            style: { lineWidth: HAIRLINE },
-          }),
-        ]),
+    background(colors.SURFACE, SwiftModifiers.shapes.capsule()),
+    strokeBorder({
+      content: colors.CHIP_EDGE,
+      // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+      shape: "capsule",
+      style: { lineWidth: HAIRLINE },
+    }),
   ];
 }
 
@@ -202,8 +201,7 @@ export function Chip({ label, symbol, count, selected = false, hint, onPress }: 
       onPress={onPress}
       modifiers={[
         buttonStyle(selected ? "borderedProminent" : "bordered"),
-        SwiftModifiers.buttonBorderShape("capsule"),
-        controlSize("small"),
+        ...SMALL_CAPSULE,
         tint(colors.TEXT),
         ...(selected ? [foregroundStyle(colors.GROUND)] : []),
         ...(selected ? [accessibilityAddTraits(["isSelected"])] : []),
@@ -333,40 +331,52 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
 
 /**
  * A task's field read as a small capsule, such as its status, priority, or
- * assignee: on the surface inside a hairline, and heard as its words once,
- * its mark saying the same. Where it carries a menu, a press opens the
- * system's pull-down menu of the field's values over it, the one it holds
- * checked, as Reminders' and Linear's fields open theirs, and VoiceOver
- * hears the field's name and its value as one label; with none it takes no
- * press.
+ * assignee, heard as its words once, its mark saying the same. Where it
+ * carries a menu it is the system's own small bordered capsule, as `Chip`
+ * and `MenuChip` are, so iOS draws its press, Button Shapes and Increase
+ * Contrast; a press opens the system's pull-down menu of the field's
+ * values over it, the one it holds checked, as Reminders' and Linear's
+ * fields open theirs, and VoiceOver hears the field's name and its value as
+ * one label. With none it takes no press, and stands as a capsule of our
+ * own on the surface inside a hairline, since a bordered button would read
+ * as one a person can press.
  */
 export function FieldChip(props: FieldChipProps) {
   const colors = useColors();
   const { menu } = props;
 
-  const capsule = (
-    <HStack
-      spacing={SPACE.TIGHT + 2}
-      modifiers={[
-        ...capsuleModifiers(colors, false),
-        ...(menu === undefined
-          ? [accessibilityElement("ignore"), accessibilityLabel(props.label)]
-          : []),
-      ]}
-    >
-      {fieldMark(props, colors)}
-      <CapsuleWords label={props.label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
-    </HStack>
+  const words = (
+    <CapsuleWords label={props.label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
   );
 
-  if (menu === undefined) return capsule;
+  if (menu === undefined) {
+    return (
+      <HStack
+        spacing={SPACE.TIGHT + 2}
+        modifiers={[
+          ...capsuleModifiers(colors),
+          accessibilityElement("ignore"),
+          accessibilityLabel(props.label),
+        ]}
+      >
+        {fieldMark(props, colors)}
+        {words}
+      </HStack>
+    );
+  }
 
   return (
     <Menu
-      label={capsule}
+      label={
+        <HStack spacing={SPACE.TIGHT + 2}>
+          {fieldMark(props, colors)}
+          {words}
+        </HStack>
+      }
       modifiers={[
-        // Note that a borderless menu takes only its own press, since a list row holding the system's buttons hands any press on it to all of them.
-        buttonStyle("borderless"),
+        // Note that a bordered menu takes only its own press, as a borderless one does, since a list row holding the system's buttons hands any press on it to all of them.
+        ...BORDERED_CAPSULE,
+        tint(colors.TEXT),
         // Note that the field's name and its value are one label, "Status, Todo", because Maestro and Voice Control match a label and never a value.
         accessibilityLabel(`${menu.label}, ${props.label}`),
       ]}
@@ -416,8 +426,7 @@ type FollowingChipProps = {
  * Who follows a task as a capsule beside its fields: a face pile, each face
  * overlapping the one before it and a +N count last and on top, then
  * Following or Follow; pressed, it opens who follows. It stands as the
- * fields' chips do, on the surface inside a hairline, but takes a press, as
- * the system's borderless button over it.
+ * fields' chips that open a menu do, the system's own small bordered capsule.
  */
 export function FollowingChip({ label, faces, more, hint, heard, onPress }: FollowingChipProps) {
   const colors = useColors();
@@ -426,13 +435,14 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
     <SwiftUIButton
       onPress={onPress}
       modifiers={[
-        buttonStyle("borderless"),
+        ...BORDERED_CAPSULE,
+        tint(colors.TEXT),
         accessibilityLabel(label),
         accessibilityValue(heard),
         accessibilityHint(hint),
       ]}
     >
-      <HStack spacing={SPACE.TIGHT + 2} modifiers={capsuleModifiers(colors, false)}>
+      <HStack spacing={SPACE.TIGHT + 2}>
         {faces.length === 0 ? null : (
           <HStack spacing={-FACE_OVERLAP}>
             {faces.map((face, at) => (

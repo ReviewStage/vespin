@@ -4,18 +4,22 @@ import { Button, HStack, Image, List, Menu, Section, Spacer, Text } from "@expo/
 import type { ModifierConfig } from "@expo/ui/swift-ui/modifiers";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
+  Animation,
   accessibilityAddTraits,
   accessibilityElement,
   accessibilityHint,
   accessibilityLabel,
   accessibilityValue,
+  animation,
   background,
   buttonStyle,
   environment,
   font,
   foregroundStyle,
   frame,
+  listRowBackground,
   listSectionMargins,
+  listSectionSpacing,
   listStyle,
   monospacedDigit,
   onGeometryChange,
@@ -25,7 +29,8 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { Predicate } from "effect";
-import { type ReactElement, type ReactNode, useState } from "react";
+import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
+import { useReduceMotion } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
@@ -47,16 +52,26 @@ const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
 /** The least a section's + answers a press across, in points, wider than it draws so a finger finds it beside the header's small words. */
 const ADD_TARGET = { WIDTH: 36, HEIGHT: 28 } as const;
 
+/** How long a section takes to fold or open, in seconds: the system's own quick ease. */
+const FOLD_SECONDS = 0.25;
+
 /**
  * How a list stands: plain rows on a screen of its own, as the panel's lists
- * stand rather than as grouped cards, or a split view's sidebar.
+ * stand rather than as grouped cards; a page of one thing's sections, such
+ * as a task's, whose headers scroll away with their rows, as Reminders' and
+ * Settings' do, rather than pinning to the bar as a long list's do, its rows
+ * still plain on the ground; or a split view's sidebar.
  */
 export const LIST_LOOK = {
   PLAIN: "plain",
+  DETAIL: "grouped",
   SIDEBAR: "sidebar",
 } as const;
 
 export type ListLook = (typeof LIST_LOOK)[keyof typeof LIST_LOOK];
+
+/** The look of the list a section stands in, so a page's section clears the grouped style's row fill; none outside a `RowList`, such as a form's. */
+const ListLookContext = createContext<ListLook | undefined>(undefined);
 
 /**
  * A list's Select mode, as Mail's: the rows chosen, by their ids, and what is
@@ -111,7 +126,7 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
 export function RowList({ look, selected, onSelect, onRefresh, choosing, children }: RowListProps) {
   const colors = useColors();
   const [width, setWidth] = useState(0);
-  const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
+  const sides = look === LIST_LOOK.SIDEBAR ? 0 : Math.max(0, (width - READING_WIDTH) / 2);
 
   // Note that a list in Select mode draws no row as the open one and reads nothing on a pull, since its checks say what is chosen and a pull there would read the rows from under them.
   return (
@@ -136,6 +151,8 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
         ...listGround(colors, look),
         onGeometryChange(({ width: next }) => setWidth(next)),
         ...(sides > 0 ? [listSectionMargins({ edges: "horizontal", length: sides })] : []),
+        // Note that a page's sections stand as close as the system lets them, since its small headers already part them.
+        ...(look === LIST_LOOK.DETAIL ? [listSectionSpacing("compact")] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
         scrollDismissesKeyboard("immediately"),
         ...(onRefresh === undefined || choosing !== undefined ? [] : [refreshable(onRefresh)]),
@@ -143,11 +160,13 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
         ...(choosing === undefined ? [] : [environment("editMode", "active"), tint(colors.ACCENT)]),
       ]}
     >
-      <RowOpenContext value={onSelect}>
-        <RowSelectedContext value={choosing === undefined ? selected : undefined}>
-          {children}
-        </RowSelectedContext>
-      </RowOpenContext>
+      <ListLookContext value={look}>
+        <RowOpenContext value={onSelect}>
+          <RowSelectedContext value={choosing === undefined ? selected : undefined}>
+            {children}
+          </RowSelectedContext>
+        </RowOpenContext>
+      </ListLookContext>
     </List>
   );
 }
@@ -341,7 +360,11 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
  * chevron turning to say so; it opens unfolded. A header given `onDropLink`
  * takes a row dragged onto it, on an iPad, and hands on the row's link. A
  * header given `add` ends in a + that adds to the section, so an empty
- * section stands as its header alone rather than a list of add rows.
+ * section stands as its header alone rather than a list of add rows. Its
+ * rows fold away and come back with the system's quick ease, or at once
+ * where the reader reduces motion. Note that SwiftUI's own
+ * `Section(isExpanded:)` is not used, because it folds only in a sidebar
+ * list, where the system draws its own chevron at the header's end.
  */
 export function ListSection({
   title,
@@ -355,6 +378,8 @@ export function ListSection({
   children,
 }: ListSectionProps) {
   const [folded, setFolded] = useState(false);
+  const look = useContext(ListLookContext);
+  const reduceMotion = useReduceMotion();
 
   const label =
     title === undefined ? undefined : (
@@ -402,8 +427,17 @@ export function ListSection({
       </HStack>
     );
 
+  // Note that a page's grouped list fills each row with the system's card gray, so its sections clear it, standing their rows on the brand's ground as a plain list does.
+  const modifiers = [
+    ...(look === LIST_LOOK.DETAIL ? [listRowBackground("clear")] : []),
+    ...(foldable && !reduceMotion
+      ? [animation(Animation.easeInOut({ duration: FOLD_SECONDS }), folded)]
+      : []),
+  ];
+
   return (
     <Section
+      modifiers={modifiers}
       {...(header === undefined ? {} : { header })}
       {...(footer === undefined ? {} : { footer: <Text>{footer}</Text> })}
     >

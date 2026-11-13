@@ -112,7 +112,9 @@ builds a control of its own.
   themselves (`containerBackground`) and a sheet or popover to its edge
   (`presentationBackground`); a split view's sidebar paints nothing, so it
   stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
-  inset cards; and the tint is the brand's copper, never the system's blue.
+  inset cards (a page of one thing's sections, such as a task's, stands
+  `LIST_LOOK.DETAIL`, the system's grouped list, so its headers scroll away
+  rather than pin under the bar, its rows still clear on the ground); and the tint is the brand's copper, never the system's blue.
   Only a control's states and a label's hierarchy are the system's.
 - **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
   panel's three lines (the task's status ring and name, then the thread's
@@ -208,7 +210,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
   foot, a compact window's tab bar stepping aside for it.
 - **Group headers** (`ListSection`) are small and muted with a count, or
   finished of all as `2/5` (`progress`); a `foldable` one folds in place on
-  a press, its chevron on the left; and one given `add` ends in a muted +,
+  a press, its chevron on the left, its rows easing away and back; and one given `add` ends in a muted +,
   one act or the system's menu of several, as Reminders' groups add, so an
   empty section stands as its header alone rather than a list of add rows.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
@@ -227,8 +229,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   (`SCOPE_LOOK.MENU`). `Chip` is a capsule an act or a choice stands in, such as a
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
   status, priority and assignee, and where handed a `FieldMenu`, open the
-  system's pull-down menu of the field's values, as Reminders' fields do. Each stands
-  on `SURFACE` inside a hairline.
+  system's pull-down menu of the field's values, as Reminders' fields do.
+  `Chip`, a field's chip that opens a menu, and `FollowingChip` are the
+  system's own small bordered capsule; a field's chip that only says stands
+  on `SURFACE` inside a hairline, since a bordered button reads as pressable.
 - **Grouped forms** (`SettingsForm` and the sheets that start work, pick
   or remind) read as iOS Settings' cards: their rows stand in the panel's
   raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground

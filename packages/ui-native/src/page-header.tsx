@@ -20,6 +20,8 @@ type PageHeaderProps = {
   readonly title: string;
   /** A line under the chips: where the thing stands, or what it asks. */
   readonly summary?: string | undefined;
+  /** Who made it and when, last and quietest in the system's footnote: "Created by Ada Lovelace · Oct 5". */
+  readonly byline?: string | undefined;
   /** A task's status, drawn as its chip under the title. */
   readonly status?: TaskStatus | undefined;
   /** A task's priority, drawn as a chip after its status. */
@@ -56,10 +58,11 @@ export type PageFollowing = {
  * menu of its field's values where it carries one, and a line in the
  * body's ink. A task's followers stand under its fields as a chip that
  * opens them, on a line of its own, since a fourth chip runs off a phone's
- * screen.
+ * screen, and who made it stands last in the muted footnote, as Notes and
+ * Reminders say an item's provenance.
  */
 export function PageHeader(props: PageHeaderProps) {
-  const { title, summary, status, priority, assignee, following, menus } = props;
+  const { title, summary, byline, status, priority, assignee, following, menus } = props;
   const colors = useColors();
 
   const chips = status !== undefined || priority !== undefined || assignee !== undefined;
@@ -107,6 +110,13 @@ export function PageHeader(props: PageHeaderProps) {
           modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT_BODY)]}
         >
           {summary}
+        </Text>
+      )}
+      {byline === undefined ? null : (
+        <Text
+          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
+        >
+          {byline}
         </Text>
       )}
     </VStack>

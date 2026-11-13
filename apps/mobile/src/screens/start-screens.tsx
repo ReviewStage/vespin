@@ -308,7 +308,11 @@ function RepositoryChip({
 
 type UseSheetStartResult = {
   readonly starting: boolean;
-  readonly go: (start: () => Promise<StartAnswer>, refusal?: string | undefined) => void;
+  readonly go: (
+    start: () => Promise<StartAnswer>,
+    refusal?: string | undefined,
+    brief?: string | undefined,
+  ) => void;
 };
 
 type Started = { answer?: StartAnswer };
@@ -330,7 +334,11 @@ function useSheetStart(
   const write = useWrite();
   const [starting, setStarting] = useState(false);
 
-  const go = (start: () => Promise<StartAnswer>, refusal?: string | undefined) => {
+  const go = (
+    start: () => Promise<StartAnswer>,
+    refusal?: string | undefined,
+    brief?: string | undefined,
+  ) => {
     if (starting) return;
 
     if (refusal !== undefined) {
@@ -367,7 +375,13 @@ function useSheetStart(
           onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: answer.taskId })),
         );
 
-        if (answer.agentId !== undefined) router.push(onTab(iosAgentRoute(answer.agentId)));
+        // Note that the agent's page is handed the brief it was started on, which names it in the bar until the task list does, rather than a bare "Agent".
+        if (answer.agentId !== undefined) {
+          router.push({
+            pathname: onTab(iosAgentRoute(answer.agentId)),
+            params: brief === undefined ? {} : { brief },
+          });
+        }
       })
       .finally(() => setStarting(false));
   };
@@ -443,6 +457,7 @@ export function NewAgentScreen({
             })
           : startSuggested(opened.suggestion),
       pictures.refusal,
+      prompt.trim(),
     );
 
   return (
@@ -726,6 +741,7 @@ export function NewTaskScreen({
           ...place,
         }),
       pictures.refusal,
+      prompt.trim(),
     );
   };
 
