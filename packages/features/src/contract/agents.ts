@@ -490,7 +490,7 @@ export const agentsContract = {
     .output(EffectSchema.flip(terminalsAnswerSchema)),
   /**
    * One of the agent's repository's run actions run in its running
-   * sandbox, behind the Run actions experiment, answering its shell: the one
+   * sandbox, answering its shell: the one
    * already running it, or one it was typed into or started in now. A
    * stopped sandbox is refused, never woken.
    */

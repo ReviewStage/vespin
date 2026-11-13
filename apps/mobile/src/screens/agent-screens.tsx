@@ -48,13 +48,13 @@ import {
   type Glyph,
   glyphSymbol,
   HeldCallBanner,
-  HintPickRows,
   ListSection,
   MenuPickRow,
   MenuRow,
   type MenuRowAct,
   NO_TOGGLES,
   openCuts,
+  PickRows,
   QueuedLines,
   RenameAsk,
   Screen,
@@ -371,6 +371,7 @@ function agentAddMenu(
               symbol: MODE_SYMBOL[mode.mode],
               choices: mode.modes.map((option) => ({
                 label: option.label,
+                symbol: MODE_SYMBOL[option.id],
                 on: option.id === mode.mode,
                 onPress: () => mode.choose(option.id),
               })),
@@ -681,7 +682,7 @@ export function AgentScreen() {
             </Stack.Toolbar.Menu>
           )}
           <Stack.Toolbar.Menu inline>
-            <Stack.Toolbar.Menu icon="doc.on.doc" title={COPY_TRANSCRIPT_WORDS.COPY}>
+            <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.COPY)} title={COPY_TRANSCRIPT_WORDS.COPY}>
               <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.CONCISE)}>
                 {COPY_TRANSCRIPT_WORDS.CONCISE}
               </Stack.Toolbar.MenuAction>
@@ -980,8 +981,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
               title={PERMISSION_MODE_WORDS.GROUP}
               footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
             >
-              <HintPickRows
-                label={PERMISSION_MODE_WORDS.QUESTION}
+              <PickRows
                 options={mode.modes}
                 picked={mode.mode}
                 onPick={(picked) => {
