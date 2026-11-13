@@ -1,4 +1,4 @@
-# accessibility-ax3.yaml -- the iPhone's main reading screens at the third accessibility text size (AX3, Accessibility Large), where a row's parts are wide enough to crowd but not yet the AX5 that `accessibility.yaml` shoots: the Inbox's rows, a do ask's Mark done and Couldn't do it one to a line, a task page's agent rows with their state and pull request one under another, an agent's page with its head line wrapping and a `/`'s skills grown with the text, and Settings' rows, each shot to check that words wrap and parts stack rather than cut or overlap, as Mail and Settings stand large text.
+# accessibility-ax3.yaml -- the iPhone's main reading screens at the third accessibility text size (AX3, Accessibility Extra Large), where a row's parts are wide enough to crowd but not yet the AX5 that `accessibility.yaml` shoots: the Inbox's rows, a do ask's Mark done and Couldn't do it one to a line, a task page's agent rows with their state and pull request one under another, an agent's page with its head line wrapping and a `/`'s skills grown with the text, and Settings' rows, each shot to check that words wrap and parts stack rather than cut or overlap, as Mail and Settings stand large text.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -12,7 +12,7 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityLarge
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityExtraLarge
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 15000
@@ -36,7 +36,7 @@ appId: dev.vespin.ios
 - launchApp:
     arguments:
       fixture: inbox
-      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityLarge
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityExtraLarge
 - tapOn: "Tasks"
 - scrollUntilVisible:
     element: "Teammate invitations"
@@ -55,7 +55,7 @@ appId: dev.vespin.ios
     arguments:
       fixture: inbox
       agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
-      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityLarge
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityExtraLarge
 - extendedWaitUntil:
     visible: "Steer"
     timeout: 15000
@@ -75,7 +75,7 @@ appId: dev.vespin.ios
 - launchApp:
     arguments:
       fixture: inbox
-      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityLarge
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityExtraLarge
 - extendedWaitUntil:
     visible: "Recorded the invite flow"
     timeout: 15000
