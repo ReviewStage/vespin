@@ -126,7 +126,6 @@ import {
   GitHubMemberTokens,
   type GitHubMemberTokensUnavailable,
   type GitHubNotFound,
-  GitHubPriority,
   type GitHubThrottleGroups,
   GitHubUnreadable,
   type InstallationGrant,
@@ -136,7 +135,6 @@ import {
   memberRepositories,
   memberRepositoryReadable,
   memberToken,
-  PRIORITY,
   REACHED_BY,
   reachRepository,
 } from "@repo/github";
@@ -287,10 +285,6 @@ const TOKEN_LIFE = {
   READ: Duration.minutes(10),
   SANDBOX: Duration.minutes(45),
 } as const;
-
-/** A lookup a cache keeps, run at the members' priority rather than at the priority of whoever missed first. */
-const inForeground = <A, E, R>(lookup: Effect.Effect<A, E, R>) =>
-  Effect.provideService(lookup, GitHubPriority, PRIORITY.MEMBER);
 
 /** The mint as GitHub takes it: the repositories by name, none for every one, and the permissions the token is cut to. */
 interface InstallationTokenRequest {
@@ -1644,8 +1638,7 @@ function githubAppServiceOver(
    * A bearer for the installation, cut as asked, with `lifetime` of its hour
    * left at least: the token `@repo/github` keeps for the same cut where it
    * has that left, else one minted as the App, beside the module's client
-   * for the same grant, which signs with that token. Work no member waits on
-   * mints at the caller's `GitHubPriority`.
+   * for the same grant, which signs with that token.
    */
   const mint = (
     installationId: number,
@@ -2028,7 +2021,7 @@ function githubAppServiceOver(
   return Effect.gen(function* () {
     // Note that a lookup runs in the member's lane whoever missed first, because every asker of its key waits on it.
     const reaches = yield* Cache.makeWith(
-      (key: ReachKey) => inForeground(reach(key.organizationId, key.fullName, key.member)),
+      (key: ReachKey) => reach(key.organizationId, key.fullName, key.member),
       {
         capacity: KEPT.CAPACITY,
         requireServicesAt: "lookup",
