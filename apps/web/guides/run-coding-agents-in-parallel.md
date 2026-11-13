@@ -66,7 +66,7 @@ Anthropic, OpenAI, GitHub, Cursor, and Cognition each run their own agent in the
 | Warp | Warp's cloud | Warp's agent, Claude Code, Codex | Yes | Free tier; from $20/mo | Hosted service |
 | Vespin | Cloud, your Mac, or Linux | Claude Code, Codex | Yes | Free | Apache-2.0 |
 
-We checked these prices on November 12, 2026. They're for the tool alone, and the model is billed on top unless the vendor's plan includes it.
+We checked these prices on November 13, 2026. They're for the tool alone, and the model is billed on top unless the vendor's plan includes it.
 
 ## Picking a kind of tool
 
