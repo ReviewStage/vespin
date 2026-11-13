@@ -49,15 +49,13 @@ export function useNarrowPage(ref: RefObject<HTMLDivElement | null>): boolean {
 
 /**
  * A story's step, from 0 to `count - 1`, held `beat` milliseconds each, on a
- * clock that runs only while the element `ref` names is on screen, starting
- * over at its end unless it plays `once`, or the last step where motion is
- * held.
+ * clock that runs only while the element `ref` names is on screen, or the
+ * last step where motion is held.
  */
 export function useStory(
   ref: RefObject<HTMLDivElement | null>,
   count: number,
   beat: number,
-  { once = false }: { readonly once?: boolean } = {},
 ): number {
   const [step, setStep] = useState(0);
   useEffect(() => {
@@ -86,8 +84,7 @@ export function useStory(
     const tick = (ms: number): void => {
       if (shown && previous !== undefined) played += ms - previous;
       previous = ms;
-      const steps = Math.floor(played / beat);
-      setStep(once ? Math.min(steps, count - 1) : steps % count);
+      setStep(Math.floor(played / beat) % count);
       frame = requestAnimationFrame(tick);
     };
 
@@ -97,7 +94,7 @@ export function useStory(
       cancelAnimationFrame(frame);
       watch.disconnect();
     };
-  }, [ref, count, beat, once]);
+  }, [ref, count, beat]);
 
   return step;
 }

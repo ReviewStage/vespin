@@ -282,22 +282,443 @@
     margin: 0 auto;
   }
 
-  .ui-landing-hero-app .ui-landing-window {
+  /* The hero's app (`landing-hero.tsx`): the Mac app at its own size,
+     restating the panel's shell (`packages/panel/src/styles/shell.css`
+     and `desktop.css`) for the parts no `@repo/ui` component draws: the
+     frame and its title bar, the sidebar's column, the sheet each page
+     stands on under its row on the frame, and the Inbox's and a task's
+     columns. It stands at one to one wherever the stage is wide enough,
+     and a narrower stage scales it down whole (`--ui-hero-app-fit`). */
+  .ui-hero-app-room {
+    position: relative;
+    /* off-scale: the app's height, a laptop window's */
+    height: calc(720px * var(--ui-hero-app-fit, 1));
+  }
+
+  .ui-hero-app {
+    /* off-scale: the panel's shell metrics, its title bar, sheet gap, and column inset */
+    --ui-hero-bar: 48px;
+    --ui-hero-gap: 8px;
+    --ui-hero-inset: 12px;
+    --ui-hero-reading-room: max(20px, calc((100% - 720px) / 2));
+
+    position: absolute;
+    top: 0;
+    left: 0;
+    display: grid;
+    grid-template-columns: 264px minmax(0, 1fr);
+    box-sizing: border-box;
+    width: 100%;
+    height: 720px;
+    overflow: hidden;
+    border: 1px solid var(--ui-color-border-strong);
+    border-radius: var(--ui-display-window-radius);
+    background: var(--ui-color-sidebar);
+    color: var(--ui-color-text);
+    font-family: var(--ui-font-sans);
+    text-align: start;
     box-shadow:
       0 0 0 1px color-mix(in srgb, var(--ui-color-text-muted) 12%, transparent),
       0 48px 140px -24px var(--ui-color-shadow-deep),
       0 0 200px -40px color-mix(in srgb, var(--ui-color-accent) 28%, transparent);
   }
 
-  /* A page the hero's app opens holds the window's whole height, so its
-     story's clock sees it on screen. */
-  .ui-landing-hero-page {
-    height: 100%;
+  .ui-hero-app-room[data-scaled="true"] .ui-hero-app {
+    width: 1040px;
+    transform: scale(var(--ui-hero-app-fit));
+    transform-origin: 0 0;
   }
 
-  /* A task with no plan beside its log gives the log the whole column. */
-  .ui-landing-task.ui-landing-task-alone {
-    grid-template-columns: minmax(0, 1fr);
+  .ui-hero-sidebar {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    padding: 0 var(--ui-hero-inset) var(--ui-hero-inset);
+  }
+
+  .ui-hero-title-bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-tight-gap);
+    height: var(--ui-hero-bar);
+    --ui-button-ground: var(--ui-color-sidebar);
+  }
+
+  .ui-hero-lights {
+    display: flex;
+    gap: 8px;
+    margin: 0 18px 0 8px;
+  }
+
+  .ui-hero-lights > i {
+    width: 12px;
+    height: 12px;
+    border-radius: var(--ui-radius-full);
+    background: var(--ui-color-border-strong);
+  }
+
+  .ui-hero-history {
+    display: flex;
+    margin-left: auto;
+  }
+
+  .ui-hero-workspace {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-control-gap);
+    padding-bottom: var(--ui-tight-gap);
+  }
+
+  .ui-hero-workspace > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ui-hero-workspace-ref {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-icon-gap);
+    min-width: 0;
+    font-weight: var(--ui-type-section-weight);
+  }
+
+  .ui-hero-sidebar-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .ui-hero-sidebar-group + .ui-hero-sidebar-group {
+    margin-top: var(--ui-section-gap);
+  }
+
+  .ui-hero-repository + .ui-hero-repository {
+    margin-top: var(--ui-tight-gap);
+  }
+
+  .ui-hero-row-time {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-icon-gap);
+    color: var(--ui-color-text-muted);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* The work column: each page's top row on the frame, level with the
+     lights, and its sheet under the row, a gap from the window's edges. */
+  .ui-hero-main {
+    display: flex;
+    min-width: 0;
+    min-height: 0;
+    margin: 0 var(--ui-hero-gap) var(--ui-hero-gap) 0;
+  }
+
+  .ui-hero-page {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .ui-hero-bar {
+    display: flex;
+    flex: none;
+    align-items: center;
+    min-width: 0;
+    height: var(--ui-hero-bar);
+    --ui-button-ground: var(--ui-color-sidebar);
+  }
+
+  .ui-hero-bar > :only-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ui-hero-sheet,
+  .ui-hero-inbox::before {
+    border-radius: var(--ui-radius-14);
+    background: var(--ui-color-ground);
+    box-shadow:
+      0 0 0 1px var(--ui-color-border),
+      0 1px 2px var(--ui-color-shadow-soft),
+      0 16px 40px -20px var(--ui-color-shadow);
+  }
+
+  .ui-hero-sheet {
+    position: relative;
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Home has no row of its own: its sheet starts a gap under the window's top. */
+  .ui-hero-home {
+    padding-top: var(--ui-hero-gap);
+  }
+
+  .ui-hero-home .ui-hero-sheet > * {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .ui-hero-new-task {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-control-gap);
+    margin-bottom: var(--ui-page-section-gap);
+  }
+
+  .ui-hero-new-task-head {
+    display: flex;
+  }
+
+  .ui-hero-home-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-tight-gap);
+  }
+
+  .ui-hero-composer-field {
+    padding: 12px 16px 4px;
+  }
+
+  .ui-hero-chip-words {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-icon-gap);
+  }
+
+  .ui-hero-chip-words > svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  .ui-hero-effort {
+    color: var(--ui-color-text-muted);
+  }
+
+  /* The Inbox: its list beside the opened item, one sheet under both
+     rows, the list parted from the item by a hairline. */
+  .ui-hero-inbox {
+    position: relative;
+    display: grid;
+    grid-template-columns: 320px minmax(0, 1fr);
+  }
+
+  .ui-hero-inbox::before {
+    content: "";
+    position: absolute;
+    inset: var(--ui-hero-bar) 0 0;
+  }
+
+  .ui-hero-inbox-list,
+  .ui-hero-inbox-item {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .ui-hero-inbox-list-body {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+    border-right: 1px solid var(--ui-color-border);
+  }
+
+  .ui-hero-inbox-head {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-control-gap);
+    padding: var(--ui-hero-inset) var(--ui-hero-inset) var(--ui-row-inset);
+  }
+
+  .ui-hero-inbox-head > :first-child {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .ui-hero-inbox-rows {
+    min-height: 0;
+    overflow: hidden;
+    padding: var(--ui-row-inset) var(--ui-hero-inset) var(--ui-hero-inset);
+  }
+
+  .ui-hero-inbox-item-body {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    padding: var(--ui-section-gap) var(--ui-hero-reading-room) var(--ui-hero-inset);
+  }
+
+  .ui-hero-subject {
+    padding-bottom: var(--ui-block-gap);
+    border-bottom: 1px solid var(--ui-color-border);
+  }
+
+  .ui-hero-comments {
+    display: flex;
+    flex-direction: column;
+    gap: var(--ui-section-gap);
+    margin: var(--ui-block-gap) 0 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .ui-hero-line {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-tight-gap);
+    min-width: 0;
+  }
+
+  .ui-hero-line-glyph {
+    display: inline-flex;
+    flex: none;
+    color: var(--ui-color-complete);
+  }
+
+  .ui-hero-line-glyph[data-open="true"] {
+    color: var(--ui-color-attention);
+  }
+
+  .ui-hero-line-glyph > svg {
+    width: 12px;
+    height: 12px;
+  }
+
+  .ui-hero-draft-ask {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--ui-tight-gap);
+    padding: var(--ui-list-inset) var(--ui-list-inset) var(--ui-tight-gap);
+  }
+
+  .ui-hero-draft-ask-options {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    min-width: 0;
+  }
+
+  /* A task: its name on the frame, its agents' tabs under it, and the
+     agent's transcript on the sheet over the follow-up box. */
+  .ui-hero-task-title {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--ui-icon-gap);
+    min-width: 0;
+    padding-left: var(--ui-hero-inset);
+    font-weight: var(--ui-type-section-weight);
+  }
+
+  .ui-hero-bar > .ui-hero-bar-end {
+    display: flex;
+    flex: none;
+    margin-left: auto;
+  }
+
+  /* The tabs' row stands a control's height and a gap under the title,
+     as the panel's does (`desktop.css`'s `--task-tabs-gap`). */
+  .ui-hero-task-tabs {
+    flex: none;
+    min-width: 0;
+    height: calc(var(--ui-control-height) + var(--ui-hero-gap));
+    --ui-button-ground: var(--ui-color-sidebar);
+  }
+
+  /* The bar's own height is a toolbar's; the row is shorter, so the bar
+     stands from its top, its tabs a gap above the sheet. */
+  .ui-hero-task-tabs > * {
+    margin-top: calc((var(--ui-control-height) - var(--ui-hero-bar)) / 2 - var(--ui-space-4));
+  }
+
+  .ui-hero-tabs {
+    display: flex;
+    align-items: center;
+    gap: var(--ui-list-gap);
+    min-width: 0;
+  }
+
+  .ui-hero-log {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--ui-block-gap);
+    min-height: 0;
+    overflow: auto;
+    padding: var(--ui-section-gap) var(--ui-hero-reading-room) var(--ui-block-gap);
+  }
+
+  .ui-hero-message-you {
+    align-self: flex-end;
+    max-width: 80%;
+  }
+
+  .ui-hero-bubble {
+    width: fit-content;
+    padding: var(--ui-row-inset) var(--ui-list-inset);
+    border-radius: var(--ui-radius-14);
+    background: var(--ui-color-fill-strong);
+  }
+
+  .ui-hero-call-words {
+    display: inline-flex;
+    flex: 1;
+    align-items: baseline;
+    gap: var(--ui-tight-gap);
+    min-width: 0;
+    font-size: var(--ui-type-caption-size);
+    line-height: var(--ui-type-caption-leading);
+  }
+
+  .ui-hero-call-subject {
+    color: var(--ui-color-text-muted);
+  }
+
+  .ui-hero-working {
+    display: inline-flex;
+    color: var(--ui-color-text-muted);
+  }
+
+  .ui-hero-empty {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--ui-control-gap);
+  }
+
+  .ui-hero-agent-foot {
+    display: flex;
+    flex: none;
+    flex-direction: column;
+    gap: var(--ui-tight-gap);
+    padding: 0 var(--ui-hero-reading-room) var(--ui-hero-inset);
+  }
+
+  .ui-hero-pull-request {
+    display: inline-flex;
+    color: var(--ui-color-complete);
+  }
+
+  .ui-hero-enter {
+    animation: ui-landing-enter var(--ui-duration-shape) var(--ui-motion-pane) both;
   }
 
   /* A feature: its heading and sentence over its stage. */

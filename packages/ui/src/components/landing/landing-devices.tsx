@@ -9,9 +9,8 @@ import { cssCustomProperties } from "../../css.js";
  * own proportions, and the device scales it to fit, measuring its own box
  * rather than the viewport. The window wears the app's frame (the sidebar's
  * ground around the sheet) and three quiet lights; the phone a thin even
- * bezel, deep corners, and the Dynamic Island. A scene's device is never
- * pressed: what it holds is inert, and a reader is told only the device's
- * name; the hero's window alone is live.
+ * bezel, deep corners, and the Dynamic Island. Neither is ever pressed: what
+ * they hold is inert, and a reader is told only the device's name.
  */
 
 /** The size each device lays its screen out at, in CSS pixels. */
@@ -43,42 +42,28 @@ function useFit(width: number) {
   return { ref, style: cssCustomProperties({ "--ui-landing-fit": scale }) };
 }
 
-/**
- * A Mac window, 16:10, drawing `children` laid out at 1280 by 800: a
- * picture named `label`, or, `live`, a region of that name whose app takes
- * presses and typing.
- */
+/** A Mac window, 16:10, drawing `children` laid out at 1280 by 800. */
 export function LandingWindow({
   label,
-  live = false,
   children,
 }: {
   label: string;
-  live?: boolean | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   const fit = useFit(SCREEN.WINDOW.WIDTH);
 
-  const screen = (
-    <div ref={fit.ref} className="ui-landing-window-fit" style={fit.style}>
-      <div className="ui-landing-window-screen" inert={!live}>
-        <span className="ui-landing-window-lights" aria-hidden="true">
-          <i />
-          <i />
-          <i />
-        </span>
-        {children}
-      </div>
-    </div>
-  );
-
-  return live ? (
-    <section className="ui-landing-window" aria-label={label}>
-      {screen}
-    </section>
-  ) : (
+  return (
     <div className="ui-landing-window" role="img" aria-label={label}>
-      {screen}
+      <div ref={fit.ref} className="ui-landing-window-fit" style={fit.style}>
+        <div className="ui-landing-window-screen" inert>
+          <span className="ui-landing-window-lights" aria-hidden="true">
+            <i />
+            <i />
+            <i />
+          </span>
+          {children}
+        </div>
+      </div>
     </div>
   );
 }

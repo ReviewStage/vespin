@@ -5,7 +5,6 @@ import { ChevronDownIcon, GLYPH, InboxIcon, ListTodoIcon, ZapIcon } from "../../
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
-  ComposeIcon,
   GearIcon,
   SearchIcon,
   SidebarIcon,
@@ -45,18 +44,13 @@ import { MINUTE, STORY_NOW, still } from "./landing-story.js";
 
 /** The page on show, which the sidebar marks among its places. */
 export const DESKTOP_PLACE = {
+  HOME: "home",
   INBOX: "inbox",
   TASK: "task",
   AUTOMATIONS: "automations",
 } as const;
 
 export type DesktopPlace = (typeof DESKTOP_PLACE)[keyof typeof DESKTOP_PLACE];
-
-/** Where a press in the sidebar goes: to one of its places, or to one of My tasks by its id. */
-export type SidebarGo = {
-  readonly place: (place: DesktopPlace) => void;
-  readonly task: (id: string) => void;
-};
 
 /** One of My tasks: its status, its name, whether an agent is at work on it, and how long ago it moved. */
 type SidebarTask = {
@@ -146,18 +140,57 @@ export function SidePanelToggle(): React.JSX.Element {
   );
 }
 
-/** The desktop's sidebar, `place` marked among its places and `openTask` among My tasks, its presses going where `go` says. */
-export function DesktopSidebar({
+/**
+ * The sidebar's places as the panel lists them: Search, Home, the Inbox
+ * with how many of its items wait on the reader, Tasks, and Automations,
+ * `place` marked, each of Home, the Inbox, and Automations going where
+ * `go` says where it is given.
+ */
+export function DesktopPlaces({
   place,
-  openTask,
   needYou = 2,
   go,
 }: {
   place: DesktopPlace;
-  openTask?: string | undefined;
-  /** How many of the Inbox's items wait on the reader, its count. */
   needYou?: number | undefined;
-  go?: SidebarGo | undefined;
+  go?: ((place: DesktopPlace) => void) | undefined;
+}): React.JSX.Element {
+  const current = (shown: DesktopPlace) => (place === shown ? NAV_CURRENT.PAGE : undefined);
+  const press = (to: DesktopPlace) => (go === undefined ? undefined : () => go(to));
+
+  return (
+    <SidebarPlaces label="Places">
+      <NavItem icon={<SearchIcon />}>Search</NavItem>
+      <NavItem
+        icon={<GLYPH.HOME />}
+        current={current(DESKTOP_PLACE.HOME)}
+        onClick={press(DESKTOP_PLACE.HOME)}
+      >
+        Home
+      </NavItem>
+      <NavItem
+        icon={<InboxIcon />}
+        current={current(DESKTOP_PLACE.INBOX)}
+        count={{ value: needYou, noun: "need you", tone: STATUS_TONE.ATTENTION }}
+        onClick={press(DESKTOP_PLACE.INBOX)}
+      >
+        Inbox
+      </NavItem>
+      <NavItem icon={<ListTodoIcon />}>Tasks</NavItem>
+      <NavItem icon={<ZapIcon />} current={current(DESKTOP_PLACE.AUTOMATIONS)}>
+        Automations
+      </NavItem>
+    </SidebarPlaces>
+  );
+}
+
+/** The desktop's sidebar, `place` marked among its places and `openTask` among My tasks. */
+export function DesktopSidebar({
+  place,
+  openTask,
+}: {
+  place: DesktopPlace;
+  openTask?: string | undefined;
 }): React.JSX.Element {
   return (
     <aside className="ui-landing-sidebar">
@@ -172,26 +205,7 @@ export function DesktopSidebar({
           </span>
         </NavItem>
       </div>
-      <SidebarPlaces label="Places">
-        <NavItem icon={<ComposeIcon />}>New task</NavItem>
-        <NavItem icon={<SearchIcon />}>Search</NavItem>
-        <NavItem
-          icon={<InboxIcon />}
-          current={place === DESKTOP_PLACE.INBOX ? NAV_CURRENT.PAGE : undefined}
-          count={{ value: needYou, noun: "need you", tone: STATUS_TONE.ATTENTION }}
-          onClick={go === undefined ? undefined : () => go.place(DESKTOP_PLACE.INBOX)}
-        >
-          Inbox
-        </NavItem>
-        <NavItem icon={<ListTodoIcon />}>Tasks</NavItem>
-        <NavItem
-          icon={<ZapIcon />}
-          current={place === DESKTOP_PLACE.AUTOMATIONS ? NAV_CURRENT.PAGE : undefined}
-          onClick={go === undefined ? undefined : () => go.place(DESKTOP_PLACE.AUTOMATIONS)}
-        >
-          Automations
-        </NavItem>
-      </SidebarPlaces>
+      <DesktopPlaces place={place} />
       <SidebarRule />
       <nav className="ui-landing-sidebar-group" aria-label="My tasks">
         <GroupHeader heading={GROUP_HEADING.NONE} label="My tasks" />
@@ -218,7 +232,7 @@ export function DesktopSidebar({
                     </span>
                   }
                   current={task.id === openTask ? LIST_ROW_CURRENT.PAGE : undefined}
-                  onPress={go === undefined ? still : () => go.task(task.id)}
+                  onPress={still}
                 />
               ))}
             </List>
