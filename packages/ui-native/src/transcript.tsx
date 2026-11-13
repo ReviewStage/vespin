@@ -576,7 +576,7 @@ function TranscriptRow({
           )}
           <CopyWordsMenu words={item.words}>
             <View style={styles.saidHeld}>
-              <View style={[styles.said, { backgroundColor: colors.SIDEBAR }]}>
+              <View style={[styles.said, { backgroundColor: colors.FILL_STRONG }]}>
                 <Markdown
                   words={item.words}
                   typed

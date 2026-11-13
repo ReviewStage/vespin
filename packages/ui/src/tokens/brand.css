@@ -17,6 +17,7 @@
   --ui-color-chip-selected: light-dark(#ebebeb, #292929);
   --ui-color-chip-edge: light-dark(#ebebeb, #2e2e2e);
   --ui-color-chip-edge-strong: light-dark(#c9c9c9, #454545);
+  --ui-color-fill-strong: light-dark(#00000014, #ffffff17);
   --ui-color-ink: light-dark(#000000, #ffffff);
   --ui-color-text: light-dark(#171717, #ededed);
   --ui-color-text-body: light-dark(#171717, #ededed);
@@ -54,6 +55,7 @@
   --ui-color-chip-selected: #ebebeb;
   --ui-color-chip-edge: #ebebeb;
   --ui-color-chip-edge-strong: #c9c9c9;
+  --ui-color-fill-strong: #00000014;
   --ui-color-ink: #000000;
   --ui-color-text: #171717;
   --ui-color-text-body: #171717;
@@ -90,6 +92,7 @@
   --ui-color-chip-selected: #292929;
   --ui-color-chip-edge: #2e2e2e;
   --ui-color-chip-edge-strong: #454545;
+  --ui-color-fill-strong: #ffffff17;
   --ui-color-ink: #ffffff;
   --ui-color-text: #ededed;
   --ui-color-text-body: #ededed;
