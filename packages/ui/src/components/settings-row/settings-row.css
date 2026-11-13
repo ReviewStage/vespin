@@ -233,6 +233,14 @@
   /* Note that the glyph a mark holds is sized here rather than by a utility
      on the mark, because the glyph is another component's, whose own
      utilities a parent's child selector in the utilities layer would beat. */
+  /* The mark's one cell is held at the mark's own size, so a control wider
+     than the mark, a run action's icon button, centers on it and overhangs
+     both sides alike rather than growing its track and standing off center
+     to the end. */
+  .ui-settings-row-mark {
+    grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  }
+
   .ui-settings-row-mark > :is(svg, img) {
     width: 100%;
     height: 100%;

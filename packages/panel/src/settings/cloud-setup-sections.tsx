@@ -1344,18 +1344,19 @@ function RunActionsOfRepository({
             : []
         }
         row={{
-          label: (
-            <Inline gap={GAP.ICON}>
-              <GlyphSlot line>
+          // Note that the owner's picture leads the row in its mark column, as each action's icon does, so the picture centers over their icons and the name starts where their labels do.
+          leading: (
+            <SettingsRowMark>
+              <GlyphSlot>
                 <RepositoryPicture
                   repository={repository}
                   pictures={pictures}
                   size={AVATAR_SIZE.GLYPH}
                 />
               </GlyphSlot>
-              <ReplayMask>{repository}</ReplayMask>
-            </Inline>
+            </SettingsRowMark>
           ),
+          label: <ReplayMask>{repository}</ReplayMask>,
           error: saveRefusal(refused),
         }}
       />
