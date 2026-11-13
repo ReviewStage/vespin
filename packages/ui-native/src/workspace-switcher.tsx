@@ -26,6 +26,7 @@ import {
   lineLimit,
   listRowBackground,
   onDisappear,
+  presentationBackground,
   presentationDetents,
   presentationDragIndicator,
 } from "@expo/ui/swift-ui/modifiers";
@@ -95,11 +96,12 @@ const POPOVER_WIDTH = 320;
 
 /**
  * How tall the popover's rows and their gaps stand, in points, at the
- * default text size, which its height is reckoned from, since a list has no
- * height of its own for a popover to fit: a row with its mark and two lines,
- * one with a line, the gap above and below the list and between its
- * sections, and a section's name over it. A larger text size scrolls inside
- * it, and `POPOVER_TALLEST` keeps a long list of workspaces on the screen.
+ * default text size: its least height, which the list's own measure raises
+ * once it has laid out, since a list has no height of its own for a popover
+ * to fit. A row with its mark and two lines, one with a line, the
+ * gap above and below the list and between its sections, and a section's
+ * name over it. `POPOVER_TALLEST` keeps a long list of workspaces, or a
+ * large text size, on the screen, scrolling inside it.
  */
 const POPOVER_ROW = { MARKED: 52, PLAIN: 44, EDGE: 20, BETWEEN: 32, TITLED: 22 } as const;
 
@@ -143,7 +145,7 @@ function rowHeard(name: string, line: string | undefined): string {
   return line === undefined ? name : `${name}, ${line}`;
 }
 
-/** The popover's height for the rows it holds, reckoned as `POPOVER_ROW` says, never taller than `POPOVER_TALLEST`. */
+/** The popover's least height for the rows it holds, reckoned as `POPOVER_ROW` says, which its list's measure only ever raises. */
 function popoverHeight({
   workspaces,
   account,
@@ -162,7 +164,7 @@ function popoverHeight({
     gaps * POPOVER_ROW.BETWEEN +
     (onWorkspaceSettings === undefined ? 0 : POPOVER_ROW.TITLED);
 
-  return Math.min(height, POPOVER_TALLEST);
+  return height;
 }
 
 /** A row of the list: what leads it, its name and the line under it, and the copper check on the one chosen, the whole row pressed. */
@@ -189,7 +191,7 @@ function SwitcherRow({
         buttonStyle("plain"),
         accessibilityLabel(rowHeard(name, line)),
         ...(checked ? [accessibilityAddTraits(["isSelected"])] : []),
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
       ]}
     >
       <HStack
@@ -237,15 +239,18 @@ function SwitcherRow({
 function SwitcherList({
   props,
   closed,
+  onContentHeight,
 }: {
   readonly props: WorkspaceSwitcherProps;
   readonly closed: (then: () => void, presents: boolean) => void;
+  /** Told the height its rows stand in, for the popover to fit them; none in a sheet. */
+  readonly onContentHeight?: ((height: number) => void) | undefined;
 }) {
   const { workspaces, chosen, onChoose, account, actions, onWorkspaceSettings } = props;
   const markSize = useScaledSize(ROW_MARK_SIZE);
 
   return (
-    <SettingsForm>
+    <SettingsForm onContentHeight={onContentHeight}>
       <Section>
         {workspaces.map((workspace) => (
           <SwitcherRow
@@ -365,10 +370,14 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
     presentation = SWITCHER_PRESENTATION.POPOVER,
   } = props;
 
+  const colors = useColors();
+
   const [presented, setPresented] = useState(false);
   // Note that the popover's list mounts on its first open and stays, since a closed popover's content stays mounted, every workspace's photo with it, and a list mounted anew on each open would draw each photo's letter tile again.
   const [opened, setOpened] = useState(false);
   const [after, setAfter] = useState<{ readonly act: () => void } | undefined>(undefined);
+  // Note that the popover grows to the height its list's rows lay out at, since a reckoning at the default text size cut its last section off, but never stands shorter than the reckoning, since the list measures nothing (0) before the popover first draws, and a popover of no height never draws.
+  const [measured, setMeasured] = useState<number | undefined>(undefined);
 
   // Note that the act is taken off as it runs, so a second dismissal never runs it again.
   const gone = () => {
@@ -407,6 +416,7 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
           modifiers={[
             presentationDetents(["medium", "large"]),
             presentationDragIndicator("visible"),
+            presentationBackground(colors.GROUPED),
           ]}
         >
           <SwitcherList props={props} closed={closed} />
@@ -421,11 +431,18 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
       <Popover.Content>
         <Group
           modifiers={[
-            frame({ width: POPOVER_WIDTH, height: popoverHeight(props) }),
+            frame({
+              width: POPOVER_WIDTH,
+              height: Math.min(Math.max(measured ?? 0, popoverHeight(props)), POPOVER_TALLEST),
+            }),
+            // Note that the popover stands on the list's own ground, its arrow and rim too, rather than the system's glass around a solid list.
+            presentationBackground(colors.GROUPED),
             onDisappear(gone),
           ]}
         >
-          {opened || presented ? <SwitcherList props={props} closed={closed} /> : null}
+          {opened || presented ? (
+            <SwitcherList props={props} closed={closed} onContentHeight={setMeasured} />
+          ) : null}
         </Group>
       </Popover.Content>
     </Popover>

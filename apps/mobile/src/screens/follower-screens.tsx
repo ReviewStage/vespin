@@ -90,7 +90,7 @@ export function AddFollowerScreen({ taskId }: { readonly taskId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.SIDEBAR },
+          contentStyle: { backgroundColor: colors.GROUPED },
           // Note that the sheet stays while an add is out, as Move to workspace's does, so its answer can never close the page under it.
           gestureEnabled: !adding,
         }}
