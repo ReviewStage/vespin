@@ -25,71 +25,12 @@ function flush(): void {
   }
 }
 
-function nameOf(fiber): string | undefined {
-  const type = fiber.type;
-  if (type == null || typeof type === "string") return undefined;
-  if (typeof type === "function") return type.displayName || type.name || "anon";
-  if (typeof type === "object") {
-    const inner = type.render || type.type;
-    return type.displayName || (inner && (inner.displayName || inner.name)) || "obj";
-  }
-  return undefined;
-}
-
-// Note that a fiber rendered this commit where it mounted or its props or state are new objects, the heuristic React DevTools uses.
-function walk(root) {
-  const counts = new Map<string, number>();
-  let rendered = 0;
-  let mounted = 0;
-  let hostRendered = 0;
-  let total = 0;
-  const stack = [root.current];
-  while (stack.length > 0) {
-    const fiber = stack.pop();
-    total += 1;
-    const old = fiber.alternate;
-    const did =
-      old === null ||
-      old.memoizedProps !== fiber.memoizedProps ||
-      old.memoizedState !== fiber.memoizedState;
-    // Note that a subtree React bailed out of keeps the same child objects, so it is skipped.
-    const name = nameOf(fiber);
-    if (did) {
-      if (old === null) mounted += 1;
-      if (name !== undefined) {
-        rendered += 1;
-        counts.set(name, (counts.get(name) ?? 0) + 1);
-      } else if (typeof fiber.type === "string") hostRendered += 1;
-    }
-    if (fiber.sibling) stack.push(fiber.sibling);
-    if (fiber.child && !(old !== null && old.child === fiber.child && !did))
-      stack.push(fiber.child);
-  }
-  const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25);
-  return { rendered, mounted, hostRendered, total, top };
-}
-
-let commitStart = 0;
-const hook = {
-  renderers: new Map(),
-  supportsFiber: true,
-  isDisabled: false,
-  inject(renderer) {
-    const id = this.renderers.size + 1;
-    this.renderers.set(id, renderer);
-    return id;
-  },
-  checkDCE() {},
-  onScheduleFiberRoot() {},
-  onCommitFiberUnmount() {},
-  onPostCommitFiberRoot() {},
-  onCommitFiberRoot(_id, root) {
-    commitStart = performance.now();
-    const seen = walk(root);
-    stamp("commit", { ...seen, walkMs: performance.now() - commitStart });
-  },
-};
-globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__ = hook;
+// Each commit the polyfill's hook saw (`scripts/perf/devtools-hook-polyfill.js`), moved into the log.
+setInterval(() => {
+  const commits = globalThis.__perfCommits;
+  if (commits === undefined || commits.length === 0) return;
+  for (const commit of commits.splice(0, commits.length)) pending.push(JSON.stringify(commit));
+}, 500);
 
 // The JS thread's stalls: a 16 ms tick that came late by more than 34 ms.
 let last = performance.now();
@@ -101,6 +42,7 @@ setInterval(() => {
 }, 16);
 
 setInterval(flush, 1000);
+stamp("probe-hook", { hooked: globalThis.__REACT_DEVTOOLS_GLOBAL_HOOK__?.renderers?.size ?? -1 });
 
 // Native events as they reach JS, before React handles them; continuous ones are left out.
 const NOISY =

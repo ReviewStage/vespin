@@ -114,10 +114,17 @@ function workspaceConfig(projectRoot, options) {
 // which is what Sentry matches a Hermes stack trace to its uploaded map by.
 // The SDK's web replay and feedback widget are left out of the bundle, and
 // no options file is read, since the app passes its options to `init`.
-module.exports = getSentryExpoConfig(__dirname, {
+const exported = getSentryExpoConfig(__dirname, {
   getDefaultConfig: workspaceConfig,
   includeWebReplay: false,
   includeWebFeedback: false,
   injectReleaseForWeb: false,
   optionsFile: false,
 });
+// MEASUREMENT ONLY (chore/probe-tap-timing): React DevTools' hook set before any module.
+const basePolyfills = exported.serializer.getPolyfills ?? (() => []);
+exported.serializer.getPolyfills = (context) => [
+  ...basePolyfills(context),
+  path.join(__dirname, "scripts", "perf", "devtools-hook-polyfill.js"),
+];
+module.exports = exported;

@@ -149,6 +149,9 @@ def main():
         end = commands[i + 1]["start"] if i + 1 < len(commands) else start + WINDOW_MS
         end = min(end, start + command["duration"] + WINDOW_MS)
         first_event = next((e for e in events if start <= e["t"] < end), None)
+        # Note that the tap's moment is the finger's lift reaching JS, since a button acts on the lift.
+        lift = next((e for e in events if start <= e["t"] < end and e["name"] == "topTouchEnd"), None)
+        first_event = lift or first_event
         moment = first_event["t"] if first_event else None
         mine = [c for c in commits if (moment or start) <= c["t"] < end]
         rendered = Counter()
