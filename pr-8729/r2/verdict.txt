@@ -3,3 +3,8 @@ PASS on what stills can show. r8729.yaml ran clean in both looks (0 fails).
 - 2-first-screen: the Inbox is drawn whole on the first frame Maestro sees, with the tabs, rows and badge, in both looks. No blank or half-drawn screen.
 - 1-at-launch caught the Home Screen, before the app had drawn, so it shows nothing of the splash itself.
 - Not proven: that the splash holds with no blank frame between it and the Inbox. That needs a launch video; ask if you want one (simctl recordVideo, one launch per look).
+
+Launch video (j8729v, Nov 13 17:19 ET): PASS. One cold launch on the iPhone 18 Pro, light, #8729 at 70ac2d0a4 alone on Nov 12's native app, recorded with simctl (launch-light.mp4, 7.8 s).
+- Checked frame by frame at 30 fps: the Home Screen until 1.70 s, the launch zoom 1.73–2.10 s with the copper V already on white, then the splash held still until 7.30 s, then the Inbox fading in over it across 7.33–7.40 s (one frame shows the rows over the fading V), then the whole Inbox.
+- No frame in the run is blank or uniform (every frame's luminance spread stays well above a flat screen's), so there is no gap between the splash and the first screen.
+- The splash stood about 5.2 s here, which is the simulator's host start; a device should be quicker.
