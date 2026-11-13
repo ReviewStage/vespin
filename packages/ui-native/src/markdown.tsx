@@ -128,11 +128,21 @@ const MARKER_WIDTH = 1.4;
  */
 const BULLET = { SIZE: 0.34, MIDDLE: 0.69, INSET: 0.2 } as const;
 
+/**
+ * How far apart a flow's blocks stand, in body sizes, as the panel's
+ * Markdown flow sets them (`prose.css`'s `.ui-markdown-flow`): a paragraph's
+ * gap between blocks, a heading close over what it names, a rule a gap and a
+ * half from what it divides, and a list's items close together. Note that
+ * these scale with the reader's text size, as the words do.
+ */
+const BLOCK_GAP = { BLOCK: 1, UNDER_HEADING: 0.25, RULE: 1.5, ITEM: 0.25 } as const;
+
+/** How far apart the blocks inside one list item or one quote stand, in body sizes, as the panel's `li > * + *` and quote's own set them. */
+const NESTED_GAP = 0.5;
+
 const styles = StyleSheet.create({
-  flow: { gap: SPACE.ROW },
-  itemBody: { gap: SPACE.TIGHT },
   marker: { position: "absolute", left: 0, top: 0 },
-  quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW, gap: SPACE.ROW },
+  quote: { borderLeftWidth: 3, paddingLeft: SPACE.ROW },
   well: { borderRadius: 8, padding: SPACE.ROW },
   tableBox: { alignSelf: "stretch", overflow: "hidden" },
   table: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
@@ -688,10 +698,12 @@ function ListView({
 }) {
   const indent = PROSE_SIZE * MARKER_WIDTH * drawing.fontScale + SPACE.TIGHT;
 
+  const itemGap = PROSE_SIZE * BLOCK_GAP.ITEM * drawing.fontScale;
+
   return (
-    <View style={styles.flow}>
+    <View style={{ gap: itemGap }}>
       {block.items.map((item, at) => (
-        <View key={at} style={[styles.itemBody, { paddingLeft: indent }]}>
+        <View key={at} style={{ paddingLeft: indent }}>
           {/* Note that an empty item's marker stands in the flow, pulled back into the margin, since an item with no words would otherwise take no height and the next item would draw over its marker. */}
           <View style={item.blocks.length === 0 ? { marginLeft: -indent } : styles.marker}>
             <Marker
@@ -700,7 +712,7 @@ function ListView({
               drawing={drawing}
             />
           </View>
-          <Blocks blocks={item.blocks} drawing={drawing} />
+          <Blocks blocks={item.blocks} drawing={drawing} gap={NESTED_GAP} />
         </View>
       ))}
     </View>
@@ -982,7 +994,7 @@ function BlockView({
     case MARKDOWN_BLOCK.QUOTE:
       return (
         <View style={[styles.quote, { borderColor: colors.CHIP_EDGE }]}>
-          <Blocks blocks={block.blocks} drawing={drawing} />
+          <Blocks blocks={block.blocks} drawing={drawing} gap={NESTED_GAP} />
         </View>
       );
     case MARKDOWN_BLOCK.TABLE:
@@ -1000,14 +1012,35 @@ function BlockView({
   }
 }
 
+/** The space over a block, in body sizes, by what stands before it: none over the first, a heading's close gap under a heading, a rule's wider gap around a rule, and `gap` otherwise. */
+function gapOver(block: MarkdownBlock, before: MarkdownBlock | undefined, gap: number): number {
+  if (before === undefined) return 0;
+
+  if (block.kind === MARKDOWN_BLOCK.RULE || before.kind === MARKDOWN_BLOCK.RULE) {
+    return BLOCK_GAP.RULE;
+  }
+
+  return before.kind === MARKDOWN_BLOCK.HEADING ? BLOCK_GAP.UNDER_HEADING : gap;
+}
+
+/** A run of blocks, each set its gap below the one before it, as the panel's flow spaces them; `gap` is the plain gap, a page's or a list item's. */
 function Blocks({
   blocks,
   drawing,
+  gap = BLOCK_GAP.BLOCK,
 }: {
   readonly blocks: readonly MarkdownBlock[];
   readonly drawing: Drawing;
+  readonly gap?: number;
 }): ReactNode {
-  return blocks.map((block, at) => <BlockView key={at} block={block} drawing={drawing} />);
+  return blocks.map((block, at) => (
+    <View
+      key={at}
+      style={{ marginTop: PROSE_SIZE * gapOver(block, blocks[at - 1], gap) * drawing.fontScale }}
+    >
+      <BlockView block={block} drawing={drawing} />
+    </View>
+  ));
 }
 
 type MarkdownProps = {
@@ -1099,7 +1132,7 @@ export function Markdown({
   };
 
   return (
-    <View style={styles.flow}>
+    <View>
       <Blocks blocks={blocks} drawing={drawing} />
     </View>
   );
