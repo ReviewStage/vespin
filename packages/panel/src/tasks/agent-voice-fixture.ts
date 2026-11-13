@@ -16,7 +16,8 @@
  *   into the turn the call opened; a line edited in the queue, whose edit
  *   was handed on while the line as said stands; and a hand-over that
  *   failed, its line standing as said. A teammate's call into the agent
- *   follows it.
+ *   follows it, and then the member's and the teammate's calls at once,
+ *   their lines interleaving as said.
  * - The live profile holds a call under way while the agent works: an ask
  *   handed on while the turn runs, awaiting it, and the caller's line
  *   growing a word at a time while the tab holds the transcript
@@ -40,6 +41,9 @@ const CALL = {
   OWN: "3f1a7c2e-5b9d-4e6f-8a0c-2d4f6b8e0a1c",
   TEAMMATE: "4a2b8d3f-6c0e-4f7a-9b1d-3e5a7c9f1b2d",
   LIVE: "5b3c9e4a-7d1f-4a8b-8c2e-4f6b8d0a2c3e",
+  /** The member's and the teammate's calls into the agent at once. */
+  OWN_AT_ONCE: "6c4d0f5b-8e2a-4b9c-9d3f-5a7c9e1b3d4f",
+  TEAMMATE_AT_ONCE: "7d5e1a6c-9f3b-4cad-8e4a-6b8d0f2c4e5a",
 } as const;
 
 /** The teammate who called the agent too. */
@@ -327,6 +331,43 @@ function settledCalls(at: number): readonly AgentTranscriptMessage[] {
       text: "Okay, thanks.",
       teammate: true,
     }),
+    // The member and the teammate on two calls into the agent at once, their lines interleaving as said.
+    ...atOnce(at + 3 * 60 * MINUTE),
+  ];
+}
+
+/** Two calls into the agent at once from `at`, the member's and the teammate's, each line as it was said. */
+function atOnce(at: number): readonly AgentTranscriptMessage[] {
+  const line = (
+    id: string,
+    teammate: boolean,
+    offset: number,
+    text: string,
+  ): AgentTranscriptMessage =>
+    callerLine({
+      id,
+      call: teammate ? CALL.TEAMMATE_AT_ONCE : CALL.OWN_AT_ONCE,
+      at: at + offset,
+      fromMs: offset,
+      text,
+      ...(teammate ? { teammate: true as const } : undefined),
+    });
+
+  const voice = (id: string, teammate: boolean, offset: number, text: string) =>
+    voiceLine(id, teammate ? CALL.TEAMMATE_AT_ONCE : CALL.OWN_AT_ONCE, at + offset, offset, text);
+
+  return [
+    line("at-once-ada-ask", false, 0, "Has the merge queue taken the pull request yet?"),
+    line("at-once-grace-ask", true, 2 * SECOND, "Do expired links still work after the change?"),
+    voice("at-once-ada-answer", false, 4 * SECOND, "Yes, it's second in the queue."),
+    voice(
+      "at-once-grace-answer",
+      true,
+      6 * SECOND,
+      "No. An expired link asks for a new invite now.",
+    ),
+    line("at-once-ada-bye", false, 9 * SECOND, "Great, thanks."),
+    line("at-once-grace-bye", true, 12 * SECOND, "Perfect, that's all."),
   ];
 }
 

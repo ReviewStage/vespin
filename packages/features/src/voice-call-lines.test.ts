@@ -216,6 +216,29 @@ test.each<{ readonly case: string; readonly script: Script; readonly drawn: read
       "end call-2",
     ],
   },
+  {
+    case: "two members on two calls at once: their lines interleave by seq, between their own starts and ends",
+    script: [
+      caller("ada-ask"),
+      caller("grace-ask", false, "call-2"),
+      voice("ada-answer"),
+      voice("grace-answer", "call-2"),
+      caller("ada-bye"),
+      caller("grace-bye", false, "call-2"),
+    ],
+    drawn: [
+      "start call-1",
+      "ada-ask",
+      "start call-2",
+      "grace-ask",
+      "ada-answer",
+      "grace-answer",
+      "ada-bye",
+      "end call-1",
+      "grace-bye",
+      "end call-2",
+    ],
+  },
 ])("$case", ({ script, drawn: expected }) => {
   assert.deepEqual(drawing(script), expected);
 });

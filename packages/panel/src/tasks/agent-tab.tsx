@@ -17,6 +17,7 @@ import {
   placedMessages,
   type TurnStretch,
   turnStretches,
+  turnWorkSummary,
   wholeCallOf,
 } from "@repo/features/agent-parts";
 import { dockedTodos, newestTodos, taskTodos, todosOfPart } from "@repo/features/agent-todos";
@@ -65,7 +66,7 @@ import { skillWord } from "@repo/features/skill-word";
 import { sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskStatus } from "@repo/features/task-wire";
-import { workingTime } from "@repo/features/time-format";
+import { WORKED_SEPARATOR, WORKED_WORDS, workingTime } from "@repo/features/time-format";
 import { TOOL_BLOCK, TOOL_STATE } from "@repo/features/tool-call-block";
 import {
   calledAgent,
@@ -144,7 +145,6 @@ import {
   NewSessionLine,
   OneLine,
   RetoldTurn,
-  SpokenMark,
   STATUS_TONE,
   SUBJECT_FIT,
   SubjectLine,
@@ -368,7 +368,6 @@ import {
   CallEnds,
   CallStarts,
   NO_CALL_MARKS,
-  SpokenOffset,
   useVoiceShown,
   VoiceLineRow,
 } from "./voice-call-rows.js";
@@ -1737,9 +1736,6 @@ export interface ArrivedLine {
   readonly sender: Actor | undefined;
 }
 
-/** What a turn the voice retells on a call says folded closed, before how long it worked. */
-const RETOLD_WORDS = "Retold on the call";
-
 /** No line reached the turn while it ran. */
 const NO_ARRIVED: readonly ArrivedLine[] = [];
 
@@ -1863,8 +1859,8 @@ export function AgentMessage({
 }): ReactNode {
   const words = messageWords(message);
   const forkOffered = useForkOffered();
-  // Note that a line the caller said aloud on a call is led by the spoken mark only while the Voice experiment is on, its time into the call shown on hover in its day and time's place.
-  const spoken = useVoiceShown() ? spokenLineOf(message) : undefined;
+  // Note that a line the caller said aloud on a call is drawn as a typed one, but offers no Edit while the Voice experiment is on, since it stands as it was said.
+  const spoken = useVoiceShown() && spokenLineOf(message) !== undefined;
   const sending = useLineSending(message.id);
   const marked = useLineMarked(message.id);
   const status = useLineStatus(message.id);
@@ -2006,22 +2002,17 @@ export function AgentMessage({
           ) : null}
           <MessageLine
             align={received ? MESSAGE_LINE_ALIGN.START : MESSAGE_LINE_ALIGN.END}
-            sender={spoken === undefined ? undefined : <SpokenMark />}
             status={status}
-            at={spoken === undefined ? sentAt : undefined}
+            at={sentAt}
             // Note that a line of no words, files alone, still offers its Copy link, though it has nothing to copy or edit.
             actions={
               <CopyMessageAction
                 words={shown}
                 copyable={shown !== ""}
                 messageId={message.id}
-                lead={spoken === undefined ? undefined : <SpokenOffset line={spoken} />}
                 // Note that a comment's or a Slack message's line is drawn from what it carries rather than its words, so it is written again nowhere, as GitHub's is not, and a line said on a call stands as it was said.
                 rewind={
-                  shown === "" ||
-                  comment !== undefined ||
-                  slack !== undefined ||
-                  spoken !== undefined
+                  shown === "" || comment !== undefined || slack !== undefined || spoken
                     ? undefined
                     : REWIND_ACTION.EDIT
                 }
@@ -2112,11 +2103,13 @@ export function AgentMessage({
     );
   });
 
-  // A turn the voice retells on a call reads once: folded closed under how long it worked, one press opening it where it stands.
+  // A turn the voice retells on a call reads once: folded closed under what a finished turn's line says of it, how long it worked and the work it did, one press opening it where it stands.
   if (!folded || moving || startedAt === undefined || finishedAt === undefined) return drawn;
+  const work = turnWorkSummary(message);
+  const worked = `${WORKED_WORDS}${workingTime(finishedAt - startedAt)}`;
 
   return (
-    <RetoldTurn summary={`${RETOLD_WORDS} · ${workingTime(finishedAt - startedAt)}`}>
+    <RetoldTurn summary={work === "" ? worked : `${worked}${WORKED_SEPARATOR}${work}`}>
       {drawn}
     </RetoldTurn>
   );

@@ -93,7 +93,7 @@ import type { DescriptionEditor, TaskPullRequestLine } from "@repo/features/task
 import { dayAndTimeText, dueText } from "@repo/features/time-format";
 import { TOOL_STATE, type ToolState } from "@repo/features/tool-call-block";
 import { githubLineOf } from "@repo/features/transcript-lines";
-import { isAgentTurn, isVoiceLine } from "@repo/features/voice-call-lines";
+import { isAgentTurn, isVoiceLine, opensTurn } from "@repo/features/voice-call-lines";
 import { andList, countWords, readFailedWords, TERM } from "@repo/features/words";
 import type { FormerMember, WorkspaceMember } from "@repo/features/workspace-wire";
 import {
@@ -1672,8 +1672,9 @@ export function agentWorkingSince(lines: readonly AgentTranscriptMessage[]): num
   const at = lines.findLastIndex(isAgentTurn);
   const journal = lines[at];
 
+  // Note that a line said on a call opens a turn only where a delegation handed it on, so the talk before an ask counts nothing.
   const opens = (line: AgentTranscriptMessage) =>
-    line.role === MESSAGE_ROLE.USER && line.arrivedIn === undefined && line.sentAt !== undefined;
+    opensTurn(line) && line.arrivedIn === undefined && line.sentAt !== undefined;
 
   // A closed journal, or none, is followed by the line that opens the next turn, where one was sent.
   if (journal === undefined || journal.finishedAt !== undefined) {

@@ -42,10 +42,6 @@ export interface SpokenLine {
 /** A row as far as these reads look at it. */
 type Row = Pick<AgentTranscriptMessage, "role" | "metadata">;
 
-const SECOND_MS = 1_000;
-const MINUTE_SECONDS = 60;
-const HOUR_SECONDS = 60 * MINUTE_SECONDS;
-
 /** An offset into a call the row's metadata keeps under `key`, a count of milliseconds; none where it keeps none. */
 function offsetOf(metadata: WireRecord, key: string): number | undefined {
   const value = metadata[key];
@@ -83,18 +79,6 @@ export function isVoiceLine(message: Row): boolean {
 /** Whether a row is one of the agent's own turns: an assistant row the voice did not write. */
 export function isAgentTurn(message: Row): boolean {
   return message.role === MESSAGE_ROLE.ASSISTANT && !isVoiceLine(message);
-}
-
-/** A time into a call as a call's clock says it: "0:42", "12:05", "1:02:09". */
-export function callClock(ms: number): string {
-  const seconds = Math.floor(Math.max(0, ms) / SECOND_MS);
-  const hours = Math.floor(seconds / HOUR_SECONDS);
-  const minutes = Math.floor((seconds % HOUR_SECONDS) / MINUTE_SECONDS);
-  const rest = String(seconds % MINUTE_SECONDS).padStart(2, "0");
-
-  return hours === 0
-    ? `${minutes}:${rest}`
-    : `${hours}:${String(minutes).padStart(2, "0")}:${rest}`;
 }
 
 /** A call as its rows stand: its id, the caller's first line, when it began, how long it ran, and the rows that hold its first and last lines. */
@@ -179,6 +163,7 @@ function spansOf(rows: readonly PlacedRow[]): ReadonlyMap<string, CallSpan> {
       const spoken = spokenLineOf(line);
 
       if (spoken === undefined) continue;
+
       const held = spans.get(spoken.callId) ?? { opensIn: row.id, closesIn: row.id };
       spans.set(spoken.callId, held);
       held.closesIn = row.id;
@@ -202,7 +187,7 @@ function spansOf(rows: readonly PlacedRow[]): ReadonlyMap<string, CallSpan> {
 }
 
 /** Whether a line opens a turn: a line of the developer's that is no line of a call, or a line of a call a delegation handed the agent. */
-function opensTurn(message: AgentTranscriptMessage): boolean {
+export function opensTurn(message: AgentTranscriptMessage): boolean {
   if (message.role !== MESSAGE_ROLE.USER) return false;
   const spoken = spokenLineOf(message);
 
@@ -245,14 +230,19 @@ function retold(rows: readonly PlacedRow[], index: number): boolean {
  *    row is moved, so a line of a call never moves into a turn, up to the
  *    turn it answers, or past another by its time. A call only adds what
  *    stands between rows (its start and its end) and folds a row in place.
- * 2. When into a call a line was said (`from_ms`, `to_ms`) is for the eye
- *    alone, a line's time on hover and a call's length, and orders nothing.
+ * 2. When into a call a line was said (`from_ms`, `to_ms`) gives the
+ *    call's length alone, and orders nothing.
  * 3. A turn is one row, its journal, written as it starts and grown in place
  *    (`writer.ts`), so a line said while it runs stands after all of it.
  * 4. A spoken turn's work reads once: a finished turn a spoken ask opened is
  *    folded closed, one press opening it, since the voice retells it,
  *    wherever that retelling stands. A running turn and a typed one stay
  *    open. Folding never moves a row.
+ *
+ * 5. A call is marked by its start and end alone: its lines are drawn as
+ *    any line of the member's and any reply of the agent's are, so two calls
+ *    into the agent at once interleave by `seq` between their own starts
+ *    and ends.
  *
  * A call starts before the row its first line stands in and ends after the
  * row its last stands in, a line a turn took in under way standing in that

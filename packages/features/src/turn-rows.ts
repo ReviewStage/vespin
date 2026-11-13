@@ -591,14 +591,14 @@ export function sameTurnRow<B>(a: TurnRow<B>, b: TurnRow<B>): boolean {
 }
 
 /** What a run's blocks hold, as its group's line counts them. */
-interface Held {
+export interface Held {
   readonly calls: number;
   readonly subagents: number;
   readonly startedAgents: number;
 }
 
-/** What a group's line says it holds: its calls, a coding agent's start among them, then its subagents, in the same words while the turn moves and once it has finished. */
-function groupSummary({ calls, subagents, startedAgents }: Held): string {
+/** What a group's line says it holds: its calls, a coding agent's start among them, then its subagents, in the same words while the turn moves and once it has finished; a whole turn folded closed says its work in the same words (`turnWorkSummary`). */
+export function groupSummary({ calls, subagents, startedAgents }: Held): string {
   const tools = calls + startedAgents;
 
   const said = [
