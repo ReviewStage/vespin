@@ -17,11 +17,13 @@
 import { firstMessageParts } from "@repo/features/agent-replay";
 import { agentName } from "@repo/features/model-label";
 import { isTextUIPart } from "ai";
-import { MESSAGE_ROLE, type StoredUIMessage } from "../core.js";
+import { MESSAGE_AUTHOR, MESSAGE_ROLE, type StoredUIMessage } from "../core.js";
 
 /** How much of the agent's recent work the instructions carry: a few messages, each a paragraph, well inside GPT-Live's 16k-token instructions. */
 export const VOICE_CONTEXT = {
-  /** How many of the conversation's newest finished messages are read. */
+  /** How many of the conversation's newest finished messages are read, before the voice's own lines are dropped from them. */
+  READ: 40,
+  /** How many of those, the newest with words, the instructions carry. */
   MESSAGES: 6,
   /** The characters one message keeps. */
   MESSAGE_CHARS: 800,
@@ -81,9 +83,18 @@ function wordsOf(message: StoredUIMessage): string {
     .join("\n");
 }
 
-/** One message as a line of the context, or nothing for a message with no words or no speaker. */
+/**
+ * One message as a line of the context, or nothing for a message with no
+ * words or no speaker, or one the voice model wrote on an earlier call: its
+ * spoken lines and its delegations are its own retellings, which would read
+ * as the agent's or the developer's and crowd the agent's words out.
+ */
 function contextLine(message: StoredUIMessage): string | undefined {
   if (message.role !== MESSAGE_ROLE.USER && message.role !== MESSAGE_ROLE.ASSISTANT) {
+    return undefined;
+  }
+
+  if ("author" in message.metadata && message.metadata.author === MESSAGE_AUTHOR.VOICE_MODEL) {
     return undefined;
   }
 
@@ -94,7 +105,10 @@ function contextLine(message: StoredUIMessage): string | undefined {
 
 /** The `instructions` a call's session is created with: the policy, then the agent's recent context. */
 export function voiceInstructions(context: VoiceContext): string {
-  const lines = context.messages.flatMap((message) => contextLine(message) ?? []);
+  const lines = context.messages
+    .flatMap((message) => contextLine(message) ?? [])
+    .slice(-VOICE_CONTEXT.MESSAGES);
+
   const said = lines.length === 0 ? "The agent has no messages yet." : lines.join("\n");
 
   return [

@@ -79,12 +79,7 @@ export function voiceProcedures(seams: VoiceProcedureSeams) {
 
       // Note that the conversation is read under the member who started the agent, as its transcript is.
       const recent = yield* hostedStoreOrUnavailable(
-        listRecentMessages(
-          agent.userId,
-          agent.conversationId,
-          CODER_TOOL_SET,
-          VOICE_CONTEXT.MESSAGES,
-        ),
+        listRecentMessages(agent.userId, agent.conversationId, CODER_TOOL_SET, VOICE_CONTEXT.READ),
       );
 
       const task = yield* hostedStoreOrUnavailable(readTaskHeader(context.userId, agent.taskId));

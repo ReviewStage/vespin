@@ -6,7 +6,7 @@ import { parseKeyRing, sealProviderKey } from "@repo/database/models/provider-ke
 import { saveProviderKey } from "@repo/database/models/provider-key-store";
 import { agentTable } from "@repo/database/schemas/agent";
 import { user } from "@repo/database/schemas/auth";
-import { conversations } from "@repo/database/schemas/storage";
+import { conversations, messages } from "@repo/database/schemas/storage";
 import { hostedUsage } from "@repo/database/schemas/usage";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import {
@@ -18,7 +18,7 @@ import {
 import { AGENT_MACHINE } from "@repo/features/agent-wire";
 import { PROVIDER_KEY_KIND, PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { LIVE_VOICE } from "@repo/features/voices";
-import type { WireBoundaryInput } from "@repo/wire";
+import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, type WireBoundaryInput } from "@repo/wire";
 import { HTTP_STATUS, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
 import { Cause, type Context, Effect, Layer, Logger, Option, Redacted, Result } from "effect";
@@ -128,6 +128,36 @@ const openAgent = (ownerId: string, workspaceId: string, onMac = false) =>
       .where(eq(agentTable.id, agentId));
 
     assert.ok(row);
+
+    // A call already held: the developer's spoken line, the voice's retelling of it, and the agent's reply.
+    const said = [
+      [
+        MESSAGE_ROLE.USER,
+        "Use the staging database.",
+        { author: MESSAGE_AUTHOR.DEVELOPER, channel: MESSAGE_CHANNEL.VOICE },
+      ],
+      [
+        MESSAGE_ROLE.ASSISTANT,
+        "Passing that on now.",
+        { author: MESSAGE_AUTHOR.VOICE_MODEL, channel: MESSAGE_CHANNEL.VOICE },
+      ],
+      [MESSAGE_ROLE.ASSISTANT, "Switched the tests to staging.", { author: MESSAGE_AUTHOR.MODEL }],
+    ] as const;
+
+    yield* db.insert(messages).values(
+      said.map(([role, text, metadata], seq) => ({
+        userId: ownerId,
+        conversationId: row.conversationId,
+        seq,
+        clientId: randomUUID(),
+        role,
+        parts: [{ type: "text" as const, text }],
+        metadata,
+        placedAt: new Date(seq),
+        finishedAt: new Date(seq),
+      })),
+    );
+
     yield* db
       .update(conversations)
       .set({ runtime: CONVERSATION_RUNTIME.CLAUDE_CODE })
@@ -230,6 +260,10 @@ it.layer(getTestDB())("the voice routes", (it) => {
         assert.equal(sent.session.store, false);
         assert.deepEqual(sent.session.audio, { output: { voice: LIVE_VOICE.CEDAR } });
         assert.ok(sent.session.instructions.includes("Task: Flaky tests"));
+        // The developer's spoken line and the agent's reply are context; the voice's own retelling is not.
+        assert.ok(sent.session.instructions.includes("Developer: Use the staging database."));
+        assert.ok(sent.session.instructions.includes("Agent: Switched the tests to staging."));
+        assert.ok(!sent.session.instructions.includes("Passing that on now."));
       }),
   );
 
