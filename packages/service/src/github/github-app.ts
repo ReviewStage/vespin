@@ -220,7 +220,7 @@ const ISSUES_PERMISSION = "issues";
  * the installation grants it. Issues and pull requests write comment as the
  * App's bot on an issue or a pull request and react to a comment there,
  * pull requests write alone on a pull request only, where the installation
- * grants no issues.
+ * grants no issues at write.
  */
 const INSTALLATION_TOKEN_PERMISSIONS = {
   LIST: { metadata: "read" },
@@ -337,6 +337,8 @@ interface GitHubInstallation {
   readonly ciReadable: boolean;
   /** Whether the installation grants the App issues, at read or write, which an issue's read is minted with. */
   readonly issuesReadable: boolean;
+  /** Whether the installation grants the App issues at write, which a comment on an issue as the App's bot is minted with. */
+  readonly issuesWritable: boolean;
   /** Whether the account it is on suspended it, which leaves it minting nothing until it is brought back. */
   readonly suspended: boolean;
 }
@@ -749,7 +751,7 @@ export interface GitHubAppService {
    * repository the workspace's installation reaches, and reacts to a
    * comment there with: never a member's own token, kept as a repository's
    * is, with issues and pull requests write, or pull requests write alone
-   * where the installation grants no issues; none where the installation
+   * where the installation grants no issues at write; none where the installation
    * does not reach it.
    */
   readonly repositoryCommentToken: (
@@ -1172,6 +1174,7 @@ function installationOf(record: InstallationRecord): GitHubInstallation {
     repositorySelection: record.repository_selection,
     ciReadable: Object.keys(CI_READ_PERMISSIONS).every((permission) => permission in granted),
     issuesReadable: ISSUES_PERMISSION in granted,
+    issuesWritable: granted[ISSUES_PERMISSION] === "write",
     suspended: record.suspended_at !== undefined && record.suspended_at !== null,
   };
 }
@@ -2402,7 +2405,7 @@ function githubAppService(
         ),
       repositoryCommentToken: (organizationId, fullName) =>
         repositoryToken(organizationId, fullName, undefined, (on) =>
-          on.issuesReadable
+          on.issuesWritable
             ? INSTALLATION_TOKEN_PERMISSIONS.COMMENT
             : INSTALLATION_TOKEN_PERMISSIONS.COMMENT_ON_PULL_REQUESTS,
         ),

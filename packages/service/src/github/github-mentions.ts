@@ -146,8 +146,13 @@ const MENTION_REPLY = {
   GONE: "That agent is gone.",
 } as const;
 
-/** Lines quoting an earlier comment, fenced code, and inline code: where a handle is never read as a mention. */
-const NOT_ADDRESSED = [/```[\s\S]*?(?:```|$)/gu, /`[^`\n]*`/gu, /^[ \t]*>.*$/gmu] as const;
+/** Lines quoting an earlier comment, code fenced in backticks or tildes, and inline code: where a handle is never read as a mention. */
+const NOT_ADDRESSED = [
+  /```[\s\S]*?(?:```|$)/gu,
+  /~~~[\s\S]*?(?:~~~|$)/gu,
+  /`[^`\n]*`/gu,
+  /^[ \t]*>.*$/gmu,
+] as const;
 
 /** A comment's delivery as far as a mention is read: the installation, the repository, the issue or pull request, and the comment with its author. */
 const MentionDeliverySchema = Schema.Struct({
@@ -555,7 +560,8 @@ const startFromMention = Effect.fnUntraced(function* (
  * is a member of the installation's workspace: sent to the agent of theirs
  * that holds the pull request, or starting one; the App replies where the
  * writer is no member. Answers whether the mention took the comment, so the
- * webhook tells no agent of it again; a failure is logged by its kind alone.
+ * webhook tells no agent of it again; a failure is logged by its kind alone,
+ * and answers that it did not, so the comment still wakes whom it would.
  */
 export const actOnGitHubMention = /* @__PURE__ */ Effect.fn("web/githubMention")(function* (
   mention: GitHubMention,
@@ -589,7 +595,9 @@ export const actOnGitHubMention = /* @__PURE__ */ Effect.fn("web/githubMention")
 
   const userId = member.value;
 
-  yield* Effect.gen(function* () {
+  // Note that a failure answers false even past a start, because no agent of the workspace holds
+  // the issue or pull request then, and a send fails nothing past the steer that delivered it.
+  return yield* Effect.gen(function* () {
     const held = mention.pullRequest
       ? (yield* listAgentsOnPullRequest(mention.repository, mention.number, MAXIMUM_HELD_AGENTS))
           .map(({ agent }) => agent)
@@ -600,12 +608,14 @@ export const actOnGitHubMention = /* @__PURE__ */ Effect.fn("web/githubMention")
 
     yield* sendToHeld(mention, organizationId, userId, held.id);
   }).pipe(
+    Effect.as(true),
     Effect.catchCause((cause) =>
-      Effect.logWarning("github mention: it was not acted on", { failure: causeKind(cause) }),
+      Effect.as(
+        Effect.logWarning("github mention: it was not acted on", { failure: causeKind(cause) }),
+        false,
+      ),
     ),
   );
-
-  return true;
 });
 
 /** What the reply says of the turn: its final message where it finished, that it failed and why, or that it was stopped. */

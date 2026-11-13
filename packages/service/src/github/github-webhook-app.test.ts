@@ -1594,7 +1594,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
       }),
   );
   it.effect(
-    "a mention by a writer without write access is not heard, and one by a writer who is no member is answered so and starts nothing",
+    "a mention inside code or by a writer without write access is not heard, and one by a writer who is no member is answered so and starts nothing",
     () =>
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
@@ -1604,6 +1604,16 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         const github = githubReaching([installation]);
         const on = { number: 9, pullRequest: false };
         const words = `@${GITHUB_FIXTURE.SLUG} please fix this`;
+
+        const quoted = `~~~\n${words}\n~~~`;
+
+        yield* answer(
+          github,
+          SECRET,
+          delivery("issue_comment", commentDelivery(installation.id, on, quoted, MEMBER_WRITER)),
+        );
+
+        assert.deepEqual(appWrites(github), []);
 
         const outsider = { ...MEMBER_WRITER, association: "CONTRIBUTOR" };
         yield* answer(
