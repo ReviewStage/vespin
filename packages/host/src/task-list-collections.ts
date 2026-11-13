@@ -8,7 +8,10 @@
  * an agent's status moves with the clock alone and a live query reads no
  * clock. So it is drawn again each time either moves, and at the nearest
  * instant the clock alone moves it (the drawing's `edge`): the one clock
- * left here, armed only while such an agent stands. One drawer stands for
+ * left here, armed only while such an agent stands. The follow's answers
+ * past a sync id are drawn once a tick (`drawnPerTick`), since every draw
+ * builds the whole list and pushes it to every window; a write, a whole
+ * answer, and an edge draw at once. One drawer stands for
  * the scope (`taskListDrawer`), so each drawing builds again only the plans
  * and agents a moved row or that instant reaches, and every other is the
  * object drawn before.
@@ -34,7 +37,7 @@ import type {
 } from "@repo/features/task-wire";
 import { type Confirmation, type EntityPool, fieldKind, type HeldRows } from "@repo/sync";
 import { Effect, type Scope } from "effect";
-import { drawnAtEdges } from "./live-collection.js";
+import { drawnAtEdges, drawnPerTick } from "./live-collection.js";
 import { confirmWrite, type SyncStanding, syncIdOf, type TxWait } from "./live-follow.js";
 
 /** A plan's row as the list's statement answers it. */
@@ -121,7 +124,8 @@ export function taskListCollections(
       return wait === undefined ? undefined : (txid) => confirmWrite(wait, txid);
     };
 
-    const redraw = () => Effect.suspend(() => drawn);
+    // Note that only the list's own follow stands on these kinds, so the pool redraws them for a write the member made, or its answer taken in the list's place: at once, so a press never waits a tick.
+    const redraw = () => Effect.suspend(() => ticks.drawn);
 
     // Note that every plan made is the list's, since it holds every task the account reaches.
     const plans: HeldRows<PlanRow> = yield* pool.stand(PLAN, {
@@ -142,6 +146,8 @@ export function taskListCollections(
 
       return edge;
     });
+
+    const ticks = yield* drawnPerTick(drawn);
 
     return {
       answer: (rows, standing) =>
@@ -169,7 +175,8 @@ export function taskListCollections(
           return Effect.gen(function* () {
             const plansMoved = yield* plans.answer(rows.plans, answered(planKeys));
             const agentsMoved = yield* agents.answer(rows.agents, answered(agentKeys));
-            yield* drawn;
+            // Note that a whole answer, the list's first or one read again, draws at once, and one past a sync id rides the tick, since a busy account's agents answer many a second.
+            yield* standing?.past === undefined ? ticks.drawn : ticks.soon;
 
             return plansMoved.length + agentsMoved.length > 0;
           });
