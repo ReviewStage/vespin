@@ -53,7 +53,7 @@ def find_label(node):
 
 
 def load_commands():
-    files = glob.glob(os.path.join(OUT, "debug", "**", "commands-*.json"), recursive=True)
+    files = glob.glob(os.path.join(OUT, "debug", "**", "commands*.json"), recursive=True)
     commands = []
     for path in files:
         with open(path) as f:
@@ -72,6 +72,35 @@ def load_commands():
                 )
     commands.sort(key=lambda c: c["start"])
     return commands
+
+
+def load_scenes(start):
+    """Each frame's change from the one before (ffmpeg's scene score, 0 to 1), by its wall-clock time."""
+    path = os.path.join(OUT, "scenes.txt")
+    if not os.path.exists(path):
+        os.system(
+            f"ffmpeg -v error -i {os.path.join(OUT, 'screen.mp4')} -vf "
+            f"\"scale=320:-1,select='gte(scene,0)',metadata=print:file={path}\" -an -f null - 2>/dev/null"
+        )
+    scenes = []
+    pts = None
+    if not os.path.exists(path):
+        return scenes
+    with open(path) as f:
+        for line in f:
+            if "pts_time:" in line:
+                pts = float(line.rsplit("pts_time:", 1)[1])
+            elif "lavfi.scene_score=" in line and pts is not None:
+                scenes.append((start + pts * 1000, float(line.split("=", 1)[1])))
+    return scenes
+
+
+def record_start():
+    with open(os.path.join(OUT, "record.log")) as f:
+        for line in f:
+            if "Recording started" in line:
+                return int(line.split(" ", 1)[0])
+    return None
 
 
 def load_frames():
@@ -104,6 +133,9 @@ def main():
     probe = load_probe()
     commands = load_commands()
     frames = load_frames()
+    start_ms = record_start()
+    scenes = load_scenes(start_ms) if start_ms else []
+    BIG = float(os.environ.get("BIG_SCENE", "0.004"))
     events = [r for r in probe if r["kind"] == "event"]
     commits = [r for r in probe if r["kind"] == "commit"]
     stalls = [r for r in probe if r["kind"] == "stall"]
@@ -135,8 +167,13 @@ def main():
                 if f - settle > SETTLE_GAP_MS:
                     break
                 settle = f
+        # The first big change after the tap reached JS (or after the command, where no event came).
+        big = next((t for t, score in scenes if t >= anchor and t < end and score >= BIG), None)
+        big_cmd = next((t for t, score in scenes if t >= start and t < end and score >= BIG), None)
         taps[label[2:]].append(
             {
+                "to_big": round(big - anchor) if big else None,
+                "cmd_to_big": round(big_cmd - start) if big_cmd else None,
                 "event": first_event["name"] if first_event else None,
                 "event_after_cmd": round(moment - start) if moment else None,
                 "commits": len(mine),
@@ -154,7 +191,7 @@ def main():
     print(f"probe rows {len(probe)}, commands {len(commands)}, frames {len(frames)}")
     print(
         "path | n | event | ev-after-cmd | commits | comps rendered | mounted | "
-        "to last commit | stalls ms | probe walk ms | to 1st frame | to settle"
+        "to last commit | stalls ms | probe walk ms | to 1st frame | to 1st big change | cmd to big | to settle"
     )
     for path, rows in taps.items():
         print(
@@ -172,6 +209,8 @@ def main():
                     median([r["stall"] for r in rows]),
                     median([r["walk"] for r in rows]),
                     median([r["to_first_frame"] for r in rows]),
+                    median([r["to_big"] for r in rows]),
+                    median([r["cmd_to_big"] for r in rows]),
                     median([r["to_settle"] for r in rows]),
                 ]
             )
