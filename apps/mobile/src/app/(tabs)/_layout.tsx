@@ -1,7 +1,15 @@
 // _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, in a compact window, the prominent round + that opens New task; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation or while the Inbox stands in Select mode.
 
 import { type IosTab, iosRouteHidesTabs, iosTabOfGroup } from "@repo/features/ios-app-links";
-import { GLYPH, SplitOverTabs, UNDER_SPLIT_SCREEN, useColors } from "@repo/ui-native";
+import {
+  GLYPH,
+  SplitOverTabs,
+  UNDER_SPLIT_SCREEN,
+  useColors,
+  useThreeColumns,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
+} from "@repo/ui-native";
 import { usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
@@ -11,8 +19,6 @@ import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
 import { placeOfRoute, SIDEBAR_PLACE } from "../../screens/app-sidebar.js";
 import { AppSplit } from "../../screens/app-split.js";
-import { useThreeColumns, useWindowSizeClass } from "../../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 
 /** Where the tabs stand: the tab shown, and whether its root, or an item of its own the split view selects beside its list, stands in front rather than a page pushed over it. */
 type TabStanding = { readonly tab: IosTab | undefined; readonly atRoot: boolean };

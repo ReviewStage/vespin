@@ -12,6 +12,7 @@ import {
   MARK_SIZE,
   RowList,
   SWITCHER_LOOK,
+  useThreeColumns,
   WorkspaceSwitcherItem,
 } from "@repo/ui-native";
 import { useRouter } from "expo-router";
@@ -20,7 +21,6 @@ import { useInboxBadge } from "../inbox/use-inbox.js";
 import { useSettingsAccount } from "../settings-button.js";
 import { keepSidebarPlace, keepTasksCollection, useTasksCollection } from "../sidebar-pick.js";
 import { useSidebarShown } from "../sidebar-shown.js";
-import { useThreeColumns } from "../use-window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 
 /** The places the sidebar's first rows open, each a tab's root. */

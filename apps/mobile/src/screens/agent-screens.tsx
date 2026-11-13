@@ -56,7 +56,6 @@ import {
   openCuts,
   PickRows,
   QueuedLines,
-  RenameAsk,
   Screen,
   SettingsForm,
   SkillSuggestions,
@@ -71,6 +70,10 @@ import {
   transcriptOriginOf,
   useAnnounced,
   useColors,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
+  WORDS_ASK_KIND,
+  WordsAsk,
   withSending,
   withWaitingLine,
 } from "@repo/ui-native";
@@ -115,8 +118,6 @@ import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { PageScreen } from "./page-screens.js";
 
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
@@ -834,16 +835,21 @@ export function AgentScreen() {
       {asked === undefined ? null : (
         <CardMergeAsk agentId={id} pullRequest={asked} onDone={() => setMerging(undefined)} />
       )}
-      <RenameAsk
+      <WordsAsk
         title={RENAME_WORDS.TITLE}
-        act={RENAME_WORDS.ACT}
-        name={actions.title}
         placeholder={RENAME_WORDS.PLACEHOLDER}
+        initial={actions.title}
+        kind={WORDS_ASK_KIND.NAME}
+        acts={[
+          {
+            label: RENAME_WORDS.ACT,
+            onAct: (name) => {
+              setRenaming(false);
+              actions.rename(name);
+            },
+          },
+        ]}
         presented={renaming}
-        onRename={(name) => {
-          setRenaming(false);
-          actions.rename(name);
-        }}
         onDismiss={() => setRenaming(false)}
       />
       <ConfirmAsk

@@ -1,11 +1,10 @@
 // split-route.ts -- a tab's selection kept in its root route, so a link, a notification, or a fold lands on the item beside its list or pushed over it, as the window allows.
 
 import { iosRouteOnTab, iosRouteTab } from "@repo/features/ios-app-links";
+import { useWindowSizeClass, WINDOW_SIZE_CLASS } from "@repo/ui-native";
 import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { useOwnTab } from "./tab-route.js";
-import { useWindowSizeClass } from "./use-window-size-class.js";
-import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
 
 /** A tab whose root stands a split view in a regular window, by its root route. */
 export const SPLIT_TAB = {

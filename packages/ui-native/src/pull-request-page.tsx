@@ -1,38 +1,23 @@
 // pull-request-page.tsx -- a pull request's page: its heading with where it stands and its branches, the rows of its checks and reviews, the line a change GitHub refused leaves, and the question an act asks first.
 
+import { HStack, Menu, Button as SwiftUIButton, Text, Toggle, VStack } from "@expo/ui/swift-ui";
 import {
-  Alert,
-  Host,
-  HStack,
-  Menu,
-  Button as SwiftUIButton,
-  Text,
-  TextField,
-  Toggle,
-  useNativeState,
-  VStack,
-} from "@expo/ui/swift-ui";
-import {
-  autocorrectionDisabled,
   buttonStyle,
   controlSize,
   disabled,
   font,
   foregroundStyle,
-  frame,
-  keyboardType,
   lineLimit,
   listRowBackground,
   listRowInsets,
   listRowSeparator,
   menuIndicator,
   monospacedDigit,
-  textInputAutocapitalization,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import type { PullRequestState } from "@repo/features/agent-wire";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
-import { type ReactElement, useEffect, useState } from "react";
+import type { ReactElement } from "react";
 import { FieldChip } from "./button.js";
 import { GLYPH, type MarkLook } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
@@ -332,205 +317,5 @@ export function MergeActRow({
         />
       ))}
     </Menu>
-  );
-}
-
-type ConfirmAskProps = {
-  /** The question, as the panel's confirm asks it: "Remove from the merge queue?" */
-  readonly title: string;
-  /** What the act costs, under the question. */
-  readonly message?: string | undefined;
-  /** The act's own words, the alert's act beside Cancel. */
-  readonly act: string;
-  /** Whether the act ends or takes away something, which the system draws red. */
-  readonly destructive?: boolean | undefined;
-  /**
-   * Words the person types before the act can be pressed, such as the
-   * account's address before Delete account, as the panel's confirm gates
-   * an act that cannot be undone.
-   */
-  readonly gate?: string | undefined;
-  readonly presented: boolean;
-  readonly onAct: () => void;
-  /** Called as the alert goes, by its act or Cancel. */
-  readonly onDismiss: () => void;
-};
-
-/** What an act that asks first offers beside its act, and the role the system draws it in. */
-const CANCEL = { LABEL: "Cancel", ROLE: "cancel" } as const;
-
-/**
- * The question an act asks first, as the system's alert: its question,
- * what it costs, Cancel, and its act last, as the panel's confirm stands.
- * Note that it is an alert rather than a confirmation dialog, because iOS
- * 26 draws a confirmation dialog as a popover on the view that presents it,
- * and the act is pressed in the bar or on a card, which this cannot stand
- * on; an alert stands centered whatever presents it. It stands in a host
- * of its own, the size of nothing, so a screen draws it beside whatever it
- * shows and presents it from a press anywhere: beside its `Screen`, never
- * inside that host, where a screen drawing it took no press and no key at
- * all on the simulators (the Tasks list and Search did). A gated ask holds the
- * system's field in the alert, its act dimmed until the field holds the
- * gate's words exactly.
- */
-export function ConfirmAsk({
-  title,
-  message,
-  act,
-  destructive = false,
-  gate,
-  presented,
-  onAct,
-  onDismiss,
-}: ConfirmAskProps) {
-  const typed = useNativeState("");
-  const [words, setWords] = useState("");
-  // Note that the field is emptied each time the alert opens, so every ask is typed afresh and none is let through by an earlier one's words.
-  useEffect(() => {
-    if (!presented) return;
-    typed.value = "";
-    setWords("");
-  }, [presented, typed]);
-  const shut = gate !== undefined && words !== gate;
-
-  return (
-    <Host matchContents style={{ position: "absolute" }}>
-      <Alert
-        title={title}
-        isPresented={presented}
-        onIsPresentedChange={(shown) => {
-          if (!shown) onDismiss();
-        }}
-      >
-        <Alert.Trigger>
-          <Text modifiers={[frame({ width: 0, height: 0 })]}>{""}</Text>
-        </Alert.Trigger>
-        <Alert.Actions>
-          {gate === undefined ? null : (
-            <TextField
-              text={typed}
-              placeholder={gate}
-              onTextChange={setWords}
-              modifiers={[autocorrectionDisabled(), textInputAutocapitalization("never")]}
-            />
-          )}
-          <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />
-          <SwiftUIButton
-            label={act}
-            role={destructive ? "destructive" : "default"}
-            onPress={onAct}
-            modifiers={[disabled(shut)]}
-          />
-        </Alert.Actions>
-        {message === undefined ? null : (
-          <Alert.Message>
-            <Text>{message}</Text>
-          </Alert.Message>
-        )}
-      </Alert>
-    </Host>
-  );
-}
-
-/** What a `WordsAsk` field takes, and the keyboard it raises for it. */
-export const WORDS_ASK_KIND = {
-  /** A name, capitalized and corrected as the system does. */
-  NAME: "name",
-  /** An email address, on the address keyboard, with nothing capitalized or corrected. */
-  EMAIL: "email",
-} as const;
-
-export type WordsAskKind = (typeof WORDS_ASK_KIND)[keyof typeof WORDS_ASK_KIND];
-
-/** One of a `WordsAsk`'s acts beside Cancel, handed the words typed. */
-export interface WordsAskAct {
-  readonly label: string;
-  readonly onAct: (words: string) => void;
-}
-
-type WordsAskProps = {
-  readonly title: string;
-  readonly message?: string | undefined;
-  readonly placeholder: string;
-  /** The words the field holds as the alert opens, such as the name a rename starts from. */
-  readonly initial?: string | undefined;
-  readonly kind: WordsAskKind;
-  /** Its acts, the last the one Return presses; each dimmed while the field is empty. */
-  readonly acts: readonly WordsAskAct[];
-  readonly presented: boolean;
-  /** Called as the alert goes, by an act or Cancel. */
-  readonly onDismiss: () => void;
-};
-
-/**
- * Words asked for in the system's alert, as iOS asks a rename or an
- * address: its field, Cancel, and its acts, each dimmed until something is
- * typed. The field starts from `initial` each time the alert opens. It
- * stands in a host of its own, the size of nothing, as `ConfirmAsk` does.
- */
-export function WordsAsk({
-  title,
-  message,
-  placeholder,
-  initial = "",
-  kind,
-  acts,
-  presented,
-  onDismiss,
-}: WordsAskProps) {
-  const typed = useNativeState(initial);
-  const [words, setWords] = useState(initial);
-  useEffect(() => {
-    if (!presented) return;
-    typed.value = initial;
-    setWords(initial);
-  }, [presented, initial, typed]);
-  const empty = words.trim().length === 0;
-
-  const field =
-    kind === WORDS_ASK_KIND.EMAIL
-      ? [
-          keyboardType("email-address"),
-          autocorrectionDisabled(),
-          textInputAutocapitalization("never"),
-        ]
-      : [textInputAutocapitalization("words")];
-
-  return (
-    <Host matchContents style={{ position: "absolute" }}>
-      <Alert
-        title={title}
-        isPresented={presented}
-        onIsPresentedChange={(shown) => {
-          if (!shown) onDismiss();
-        }}
-      >
-        <Alert.Trigger>
-          <Text modifiers={[frame({ width: 0, height: 0 })]}>{""}</Text>
-        </Alert.Trigger>
-        <Alert.Actions>
-          <TextField
-            text={typed}
-            placeholder={placeholder}
-            onTextChange={setWords}
-            modifiers={field}
-          />
-          <SwiftUIButton label={CANCEL.LABEL} role={CANCEL.ROLE} onPress={onDismiss} />
-          {acts.map((act) => (
-            <SwiftUIButton
-              key={act.label}
-              label={act.label}
-              onPress={() => act.onAct(words.trim())}
-              modifiers={[disabled(empty)]}
-            />
-          ))}
-        </Alert.Actions>
-        {message === undefined ? null : (
-          <Alert.Message>
-            <Text>{message}</Text>
-          </Alert.Message>
-        )}
-      </Alert>
-    </Host>
   );
 }
