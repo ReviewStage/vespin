@@ -1,6 +1,6 @@
 // video.tsx -- a video a message carried, played in iOS's own player through expo-video, at its message's width.
 
-import { useVideoPlayer, type VideoPlayerStatus, VideoView } from "expo-video";
+import { useVideoPlayer, type VideoPlayerStatus, type VideoTrack, VideoView } from "expo-video";
 import { useEffect, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
@@ -8,7 +8,7 @@ import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
 import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
-import { SPACE } from "./tokens/space.js";
+import { RADIUS, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
 
 /** What a video says where the system's player cannot play it, such as a WebM, which iOS's player has no reader for. */
@@ -23,8 +23,26 @@ const OPENS_IN_SAFARI = "Opens the video in Safari";
 /** What opens a video the player cannot play where it plays. */
 const OPEN_IN_SAFARI = "Open in Safari";
 
+/** A film's shape, width over height, which a video's well stands at until the player has read its own. */
+const FILM_ASPECT = 16 / 9;
+
+/** The tallest a video stands, width over height: a portrait recording stands no taller than 3 by 4, its picture fitted inside, so one video never fills the screen. */
+const TALLEST_ASPECT = 3 / 4;
+
+/** A video's own shape, width over height, as its track reads, held no taller than `TALLEST_ASPECT`; none while the track is not read. */
+function trackAspect(track: VideoTrack | null): number | undefined {
+  if (track === null || track.size.width <= 0 || track.size.height <= 0) return undefined;
+
+  return Math.max(TALLEST_ASPECT, track.size.width / track.size.height);
+}
+
 const styles = StyleSheet.create({
-  frame: { width: "100%", aspectRatio: 16 / 9, borderRadius: 8, overflow: "hidden" },
+  frame: {
+    width: "100%",
+    aspectRatio: FILM_ASPECT,
+    borderRadius: RADIUS.BLOCK,
+    overflow: "hidden",
+  },
   unplayable: {
     alignItems: "center",
     justifyContent: "center",
@@ -43,7 +61,7 @@ type VideoProps = {
   readonly label: string;
   /** Opens the video where it plays, offered where the system's player cannot read it; none offers nothing. */
   readonly onOpenElsewhere?: (() => void) | undefined;
-  /** A tile's fixed shape, width over height; a film's 16 by 9 where none is given. */
+  /** A tile's fixed shape, width over height; the video's own, once the player has read it, where none is given. */
   readonly tileAspect?: number | undefined;
 };
 
@@ -60,15 +78,26 @@ type VideoProps = {
 export function Video({ source, label, onOpenElsewhere, tileAspect }: VideoProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
-  const tiled = tileAspect === undefined ? undefined : { aspectRatio: tileAspect };
   const player = useVideoPlayer(source ?? null);
   const [status, setStatus] = useState<VideoPlayerStatus>(player.status);
+  const [ownAspect, setOwnAspect] = useState(() => trackAspect(player.videoTrack));
   useEffect(() => {
     setStatus(player.status);
+    setOwnAspect(trackAspect(player.videoTrack));
     const listening = player.addListener("statusChange", ({ status: next }) => setStatus(next));
 
-    return () => listening.remove();
+    const tracking = player.addListener("videoTrackChange", ({ videoTrack }) =>
+      setOwnAspect(trackAspect(videoTrack)),
+    );
+
+    return () => {
+      listening.remove();
+      tracking.remove();
+    };
   }, [player]);
+  // Note that a tile keeps the shape its grid gives it, and a message's video takes its own once read, as Messages draws one, rather than a film's 16 by 9 whatever was recorded.
+  const aspect = tileAspect ?? ownAspect;
+  const tiled = aspect === undefined ? undefined : { aspectRatio: aspect };
   const failed = status === "error";
 
   const acts = useKeptActs(
