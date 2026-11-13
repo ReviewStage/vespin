@@ -115,8 +115,11 @@ function Box({
   onClear,
   startsGoal,
   model,
+  talksIn,
 }: {
   sender: MessageSender;
+  /** The task the box's agent works on, where the box calls its agent, as an agent's tab's does. */
+  talksIn?: string;
   skills?: SkillSource;
   /** What `/clear` does, where the box runs commands. */
   onClear?: () => Promise<boolean>;
@@ -146,6 +149,8 @@ function Box({
       onClear,
       startsGoal,
       model,
+      agentId: talksIn === undefined ? undefined : "agent-1",
+      talksIn,
     }),
     // What Continue would carry, as the tab hands it on.
     createElement("output", { "data-unsent": composer.unsent.words }),
@@ -160,6 +165,7 @@ async function mounted(
     readonly onClear?: () => Promise<boolean>;
     readonly startsGoal?: boolean;
     readonly model?: AgentModelControl;
+    readonly talksIn?: string;
   } = {},
 ) {
   const sent: { text: string; clientKey: string }[] = [];
@@ -1158,4 +1164,21 @@ test("while the agent's turn runs, a touch held on Send sends the other way: a b
   }
 
   assert.deepEqual(done, ["queued"]);
+});
+
+test("Talk stands beside Dictate only in a box that calls its agent, and only while the Voice experiment is on", async () => {
+  const off = await mounted(undefined, { talksIn: "plan-1" });
+  assert.ok(off.button("Dictate"));
+  assert.equal(off.button("Talk"), null, "no box offers a call while Voice is off");
+
+  for (const root of roots.splice(0)) act(() => root.unmount());
+  writeAppState(stateWith({ [EXPERIMENT.VOICE]: true }, {}));
+  const other = await mounted();
+  assert.equal(other.button("Talk"), null, "nor does a box that calls no agent");
+
+  for (const root of roots.splice(0)) act(() => root.unmount());
+
+  const tab = await mounted(undefined, { talksIn: "plan-1" });
+  assert.ok(tab.button("Dictate"));
+  assert.ok(tab.button("Talk"), "an agent's tab's box does");
 });

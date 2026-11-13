@@ -2185,15 +2185,16 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   min-width: 0;
 }
 
-/* Too narrow for every press: the ⋯ takes in the context ring and the
-   microphone, but only where the ring stands, since a ⋯ holding the
+/* Too narrow for every press: the ⋯ takes in the context ring, the
+   microphone, and Talk, but only where the ring stands, since a ⋯ holding the
    microphone alone is one press behind two. The ring's box stays, out of
    the row at its right end, so the popover the ⋯ opens for it hangs where
    the ⋯ stands. */
 /* off-scale: 400px, a card under which the box folds its own presses into its ⋯ (composer-foot.css) */
 @container composer (width < 400px) {
   .message-box .agent-context-button,
-  .message-box-actions:has(.agent-context-button) .dictate-button {
+  .message-box-actions:has(.agent-context-button) .dictate-button,
+  .message-box-actions:has(.agent-context-button) .talk-button {
     display: none;
   }
 
@@ -2210,11 +2211,12 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
 }
 
 /* The narrowest: the + goes into the ⋯ too, its menu's rows with it, and
-   the microphone with them, leaving what the agent published, the model,
+   the microphone and Talk with them, leaving what the agent published, the model,
    the ⋯, and Send. */
 @container composer (width < 240px) {
   .message-box .message-box-attach,
-  .message-box .dictate-button {
+  .message-box .dictate-button,
+  .message-box .talk-button {
     display: none;
   }
 
