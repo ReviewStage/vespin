@@ -19,6 +19,7 @@ import {
   accessibilityValue,
   alignmentGuide,
   buttonStyle,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -728,7 +729,7 @@ export function TaskRow(props: TaskRowProps) {
                   font({ textStyle: TYPE_ROLE.TIME }),
                   monospacedDigit(),
                   foregroundStyle(colors.TEXT_MUTED),
-                  lineLimit(1),
+                  fixedSize(),
                 ]}
               >
                 {taskKey}
