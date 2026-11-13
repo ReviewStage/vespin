@@ -331,8 +331,9 @@ function agentsStatement(userId: string, narrowed: SQL = sql`true`) {
 /**
  * Where the agent's current sandbox stands as its row in `agent_sandbox`
  * last recorded it (`@repo/features/agent-sandbox-wire`): none where no
- * row stands, off where it was released or is being, booting while a boot
- * is under way, and otherwise running until `SANDBOX_IDLE` after its last
+ * row stands, off where it was released or is being, or the service stopped
+ * it as nothing held it, booting while a boot is under way, and otherwise
+ * running until `SANDBOX_IDLE` after its last
  * recorded use, which a reader reads against its own clock. The last use is
  * written at most once a minute, so the stop it gives is never later than
  * the sandbox's own, and at most that much earlier.
@@ -341,13 +342,15 @@ const SANDBOX_STATE_OF_AGENT = sql<SandboxState | null>`case
   when ${agentSandboxTable.sandboxName} is null then null
   when ${agentSandboxTable.state} <> ${AGENT_SANDBOX_STATE.LIVE} then ${SANDBOX_STATE.OFF}
   when ${agentSandboxTable.bootingSince} is not null then ${SANDBOX_STATE.BOOTING}
+  when ${agentSandboxTable.stoppedAt} is not null then ${SANDBOX_STATE.OFF}
   else ${SANDBOX_STATE.RUNNING} end`;
 
-const SANDBOX_STATE_AT_OF_AGENT = sql<Date | null>`coalesce(${agentSandboxTable.bootingSince}, ${agentSandboxTable.usedAt})`;
+const SANDBOX_STATE_AT_OF_AGENT = sql<Date | null>`coalesce(${agentSandboxTable.bootingSince}, ${agentSandboxTable.stoppedAt}, ${agentSandboxTable.usedAt})`;
 
 // Note that the stop is summed as epoch milliseconds, as an instant is read, since adding an interval to a timestamp is not immutable.
 const SANDBOX_RUNS_UNTIL_OF_AGENT = sql<number | null>`case
   when ${agentSandboxTable.state} = ${AGENT_SANDBOX_STATE.LIVE} and ${agentSandboxTable.bootingSince} is null
+    and ${agentSandboxTable.stoppedAt} is null
   then floor(extract(epoch from (${agentSandboxTable.usedAt} at time zone 'UTC')) * 1000)::float8 + ${Duration.toMillis(SANDBOX_IDLE)} end`;
 
 /**

@@ -110,6 +110,7 @@ import {
   type PublishedReach,
 } from "./coder-host/published.js";
 import { productionSummaryModel, type SummaryModelOf } from "./coder-host/replay-summary.js";
+import { sandboxLetGo } from "./coder-host/runner-sessions.js";
 import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   acceptedAgentChoice,
@@ -827,8 +828,11 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           yield* recordedTerminalEnded(agentSandboxName(sessionId), terminalId);
 
           if (Result.isFailure(killed)) return yield* Effect.fail(shellRefusal(killed.failure));
+          const listed = yield* listedShells(sessionId);
+          // Note that the tab may have been the sandbox's last hold, with no turn running.
+          yield* sandboxLetGo(sessionId);
 
-          return yield* listedShells(sessionId);
+          return listed;
         }),
       );
     }),

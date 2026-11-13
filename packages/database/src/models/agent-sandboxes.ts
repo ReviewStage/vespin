@@ -21,7 +21,11 @@
  * `machine/sandbox-machine.ts`): `booting_since` set as it opens the
  * sandbox, LIVE again where it stood released, and cleared once its runner
  * is handed its first lines, which is a use, or once the open failed; a
- * discard, which deletes the sandbox, marks it RELEASED. A sweep leaves a
+ * discard, which deletes the sandbox, marks it RELEASED. A stop the service
+ * makes as nothing holds the sandbox (`@repo/service`'s
+ * `sandboxStoppedIfUnheld`) is recorded as `stopped_at`, which the next
+ * open, boot, or use clears, so the task list reads it off at once while it
+ * stays LIVE for the release sweep. A sweep leaves a
  * sandbox booting alone, since its boot keeps the last use it began from,
  * unless the boot began before the sweep's cutoff and never ended. The task
  * list reads the row of the agent's current session (`sandboxNamedFor`).
@@ -81,6 +85,11 @@ function notBootingSince(usedBy: Date) {
   return or(isNull(agentSandboxTable.bootingSince), lte(agentSandboxTable.bootingSince, usedBy));
 }
 
+/** That the row was last used before the cutoff, or reads stopped, which any use that follows clears whatever its cutoff. */
+function usedBeforeOrStopped(writtenBefore: Date) {
+  return or(lt(agentSandboxTable.usedAt, writtenBefore), isNotNull(agentSandboxTable.stoppedAt));
+}
+
 /** One use of a sandbox to record: its name, when it was used, and the cutoff a row written since is left at. */
 export interface AgentSandboxUse {
   readonly sandboxName: string;
@@ -103,8 +112,8 @@ const upsertOpen = SqlSchema.void({
         .values({ sandboxName, agentId, usedAt: at, state: AGENT_SANDBOX_STATE.LIVE })
         .onConflictDoUpdate({
           target: agentSandboxTable.sandboxName,
-          set: { agentId, usedAt: at, state: AGENT_SANDBOX_STATE.LIVE },
-          setWhere: sql`${lt(agentSandboxTable.usedAt, writtenBefore)} or ${mayWrite(
+          set: { agentId, usedAt: at, state: AGENT_SANDBOX_STATE.LIVE, stoppedAt: null },
+          setWhere: sql`${usedBeforeOrStopped(writtenBefore)} or ${mayWrite(
             AGENT_SANDBOX_STATE.LIVE,
             false,
           )}`,
@@ -118,12 +127,9 @@ const updateUse = SqlSchema.void({
     Database.use((db) =>
       db
         .update(agentSandboxTable)
-        .set({ usedAt: at })
+        .set({ usedAt: at, stoppedAt: null })
         .where(
-          and(
-            eq(agentSandboxTable.sandboxName, sandboxName),
-            lt(agentSandboxTable.usedAt, writtenBefore),
-          ),
+          and(eq(agentSandboxTable.sandboxName, sandboxName), usedBeforeOrStopped(writtenBefore)),
         ),
     ),
 });
@@ -134,10 +140,11 @@ const StateSchema = Schema.Literals([
   AGENT_SANDBOX_STATE.RELEASED,
 ]);
 
-/** A sandbox a release names: its name, its agent, the agent's conversation, when it was last used, and its state. */
+/** A sandbox a release names: its name, its agent and the agent's starter, the agent's conversation, when it was last used, and its state. */
 const ReleaseRowSchema = Schema.Struct({
   sandboxName: Schema.String,
   agentId: Schema.String,
+  userId: Schema.String,
   conversationId: Schema.String,
   usedAt: Schema.Date,
   state: StateSchema,
@@ -197,6 +204,7 @@ const findRelease = SqlSchema.findOneOption({
         .select({
           sandboxName: agentSandboxTable.sandboxName,
           agentId: agentSandboxTable.agentId,
+          userId: agentTable.userId,
           conversationId: agentTable.conversationId,
           usedAt: agentSandboxTable.usedAt,
           state: agentSandboxTable.state,
@@ -239,7 +247,7 @@ const upsertBooting = SqlSchema.void({
         // Note that its last use stays, so a resume that fails reads off rather than running.
         .onConflictDoUpdate({
           target: agentSandboxTable.sandboxName,
-          set: { agentId, state: AGENT_SANDBOX_STATE.LIVE, bootingSince: at },
+          set: { agentId, state: AGENT_SANDBOX_STATE.LIVE, bootingSince: at, stoppedAt: null },
           setWhere: mayWrite(AGENT_SANDBOX_STATE.LIVE, true),
         }),
     ),
@@ -272,6 +280,23 @@ const markReleased = SqlSchema.void({
           and(
             eq(agentSandboxTable.sandboxName, sandboxName),
             mayWrite(AGENT_SANDBOX_STATE.RELEASED, false),
+          ),
+        ),
+    ),
+});
+
+const markStopped = SqlSchema.void({
+  Request: Schema.Struct({ sandboxName: Schema.String, at: Schema.Date }),
+  execute: ({ sandboxName, at }) =>
+    Database.use((db) =>
+      db
+        .update(agentSandboxTable)
+        .set({ stoppedAt: at })
+        .where(
+          and(
+            eq(agentSandboxTable.sandboxName, sandboxName),
+            eq(agentSandboxTable.state, AGENT_SANDBOX_STATE.LIVE),
+            isNull(agentSandboxTable.bootingSince),
           ),
         ),
     ),
@@ -343,6 +368,16 @@ export function recordAgentSandboxUse(use: AgentSandboxUse): SandboxUseEffect<vo
 }
 
 /**
+ * The LIVE sandbox stopped at `at` as nothing held it, its disk kept: its
+ * row read off until it is opened, booted, or used again, and every hold
+ * on it let go, since its shells ended with its run. A
+ * release sweep still deletes it by its last use.
+ */
+export function recordAgentSandboxStopped(sandboxName: string, at: Date): SandboxUseEffect<void> {
+  return Effect.andThen(forgetAgentSandboxHolds(sandboxName), markStopped({ sandboxName, at }));
+}
+
+/**
  * The sandboxes a release sweep acts on, the oldest used first: at most
  * `limit` LIVE ones last used at or before `usedBy`, and beside them at most
  * `limit` RELEASING, whose release may have been lost on its way to the
@@ -372,7 +407,7 @@ export function markAgentSandboxReleasing(
   return Effect.map(markReleasing({ sandboxName, usedBy }), (rows) => rows.length > 0);
 }
 
-/** The sandbox's row as a release reads it again, with its agent and the agent's conversation; none where the row or its agent is gone. */
+/** The sandbox's row as a release or a stop reads it again, with its agent, the agent's starter, and the agent's conversation; none where the row or its agent is gone. */
 export function agentSandboxRelease(
   sandboxName: string,
 ): SandboxUseEffect<Option.Option<AgentSandboxRelease>> {

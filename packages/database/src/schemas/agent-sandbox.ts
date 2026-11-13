@@ -59,6 +59,8 @@ export const agentSandboxTable = pgTable(
     state: text("state").$type<AgentSandboxState>().notNull().default(AGENT_SANDBOX_STATE.LIVE),
     /** When the boot under way began; null where none is. */
     bootingSince: timestamptz("booting_since"),
+    /** When the service stopped the sandbox as nothing held it, so the task list reads it off at once; null once it is opened, booted, or used again. */
+    stoppedAt: timestamptz("stopped_at"),
   },
   (table) => [
     // An agent's delete cascades to its rows, found by the agent alone.
