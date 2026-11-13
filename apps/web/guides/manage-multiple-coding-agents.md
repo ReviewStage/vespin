@@ -1,96 +1,79 @@
 ---
 title: "Running 10 coding agents at once: who answers them?"
-description: "How to keep many coding agents moving when each one stops to ask, decide, or get reviewed: the failure modes, and the patterns that fix them with any tool."
+description: "When many coding agents run at once, their questions and pull requests wait on you. How to get those questions in one place and answer them quickly."
 published: 2026-11-12
 updated: 2026-11-12
 faq:
   - q: How many agents can one person supervise?
-    a: "It depends less on the agents than on how often they need you and how fast you answer. If every ask lands in one queue and most are a tap to answer, one person can keep many more agents moving than by switching between terminals. Watch the queue: if it grows faster than you clear it, you're running more agents than you can answer, and the extra ones are only waiting."
+    a: "There is no fixed number. It depends on how often each agent needs you and how long each answer takes. If questions wait longer than the agents take to work, you are running more agents than you can answer."
   - q: Do I have to watch my agents while they work?
-    a: "No. Watching is the polling failure mode. Have agents push what they need to you, and check in when something is waiting. Review what they produce, the pull request and its checks, rather than their transcript as it scrolls."
+    a: "No. Set them up to notify you when they need input, and review the pull request when they finish. Reading a transcript as it runs is rarely worth the time."
   - q: Can I answer agents from my phone or Slack?
-    a: "With some tools, yes. Cursor can notify you on Slack when an agent finishes ([Cursor docs](https://docs.cursor.com/background-agent/web-and-mobile)). In Vespin, the iOS app and the Slack bot both let you answer a decision with a button, and a reply typed on either reaches the agent."
-  - q: What should go to the human, and what should the agent decide?
-    a: "Send people what only they can do or decide: product and design choices, trade-offs with real cost either way, risky or irreversible steps, and things only they can do by hand. Let the agent decide everything small itself, or the queue fills with noise."
+    a: "It depends on the tool. Cursor can send you a Slack message when an agent finishes ([Cursor docs](https://docs.cursor.com/background-agent/web-and-mobile)). Vespin's iOS app and Slack bot both let you answer an agent's question, with a button for each option on a decision."
+  - q: What should an agent ask me, and what should it decide alone?
+    a: "Ask about product and design choices, trade-offs that cost something either way, steps that are hard to undo, and anything only you can do, such as adding a secret. Have it decide the rest itself."
   - q: Do I still need worktrees or sandboxes?
-    a: "Yes. Isolation keeps parallel agents from breaking each other's work. It just doesn't solve the human side, which is what the queue is for."
+    a: "Yes. They keep agents from overwriting each other's changes. They don't help you answer them."
 ---
 
 Running agents in parallel is solved, and isolating each in a worktree or sandbox is easy. The bottleneck is you: every agent stops to ask, decide, or get reviewed, and those asks pile up across terminals.
 
-This guide is about that bottleneck. It covers how it shows up, the patterns that fix it with any tool, and where Vespin fits.
+## Running agents in parallel
 
-## Parallel is the easy part
+Each agent needs its own checkout. With Claude Code, `claude --worktree <name>` starts a session in its own [git worktree](https://git-scm.com/docs/git-worktree) on a new branch ([Claude Code docs](https://code.claude.com/docs/en/common-workflows#run-parallel-sessions-with-worktrees)). [Conductor](https://www.conductor.build/docs/guides/parallel-agents/run-multiple-claude-code-sessions) creates a worktree and branch for each workspace. [Cursor's cloud agents](https://docs.cursor.com/background-agent/web-and-mobile) run each task on a remote machine.
 
-Give each agent its own checkout and they stop stepping on each other. Claude Code does this with one flag, `claude --worktree <name>`, which starts a session in its own [git worktree](https://git-scm.com/docs/git-worktree) on its own branch ([Claude Code docs](https://code.claude.com/docs/en/common-workflows#run-parallel-sessions-with-worktrees)). Desktop apps such as [Conductor](https://www.conductor.build/docs/guides/parallel-agents/run-multiple-claude-code-sessions) make a worktree and branch for every workspace for you. Cloud agents, such as [Cursor's](https://docs.cursor.com/background-agent/web-and-mobile), run each task on a remote machine.
+## What goes wrong
 
-So starting ten agents takes a minute. Keeping all ten moving is harder.
+An agent stops for a permission prompt, a question, a choice between two approaches, a step only you can do (adding a secret, changing a repository setting), and a pull request to review. With ten agents, these come in faster than one person handles them in separate terminals:
 
-## Where it breaks: the human in the loop
+- You switch between terminals to check which agent is waiting, and most of them aren't.
+- A question sits in the middle of a long transcript, and you don't see it until much later.
+- A question written as several paragraphs takes a while to read and answer.
+- Pull requests arrive faster than you review them.
+- Every question goes to the person who started the agent, even when someone else knows the answer.
 
-Each agent needs you a few times per task: a permission prompt, a question it can't settle alone, a design choice, a to-do only you can do (add a secret, change a repository setting), and a pull request to review. One agent, and you answer as it asks. Ten agents, and the questions come in faster than you can find them.
+## How to fix it
 
-The usual failure modes:
+### Get notified
 
-1. **Polling terminals.** You cycle through tabs to see who is stuck. Most checks find an agent still working, so you've switched context for nothing. The one that is stuck has been stuck for twenty minutes.
-2. **Missed questions.** An agent asks something in the middle of a long transcript, then goes idle. Nothing tells you. You find it an hour later, or never.
-3. **Questions you can't answer quickly.** "Should I do A or B?" in prose, with the trade-offs buried in paragraphs. You have to read the whole thing, then type an answer the agent has to read back.
-4. **PR pile-ups.** Agents finish faster than you review. Ten pull requests wait, each needing you to rebuild context on a task you started hours ago.
-5. **Everything waits on one person.** Every question goes to whoever started the agent, even when a teammate owns that code or that decision.
+Have each agent tell you when it needs you. Claude Code runs a `Notification` hook when it needs permission or is waiting for input, and you can point it at a script or a desktop notification ([hooks reference](https://code.claude.com/docs/en/hooks)). Cursor can message you on Slack when an agent finishes ([Cursor's Slack integration](https://docs.cursor.com/slack)).
 
-Your throughput is no longer how many agents you run. It's how fast the asks reach you, and how fast you can answer each one.
+A notification you dismiss is gone, though, so notifications work best alongside a list.
 
-## The patterns that fix it
+### Keep one list of what's waiting
 
-These work with any tool. Some you can build with scripts, and some need a tool designed for them.
+Put every open question from every agent in one list, and keep each one there until it's answered. Claude Code's agent view does this for background sessions on your machine: sessions that need input are listed first, and you can filter to only those ([agent view docs](https://code.claude.com/docs/en/agent-view)).
 
-### 1. Get pushed, never poll
+### Ask in a fixed format
 
-Stop checking agents. Have each agent tell you when it needs you, and stay quiet otherwise.
+Most questions are one of three kinds:
 
-The simplest version is a notification hook. Claude Code fires a `Notification` hook, filterable to permission prompts or to a session waiting for input, and you can point it at a desktop notification or a script ([hooks reference](https://code.claude.com/docs/en/hooks)). Cloud agents often notify you on Slack when a run finishes ([Cursor's Slack integration](https://docs.cursor.com/slack)).
+- a choice between a few options,
+- steps for you to do by hand,
+- a value only you know, such as a name or an ID.
 
-Pushes alone don't scale, though. Ten agents send ten separate notifications, and once one is dismissed, the question is lost again.
+Ask the agent to say which kind it's asking, list the options, and say which one it recommends. You can then answer in a word, and you can answer from a phone.
 
-### 2. One queue for everything that waits on you
+### Let the agent keep working
 
-Put every open ask from every agent in one list, sorted with what needs you at the top. Answer down the list, and you're done when it's empty.
+Tell the agent to ask its question and keep working on anything that doesn't depend on the answer.
 
-Claude Code's agent view is one such list for local background sessions: it groups sessions that need input at the top and lets you filter to everything waiting on you ([agent view docs](https://code.claude.com/docs/en/agent-view)). The property to look for in any tool: an ask stays in the queue until it's answered, so dismissing a notification never loses it.
+### Send questions to the right person
 
-A good queue also lets you put an ask away until later (snooze it) without losing it, and counts what's waiting somewhere you'll see it.
+If a teammate owns the code or the decision, the question should go to them.
 
-### 3. Typed asks, not prose
+### Review small pull requests as they're ready
 
-Most of what an agent needs from you fits one of three shapes:
-
-- **A decision.** Pick one of a few options, ideally with the agent's recommendation marked.
-- **A to-do.** Steps only you can do by hand, which you tick off and then mark done, or say you couldn't.
-- **An answer.** A value only you know: a name, an ID, a number, a yes or no.
-
-When the agent asks in one of these shapes, you answer with a tap instead of a paragraph, and the agent gets back exactly what it asked for. Typed asks are also what make answering from a phone notification or a Slack message practical.
-
-Write it into your agents' instructions even if your tool has no such feature: "When you need a decision, list the options as a numbered list, mark the one you recommend, and stop."
-
-### 4. Keep working around the question
-
-An agent that stops dead at every question idles most of the day. Tell it to ask, then carry on with whatever doesn't depend on the answer, and come back when the answer arrives. Then an unanswered question costs you part of a task, not the whole task.
-
-### 5. Route each ask to the person who can answer it
-
-Not every question is yours. An agent working on billing code should be able to send its question to the person who owns billing. A tool that lets an ask name who it's for, and falls back to the task's owner, spreads the load across the team instead of piling it on whoever typed the prompt.
-
-### 6. Hand off review in small pieces
-
-PR pile-ups are a planning problem. Small, independent pull requests are faster to review than one large one, and the agent should post each one for review as it's ready, with what it changed and what it tested. If one agent splits the work and starts others on the pieces, those agents report back to it, and only it reports to you, so ten agents' worth of status reaches you as one.
+Split the work so each pull request is small enough to review in one sitting, and have the agent say what it changed and how it tested it. If one agent splits the work and starts other agents on the parts, they can report to it, and it reports to you.
 
 ## Where Vespin fits
 
-Vespin is built around the queue. Every agent, running on your Mac or in the cloud, posts what it needs from you to one Inbox, as a thread apart from its transcript.
+In Vespin, every agent, whether on your Mac or in the cloud, posts what it needs from you to one Inbox, as a thread separate from its transcript.
 
-- **Typed asks.** An agent's post ends with one of three asks: **decide** (pick one option, or several where the agent allows, with the ones it recommends marked; an option can carry its own screenshots, recordings, or pages to compare), **do** (steps to do by hand, ticked off, then marked done or "couldn't do it"), or **answer** (typed fields: text, number, a choice, or yes/no, or a reply in your own words).
-- **One queue.** The Inbox's **Needs me** scope shows only the threads waiting on you. A thread stays open until its ask is answered or the agent withdraws it. You can snooze a thread, and it comes back to the top when its time comes, or sooner if someone writes on it. On the Mac, the Dock badge counts what's waiting.
-- **The agent keeps going.** Posting an ask doesn't hold the agent's turn. It carries on with what doesn't depend on the answer, and your answer reaches it as a message.
-- **The right person.** An agent can address an ask to a teammate. Otherwise it waits on the task's assignee, or on whoever started the agent.
-- **Answer from your phone or Slack.** The iOS app pushes asks that wait on you, with a button per option on a decision and a reply you can type in place. Vespin's Slack bot DMs you each thread, with a button per option, **Mark done** and **Couldn't do it** on a to-do, and **Open in Vespin** ([Slack docs](https://vespin.dev/docs/slack)).
-- **Review as it lands.** An agent posts its pull request to the Inbox when it's ready for review, so PRs reach you one at a time, in the same queue as everything else.
+A post can end with one of three kinds of question: decide (pick one option, or several if the agent allows, with its recommendation marked), do (steps to tick off, then mark done or say you couldn't), or answer (text, a number, a choice from a list, yes or no, or a free reply). An option can include screenshots, recordings, or a page to compare.
+
+The Inbox's Needs me view shows only the threads waiting on you. A thread stays open until you answer it or the agent withdraws the question. You can snooze a thread until later, and on the Mac the Dock icon shows how many are waiting.
+
+Posting a question doesn't stop the agent. It keeps working, and your answer reaches it as a message. An agent can address a question to a teammate; otherwise it goes to the task's assignee, or to whoever started the agent.
+
+You can answer from the iOS app, which sends a notification with a button for each option, or from Slack, where Vespin's bot sends you each thread as a DM, with buttons to answer decisions and to-dos ([Slack docs](https://vespin.dev/docs/slack)). Agents post their pull requests to the same Inbox when they're ready for review.
