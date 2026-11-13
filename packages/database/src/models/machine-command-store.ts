@@ -5,8 +5,10 @@ import {
 } from "@repo/features/automation-wire";
 import {
   MACHINE_COMMAND_KIND,
+  MACHINE_COMMAND_MODE,
   type MachineCommand,
   type MachineCommandKind,
+  type MachineCommandMode,
   type MachineCommandResult,
   machineCommandOfStored,
   machineCommandResultSchema,
@@ -34,7 +36,7 @@ import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, queryBuilder } from "../core/query.js";
 import { agentTable } from "../schemas/agent.js";
-import { member } from "../schemas/auth.js";
+import { member, user } from "../schemas/auth.js";
 import { automationRun } from "../schemas/automation.js";
 import { device } from "../schemas/device.js";
 import {
@@ -550,11 +552,23 @@ const ownAgent = alias(agentTable, "own_agent");
  */
 const findMacOwner = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
-  Result: Schema.Struct({ userId: Schema.String }),
+  Result: Schema.Struct({
+    userId: Schema.String,
+    taskId: Schema.NullOr(Schema.String),
+    workspaceId: Schema.NullOr(Schema.String),
+    targetDeviceId: Schema.NullOr(Schema.String),
+    deviceId: Schema.NullOr(Schema.String),
+  }),
   execute: ({ userId, conversationId }) =>
     Database.use((db) =>
       db
-        .select({ userId: sql<string>`coalesce(${member.userId}, ${ownAgent.userId})` })
+        .select({
+          userId: sql<string>`coalesce(${member.userId}, ${ownAgent.userId})`,
+          taskId: task.id,
+          workspaceId: task.organizationId,
+          targetDeviceId: ownAgent.targetDeviceId,
+          deviceId: ownAgent.deviceId,
+        })
         .from(conversations)
         .leftJoin(parent, eq(parent.id, conversations.parentConversationId))
         .innerJoin(
@@ -569,6 +583,39 @@ const findMacOwner = SqlSchema.findOneOption({
         )
         .where(and(eq(conversations.id, conversationId), eq(conversations.userId, userId)))
         .limit(1),
+    ),
+});
+
+/** The machines of the accounts given, as a call is routed to one: each with its owner's name, its command mode, and when it last listened for commands as a device, the latest first. */
+const findCommandMachines = SqlSchema.findAll({
+  Request: Schema.Struct({ userIds: Schema.Array(Schema.String) }),
+  Result: Schema.Struct({
+    id: Schema.String,
+    name: Schema.String,
+    userId: Schema.String,
+    ownerName: Schema.String,
+    commandMode: Schema.NullOr(Schema.Literals(Object.values(MACHINE_COMMAND_MODE))),
+    seenAt: Schema.NullOr(InstantColumnSchema),
+  }),
+  execute: ({ userIds }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: device.id,
+          name: device.name,
+          userId: device.userId,
+          ownerName: user.name,
+          commandMode: device.commandMode,
+          seenAt: machineCommandDeviceListener.seenAt,
+        })
+        .from(device)
+        .innerJoin(user, eq(user.id, device.userId))
+        .leftJoin(
+          machineCommandDeviceListener,
+          eq(machineCommandDeviceListener.deviceId, device.id),
+        )
+        .where(and(inArray(device.userId, [...userIds]), isNull(device.removedAt)))
+        .orderBy(sql`${machineCommandDeviceListener.seenAt} desc nulls last`, asc(device.name)),
     ),
 });
 
@@ -623,10 +670,47 @@ export function heardFromAnotherAccount(target: ConversationTarget): TaskStoreEf
  * member who left, or it is no agent's.
  */
 export function machineOwnerOf(target: ConversationTarget): TaskStoreEffect<string> {
+  return Effect.map(machineRoutingOf(target), (routing) => routing.userId);
+}
+
+/** What a conversation's commands are routed by: whose Mac runs them (`machineOwnerOf`), the task and workspace of its agent, the agent's default machine, and the machine it runs on itself; each none for a conversation that is no agent's. */
+export interface MachineRouting {
+  readonly userId: string;
+  readonly taskId: string | null;
+  readonly workspaceId: string | null;
+  readonly targetDeviceId: string | null;
+  readonly deviceId: string | null;
+}
+
+/** What the conversation's commands are routed by (`MachineRouting`). */
+export function machineRoutingOf(target: ConversationTarget): TaskStoreEffect<MachineRouting> {
   return Effect.map(
     findMacOwner(target),
-    Option.match({ onNone: () => target.userId, onSome: (row) => row.userId }),
+    Option.getOrElse(() => ({
+      userId: target.userId,
+      taskId: null,
+      workspaceId: null,
+      targetDeviceId: null,
+      deviceId: null,
+    })),
   );
+}
+
+/** One machine a call may be routed to: its id and name, its owner, its command mode (none for a machine whose app never joined), and when it last listened for commands as a device (none where it never did). */
+export interface CommandMachine {
+  readonly id: string;
+  readonly name: string;
+  readonly userId: string;
+  readonly ownerName: string;
+  readonly commandMode: MachineCommandMode | null;
+  readonly seenAt: Date | null;
+}
+
+/** The machines of the accounts given, none removed, the one that listened last first; nothing for no account. Note that the caller decides whose machines a call may reach; this reads only those. */
+export function commandMachinesOf(
+  userIds: readonly string[],
+): TaskStoreEffect<readonly CommandMachine[]> {
+  return userIds.length === 0 ? Effect.succeed([]) : findCommandMachines({ userIds });
 }
 
 /**
