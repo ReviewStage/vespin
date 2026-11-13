@@ -75,6 +75,7 @@ import {
   TASK_PAGE_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_READ,
+  TASK_SUB_TASKS_READ,
 } from "../task-list-live.js";
 import { AGENT_PAGES_READ, TASK_PAGES_READ } from "../task-pages-live.js";
 import { TASK_RECORD_READ } from "../task-record-live.js";
@@ -100,6 +101,7 @@ export const liveContract = {
   [TASK_ROWS_READ.name]: liveProcedure(TASK_ROWS_READ),
   [TASK_SEARCH_READ.name]: liveProcedure(TASK_SEARCH_READ),
   [TASK_PAGE_READ.name]: liveProcedure(TASK_PAGE_READ),
+  [TASK_SUB_TASKS_READ.name]: liveProcedure(TASK_SUB_TASKS_READ),
   [AUTOMATIONS_READ.name]: liveProcedure(AUTOMATIONS_READ),
   [AUTOMATION_WORKSPACE_RUNS_READ.name]: liveProcedure(AUTOMATION_WORKSPACE_RUNS_READ),
   [AUTOMATION_RUNS_READ.name]: liveProcedure(AUTOMATION_RUNS_READ),

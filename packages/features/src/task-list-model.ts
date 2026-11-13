@@ -557,32 +557,72 @@ export function subTasksOf(
     .toSorted((one, other) => one.createdAt - other.createdAt);
 }
 
-/** How many of `subTasks` are finished (done or canceled), of all of them. */
-export function subTaskCount(subTasks: readonly TaskSummary[]): ChildTaskCount {
-  return { finished: subTasks.filter(taskFinished).length, total: subTasks.length };
+/**
+ * A parent's sub-task count from the children the list holds and the count
+ * the service carries on the parent's row (`TaskSummary.subTasks`): the
+ * list's own where it holds at least as many as the service counted, since
+ * it then holds every child and draws a write the service has not answered
+ * yet, and the service's where it holds fewer, as a list that keeps only
+ * some tasks live does; none where neither counts a child.
+ */
+function countBeside(
+  held: ChildTaskCount | undefined,
+  counted: ChildTaskCount | undefined,
+): ChildTaskCount | undefined {
+  if (counted === undefined || (held !== undefined && held.total >= counted.total)) return held;
+
+  return counted;
+}
+
+/** How many of `parent`'s sub-tasks are finished (done or canceled), of all of them, `subTasks` the ones the list holds (`countBeside`). */
+export function subTaskCount(
+  parent: Pick<TaskSummary, "subTasks">,
+  subTasks: readonly TaskSummary[],
+): ChildTaskCount {
+  const held = { finished: subTasks.filter(taskFinished).length, total: subTasks.length };
+
+  return countBeside(held, parent.subTasks) ?? held;
 }
 
 /**
  * How many of each parent's child tasks are finished (done or canceled),
- * by the parent's id, for the parents with any. Note that only a task's
- * direct children count, never theirs, and that `tasks` is every task the
- * workspace holds rather than the rows a view draws, since the view
- * hides the finished ones by default and the count is how many of them there are.
+ * by the parent's id, for the parents with any, as the list's own rows and
+ * the service's count on each parent's row say together (`countBeside`).
+ * Note that only a task's direct children count, never theirs, and that
+ * `tasks` is every task the workspace holds rather than the rows a view
+ * draws, since the view hides the finished ones by default and the count is
+ * how many of them there are.
  */
 export function childTaskCounts(
   tasks: readonly TaskSummary[],
 ): ReadonlyMap<string, ChildTaskCount> {
-  const counts = new Map<string, ChildTaskCount>();
+  const held = new Map<string, ChildTaskCount>();
 
   for (const task of tasks) {
     const { id, parentTaskId } = task;
 
     if (parentTaskId === undefined || parentTaskId === id) continue;
-    const was = counts.get(parentTaskId) ?? { finished: 0, total: 0 };
-    counts.set(parentTaskId, {
+    const was = held.get(parentTaskId) ?? { finished: 0, total: 0 };
+    held.set(parentTaskId, {
       finished: was.finished + (taskFinished(task) ? 1 : 0),
       total: was.total + 1,
     });
+  }
+
+  return servedCounts(tasks, held);
+}
+
+/** `held`, each parent's count among `parents` read beside the service's on its row (`countBeside`). */
+export function servedCounts(
+  parents: readonly { readonly id: string; readonly subTasks?: ChildTaskCount | undefined }[],
+  held: ReadonlyMap<string, ChildTaskCount>,
+): ReadonlyMap<string, ChildTaskCount> {
+  const counts = new Map(held);
+
+  for (const { id, subTasks } of parents) {
+    const count = countBeside(held.get(id), subTasks);
+
+    if (count !== undefined) counts.set(id, count);
   }
 
   return counts;

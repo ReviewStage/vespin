@@ -196,6 +196,8 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_TASK_SEARCH: "/api/live/task-search",
   /** One page of a workspace's settled tasks under `?workspaceId=`, the newest finished first, past `?beforeAt=&beforeId=` where named, each with every agent of it, as the task list answers them: none the account does not reach. `task-list-live.ts` declares the answer. */
   LIVE_TASK_PAGE: "/api/live/task-page",
+  /** The direct children of the task under `?id=` the account reaches, with every agent of them, as the task list answers them, with `?poll=true` their rows inline. `task-list-live.ts` declares the answer. */
+  LIVE_TASK_SUB_TASKS: "/api/live/task-sub-tasks",
   /** A workspace's automations under `?workspaceId=`, sealed for following over Neon Realtime (GET), or `unavailable`. `automation-live.ts` declares the answer. */
   LIVE_AUTOMATIONS: "/api/live/automations",
   /** One automation's runs under `?id=`, sealed for following over Neon Realtime (GET), or `not-found` or `unavailable`. */

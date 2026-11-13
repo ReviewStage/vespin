@@ -43,6 +43,7 @@ import {
   TASK_PAGE_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_READ,
+  TASK_SUB_TASKS_READ,
 } from "@repo/features/task-list-live";
 import { AGENT_PAGES_READ, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
@@ -1287,6 +1288,17 @@ export function fakeService(tasks: Task[]): FakeService {
             plans: service.tasks
               .filter((each) => each.name.toLowerCase().includes(query))
               .map(rowOfTask),
+            agents: [],
+          });
+
+          return Effect.succeed(rows.first());
+        }
+
+        // A parent's sub-tasks, each of the fake's tasks under the parent named, none with agents.
+        if (read.name === TASK_SUB_TASKS_READ.name) {
+          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+          rows.set({
+            plans: service.tasks.filter((each) => each.parentTaskId === params.id).map(rowOfTask),
             agents: [],
           });
 

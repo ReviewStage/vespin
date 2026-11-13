@@ -793,6 +793,11 @@ export const tasksSettledPageAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
 ]);
 
+/** A parent whose sub-tasks the window asks the host to read past the list it holds, as a list showing finished sub-tasks draws it. */
+export const tasksSubTasksParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+});
+
 /** A page of a description's history, as the version history asks the host for it: the task, and the revision the page is read before where it is an older page. */
 export const tasksRevisionsParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,

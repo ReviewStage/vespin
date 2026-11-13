@@ -24,6 +24,7 @@ import {
   type RepositoryGroup,
   repositoryHeadingsDrawn,
   repositoryLabel,
+  servedCounts,
   TASK_GROUPING,
   TASK_ORDER,
   type TaskSections,
@@ -178,6 +179,7 @@ import {
   type SidebarPin,
   samePin,
 } from "../tasks/use-side-panel.js";
+import { useSubTaskReads } from "../tasks/use-sub-task-reads.js";
 import { useReadMark, useUnreadTasks } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
@@ -506,11 +508,13 @@ function useListedPart(workspaceId: string | undefined, pinned: boolean): readon
 /**
  * How many of each parent's child tasks are finished, of all of them, by
  * the parent's id (`childTaskCounts`), as one live query grouping the
- * window's task collection keeps them. Note that every task counts, the
- * finished ones the view hides among them, since the count is how many of
- * them there are.
+ * window's task collection keeps them, read beside the count the service
+ * carries on each parent's row (`servedCounts`), which stands for children
+ * the collection does not hold. Note that every task counts, the finished
+ * ones the view hides among them, since the count is how many of them there
+ * are.
  */
-function useChildCounts(): ReadonlyMap<string, ChildTaskCount> {
+function useChildCounts(): ChildCounts {
   const collections = useTaskListCollections();
 
   const { data } = useLiveQuery({
@@ -528,15 +532,39 @@ function useChildCounts(): ReadonlyMap<string, ChildTaskCount> {
         })),
   });
 
-  return useMemo(
-    () =>
-      new Map(
-        data.flatMap(({ parentTaskId, finished, total }) =>
-          parentTaskId === undefined ? [] : [[parentTaskId, { finished, total }] as const],
-        ),
+  // The parents the service counted sub-tasks of, whose count stands where the collection holds fewer of their children.
+  const { data: counted } = useLiveQuery({
+    query: (q) =>
+      q
+        .from({ task: collections.tasks })
+        .where(({ task }) => not(isUndefined(task.subTasks)))
+        .select(({ task }) => ({ id: task.id, status: task.status, subTasks: task.subTasks })),
+  });
+
+  return useMemo(() => {
+    const held = new Map(
+      data.flatMap(({ parentTaskId, finished, total }) =>
+        parentTaskId === undefined ? [] : [[parentTaskId, { finished, total }] as const],
       ),
-    [data],
-  );
+    );
+
+    // Note that a finished parent is left out, since the view draws no finished task at the top to stand its sub-tasks under.
+    const unheld = counted.flatMap(({ id, status, subTasks }) =>
+      subTasks !== undefined &&
+      (held.get(id)?.total ?? 0) < subTasks.total &&
+      (status === undefined || !SETTLED_STATUSES.includes(status))
+        ? [id]
+        : [],
+    );
+
+    return { counts: servedCounts(counted, held), unheld };
+  }, [counted, data]);
+}
+
+/** Each parent's sub-task count (`useChildCounts`), and the parents whose count names children the collection does not hold. */
+interface ChildCounts {
+  readonly counts: ReadonlyMap<string, ChildTaskCount>;
+  readonly unheld: readonly string[];
 }
 
 /** The listed tasks as the sidebar reads them, every list off the window's task collection, so Pinned, the sections, and Tasks never disagree on a task for a frame. */
@@ -551,6 +579,8 @@ interface ListedTasks {
   readonly task: (taskId: string) => TaskSummary | undefined;
   /** How many of a task's child tasks are finished, of all of them, by its id. */
   readonly childCounts: ReadonlyMap<string, ChildTaskCount>;
+  /** The open tasks whose sub-tasks the service counted more of than the collection holds, by id. */
+  readonly unheldSubTasks: readonly string[];
 }
 
 /**
@@ -564,7 +594,7 @@ function useListedTasks(tasks: TasksControl): ListedTasks {
   const workspaceId = tasks.workspace?.id;
   const pinnedRows = useListedPart(workspaceId, true);
   const unpinnedRows = useListedPart(workspaceId, false);
-  const childCounts = useChildCounts();
+  const { counts: childCounts, unheld: unheldSubTasks } = useChildCounts();
   const { typedNames } = tasks;
   const pinned = useMemo(() => renamedTasks(pinnedRows, typedNames), [pinnedRows, typedNames]);
 
@@ -583,7 +613,7 @@ function useListedTasks(tasks: TasksControl): ListedTasks {
     return renamedTasks([held], typedNames)[0];
   };
 
-  return { pinned, unpinned, every: collections.tasks, task, childCounts };
+  return { pinned, unpinned, every: collections.tasks, task, childCounts, unheldSubTasks };
 }
 
 /**
@@ -2171,6 +2201,8 @@ function SidebarColumn({
   const listedInbox = useListedInbox(tasks);
   // The list is the chosen workspace's; the unread marks above read every task.
   const listedTasks = useListedTasks(tasks);
+  // Note that while the view shows finished sub-tasks, those a parent's count names that the list holds not are read into it.
+  useSubTaskReads(listedTasks.unheldSubTasks, taskView.view.finishedSubTasks && tasks.listRead);
   const pinnedSection = pinnedRows(listedTasks.pinned, listedTasks.task, tasks);
   // The pin the open task was opened from is marked in its task's place,
   // whichever of the task's tabs is shown, while its row still stands.

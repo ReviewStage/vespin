@@ -39,6 +39,7 @@ import {
   TASK_PAGE_READ,
   TASK_ROWS_READ,
   TASK_SEARCH_READ,
+  TASK_SUB_TASKS_READ,
 } from "@repo/features/task-list-live";
 import { pagesOfLiveRows, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
@@ -1305,6 +1306,46 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       yield* collections.cold(rows.value, mark);
     });
 
+  const decodeSubTaskRows = Schema.decodeUnknownOption(TASK_SUB_TASKS_READ.rows);
+  /** Each read out now of a parent's sub-tasks, by the parent's id, which every ask meanwhile joins. */
+  const subTaskReads = yield* FiberMap.make<string>();
+
+  /**
+   * A parent's direct children, read from the service with their agents and
+   * drawn in the list as cold tasks where it holds them not, for a window
+   * showing finished sub-tasks under a parent whose count names children the
+   * list does not hold: answered at once, the read running on, and nothing
+   * read while the list cannot be read outside of. Note that a child the
+   * list holds already is the list's alone, so nothing moves while it holds
+   * every one.
+   */
+  const subTasksRead = (taskId: string): Effect.Effect<void> =>
+    Effect.suspend(() => {
+      const userId = dependencies.accountId();
+      const { collections } = taskList;
+
+      if (!gate() || userId === undefined || view.listStatus !== TASKS_READ.READY) {
+        return Effect.void;
+      }
+
+      const mark = collections.mark();
+
+      const read = Effect.gen(function* () {
+        const sealed = yield* served(
+          client.liveRead(TASK_SUB_TASKS_READ, { id: taskId, userId }, {}),
+        );
+
+        if ("failure" in sealed) return;
+        const { plans, agents } = sealed.queries;
+        const rows = decodeSubTaskRows({ plans: plans.rows, agents: agents.rows });
+
+        if (Option.isNone(rows) || taskList.collections !== collections) return;
+        yield* collections.cold(rows.value, mark);
+      });
+
+      return Effect.asVoid(FiberMap.run(subTaskReads, taskId, read, { onlyIfMissing: true }));
+    });
+
   /** The sync id the list drawn from disk was kept at, which the next follow reads past once; none once it has. */
   let listKeptAt: string | undefined;
 
@@ -2564,6 +2605,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       }),
     // A search past the list is read into it, answered to the window once drawn.
     TASKS_SEARCH: ({ query }) => searched(query),
+    // A parent's sub-tasks past the list are read into it, answered at once.
+    TASKS_SUB_TASKS: ({ taskId }) => subTasksRead(taskId),
     // A page of a workspace's settled tasks is read into the list as cold
     // tasks, as a task opened outside it is, so a list that shows finished
     // work draws them where the list holds them not; the cursor the next page
@@ -2923,6 +2966,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       for (const id of [...coldRead, ...coldPending]) coldWaiting.add(id);
 
       yield* FiberMap.clear(coldReads);
+      yield* FiberMap.clear(subTaskReads);
 
       coldRead.clear();
       coldNone.clear();

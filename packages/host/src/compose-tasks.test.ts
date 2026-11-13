@@ -936,6 +936,34 @@ it.effect(
     }),
 );
 
+it.effect("a parent's sub-tasks outside the list are drawn beside it, and each it holds once", () =>
+  Effect.gen(function* () {
+    const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+
+    const billing = {
+      ...task(BILLING, "Billing invitations", "# Billing invitations", 20),
+      parentTaskId: INVITES,
+      status: TASK_STATUS.DONE,
+    };
+
+    const service = fakeService([billing, invites]);
+    const { call, last } = yield* subject(service);
+    // The list holds the parent alone, as one that keeps finished tasks out of the live set.
+    yield* call("TASKS_REFRESH", undefined);
+    yield* listAnswers(service, { plans: [rowOfTask(invites)], agents: [], issues: [] });
+
+    yield* call("TASKS_SUB_TASKS", { taskId: INVITES });
+
+    assert.deepEqual(
+      last()
+        ?.tasks.map((each) => each.id)
+        .toSorted(),
+      [BILLING, INVITES].toSorted(),
+      "the finished sub-task outside the list is drawn, and its parent once",
+    );
+  }),
+);
+
 it.effect("a task the list takes up and then lets go is read again as it opens", () =>
   Effect.gen(function* () {
     const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
