@@ -209,6 +209,15 @@ const ACCOUNT: AccountSnapshot = {
   provider: ACCOUNT_PROVIDER.GITHUB,
 };
 
+/** The account's own experiments its screens stand behind: Skills', which a `/` typed in a composer offers skills by. Task descriptions' is its workspace's ({@link FIXTURE_WORKSPACE}). */
+const STAGED_EXPERIMENTS = { [EXPERIMENT.SKILLS]: true } as const;
+
+/** Main's settings with the staged experiments on, one object for each of main's, so a staging that moves nothing of them hands nothing new. */
+const STAGED_SETTINGS = new WeakMap<
+  NonNullable<AppStateSnapshot["settings"]>,
+  NonNullable<AppStateSnapshot["settings"]>
+>();
+
 /** The tasks holding items: the reference journey's, and two of the account's own beside it. */
 const TASK = {
   INVITES: FIXTURE_IDS.TASK,
@@ -1950,9 +1959,23 @@ const REPOSITORIES: GitHubRepositoriesAnswer = {
   installationUrl: "https://github.com/apps/vespin/installations/new",
 };
 
+/** Main's settings with the account's staged experiments on, the same object for the same settings. */
+function stagedSettings(
+  settings: NonNullable<AppStateSnapshot["settings"]>,
+): NonNullable<AppStateSnapshot["settings"]> {
+  const held = STAGED_SETTINGS.get(settings);
+
+  if (held !== undefined) return held;
+  const staged = { ...settings, experiments: { ...settings.experiments, ...STAGED_EXPERIMENTS } };
+  STAGED_SETTINGS.set(settings, staged);
+
+  return staged;
+}
+
 /**
- * Main's document as these profiles draw it: the account signed in, its
- * read of what waits naming the tasks holding items, and each of
+ * Main's document as these profiles draw it: the account signed in with
+ * its staged experiments on, its read of what waits naming the tasks
+ * holding items, and each of
  * `workspaceIds` held with no automation, so the person page and the
  * sidebar list none rather than reading for good. The same document, the
  * very object, under any other profile.
@@ -1968,6 +1991,7 @@ export function inboxAppState(
   return {
     ...state,
     account: ACCOUNT,
+    ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
     inbox: stagedInbox(state.inbox),
     [LIVE_READ.INBOX_ITEMS]: {
       rows: { [INBOX_SCOPE_KIND.PLAN]: fed },
