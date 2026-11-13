@@ -1,3 +1,4 @@
+import type { ComputerAppKept } from "@repo/features/agent-parts";
 import type { NamedServer } from "@repo/features/agent-servers-model";
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
@@ -119,6 +120,8 @@ import { Highlighted } from "../search-field.js";
 import { appStateQuery } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { type AgentRowPlace, agentMenuRow, useAgentRowPlace } from "./agent-menu-row.js";
+import { useKeptApps } from "./agent-pictures.js";
+import { useOnThatMac } from "./computer-permission-note.js";
 import {
   DATE_PICKER_CLOSE,
   type DatePicked,
@@ -129,7 +132,7 @@ import {
 import { fileFolder } from "./file-ref-model.js";
 import { InboxItemChipCard } from "./inbox-item-chip.js";
 import { inboxItemGlyph } from "./inbox-item-parts.js";
-import { useMacApps } from "./mac-apps.js";
+import { type MachineAllowedApps, useAllowedApps, useMacApps } from "./mac-apps.js";
 import { PageCard } from "./page-card.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
@@ -883,6 +886,55 @@ function appRows(apps: readonly MacApp[]): MentionRow[] {
   return [COMPUTER_ROW, ...rows];
 }
 
+/**
+ * The name an app is called by where no call named it: a bundle id's last
+ * part, its first letter raised ("com.apple.Notes" is "Notes"), or the name
+ * an app with no bundle id is allowed by as it stands.
+ */
+function allowedAppName(app: string): string {
+  if (/\s/u.test(app) || !app.includes(".")) return app;
+  const last = app.slice(app.lastIndexOf(".") + 1);
+
+  return last === "" ? app : `${last.charAt(0).toUpperCase()}${last.slice(1)}`;
+}
+
+/**
+ * The Mac's own row, then a row for each app the reader's own machines
+ * always allow, by name, as the list offers them where it stands off the
+ * Mac the agent uses; none where no machine allows one. An app is named as
+ * a `computer` call in the conversation named it, or by its bundle id where
+ * none did, and is found by either. Where the reader has more than one
+ * machine that allows an app, each row names the machines it is allowed on.
+ */
+function allowedAppRows(
+  machines: readonly MachineAllowedApps[],
+  kept: ReadonlyMap<string, ComputerAppKept>,
+): MentionRow[] {
+  const allowedOn = new Map<string, string[]>();
+
+  for (const machine of machines) {
+    for (const app of machine.apps) {
+      allowedOn.set(app, [...(allowedOn.get(app) ?? []), machine.name]);
+    }
+  }
+
+  if (allowedOn.size === 0) return [];
+  const named = machines.length > 1;
+
+  const rows = [...allowedOn].map(([app, on]): MentionRow => {
+    const name = kept.get(app)?.name ?? allowedAppName(app);
+
+    return {
+      mention: { kind: MENTION_KIND.MAC_APP, app },
+      name,
+      detail: named ? `${APP_DETAIL.ALLOWED} on ${on.join(", ")}` : APP_DETAIL.ALLOWED,
+      terms: `${name} ${app}`,
+    };
+  });
+
+  return [COMPUTER_ROW, ...rows.toSorted((one, other) => one.name.localeCompare(other.name))];
+}
+
 /** Each connected server's row, and where asked each of its tools' rows as far as its read answered, found by the server's name and the tool's. */
 function serverRows(
   servers: readonly NamedServer[],
@@ -1520,6 +1572,7 @@ const MENTION_READ = {
   THREADS: "Inbox threads",
   AUTOMATIONS: "automations",
   APPS: "the apps on this Mac",
+  ALLOWED_APPS: "the apps your machines allow",
 } as const;
 
 type MentionRead = (typeof MENTION_READ)[keyof typeof MENTION_READ];
@@ -1887,7 +1940,7 @@ export function useMentionPicker({
   skills?: MentionSkills | undefined;
   /** The account's connected MCP servers, where the words go to an agent; none for the description's own words. */
   servers?: readonly NamedServer[] | undefined;
-  /** Whether the list offers the apps on this Mac, where the words go to an agent; never for the description's own words. */
+  /** Whether the list offers apps, where the words go to an agent: this Mac's where the window is the Mac the agent uses, else those the reader's machines always allow; never for the description's own words. */
   macApps?: boolean | undefined;
   /** The box the editor stands in: a press in it is the editor's, and the date picker hangs in it. */
   room: RefObject<HTMLElement | null>;
@@ -1995,9 +2048,17 @@ export function useMentionPicker({
       ? undefined
       : taskKey(tasksWorkspace.name, planNumber);
 
-  // The apps on this Mac are read while the list stands open, where it may read them (`mac-apps.ts`).
-  const apps = useMacApps(open && macApps);
-  const appRowsOffered = open ? appRows(apps.apps) : [];
+  // The apps offered are this Mac's where the window is the Mac the agent uses, else those the reader's own machines always allow, each read while the list stands open (`mac-apps.ts`).
+  const onThatMac = useOnThatMac();
+  const apps = useMacApps(open && macApps && onThatMac);
+  const allowedApps = useAllowedApps(open && macApps && !onThatMac);
+  const keptApps = useKeptApps();
+
+  const appRowsOffered = !open
+    ? []
+    : onThatMac
+      ? appRows(apps.apps)
+      : allowedAppRows(allowedApps.machines, keptApps);
 
   // The list is narrowed to the kind a key opened or whose word was typed, and searched by the words after it.
   const kinds = open
@@ -2134,7 +2195,8 @@ export function useMentionPicker({
       (skills !== undefined && skills.known === undefined && !skills.unread) ||
       (threadsAsked && feed.isPending) ||
       (automationsAsked && automationsRead === undefined) ||
-      apps.reading);
+      apps.reading ||
+      allowedApps.reading);
 
   // The list says a read could not be read, never that nothing matches, and Retry reads it again.
   const failures: readonly MentionReadFailure[] = open
@@ -2152,6 +2214,9 @@ export function useMentionPicker({
           ? [{ read: MENTION_READ.AUTOMATIONS, retry: automations.reload }]
           : []),
         ...(apps.failed ? [{ read: MENTION_READ.APPS, retry: apps.retry }] : []),
+        ...(allowedApps.failed
+          ? [{ read: MENTION_READ.ALLOWED_APPS, retry: allowedApps.retry }]
+          : []),
       ]
     : [];
 

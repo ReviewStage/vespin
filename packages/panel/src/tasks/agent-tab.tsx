@@ -9,6 +9,7 @@ import {
   agentParts,
   agentRows,
   callUsageLimit,
+  computerAppsKept,
   computerIconsByCall,
   delegates,
   followUpsWords,
@@ -288,6 +289,7 @@ import {
   CALL_PICTURES_PLACE,
   CallPictures,
   ComputerIconsProvider,
+  KeptAppsProvider,
   MessageFileChips,
   MessageFiles,
   ShownPictures,
@@ -3354,6 +3356,7 @@ function AgentTabView({
   const queue = useAgentQueue(agent.id, transcript.queue);
   const pictures = useAgentPictureDoor(agent.id);
   const computerIcons = useMemo(() => computerIconsByCall(lines), [lines]);
+  const keptApps = useMemo(() => computerAppsKept(lines), [lines]);
   const queueEditing = useQueueEditing(composer, queue, pictures);
   const enterQueues = useQuery({ ...appStateQuery, select: selectEnterQueues }).data === true;
   const startedByReader = starter === undefined;
@@ -3607,99 +3610,101 @@ function AgentTabView({
       <MacOwnerProvider value={macOwner}>
         <AgentPicturesProvider value={pictures}>
           <ComputerIconsProvider value={computerIcons}>
-            <WholePartsProvider value={wholeParts}>
-              <MentionedServers value={mentioned}>
-                <UndeliveredLines value={marks}>
-                  <RewindProvider value={rewind}>
-                    <TurnFilesOn value={turnLines}>
-                      <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
-                        <AutomationsWanted wanted={automationLines}>
-                          <ApprovalsProvider asks={approvals.asks}>
-                            <GoalConditions.Provider value={conditions}>
-                              <AgentTranscriptView
-                                messages={lines}
-                                brief={agent.brief}
-                                briefSender={starter === undefined ? undefined : starterActor}
-                                origin={origin}
-                                readerId={readerId}
-                                agentId={agent.id}
-                                payerSubscriptionId={transcript.payerSubscriptionId}
-                                taskId={agent.planId}
-                                replay={replay}
-                                delegation={{
-                                  models,
-                                  own: { model: agent.model, effort: agent.effort },
-                                  starts:
-                                    delegationStarts &&
-                                    workerStarts(delegationStarts, transcript.subagents),
-                                  onOpen: openSubagent,
-                                  onOpenTarget: openTarget,
-                                  cards,
-                                  standings: transcript.subagents,
-                                }}
-                                reading={(transcript.reading && !firstBoot) || holding}
-                                holding={holding}
-                                failed={transcript.failed}
-                                failedWith={transcript.failedWith}
-                                working={standing.working && !booting}
-                                boot={bootFailed ? bootDrawn : undefined}
-                                starting={bootFailed ? undefined : bootDrawn}
-                                phase={standing.phase}
-                                waitsUntil={standing.waitsUntil}
-                                turnId={standing.turnId ?? agent.turnId}
-                                // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
-                                startedAt={
-                                  !counts
-                                    ? undefined
-                                    : composer.rewinding
-                                      ? composer.rewoundAt
-                                      : (agentWorkingSince(lines) ?? startedAt)
-                                }
-                                ended={
-                                  // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
-                                  transcript.pages === 0 || standing.working || booting
-                                    ? undefined
-                                    : endLineParts(
-                                        standing.status,
-                                        standing.failure,
-                                        starter,
-                                        continuable,
-                                        transcript.hostLost,
-                                        transcript.launchStopped === undefined
-                                          ? undefined
-                                          : {
-                                              step: transcript.launchStopped,
-                                              runtime: agent.runtime,
-                                              unstarted: transcript.launchUnstarted,
-                                            },
-                                      )
-                                }
-                                endReason={endLineReason(standing.failure, starter)}
-                                keyProvider={keyProvider}
-                                onOpenApiKeys={
-                                  onOpenApiKeys === undefined
-                                    ? undefined
-                                    : () => onOpenApiKeys(keyProvider)
-                                }
-                                endPress={endPress}
-                                endTrail={endTrail}
-                                signIn={signIn}
-                                onRetry={transcript.onRetry}
-                                onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
-                                olderFailed={transcript.olderFailed}
-                                overComposer
-                                bringIn={bringIn}
-                                approvals={mode === undefined ? undefined : approvals}
-                              />
-                            </GoalConditions.Provider>
-                          </ApprovalsProvider>
-                        </AutomationsWanted>
-                      </ReplyDoorProvider>
-                    </TurnFilesOn>
-                  </RewindProvider>
-                </UndeliveredLines>
-              </MentionedServers>
-            </WholePartsProvider>
+            <KeptAppsProvider value={keptApps}>
+              <WholePartsProvider value={wholeParts}>
+                <MentionedServers value={mentioned}>
+                  <UndeliveredLines value={marks}>
+                    <RewindProvider value={rewind}>
+                      <TurnFilesOn value={turnLines}>
+                        <ReplyDoorProvider value={replies ? replyThroughBox : undefined}>
+                          <AutomationsWanted wanted={automationLines}>
+                            <ApprovalsProvider asks={approvals.asks}>
+                              <GoalConditions.Provider value={conditions}>
+                                <AgentTranscriptView
+                                  messages={lines}
+                                  brief={agent.brief}
+                                  briefSender={starter === undefined ? undefined : starterActor}
+                                  origin={origin}
+                                  readerId={readerId}
+                                  agentId={agent.id}
+                                  payerSubscriptionId={transcript.payerSubscriptionId}
+                                  taskId={agent.planId}
+                                  replay={replay}
+                                  delegation={{
+                                    models,
+                                    own: { model: agent.model, effort: agent.effort },
+                                    starts:
+                                      delegationStarts &&
+                                      workerStarts(delegationStarts, transcript.subagents),
+                                    onOpen: openSubagent,
+                                    onOpenTarget: openTarget,
+                                    cards,
+                                    standings: transcript.subagents,
+                                  }}
+                                  reading={(transcript.reading && !firstBoot) || holding}
+                                  holding={holding}
+                                  failed={transcript.failed}
+                                  failedWith={transcript.failedWith}
+                                  working={standing.working && !booting}
+                                  boot={bootFailed ? bootDrawn : undefined}
+                                  starting={bootFailed ? undefined : bootDrawn}
+                                  phase={standing.phase}
+                                  waitsUntil={standing.waitsUntil}
+                                  turnId={standing.turnId ?? agent.turnId}
+                                  // Note that the line counts from the lines themselves, from the press of the line that opened the turn, and while a rewind goes from its press, never from the task list's run, which a line sent does not wake.
+                                  startedAt={
+                                    !counts
+                                      ? undefined
+                                      : composer.rewinding
+                                        ? composer.rewoundAt
+                                        : (agentWorkingSince(lines) ?? startedAt)
+                                  }
+                                  ended={
+                                    // Note that the end line waits for a first page, so a stopped agent's tab never draws it over nothing, and gives way to the working line while the agent works.
+                                    transcript.pages === 0 || standing.working || booting
+                                      ? undefined
+                                      : endLineParts(
+                                          standing.status,
+                                          standing.failure,
+                                          starter,
+                                          continuable,
+                                          transcript.hostLost,
+                                          transcript.launchStopped === undefined
+                                            ? undefined
+                                            : {
+                                                step: transcript.launchStopped,
+                                                runtime: agent.runtime,
+                                                unstarted: transcript.launchUnstarted,
+                                              },
+                                        )
+                                  }
+                                  endReason={endLineReason(standing.failure, starter)}
+                                  keyProvider={keyProvider}
+                                  onOpenApiKeys={
+                                    onOpenApiKeys === undefined
+                                      ? undefined
+                                      : () => onOpenApiKeys(keyProvider)
+                                  }
+                                  endPress={endPress}
+                                  endTrail={endTrail}
+                                  signIn={signIn}
+                                  onRetry={transcript.onRetry}
+                                  onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
+                                  olderFailed={transcript.olderFailed}
+                                  overComposer
+                                  bringIn={bringIn}
+                                  approvals={mode === undefined ? undefined : approvals}
+                                />
+                              </GoalConditions.Provider>
+                            </ApprovalsProvider>
+                          </AutomationsWanted>
+                        </ReplyDoorProvider>
+                      </TurnFilesOn>
+                    </RewindProvider>
+                  </UndeliveredLines>
+                </MentionedServers>
+              </WholePartsProvider>
+            </KeptAppsProvider>
           </ComputerIconsProvider>
         </AgentPicturesProvider>
       </MacOwnerProvider>
@@ -3773,41 +3778,50 @@ function AgentTabView({
                 onDrop={composer.dropSuggestion}
               />
             )}
-            <AgentComposer
-              {...box}
-              composer={composer}
-              usage={transcript.usage}
-              payer={transcript.payer}
-              payerSubscriptionId={transcript.payerSubscriptionId}
-              // Note that the tab counts the asks its own cards hold, which drop the moment one is answered here, before the row says so.
-              approvalsWaiting={approvals.waiting}
-              context={transcript.context}
-              brief={agent.brief}
-              onStop={onStop}
-              // Note that a started agent's conversation always opens on its description or
-              // task, so the box takes a follow up even before the transcript is read.
-              followsUp
-              keywords={keywords}
-              skills={skills}
-              replyDoor={replyDoor}
-              closedRemedy={closedRemedy}
-              sendsEmpty={sendsEmpty}
-              onContinueInCloud={onMoveToCloud}
-              // Note that a box filled in from a suggestion queues nothing, because its words go once, through the suggestion.
-              queueing={
-                agent.runtime === undefined || !controlsQueue || composer.suggestion !== undefined
-                  ? undefined
-                  : {
-                      working: standing.working,
-                      enterQueues,
-                      onQueue: queueEditing.queue,
-                      editing: queueEditing.editing !== undefined,
-                      onSave: queueEditing.save,
-                      onSteer: queueEditing.steer,
-                      onCancel: queueEditing.cancel,
+            {/* Note that the box's `@` reads whose Mac the agent uses, to list that Mac's apps or else the ones the reader's machines allow, named and drawn as the agent's calls kept them. */}
+            <MacOwnerProvider value={macOwner}>
+              <AgentPicturesProvider value={pictures}>
+                <KeptAppsProvider value={keptApps}>
+                  <AgentComposer
+                    {...box}
+                    composer={composer}
+                    usage={transcript.usage}
+                    payer={transcript.payer}
+                    payerSubscriptionId={transcript.payerSubscriptionId}
+                    // Note that the tab counts the asks its own cards hold, which drop the moment one is answered here, before the row says so.
+                    approvalsWaiting={approvals.waiting}
+                    context={transcript.context}
+                    brief={agent.brief}
+                    onStop={onStop}
+                    // Note that a started agent's conversation always opens on its description or
+                    // task, so the box takes a follow up even before the transcript is read.
+                    followsUp
+                    keywords={keywords}
+                    skills={skills}
+                    replyDoor={replyDoor}
+                    closedRemedy={closedRemedy}
+                    sendsEmpty={sendsEmpty}
+                    onContinueInCloud={onMoveToCloud}
+                    // Note that a box filled in from a suggestion queues nothing, because its words go once, through the suggestion.
+                    queueing={
+                      agent.runtime === undefined ||
+                      !controlsQueue ||
+                      composer.suggestion !== undefined
+                        ? undefined
+                        : {
+                            working: standing.working,
+                            enterQueues,
+                            onQueue: queueEditing.queue,
+                            editing: queueEditing.editing !== undefined,
+                            onSave: queueEditing.save,
+                            onSteer: queueEditing.steer,
+                            onCancel: queueEditing.cancel,
+                          }
                     }
-              }
-            />
+                  />
+                </KeptAppsProvider>
+              </AgentPicturesProvider>
+            </MacOwnerProvider>
           </>
         )}
       </AgentTabFoot>

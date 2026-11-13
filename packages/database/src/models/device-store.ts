@@ -412,6 +412,33 @@ const writeSettings = SqlSchema.findAll({
     ),
 });
 
+const findAllowedApps = SqlSchema.findAll({
+  Request: Schema.Struct({ userId: Schema.String }),
+  Result: Schema.Struct({
+    id: Schema.String,
+    name: Schema.String,
+    alwaysAllowedApps: Schema.Array(Schema.String),
+  }),
+  execute: ({ userId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: device.id,
+          name: device.name,
+          alwaysAllowedApps: sql<readonly string[]>`${device.alwaysAllowedApps}`,
+        })
+        .from(device)
+        .where(
+          and(
+            eq(device.userId, userId),
+            isNotNull(device.alwaysAllowedApps),
+            isNull(device.removedAt),
+          ),
+        )
+        .orderBy(device.name, device.id),
+    ),
+});
+
 /**
  * Registers the Mac under the account, or renames, relocates, and beats it
  * where the account holds it already, with the machine it runs on where it
@@ -545,6 +572,29 @@ export function joinCommandDevice(
         now,
       }),
       (rows) => Option.fromUndefinedOr(rows[0]),
+    ),
+  );
+}
+
+/** One of the account's machines by its id and name, and the apps on it the member always allows, by bundle id. */
+export interface MachineAllowedApps {
+  readonly deviceId: string;
+  readonly name: string;
+  readonly apps: readonly string[];
+}
+
+/**
+ * The account's own machines that always allow an app, each with those
+ * apps, by the machine's name; a machine removed, or one that allows none
+ * or never carried its list up, is left out. Note that the read is keyed by
+ * the account, so a teammate's machines are never among them.
+ */
+export function allowedAppsOf(userId: string): DeviceEffect<readonly MachineAllowedApps[]> {
+  return Effect.map(findAllowedApps({ userId }), (rows) =>
+    rows.flatMap((row) =>
+      row.alwaysAllowedApps.length === 0
+        ? []
+        : [{ deviceId: row.id, name: row.name, apps: row.alwaysAllowedApps }],
     ),
   );
 }

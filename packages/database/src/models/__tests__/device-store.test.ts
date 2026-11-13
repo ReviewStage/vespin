@@ -11,6 +11,7 @@ import { user } from "../../schemas/auth.js";
 import { device } from "../../schemas/device.js";
 import { DEVICE_LAYOUT, getTestDB } from "../../testing/index.js";
 import {
+  allowedAppsOf,
   beatDevice,
   devicesNamed,
   devicesSeenSince,
@@ -26,7 +27,8 @@ import { enrollOwnDevice, hostsOf, removeHost } from "../host-store.js";
  * read by its own account alone, an id another account holds is never taken
  * over, a Mac that stopped beating is no longer read as there, a host's
  * update stands until its own beat names none, a Mac quiet past fresh is marked away once and its next beat clears it, and the Macs a read's local agents name are read by their ids alone.
- * A Mac joining for its commands carries its own settings up once.
+ * A Mac joining for its commands carries its own settings up once, and the
+ * apps each machine always allows are read by its own account alone.
  * Synthetic accounts and Macs throughout.
  */
 
@@ -108,6 +110,43 @@ it.layer(getTestDB())("the device store", (it) => {
         assert.equal(saved, true);
         assert.deepEqual(afterSave, Option.some(changed));
       }),
+  );
+
+  it.effect("an account reads the apps its own machines always allow, never another's", () =>
+    Effect.gen(function* () {
+      const { owner, other } = yield* openAccounts;
+      const machine = { platform: DEVICE_PLATFORM.DARWIN, arch: DEVICE_ARCH.ARM64 };
+      const ask = MAC_COMMAND_MODE.ASK;
+      const studio = randomUUID();
+
+      yield* joinCommandDevice(owner, {
+        ...machine,
+        deviceId: studio,
+        name: "Studio",
+        settings: { commandMode: ask, alwaysAllowedApps: ["com.apple.Notes"] },
+      });
+      yield* joinCommandDevice(owner, {
+        ...machine,
+        deviceId: randomUUID(),
+        name: "Laptop",
+        settings: { commandMode: ask, alwaysAllowedApps: [] },
+      });
+      yield* joinCommandDevice(other, {
+        ...machine,
+        deviceId: randomUUID(),
+        name: "Teammate's",
+        settings: { commandMode: ask, alwaysAllowedApps: ["com.tinyspeck.slackmacgap"] },
+      });
+
+      assert.deepEqual(yield* allowedAppsOf(owner), [
+        { deviceId: studio, name: "Studio", apps: ["com.apple.Notes"] },
+      ]);
+      assert.deepEqual(
+        (yield* allowedAppsOf(other)).map((each) => each.name),
+        ["Teammate's"],
+        "each account reads its own machine alone",
+      );
+    }),
   );
 
   it.effect(

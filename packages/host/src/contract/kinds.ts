@@ -221,6 +221,8 @@ export const AGENT_ACT_KIND = {
   /** Run agents on this Mac turned on or off, from This Mac's row in Settings › Hosts; only the desktop answers it. */
   HOSTS_THIS_MAC_SET: "hosts.thisMacSet",
   HOSTS_PAIRING_READ: "hosts.pairingRead",
+  /** The apps the account's own machines always allow agents to use, each machine's by its name, which an agent's `@` offers where it is typed off the agent's Mac; asked of the service on every host. */
+  HOSTS_ALLOWED_APPS: "hosts.allowedApps",
   HOSTS_PAIRING_APPROVE: "hosts.pairingApprove",
   HOSTS_PAIRING_DENY: "hosts.pairingDeny",
   AGENTS_LIST: "agents.list",
@@ -1027,6 +1029,7 @@ export const PORT_ACT_USE = {
   HOSTS_REMOVE: ACT_USE.WRITE,
   HOSTS_THIS_MAC_SET: ACT_USE.WRITE,
   HOSTS_PAIRING_READ: ACT_USE.FETCH,
+  HOSTS_ALLOWED_APPS: ACT_USE.FETCH,
   HOSTS_PAIRING_APPROVE: ACT_USE.WRITE,
   HOSTS_PAIRING_DENY: ACT_USE.WRITE,
   AGENTS_LIST: ACT_USE.READ,

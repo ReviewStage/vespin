@@ -79,6 +79,7 @@ import {
   type LiveActivityEndedParams,
   type LiveActivityTokenAnswerView,
   type LiveActivityTokenParams,
+  type MachineAllowedAppsAnswerView,
   type MemoriesAnswerView,
   type MemoryForgetParams,
   type MemorySaveAnswerView,
@@ -534,6 +535,11 @@ export class HostedAgentClient {
     return hostedCall(this.#hosted.hosts.presence, undefined, {
       deadline: HOSTED_DEADLINE.PRESENCE,
     });
+  }
+
+  /** The apps the account's own machines always allow agents to use, each machine's by its name. */
+  machineAllowedApps(): Effect.Effect<MachineAllowedAppsAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.hosts.allowedApps, undefined);
   }
 
   /** A declared live read sealed for following, or polled where `poll` asks (`askLiveRead`). */
