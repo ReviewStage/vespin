@@ -492,8 +492,7 @@ export const DETAILS_WORDS = { HINT: "Task details", PLACE: "agents" } as const;
  * is the task's own menu (`descriptionMenu`), whichever the page shows,
  * renamed where it stands while `rename` is editing, and led on a run's task
  * by the path to the automation whose run made it (`trail`); then `actions`. No ⋯ stands on the bar, as none stands on the tab rows under
- * it: every menu there is a right-click. The window's side panel toggle
- * stands at its end (`desktop-shell.tsx`).
+ * it: every menu there is a right-click.
  */
 export function TaskTopbar({
   task,
