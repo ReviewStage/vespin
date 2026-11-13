@@ -38,7 +38,10 @@ import { TaskMentions, type TaskMentionsValue } from "./task-mentions.js";
 const TASK: Task = {
   ...DOCUMENT_TASK,
   repository: "acme/relay",
-  document: { body: "## Goal\n\nInvite by email.\n\n## Rollout\n\nStore first.", assumptions: [] },
+  description: {
+    body: "## Goal\n\nInvite by email.\n\n## Rollout\n\nStore first.",
+    assumptions: [],
+  },
 };
 
 const roots: Root[] = [];
@@ -64,6 +67,7 @@ beforeEach(() => {
           truncated: false,
         },
       }),
+    [ACT_KIND.WORKSPACE_MACHINES_READ]: () => Promise.resolve({ machines: [] }),
   });
 });
 
@@ -304,7 +308,7 @@ test("on the plan's page an @ typed in the description suggests its agents and t
     taskName: TASK.name,
     workspace: "acme",
     repository: TASK.repository,
-    text: () => TASK.document.body,
+    text: () => TASK.description.body,
     pages: [{ id: "page-1", title: "Invites by week", version: 1, at: 1_000 }],
     agents: [
       {
@@ -349,7 +353,7 @@ test("on the plan's page an @ typed in the description offers the workspace's ot
     taskName: TASK.name,
     workspace: "acme",
     repository: TASK.repository,
-    text: () => TASK.document.body,
+    text: () => TASK.description.body,
     agents: [agent("agent-2", "Wire the desktop")],
     readAgents: () =>
       Promise.resolve([
@@ -498,7 +502,7 @@ test("on the description's page an @ typed in the description offers the pull re
     taskName: TASK.name,
     workspace: "acme",
     repository: TASK.repository,
-    text: () => TASK.document.body,
+    text: () => TASK.description.body,
     pullRequests: [
       {
         number: 3059,

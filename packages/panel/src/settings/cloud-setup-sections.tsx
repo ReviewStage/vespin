@@ -430,8 +430,8 @@ function ScriptRow({
 
   const removeAct = useConfirmAct(saving, {
     send: () => {
-      // Note that an edit of only whitespace is emptied, so the empty script the delete leaves agrees with it and lets it go.
-      setEdited((now) => (now === undefined ? now : ""));
+      // Note that an edit of only whitespace is emptied, so the empty script the delete leaves agrees with it and lets it go; an edit with words in it is kept, whatever the delete answers.
+      setEdited((now) => (now !== undefined && blank(now) ? "" : now));
 
       return saving.mutateAsync({ target, script: "" });
     },

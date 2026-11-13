@@ -1,4 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
+import { readAgentHeaderOfConversation } from "@repo/database/models/agent-store";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
@@ -506,12 +507,24 @@ export function runComputerTool(
     // Note that a read that fails refuses, because an action on a guess could land on the wrong Mac.
     if (Result.isFailure(route)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
 
-    const { answer, recording } = yield* askMachine(route.success, {
+    // Note that the agent rides along so the Mac puts its cursor away once that agent's turn ends; a read that fails leaves it to the helper's own clock.
+    const agent = yield* Effect.option(
+      readAgentHeaderOfConversation(target.userId, target.conversationId),
+    );
+
+    const agentId = Option.getOrUndefined(Option.flatten(agent))?.id;
+
+    const ask = {
       kind: MACHINE_COMMAND_KIND.COMPUTER,
       conversationId: target.conversationId,
       action,
       timeoutSeconds: COMPUTER_TOOL_TIMEOUT_SECONDS,
-    });
+    };
+
+    const { answer, recording } = yield* askMachine(
+      route.success,
+      agentId === undefined ? ask : { ...ask, agentId },
+    );
 
     if (!("computer" in answer)) return answer;
     const outcome = answer.computer;

@@ -38,7 +38,7 @@ import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
-import { TASK_LIST_READ } from "@repo/features/task-list-live";
+import { TASK_LIST_READ, TASK_ROWS_READ } from "@repo/features/task-list-live";
 import { AGENT_PAGES_READ, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
 import type {
@@ -136,7 +136,7 @@ export function task(id: string, name: string, body: string, updatedAt: number):
     createdAt: 1_000,
     updatedAt,
     repository: null,
-    document: {
+    description: {
       body,
       assumptions: [{ text: "An invite expires after 7 days." }],
     },
@@ -727,7 +727,7 @@ export function fakeService(tasks: Task[]): FakeService {
 
         const restored: Task = {
           ...found,
-          document: revision.document,
+          description: revision.description,
           updatedAt: found.updatedAt + 1,
           lastEdit: {
             actor: DESCRIPTION_ACTOR.DEVELOPER,
@@ -848,6 +848,7 @@ export function fakeService(tasks: Task[]): FakeService {
       deleteVariable: () => Effect.succeed(UNANSWERED_WORKSPACE),
       sandboxSetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       mergeQueue: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      machines: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putInstallScript: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRepositorySetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRunActions: () => Effect.succeed(UNANSWERED_WORKSPACE),
@@ -1192,9 +1193,9 @@ export function fakeService(tasks: Task[]): FakeService {
         const edited = {
           ...found,
           updatedAt: EDITED_AT,
-          document: {
-            ...found.document,
-            body: edit.document.value,
+          description: {
+            ...found.description,
+            body: edit.description.value,
           },
           lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, at: EDITED_AT, duringCall: false },
         };
@@ -1258,6 +1259,18 @@ export function fakeService(tasks: Task[]): FakeService {
     ) =>
       Effect.suspend((): Effect.Effect<unknown> => {
         if (read.name === TASK_LIST_READ.name) return service.listLive(params.userId, params.sync);
+
+        // One task outside the list, read with its agents, none of which the fake's tasks hold.
+        if (read.name === TASK_ROWS_READ.name) {
+          service.reads.push(`task-rows:${params.id}`);
+          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+          rows.set({
+            plans: service.tasks.filter((each) => each.id === params.id).map(rowOfTask),
+            agents: [],
+          });
+
+          return Effect.succeed(rows.first());
+        }
 
         if (read.name === SIDEBAR_READ.name) {
           if (poll === undefined) service.reads.push("sidebar-live");
@@ -1378,6 +1391,7 @@ export function fakeService(tasks: Task[]): FakeService {
       ),
     unfollow: (taskId) =>
       followersWrite(taskId, (followers) => followers.filter((each) => each.userId !== READER_ID)),
+    followerMachines: () => Effect.die("no follower's machines read in this suite"),
     setFollowerMachines: (taskId, machines) =>
       followersWrite(taskId, (followers) =>
         followers.map((each) => (each.userId === READER_ID ? { ...each, machines } : each)),
@@ -1435,7 +1449,13 @@ export function fakeService(tasks: Task[]): FakeService {
         const found = service.tasks.find((candidate) => candidate.id === taskId);
 
         if (found === undefined) return { ok: false, failure: WRITE_UNTAKEN.REFUSED };
-        const renamed = { ...found, name, document: { ...found.document, body: `# ${name}` } };
+
+        const renamed = {
+          ...found,
+          name,
+          description: { ...found.description, body: `# ${name}` },
+        };
+
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? renamed : candidate,
         );

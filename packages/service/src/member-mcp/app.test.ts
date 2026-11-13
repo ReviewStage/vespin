@@ -1336,7 +1336,7 @@ it.effect(
           ["markPullRequestReadyForReview", { id }, `Bearer ${MEMBER_GITHUB_TOKEN}`],
           [
             "mergePullRequest",
-            { id, method: "SQUASH", head: PUBLISHED.headSha },
+            { id, mergeMethod: "SQUASH", head: PUBLISHED.headSha },
             `Bearer ${MEMBER_GITHUB_TOKEN}`,
           ],
         ],

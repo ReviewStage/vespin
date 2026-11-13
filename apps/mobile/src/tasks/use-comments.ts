@@ -32,7 +32,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { BUZZ, type ThreadMessage } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
@@ -44,6 +44,36 @@ const NO_THREADS: readonly DescriptionCommentThread[] = [];
 
 /** What an entry says of who wrote it where its writer's account is gone. */
 const SOMEONE = "Someone";
+
+/**
+ * The words typed toward a new thread and not yet sent, by the task, then
+ * the block's start and end, so they outlive the screen that drew them, as
+ * a rotation hands a new comment between a split view's detail and its
+ * tab's stack, each drawing its own screen.
+ */
+const startDrafts = new Map<string, Map<number, Map<number, string>>>();
+
+/** The words kept toward a new thread on one block of a task; none kept, or no block yet read, reads empty. */
+function startDraftOf(taskId: string, block: DescriptionBlock | undefined): string {
+  if (block === undefined) return "";
+
+  return startDrafts.get(taskId)?.get(block.from)?.get(block.to) ?? "";
+}
+
+/** Keeps the words typed toward a new thread on one block of a task, and lets them go once they are empty. */
+function keepStartDraft(taskId: string, block: DescriptionBlock, words: string): void {
+  const spans = startDrafts.get(taskId) ?? new Map<number, Map<number, string>>();
+  const ends = spans.get(block.from) ?? new Map<number, string>();
+
+  if (words === "") ends.delete(block.to);
+  else ends.set(block.to, words);
+
+  if (ends.size === 0) spans.delete(block.from);
+  else spans.set(block.from, ends);
+
+  if (spans.size === 0) startDrafts.delete(taskId);
+  else startDrafts.set(taskId, spans);
+}
 
 /**
  * A task's description threads, followed while `taskId` is named, the
@@ -264,7 +294,9 @@ interface SentStart extends SentReply {
  * in, which the service carries over to the text as it stands. It goes
  * under an id minted here, so the host draws the thread at once, and a key
  * kept for as long as the words stand, so the same words sent again after a
- * lost answer start one thread; a refusal keeps the words with why.
+ * lost answer start one thread; a refusal keeps the words with why. The
+ * words typed are kept for the block until they are sent, so a new comment
+ * handed to another screen by a rotation opens on them.
  */
 export function useCommentStart(
   taskId: string,
@@ -273,13 +305,27 @@ export function useCommentStart(
 ): CommentStart {
   const acts = useHostActs();
   const write = useWrite();
-  const [words, setWords] = useState("");
+  const [words, setLocal] = useState(() => startDraftOf(taskId, block));
   const [sent, setSent] = useState<SentStart | undefined>(undefined);
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | undefined>(undefined);
   // Note that a second tap before the next render reads no `sending` yet, so the send in flight is held here too, or two taps would start two threads.
   const inFlight = useRef(false);
   const quote = block?.quote;
+
+  // Note that a block read after the first draw takes up the words kept for it, where nothing was typed meanwhile.
+  useEffect(() => {
+    setLocal((was) => (was === "" ? startDraftOf(taskId, block) : was));
+  }, [taskId, block]);
+
+  const setWords = useCallback(
+    (next: string) => {
+      setLocal(next);
+
+      if (block !== undefined) keepStartDraft(taskId, block, next);
+    },
+    [taskId, block],
+  );
 
   return useMemo(() => {
     const send = async (): Promise<string | undefined> => {
@@ -342,5 +388,5 @@ export function useCommentStart(
       send,
       note,
     };
-  }, [acts, write, taskId, text, block, quote, words, sent, sending, note]);
+  }, [acts, write, taskId, text, block, quote, words, setWords, sent, sending, note]);
 }

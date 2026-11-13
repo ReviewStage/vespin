@@ -251,7 +251,7 @@ export function Version({
   }, []);
   const answer = version.data;
   const read = answer === undefined || "failure" in answer ? undefined : answer.revision;
-  const { pictureSource, videoAt } = useDescriptionPictures(read?.document.body);
+  const { pictureSource, videoAt } = useDescriptionPictures(read?.description.body);
 
   const restore = () => {
     if (restoring) return;
@@ -279,11 +279,12 @@ export function Version({
       if (!went) return;
       notices.say({ kind: NOTICE_KIND.DONE, words: VERSION_HISTORY_WORDS.RESTORED, undo });
 
-      // Note that a link pressed in the version while its restore was out stands in front of it, and is left where it is.
+      // Note that a link pressed in the version while its restore was out stands in front of it, and is left where it is, in a stack over the window or pushed over it in its column.
       if (!standing.current) return;
 
-      if (detail !== undefined) detail.leave();
-      else if (navigation.isFocused()) router.back();
+      if (detail !== undefined) {
+        if (detail.onTop()) detail.leave();
+      } else if (navigation.isFocused()) router.back();
     });
   };
 
@@ -299,7 +300,7 @@ export function Version({
     <RowList look={LIST_LOOK.PLAIN}>
       <ListSection>
         <WordsRow
-          words={read.document.body}
+          words={read.description.body}
           onOpenLink={openLink}
           pictureSource={pictureSource}
           videoAt={videoAt}

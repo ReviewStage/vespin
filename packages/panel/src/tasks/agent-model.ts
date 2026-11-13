@@ -1580,6 +1580,8 @@ export interface TabTurn {
   readonly turnId: string | undefined;
   /** Whether the working line stands: the turn is open, a line sent has not been answered, or a rewind is out. */
   readonly working: boolean;
+  /** Whether the working line is drawn: the turn is open or a rewind is out. A line sent and not yet answered draws none, because the turn it queued is not known until its answer names it, though it holds `working`. */
+  readonly drawsLine: boolean;
   /** What the working line says the agent is doing. */
   readonly phase: WorkingPhase;
   /** When the usage limit its open turn waits on resets; none where it waits on none. */
@@ -1624,6 +1626,7 @@ export function tabTurnOf(agent: Pick<AgentSummary, "status" | "turn">, sends: T
   return {
     turnId: turn?.id,
     working: open || sends.unanswered || sends.rewinding,
+    drawsLine: open || sends.rewinding,
     phase: workingPhaseOf(turn, open, sends.rewinding),
     waitsUntil: open ? turn?.waitsUntil : undefined,
     status,

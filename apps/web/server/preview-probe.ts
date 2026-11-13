@@ -102,7 +102,7 @@ const ROUTER_NOT_FOUND_BODY = '{"error":"not-found"}';
 const EXPECTED_STATUS = {
   [PROBE_DOOR.BYPASS_SECRET]: new Map([
     [SITE_ROOT_PATH, PROBE_STATUS.OK],
-    ["/api/plans", PROBE_STATUS.UNAUTHORIZED],
+    ["/api/tasks", PROBE_STATUS.UNAUTHORIZED],
     ["/api/maintenance/sweep", PROBE_STATUS.UNAUTHORIZED],
     ["/api/events", PROBE_STATUS.METHOD_NOT_ALLOWED],
     ["/api/terminal/sessions", PROBE_STATUS.UPGRADE_REQUIRED],
@@ -112,7 +112,7 @@ const EXPECTED_STATUS = {
     [UNKNOWN_API_PATH, PROBE_STATUS.NOT_FOUND],
   ]),
   [PROBE_DOOR.OPTIONS_ALLOWLIST]: new Map([
-    ["/api/plans", PROBE_STATUS.METHOD_NOT_ALLOWED],
+    ["/api/tasks", PROBE_STATUS.METHOD_NOT_ALLOWED],
     ["/api/maintenance/sweep", PROBE_STATUS.METHOD_NOT_ALLOWED],
     ["/api/events", PROBE_STATUS.METHOD_NOT_ALLOWED],
     ["/api/feedback", PROBE_STATUS.METHOD_NOT_ALLOWED],

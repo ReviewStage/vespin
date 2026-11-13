@@ -193,7 +193,8 @@ it("a panel's call is kept as it tells it, and a press on the call's card handed
   const call = {
     agentId: "agent_1",
     taskId: "task_1",
-    name: "Teammate invitations",
+    agentName: "Send the invitation email",
+    taskName: "Teammate invitations",
     stage: VOICE_CALL_STAGE.LIVE,
     microphoneMuted: false,
     speakerMuted: false,

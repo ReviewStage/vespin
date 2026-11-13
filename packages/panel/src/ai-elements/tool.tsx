@@ -155,6 +155,8 @@ export interface ToolHeaderProps {
   subjectInBody?: boolean;
   /** Where the call ran, as a quiet tag at the line's end, for a call that ran somewhere other than its tab says ("On your Mac", or whose Mac by their disc and name); none for the rest. */
   place?: ReactNode | undefined;
+  /** Where the call ran as a chip, drawn as itself at the line's end with no tag around it, as a machine's mention chip is (`place`'s stand-in where given); none for the rest. */
+  placeChip?: ReactNode | undefined;
   /** Where the call stands in a word or two of the muted ink at the line's end, as a held call's "Waiting for approval" and its answer's "Allowed"; none for the rest. */
   status?: string | undefined;
   /** Whether the call is held, not working, so the working mark gives way to its status. */
@@ -178,11 +180,21 @@ export function ToolLine({
   chip,
   subjectIsCode = true,
   place,
+  placeChip,
   status,
   paused = false,
 }: Pick<
   ToolHeaderProps,
-  "state" | "icon" | "label" | "subject" | "chip" | "subjectIsCode" | "place" | "status" | "paused"
+  | "state"
+  | "icon"
+  | "label"
+  | "subject"
+  | "chip"
+  | "subjectIsCode"
+  | "place"
+  | "placeChip"
+  | "status"
+  | "paused"
 >): ReactNode {
   const trailing = subject !== undefined || chip !== undefined;
   const failed = state === TOOL_STATE.OUTPUT_ERROR;
@@ -220,7 +232,9 @@ export function ToolLine({
           </span>
         )}
       </span>
-      {place === undefined ? null : (
+      {placeChip !== undefined ? (
+        <span className="tool-place flex flex-none items-center"> {placeChip}</span>
+      ) : place === undefined ? null : (
         <span className="tool-place flex flex-none">
           {" "}
           <Badge>{place}</Badge>
@@ -268,6 +282,7 @@ export function ToolHeader({
   subjectIsCode = true,
   subjectInBody = false,
   place,
+  placeChip,
   status,
   paused,
 }: ToolHeaderProps): ReactNode {
@@ -283,6 +298,7 @@ export function ToolHeader({
         chip={chip}
         subjectIsCode={subjectIsCode}
         place={place}
+        placeChip={placeChip}
         status={status}
         paused={paused}
       />

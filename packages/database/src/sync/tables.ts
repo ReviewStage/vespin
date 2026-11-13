@@ -65,6 +65,7 @@ import { taskPageVersion } from "../schemas/task-page.js";
 import { taskPin } from "../schemas/task-pin.js";
 import { taskRead } from "../schemas/task-read.js";
 import { taskSection, taskSectionEntry } from "../schemas/task-section.js";
+import { voiceCallTable } from "../schemas/voice-call.js";
 import { workspaceExperiment } from "../schemas/workspace-experiment.js";
 import { workspaceFormerSlug } from "../schemas/workspace-former-slug.js";
 import { TOPIC } from "./notification.js";
@@ -83,7 +84,7 @@ export const taskSync = defineSyncTable(task, {
     { kind: TOPIC.TASK, column: task.id },
     { kind: TOPIC.WORKSPACE, column: task.organizationId },
   ],
-  ignore: [task.document, task.agentEdits, task.doneBy],
+  ignore: [task.description, task.agentEdits, task.doneBy],
   log: LOG.EVERY,
 });
 
@@ -230,6 +231,17 @@ export const agentBootSync = defineSyncTable(agentBootTable, {
     },
   ],
   log: LOG.EVERY,
+});
+
+/**
+ * A voice call's row, on the agent's topic, so every transcript of the agent
+ * hears a call open and close. Note that its lease and the cursor of what the
+ * voice was told are written as the call goes, and no view reads them, so
+ * their change alone notifies nothing.
+ */
+export const voiceCallSync = defineSyncTable(voiceCallTable, {
+  topics: [{ kind: TOPIC.AGENT, column: voiceCallTable.agentId }],
+  ignore: [voiceCallTable.leaseEpoch, voiceCallTable.leaseUntil, voiceCallTable.toldSeq],
 });
 
 /** An account's membership of a workspace, on the workspace's topic and the account's. */
@@ -666,7 +678,7 @@ export const automationRunSync = defineSyncTable(automationRun, {
  */
 export const descriptionRevisionSync = defineSyncTable(descriptionRevision, {
   topics: [{ kind: TOPIC.TASK, column: descriptionRevision.taskId }],
-  ignore: [descriptionRevision.document],
+  ignore: [descriptionRevision.description],
 });
 
 /**
@@ -895,6 +907,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   agentQueueSync,
   agentSandboxSync,
   agentBootSync,
+  voiceCallSync,
   deviceAgentLineSync,
   deviceAgentRequestSync,
   descriptionCommentThreadSync,

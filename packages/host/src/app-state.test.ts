@@ -190,7 +190,7 @@ describe("a delivery that crosses the wire", () => {
 
   const openDescription: Task = {
     ...invites,
-    document: { body: "# Billing alerts fire at ninety percent", assumptions: [] },
+    description: { body: "# Billing alerts fire at ninety percent", assumptions: [] },
   };
 
   const taskList = (tasks: readonly TaskSummary[]): AppStateSnapshot => ({
@@ -231,7 +231,7 @@ describe("a delivery that crosses the wire", () => {
 
   const quietLine = line("m-1", "Read the invites.");
   /** A task's description holding `body` alone. */
-  const draft = (body: string): Task["document"] => ({ body, assumptions: [] });
+  const draft = (body: string): Task["description"] => ({ body, assumptions: [] });
   const quietList = [quietItem];
   const quietInbox = { rows: quietList };
   const quietPages = { rows: [quietPage] };
@@ -300,15 +300,19 @@ describe("a delivery that crosses the wire", () => {
       name: "the held descriptions, a task's saved, one let go, and one kept",
       sent: descriptions({
         quiet: quietDescription,
-        moved: { rows: { task: { ...summary("moved", "Rollout"), document: draft("# Draft") } } },
+        moved: {
+          rows: { task: { ...summary("moved", "Rollout"), description: draft("# Draft") } },
+        },
         gone: { failed: true },
       }),
       next: descriptions({
         quiet: quietDescription,
-        moved: { rows: { task: { ...summary("moved", "Rollout"), document: draft("# Final") } } },
+        moved: {
+          rows: { task: { ...summary("moved", "Rollout"), description: draft("# Final") } },
+        },
       }),
       kept: (state: AppStateSnapshot) => [state[LIVE_READ.DESCRIPTION_DOCUMENT].quiet],
-      quiet: [openDescription.document.body],
+      quiet: [openDescription.description.body],
     },
     {
       name: "a held transcript, its journal grown, a message come, and its word moved with them",

@@ -27,6 +27,7 @@ import {
 } from "../tasks/mentioned-agent-card.js";
 import { ServerCard } from "../tasks/server-card.js";
 import { TAB_KIND } from "../tasks/tab-look.js";
+import { MachineChipCard } from "../tasks/workspace-machines.js";
 
 /**
  * entity-card.tsx -- the card a chip hangs for each kind of entity it names, one entry per kind (`@repo/features/entity-kind`).
@@ -192,6 +193,10 @@ const ENTITY_CARD: EntityCards = {
   [ENTITY_KIND.DATE]: OWN_CARD,
   [ENTITY_KIND.MAC_APP]: OWN_CARD,
   [ENTITY_KIND.COMPUTER]: OWN_CARD,
+  // A machine hangs whose it is and what it is, as the workspace its link names reads it.
+  [ENTITY_KIND.MACHINE]: (machine, at) => (
+    <MachineChipCard machineId={machine.machineId} workspace={at.workspace} name={at.name} />
+  ),
 };
 
 /** An entity's card drawn through its kind's own entry. */
