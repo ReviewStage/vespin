@@ -335,4 +335,28 @@ describe("GitHub", () => {
       assert.deepStrictEqual(new Uint8Array(read), bytes);
     }).pipe(Effect.provide(layer));
   });
+
+  it.effect("fails a refusal in GitHub's own words", () => {
+    const { layer } = harness(() =>
+      json(
+        {
+          message: "Reviews may only be requested from collaborators.",
+          documentation_url: "https://docs.github.com",
+        },
+        422,
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+      const refused = yield* readRepository(github.asMember(Redacted.make("gho_member"))).pipe(
+        Effect.flip,
+      );
+
+      assert.deepStrictEqual(
+        { tag: refused._tag, message: refused.message },
+        { tag: "GitHubRejected", message: "Reviews may only be requested from collaborators." },
+      );
+    }).pipe(Effect.provide(layer));
+  });
 });

@@ -227,7 +227,10 @@ const Rejection = Schema.Struct({
   message: Schema.optional(Schema.String),
   status: Schema.optional(Schema.Number),
   response: Schema.optional(
-    Schema.Struct({ headers: Schema.optional(Schema.Record(Schema.String, HeaderValue)) }),
+    Schema.Struct({
+      headers: Schema.optional(Schema.Record(Schema.String, HeaderValue)),
+      data: Schema.optional(Schema.Unknown),
+    }),
   ),
   errors: Schema.optional(Schema.Array(Schema.Unknown)),
   data: Schema.optional(Schema.Unknown),
@@ -252,6 +255,9 @@ const UNREAD_REJECTION: Rejection = { message: "GitHub request failed" };
 
 /** A GraphQL error, as far as its type. */
 const TypedError = Schema.Struct({ type: Schema.String });
+
+/** A GraphQL error, or a REST refusal's body, as far as GitHub's own words. */
+const SaidError = Schema.Struct({ message: Schema.String });
 
 /** An answer's data that names errors, as GraphQL answers do. */
 const ErroredData = Schema.Struct({ errors: Schema.Array(Schema.Unknown) });
@@ -324,16 +330,37 @@ function refusalOf(
   };
 }
 
-/** The GraphQL error types a rejection carries. */
-function graphqlErrorTypes(rejection: Rejection): ReadonlyArray<string> {
-  const errors =
+/** The GraphQL errors a rejection carries. */
+function graphqlErrors(rejection: Rejection): ReadonlyArray<unknown> {
+  return (
     rejection.errors ??
     Option.match(Schema.decodeUnknownOption(ErroredData)(rejection.data), {
       onNone: () => [],
       onSome: (data) => data.errors,
-    });
+    })
+  );
+}
 
-  return errors.flatMap((each) =>
+/**
+ * GitHub's own words for a rejection, which a caller may show the member:
+ * its GraphQL errors' messages, or its REST refusal's `message`, rather than
+ * Octokit's, which adds a preamble, the errors' JSON, and a documentation
+ * link; Octokit's where GitHub said none.
+ */
+function wordsOf(rejection: Rejection): string {
+  const said = [...graphqlErrors(rejection), rejection.response?.data].flatMap((each) =>
+    Option.match(Schema.decodeUnknownOption(SaidError)(each), {
+      onNone: () => [],
+      onSome: (error) => [error.message],
+    }),
+  );
+
+  return said.length > 0 ? said.join(" ") : (rejection.message ?? UNREAD_REJECTION.message ?? "");
+}
+
+/** The GraphQL error types a rejection carries. */
+function graphqlErrorTypes(rejection: Rejection): ReadonlyArray<string> {
+  return graphqlErrors(rejection).flatMap((each) =>
     Option.match(Schema.decodeUnknownOption(TypedError)(each), {
       onNone: () => [],
       onSome: (error) => [error.type],
@@ -376,7 +403,7 @@ function failureOf(rejection: Rejection, identity: GitHubIdentityKind): GitHubFa
   }
 
   const types = graphqlErrorTypes(rejection);
-  const message = rejection.message ?? UNREAD_REJECTION.message ?? "";
+  const message = wordsOf(rejection);
 
   if (types.includes(GRAPHQL_ERROR.RATE_LIMITED)) {
     return new GitHubRateLimited({ identity, resource: GRAPHQL_RESOURCE });
