@@ -17,9 +17,11 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
+  background,
   buttonStyle,
   containerBackground,
   disabled,
+  frame,
   hidden,
   type ModifierConfig,
   menuIndicator,
@@ -361,7 +363,13 @@ function Column({
   const stacked = (
     <ZStack
       modifiers={[
-        ...(clear ? [] : [containerBackground(colors.GROUND, "navigationSplitView")]),
+        // Note that the column paints its ground itself, filling it under its bar too, because the shots showed `containerBackground` leaving a dark column at the system's black beside the list's ground, where Mail paints its columns one ground.
+        ...(clear
+          ? []
+          : [
+              frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+              background(colors.GROUND),
+            ]),
         // Note that a page in the detail's own stack paints the stack's ground too, because a navigation stack stands the system's own color behind each of its pages.
         ...(inStack ? [containerBackground(colors.GROUND, "navigation")] : []),
         // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, compose, ⋯ and the sidebar button, and a leading title folds them into an overflow. A page pushed over the detail names itself small and inline, as a stack's page does. A column with no title, such as a page under its path, keeps its bar inline too, because iPadOS 26 otherwise holds an empty large-title band under it.
