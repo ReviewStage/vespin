@@ -3,92 +3,44 @@ title: "Inbox"
 description: "Answer your agents' questions, to-dos, and notices from one list"
 ---
 
-The Inbox is the list of threads your agents post when they need something from you. Each thread belongs to a task, so you can answer every agent without opening its task.
+The Inbox lists the threads your agents post when they need something from you. Press <kbd>⇧⌘I</kbd> to open it.
 
-Click **Inbox** in the sidebar, or press <kbd>⇧⌘I</kbd>.
+## Asks
 
-## What lands there
+An agent's message can end in one ask:
 
-Each item is one thread. An agent's message in it can end in one ask:
+- **A decision:** pick one option, or several where it says **Pick any**. Options with pictures add **None of these**.
+- **A to-do:** steps you do by hand. **Mark done** when they're done, or **Couldn't do it**.
+- **A form:** fields to fill in.
+- **An answer:** a reply in your own words.
 
-| Ask | What it holds | What you do |
-| --- | --- | --- |
-| A decision | Options under **Pick one** or **Pick any**, one of them maybe **Recommended** | Pick one or more options. |
-| A to-do | Steps you do by hand, under **Steps** | Tick each step as you finish it, or click **Mark done**, or **Couldn't do it** if you can't. |
-| A form | Fields under **Fill in**: text, a number, a choice, or yes or no | Fill in the fields. Those marked **Optional** may stay empty. |
-| An answer | A box under **Your answer** | Write your answer. |
+A message with no ask is a notice. **Got it** acknowledges it.
 
 <Frame>
   <img src="/images/inbox-todo.png" alt="A to-do in the Inbox: three steps to verify a mail domain, each with a checkbox, and Mark done and Couldn't do it under them" />
 </Frame>
 
-Options can come with pictures, as cards. If none fits, pick **None of these**.
+An ask waits on the member it's addressed to, then the task's assignee, then whoever started the agent. Anyone in the workspace can answer it.
 
-A message with no ask is a notice. Click **Got it** to acknowledge it, or type a reply and click **Send**. Opening a notice that waits on you acknowledges it, unless the agent asked to hear back.
+## Answer
 
-An ask waits on the member the agent addressed it to. With no one named, it waits on the task's assignee, and with no assignee, on whoever started the agent. Any member of the workspace can still answer it.
-
-## Answer an item
-
-1. Pick an option, tick the steps, or fill in the fields. Pick an option again to take it out.
-2. Type in **Add a note** if the agent needs more than your choice.
-3. Click **Send**, or press <kbd>⏎</kbd> on an option or in a field.
+Pick, tick, or fill in, add a note if the agent needs one, and **Send**. Press <kbd>1</kbd>–<kbd>9</kbd> to pick an option and <kbd>⏎</kbd> to send. Send with nothing picked to reply without answering.
 
 <Frame>
   <img src="/images/inbox-decide.png" alt="A decision in the Inbox: Who can withdraw an invite?, three options numbered 1 to 3, the third marked Recommended, and Add a note under them" />
 </Frame>
 
-To reply without answering, type in the box and click **Send** with nothing picked. The ask stays open for your answer.
+Select words in a message and press <kbd>R</kbd> to quote them in your reply.
 
-To quote part of a message, select its words and press <kbd>R</kbd>, or click **Reply** over the selection.
+## Resolve and remind
 
-To start a separate thread with the agent, tick **Send as a new thread to**, then click **Start thread**.
+**Resolve** (<kbd>E</kbd>) closes an item without answering it, and the agent is told. **Remind me** (<kbd>H</kbd>) hides an item until the time you pick, then puts it back at the top. <kbd>⌘Z</kbd> undoes either, though not a Resolve the agent has already been told of.
 
-If a reply shows **Not delivered**, click **Retry**, **Edit**, or **Delete**. An answer you sent can't be undone.
+## What the list shows
 
-## Keys
+**View options** chooses **Questions**, **Open** (the default), **All**, or **Reminders**, and **Addressed to** chooses **Me** (the default), **Anyone**, or one teammate. For every key, see [Keyboard shortcuts](/shortcuts).
 
-| Key | Action |
-| --- | --- |
-| <kbd>1</kbd>–<kbd>9</kbd> | Pick the option with that number in a list of options |
-| <kbd>R</kbd> | Reply to the words selected in a message |
-| <kbd>J</kbd> / <kbd>K</kbd> | Next or previous item |
-| <kbd>E</kbd> | Resolve |
-| <kbd>U</kbd> | Mark as read or unread |
-| <kbd>H</kbd> | Remind me |
-| <kbd>⌘O</kbd> | Open in task |
-| <kbd>⌘Z</kbd> | Undo |
-
-The number keys don't work while you're typing in a field. For every key, see [Keyboard shortcuts](/shortcuts).
-
-## Close items
-
-**Resolve** closes an item without answering it, and Vespin tells the agent. Press <kbd>E</kbd>, or choose **Resolve** from the item's **⋯** menu.
-
-**Remind me** hides an item until **In 1 hour**, **Tomorrow**, **Next week**, or **Pick a date and time…**. **Tomorrow** and **Next week** mean 9 AM. When the reminder comes due, the item returns to the top of the list.
-
-Opening an item marks it read. **Mark as unread** puts it back, and **Mark all as read** marks every item.
-
-To undo **Resolve**, **Got it**, or **Remind me**, click **Undo** within 5 seconds, or press <kbd>⌘Z</kbd> later. Once the agent has been told, neither Resolve nor Got it can be undone.
-
-An item is done once it's answered or closed and you've read it. It leaves the **Open** list once you choose another item.
-
-To act on several items, select them with <kbd>⌘</kbd>-click or <kbd>⇧</kbd>-click. **Mark as read**, **Remind me**, and **Resolve** then act on all of them.
-
-## Choose what the list shows
-
-Open **View options** over the list:
-
-- **Questions**: open asks waiting on you.
-- **Open** (the default): every item you're not done with.
-- **All**: every item, done or not, except those with a reminder set.
-- **Reminders**: items with a reminder set.
-
-**Addressed to** shows items for **Me**, **Anyone**, or one teammate. It starts on **Me**, so a teammate's items stay hidden until you choose **Anyone**. **Pinned tasks first** groups the items of your pinned tasks at the top.
-
-Items on a task marked **Done** or **Canceled** still show in the list and in the sidebar's count.
-
-## Answer away from the app
+## Away from the app
 
 - Slack: the Vespin bot can DM you each item to answer there. See [Slack](/slack).
-- Mac and web: turn on **Play a sound** or **Show a notification** under **Settings › Preferences › Notifications**. A notification shows only while Vespin's window is in the background.
+- Mac and web: turn on **Play a sound** or **Show a notification** in **Settings › Preferences › Notifications**.

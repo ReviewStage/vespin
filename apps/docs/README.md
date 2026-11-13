@@ -27,6 +27,14 @@ A page states only what a reader needs in order to act
 Every claim comes from the code on `main`: a label, a key, a limit. If you
 can't find it in the code, leave it out.
 
+- Nothing behind **Settings › Experimental** goes in the docs, in words or in
+  a picture, and neither does the iPhone app until it launches. A feature
+  joins the docs when its experiment is retired.
+- A feature gets a sentence or two: what it does, and what the screen
+  doesn't say. Leave out the clicks the screen already makes plain. Number
+  the steps only for a setup the reader couldn't find alone, such as
+  connecting Slack.
+
 ### Page shape
 
 - Frontmatter: a `title` of one to three words, and a `description` of one
@@ -36,8 +44,8 @@ can't find it in the code, leave it out.
   a prompt you write whenever its trigger fires." The second says why it
   exists or what it gives you. No heading above them.
 - Then `##` sections with plain task headings: "Start a task", "Triggers",
-  "What the agent gets", "Limits". Never a question, never "Overview" or
-  "Introduction". A heading the app or another page links to by anchor, if
+  "What the agent gets", "Limits". Never a question, and never a generic
+  "Overview" or "Introduction". A heading the app or another page links to by anchor, if
   it holds an apostrophe, takes an explicit id
   (`## The agent's browser {#the-agents-browser}`), since Mintlify keeps
   the curly apostrophe in the anchor it makes.
@@ -50,9 +58,9 @@ can't find it in the code, leave it out.
 - Second person, present tense, active voice: "you" do things, "the agent"
   does things. Not "we", not "users".
 - Short declarative sentences, about 6 to 20 words, one fact each.
-- Concrete nouns: "the task's **Overview** tab", not "the relevant view".
-- Imperatives for steps: "Press <kbd>R</kbd> to reply." Bullets are
-  imperatives or fragments, never paragraphs.
+- Concrete nouns: "the task's **Overview**", not "the relevant view".
+- Imperatives for steps: "Press <kbd>R</kbd> to quote a message." Bullets
+  are imperatives or fragments, never paragraphs.
 - Say what happens, then stop. Don't reassure, don't predict how the reader
   feels, don't describe the screen they're looking at.
 
