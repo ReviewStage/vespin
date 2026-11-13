@@ -71,6 +71,10 @@ import {
   githubTokenProcedures,
 } from "../github/github-token-procedures.js";
 import {
+  type MergeQueueProcedureSeams,
+  mergeQueueProcedures,
+} from "../github/merge-queue-procedures.js";
+import {
   type RepositoryPinsProcedureSeams,
   repositoryPinsProcedures,
 } from "../github/repository-pins-procedures.js";
@@ -114,6 +118,10 @@ import {
   taskFilesProcedures,
 } from "../tasks/task-files-procedures.js";
 import {
+  type TaskFollowersProcedureSeams,
+  taskFollowersProcedures,
+} from "../tasks/task-followers-procedures.js";
+import {
   type TaskSectionsProcedureSeams,
   taskSectionsProcedures,
 } from "../tasks/task-sections-procedures.js";
@@ -122,6 +130,7 @@ import {
   type SentryInstallProcedureSeams,
   sentryInstallProcedures,
 } from "../triggers/sentry/sentry-install-procedures.js";
+import { type VoiceProcedureSeams, voiceProcedures } from "../voice/voice-procedures.js";
 import {
   type WorkspaceEnvironmentProcedureSeams,
   workspaceEnvironmentProcedures,
@@ -142,6 +151,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   AgentsProcedureSeams &
   AutomationsProcedureSeams &
   DictationProcedureSeams &
+  VoiceProcedureSeams &
   EventsProcedureSeams &
   GitHubProcedureSeams &
   GitHubTokenProcedureSeams &
@@ -154,6 +164,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   DeviceAgentsProcedureSeams &
   MacCommandsProcedureSeams &
   McpClientsProcedureSeams &
+  MergeQueueProcedureSeams &
   MessagesProcedureSeams &
   ModelsProcedureSeams &
   DescriptionCommentsProcedureSeams &
@@ -164,6 +175,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   RepositoryPullRequestProcedureSeams &
   SupportAccessProcedureSeams &
   TaskFilesProcedureSeams &
+  TaskFollowersProcedureSeams &
   TaskSectionsProcedureSeams &
   TasksProcedureSeams &
   WorkspaceEnvironmentProcedureSeams &
@@ -212,11 +224,14 @@ export function hostedRouter(seams: HostedRouterSeams) {
     repositoryPins: repositoryPinsProcedures(seams),
     supportAccess: supportAccessProcedures(seams),
     taskFiles: taskFilesProcedures(seams),
+    taskFollowers: taskFollowersProcedures(seams),
     taskSections: taskSectionsProcedures(seams),
+    voice: voiceProcedures(seams),
     workspaceEnvironment: workspaceEnvironmentProcedures(seams),
     workspaceSandboxSetup: workspaceSandboxSetupProcedures(seams),
     workspaceGithub: workspaceGithubProcedures(seams),
     workspaceInvitations: workspaceInvitationsProcedures(seams),
+    workspaceMergeQueue: mergeQueueProcedures(seams),
     workspaceSentry: sentryInstallProcedures(seams),
     workspaceSlackBot: slackBotProcedures(seams),
     workspaces: workspacesProcedures(seams),

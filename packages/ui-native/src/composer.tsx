@@ -16,6 +16,7 @@ import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityIdentifier,
   accessibilityLabel,
+  background,
   buttonStyle,
   disabled,
   font,
@@ -28,8 +29,9 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glass-bar.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { actContent } from "./glyph-label.js";
 import { dropPictures, HOVER_EFFECT, hoverEffect } from "./interactions.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -52,13 +54,20 @@ const PRESS_FRAME = [
 /** The mark inside the round button, centered in the circle's own size, so the system's circle draws at Send's size around it. */
 const ROUND_MARK = [frame({ width: SEND_SIZE - 12, height: SEND_SIZE - 12 })];
 
-/** The round button's look: the system's prominent circle in the ink, its mark in the ground, inside the composer's press frame. */
-function roundModifiers(colors: ReturnType<typeof useColors>) {
+/**
+ * The round button's look: the system's prominent circle in the ink, its mark
+ * in the ground, inside the composer's press frame. Note that a disabled
+ * circle drops the tint for the system's faint fill, which in light mode
+ * matched the composer's own ground, so a Send with nothing to send vanished:
+ * it stands on a hairline-gray disc of ours instead, its mark muted.
+ */
+function roundModifiers(colors: ReturnType<typeof useColors>, enabled = true) {
   return [
     buttonStyle("borderedProminent"),
     SwiftModifiers.buttonBorderShape("circle"),
     tint(colors.TEXT),
-    foregroundStyle(colors.GROUND),
+    foregroundStyle(enabled ? colors.GROUND : colors.TEXT_MUTED),
+    ...(enabled ? [] : [background(colors.CHIP_EDGE, SwiftModifiers.shapes.circle())]),
     ...PRESS_FRAME,
     hoverEffect(HOVER_EFFECT.HIGHLIGHT),
   ];
@@ -88,7 +97,7 @@ const ADD_LABEL = "Add";
 export type ComposerMenu = {
   readonly actions: readonly {
     readonly label: string;
-    readonly symbol: SfSymbol;
+    readonly symbol: Glyph;
     readonly onPress: () => void;
   }[];
   readonly submenus?: readonly BarMenu[] | undefined;
@@ -118,6 +127,8 @@ type ComposerProps = {
   readonly stopping?: boolean | undefined;
   /** What stands over the field inside the same glass: the messages queued behind the turn, the pictures attached, and what a send that did not go said. */
   readonly head?: ReactNode;
+  /** Whether the field takes the keyboard as it stands, as a new comment's field does once opened for its words. */
+  readonly autoFocus?: boolean | undefined;
   /** Called with the file addresses of pictures dropped on the composer from Photos, Files, or another app, on an iPad; it takes no drop where none is given. */
   readonly onDropPictures?: ((uris: readonly string[], unreadable: number) => void) | undefined;
 };
@@ -159,7 +170,7 @@ function SendButton({
   if (empty && onStop !== undefined) {
     return (
       <Button onPress={onStop} modifiers={[...roundModifiers(colors), accessibilityLabel("Stop")]}>
-        <Image systemName="stop.fill" size={MARK_SIZE.GLYPH - 2} modifiers={ROUND_MARK} />
+        <Image {...glyphImage(GLYPH.STOP_TURN)} size={MARK_SIZE.GLYPH - 2} modifiers={ROUND_MARK} />
       </Button>
     );
   }
@@ -175,21 +186,23 @@ function SendButton({
           accessibilityLabel("Dictate"),
         ]}
       >
-        <Image systemName="mic" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+        <Image {...glyphImage(GLYPH.DICTATE)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
       </Button>
     );
   }
+
+  const sendable = !empty && onSend !== undefined;
 
   return (
     <Button
       onPress={() => onSend?.()}
       modifiers={[
-        ...roundModifiers(colors),
-        disabled(empty || onSend === undefined),
+        ...roundModifiers(colors, sendable),
+        disabled(!sendable),
         accessibilityLabel("Send"),
       ]}
     >
-      <Image systemName="arrow.up" size={MARK_SIZE.GLYPH} modifiers={ROUND_MARK} />
+      <Image {...glyphImage(GLYPH.SEND)} size={MARK_SIZE.GLYPH} modifiers={ROUND_MARK} />
     </Button>
   );
 }
@@ -202,7 +215,9 @@ function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
 
   return (
     <Menu
-      label={<Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />}
+      label={
+        <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+      }
       modifiers={[
         ...PRESS_FRAME,
         accessibilityLabel(ADD_LABEL),
@@ -212,12 +227,13 @@ function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
       {menu.actions.map((action) => (
         <Button
           key={action.label}
-          label={action.label}
-          systemImage={action.symbol}
+          {...actContent(action.label, action.symbol)}
           onPress={action.onPress}
         />
       ))}
-      {submenus.length === 0 && switches.length === 0 ? null : <Divider />}
+      {menu.actions.length === 0 || (submenus.length === 0 && switches.length === 0) ? null : (
+        <Divider />
+      )}
       {submenus.map((submenu) => (
         <BarMenuButton key={submenu.label} menu={submenu} />
       ))}
@@ -293,13 +309,14 @@ function ComposerPieces(props: ComposerProps) {
             accessibilityLabel(ADD_LABEL),
           ]}
         >
-          <Image systemName="plus" size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+          <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
         </Button>
       )}
       <TextField
         text={text}
         placeholder={placeholder}
         axis="vertical"
+        autoFocus={props.autoFocus === true}
         onTextChange={type}
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),

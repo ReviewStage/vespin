@@ -115,7 +115,7 @@ export {
   isLiveFollow,
 } from "./live-follow.js";
 
-export { MAC_COMMAND_ACTS } from "./mac-commands.js";
+export { type ComputerUseStatus, MAC_COMMAND_ACTS } from "./mac-commands.js";
 
 export {
   MAC_PROCESS_KIND,
@@ -123,6 +123,8 @@ export {
   type MacProcessKind,
   type MacResources,
 } from "./mac-resources.js";
+
+export type { MacRunActionShell } from "./mac-shells.js";
 
 export { PORT_FORWARD_ACTS } from "./port-forwards.js";
 

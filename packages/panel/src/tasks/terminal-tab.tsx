@@ -27,7 +27,7 @@ import {
   TextButton,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
-import { STRIP_TAB_KIND, type TerminalStripTab } from "@repo/ui/tab-strip-model";
+import { STRIP_TAB_KIND } from "@repo/ui/tab-strip-model";
 import { useQuery } from "@tanstack/react-query";
 import { useContext, useEffect, useMemo, useState } from "react";
 import { TERMINAL_LOAD_FAILED } from "../bundle-loader.js";
@@ -109,19 +109,31 @@ const RUN_WORDS = {
   STOP: (label: string) => `Stop ${label}`,
 } as const;
 
-/** A run action's tab's own press: Stop while its process runs, Run otherwise, which runs it again in this tab. */
+/** A run action's tab's own press: Stop while its process runs, Run otherwise, which runs it again in this tab, each held while it cannot be pressed. */
 function runControlOf(
   run: RunTabLook,
   label: string,
   press: ReturnType<typeof useRunActionPress>,
-): { readonly label: string; readonly icon: React.JSX.Element; readonly onPress: () => void } {
+): {
+  readonly label: string;
+  readonly icon: React.JSX.Element;
+  readonly onPress: () => void;
+  readonly held: boolean;
+} {
   return run.running === true
-    ? { label: RUN_WORDS.STOP(label), icon: <GLYPH.STOP />, onPress: () => press.stop(run.action) }
-    : { label: RUN_WORDS.RUN(label), icon: <PlayIcon />, onPress: () => press.run(run.action) };
+    ? {
+        label: RUN_WORDS.STOP(label),
+        icon: <GLYPH.STOP />,
+        onPress: () => press.stop(run.action),
+        held: press.busy,
+      }
+    : {
+        label: RUN_WORDS.RUN(label),
+        icon: <PlayIcon />,
+        onPress: () => press.run(run.action),
+        held: press.busy || !press.runnable,
+      };
 }
-
-/** No cloud tab, which a Local tab hands the run action looks. */
-const NO_CLOUD_TAB: readonly TerminalStripTab[] = [];
 
 /** What a phone's ⋯ calls the agent's name in the bar, which opens its tab. */
 const OPEN_AGENT = "Open agent";
@@ -199,19 +211,16 @@ export function TerminalTab({
   // Note that a Local tab says which step of the agent's mirror it waits on while it connects, where the host said.
   const mirrors = useQuery({ ...appStateQuery, select: selectMirrors }).data;
   const mirror = tab.kind === STRIP_TAB_KIND.LOCAL ? mirrors?.[agentId] : undefined;
-
   // A run action's tab is read-only, and its bar says where the action stands and offers to run or stop it.
-  const runLook = useRunTabLooks(
-    tab.kind === STRIP_TAB_KIND.TERMINAL ? [tab] : NO_CLOUD_TAB,
-    shown,
-  )(tab.kind === STRIP_TAB_KIND.TERMINAL ? tab : undefined);
+  const tabs = useMemo(() => [tab], [tab]);
+  const runLook = useRunTabLooks(tabs, shown)(tab);
 
   const look =
     runLook === undefined
       ? terminalLook(session.state, mirror)
       : readOnlyTerminalLook(session.state);
 
-  const press = useRunActionPress(agentId);
+  const press = useRunActionPress(agentId, tab.kind === STRIP_TAB_KIND.LOCAL);
 
   // A run action's tab whose shell went says it ended, and attaches again once its action runs again, from here or the Run button.
   const ranAgain =
@@ -242,7 +251,7 @@ export function TerminalTab({
                   {
                     label: runControl.label,
                     icon: runControl.icon,
-                    disabled: press.busy,
+                    disabled: runControl.held,
                     onSelect: runControl.onPress,
                   },
                 ]),
@@ -279,7 +288,7 @@ export function TerminalTab({
                 variant={BUTTON_VARIANT.QUIET}
                 icon={runControl.icon}
                 label={runControl.label}
-                disabled={press.busy}
+                disabled={runControl.held}
                 onClick={runControl.onPress}
               />
             )

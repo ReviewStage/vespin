@@ -9,8 +9,8 @@ import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import {
   APP_SETTING_SCHEMA,
   describedSettings,
-  EXPERIMENTS,
   HOST_CAPABILITY,
+  LISTED_EXPERIMENTS,
   type SettingsRowsInput,
   settingFieldForId,
   settingIdVisible,
@@ -72,8 +72,9 @@ import { appPlatform } from "./app-platform.js";
 import { coarsePointerNow } from "./coarse-pointer.js";
 import { drawnVisibly, focusSeek } from "./focus-seek.js";
 import { focusSearchField, Highlighted } from "./search-field.js";
-import { settingsPageOf, WORKSPACE_CONNECTIONS } from "./settings/pages.js";
+import { settingsPageOf } from "./settings/pages.js";
 import { experimentPages, settingsPageShown } from "./settings/settings-rows.js";
+import { settingsSectionEntries } from "./settings/settings-sections.js";
 
 /**
  * Searching the Settings tab.
@@ -157,9 +158,6 @@ const INTEGRATION_WORDS = "connect disconnect integration";
 /** The words every experiment's row answers to beside its own name, the ones other apps call the same page by. */
 const EXPERIMENT_WORDS = "experiment preview beta labs early try";
 
-/** The words Experimental's group for everyone in a workspace is named by, before the workspace's own name. */
-const EXPERIMENTS_WORKSPACE_LABEL = "For everyone in ";
-
 /** The words every window shortcut answers to, which change nothing and so offer no removal. */
 const WINDOW_SHORTCUT_WORDS = "keyboard shortcut key chord";
 
@@ -183,9 +181,10 @@ function inContextEntry(key: InContextKey, group: string): SettingsSearchEntry {
 }
 
 /**
- * The rows that are not stored settings, each gated by the condition that
- * draws it. Declared as one table so a row added to a page has one place to
- * become findable.
+ * The rows that are neither stored settings nor sections, each gated by the
+ * condition that draws it. Declared as one table so a row added to a page has
+ * one place to become findable; a section is found from its own declaration
+ * (`settings/settings-sections.tsx`).
  */
 function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[] {
   const entries: (SettingsSearchEntry | undefined)[] = [
@@ -222,29 +221,8 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           haystack: ["GitHub personal access token", "classic token PAT add manage"],
         }
       : undefined,
-    // Experimental's two groups, the workspace's for everyone in the one Settings shows and the account's own, each found by whom it reaches.
-    input.accountDrawn && input.workspace
-      ? {
-          id: SETTINGS_SEARCH_ROW.EXPERIMENTS_WORKSPACE,
-          label: `${EXPERIMENTS_WORKSPACE_LABEL}${input.workspace.name}`,
-          replayMaskedFrom: EXPERIMENTS_WORKSPACE_LABEL.length,
-          page: SETTINGS_VIEW.EXPERIMENTAL,
-          haystack: [
-            `${EXPERIMENTS_WORKSPACE_LABEL}${input.workspace.name}`,
-            "workspace team everyone members admins experiments",
-          ],
-        }
-      : undefined,
-    input.accountDrawn
-      ? {
-          id: SETTINGS_SEARCH_ROW.EXPERIMENTS_ACCOUNT,
-          label: "Just for you",
-          page: SETTINGS_VIEW.EXPERIMENTAL,
-          haystack: ["Just for you", "personal only me mine account experiments"],
-        }
-      : undefined,
     // Each experiment's row on Experimental, drawn once an account is signed in: found by its name, what it brings, and the pages it holds.
-    ...EXPERIMENTS.map((entry) =>
+    ...LISTED_EXPERIMENTS.map((entry) =>
       input.accountDrawn
         ? {
             id: EXPERIMENT_ANCHOR[entry.key],
@@ -270,18 +248,7 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           }
         : undefined,
     ),
-    // The product MCP & CLI page's rows, drawn once an account is signed in: the MCP section's agents let in and Connect an app, and the CLI section's sign-in and install.
-    input.accountDrawn
-      ? {
-          id: SETTINGS_SEARCH_ROW.MCP_CLIENTS,
-          label: "Connected apps",
-          page: SETTINGS_VIEW.MCP,
-          haystack: [
-            "Connected apps",
-            "mcp server clients oauth allowed agents with access revoke disconnect external outside",
-          ],
-        }
-      : undefined,
+    // The product MCP & CLI page's rows, drawn once an account is signed in: the MCP section's Connect an app, and the CLI section's install.
     input.accountDrawn
       ? {
           id: SETTINGS_SEARCH_ROW.MCP_CONNECT,
@@ -301,17 +268,6 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           haystack: [
             "Install the vespin command",
             "cli set up setup command-line tool terminal shell npm path reinstall",
-          ],
-        }
-      : undefined,
-    input.accountDrawn
-      ? {
-          id: SETTINGS_SEARCH_ROW.CLI_SIGN_IN,
-          label: "CLI sign-in",
-          page: SETTINGS_VIEW.MCP,
-          haystack: [
-            "CLI sign-in",
-            "sign in from your terminal signed in command-line tool vespin login sign out everywhere logout",
           ],
         }
       : undefined,
@@ -369,18 +325,6 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           haystack: ["Fast", "agent fast version speed quick model"],
         }
       : undefined,
-    // Agents' Always allowed, the commands the account's agents run without asking: drawn once an account is signed in.
-    input.accountDrawn
-      ? {
-          id: SETTINGS_SEARCH_ROW.ALWAYS_ALLOWED,
-          label: "Always allowed",
-          page: SETTINGS_VIEW.AGENTS,
-          haystack: [
-            "Always allowed",
-            "always allow allowlist allowed commands permissions approval ask run without asking shell bash claude code",
-          ],
-        }
-      : undefined,
     // The harnesses' rows, each holding the account's plan and API key for it on the service: drawn once an account is signed in.
     input.accountDrawn
       ? {
@@ -404,29 +348,9 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           ],
         }
       : undefined,
-    // The Machines page's Add a machine button, drawn once an account is signed in, under the machines the service lists.
-    input.accountDrawn
-      ? {
-          id: SETTINGS_SEARCH_ROW.ADD_HOSTS,
-          label: "Add a machine",
-          page: SETTINGS_VIEW.HOSTS,
-          haystack: [
-            "Add a machine",
-            "machines machine hosts host server linux mac install vespin-host",
-          ],
-        }
-      : undefined,
-    // The Workspace page's groups, as it draws them for the workspace it
-    // shows: the invite form, under the members, only where the reader may
-    // invite, and the leave only where the reader may leave.
-    input.workspace
-      ? {
-          id: SETTINGS_SECTION.MEMBERS,
-          label: "Members",
-          page: SETTINGS_VIEW.WORKSPACE,
-          haystack: ["Members", "people team remove role"],
-        }
-      : undefined,
+    // The Workspace page's rows beside its sections, as it draws them for the
+    // workspace it shows: the invite form, under the members, only where the
+    // reader may invite, and the leave only where the reader may leave.
     input.workspace !== undefined && managesWorkspace(input.workspace)
       ? {
           id: SETTINGS_SECTION.INVITATIONS,
@@ -442,17 +366,6 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           replayMaskedFrom: LEAVE_WORD.length + 1,
           page: SETTINGS_VIEW.WORKSPACE,
           haystack: [`Leave ${input.workspace.name}`, "leave quit exit workspace"],
-        }
-      : undefined,
-    input.workspace
-      ? {
-          id: SETTINGS_SECTION.GITHUB_REPOSITORIES,
-          label: WORKSPACE_CONNECTIONS,
-          page: SETTINGS_VIEW.WORKSPACE,
-          haystack: [
-            WORKSPACE_CONNECTIONS,
-            "integrations GitHub repositories connect choose manage disconnect organization",
-          ],
         }
       : undefined,
     // The workspace's name, which an owner or an admin changes on the identity row, but not the account's first workspace, which its owner's account name names.
@@ -473,18 +386,6 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
           label: "Workspace URL",
           page: SETTINGS_VIEW.WORKSPACE,
           haystack: ["Workspace URL", "Change URL slug link address workspace"],
-        }
-      : undefined,
-    // The Skills page's Add skill, on its first group's heading, drawn once the page has the workspace it lists the skills of.
-    input.workspace
-      ? {
-          id: SETTINGS_SEARCH_ROW.ADD_SKILL,
-          label: "Add skill",
-          page: SETTINGS_VIEW.SKILLS,
-          haystack: [
-            "Add skill",
-            "skills skill install import github repository SKILL.md instructions agents",
-          ],
         }
       : undefined,
     // The window's own chords, fixed rather than chosen, listed below them; a gated feature's only while its experiment is on.
@@ -547,8 +448,8 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
 
 /**
  * Everything a query can find right now, ordered by page the way the front
- * page orders them — the stored settings first within a page, then the rows
- * that are not settings. Each entry carries the page's own name in its
+ * page orders them — the stored settings first within a page, then its
+ * sections, then the rows that are neither. Each entry carries the page's own name in its
  * haystack, so a page's name finds everything the page holds.
  */
 export function settingsSearchEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[] {
@@ -576,7 +477,7 @@ export function settingsSearchEntries(input: SettingsSearchInput): readonly Sett
     ];
   });
 
-  const fixed = fixedEntries(input);
+  const fixed = [...settingsSectionEntries(input), ...fixedEntries(input)];
 
   const pages = SETTINGS_PAGE_LIST.filter((page) =>
     settingsPageShown(page, input.capabilities, input.settings.experiments),

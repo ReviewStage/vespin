@@ -233,14 +233,25 @@ export function untilText(at: number, now: number): string {
   return at - now < DAY_MS ? distanceText(at - now) : dueText(at, now);
 }
 
+/**
+ * When a scheduled moment comes, its time of day always said, since a
+ * schedule is set by its hour: "Today 2:00 PM", "Tomorrow 9:00 AM", its
+ * weekday inside the week ahead, "Sun 2:00 AM", and its date past that,
+ * "Nov 20, 9:00 AM". A moment already gone is named by its date and time.
+ */
+export function scheduledText(at: number, now: number): string {
+  const daysAhead = Math.round((midnightOf(at) - midnightOf(now)) / DAY_MS);
+
+  if (daysAhead === 0) return `Today ${TIME_OF_DAY.format(at)}`;
+
+  if (daysAhead === 1) return `Tomorrow ${TIME_OF_DAY.format(at)}`;
+
+  return daysAhead > 1 && daysAhead < 7 ? WEEKDAY_AND_TIME.format(at) : DAY_AND_TIME.format(at);
+}
+
 /** A day and a time in the fewest words, as a version is named: "Oct 11, 2:14 PM". */
 export function dayAndTimeText(at: number): string {
   return DAY_AND_TIME.format(at);
-}
-
-/** A moment's weekday and time of day: "Mon 2:05 PM". */
-export function weekdayAndTimeText(at: number): string {
-  return WEEKDAY_AND_TIME.format(at);
 }
 
 /** A time of day a schedule names by its hour (0 to 23) and minute, on the 12-hour clock: "2:05 PM". */

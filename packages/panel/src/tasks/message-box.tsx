@@ -33,6 +33,7 @@ import {
 } from "react";
 import { PromptInput, submitPromptInput } from "../ai-elements/prompt-input.js";
 import { useSideBundles } from "../bundle-loader.js";
+import { copyPictureWithWordsThroughShell } from "../copy-feedback.js";
 import {
   COMPOSER_INPUT,
   type ComposerEditorHandle,
@@ -57,6 +58,7 @@ import { ComposerField, type ComposerFieldFiles } from "./composer-field.js";
 import { type ComposerPickers, useComposerPickers } from "./composer-pickers.js";
 import { DictateButton, DictationStrip } from "./dictation-strip.js";
 import { useWordFiles } from "./file-chips.js";
+import { copiedFiles, linkedFiles } from "./pasted-files.js";
 import type { DictationControl } from "./use-dictation.js";
 
 /**
@@ -415,11 +417,8 @@ interface BoxFiles {
  * editor not loaded or its bound reached, or whose chip was copied into
  * code. Where the box takes none into its words, every file beside them.
  */
-function useBoxFiles(
-  takes: boolean,
-  draft: string,
-  attachments: readonly AgentAttachment[],
-): BoxFiles {
+function useBoxFiles(takes: boolean, draft: string, files: AttachedFiles): BoxFiles {
+  const { attachments } = files;
   const chips = attachmentChips(attachments);
   const shown = useWordFiles(chips, takes ? draft : "");
   const names = useMemo(() => new Set(attachments.map((file) => file.name)), [attachments]);
@@ -429,7 +428,24 @@ function useBoxFiles(
   return {
     beside: attachments.filter((_, at) => shown.beside.some((chip) => chip === chips[at])),
     // Note that every file the box holds is chipped, so a marker undo brings back is its chip at once.
-    field: { names, chip: shown.chip },
+    field: {
+      names,
+      chip: shown.chip,
+      copies: {
+        copied: files.known,
+        pasted: (pasted) => files.adopt(copiedFiles(pasted)),
+        linked: (pictures) => files.adopt(linkedFiles(pictures)),
+        copiedAlone: (name, words) => {
+          const file = files.known(name);
+
+          // Note that a refused write leaves the words the editor's own copy wrote standing.
+          if (file === undefined || file.data === "" || !file.mediaType.startsWith("image/"))
+            return;
+          const url = Promise.resolve(`data:${file.mediaType};base64,${file.data}`);
+          copyPictureWithWordsThroughShell(words, url).catch(() => undefined);
+        },
+      },
+    },
     viewer: shown.viewer,
   };
 }
@@ -515,11 +531,12 @@ export function useMessageBox(options: MessageBoxOptions): MessageBoxControl {
 
             return mark === undefined ? undefined : (names) => mark.insertFiles(names);
           },
+          remove: (names) => editor.current?.removeFiles(names),
         }
       : undefined,
   });
 
-  const inWords = useBoxFiles(takesFiles, options.draft, files.attachments);
+  const inWords = useBoxFiles(takesFiles, options.draft, files);
   const { draft, placeholder, keywords = NO_KEYWORDS, ...picked } = options;
 
   const pickers = useComposerPickers({

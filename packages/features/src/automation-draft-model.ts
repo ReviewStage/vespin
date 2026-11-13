@@ -104,12 +104,14 @@ export interface AutomationDraft {
   readonly triggerKind: AutomationTriggerKind;
   /** The GitHub event it fires on, where that is its trigger; a new draft's is a pull request opened or updated. */
   readonly githubEvent: GitHubTriggerEvent;
-  /** The label and branch filters a GitHub trigger was given, kept as they were. */
+  /** The label, branch, and tag filters a GitHub trigger was given, its default branch among them, kept as they were. */
   readonly githubFilters: {
     readonly labels?: readonly string[];
     readonly branches?: readonly string[];
+    readonly defaultBranch?: boolean;
+    readonly tags?: readonly string[];
   };
-  /** Whose events, at which moments, and whether drafts and forks fire a GitHub trigger: the row of choices under its sentence. */
+  /** Whose events, at which moments, and whether drafts, forks, and prereleases fire a GitHub trigger: the row of choices under its sentence. */
   readonly githubSettings: GitHubTriggerSettings;
   /** The integration event it fires on, with its filters, kept as it was given; a new draft's is a Sentry alert. */
   readonly integrationTrigger: IntegrationTrigger;
@@ -142,14 +144,16 @@ export interface GitHubTriggerSettings {
   readonly moments: readonly PullRequestMoment[];
   readonly drafts: boolean;
   readonly forks: boolean;
+  readonly prereleases: boolean;
 }
 
-/** A GitHub trigger's settings where it names none: people's events, at every moment, no drafts, no forks. */
+/** A GitHub trigger's settings where it names none: people's events, at every moment, no drafts, no forks, no prereleases. */
 const GITHUB_DEFAULT_SETTINGS: GitHubTriggerSettings = {
   senders: GITHUB_DEFAULT_SENDERS,
   moments: PULL_REQUEST_DEFAULT_MOMENTS,
   drafts: false,
   forks: false,
+  prereleases: false,
 };
 
 /** An integration trigger where none was given: a Sentry alert, unfiltered. */
@@ -249,6 +253,7 @@ function githubSettingsOf(
     moments: trigger.moments ?? GITHUB_DEFAULT_SETTINGS.moments,
     drafts: trigger.drafts ?? GITHUB_DEFAULT_SETTINGS.drafts,
     forks: trigger.forks ?? GITHUB_DEFAULT_SETTINGS.forks,
+    prereleases: trigger.prereleases ?? GITHUB_DEFAULT_SETTINGS.prereleases,
   };
 }
 
@@ -257,12 +262,17 @@ function sameSet(one: readonly string[] = [], other: readonly string[] = []): bo
   return one.length === other.length && one.every((each) => other.includes(each));
 }
 
-/** Whether two GitHub triggers keep to the same labels and branches. */
+/** Whether two GitHub triggers keep to the same labels, branches, and tags, the default branch among them. */
 function sameFilters(
   one: AutomationDraft["githubFilters"],
   other: AutomationDraft["githubFilters"],
 ) {
-  return sameSet(one.labels, other.labels) && sameSet(one.branches, other.branches);
+  return (
+    sameSet(one.labels, other.labels) &&
+    sameSet(one.branches, other.branches) &&
+    sameSet(one.tags, other.tags) &&
+    (one.defaultBranch === true) === (other.defaultBranch === true)
+  );
 }
 
 /** Whether two GitHub triggers' settings say the same. */
@@ -271,7 +281,8 @@ function sameSettings(one: GitHubTriggerSettings, other: GitHubTriggerSettings):
     sameSet(one.senders, other.senders) &&
     sameSet(one.moments, other.moments) &&
     one.drafts === other.drafts &&
-    one.forks === other.forks
+    one.forks === other.forks &&
+    one.prereleases === other.prereleases
   );
 }
 
@@ -336,9 +347,10 @@ export function draftTrigger(draft: AutomationDraft): AutomationTrigger {
         timezone: draft.timezone,
       };
     case AUTOMATION_TRIGGER.GITHUB: {
-      const { senders, moments, drafts, forks } = draft.githubSettings;
-      // The moments speak to an update alone, so no other event carries them.
+      const { senders, moments, drafts, forks, prereleases } = draft.githubSettings;
+      // The moments speak to an update alone, and prereleases to a release, so no other event carries them.
       const updated = draft.githubEvent === GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED;
+      const release = draft.githubEvent === GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED;
 
       return {
         kind: AUTOMATION_TRIGGER.GITHUB,
@@ -348,6 +360,7 @@ export function draftTrigger(draft: AutomationDraft): AutomationTrigger {
         ...(updated ? { moments } : undefined),
         drafts,
         forks,
+        ...(release ? { prereleases } : undefined),
       };
     }
 
@@ -462,6 +475,10 @@ export function automationDraft(
       ? {
           ...(trigger.labels === undefined ? undefined : { labels: trigger.labels }),
           ...(trigger.branches === undefined ? undefined : { branches: trigger.branches }),
+          ...(trigger.defaultBranch === undefined
+            ? undefined
+            : { defaultBranch: trigger.defaultBranch }),
+          ...(trigger.tags === undefined ? undefined : { tags: trigger.tags }),
         }
       : {},
     githubSettings: github ? githubSettingsOf(trigger) : GITHUB_DEFAULT_SETTINGS,
@@ -713,7 +730,7 @@ export function changeOf(
 }
 
 /**
- * A draft moved to another GitHub event. The label and branch filters a
+ * A draft moved to another GitHub event. The label, branch, and tag filters a
  * trigger was given go with the event they were given for, since the
  * editor does not show them and one event's filter can match nothing of
  * another's: a label filter on a push, whose delivery has no labels, would
@@ -729,23 +746,45 @@ export function withGithubEvent(
 }
 
 /**
- * A new draft filled in from a preset: its name, schedule, task, and
- * archiving, its runs each on a new agent, where it runs and who owns it
- * kept as they were chosen, and its zone the member's own. One whose runs
- * need no repository starts with none chosen.
+ * A new draft filled in from a preset: its name, trigger, task, where its
+ * runs land, and archiving, its zone the member's own. One whose runs need
+ * no repository starts with none chosen, and one that needs one keeps the
+ * one chosen. One for the workspace is the workspace's only where `shared`
+ * says the workspace is, since everything in the account's own workspace is
+ * its own; who owns any other stays as it was chosen. A GitHub event keeps
+ * to the preset's default branch under the settings a new trigger has.
  */
-export function presetDraft(draft: AutomationDraft, preset: AutomationPreset): AutomationDraft {
-  return {
+export function presetDraft(
+  draft: AutomationDraft,
+  preset: AutomationPreset,
+  shared: boolean,
+): AutomationDraft {
+  const { trigger } = preset;
+
+  const filled: AutomationDraft = {
     ...draft,
     name: preset.name,
     prompt: preset.prompt,
-    triggerKind: AUTOMATION_TRIGGER.SCHEDULE,
-    schedule: scheduleDraftOf(preset.cron),
-    target: AUTOMATION_TARGET.NEW_AGENT,
+    triggerKind: trigger.kind,
+    target: preset.target,
     agentId: null,
     archiveSuccessful: preset.archiveSuccessful,
     ...(preset.inRepository ? undefined : { repository: null, alsoRepositories: [] }),
+    ...(preset.forWorkspace && shared ? { owner: AUTOMATION_SCOPE.WORKSPACE } : undefined),
   };
+
+  switch (trigger.kind) {
+    case AUTOMATION_TRIGGER.SCHEDULE:
+      return { ...filled, schedule: scheduleDraftOf(trigger.cron) };
+    case AUTOMATION_TRIGGER.GITHUB:
+      return {
+        ...filled,
+        githubEvent: trigger.event,
+        githubFilters: { defaultBranch: trigger.defaultBranch },
+      };
+    case AUTOMATION_TRIGGER.INTEGRATION:
+      return { ...filled, integrationTrigger: trigger };
+  }
 }
 
 /**

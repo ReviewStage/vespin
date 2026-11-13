@@ -42,7 +42,8 @@ import { MemorySection } from "./memory-page.js";
  * forget that fails says so in the dialog and keeps the memory listed;
  * another workspace is held for its own memories; and a read that fails
  * offers to try again. The memories agents recall most stand first, one no
- * agent was handed in the window says so, and Edit saves a memory's words
+ * agent was handed in the window says so, Saved by sorts them by their
+ * agent's name, and Edit saves a memory's words
  * from the card it opens, which goes with a memory deleted while it saves
  * and is never replaced while it saves; Add memory saves a new one from the
  * same card, which stands under a refusal. Synthetic workspaces, members,
@@ -605,13 +606,30 @@ test("the memories agents recalled most in the last 30 days stand first, then th
   assert.deepEqual(words(page), [flags.text, pricing.text, DEPLOYS.text, TESTS.text]);
 });
 
-test("a memory older than the recall window that no agent was handed in it reads Unused, no recalls, and Never", async () => {
-  vi.useFakeTimers({ toFake: ["Date"], now: Date.UTC(2026, 10, 20, 12) });
+test("a memory no agent was handed in the recall window reads no recalls and Never", async () => {
   const { page } = await mount();
 
   const cells = [...rowOf(page, DEPLOYS).querySelectorAll("td")].map((cell) => cell.textContent);
-  assert.match(cells.join(" | "), /Unused/u);
-  assert.deepEqual(cells.slice(2, 4), ["—", "Never"]);
+  assert.deepEqual(cells.slice(3, 5), ["—", "Never"]);
+});
+
+test("Saved by sorts the memories by the name the agent's chip says", async () => {
+  const sourced = (memory: MemorySummary, agentId: string, taskName: string): MemorySummary => ({
+    ...memory,
+    source: { agentId, messageId: null, taskId: `task-${agentId}`, taskName },
+  });
+
+  stored = new Map([
+    [
+      ACME.id,
+      [sourced(DEPLOYS, "agent-1", "Ship the release"), sourced(TESTS, "agent-2", "Audit tests")],
+    ],
+  ]);
+  const { page } = await mount();
+
+  act(() => button(page, "Saved by").click());
+
+  assert.deepEqual(words(page), [TESTS.text, DEPLOYS.text]);
 });
 
 test("Edit opens the memory's words in a card and saves the new words in place of the memory it edits", async () => {

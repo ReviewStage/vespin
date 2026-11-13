@@ -10,6 +10,12 @@ export * from "./components/anchored-popover/press-away.js";
 
 export * from "./components/announcer/announcer.js";
 
+export * from "./components/app-ask/app-ask.js";
+
+export * from "./components/app-icon/app-icon.js";
+
+export * from "./components/app-window-stack/app-window-stack.js";
+
 export * from "./components/approval-actions/approval-actions.js";
 
 export * from "./components/arrival/arrival.js";
@@ -57,6 +63,12 @@ export * from "./components/breadcrumbs/crumb.js";
 export * from "./components/button/button.js";
 
 export * from "./components/calendar/calendar.js";
+
+export * from "./components/call/call-card.js";
+
+export * from "./components/call/call-controls.js";
+
+export * from "./components/caption-field/caption-field.js";
 
 export * from "./components/card/card.js";
 
@@ -126,7 +138,11 @@ export * from "./components/drawer-swipe/drawer-scrim.js";
 
 export * from "./components/drawer-swipe/use-drawer-swipe.js";
 
+export * from "./components/drop-line/drop-line.js";
+
 export * from "./components/drop-slot/drop-slot.js";
+
+export * from "./components/edit-actions/edit-actions.js";
 
 export * from "./components/editable-block/editable-block.js";
 
@@ -252,6 +268,8 @@ export * from "./components/pane-bar/pane-bar.js";
 
 export * from "./components/pane-pin/pane-pin.js";
 
+export * from "./components/pdf-pages/pdf-pages-skeleton.js";
+
 export * from "./components/photo-pick/photo-pick.js";
 
 export * from "./components/picture-set/picture-set.js";
@@ -261,6 +279,8 @@ export * from "./components/picture-tile/picture-tile.js";
 export * from "./components/popover-icon-button/popover-icon-button.js";
 
 export * from "./components/popover-panel/popover-panel.js";
+
+export * from "./components/port-table/port-table.js";
 
 export * from "./components/portal-fence/portal-fence.js";
 
@@ -332,8 +352,6 @@ export * from "./components/settings-ordered-rows/settings-ordered-rows.js";
 
 export * from "./components/settings-page/settings-page.js";
 
-export * from "./components/settings-row/settings-add-row.js";
-
 export * from "./components/settings-row/settings-row.js";
 
 export * from "./components/settings-row/settings-row-fold.js";
@@ -365,6 +383,8 @@ export * from "./components/stepped-back/stepped-back.js";
 export * from "./components/steps/steps.js";
 
 export * from "./components/subject-line/subject-line.js";
+
+export * from "./components/suggestion/suggestion.js";
 
 export * from "./components/suggestion-card/suggestion-card.js";
 
@@ -408,11 +428,15 @@ export * from "./components/tooltip/hint.js";
 
 export * from "./components/tooltip/tooltip.js";
 
+export * from "./components/track-list/track-list.js";
+
 export * from "./components/turn-end/turn-end.js";
 
 export * from "./components/turn-into-menu/turn-into-menu.js";
 
 export * from "./components/unread-mark/unread-mark.js";
+
+export * from "./components/upload-cover/upload-cover.js";
 
 export * from "./components/usage-meters/usage-meters.js";
 

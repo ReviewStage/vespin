@@ -1,12 +1,11 @@
 /**
- * base-drive-repositories.ts -- the workspaces an active GitHub installation connects, read across accounts for the scheduled refresh alone, and the workspace an installation connects, for its fill.
+ * base-drive-repositories.ts -- the workspace an installation connects, and a workspace's first owner, each for a fill of its drive.
  *
  * Each workspace's drive (`packages/service/src/agents/workspace-drive.ts`)
  * is filled under the account of the workspace's first owner, whose firewall
  * the fill's sandbox writes under.
  */
 
-import { GITHUB_INSTALLATION_STATUS } from "@repo/features/github-installation-wire";
 import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { and, asc, eq } from "drizzle-orm";
 import { type Option, Schema } from "effect";
@@ -76,31 +75,4 @@ export function workspaceDriveOwner(
   organizationId: string,
 ): AgentStoreEffect<Option.Option<BaseDriveWorkspace>> {
   return findWorkspaceDriveOwner(organizationId);
-}
-
-const findBaseDriveWorkspaces = SqlSchema.findAll({
-  Request: Schema.Void,
-  Result: BaseDriveWorkspaceSchema,
-  execute: () =>
-    Database.use((db) =>
-      db
-        .selectDistinctOn([member.organizationId], {
-          workspaceId: member.organizationId,
-          userId: member.userId,
-        })
-        .from(githubInstallation)
-        .innerJoin(member, eq(member.organizationId, githubInstallation.organizationId))
-        .where(
-          and(
-            eq(githubInstallation.status, GITHUB_INSTALLATION_STATUS.ACTIVE),
-            eq(member.role, WORKSPACE_ROLE.OWNER),
-          ),
-        )
-        .orderBy(member.organizationId, asc(member.createdAt)),
-    ),
-});
-
-/** Every workspace an active installation connects, with its first owner, across accounts, for the daily refresh of its drive alone. */
-export function listBaseDriveWorkspaces(): AgentStoreEffect<readonly BaseDriveWorkspace[]> {
-  return findBaseDriveWorkspaces(undefined);
 }

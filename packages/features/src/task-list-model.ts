@@ -20,6 +20,11 @@ import { isTaskSettled, TASK_STATUS, type TaskStatus, type TaskSummary } from ".
  * under their parents (`taskInView`); a task from a service before
  * statuses has no status to leave it out by and always stands. The Tasks page lays the same tasks out its own way
  * (`tasks-page-model.ts`).
+ *
+ * Where the workspace has Following on, the reader may narrow the list to
+ * the tasks they follow (`ASSIGNED_TO.FOLLOWING`), and the tasks they follow
+ * that no other list holds stand in a Following group of their own
+ * (`followingTasks`), so a teammate's task they keep up with stays in reach.
  */
 
 /** How the list groups its tasks. */
@@ -39,9 +44,10 @@ export const TASK_ORDER = {
 
 export type TaskOrder = (typeof TASK_ORDER)[keyof typeof TASK_ORDER];
 
-/** Whose tasks the list holds: the reader's, anyone's, or one teammate's. */
+/** Whose tasks the list holds: the reader's, those the reader follows, anyone's, or one teammate's. */
 export const ASSIGNED_TO = {
   ME: "me",
+  FOLLOWING: "following",
   ANYONE: "anyone",
   MEMBER: "member",
 } as const;
@@ -49,6 +55,7 @@ export const ASSIGNED_TO = {
 /** Whose tasks the list holds, a teammate by account id. */
 export type AssignedTo =
   | { readonly kind: typeof ASSIGNED_TO.ME }
+  | { readonly kind: typeof ASSIGNED_TO.FOLLOWING }
   | { readonly kind: typeof ASSIGNED_TO.ANYONE }
   | { readonly kind: typeof ASSIGNED_TO.MEMBER; readonly userId: string };
 
@@ -60,9 +67,10 @@ export interface TaskListView {
   readonly finishedSubTasks: boolean;
 }
 
-/** What the Tasks head says for Me and Anyone; a member's list is called by their name (the panel's `tasksHeadWords`). */
+/** What the Tasks head says for Me, Following, and Anyone; a member's list is called by their name (the panel's `tasksHeadWords`). */
 export const TASKS_HEAD_WORDS = {
   [ASSIGNED_TO.ME]: "My tasks",
+  [ASSIGNED_TO.FOLLOWING]: "Tasks I follow",
   [ASSIGNED_TO.ANYONE]: "Everyone's tasks",
 } as const;
 
@@ -136,6 +144,12 @@ function latest(tasks: readonly TaskSummary[]): number {
 
 /** What every surface calls the state of naming no repository: a task's, a group's, a filter's, a pick's. */
 export const NO_REPOSITORY = "No repository";
+
+/** What a task's repository pick is called while it names none, which it still needs: its menu's item and its chip's words. */
+export const CHOOSE_REPOSITORY = "Choose a repository";
+
+/** What a task's repository pick is called once it names one. */
+export const CHANGE_REPOSITORY = "Change repository";
 
 /** A repository's two parts, `acme` and `relay` of `acme/relay`; a name with no owner is its name alone. */
 export interface RepositoryParts {
@@ -214,11 +228,20 @@ export function createdByOnly(
   return createdBy === undefined ? tasks : tasks.filter((task) => creatorIdOf(task) === createdBy);
 }
 
+/** Whether the reader follows a task: one of its followers, which a task of a workspace with Following off names none of. */
+export function followedBy(task: TaskSummary, readerId: string | undefined): boolean {
+  return (
+    readerId !== undefined &&
+    task.followers?.some((follower) => follower.userId === readerId) === true
+  );
+}
+
 /**
  * The tasks the view's Assigned to holds: every task for Anyone; one
- * teammate's; and for Me the reader's, and the tasks no one is on that the
- * reader created, so their own unassigned work never leaves the list. A
- * reader not yet known filters nothing.
+ * teammate's; those the reader follows for Following; and for Me the
+ * reader's, and the tasks no one is on that the reader created, so their
+ * own unassigned work never leaves the list. A reader not yet known filters
+ * nothing.
  */
 export function tasksAssignedTo(
   tasks: readonly TaskSummary[],
@@ -230,6 +253,10 @@ export function tasksAssignedTo(
       return tasks;
     case ASSIGNED_TO.MEMBER:
       return tasks.filter((task) => task.assignee?.userId === assignedTo.userId);
+    case ASSIGNED_TO.FOLLOWING:
+      if (readerId === undefined) return tasks;
+
+      return tasks.filter((task) => followedBy(task, readerId));
     case ASSIGNED_TO.ME:
       if (readerId === undefined) return tasks;
 
@@ -239,6 +266,30 @@ export function tasksAssignedTo(
         return assignee === undefined ? creatorIdOf(task) === readerId : assignee === readerId;
       });
   }
+}
+
+/**
+ * The tasks the Following group holds, newest active first: of `free`, the
+ * tasks neither pinned nor put in a section, those the reader follows that
+ * the view draws (`taskInView`) and the Tasks list, `listed`, does not hold.
+ * Note that the sidebar draws a task in one place, as a pinned task leaves
+ * its section, so a task pinned or put in a section by hand stands there
+ * and not here, and the reader's own tasks, which they follow too, stand
+ * under My tasks: Following holds the rest they keep up with, a teammate's.
+ */
+export function followingTasks(
+  free: readonly TaskSummary[],
+  listed: readonly TaskSummary[],
+  view: Pick<TaskListView, "finishedSubTasks">,
+  readerId: string | undefined,
+): readonly TaskSummary[] {
+  const held = new Set(listed.map((task) => task.id));
+
+  return orderTasks(
+    free.filter(
+      (task) => !held.has(task.id) && followedBy(task, readerId) && taskInView(task, view),
+    ),
+  );
 }
 
 /** Whether the view draws a task: one of a status shown, or one with no status to leave it out by, a task from a service before statuses. */

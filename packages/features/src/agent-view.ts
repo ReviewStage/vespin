@@ -5,6 +5,7 @@ import {
   agentPermissionModeRequestSchema,
   approvalAnswerRequestSchema,
 } from "./agent-approval-wire.js";
+import type { QueuedMessage } from "./agent-queue-wire.js";
 import {
   AGENT_ATTACHMENT_TYPE,
   AGENT_BOUNDS,
@@ -34,6 +35,7 @@ import { liveActivitiesContract } from "./contract/live-activities.js";
 import { messagesContract } from "./contract/messages.js";
 import { modelsContract } from "./contract/models.js";
 import { pushDevicesContract } from "./contract/push-devices.js";
+import { voiceContract } from "./contract/voice.js";
 import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
 import { dictationRequestSchema } from "./dictation-wire.js";
 import { failureFactsSchema } from "./failure-facts.js";
@@ -63,6 +65,7 @@ import {
   PROVIDER_KEY_PROVIDER,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
+  providerKeyResetCreditRequestSchema,
   providerKeySaveRequestSchema,
   subscriptionIdSchema,
   subscriptionLabelRequestSchema,
@@ -74,6 +77,7 @@ import {
   pushDeviceRegisterRequestSchema,
   pushDeviceUnregisterRequestSchema,
 } from "./push-device-wire.js";
+import { replyButtonSentSchema } from "./reply-button-wire.js";
 import { repositoryUnreachedSchema } from "./repository-reach-wire.js";
 import { countedNumber, HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
 import {
@@ -83,6 +87,7 @@ import {
   soundRenameRequestSchema,
 } from "./sound-clip-wire.js";
 import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
+import { voiceCallEndedRequestSchema, voiceSessionRequestSchema } from "./voice-wire.js";
 
 /**
  * agent-view.ts -- a task's coding agents as one Mac's window hears them: each call's answer whole, or why there is none.
@@ -106,7 +111,9 @@ import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
  * A clip dictated into an agent's message box travels here too, since the
  * box is an agent's: the clip and its words to listen for, and the text
  * back, or why there is none, the account having saved no OpenAI key among
- * the reasons.
+ * the reasons. A voice call into an agent travels here for the same reason:
+ * the panel's SDP offer and GPT-Live's answer back, and the call's seconds
+ * once it ends.
  */
 
 /**
@@ -122,6 +129,7 @@ export const AGENT_RENAMES = {
 const AGENT_ACCOUNT_CALLS = {
   models: modelsContract,
   dictation: dictationContract,
+  voice: voiceContract,
   pushDevices: pushDevicesContract,
   liveActivities: liveActivitiesContract,
   githubToken: githubTokenContract,
@@ -130,6 +138,7 @@ const AGENT_ACCOUNT_CALLS = {
     providerKeys: accountContract.providerKeys,
     saveProviderKey: accountContract.saveProviderKey,
     setProviderKeyForAgents: accountContract.setProviderKeyForAgents,
+    useResetCredit: accountContract.useResetCredit,
     renameSubscription: accountContract.renameSubscription,
     reorderSubscriptions: accountContract.reorderSubscriptions,
     removeProviderKey: accountContract.removeProviderKey,
@@ -321,6 +330,9 @@ export type AgentCallFailure = (typeof AGENT_CALL_FAILURE)[keyof typeof AGENT_CA
 
 const failureSchema = EffectSchema.Literals(Object.values(AGENT_CALL_FAILURE));
 
+/** Whether a failure is one an agent call names, which its words say (`agent-refusal-words.ts`). */
+export const isAgentCallFailure = EffectSchema.is(failureSchema);
+
 /** A failed call, as every answer below spells one, with the facts of what failed beneath it where the host caught it (`failure-facts.ts`), which the window reports and never draws. */
 const failed = EffectSchema.Struct({
   failure: failureSchema,
@@ -492,6 +504,11 @@ export const providerKeyForAgentsParamsSchema = providerKeyForAgentsRequestSchem
 
 export type ProviderKeyForAgentsParams = typeof providerKeyForAgentsParamsSchema.Type;
 
+/** Spending one of a ChatGPT plan's reset credits, as the window asks it: the plan, and the press's key. */
+export const providerKeyResetCreditParamsSchema = providerKeyResetCreditRequestSchema;
+
+export type ProviderKeyResetCreditParams = typeof providerKeyResetCreditParamsSchema.Type;
+
 /** Naming a subscription, as the window asks it: which one, and its name or none for its default. */
 export const subscriptionLabelParamsSchema = subscriptionLabelRequestSchema;
 
@@ -606,13 +623,15 @@ export type AllowedCommandsAnswerView = typeof allowedCommandsAnswerViewSchema.T
 
 /**
  * One write of the account's always-allowed commands, as Settings asks it:
- * a command's first words added by hand (`add`), or one removed by its
- * first words (`remove`), which the host finds on the list it holds, so a
- * removal taken back and asked again names the command rather than an id
- * the take-back replaced.
+ * a command's first words added by hand (`add`), one's first words
+ * replaced by others typed by hand (`edit`, to `to`), or one removed by its
+ * first words (`remove`). The host finds an edited or removed command on
+ * the list it holds by its words, so a removal taken back and asked again
+ * names the command rather than an id the take-back replaced.
  */
 export const allowedCommandWriteParamsSchema = EffectSchema.Union([
   EffectSchema.Struct({ add: CommandPrefixSchema }),
+  EffectSchema.Struct({ edit: CommandPrefixSchema, to: CommandPrefixSchema }),
   EffectSchema.Struct({ remove: CommandPrefixSchema }),
 ]);
 
@@ -688,10 +707,49 @@ export const agentAgentAnswerSchema = EffectSchema.Union([
     /** That a message sent waits in the agent's queue while its first launch boots, rather than in its transcript; absent for every other answer. */
     queued: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   }),
-  failedReaching,
+  EffectSchema.Struct({
+    ...failedReaching.fields,
+    /** That a message sent in place of a line took the agent back to just before it, but was not delivered, so sending it again only sends; absent for every other answer. */
+    rewound: EffectSchema.optionalKey(EffectSchema.Literal(true)),
+  }),
 ]);
 
 export type AgentAgentAnswer = typeof agentAgentAnswerSchema.Type;
+
+/** Why the service did not take a message sent to an agent, as the window hears it. */
+export type AgentMessageRefusal = Extract<AgentAgentAnswer, { readonly failure: unknown }>;
+
+/**
+ * A message of the member's to an agent, as the host draws it from the
+ * moment it is sent until the service's row for it lands in the transcript,
+ * or, refused, until the member sends it again or lets it go: the one record
+ * every window draws the line from (`@repo/host`'s `agent-queue-writes.ts`),
+ * so a message stands in exactly one place, its queue or its transcript,
+ * through every step between.
+ */
+export interface SendingMessage {
+  /** The id the service writes its row under (`sentLineId` of its send key), which the line is drawn under, so the row lands in its place. */
+  readonly id: string;
+  /** The key it went under, which Retry sends it under again, so it reaches the agent once. */
+  readonly clientKey: string;
+  readonly text: string;
+  /** Its files, by the ids the window keeps their bytes under, as a queued message's are. */
+  readonly files?: QueuedMessage["files"];
+  /** Epoch milliseconds it was sent, drawn under it at once. */
+  readonly sentAt: number;
+  /** Whether a turn ran as it went, so it steers that turn rather than opening one. */
+  readonly steers: boolean;
+  /** The member's line it went in place of, by its message id, which the agent is taken back to just before first; none for a line sent after the rest. */
+  readonly rewinds?: string;
+  /** Whether the agent's files go back too as it is taken back. */
+  readonly restoresFiles?: boolean;
+  /** The agent's task, whose row is marked while it stands refused; none for an agent with no task. */
+  readonly taskId?: string;
+  /** The account that sent it, whose windows alone draw it; none for one sent while nobody was signed in. */
+  readonly sentBy?: string;
+  /** Why the service did not take it, where it did not; none while it is on its way. */
+  readonly refused?: AgentMessageRefusal;
+}
 
 /** A message handed to an agent, as the host hears the service answer it: the agent, and the transaction that wrote its row where one did; or why there is none. */
 const agentMessageAnswerViewSchema = answerView(messagesContract.send);
@@ -753,6 +811,32 @@ export type AgentRunActionAnswerView = typeof agentRunActionAnswerViewSchema.Typ
 export const agentRunActionStopAnswerViewSchema = answerView(agentsContract.stopRunAction);
 
 export type AgentRunActionStopAnswerView = typeof agentRunActionStopAnswerViewSchema.Type;
+
+/** A button in an agent's reply read, as the window hears it: the button, or why it is not drawn. */
+export const replyButtonAnswerViewSchema = answerView(agentsContract.readButton);
+
+export type ReplyButtonAnswerView = typeof replyButtonAnswerViewSchema.Type;
+
+/** A button in an agent's reply pressed, as the window hears it: the button as its press then stands, or why the press was refused. */
+export const replyButtonPressAnswerViewSchema = answerView(agentsContract.pressButton);
+
+export type ReplyButtonPressAnswerView = typeof replyButtonPressAnswerViewSchema.Type;
+
+/** The button in an agent's reply an act names: the agent whose reply holds it, and the button. */
+export const replyButtonParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.String,
+  buttonId: EffectSchema.String,
+});
+
+export type ReplyButtonParams = typeof replyButtonParamsSchema.Type;
+
+/** A suggestion in an agent's reply sent from its draft: the button, and what the member sent. */
+export const replyButtonPressParamsSchema = EffectSchema.Struct({
+  ...replyButtonParamsSchema.fields,
+  sent: replyButtonSentSchema,
+});
+
+export type ReplyButtonPressParams = typeof replyButtonPressParamsSchema.Type;
 
 /** One agent's transcript past a cursor, as the window asks it: the agent, and where the window stands; or, naming the delegation call that started one, a worker's transcript under the agent. */
 export const agentMessagesParamsSchema = EffectSchema.Struct({
@@ -826,11 +910,35 @@ export const agentTranscriptOlderAnswerSchema = EffectSchema.Union([
 
 export type AgentTranscriptOlderAnswer = typeof agentTranscriptOlderAnswerSchema.Type;
 
-/** Messaging an agent, as the window asks it: the agent, and the message request the service takes, its key the window's own. */
+/**
+ * Messaging an agent, as the window asks it: the agent, and the message
+ * request the service takes, its key the window's own; and what the host
+ * draws the message by while it is on its way, which the service is never
+ * sent: the ids the window keeps each file's bytes under, in order, whether
+ * a turn runs that it steers, the agent's task, which marks the task's row
+ * while the message stands refused, and the member's line it goes in place of,
+ * which the host takes the agent back to just before first, its files back
+ * too where `restoreFiles` says.
+ */
 export const agentMessageParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
   ...agentMessageRequestSchema.fields,
+  pictures: EffectSchema.optionalKey(
+    EffectSchema.Array(wireUuidSchema).check(
+      EffectSchema.isMaxLength(AGENT_BOUNDS.MAX_ATTACHMENTS),
+    ),
+  ),
+  steers: EffectSchema.optionalKey(EffectSchema.Boolean),
+  taskId: EffectSchema.optionalKey(EffectSchema.NonEmptyString),
+  rewinds: EffectSchema.optionalKey(
+    EffectSchema.Struct({
+      messageId: EffectSchema.NonEmptyString,
+      restoreFiles: EffectSchema.optionalKey(EffectSchema.Boolean),
+    }),
+  ),
 });
+
+export type AgentMessageParams = typeof agentMessageParamsSchema.Type;
 
 /** One agent's model and effort changed for its next step, as the window asks it: the agent and the choice. */
 export const agentChooseParamsSchema = EffectSchema.Struct({
@@ -901,6 +1009,16 @@ export const agentRewindParamsSchema = EffectSchema.Struct({
   /** Whether the agent's files go back too, to the snapshot its runner took before the turn the line opened. */
   restoreFiles: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
+
+export type AgentRewindParams = typeof agentRewindParamsSchema.Type;
+
+/** A message of the member's the service refused, let go, as the window names it: the agent, and the id its line is drawn under. */
+export const agentUnsendParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  lineId: EffectSchema.NonEmptyString,
+});
+
+export type AgentUnsendParams = typeof agentUnsendParamsSchema.Type;
 
 /** One agent, as the window asks to read it whole by its id. */
 export const agentPageParamsSchema = EffectSchema.Struct({
@@ -1045,6 +1163,26 @@ export type DictationTranscribeParams = typeof dictationTranscribeParamsSchema.T
 export const dictationTranscribeAnswerViewSchema = answerView(dictationContract.transcribe);
 
 export type DictationTranscribeAnswerView = typeof dictationTranscribeAnswerViewSchema.Type;
+
+/** A voice call to open, as the window asks for it: the agent, the voice, and its peer's SDP offer. */
+export const voiceSessionParamsSchema = voiceSessionRequestSchema;
+
+export type VoiceSessionParams = typeof voiceSessionParamsSchema.Type;
+
+/** The opened call, as the window hears it: the SDP answer, or why there is none. */
+export const voiceSessionAnswerViewSchema = answerView(voiceContract.open);
+
+export type VoiceSessionAnswerView = typeof voiceSessionAnswerViewSchema.Type;
+
+/** A finished voice call, as the window reports it: the agent and the seconds it ran. */
+export const voiceCallEndedParamsSchema = voiceCallEndedRequestSchema;
+
+export type VoiceCallEndedParams = typeof voiceCallEndedParamsSchema.Type;
+
+/** A reported call, as the window hears it: kept, or why not. */
+export const voiceCallEndedAnswerViewSchema = answerView(voiceContract.ended);
+
+export type VoiceCallEndedAnswerView = typeof voiceCallEndedAnswerViewSchema.Type;
 
 /** The phone the app runs on, as it registers itself for pushes: its APNs token, its build's gateway, and its app. */
 export const pushDeviceRegisterParamsSchema = pushDeviceRegisterRequestSchema;

@@ -1,7 +1,7 @@
 {
   "name": "@repo/desktop",
   "productName": "Vespin",
-  "version": "0.32.0",
+  "version": "0.33.0",
   "private": true,
   "description": "Vespin desktop application",
   "main": "dist/main.js",
@@ -55,8 +55,8 @@
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "effect": "catalog:",
-    "electron": "43.3.0",
-    "electron-builder": "26.8.1",
+    "electron": "43.8.9",
+    "electron-builder": "26.18.1",
     "esbuild": "0.28.2",
     "jsdom": "^30.0.1",
     "node-pty": "1.1.0",
@@ -69,7 +69,7 @@
   },
   "dependencies": {
     "@sentry/electron": "8.3.0",
-    "electron-updater": "6.8.9"
+    "electron-updater": "6.8.12"
   },
   "optionalDependencies": {
     "electron-liquid-glass": "1.1.1"

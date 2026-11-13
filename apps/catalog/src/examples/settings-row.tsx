@@ -6,7 +6,7 @@ import {
   BUTTON_TYPE,
   BUTTON_VARIANT,
   Button,
-  IconButton,
+  EditActions,
   Inline,
   JUSTIFY,
   MARK_PROVIDER,
@@ -15,10 +15,10 @@ import {
   PROVIDER_MARK_SIZE,
   ProviderMark,
   RepositoryLines,
+  SETTINGS_ROW_CONTROLS,
   SETTINGS_ROW_DENSITY,
   SETTINGS_ROW_INDENT,
   SETTINGS_ROW_STATE,
-  SettingsAddRow,
   SettingsAttentionMark,
   SettingsFacts,
   SettingsFoldRow,
@@ -35,14 +35,14 @@ import {
   Shortcut,
   Switch,
   TEXT_ELEMENT,
-  TEXT_FIELD_FONT,
+  TEXT_FIELD_SIZE,
   TEXT_FIELD_TYPE,
   TEXT_FONT,
   TEXT_VARIANT,
   Text,
   TextField,
 } from "@repo/ui";
-import { ExternalLinkIcon, GLYPH } from "@repo/ui/icons";
+import { ExternalLinkIcon } from "@repo/ui/icons";
 import { useState } from "react";
 import { CATALOG_FAILURE } from "../catalog-failure";
 import type { Example } from "../example";
@@ -318,6 +318,59 @@ function CompactRows(): React.JSX.Element {
   );
 }
 
+/** A row whose words are typed in place: ringed while it is edited, its words a bare field in their own type, and Cancel and Save at its end. */
+function EditedRows(): React.JSX.Element {
+  const [typed, setTyped] = useState("pnpm test");
+  const [editing, setEditing] = useState(true);
+
+  const words = (children: React.ReactNode) => (
+    <Text as="span" variant={TEXT_VARIANT.LABEL} font={TEXT_FONT.MONO}>
+      {children}
+    </Text>
+  );
+
+  return (
+    <SettingsSection title="Always allowed">
+      <SettingsRow
+        editing={editing}
+        controls={SETTINGS_ROW_CONTROLS.BESIDE}
+        label={words(
+          editing ? (
+            <TextField
+              label="Command"
+              size={TEXT_FIELD_SIZE.INLINE}
+              value={typed}
+              onChange={setTyped}
+              onEnter={() => setEditing(false)}
+              onEscape={() => setEditing(false)}
+            />
+          ) : (
+            `${typed} *`
+          ),
+        )}
+        description="Added 2h ago by you"
+      >
+        {() =>
+          editing ? (
+            <EditActions
+              leave="Cancel"
+              saving={false}
+              canSave={typed.trim() !== ""}
+              onLeave={() => setEditing(false)}
+              onSave={() => setEditing(false)}
+            />
+          ) : (
+            <Button variant={BUTTON_VARIANT.QUIET} onClick={() => setEditing(true)}>
+              Edit
+            </Button>
+          )
+        }
+      </SettingsRow>
+      <SettingsRow label={words("git status *")} description="Added 3w ago by you" />
+    </SettingsSection>
+  );
+}
+
 /** List rows, a reference read down rather than set, as the window's keyboard shortcuts stand. */
 function ListRows(): React.JSX.Element {
   const commands = [
@@ -332,57 +385,6 @@ function ListRows(): React.JSX.Element {
         <SettingsRow key={command.label} density={SETTINGS_ROW_DENSITY.LIST} label={command.label}>
           {() => <Shortcut chord={command.chord} value spoken />}
         </SettingsRow>
-      ))}
-    </SettingsSection>
-  );
-}
-
-/** A row that adds a command in place at the head of its card, refusing one with shell syntax, the commands it added listed under it newest first. */
-function AddRows(): React.JSX.Element {
-  const [typed, setTyped] = useState("");
-  const [added, setAdded] = useState<readonly string[]>(["pnpm test"]);
-  const [refused, setRefused] = useState(false);
-
-  return (
-    <SettingsSection title="Always allowed" caption="Commands your agents run without asking.">
-      <SettingsAddRow
-        label="Add a command"
-        placeholder="pnpm test"
-        font={TEXT_FIELD_FONT.MONO}
-        value={typed}
-        error={
-          refused
-            ? {
-                words: "Name a command's first words, with no shell syntax.",
-                failure: CATALOG_FAILURE,
-              }
-            : undefined
-        }
-        onChange={(value) => {
-          setTyped(value);
-          setRefused(false);
-        }}
-        onAdd={(value) => {
-          if (/[;&|<>$`]/.test(value)) {
-            setRefused(true);
-
-            return;
-          }
-
-          setAdded((was) => [value, ...was]);
-          setTyped("");
-        }}
-      />
-      {added.map((command) => (
-        <SettingsRow
-          key={command}
-          label={
-            <Text as="span" variant={TEXT_VARIANT.LABEL} font={TEXT_FONT.MONO}>
-              {`${command} *`}
-            </Text>
-          }
-          description="Added just now by you"
-        />
       ))}
     </SettingsSection>
   );
@@ -518,7 +520,7 @@ function RowsFoldRows(): React.JSX.Element {
             leading={<Mark provider={MARK_PROVIDER.SLACK} />}
             end={() => (
               <>
-                <IconButton icon={<GLYPH.DISCONNECT />} label="Disconnect" />
+                <MoreButton thing="Slack" />
                 {chevron}
               </>
             )}
@@ -557,7 +559,7 @@ function RowsFoldRows(): React.JSX.Element {
             leading={<Mark provider={MARK_PROVIDER.SENTRY} />}
             end={() => (
               <>
-                <IconButton icon={<GLYPH.DISCONNECT />} label="Disconnect" />
+                <MoreButton thing="Sentry" />
                 {chevron}
               </>
             )}
@@ -625,9 +627,9 @@ function SettingsRows(): React.JSX.Element {
       <CatalogSection id="settings-row-compact" title="Compact, in a popover">
         <CompactRows />
       </CatalogSection>
-      <CatalogSection id="settings-row-add" title="Adding in place, first in its card">
+      <CatalogSection id="settings-row-edited" title="Edited in place, ringed with Cancel and Save">
         <div className="catalog-settings">
-          <AddRows />
+          <EditedRows />
         </div>
       </CatalogSection>
       <CatalogSection id="settings-row-list" title="List, a reference in a card">

@@ -15,7 +15,6 @@ import { AgentComposer } from "./agent-composer.js";
 import { useInboxAcknowledger } from "./inbox-acknowledge.js";
 import { focusMissing } from "./inbox-ask-controls.js";
 import { inboxNoteReading } from "./inbox-model.js";
-import { putBackRefused } from "./refused-send.js";
 import { ReplyToSelection } from "./reply-to-selection.js";
 import type { SkillSource } from "./skill-picker.js";
 import type { AgentComposerControl } from "./use-agent-composer.js";
@@ -84,10 +83,12 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * order sent (`use-task-inbox.ts`), each standing on the thread meanwhile.
  * Only Got it and Start thread hold the box, Send busy, until they go,
  * since each settles or opens something: Got it waits behind the item's
- * replies on their way, then draws the notice settled, its Undo on a toast. Why a reply did not go is said
- * under the foot's bar over the box's own notes, its words and files back in
- * the box; one refused because the agent is archived says so, with
- * Unarchive after it, which brings the agent back and lets the note go.
+ * replies on their way, then draws the notice settled, its Undo on a toast. A
+ * reply that did not go never comes back into the box: it stands on the
+ * thread marked Not delivered (`use-task-inbox.ts`), and why a refused one
+ * did not go is said under the foot's bar over the box's own notes; one
+ * refused because the agent is archived says so, with Unarchive after it,
+ * which brings the agent back and lets the note go.
  * Once the item is settled, answered or taken back, the same box writes a
  * message on its thread, which reaches the agent and leaves the item where
  * it stands.
@@ -97,7 +98,9 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
  * item's agent's chip. Ticked, the line asks to start a thread and Send
  * reads "Start thread"; the words and files go as the thread's first
  * message, its first line standing for its title, and the box unticks once
- * the thread is started, so the next send is a reply again. Ticked under an
+ * the start answers, so the next send is a reply again. A start that did not
+ * go never comes back into the box: it stands on the thread marked Not
+ * delivered, as a reply that did not go does. Ticked under an
  * open question, the question's controls step aside, since nothing picked
  * there goes with the thread, and come back as they were once it is
  * unticked or the thread is started.
@@ -107,18 +110,6 @@ import type { TaskInboxControl } from "./use-task-inbox.js";
 function emptyBox(draft: InboxDraft): boolean {
   return draft.note.trim() === "" && draft.attachments.length === 0;
 }
-
-/** What Send reads, in words, while the box starts a new thread. */
-const START_THREAD = "Start thread";
-
-/** What the line asks for while the box starts a new thread. */
-const NEW_THREAD_PLACEHOLDER = "Start a new thread";
-
-/** What the checkbox under the card says before the agent's chip. */
-const SEND_AS_NEW = "Send as a new thread to";
-
-/** What Send reads on an empty notice that waits on the reader's nod, which settles it without messaging the agent. */
-const GOT_IT = "Got it";
 
 /** What the press after an archived agent's note says. */
 const UNARCHIVE = "Unarchive";
@@ -139,7 +130,7 @@ function NewThreadChoice({
   return (
     <div className="inbox-new-thread flex min-w-0 pt-ui-8 pl-ui-4 text-muted-foreground">
       <Checkbox checked={checked} disabled={held} onChange={onChange}>
-        {SEND_AS_NEW} {offer.agent}
+        {INBOX_BOX_WORDS.SEND_AS_NEW} {offer.agent}
       </Checkbox>
     </div>
   );
@@ -194,7 +185,7 @@ export interface NewThreadStart {
 export interface AnswerNewThread {
   /** The item's agent's chip, whom the thread goes to. */
   readonly agent: ReactNode;
-  /** Starts the thread, answering why it did not, or nothing once it did. */
+  /** Starts the thread, answering why a refused start did not go, which the box says, or nothing once it started or stands Not delivered without a refusal to say. */
   readonly onStart: (start: NewThreadStart) => Promise<string | undefined>;
 }
 
@@ -222,7 +213,6 @@ function AnswerCard({
   const draft = control.draftOf(item);
   const [asNew, setAsNew] = useState(false);
   const [starting, setStarting] = useState(false);
-  const attempt = useRef<{ readonly key: string; readonly words: string } | undefined>(undefined);
   const starts = newThread !== undefined && asNew;
   const asks = controls !== undefined && !starts;
   // Note that only a nod and a thread start hold the box; a reply leaves it at once and the next may follow.
@@ -250,7 +240,7 @@ function AnswerCard({
   };
 
   const placeholder = starts
-    ? NEW_THREAD_PLACEHOLDER
+    ? INBOX_BOX_WORDS.NEW_THREAD_PLACEHOLDER
     : asks
       ? INBOX_BOX_WORDS.NOTE_PLACEHOLDER
       : INBOX_BOX_WORDS.REPLY_PLACEHOLDER;
@@ -303,34 +293,19 @@ function AnswerCard({
     control.onAcknowledge(item, acknowledgeHeld);
   };
 
-  // Note that the same words and files sent again go under the key they went under, so a retry starts one thread.
-  // The box lets go of what it sent at once, as a reply does, so words written while the start is out stay
-  // there; a start refused puts what it sent back ahead of them (`refused-send.ts`), so neither is lost.
+  // Note that the box lets go of what it sends at once, as a reply does, and never takes it back: a start that
+  // did not go stands on the thread marked Not delivered (`inbox-pane.tsx`), whose Retry starts it again under its key.
   const start = (offer: AnswerNewThread) => {
-    const sent = { note: draft.note, attachments: draft.attachments };
-    const text = sent.note.trim();
-    const sentWords = JSON.stringify([text, sent.attachments]);
-    const key = attempt.current?.words === sentWords ? attempt.current.key : crypto.randomUUID();
-    attempt.current = { key, words: sentWords };
+    const text = draft.note.trim();
+    const { attachments } = draft;
     setRefusal(undefined);
     setStarting(true);
     control.onDraft(item, { ...draft, note: "", attachments: [] });
-    void offer.onStart({ text, attachments: sent.attachments, clientKey: key }).then((refused) => {
+    void offer.onStart({ text, attachments, clientKey: crypto.randomUUID() }).then((refused) => {
       setStarting(false);
+      setAsNew(false);
 
-      if (refused === undefined) {
-        attempt.current = undefined;
-        setAsNew(false);
-
-        return;
-      }
-
-      setRefusal(refused);
-      putBackRefused({
-        went: { text: sent.note, attachments: sent.attachments },
-        most: INBOX_BOUNDS.MAX_MESSAGE_CHARS,
-        update: (next) => control.onHeld(item, next),
-      });
+      if (refused !== undefined) setRefusal(refused);
     });
   };
 
@@ -390,7 +365,11 @@ function AnswerCard({
         wording={{
           placeholder,
           label: placeholder,
-          send: nod ? GOT_IT : starts ? START_THREAD : INBOX_BOX_WORDS.SEND,
+          send: nod
+            ? INBOX_BOX_WORDS.GOT_IT
+            : starts
+              ? INBOX_BOX_WORDS.START_THREAD
+              : INBOX_BOX_WORDS.SEND,
         }}
         maxLength={INBOX_BOUNDS.MAX_MESSAGE_CHARS}
         takesFocus={false}

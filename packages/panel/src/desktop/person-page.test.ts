@@ -853,7 +853,7 @@ test("an automation's row leads with its clock tile, ends with its failure and w
 
   const row = page.querySelector<HTMLElement>('section[aria-label="Automations"] li');
   assert.ok(row?.querySelector(".failed-mark"), "a failed newest run is marked at the end");
-  assert.match(row?.textContent ?? "", /Next /u);
+  assert.match(row?.textContent ?? "", /Next: /u);
   restOn(row?.querySelector("button") ?? assert.fail("no press"));
   const card = document.querySelector('.ui-tooltip-card [data-actor-card="automation"]');
   assert.match(card?.textContent ?? "", /Morning Sentry triage/u);

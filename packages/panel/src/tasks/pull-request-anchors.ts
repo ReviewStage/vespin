@@ -13,7 +13,7 @@
  */
 
 import type { ConversationEntry, ReviewThread } from "@repo/features/agent-wire";
-import { pullRequestAddressOf } from "@repo/features/link-grammar";
+import { samePullRequest } from "@repo/features/link-grammar";
 
 /** What a link to a pull request's own comment names: a review thread, or an entry of its conversation. */
 export const ANCHOR_KIND = {
@@ -38,19 +38,6 @@ function fragmentOf(href: string): string {
   } catch {
     return "";
   }
-}
-
-/** Whether two addresses are pages of the same pull request, whatever the case its owner and name are spelled in. */
-function samePullRequest(href: string, pullRequestUrl: string): boolean {
-  const there = pullRequestAddressOf(href);
-  const here = pullRequestAddressOf(pullRequestUrl);
-
-  return (
-    there !== undefined &&
-    here !== undefined &&
-    there.number === here.number &&
-    there.repository.toLowerCase() === here.repository.toLowerCase()
-  );
 }
 
 /**

@@ -1,5 +1,5 @@
 /**
- * workspace-sandbox-setup-procedures.ts -- a workspace's cloud sandbox setup: read it as a member, and save its install script, a repository's setup or archive script, or a repository's run actions, whole or one action at a time, as an owner or admin.
+ * workspace-sandbox-setup-procedures.ts -- a workspace's cloud sandbox setup: read it as a member, and save its install script, a repository's setup script, or a repository's run actions, whole or one action at a time, as an owner or admin.
  *
  * Every procedure resolves the caller (`accountMiddleware`, on the resource
  * so it runs before an input is read), then runs the operation every door
@@ -38,13 +38,12 @@ export function workspaceSandboxSetupProcedures(seams: WorkspaceSandboxSetupProc
     }),
 
     putRepository: signedIn.putRepository.effect(function* ({ input, context: { userId } }) {
-      return yield* saveRepositorySetup(
-        userId,
-        input.workspaceId,
-        input.repository,
-        input.script,
-        input.kind ?? REPOSITORY_SCRIPT_KIND.SETUP,
-      );
+      // Note that an archive script a released build still saves is ignored, because archive scripts were removed.
+      if (input.kind === REPOSITORY_SCRIPT_KIND.ARCHIVE) {
+        return yield* readSandboxSetup(userId, input.workspaceId);
+      }
+
+      return yield* saveRepositorySetup(userId, input.workspaceId, input.repository, input.script);
     }),
 
     putRunActions: signedIn.putRunActions.effect(function* ({ input, context: { userId } }) {

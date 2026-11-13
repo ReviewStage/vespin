@@ -5,7 +5,21 @@ import {
   type ReviewState,
 } from "@repo/features/agent-wire";
 import { threadLineTitle } from "@repo/features/inbox-wire";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { GITHUB_PAGE, gitHubPageLink, LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { SUGGESTION_LEAD } from "@repo/features/reply-button-wire";
+import {
+  COMMENT_LINE_LEAD,
+  CONCLUSION_WORDS,
+  commentLineSubject,
+  githubChecksFailed,
+  githubChecksPassed,
+  githubLineChecks,
+  githubLineHead,
+  type LineLead,
+  SLACK_LINE_LEAD,
+  SLACK_LINE_SUBJECT,
+  THREAD_LINE_DID,
+} from "@repo/features/transcript-lines";
 import {
   DISCLOSURE_FILL,
   type EventNote,
@@ -24,18 +38,11 @@ import {
   type GitHubLineMetadata,
   isFailingConclusion,
   type SlackLineMetadata,
-  THREAD_LINE_EVENT,
+  type SuggestedBy,
   type ThreadLineMetadata,
 } from "@repo/wire";
 import { createContext, type ReactNode, useContext } from "react";
 import { PLAN_BODY_LAYOUT, Plan, PlanContent, PlanHeader, PlanIcon } from "../ai-elements/plan.js";
-import {
-  CONCLUSION_WORDS,
-  githubChecksFailed,
-  githubChecksPassed,
-  githubLineChecks,
-  githubLineHead,
-} from "./agent-model.js";
 import { CheckList, CheckRow } from "./agent-pull-request-tab.js";
 import { FileTypeIcon } from "./file-type-icon.js";
 import { ChipOrLink, linkChip, type MentionDoors } from "./mention-chip.js";
@@ -68,23 +75,10 @@ import { type GitHubPictureDrawer, GitHubWords, TranscriptWords } from "./transc
  * instructions and the fence are left to the agent.
  */
 
-/** What a line's head says was done: in lowercase after its sender's name, or opening the line where it is the reader's own. */
-interface LineLead {
-  readonly AFTER_NAME: string;
-  readonly OWN: string;
-}
-
 /** The lead for a line another sent, or the reader's own. */
 function leadOf(lead: LineLead, received: boolean): string {
   return received ? lead.AFTER_NAME : lead.OWN;
 }
-
-/** What a thread's line says the member did on it, by the event its metadata names, so the head reads as a sentence from their name. */
-export const THREAD_LINE_DID = {
-  [THREAD_LINE_EVENT.MESSAGE]: { AFTER_NAME: "wrote in", OWN: "Wrote in" },
-  [THREAD_LINE_EVENT.ANSWER]: { AFTER_NAME: "answered", OWN: "Answered" },
-  [THREAD_LINE_EVENT.CLOSE]: { AFTER_NAME: "resolved", OWN: "Resolved" },
-} as const satisfies Record<ThreadLineMetadata["event"], LineLead>;
 
 /** The agent whose transcript is drawn, whose threads its thread lines are on; none where no transcript says. */
 export const TranscriptAgent = createContext<string | undefined>(undefined);
@@ -134,14 +128,42 @@ export function ThreadLineHead({
   );
 }
 
-/** What a comment line leads with, as a thread's leads with what its member did. */
-export const COMMENT_LINE_LEAD = {
-  AFTER_NAME: "commented on",
-  OWN: "Commented on",
-} as const satisfies LineLead;
+/**
+ * A line sent from a suggestion in another agent's reply: Suggested by that
+ * agent's chip, which opens it and hangs its card, as a thread's line is
+ * headed by the thread, its name the one it had as the line was sent until
+ * the agent itself is read. The member who sent it is the line's sender.
+ */
+export function SuggestionLineHead({
+  suggestedBy,
+  fit,
+  then,
+}: {
+  suggestedBy: SuggestedBy;
+  /** How much of the line the chip takes: the rest of it alone, or its own width beside its sender (`MessageHead`). */
+  fit?: SubjectFit | undefined;
+  /** What follows the chip with no gap before it, as the comma before who started an agent does; nothing where the head ends there. */
+  then?: string | undefined;
+}): React.JSX.Element {
+  const doors = useMentionDoors();
 
-/** What a comment line's chip names where no page does: the description of the task it is on. */
-const DESCRIPTION_WORDS = "the description";
+  const href =
+    doors.place.workspace === ""
+      ? undefined
+      : linkOf(
+          { kind: LINK_DESTINATION.AGENT, agentId: suggestedBy.agent_id },
+          doors.place.workspace,
+        );
+
+  return (
+    <SubjectLine lead={SUGGESTION_LEAD} fit={fit} data-suggestion-line="">
+      <span className="inline-flex min-w-0 items-center">
+        {href === undefined ? suggestedBy.name : linkChip(href, suggestedBy.name, doors)}
+        {then}
+      </span>
+    </SubjectLine>
+  );
+}
 
 /** The link a comment line's chip is read from: the page it is on, or its task's description; none where no task or workspace names it. */
 function commentLink(line: CommentLineMetadata, doors: MentionDoors): string | undefined {
@@ -153,11 +175,6 @@ function commentLink(line: CommentLineMetadata, doors: MentionDoors): string | u
         { kind: LINK_DESTINATION.PAGE, planId: line.task_id, pageId: line.page_id },
         doors.place.workspace,
       );
-}
-
-/** What a comment line's head names: the page by its title, or the description. */
-export function commentLineSubject(line: CommentLineMetadata): string {
-  return line.page_title ?? DESCRIPTION_WORDS;
 }
 
 /**
@@ -188,15 +205,6 @@ export function CommentLineHead({
     </SubjectLine>
   );
 }
-
-/** What a Slack line leads with: after its sender's name, as GitHub's card says what its author did, or opening the line where it is the reader's own. */
-export const SLACK_LINE_LEAD = {
-  AFTER_NAME: "wrote in",
-  OWN: "Wrote in",
-} as const satisfies LineLead;
-
-/** What a Slack line's chip names: Slack, whose mark the chip wears for a link to it. */
-export const SLACK_LINE_SUBJECT = "Slack";
 
 /**
  * The head of a member's message to the Slack bot, drawn in place of the
@@ -326,7 +334,11 @@ function pullRequestPage(line: GitHubLineMetadata): string {
 
   if (reviewed || line.number === undefined) return line.url;
 
-  return `https://github.com/${line.repository}/pull/${line.number}`;
+  return gitHubPageLink({
+    kind: GITHUB_PAGE.PULL_REQUEST,
+    repository: line.repository,
+    number: line.number,
+  });
 }
 
 /** A picture drawer that draws none, each picture standing as its link, where no agent's transcript is drawn to read it as. */

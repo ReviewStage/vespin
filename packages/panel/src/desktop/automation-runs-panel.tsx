@@ -9,7 +9,6 @@ import { AUTOMATION_FIRING, type AutomationRunSummary } from "@repo/features/aut
 import { GLYPH_STATE, type GlyphState } from "@repo/features/glyph-state";
 import { LINK_DESTINATION, type LinkDestination } from "@repo/features/link-grammar";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { momentText, sinceText } from "@repo/features/time-format";
 import { TRIGGER_CATALOG } from "@repo/features/trigger-catalog";
 import {
   BackButton,
@@ -35,6 +34,7 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  Time,
   Tooltip,
   useMinute,
   useResizeEdge,
@@ -210,11 +210,9 @@ export function RunRow({
       meta={
         <span className={AUTOMATION_ROW_META}>
           {stateEndMark(state, true)}
-          <Tooltip label={momentText(run.firedAt)}>
-            <span>
-              <ReplayUnmask>{sinceText(run.firedAt, now)}</ReplayUnmask>
-            </span>
-          </Tooltip>
+          <ReplayUnmask>
+            <Time at={run.firedAt} now={now} />
+          </ReplayUnmask>
         </span>
       }
       current={linked ? LIST_ROW_CURRENT.ITEM : undefined}

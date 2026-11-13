@@ -1,5 +1,5 @@
 /**
- * task-standing-words.ts -- what a task's status, priority, assignee, and relations are called wherever they are named: a chip, a menu's row, a list's filter, and the iPhone's task page alike.
+ * task-standing-words.ts -- what a task's status, priority, assignee, and relations are called wherever they are named: a chip, a menu's row, a list's filter, and the iPhone's task page alike; and the tone a status's mark is drawn in.
  */
 
 import {
@@ -20,6 +20,22 @@ export const TASK_STATUS_WORDS = {
   [TASK_STATUS.IN_PROGRESS]: "In progress",
   [TASK_STATUS.DONE]: "Done",
   [TASK_STATUS.CANCELED]: "Canceled",
+} as const satisfies Record<TaskStatus, string>;
+
+/** The tones a status's mark is drawn in, as `@repo/ui`'s and `@repo/ui-native`'s `STATUS_TONE` name them. */
+const TASK_STATUS_TONE_KIND = {
+  NEUTRAL: "neutral",
+  WORKING: "working",
+  COMPLETE: "complete",
+} as const;
+
+/** The tone each status's mark is drawn in, on the panel and the iPhone alike: at rest, under way, or finished well. Only its glyph is each platform's own. */
+export const TASK_STATUS_TONE = {
+  [TASK_STATUS.BACKLOG]: TASK_STATUS_TONE_KIND.NEUTRAL,
+  [TASK_STATUS.TODO]: TASK_STATUS_TONE_KIND.NEUTRAL,
+  [TASK_STATUS.IN_PROGRESS]: TASK_STATUS_TONE_KIND.WORKING,
+  [TASK_STATUS.DONE]: TASK_STATUS_TONE_KIND.COMPLETE,
+  [TASK_STATUS.CANCELED]: TASK_STATUS_TONE_KIND.NEUTRAL,
 } as const satisfies Record<TaskStatus, string>;
 
 /** Each priority as its chip, its menu's row, and a Board card's say it. */

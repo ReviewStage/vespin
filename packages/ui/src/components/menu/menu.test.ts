@@ -364,7 +364,7 @@ function standInResizeObserver(): void {
   );
 }
 
-test("an item standing for a wait is heard with its words after its label and detail", () => {
+test("an item standing for a wait, or tagged beside a detail, is heard with those words after its label", () => {
   mount(
     createElement(Harness, {
       groups: [
@@ -376,6 +376,13 @@ test("an item standing for a wait is heard with its words after its label and de
             onSelect: () => undefined,
           },
           { label: "Check", busy: "Running", onSelect: () => undefined },
+          {
+            label: "Serve",
+            tag: "Default",
+            tagWords: "Default",
+            detail: "pnpm serve",
+            onSelect: () => undefined,
+          },
         ],
       ],
     }),
@@ -386,6 +393,7 @@ test("an item standing for a wait is heard with its words after its label and de
   expect(items.map((item) => item.getAttribute("aria-label"))).toEqual([
     "Stop Dev server, pnpm dev, Running",
     "Check, Running",
+    "Serve, Default, pnpm serve",
   ]);
 });
 
@@ -872,6 +880,71 @@ test("a value that stays leaves its menu and submenu standing as it is chosen, w
   press(button("Clear filters"));
   expect(openMenu()).toBeNull();
 });
+
+test.each([
+  { layout: "a floating menu", phone: false },
+  { layout: "a phone's sheet", phone: true },
+])(
+  "in $layout, actions naming one row stand in one group named by it, each an item named by its label that the arrows walk in turn, one that stays leaves the menu standing, and one that dims itself as it is chosen hands the keys to the menu's first item",
+  ({ phone }) => {
+    if (phone) {
+      vi.stubGlobal("ResizeObserver", StandInResizeObserver);
+      inPhoneLayout();
+    }
+
+    const chosen: Chosen = [];
+
+    const step = (label: string, extra: { detail?: string; disabled?: boolean } = {}) => ({
+      ...action(label, chosen),
+      ...extra,
+      row: "Zoom",
+      stays: true,
+    });
+
+    // A zoom at 125%, which Actual size draws at 100%, where it no longer applies.
+    function Zoomed(): React.JSX.Element {
+      const [actual, setActual] = useState(false);
+
+      return createElement(Harness, {
+        groups: [
+          [action("Rename", chosen)],
+          [
+            step("Zoom out"),
+            {
+              ...step("Actual size", { detail: actual ? "100%" : "125%", disabled: actual }),
+              onSelect: () => {
+                chosen.push("Actual size");
+                setActual(true);
+              },
+            },
+            step("Zoom in"),
+          ],
+        ],
+      });
+    }
+
+    mount(createElement(Zoomed));
+    press(button("More"));
+
+    const row =
+      document.querySelector('[role="group"][aria-label="Zoom"]') ?? expect.fail("no row");
+
+    expect(
+      [...row.querySelectorAll('[role="menuitem"]')].map((item) => item.getAttribute("aria-label")),
+    ).toEqual(["Zoom out", "Actual size, 125%", "Zoom in"]);
+    expect(row.textContent).toBe("ZoomZoom out125%Zoom in");
+
+    key("ArrowDown");
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Zoom out");
+    key("ArrowDown");
+    expect(document.activeElement?.getAttribute("aria-label")).toBe("Actual size, 125%");
+
+    pressFocused();
+    expect(chosen).toEqual(["Actual size"]);
+    expect(openMenu()).not.toBeNull();
+    expect(focused()).toBe("Rename");
+  },
+);
 
 test("the menu key or Shift-F10 on a row opens its menu under it on the first item", () => {
   function Row(): React.JSX.Element {

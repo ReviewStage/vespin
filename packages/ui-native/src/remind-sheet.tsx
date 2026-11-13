@@ -26,6 +26,8 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
 import { useState } from "react";
+import { GLYPH } from "./glyph.js";
+import { actContent } from "./glyph-label.js";
 import { useColors } from "./tokens/colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -103,8 +105,7 @@ function PickFace({
         ]}
       />
       <SwiftUIButton
-        label={REMIND_WORDS.REMIND_ME}
-        systemImage="clock"
+        {...actContent(REMIND_WORDS.REMIND_ME, GLYPH.TIME)}
         onPress={() => onPick(picked.getTime())}
         modifiers={[tint(colors.ACCENT), listRowBackground(colors.SURFACE)]}
       />
@@ -166,8 +167,7 @@ export function RemindSheet({
                     <TimeRow key={time.label} time={time} />
                   ))}
                   <SwiftUIButton
-                    label={REMIND_WORDS.PICK}
-                    systemImage="calendar"
+                    {...actContent(REMIND_WORDS.PICK, GLYPH.TIME)}
                     onPress={() => setStage(REMIND_STAGE.PICK)}
                     modifiers={[listRowBackground(colors.SURFACE)]}
                   />
@@ -175,8 +175,7 @@ export function RemindSheet({
                 {onClear === undefined ? null : (
                   <Section>
                     <SwiftUIButton
-                      label={REMIND_WORDS.CLEAR}
-                      systemImage="tray"
+                      {...actContent(REMIND_WORDS.CLEAR, GLYPH.INBOX)}
                       onPress={onClear}
                       modifiers={[listRowBackground(colors.SURFACE)]}
                     />

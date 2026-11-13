@@ -216,11 +216,11 @@
     container: pinned / scroll-state;
   }
 
-  /* On the frame the chosen tab is lifted in the sheet's ground beneath it,
-     by a hairline and a soft shadow, as the sidebar draws the place standing
-     open (nav-item.css), so the strip and the sidebar choose alike. */
+  /* On the frame the chosen tab is lifted as a card is, in the surface's
+     fill with a hairline and a soft shadow, as the sidebar draws the place
+     standing open (nav-item.css), so the strip and the sidebar choose alike. */
   .ui-tabs[data-ground="frame"] .ui-tab[data-selected="true"] {
-    background: var(--ui-color-ground);
+    background: var(--ui-color-surface);
     box-shadow:
       0 0 0 1px var(--ui-color-border),
       0 1px 2px var(--ui-color-shadow-soft);

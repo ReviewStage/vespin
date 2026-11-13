@@ -207,8 +207,8 @@ import { PaneGlide } from "./pane-motion.js";
 import { PhoneHead, phoneFindGroups } from "./phone-head.js";
 import { useAutomationRuns } from "./use-automation-runs.js";
 import {
-  AUTOMATION_DELETE_MUTATION,
   type AutomationWriteAnswer,
+  useAutomationDeletion,
   WEBHOOK_SECRET_MUTATION,
 } from "./use-automations.js";
 import { type RunChoices, useRunChoices } from "./use-run-choices.js";
@@ -335,10 +335,12 @@ const GITHUB_EVENTS: readonly { value: GitHubTriggerEvent; label: string }[] = [
   { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED, label: "Pull request opened or updated" },
   { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED, label: "Pull request opened" },
   { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED, label: "Pull request labeled" },
+  { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED, label: "Pull request merged" },
   { value: GITHUB_TRIGGER_EVENT.ISSUE_OPENED, label: "Issue opened" },
   { value: GITHUB_TRIGGER_EVENT.ISSUE_LABELED, label: "Issue labeled" },
   { value: GITHUB_TRIGGER_EVENT.CHECK_FAILED, label: "Checks failed" },
   { value: GITHUB_TRIGGER_EVENT.PUSH, label: "Commits pushed" },
+  { value: GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED, label: "Release published" },
 ];
 
 /** The days of the week as cron numbers them. */
@@ -1404,11 +1406,12 @@ const MOMENT_CHOICES: readonly { value: PullRequestMoment; label: string; detail
   },
 ];
 
-/** The GitHub events a pull request's drafts and forks speak to. */
+/** The GitHub events a pull request's forks speak to. */
 const PULL_REQUEST_EVENTS: ReadonlySet<GitHubTriggerEvent> = new Set([
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED,
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED,
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
+  GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED,
 ]);
 
 /** A list with a value in it or out of it, as a switch leaves it. */
@@ -1421,8 +1424,10 @@ function toggled<Value>(list: readonly Value[], value: Value, on: boolean): read
 /**
  * A GitHub trigger's settings, as rows of the Trigger card, a switch each
  * as Settings lists several: whose events fire it, the moments an update
- * fires on, and whether drafts are skipped and forks heard, each shown
- * only for the events it speaks to. A check names no sender, so it shows none.
+ * fires on, whether drafts are skipped and forks heard, and whether
+ * prereleases are heard, each shown only for the events it speaks to. A
+ * check names no sender, so it shows none, and a merged pull request is
+ * never a draft, so it shows no drafts switch.
  */
 function GitHubSettingsRows({
   event,
@@ -1466,13 +1471,15 @@ function GitHubSettingsRows({
         ))}
       </Reveal>
       <Reveal shown={PULL_REQUEST_EVENTS.has(event)}>
-        <SwitchRow
-          label="Skip drafts"
-          labelReplayUnmasked
-          detail={<ReplayUnmask>A draft starts a run once it is marked ready.</ReplayUnmask>}
-          checked={!settings.drafts}
-          onChange={(skip) => onSettings({ ...settings, drafts: !skip })}
-        />
+        <Reveal shown={event !== GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED}>
+          <SwitchRow
+            label="Skip drafts"
+            labelReplayUnmasked
+            detail={<ReplayUnmask>A draft starts a run once it is marked ready.</ReplayUnmask>}
+            checked={!settings.drafts}
+            onChange={(skip) => onSettings({ ...settings, drafts: !skip })}
+          />
+        </Reveal>
         <SwitchRow
           label="Include forks"
           labelReplayUnmasked
@@ -1484,6 +1491,14 @@ function GitHubSettingsRows({
           }
           checked={settings.forks}
           onChange={(forks) => onSettings({ ...settings, forks })}
+        />
+      </Reveal>
+      <Reveal shown={event === GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED}>
+        <SwitchRow
+          label="Include prereleases"
+          labelReplayUnmasked
+          checked={settings.prereleases}
+          onChange={(prereleases) => onSettings({ ...settings, prereleases })}
         />
       </Reveal>
     </Reveal>
@@ -2795,7 +2810,7 @@ export function AutomationEditor({
   }));
 
   // A new automation starts in the repository the workspace's plans were about lately, as a new plan does,
-  // filled in from the preset of the suggestion it was opened from.
+  // filled in from the preset of the suggestion it was opened from, the workspace's own where it is shared.
   const [start] = useState(() => {
     if (automation !== undefined) return automationDraft(automation, defaults);
 
@@ -2804,7 +2819,7 @@ export function AutomationEditor({
       repository: repositories.recent[0] ?? null,
     };
 
-    return preset === undefined ? blank : presetDraft(blank, automationPreset(preset));
+    return preset === undefined ? blank : presetDraft(blank, automationPreset(preset), offersOwner);
   });
 
   const [draft, setDraft] = useState(start);
@@ -2903,7 +2918,11 @@ export function AutomationEditor({
     if (workspace === undefined || (automation !== undefined && change === undefined)) return;
     void saving.run(() =>
       (automation === undefined
-        ? writes.create(createRequestOf(draft, workspace.id))
+        ? writes.create({
+            ...createRequestOf(draft, workspace.id),
+            // Note that a new automation opened from a suggestion keeps its preset, so the list suggests it no more.
+            ...(preset === undefined ? undefined : { preset }),
+          })
         : writes.change({ automationId: automation.id, change: change ?? {} })
       ).then(landed),
     );
@@ -2954,26 +2973,8 @@ export function AutomationEditor({
       ? Promise.resolve<AutomationView>({ failure: AUTOMATION_CALL_FAILURE.NOT_FOUND })
       : writes.toggle(automation.id, enabled);
 
-  const removing = useMutation(AUTOMATION_DELETE_MUTATION);
-
-  const deletionAct = useConfirmAct(removing, {
-    send: () => {
-      if (automation === undefined) return Promise.resolve();
-
-      return removing.mutateAsync(automation.id).then((answer) => {
-        if (!("failure" in answer)) placeLeave.pass(() => onDeleted(automation.id));
-      });
-    },
-    answered: (answer): ActionResult =>
-      "failure" in answer
-        ? { status: ACTION_RESULT_STATUS.REJECTED, reason: SAVE_REFUSAL_WORDS[answer.failure] }
-        : ACCEPTED,
-  });
-
-  const deletion = useConfirmDialog(
-    { subject: automation !== undefined, surfaceOpen: true },
-    deletionAct,
-    confirmFailure(FAILURE_SURFACE.AUTOMATION_DELETE, { automationId: automation?.id }),
+  const deletion = useAutomationDeletion(automation?.id, (automationId) =>
+    placeLeave.pass(() => onDeleted(automationId)),
   );
 
   // A run with nothing of its own to open opens the setup, where whatever kept it from starting is mended:

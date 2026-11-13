@@ -10,7 +10,15 @@ import {
   SEARCH_FOUND_KIND,
   SEARCH_FOUND_TITLE,
 } from "@repo/features/search-found-model";
-import { EmptyState, LIST_LOOK, ListSection, RowList, Screen, SplitView } from "@repo/ui-native";
+import {
+  EmptyState,
+  GLYPH,
+  LIST_LOOK,
+  ListSection,
+  RowList,
+  Screen,
+  SplitView,
+} from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
@@ -23,11 +31,11 @@ import { useThreeColumns } from "../use-window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
-import { InboxRow } from "./inbox-screens.js";
+import { InboxItemRows } from "./inbox-screens.js";
 import {
   StatusQuestionAsk,
   TaskAgentRow,
-  TaskNodeRow,
+  TaskRows,
   useAgentArchiveAsk,
   useSidebarTasks,
 } from "./task-screens.js";
@@ -89,24 +97,19 @@ function FoundList({
     >
       {found.tasks.length === 0 ? null : (
         <ListSection title={SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.TASKS]} count={found.tasks.length}>
-          {found.tasks.map((task) => (
-            <TaskNodeRow key={task.id} node={{ task, children: [] }} listing={listing} />
-          ))}
+          <TaskRows tasks={found.tasks} listing={listing} />
         </ListSection>
       )}
       {found.inbox.length === 0 ? null : (
         <ListSection title={SEARCH_FOUND_TITLE[SEARCH_FOUND_KIND.INBOX]} count={found.inbox.length}>
-          {found.inbox.map((listed) => (
-            <InboxRow
-              key={listed.item.id}
-              listed={listed}
-              readerId={found.readerId}
-              pictureOf={pictureOf}
-              onMark={mark}
-              onRemind={onRemind}
-              onResolve={resolve}
-            />
-          ))}
+          <InboxItemRows
+            listed={found.inbox}
+            readerId={found.readerId}
+            pictureOf={pictureOf}
+            onMark={mark}
+            onRemind={onRemind}
+            onResolve={resolve}
+          />
         </ListSection>
       )}
       {found.agents.length === 0 ? null : (
@@ -149,9 +152,9 @@ function useSearchScreen({ query, setQuery }: SearchWords) {
 
   const results =
     query.trim() === "" ? (
-      <EmptyState title={SEARCH_TITLE} symbol="magnifyingglass" description={SEARCH_FINDS} />
+      <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
     ) : none ? (
-      <EmptyState title={noResultsWords(query)} symbol="magnifyingglass" />
+      <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
     ) : (
       <FoundList
         found={found}

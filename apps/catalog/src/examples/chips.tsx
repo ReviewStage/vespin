@@ -219,9 +219,9 @@ function Chips(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection id="chips-status-glyph" title="A glyph wearing a status dot">
         <Inline>
-          <Chip look={CHIP_LOOK.TOOLBAR} iconOnly aria-label="Ports: Ports not forwarded">
+          <Chip look={CHIP_LOOK.TOOLBAR} iconOnly aria-label="Ports: Ports">
             <PlugIcon aria-hidden="true" />
-            <ChipName>Ports not forwarded</ChipName>
+            <ChipName>Ports</ChipName>
           </Chip>
           <Chip look={CHIP_LOOK.TOOLBAR} iconOnly aria-label="Ports: Forwarding to localhost:3000">
             <StatusGlyph tone={STATUS_TONE.COMPLETE} label="Forwarding to localhost:3000">

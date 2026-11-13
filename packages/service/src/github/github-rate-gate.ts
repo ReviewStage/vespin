@@ -6,7 +6,9 @@
  * https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api):
  * make requests serially rather than concurrently, since its secondary limit
  * refuses past a hundred at once; wait at least a second between each POST,
- * PATCH, PUT, or DELETE; and on a 403 or 429 for a rate limit, ask nothing
+ * PATCH, PUT, or DELETE, save a GraphQL query, which GitHub counts as a read
+ * (https://docs.github.com/en/graphql/overview/rate-limits-and-query-limits-for-the-graphql-api);
+ * and on a 403 or 429 for a rate limit, ask nothing
  * again before `retry-after` seconds have passed, or before
  * `x-ratelimit-reset` where `x-ratelimit-remaining` is 0, or else before a
  * minute has, waiting exponentially longer as the refusals repeat, because
@@ -52,7 +54,17 @@ import {
   liftGitHubRateHold,
   readGitHubRateHold,
 } from "@repo/database/models/github-rate-holds";
-import { Clock, Context, Duration, Effect, Layer, Option, Semaphore } from "effect";
+import {
+  Clock,
+  Context,
+  Duration,
+  Effect,
+  Layer,
+  Option,
+  Predicate,
+  Schema,
+  Semaphore,
+} from "effect";
 import * as Headers from "effect/http/Headers";
 import * as HttpClient from "effect/http/HttpClient";
 import type * as HttpClientRequest from "effect/http/HttpClientRequest";
@@ -94,6 +106,17 @@ const IDENTITY = { APP: "app", ANONYMOUS: "anonymous" } as const;
 
 /** The methods GitHub asks a second between: the ones that write. */
 const MUTATIVE_METHODS: ReadonlySet<string> = new Set(["POST", "PATCH", "PUT", "DELETE"]);
+
+const GRAPHQL_PATH = "/graphql";
+
+/** A GraphQL request's body, as far as the gate reads it: its document. */
+const GraphqlBody = Schema.fromJsonString(Schema.Struct({ query: Schema.String }));
+
+/** A document whose one operation is a query: named `query`, or the bare `{ … }` shorthand. */
+const QUERY_DOCUMENT = /^\s*(?:query\b|\{)/u;
+
+/** A document naming a mutation anywhere, which is spaced as a write whatever it opens with. */
+const MUTATION_WORD = /\bmutation\b/u;
 
 /** One identity's standing hold: when it lifts, and how many refusals in a row it follows. */
 interface Hold {
@@ -143,6 +166,26 @@ function loggedIdentity(identity: string): string {
 
 function toGitHubApi(request: HttpClientRequest.HttpClientRequest): boolean {
   return URL.canParse(request.url) && new URL(request.url).host === GITHUB_API_HOST;
+}
+
+/**
+ * Whether a request to GitHub's API is a GraphQL query, which is POSTed
+ * but writes nothing. Note that a document naming a mutation anywhere is
+ * read as one, so a doubt is spaced as a write.
+ */
+function graphqlQuery(request: HttpClientRequest.HttpClientRequest): boolean {
+  const { body } = request;
+
+  if (new URL(request.url).pathname !== GRAPHQL_PATH || !Predicate.isTagged(body, "Uint8Array")) {
+    return false;
+  }
+
+  const document = Schema.decodeUnknownOption(GraphqlBody)(new TextDecoder().decode(body.body));
+
+  return Option.match(document, {
+    onNone: () => false,
+    onSome: ({ query }) => QUERY_DOCUMENT.test(query) && !MUTATION_WORD.test(query),
+  });
 }
 
 /**
@@ -470,7 +513,7 @@ export const githubRateGate: Layer.Layer<
       const identity = identityOf(request);
       // Note that the hold is read once the lane is had, because a request
       // that queued behind the refusal must not be sent after it.
-      const writes = MUTATIVE_METHODS.has(request.method);
+      const writes = MUTATIVE_METHODS.has(request.method) && !graphqlQuery(request);
 
       const send = Effect.gen(function* () {
         const now = yield* Clock.currentTimeMillis;

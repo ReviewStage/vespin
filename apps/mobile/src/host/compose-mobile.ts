@@ -13,9 +13,12 @@
  * authentication session and its cipher the Keychain's.
  *
  * The screens' acts reach the host's own procedures on the act port in this
- * process, over a channel of two ends (`in-process-channel.ts`); every
- * platform kind, a copy, a download, the Mac's own terminal, is refused in
- * its own words, so the table stays total. The composition is a `Layer`,
+ * process, over a channel of two ends (`in-process-channel.ts`); of the
+ * platform kinds the app answers a note's send to the feedback endpoint,
+ * and an agent's shells listed and its sandbox resumed, which its run
+ * actions ask (`shellReadProcedures`), and every other, a copy, a download,
+ * the Mac's own terminal, is refused in its own words, so the table stays
+ * total. The composition is a `Layer`,
  * built by the app's one runtime edge (`mobile-runtime.ts`), whose close is
  * the host's drain; `fork` is that runtime's, handed in so no count runs
  * anywhere else. A fixture run (`launch-arguments.ts`) stands the host on
@@ -36,7 +39,10 @@ import {
   type AgentProceduresDependencies,
   clientSettingSideEffects,
   createActPortHandler,
+  feedbackProcedures,
+  type PlatformActProcedures,
   refusedPlatformProcedures,
+  shellReadProcedures,
   WindowPushes,
 } from "@repo/host/act-port";
 import { AgentNoticeDoors } from "@repo/host/agent-notices";
@@ -84,7 +90,7 @@ import { effectServiceLayer } from "@repo/host/service-layer";
 import { plainCodeLines } from "@repo/host/task-code-remote";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Stream } from "effect";
 import type * as FileSystem from "effect/FileSystem";
-import type * as HttpClient from "effect/http/HttpClient";
+import * as HttpClient from "effect/http/HttpClient";
 import { fixtureActs, stageFixture } from "./fixture-host.js";
 import { inProcessChannel } from "./in-process-channel.js";
 
@@ -124,8 +130,8 @@ export interface DeviceSeams {
   readonly fileSystem: Layer.Layer<FileSystem.FileSystem>;
   /** The ids the host mints for its own records. */
   readonly createId: () => string;
-  /** Opens an address outside the app. */
-  readonly openExternal: (url: string) => Promise<void>;
+  /** Opens an address outside the app; a sign-in's in the system's authentication sheet, which closes on the page it names as its landing. */
+  readonly openExternal: (url: string, landing?: string) => Promise<void>;
   /** Opens a relay socket, which the terminals and the live reads ride. */
   readonly openSocket: OpenTerminalSocket;
   /** Whether the app is in the foreground, at each change, for as long as the subscription stands. */
@@ -256,6 +262,25 @@ function portDependencies(
 }
 
 /**
+ * The platform kinds the app answers itself: a note to the people who make
+ * the app, carried to the service's feedback endpoint over the host's own
+ * HTTP client (`feedbackProcedures`), and an agent's shells listed and its
+ * sandbox resumed, which its run actions read (`shellReadProcedures`).
+ * Every other platform kind is refused
+ * in its own words: a copy or a save the app does through the system's own
+ * pasteboard, Photos, and share sheet, and what only the Mac has.
+ */
+const platformProcedures = (
+  http: HttpClient.HttpClient,
+  shells: Pick<OperatorClient["host"], "terminalList" | "terminalResume">,
+): PlatformActProcedures<MobileSender> => ({
+  ...refusedPlatformProcedures<MobileSender>(),
+  ...feedbackProcedures<MobileSender>(http, SERVICE_ORIGIN),
+  // Note that an agent's shells are listed and its sandbox resumed for its run actions, though no Terminal tab is drawn.
+  ...shellReadProcedures<MobileSender>(shells),
+});
+
+/**
  * The act port as the app opens it: a channel in the process, the host's end
  * upgraded with the act port's handler and the screens' end linked to the
  * client they act through, as the web's tab opens one over a
@@ -263,20 +288,22 @@ function portDependencies(
  * every call is the panel's and trusted; the procedures' effects run on the
  * app's runtime. Both ends close with the host's scope.
  */
-const servedActPort = (dependencies: ActPortDependencies, services: Context.Context<never>) =>
+const servedActPort = (
+  dependencies: ActPortDependencies,
+  shells: Pick<OperatorClient["host"], "terminalList" | "terminalResume">,
+  services: Context.Context<never>,
+  http: HttpClient.HttpClient,
+) =>
   Effect.acquireRelease(
     Effect.sync(() => {
       const channel = inProcessChannel();
-      createActPortHandler(dependencies, refusedPlatformProcedures<MobileSender>()).upgrade(
-        channel.port2,
-        {
-          context: () => ({
-            actor: { sender: APP_SCREENS, panel: true },
-            trusted: true,
-            "effect/context": services,
-          }),
-        },
-      );
+      createActPortHandler(dependencies, platformProcedures(http, shells)).upgrade(channel.port2, {
+        context: () => ({
+          actor: { sender: APP_SCREENS, panel: true },
+          trusted: true,
+          "effect/context": services,
+        }),
+      });
       channel.port2.start();
       const link = new RPCLink({ port: channel.port1 });
       channel.port1.start();
@@ -389,7 +416,9 @@ const composedMobile = (options: MobileHostOptions) =>
 
       const acts = yield* servedActPort(
         portDependencies(operator, notices, device.createId(), device),
+        operator.host,
         services,
+        yield* HttpClient.HttpClient,
       );
 
       return { bridge: made.bridge, acts, operator, state };

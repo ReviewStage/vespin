@@ -1,5 +1,5 @@
 /**
- * workspace-sandbox-setup.ts -- a workspace's cloud sandbox setup, as every door reads and saves it: read it as a member, and save its install script, a repository's setup or archive script, or a repository's run actions, whole or one action at a time, as an owner or admin.
+ * workspace-sandbox-setup.ts -- a workspace's cloud sandbox setup, as every door reads and saves it: read it as a member, and save its install script, a repository's setup script, or a repository's run actions, whole or one action at a time, as an owner or admin.
  *
  * The hosted procedures (`workspace-sandbox-setup-procedures.ts`) and the
  * member MCP tools (`read_sandbox_setup`, `edit_sandbox_setup`,
@@ -37,7 +37,7 @@ import {
   type CloudSetupScriptRun,
   REPOSITORY_SCRIPT_KIND,
   type RepositoryRunActions,
-  type RepositoryScriptKind,
+  RUN_ACTION_AVAILABILITY,
   type RunActionPut,
   WORKSPACE_SANDBOX_SETUP_BOUNDS,
   type WorkspaceRunActionEdit,
@@ -73,6 +73,9 @@ function runActionLists(rows: readonly WorkspaceRunAction[]): RepositoryRunActio
       command: row.command,
       ...(row.icon === null ? undefined : { icon: row.icon }),
       ...(row.isDefault ? { isDefault: true } : undefined),
+      ...(row.availableIn === RUN_ACTION_AVAILABILITY.BOTH
+        ? undefined
+        : { availableIn: row.availableIn }),
     };
 
     const last = lists.at(-1);
@@ -128,6 +131,8 @@ function editedRunActions(
     command: row.command,
     icon: row.icon ?? undefined,
     isDefault: row.isDefault,
+    // Note that each action keeps where it may run, because the list is written whole, and one written without it may run in both.
+    availableIn: row.availableIn,
   }));
 
   let edited: RunActionWrite;
@@ -212,15 +217,15 @@ const setupAnswer = Effect.fn("web/workspaceSandboxSetupAnswer")(function* (
     ]),
   );
 
-  const ofKind = (kind: RepositoryScriptKind) =>
-    scripts
-      .filter((row) => row.kind === kind)
-      .map((row) => ({
-        repository: row.repository,
-        script: row.script,
-        updatedAt: row.updatedAt.getTime(),
-        ...lastRunOf(runs, kind, row.repository),
-      }));
+  // Note that an archive script saved before archive scripts were removed is left out, since nothing runs it.
+  const setups = scripts
+    .filter((row) => row.kind === REPOSITORY_SCRIPT_KIND.SETUP)
+    .map((row) => ({
+      repository: row.repository,
+      script: row.script,
+      updatedAt: row.updatedAt.getTime(),
+      ...lastRunOf(runs, CLOUD_SETUP_SCRIPT.SETUP, row.repository),
+    }));
 
   return {
     install: Option.match(install, {
@@ -231,8 +236,8 @@ const setupAnswer = Effect.fn("web/workspaceSandboxSetupAnswer")(function* (
         ...lastRunOf(runs, CLOUD_SETUP_SCRIPT.INSTALL, null),
       }),
     }),
-    setups: ofKind(REPOSITORY_SCRIPT_KIND.SETUP),
-    archives: ofKind(REPOSITORY_SCRIPT_KIND.ARCHIVE),
+    setups,
+    archives: [],
     runActions: runActionLists(runActions),
   };
 });
@@ -264,20 +269,19 @@ export const saveInstallScript = Effect.fn("web/saveInstallScript")(function* (
   return yield* setupAnswer(workspace.id, userId);
 });
 
-/** A repository's setup or archive script in a workspace the account manages saved, replacing the one of that kind under any casing of its name, or removed where it is empty; the setup as it then stands. */
+/** A repository's setup script in a workspace the account manages saved, replacing the one under any casing of its name, or removed where it is empty; the setup as it then stands. */
 export const saveRepositorySetup = Effect.fn("web/saveRepositorySetup")(function* (
   userId: string,
   workspaceId: string,
   repository: string,
   script: string,
-  kind: RepositoryScriptKind,
 ): Effect.fn.Return<WorkspaceSandboxSetupAnswer, HostedRefusal, DatabaseServices> {
   const workspace = yield* managedWorkspace(userId, workspaceId);
   const now = yield* DateTime.nowAsDate;
   yield* hostedStoreOrUnavailable(
     removes(script)
-      ? Effect.asVoid(removeRepositorySetup(workspace.id, repository, kind))
-      : setRepositorySetup(workspace.id, repository, kind, script, now),
+      ? Effect.asVoid(removeRepositorySetup(workspace.id, repository, REPOSITORY_SCRIPT_KIND.SETUP))
+      : setRepositorySetup(workspace.id, repository, REPOSITORY_SCRIPT_KIND.SETUP, script, now),
   );
 
   return yield* setupAnswer(workspace.id, userId);

@@ -129,7 +129,10 @@ root layout stands the tabs and Settings behind the account and the
 sign-in screen in front of them otherwise. A `vespin.dev` link the app
 draws is routed by `src/app/+native-intent.tsx` through
 `@repo/features/ios-app-links`, the same list the host's association file
-claims for the app; any other opens in Safari.
+claims for the app; any other opens in Safari. A page another device hands
+off as its browser would, such as the Mac app's, reaches the app for any
+page of the host, since `activitycontinuation` claims the whole domain, and
+the same routing sends one the app doesn't draw on to Safari.
 
 A `-fixture <profile>` launch argument (`src/host/launch-arguments.ts`)
 stands the host on the desktop's synthetic data instead of the service, the
@@ -221,6 +224,27 @@ attached. A view handed a modifier the build does not register draws as it
 would without it. No Maestro flow can drag or hover, so these are checked by
 hand on an iPad with a trackpad.
 
+## The photo scaler
+
+A workspace's photo is picked in the system's photo picker, cropped there to
+a square, and drawn at the panel's size (`WORKSPACE_PHOTO_EDGE`) as a JPEG
+within the service's bound by the app's own native module, autolinked from
+`modules/photo-scale/`, through ImageIO as the share extension scales a
+shared picture, so a HEIC from the library is read and no metadata goes with
+it (`src/workspace-photo.ts`). A build without the module says the photo
+could not be read rather than sending one at full size.
+
+## The rich copy module
+
+A draft's Copy message puts one pasteboard item holding the body's HTML, the
+rich text the system reads from it, and the plain words beside it, a link's
+address after its label, as the desktop writes them (`src/keeping.ts`). That
+item is the app's own native module, autolinked from
+`modules/rich-pasteboard/`, since expo-clipboard takes the plain words from
+the system's reading of the HTML, which drops each link's address. A build
+without the module copies through expo-clipboard. Pasting into Messages
+(plain) and Slack or Mail (rich) is checked by hand on a device.
+
 ## The share extension
 
 Vespin stands in the system's share sheet for text, a web link and up to
@@ -306,7 +330,8 @@ A flow is written one way throughout:
 - **Every control comes from `@repo/ui-native`**, the app's design system
   (`packages/ui-native/AGENTS.md`), as the web's come from `@repo/ui`. A
   screen composes its components and imports neither `@expo/ui` nor
-  `expo-glass-effect`; the app still declares both,
+  `expo-glass-effect`, which lint refuses
+  (`vespin/no-raw-press-outside-ui-native`); the app still declares both,
   since Expo links a native module from the app's own dependencies.
 - **The app is a shell.** A module whose imports name no Expo, React Native,
   or expo-router API is logic and belongs in a package. A relative import ends

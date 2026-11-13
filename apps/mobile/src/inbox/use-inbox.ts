@@ -9,24 +9,28 @@
  * each thread drawn with the reader's sends still out (`use-thread-answer.ts`).
  */
 
-import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
+import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import { sizeLabel } from "@repo/features/attachment-model";
 import {
   INBOX_MEDIA,
   INBOX_SHOW,
   type InboxCounts,
+  type InboxGroup,
   type InboxListed,
   type InboxMessageMedia,
   type InboxShow,
   inboxAtNow,
   inboxCounts,
+  inboxGroup,
   inboxList,
   isUnread,
   MINE,
+  taskHolder,
   waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
-import type { InboxItem } from "@repo/features/inbox-wire";
-import { markedNote, REMIND_REFUSED } from "@repo/features/inbox-write-words";
+import type { InboxItem, InboxItemHome } from "@repo/features/inbox-wire";
+import { markedNote, NOT_RESOLVED, REMIND_REFUSED } from "@repo/features/inbox-write-words";
+import { LIVE_READ } from "@repo/features/live-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
@@ -45,6 +49,7 @@ import {
 } from "@repo/host/app-state-reads";
 import { BUZZ } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { Predicate } from "effect";
 import { randomUUID } from "expo-crypto";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Settings } from "react-native";
@@ -52,9 +57,10 @@ import { cachedFile, cachedVideo } from "../cached-media.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
-import { NOT_RESOLVED, refusedWords, useSendsDrawn } from "./use-thread-answer.js";
+import { refusedWords, SETTLE, useSendsDrawn, useSettleUndo } from "./use-thread-answer.js";
 
 /** What a thread's videos and files are named under among the app's caches. */
 const INBOX_MEDIA_PREFIX = "inbox";
@@ -192,6 +198,8 @@ type UseInboxThreadResult = {
   readonly listed: InboxListed | undefined;
   readonly readerId: string | undefined;
   readonly feed: InboxFeed;
+  /** Reads again what the thread waits on where it failed: where it stands, its task's own inbox, or the feed and the task list. */
+  readonly retry: () => void;
 };
 
 /**
@@ -204,8 +212,19 @@ type UseInboxThreadResult = {
  * leaves out is. Note too that every
  * workspace's threads are searched, not only the chosen workspace's the list
  * shows, so a link to a thread of another workspace still opens it.
+ *
+ * A thread the feed, once answered, does not hold, such as a teammate's or
+ * one long settled that a link names by its id alone, is found as the
+ * panel's route finds it: the service says where it stands
+ * (`AGENTS_INBOX_ITEM_HOME`), and its task's own inbox is followed while the
+ * thread is shown (`AGENTS_INBOX_FOLLOW`), the thread drawn from that read,
+ * still reading until it answers, refused where it failed, and missing where
+ * the service says the account may not read it. Its Try again reads anew
+ * whichever read failed, as the panel's Try again does.
  */
 export function useInboxThread(id: string | undefined): UseInboxThreadResult {
+  const acts = useHostActs();
+
   const { data: read = NO_GROUPS } = useQuery({
     ...appStateQuery,
     select: selectInboxGroupsIn(undefined),
@@ -227,24 +246,192 @@ export function useInboxThread(id: string | undefined): UseInboxThreadResult {
     select: selectTaskListStatus,
   });
 
-  const listed = useMemo(() => {
-    for (const { holder, items } of groups) {
-      const item = items.find((each) => each.id === id);
+  const inFeed = useMemo(() => listedIn(groups, id), [groups, id]);
 
-      if (item !== undefined) return { holder, item };
-    }
+  // Note that only a thread the answered feed does not hold is looked for, so a thread still read, or one whose task is still read, waits as it did.
+  const lookedFor =
+    id !== undefined && inFeed === undefined && !held && answered === INBOX_FEED.ANSWERED;
 
-    return undefined;
-  }, [groups, id]);
+  const { home, again } = useItemHome(id, lookedFor);
+  const found = home === undefined || Predicate.isString(home) ? undefined : home;
+  const homed = useHomeGroups(found?.planId);
+  const outside = useSendsDrawn(homed.groups);
+  const listed = inFeed ?? (lookedFor ? listedIn(outside, id) : undefined);
 
-  const feed =
-    listed !== undefined || !held || tasksRead === TASKS_READ.READY
+  const feed = !lookedFor
+    ? listed !== undefined || !held || tasksRead === TASKS_READ.READY
       ? answered
       : tasksRead === TASKS_READ.FAILED
         ? INBOX_FEED.FAILED
-        : INBOX_FEED.READING;
+        : INBOX_FEED.READING
+    : listed !== undefined || home === HOME_READ.MISSING
+      ? answered
+      : home === undefined
+        ? INBOX_FEED.READING
+        : home === HOME_READ.FAILED
+          ? INBOX_FEED.FAILED
+          : homed.read !== INBOX_FEED.ANSWERED
+            ? homed.read
+            : // Note that a task's inbox read before the task list holds its task waits on that list, as a thread of the feed does.
+              tasksRead === TASKS_READ.READY
+              ? answered
+              : tasksRead === TASKS_READ.FAILED
+                ? INBOX_FEED.FAILED
+                : INBOX_FEED.READING;
 
-  return { listed, readerId, feed };
+  // Try again reads anew what failed: where the thread stands, its task's own inbox, or the feed and the task list that hold it.
+  const retry = () => {
+    if (lookedFor && home === HOME_READ.FAILED) again();
+    else if (lookedFor && homed.read === INBOX_FEED.FAILED) homed.again();
+    else {
+      acts[ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]().catch(refused("Reading the inbox again"));
+      acts[ACT_KIND.TASKS_REFRESH]().catch(refused("Reading the task list again"));
+    }
+  };
+
+  return { listed, readerId, feed, retry };
+}
+
+/** The thread `id` names among `groups`, with what holds it; none where none holds it. */
+function listedIn(
+  groups: readonly {
+    readonly holder: InboxListed["holder"];
+    readonly items: readonly InboxItem[];
+  }[],
+  id: string | undefined,
+): InboxListed | undefined {
+  for (const { holder, items } of groups) {
+    const item = items.find((each) => each.id === id);
+
+    if (item !== undefined) return { holder, item };
+  }
+
+  return undefined;
+}
+
+/** What the read of where a thread stands is kept under, by the thread's id. */
+const ITEM_HOME_KEY = "inbox-item-home";
+
+/** Where a thread stands where the service named no place for it: not readable by the account, or not answered. */
+const HOME_READ = {
+  MISSING: "missing",
+  FAILED: "failed",
+} as const;
+
+/** Where a thread stands, as the service said: its task and agent, or that the account may not read it, or that no answer came. */
+type HomeRead = InboxItemHome | (typeof HOME_READ)[keyof typeof HOME_READ];
+
+/** Where a thread stands as read once, and how to read it again. */
+interface ItemHome {
+  /** None while it is read or not asked. */
+  readonly home: HomeRead | undefined;
+  readonly again: () => void;
+}
+
+/**
+ * Where the thread `id` stands, as the service says, read once while
+ * `asked`, as a link by its id alone is opened: its task and agent, missing
+ * where the account may not read it, or failed where no answer came, which
+ * `again` reads anew.
+ */
+function useItemHome(id: string | undefined, asked: boolean): ItemHome {
+  const acts = useHostActs();
+
+  const { data, refetch, isFetching } = useQuery({
+    queryKey: [ITEM_HOME_KEY, id],
+    enabled: asked && id !== undefined,
+    queryFn: (): Promise<HomeRead> =>
+      acts[ACT_KIND.AGENTS_INBOX_ITEM_HOME]({ itemId: id ?? "" }).then(
+        (answer) =>
+          "failure" in answer
+            ? answer.failure === AGENT_CALL_FAILURE.NOT_FOUND
+              ? HOME_READ.MISSING
+              : HOME_READ.FAILED
+            : answer,
+        (cause: unknown) => {
+          console.error("Where the thread stands was not read.", cause);
+
+          return HOME_READ.FAILED;
+        },
+      ),
+  });
+
+  return {
+    // Note that a read asked again stands as still read, rather than as the failure it is read again for.
+    home: !asked || (isFetching && data === HOME_READ.FAILED) ? undefined : data,
+    again: () =>
+      void refetch().catch((cause: unknown) =>
+        console.error("Where the thread stands was not read again.", cause),
+      ),
+  };
+}
+
+/** A task's own inbox as one group, where its read stands, and how to read it again. */
+interface HomeGroups {
+  readonly groups: readonly InboxGroup[];
+  readonly read: InboxFeed;
+  readonly again: () => void;
+}
+
+/** No group of a task's own inbox. */
+const NO_HOME_GROUPS: readonly InboxGroup[] = [];
+
+/**
+ * The inbox of the task `taskId` names, followed while it is named, as one
+ * group under that task as the task list holds it, where its read stands,
+ * still read until it answered, or refused, and its Try again. No group
+ * where none is named, the read has not answered, or the task list holds no
+ * such task.
+ */
+function useHomeGroups(taskId: string | undefined): HomeGroups {
+  const acts = useHostActs();
+  useLiveFollow(taskId, (id) =>
+    acts[ACT_KIND.AGENTS_INBOX_FOLLOW]({ kind: INBOX_SCOPE_KIND.PLAN, id }),
+  );
+
+  const heldRead = useCallback(
+    (state: AppStateSnapshot) =>
+      taskId === undefined
+        ? undefined
+        : state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.PLAN][taskId],
+    [taskId],
+  );
+
+  const taskOf = useCallback(
+    (state: AppStateSnapshot) =>
+      taskId === undefined ? undefined : state.tasks.tasks.find((task) => task.id === taskId),
+    [taskId],
+  );
+
+  const { data: read } = useQuery({ ...appStateQuery, select: heldRead });
+  const { data: task } = useQuery({ ...appStateQuery, select: taskOf });
+  const rows = read?.rows;
+
+  const groups = useMemo(
+    () =>
+      task === undefined || rows === undefined
+        ? NO_HOME_GROUPS
+        : [inboxGroup(taskHolder(task), rows)],
+    [task, rows],
+  );
+
+  const stands =
+    read?.failed === true
+      ? INBOX_FEED.FAILED
+      : rows === undefined
+        ? INBOX_FEED.READING
+        : INBOX_FEED.ANSWERED;
+
+  return {
+    groups,
+    read: stands,
+    again: () => {
+      if (taskId === undefined) return;
+      acts[ACT_KIND.AGENTS_INBOX_RETRY]({ kind: INBOX_SCOPE_KIND.PLAN, id: taskId }).catch(
+        refused("Reading the thread's task inbox again"),
+      );
+    },
+  };
 }
 
 /** Says on the console an act the host refused, which the next delivery of the document corrects. */
@@ -257,7 +444,7 @@ export function useInboxActs(): {
   readonly mark: (itemId: string, unread: boolean) => void;
   /** Sets the thread's reminder for an instant, or clears it where `until` is null, which the host draws at once, as it draws a mark. */
   readonly remind: (itemId: string, until: number | null) => void;
-  /** Resolves an open thread against the revision its row drew, as the thread's own Resolve does, buzzing as it lands or is refused. */
+  /** Resolves an open thread against the revision its row drew, as the thread's own Resolve does, buzzing as it lands or is refused, and offering Undo once it went. */
   readonly resolve: (item: InboxItem) => void;
   readonly markAll: (itemIds: readonly string[]) => void;
   readonly refresh: () => Promise<void>;
@@ -265,6 +452,7 @@ export function useInboxActs(): {
 } {
   const acts = useHostActs();
   const write = useWrite();
+  const settled = useSettleUndo();
 
   return useMemo(
     () => ({
@@ -309,6 +497,8 @@ export function useInboxActs(): {
             // Note that a thread answered or resolved already offers no Try again, which could never take.
             retry: (answer) => "failure" in answer,
             went: BUZZ.SUCCESS,
+            // Note that a Try again that went offers Undo as the first send's would.
+            done: () => settled(item, clientKey, SETTLE.RESOLVE),
           },
         );
       },
@@ -326,7 +516,7 @@ export function useInboxActs(): {
       refreshTasks: () =>
         acts[ACT_KIND.TASKS_REFRESH]().catch(refused("Reading the task list again")),
     }),
-    [acts, write],
+    [acts, write, settled],
   );
 }
 

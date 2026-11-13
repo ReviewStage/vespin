@@ -26,10 +26,12 @@ import {
   markdownLink,
   pullRequestAddressOf,
   type ReadLink,
+  readGitHubPage,
   readLink,
   taskNumberOf,
   withTaskId,
 } from "@repo/features/link-grammar";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import {
   type DescriptionMention,
@@ -49,8 +51,7 @@ import {
   sectionAnchors,
 } from "@repo/features/mention-link";
 import { placeChipLook } from "@repo/features/place-chip-model";
-import { UNTITLED_TASK_NAME } from "@repo/features/task-wire";
-import { isGitHubAddress, isWebAddress } from "@repo/host/acts";
+import { isWebAddress } from "@repo/host/acts";
 import {
   HoverCard,
   HoverCardHead,
@@ -88,12 +89,7 @@ import { useInboxItemTitle } from "./inbox-item-chip.js";
 import { OpenedByRow, PullRequestCard } from "./pull-request-card.js";
 import { WrittenAs } from "./selection-markdown.js";
 import { useKnownNames, useWordTargets } from "./use-known-names.js";
-import {
-  type LinkStanding,
-  useLinkStanding,
-  useNumberedTaskId,
-  useWordsWorkspaceId,
-} from "./use-link-standing.js";
+import { useLinkStanding, useNumberedTaskId, useWordsWorkspaceId } from "./use-link-standing.js";
 import { useOpenLink } from "./use-open-link.js";
 import { useWordsDates } from "./words-dates.js";
 
@@ -303,7 +299,7 @@ function pressOf(
       }
 
       // Where no File tab opens it, a file or a folder written as its GitHub page opens there, as its link would.
-      return isGitHubAddress(target) ? () => openLink(target) : undefined;
+      return readGitHubPage(target) === undefined ? undefined : () => openLink(target);
     }
 
     case MENTION_KIND.SERVER:
@@ -553,9 +549,6 @@ function chipName(
 ): string {
   const entity = entityOfMention(mention);
   const { live, held } = entityName(entity, known, { heading, answered: standing, repository });
-
-  // Note that a plan the window still lists Untitled keeps the name it was written with, which says more.
-  if (entity.kind === ENTITY_KIND.PLAN && held === UNTITLED_TASK_NAME) return written;
 
   return (live || bare ? held : undefined) ?? written;
 }
@@ -1011,8 +1004,10 @@ export function linkChip(
   label: string,
   doors: MentionDoors,
   at?: MarkdownSpan | undefined,
+  /** What stands after a mention's name in place of where its provider says it stands: a suggestion's Started or Sent. */
+  after?: ReactNode,
 ): React.JSX.Element | undefined {
-  const chip = chipOfLink(href, label, doors, at);
+  const chip = chipOfLink(href, label, doors, at, after);
 
   // Note that a selection taking the chip reads it back as the link it was written as, which a reply quotes.
   return chip === undefined ? undefined : (
@@ -1059,6 +1054,7 @@ function chipOfLink(
   label: string,
   doors: MentionDoors,
   at: MarkdownSpan | undefined,
+  after: ReactNode,
 ): React.JSX.Element | undefined {
   const bare = isBareLink(label, href);
   const placed = pageDoors(doors, href);
@@ -1078,6 +1074,7 @@ function chipOfLink(
         name={chip.name}
         doors={placed}
         bare={bare}
+        state={after}
       />
     );
   }
@@ -1363,7 +1360,8 @@ function NodeChip({
   doors: MentionDoors;
   edit: MentionNodeEdit | undefined;
 }): React.JSX.Element {
-  const written = `${MENTION_SIGIL}${mention.name}`;
+  // Note that a link written as plain words is drawn under its own words, as the read view draws it.
+  const written = mention.label ?? `${MENTION_SIGIL}${mention.name}`;
   const chip = linkChipOf(written, mention.target, doors.place.repository);
 
   // A date's chip held in an editor opens its picker, which names the node anew; every other chip is the one its link draws in words.

@@ -2,6 +2,8 @@ import type { LooseTaskSectionIcon } from "@repo/features/task-section-wire";
 import {
   REPOSITORY_SCRIPT_KIND,
   type RepositoryScriptKind,
+  RUN_ACTION_AVAILABILITY,
+  type RunActionAvailability,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { sql } from "drizzle-orm";
 import { boolean, integer, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
@@ -9,14 +11,15 @@ import { createdAt, updatedAt } from "./_helpers.js";
 import { organization } from "./auth.js";
 
 /**
- * workspace-sandbox-script.ts -- the scripts that set up and archive a workspace's cloud agent sandboxes: one install script for the workspace, one setup script and one archive script per repository, and each repository's run actions.
+ * workspace-sandbox-script.ts -- the scripts that set up a workspace's cloud agent sandboxes: one install script for the workspace, one setup script per repository, and each repository's run actions.
  *
- * As Conductor Cloud keeps them, in the workspace's settings rather than in
+ * Kept together, in the workspace's settings rather than in
  * a repository: the install script runs once per build of each of the
  * workspace's repositories' base snapshots, so what it installs is in every
  * sandbox made from one, a repository's setup script runs once in each new
- * agent sandbox of that repository, after its checkout, and its archive
- * script once in each just before it is deleted for good. All are plain
+ * agent sandbox of that repository, after its checkout. A row may still
+ * hold an archive script saved before archive scripts were removed, which
+ * nothing reads. All are plain
  * text every member may read, since a secret belongs in the workspace's
  * environment variables (`workspace-environment-variable.ts`), and all go
  * with their workspace.
@@ -40,7 +43,7 @@ export const workspaceRepositorySetup = pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     /** `owner/name` as GitHub spelled it when the script was saved, e.g. `"acme/relay"`. */
     repository: text("repository").notNull(),
-    /** The bash the repository's agent sandboxes run: each new one after its checkout, or each just before its delete, as `kind` says. */
+    /** The bash each new agent sandbox of the repository runs after its checkout, for a setup script (`kind`). */
     script: text("script").notNull(),
     /** Which of the repository's scripts the row is (`REPOSITORY_SCRIPT_KIND`); its setup script for every row from before the column. */
     kind: text("kind")
@@ -62,8 +65,9 @@ export const workspaceRepositorySetup = pgTable(
 
 /**
  * A repository's run actions, one row each: the commands a member runs in
- * one of its cloud agents' sandboxes, each only when pressed, from the Run
- * menu in the agent's message box. A save replaces the repository's whole
+ * one of its agents, each only when pressed, from the Run menu over the
+ * agent's tabs: in a cloud agent's sandbox, or on the Mac a local agent runs
+ * on, as the action's availability allows. A save replaces the repository's whole
  * list, keeping the id of each action it names, so a run already going is
  * still known as its action after the list around it changes.
  */
@@ -86,6 +90,11 @@ export const workspaceRepositoryRunAction = pgTable(
     icon: jsonb("icon").$type<LooseTaskSectionIcon>(),
     /** Whether it is the Run button's and ⌥⌘R's; where no action of the list is, the first is. */
     isDefault: boolean("is_default").notNull().default(false),
+    /** Where it may run (`RUN_ACTION_AVAILABILITY`): cloud agents, local agents, or both, which every row from before the column is. */
+    availableIn: text("available_in")
+      .$type<RunActionAvailability>()
+      .notNull()
+      .default(RUN_ACTION_AVAILABILITY.BOTH),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },

@@ -2,14 +2,18 @@
 
 import assert from "node:assert/strict";
 import { AGENT_BOUNDS } from "@repo/features/agent-wire";
+import { AUTOMATION_PRESET } from "@repo/features/automation-presets";
 import { AUTOMATION_CALL_FAILURE } from "@repo/features/automation-view";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_SCOPE,
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
+  GITHUB_TRIGGER_EVENT,
 } from "@repo/features/automation-wire";
 import { INTEGRATION_PROVIDER } from "@repo/features/integration-wire";
+import { SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
+import { WORKSPACE_ROLE } from "@repo/features/workspace-wire";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { act } from "react";
 import { test, vi } from "vitest";
@@ -23,6 +27,7 @@ import {
   CI_DIGEST,
   DIGEST,
   FAILING,
+  layIntegrations,
   layStanding,
   listed,
   menuItem,
@@ -601,6 +606,23 @@ test("a deletion asks first, then goes back to the list without the automation",
   assert.deepEqual(world.places.at(-1), { kind: AUTOMATIONS_PAGE.LIST });
   assert.ok(world.deletedNow(SWEEP.id), "the history passes over its page");
   assert.ok(!rows(page).some(([name]) => name === SWEEP.name));
+});
+
+test("a deletion the service refuses says why in the deletion's words, not a save's", async () => {
+  world.deleteRefusal = AUTOMATION_CALL_FAILURE.UNANSWERED;
+  mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
+  await settle();
+
+  act(() => button("Automation actions").click());
+  act(() => menuItem("Delete").click());
+  await settle();
+  act(() => dialogButton("Delete automation").click());
+  await settle();
+
+  assert.match(
+    document.querySelector("[role=dialog], [role=alertdialog]")?.textContent ?? "",
+    /The automation could not be deleted\. Try again\./u,
+  );
 });
 
 test("a row's Delete asks first, and once confirmed the row leaves the list and the history passes over its page", async () => {
@@ -1267,6 +1289,31 @@ test("Memory digest is suggested under the list, and under an empty one, only wh
   assert.ok(suggestion(empty, "Memory digest"));
 });
 
+test("Memory digest is suggested no more once the list holds the reader's own or a workspace automation made from it, whatever its name, and still beside a teammate's personal one or one merely named for it", async () => {
+  memoryOn();
+
+  for (const { held, suggested } of [
+    {
+      held: { name: "Weekly memories", preset: AUTOMATION_PRESET.MEMORY_DIGEST, mine: true },
+      suggested: false,
+    },
+    {
+      held: { name: "Their memories", preset: AUTOMATION_PRESET.MEMORY_DIGEST, mine: false },
+      suggested: true,
+    },
+    { held: { name: "Memory digest", mine: true }, suggested: true },
+  ]) {
+    world.standing = [SWEEP, automation(4, { ...held, scope: AUTOMATION_SCOPE.PERSONAL })];
+    const page = mount();
+    await settle();
+
+    assert.equal(automationRows(page).length, 2);
+    assert.equal(suggestion(page, "Memory digest") !== undefined, suggested, held.name);
+    act(() => world.root?.unmount());
+    document.body.innerHTML = "";
+  }
+});
+
 test("a new automation started from Memory digest is made every Monday at nine in the member's zone, in no repository, archiving its finished runs", async () => {
   memoryOn();
   const page = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
@@ -1290,6 +1337,7 @@ test("a new automation started from Memory digest is made every Monday at nine i
       repositories: made.repositories,
       archiveSuccessful: made.archiveSuccessful,
       target: made.target,
+      preset: made.preset,
     },
     {
       name: "Memory digest",
@@ -1301,9 +1349,113 @@ test("a new automation started from Memory digest is made every Monday at nine i
       repositories: [],
       archiveSuccessful: true,
       target: { kind: AUTOMATION_TARGET.NEW_AGENT },
+      preset: AUTOMATION_PRESET.MEMORY_DIGEST,
     },
   );
   assert.match(made.action.prompt, /forget_memory/u);
+});
+
+/** The listed workspace as one of its admins reads it, who may connect its integrations. */
+const ADMINISTERED = { ...WORKSPACE, role: WORKSPACE_ROLE.ADMIN };
+
+/** The workspace's Sentry once an install landed on it. */
+const SENTRY_INSTALLED = {
+  configured: true,
+  installations: [{ installationId: "a1b2c3d4-0000-4000-8000-000000000002" }],
+};
+
+test("Investigate Sentry alerts asks for Sentry while the workspace has none, Connect for an admin and whom to ask for a member, and stands as any suggestion once it is connected", async () => {
+  world.sentryRead = { configured: true, installations: [] };
+  const member = mount();
+  await settle();
+  const asked = suggestion(member, "Investigate Sentry alerts");
+  assert.match(asked?.textContent ?? "", /Ask an owner or admin to connect Sentry$/u);
+  assert.equal(asked?.disabled, true, "a member cannot connect it");
+  act(() => world.root?.unmount());
+  document.body.innerHTML = "";
+  // A window of its own follows the workspace's integrations afresh.
+  world.integrationsFollowed.clear();
+
+  const admin = mount(tasksControl({ workspace: ADMINISTERED }));
+  await settle();
+  assert.match(
+    suggestion(admin, "Investigate Sentry alerts")?.textContent ?? "",
+    /Connect Sentry$/u,
+  );
+
+  world.sentryRead = SENTRY_INSTALLED;
+  act(() => layIntegrations(ADMINISTERED.id));
+  await settle();
+  const connected = suggestion(admin, "Investigate Sentry alerts");
+  assert.doesNotMatch(connected?.textContent ?? "", /Connect Sentry|Ask an owner/u);
+  assert.equal(connected?.disabled, false);
+});
+
+test("a new automation started from Triage a red main or Investigate Sentry alerts is made with its preset and trigger, the workspace's, Sentry connected first where its card asked for it", async () => {
+  world.sentryRead = { configured: true, installations: [] };
+  const triage = mountPages({ kind: AUTOMATIONS_PAGE.LIST }, ADMINISTERED);
+  await settle();
+  act(() => suggestion(triage, "Triage a red main")?.click());
+  await settle();
+  act(() => button("Create automation").click());
+  await settle();
+  act(() => world.root?.unmount());
+  document.body.innerHTML = "";
+  world.integrationsFollowed.clear();
+
+  const investigate = mountPages({ kind: AUTOMATIONS_PAGE.LIST }, ADMINISTERED);
+  await settle();
+  act(() => suggestion(investigate, "Investigate Sentry alerts")?.click());
+  await settle();
+  assert.deepEqual(world.sentryInstalls, [ADMINISTERED.id], "its press starts the install");
+  world.sentryRead = SENTRY_INSTALLED;
+  act(() => layIntegrations(ADMINISTERED.id));
+  await settle();
+  act(() => button("Create automation").click());
+  await settle();
+
+  assert.deepEqual(
+    world.creates.map((made) => ({
+      preset: made.preset,
+      trigger:
+        made.trigger.kind === AUTOMATION_TRIGGER.GITHUB
+          ? {
+              kind: made.trigger.kind,
+              event: made.trigger.event,
+              branches: made.trigger.branches,
+              defaultBranch: made.trigger.defaultBranch,
+            }
+          : made.trigger,
+      scope: made.scope,
+      target: made.target,
+      repositories: made.repositories?.length,
+    })),
+    [
+      {
+        preset: AUTOMATION_PRESET.RED_MAIN_TRIAGE,
+        trigger: {
+          kind: AUTOMATION_TRIGGER.GITHUB,
+          event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
+          branches: undefined,
+          defaultBranch: true,
+        },
+        scope: AUTOMATION_SCOPE.WORKSPACE,
+        target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: null },
+        repositories: 1,
+      },
+      {
+        preset: AUTOMATION_PRESET.SENTRY_ALERT_INVESTIGATION,
+        trigger: {
+          kind: AUTOMATION_TRIGGER.INTEGRATION,
+          provider: TRIGGER_PROVIDER.SENTRY,
+          event: SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED,
+        },
+        scope: AUTOMATION_SCOPE.WORKSPACE,
+        target: { kind: AUTOMATION_TARGET.NEW_AGENT },
+        repositories: 1,
+      },
+    ],
+  );
 });
 
 /** The Nightly sweep's page, standing on a schedule of Wednesdays at 07:30 Tokyo time. */

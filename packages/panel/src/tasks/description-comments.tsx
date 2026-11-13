@@ -18,6 +18,7 @@ import type { DescriptionSection } from "@repo/features/description-document";
 import { fileMarkers } from "@repo/features/file-marker";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { FrameBox, PagePicked } from "@repo/features/page-pick";
+import { MESSAGE_BLOCK, messageBlocks, messageText, replyOf } from "@repo/features/reply-quote";
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { IRREVERSIBLE_WORDS } from "@repo/features/words";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -49,6 +50,7 @@ import {
   type CommentPinStands,
   CommentsIcon,
   ConfirmDialog,
+  CornerCount,
   cssCustomProperties,
   type DialogQuestion,
   DRAFT_WORD,
@@ -112,11 +114,9 @@ import {
   RotateCcwIcon,
 } from "@repo/ui/icons";
 import { QUOTE_CLASS } from "@repo/ui/quote-face";
-import { MESSAGE_BLOCK, messageBlocks, messageText, replyOf } from "@repo/ui/reply-quote";
 import { ReplayUnmask, writeWithheldSheet } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { VIRTUAL_ROWS_ANCHOR, VirtualRows, type VirtualRowsHandle } from "@repo/ui/virtual-rows";
-import { visibleViewport } from "@repo/ui/visible-viewport";
 import { useSelector } from "@tanstack/react-store";
 import { Equal } from "effect";
 import {
@@ -411,9 +411,6 @@ const THREAD_PLACE = {
 } as const;
 
 type ThreadPlace = (typeof THREAD_PLACE)[keyof typeof THREAD_PLACE];
-
-/** The room a finger's bubble needs under the words, its gap past the handle and its own height, short of which it stands over them after all. */
-const BUBBLE_ROOM_TOUCH = FINGER_SELECTION_GAP + 48;
 
 /** The words a thread's controls are named by. */
 const COMMENT_WORDS = {
@@ -2194,7 +2191,7 @@ export function DescriptionCommentLayer({
   const touching = useRef(false);
 
   const [bubble, setBubble] = useState<
-    { top: number; left: number; below: boolean; start: () => void } | undefined
+    { words: () => DOMRect | undefined; coarse: boolean; start: () => void } | undefined
   >(undefined);
 
   const cards = useRef(new Map<string, HTMLDivElement>());
@@ -2609,14 +2606,6 @@ export function DescriptionCommentLayer({
         return;
       }
 
-      const box = range.getBoundingClientRect();
-      const own = element.getBoundingClientRect();
-
-      // Note that a finger's bubble stands under the words, because the system's own selection menu stands over them, unless the window ends first.
-      const below =
-        coarsePointerNow() && box.bottom + BUBBLE_ROOM_TOUCH <= visibleViewport().bottom;
-
-      const top = (below ? box.bottom : box.top) - own.top;
       const index = [...element.querySelectorAll(`.${unitClass}`)].indexOf(start);
       const section = sections[index];
       const quote = selection.toString().trim();
@@ -2625,9 +2614,9 @@ export function DescriptionCommentLayer({
       const from = drawnOffset(start, range.startContainer, range.startOffset);
       const to = drawnOffset(start, range.endContainer, range.endOffset);
       setBubble({
-        top,
-        left: box.left - own.left,
-        below,
+        // Note that the editor opening on the words replaces them, which collapses the range, so the bubble stands where it stood for the frame it has left.
+        words: () => (range.collapsed ? undefined : range.getBoundingClientRect()),
+        coarse: coarsePointerNow(),
         start: () => {
           const begun = pendingOf(
             start,
@@ -2784,7 +2773,11 @@ export function DescriptionCommentLayer({
     // Note that folded, a line holding a count opens its threads there, a thread whose words were deleted counted at its section's top too, so its block shows no button over it.
     hovered === undefined ||
     (!wide && [...anchors.values()].some((top) => Math.abs(top - hovered.top) < 4)) ? null : (
-      <div className={BLOCK_BUTTON_CLASS} style={{ top: hovered.middle }}>
+      <div
+        className={BLOCK_BUTTON_CLASS}
+        data-beside-cards={wide ? "" : undefined}
+        style={{ top: hovered.middle }}
+      >
         <Tooltip label={COMMENT_WORDS.COMMENT} command={APP_COMMAND.COMMENT_ON_SELECTION}>
           {/* Note that the press takes no focus, so an open editor stays to measure the block through. */}
           <IconButton
@@ -2799,18 +2792,31 @@ export function DescriptionCommentLayer({
 
   const bubbleDrawn =
     bubble === undefined ? null : (
-      <MenuSurface
-        flow={MENU_SURFACE_FLOW.TOOLBAR}
-        className="comment-bubble absolute z-3 -translate-y-[calc(100%+var(--ui-space-6))] data-below:translate-y-ui-16"
-        data-below={bubble.below ? "" : undefined}
-        style={{ top: bubble.top, left: bubble.left }}
+      // Note that it floats as the editor's format toolbar does (`selection-toolbar.tsx`), which takes its place once the press opens the editor, so the Comment it holds never moves as one gives way to the other; a finger's stands under the words and their handle, because the system's own selection menu stands over them.
+      <RectFloat
+        open
+        anchor={() => {
+          const box = bubble.words();
+
+          return box === undefined || !bubble.coarse
+            ? box
+            : {
+                left: box.left,
+                top: box.top,
+                right: box.right,
+                bottom: box.bottom + FINGER_SELECTION_GAP,
+              };
+        }}
+        side={bubble.coarse ? POPOVER_SIDE.BELOW : POPOVER_SIDE.ABOVE}
       >
-        <Tooltip label={COMMENT_WORDS.COMMENT} command={APP_COMMAND.COMMENT_ON_SELECTION}>
-          <Button keepFocus icon={<MessageSquarePlusIcon />} onClick={bubble.start}>
-            <ReplayUnmask>{COMMENT_WORDS.COMMENT}</ReplayUnmask>
-          </Button>
-        </Tooltip>
-      </MenuSurface>
+        <MenuSurface flow={MENU_SURFACE_FLOW.TOOLBAR} className="comment-bubble">
+          <Tooltip label={COMMENT_WORDS.COMMENT} command={APP_COMMAND.COMMENT_ON_SELECTION}>
+            <Button keepFocus icon={<MessageSquarePlusIcon />} onClick={bubble.start}>
+              <ReplayUnmask>{COMMENT_WORDS.COMMENT}</ReplayUnmask>
+            </Button>
+          </Tooltip>
+        </MenuSurface>
+      </RectFloat>
     );
 
   // Note that an open card stands no taller than the scroller it opens in, its entries scrolling inside it.
@@ -2912,16 +2918,19 @@ export function DescriptionCommentLayer({
 
         return (
           <span key={top} className="comment-count" style={{ top: middle ?? top }}>
-            <Button
-              icon={<MessageSquareIcon />}
+            {/* Note that its figures stand on its glyph, as a review's held comments do on its press (`CornerCount`), so every count's glyph stands where the block's button's does, however many figures it holds. */}
+            <IconButton
+              icon={
+                <CornerCount count={comments}>
+                  <MessageSquareIcon />
+                </CornerCount>
+              }
               label={`${comments} ${comments === 1 ? "comment" : "comments"}`}
               aria-expanded={threads.some((thread) => thread.id === active)}
               onClick={() =>
                 onActive(threads.some((thread) => thread.id === active) ? undefined : first?.id)
               }
-            >
-              {comments}
-            </Button>
+            />
           </span>
         );
       })}
@@ -3986,7 +3995,6 @@ export function PendingPageComment({
             {
               label: COMMENT_WORDS.DELETE,
               icon: <TrashIcon />,
-              danger: true,
               onSelect: () => review.remove(clientKey),
             },
           ],

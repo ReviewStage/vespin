@@ -26,6 +26,7 @@ import {
   type AutomationWorkspaceRun,
 } from "@repo/features/automation-wire";
 import { CHAPTERS_MODEL_DEFAULT } from "@repo/features/chapters-model-choice";
+import { readerZone } from "@repo/features/date-mention";
 import {
   INTEGRATION_PROVIDER,
   INTEGRATION_PROVIDER_LIST,
@@ -84,7 +85,7 @@ export function automation(n: number, patch: Partial<AutomationSummary> = {}): A
     name: `Automation ${n}`,
     enabled: true,
     pausedReason: null,
-    trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 9 * * 1-5", timezone: "UTC" },
+    trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 9 * * 1-5", timezone: readerZone() },
     action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Triage today's issues." },
     guards: AUTOMATION_DEFAULT_GUARDS,
     nextRunAt: null,
@@ -228,8 +229,8 @@ function holdChoices(): void {
   }).deliverModels;
 }
 
-/** Lays a workspace's integrations as the host's read of them now stands: failed while refused, its Sentry as `sentryRead` says and no Slack bot otherwise. */
-function layIntegrations(workspaceId: string): void {
+/** Lays a workspace's integrations as the host's read of them now stands, as it does once the hold is taken and again as an install lands: failed while refused, its Sentry as `sentryRead` says and no Slack bot otherwise. */
+export function layIntegrations(workspaceId: string): void {
   const read =
     world.sentryRefusals > 0
       ? { failed: true as const }
@@ -339,6 +340,8 @@ class AutomationsWorld {
   sentryInstalls: string[] = [];
   /** What a change answers: the automation as changed, or why not. */
   changeRefusal: (typeof AUTOMATION_CALL_FAILURE)[keyof typeof AUTOMATION_CALL_FAILURE] | undefined;
+  /** What a deletion answers: deleted, or why not. */
+  deleteRefusal: (typeof AUTOMATION_CALL_FAILURE)[keyof typeof AUTOMATION_CALL_FAILURE] | undefined;
   /** The automations a fresh webhook secret was asked for. */
   secretsAsked: string[] = [];
   /** What the window handed main's clipboard itself. */
@@ -408,6 +411,7 @@ beforeEach(() => {
   world.agentListRefused = false;
   world.agentSearchRefused = false;
   world.changeRefusal = undefined;
+  world.deleteRefusal = undefined;
   world.noRecent = false;
   world.integrationsHeld = false;
   world.integrationsRefusals = 0;
@@ -543,6 +547,13 @@ beforeEach(() => {
       }
 
       if (request.kind === ACT_KIND.AUTOMATIONS_DELETE) {
+        if (world.deleteRefusal !== undefined) {
+          return Promise.resolve({
+            status: FAKE_ANSWER.DONE,
+            value: { failure: world.deleteRefusal },
+          });
+        }
+
         world.deletes.push(request.payload.automationId);
         world.standing = world.standing.filter((each) => each.id !== request.payload.automationId);
         layStanding();

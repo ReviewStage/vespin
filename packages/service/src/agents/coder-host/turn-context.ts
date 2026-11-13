@@ -1,5 +1,5 @@
 /**
- * turn-context.ts -- what a coding agent's turn opens with as a message of its own: the time, and the task where it changed.
+ * turn-context.ts -- what a coding agent's turn opens with as a message of its own: the words of a spoken turn, the time, and the task where it changed.
  *
  * The session's prompt (`instructions.ts`) is composed once, as the session
  * starts, and stands for its life, and every tool is offered on every turn,
@@ -53,7 +53,7 @@ const TURN_MESSAGE_LEAD = {
  */
 export const TurnHandedSchema = Schema.Struct({
   task: Schema.optionalKey(Schema.String),
-  /** Whether the session's last turn was spoken, on a call of a build that still took calls, which a compaction leaves standing, so the next turn says the call's words no longer hold. */
+  /** Whether the session's last turn was spoken, which a compaction leaves standing, so the next turn says the spoken words no longer hold. */
   spoken: Schema.optionalKey(Schema.Boolean),
   /** The workspace's experiments the session's instructions and tools were composed on as it opened, which a message arriving after they changed opens a fresh session for (`runner-sessions.ts`); none for a session opened before they were kept, which takes up the ones standing. */
   experiments: Schema.optionalKey(
@@ -62,6 +62,10 @@ export const TurnHandedSchema = Schema.Struct({
       memoryOn: Schema.Boolean,
       /** Absent on a session opened before Done and follow-ups was kept, which read it as off. */
       turnEndOn: Schema.optionalKey(Schema.Boolean),
+      /** Absent for a session opened before Reply buttons was kept, which opened with it off. */
+      replyButtonsOn: Schema.optionalKey(Schema.Boolean),
+      // Note that a session opened before Computer use was an experiment names none, having been offered no computer tool.
+      computerUseOn: Schema.optionalKey(Schema.Boolean),
     }),
   ),
 });
@@ -104,16 +108,28 @@ export function taskKey(
   return contentKey(JSON.stringify(descriptionsOn ? handed : [...handed, { descriptionsOn }]));
 }
 
+/**
+ * What a spoken turn is told: the developer is speaking through a voice
+ * that reads the agent's reply aloud, so the reply is short, plain, and
+ * leads with what matters.
+ */
+const SPOKEN_WORDS = `## This turn is spoken
+
+The developer is speaking to you through a voice that reads your replies aloud, so this turn's message is what they said, and your final reply is what they hear. Answer short, in plain facts: no Markdown, code blocks, or tables, and no file paths or links read out. Lead with the result and any decision waiting on the developer, a sentence or two at a time, and leave the detail to what you write to the task.`;
+
 /** The line a turn opens with after a spoken one, whose call's words still stand in the history. */
 const TYPED_AFTER_CALL =
   'This turn is typed (nothing you write is heard), so "This turn is spoken" above no longer holds: your words are read, and a question for the developer goes in a thread.';
 
 /**
- * What a turn opens with of its kind: where the session's last turn was
- * spoken, a line saying the call's words in its history no longer hold, and
- * nothing otherwise, since every turn now is typed.
+ * What a turn opens with of its kind: on a spoken turn the words for a reply
+ * read aloud, handed every time since they are short; on a typed turn after
+ * a spoken one, a line saying those words in its history no longer hold; and
+ * nothing for a typed turn otherwise.
  */
-export function turnKindWords(handed: TurnHanded): string | undefined {
+export function turnKindWords(handed: TurnHanded, spoken: boolean): string | undefined {
+  if (spoken) return SPOKEN_WORDS;
+
   return handed.spoken === true ? TYPED_AFTER_CALL : undefined;
 }
 

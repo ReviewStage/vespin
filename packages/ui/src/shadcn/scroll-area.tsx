@@ -31,7 +31,7 @@ import { cn } from "../cn.js";
  * - The viewport's `rounded-[inherit]`, `size-full`, color transition, and
  *   outline and ring utilities are dropped: the area draws nothing of its
  *   own, sizes as its caller's `size` says, and leaves the keyboard's ring to
- *   the window.
+ *   the window (`vespin/no-shadcn-focus-ring`).
  *
  * `@repo/ui`'s `ScrollArea` (`components/scroll-area/scroll-area.tsx`) is
  * what an app draws, and its sheet keeps the edge fade; this is its inside.

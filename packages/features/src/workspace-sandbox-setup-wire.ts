@@ -5,20 +5,20 @@ import { looseTaskSectionIconSchema, taskSectionIconSchema } from "./task-sectio
 import { workspaceIdSchema } from "./task-wire.js";
 
 /**
- * workspace-sandbox-setup-wire.ts -- a workspace's cloud sandbox setup, as Settings reads and saves it: its install script, each repository's setup and archive scripts, and each repository's run actions.
+ * workspace-sandbox-setup-wire.ts -- a workspace's cloud sandbox setup, as Settings reads and saves it: its install script, each repository's setup script, and each repository's run actions.
  *
- * As Conductor Cloud keeps them, in the workspace's settings: the install
+ * Kept together, in the workspace's settings: the install
  * script runs once per build of each of the workspace's repositories' base
  * snapshots, a repository's setup script runs once in each new agent
- * sandbox of it, after its checkout, and its archive script once in each
- * just before the sandbox is deleted for good, as its agent is archived.
+ * sandbox of it, after its checkout.
  * `GET /api/workspaces/sandbox-setup` answers them all to any member;
  * `PUT /api/workspaces/sandbox-setup/install` and
  * `PUT /api/workspaces/sandbox-setup/repository` save one, each to an owner
  * or admin, an empty script removing it. A repository's run actions are the
- * commands a member runs in one of its cloud agents' sandboxes, each only
- * when pressed, from the Run menu in the agent's message box, behind the
- * Run actions experiment; `PUT /api/workspaces/sandbox-setup/run-actions`
+ * commands a member runs in one of its agents, each only when pressed, from
+ * the Run menu over the agent's tabs, behind the Run actions experiment: in
+ * a cloud agent's sandbox, or on the Mac a local agent runs on, as each
+ * action's availability allows; `PUT /api/workspaces/sandbox-setup/run-actions`
  * saves one repository's whole list in its order, to an owner or admin, an
  * empty list removing it, and `PATCH /api/workspaces/sandbox-setup/run-action`
  * adds, changes, moves, or removes one action of it, read and written
@@ -40,7 +40,12 @@ export const WORKSPACE_SANDBOX_SETUP_BOUNDS = {
   MAX_RUN_ACTION_COMMAND_CHARS: 4 * 1024,
 } as const;
 
-/** Which of a repository's scripts a row holds: the one its new sandboxes run after their checkout, or the one each runs just before it is deleted for good. */
+/**
+ * Which of a repository's scripts a row holds: the one its new sandboxes run
+ * after their checkout, or an archive script, which a row or a released
+ * build from before archive scripts were removed may still name, and which
+ * nothing runs, reads, or saves now.
+ */
 export const REPOSITORY_SCRIPT_KIND = {
   SETUP: "setup",
   ARCHIVE: "archive",
@@ -49,7 +54,7 @@ export const REPOSITORY_SCRIPT_KIND = {
 export type RepositoryScriptKind =
   (typeof REPOSITORY_SCRIPT_KIND)[keyof typeof REPOSITORY_SCRIPT_KIND];
 
-/** Which of the workspace's scripts a run was of: its install script, or a repository's setup or archive script. */
+/** Which of the workspace's scripts a run was of: its install script, or a repository's setup script; an archive script's run from before archive scripts were removed is never read. */
 export const CLOUD_SETUP_SCRIPT = {
   INSTALL: "install",
   ...REPOSITORY_SCRIPT_KIND,
@@ -95,6 +100,53 @@ const repositorySetupSchema = EffectSchema.Struct({
   repository: EffectSchema.String,
 });
 
+/** Where a run action runs: in a cloud agent's sandbox, or on the Mac a local agent runs on. */
+export const RUN_ACTION_PLACE = {
+  CLOUD: "cloud",
+  LOCAL: "local",
+} as const;
+
+export type RunActionPlace = (typeof RUN_ACTION_PLACE)[keyof typeof RUN_ACTION_PLACE];
+
+/**
+ * Where a run action may run: in cloud agents alone, in local agents alone,
+ * or in both, which is what an action that says nothing means. It limits
+ * where the action is offered and where it runs.
+ */
+export const RUN_ACTION_AVAILABILITY = {
+  BOTH: "both",
+  ...RUN_ACTION_PLACE,
+} as const;
+
+export type RunActionAvailability =
+  (typeof RUN_ACTION_AVAILABILITY)[keyof typeof RUN_ACTION_AVAILABILITY];
+
+const runActionAvailabilitySchema = EffectSchema.Literals(Object.values(RUN_ACTION_AVAILABILITY));
+
+/** Where an action may run, both where it says nothing. */
+export function runActionAvailability(action: {
+  readonly availableIn?: RunActionAvailability | undefined;
+}): RunActionAvailability {
+  return action.availableIn ?? RUN_ACTION_AVAILABILITY.BOTH;
+}
+
+/** Whether an action may run in the place given. */
+export function runActionRunsIn(
+  action: { readonly availableIn?: RunActionAvailability | undefined },
+  place: RunActionPlace,
+): boolean {
+  const availability = runActionAvailability(action);
+
+  return availability === RUN_ACTION_AVAILABILITY.BOTH || availability === place;
+}
+
+/** The actions of a list that may run in the place given, in their order: the ones an agent there is offered. */
+export function runActionsIn<
+  Action extends { readonly availableIn?: RunActionAvailability | undefined },
+>(actions: readonly Action[], place: RunActionPlace): Action[] {
+  return actions.filter((action) => runActionRunsIn(action, place));
+}
+
 /** A run action's label: words to draw, with something in them. */
 const runActionLabelSchema = EffectSchema.Trim.check(
   EffectSchema.isNonEmpty(),
@@ -110,8 +162,8 @@ const runActionCommandSchema = EffectSchema.String.check(
 /**
  * One run action as it is kept: its id, which a run of it is known by while
  * the list around it changes, its label, its command, the icon it wears
- * where it wears one, a sidebar section's kind of icon, and whether it is
- * the repository's default, the Run button's and ⌥⌘R's.
+ * where it wears one, a sidebar section's kind of icon, whether it is the
+ * repository's default, the Run button's and ⌥⌘R's, and where it may run.
  */
 export const runActionSchema = EffectSchema.Struct({
   id: EffectSchema.String,
@@ -120,6 +172,8 @@ export const runActionSchema = EffectSchema.Struct({
   icon: EffectSchema.optionalKey(looseTaskSectionIconSchema),
   /** Present, and true, on the list's one default; absent on every other action. */
   isDefault: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** Where it may run (`RUN_ACTION_AVAILABILITY`); absent where it may run in both, and from a service older than the choice. */
+  availableIn: EffectSchema.optionalKey(runActionAvailabilitySchema),
 });
 
 export type RunAction = typeof runActionSchema.Type;
@@ -135,10 +189,11 @@ const repositoryRunActionsSchema = EffectSchema.Struct({
 
 export type RepositoryRunActions = typeof repositoryRunActionsSchema.Type;
 
-/** The workspace's sandbox setup (GET, and every save's answer): its install script where one is saved, each repository's setup script and archive script, and each repository's run actions, each list in the order of their names. */
+/** The workspace's sandbox setup (GET, and every save's answer): its install script where one is saved, each repository's setup script, and each repository's run actions, each list in the order of their names. */
 export const workspaceSandboxSetupAnswerSchema = EffectSchema.Struct({
   install: EffectSchema.NullOr(savedScriptSchema),
   setups: EffectSchema.Array(repositorySetupSchema),
+  /** Always empty since archive scripts were removed; kept for the released builds that read it. */
   archives: EffectSchema.Array(repositorySetupSchema),
   /** Absent from a service older than run actions, which reads as none. */
   runActions: EffectSchema.optionalKey(EffectSchema.Array(repositoryRunActionsSchema)),
@@ -152,22 +207,23 @@ export const workspaceInstallScriptPutRequestSchema = EffectSchema.Struct({
   script: scriptSchema,
 });
 
-/** Saving a repository's setup script, or its archive script where `kind` names it (PUT to `/repository`), replacing the one of that kind that stood under any casing of its name; an empty script removes it. */
+/** Saving a repository's setup script (PUT to `/repository`), replacing the one that stood under any casing of its name; an empty script removes it. */
 export const workspaceRepositorySetupPutRequestSchema = EffectSchema.Struct({
   workspaceId: workspaceIdSchema,
   repository: githubRepositoryFullNameSchema,
   script: scriptSchema,
-  /** Which of the repository's scripts is saved; its setup script where unsaid. */
+  /** Which of the repository's scripts is saved; its setup script where unsaid, and a save naming an archive script, as a released build may, is ignored. */
   kind: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(REPOSITORY_SCRIPT_KIND))),
 });
 
-/** One run action as a save names it: the id it was read with, to keep its runs known as it, or none for an action new to the list, which the service names; its icon, none for the menu's own; and whether it is the default, the first so named being kept as it where several are. */
+/** One run action as a save names it: the id it was read with, to keep its runs known as it, or none for an action new to the list, which the service names; its icon, none for the menu's own; whether it is the default, the first so named being kept as it where several are; and where it may run, both where unsaid. */
 const runActionPutSchema = EffectSchema.Struct({
   id: EffectSchema.optionalKey(wireUuidSchema),
   label: runActionLabelSchema,
   command: runActionCommandSchema,
   icon: EffectSchema.optionalKey(taskSectionIconSchema),
   isDefault: EffectSchema.optionalKey(EffectSchema.Boolean),
+  availableIn: EffectSchema.optionalKey(runActionAvailabilitySchema),
 });
 
 /** Saving a repository's run actions (PUT to `/run-actions`), the whole list in its order, replacing the one that stood under any casing of its name; an empty list removes it. */

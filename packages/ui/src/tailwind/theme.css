@@ -72,6 +72,7 @@
   --spacing-attention-mark: 14px; /* off-scale: the attention disc, a row glyph's size */
   --spacing-find-field: 240px; /* off-scale: the find bar's field, one width whatever is typed */
   --radius-disc: 50%; /* off-scale: a circle, whose corner what it holds inherits */
+  --radius-held: inherit; /* a layer laid over a box, following the box's own corner (`UploadCover`) */
   --font-weight-ui-regular: var(--ui-weight-regular);
   --font-weight-ui-medium: var(--ui-weight-medium);
   --font-weight-ui-semibold: var(--ui-weight-semibold);
@@ -707,6 +708,8 @@
   --radius-card-raised: var(--ui-radius-8);
   --shadow-card-soft: 0 1px 2px var(--ui-color-shadow-soft);
   --shadow-card-lift: 0 2px 6px var(--ui-color-shadow-soft);
+  /* A card's lift off the ground (`--ui-shadow-card`): a list drawn as a card. */
+  --shadow-card: var(--ui-shadow-card);
 
   /* The panel window's own (`@repo/panel`'s desktop surfaces, which every
      client mounts): the profile's spacing roles its layout reads beside the
@@ -898,6 +901,16 @@
      where one fits, and say so where none does. */
   --spacing-page-thumb-row: 48px; /* off-scale: a row's media line */
   --spacing-icon-16: var(--ui-icon-16);
+  --spacing-icon-20: var(--ui-icon-20);
+  --spacing-icon-40: var(--ui-icon-40);
+  /* An app's window floating over an agent's box (`app-window-stack/`): at
+     most this tall and this wide at its own shape, on a ground at least this
+     wide, and each window under it peeking out by this much. */
+  --spacing-app-window-tall: 144px; /* off-scale: a window small enough to float */
+  --spacing-app-window-wide: 240px; /* off-scale: as wide again as it is tall, and some */
+  --spacing-app-window-least: 192px; /* off-scale: a phone's window stands on a ground this wide */
+  --spacing-app-window-peek: var(--ui-space-8);
+  --spacing-app-window-peek-twice: var(--ui-space-16);
   --color-veil: var(--ui-color-veil);
   --color-on-veil: var(--ui-color-on-veil);
   /* A picture's own shape, which its tile sets where it is drawn
@@ -943,11 +956,16 @@
   --text-label-inline: var(--ui-type-label-size);
   --color-provider-last-used: color-mix(in srgb, var(--ui-color-ground) 16%, var(--ui-color-text));
   --color-provider-last-used-ink: color-mix(in srgb, var(--ui-color-ground) 72%, transparent);
-  /* A composer's card (`components/composer-frame/`), lifted by a soft
-     shadow rather than ringed by a dark edge. */
-  --shadow-composer:
-    0 1px 2px var(--ui-color-shadow-soft), 0 12px 32px -16px var(--ui-color-shadow);
-  /* A caption's small glyph. */
+  /* A composer's card (`components/composer-frame/`), lifted as every card
+     is, by Geist's card shadow under its border. */
+  --shadow-composer: var(--ui-shadow-card);
+  /* A call's bar (`components/call/`), as tall as its two lines; and a
+     caption's small glyph. */
+  --spacing-call-row: calc(
+    var(--ui-type-section-leading) +
+    var(--ui-space-2) +
+    var(--ui-type-caption-leading)
+  );
   --spacing-icon-12: var(--ui-icon-12);
 
   /* The page patterns (`components/layout/`, `settings-*`,
@@ -1192,6 +1210,9 @@
      the app is marked by. */
   --spacing-picture-most: 520px; /* off-scale: a screenful's worth */
   --spacing-picture-stand-in: 480px; /* off-scale: a picture's width before its bytes are read */
+  /* A picture whose upload failed is at least this size, so its failure's card (`UploadCover`) fits on it however small the picture. */
+  --spacing-picture-failed-w: 240px; /* off-scale: the failure's card's words and presses */
+  --spacing-picture-failed-h: 136px; /* off-scale: its glyph, two lines of why, and its presses */
   --aspect-screenshot: 16 / 10;
   --text-picture-caption: 0.9em;
   --text-picture-caption--line-height: 1.45;

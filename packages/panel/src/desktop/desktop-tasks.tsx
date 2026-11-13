@@ -35,7 +35,7 @@ import {
 } from "@repo/ui";
 import { DescriptionCommentsProvider } from "@repo/ui/description-comments";
 import { GLYPH } from "@repo/ui/icons";
-import { pullRequestAgentOf, repositoryPullRequestOf } from "@repo/ui/pull-request-link";
+import { pullRequestAgentOf } from "@repo/ui/pull-request-link";
 import {
   agentOfTab,
   agentTab,
@@ -50,7 +50,7 @@ import {
   turnChangesTab,
 } from "@repo/ui/tab-strip-model";
 import { useInlineRename } from "@repo/ui/use-inline-rename";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { Activity, Fragment, memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { AutomationDirectory } from "../automation-directory.js";
@@ -108,6 +108,7 @@ import type { TaskLooks } from "../tasks/use-task-looks.js";
 import { useTaskRelationWrites } from "../tasks/use-task-relation-writes.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { useWindowAccount } from "../tasks/window-account.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import type { MenuEntry } from "./action-menu.js";
 import { useAgentDraftDoors, useAgentTerminalDoors } from "./agent-actions.js";
@@ -474,7 +475,10 @@ function DescriptionDocument({
         tasks.workspace?.id);
 
   const descriptionsOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.DESCRIPTIONS);
-  const turnEndOn = useWorkspaceExperiment(shownWorkspaceId, EXPERIMENT.TURN_END);
+
+  const turnEndOn =
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.TURN_END) }).data === true;
+
   const commentsTaskId = tasks.shown && descriptionsOn ? tasks.activeTaskId : undefined;
 
   const comments = useDescriptionComments(
@@ -659,7 +663,7 @@ function DescriptionDocument({
     [phone, leaveDetailsDoor],
   );
 
-  // The panel opened over the task's details, as its toggle opens it, goes back to the agents,
+  // The panel opened over the task's details, as a file a mention names opens it, goes back to the agents,
   // beside which the panel stands, since the details take the panel's room too.
   const detailsOver = isOverviewTab(tab) && !phone;
   const panelWasOpen = useRef(sidePanel.open);
@@ -751,14 +755,7 @@ function DescriptionDocument({
   const pullRequestCard = (url: string) => {
     const owned = [...agents.pullRequests].map(([agentId, each]) => ({ agentId, url: each.url }));
     // A page under an agent's pull request, as its files, is still that pull request, as its press says.
-    const number = repositoryPullRequestOf(url, opened?.repository);
-
-    const owner =
-      pullRequestAgentOf(url, owned) ??
-      (number === undefined
-        ? undefined
-        : owned.find((each) => repositoryPullRequestOf(each.url, opened?.repository) === number)
-            ?.agentId);
+    const owner = pullRequestAgentOf(url, owned);
 
     if (owner === undefined) return undefined;
     const agentId = changesTabOf(agents, owner, tasks.sidePanel.changes).changes;
@@ -807,11 +804,11 @@ function DescriptionDocument({
     onPressTab({ kind: TAB_PRESS.PANEL, tab: turnChangesTab(agentId, messageId) });
   });
 
-  const { onFork: forkDoor, onContinue: continueDoor } = useAgentDraftDoors(
-    agents,
-    false,
-    (draft) => openColumnTab(draftTab(draft)),
-  );
+  const {
+    onFork: forkDoor,
+    onContinue: continueDoor,
+    onSuggest: suggestDoor,
+  } = useAgentDraftDoors(agents, false, (draft) => openColumnTab(draftTab(draft)));
 
   const showHistory = useSteadyDoor((save: number | undefined) => {
     if (opened !== undefined) tasks.onOpenHistory(opened.id, save);
@@ -1667,6 +1664,7 @@ function DescriptionDocument({
                                 cards={cards}
                                 onFork={forkDoor}
                                 onContinue={continueDoor}
+                                onSuggest={suggestDoor}
                                 threads={threads}
                                 hidden={agentThreadsView !== undefined}
                               />

@@ -74,6 +74,7 @@ export type AccountAsksClient = Pick<
   | "saveProviderKey"
   | "removeProviderKey"
   | "setProviderKeyForAgents"
+  | "useResetCredit"
   | "renameSubscription"
   | "reorderSubscriptions"
   | "startChatGptDeviceLogin"
@@ -82,6 +83,7 @@ export type AccountAsksClient = Pick<
   | "readGitHubToken"
   | "readAllowedCommands"
   | "addAllowedCommand"
+  | "editAllowedCommand"
   | "removeAllowedCommand"
   | "saveGitHubToken"
   | "removeGitHubToken"
@@ -414,11 +416,12 @@ const COMMANDS_UNANSWERED: AllowedCommandsWriteAnswerView = {
 
 /**
  * One write of the always-allowed commands sent to the service for the
- * account that asked it (`sentFor`): an add as it stands, and a removal by
- * its first words, read off the list as the service answers it now, since
- * an id the window saw may have been replaced by a take-back that added
- * the command again. A removal of words the list no longer holds answers
- * the list as it stands. Note that each call is sent only while that
+ * account that asked it (`sentFor`): an add as it stands, and an edit or a
+ * removal by its first words, read off the list as the service answers it
+ * now, since an id the window saw may have been replaced by a take-back
+ * that added the command again. A removal of words the list no longer
+ * holds answers the list as it stands, and an edit of them adds the words
+ * it puts in their place, since those are what the member asked to keep. Note that each call is sent only while that
  * account is still the one signed in, because a write waits its turn
  * behind others and must not land on whoever signed in meanwhile.
  */
@@ -437,11 +440,19 @@ function allowedCommandWrite(
 
   if ("add" in write) return forSender(() => asked(client.addAllowedCommand(write.add)));
 
+  const named = "edit" in write ? write.edit : write.remove;
+
   return Effect.flatMap(
     forSender(() => asked(client.readAllowedCommands())),
     (answer) => {
       if ("failure" in answer) return Effect.succeed(answer);
-      const kept = answer.commands.find((each) => samePrefix(each.prefix, write.remove));
+      const kept = answer.commands.find((each) => samePrefix(each.prefix, named));
+
+      if ("edit" in write) {
+        return kept === undefined
+          ? forSender(() => asked(client.addAllowedCommand(write.to)))
+          : forSender(() => asked(client.editAllowedCommand(kept.id, write.to)));
+      }
 
       return kept === undefined
         ? Effect.succeed(answer)
@@ -483,6 +494,8 @@ function actsOf(
       Effect.flatMap(asked(client.removeProviderKey(removal)), keysWritten),
     PROVIDER_KEYS_FOR_AGENTS: (change) =>
       Effect.flatMap(asked(client.setProviderKeyForAgents(change)), keysWritten),
+    PROVIDER_KEYS_USE_RESET_CREDIT: (spend) =>
+      Effect.flatMap(asked(client.useResetCredit(spend)), keysWritten),
     SUBSCRIPTION_RENAME: (rename) =>
       Effect.flatMap(asked(client.renameSubscription(rename)), keysWritten),
     SUBSCRIPTIONS_REORDER: (order) =>

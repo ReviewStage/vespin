@@ -6,6 +6,7 @@ import { descriptionSections, openFenceAt } from "./description-document.js";
 import { mentionLinksIn } from "./mention-link.js";
 import { DESCRIPTION_SECTION_BOUNDS, TASK_BOUNDS } from "./task-wire.js";
 import { trimmedText } from "./text-schema.js";
+import { withoutTrailingNewlines } from "./trailing-newlines.js";
 
 /**
  * description-notes.ts -- the notes the app takes into a description's text, and the agents' journal of them.
@@ -389,7 +390,12 @@ function struckFromText(text: string, lines: Span): string {
   const head = text.slice(0, lines.from);
   const tail = text.slice(lines.to);
 
-  if (tail.trim().length === 0) return head.replace(/\n+$/u, "\n");
+  if (tail.trim().length === 0) {
+    // Note that a head ending in newlines keeps one, and one ending in none is kept as it is, as the pattern it replaces did.
+    const kept = withoutTrailingNewlines(head);
+
+    return kept === head ? head : `${kept}\n`;
+  }
 
   return head.endsWith("\n\n") || head.length === 0
     ? head + tail.replace(/^\n+/u, "")

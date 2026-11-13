@@ -186,9 +186,7 @@ export interface StoredAutomationOrigin {
 
 /**
  * The agent an agent was started from: its id, the assistant message it was
- * forked at where it was forked rather than continued, and how many of that
- * message's steps, and of the last of them how many words and calls, the
- * fork kept where it was a reply still being written,
+ * forked at where it was forked rather than continued,
  * how many of the source's steps the replay kept of how many there were,
  * and the sandbox its work stood in, whose latest snapshot this agent's own
  * sandbox is created from, or, for a source whose sandbox was not stopped
@@ -198,10 +196,6 @@ export interface StoredAutomationOrigin {
 export interface StoredStartedFrom {
   readonly agentId: string;
   readonly messageId?: string;
-  /** How many of the message's steps the fork kept, as seen when Fork was pressed on a reply still being written; absent where it kept the message whole. */
-  readonly messageSteps?: number;
-  /** How many words and calls of the last of those steps the fork kept, as seen at that press; absent where it kept that step whole. */
-  readonly messageStepParts?: number;
   readonly steps: number;
   readonly totalSteps: number;
   /** The branch the source's work was copied to for this agent, what it had not pushed included; absent where it could not be copied, or stood in a snapshot. */

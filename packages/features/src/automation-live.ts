@@ -99,6 +99,8 @@ const automationLiveRowSchema = EffectSchema.Struct({
   targetAgentId: EffectSchema.NullOr(EffectSchema.String),
   archiveSuccessful: EffectSchema.Boolean,
   slackDelivery: EffectSchema.Boolean,
+  /** The suggestion it was made from, as any text, since a row may hold a preset this release does not know. */
+  preset: EffectSchema.NullOr(EffectSchema.String),
   createdAt: countedNumber,
   mine: EffectSchema.Boolean,
   runId: EffectSchema.NullOr(EffectSchema.String),
@@ -330,6 +332,7 @@ export function automationsOfLiveRows(
           : { kind: AUTOMATION_TARGET.NEW_AGENT },
       archiveSuccessful: row.archiveSuccessful,
       slackDelivery: row.slackDelivery,
+      preset: row.preset,
       mine: row.mine,
       creatorId: row.userId,
     }),

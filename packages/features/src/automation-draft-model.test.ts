@@ -309,15 +309,15 @@ test("a GitHub trigger's settings are written as the row of choices leaves them,
 
   const opened = automationDraft(onEvent, DEFAULTS);
 
-  const chosen = {
-    ...opened,
-    githubSettings: {
-      senders: [GITHUB_SENDER.PEOPLE, GITHUB_SENDER.APP_AGENTS],
-      moments: [PULL_REQUEST_MOMENT.OPENED, PULL_REQUEST_MOMENT.READY],
-      drafts: true,
-      forks: false,
-    },
+  // Prereleases speak to a release alone, so an update's trigger is written without them.
+  const said = {
+    senders: [GITHUB_SENDER.PEOPLE, GITHUB_SENDER.APP_AGENTS],
+    moments: [PULL_REQUEST_MOMENT.OPENED, PULL_REQUEST_MOMENT.READY],
+    drafts: true,
+    forks: false,
   };
+
+  const chosen = { ...opened, githubSettings: { ...said, prereleases: false } };
 
   assert.equal(
     changeOf(opened, onEvent, DEFAULTS),
@@ -328,7 +328,7 @@ test("a GitHub trigger's settings are written as the row of choices leaves them,
     trigger: {
       kind: AUTOMATION_TRIGGER.GITHUB,
       event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
-      ...chosen.githubSettings,
+      ...said,
     },
   });
   assert.deepEqual(

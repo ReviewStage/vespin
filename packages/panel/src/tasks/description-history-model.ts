@@ -7,7 +7,6 @@ import {
   type DescriptionEditor,
   type DescriptionRevisionLine,
 } from "@repo/features/task-wire";
-import { dayAndTimeText } from "@repo/features/time-format";
 import type { FormerMember, WorkspaceMember } from "@repo/features/workspace-wire";
 import {
   ACTOR_KIND,
@@ -138,18 +137,6 @@ export function revisionAuthorOf(
     case DESCRIPTION_ACTOR.EARLIER:
       return { kind: ACTOR_KIND.SOMEONE, reason: SOMEONE_REASON.EARLIER };
   }
-}
-
-/** What a revision did, in a few words: the version a restore brought back, the description before history, or how many changes its saves made. */
-export function revisionSummary(line: DescriptionRevisionLine): string {
-  if (line.restoredFrom !== undefined) {
-    return `Restored the version from ${dayAndTimeText(line.restoredFrom.at)}`;
-  }
-
-  if (line.lastEdit.actor === DESCRIPTION_ACTOR.EARLIER)
-    return "The description before its history began";
-
-  return line.changes === 1 ? "1 change" : `${line.changes} changes`;
 }
 
 /**

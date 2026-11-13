@@ -43,7 +43,7 @@
  * A member's change to a CLAIMED message finds no message and changes
  * nothing, which the route answers as not found: it has left the queue. A
  * mark left standing, a window closed mid-edit, holds the queue until any
- * of the member's windows cancels it from the row.
+ * of the windows that may change the queue cancels it from the row.
  *
  * Every write holds the agent's queue lock until it commits, so two changes
  * at once land one after the other, and each that changed anything moves
@@ -125,6 +125,8 @@ export interface QueuedLine {
   readonly serverWords?: string | undefined;
   /** The words what it mentions is read from where they are not all of its text, as a Start's prompt beside a source's replay; empty where it mentions nothing. */
   readonly mentionWords?: string | undefined;
+  /** The caller's lines of a call it is, by the keys they were recorded under, oldest first, which it starts its turn on in place of writing its words again (`writer.ts`'s `AwaitingLineWrite`). */
+  readonly adopts?: readonly string[] | undefined;
 }
 
 /** One queued message: its id, which its window minted and it goes under, the member who queued it, its words and files, whether a member is editing it, when the hand-off claimed it to send, and, for a line a send diverted while the agent boots, the key it was sent under and what it named beside its words. */
@@ -152,9 +154,10 @@ export interface AgentQueueRead {
   readonly revision: number;
 }
 
-/** What queueing a message answered: queued (or queued already under its id), or refused because the queue is full. */
+/** What queueing a message answered: queued, queued already under its id or key (which wrote nothing), or refused because the queue is full. */
 export const QUEUE_OUTCOME = {
   QUEUED: "queued",
+  REPEATED: "repeated",
   FULL: "full",
 } as const;
 
@@ -172,7 +175,7 @@ function messageOf(row: typeof QueuedRowSchema.Type): QueuedMessageRow {
     attachments,
     claimedAt: row.claimedAt ?? undefined,
     sendKey: row.sendKey ?? undefined,
-    // SAFETY: the column is written only by `queueWhileBooting`, from a send's own line.
+    // SAFETY: the column is written only by `queueWhileBooting` and a queued message spoken on a call, from their own lines.
     line: (row.line ?? undefined) as QueuedLine | undefined,
   };
 }
@@ -286,6 +289,13 @@ const findBootPhase = SqlSchema.findAll({
 });
 
 /** A message written again as an edit saved it, its words and its files, its hold let go. */
+/**
+ * A queued line's `line` column with the caller's lines of a call it named
+ * taken off (`QueuedLine`'s `adopts`), for an edit of its words: what was
+ * said stands as recorded, and the edit is written as a line of its own.
+ */
+const withoutAdoptedLines = () => sql`${queuedMessage.line} - 'adopts'`;
+
 const updateEdit = SqlSchema.findAll({
   Request: Schema.Struct({
     agentId: Schema.String,
@@ -302,6 +312,8 @@ const updateEdit = SqlSchema.findAll({
         .set({
           text,
           attachments,
+          // An edit's words are no longer the caller's lines a call recorded, so it goes as a line of its own.
+          line: withoutAdoptedLines(),
           editing: false,
           updatedAt: now,
         })
@@ -371,6 +383,7 @@ const updateClaim = SqlSchema.findAll({
             : {
                 text: edit.text,
                 attachments: edit.attachments,
+                line: withoutAdoptedLines(),
               }),
         })
         .where(
@@ -671,6 +684,8 @@ export function queueAgentMessage(
     readonly id: string;
     readonly text: string;
     readonly attachments?: readonly AgentAttachment[] | undefined;
+    /** What it names beside its words where it is not a plain typed message, such as a line spoken on a call (`QueuedLine`). */
+    readonly line?: QueuedLine | undefined;
   },
 ): AgentQueueEffect<Option.Option<QueueOutcome>> {
   let inserted = false;
@@ -683,7 +698,7 @@ export function queueAgentMessage(
       const queued = yield* queueLineInLock(agentId, userId, {
         ...message,
         sendKey: undefined,
-        line: undefined,
+        line: message.line,
       });
 
       inserted = queued.inserted;
@@ -707,8 +722,8 @@ export function bootPhaseInLock(agentId: string): AgentQueueEffect<BootPhase | u
  * A line queued at the end of the agent's queue inside a caller's lock, as
  * `userId`'s, under `sendKey` where it was sent under a key of its own, with
  * what it named beside its words; a line repeated under its key keeps the
- * one queued first. Answers whether it is queued or the queue was full, and
- * whether it wrote a row.
+ * one queued first. Answers whether it is queued, repeated, or the queue
+ * was full, and whether it wrote a row.
  */
 export function queueLineInLock(
   agentId: string,
@@ -740,7 +755,9 @@ export function queueLineInLock(
       now: yield* DateTime.nowAsDate,
     });
 
-    return { outcome: QUEUE_OUTCOME.QUEUED, inserted: rows.length > 0 };
+    const inserted = rows.length > 0;
+
+    return { outcome: inserted ? QUEUE_OUTCOME.QUEUED : QUEUE_OUTCOME.REPEATED, inserted };
   });
 }
 

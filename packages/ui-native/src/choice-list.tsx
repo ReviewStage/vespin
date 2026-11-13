@@ -24,6 +24,7 @@ import {
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
 import { Fragment } from "react";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -64,10 +65,10 @@ type ChoiceListProps = {
 const HAIRLINE = 0.5;
 
 /** The mark leading an option, 18 pt: a ring filled with the accent at its heart once picked, or, where several may be picked, Reminders' round check, since iOS has no square checkbox. */
-function pickMark(picked: boolean, multiple: boolean) {
-  if (multiple) return picked ? "checkmark.circle.fill" : "circle";
+function pickMark(picked: boolean, multiple: boolean): Glyph {
+  if (multiple) return picked ? GLYPH.ROUND_BOX_TICKED : GLYPH.ROUND_BOX;
 
-  return picked ? "smallcircle.filled.circle.fill" : "circle";
+  return picked ? GLYPH.RADIO_PICKED : GLYPH.ROUND_BOX;
 }
 
 /** The small bordered tag after the recommended option's label, muted, as the panel's stands, so copper is left for the option picked. */
@@ -147,7 +148,7 @@ function ChoiceRow({
         ]}
       >
         <Image
-          systemName={pickMark(picked, multiple)}
+          {...glyphImage(pickMark(picked, multiple))}
           size={MARK_SIZE.LEAD}
           color={picked ? colors.ACCENT : colors.TEXT_MUTED}
         />

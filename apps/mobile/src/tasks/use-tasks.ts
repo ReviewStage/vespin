@@ -11,6 +11,7 @@
 
 import type { ListedAgent } from "@repo/features/agent-wire";
 import { waitsOnReaderNow } from "@repo/features/inbox-list-model";
+import { LINK_DESTINATION, taskNumberOf } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { PAGE_OWNER, type PageLine } from "@repo/features/page-wire";
 import { READ_MARK, type ReadMark } from "@repo/features/read-mark";
@@ -21,11 +22,15 @@ import {
   inAgentListOrder,
 } from "@repo/features/task-agents-model";
 import { ASSIGNED_TO, NO_REPOSITORY, TASKS_HEAD_WORDS } from "@repo/features/task-list-model";
-import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
+import { TASK_SECTION_WRITE, type TaskSection } from "@repo/features/task-section-wire";
 import {
   NO_TASK_SECTIONS,
+  placeWrites,
   SECTION_WRITE_FAILED_NOTE,
   sectionOfTask,
+  sectionOrder,
+  unplaceAllWrites,
+  workspaceSections,
 } from "@repo/features/task-sections-model";
 import {
   searchedTasks,
@@ -45,6 +50,7 @@ import {
   deleteTaskWords,
   MARK_FAILED_NOTES,
   RENAME_FAILED_NOTE,
+  repositoryChangeFailureNote,
   type StopAgentsWords,
   settleFailedNote,
   settleStopWords,
@@ -68,6 +74,8 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
+import { type TaskRelationWrites, useTaskRelationWrites } from "./use-relations.js";
+import { useWorkspaceRepositories } from "./use-start.js";
 
 /** No task list read yet. */
 const NO_TASKS: AppStateSnapshot["tasks"]["tasks"] = [];
@@ -263,6 +271,79 @@ export function useTaskWrites(): TaskWrites {
   );
 }
 
+/** Where a task stands in the member's sections and which repository it works in, with the writes that move either, as a task's menus offer them. */
+export interface TaskPlacing {
+  /** The member's sections of the workspace, in the order the list draws them. */
+  readonly sections: readonly TaskSection[];
+  /** The section the member keeps a task in, a pinned task's stored entry among them; none where it is in none. */
+  readonly sectionOf: (taskId: string) => string | undefined;
+  /** Puts a task on top of a section, or takes it out of every section under null, as the panel's Move to section does. */
+  readonly moveToSection: (taskId: string, sectionId: string | null) => void;
+  /** The repositories the workspace's GitHub reaches, which a task's repository is picked among. */
+  readonly repositories: readonly string[];
+  /** Gives a task its repository, or takes it away under null, as the panel's Change repository does. */
+  readonly setRepository: (taskId: string, repository: string | null) => void;
+}
+
+/**
+ * A workspace's sections and repositories, the repositories followed while
+ * the screen stands, and the writes that move a task among them: a section
+ * move as the panel's Move to section sends it, on top of the section
+ * (`placeWrites`) or out of every one (`unplaceAllWrites`), which the host
+ * draws at once and puts back where the service refused it; and a
+ * repository set as the panel's Change repository sends it
+ * (`TASKS_SET_REPOSITORY`), drawn as the service answers it, a refusal
+ * said in the panel's words for it.
+ */
+export function useTaskPlacing(workspaceId: string | undefined): TaskPlacing {
+  const acts = useHostActs();
+  const write = useWrite();
+
+  const { data: state = NO_TASK_SECTIONS } = useQuery({
+    ...appStateQuery,
+    select: (snapshot) => snapshot.tasks.taskSections ?? NO_TASK_SECTIONS,
+  });
+
+  const { listed } = useWorkspaceRepositories(workspaceId);
+
+  return useMemo(() => {
+    const moveToSection = (taskId: string, sectionId: string | null) => {
+      const [first, ...rest] =
+        sectionId === null
+          ? unplaceAllWrites([taskId])
+          : placeWrites(sectionOrder(state, sectionId), taskId, sectionId, 0, Date.now());
+
+      if (first === undefined) return;
+      // Note that Try again is offered only where the move writes this task alone, because a batch that also places its neighbors would put back one the member has since moved.
+      const alone = rest.every((each) => "taskId" in each && each.taskId === taskId);
+      void write(() => acts[ACT_KIND.TASKS_WRITE_SECTION]({ writes: [first, ...rest] }), {
+        refused: (landed) => (landed ? undefined : SECTION_WRITE_FAILED_NOTE),
+        retry: alone,
+        subject: { kind: WRITE_SUBJECT.TASK_SECTION, id: taskId },
+        went: BUZZ.SUCCESS,
+      });
+    };
+
+    const setRepository = (taskId: string, repository: string | null) => {
+      void write(() => acts[ACT_KIND.TASKS_SET_REPOSITORY]({ taskId, repository }), {
+        refused: (answer) =>
+          "failure" in answer ? repositoryChangeFailureNote(answer.failure) : undefined,
+        retry: true,
+        subject: { kind: WRITE_SUBJECT.TASK_REPOSITORY, id: taskId },
+        went: BUZZ.SUCCESS,
+      });
+    };
+
+    return {
+      sections: workspaceId === undefined ? [] : workspaceSections(state, workspaceId),
+      sectionOf: (taskId: string) => sectionOfTask(state, taskId),
+      moveToSection,
+      repositories: listed,
+      setRepository,
+    };
+  }, [acts, write, state, workspaceId, listed]);
+}
+
 /** What the Tasks tab draws: the tree, what a search finds, each row's look, and the acts on a row. */
 export interface TasksListing {
   readonly tree: TaskTree;
@@ -285,6 +366,10 @@ export interface TasksListing {
   readonly askDelete: (task: TaskSummary) => void;
   /** A task at a glance, as its row's preview draws it: how many of its threads wait on the reader, and its agents not archived, as its Overview lists them. */
   readonly glanceOf: (taskId: string) => TaskGlance;
+  /** The workspace's sections and repositories, and the writes that move a task among them. */
+  readonly placing: TaskPlacing;
+  /** The writes that relate a task to another, change how it stands, or take it out from under its parent. */
+  readonly relations: TaskRelationWrites;
 }
 
 /** A task at a glance: how many of its threads wait on the reader, and its agents not archived, in its Overview's order. */
@@ -339,6 +424,8 @@ export function useTasksListing(search: string): ReadListing {
   const listed = view?.tasks ?? NO_TASKS;
   const { held, setStatus } = useStatusWrites(listed);
   const { rename } = useTaskWrites();
+  const placing = useTaskPlacing(workspace?.id);
+  const relations = useTaskRelationWrites();
 
   return useMemo(() => {
     const tasks = withHeld(listed, held);
@@ -390,6 +477,8 @@ export function useTasksListing(search: string): ReadListing {
           }),
         {
           refused: (landed) => (landed ? undefined : SECTION_WRITE_FAILED_NOTE),
+          // Note that the move offers no Try again, but voids an older menu move's, which would put the task back.
+          subject: { kind: WRITE_SUBJECT.TASK_SECTION, id: taskId },
           went: BUZZ.SUCCESS,
         },
       );
@@ -416,8 +505,23 @@ export function useTasksListing(search: string): ReadListing {
       sectionOf: (taskId: string) => sectionOfTask(view?.taskSections ?? NO_TASK_SECTIONS, taskId),
       rename,
       glanceOf,
+      placing,
+      relations,
     };
-  }, [acts, write, listed, held, view, workspace, readerId, waiting, search, rename]);
+  }, [
+    acts,
+    write,
+    listed,
+    held,
+    view,
+    workspace,
+    readerId,
+    waiting,
+    search,
+    rename,
+    placing,
+    relations,
+  ]);
 }
 
 /** One agent on a task as its row draws it: the agent, how many of its threads wait on the reader, and the pull request it opened. */
@@ -447,6 +551,8 @@ export interface TaskOverview {
   readonly task: TaskSummary;
   /** Its whole document, where the host has read it: its description and the tasks it waits on and holds up. */
   readonly document: Task | undefined;
+  /** Reads its document again, as the panel's Try again does (`TASKS_DOCUMENT_RETRY`), where its read failed and none is held; none otherwise. */
+  readonly documentRetry: (() => void) | undefined;
   readonly workspace: Workspace | undefined;
   readonly agents: readonly TaskAgentLine[];
   readonly pages: readonly PageLine[];
@@ -457,6 +563,15 @@ export interface TaskOverview {
   readonly setStatus: SetStatus;
   readonly agentsWorking: (taskId: string) => boolean;
   readonly rename: TaskWrites["rename"];
+  /** Its workspace's sections and repositories, and the writes that move it among them. */
+  readonly placing: TaskPlacing;
+  /** The writes that relate it to another task, change how one stands to it, or take it out from under its parent. */
+  readonly relations: TaskRelationWrites;
+}
+
+/** Says on the console a description read asked again that did not go; the page still says the read failed. */
+function documentRetryLost(cause: unknown): void {
+  console.error("Reading the description again did not go.", cause);
 }
 
 /** Whether a link's word names the task: its id, or its number as a task link spells one. */
@@ -465,10 +580,29 @@ function namesTask(task: TaskSummary, named: string): boolean {
 }
 
 /**
+ * The tasks the list has held this session, by their ids. Note that one that
+ * leaves the list was deleted or moved out of the member's reach, so its
+ * description, which the host keeps after a delete, is never drawn in its
+ * place; only a task the list never held stands on its own read.
+ */
+const listedOnce = new Set<string>();
+
+/** The id a link's word names a task by, or none where it names one by its number. */
+function idNamed(named: string | undefined): string | undefined {
+  if (named === undefined) return undefined;
+
+  return taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: named }) === undefined
+    ? named
+    : undefined;
+}
+
+/**
  * One task by its id or its number, as a link names it, with all its page
  * shows, its description and pages followed while the page stands, as the
- * panel's Overview follows them (`TASKS_DOCUMENT_FOLLOW`, `TASKS_PAGES_FOLLOW`);
- * none where the list holds no such task.
+ * panel's Overview follows them (`TASKS_DOCUMENT_FOLLOW`, `TASKS_PAGES_FOLLOW`).
+ * A task the list doesn't hold, named by its id, stands on its own
+ * description read, as the panel's page stands on it (`use-found-task.ts`
+ * finds one a link names by number); none until that read answers with it.
  */
 export function useTaskOverview(named: string | undefined): TaskOverview | undefined {
   const acts = useHostActs();
@@ -478,8 +612,13 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
   const { held: statuses, setStatus } = useStatusWrites(view?.tasks ?? NO_TASKS);
   const { rename } = useTaskWrites();
   const listed = useMemo(() => withHeld(view?.tasks ?? NO_TASKS, statuses), [view, statuses]);
-  const task = named === undefined ? undefined : listed.find((each) => namesTask(each, named));
-  const taskId = task?.id;
+
+  const listedTask =
+    named === undefined ? undefined : listed.find((each) => namesTask(each, named));
+
+  // Note that an id the list doesn't hold is followed by its own read, while a number it doesn't hold names nothing to follow.
+  const taskId = listedTask?.id ?? idNamed(named);
+  const relations = useTaskRelationWrites();
   useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_DOCUMENT_FOLLOW]({ taskId: id }));
   useLiveFollow(taskId, (id) => acts[ACT_KIND.TASKS_PAGES_FOLLOW]({ taskId: id }));
 
@@ -490,9 +629,30 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
         ? undefined
         : {
             document: state[LIVE_READ.DESCRIPTION_DOCUMENT][taskId]?.rows,
+            documentFailed: state[LIVE_READ.DESCRIPTION_DOCUMENT][taskId]?.failed === true,
             pages: state[LIVE_READ.PAGES][PAGE_OWNER.TASK][taskId]?.rows,
           },
   });
+
+  useEffect(() => {
+    if (listedTask !== undefined) listedOnce.add(listedTask.id);
+  }, [listedTask]);
+
+  const read = held?.document;
+
+  const unlistedTask =
+    taskId !== undefined && !listedOnce.has(taskId) && read !== undefined && "task" in read
+      ? read.task
+      : undefined;
+
+  const task = listedTask ?? unlistedTask;
+  const { data: workspaces } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+
+  // Note that a task stands under its own workspace, its path and its link named by that workspace's key, since a link may open one outside the workspace the phone works in.
+  const taskWorkspace = workspaces?.find((each) => each.id === task?.workspaceId) ?? workspace;
+
+  // Note that a task opened by a link may stand in another workspace than the one the phone works in, so its own workspace's sections and repositories are read.
+  const placing = useTaskPlacing(task?.workspaceId);
 
   return useMemo(() => {
     if (task === undefined) return undefined;
@@ -504,10 +664,19 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
     const listedWaiting = agents.reduce((sum, line) => sum + line.waiting, 0);
     const document = held?.document;
 
+    // Note that a read that failed with a document still held keeps drawing it, as the panel does, so Try again stands only where nothing is.
+    const documentRetry =
+      held?.documentFailed === true && document === undefined
+        ? () => {
+            acts[ACT_KIND.TASKS_DOCUMENT_RETRY]({ taskId: task.id }).catch(documentRetryLost);
+          }
+        : undefined;
+
     return {
       task,
       document: document !== undefined && "task" in document ? document.task : undefined,
-      workspace,
+      documentRetry,
+      workspace: taskWorkspace,
       agents,
       pages: held?.pages ?? [],
       waitingElsewhere: Math.max(0, (waiting.byTask.get(task.id) ?? 0) - listedWaiting),
@@ -515,8 +684,10 @@ export function useTaskOverview(named: string | undefined): TaskOverview | undef
       setStatus,
       agentsWorking: agentsWorkingIn(view, listed),
       rename,
+      placing,
+      relations,
     };
-  }, [task, view, waiting, held, workspace, listed, rename]);
+  }, [task, view, waiting, held, taskWorkspace, listed, rename, placing, relations, acts]);
 }
 
 /** Whether the host has read the task list once, so a task it does not hold is one that is not there rather than one still on its way. */

@@ -1,0 +1,28 @@
+# settings-mcp.yaml -- Settings › MCP on the Inbox fixture: the apps the account allowed, each by its name and where it signs in from, and Disconnect asked first and canceled.
+#
+# Launched on the host's Inbox fixture, whose account allowed two apps
+# (`@repo/host/fixture-inbox`), so no server is reached.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "MCP"
+- tapOn: "MCP"
+- waitForAnimationToEnd
+- assertVisible: "Claude Code"
+- assertVisible: "ChatGPT"
+- takeScreenshot: settings-mcp
+- longPressOn: "ChatGPT"
+- tapOn: "Disconnect"
+- assertVisible: "Disconnect ChatGPT?"
+- waitForAnimationToEnd
+- takeScreenshot: settings-mcp-disconnect
+- tapOn: "Cancel"

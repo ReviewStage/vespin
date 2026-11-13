@@ -1,15 +1,21 @@
-// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer's + and its ⋯ menu, a page it showed, opened whole, and the sheet of its options: its model, effort, Fast, permission mode, and MCP servers.
+// agent-screens.tsx -- one agent's page, its transcript live under the system's header naming it, its held calls answered, its composer's + and its ⋯ menu, its run actions and its Permanently delete among it, a page it showed, opened whole, the sheet of its options: its model, effort, Fast, permission mode, and MCP servers, and the sheet of its listening ports.
 
 import { DENIES_WAITING } from "@repo/features/agent-approval-model";
 import {
   AGENT_PERMISSION_MODE,
   type AgentPermissionMode,
 } from "@repo/features/agent-approval-wire";
+import {
+  AGENT_PORTS_WORDS,
+  PORT_ACT,
+  type PortAct,
+  type PortRow,
+} from "@repo/features/agent-ports-model";
 import { type AgentOverviewPullRequest, PULL_REQUEST_STATE } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { agentActivity } from "@repo/features/ios-system-activity";
-import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
-import { modelLabel } from "@repo/features/model-label";
+import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
+import { agentName, modelLabel } from "@repo/features/model-label";
 import { cardTitle } from "@repo/features/plain-words";
 import {
   MERGE_ACTION,
@@ -18,7 +24,11 @@ import {
   mergeActionFor,
 } from "@repo/features/pull-request-model";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
+import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
+import { RUN_ACTION_WORDS, runActionMenuLabel } from "@repo/features/run-actions-model";
+import { MESSAGE_SUGGESTION_REFUSAL, sentOf } from "@repo/features/suggestion-model";
 import { agentStillWriting } from "@repo/features/task-agents-model";
+import { TRANSCRIPT_COPY, type TranscriptCopy } from "@repo/features/transcript-copy";
 import { MCP_SERVER_LABEL, VERB } from "@repo/features/words";
 import { selectInboxReader, selectWorkspaces } from "@repo/host/app-state-reads";
 import { PERMISSION_MODE_WORDS } from "@repo/settings";
@@ -32,17 +42,22 @@ import {
   Composer,
   type ComposerMenu,
   ConfirmAsk,
+  GLYPH,
   GlassDock,
+  type Glyph,
+  glyphSymbol,
   HeldCallBanner,
   HintPickRows,
   ListSection,
   MenuPickRow,
+  MenuRow,
+  type MenuRowAct,
   NO_TOGGLES,
+  openCuts,
   QueuedLines,
   RenameAsk,
   Screen,
   SettingsForm,
-  type SfSymbol,
   SkillSuggestions,
   SwitchRow,
   shownMediaIds,
@@ -51,25 +66,45 @@ import {
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
+  transcriptOriginOf,
   useColors,
+  withSending,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 import {
   useAgentMedia,
   useAgentPullRequests,
   useAgentTranscript,
   useFollowedAgent,
   useOlderPages,
+  useShownAgent,
   useTranscriptRetry,
+  useWholeParts,
 } from "../agents/use-agent.js";
 import { useAgentActions } from "../agents/use-agent-actions.js";
 import { type AgentApprovals, useAgentApprovals } from "../agents/use-agent-approvals.js";
-import { type AgentComposer, useAgentComposer } from "../agents/use-agent-composer.js";
+import {
+  type AgentComposer,
+  type SuggestedSend,
+  useAgentComposer,
+} from "../agents/use-agent-composer.js";
 import { type AgentMode, useAgentMode } from "../agents/use-agent-mode.js";
 import { type AgentModelPick, useAgentModelPick } from "../agents/use-agent-model.js";
+import { useAgentOrigin } from "../agents/use-agent-origin.js";
+import { useAgentHasPorts, useAgentPorts } from "../agents/use-agent-ports.js";
+import { useAgentRun } from "../agents/use-agent-run.js";
 import { useAgentServers } from "../agents/use-agent-servers.js";
+import {
+  type OpenedSuggestion,
+  useOpenedSuggestion,
+  useSuggestionAddress,
+  useSuggestionLooks,
+  useSuggestionSender,
+} from "../agents/use-suggestions.js";
+import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
+import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
@@ -77,8 +112,8 @@ import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { PageScreen } from "./page-screens.js";
 
-/** What an agent is called where the list holds no title for it yet. */
-const UNTITLED_AGENT = "Agent";
+/** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
+const UNLISTED_AGENT = "Agent";
 
 /** What stands in the transcript's place while it is read, and where it could not be, with what reads it again. */
 const TRANSCRIPT_WORDS = {
@@ -95,6 +130,15 @@ const MENU_WORDS = {
   PIN: "Pin",
   UNPIN: "Unpin",
   ARCHIVE: "Archive",
+  DELETE: "Permanently delete",
+} as const;
+
+/** What Copy transcript offers, in the panel's words: the transcript concise or whole, copied, and the same words handed to the share sheet. */
+const COPY_TRANSCRIPT_WORDS = {
+  COPY: "Copy transcript",
+  CONCISE: "Concise",
+  FULL: "Full",
+  SHARE: "Share…",
 } as const;
 
 /** What the + offers beside the options: the photo picker, and the sheet of every option. */
@@ -123,32 +167,45 @@ const OPTIONS_WORDS = {
   MORE_SERVERS: "Connect another in Settings.",
 } as const;
 
-/** The SF Symbol each permission mode wears, the closest to the panel's glyph: a hand, a shield round a check, a shield round a "!". */
+/** The glyph each permission mode wears, the panel's own: a hand, a shield round an ellipsis, a shield round a "!". */
 const MODE_SYMBOL = {
-  [AGENT_PERMISSION_MODE.ASK]: "hand.raised",
-  [AGENT_PERMISSION_MODE.AUTO]: "checkmark.shield",
-  [AGENT_PERMISSION_MODE.FULL_ACCESS]: "exclamationmark.shield",
-} as const satisfies Record<AgentPermissionMode, SfSymbol>;
+  [AGENT_PERMISSION_MODE.ASK]: GLYPH.ASK_FIRST,
+  [AGENT_PERMISSION_MODE.AUTO]: GLYPH.AUTO_APPROVE,
+  [AGENT_PERMISSION_MODE.FULL_ACCESS]: GLYPH.FULL_ACCESS,
+} as const satisfies Record<AgentPermissionMode, Glyph>;
 
 /** What a pull request's card offers beside Review where it may merge now, and what that asks first. */
 const MERGE_WORD = "Merge";
 const MERGE_QUESTION = "Merge this pull request?";
 
-/** The agent's address on vespin.dev, under its workspace and its task, once the agent is read. */
+/** The agent's address on vespin.dev, under its workspace and its task, once the agent is read; none before its workspace is known. */
 function useAgentAddress(
   agentId: string,
   workspaceId: string | undefined,
   taskId: string | undefined,
-): string {
+): string | undefined {
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
-  const workspace = workspaces.find(({ id }) => id === workspaceId);
+  const step = linkWorkspaceStep(workspaceId, workspaces);
 
   const place =
     taskId === undefined
       ? { kind: LINK_DESTINATION.AGENT, agentId }
       : { kind: LINK_DESTINATION.AGENT, planId: taskId, agentId };
 
-  return linkOf(place, workspace?.slug ?? workspace?.id ?? workspaceId ?? "");
+  return step === undefined ? undefined : linkOf(place, step);
+}
+
+/** An automation's address on vespin.dev, under the agent's workspace, which opens in Safari, since the phone draws no Automations; none before the workspace is known. */
+function useAutomationAddress(
+  automationId: string | undefined,
+  workspaceId: string | undefined,
+): string | undefined {
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
+  const step = linkWorkspaceStep(workspaceId, workspaces);
+
+  if (step === undefined || automationId === undefined) return undefined;
+
+  return linkOf({ kind: LINK_DESTINATION.AUTOMATION, automationId }, step);
 }
 
 /** The change a card's Merge sends, by what the pull request offers: merged at once by the first method the repository allows, or queued once ready where it merges through a queue; none where it offers neither. */
@@ -279,13 +336,13 @@ function agentAddMenu(
 ): ComposerMenu {
   return {
     actions: [
-      { label: ADD_WORDS.PHOTOS, symbol: "photo.on.rectangle", onPress: composer.attach },
+      { label: ADD_WORDS.PHOTOS, symbol: GLYPH.ATTACH, onPress: composer.attach },
       ...(openOptions === undefined
         ? []
         : [
             {
               label: ADD_WORDS.OPTIONS,
-              symbol: "slider.horizontal.3" as const,
+              symbol: GLYPH.OPTIONS,
               onPress: openOptions,
             },
           ]),
@@ -313,12 +370,49 @@ function agentAddMenu(
 }
 
 /**
+ * The send a box opened on a message suggestion goes through: the
+ * suggestion's words and the send through it, where the page is the running
+ * agent it goes to; none for any other page, or once a send of it landed.
+ */
+function suggestedSendOf(
+  opened: OpenedSuggestion | undefined,
+  agentId: string,
+  sendSuggestion: ReturnType<typeof useSuggestionSender>,
+): SuggestedSend | undefined {
+  const action = opened?.view.action;
+
+  if (opened === undefined || action?.kind !== REPLY_BUTTON_ACTION.SEND) return undefined;
+
+  if (opened.view.sendTo?.id !== agentId) return undefined;
+  const { suggestion } = opened;
+
+  return {
+    key: suggestion.buttonId,
+    words: action.text,
+    send: (text, attachments) =>
+      sendSuggestion(
+        {
+          agentId: suggestion.agentId,
+          buttonId: suggestion.buttonId,
+          sent: sentOf(suggestion, text, attachments),
+        },
+        MESSAGE_SUGGESTION_REFUSAL,
+      ),
+  };
+}
+
+/**
  * One agent's page: the system's header naming the agent in the ink, as
  * Messages names a conversation, since the transcript opens at its newest
  * row and its head scrolls away, its back button leading to the task, with
  * a ⋯ menu, as the panel's agent menu offers it: Copy link and Open in
- * browser, Rename, typed in the system's alert, Pin or Unpin, Options, and
- * Archive, asked first, which goes back once the agent is archived. Under
+ * browser, Rename, typed in the system's alert, Pin or Unpin, Options, a
+ * cloud agent's Ports, which opens the sheet of its listening ports, and
+ * Run ›, its repository's run actions where its workspace offers them, each
+ * run in its sandbox or stopped while it runs, as the panel's narrow ⋯
+ * offers them, Archive, asked first, which goes back once the agent is
+ * archived, and Permanently delete, red and last, which always asks in the
+ * panel's words and goes back once the agent is deleted. Under
  * it, its transcript as one lazy list, its head where the agent stands and
  * the model it runs on, which opens the options sheet, as the menu's
  * Options and the composer's + do. The transcript
@@ -326,7 +420,8 @@ function agentAddMenu(
  * moves, and its older pages are read as the reader scrolls up to them; one
  * that could not be read offers Try again. Each call opens in place, and
  * one the agent holds for an answer says so under its line with Deny and
- * Allow; a fold opens on what it holds, a page the agent showed opens
+ * Allow, and one whose answer its page carried cut reads it whole as it
+ * opens; a fold opens on what it holds, a page the agent showed opens
  * whole, and a pull request it opened opens its own screen, its card
  * offering Review, which opens it on GitHub, and Merge where it may merge
  * now, which asks first. Its composer floats over the transcript's foot:
@@ -339,12 +434,20 @@ function agentAddMenu(
  * task's skills over the field.
  */
 export function AgentScreen() {
-  const { id = "" } = useLocalSearchParams<{ id: string }>();
+  const {
+    id = "",
+    suggestedBy,
+    button,
+  } = useLocalSearchParams<{ id: string; suggestedBy?: string; button?: string }>();
+
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
   const router = useRouter();
+  const navigation = useNavigation();
   const openLink = useOpenLink();
   const colors = useColors();
   const agent = useFollowedAgent(id);
+  // Note that an agent the list doesn't hold is named and placed from its own read, while what acts on it reads the list alone.
+  const shown = useShownAgent(id);
   const pullRequests = useAgentPullRequests(id);
 
   const open = useMemo(
@@ -361,40 +464,103 @@ export function AgentScreen() {
   const asked = merging === undefined ? undefined : offers.get(merging);
   const held = useAgentTranscript(id);
   const { data: readerId } = useQuery({ ...appStateQuery, select: selectInboxReader });
-  const address = useAgentAddress(id, agent?.workspaceId, agent?.planId);
+  const address = useAgentAddress(id, shown?.workspaceId, shown?.planId);
   const [toggles, setToggles] = useState<TranscriptToggles>(NO_TOGGLES);
   const transcript = held?.rows;
-  const status = agent?.status ?? transcript?.word?.status;
+  const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
   const messages = transcript?.messages;
+  const sending = transcript?.sending;
+  const whole = useWholeParts(id);
+  // Note that an agent the list doesn't hold still opens on its run's card, from its own read.
+  const automated = shown?.automationId !== undefined || shown?.automationName !== undefined;
+  const run = useAgentOrigin(id, automated);
+  const automationAddress = useAutomationAddress(shown?.automationId, shown?.workspaceId);
+  const suggestionAddress = useSuggestionAddress(shown?.workspaceId);
 
+  // Note that the run's card stands on the transcript's first line, so it waits until no older page is left to read.
+  const origin = useMemo(
+    () =>
+      !automated || transcript?.before !== undefined
+        ? undefined
+        : transcriptOriginOf({
+            automationId: shown?.automationId,
+            automationName: shown?.automationName,
+            automationAddress,
+            run,
+          }),
+    [
+      automated,
+      transcript?.before,
+      shown?.automationId,
+      shown?.automationName,
+      automationAddress,
+      run,
+    ],
+  );
+
+  // The member's messages on their way stand as their own lines at the end, as the host draws them.
   const items = useMemo(
     () =>
-      transcriptItems(messages ?? [], {
+      transcriptItems(withSending(messages ?? [], sending ?? []), {
         writing: status !== undefined && agentStillWriting(status),
         readerId,
         toggles,
         now: Date.now(),
         pullRequests,
+        wholePart: whole.read,
+        origin,
+        suggestionAddress,
       }),
-    [messages, status, readerId, toggles, pullRequests],
+    [
+      messages,
+      sending,
+      status,
+      readerId,
+      toggles,
+      pullRequests,
+      whole.read,
+      origin,
+      suggestionAddress,
+    ],
   );
+
+  // A call opened on an answer its page carried cut reads it whole.
+  const cuts = useMemo(() => openCuts(items), [items]);
+  useEffect(() => whole.ask(cuts), [whole, cuts]);
 
   const mediaIds = useMemo(() => shownMediaIds(items), [items]);
   const approvals = useAgentApprovals(agent, id);
-  const composer = useAgentComposer(id, agent, transcript, status, approvals.messageSent);
+  const opened = useOpenedSuggestion({ suggestedBy, button });
+  const sendSuggestion = useSuggestionSender();
+  const suggested = suggestedSendOf(opened, id, sendSuggestion);
+
+  const composer = useAgentComposer(
+    id,
+    agent,
+    transcript,
+    status,
+    approvals.messageSent,
+    suggested,
+  );
+
+  const suggestion = useSuggestionLooks(items, shown?.workspaceId, shown?.planId);
   const older = useOlderPages(id, transcript?.before);
   const retry = useTranscriptRetry(id);
   const media = useAgentMedia(id, mediaIds);
-  const title = cardTitle(agent?.title ?? transcript?.word?.title ?? UNTITLED_AGENT);
+
+  const title = cardTitle(
+    shown === undefined ? (transcript?.word?.title ?? UNLISTED_AGENT) : agentName(shown),
+  );
+
   useScreenActivity((workspaces) =>
-    agent === undefined
+    shown === undefined
       ? undefined
       : agentActivity(
           {
             id,
             title,
-            workspaceId: agent.workspaceId,
-            taskId: agent.planId,
+            workspaceId: shown.workspaceId,
+            taskId: shown.planId,
           },
           workspaces,
         ),
@@ -409,9 +575,37 @@ export function AgentScreen() {
   const mode = useAgentMode(id);
   const pick = useAgentModelPick(id);
   const actions = useAgentActions(id, address);
-  // Whether Rename's alert, or Archive's question, stands over the page.
+  const transcriptCopy = useTranscriptCopy(id, title, shown?.brief);
+
+  // Note that a copy or share lets the menu's last note go, so an older Rename or Pin refusal never stands over what the copy says.
+  const copyTranscript = (way: TranscriptCopy) => {
+    actions.clearNote();
+    transcriptCopy.copy(way);
+  };
+
+  const shareTranscript = (way: TranscriptCopy) => {
+    actions.clearNote();
+    transcriptCopy.share(way);
+  };
+
+  const runActions = useAgentRun(id);
+  useWarmAgent(id);
+  const hasPorts = useAgentHasPorts(id);
+  const openPorts = () => router.push({ pathname: "/agent-ports", params: { agent: id } });
+  // Whether Rename's alert, or Archive's or Permanently delete's question, stands over the page.
   const [renaming, setRenaming] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const deleteQuestion = actions.deleteQuestion(title);
+
+  // An agent archived or deleted gives way to where its own stack opened it from, or to the Tasks list it stands in where it was opened first, as from a launch or a notification; nothing moves once the reader has left its page.
+  const leave = () => {
+    if (!navigation.isFocused()) return;
+
+    if (router.canDismiss()) router.back();
+    else router.replace("/tasks");
+  };
+
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
 
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) =>
@@ -429,22 +623,46 @@ export function AgentScreen() {
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon="ellipsis" accessibilityLabel={MENU_WORDS.MORE}>
+        <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.MORE)} accessibilityLabel={MENU_WORDS.MORE}>
+          {address === undefined ? null : (
+            <Stack.Toolbar.Menu inline>
+              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.LINK)} onPress={actions.copyLink}>
+                {MENU_WORDS.COPY_LINK}
+              </Stack.Toolbar.MenuAction>
+              <Stack.Toolbar.MenuAction
+                icon={glyphSymbol(GLYPH.OPEN_EXTERNALLY)}
+                onPress={() => openInSafari(address)}
+              >
+                {VERB.OPEN_IN_BROWSER}
+              </Stack.Toolbar.MenuAction>
+            </Stack.Toolbar.Menu>
+          )}
           <Stack.Toolbar.Menu inline>
-            <Stack.Toolbar.MenuAction icon="link" onPress={actions.copyLink}>
-              {MENU_WORDS.COPY_LINK}
-            </Stack.Toolbar.MenuAction>
-            <Stack.Toolbar.MenuAction icon="safari" onPress={() => openInSafari(address)}>
-              {VERB.OPEN_IN_BROWSER}
-            </Stack.Toolbar.MenuAction>
+            <Stack.Toolbar.Menu icon="doc.on.doc" title={COPY_TRANSCRIPT_WORDS.COPY}>
+              <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.CONCISE)}>
+                {COPY_TRANSCRIPT_WORDS.CONCISE}
+              </Stack.Toolbar.MenuAction>
+              <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.FULL)}>
+                {COPY_TRANSCRIPT_WORDS.FULL}
+              </Stack.Toolbar.MenuAction>
+              <Stack.Toolbar.MenuAction
+                icon="square.and.arrow.up"
+                onPress={() => shareTranscript(TRANSCRIPT_COPY.FULL)}
+              >
+                {COPY_TRANSCRIPT_WORDS.SHARE}
+              </Stack.Toolbar.MenuAction>
+            </Stack.Toolbar.Menu>
           </Stack.Toolbar.Menu>
           {agent === undefined ? null : (
             <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon="pencil" onPress={() => setRenaming(true)}>
+              <Stack.Toolbar.MenuAction
+                icon={glyphSymbol(GLYPH.RENAME)}
+                onPress={() => setRenaming(true)}
+              >
                 {MENU_WORDS.RENAME}
               </Stack.Toolbar.MenuAction>
               <Stack.Toolbar.MenuAction
-                icon={actions.pinned ? "pin.slash" : "pin"}
+                icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
                 onPress={actions.pin}
               >
                 {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
@@ -453,19 +671,55 @@ export function AgentScreen() {
           )}
           {openOptions === undefined ? null : (
             <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction icon="slider.horizontal.3" onPress={openOptions}>
+              <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.OPTIONS)} onPress={openOptions}>
                 {ADD_WORDS.OPTIONS}
+              </Stack.Toolbar.MenuAction>
+              {hasPorts ? (
+                <Stack.Toolbar.MenuAction icon={glyphSymbol(GLYPH.PLUG)} onPress={openPorts}>
+                  {AGENT_PORTS_WORDS.PORTS}
+                </Stack.Toolbar.MenuAction>
+              ) : null}
+              {runActions.length === 0 ? null : (
+                <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.RUN)} title={RUN_ACTION_WORDS.SUBMENU}>
+                  {runActions.map((offered) => (
+                    <Stack.Toolbar.MenuAction
+                      key={offered.action.id}
+                      icon={glyphSymbol(offered.runs ? GLYPH.STOP : GLYPH.RUN)}
+                      subtitle={offered.action.command}
+                      onPress={offered.onPress}
+                    >
+                      {runActionMenuLabel(offered.action, offered.runs)}
+                    </Stack.Toolbar.MenuAction>
+                  ))}
+                </Stack.Toolbar.Menu>
+              )}
+            </Stack.Toolbar.Menu>
+          )}
+          {agent === undefined ? null : (
+            <Stack.Toolbar.Menu inline>
+              <Stack.Toolbar.MenuAction
+                icon={glyphSymbol(GLYPH.ARCHIVE)}
+                destructive
+                onPress={() => {
+                  // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
+                  setArchiving(false);
+                  void actions.archiveAsk.ask(id).then((stands) => {
+                    if (stands) setArchiving(true);
+                  });
+                }}
+              >
+                {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
             </Stack.Toolbar.Menu>
           )}
           {agent === undefined ? null : (
             <Stack.Toolbar.Menu inline>
               <Stack.Toolbar.MenuAction
-                icon="archivebox"
+                icon={glyphSymbol(GLYPH.DELETE)}
                 destructive
-                onPress={() => setArchiving(true)}
+                onPress={() => setDeleting(true)}
               >
-                {MENU_WORDS.ARCHIVE}
+                {MENU_WORDS.DELETE}
               </Stack.Toolbar.MenuAction>
             </Stack.Toolbar.Menu>
           )}
@@ -478,7 +732,7 @@ export function AgentScreen() {
             composer={composer}
             banner={approvals.banner}
             addMenu={addMenu}
-            note={actions.note ?? mode?.note ?? pick.note}
+            note={actions.note ?? transcriptCopy.note ?? mode?.note ?? pick.note}
           />
         }
       >
@@ -493,18 +747,19 @@ export function AgentScreen() {
           }
           empty={{
             title: failed ? TRANSCRIPT_WORDS.FAILED : TRANSCRIPT_WORDS.READING,
-            symbol: failed ? "exclamationmark.triangle" : "text.bubble",
+            symbol: failed ? GLYPH.FAILED : GLYPH.COMMENT,
             loading: !failed,
             action: failed ? { label: TRANSCRIPT_WORDS.RETRY, onPress: retry } : undefined,
           }}
           older={older}
           heldCall={approvals.heldCall}
+          suggestion={suggestion}
           repository={agent?.repository}
           onOpenLink={openLink}
           onToggle={(item) => setToggles((held) => toggledAt(held, item))}
           onOpenPage={openPage}
           mediaSource={(pictureId) => media.get(pictureId)}
-          onOpenElsewhere={() => openInSafari(address)}
+          onOpenElsewhere={address === undefined ? undefined : () => openInSafari(address)}
           onOpenAddress={openInSafari}
           onOpenPullRequest={(item) =>
             router.push({
@@ -535,18 +790,31 @@ export function AgentScreen() {
         onDismiss={() => setRenaming(false)}
       />
       <ConfirmAsk
-        title={actions.archiveQuestion.title}
-        message={actions.archiveQuestion.message}
-        act={actions.archiveQuestion.act}
+        title={actions.archiveAsk.question.title}
+        message={actions.archiveAsk.question.message}
+        act={actions.archiveAsk.question.act}
         destructive
         presented={archiving}
         onAct={() => {
           setArchiving(false);
-          actions.archive(() => {
-            if (router.canGoBack()) router.back();
-          });
+          actions.archiveAsk.answered(
+            () => actions.archive(leave),
+            () => setArchiving(true),
+          );
         }}
         onDismiss={() => setArchiving(false)}
+      />
+      <ConfirmAsk
+        title={deleteQuestion.title}
+        message={deleteQuestion.body}
+        act={deleteQuestion.verb}
+        destructive
+        presented={deleting}
+        onAct={() => {
+          setDeleting(false);
+          actions.remove(leave);
+        }}
+        onDismiss={() => setDeleting(false)}
       />
     </>
   );
@@ -673,6 +941,96 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
                 label={server.name}
                 on={server.on}
                 onSwitch={(on) => servers.toggle(server.connection, on)}
+              />
+            ))}
+          </ListSection>
+        </SettingsForm>
+      </Screen>
+    </>
+  );
+}
+
+/** The glyph each port's act wears in its menu, as the panel's plug wears it. */
+const PORT_ACT_SYMBOL = {
+  [PORT_ACT.SHARE]: GLYPH.LINK,
+  [PORT_ACT.OPEN_LINK]: GLYPH.LINK,
+  [PORT_ACT.COPY_LINK]: GLYPH.COPY,
+  [PORT_ACT.STOP_SHARING]: GLYPH.UNLINK,
+} as const satisfies Record<PortAct, Glyph>;
+
+/** Each port's act's words, in the panel's. */
+const PORT_ACT_WORDS = {
+  [PORT_ACT.SHARE]: AGENT_PORTS_WORDS.SHARE,
+  [PORT_ACT.OPEN_LINK]: AGENT_PORTS_WORDS.OPEN_LINK,
+  [PORT_ACT.COPY_LINK]: AGENT_PORTS_WORDS.COPY_LINK,
+  [PORT_ACT.STOP_SHARING]: AGENT_PORTS_WORDS.STOP_SHARING,
+} as const satisfies Record<PortAct, string>;
+
+/** The Ports sheet's own words: its close. */
+const PORTS_WORDS = { DONE: "Done" } as const;
+
+/**
+ * A cloud agent's listening ports, as the panel's plug lists them where it
+ * forwards nothing, in a sheet over its page, read every few seconds while
+ * it stands: one row per port, ":3000" with what serves it under it, whose
+ * press offers Share while no port is shared; the shared one wears a link
+ * and Sharing, and offers Open link, which opens it in Safari, Copy link,
+ * and Stop sharing; while one is shared, another offers nothing, and where
+ * none is listed, the panel's line says why. A share that did not go says
+ * why under the list. Done closes it.
+ */
+export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
+  const colors = useColors();
+  const router = useRouter();
+  const ports = useAgentPorts(agentId);
+
+  const actOf = (row: PortRow, act: PortAct): MenuRowAct => {
+    const label = PORT_ACT_WORDS[act];
+    const symbol = PORT_ACT_SYMBOL[act];
+    const url = row.url ?? "";
+
+    switch (act) {
+      case PORT_ACT.SHARE:
+        return { label, symbol, onPress: () => ports.share(row.port) };
+      case PORT_ACT.OPEN_LINK:
+        return { label, symbol, onPress: () => openInSafari(url) };
+      case PORT_ACT.COPY_LINK:
+        return { label, symbol, onPress: () => ports.copy(url) };
+      case PORT_ACT.STOP_SHARING:
+        return { label, symbol, onPress: () => ports.share(null) };
+    }
+  };
+
+  return (
+    <>
+      <Stack.Screen
+        options={{
+          headerShown: true,
+          title: AGENT_PORTS_WORDS.PORTS,
+          headerTintColor: colors.TEXT,
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+          headerShadowVisible: false,
+          contentStyle: { backgroundColor: colors.SIDEBAR },
+        }}
+      />
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button onPress={() => router.back()}>
+          {PORTS_WORDS.DONE}
+        </Stack.Toolbar.Button>
+      </Stack.Toolbar>
+      <Screen>
+        <SettingsForm>
+          <ListSection
+            footer={ports.note ?? (ports.rows.length === 0 ? ports.none : ports.linkNote)}
+          >
+            {ports.rows.map((row) => (
+              <MenuRow
+                key={row.port}
+                label={`:${row.port}`}
+                symbol={row.url === undefined ? GLYPH.GLOBE : GLYPH.LINK}
+                detail={row.label}
+                value={row.url === undefined ? undefined : AGENT_PORTS_WORDS.SHARING}
+                acts={row.acts.map((act) => actOf(row, act))}
               />
             ))}
           </ListSection>

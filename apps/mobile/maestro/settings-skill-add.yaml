@@ -1,0 +1,48 @@
+# settings-skill-add.yaml -- Settings › Skills' Add skill on the Inbox fixture: a GitHub source pasted, its skills listed with the one it named ticked, and Install going back to Skills; then a skill's text, its name and description filled from its frontmatter.
+#
+# Launched on the host's Inbox fixture, which reads a paste and takes an
+# install as the service would, though no repository is reached
+# (`@repo/host/fixture-inbox`).
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd
+- scrollUntilVisible:
+    element: "Skills"
+- tapOn: "Skills"
+- waitForAnimationToEnd
+- tapOn: "Add skill"
+- waitForAnimationToEnd
+- assertVisible: "Add skill"
+- tapOn:
+    id: "skill-paste"
+- inputText: "acme/agent-skills"
+- extendedWaitUntil:
+    visible: "frontend-design.*"
+    timeout: 5000
+- assertVisible: "changelog.*"
+- assertVisible: "Skills to install.*"
+- takeScreenshot: settings-skill-add-source
+- tapOn: "Install frontend-design"
+- waitForAnimationToEnd
+- assertVisible: "release-notes"
+# A skill's text fills its name and description from its frontmatter.
+- tapOn: "Add skill"
+- waitForAnimationToEnd
+- tapOn:
+    id: "skill-paste"
+- inputText: "---\nname: commit-style\ndescription: Write commit messages the team's way.\n---\nUse the imperative."
+- extendedWaitUntil:
+    visible:
+      id: "skill-name"
+    timeout: 5000
+- assertVisible: "commit-style"
+- assertVisible: "Write commit messages the team's way."
+- takeScreenshot: settings-skill-add-text

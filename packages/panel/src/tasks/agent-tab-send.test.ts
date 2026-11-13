@@ -39,7 +39,7 @@ import type { AgentThreads } from "./threads-dock.js";
  * words, and the row the service writes for it lands in the line's place,
  * drawn once, whichever of the row and the send's answer comes first; a
  * message refused stays where it went, marked Not delivered, whether its tab
- * stood as it landed or not, its alert offering Retry and Edit; the working line stands from the
+ * stood as it landed or not, or the window reloaded since, its alert offering Retry and Edit; the working line stands from the
  * press, before the service takes the line. Synthetic throughout.
  */
 
@@ -151,7 +151,7 @@ async function drawnTab(
 
   const control = agentsControl({
     agents: [agent],
-    onMessage: (_agentId, text, clientKey) => {
+    onMessage: (_agentId, { text, clientKey }) => {
       sent.push({ text, clientKey });
 
       return new Promise((resolve) => answers.push(resolve));
@@ -289,30 +289,6 @@ test("a message sent stands in the transcript at once with its time, the box emp
 
   await tab.answer(0, TAKEN);
   assert.equal(tab.lines("Now the dark variant.").length, 1);
-});
-
-test("a line whose row landed before its send answered offers Edit only once the service took it, since it may yet withdraw the row", async () => {
-  vi.spyOn(crypto, "randomUUID").mockReturnValue(KEY);
-
-  const row: AgentTranscriptMessage = {
-    id: "row-1",
-    role: MESSAGE_ROLE.USER,
-    parts: [{ type: "text", text: "Now the dark variant." }],
-    clientId: sentLineId(KEY),
-    sentAt: 90_000,
-  };
-
-  const tab = await drawnTab([row]);
-
-  const edit = () =>
-    tab.container.querySelector('[data-message-id="row-1"] button[aria-label="Edit"]');
-
-  await tab.send("Now the dark variant.");
-  await tab.landRow();
-
-  assert.ok(edit() === null, "no Edit while the send is out");
-  await tab.answer(0, TAKEN);
-  assert.ok(edit(), "Edit once the service took it");
 });
 
 test("a message sent to an agent at rest draws the working line at once, before the service takes it, counting from the press rather than the turn before it", async () => {

@@ -45,7 +45,7 @@ import {
   UserIcon,
   useMenu,
 } from "@repo/ui";
-import { PaperclipIcon } from "@repo/ui/icons";
+import { MinusIcon, PaperclipIcon, RotateCwIcon } from "@repo/ui/icons";
 import { useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -91,6 +91,61 @@ function TaskMenu(): React.JSX.Element {
       <MoreButton thing="Task" {...menu.trigger()} />
       {menu.drawn && (
         <Menu label="Task actions" menu={menu.drawn} groups={TASK_ACTIONS} onClose={menu.close} />
+      )}
+    </>
+  );
+}
+
+/** The sizes the zoom row steps between, as a page's tab steps them. */
+const ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+
+/** A page's ⋯: one row, Zoom − 125% +, each press leaving the menu standing, between its other actions. */
+function ZoomMenu(): React.JSX.Element {
+  const menu = useMenu(true);
+  const [at, setAt] = useState(3);
+  const zoom = ZOOMS[at] ?? 1;
+
+  const step = (by: number) => setAt((was) => Math.min(Math.max(was + by, 0), ZOOMS.length - 1));
+
+  return (
+    <>
+      <MoreButton thing="Page" {...menu.trigger()} />
+      {menu.drawn && (
+        <Menu
+          label="Page actions"
+          menu={menu.drawn}
+          groups={[
+            [{ label: "Copy link", icon: <CopyIcon />, onSelect: ignore }],
+            [
+              {
+                label: "Zoom out",
+                row: "Zoom",
+                icon: <MinusIcon />,
+                disabled: at === 0,
+                stays: true,
+                onSelect: () => step(-1),
+              },
+              {
+                label: "Actual size",
+                row: "Zoom",
+                detail: `${Math.round(zoom * 100)}%`,
+                disabled: zoom === 1,
+                stays: true,
+                onSelect: () => setAt(ZOOMS.indexOf(1)),
+              },
+              {
+                label: "Zoom in",
+                row: "Zoom",
+                icon: <PlusIcon />,
+                disabled: at === ZOOMS.length - 1,
+                stays: true,
+                onSelect: () => step(1),
+              },
+            ],
+            [{ label: "Reload page", icon: <RotateCwIcon />, onSelect: ignore }],
+          ]}
+          onClose={menu.close}
+        />
       )}
     </>
   );
@@ -402,6 +457,7 @@ function MenuExample(): React.JSX.Element {
       <CatalogSection id="menu-buttons" title="From a button">
         <Inline gap={GAP.CONTROL}>
           <TaskMenu />
+          <ZoomMenu />
           <ViewMenu />
           <AccountMenu />
           <PeopleMenu />
@@ -449,7 +505,7 @@ function MenuExample(): React.JSX.Element {
               Describe
             </Button>
             <Button variant={BUTTON_VARIANT.DANGER} icon={<TrashIcon />} onClick={ignore}>
-              Remove
+              Delete
             </Button>
           </MenuSurface>
           <MenuSurface flow={MENU_SURFACE_FLOW.TOOLBAR}>

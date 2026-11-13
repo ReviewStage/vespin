@@ -1,7 +1,7 @@
 import type { GitHubRepository } from "@repo/features";
 import { GITHUB_ACCESS } from "@repo/features/github-repositories-wire";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { NO_REPOSITORY } from "@repo/features/task-list-model";
+import { CHOOSE_REPOSITORY, NO_REPOSITORY } from "@repo/features/task-list-model";
 import { repositoryFailureNote } from "@repo/features/tasks-model";
 import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { countWords, orList, readingWords } from "@repo/features/words";
@@ -128,7 +128,7 @@ const PLACE_LOOK = {
 } as const satisfies Record<ChipPlace, ChipLook>;
 
 /** The chip's words while it waits on a pick. */
-export const CHOOSE_LABEL = "Choose a repository";
+export const CHOOSE_LABEL = CHOOSE_REPOSITORY;
 
 /** The chip's words while what its default is read from, the tasks or the repositories, is still being read, which ask nothing yet. */
 const READING_LABEL = "Repository";

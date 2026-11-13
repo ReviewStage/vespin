@@ -65,6 +65,8 @@ export const TEXT_FIELD_SIZE = {
   TITLE: "title",
   /** A step under a control in the caption's type, on the well's ground, among a bar's controls, as a Browser tab's address. */
   COMPACT: "compact",
+  /** A row's words typed in place, in the line's own type with no box, the row around them ringed while it is edited (`SettingsRow`'s `editing`). */
+  INLINE: "inline",
 } as const;
 
 export type TextFieldSize = (typeof TEXT_FIELD_SIZE)[keyof typeof TEXT_FIELD_SIZE];
@@ -157,6 +159,14 @@ const TEXT_FIELD_SIZE_CLASS = {
   /** A step under a control, on the well's ground, its edge lighting while it holds the caret; 16px words under a finger. */
   [TEXT_FIELD_SIZE.COMPACT]:
     "h-control-compact rounded-control-compact border-border bg-well px-ui-6 text-caption leading-body text-ellipsis focus:border-muted-foreground focus:bg-well focus:outline-none pointer-coarse:text-caption-touch",
+  /**
+   * A row's words typed in place: bare in the type of the line it stands
+   * on, drawn over the input's own classes by a variant on its `data-size`,
+   * as `InlineEdit`'s field is, so they outrank them whatever order the
+   * utilities land in; 16px words under a finger, or iOS zooms into it.
+   */
+  [TEXT_FIELD_SIZE.INLINE]:
+    "data-[size=inline]:block data-[size=inline]:h-auto data-[size=inline]:w-full data-[size=inline]:rounded-none data-[size=inline]:border-0 data-[size=inline]:bg-transparent data-[size=inline]:focus:bg-transparent data-[size=inline]:p-0 data-[size=inline]:text-inherit data-[size=inline]:outline-none data-[size=inline]:[font:inherit] pointer-coarse:data-[size=inline]:text-touch",
 } as const satisfies Record<TextFieldSize, string | undefined>;
 
 /**

@@ -77,14 +77,24 @@ function kindOf(button: HTMLElement): string {
   return KINDS.find(([, selector]) => button.closest(selector) !== null)?.[0] ?? "other";
 }
 
-/** The busy buttons of `example`, drawn afresh into the page. */
+/**
+ * The busy buttons of `example`, drawn afresh into the page. Note that an
+ * example drawing none is taken down at once, because every example left
+ * standing makes each later draw slower, and the whole catalog standing at
+ * once took most of a CI runner's 30 seconds.
+ */
 function drawn(Render: () => React.JSX.Element): HTMLElement[] {
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
-  roots.push(root);
   act(() => root.render(createElement(Render)));
+  const busy = [...container.querySelectorAll<HTMLElement>(BUSY_BUTTON)];
 
-  return [...container.querySelectorAll<HTMLElement>(BUSY_BUTTON)];
+  if (busy.length === 0) {
+    act(() => root.unmount());
+    container.remove();
+  } else roots.push(root);
+
+  return busy;
 }
 
 /** Every busy button the catalog draws, each with the example that draws it. */

@@ -43,6 +43,7 @@ import {
   LAYOUT_ELEMENT,
   POPOVER_ALIGN,
   POPOVER_PANEL_LOOK,
+  POPOVER_WIDTH,
   PopoverPanel,
   Tooltip,
 } from "@repo/ui";
@@ -219,9 +220,6 @@ function ReactionPill({
   );
 }
 
-/** How wide the row of eight stands: eight emoji buttons and the panel's inset. */
-const PICKER_WIDTH = 296;
-
 /** The keys that move the focus along the picker's row, by how far. */
 const PICKER_STEP = new Map([
   ["ArrowRight", 1],
@@ -294,7 +292,8 @@ function AddReaction({
           }}
         />
       </Tooltip>
-      <AnchoredPopover open={open} align={POPOVER_ALIGN.START} width={PICKER_WIDTH}>
+      {/* Note that the row is as wide as its eight buttons, because a width of its own leaves room past the last wherever a profile draws a control at another height. */}
+      <AnchoredPopover open={open} align={POPOVER_ALIGN.START} width={POPOVER_WIDTH.FIT}>
         <PopoverPanel
           open={open}
           id={panelId}

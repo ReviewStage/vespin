@@ -1,5 +1,5 @@
 /**
- * failure-notice-model.ts -- which failure notice stands: a write refused, in its own words and with a Try again where one is offered, or the one notice that says the phone is offline, said once however many writes fail under it.
+ * failure-notice-model.ts -- which notice stands: a write refused, in its own words and with a Try again where one is offered, a write that went with its Undo, or the one notice that says the phone is offline, said once however many writes fail under it.
  *
  * The app has one notice at a time, as iOS's own banners stand: the newest
  * refusal replaces the one before it, since the person pressed last for it.
@@ -7,13 +7,15 @@
  * so the writes that fail while it is offline buzz rather than each say it,
  * until the phone is online and a later stretch offline is said anew.
  * Nothing here draws or times anything; the banner (`failure-notice.tsx`)
- * holds the state this answers and lets each notice go.
+ * holds the state this answers and lets each notice go, and lets every
+ * notice go at once when the account it was said for is gone.
  */
 
-/** What a notice says: a write that did not go, or that the phone is offline. */
+/** What a notice says: a write that did not go, that the phone is offline, or a write that went and can be undone, as the panel's Undo toast says it. */
 export const NOTICE_KIND = {
   REFUSED: "refused",
   OFFLINE: "offline",
+  DONE: "done",
 } as const;
 
 export type NoticeKind = (typeof NOTICE_KIND)[keyof typeof NOTICE_KIND];
@@ -21,10 +23,12 @@ export type NoticeKind = (typeof NOTICE_KIND)[keyof typeof NOTICE_KIND];
 /** A notice as a write asks for it. */
 export interface NoticeAsk {
   readonly kind: NoticeKind;
-  /** The refusal's own words, or the offline hint. */
+  /** The refusal's own words, the offline hint, or what the write that went did. */
   readonly words: string;
   /** Sends the write again; no Try again is drawn where none is given. */
   readonly retry?: (() => void) | undefined;
+  /** Takes back the write that went; no Undo is drawn where none is given, and Try again stands in its place where both are. */
+  readonly undo?: (() => void) | undefined;
 }
 
 /** A notice as it stands, counted so a new one is told from the one it replaces, even in the same words. */
@@ -70,4 +74,15 @@ export function noticeOnline(state: NoticeState): NoticeState {
 /** The notice once the one numbered `serial` has gone, which lets nothing go where a newer one stands. */
 export function noticeGone(state: NoticeState, serial: number): NoticeState {
   return state.shown?.serial === serial ? { ...state, shown: undefined } : state;
+}
+
+/**
+ * The notice once the account it was said for is gone, signed out or
+ * changed: nothing stands, so no Try again or Undo it offered acts for the
+ * next account with the last one's words or pictures, and the next offline
+ * stretch is said anew. The count goes on, so a banner still leaving is
+ * never taken for a newer notice.
+ */
+export function noticeCleared(state: NoticeState): NoticeState {
+  return { shown: undefined, serial: state.serial, offlineSaid: false };
 }

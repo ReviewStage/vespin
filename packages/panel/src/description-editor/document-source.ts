@@ -3,6 +3,7 @@ import { BulletList, TaskList } from "@tiptap/extension-list";
 import { MarkdownManager } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
 import { diffArrays } from "diff";
+import type { NamesChip } from "./contract.js";
 import { withMentions } from "./mention-node.js";
 
 /**
@@ -42,9 +43,13 @@ const FOOTNOTE = /\[\^[^\]\s]+\]/u;
 /**
  * A GitHub alert's marker as TipTap's Markdown re-prints a quote opening on
  * one, its brackets escaped as any words' are (`> \[!NOTE\]`), which GitHub
- * no longer draws as an alert.
+ * no longer draws as an alert; on any line, since a quote in a list item is
+ * re-printed indented.
  */
-const ESCAPED_ALERT = /^(>[^\S\n]*)\\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\\]/iu;
+const ESCAPED_ALERT = /^([^\S\n]*>[^\S\n]*)\\\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\\\]/iu;
+
+/** A line opening or closing a code fence: the quote and list markers holding it, its run of backticks or tildes, and what follows it. */
+const FENCE_LINE = /^([\s>]*(?:(?:[-*+]|\d{1,9}[.)])\s+)?[\s>]*)(`{3,}|~{3,})(.*)$/u;
 
 /** What separates a re-printed block from the next. */
 const BLOCK_GAP = "\n\n";
@@ -60,18 +65,18 @@ export type BlankEnds = (typeof BLANK_ENDS)[keyof typeof BLANK_ENDS];
 /** The blocks a bullet list opens as, a run of plain items or of task items (`tokenSources`). */
 const LIST_BLOCKS = new Set([BulletList.name, TaskList.name]);
 
-/** The locked block a source the editor cannot draw faithfully opens as. */
+/** The locked block a source the editor cannot draw faithfully opens as, drawn as its words, as the read view draws them (`@repo/ui`'s note). */
 export const RawBlock = Node.create({
   name: "rawBlock",
   group: "block",
   atom: true,
   selectable: true,
   addAttributes: () => ({ source: { default: "" } }),
-  parseHTML: () => [{ tag: "pre[data-raw-block]" }],
+  parseHTML: () => [{ tag: "p[data-raw-block]" }, { tag: "pre[data-raw-block]" }],
   renderHTML: ({ node }) => [
-    "pre",
+    "p",
     { "data-raw-block": "", class: "description-raw-block", contenteditable: "false" },
-    node.attrs.source,
+    String(node.attrs.source).trimEnd(),
   ],
   renderMarkdown: (node: JSONContent) => String(node.attrs?.source ?? "").trimEnd(),
 });
@@ -156,7 +161,11 @@ export function documentManager(extensions: AnyExtension[]): MarkdownManager {
 }
 
 /** A whole document opened as top-level blocks, each with its exact source. */
-export function documentOpened(manager: MarkdownManager, markdown: string): OpenedDocument {
+export function documentOpened(
+  manager: MarkdownManager,
+  markdown: string,
+  namesChip?: NamesChip | undefined,
+): OpenedDocument {
   const blocks: JSONContent[] = [];
   const sources: string[] = [];
   let lead = "";
@@ -174,7 +183,7 @@ export function documentOpened(manager: MarkdownManager, markdown: string): Open
       const [block] = parsed;
       blocks.push(
         parsed.length === 1 && block !== undefined
-          ? withMentions(block)
+          ? withMentions(block, namesChip)
           : { type: RawBlock.name, attrs: { source } },
       );
       sources.push(source);
@@ -203,16 +212,72 @@ export function sourcesOf(doc: PmNode, opened: OpenedDocument): HeldSources {
   return { sources: map, lead: opened.lead, ending: opened.ending };
 }
 
+/** How many quotes deep a line's markers stand. */
+function quoteDepth(markers: string): number {
+  return markers.split(">").length - 1;
+}
+
 /** The trailing whitespace of a source. */
 function trailing(source: string): string {
   return /\s*$/u.exec(source)?.[0] ?? "";
 }
 
-/** A block re-printed, a quote opening on a GitHub alert's marker keeping it unescaped, so it stays an alert. */
+/**
+ * A block re-printed, a quote opening on a GitHub alert's marker keeping it
+ * unescaped, so it stays an alert, and with no blank line before it. Note that
+ * TipTap's own opens a table on one (ueberdosis/tiptap#8719), so an edited
+ * table gained a blank line over it.
+ */
 function reprinted(manager: MarkdownManager, node: PmNode): string {
-  const markdown = manager.serialize({ type: "doc", content: [node.toJSON()] }).trimEnd();
+  const markdown = manager.serialize({ type: "doc", content: [node.toJSON()] });
 
-  return node.type.name === "blockquote" ? markdown.replace(ESCAPED_ALERT, "$1[!$2]") : markdown;
+  return alertsUnescaped(markdown.replace(/^\n+/u, "").trimEnd());
+}
+
+/**
+ * Re-printed Markdown with each alert's marker unescaped. Note that a line
+ * inside a code fence, at any depth, is left as written, because TipTap
+ * writes code raw, so a backslash there is the code's own.
+ */
+function alertsUnescaped(markdown: string): string {
+  let fence: { run: string; depth: number } | undefined;
+
+  return markdown
+    .split("\n")
+    .map((line) => {
+      const [, markers = "", run, rest = ""] = FENCE_LINE.exec(line) ?? [];
+
+      if (fence === undefined) {
+        fence = run === undefined ? undefined : { run, depth: quoteDepth(markers) };
+
+        return run === undefined ? line.replace(ESCAPED_ALERT, "$1[!$2]") : line;
+      }
+
+      // Note that a fence closes on a run as long or longer of its own mark, as many quotes deep, with nothing after it.
+      const closes =
+        run !== undefined &&
+        run[0] === fence.run[0] &&
+        run.length >= fence.run.length &&
+        quoteDepth(markers) === fence.depth &&
+        rest.trim() === "";
+
+      if (closes) fence = undefined;
+
+      return line;
+    })
+    .join("\n");
+}
+
+/** Whether a block holds a picture still waiting on its upload, at any depth. */
+function holdsUpload(node: PmNode): boolean {
+  let waiting = false;
+  node.descendants((child) => {
+    if (String(child.attrs.upload ?? "") !== "") waiting = true;
+
+    return !waiting;
+  });
+
+  return waiting;
 }
 
 /** Whether a block is a paragraph holding nothing: a line the developer left blank. */
@@ -234,6 +299,21 @@ function blockMarkdown(manager: MarkdownManager, node: PmNode, held: HeldSources
   if (leftBlank(node, held)) return BLANK_LINE + BLOCK_GAP;
 
   return held.sources.get(node) ?? reprinted(manager, node) + BLOCK_GAP;
+}
+
+/**
+ * Whether two sources written one against the other still read as the two
+ * blocks they were, as a heading over its paragraph does and two paragraphs
+ * do not: more than one block, the first ending where `source` does. Note
+ * that a block can still read as two after it took the next's first lines,
+ * as a paragraph takes an indented code block's up to its blank line.
+ */
+function readsApart(manager: MarkdownManager, source: string, next: string): boolean {
+  const [first, ...rest] = manager.instance
+    .lexer(source + next)
+    .filter((token) => token.type !== "space");
+
+  return rest.length > 0 && first?.raw.trimEnd() === source.trimEnd();
 }
 
 /**
@@ -285,8 +365,18 @@ export function documentMarkdown(
       return;
     }
 
-    // Note that the text's last block kept its source without the blank line after it, which a block laid in after it needs.
-    out += /\n[^\S\n]*\n$/u.test(block) ? block : block.trimEnd() + BLOCK_GAP;
+    // Note that a kept block written against the block after it, as a line
+    // over its list, stays so where the two still read apart; the text's last
+    // block kept its source without the line break after it, which a block
+    // laid in after it needs, since without it the next block's first line
+    // runs on in its own.
+    const asWritten =
+      /\n[^\S\n]*\n$/u.test(block) ||
+      (held.sources.has(node) &&
+        block.endsWith("\n") &&
+        readsApart(manager, block, blocks[index + 1] ?? ""));
+
+    out += asWritten ? block : block.trimEnd() + BLOCK_GAP;
   });
 
   return out;
@@ -322,13 +412,15 @@ export function documentTook(
   held: HeldSources,
   sent: string,
   merged: string,
+  namesChip?: NamesChip | undefined,
 ): TakenDocument {
-  const sentOpened = documentOpened(manager, sent);
+  const sentOpened = documentOpened(manager, sent, namesChip);
   const was = [...sentOpened.sources];
-  const now = documentOpened(manager, merged);
+  const now = documentOpened(manager, merged, namesChip);
   const current: string[] = [];
+  // Note that a block holding a picture still being kept counts as changed since, because it writes as if the picture were not there, and a block put in its place would lose it.
   editor.state.doc.forEach((node) => {
-    current.push(blockMarkdown(manager, node, held));
+    current.push(holdsUpload(node) ? "" : blockMarkdown(manager, node, held));
   });
   // Where each block that was sent stands in the editor now, if the developer has not changed it since.
   const standing = new Map<number, number>();

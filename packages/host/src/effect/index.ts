@@ -8,6 +8,8 @@ export { hostAssemblyLayer } from "../compose-host.js";
 
 export { DuplicateGatewayMethod, DuplicateHostAct } from "../composer.js";
 
+export { type ComputerUseHelperSeam, computerUseHelperProcess } from "../computer-use-helper.js";
+
 export {
   type CookieSessionDoor,
   CookieSessionFailed,
@@ -51,7 +53,9 @@ export { hostKernelLayer } from "./kernel.js";
 export {
   AccountSource,
   AppIdentity,
+  ComputerUseHelper,
   Environment,
+  type HostReporter,
   IdSource,
   type LocalAgentCommand,
   LocalAgentPlatform,
@@ -60,6 +64,7 @@ export {
   LoopbackListener,
   MirrorPlatform,
   type MirrorPlatformSeam,
+  type ReportAttributes,
   RunMode,
   reporterLayer,
   SecretCipher,

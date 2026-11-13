@@ -61,6 +61,12 @@ export const STOP_FAILED = "The agent could not be stopped. Try again.";
 /** What an agent's archive the service refused says, wherever it was pressed. */
 export const ARCHIVE_FAILED = "The agent could not be archived.";
 
+/** What a refused archive or delete says of an agent still starting, or with a message awaiting its turn, which has no turn to stop yet. */
+export const ARCHIVE_NOT_READY = "The agent is still starting its turn. Try again in a moment.";
+
+/** What an agent's delete the service refused says, wherever it was asked; one that landed says nothing, since the agent leaving its list says it. */
+export const DELETE_FAILED = "The agent could not be deleted. Try again.";
+
 /** What the toast says when the service did not start an agent's harness on a fresh session (`/clear`). */
 export const CLEAR_FAILED = "A new session could not be started. Try again once the agent is idle.";
 

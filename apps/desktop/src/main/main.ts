@@ -75,9 +75,9 @@ const config = bootstrapDesktop({
   argv: process.argv,
   environment: process.env,
   resourceDirectory: __dirname,
-  report: (message) => {
-    reportToStderr(message);
-    reportThisMacToSentry(message);
+  report: (message, attributes) => {
+    reportToStderr(message, attributes);
+    reportThisMacToSentry(message, attributes);
   },
   openExternal: (url) => shell.openExternal(url),
   quit: () => app.quit(),

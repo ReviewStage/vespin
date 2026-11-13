@@ -66,8 +66,7 @@ import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import type { TasksView } from "@repo/features/tasks-view";
 import type { WorkspaceVariable } from "@repo/features/workspace-environment-wire";
 import {
-  REPOSITORY_SCRIPT_KIND,
-  type RepositoryScriptKind,
+  RUN_ACTION_AVAILABILITY,
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
 } from "@repo/features/workspace-sandbox-setup-wire";
@@ -130,9 +129,11 @@ const ACCOUNT: AccountSnapshot = {
 /** An admin of the service, read, so Admin stands rather than waiting on the read. */
 const ADMIN_ACCESS = { admin: true } as const;
 
-/** The account's own experiments the staged pages stand behind: Skills'. Memory's is its workspaces' (`tasks-fixture.ts`). */
+/** The account's own experiments the staged pages stand behind: Skills', Rewind restores files', and Turn changes'. Memory's is its workspaces' (`tasks-fixture.ts`). */
 const STAGED_EXPERIMENTS = {
   [EXPERIMENT.SKILLS]: true,
+  [EXPERIMENT.REWIND_FILES]: true,
+  [EXPERIMENT.TURN_CHANGES]: true,
 } as const;
 
 /** The staged hosts, by id. */
@@ -772,10 +773,9 @@ const SETUP_RUN_AGENT = {
 
 /**
  * Acme's sandbox setup, as a save leaves it: an install script, setup
- * scripts for two of its repositories, an archive script for one, and run
- * actions for one, each script with how it last ran: the install script
- * and the archive script cleanly, `acme/api`'s setup script failing, and
- * `acme/relay`'s saved since its run.
+ * scripts for two of its repositories, and run actions for one, each script
+ * with how it last ran: the install script cleanly, `acme/api`'s setup
+ * script failing, and `acme/relay`'s saved since its run.
  */
 let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
   install: {
@@ -801,14 +801,7 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
       lastRun: { ranAt: NOW - 3 * DAY, exitCode: 0, agent: SETUP_RUN_AGENT.RELAY },
     },
   ],
-  archives: [
-    {
-      repository: "acme/relay",
-      script: "docker compose down --volumes\n./scripts/drop-preview-database.sh",
-      updatedAt: NOW - DAY,
-      lastRun: { ranAt: NOW - HOUR, exitCode: 0, agent: SETUP_RUN_AGENT.RELAY },
-    },
-  ],
+  archives: [],
   runActions: [
     {
       repository: "acme/relay",
@@ -818,6 +811,7 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
           id: "5b7c1e1a-3f0d-4c55-9a52-0d7f2b9e6a02",
           label: "Storybook",
           command: "cd packages/ui && pnpm storybook",
+          availableIn: RUN_ACTION_AVAILABILITY.LOCAL,
         },
       ],
       updatedAt: NOW - HOUR,
@@ -837,10 +831,11 @@ function runActionsAnswer(repository: string, actions: readonly RunActionPut[]) 
       .flatMap((each) => each.actions.map((action) => action.id)),
   );
 
-  const named = actions.map(({ id, label, command }) => ({
+  const named = actions.map(({ id, label, command, availableIn }) => ({
     id: id !== undefined && keepable.delete(id) ? id : crypto.randomUUID(),
     label,
     command,
+    ...(availableIn === undefined ? undefined : { availableIn }),
   }));
 
   const lists =
@@ -857,11 +852,7 @@ function runActionsAnswer(repository: string, actions: readonly RunActionPut[]) 
 }
 
 /** The setup a save leaves, an empty script removing it, its repositories in name order as the service answers them. */
-function sandboxSetupAnswer(
-  repository: string | undefined,
-  script: string,
-  kind: RepositoryScriptKind = REPOSITORY_SCRIPT_KIND.SETUP,
-) {
+function sandboxSetupAnswer(repository: string | undefined, script: string) {
   const removes = script.trim() === "";
 
   if (repository === undefined) {
@@ -873,14 +864,12 @@ function sandboxSetupAnswer(
     return acmeSandboxSetup;
   }
 
-  const list = kind === REPOSITORY_SCRIPT_KIND.ARCHIVE ? "archives" : "setups";
-
   const named = (each: { readonly repository: string }) =>
     each.repository.toLowerCase() === repository.toLowerCase();
 
-  const others = acmeSandboxSetup[list].filter((each) => !named(each));
+  const others = acmeSandboxSetup.setups.filter((each) => !named(each));
   // A save keeps the script's last run, which ran before it.
-  const lastRun = acmeSandboxSetup[list].find(named)?.lastRun;
+  const lastRun = acmeSandboxSetup.setups.find(named)?.lastRun;
 
   const saved = {
     repository,
@@ -892,7 +881,7 @@ function sandboxSetupAnswer(
   const scripts = removes ? others : [...others, saved];
   acmeSandboxSetup = {
     ...acmeSandboxSetup,
-    [list]: scripts.sort((one, other) =>
+    setups: scripts.sort((one, other) =>
       one.repository.toLowerCase().localeCompare(other.repository.toLowerCase()),
     ),
   };
@@ -957,8 +946,8 @@ const ANSWERS: StagedAnswers = {
     variablesAnswer(acmeVariables.filter((variable) => variable.name !== name)),
   [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
-  [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script, kind }) =>
-    sandboxSetupAnswer(repository, script, kind),
+  [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script }) =>
+    sandboxSetupAnswer(repository, script),
   [ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT]: ({ repository, actions }) =>
     runActionsAnswer(repository, actions),
   [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId: id }) =>
@@ -1127,7 +1116,7 @@ let stagedCommands: readonly AllowedCommand[] = [
   },
   {
     id: "bd5a9b3c-8eaf-4fc0-9c6d-9eb03f5b7c8d",
-    prefix: ["pnpm", "test"],
+    prefix: ["pnpm", "typecheck"],
     agentId: MEMORY_AGENT.CLAUDE,
     addedAt: NOW - 2 * HOUR,
   },
@@ -1141,19 +1130,27 @@ function heldCommands(commands: readonly AllowedCommand[]): AppAllowedCommands {
 /** The staged commands as the host holds them, one object until a write moves them. */
 let stagedAllowedCommands = heldCommands(stagedCommands);
 
-/** The staged commands after one write, as the service keeps them: an add stands last, unless its words are kept already, and a removal goes. */
+/** A command added by hand now, as the service keeps one. */
+function addedByHand(prefix: readonly string[], id: string = crypto.randomUUID()): AllowedCommand {
+  return { id, prefix, agentId: null, addedAt: Date.now() };
+}
+
+/**
+ * The staged commands after one write, as the service keeps them: an add
+ * stands last, unless its words are kept already; an edit takes the new
+ * words and stands last as added by hand, or goes where they are kept; and
+ * a removal goes.
+ */
 function allowedCommandWritten(write: AllowedCommandWriteParams): AllowedCommandsWriteAnswerView {
   if ("add" in write) {
     if (!stagedCommands.some((each) => samePrefix(each.prefix, write.add))) {
-      const added = {
-        id: crypto.randomUUID(),
-        prefix: write.add,
-        agentId: null,
-        addedAt: Date.now(),
-      };
-
-      stagedCommands = [...stagedCommands, added];
+      stagedCommands = [...stagedCommands, addedByHand(write.add)];
     }
+  } else if ("edit" in write) {
+    const edited = stagedCommands.find((each) => samePrefix(each.prefix, write.edit));
+    const others = stagedCommands.filter((each) => each !== edited);
+    const kept = others.some((each) => samePrefix(each.prefix, write.to));
+    stagedCommands = kept ? others : [...others, addedByHand(write.to, edited?.id)];
   } else {
     stagedCommands = stagedCommands.filter((each) => !samePrefix(each.prefix, write.remove));
   }
@@ -1282,13 +1279,19 @@ const STAGED_INTEGRATIONS: AppIntegrations = {
  * own integrations, and Acme's Slack channels, and the staged workspace's
  * memories and skills held. The members are held under every profile rather
  * than only the signed-in ones, because ⌘K's People, a task's assignee and
- * creator faces, and the person page read them wherever the window stands.
+ * creator faces, and the person page read them wherever the window stands;
+ * so are the staged experiments, because a task's agent draws its turns'
+ * files and offers its files back on Rewind by the reader's own choice.
  * Each slice laid over is one object across deliveries, but the settings,
  * which carry main's own, so a delivery that moves nothing of them draws
  * nothing again.
  */
 export function settingsAppState(profile: string, state: AppStateSnapshot): AppStateSnapshot {
-  const held = { ...state, [LIVE_READ.WORKSPACE_MEMBERS]: HELD_MEMBERS };
+  const held = {
+    ...state,
+    [LIVE_READ.WORKSPACE_MEMBERS]: HELD_MEMBERS,
+    ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
+  };
 
   if (!SIGNED_IN_PROFILES.has(profile)) return held;
 
@@ -1313,7 +1316,6 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
     [LIVE_READ.TOKEN_REPOSITORIES]: STAGED_TOKEN_REPOSITORIES,
     [LIVE_READ.MCP_CLIENTS]: STAGED_MCP_CLIENTS,
     [LIVE_READ.REPOSITORY_LISTS]: STAGED_REPOSITORIES,
-    ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
   };
 }
 

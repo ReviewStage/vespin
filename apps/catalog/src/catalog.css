@@ -305,6 +305,25 @@ body {
   list-style: none;
 }
 
+/* Pictures in written words side by side, each the box its upload's cover lays itself over. */
+.catalog-upload-covers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-16);
+}
+
+.catalog-upload-cover {
+  position: relative;
+  width: 280px;
+  max-width: 100%;
+}
+
+.catalog-upload-cover > img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
 /* A column narrower than a phone, where long words have to wrap. */
 .catalog-narrow {
   display: flex;
@@ -536,6 +555,11 @@ body {
   max-width: 400px;
 }
 
+/* Wide enough for a page at the wide measure to stand at it. */
+.catalog-settings-frame-wide {
+  max-width: 1120px;
+}
+
 /* A key's field and its presses, grown under its row: the field takes the
    line's room. */
 .catalog-settings-key {
@@ -631,6 +655,14 @@ body {
 .catalog-skeleton-block {
   width: 240px;
   height: 96px;
+}
+
+/* The room a file viewer's card gives a PDF, a page's width and less than a page's height, so its column scrolls. */
+.catalog-pdf-room {
+  display: flex;
+  flex-direction: column;
+  width: 360px;
+  height: 320px;
 }
 
 .catalog-skeleton-line {

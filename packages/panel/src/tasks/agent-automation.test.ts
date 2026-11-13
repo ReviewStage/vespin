@@ -12,6 +12,7 @@ import {
   type AutomationSummary,
   GITHUB_TRIGGER_EVENT,
 } from "@repo/features/automation-wire";
+import { readerZone } from "@repo/features/date-mention";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -49,7 +50,7 @@ const TRIAGE: AutomationSummary = {
   name: "Morning Sentry triage",
   enabled: true,
   pausedReason: null,
-  trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 9 * * 1-5", timezone: "UTC" },
+  trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: "0 9 * * 1-5", timezone: readerZone() },
   action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Triage Sentry." },
   guards: AUTOMATION_DEFAULT_GUARDS,
   nextRunAt: null,
@@ -195,7 +196,7 @@ test("the automation's name hangs its card over the agent's: its schedule, whose
   );
   assert.equal(
     automation.querySelector(".ui-hover-card-sub")?.textContent,
-    "Weekdays at 9:00 AM · UTC · Acme",
+    "Weekdays at 9:00 AM, for Acme",
   );
   assert.equal(automation.querySelector(".ui-hover-card-corner"), null);
 
@@ -204,7 +205,8 @@ test("the automation's name hangs its card over the agent's: its schedule, whose
   );
 
   assert.equal(notes[0], "Not scheduled");
-  assert.match(notes[1] ?? "", /^Last ran .+ · Finished$/u);
+  assert.match(notes[1] ?? "", /^Last ran .+$/u);
+  assert.equal(notes[2], "Finished");
 
   assert.equal(
     automation.querySelector("button")?.textContent,
@@ -234,6 +236,6 @@ test("an automation a GitHub event fires says where on its card, as its row in t
   const automation = cards()[1]?.querySelector("[data-actor-card='automation']");
   assert.equal(
     automation?.querySelector(".ui-hover-card-sub")?.textContent,
-    "When a pull request by people is opened in acme/relay or acme/ledger · Acme",
+    "When a pull request by people is opened in acme/relay or acme/ledger, for Acme",
   );
 });

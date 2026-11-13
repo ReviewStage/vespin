@@ -27,6 +27,7 @@ import { getTestDB, joinWorkspace, openWorkspace, startTask } from "@repo/databa
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_PAYER } from "@repo/features/agent-wire";
 import { descriptionAttachmentAddress } from "@repo/features/description-attachment-link";
+import { DESCRIPTION_FILE_TYPE } from "@repo/features/description-attachment-wire";
 import {
   DESCRIPTION_COMMENT_ACTOR,
   DESCRIPTION_COMMENT_SCOPE,
@@ -360,6 +361,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
               admitted,
               unparsedWire({ address }),
               descriptionsOn,
+              noSandbox,
             );
           });
 
@@ -370,6 +372,61 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
         assert.equal(onSibling.status, PICTURE_LOOK_STATUS.LOOKED);
         assert.deepEqual(outside, pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE));
         assert.deepEqual(descriptionsOff, pictureNotLooked(PICTURE_LOOK_REFUSAL.ELSEWHERE));
+      }),
+  );
+
+  it.effect(
+    "an agent's look at a PDF of its own task's description writes it into its machine and answers where, and one of another task of its workspace is refused with nothing written",
+    () =>
+      Effect.gen(function* () {
+        const { userId, agent, admitted } = yield* openAgent();
+        const sibling = yield* startTask(userId, { name: "Seat billing" });
+
+        const pdf = {
+          contentType: DESCRIPTION_FILE_TYPE.PDF,
+          bytes: new TextEncoder().encode("%PDF-1.7 the spec"),
+        };
+
+        const written: { name: string; contents: number[] }[] = [];
+
+        const sandbox: InboxSandboxDoor = () =>
+          Promise.resolve({
+            readFile: () => Promise.resolve(null),
+            writeFile: (file) => {
+              written.push({ name: file.name, contents: [...file.contents] });
+
+              return Promise.resolve(`/tmp/agent-attachments/${file.name}`);
+            },
+          });
+
+        const look = (taskId: string) =>
+          Effect.gen(function* () {
+            const kept = yield* keepDescriptionAttachment(userId, taskId, pdf);
+
+            if (kept.status !== DESCRIPTION_ATTACHMENT_KEEP.KEPT) return assert.fail("no PDF");
+            const address = descriptionAttachmentAddress({ taskId, attachmentId: kept.id }, "acme");
+
+            const answer = yield* runAgentLookAtPicture(
+              admitted,
+              unparsedWire({ address }),
+              true,
+              sandbox,
+            );
+
+            return { answer, attachmentId: kept.id };
+          });
+
+        const own = yield* look(agent.taskId);
+        const onSibling = yield* look(sibling.id);
+
+        assert.deepEqual(own.answer, {
+          status: PICTURE_LOOK_STATUS.WRITTEN,
+          path: `/tmp/agent-attachments/description/${own.attachmentId}.pdf`,
+        });
+        assert.deepEqual(onSibling.answer, pictureNotLooked(PICTURE_LOOK_REFUSAL.PDF_ELSEWHERE));
+        assert.deepEqual(written, [
+          { name: `description/${own.attachmentId}.pdf`, contents: [...pdf.bytes] },
+        ]);
       }),
   );
 
@@ -423,7 +480,12 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
             const place = { kind: LINK_DESTINATION.INBOX_ITEM, planId: on.taskId, itemId: item.id };
             const address = inboxAttachmentAddress(place, attachmentId, "acme");
 
-            return yield* runAgentLookAtPicture(admitted, unparsedWire({ address }), true);
+            return yield* runAgentLookAtPicture(
+              admitted,
+              unparsedWire({ address }),
+              true,
+              noSandbox,
+            );
           });
 
         const inWorkspace = yield* look(agent);

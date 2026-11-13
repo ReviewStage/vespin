@@ -1,4 +1,5 @@
 import { AGENT_BOUNDS, type AgentPullRequest, type AgentSummary } from "@repo/features/agent-wire";
+import { pullRequestAddressOf } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { agentsOfTask, pullRequestsOfTask } from "@repo/features/task-agents-model";
 import type { TaskPullRequestLine, TaskPullRequests, TaskSummary } from "@repo/features/task-wire";
@@ -151,9 +152,11 @@ function pinSubject(
 /** What a pin's pull request is drawn and named from: its number, title, and where it stands. */
 type PinnedPullRequest = PullRequestMarked & Pick<AgentPullRequest, "title">;
 
-/** The repository a pull request's address names, without its number: what two pull requests of one repository share. */
+/** The repository a pull request's address names, `owner/name` in lowercase, as GitHub reads it: what two pull requests of one repository share. */
 function repositoryOfLine(line: TaskPullRequestLine): string | undefined {
-  return line.url?.replace(/\/pull\/\d+.*$/u, "");
+  return line.url === undefined
+    ? undefined
+    : pullRequestAddressOf(line.url)?.repository.toLowerCase();
 }
 
 /**

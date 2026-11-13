@@ -4,6 +4,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import {
   type Agent,
   createAgent,
@@ -24,7 +25,6 @@ import { registerDevice } from "@repo/database/models/device-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask, saveDescriptionText } from "@repo/database/models/task-store";
 import { queuedTurnOf } from "@repo/database/models/turn-state";
-import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
 import { conversations, messages, turns } from "@repo/database/schemas/storage";
@@ -197,10 +197,10 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   });
 
   it.effect(
-    "a rewind asked to put the files back is refused as malformed while the workspace has the experiment off, and where no snapshot of them stands for the line once it is on, the conversation left whole either way",
+    "a rewind asked to put the files back is refused as malformed while the account rewinding has the experiment off, and where no snapshot of them stands for the line once it is on, the conversation left whole either way",
     () =>
       Effect.gen(function* () {
-        const { owner, task, ask, source, stored, laterLine } = yield* sourceAgent;
+        const { owner, ask, source, stored, laterLine } = yield* sourceAgent;
         const db = yield* Database;
 
         const rowsOf = () =>
@@ -226,12 +226,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           [HOSTED_HTTP_STATUS.BAD_REQUEST, { error: HOSTED_API_ERROR.INVALID_REQUEST }],
         );
 
-        yield* setWorkspaceExperiment({
-          organizationId: task.workspaceId,
-          experiment: EXPERIMENT.REWIND_FILES,
-          on: true,
-          by: owner,
-        });
+        yield* writeAccountPreferences(owner, { experiments: { [EXPERIMENT.REWIND_FILES]: true } });
         const answered = yield* asked();
 
         assert.deepEqual(answered.body, { error: HOSTED_API_ERROR.CHECKOUT_SNAPSHOT_MISSING });
@@ -241,21 +236,16 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   it.effect(
-    "a turn's changes are refused as malformed while the workspace has the experiment off, and by name where no snapshot of the turn stands once it is on",
+    "a turn's changes are refused as malformed while the account asking has the experiment off, and by name where no snapshot of the turn stands once it is on",
     () =>
       Effect.gen(function* () {
-        const { owner, task, ask, source, laterLine } = yield* sourceAgent;
+        const { owner, ask, source, laterLine } = yield* sourceAgent;
 
         const asked = () =>
           ask(request(AGENT_TURN_CHANGES, owner, { id: source.id, messageId: laterLine }));
 
         const off = yield* asked();
-        yield* setWorkspaceExperiment({
-          organizationId: task.workspaceId,
-          experiment: EXPERIMENT.REWIND_FILES,
-          on: true,
-          by: owner,
-        });
+        yield* writeAccountPreferences(owner, { experiments: { [EXPERIMENT.TURN_CHANGES]: true } });
         const unrecorded = yield* asked();
 
         assert.deepEqual(
@@ -742,12 +732,12 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   /** A source whose stopped sandbox holds a change it never committed, over a checkout and remote on disk, and a continue of it; GitHub answers its pull request's reads as `pull` does, where given. */
-  const copyScenario = (t: TestContext, pull?: RepositoryScript, snapshotted = false) =>
+  const copyScenario = (t: TestContext, pull?: RepositoryScript, ownsDrive = false) =>
     Effect.gen(function* () {
       vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureOidcToken());
       const checkout = sourceCheckout(yield* Effect.promise(() => temporaryDirectory(t, "copy-")));
       writeFileSync(join(checkout.checkout, "invites.ts"), "export const ttl = 7;\n");
-      const sandbox = sourceSandbox(checkout, "stopped", snapshotted);
+      const sandbox = sourceSandbox(checkout, "stopped", ownsDrive);
 
       const opened = yield* sourceAgentOn(
         pull === undefined ? sandbox.answer : (sent) => sandbox.answer(sent) ?? pull(sent),
@@ -822,7 +812,7 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
   );
 
   it.effect(
-    "a continue of a source whose sandbox stopped on a snapshot wakes nothing and copies nothing, and tells the new agent its checkout is the source's own",
+    "a continue of a source whose sandbox stopped owning a drive wakes nothing and copies nothing, and tells the new agent its checkout is the source's own",
     (t) =>
       Effect.gen(function* () {
         const { sandbox, continued } = yield* copyScenario(t, undefined, true);
@@ -1007,18 +997,22 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
           },
         ]);
 
-        const fork = (messageId: string) =>
+        const fork = (
+          messageId: string,
+          cut?: { messageSteps: number; messageStepParts: number },
+        ) =>
           ask(
             startAs(owner, task.id, {
               idempotencyKey: randomUUID(),
-              from: { agentId: source.id, messageId },
+              from: { agentId: source.id, messageId, ...cut },
             }),
           );
 
+        // A desktop before the cut was dropped still names one, which is taken and kept out of the fork.
         const started = readAnswer(
           agentAnswerSchema,
           HOSTED_HTTP_STATUS.CREATED,
-          yield* fork(firstTurn),
+          yield* fork(firstTurn, { messageSteps: 1, messageStepParts: 0 }),
         ).agent;
 
         const { parts } = openedParts(agentSessions);
@@ -1098,99 +1092,6 @@ it.layer(getTestDB())("starting an agent from another", (it) => {
         assert.equal(
           openedParts(agentSessions).parts.replay?.steps.at(-1)?.summary,
           "Said: Halfway through the mailer.",
-        );
-      }),
-  );
-
-  it.effect(
-    "a fork of a reply still being written keeps the steps, and the words and calls of the last of them, seen as Fork was pressed, nothing written after, and names the files the rest of that reply edited; a fork naming no steps keeps the reply whole",
-    () =>
-      Effect.gen(function* () {
-        const { owner, task, ask, agentSessions, source, stored } = yield* sourceAgent;
-
-        const write = (callId: string, filePath: string) => ({
-          type: "tool-write_file",
-          toolCallId: callId,
-          state: "output-available",
-          input: { filePath, content: "x" },
-          output: "ok",
-        });
-
-        const writing = yield* transcriptRow(stored, 6, MESSAGE_ROLE.ASSISTANT, [
-          { type: "step-start" },
-          text("Writing the expiry first."),
-          write("call-7", "src/expiry.ts"),
-          { type: "step-start" },
-          text("Now the mailer."),
-          write("call-8", "src/mailer.ts"),
-        ]);
-
-        const fork = (messageSteps: number | undefined, messageStepParts?: number) =>
-          Effect.gen(function* () {
-            const started = readAnswer(
-              agentAnswerSchema,
-              HOSTED_HTTP_STATUS.CREATED,
-              yield* ask(
-                startAs(owner, task.id, {
-                  idempotencyKey: randomUUID(),
-                  from: {
-                    agentId: source.id,
-                    messageId: writing,
-                    ...(messageSteps === undefined ? undefined : { messageSteps }),
-                    ...(messageStepParts === undefined ? undefined : { messageStepParts }),
-                  },
-                }),
-              ),
-            ).agent;
-
-            return { started, replay: openedParts(agentSessions).parts.replay };
-          });
-
-        const pinned = yield* fork(1);
-        assert.equal(pinned.started.from?.messageSteps, 1);
-        assert.deepEqual(
-          pinned.replay?.steps.slice(-2).map((step) => step.summary),
-          ["Said: Writing the expiry first.", "Wrote: src/expiry.ts"],
-        );
-        assert.match(
-          pinned.replay?.preamble ?? "",
-          /After that message it edited `src\/mailer\.ts`; undo/u,
-        );
-
-        // A press that saw the step's words and not yet its call keeps the words alone.
-        const within = yield* fork(1, 1);
-        assert.equal(within.started.from?.messageStepParts, 1);
-        assert.equal(within.replay?.steps.at(-1)?.summary, "Said: Writing the expiry first.");
-        assert.match(
-          within.replay?.preamble ?? "",
-          /After that message it edited `src\/expiry\.ts`, `src\/mailer\.ts`; undo/u,
-        );
-
-        const whole = yield* fork(undefined);
-        assert.equal(whole.started.from?.messageSteps, undefined);
-        assert.deepEqual(
-          whole.replay?.steps.slice(-2).map((step) => step.summary),
-          ["Said: Now the mailer.", "Wrote: src/mailer.ts"],
-        );
-        assert.match(whole.replay?.preamble ?? "", /edited no file after that message/u);
-
-        assert.deepEqual(
-          yield* ask(
-            startAs(owner, task.id, {
-              idempotencyKey: randomUUID(),
-              from: { agentId: source.id, messageSteps: 1 },
-            }),
-          ),
-          refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
-        );
-        assert.deepEqual(
-          yield* ask(
-            startAs(owner, task.id, {
-              idempotencyKey: randomUUID(),
-              from: { agentId: source.id, messageId: writing, messageStepParts: 1 },
-            }),
-          ),
-          refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
         );
       }),
   );

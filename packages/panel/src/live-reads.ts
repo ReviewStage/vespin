@@ -48,7 +48,8 @@
  *   holds nothing, or `getQueryData` in a callback.
  *
  * A read added here is its factory, its Try again, and its follow below,
- * and nothing else. This module is the only one that opens a follow.
+ * and nothing else. This module is the only one that opens a follow
+ * (`vespin/no-follow-outside-host-read`).
  */
 
 import {

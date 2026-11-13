@@ -19,6 +19,7 @@ import {
   accessibilityValue,
   alignmentGuide,
   buttonStyle,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -31,17 +32,20 @@ import {
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
-import { PULL_REQUEST_STATE_LABEL } from "@repo/features/pull-request-model";
+import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
-import { type ReactElement, type ReactNode, useContext, useState } from "react";
+import { type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { actContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dragLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import {
@@ -54,8 +58,7 @@ import {
   UnreadDot,
   WorkingMark,
 } from "./marks.js";
-import { RowOpenContext } from "./row-open.js";
-import type { SfSymbol } from "./sf-symbol.js";
+import { RowOpenContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -97,8 +100,6 @@ const LINE_PART = " · ";
 
 /** The words VoiceOver hears for a row's marks, each said where the mark is drawn. */
 const UNREAD_WORDS = "Unread";
-const FAILED_HEARD = "Failed";
-const WORKING_HEARD = "Working";
 const PULL_REQUEST_HEARD = "Pull request";
 const SUB_TASKS_SHOWN = "Sub-tasks shown";
 const SUB_TASKS_HIDDEN = "Sub-tasks hidden";
@@ -114,20 +115,21 @@ export type RowActionTone = (typeof ROW_ACTION_TONE)[keyof typeof ROW_ACTION_TON
 export type RowAction = {
   /** The act's name, as the panel's menu names it: Mark done, Mark unread. */
   readonly label: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly tone: RowActionTone;
   readonly onPress: () => void;
 };
 
-/** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them. */
+/** A menu within a row's long press menu, such as a task's Status: its choices, each checked where it stands, as the system checks them, and the acts under them, such as a task's Remove from section. */
 export type RowSubmenu = {
   readonly label: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly choices: readonly {
     readonly label: string;
     readonly on: boolean;
     readonly onPress: () => void;
   }[];
+  readonly actions?: readonly RowAction[] | undefined;
 };
 
 /** What a swipe reveals: an act, or a menu of choices, such as a task's Status, which opens where the act would run. */
@@ -181,6 +183,9 @@ type ListRowProps = RowActs & {
   readonly due?: number | undefined;
 };
 
+/** Whether a parent task's sub-tasks stand open under it, and what turns them. */
+export type TaskFold = { readonly open: boolean; readonly onToggle: () => void };
+
 type TaskRowProps = RowActs & {
   readonly id: string;
   readonly name: string;
@@ -195,20 +200,20 @@ type TaskRowProps = RowActs & {
   readonly agents?: TaskAgentsStatus | undefined;
   /** Its key, `ACME-42`, which ends the line. */
   readonly taskKey?: string | undefined;
-  /** Its sub-tasks' rows, folded under it until its chevron opens them, as the panel folds them. */
-  readonly subRows?: ReactNode | undefined;
+  /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its chevron's press does. Its caller holds it, since a recycled row holds no state (`RowForEach`). */
+  readonly fold?: TaskFold | undefined;
   /** How deep it stands under the tasks above it, which sets it in from the list's edge. */
   readonly depth?: number | undefined;
 };
 
-function actionButton(action: RowAction, colors: BrandColors) {
+/** A row's act as a button of its long press menu or its swipe: red where it takes something away, and in the muted ink otherwise. */
+export function actionButton(action: RowAction, colors: BrandColors) {
   const destructive = action.tone === ROW_ACTION_TONE.DESTRUCTIVE;
 
   return (
     <Button
       key={action.label}
-      label={action.label}
-      systemImage={action.symbol}
+      {...actContent(action.label, action.symbol)}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
       modifiers={destructive ? [] : [tint(colors.TEXT_MUTED)]}
@@ -216,13 +221,12 @@ function actionButton(action: RowAction, colors: BrandColors) {
   );
 }
 
-/** A submenu of a row's long press menu as SwiftUI's: each choice a toggle the system checks. */
-function rowSubmenu(submenu: RowSubmenu, ink?: string) {
+/** A submenu of a row's long press menu as SwiftUI's: each choice a toggle the system checks, then its acts. */
+function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
   return (
     <Menu
       key={submenu.label}
-      label={submenu.label}
-      systemImage={submenu.symbol}
+      label={menuLabel(submenu.label, submenu.symbol)}
       modifiers={ink === undefined ? [] : [tint(ink)]}
     >
       {submenu.choices.map((choice) => (
@@ -233,6 +237,7 @@ function rowSubmenu(submenu: RowSubmenu, ink?: string) {
           onIsOnChange={() => choice.onPress()}
         />
       ))}
+      {(submenu.actions ?? []).map((action) => actionButton(action, colors))}
     </Menu>
   );
 }
@@ -262,7 +267,7 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
   return (
     <HStack spacing={SPACE.TIGHT}>
       <Image
-        systemName="clock"
+        {...glyphImage(GLYPH.TIME)}
         size={MARK_SIZE.GLYPH - 4}
         color={colors.ACCENT_TEXT}
         modifiers={[accessibilityHidden(true)]}
@@ -281,15 +286,25 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
   );
 }
 
-/** Where a row stands in its list: on the list's own ground, inset so the unread dot stands in the margin, its hairline starting under the words. */
-export function rowPlacement(colors: BrandColors) {
+/**
+ * Where a row stands in its list: on the list's own ground, inset so the
+ * unread dot stands in the margin, its hairline starting under the words.
+ * Note that a selected row stands on the `SELECTED` gray, as iOS's own
+ * selection does, since a clear row ground leaves the system no fill to draw,
+ * so an iPad's selected row showed only the keyboard focus's black outline.
+ */
+export function rowPlacement(
+  colors: BrandColors,
+  selected = false,
+  vertical: number = ROW_INSET.VERTICAL,
+) {
   return [
-    listRowBackground("clear"),
+    listRowBackground(selected ? colors.SELECTED : "clear"),
     listRowInsets({
       leading: ROW_INSET.LEADING,
       trailing: SPACE.EDGE,
-      top: ROW_INSET.VERTICAL,
-      bottom: ROW_INSET.VERTICAL,
+      top: vertical,
+      bottom: vertical,
     }),
     listRowSeparatorTint(colors.CHIP_EDGE),
     alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT - ROW_INSET.LEADING),
@@ -305,7 +320,9 @@ function fullSwipes(swipes: readonly RowSwipe[]): boolean {
 
 /** A swipe's piece as SwiftUI draws it behind the row: an act's button, or a menu's, in the muted ink. */
 function swipeButton(swipe: RowSwipe, colors: BrandColors) {
-  return isSubmenu(swipe) ? rowSubmenu(swipe, colors.TEXT_MUTED) : actionButton(swipe, colors);
+  return isSubmenu(swipe)
+    ? rowSubmenu(swipe, colors, colors.TEXT_MUTED)
+    : actionButton(swipe, colors);
 }
 
 /**
@@ -334,18 +351,22 @@ export function RowFrame({
   menuActions = [],
   preview,
   link,
+  vertical,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
+  /** The row's top and bottom inset, where it stands roomier than the list's own, as an Inbox thread does. */
+  readonly vertical?: number | undefined;
 }) {
   const colors = useColors();
   const open = useContext(RowOpenContext);
+  const selected = useContext(RowSelectedContext) === id;
   const swiped = [...trailingActions, ...leadingActions];
 
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
   const frameModifiers = [
     tag(id),
-    ...rowPlacement(colors),
+    ...rowPlacement(colors, selected, vertical),
     ...(heard === undefined
       ? []
       : [
@@ -366,7 +387,7 @@ export function RowFrame({
       : [
           {
             label: VERB.OPEN,
-            symbol: "arrow.up.forward.app",
+            symbol: GLYPH.OPEN_EXTERNALLY,
             tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: () => open(id),
           },
@@ -377,7 +398,7 @@ export function RowFrame({
       <ContextMenu.Items>
         {opening.map((action) => actionButton(action, colors))}
         {swiped.map((swipe) => swipeButton(swipe, colors))}
-        {menuSubmenus.map((submenu) => rowSubmenu(submenu))}
+        {menuSubmenus.map((submenu) => rowSubmenu(submenu, colors))}
         {menuActions.map((action) => actionButton(action, colors))}
       </ContextMenu.Items>
       <ContextMenu.Trigger>{row}</ContextMenu.Trigger>
@@ -525,7 +546,9 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
  * under it the glyph and words of what it asks, then the task's name, in a
  * 13 pt muted line. A teammate's face stands before the time on a thread
  * that waits on them, and a thread put away until a reminder says when it
- * comes back in its time's place, as the panel's row does.
+ * comes back in its time's place, as the panel's row does. It stands
+ * roomier than a task's row, with Mail's breathing room above, below, and
+ * between its lines.
  */
 export function ListRow(props: ListRowProps) {
   const { id, title, task, line, unread = false, done = false, face, at, now, due } = props;
@@ -533,7 +556,7 @@ export function ListRow(props: ListRowProps) {
   const ring = task?.status === undefined ? undefined : <TaskStatusMark status={task.status} />;
 
   const row: ReactElement = (
-    <VStack alignment="leading" spacing={2}>
+    <VStack alignment="leading" spacing={ROW_INSET.THREAD_LINE_GAP}>
       <RowHead
         unread={unread}
         faded={done}
@@ -557,7 +580,15 @@ export function ListRow(props: ListRowProps) {
     </VStack>
   );
 
-  return <RowFrame {...props} id={id} row={row} heard={props.heard ?? threadHeard(props)} />;
+  return (
+    <RowFrame
+      {...props}
+      id={id}
+      row={row}
+      heard={props.heard ?? threadHeard(props)}
+      vertical={ROW_INSET.THREAD_VERTICAL}
+    />
+  );
 }
 
 /** What VoiceOver hears of an Inbox row: its title, then unread, what waits on you, its last words, its task and the task's status, whom it waits on, and when. */
@@ -588,11 +619,11 @@ function threadHeard(props: ListRowProps): RowHeard {
 function agentsHeard(agents: TaskAgentsStatus | undefined): string | undefined {
   switch (agents?.kind) {
     case TASK_AGENTS_STATUS.FAILED:
-      return FAILED_HEARD;
+      return GLYPH_STATE_WORDS[GLYPH_STATE.FAILED];
     case TASK_AGENTS_STATUS.WORKING:
-      return WORKING_HEARD;
+      return GLYPH_STATE_WORDS[GLYPH_STATE.WORKING];
     case TASK_AGENTS_STATUS.PULL_REQUEST:
-      return `${PULL_REQUEST_HEARD} ${PULL_REQUEST_STATE_LABEL[agents.pullRequest.state]}`;
+      return `${PULL_REQUEST_HEARD} ${pullRequestMarkLabel(agents.pullRequest)}`;
     case TASK_AGENTS_STATUS.NONE:
     case undefined:
       return undefined;
@@ -606,8 +637,8 @@ function agentsHeard(agents: TaskAgentsStatus | undefined): string | undefined {
 }
 
 /** What a task row is heard as: its name, then unread, its status, a thread that needs you, its agents, its key, and whether its sub-tasks are open. */
-function taskHeard(props: TaskRowProps, open: boolean): RowHeard {
-  const { name, status, unread = false, needsYou = false, agents, taskKey, subRows } = props;
+function taskHeard(props: TaskRowProps): RowHeard {
+  const { name, status, unread = false, needsYou = false, agents, taskKey, fold } = props;
 
   return {
     label: name,
@@ -617,7 +648,7 @@ function taskHeard(props: TaskRowProps, open: boolean): RowHeard {
       needsYou && NEEDS_YOU.LABEL,
       agentsHeard(agents),
       taskKey,
-      subRows !== undefined && (open ? SUB_TASKS_SHOWN : SUB_TASKS_HIDDEN),
+      fold !== undefined && (fold.open ? SUB_TASKS_SHOWN : SUB_TASKS_HIDDEN),
     ],
   };
 }
@@ -632,7 +663,7 @@ function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou"
     case TASK_AGENTS_STATUS.WORKING:
       return <WorkingMark />;
     case TASK_AGENTS_STATUS.PULL_REQUEST: {
-      const pull = PULL_REQUEST_LOOK[agents.pullRequest.state];
+      const pull = PULL_REQUEST_LOOK[pullRequestMarkState(agents.pullRequest)];
 
       return <ToneGlyph glyph={pull.symbol} tone={pull.tone} />;
     }
@@ -670,7 +701,7 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
       ]}
     >
       <Image
-        systemName={open ? "chevron.down" : "chevron.right"}
+        {...glyphImage(open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
         size={MARK_SIZE.GLYPH - 4}
         color={colors.TEXT_MUTED}
         modifiers={[frame({ width: MARK_SIZE.LEAD, height: MARK_SIZE.LEAD })]}
@@ -683,14 +714,13 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
  * One task on a single line, as Linear's rows stand: the dot while it has
  * news, its status ring, its name in 15 pt, and at the line's end what its
  * agents say and its key. A task with sub-tasks leads with the panel's fold
- * in its ring's place, which opens them under it a level deeper. Note that
- * SwiftUI's disclosure is not used, because a press on its row folds it
- * rather than picking the row.
+ * in its ring's place, whose press opens them; its caller draws them as rows
+ * of their own under it, a level deeper. Note that SwiftUI's disclosure is
+ * not used, because a press on its row folds it rather than picking the row.
  */
 export function TaskRow(props: TaskRowProps) {
-  const { id, name, status, unread = false, finished = false, taskKey, subRows, depth = 0 } = props;
+  const { id, name, status, unread = false, finished = false, taskKey, fold, depth = 0 } = props;
   const colors = useColors();
-  const [open, setOpen] = useState(false);
 
   const row: ReactElement = (
     <HStack modifiers={[padding({ leading: depth * SUB_TASK_INDENT })]}>
@@ -698,10 +728,10 @@ export function TaskRow(props: TaskRowProps) {
         unread={unread}
         faded={finished}
         lead={
-          subRows === undefined ? (
+          fold === undefined ? (
             <TaskStatusMark status={status} />
           ) : (
-            <SubTaskFold open={open} onPress={() => setOpen(!open)} />
+            <SubTaskFold open={fold.open} onPress={fold.onToggle} />
           )
         }
         title={name}
@@ -715,6 +745,7 @@ export function TaskRow(props: TaskRowProps) {
                   font({ textStyle: TYPE_ROLE.TIME }),
                   monospacedDigit(),
                   foregroundStyle(colors.TEXT_MUTED),
+                  fixedSize(),
                 ]}
               >
                 {taskKey}
@@ -727,34 +758,25 @@ export function TaskRow(props: TaskRowProps) {
   );
 
   // Note that the fold stands in the row's menu too, so a person who reaches the row as one element, through VoiceOver or Voice Control, still opens its sub-tasks.
-  const fold: readonly RowAction[] =
-    subRows === undefined
+  const folding: readonly RowAction[] =
+    fold === undefined
       ? []
       : [
           {
-            label: open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS,
-            symbol: open ? "chevron.down" : "chevron.right",
+            label: fold.open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS,
+            symbol: fold.open ? GLYPH.UNFOLDED : GLYPH.FOLDED,
             tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => setOpen(!open),
+            onPress: fold.onToggle,
           },
         ];
 
-  const framed = (
+  return (
     <RowFrame
       {...props}
       id={id}
       row={row}
-      menuActions={[...fold, ...(props.menuActions ?? [])]}
-      heard={props.heard ?? taskHeard(props, open)}
+      menuActions={[...folding, ...(props.menuActions ?? [])]}
+      heard={props.heard ?? taskHeard(props)}
     />
-  );
-
-  if (subRows === undefined || !open) return framed;
-
-  return (
-    <>
-      {framed}
-      {subRows}
-    </>
   );
 }

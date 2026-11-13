@@ -8,6 +8,7 @@ import { agentStateWords } from "@repo/features/glyph-state";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import type { CatalogModel } from "@repo/features/models-wire";
 import { agentMovedAt, agentStillWriting } from "@repo/features/task-agents-model";
+import { agentTranscript } from "@repo/features/transcript-copy";
 import {
   HoverCard,
   HoverCardHead,
@@ -30,7 +31,6 @@ import {
   lastFinished,
 } from "./agent-tab-card.js";
 import { MentionedAgentCard } from "./mentioned-agent-card.js";
-import { agentTranscript } from "./transcript-copy.js";
 import type { AgentsControl } from "./use-agents.js";
 import { useOpenPlace } from "./use-open-link.js";
 

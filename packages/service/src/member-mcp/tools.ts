@@ -162,7 +162,6 @@ import {
   workspaceInviteRequestSchema,
 } from "@repo/features/workspace-invitation-wire";
 import {
-  REPOSITORY_SCRIPT_KIND,
   WORKSPACE_SANDBOX_SETUP_BOUNDS,
   type WorkspaceSandboxSetupAnswer,
   workspaceInstallScriptPutRequestSchema,
@@ -678,7 +677,9 @@ const MEMBER_LIST_TASKS_TOOL = memberMcpTool({
     "Canceled ones among them: each with its id, its key (such as ACME-42), its name, where it " +
     `stands (its status: ${Object.values(TASK_STATUS).join(", ")}) and how much it matters (its ` +
     "priority), who it is assigned to (its assignee's mention link, null for no one), the " +
-    "repository its agents work in (null for none yet), who started it, the sectionId of the " +
+    "repository its agents work in (null for none yet), who started it, its followers (each " +
+    "with their name and id, whether they are its assignee, and whether its " +
+    "agents may use their machines; absent where the workspace keeps none), the sectionId of the " +
     "sidebar section the member keeps it in (null for none), the newest first and at most " +
     `${TASKS_LIST_LIMIT} a page, with nextOffset where more stand; and beside them every ` +
     "section the member keeps in that workspace's sidebar, each with its id and title. Narrow " +
@@ -698,7 +699,9 @@ const MEMBER_READ_TASK_TOOL = memberMcpTool({
     "status) and how much it matters (its priority), repository, who started it (startedBy, and " +
     "startedByUserId to link them by), " +
     "the brief it was started with (null for none), the tasks it is blocked by and the tasks it " +
-    "blocks (each with its id, name, and status), and its description as last saved, cut on a " +
+    "blocks (each with its id, name, and status), its followers (each with their name and id, " +
+    "whether they are its assignee, and whether its agents may use their machines; " +
+    "absent where the workspace keeps none), and its description as last saved, cut on a " +
     `line at ${DESCRIPTION_TEXT_READ_CHARS} characters with how many were left out. ` +
     `${MEMBER_MCP_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
   input: READ_TASK_TOOL.inputSchema,
@@ -708,8 +711,10 @@ const MEMBER_READ_TASK_TOOL = memberMcpTool({
       "member's workspaces it stands: its key (such as ACME-42), name, where it stands (its " +
       "status) and how much it matters (its priority), repository, who started it (startedBy, " +
       "and startedByUserId to link them by), " +
-      "the brief it was started with (null for none), and the tasks it is blocked by and the " +
-      "tasks it blocks (each with its id, name, and status). " +
+      "the brief it was started with (null for none), the tasks it is blocked by and the " +
+      "tasks it blocks (each with its id, name, and status), and its followers (each with their " +
+      "name and id, whether they are its assignee, and whether its agents may use " +
+      "their machines; absent where the workspace keeps none). " +
       `${MEMBER_MCP_TOOL.LIST_AGENTS} with its taskId names the agents on it.`,
     input: READ_TASK_TOOL.inputSchema,
   },
@@ -1769,7 +1774,7 @@ const MessageAgentInputSchema = Schema.Struct({
       "true to queue it behind the agent's turn, as the composer's ⌘↩ would, rather than steer " +
         "it into the turn under way: it waits unsent, and goes as the member's next message once " +
         "the turn and every message queued before it are over, at once where the agent stands " +
-        "idle. Only the agent's starter queues to it.",
+        "idle. Any member who may message the agent queues to it.",
     ),
   ),
 });
@@ -1782,11 +1787,11 @@ const MEMBER_QUEUE_DELIVERY = {
   HANDED_ON: "handed-on",
 } as const;
 
-/** Why a queued message was not queued, in the member's tool's words: another member's agent, a full queue, or the service. */
+/** Why a queued message was not queued, in the member's tool's words: an agent only its starter messages, a full queue, or the service. */
 const QUEUE_MESSAGE_REFUSAL = {
   NOT_STARTER:
-    "Not queued: only the member who started that agent queues to it; send it without queue to " +
-    "steer it into the turn instead.",
+    "Not queued: that agent runs on its starter's own GitHub token or Mac, so only the member " +
+    "who started it queues to it.",
   FULL: `Not queued: that agent's queue already holds ${AGENT_QUEUE_BOUNDS.MAX_MESSAGES} messages.`,
   UNAVAILABLE: "Not queued: the service could not take the message just now.",
 } as const;
@@ -1950,7 +1955,9 @@ type ChangeAgentQueueInput = typeof ChangeAgentQueueInputSchema.Type;
 
 /** Why a queue change changed nothing, in the member's tool's words. */
 const CHANGE_QUEUE_REFUSAL = {
-  NOT_STARTER: "Not changed: only the member who started that agent changes its queue.",
+  NOT_STARTER:
+    "Not changed: that agent runs on its starter's own GitHub token or Mac, so only the member " +
+    "who started it changes its queue.",
   NO_MESSAGE:
     "Not changed: that agent's queue holds no message of that id; it may have gone already. " +
     `${MEMBER_MCP_TOOL.READ_AGENT} lists the queue.`,
@@ -2009,13 +2016,13 @@ const memberQueueChange = (call: AgentCall, { agentId, change }: ChangeAgentQueu
 const CHANGE_AGENT_QUEUE_TOOL = memberMcpTool({
   name: MEMBER_MCP_TOOL.CHANGE_AGENT_QUEUE,
   description:
-    "Change the queue of a coding agent the member started, by its id, as their queue " +
+    "Change the queue of a coding agent the member may message, by its id, as their queue " +
     `controls would: the messages ${MEMBER_MCP_TOOL.MESSAGE_AGENT}'s queue left waiting behind ` +
     `its turn, which ${MEMBER_MCP_TOOL.READ_AGENT} lists by id. Resume a queue a Stop, a ` +
     "failed turn, or a refused hand-off paused; hold a message, so the queue stops at it, or " +
     "let it go; edit its words; delete it; reorder the queue; or steer a message into the turn " +
-    "under way now, which takes it out of the queue. Only the agent's starter changes its " +
-    "queue. Where the agent stands idle, the change hands the next message on at once, as a " +
+    "under way now, which takes it out of the queue. Any member who may message the agent " +
+    "changes any message in its queue, whoever queued it. Where the agent stands idle, the change hands the next message on at once, as a " +
     "turn's end would. Answers `accepted` with the queue as it then stands, or `rejected` and " +
     `why nothing changed. ${FOLLOW_WORDS}`,
   input: ChangeAgentQueueInputSchema,
@@ -4787,9 +4794,6 @@ const SANDBOX_SETUP_REFUSAL = {
   NOT_PERMITTED:
     "Not saved: only an owner or an admin of the workspace saves its sandbox setup, and the " +
     "member is neither.",
-  KIND_WITHOUT_REPOSITORY:
-    "Not saved: a kind names one of a repository's scripts, so name the repository as well; " +
-    "leave both out to save the install script.",
   UNAVAILABLE:
     "Not run: the service could not reach the workspace's sandbox setup just now. The call may " +
     "be made again.",
@@ -4829,22 +4833,14 @@ const SANDBOX_SETUP_WORKSPACE_INPUT = Schema.optionalKey(
 /** A read of the setup names its workspace. */
 const ReadSandboxSetupInputSchema = Schema.Struct({ workspace: SANDBOX_SETUP_WORKSPACE_INPUT });
 
-/** A save names its workspace, at most the repository and which of its scripts it is, and the script. */
+/** A save names its workspace, at most the repository whose setup script it is, and the script. */
 const EditSandboxSetupInputSchema = Schema.Struct({
   workspace: SANDBOX_SETUP_WORKSPACE_INPUT,
   repository: Schema.optionalKey(
     describeWire(
       githubRepositoryFullNameSchema,
-      "The repository whose script to save, as owner/name; leave it out to save the " +
+      "The repository whose setup script to save, as owner/name; leave it out to save the " +
         "workspace's install script.",
-    ),
-  ),
-  kind: Schema.optionalKey(
-    describeWire(
-      Schema.Literals(Object.values(REPOSITORY_SCRIPT_KIND)),
-      "Which of the repository's scripts to save: setup, which runs once in each new agent " +
-        "sandbox of it after its checkout, or archive, which runs once in each just before it " +
-        "is deleted for good as its agent is archived; setup where left out.",
     ),
   ),
   script: describeWire(
@@ -4859,12 +4855,11 @@ const READ_SANDBOX_SETUP_TOOL = memberMcpTool({
     "Read the cloud sandbox setup of a workspace the member belongs to, as its Settings › Cloud " +
     "environment shows it: its install script, which runs once in each build of a repository's base " +
     "snapshot; each repository's setup script, which runs once in each new agent sandbox " +
-    "of it after its checkout, and archive script, which runs once in each just before it is " +
-    "deleted for good, each script with when it was last saved in epoch milliseconds and how " +
+    "of it after its checkout, each script with when it was last saved in epoch milliseconds and how " +
     "it last ran where it has; and each repository's run actions, the commands a member runs " +
     "in one of its agents' sandboxes from the Run menu, each with its id, label, command, " +
     `icon, and whether it is the default. ${WORKSPACE_WORDS} Answers the install script, or ` +
-    "install null where none is saved, the repositories' setup scripts, archive scripts, and " +
+    "install null where none is saved, the repositories' setup scripts and " +
     "run actions, each in the order of their names, or `rejected` and why.",
   input: ReadSandboxSetupInputSchema,
   annotations: READ_ONLY,
@@ -4882,7 +4877,7 @@ const EDIT_SANDBOX_SETUP_TOOL = memberMcpTool({
   description:
     "Save one script of the cloud sandbox setup of a workspace the member is an owner or an " +
     "admin of, as its Settings › Cloud environment would: the install script, or, naming a " +
-    "repository, that repository's setup or archive script, under any casing of its name. The " +
+    "repository, that repository's setup script, under any casing of its name. The " +
     "script given replaces the one that stood whole, so read it first with " +
     `${MEMBER_MCP_TOOL.READ_SANDBOX_SETUP} to change part of it; an empty script removes it. ` +
     "Sandboxes already running keep the script they ran. " +
@@ -4890,23 +4885,20 @@ const EDIT_SANDBOX_SETUP_TOOL = memberMcpTool({
     "`rejected` and why.",
   input: EditSandboxSetupInputSchema,
   annotations: DESTRUCTIVE,
-  run: ({ workspace, repository, kind, script }) =>
-    repository === undefined && kind !== undefined
-      ? Effect.succeed(agentToolRejected(SANDBOX_SETUP_REFUSAL.KIND_WITHOUT_REPOSITORY))
-      : listAsMember(workspace, ({ caller }) =>
-          sandboxSetupAnswer(
-            repository === undefined
-              ? saveInstallScript(callerUserId(caller), callerWorkspaceId(caller), script)
-              : saveRepositorySetup(
-                  callerUserId(caller),
-                  callerWorkspaceId(caller),
-                  repository,
-                  script,
-                  kind ?? REPOSITORY_SCRIPT_KIND.SETUP,
-                ),
-            (setup) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...setup }),
-          ),
-        ),
+  run: ({ workspace, repository, script }) =>
+    listAsMember(workspace, ({ caller }) =>
+      sandboxSetupAnswer(
+        repository === undefined
+          ? saveInstallScript(callerUserId(caller), callerWorkspaceId(caller), script)
+          : saveRepositorySetup(
+              callerUserId(caller),
+              callerWorkspaceId(caller),
+              repository,
+              script,
+            ),
+        (setup) => ({ status: ACTION_RESULT_STATUS.ACCEPTED, ...setup }),
+      ),
+    ),
 });
 
 /*

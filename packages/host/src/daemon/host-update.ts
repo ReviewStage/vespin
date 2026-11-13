@@ -16,6 +16,7 @@ import {
   Duration,
   Effect,
   FiberHandle,
+  MutableRef,
   Option,
   Path,
   Predicate,
@@ -188,10 +189,13 @@ export const hostUpdate = Effect.fnUntraced(function* (options: HostUpdateOption
       yield* fileSystem.remove(folderOf(release.version), { recursive: true, force: true });
     }).pipe(Effect.ignore);
 
-  /** The update failed for the reason given, which every beat says until it is tried again. */
-  const failed = (release: DeviceAgentRelease, reason: string) =>
+  /** The update failed for the reason given, on the fetch's try given where it is one, which every beat says until it is tried again. */
+  const failed = (release: DeviceAgentRelease, reason: string, attempt?: number) =>
     Effect.gen(function* () {
-      report(`${PRODUCT_NAME} host: could not update to ${release.version}: ${reason}`);
+      report(
+        `${PRODUCT_NAME} host: could not update to ${release.version}: ${reason}`,
+        attempt === undefined ? undefined : { attempt },
+      );
       yield* Ref.set(standing, {
         release,
         update: {
@@ -261,21 +265,25 @@ export const hostUpdate = Effect.fnUntraced(function* (options: HostUpdateOption
 
   /** The release fetched, tried again about every `RETRY_AFTER` while it fails, and then waiting for the device to be idle. */
   const attempts = (release: DeviceAgentRelease) =>
-    fetched(release).pipe(
-      Effect.tapError((reason) => failed(release, reason)),
-      Effect.retry(Schedule.jittered(Schedule.spaced(RETRY_AFTER))),
-      Effect.andThen(
-        Effect.gen(function* () {
-          yield* Ref.set(standing, { release, update: { update: HOST_UPDATE.WAITING } });
-          report(
-            `${PRODUCT_NAME} host: ${release.version} is ready, and switches in once no agent runs.`,
-          );
-        }),
-      ),
-      // Note that the schedule never ends, so a failure is only ever tried again.
-      Effect.ignore,
-      Effect.provideContext(services),
-    );
+    Effect.suspend(() => {
+      const tries = MutableRef.make(0);
+
+      return fetched(release).pipe(
+        Effect.tapError((reason) => failed(release, reason, MutableRef.incrementAndGet(tries))),
+        Effect.retry(Schedule.jittered(Schedule.spaced(RETRY_AFTER))),
+        Effect.andThen(
+          Effect.gen(function* () {
+            yield* Ref.set(standing, { release, update: { update: HOST_UPDATE.WAITING } });
+            report(
+              `${PRODUCT_NAME} host: ${release.version} is ready, and switches in once no agent runs.`,
+            );
+          }),
+        ),
+        // Note that the schedule never ends, so a failure is only ever tried again.
+        Effect.ignore,
+        Effect.provideContext(services),
+      );
+    });
 
   /** What the new version's `vespin-host version` printed, nothing where it did not answer, failed, or outlasted `VERSION_ANSWER`. */
   const versionAnswered = (version: string) =>

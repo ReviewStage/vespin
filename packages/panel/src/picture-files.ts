@@ -1,8 +1,8 @@
 /**
- * picture-files.ts -- which picked, pasted, or dropped files are pictures, a HEIC photo among them however the system typed it.
+ * picture-files.ts -- which picked, pasted, or dropped files are pictures, a HEIC photo among them however the system typed it, and which a description keeps beside them, a PDF.
  *
- * Every place a picture is taken in reads its files through `imageFiles`,
- * the message box, feedback, and the description's editor alike, so a photo
+ * Every place a picture is taken in tells one by `isPictureFile`, the
+ * message box, feedback, and the description's editor alike, so a photo
  * off an iPhone is taken by all of them or none. Kept free of every other
  * import, because the description's editor, which loads as a bundle of its
  * own, reads it too.
@@ -34,4 +34,48 @@ export function imageFiles(list: ArrayLike<File> | null | undefined): File[] {
   if (!list) return [];
 
   return Array.from(list).filter(isPictureFile);
+}
+
+/** The type a PDF is given. */
+const PDF_TYPE = "application/pdf";
+
+/** A PDF's name, for a system that gave it no type. */
+const PDF_NAME = /\.pdf$/iu;
+
+/** Whether a file is a PDF, by its type or, where it has none, its name. */
+export function isPdfUpload(file: { readonly type: string; readonly name: string }): boolean {
+  return file.type === PDF_TYPE || (file.type === "" && PDF_NAME.test(file.name));
+}
+
+/** Whether a description keeps a file: a picture or a PDF. */
+export function isDescriptionFile(file: { readonly type: string; readonly name: string }): boolean {
+  return isPictureFile(file) || isPdfUpload(file);
+}
+
+/** The files a description keeps among whatever was picked, pasted, or dropped: its pictures and its PDFs, in their given order. */
+export function descriptionFiles(list: ArrayLike<File> | null | undefined): File[] {
+  if (!list) return [];
+
+  return Array.from(list).filter(isDescriptionFile);
+}
+
+/** An item a drag carries, as it reads before the drop: its kind and its type, with no name yet. */
+interface DraggedItem {
+  readonly kind: string;
+  readonly type: string;
+}
+
+/**
+ * Whether a drag may carry a file a description keeps, read from its items
+ * before the drop (`isDescriptionFile`): one typed as a picture or a PDF, or
+ * one with no type, such as a HEIC photo some systems leave untyped, which the
+ * drop's own check decides once it has its name. A drag whose files cannot be
+ * read before the drop is taken too, for the drop to decide.
+ */
+export function offersDescriptionFiles(items: ArrayLike<DraggedItem>): boolean {
+  const files = Array.from(items).filter((item) => item.kind === "file");
+
+  if (files.length === 0) return true;
+
+  return files.some((item) => item.type === "" || isDescriptionFile({ type: item.type, name: "" }));
 }

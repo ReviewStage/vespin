@@ -22,11 +22,11 @@ import {
   scrollDismissesKeyboard,
 } from "@expo/ui/swift-ui/modifiers";
 import { Predicate } from "effect";
-import { type ReactNode, useState } from "react";
-import type { MarkLook } from "./glyph.js";
+import { type ReactElement, type ReactNode, useState } from "react";
+import { GLYPH, glyphImage, type MarkLook } from "./glyph.js";
 import { dropLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
-import { RowOpenContext } from "./row-open.js";
+import { RowOpenContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -106,8 +106,37 @@ export function RowList({ look, selected, onSelect, onRefresh, children }: RowLi
         ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
       ]}
     >
-      <RowOpenContext value={onSelect}>{children}</RowOpenContext>
+      <RowOpenContext value={onSelect}>
+        <RowSelectedContext value={selected}>{children}</RowSelectedContext>
+      </RowOpenContext>
     </List>
+  );
+}
+
+type RowForEachProps<Item> = {
+  /** The rows' items, in the order they stand: the same array until they change, since a new one resets every row the list holds. */
+  readonly data: readonly Item[];
+  /** Each item's row id, the one its row is picked by and tagged with, unique in the list. */
+  readonly keyOf: (item: Item) => string;
+  /** Draws one item's row. */
+  readonly children: (item: Item) => ReactElement;
+};
+
+/**
+ * A run of rows inside a `RowList` or a `ListSection`, of any length, as
+ * `UITableView` draws one: only the rows near the screen are mounted, each
+ * reused for another item as the list scrolls (`List.ForEach`'s recycling).
+ * Note that every list whose length the reader's data sets goes through
+ * this, because mounting every row at once blocks the main thread past the
+ * watchdog on a long Inbox: each Expo view pays its own reflection as it is
+ * made. A recycled row keeps a `useState` of the item it drew before, so a
+ * row drawn here holds no state of its own; its caller holds it by id.
+ */
+export function RowForEach<Item>({ data, keyOf, children }: RowForEachProps<Item>) {
+  return (
+    <List.ForEach data={data} keyExtractor={keyOf}>
+      {({ item }) => children(item)}
+    </List.ForEach>
   );
 }
 
@@ -154,7 +183,7 @@ function GroupHeader({
     >
       {folded === undefined ? null : (
         <Image
-          systemName={folded ? "chevron.right" : "chevron.down"}
+          {...glyphImage(folded ? GLYPH.FOLDED : GLYPH.UNFOLDED)}
           size={CHEVRON_SIZE}
           color={colors.TEXT_MUTED}
           modifiers={[frame({ width: CHEVRON_SIZE + 2 })]}

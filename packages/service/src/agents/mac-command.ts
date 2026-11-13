@@ -16,11 +16,14 @@ import type { ConversationTarget } from "@repo/database/models/writer";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
+  type ComputerPermission,
   MAC_COMMAND_BOUNDS,
   MAC_COMMAND_KIND,
   type MacCommand,
   type MacCommandKind,
   type MacCommandResult,
+  type MacComputerAction,
+  type MacComputerResult,
   type MacShellResult,
   macCommandSchema,
 } from "@repo/features/mac-command-wire";
@@ -105,6 +108,11 @@ const MAC_COMMAND_REFUSAL = {
   UNREADABLE:
     "Not run: `command` must be one non-empty shell command, and `timeout_seconds` a whole " +
     `number from 1 to ${MAC_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS}.`,
+  NO_COMPUTER:
+    `Not run: ${PRODUCT_NAME} is not running on the developer's Mac, or that Mac cannot use ` +
+    "apps for agents; updating it there may let it.",
+  COMPUTER_UNREADABLE:
+    "Not run: the action does not read; name the app, and only the fields its action takes.",
 } as const;
 
 /** Why a call ran nothing by its kind: no Mac that runs that kind listening, or an ask the Mac's read would refuse. */
@@ -113,26 +121,43 @@ const MAC_COMMAND_KIND_REFUSAL = {
     NO_MAC: MAC_COMMAND_REFUSAL.NO_MAC,
     UNREADABLE: MAC_COMMAND_REFUSAL.UNREADABLE,
   },
+  [MAC_COMMAND_KIND.COMPUTER]: {
+    NO_MAC: MAC_COMMAND_REFUSAL.NO_COMPUTER,
+    UNREADABLE: MAC_COMMAND_REFUSAL.COMPUTER_UNREADABLE,
+  },
 } as const satisfies Record<
   MacCommandKind,
   { readonly NO_MAC: string; readonly UNREADABLE: string }
 >;
 
-/** What a call answers: what a shell command did, or why nothing ran. */
+/** What a call answers: what a shell command or an action on an app did, or why nothing ran. */
 // A type rather than an interface, so a result is a `WireRecord` the model is handed as it stands.
 export type MacCommandAnswer =
   | ({ readonly status: typeof MAC_COMMAND_STATUS.RAN } & MacShellResult)
-  | { readonly status: typeof MAC_COMMAND_STATUS.NOT_RUN; readonly reason: string };
+  | ({ readonly status: typeof MAC_COMMAND_STATUS.RAN } & MacComputerResult)
+  | {
+      readonly status: typeof MAC_COMMAND_STATUS.NOT_RUN;
+      readonly reason: string;
+      /** The grants the Mac lacked for an action on an app, which the transcript offers the place to turn on. */
+      readonly missingPermissions?: readonly ComputerPermission[];
+    };
 
 /**
  * What a call asks of the Mac: a command of one kind, what that kind
  * carries, and how long it may run, the default where unsaid.
  */
-export type MacCommandAsk = {
-  readonly kind: typeof MAC_COMMAND_KIND.SHELL;
-  readonly command: string;
-  readonly timeoutSeconds?: number;
-};
+export type MacCommandAsk =
+  | {
+      readonly kind: typeof MAC_COMMAND_KIND.SHELL;
+      readonly command: string;
+      readonly timeoutSeconds?: number;
+    }
+  | {
+      readonly kind: typeof MAC_COMMAND_KIND.COMPUTER;
+      readonly conversationId: string;
+      readonly action: MacComputerAction;
+      readonly timeoutSeconds?: number;
+    };
 
 const readMacCommand = readEither(macCommandSchema);
 
@@ -198,7 +223,12 @@ export function macListening(userId: string): TaskStoreEffect<boolean> {
 
 /** What a call answers for what the Mac said: what a shell command did, or why the Mac ran nothing. */
 function answered(result: MacCommandResult): MacCommandAnswer {
-  if ("refused" in result) return macCommandNotRun(result.refused);
+  if ("refused" in result) {
+    const { refused, missingPermissions } = result;
+    const reason = { status: MAC_COMMAND_STATUS.NOT_RUN, reason: refused } as const;
+
+    return missingPermissions === undefined ? reason : { ...reason, missingPermissions };
+  }
 
   return { status: MAC_COMMAND_STATUS.RAN, ...result };
 }

@@ -12,13 +12,15 @@ const resolveEntry = (path: string) => fileURLToPath(new URL(path, import.meta.u
 // What the web app's tab reads of the deployment it was built for, from the
 // build's environment as the desktop's build reads its own: Vercel's name for
 // the deployment, which only `production` records session replay under
-// (`src/app/web-session-replay.ts`) and Sentry files reports under, and the
-// DSN and commit the tab reports to Sentry with (`src/app/web-sentry.ts`). A
-// build without `SENTRY_DSN` writes an empty one, and the tab loads no SDK.
+// (`src/app/web-session-replay.ts`) and Sentry files reports under, the
+// deployment's commit, which is the version the tab reports itself as and
+// the release it reports to Sentry under, and the DSN it reports with
+// (`src/app/web-sentry.ts`). A build without `SENTRY_DSN` writes an empty
+// one, and the tab loads no SDK.
 const WEB_DEPLOYMENT_DEFINES = {
   WEB_DEPLOYMENT: JSON.stringify(process.env.VERCEL_ENV ?? ""),
+  WEB_DEPLOYMENT_COMMIT: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? ""),
   WEB_SENTRY_DSN: JSON.stringify(process.env.SENTRY_DSN ?? ""),
-  WEB_SENTRY_RELEASE: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA ?? ""),
 };
 
 /**
@@ -60,6 +62,7 @@ export default defineConfig({
         about: resolveEntry("./about.html"),
         privacy: resolveEntry("./privacy.html"),
         changelog: resolveEntry("./changelog.html"),
+        guides: resolveEntry("./guides.html"),
         "sign-in": resolveEntry("./sign-in.html"),
         consent: resolveEntry("./consent.html"),
         "github-installed": resolveEntry("./github-installed.html"),

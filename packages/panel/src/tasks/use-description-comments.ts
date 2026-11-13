@@ -1,8 +1,7 @@
+import { COMMENT_NOTE, commentRefusalNote } from "@repo/features/description-comment-notes";
 import {
   DESCRIPTION_COMMENT_ACTION,
-  DESCRIPTION_COMMENT_REFUSAL,
   type DescriptionCommentActionRequest,
-  type DescriptionCommentRefusal,
   type DescriptionCommentStart,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
@@ -51,18 +50,6 @@ import { useToast } from "../toast.js";
  * mentions, and is said on its thread where one in it could not take it.
  */
 
-/** What a write to a thread did not do, said on the thread. */
-const COMMENT_NOTE = {
-  NOT_POSTED: "The comment could not be posted.",
-  NOT_CHANGED: "The comment could not be changed.",
-  TOO_MANY: "This thread holds as many comments as it can.",
-  NO_WORDS: "The words this comment was on are no longer in the description.",
-  NOT_YOURS: "Only its writer can change this comment.",
-  GONE: "This comment is no longer in the thread.",
-  TOO_MANY_FILES: "A comment can't carry that many files.",
-  AGENT_AWAY: "That agent isn't running, so it couldn't take the thread.",
-} as const;
-
 const UNANSWERED = { failure: DESCRIPTION_COMMENT_CALL_FAILURE.UNANSWERED } as const;
 
 /** No threads, while a read has not answered. */
@@ -89,24 +76,6 @@ function surfaceOf(action: DescriptionCommentActionRequest["action"]): FailureSu
       return FAILURE_SURFACE.DESCRIPTION_THREAD_RESOLVE;
     case DESCRIPTION_COMMENT_ACTION.REOPEN:
       return FAILURE_SURFACE.DESCRIPTION_THREAD_REOPEN;
-  }
-}
-
-/** The words a refusal is said in on its thread. */
-function refusalWords(refusal: DescriptionCommentRefusal): string {
-  switch (refusal) {
-    case DESCRIPTION_COMMENT_REFUSAL.TOO_MANY:
-      return COMMENT_NOTE.TOO_MANY;
-    case DESCRIPTION_COMMENT_REFUSAL.NO_WORDS:
-      return COMMENT_NOTE.NO_WORDS;
-    case DESCRIPTION_COMMENT_REFUSAL.NOT_YOURS:
-      return COMMENT_NOTE.NOT_YOURS;
-    case DESCRIPTION_COMMENT_REFUSAL.NO_ENTRY:
-      return COMMENT_NOTE.GONE;
-    case DESCRIPTION_COMMENT_REFUSAL.KEY_TAKEN:
-      return COMMENT_NOTE.NOT_CHANGED;
-    case DESCRIPTION_COMMENT_REFUSAL.TOO_MANY_FILES:
-      return COMMENT_NOTE.TOO_MANY_FILES;
   }
 }
 
@@ -163,7 +132,9 @@ export function useDescriptionComments(
       );
 
       if (!("thread" in answer)) {
-        const words = "refused" in answer ? refusalWords(answer.refused) : COMMENT_NOTE.NOT_POSTED;
+        const words =
+          "refused" in answer ? commentRefusalNote(answer.refused) : COMMENT_NOTE.NOT_POSTED;
+
         takenBack(words, FAILURE_SURFACE.DESCRIPTION_COMMENT_SEND, answer);
 
         return { note: words };
@@ -195,7 +166,7 @@ export function useDescriptionComments(
 
       const words =
         "refused" in answer
-          ? refusalWords(answer.refused)
+          ? commentRefusalNote(answer.refused)
           : reply
             ? COMMENT_NOTE.NOT_POSTED
             : COMMENT_NOTE.NOT_CHANGED;

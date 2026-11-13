@@ -185,7 +185,17 @@ test("one sidebar lists the measures", async () => {
   const [sidebar] = Array.from(navigations);
 
   if (sidebar === undefined) throw new Error("No navigation");
-  expect(sectionNames(sidebar)).toEqual(["Overview", "Cost", "Reliability", "Workspaces", "Users"]);
+  expect(sectionNames(sidebar)).toEqual([
+    "Overview",
+    "Cost",
+    "Reliability",
+    "Agents",
+    "Tools",
+    "Prompts",
+    "Workspaces",
+    "Users",
+    "Limits",
+  ]);
 });
 
 test("the toggle at the sidebar's top hides it and shows it again, remembered across visits", async () => {

@@ -1,4 +1,4 @@
-// file-chip.tsx -- a file a message carried that is neither a picture nor a video, such as a PDF: its chip after the message's words, naming it and its size, which opens a PDF full screen in a web view and any other file in the system's share sheet.
+// file-chip.tsx -- a file a message carried that is neither a picture nor a video, such as a PDF: its chip after the message's words, naming it and its size, which opens a PDF full screen in a web view and any other file in the system's share sheet, and whose long press offers Share and, for a text file, Copy.
 
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
@@ -15,7 +15,9 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView, type WebViewNavigation } from "react-native-webview";
 import { useAccessibilitySize } from "./accessibility.js";
-import type { SfSymbol } from "./sf-symbol.js";
+import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
+import { HeldMenu, useKeptActs } from "./held-menu.js";
+import { KEPT_KIND } from "./keep-model.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -23,11 +25,11 @@ import { TEXT_SIZE } from "./tokens/type.js";
 /** The type a PDF is read as, which its chip names as a PDF. */
 const PDF_TYPE = "application/pdf";
 
-/** The SF Symbol a file's chip leads with: a page of words for a PDF or a text file, a blank page for any other. */
+/** The glyph a file's chip leads with, as the panel's: a page of words for a PDF or a text file, a blank page for any other. */
 const FILE_SYMBOL = {
-  DOCUMENT: "doc.text",
-  OTHER: "doc",
-} as const satisfies Record<string, SfSymbol>;
+  DOCUMENT: GLYPH.FILE_TEXT,
+  OTHER: GLYPH.FILE,
+} as const satisfies Record<string, Glyph>;
 
 /** What a file's chip and its viewer say. */
 const FILE_WORDS = {
@@ -207,7 +209,7 @@ function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
             style={[styles.barPress, styles.barEnd]}
           >
             <SymbolView
-              name="square.and.arrow.up"
+              name={glyphSymbol(GLYPH.SHARE)}
               size={MARK_SIZE.LEAD + 2}
               tintColor={colors.TEXT}
             />
@@ -286,6 +288,10 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
   const fact = { fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED };
   const viewed = isPdf(mediaType);
 
+  const acts = useKeptActs(
+    source === undefined ? undefined : { kind: KEPT_KIND.FILE, source, name, mediaType },
+  );
+
   const press = () => {
     if (source === undefined) return;
 
@@ -295,39 +301,41 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
 
   return (
     <>
-      <Pressable
-        onPress={press}
-        disabled={source === undefined}
-        accessibilityRole="button"
-        accessibilityLabel={heard}
-        accessibilityHint={viewed ? FILE_WORDS.OPENS : FILE_WORDS.SHARES}
-        accessibilityState={{ busy: source === undefined }}
-        style={[styles.chip, { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE }]}
-      >
-        {source === undefined ? (
-          <ActivityIndicator color={colors.TEXT_MUTED} style={{ width: MARK_SIZE.LEAD }} />
-        ) : (
-          <SymbolView
-            name={isDocument(mediaType) ? FILE_SYMBOL.DOCUMENT : FILE_SYMBOL.OTHER}
-            size={MARK_SIZE.LEAD}
-            tintColor={colors.TEXT_MUTED}
-          />
-        )}
-        <View style={styles.words}>
-          <Text
-            numberOfLines={large ? undefined : 1}
-            ellipsizeMode="middle"
-            style={{ fontSize: TEXT_SIZE.SUBHEADLINE, fontWeight: "500", color: colors.TEXT }}
-          >
-            {name}
-          </Text>
-          {/* Note that its kind and its size stand as two muted words apart, never joined by a separator. */}
-          <View style={styles.facts}>
-            <Text style={fact}>{kind}</Text>
-            {size === undefined ? null : <Text style={fact}>{size}</Text>}
+      <HeldMenu acts={acts}>
+        <Pressable
+          onPress={press}
+          disabled={source === undefined}
+          accessibilityRole="button"
+          accessibilityLabel={heard}
+          accessibilityHint={viewed ? FILE_WORDS.OPENS : FILE_WORDS.SHARES}
+          accessibilityState={{ busy: source === undefined }}
+          style={[styles.chip, { backgroundColor: colors.SURFACE, borderColor: colors.CHIP_EDGE }]}
+        >
+          {source === undefined ? (
+            <ActivityIndicator color={colors.TEXT_MUTED} style={{ width: MARK_SIZE.LEAD }} />
+          ) : (
+            <SymbolView
+              name={glyphSymbol(isDocument(mediaType) ? FILE_SYMBOL.DOCUMENT : FILE_SYMBOL.OTHER)}
+              size={MARK_SIZE.LEAD}
+              tintColor={colors.TEXT_MUTED}
+            />
+          )}
+          <View style={styles.words}>
+            <Text
+              numberOfLines={large ? undefined : 1}
+              ellipsizeMode="middle"
+              style={{ fontSize: TEXT_SIZE.SUBHEADLINE, fontWeight: "500", color: colors.TEXT }}
+            >
+              {name}
+            </Text>
+            {/* Note that its kind and its size stand as two muted words apart, never joined by a separator. */}
+            <View style={styles.facts}>
+              <Text style={fact}>{kind}</Text>
+              {size === undefined ? null : <Text style={fact}>{size}</Text>}
+            </View>
           </View>
-        </View>
-      </Pressable>
+        </Pressable>
+      </HeldMenu>
       {source === undefined || !viewed ? null : (
         <FileViewer source={source} name={name} visible={open} onClose={() => setOpen(false)} />
       )}

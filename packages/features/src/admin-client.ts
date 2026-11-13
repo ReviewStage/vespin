@@ -27,7 +27,6 @@ import {
   sendInSession,
 } from "./account-call.js";
 import {
-  ADMIN_HTTP_STATUS,
   ADMIN_READ_PATH,
   ADMIN_REFUSED,
   ADMIN_ROUTE_PATH,
@@ -35,7 +34,7 @@ import {
   ADMIN_USER_ID_PARAM,
   type AdminReadAnswer,
   type AdminReadParams,
-  type AdminRefused,
+  adminRefusedOf,
 } from "./admin-wire.js";
 import { textWithin } from "./hosted-link.js";
 
@@ -45,14 +44,6 @@ interface HostedAdminClientOptions {
   sessionCredential: CallCredential;
   requestTimeoutMs?: number | undefined;
 }
-
-/** The word a screen tells a refusal apart by, from the status the admin routes answer it under. */
-const REFUSED_BY_STATUS: ReadonlyMap<number, AdminRefused> = new Map([
-  [ADMIN_HTTP_STATUS.UNAUTHORIZED, ADMIN_REFUSED.SIGNED_OUT],
-  [ADMIN_HTTP_STATUS.FORBIDDEN, ADMIN_REFUSED.FORBIDDEN],
-  [ADMIN_HTTP_STATUS.NOT_FOUND, ADMIN_REFUSED.MISSING],
-  [ADMIN_HTTP_STATUS.SERVICE_UNAVAILABLE, ADMIN_REFUSED.UNAVAILABLE],
-]);
 
 /** A path under the service with its query parameters, the way the admin routes read them. */
 function withQuery(path: string, query: Readonly<Record<string, string>>): string {
@@ -127,7 +118,7 @@ export class HostedAdminClient {
       const { response } = answer;
 
       if (!response.ok) {
-        return { refused: REFUSED_BY_STATUS.get(response.status) ?? ADMIN_UNANSWERED };
+        return { refused: adminRefusedOf(response.status) ?? ADMIN_UNANSWERED };
       }
 
       const text = yield* textWithin(response, deadline);

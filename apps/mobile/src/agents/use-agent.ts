@@ -6,14 +6,24 @@
  * focus, opened again as it breaks (`@repo/host/follow-stream`), and the
  * host lays each page it reads on the document, which the page reads with
  * `selectTranscript` as the panel reads it with `transcriptQuery`. A
- * transcript the host still holds, as one shown lately, draws at once.
+ * transcript the host still holds, as one shown lately, draws at once. A
+ * part its page carried cut is read whole as its call opens, as the panel's
+ * fold reads it (`ACT_KIND.AGENTS_PART`).
  */
 
+import { signedInAccountId } from "@repo/credentials/snapshot";
+import { type AgentPartCut, WHOLE_PART, type WholePartRead } from "@repo/features/agent-parts";
 import { ARCHIVE_FAILED, STOP_FAILED } from "@repo/features/agent-refusal-words";
-import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
-import type { AgentPullRequest, AgentStatus } from "@repo/features/agent-wire";
+import { type AgentPageAnswerView, TRANSCRIPT_KIND } from "@repo/features/agent-view";
+import {
+  type AgentPullRequest,
+  type AgentStatus,
+  type ListedAgent,
+  listedAgentOfPage,
+} from "@repo/features/agent-wire";
 import { CONVERSATION_MEDIA_TYPE } from "@repo/features/conversation-picture-wire";
 import { agentStillWriting } from "@repo/features/task-agents-model";
+import { TASKS_READ } from "@repo/features/tasks-view";
 import { MP4_TYPE } from "@repo/features/video-signature";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppHostRead, AppStateSnapshot, AppTranscript } from "@repo/host/app-state";
@@ -23,7 +33,7 @@ import {
   selectTranscript,
 } from "@repo/host/app-state-reads";
 import { BUZZ, latestStep, NO_TOGGLES, type OlderPages, transcriptItems } from "@repo/ui-native";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cachedVideo } from "../cached-media.js";
@@ -39,11 +49,85 @@ function refused(what: string): (cause: unknown) => void {
   return (error) => console.error(`${what} did not land.`, error);
 }
 
+/** The key one agent's own read is held under, by its id. */
+const AGENT_PAGE_QUERY = "agent-page";
+
+/** Whether the host has read the task list once, so an agent it doesn't hold is one it never will, rather than one on its way. */
+function selectTasksRead(state: AppStateSnapshot): boolean {
+  return state.tasks.listStatus === TASKS_READ.READY;
+}
+
+/** The account signed in, whose reads an agent's own read is kept under; none while signed out. */
+function selectAccountId(state: AppStateSnapshot): string | undefined {
+  return signedInAccountId(state.account);
+}
+
+/**
+ * One agent's own read (`AGENTS_PAGE`), as the panel's `agentPageQueryOptions`
+ * asks it: every ask reads afresh, and a failure is never tried again on its
+ * own. Note that it's kept under the account that read it, because the
+ * session's one query client outlives a sign-out, and another account must
+ * never be shown a page read for the last.
+ */
+function agentPageQuery(acts: ReturnType<typeof useHostActs>, accountId: string, agentId: string) {
+  return {
+    queryKey: [AGENT_PAGE_QUERY, accountId, agentId],
+    queryFn: () => acts[ACT_KIND.AGENTS_PAGE]({ agentId }),
+    retry: false,
+  } as const;
+}
+
+/** The agent an answer to its own read carries, in the list's shape; none where it could not be read. */
+function agentOfAnswer(answer: AgentPageAnswerView): ListedAgent | undefined {
+  return "failure" in answer ? undefined : listedAgentOfPage(answer.agent);
+}
+
 /** The agent as the task list follows it, by its id; none until the list holds it. */
 export function useFollowedAgent(agentId: string): FollowedAgent | undefined {
   const select = useMemo(() => selectFollowedAgent(agentId), [agentId]);
 
   return useQuery({ ...appStateQuery, select }).data;
+}
+
+/**
+ * The agent a page draws, by its id: as the task list follows it, or, for
+ * one the list doesn't hold, such as an archived agent or a teammate's a
+ * link names, as its own read answered once the list was read without it,
+ * as the panel's agent page reads one. Note that such a read is taken once
+ * and followed by nothing, so it names the agent and its place, while what
+ * acts on the agent or follows its turn reads the list alone
+ * (`useFollowedAgent`) and its status is the transcript's to say.
+ */
+export function useShownAgent(agentId: string): FollowedAgent | undefined {
+  const acts = useHostActs();
+  const listed = useFollowedAgent(agentId);
+  const { data: read = false } = useQuery({ ...appStateQuery, select: selectTasksRead });
+  const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
+
+  const page = useQuery({
+    ...agentPageQuery(acts, accountId ?? "", agentId),
+    enabled: read && listed === undefined && agentId !== "" && accountId !== undefined,
+    select: agentOfAnswer,
+  }).data;
+
+  return listed ?? page;
+}
+
+/** Reads one agent afresh by its id, whether the list holds it or not; none where it could not be read. */
+export function useReadAgent(): (agentId: string) => Promise<ListedAgent | undefined> {
+  const acts = useHostActs();
+  const queryClient = useQueryClient();
+  const { data: accountId } = useQuery({ ...appStateQuery, select: selectAccountId });
+
+  return useCallback(
+    (agentId: string) =>
+      accountId === undefined
+        ? Promise.resolve(undefined)
+        : queryClient
+            .fetchQuery(agentPageQuery(acts, accountId, agentId))
+            .then(agentOfAnswer, () => undefined),
+    [acts, accountId, queryClient],
+  );
 }
 
 /** No pull requests, held as one value so a list that holds none reads the same each time. */
@@ -211,6 +295,105 @@ export function useAgentMedia(
   }, [acts, agentId, ids]);
 
   return sources;
+}
+
+/** A cut part's whole read as held: the size it was asked at, and how it stands. */
+interface HeldPart {
+  readonly bytes: number;
+  readonly read: WholePartRead;
+}
+
+/** The whole reads asked of one agent's parts, by message and then index. */
+type HeldParts = ReadonlyMap<string, ReadonlyMap<number, HeldPart>>;
+
+/** `held` with one part's read set. */
+function withPart(held: HeldParts, cut: AgentPartCut, read: WholePartRead): HeldParts {
+  const message = new Map(held.get(cut.messageId)).set(cut.index, { bytes: cut.bytes, read });
+
+  return new Map(held).set(cut.messageId, message);
+}
+
+/** What the page reads a transcript's cut parts whole through. */
+export interface WholeParts {
+  /** How a cut part's whole read stands; none where it was not asked at the size its page says. */
+  readonly read: (cut: AgentPartCut) => WholePartRead | undefined;
+  /** Asks for each part not asked yet at the size its page says. */
+  readonly ask: (cuts: readonly AgentPartCut[]) => void;
+}
+
+/**
+ * How each part its page carried cut stands read whole, read once through
+ * the host as its call opens, as the panel's fold reads it
+ * (`ACT_KIND.AGENTS_PART`). A read is held as of the size its page said, so
+ * a part that grew since is read again, and one that failed stays failed,
+ * its two ends drawn. A read that lands once another agent's page stands is
+ * let go.
+ */
+export function useWholeParts(agentId: string): WholeParts {
+  const acts = useHostActs();
+
+  // Note that the reads are held apart from what is drawn, so an ask made twice before the first is drawn is sent once.
+  const held = useRef<{ readonly agentId: string; parts: HeldParts }>({
+    agentId,
+    parts: new Map(),
+  });
+
+  const [drawn, setDrawn] = useState<{ readonly agentId: string; readonly parts: HeldParts }>({
+    agentId,
+    parts: new Map(),
+  });
+
+  const ask = useCallback(
+    (cuts: readonly AgentPartCut[]) => {
+      // Note that the reads of another agent's page are let go as this one's are first asked.
+      if (held.current.agentId !== agentId) held.current = { agentId, parts: new Map() };
+
+      const settle = (cut: AgentPartCut, read: WholePartRead) => {
+        if (held.current.agentId !== agentId) return;
+        held.current.parts = withPart(held.current.parts, cut, read);
+        setDrawn({ agentId, parts: held.current.parts });
+      };
+
+      // Note that an answer lands only while the part is still asked at the size it was asked at, so an older read never overwrites a newer one.
+      const land = (cut: AgentPartCut, read: WholePartRead) => {
+        if (held.current.parts.get(cut.messageId)?.get(cut.index)?.bytes !== cut.bytes) return;
+        settle(cut, read);
+      };
+
+      for (const cut of cuts) {
+        if (held.current.parts.get(cut.messageId)?.get(cut.index)?.bytes === cut.bytes) continue;
+        settle(cut, { state: WHOLE_PART.READING });
+
+        acts[ACT_KIND.AGENTS_PART]({ agentId, messageId: cut.messageId, index: cut.index }).then(
+          (answer) =>
+            land(
+              cut,
+              "part" in answer
+                ? { state: WHOLE_PART.WHOLE, part: answer.part }
+                : { state: WHOLE_PART.FAILED },
+            ),
+          (cause: unknown) => {
+            refused("A part of the transcript")(cause);
+            land(cut, { state: WHOLE_PART.FAILED });
+          },
+        );
+      }
+    },
+    [acts, agentId],
+  );
+
+  const parts = drawn.agentId === agentId ? drawn.parts : undefined;
+
+  const read = useCallback(
+    (cut: AgentPartCut) => {
+      const part = parts?.get(cut.messageId)?.get(cut.index);
+
+      return part?.bytes === cut.bytes ? part.read : undefined;
+    },
+    [parts],
+  );
+
+  return useMemo(() => ({ read, ask }), [read, ask]);
 }
 
 /** How a page's read stands: on its way, read with its HTML, or not answered. */

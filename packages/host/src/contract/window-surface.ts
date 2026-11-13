@@ -8,6 +8,7 @@
 
 import { DESCRIPTION_MARKDOWN_MAX_CHARS } from "@repo/features/description-markdown";
 import { type FeedbackSubmission, feedbackSubmission } from "@repo/features/feedback";
+import { handoffActivitySchema } from "@repo/features/ios-system-activity";
 import {
   LID_STATE,
   MICROPHONE_STATUS,
@@ -156,7 +157,9 @@ export const windowSurfaceActsContract = {
     .output(EffectSchema.Void),
   // A draft an agent wrote to be sent elsewhere, put on the clipboard as its
   // HTML and its plain words together, so it pastes into Slack or Mail with
-  // its links and bold and into a plain field as words.
+  // its links and bold and into a plain field as words; and a picture copied
+  // alone from a box's words, its PNG beside them, so it pastes as the picture
+  // where a field takes one.
   [WINDOW_SURFACE_ACT_KIND.WINDOW_COPY_RICH]: actProcedure(
     "Could not copy that to the clipboard on this system.",
   )
@@ -165,6 +168,7 @@ export const windowSurfaceActsContract = {
         EffectSchema.Struct({
           html: textUpTo(FILE_TEXT_MAX_CHARS),
           text: textUpTo(FILE_TEXT_MAX_CHARS),
+          png: EffectSchema.optionalKey(pngBase64),
         }),
       ),
     )
@@ -195,6 +199,17 @@ export const windowSurfaceActsContract = {
       exactInput(
         EffectSchema.Struct({
           commands: EffectSchema.Array(EffectSchema.Literals(Object.values(APP_COMMAND))),
+        }),
+      ),
+    )
+    .output(EffectSchema.Void),
+  [WINDOW_SURFACE_ACT_KIND.WINDOW_HANDOFF]: actProcedure(
+    "Could not tell the Mac what this window shows.",
+  )
+    .input(
+      exactInput(
+        EffectSchema.Struct({
+          activity: EffectSchema.NullOr(handoffActivitySchema),
         }),
       ),
     )

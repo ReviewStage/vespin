@@ -8,7 +8,7 @@ import {
   type AutomationScope,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
-import { dayAndTimeText, momentText, weekdayAndTimeText } from "@repo/features/time-format";
+import { momentText, scheduledText } from "@repo/features/time-format";
 import { CONFIRM_LOSS, type DialogQuestion } from "@repo/ui";
 
 /** What the Automations list says to a reader while it is first read, on its page and in the frame standing while the page's code loads. */
@@ -27,14 +27,12 @@ export function automationDeleteQuestion(name: string | undefined): DialogQuesti
   };
 }
 
-/** How near a next run is still named by its weekday alone: under a week, so no weekday stands for two days. */
-const WEEKDAY_REACH_MS = 6 * 24 * 60 * 60 * 1000;
+/** What a next run is said after, so its day and time read as the one run to come, not the schedule. */
+const NEXT_LABEL = "Next: ";
 
-/** A run due at `at`, in a few words: within the week by its weekday, further off by its date. */
+/** A run due at `at`, in a few words, its day and time always said: "Next: Today 3:00 PM", "Next: Mon 1:00 PM". */
 function dueText(at: number, now: number): string {
-  return at - now < WEEKDAY_REACH_MS
-    ? `Next ${weekdayAndTimeText(at)}`
-    : `Next ${dayAndTimeText(at)}`;
+  return `${NEXT_LABEL}${scheduledText(at, now)}`;
 }
 
 /** When an automation runs next, in a few words; none for one an event fires, whose trigger already says when. */
@@ -65,6 +63,22 @@ export function automationOwnerName(
 }
 
 /**
+ * Whom an automation is for, said after a comma in a line that names
+ * something else first, what fires it or who made it, where a dot would
+ * otherwise set the owner apart: "for Acme", "just for you", "just for its
+ * creator".
+ */
+export function automationOwnerFor(
+  owner: AutomationScope,
+  workspaceName: string | undefined,
+  mine: boolean,
+): string {
+  if (owner === AUTOMATION_SCOPE.WORKSPACE) return `for ${workspaceName ?? "the workspace"}`;
+
+  return mine ? "just for you" : "just for its creator";
+}
+
+/**
  * An automation's line under its name in a row with no room for the owner's
  * and the next run's columns, a phone's: when it runs next, where it is set
  * to, before what fires it, so the line's end is cut rather than the time.
@@ -81,7 +95,7 @@ export function automationNarrowLine(
 
   if (next.kind !== AUTOMATION_NEXT.AT) return trigger;
   const sameYear = new Date(next.at).getFullYear() === new Date(now).getFullYear();
-  const when = sameYear ? dueText(next.at, now) : `Next ${momentText(next.at)}`;
+  const when = sameYear ? dueText(next.at, now) : `${NEXT_LABEL}${momentText(next.at)}`;
 
-  return `${when} · ${trigger}`;
+  return `${when} (${trigger})`;
 }

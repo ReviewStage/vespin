@@ -9,6 +9,7 @@ import {
   type BrowserLivePortOutbound,
   type BrowserLivePortTicket,
 } from "@repo/features/browser-live-acts";
+import { deviceAgentCheckoutPath } from "@repo/features/device-agent-wire";
 import {
   TERMINAL_PORT_CHANNEL,
   type TerminalPortOutbound,
@@ -25,6 +26,7 @@ import {
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { LEAVE } from "@repo/host/quit";
 import type { WireBoundaryInput } from "@repo/wire";
+import { Effect } from "effect";
 import {
   BrowserWindow,
   clipboard,
@@ -148,12 +150,19 @@ export function registerDesktopIpc(services: DesktopServices): void {
     ...macResourcesProcedures({ read: readMacResources }),
     ...macShellProcedures<WebContents>({
       mirror: (agentId) => operator.host.mirrorEnsure({ agentId }),
+      // A local agent's worktree, where the host has made it on this Mac (`mac-terminal-acts.ts` reads it the same way).
+      checkout: (agentId) => {
+        const folder = deviceAgentCheckoutPath(os.homedir(), agentId);
+
+        return fs.existsSync(folder) ? folder : undefined;
+      },
       spawn: spawnMacShell,
       ports: {
         open: portTo<TerminalPortTicket, TerminalPortOutbound>(TERMINAL_PORT_CHANNEL),
         whenGone: whenPageGone,
       },
       createId: randomUUID,
+      sleep: Effect.sleep,
     }),
     ...macTerminalProcedures({
       home: os.homedir(),
@@ -183,7 +192,15 @@ export function registerDesktopIpc(services: DesktopServices): void {
         await promisify(execFile)(nativeHelperPath("open-login-items"));
       },
       copyText: (words) => clipboard.writeText(words),
-      copyRich: ({ html, text }) => clipboard.write({ html, text }),
+      // Note that a PNG that draws no picture leaves the words to go alone, as they went before.
+      copyRich: ({ html, text, png }) => {
+        const image =
+          png === undefined ? undefined : nativeImage.createFromBuffer(Buffer.from(png, "base64"));
+
+        clipboard.write(
+          image === undefined || image.isEmpty() ? { html, text } : { html, text, image },
+        );
+      },
       copyImage: (png) => {
         const image = nativeImage.createFromBuffer(Buffer.from(png, "base64"));
 
@@ -195,6 +212,7 @@ export function registerDesktopIpc(services: DesktopServices): void {
       captureStill: (sender, rect) => windowStill(sender, rect),
       tellUnsavedWork: services.unsavedWork.tell,
       tellMenuOffers: services.menuOffers.tell,
+      tellHandoff: services.handoff.tell,
       saveFile: async (sender, name, text) => {
         const window = BrowserWindow.fromWebContents(sender);
         const options = { defaultPath: name };

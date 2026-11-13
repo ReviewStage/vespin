@@ -1,4 +1,4 @@
-// settings-button.tsx -- the one way Settings opens, and what leads each tab's root bar: the workspace switcher, whose menu opens it, where the tab names its workspace, else the signed-in account's photo, the button that opens it.
+// settings-button.tsx -- the one way Settings opens, and what leads each tab's root bar: the workspace switcher, whose list opens it, where the tab names its workspace, else the signed-in account's photo, the button that opens it.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { selectAccount } from "@repo/host/app-state-reads";
@@ -16,7 +16,22 @@ export const SETTINGS_ROUTE = {
   MAIN: "/settings",
   ACCOUNT: "/settings/account",
   AGENTS: "/settings/agents",
-  /** The workspace the app works in, as the workspace switcher's Workspace settings opens it. */
+  INTEGRATIONS: "/settings/integrations",
+  MACHINES: "/settings/machines",
+  /** A machine's pairing, approved or denied by the `code` its link named. */
+  MACHINE_CONNECT: "/settings/machine-connect",
+  MCP: "/settings/mcp",
+  MEMORY: "/settings/memory",
+  /** A memory's words, written anew or edited (`?memory=` its id), as Settings › Memory opens it. */
+  MEMORY_EDIT: "/settings/memory-edit",
+  /** Send feedback, as Settings' About and the iPad's Help menu open it. */
+  FEEDBACK: "/settings/feedback",
+  SKILLS: "/settings/skills",
+  /** One skill's file, by the `skill` and `name` it is pushed with. */
+  SKILL: "/settings/skill",
+  /** Add skill's paste. */
+  SKILL_ADD: "/settings/skill-add",
+  /** The workspace the app works in, as the Settings… under the workspace switcher's workspace opens it. */
   WORKSPACE: "/settings/workspace",
 } as const;
 
@@ -52,7 +67,7 @@ export function useSettingsAccount(): BarAccount | undefined {
 /**
  * The one item at the leading edge of a tab's root bar, in a stack's own
  * header: a compact window's, and a regular one's where the tab stands no
- * split view: the workspace switcher, whose menu holds the account and
+ * split view: the workspace switcher, whose list holds the account and
  * opens Settings, as Notion's one workspace button does, on every tab, since
  * each acts on the chosen workspace; the account's photo, opening Settings,
  * only before the account's workspaces are read. A split view

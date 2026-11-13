@@ -152,8 +152,12 @@ export const LINK_DESTINATION = {
 export const ADMIN_LINK_SECTION = {
   COST: "cost",
   RELIABILITY: "reliability",
+  AGENTS: "agents",
+  TOOLS: "tools",
+  PROMPTS: "prompts",
   WORKSPACES: "workspaces",
   USERS: "users",
+  LIMITS: "limits",
 } as const;
 
 export type AdminLinkSection = (typeof ADMIN_LINK_SECTION)[keyof typeof ADMIN_LINK_SECTION];
@@ -326,6 +330,15 @@ const GITHUB_STEP = {
 
 /** The schemes a page on the web is read by. */
 const WEB_PROTOCOLS: ReadonlySet<string> = new Set(["https:", "http:"]);
+
+/** The longest link a client opens, as the window's `web.open` takes one. */
+const OPENABLE_LINK_MAX_CHARS = 2_048;
+
+/** The schemes an openable link is written in, as the window's `web.open` reads them: the web's, followed by its slashes, and mail's. */
+const OPENABLE_SCHEME = {
+  WEB: /^https?:\/\//iu,
+  MAIL: /^mailto:/iu,
+} as const;
 
 /** A commit as a link pins one: seven to forty hexadecimal digits. */
 const COMMIT = /^[0-9a-f]{7,40}$/u;
@@ -901,6 +914,34 @@ export function taskLinkStep(task: {
   return task.number === undefined ? task.id : String(task.number);
 }
 
+/** A workspace as its links are written under it: its id, and its slug where the service sent one. */
+interface LinkWorkspace {
+  readonly id: string;
+  readonly slug?: string | undefined;
+}
+
+/**
+ * The step a workspace's links are written under: its slug, else its id,
+ * else the id itself before the workspaces are read; nothing where no
+ * workspace is known yet, so no link is written under an empty step.
+ */
+export function linkWorkspaceStep(
+  workspaceId: string,
+  workspaces: readonly LinkWorkspace[],
+): string;
+export function linkWorkspaceStep(
+  workspaceId: string | undefined,
+  workspaces: readonly LinkWorkspace[],
+): string | undefined;
+export function linkWorkspaceStep(
+  workspaceId: string | undefined,
+  workspaces: readonly LinkWorkspace[],
+): string | undefined {
+  const workspace = workspaces.find(({ id }) => id === workspaceId);
+
+  return workspace?.slug ?? workspace?.id ?? workspaceId;
+}
+
 /** The places of the account's own, which no workspace holds, so their links name none. */
 export const ACCOUNT_DESTINATION = {
   /** A box's pending pairing, by the code it shows, which the member approves or denies. */
@@ -1160,6 +1201,23 @@ export function pullRequestAddressOf(target: string): NumberedAddress | undefine
 }
 
 /**
+ * Whether two links name one pull request on GitHub, a page under it among
+ * them: the same number in the same repository, whatever the case its owner
+ * and name are spelled in, as GitHub reads them.
+ */
+export function samePullRequest(one: string, other: string): boolean {
+  const first = pullRequestAddressOf(one);
+  const second = pullRequestAddressOf(other);
+
+  return (
+    first !== undefined &&
+    second !== undefined &&
+    first.number === second.number &&
+    first.repository.toLowerCase() === second.repository.toLowerCase()
+  );
+}
+
+/**
  * The issue a page of GitHub's is, `acme/relay` and `7` from
  * `https://github.com/acme/relay/issues/7`; nothing for any other address,
  * the repository's list of issues among them.
@@ -1187,6 +1245,29 @@ export function readLinearIssue(target: string): string | undefined {
   const upper = identifier.toUpperCase();
 
   return LINEAR_IDENTIFIER.test(upper) ? upper : undefined;
+}
+
+/** What a link opens as outside the app: a page on the web, in the browser, or a mail address, as a draft in the mail app. */
+export const OPENABLE_LINK = {
+  WEB: "web",
+  MAIL: "mail",
+} as const;
+
+/** What a link opens as outside the app, as `openableLinkOf` reads it. */
+export type OpenableLink = (typeof OPENABLE_LINK)[keyof typeof OPENABLE_LINK];
+
+/**
+ * What a link opens as outside the app, as the window's `web.open` takes
+ * it: an http or https address, or a `mailto:` one, of at most 2,048
+ * characters that the URL parser reads; nothing for any other, which every
+ * client draws as words rather than a press that opens nothing.
+ */
+export function openableLinkOf(href: string): OpenableLink | undefined {
+  if (href.length > OPENABLE_LINK_MAX_CHARS || parsedUrl(href) === undefined) return undefined;
+
+  if (OPENABLE_SCHEME.WEB.test(href)) return OPENABLE_LINK.WEB;
+
+  return OPENABLE_SCHEME.MAIL.test(href) ? OPENABLE_LINK.MAIL : undefined;
 }
 
 /** A `mention://` or `luke://` address read: its host, its path's steps still percent-encoded, and its fragment and query as written. */

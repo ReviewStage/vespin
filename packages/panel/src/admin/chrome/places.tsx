@@ -3,13 +3,18 @@
  * sidebar lists, and what a page under one leads back to from its toolbar.
  */
 
+import { ENTITY_KIND } from "@repo/features/entity-kind";
 import {
   ActivityIcon,
   Building2Icon,
   CircleDollarSignIcon,
+  GaugeIcon,
   LayoutDashboardIcon,
+  ScrollTextIcon,
   UsersIcon,
+  WrenchIcon,
 } from "@repo/ui/icons";
+import { EntityGlyph } from "../../entities/entity-glyph.js";
 import { ADMIN_TAB, type AdminTab } from "../routing.js";
 
 /** One section: the tab it opens, its name, and its glyph. */
@@ -24,8 +29,12 @@ const PLACE_BY_TAB = {
   [ADMIN_TAB.DASHBOARD]: { label: "Overview", icon: <LayoutDashboardIcon /> },
   [ADMIN_TAB.COST]: { label: "Cost", icon: <CircleDollarSignIcon /> },
   [ADMIN_TAB.RELIABILITY]: { label: "Reliability", icon: <ActivityIcon /> },
+  [ADMIN_TAB.AGENTS]: { label: "Agents", icon: <EntityGlyph kind={ENTITY_KIND.AGENT} /> },
+  [ADMIN_TAB.TOOLS]: { label: "Tools", icon: <WrenchIcon /> },
+  [ADMIN_TAB.PROMPTS]: { label: "Prompts", icon: <ScrollTextIcon /> },
   [ADMIN_TAB.WORKSPACES]: { label: "Workspaces", icon: <Building2Icon /> },
   [ADMIN_TAB.USERS]: { label: "Users", icon: <UsersIcon /> },
+  [ADMIN_TAB.LIMITS]: { label: "Limits", icon: <GaugeIcon /> },
 } satisfies { readonly [Tab in AdminTab]: Omit<AdminPlace, "tab"> };
 
 /** The sidebar's places, in the order it lists them. */

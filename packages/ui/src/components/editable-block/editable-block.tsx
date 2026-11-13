@@ -53,10 +53,11 @@ function stepBlock(from: HTMLElement, by: 1 | -1): void {
 }
 
 /**
- * A block of a document. `onOpen` hears Return on the block itself, and
- * `onPress` a click on its words. Note that a click on a menu or a card
- * portaled out of the block still bubbles here through React's tree, and
- * is no press on the block's words, so `onPress` never hears it.
+ * A block of a document. `onOpen` hears Return on the block itself,
+ * and `onPress` a click on its words.
+ * Note that a click on a menu or a card portaled out of the block still
+ * bubbles here through React's tree, and is no press on the block's words,
+ * so `onPress` never hears it.
  */
 export function EditableBlock({
   label,

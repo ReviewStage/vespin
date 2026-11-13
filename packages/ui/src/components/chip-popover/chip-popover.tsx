@@ -9,7 +9,7 @@ import {
 import { CHIP_LOOK, CHIP_WIDTH, Chip, ChipName } from "../chip/chip.js";
 import { Fact, Facts } from "../facts/facts.js";
 import { PopoverPanel } from "../popover-panel/popover-panel.js";
-import { type MenuRow, SearchableMenu } from "../searchable-menu/searchable-menu.js";
+import { type FootRow, type MenuRow, SearchableMenu } from "../searchable-menu/searchable-menu.js";
 
 /**
  * chip-popover.tsx -- a toolbar chip whose press hangs a popover of what it names: a title, its facts as label-value rows, and where it offers one, a menu section to pick from.
@@ -28,9 +28,16 @@ import { type MenuRow, SearchableMenu } from "../searchable-menu/searchable-menu
  * popover: the popover is then the picker menu (`SearchableMenu`), its
  * facts standing over its rows (`lead`), so its keys and its phone sheet
  * are the menu's own. With no menu it is a small card (`PopoverPanel`)
- * holding the facts alone. Its title and the facts' labels are the app's
- * own words, which a screen recording shows as they read; a value or a row
- * the owner marks masked stays masked.
+ * holding the facts alone. A popover whose menu says all there is, as a
+ * task's followers do, stands with no title and no facts, its rows the whole
+ * of it, named to a reader by the chip's own name; its rows may stand under
+ * no heading, with none chosen, and where its owner takes no pick they only
+ * say, each hanging its card, so a press on one changes nothing and the
+ * popover stays. Under the rows the owner may pin rows of its own
+ * (`SearchableMenu`'s `FootRow`): a press, or a switch a press turns, which
+ * act and leave the popover standing. Its title and the facts' labels are
+ * the app's own words, which a screen recording shows as they read; a value
+ * or a row the owner marks masked stays masked.
  */
 
 /** One fact the popover lists: its glyph, its label, and its value. */
@@ -40,16 +47,37 @@ export interface ChipPopoverFact {
   readonly value: ReactNode;
 }
 
-/** The menu section under the facts: its heading, its rows, the one chosen, and what a pick does. */
+/** The menu section under the facts: its heading, its rows, the one chosen, what a pick does, and the rows pinned under them. */
 export interface ChipPopoverMenu {
-  readonly heading: string;
+  /** The heading over the rows; none where they stand under no heading. */
+  readonly heading?: string | undefined;
   readonly rows: readonly MenuRow[];
-  /** The id of the row chosen now, drawn checked. */
-  readonly value: string | undefined;
+  /** The id of the row chosen now, drawn checked; none where no row is chosen. */
+  readonly value?: string | undefined;
   /** Said where no row is listed. */
   readonly noMatch: string;
-  readonly onPick: (id: string) => void;
+  /** What a pick does, which puts the popover away; none where the rows only say, so a press changes nothing. */
+  readonly onPick?: ((id: string) => void) | undefined;
+  /** Rows pinned under the list: a press, or a switch, each acting with the popover still standing. */
+  readonly foot?: readonly FootRow[] | undefined;
 }
+
+/**
+ * What the popover holds: its title and its facts, with a menu under them
+ * or none; or, with a menu, the menu alone, with no title and no facts.
+ */
+type ChipPopoverBody =
+  | {
+      title: string;
+      facts: readonly ChipPopoverFact[];
+      /** The menu section under the facts; none where the popover lists the facts alone. */
+      menu?: ChipPopoverMenu | undefined;
+    }
+  | {
+      title?: undefined;
+      facts?: undefined;
+      menu: ChipPopoverMenu;
+    };
 
 /** The title over the facts, as a popover card heads itself. */
 const TITLE = "ui-chip-popover-title m-0 text-section font-section";
@@ -75,9 +103,7 @@ export function ChipPopover({
   words,
   said,
   iconOnly = false,
-  title,
-  facts,
-  menu,
+  ...body
 }: {
   /** What a reader hears the chip as, before its words: "Runs on". */
   label: string;
@@ -87,13 +113,12 @@ export function ChipPopover({
   said?: string | undefined;
   /** Whether the chip draws its glyph alone, its words kept for a reader. */
   iconOnly?: boolean | undefined;
-  title: string;
-  facts: readonly ChipPopoverFact[];
-  /** The menu section under the facts; none where the popover lists the facts alone. */
-  menu?: ChipPopoverMenu | undefined;
-}): React.JSX.Element {
+} & ChipPopoverBody): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const drawn = useDisclosure(open);
+  const { menu } = body;
+  // The title and the facts under it, where the popover holds them.
+  const head = body.title === undefined ? undefined : { title: body.title, facts: body.facts };
   const popoverId = useId();
   const box = useRef<HTMLSpanElement>(null);
   const chip = useRef<HTMLButtonElement>(null);
@@ -129,41 +154,50 @@ export function ChipPopover({
         <ChipName>{words}</ChipName>
       </Chip>
       {menu === undefined ? (
-        <AnchoredPopover open={open} align={POPOVER_ALIGN.START}>
-          <PopoverPanel
-            open={open}
-            id={popoverId}
-            title={title}
-            replayUnmasked
-            onDismiss={close}
-            onLeave={left}
-          >
-            <PopoverFacts facts={facts} />
-          </PopoverPanel>
-        </AnchoredPopover>
+        head === undefined ? null : (
+          <AnchoredPopover open={open} align={POPOVER_ALIGN.START}>
+            <PopoverPanel
+              open={open}
+              id={popoverId}
+              title={head.title}
+              replayUnmasked
+              onDismiss={close}
+              onLeave={left}
+            >
+              <PopoverFacts facts={head.facts} />
+            </PopoverPanel>
+          </AnchoredPopover>
+        )
       ) : drawn.mounted ? (
         <SearchableMenu
           leaving={drawn.leaving}
           ref={drawn.ref}
           id={popoverId}
-          label={title}
+          label={head?.title ?? label}
           lead={
-            <>
-              <p className={TITLE} aria-hidden="true">
-                {title}
-              </p>
-              <PopoverFacts facts={facts} />
-            </>
+            head === undefined ? undefined : (
+              <>
+                <p className={TITLE} aria-hidden="true">
+                  {head.title}
+                </p>
+                <PopoverFacts facts={head.facts} />
+              </>
+            )
           }
           rows={menu.rows.map((row) => ({ ...row, section: menu.heading }))}
           value={menu.value}
           noMatch={menu.noMatch}
+          foot={menu.foot}
           align={POPOVER_ALIGN.START}
           width={POPOVER_WIDTH.REGULAR}
           replayUnmasked
           onPick={(id) => {
+            const { onPick } = menu;
+
+            // Note that rows that only say take no pick, so a press on one leaves the popover standing.
+            if (onPick === undefined) return;
             close();
-            menu.onPick(id);
+            onPick(id);
           }}
           onClose={close}
           onLeave={left}

@@ -1,14 +1,20 @@
-import { MEMORY_SAVE_FAILURE, type MemorySaveAnswerView } from "@repo/features/agent-view";
+import type { MemorySaveAnswerView } from "@repo/features/agent-view";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { markdownTree } from "@repo/features/markdown-tree";
 import {
-  MEMORY_BOUNDS,
-  MEMORY_RECALL_WINDOW_DAYS,
-  type MemorySummary,
-} from "@repo/features/memory-wire";
+  ADD_MEMORY,
+  forgetQuestion as forgetWords,
+  MEMORY_ACT,
+  MEMORY_EDITOR_WORDS,
+  MEMORY_PAGE_WORDS,
+  MEMORY_RECALLS_WORDS,
+  MEMORY_UNRECALLED_WORDS,
+  memoriesByUse,
+  memorySaveRefusal,
+} from "@repo/features/memory-settings-words";
+import { MEMORY_BOUNDS, type MemorySummary } from "@repo/features/memory-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
 import { formatCount } from "@repo/features/number-format";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { matchesTokens, searchTokens } from "@repo/features/search-tokens";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
@@ -22,7 +28,6 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
-  Badge,
   BUTTON_VARIANT,
   Button,
   CHIP_LOOK,
@@ -55,7 +60,6 @@ import {
   SettingsLine,
   SettingsSection,
   SkeletonRegion,
-  STATUS_TONE,
   Stack,
   selectionMenu,
   TEXT_ELEMENT,
@@ -69,7 +73,6 @@ import {
   useConfirmDialog,
   useLeaving,
   useMenu,
-  useMinute,
 } from "@repo/ui";
 import {
   ACTOR_KIND,
@@ -142,16 +145,17 @@ import { ReadFailed } from "./marks.js";
  * The memories stand in a table (`DataTable`), one row each, sorted from any
  * heading but the ⋯'s, the memories agents recalled most in the last thirty
  * days first, then the most recently kept or corrected, so what no agent
- * reaches sinks to the foot, where it is pruned. A row's columns: its box,
- * its words whole at any width, drawn as the notes are since a memory is
- * Markdown (`pnpm db:generate` in backticks), with New under them on one
- * kept in the last week and Unused on one older than the recall window that
- * no agent was handed in it, and whose they are and when they were kept on
- * the card the words hang, and beside New or Unused the agent that saved
- * it as that agent's mention chip, wearing its harness's mark, whose press
- * opens the agent's transcript at the line that kept it, or the task's chip
- * where the window cannot name the agent; how often agents were handed it
- * in the window; when last; and its ⋯. A row opens nothing. Its ⋯, a right-click on it, and
+ * reaches sinks to the foot, where it is pruned. The page stands at
+ * Settings' wide measure, so every column shows in a big window, and in a
+ * narrow one the table scrolls sideways in its own frame. A row's columns:
+ * its box; its words whole at any width, drawn as the notes are since a
+ * memory is Markdown (`pnpm db:generate` in backticks), whose they are and
+ * when they were kept on the card the words hang; Saved by, the agent that
+ * saved it as that agent's mention chip, wearing its harness's mark, whose
+ * press opens the agent's transcript at the line that kept it, or the
+ * task's chip where the window cannot name the agent, sorted by the name
+ * the chip says; how often agents were handed it in the window; when last;
+ * and its ⋯. A row opens nothing. Its ⋯, a right-click on it, and
  * the menu key offer Edit, Copy text, and Delete to a reader who may change
  * it: its words are theirs, or they own or administer the workspace. To any
  * other reader Edit stands nowhere and Delete stands unavailable, saying who
@@ -182,12 +186,12 @@ import { ReadFailed } from "./marks.js";
 
 /** What the page says while it cannot read or write, and with no account. */
 const PAGE_LINE = {
-  FAILED: readFailedWords(`${PRODUCT_NAME}'s memory`),
+  FAILED: MEMORY_PAGE_WORDS.FAILED,
   WORKSPACES_FAILED: readFailedWords("your workspaces"),
   SIGNED_OUT: SIGNED_OUT_WORDS,
-  EMPTY: `${PRODUCT_NAME} hasn't remembered anything yet.`,
-  FORGET_FAILED: "The memory could not be deleted. Try again.",
-  NO_MATCH: "No memories match",
+  EMPTY: MEMORY_PAGE_WORDS.EMPTY,
+  FORGET_FAILED: MEMORY_PAGE_WORDS.FORGET_FAILED,
+  NO_MATCH: MEMORY_PAGE_WORDS.NO_MATCH,
   CLEAR: "Clear search and filter",
 } as const;
 
@@ -195,63 +199,11 @@ const PAGE_LINE = {
 const FILTER = "Filter";
 const KEPT_BY = "Saved by";
 
-/** What the selection's acts and a row's menu say. */
-const MEMORY_ACT = {
-  EDIT: "Edit",
-  FORGET: "Delete",
-  COPY: "Copy text",
-} as const;
-
-/** What the button that keeps a new memory says. */
-const ADD_MEMORY = "Add memory";
-
-/** What the card a memory's words are written in says: its head as it edits or adds, its hint, and its send. */
-const EDITOR_WORDS = {
-  EDIT: "Edit memory",
-  ADD: "New memory",
-  PLACEHOLDER: "A fact your agents should remember",
-  SAVE: "Save",
-} as const;
-
-/** What a save that came to no answer says. */
-const SAVE_FAILED = "The memory could not be saved. Try again.";
-
-/** What a save the service refused says, by why. */
-const SAVE_REFUSAL = {
-  [MEMORY_SAVE_FAILURE.MEMORY_OFF]: "Turn on Memory in Settings › Experimental to save a memory.",
-  [MEMORY_SAVE_FAILURE.NOT_FOUND]: "This memory no longer exists.",
-  [MEMORY_SAVE_FAILURE.MEMORY_CREDENTIAL]:
-    "That looks like it holds a credential, which a memory never keeps.",
-  [MEMORY_SAVE_FAILURE.MEMORY_FULL]: `This workspace holds ${MEMORY_BOUNDS.MAX_MEMORIES.toLocaleString("en-US")} memories, the most it can. Delete one first.`,
-  [MEMORY_SAVE_FAILURE.UNANSWERED]: SAVE_FAILED,
-  // Note that a save is always a POST, so the method refused is never the window's; it reads as no answer.
-  [MEMORY_SAVE_FAILURE.METHOD_NOT_ALLOWED]: SAVE_FAILED,
-} as const satisfies Record<(typeof MEMORY_SAVE_FAILURE)[keyof typeof MEMORY_SAVE_FAILURE], string>;
-
-/** One day, in milliseconds. */
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** How long a memory reads as New after it was kept. */
-const NEW_FOR_MS = 7 * DAY_MS;
-
-/** How far back a memory's recalls are counted, as the service counts them. */
-const RECALL_WINDOW_MS = MEMORY_RECALL_WINDOW_DAYS * DAY_MS;
-
-/** What a memory says of how agents use it: New or Unused under its words, and its recall columns where it has none. */
-const USE_WORDS = {
-  NEW: "New",
-  UNUSED: "Unused",
-  NONE: "—",
-  NEVER: "Never",
-} as const;
-
-/** What the caption under the search says Recalls counts. */
-const RECALLS_WORDS = `Recalls count the last ${MEMORY_RECALL_WINDOW_DAYS} days`;
-
 /** The table's columns, by id, which its sort names. */
 const COLUMN = {
   CHOSEN: "chosen",
   MEMORY: "memory",
+  SAVED_BY: "savedBy",
   RECALLS: "recalls",
   LAST_RECALLED: "lastRecalled",
 } as const;
@@ -260,6 +212,7 @@ const COLUMN = {
 const HEADING = {
   [COLUMN.CHOSEN]: "Select",
   [COLUMN.MEMORY]: "Memory",
+  [COLUMN.SAVED_BY]: KEPT_BY,
   [COLUMN.RECALLS]: "Recalls",
   [COLUMN.LAST_RECALLED]: "Last recalled",
 } as const;
@@ -268,7 +221,7 @@ const HEADING = {
 const MOST_RECALLED_FIRST: SortingState = [{ id: COLUMN.RECALLS, desc: true }];
 
 /** What the table is called to a reader. */
-const TABLE_LABEL = "Memories";
+const TABLE_LABEL = MEMORY_PAGE_WORDS.TITLE;
 
 /** How many rows stand while the memories are read. */
 const SKELETON_ROWS = 3;
@@ -281,7 +234,7 @@ const FORMER_WORDS = "Former members";
 
 /** What the skeletons say to a reader who cannot see them. */
 const READING_LABEL = {
-  MEMORY: readingWords(`${PRODUCT_NAME}'s memory`),
+  MEMORY: MEMORY_PAGE_WORDS.READING,
   WORKSPACES: readingWords("your workspaces"),
 } as const;
 
@@ -323,13 +276,6 @@ function forgetterOf(memory: MemorySummary, actor: Actor): string {
   return keeper === undefined
     ? "Only an owner or an admin"
     : `Only ${keeper}, or an owner or admin`;
-}
-
-/** The memories as the page orders them: most recalled in the recall window first, then most recently kept or corrected, as the service lists them. */
-function byUse(memories: readonly MemorySummary[]): readonly MemorySummary[] {
-  return [...memories].sort(
-    (one, other) => other.recalls30d - one.recalls30d || other.updatedAt - one.updatedAt,
-  );
 }
 
 /** Where a memory's words came from, as a reader who may open its task sees it. */
@@ -387,20 +333,6 @@ function SourceChip({
   return chip ?? null;
 }
 
-/** New on a memory kept in the last week, Unused on one older than the recall window that no agent was handed in it, and nothing otherwise. */
-function UseBadge({ memory }: { memory: MemorySummary }): React.JSX.Element | null {
-  const now = useMinute();
-  const age = now - memory.createdAt;
-
-  if (age < NEW_FOR_MS) return <Badge tone={STATUS_TONE.WORKING}>{USE_WORDS.NEW}</Badge>;
-
-  if (age > RECALL_WINDOW_MS && memory.recalls30d === 0) {
-    return <Badge tone={STATUS_TONE.ATTENTION}>{USE_WORDS.UNUSED}</Badge>;
-  }
-
-  return null;
-}
-
 /** The card a memory's words hang: whose they are, and when they were last kept or corrected. */
 function KeeperCard({ shown }: { shown: ShownMemory }): React.JSX.Element {
   const { actor, memory } = shown;
@@ -428,14 +360,15 @@ function rowId(row: MemoryTableRow): string {
   return row.memory.id;
 }
 
-/** What the table's cells draw that the page holds: a memory's box and its words. */
+/** What the table's cells draw that the page holds: a memory's box, its words, and the agent that saved it. */
 interface MemoryCells {
   readonly chosen: (shown: ShownMemory) => ReactNode;
   readonly words: (shown: ShownMemory) => ReactNode;
+  readonly source: (shown: ShownMemory) => ReactNode;
 }
 
 /** No cells, where no table hands its own. */
-const NO_CELLS: MemoryCells = { chosen: () => null, words: () => null };
+const NO_CELLS: MemoryCells = { chosen: () => null, words: () => null, source: () => null };
 
 /**
  * What the table's cells draw from the page, handed down rather than closed
@@ -455,11 +388,21 @@ function WordsCell({ shown }: { shown: ShownMemory }): ReactNode {
   return useContext(MemoryCellsContext).words(shown);
 }
 
+/** The agent that saved a memory, as the page draws it. */
+function SourceCell({ shown }: { shown: ShownMemory }): ReactNode {
+  return useContext(MemoryCellsContext).source(shown);
+}
+
+/** What a memory's Saved by column sorts by: the name its chip says, the agent's or its task's, and nothing where no source traveled. */
+function sourceName(shown: ShownMemory): string {
+  return shown.agentName ?? shown.memory.source?.taskName ?? "";
+}
+
 const column = createDataTableColumnHelper<MemoryTableRow>();
 
 /**
- * The table's columns: a memory's box; its words, wrapping, with the agent
- * that saved it under them; how often agents were handed it in the recall
+ * The table's columns: a memory's box; its words, wrapping; the agent that
+ * saved it, by its name; how often agents were handed it in the recall
  * window; and when last.
  */
 function memoryColumns(): DataTableColumns<MemoryTableRow> {
@@ -478,13 +421,21 @@ function memoryColumns(): DataTableColumns<MemoryTableRow> {
       sortDescFirst: false,
       cell: ({ row: { original } }) => <WordsCell shown={original} />,
     }),
+    column.accessor(sourceName, {
+      id: COLUMN.SAVED_BY,
+      header: HEADING[COLUMN.SAVED_BY],
+      sortFn: "text",
+      sortDescFirst: false,
+      cell: ({ row: { original } }) => <SourceCell shown={original} />,
+    }),
     column.accessor((row) => row.memory.recalls30d, {
       id: COLUMN.RECALLS,
       header: HEADING[COLUMN.RECALLS],
       meta: { kind: DATA_TABLE_COLUMN_KIND.NUMERIC },
       sortFn: "basic",
       sortDescFirst: true,
-      cell: ({ getValue }) => (getValue() === 0 ? USE_WORDS.NONE : formatCount(getValue())),
+      cell: ({ getValue }) =>
+        getValue() === 0 ? MEMORY_UNRECALLED_WORDS.NONE : formatCount(getValue()),
     }),
     column.accessor((row) => row.memory.lastRecalledAt ?? 0, {
       id: COLUMN.LAST_RECALLED,
@@ -496,7 +447,11 @@ function memoryColumns(): DataTableColumns<MemoryTableRow> {
 
         return (
           <Text tone={TEXT_TONE.MUTED}>
-            {last === null ? USE_WORDS.NEVER : <Time at={last} look={TIME_LOOK.AGO} hint={false} />}
+            {last === null ? (
+              MEMORY_UNRECALLED_WORDS.NEVER
+            ) : (
+              <Time at={last} look={TIME_LOOK.AGO} hint={false} />
+            )}
           </Text>
         );
       },
@@ -515,7 +470,7 @@ function MemoriesSkeleton({ label }: { label: string }): React.JSX.Element {
         label={TABLE_LABEL}
         columns={MEMORY_COLUMNS}
         rows={SKELETON_ROWS}
-        minWidth={DATA_TABLE_MIN_WIDTH.NARROW}
+        minWidth={DATA_TABLE_MIN_WIDTH.WIDE}
         menus
       />
     </SkeletonRegion>
@@ -745,20 +700,8 @@ function KeptByChips(props: {
 
 /** What Delete asks, of one memory or of several, and what it says of those the reader may not delete. */
 function forgetQuestion(asked: readonly MemorySummary[], left: number) {
-  const one = asked.length === 1;
-  const them = one ? "it" : "them";
-  const body = `No agent will recall ${them} in any later task in this workspace, for anyone.`;
-
-  const kept =
-    left === 0
-      ? ""
-      : ` ${countWords(left, TERM.MEMORY)} you may not delete ${left === 1 ? "stays" : "stay"}.`;
-
   return {
-    title: one ? "Delete this memory?" : `Delete ${countWords(asked.length, TERM.MEMORY)}?`,
-    body: `${body}${kept}`,
-    verb: `${MEMORY_ACT.FORGET} ${one ? TERM.MEMORY.one : TERM.MEMORY.many}`,
-    running: "Deleting",
+    ...forgetWords(asked.length, left),
     loss: CONFIRM_LOSS.IRREVERSIBLE,
     replayUnmasked: true,
   };
@@ -818,45 +761,34 @@ function memoriesForgetMutation(workspaceId: string) {
 
 /** A save's answer as the editor's act reads it: taken, or refused in the service's own words. */
 function saveAnswered(answer: MemorySaveAnswerView): ActionResult {
-  return "failure" in answer
-    ? { status: ACTION_RESULT_STATUS.REJECTED, reason: SAVE_REFUSAL[answer.failure] }
-    : ANSWER_ACCEPTED;
+  const refusal = memorySaveRefusal(answer);
+
+  return refusal === undefined
+    ? ANSWER_ACCEPTED
+    : { status: ACTION_RESULT_STATUS.REJECTED, reason: refusal };
 }
 
-/** A memory's words as its row draws them: lit where the search landed, hanging the card of whose they are, with New or Unused and the agent that saved them under them. */
+/** A memory's words as its row draws them: lit where the search landed, and hanging the card of whose they are. */
 function MemoryWords({
   shown,
   found,
-  workspaceStep,
 }: {
   shown: ShownMemory;
   /** The words the search asks for, lit where they landed. */
   found: readonly string[];
-  /** The step the workspace's links name it by, which the agent's chip is written under. */
-  workspaceStep: string;
 }): React.JSX.Element {
-  const { source } = shown.memory;
-
   return (
-    <Stack gap={GAP.TIGHT}>
-      <Tooltip label={`Saved by ${actorName(shown.actor)}`} card={<KeeperCard shown={shown} />}>
-        <div className="memory-words">
-          {/* A memory's words stand inside its row's card, so they stay words going nowhere, links among them. */}
-          <MarkdownMessage
-            words={shown.memory.text}
-            className="memory-text"
-            found={found}
-            link={null}
-          />
-        </div>
-      </Tooltip>
-      <Inline gap={GAP.ICON}>
-        <UseBadge memory={shown.memory} />
-        {source === null ? null : (
-          <SourceChip source={source} agentName={shown.agentName} workspaceStep={workspaceStep} />
-        )}
-      </Inline>
-    </Stack>
+    <Tooltip label={`Saved by ${actorName(shown.actor)}`} card={<KeeperCard shown={shown} />}>
+      <div className="memory-words">
+        {/* A memory's words stand inside its row's card, so they stay words going nowhere, links among them. */}
+        <MarkdownMessage
+          words={shown.memory.text}
+          className="memory-text"
+          found={found}
+          link={null}
+        />
+      </div>
+    </Tooltip>
   );
 }
 
@@ -922,12 +854,12 @@ function MemoryCard({
     [],
   );
 
-  const title = editing.replaces === undefined ? EDITOR_WORDS.ADD : EDITOR_WORDS.EDIT;
+  const title = editing.replaces === undefined ? MEMORY_EDITOR_WORDS.ADD : MEMORY_EDITOR_WORDS.EDIT;
 
   const box = useMessageBox({
     draft: editing.text,
     setDraft: onChange,
-    placeholder: EDITOR_WORDS.PLACEHOLDER,
+    placeholder: MEMORY_EDITOR_WORDS.PLACEHOLDER,
     label: title,
     maxLength: MEMORY_BOUNDS.MAX_CHARS,
     onSubmit: onSave,
@@ -960,7 +892,11 @@ function MemoryCard({
           <MessageBox
             box={box}
             className="memory-field"
-            send={{ label: EDITOR_WORDS.SAVE, empty: editing.text.trim() === "", held: busy }}
+            send={{
+              label: MEMORY_EDITOR_WORDS.SAVE,
+              empty: editing.text.trim() === "",
+              held: busy,
+            }}
             note={editing.refusal}
           />
         </ReplayMask>
@@ -1098,7 +1034,7 @@ function MemoryList({
   const found = searchTokens(query);
   const editor = useMemoryEditor(workspaceId, new Set(memories.map((memory) => memory.id)));
 
-  const all = byUse(memories).map((memory): ShownMemory => {
+  const all = memoriesByUse(memories).map((memory): ShownMemory => {
     // Note that the service names a memory's keeper as nobody only once their account is deleted.
     const actor =
       memory.keptBy === null
@@ -1151,7 +1087,14 @@ function MemoryList({
 
   const acts: readonly SelectionAct[] = [
     ...(chosen.some((memory) => memory.forgettable) && !forgetting
-      ? [{ label: MEMORY_ACT.FORGET, icon: <TrashIcon />, onAct: () => askForget(chosen) }]
+      ? [
+          {
+            label: MEMORY_ACT.FORGET,
+            icon: <TrashIcon />,
+            danger: true,
+            onAct: () => askForget(chosen),
+          },
+        ]
       : []),
     { label: MEMORY_ACT.COPY, icon: <GLYPH.COPY />, onAct: () => copyAll(chosen) },
   ];
@@ -1174,7 +1117,11 @@ function MemoryList({
         onChange={() => setSelected(toggled(standing, shown.memory.id))}
       />
     ),
-    words: (shown) => <MemoryWords shown={shown} found={found} workspaceStep={workspaceStep} />,
+    words: (shown) => <MemoryWords shown={shown} found={found} />,
+    source: ({ memory: { source }, agentName }) =>
+      source === null ? null : (
+        <SourceChip source={source} agentName={agentName} workspaceStep={workspaceStep} />
+      ),
   };
 
   const rowMenu = (row: MemoryTableRow): ListRowMenu => {
@@ -1196,7 +1143,7 @@ function MemoryList({
         <Stack gap={GAP.CONTROL}>
           <div className={SEARCH_LINE}>
             <SearchField
-              label="Search memories"
+              label={MEMORY_PAGE_WORDS.SEARCH}
               placeholder="Search memories"
               value={query}
               onChange={setQuery}
@@ -1212,7 +1159,7 @@ function MemoryList({
           <KeptByChips keepers={keepersOf(all)} kept={kept} onKept={setKept} />
           {listed.length === 0 ? null : (
             <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-              {`${countWords(listed.length, TERM.MEMORY)} · ${RECALLS_WORDS}`}
+              {`${countWords(listed.length, TERM.MEMORY)} · ${MEMORY_RECALLS_WORDS}`}
             </Text>
           )}
         </Stack>
@@ -1227,7 +1174,7 @@ function MemoryList({
                 rows={listed}
                 getRowId={rowId}
                 empty=""
-                minWidth={DATA_TABLE_MIN_WIDTH.NARROW}
+                minWidth={DATA_TABLE_MIN_WIDTH.WIDE}
                 initialSorting={MOST_RECALLED_FIRST}
                 rowMenu={rowMenu}
               />

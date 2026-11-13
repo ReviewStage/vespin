@@ -1,0 +1,17 @@
+diff --git a/ios/RNSentrySDK.m b/ios/RNSentrySDK.m
+index 1f9de9fe52b84ca3ac930e736c7488b4de832eec..b6f95c06ee8d572ed2b1e6321ead0ec4d05fa556 100644
+--- a/ios/RNSentrySDK.m
++++ b/ios/RNSentrySDK.m
+@@ -71,6 +71,12 @@ static NSString *SENTRY_OPTIONS_RESOURCE_TYPE = @"json";
+         }
+     }
+ 
++    // Starting with no options at all, as where the file names no DSN, faults in the SDK's start.
++    if (options == nil) {
++        NSLog(@"[RNSentry] Not starting the native SDK: no options could be made");
++        return;
++    }
++
+     [RNSentryStart updateWithReactDefaults:options];
+     if (configureOptions != nil) {
+         configureOptions(options);

@@ -6,11 +6,7 @@
  * by what they hold (`pressed-address.ts` states every surface's choices).
  */
 
-import {
-  type OpenedPullRequest,
-  pullRequestAgentOf,
-  repositoryPullRequestOf,
-} from "@repo/ui/pull-request-link";
+import { type OpenedPullRequest, pullRequestAgentOf } from "@repo/ui/pull-request-link";
 import {
   type ADDRESS,
   type Address,
@@ -73,13 +69,6 @@ export function pullRequestBeside(
   if (agentId !== undefined) return beside({ kind: THING.PULL_REQUEST, agentId });
 
   if (!ofRepository(address.repository, here.repository)) return NOTHING;
-
-  // A page under an agent's own pull request's, its files say, is still that agent's.
-  const owner = opened.find(
-    (each) => repositoryPullRequestOf(each.url, here.repository) === address.number,
-  );
-
-  if (owner !== undefined) return beside({ kind: THING.PULL_REQUEST, agentId: owner.agentId });
 
   if (address.listed !== undefined) return NOTHING;
   const first = here.agentIds?.[0];

@@ -40,6 +40,7 @@ import {
   workspaceDeletion,
 } from "./auth-policy.js";
 import { CLI_OAUTH_CLIENT, DESKTOP_OAUTH_CLIENT, IOS_OAUTH_CLIENT } from "./oauth-clients.js";
+import { offlineTokensOutliveSession } from "./offline-tokens.js";
 import { supportAccess } from "./support-access.js";
 
 const deployment = authDeployment(process.env);
@@ -138,6 +139,10 @@ export const auth = betterAuth({
       // registered above holds, and the desktop's client holds none of them.
       resourcePrivileges: denyOAuthResourcePrivileges,
     }),
+    // An `offline_access` sign-in's refreshed tokens are unbound from the
+    // browser session that consented, which the provider's own token checks
+    // read and its refresh grant never does, so they live on their own.
+    offlineTokensOutliveSession(),
     // A client named by the URL of its Client ID Metadata Document, as the
     // MCP clients of 2026 name themselves: its document fetched through the
     // package's own Node transport, with its host resolved once and pinned.

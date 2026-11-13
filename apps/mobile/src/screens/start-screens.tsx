@@ -1,6 +1,12 @@
 // start-screens.tsx -- the two sheets that start work, each a SwiftUI Form: New agent on a task, its words and pictures, model, and effort; and New task, Home's composer: the task described and its pictures, its relation to another task, its repository, its model and effort, and where its agent runs, or File for later, which files it with no agent.
 
 import { hasWordsOrFiles } from "@repo/features/agent-wire";
+import { FAILURE_REASON } from "@repo/features/failure-remedy";
+import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
+import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { agentName } from "@repo/features/model-label";
+import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
+import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
 import { TASK_CREATE_RELATION_WORDS } from "@repo/features/task-standing-words";
 import {
@@ -13,23 +19,29 @@ import {
 import { filedTaskOf } from "@repo/features/tasks-model";
 import { selectTasks, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
+  ActionRow,
   AttachRow,
   BAR_TITLE,
   BUZZ,
   buzz,
   ConfirmAsk,
+  GLYPH,
+  glyphSymbol,
   ListSection,
   MenuPickRow,
   type PickOption,
   Screen,
   SettingsForm,
+  SkillRow,
   useColors,
   ValueRow,
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, usePreventRemove, useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
+import { useShownAgent } from "../agents/use-agent.js";
+import { type OpenedSuggestion, useSuggestionSender } from "../agents/use-suggestions.js";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
@@ -38,6 +50,7 @@ import {
   type ModelPick,
   runsOnOptions,
   type StartAnswer,
+  startRefusalWords,
   useFileTask,
   useModelPick,
   useRepositoryPick,
@@ -45,6 +58,8 @@ import {
   useStartTask,
 } from "../tasks/use-start.js";
 import { type AttachedPictures, useAttachedPictures } from "../use-attached-pictures.js";
+import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
+import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
 
 /** The panel's words for the sheets, their fields, and their acts. */
@@ -60,15 +75,25 @@ const WORDS = {
   RUNS_ON: "Runs on",
   START: "Start",
   FILE_FOR_LATER: "File for later",
-  TASK_RELATION: "Task relation",
   RELATION: "Relation",
   TASK: "Task",
   NO_RELATION: "None",
   CANCEL: "Cancel",
-  DISCARD_QUESTION: "Discard draft?",
-  DISCARD: "Discard draft",
   NO_REPOSITORIES: "The workspace's GitHub reaches no repository yet.",
+  TRY_AGAIN: "Try again",
+  /** The line over a suggestion's draft, naming the agent that suggested it where it is known, as the panel's chip over the box does. */
+  SUGGESTED_BY: (agent: string | undefined, label: string) => {
+    const by = agent === undefined ? "Suggested" : `Suggested by ${agent}`;
+
+    return label === "" ? by : `${by}: “${label}”`;
+  },
 } as const;
+
+/** A suggestion's start refused, said as New agent's own Start says it. */
+const START_REFUSAL: SuggestionRefusal = (refused) => ({
+  reason: FAILURE_REASON.OTHER,
+  text: startRefusalWords(refused),
+});
 
 /** The names each sheet's flow finds its words and its + by. */
 const TEST_IDS = {
@@ -77,44 +102,6 @@ const TEST_IDS = {
 } as const;
 
 type SheetTestIds = (typeof TEST_IDS)[keyof typeof TEST_IDS];
-
-/** What keeps a sheet's draft, its words typed and pictures attached: whether it asks before they go, and its answers. */
-interface KeptWords {
-  /** Whether the sheet asks whether to discard its draft, after a Cancel or a swipe down. */
-  readonly asking: boolean;
-  /** Lets the sheet go, its draft with it, as the ask's Discard draft does. */
-  readonly discard: () => void;
-  /** Keeps the sheet and its draft, as the ask's Cancel does. */
-  readonly stay: () => void;
-  /** Lets the sheet go without asking, as a start taken does. */
-  readonly release: () => void;
-}
-
-/**
- * Keeps a sheet's draft while it holds one, words typed or a picture
- * attached, as Mail keeps a draft: the swipe down is held, and Cancel or a
- * swipe asks first whether to discard it. Note that a swipe the system held
- * comes back as a removal the stack prevented, so one ask answers both.
- */
-function useKeptWords(drafted: boolean): KeptWords {
-  const [letGo, setLetGo] = useState(false);
-  const [leave, setLeave] = useState<(() => void) | undefined>(undefined);
-  const disable = usePreventRemove(drafted && !letGo, ({ repeat }) => setLeave(() => repeat));
-
-  return {
-    asking: leave !== undefined,
-    discard: () => {
-      setLetGo(true);
-      setLeave(undefined);
-      leave?.();
-    },
-    stay: () => setLeave(undefined),
-    release: () => {
-      setLetGo(true);
-      disable();
-    },
-  };
-}
 
 /** File for later, as New task's bar offers it before Start: whether it is lit, and its press. */
 interface FileForLater {
@@ -158,14 +145,14 @@ function SheetBar({
       <Stack.Toolbar placement="right">
         {file === undefined ? null : (
           <Stack.Toolbar.Button
-            icon="tray.and.arrow.down"
+            icon={glyphSymbol(GLYPH.FILE_FOR_LATER)}
             accessibilityLabel={WORDS.FILE_FOR_LATER}
             disabled={!file.ready}
             onPress={file.onFile}
           />
         )}
         <Stack.Toolbar.Button
-          icon="arrow.up"
+          icon={glyphSymbol(GLYPH.SEND)}
           variant="prominent"
           tintColor={colors.ACCENT}
           accessibilityLabel={WORDS.START}
@@ -174,8 +161,8 @@ function SheetBar({
         />
       </Stack.Toolbar>
       <ConfirmAsk
-        title={WORDS.DISCARD_QUESTION}
-        act={WORDS.DISCARD}
+        title={DISCARD_WORDS.QUESTION}
+        act={DISCARD_WORDS.DISCARD}
         destructive
         presented={kept.asking}
         onAct={kept.discard}
@@ -185,24 +172,30 @@ function SheetBar({
   );
 }
 
-/** The agent's section: its model and effort, and where it runs where the account may run one on its own device. */
+/** The agent's section: its model and effort, and where it runs where the account may run one on its own device; where the models could not be read, why, with Try again. */
 function AgentSection({
   pick,
   runsOn,
   onRunsOn,
+  runsOnShown = true,
 }: {
   readonly pick: ModelPick;
   readonly runsOn: string;
   readonly onRunsOn: (place: string) => void;
+  /** Whether Runs on is offered; a suggestion's agent runs where the member's agents on the task run, so it offers none, as the panel's draft hides it. */
+  readonly runsOnShown?: boolean | undefined;
 }) {
   return (
-    <ListSection title={WORDS.AGENT}>
+    <ListSection title={WORDS.AGENT} footer={pick.failed}>
       <MenuPickRow
         label={WORDS.MODEL}
         options={pick.models}
         picked={pick.shown?.model}
         onPick={pick.pickModel}
       />
+      {pick.failed === undefined ? null : (
+        <ActionRow label={WORDS.TRY_AGAIN} symbol={GLYPH.RETRY} onPress={pick.retry} />
+      )}
       {pick.efforts.length <= 1 ? null : (
         <MenuPickRow
           label={WORDS.EFFORT}
@@ -211,7 +204,7 @@ function AgentSection({
           onPick={pick.pickEffort}
         />
       )}
-      {pick.devices.length === 0 ? null : (
+      {!runsOnShown || pick.devices.length === 0 ? null : (
         <MenuPickRow
           label={WORDS.RUNS_ON}
           options={runsOnOptions(pick.devices)}
@@ -223,32 +216,41 @@ function AgentSection({
   );
 }
 
-/** The sheet's words and, under them, the + and the pictures attached, with what a start, the picker, or a bound said under both. */
+/** The sheet's words, the skills a `/` in them offers, and, under them, the + and the pictures attached, with what a start, the picker, or a bound said under both. */
 function DraftSection({
+  title,
   placeholder,
+  words,
   onWords,
-  initialWords,
+  skills,
   pictures,
   note,
   testIds,
 }: {
+  /** The line over the words, such as who suggested them; none for a draft of the member's own. */
+  readonly title?: string | undefined;
   readonly placeholder: string;
+  readonly words: string;
   readonly onWords: (words: string) => void;
-  readonly initialWords?: string | undefined;
+  /** The skills a `/` being typed offers; none while no `/` word ends the words. */
+  readonly skills: SkillsOffered | undefined;
   readonly pictures: AttachedPictures;
   readonly note: string | undefined;
   /** The names a flow finds the field and the + by. */
   readonly testIds: SheetTestIds;
 }) {
   return (
-    <ListSection footer={note}>
+    <ListSection title={title} footer={note}>
       <WordsField
         placeholder={placeholder}
+        words={words}
         onWords={onWords}
-        initialWords={initialWords}
         autoFocus
         testId={testIds.WORDS}
       />
+      {skills === undefined ? null : (
+        <SkillRow skills={skills.skills} empty={skills.empty} onPick={skills.pick} />
+      )}
       <AttachRow
         pictures={pictures.attached}
         onAdd={pictures.attach}
@@ -316,11 +318,9 @@ function useSheetStart(
         if (!went || answer === undefined || "refused" in answer) return;
         kept.release();
         router.dismiss();
-        router.navigate(`/tasks/${encodeURIComponent(answer.taskId)}`);
+        router.navigate(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: answer.taskId }));
 
-        if (answer.agentId !== undefined) {
-          router.push(`/tasks/agent/${encodeURIComponent(answer.agentId)}`);
-        }
+        if (answer.agentId !== undefined) router.push(iosAgentRoute(answer.agentId));
       })
       .finally(() => setStarting(false));
   };
@@ -331,44 +331,99 @@ function useSheetStart(
 /**
  * New agent on a task, as the panel's draft tab starts one: what to ask of
  * it and the pictures that go with it, the model and effort it runs on, the
- * account's default until another is picked, and where it runs.
+ * account's default until another is picked, and where it runs. Opened on a
+ * suggestion (`opened`), it starts filled in with the suggestion's brief and
+ * model under a line naming who suggested it, offers no Runs on, and its
+ * Start goes through the suggestion, once, as the panel's draft sends one.
  */
-export function NewAgentScreen({ taskId }: { readonly taskId: string }) {
-  const [prompt, setPrompt] = useState("");
+export function NewAgentScreen({
+  taskId,
+  opened,
+}: {
+  readonly taskId: string;
+  readonly opened?: OpenedSuggestion | undefined;
+}) {
+  const action = opened?.view.action;
+  const brief = action?.kind === REPLY_BUTTON_ACTION.START ? action.prompt : "";
+  const [prompt, setPrompt] = useState(brief);
   const [runsOn, setRunsOn] = useState(CLOUD);
-  const pick = useModelPick();
+  const pick = useModelPick(action === undefined ? undefined : suggestedChoice(action));
   const startAgent = useStartAgent(taskId);
+  const sendSuggestion = useSuggestionSender();
+  const suggester = useShownAgent(opened?.suggestion.agentId ?? "");
+  // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
+  const suggestedTask = suggester?.planId;
+  const placed = opened === undefined || suggestedTask !== undefined;
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
+  const skills = useSkillOffer(prompt, setPrompt, { planId: taskId });
+
+  // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
+  const startSuggested = async (
+    suggestion: OpenedSuggestion["suggestion"],
+  ): Promise<StartAnswer> => {
+    const sent = sentOf(suggestion, prompt.trim(), pictures.files ?? [], pick.picked);
+
+    const result = await sendSuggestion(
+      { agentId: suggestion.agentId, buttonId: suggestion.buttonId, sent },
+      START_REFUSAL,
+    );
+
+    return "reached" in result
+      ? { agentId: result.reached, taskId: suggestedTask ?? taskId }
+      : { refused: result.failure.text };
+  };
 
   const start = () =>
     go(
       () =>
-        startAgent({
-          prompt: prompt.trim(),
-          attachments: pictures.files,
-          picked: pick.picked,
-          runsOn,
-        }),
+        opened === undefined
+          ? startAgent({
+              prompt: prompt.trim(),
+              attachments: pictures.files,
+              picked: pick.picked,
+              runsOn,
+            })
+          : startSuggested(opened.suggestion),
       pictures.refusal,
     );
 
   return (
     <>
-      <SheetBar title={WORDS.NEW_AGENT} ready={drafted && !starting} onStart={start} kept={kept} />
+      <SheetBar
+        title={WORDS.NEW_AGENT}
+        ready={drafted && placed && !starting}
+        onStart={start}
+        kept={kept}
+      />
       <Screen>
         <SettingsForm>
           <DraftSection
+            title={
+              opened === undefined
+                ? undefined
+                : WORDS.SUGGESTED_BY(
+                    suggester === undefined ? undefined : agentName(suggester),
+                    opened.suggestion.label,
+                  )
+            }
             placeholder={WORDS.AGENT_PLACEHOLDER}
+            words={prompt}
             onWords={setPrompt}
+            skills={skills}
             pictures={pictures}
             note={note}
             testIds={TEST_IDS.NEW_AGENT}
           />
-          <AgentSection pick={pick} runsOn={runsOn} onRunsOn={setRunsOn} />
+          <AgentSection
+            pick={pick}
+            runsOn={runsOn}
+            onRunsOn={setRunsOn}
+            runsOnShown={opened === undefined}
+          />
         </SettingsForm>
       </Screen>
     </>
@@ -462,7 +517,8 @@ function useRelationPick(
 /** New task's relation: its kind, and the task it names once a kind is picked. */
 function RelationSection({ pick }: { readonly pick: RelationPick }) {
   return (
-    <ListSection title={WORDS.TASK_RELATION}>
+    // Note that the section has no header, since its first row already names it, as a system form's single-purpose group stands.
+    <ListSection>
       <MenuPickRow
         label={WORDS.RELATION}
         options={RELATION_OPTIONS}
@@ -535,6 +591,19 @@ export function NewTaskScreen({
     ? relation.tasks.find((task) => task.id === relation.taskId)
     : undefined;
 
+  // Note that a `/` offers the skills of the repository the task starts in, its tree's where it joins one, as the panel's New task reads them.
+  const skillsRepository = tree === undefined ? repository.picked : (tree.repository ?? undefined);
+
+  const skills = useSkillOffer(
+    prompt,
+    setPrompt,
+    workspaceId === undefined
+      ? undefined
+      : skillsRepository === undefined
+        ? { workspaceId }
+        : { workspaceId, repository: skillsRepository },
+  );
+
   const start = () => {
     if (!drafted) return;
     go(
@@ -570,24 +639,42 @@ export function NewTaskScreen({
         <SettingsForm>
           <DraftSection
             placeholder={WORDS.TASK_PLACEHOLDER}
+            words={prompt}
             onWords={setPrompt}
-            initialWords={draft?.prompt}
+            skills={skills}
             pictures={pictures}
             note={note}
             testIds={TEST_IDS.NEW_TASK}
           />
           <RelationSection pick={relation} />
+          {/* Note that the section has no header, since its one row already names it, as a system form's single-row group stands. */}
           <ListSection
-            title={WORDS.REPOSITORY}
             footer={
-              tree === undefined && repository.options.length === 0
-                ? WORDS.NO_REPOSITORIES
-                : undefined
+              tree !== undefined
+                ? undefined
+                : (repository.failed ??
+                  (repository.read && repository.options.length === 0
+                    ? WORDS.NO_REPOSITORIES
+                    : undefined))
             }
           >
             {tree !== undefined ? (
               <ValueRow label={WORDS.REPOSITORY} value={tree.repository ?? NO_REPOSITORY} />
-            ) : repository.options.length === 0 ? null : (
+            ) : repository.options.length === 0 ? (
+              <>
+                {/* Note that the repository a start still names, taken from the account's recent tasks, stands while the list is read or could not be, so it never starts in one the sheet did not show. */}
+                {repository.picked === undefined ? null : (
+                  <ValueRow label={WORDS.REPOSITORY} value={repository.picked} />
+                )}
+                {repository.failed === undefined ? null : (
+                  <ActionRow
+                    label={WORDS.TRY_AGAIN}
+                    symbol={GLYPH.RETRY}
+                    onPress={repository.retry}
+                  />
+                )}
+              </>
+            ) : (
               <MenuPickRow
                 label={WORDS.REPOSITORY}
                 options={repository.options}

@@ -21,6 +21,8 @@ import {
   PULL_REQUEST_MOMENT,
   type PullRequestMoment,
 } from "./automation-wire.js";
+import { readerZone } from "./date-mention.js";
+import { GLYPH_STATE, GLYPH_STATE_WORDS, STOPPED_WORDS } from "./glyph-state.js";
 import { PRODUCT_NAME } from "./product-name.js";
 import { titlesNothing } from "./task-wire.js";
 import { clockText } from "./time-format.js";
@@ -77,6 +79,9 @@ const RUN_REASON_WORDS = {
     "Started a fresh agent: the one its runs went to was gone or archived.",
 } as const satisfies Record<AutomationRunReason, string>;
 
+/** How a trigger kept to its repository's default branch says it, whatever the branch is called. */
+const DEFAULT_BRANCH_WORDS = "the default branch";
+
 /** Each GitHub event as a trigger's sentence says what happens, after "When". */
 const GITHUB_EVENT_WORDS = {
   [GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED]: { what: "a pull request", happens: "is opened" },
@@ -86,6 +91,8 @@ const GITHUB_EVENT_WORDS = {
   [GITHUB_TRIGGER_EVENT.ISSUE_LABELED]: { what: "an issue", happens: "is labeled" },
   [GITHUB_TRIGGER_EVENT.CHECK_FAILED]: { what: "a check", happens: "fails" },
   [GITHUB_TRIGGER_EVENT.PUSH]: { what: "commits", happens: "are pushed" },
+  [GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED]: { what: "a pull request", happens: "is merged" },
+  [GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED]: { what: "a release", happens: "is published" },
 } as const satisfies Record<GitHubTriggerEvent, { what: string; happens: string }>;
 
 /** Whose events a GitHub trigger hears, as its sentence names them after "by". */
@@ -102,11 +109,12 @@ const PULL_REQUEST_MOMENT_WORDS = {
   [PULL_REQUEST_MOMENT.PUSHED]: "pushed to",
 } as const satisfies Record<PullRequestMoment, string>;
 
-/** The events a draft or a fork's pull request may be, which a trigger's drafts and forks settings speak to. */
+/** The events a draft or a fork's pull request may be, which a trigger's drafts and forks settings speak to; a merged pull request is never a draft. */
 const PULL_REQUEST_EVENTS: ReadonlySet<GitHubTriggerEvent> = new Set([
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED,
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED,
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
+  GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED,
 ]);
 
 /** What fired a run, as its row's title says it while its agent has no title of its own. */
@@ -139,13 +147,13 @@ function agentLine(
     : standing;
 }
 
-/** Where a started run's agent stands, as its row's line says it; the admin pages say an agent's status in these words too. */
+/** Where a started run's agent stands, as its row's line says it; the admin pages say an agent's status in these words too. Working, Failed, and Stopped are the agent's glyph's own words (`glyph-state.ts`). */
 export const AGENT_STATUS_WORDS = {
   [AGENT_STATUS.STARTING]: "Starting…",
-  [AGENT_STATUS.RUNNING]: "Working",
+  [AGENT_STATUS.RUNNING]: GLYPH_STATE_WORDS[GLYPH_STATE.WORKING],
   [AGENT_STATUS.COMPLETED]: "Finished",
-  [AGENT_STATUS.FAILED]: "Failed",
-  [AGENT_STATUS.CANCELED]: "Stopped",
+  [AGENT_STATUS.FAILED]: GLYPH_STATE_WORDS[GLYPH_STATE.FAILED],
+  [AGENT_STATUS.CANCELED]: STOPPED_WORDS,
 } as const satisfies Record<AgentStatus, string>;
 
 /** The order the owners' groups stand in: the workspace's first, as the ones every member shares. */
@@ -193,9 +201,21 @@ function cronNumber(field: string | undefined): number | undefined {
   return field !== undefined && /^\d+$/u.test(field) ? Number(field) : undefined;
 }
 
-/** The city of an IANA zone, its underscores spaced: "America/New_York" is "New York". */
-function zoneCity(timezone: string): string {
-  return (timezone.split("/").at(-1) ?? timezone).replaceAll("_", " ");
+/**
+ * The zone a schedule's clock is read in, as the platform names it to a
+ * person: "Eastern Time", "United Kingdom Time", "India Standard Time", and
+ * UTC as itself, since its generic name is an offset. Note that the generic
+ * name holds through summer time, as a schedule's zone does, and is read at
+ * the present, since a zone's name has changed over its history.
+ */
+function zoneWords(timezone: string): string {
+  if (timezone === "UTC" || timezone === "Etc/UTC") return "UTC";
+
+  return (
+    new Intl.DateTimeFormat("en-US", { timeZone: timezone, timeZoneName: "longGeneric" })
+      .formatToParts(Date.now())
+      .find((part) => part.type === "timeZoneName")?.value ?? timezone
+  );
 }
 
 /** A time of day as it is typed: hour, optional minutes, optional AM or PM ("2:00 AM", "2pm", "14:30"). */
@@ -226,26 +246,30 @@ export function parseAutomationClock(
 }
 
 /** A schedule in words where the picker could have written it, and its cron otherwise. */
-function scheduleText(cron: string, timezone: string): string {
+function scheduleText(cron: string, timezone: string, reader: string): string {
   const spelled = cron.trim();
-  const city = zoneCity(timezone);
+  // Note that a schedule set in the reader's own zone names none, so a zone said is one to mind.
+  const named = timezone === reader ? undefined : zoneWords(timezone);
+  const zone = named === undefined ? "" : ` ${named}`;
+  const cronZone = named === undefined ? "" : `, ${named}`;
 
-  if (spelled === SCHEDULE_PRESET.HOURLY) return `Every hour · ${city}`;
+  // Note that an hourly schedule names no zone, since an hour starts at the same moment in nearly every zone.
+  if (spelled === SCHEDULE_PRESET.HOURLY) return "Every hour";
   const [minuteField, hourField, dayOfMonth, month, dayOfWeek] = spelled.split(/\s+/u);
   const minute = cronNumber(minuteField);
   const hour = cronNumber(hourField);
   const daily = dayOfMonth === "*" && month === "*";
 
-  if (minute === undefined || hour === undefined || !daily) return `${spelled} · ${city}`;
+  if (minute === undefined || hour === undefined || !daily) return `${spelled}${cronZone}`;
   const at = clockText(hour, minute);
 
-  if (dayOfWeek === "*") return `Every day at ${at} · ${city}`;
+  if (dayOfWeek === "*") return `Every day at ${at}${zone}`;
 
-  if (dayOfWeek === "1-5") return `Weekdays at ${at} · ${city}`;
+  if (dayOfWeek === "1-5") return `Weekdays at ${at}${zone}`;
   const day = cronNumber(dayOfWeek);
   const name = day === undefined ? undefined : WEEKDAY_NAMES[day % 7];
 
-  return name === undefined ? `${spelled} · ${city}` : `${name} at ${at} · ${city}`;
+  return name === undefined ? `${spelled}${cronZone}` : `${name} at ${at}${zone}`;
 }
 
 /** Who owns an automation; one a service before scopes answered is its creator's own. */
@@ -267,16 +291,18 @@ export function automationGroups(
 /**
  * A trigger as one sentence, as a row and the editor say what fires it: a
  * schedule in words, a GitHub event with the repositories it is heard in and
- * the labels and branches it keeps to, a webhook's call, and an
+ * the labels, branches, and tags it keeps to, the default branch named first, a webhook's call, and an
  * integration's event with the provider it comes from.
  */
 export function automationTriggerText(
   trigger: AutomationTrigger,
   repositories: readonly string[] = [],
+  /** The reader's own zone, which a schedule set in it does not name. */
+  reader: string = readerZone(),
 ): string {
   switch (trigger.kind) {
     case AUTOMATION_TRIGGER.SCHEDULE:
-      return scheduleText(trigger.cron, trigger.timezone);
+      return scheduleText(trigger.cron, trigger.timezone, reader);
     case AUTOMATION_TRIGGER.GITHUB: {
       const words = GITHUB_EVENT_WORDS[trigger.event];
       // Note that each list is read in its own order and once, because a trigger may name one twice.
@@ -300,19 +326,30 @@ export function automationTriggerText(
 
       const pullRequest = PULL_REQUEST_EVENTS.has(trigger.event);
 
+      const merged = trigger.event === GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED;
+      const release = trigger.event === GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED;
+
       const included = [
-        ...(pullRequest && trigger.drafts === true ? ["drafts"] : []),
+        ...(pullRequest && !merged && trigger.drafts === true ? ["drafts"] : []),
         ...(pullRequest && trigger.forks === true ? ["forks"] : []),
+        ...(release && trigger.prereleases === true ? ["prereleases"] : []),
       ];
 
       const also = included.length === 0 ? "" : `, ${andList(included)} included`;
       const where = repositories.length === 0 ? "" : ` in ${orList(repositories)}`;
       const labels = trigger.labels ?? [];
-      const branches = trigger.branches ?? [];
+
+      const branches = [
+        ...(trigger.defaultBranch === true ? [DEFAULT_BRANCH_WORDS] : []),
+        ...(trigger.branches ?? []),
+      ];
+
+      const tags = trigger.tags ?? [];
       const labeled = labels.length === 0 ? "" : ` labeled ${orList(labels)}`;
       const on = branches.length === 0 ? "" : ` on ${orList(branches)}`;
+      const tagged = tags.length === 0 ? "" : ` tagged ${orList(tags)}`;
 
-      return `When ${words.what}${by} ${happens}${where}${labeled}${on}${also}`;
+      return `When ${words.what}${by} ${happens}${where}${labeled}${on}${tagged}${also}`;
     }
 
     case AUTOMATION_TRIGGER.WEBHOOK:
@@ -323,11 +360,15 @@ export function automationTriggerText(
       const picked = trigger.filters?.level ?? [];
       const levels = Object.values(SENTRY_LEVEL).filter((level) => picked.includes(level));
 
+      const projects = trigger.filters?.project ?? [];
+      const environments = trigger.filters?.environment ?? [];
+
+      // Note that each filter is said as words after a comma, never set apart by a dot.
       const kept = [
-        trigger.filters?.project ?? [],
-        trigger.filters?.environment ?? [],
-        levels,
-      ].flatMap((values) => (values.length > 0 ? [` · ${values.join(", ")}`] : []));
+        projects.length === 0 ? undefined : `for ${orList(projects)}`,
+        environments.length === 0 ? undefined : `in ${orList(environments)}`,
+        levels.length === 0 ? undefined : `at ${orList(levels)} level`,
+      ].flatMap((part) => (part === undefined ? [] : [`, ${part}`]));
 
       return `When ${provider.events[trigger.event].words} in ${provider.name}${kept.join("")}`;
     }
@@ -434,6 +475,11 @@ export function automationRunPlace(
   };
 }
 
+/** Words closed as a sentence, so another can follow them: a period where they end on none. */
+function sentenceOf(words: string): string {
+  return /[.…!?]$/u.test(words) ? words : `${words}.`;
+}
+
 /** A run's line: why it did not start, where it did not, else where its agent stands and what its start noted, or that it waits to start. */
 export function automationRunLine(
   run: AutomationRunSummary,
@@ -443,7 +489,9 @@ export function automationRunLine(
   if (run.status === AUTOMATION_RUN_STATUS.STARTED) {
     const standing = run.agent === null ? "Its agent is gone" : agentLine(run.agent, keyHolder);
 
-    return run.reason === null ? standing : `${standing} · ${RUN_REASON_WORDS[run.reason]}`;
+    return run.reason === null
+      ? standing
+      : `${sentenceOf(standing)} ${RUN_REASON_WORDS[run.reason]}`;
   }
 
   if (run.reason !== null) return RUN_REASON_WORDS[run.reason];

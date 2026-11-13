@@ -15,15 +15,18 @@
  * pages under a task are excluded before the task itself is claimed.
  */
 
+import { HOST_WIRE } from "./host-wire.js";
 import { IOS_OAUTH_CALLBACK_PATH } from "./ios-sign-in-wire.js";
 import {
   GITHUB_PAGE,
   gitHubPageLink,
   LINK_DESTINATION,
   type LinkDestination,
-  type NumberedAddress,
   pullRequestAddressOf,
   readLink,
+  readShownLink,
+  samePullRequest,
+  taskNumberOf,
 } from "./link-grammar.js";
 
 /** One path pattern of the association's `applinks` components, as Apple's format names its keys. */
@@ -36,6 +39,10 @@ export interface AppLinkComponent {
 /** The paths the home host hands the app, in the order Apple reads them. */
 export const IOS_APP_LINK_COMPONENTS: readonly AppLinkComponent[] = [
   { "/": IOS_OAUTH_CALLBACK_PATH, comment: "The sign-in's return." },
+  {
+    "/": `${HOST_WIRE.CONNECT_PATH}/*`,
+    comment: "A machine's pairing, which Settings › Machines approves or denies.",
+  },
   { "/": "/*/task/*/inbox/*", comment: "A thread on a task's Inbox." },
   { "/": "/*/agent/*/inbox/*", comment: "A thread on an agent's Inbox." },
   {
@@ -63,6 +70,19 @@ const IOS_ROUTE = {
   PULL_REQUEST: "pull",
 } as const;
 
+/** A place the app draws a screen for, which always has a route of the app's. */
+type IosRoutedPlace = Extract<
+  LinkDestination,
+  {
+    readonly kind:
+      | typeof LINK_DESTINATION.INBOX
+      | typeof LINK_DESTINATION.INBOX_ITEM
+      | typeof LINK_DESTINATION.BOARD
+      | typeof LINK_DESTINATION.TASK
+      | typeof LINK_DESTINATION.AGENT;
+  }
+>;
+
 /** A pull request one of the member's agents opened, by the agent and the pull request's page on GitHub. */
 export interface AgentPullRequestLink {
   readonly agentId: string;
@@ -74,21 +94,29 @@ function addressPath(address: string): string {
   return (address.split(/[?#]/u)[0] ?? "").replace(/\/$/u, "");
 }
 
-/** Whether two pull requests on GitHub are one: the same number in the same repository, whatever its case. */
-function samePullRequest(one: NumberedAddress, other: NumberedAddress | undefined): boolean {
-  return (
-    other !== undefined &&
-    one.number === other.number &&
-    one.repository.toLowerCase() === other.repository.toLowerCase()
-  );
+/** The query a task's route carries the workspace its link names it under by, where it names the task by number. */
+export const IOS_TASK_WORKSPACE_PARAM = "workspace";
+
+/** A task's route as its link names it: by id, or by number with the workspace the number counts in, for the task's screen to find. */
+function taskRoute(planId: string, workspace: string | undefined): string {
+  const route = `${IOS_ROUTE.TASKS}/${encodeURIComponent(planId)}`;
+  const numbered = taskNumberOf({ kind: LINK_DESTINATION.TASK, planId }) !== undefined;
+
+  return numbered && workspace !== undefined
+    ? `${route}?${new URLSearchParams({ [IOS_TASK_WORKSPACE_PARAM]: workspace })}`
+    : route;
 }
 
 /**
  * The app's route for a place it draws, or none for a place it leaves to the
  * web. A task is routed as the link names it, by id or by number, for the
- * task's screen to find.
+ * task's screen to find; a number carries `workspace`, the workspace the
+ * link names it under, since a number counts within one workspace and the
+ * screen finds a task the phone doesn't hold by both (`TASKS_FIND`).
  */
-export function iosAppRouteOf(place: LinkDestination): string | undefined {
+export function iosAppRouteOf(place: IosRoutedPlace, workspace?: string): string;
+export function iosAppRouteOf(place: LinkDestination, workspace?: string): string | undefined;
+export function iosAppRouteOf(place: LinkDestination, workspace?: string): string | undefined {
   switch (place.kind) {
     case LINK_DESTINATION.INBOX:
       return IOS_ROUTE.INBOX;
@@ -97,12 +125,25 @@ export function iosAppRouteOf(place: LinkDestination): string | undefined {
     case LINK_DESTINATION.BOARD:
       return IOS_ROUTE.TASKS;
     case LINK_DESTINATION.TASK:
-      return `${IOS_ROUTE.TASKS}/${encodeURIComponent(place.planId)}`;
+      return taskRoute(place.planId, workspace);
     case LINK_DESTINATION.AGENT:
       return iosAgentRoute(place.agentId);
     default:
       return undefined;
   }
+}
+
+/**
+ * The code a machine's pairing link names (`/connect/<code>`), which the app
+ * approves or denies on Settings › Machines rather than at a route a link
+ * reaches by itself; none for any other address. Note that the code is
+ * handed to the page, which reads the pairing and asks before anything is
+ * sent, as the panel's Connect dialog does.
+ */
+export function iosHostConnectCode(address: string): string | undefined {
+  const read = readShownLink(address);
+
+  return read === undefined || "workspace" in read ? undefined : read.place.code;
 }
 
 /** The app's route for an agent's page: its transcript and its composer. */
@@ -113,6 +154,24 @@ export function iosAgentRoute(agentId: string): string {
 /** The app's route for a pull request an agent opened, on its own screen under the agent's page. */
 export function iosPullRequestRoute(agentId: string, number: number): string {
   return `${iosAgentRoute(agentId)}/${IOS_ROUTE.PULL_REQUEST}/${number}`;
+}
+
+/**
+ * Whether the route is a conversation, which a compact window's tab bar
+ * steps aside for, as Messages hides its tabs in a chat so the composer
+ * stands alone at the foot: a thread (`/inbox/<id>`), an agent's page, or
+ * a pull request it opened. A list, a task, and a page the agent showed keep
+ * the bar.
+ */
+export function iosRouteHidesTabs(pathname: string): boolean {
+  const [tab, first, second, third] = pathname.split("/").filter((segment) => segment !== "");
+  const route = `/${tab ?? ""}`;
+
+  if (route === IOS_ROUTE.INBOX) return first !== undefined;
+
+  if (`${route}/${first ?? ""}` !== IOS_ROUTE.AGENT || second === undefined) return false;
+
+  return third === undefined || third === IOS_ROUTE.PULL_REQUEST;
 }
 
 /**
@@ -128,17 +187,14 @@ export function iosAppRouteOfAddress(
 ): string | undefined {
   const read = readLink(address);
 
-  if (read !== undefined) return iosAppRouteOf(read.place);
+  if (read !== undefined) return iosAppRouteOf(read.place, read.workspace);
   const named = pullRequestAddressOf(address);
 
   if (named === undefined) return undefined;
   const own = gitHubPageLink({ kind: GITHUB_PAGE.PULL_REQUEST, ...named });
 
   if (addressPath(address).toLowerCase() !== own.toLowerCase()) return undefined;
-
-  const opened = pullRequests.find(({ pullRequest }) =>
-    samePullRequest(named, pullRequestAddressOf(pullRequest.url)),
-  );
+  const opened = pullRequests.find(({ pullRequest }) => samePullRequest(pullRequest.url, address));
 
   return opened === undefined ? undefined : iosPullRequestRoute(opened.agentId, named.number);
 }

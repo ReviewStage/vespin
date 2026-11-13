@@ -5,7 +5,15 @@ import {
   type AgentBrief,
   type AgentSummary,
 } from "@repo/features/agent-wire";
+import type { ModelChoice } from "@repo/features/models-wire";
+import type { DraftSuggestion } from "@repo/features/suggestion-model";
 import { TERMINAL_ASK } from "@repo/features/terminal-entry";
+import {
+  agentTranscript,
+  readWholeTranscript,
+  TRANSCRIPT_COPY,
+  type TranscriptCopy,
+} from "@repo/features/transcript-copy";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { GLYPH } from "@repo/ui/icons";
@@ -24,17 +32,12 @@ import {
   useShortcutTargetOn,
 } from "../shortcut-target.js";
 import { useSteadyDoor } from "../steady-door.js";
+import type { SuggestDoor } from "../tasks/fork-action.js";
 import type { AgentFork } from "../tasks/fork-model.js";
 import { useMoveToEntry } from "../tasks/move-agent.js";
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import type { HeldAction } from "../tasks/terminal-held.js";
-import { TERMINAL_KIND } from "../tasks/terminal-session.js";
-import {
-  agentTranscript,
-  readWholeTranscript,
-  TRANSCRIPT_COPY,
-  type TranscriptCopy,
-} from "../tasks/transcript-copy.js";
+import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
 import type { SidePanelControl } from "../tasks/use-side-panel.js";
 import { useOpenTerminalTab, useShowShellTab } from "../tasks/use-terminal-session.js";
@@ -247,11 +250,13 @@ export interface AgentTerminalDoors {
   readonly onShowShell?: ((agentId: string, terminal: ShownShell) => void) | undefined;
 }
 
-/** A shell the service started, as a Terminal tab names and attaches to it, and the run action it runs where it is one's. */
+/** A shell the service or this Mac started, as a Terminal or Local tab names and attaches to it, and the run action it runs where it is one's. */
 export interface ShownShell {
   readonly id: string;
   readonly title: string;
   readonly action?: HeldAction | undefined;
+  /** Where the shell runs: on this Mac for a local agent's run action, in the agent's sandbox otherwise. */
+  readonly kind?: TerminalKind | undefined;
 }
 
 /** An agent's actions as a surface draws them: its doors, its rename where it is renamed, and the questions its Archive and its delete ask through, drawn beside them. */
@@ -314,6 +319,7 @@ export interface AgentDraftDoors {
   readonly onContinue:
     | ((agentId: string, words: string, attachments: readonly AgentAttachment[]) => void)
     | undefined;
+  readonly onSuggest: SuggestDoor | undefined;
 }
 
 /**
@@ -324,7 +330,7 @@ export interface AgentDraftDoors {
  * (`useSteadyDoor`), and none while what the agents stand under is archived.
  */
 export function useAgentDraftDoors(
-  agents: Pick<AgentsControl, "onForkDraft" | "onContinueDraft">,
+  agents: Pick<AgentsControl, "onForkDraft" | "onContinueDraft" | "onSuggestDraft">,
   archived: boolean,
   onOpenDraft: (draftId: string) => void,
 ): AgentDraftDoors {
@@ -339,7 +345,14 @@ export function useAgentDraftDoors(
           onOpenDraft(agents.onContinueDraft(agentId, words, attachments)),
   );
 
-  return { onFork, onContinue };
+  const onSuggest = useSteadyDoor(
+    archived
+      ? undefined
+      : (suggestion: DraftSuggestion, words: string, choice: ModelChoice | undefined) =>
+          onOpenDraft(agents.onSuggestDraft(suggestion, words, choice)),
+  );
+
+  return { onFork, onContinue, onSuggest };
 }
 
 /** One agent's actions, as every surface that draws it offers them. */

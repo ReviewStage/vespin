@@ -1,3 +1,4 @@
+import { taskFollowerSchema } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { browserTabsPlaceSchema } from "./agent-browser-tab-wire.js";
 import { agentAgentAnswerSchema } from "./agent-view.js";
@@ -7,9 +8,13 @@ import { descriptionCommentsContract } from "./contract/description-comments.js"
 import { githubContract } from "./contract/github.js";
 import { repositoryPinsContract } from "./contract/repository-pins.js";
 import { taskFilesContract } from "./contract/task-files.js";
+import { taskFollowersContract } from "./contract/task-followers.js";
 import { taskSectionsContract } from "./contract/task-sections.js";
 import { tasksContract } from "./contract/tasks.js";
-import { descriptionAttachmentTypeSchema } from "./description-attachment-wire.js";
+import {
+  descriptionAttachmentTypeSchema,
+  descriptionFileDataUrlSchema,
+} from "./description-attachment-wire.js";
 import {
   descriptionCommentActionRequestSchema,
   descriptionCommentStartRequestSchema,
@@ -31,7 +36,6 @@ import {
   pageVersionNumberSchema,
   taskPageVersionAnswerSchema,
 } from "./page-wire.js";
-import { pictureDataUrlSchema } from "./picture-wire.js";
 import { pinPositionSchema } from "./pin-order.js";
 import { readMarkSchema } from "./read-mark.js";
 import {
@@ -130,13 +134,14 @@ const tasksReadSchema = EffectSchema.Literals(Object.values(TASKS_READ));
  * Whether what the host follows live is current, as the task list's follow
  * last found it: live while its rows arrive, catching up while a poll that
  * failed twice running is asked again or a follow that broke is started
- * again, never while a read is only loading, and
- * offline while the service answers no seal at all.
+ * again, and never while a read is only loading. Whether the service
+ * answers at all is the network watch's to say (`network.reachable`),
+ * since a read refused, as an expired sign-in's is, is not the service out
+ * of reach.
  */
 export const HOST_LIVE = {
   LIVE: "live",
   CATCHING_UP: "catching-up",
-  OFFLINE: "offline",
 } as const;
 
 export type HostLive = (typeof HOST_LIVE)[keyof typeof HOST_LIVE];
@@ -349,6 +354,29 @@ export const tasksBlockParamsSchema = EffectSchema.Struct({
 
 export type TasksBlockParams = typeof tasksBlockParamsSchema.Type;
 
+/** A follow or an unfollow of a task by the account, as the window asks it: the task. */
+export const tasksFollowParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+});
+
+export type TasksFollowParams = typeof tasksFollowParamsSchema.Type;
+
+/** The account's own switch on a task it follows, as the window asks it: the task, and whether its agents may use the account's machines. */
+export const tasksSetFollowerMachinesParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+  machines: EffectSchema.Boolean,
+});
+
+export type TasksSetFollowerMachinesParams = typeof tasksSetFollowerMachinesParamsSchema.Type;
+
+/** Another member added as a follower of a task, as the window asks it: the task, and the member by their account's id. */
+export const tasksAddFollowerParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+  userId: taskAssigneeIdSchema,
+});
+
+export type TasksAddFollowerParams = typeof tasksAddFollowerParamsSchema.Type;
+
 /** A task's parent set or cleared, as the window asks it: the task, and the parent the service takes, null for none. */
 export const tasksSetParentParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
@@ -526,6 +554,21 @@ export const tasksSetParentAnswerSchema = EffectSchema.Union([
 ]);
 
 export type TasksSetParentAnswer = typeof tasksSetParentAnswerSchema.Type;
+
+/** Why a follower write wrote nothing: the service did not answer, the task is out of reach or its workspace has Following off, or, for an unfollow, the account is its assignee. */
+export const FOLLOWER_CALL_FAILURE = failureSetOf(taskFollowersContract);
+
+const FOLLOWER_CALL_FAILURES = Object.values(FOLLOWER_CALL_FAILURE);
+
+export type FollowerCallFailure = (typeof FOLLOWER_CALL_FAILURES)[number];
+
+/** A follow, an unfollow, a switch, or an add, as the window hears it: the task's followers as they then stand, the earliest to follow first, or why they are unchanged. */
+export const tasksFollowersAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({ followers: EffectSchema.Array(taskFollowerSchema) }),
+  EffectSchema.Struct({ failure: EffectSchema.Literals(FOLLOWER_CALL_FAILURES) }),
+]);
+
+export type TasksFollowersAnswer = typeof tasksFollowersAnswerSchema.Type;
 
 /** Why a relation's move wrote nothing: a block's reasons, or a parent's. */
 const RELATION_CALL_FAILURES = Object.values(
@@ -773,10 +816,10 @@ export const tasksPictureAnswerSchema = EffectSchema.Union([
 
 export type TasksPictureAnswer = typeof tasksPictureAnswerSchema.Type;
 
-/** A picture kept on a description, as the editor that took it asks: the plan, and the picture or video as a `data:` URL. */
+/** A picture kept on a description, as the editor that took it asks: the plan, and the picture, video, or PDF as a `data:` URL. */
 export const tasksPictureKeepParamsSchema = EffectSchema.Struct({
   planId: EffectSchema.NonEmptyString,
-  picture: pictureDataUrlSchema,
+  picture: descriptionFileDataUrlSchema,
 });
 
 /** Why a picture was not kept: the description holds its bound of pictures, or of videos, as the service answers in band, or how its procedure failed: the plan is not the account's to write, or no answer. */

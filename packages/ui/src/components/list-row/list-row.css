@@ -63,10 +63,10 @@
     box-shadow: inset 0 0 0 1px var(--ui-color-border-menu-open);
   }
 
-  /* The open row is drawn in the work sheet's ground, lifted by a hairline
-     and a soft shadow, as the sheet itself is. */
+  /* The open row is lifted as a card is, in the surface's fill with a
+     hairline and a soft shadow. */
   .ui-list-row[data-current="true"][data-current-look="sheet"] {
-    background: var(--ui-color-ground);
+    background: var(--ui-color-surface);
     box-shadow:
       0 0 0 1px var(--ui-color-border),
       0 1px 2px var(--ui-color-shadow-soft);

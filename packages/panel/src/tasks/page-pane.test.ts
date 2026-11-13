@@ -262,7 +262,7 @@ test("over the source, View settings offers the settings its lines follow, and t
   const { container, press, handed } = mount(FUNNEL);
   assert.deepEqual(handed(), [
     ["Open in browser"],
-    ["Zoom in", "Zoom out", "Actual size"],
+    ["Zoom out", "Actual size", "Zoom in"],
     ["Reload page"],
   ]);
   assert.equal(container.querySelector('button[aria-label="View options"]'), null);
@@ -556,9 +556,9 @@ test("on a phone the page draws no bar, and the task's header's ⋯ offers every
     "Later version",
     "View source",
     "Reload page",
-    "Zoom in",
     "Zoom out",
     "Actual size",
+    "Zoom in",
   ]);
   assert.deepEqual(handed.item("Later version"), { disabled: true, detail: "Version 3 of 3" });
   assert.deepEqual(handed.item("Actual size"), { disabled: true, detail: "100%" });

@@ -63,6 +63,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { CHECKOUT_DIFF_EXIT } from "@repo/agent-runner/checkout-diff";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { hasRepository, readAgent } from "@repo/database/models/agent-store";
 import {
@@ -78,12 +79,11 @@ import {
   withdrawDeviceAgentRequest,
   withdrawUnclaimedDeviceAgentLine,
 } from "@repo/database/models/device-agent-store";
-import { deviceLayout, devicesSeenSince } from "@repo/database/models/device-store";
+import { deviceLayout, devicesNamed, devicesSeenSince } from "@repo/database/models/device-store";
 import { hostRemoved } from "@repo/database/models/host-store";
 import { parseKeyRing, sealMacLaunchSecrets } from "@repo/database/models/provider-key-seal";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { AGENT_MACHINE, MAC_PRESENCE } from "@repo/features/agent-wire";
-import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
 import { CHECKOUT_RESTORE_EXIT } from "@repo/features/checkout-restore";
 import {
   DEVICE_AGENT_BOUNDS,
@@ -127,6 +127,7 @@ import { heldUntil } from "../../http/held-read.js";
 import { agentCommitIdentity, type CheckoutServices } from "../coder-host/checkout.js";
 import {
   type AgentMachineService,
+  ATTACHMENT_FILE_MODE,
   CHECKOUT_DIFF_OUTCOME,
   type CheckoutDiffOutcome,
   type DeliveredCredentials,
@@ -325,7 +326,7 @@ function deviceMachineOver(
   /** The local agent running in the session, where one does. */
   const pinOfSession = (session: string) => stored(deviceAgentOfSession(session));
 
-  /** Where the agent's things stand on its Mac, under the agents folder that Mac registered, or its home folder where it named none; refused where it is pinned to no Mac of its starter's. */
+  /** Where the agent's things stand on its Mac, under the agents folder that Mac registered, or its home folder where it named none; refused where it is pinned to no Mac of its starter's, and as away where that Mac's host has not registered its folders. */
   const layoutOf = (userId: string, agentId: string, deviceId: string | null | undefined) =>
     Effect.gen(function* () {
       if (deviceId === null || deviceId === undefined) {
@@ -336,8 +337,16 @@ function deviceMachineOver(
 
       if (Option.isNone(device)) {
         // Note that a removed host is refused by name, so the member is told it is gone rather than to try again.
-        return yield* (yield* stored(hostRemoved(userId, deviceId)))
-          ? new LaunchRefused({ reason: "host removed", deviceRemoved: true })
+        if (yield* stored(hostRemoved(userId, deviceId))) {
+          return yield* new LaunchRefused({ reason: "host removed", deviceRemoved: true });
+        }
+
+        // Note that a Mac of the account's whose host has not registered the folders a launch lays
+        // out, one from before them, is away until it registers them, as its presence read reads it.
+        const named = (yield* stored(devicesNamed([deviceId]))).get(deviceId);
+
+        return yield* named?.userId === userId
+          ? new LaunchRefused({ reason: "host unregistered", deviceAway: true })
           : new LaunchRefused({ reason: "no mac" });
       }
 
@@ -750,6 +759,50 @@ function deviceMachineOver(
             ? answer.bytes
             : undefined,
       ),
+
+    // Note that the file goes in a files line of its own, which its Mac settles once it wrote it, and the
+    // write waits on that as a read waits on its answer, so the agent never reads before the file stands; a
+    // line the Mac has not taken by then is withdrawn, so a Mac back later writes nothing no one waits on.
+    // A host settles the line 0 where it wrote the file and 1 where it did not; one from before that settles
+    // every files line with no exit, which says nothing either way, so the path is answered and the agent's
+    // own read finds whether it stands. It is queued outside the runner's lease, since a file under a path
+    // of its own changes nothing a line around it does.
+    writeFile: (session, file) =>
+      Effect.gen(function* () {
+        const pin = yield* pinOfSession(session);
+
+        if (Option.isNone(pin)) return yield* unavailable();
+        yield* refuseAway(pin.value);
+        const { userId, agentId, deviceId } = pin.value;
+        const layout = yield* layoutOf(userId, agentId, deviceId);
+        const path = `${layout.attachments}/${file.name}`;
+        const id = randomUUID();
+
+        yield* queued(pin.value, {
+          id,
+          kind: DEVICE_AGENT_LINE_KIND.FILES,
+          payload: encodeFilesPayload({
+            files: [{ path, mode: ATTACHMENT_FILE_MODE, contents: file.contents }],
+          }),
+        });
+
+        const settled = yield* heldUntil(
+          exitOfLine(pin.value, id),
+          (exit) => exit !== null,
+          deviceTopics(userId),
+          MAC_MACHINE.POLL,
+          MAC_MACHINE.ANSWER_WAIT,
+        ).pipe(
+          Effect.ensuring(Effect.ignore(stored(withdrawUnclaimedDeviceAgentLine(userId, id)))),
+        );
+
+        if (Option.isNone(settled)) return yield* unavailable();
+        const exit = settled.value.read;
+
+        if (exit !== 0 && exit !== COMMAND_GONE) return yield* unavailable();
+
+        return path;
+      }),
 
     // A restore line put the worktree back, which its Mac settles with the restore's exit; a Mac whose host
     // takes no such line restores nothing, and one away is refused as every line to it is.

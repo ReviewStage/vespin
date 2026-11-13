@@ -15,9 +15,9 @@
  * turn as any message does, so the wakeup pre-empts nothing and is canceled
  * then with `stop`. One booking stands per agent: booking again replaces
  * it, and `stop` cancels it (`@repo/database/models/agent-wakeups`). The
- * delay is held to the same bounds Claude Code holds its own to, a minute
- * through an hour, and the instant booked is answered so the agent reads
- * what it got.
+ * delay is held to a minute through 7 days less an hour, the longest a
+ * queue message is kept less the hour it is kept past due, and the instant
+ * booked is answered so the agent reads what it got.
  */
 
 import type { Agent } from "@repo/database/models/agent-store";
@@ -32,12 +32,15 @@ import { describeWire } from "@repo/wire/effect";
 import { Clock, Duration, Effect, Predicate, Result, Schema } from "effect";
 import { ACTION_RESULT_STATUS, isRecord, type UnparsedWireValue } from "../../core.js";
 import { type AgentCall, agentToolRejected, callerAgent, orStoreRefusal } from "../agent-tools.js";
+import { AGENT_WAKEUP } from "./agent-wakeup-bounds.js";
 import { type AgentWakeupServices, AgentWakeups } from "./agent-wakeups.js";
 
-/** The bounds a booked delay is held to, in seconds: Claude Code's own for `ScheduleWakeup`. */
+/** The bounds a booked delay is held to, in seconds: a minute, through the longest the queue keeps a message less the time a wakeup is kept past due, 7 days less an hour. */
 export const WAKEUP_DELAY = {
   MIN_SECONDS: 60,
-  MAX_SECONDS: 3_600,
+  MAX_SECONDS: Duration.toSeconds(
+    Duration.subtract(AGENT_WAKEUP.RETAINED_LONGEST, AGENT_WAKEUP.RETAINED_PAST_DUE),
+  ),
 } as const;
 
 /** The most characters a wakeup's prompt may spell. */
@@ -62,7 +65,7 @@ const SCHEDULE_WAKEUP_INPUT = Schema.Struct({
   delaySeconds: Schema.optionalKey(
     describeWire(
       Schema.Int.check(Schema.isGreaterThanOrEqualTo(1)),
-      `Seconds from now to wake up, held to ${WAKEUP_DELAY.MIN_SECONDS} through ${WAKEUP_DELAY.MAX_SECONDS}. Required unless stop is true.`,
+      `Seconds from now to wake up, held to ${WAKEUP_DELAY.MIN_SECONDS} through ${WAKEUP_DELAY.MAX_SECONDS}, a minute through 7 days less an hour. Required unless stop is true.`,
     ),
   ),
   prompt: Schema.optionalKey(
@@ -89,10 +92,10 @@ export const SCHEDULE_WAKEUP_TOOL = {
     "the prompt reaches you as a line of your own, which starts your next turn. Use it to wait on " +
     "something slow, such as your pull request's checks, rather than polling or sleeping in your " +
     `shell, which holds your sandbox up. The delay is held to ${WAKEUP_DELAY.MIN_SECONDS} through ` +
-    `${WAKEUP_DELAY.MAX_SECONDS} seconds; wait longer by booking again when it fires. One wakeup ` +
-    "stands at a time: booking again replaces it, and stop: true cancels it. A message that reaches " +
-    "you first, such as GitHub's that every check finished, starts a turn on its own, so cancel the " +
-    "wakeup then. Answers `accepted` with the instant booked and the delay as held, or with no " +
+    `${WAKEUP_DELAY.MAX_SECONDS} seconds, a minute through 7 days less an hour; wait longer by ` +
+    "booking again when it fires. One wakeup stands at a time: booking again replaces it, and " +
+    "stop: true cancels it. A message that reaches you first, such as GitHub's that every check " +
+    "finished, starts a turn on its own, so cancel the wakeup then. Answers `accepted` with the instant booked and the delay as held, or with no " +
     "wakeup once canceled, or `rejected` and why.",
   inputSchema: SCHEDULE_WAKEUP_INPUT,
 } as const;

@@ -32,7 +32,7 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-thread
-# The Tasks tab: each row's status, end marks, and key stacked under its name.
+# The Tasks tab: each row's status, end marks, and, in a compact window, key stacked under its name.
 - launchApp:
     arguments:
       fixture: inbox

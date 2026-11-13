@@ -96,6 +96,8 @@ export * from "./pull-request-chapters.js";
 
 export * from "./push-device.js";
 
+export * from "./reply-button.js";
+
 export * from "./repository-pin.js";
 
 export * from "./runner-line.js";
@@ -113,6 +115,8 @@ export * from "./sync-log.js";
 export * from "./task.js";
 
 export * from "./task-block.js";
+
+export * from "./task-follower.js";
 
 export * from "./task-page.js";
 

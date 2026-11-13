@@ -55,11 +55,31 @@
   }
 }
 
+/* What a fading scroller's mask keeps whole: the strip its scrollbar
+   stands in, at the inline end of a vertical scroller and the foot of a
+   sideways one, laid over its fade as a layer of its own so the bar never
+   dissolves with what scrolls under it. Note that it is a strip of its own
+   rather than the box past the padding, because Chromium counts the bar
+   inside a mask's padding box, and a Mac's bar overlays the content in any
+   case. Every fading scroller draws the thin bar (below), so the strip is
+   as wide as the widest thin bar, the Mac's, and a scroller here, a
+   settings page, and a note's table each lay it after their fade
+   (`../settings-page/settings-page.css`, `../prose/prose.css`, `@repo/panel`'s
+   tasks.css). */
+:root {
+  /* off-scale: a thin scrollbar's thickness at its widest, the Mac's 11px, and a pixel's room */
+  --ui-scrollbar-room: 12px;
+  --ui-scrollbar-keep-vertical:
+    linear-gradient(#000, #000) right / var(--ui-scrollbar-room) 100% no-repeat;
+  --ui-scrollbar-keep-horizontal:
+    linear-gradient(#000, #000) bottom / 100% var(--ui-scrollbar-room) no-repeat;
+}
+
 @layer components {
   /* An area out of the tab order is focused by script alone, so its keys
      scroll it, and draws no ring; one in the tab order keeps the app's. It
      stays here, under utilities, because it hides the window's ring, which
-     no vendored utility may. */
+     no vendored utility may (`vespin/no-shadcn-focus-ring`). */
   .ui-scroll-area[tabindex="-1"] {
     outline: none;
   }
@@ -92,16 +112,21 @@
      something to scroll, and is not motion, so reduced motion leaves it
      be. The scroll padding brings what the keys move to clear of a faded
      edge. Above its inset the mask is whole, so a band stuck there stands
-     whole, and the fade begins beneath it; the scroll padding clears both. */
+     whole, and the fade begins beneath it; the scroll padding clears both.
+     The scrollbar's strip stays whole over the fade, and the bar is the thin
+     one that strip is as wide as. */
   .ui-scroll-area:not([data-fade="none"]) {
-    mask-image: linear-gradient(
-      to bottom,
-      #000 var(--ui-scroll-area-fade-inset),
-      transparent var(--ui-scroll-area-fade-inset),
-      #000 calc(var(--ui-scroll-area-fade-inset) + var(--ui-scroll-area-fade-start)),
-      #000 calc(100% - var(--ui-scroll-area-fade-end)),
-      transparent
-    );
+    scrollbar-width: thin;
+    mask:
+      linear-gradient(
+        to bottom,
+        #000 var(--ui-scroll-area-fade-inset),
+        transparent var(--ui-scroll-area-fade-inset),
+        #000 calc(var(--ui-scroll-area-fade-inset) + var(--ui-scroll-area-fade-start)),
+        #000 calc(100% - var(--ui-scroll-area-fade-end)),
+        transparent
+      ),
+      var(--ui-scroll-area-keep);
     scroll-padding-block-start: calc(var(--ui-scroll-area-fade-inset) + var(--ui-scroll-fade));
     animation-name: ui-scroll-area-fade-start, ui-scroll-area-fade-end;
     animation-timing-function: linear;
@@ -110,6 +135,16 @@
     animation-range:
       0 var(--ui-scroll-fade),
       calc(100% - var(--ui-scroll-fade)) 100%;
+  }
+
+  /* The bars an area keeps whole over its fade: its one, or both where it
+     scrolls both ways. */
+  .ui-scroll-area {
+    --ui-scroll-area-keep: var(--ui-scrollbar-keep-vertical);
+  }
+
+  .ui-scroll-area[data-axis="both"] {
+    --ui-scroll-area-keep: var(--ui-scrollbar-keep-vertical), var(--ui-scrollbar-keep-horizontal);
   }
 
   .ui-scroll-area[data-fade-inset="band"] {
@@ -127,13 +162,15 @@
 
   /* A sideways area fades along its inline axis, on its inline timeline. */
   .ui-scroll-area[data-axis="horizontal"]:not([data-fade="none"]) {
-    mask-image: linear-gradient(
-      to right,
-      transparent,
-      #000 var(--ui-scroll-area-fade-start),
-      #000 calc(100% - var(--ui-scroll-area-fade-end)),
-      transparent
-    );
+    mask:
+      linear-gradient(
+        to right,
+        transparent,
+        #000 var(--ui-scroll-area-fade-start),
+        #000 calc(100% - var(--ui-scroll-area-fade-end)),
+        transparent
+      ),
+      var(--ui-scrollbar-keep-horizontal);
     scroll-padding-block-start: 0;
     scroll-padding-inline-start: var(--ui-scroll-fade);
     animation-timeline: scroll(self inline), scroll(self inline);

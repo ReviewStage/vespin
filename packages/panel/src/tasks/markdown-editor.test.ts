@@ -8,6 +8,7 @@ import type { Editor, TiptapEditorHTMLElement } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
 import { Effect } from "effect";
 import { act, createElement, type RefObject } from "react";
+import { createPortal } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test } from "vitest";
 import { type DescriptionEditorHandle, SLASH_INSERT } from "../description-editor/contract.js";
@@ -262,6 +263,31 @@ test("a document with nothing above its text leaves ↑ on its first line to the
   });
 
   assert.equal(up.defaultPrevented, false);
+});
+
+test("focus going into a dialog the room draws, as a diagram's Full screen, keeps the editor open, and into any other dialog leaves it", async () => {
+  let left = 0;
+  const own = createElement("div", { role: "dialog", tabIndex: -1, "data-own": "" });
+
+  const { editor } = mounted(BODY, {
+    onLeave: () => {
+      left += 1;
+    },
+    children: createPortal(own, document.body),
+  });
+
+  const ownDialog = document.querySelector<HTMLElement>("[data-own]") ?? assert.fail("drawn");
+  const otherDialog = document.body.appendChild(document.createElement("div"));
+  otherDialog.setAttribute("role", "dialog");
+  otherDialog.tabIndex = -1;
+
+  act(() => editor.view.focus());
+  await act(async () => ownDialog.focus());
+  assert.equal(left, 0);
+
+  act(() => editor.view.focus());
+  await act(async () => otherDialog.focus());
+  assert.equal(left, 1);
 });
 
 test("a word changed inside a GitHub alert keeps its marker unescaped, so GitHub still draws it as an alert", () => {

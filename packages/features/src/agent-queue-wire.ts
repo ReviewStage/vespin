@@ -60,6 +60,14 @@ const queuedMessageSchema = EffectSchema.Struct({
    * member's own message, and from a service older than it.
    */
   from: EffectSchema.optionalKey(EffectSchema.Struct({ name: EffectSchema.String })),
+  /**
+   * The send key it goes under where that is not its id, as a line sent
+   * while the agent's machine booted keeps the key it was sent under; the
+   * row it lands as is written under that key (`sentLineId`), which a window
+   * draws it under the moment it is steered, so the row lands in its place.
+   * Absent where it goes under its id, and from a service older than it.
+   */
+  sendKey: EffectSchema.optionalKey(EffectSchema.String),
   /** Whether a member is editing it in their composer, which stops the hand-off at it; absent while nobody is. */
   editing: EffectSchema.optionalKey(EffectSchema.Literal(true)),
 });

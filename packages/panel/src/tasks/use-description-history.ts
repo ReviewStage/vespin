@@ -1,3 +1,4 @@
+import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
 import type {
   DescriptionDocument,
   DescriptionRevisionLine,
@@ -146,7 +147,7 @@ export interface DescriptionHistoryControl {
 /** What a restore the service did not carry answers, so its press says why. */
 const RESTORE_REFUSED: ActionResult = {
   status: ACTION_RESULT_STATUS.REJECTED,
-  reason: "The version could not be restored. Try again.",
+  reason: VERSION_HISTORY_WORDS.RESTORE_REFUSED,
 };
 
 /** The history main holds as the list draws it: its pages once read, failed where it never answered, and none while it reads. */

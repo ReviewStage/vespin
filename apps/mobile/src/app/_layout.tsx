@@ -1,9 +1,9 @@
-// _layout.tsx -- the app's root: the host started over every screen, the tabs, Settings, the New task and New agent sheets, and an agent's model sheet once an account is signed in, the sign-in screen until then, and the update screen in front of both while the service refuses this build.
+// _layout.tsx -- the app's root: the host started over every screen, the tabs, Settings, the New task and New agent sheets, an agent's model sheet, and a task's Task relation sheet once an account is signed in, the sign-in screen until then, and the update screen in front of both while the service refuses this build.
 
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeProvider } from "@repo/ui-native";
+import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { hide as hideSplash } from "expo-splash-screen";
@@ -11,7 +11,9 @@ import { useEffect } from "react";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
+import { useHostConnectLink } from "../host-connect-link.js";
 import { useInboxWidget } from "../inbox-widget/use-inbox-widget.js";
+import { useKeeping } from "../keeping.js";
 import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
@@ -19,7 +21,7 @@ import { usePushRegistration } from "../push-device.js";
 import { useShareSheet } from "../share-sheet.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
-import { useOfflineNotice } from "../use-write.js";
+import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
@@ -43,9 +45,12 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
  * screen handed over from another device opens (`system-activity/`). The
  * iPad's menu bar acts on whatever stands in front, its account's commands
  * enabled while one is signed in (`menu-commands/`), and the share sheet's
- * snapshot is kept current and its draft opens New task (`share-sheet.ts`).
+ * snapshot is kept current and its draft opens New task (`share-sheet.ts`),
+ * and a machine's pairing link opens Settings › Machines on its code
+ * (`host-connect-link.ts`).
  * Over every screen stands the one notice of a write that did not go
- * (`use-write.ts`), which lets its offline word go once the service answers.
+ * (`use-write.ts`), which lets its offline word go once the service answers,
+ * and every word with its Try again once the account it was said for is gone.
  */
 function GuardedScreens() {
   const { data: signedIn = false } = useQuery({
@@ -65,7 +70,9 @@ function GuardedScreens() {
   useSystemActivity(signedIn);
   useCrashReportAccount();
   useOfflineNotice();
+  useNoticeForAccount();
   useShareSheet(updateNeeded);
+  useHostConnectLink(signedIn && !updateNeeded);
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const sheetPresentation =
@@ -96,6 +103,26 @@ function GuardedScreens() {
             options={{ presentation: sheetPresentation, title: "Options" }}
           />
           <Stack.Screen
+            name="agent-ports"
+            options={{ presentation: sheetPresentation, title: "Ports" }}
+          />
+          <Stack.Screen
+            name="task-relation"
+            options={{ presentation: sheetPresentation, title: "Task relation" }}
+          />
+          <Stack.Screen
+            name="move-task"
+            options={{ presentation: sheetPresentation, title: "Move to workspace" }}
+          />
+          <Stack.Screen
+            name="task-following"
+            options={{ presentation: sheetPresentation, title: "Followers" }}
+          />
+          <Stack.Screen
+            name="add-follower"
+            options={{ presentation: sheetPresentation, title: "Add a follower" }}
+          />
+          <Stack.Screen
             name="new-workspace"
             options={{ presentation: sheetPresentation, title: "New workspace" }}
           />
@@ -108,6 +135,15 @@ function GuardedScreens() {
         </Stack.Protected>
       </Stack>
     </>
+  );
+}
+
+/** The screens, under what their pictures', recordings', files', and messages' menus do, which says its failures in the notice above them. */
+function KeptScreens() {
+  return (
+    <KeepingProvider keeping={useKeeping()}>
+      <GuardedScreens />
+    </KeepingProvider>
   );
 }
 
@@ -125,7 +161,7 @@ export default function RootLayout() {
   return (
     <HostProvider>
       <FailureNoticeProvider>
-        <GuardedScreens />
+        <KeptScreens />
       </FailureNoticeProvider>
     </HostProvider>
   );

@@ -1,6 +1,7 @@
 import { literalsReadingLegacy } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { agentFailureSchema, agentStatusSchema, disabledServersSchema } from "./agent-wire.js";
+import { AUTOMATION_PRESET } from "./automation-preset-name.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { modelChoiceSchema } from "./models-wire.js";
 import { chosenIdSchema, countedNumber, wireUuidSchema } from "./service-wire.js";
@@ -37,9 +38,9 @@ export const AUTOMATION_BOUNDS = {
   MAX_CRON_CHARS: 120,
   /** The most characters of an IANA time zone name. */
   MAX_TIMEZONE_CHARS: 64,
-  /** The most labels or branches a GitHub trigger filters on. */
+  /** The most labels, branches, or tags a GitHub trigger filters on. */
   MAX_FILTER_VALUES: 10,
-  /** The most characters of one label or branch a filter names. */
+  /** The most characters of one label, branch, or tag a filter names. */
   MAX_FILTER_VALUE_CHARS: 100,
   /** The most repositories one automation's runs work in; a run starts in the first until full multi-repo. */
   MAX_REPOSITORIES: 10,
@@ -81,6 +82,10 @@ export const GITHUB_TRIGGER_EVENT = {
   CHECK_FAILED: "check-failed",
   /** Commits pushed to a branch. */
   PUSH: "push",
+  /** A pull request merged into its base. */
+  PULL_REQUEST_MERGED: "pull-request-merged",
+  /** A release published, a prerelease among them where the trigger asks. */
+  RELEASE_PUBLISHED: "release-published",
 } as const;
 
 export type GitHubTriggerEvent = (typeof GITHUB_TRIGGER_EVENT)[keyof typeof GITHUB_TRIGGER_EVENT];
@@ -155,18 +160,23 @@ export const PULL_REQUEST_DEFAULT_MOMENTS: readonly PullRequestMoment[] =
 
 /**
  * An event of the automation's repositories. `labels` keeps a labeled
- * event to those labels and `branches` an event to those branches (a pull
- * request's base, a push's or a check's branch); an empty or absent list
- * keeps nothing out. `senders` says whose events fire it, people's alone
- * where absent; `moments` which moments of a pull request an update fires
- * on, every one where absent. A draft pull request fires it only where
- * `drafts` is true, and one from a fork only where `forks` is.
+ * event to those labels, `branches` an event to those branches (a pull
+ * request's base, a push's or a check's branch), and `tags` a release to
+ * those tags; an empty or absent list keeps nothing out. `defaultBranch`
+ * keeps it to the repository's default branch, whatever it is called, as
+ * GitHub's delivery names it; beside `branches`, an event on either is
+ * kept. `senders` says whose events fire it, people's alone where absent
+ * (for a merged pull request, whose pull request it is); `moments` which
+ * moments of a pull request an update fires on, every one where absent. A
+ * draft pull request fires it only where `drafts` is true, one from a fork
+ * only where `forks` is, and a prerelease only where `prereleases` is.
  */
 export const githubTriggerSchema = EffectSchema.Struct({
   kind: EffectSchema.Literal(AUTOMATION_TRIGGER.GITHUB),
   event: EffectSchema.Literals(Object.values(GITHUB_TRIGGER_EVENT)),
   labels: EffectSchema.optionalKey(filterValuesSchema),
   branches: EffectSchema.optionalKey(filterValuesSchema),
+  defaultBranch: EffectSchema.optionalKey(EffectSchema.Boolean),
   senders: EffectSchema.optionalKey(
     EffectSchema.Array(EffectSchema.Literals(Object.values(GITHUB_SENDER))),
   ),
@@ -175,6 +185,8 @@ export const githubTriggerSchema = EffectSchema.Struct({
   ),
   drafts: EffectSchema.optionalKey(EffectSchema.Boolean),
   forks: EffectSchema.optionalKey(EffectSchema.Boolean),
+  tags: EffectSchema.optionalKey(filterValuesSchema),
+  prereleases: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 /** A call to the automation's own address; the secret that admits it is the store's, never on this wire. */
@@ -341,6 +353,9 @@ const automationTargetSchema = EffectSchema.Union([
 
 export type AutomationTarget = typeof automationTargetSchema.Type;
 
+/** The list's suggestion an automation was made from (`automation-presets.ts`). */
+const automationPresetSchema = EffectSchema.Literals(Object.values(AUTOMATION_PRESET));
+
 /** Where a run came from, beyond the automation's own trigger. */
 export const AUTOMATION_FIRING = {
   ...AUTOMATION_TRIGGER,
@@ -350,7 +365,7 @@ export const AUTOMATION_FIRING = {
 
 /**
  * What fired a run, in brief: the instant a schedule was due, the GitHub
- * event with the issue or pull request it names, a webhook call with how
+ * event with the issue, pull request, or release it names, a webhook call with how
  * large its body was, an integration's event with the subject it is about
  * (a Sentry issue), or a "Run now" with who asked for it. Only what the
  * run's history shows is kept; a webhook's body reaches the agent's prompt
@@ -370,6 +385,8 @@ export const automationFiringSchema = EffectSchema.Union([
     number: EffectSchema.optionalKey(EffectSchema.Int),
     title: EffectSchema.optionalKey(EffectSchema.String),
     branch: EffectSchema.optionalKey(EffectSchema.String),
+    /** A release's tag, where the event is a release. */
+    tag: EffectSchema.optionalKey(EffectSchema.String),
     url: EffectSchema.optionalKey(EffectSchema.String),
   }),
   EffectSchema.Struct({
@@ -540,6 +557,13 @@ const automationSummarySchema = EffectSchema.Struct({
   /** Whether each run's result is sent to its owner on Slack by the workspace's bot; absent from a service before it. */
   slackDelivery: EffectSchema.optionalKey(EffectSchema.Boolean),
   /**
+   * The suggestion it was made from, which the list then suggests no more;
+   * null for one made otherwise, and absent from a service before it. Note
+   * that it is read as any text, not this release's presets, so a preset a
+   * newer service added, or one since retired, never refuses the list.
+   */
+  preset: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.String)),
+  /**
    * The address a webhook trigger's caller posts to, as the client that read
    * the automation reaches the service; the service sends none, since the
    * one origin that holds is the caller's.
@@ -609,6 +633,8 @@ export const automationCreateRequestSchema = EffectSchema.Struct({
   target: EffectSchema.optionalKey(automationTargetSchema),
   archiveSuccessful: EffectSchema.optionalKey(EffectSchema.Boolean),
   slackDelivery: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** The suggestion it is made from, as the list's card opened it; set only here, since no change names it. */
+  preset: EffectSchema.optionalKey(automationPresetSchema),
 });
 
 /**

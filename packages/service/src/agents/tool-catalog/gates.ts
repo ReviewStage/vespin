@@ -7,7 +7,7 @@
  * declared here once, with how it is read off the agent and the words a
  * call it shuts would be refused with, so the list an agent is offered and
  * a refusal of a call it makes anyway read the same rule. An agent's
- * standing is the gates open to it and its workspace's experiments, which
+ * standing is the gates open to it and its experiments, which
  * word the tools it is listed, read once per list or call; an agent whose
  * row is gone has every gate shut and every experiment off, since no gated
  * tool's door would carry out a call for an agent that no longer stands.
@@ -41,13 +41,17 @@ export const TOOL_GATE = {
   MEMORY: "memory",
   /** The agent's workspace has Task descriptions on. */
   DESCRIPTIONS: "descriptions",
+  /** The agent's workspace has Reply buttons on. */
+  REPLY_BUTTONS: "reply-buttons",
   /** The agent's workspace has Done and follow-ups on. */
   TURN_END: "turn-end",
+  /** The member whose Mac the agent reaches has Computer use on, as their own experiment. */
+  COMPUTER_USE: "computer-use",
 } as const;
 
 export type ToolGate = (typeof TOOL_GATE)[keyof typeof TOOL_GATE];
 
-/** One gate: whether it opens to an agent, given its workspace's experiments, and the words a call it shuts is refused with. */
+/** One gate: whether it opens to an agent, given its experiments (`ExperimentsOn`), and the words a call it shuts is refused with. */
 interface Gate {
   readonly opens: (agent: Agent, experiments: ExperimentsOn) => boolean;
   readonly refusal: string;
@@ -81,20 +85,28 @@ export const GATES: Readonly<Record<ToolGate, Gate>> = {
     opens: (_agent, experiments) => experiments.descriptionsOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
+  [TOOL_GATE.REPLY_BUTTONS]: {
+    opens: (_agent, experiments) => experiments.replyButtonsOn,
+    refusal: EXPERIMENT_OFF_REFUSAL,
+  },
   [TOOL_GATE.TURN_END]: {
     opens: (_agent, experiments) => experiments.turnEndOn,
     refusal: EXPERIMENT_OFF_REFUSAL,
   },
+  [TOOL_GATE.COMPUTER_USE]: {
+    opens: (_agent, experiments) => experiments.computerUseOn,
+    refusal: EXPERIMENT_OFF_REFUSAL,
+  },
 };
 
-/** Where an agent stands against the gates: its row, where it still stands, the gates open to it, and its workspace's experiments, which word the tools it is listed. */
+/** Where an agent stands against the gates: its row, where it still stands, the gates open to it, and its experiments, which word the tools it is listed. */
 export interface AgentStanding {
   readonly agent: Option.Option<Agent>;
   readonly open: ReadonlySet<ToolGate>;
   readonly experiments: ExperimentsOn;
 }
 
-/** The standing of an agent's row, its workspace's experiments read once, or of none, whose every gate is shut and every experiment off. */
+/** The standing of an agent's row, its experiments read once, or of none, whose every gate is shut and every experiment off. */
 export function standingOfAgent(
   agent: Option.Option<Agent>,
 ): Effect.Effect<AgentStanding, never, DatabaseServices> {
@@ -102,7 +114,7 @@ export function standingOfAgent(
     return Effect.succeed({ agent, open: new Set(), experiments: NO_EXPERIMENT_ON });
   }
 
-  return Effect.map(experimentsOnIn(agent.value.organizationId), (experiments) => ({
+  return Effect.map(experimentsOnIn(agent.value), (experiments) => ({
     agent,
     open: new Set(
       Object.values(TOOL_GATE).filter((gate) => GATES[gate].opens(agent.value, experiments)),

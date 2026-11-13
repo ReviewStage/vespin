@@ -5,12 +5,11 @@ import {
   type PullRequestState,
 } from "@repo/features/agent-wire";
 import {
-  PULL_REQUEST_GLYPH,
+  CHECK_SUMMARY_WORDS,
   PULL_REQUEST_MARK_QUEUED,
   pullRequestMarkState,
-  STATUS_TONE,
-  type StatusTone,
-} from "@repo/ui";
+} from "@repo/features/pull-request-model";
+import { PULL_REQUEST_GLYPH, STATUS_TONE, type StatusTone } from "@repo/ui";
 import { pullRequestNumberLabel, pullRequestPillLabel } from "./agent-model.js";
 
 /**
@@ -40,9 +39,6 @@ export const PULL_REQUEST_TONE = {
   [PULL_REQUEST_STATE.CLOSED]: STATUS_TONE.DANGER,
 } as const satisfies Record<PullRequestState, StatusTone>;
 
-/** What a failed check run adds to the mark's words for a reader who cannot see it. */
-const CHECKS_FAILING_WORDS = ", checks failing";
-
 /** What a pull request's mark is drawn from: its number, where it stands, whether the merge queue holds it, and how its checks went. */
 export type PullRequestMarked = Pick<AgentPullRequest, "number" | "state" | "checks" | "queued">;
 
@@ -55,7 +51,7 @@ function pullRequestMarkLabel(pullRequest: PullRequestMarked): string {
       ? `Pull request ${pullRequestNumberLabel(pullRequest)}, queued`
       : pullRequestPillLabel(pullRequest);
 
-  return `${standing}${failing ? CHECKS_FAILING_WORDS : ""}`;
+  return failing ? `${standing}, checks ${CHECK_SUMMARY_WORDS[CHECK_SUMMARY.FAILING]}` : standing;
 }
 
 /** A pull request's mark: its glyph for where it stands, colored for it alone, and named for a reader who cannot see it. */

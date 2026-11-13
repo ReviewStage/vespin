@@ -5,13 +5,20 @@ import {
   macCommandsOfLiveRows,
 } from "@repo/features/mac-command-live";
 import {
+  COMPUTER_ACTION,
+  COMPUTER_PERMISSION,
+  type ComputerAction,
+  type ComputerApp,
+  type ComputerPermission,
+  computerPermissionsNamed,
+  isMacComputerCommand,
   isMacShellCommand,
   MAC_COMMAND_KIND,
   type MacCommandKind,
   type MacCommandRead,
   type MacCommandRefusal,
   type MacCommandResult,
-  type MacShellCommand,
+  type MacComputerCommand,
   type MacShellResult,
   macCommandKindsQuery,
 } from "@repo/features/mac-command-wire";
@@ -35,6 +42,12 @@ import * as HttpClient from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
 import type { AccountComposer } from "./compose-account.js";
 import type { Composer } from "./composer.js";
+import {
+  COMPUTER_HELPER_OP,
+  type ComputerHelperAnswer,
+  type ComputerPermissions,
+  type ComputerUseHelperSeam,
+} from "./computer-use-helper.js";
 import type { MAC_COMMAND_ACTS } from "./contract/index.js";
 import { Environment, Reporter } from "./effect/seams.js";
 import type { HostActTable } from "./host-acts.js";
@@ -43,6 +56,7 @@ import type { HostKernel } from "./host-kernel.js";
 import { decodedLiveRows, LIVE_RESTART, waitOrRegained } from "./live-follow.js";
 import {
   MAC_COMMAND_DECISION,
+  type MacAppAsk,
   type MacCommandAsk,
   type MacCommandDecision,
 } from "./mac-command-ask.js";
@@ -79,6 +93,17 @@ import type { RunMode } from "./run-mode.js";
  * words the agent can act on, through the same refusal a command of a kind
  * this Mac cannot run is answered with.
  *
+ * An action on an app (`MAC_COMMAND_KIND.COMPUTER`) is taken only where the
+ * desktop ships the computer-use helper (`computer-use-helper.ts`), and runs
+ * through it under Settings › Let agents use apps on this Mac, whatever the
+ * shell commands' setting says. The helper names the app first, launching
+ * nothing: one agents are never offered is refused, one the developer
+ * answered Always allow for, or allowed for this agent's conversation before, runs, and any
+ * other is asked about as an app (`MacAppAsk`), on the same terms as a shell
+ * command's ask. Allow once holds the app for the conversation that asked until the
+ * gate moves; Always allow adds it to the apps agents use without asking.
+ * Listing the apps names none, so it asks nothing.
+ *
  * A live read writes nothing, so the Mac says it listens for its kinds
  * itself, every `LISTENING_EVERY`, well inside the service's freshness
  * window: the one timer that remains, because presence is a fact about this
@@ -114,8 +139,8 @@ const DEFAULT_SHELL = "/bin/zsh";
 
 const VARIABLE = { HOME: "HOME", SHELL: "SHELL" } as const;
 
-/** The kinds of command this Mac runs, which every read names: shell alone, for now. */
-const RUNS: readonly MacCommandKind[] = [MAC_COMMAND_KIND.SHELL];
+/** How long the helper has to name an app before it is asked about, apart from the action's own time. */
+const DESCRIBE_WITHIN = Duration.seconds(10);
 
 /** The service's side of the commands, as this concern asks it. */
 export type MacCommandClient = Pick<
@@ -140,6 +165,19 @@ export interface MacCommandsDependencies {
   /** Writes the setting to Always allow, answering whether the write landed: the prompt's Allow all commands, which also runs the command asked. */
   allowAlways: Effect.Effect<boolean>;
   client: MacCommandClient;
+  /** The computer-use helper and its settings, where this Mac ships one; none takes no action on an app. */
+  computer?: MacComputerUse;
+}
+
+/** What actions on apps run through and under: the helper, and the settings that let them. */
+export interface MacComputerUse {
+  readonly helper: ComputerUseHelperSeam;
+  /** Whether Settings lets agents use apps on this Mac, read as each action arrives. */
+  readonly enabled: Effect.Effect<boolean>;
+  /** The apps the developer answered Always allow for, by bundle id, or by name where an app has none. */
+  readonly allowedApps: Effect.Effect<readonly string[]>;
+  /** Adds an app to them, answering whether the write landed: an app's Always allow. */
+  readonly allowApp: (app: string) => Effect.Effect<boolean>;
 }
 
 export interface MacCommandsComposer extends Composer {
@@ -170,6 +208,112 @@ const UNANSWERED: MacCommandRefusal = {
 const ACCOUNT_CHANGED: MacCommandRefusal = {
   refused: "Not run: the account signed in on the developer's Mac changed before it was allowed.",
 };
+
+/** The grants as Settings shows them where there is no helper to read them. */
+const NO_PERMISSIONS: ComputerPermissions = { screenRecording: false, accessibility: false };
+
+/** What an action answers where Settings has agents use no apps on this Mac. */
+const APPS_SWITCHED_OFF: MacCommandRefusal = {
+  refused:
+    "Not run: the developer switched off Settings › Let agents use apps on this Mac, so no app can be used.",
+};
+
+/** What an action on an app the developer declined answers. */
+const APP_DECLINED: MacCommandRefusal = {
+  refused: "Not run: the developer declined to let agents use this app.",
+};
+
+/** What an action on an app the developer did not answer for in time answers. */
+const APP_UNANSWERED: MacCommandRefusal = {
+  refused: "Not run: the developer did not answer in time whether agents may use this app.",
+};
+
+/** What an action on an app agents are never offered answers, by the app's name. */
+function neverOffered(app: string): MacCommandRefusal {
+  return {
+    refused: `Not run: agents are never offered ${app}, as with terminals, password managers, System Settings, and ${PRODUCT_NAME}.`,
+  };
+}
+
+/**
+ * The grants each action needs before the helper is asked to take it:
+ * reading a window needs both, since it walks the app's elements and
+ * captures its window; every other action on an app needs Accessibility to
+ * press, type, and post input; listing the apps needs neither.
+ */
+const ACTION_NEEDS = {
+  [COMPUTER_ACTION.LIST_APPS]: [],
+  [COMPUTER_ACTION.GET_APP_STATE]: [
+    COMPUTER_PERMISSION.SCREEN_RECORDING,
+    COMPUTER_PERMISSION.ACCESSIBILITY,
+  ],
+  [COMPUTER_ACTION.CLICK]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.TYPE_TEXT]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.PRESS_KEY]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.SCROLL]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.DRAG]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.SET_VALUE]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.PERFORM_SECONDARY_ACTION]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+} as const satisfies Record<ComputerAction, readonly ComputerPermission[]>;
+
+/** Whether the Mac holds one grant, as the helper read them. */
+function granted(permissions: ComputerPermissions, permission: ComputerPermission): boolean {
+  return permission === COMPUTER_PERMISSION.SCREEN_RECORDING
+    ? permissions.screenRecording
+    : permissions.accessibility;
+}
+
+/**
+ * What an action answers where the Mac lacks a grant it needs: each grant
+ * missing by name and where it is turned on, short enough to read on the
+ * call's row, and asking the agent to pass it on, since nothing it does can
+ * grant them.
+ */
+function permissionsMissing(
+  missing: readonly [ComputerPermission, ...ComputerPermission[]],
+): MacCommandRefusal {
+  const names = computerPermissionsNamed(missing);
+  const them = missing.length === 1 ? "it" : "them";
+
+  return {
+    refused:
+      `Not run: ${PRODUCT_NAME} on the developer's Mac needs ${names}. ` +
+      `Ask them to turn ${them} on in ${PRODUCT_NAME}'s Settings › This Mac.`,
+    missingPermissions: missing,
+  };
+}
+
+/** What a read of a window answers where the helper captured no picture of it, so no empty picture goes on to the model or the transcript. */
+function nothingCaptured(app: string): MacCommandRefusal {
+  return {
+    refused: `Not run: ${app}'s window could not be captured. Read it again with get_app_state.`,
+  };
+}
+
+/** What an action answers where the helper answered a request with an answer of another kind. */
+const UNEXPECTED_ANSWER: MacCommandRefusal = {
+  refused: "Not run: the computer-use helper answered something else.",
+};
+
+/** What an action came to, as the helper answered it. */
+function computerResult(answer: ComputerHelperAnswer, app?: ComputerApp): MacCommandResult {
+  if ("outcome" in answer) {
+    // Note that a read with no picture of its window is refused, because an empty picture handed on breaks the model's turn and draws a blank window.
+    if ("shots" in answer.outcome && !answer.outcome.shots.some((shot) => shot.jpeg !== "")) {
+      return nothingCaptured(answer.outcome.app.name);
+    }
+
+    // Note that a done action names the app it acted on, which the helper's own answer does not.
+    const outcome =
+      "done" in answer.outcome && app !== undefined ? { ...answer.outcome, app } : answer.outcome;
+
+    return { computer: outcome };
+  }
+
+  if ("failure" in answer) return { refused: `Not run: ${answer.message}` };
+
+  return UNEXPECTED_ANSWER;
+}
 
 /** What a command of a kind this Mac cannot run answers, such as one a newer service queued. */
 const CANNOT_RUN: MacCommandRefusal = {
@@ -211,7 +355,16 @@ export function composeMacCommands(
     const shell = yield* macShell;
     const services = yield* Effect.context<ChildProcessSpawner.ChildProcessSpawner>();
     const http = yield* HttpClient.HttpClient;
-    const { kernel, account, mode, allowAlways, client } = dependencies;
+    const { kernel, account, mode, allowAlways, client, computer } = dependencies;
+
+    /** The kinds of command this Mac runs, which every read names: actions on apps only where it ships the helper. */
+    const runs: readonly MacCommandKind[] =
+      computer === undefined
+        ? [MAC_COMMAND_KIND.SHELL]
+        : [MAC_COMMAND_KIND.SHELL, MAC_COMMAND_KIND.COMPUTER];
+
+    /** The apps each agent's conversation was allowed once, by its id, until the gate moves. */
+    const allowedOnce = new Map<string, Set<string>>();
 
     /** The asks waiting on the developer, by the command's id, the earliest asked first, each with the account it was claimed for. */
     const asks = new Map<
@@ -226,24 +379,20 @@ export function composeMacCommands(
       );
 
     /**
-     * The developer's answer to one claimed shell command, asked of the
-     * panel and waited for until `deadline`, the command's own timeout
+     * The developer's answer to one ask, a claimed shell command or an app
+     * an action names, asked of the panel and waited for until `deadline`, the command's own timeout
      * past the claim; no answer by then is a denial of its own kind. The
      * ask is withdrawn however the wait ends, an interruption included, so
      * a prompt never outlives its command.
      */
     const consent = (
-      command: MacShellCommand,
+      ask: MacCommandAsk,
       userId: string,
       deadline: number,
     ): Effect.Effect<MacCommandDecision | undefined> =>
       Effect.gen(function* () {
         const decided = yield* Deferred.make<MacCommandDecision>();
-        asks.set(command.id, {
-          ask: { id: command.id, command: command.command, askedAt: kernel.now() },
-          userId,
-          decided,
-        });
+        asks.set(ask.id, { ask, userId, decided });
         tellAsks();
         const now = yield* Clock.currentTimeMillis;
 
@@ -252,7 +401,7 @@ export function composeMacCommands(
           Effect.map(Option.getOrUndefined),
           Effect.ensuring(
             Effect.sync(() => {
-              asks.delete(command.id);
+              asks.delete(ask.id);
               tellAsks();
             }),
           ),
@@ -306,6 +455,9 @@ export function composeMacCommands(
      */
     const decided = (command: MacCommandRead, userId: string) =>
       Effect.gen(function* () {
+        if (isMacComputerCommand(command)) return yield* used(command, userId);
+
+        // Note that a kind this Mac cannot run is refused without asking, since nothing would run.
         if ((yield* mode) !== MAC_COMMAND_MODE.ASK || !isMacShellCommand(command)) {
           return yield* run(command);
         }
@@ -314,7 +466,13 @@ export function composeMacCommands(
           (yield* Clock.currentTimeMillis) +
           Duration.toMillis(Duration.seconds(command.timeoutSeconds));
 
-        const decision = yield* Effect.interruptible(consent(command, userId, deadline));
+        const decision = yield* Effect.interruptible(
+          consent(
+            { id: command.id, command: command.command, askedAt: kernel.now() },
+            userId,
+            deadline,
+          ),
+        );
 
         if (decision === undefined) return yield* settled(command.id, UNANSWERED);
 
@@ -330,6 +488,135 @@ export function composeMacCommands(
 
         if (left < 1) return yield* settled(command.id, UNANSWERED);
         yield* run({ ...command, timeoutSeconds: Math.min(command.timeoutSeconds, left) });
+      });
+
+    /**
+     * Whether the agent may use the app its action names: the app named by
+     * the helper, launching nothing, then refused, allowed already, or asked
+     * about until `deadline`. Answers why not, or the app as the helper
+     * named it where it may.
+     */
+    const appAllowed = (
+      use: MacComputerUse,
+      command: MacComputerCommand & { readonly action: { readonly app: string } },
+      userId: string,
+      deadline: number,
+    ): Effect.Effect<MacCommandRefusal | { readonly app: ComputerApp }> =>
+      Effect.gen(function* () {
+        const named = yield* use.helper.ask(
+          { op: COMPUTER_HELPER_OP.DESCRIBE_APP, app: command.action.app },
+          DESCRIBE_WITHIN,
+        );
+
+        if ("failure" in named) return { refused: `Not run: ${named.message}` };
+
+        if (!("described" in named)) {
+          return { refused: "Not run: the computer-use helper answered something else." };
+        }
+
+        const app = named.described;
+
+        if (app.refused) return neverOffered(app.name);
+        const key = app.bundleId ?? app.name;
+        const allowed = yield* use.allowedApps;
+
+        if (allowed.includes(key) || allowedOnce.get(command.conversationId)?.has(key) === true) {
+          return { app };
+        }
+
+        const asked: MacAppAsk = {
+          id: command.id,
+          app: {
+            name: app.name,
+            ...(app.bundleId === undefined ? undefined : { bundleId: app.bundleId }),
+            ...(app.iconPng === undefined ? undefined : { iconPng: app.iconPng }),
+          },
+          askedAt: kernel.now(),
+        };
+
+        const decision = yield* Effect.interruptible(consent(asked, userId, deadline));
+
+        if (decision === undefined) return APP_UNANSWERED;
+
+        if (decision === MAC_COMMAND_DECISION.DENY) return APP_DECLINED;
+
+        if (dependencies.accountId() !== userId) return ACCOUNT_CHANGED;
+
+        if (decision === MAC_COMMAND_DECISION.ALLOW_ALWAYS && !(yield* use.allowApp(key))) {
+          report("an app's Always allow could not be saved; the next agent asks again");
+        }
+
+        allowedOnce.set(
+          command.conversationId,
+          new Set([...(allowedOnce.get(command.conversationId) ?? []), key]),
+        );
+
+        return { app };
+      });
+
+    /**
+     * The grants an action needs that the Mac lacks, read off the helper,
+     * which answers at once and raises no prompt; why not where the helper
+     * could not say, since it would not take the action either.
+     */
+    const lacking = (
+      use: MacComputerUse,
+      op: ComputerAction,
+    ): Effect.Effect<MacCommandRefusal | undefined> => {
+      const needs: readonly ComputerPermission[] = ACTION_NEEDS[op];
+
+      if (needs.length === 0) return Effect.succeed(undefined);
+
+      return Effect.map(
+        use.helper.ask({ op: COMPUTER_HELPER_OP.PERMISSIONS }, DESCRIBE_WITHIN),
+        (answer) => {
+          if ("failure" in answer) return { refused: `Not run: ${answer.message}` };
+
+          if (!("permissions" in answer)) return UNEXPECTED_ANSWER;
+          const [first, ...rest] = needs.filter((need) => !granted(answer.permissions, need));
+
+          return first === undefined ? undefined : permissionsMissing([first, ...rest]);
+        },
+      );
+    };
+
+    /**
+     * One claimed action on an app as Settings now says: refused where agents
+     * use no apps here, refused at once, naming them, where the Mac lacks a
+     * grant the action needs, so neither the developer nor the agent waits
+     * on an action that cannot run; the app allowed or asked about where the
+     * action names one, and run through the helper in what is left of the command's own
+     * timeout from the claim, on the same terms as a shell command allowed
+     * late.
+     */
+    const used = (command: MacComputerCommand, userId: string) =>
+      Effect.gen(function* () {
+        if (computer === undefined) return yield* settled(command.id, CANNOT_RUN);
+
+        if (!(yield* computer.enabled)) return yield* settled(command.id, APPS_SWITCHED_OFF);
+
+        const deadline =
+          (yield* Clock.currentTimeMillis) +
+          Duration.toMillis(Duration.seconds(command.timeoutSeconds));
+
+        const { action } = command;
+        const missing = yield* lacking(computer, action.op);
+
+        if (missing !== undefined) return yield* settled(command.id, missing);
+        let app: ComputerApp | undefined;
+
+        if (action.op !== COMPUTER_ACTION.LIST_APPS) {
+          const allowed = yield* appAllowed(computer, { ...command, action }, userId, deadline);
+
+          if ("refused" in allowed) return yield* settled(command.id, allowed);
+          app = allowed.app;
+        }
+
+        const left = deadline - (yield* Clock.currentTimeMillis);
+
+        if (left < 1000) return yield* settled(command.id, APP_UNANSWERED);
+        const answer = yield* computer.helper.ask(action, Duration.millis(left));
+        yield* settled(command.id, computerResult(answer, app));
       });
 
     /** Whether the Mac takes commands now: an account signed in, a run that sends, and the setting not Never. */
@@ -408,7 +695,7 @@ export function composeMacCommands(
       asked(
         client.liveRead(
           MAC_COMMANDS_READ,
-          { userId, kinds: macCommandKindsQuery(RUNS) },
+          { userId, kinds: macCommandKindsQuery(runs) },
           poll ? { after } : undefined,
         ),
       );
@@ -420,7 +707,7 @@ export function composeMacCommands(
      */
     const presence = Effect.gen(function* () {
       for (;;) {
-        yield* asked(client.listening(RUNS));
+        yield* asked(client.listening(runs));
         yield* Effect.sleep(LISTENING_EVERY);
       }
     });
@@ -488,6 +775,7 @@ export function composeMacCommands(
 
         if (moves !== clearedAt) {
           clearedAt = moves;
+          allowedOnce.clear();
           yield* FiberSet.clear(running);
 
           // Note that the clear waits out any claim under way, during which the gate may have moved again, so the next turn starts from where it stands now.
@@ -526,6 +814,33 @@ export function composeMacCommands(
       yield* Effect.forkScoped(Effect.forever(guarded));
     });
 
+    /** The Mac's two grants as the helper reads them, or after it asks macOS for them; neither where there is no helper or it could not say. */
+    const permissionsRead = (
+      op: typeof COMPUTER_HELPER_OP.PERMISSIONS | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS,
+    ): Effect.Effect<ComputerPermissions> => {
+      if (computer === undefined) return Effect.succeed(NO_PERMISSIONS);
+
+      return Effect.map(computer.helper.ask({ op }, DESCRIBE_WITHIN), (answer) =>
+        "permissions" in answer ? answer.permissions : NO_PERMISSIONS,
+      );
+    };
+
+    /** Each app allowed without asking, named and drawn by the helper; one it no longer finds by its bundle id alone. */
+    const allowedAppsNamed = (use: MacComputerUse) =>
+      Effect.flatMap(use.allowedApps, (allowed) =>
+        Effect.forEach(allowed, (bundleId) =>
+          Effect.map(
+            use.helper.ask({ op: COMPUTER_HELPER_OP.DESCRIBE_APP, app: bundleId }, DESCRIBE_WITHIN),
+            (named) => {
+              if (!("described" in named)) return { bundleId, name: bundleId };
+              const { name, iconPng } = named.described;
+
+              return { bundleId, name, ...(iconPng === undefined ? undefined : { iconPng }) };
+            },
+          ),
+        ),
+      );
+
     const methods: PlatformConcernMethods<typeof HOST_PLATFORM_CONCERN.MAC_COMMANDS> = {};
 
     const acts: HostActTable<typeof MAC_COMMAND_ACTS> = {
@@ -537,6 +852,14 @@ export function composeMacCommands(
           if (held === undefined) return;
           yield* Deferred.succeed(held.decided, decision);
         }),
+      /** Computer use as Settings shows it: the Mac's grants, and the apps agents use without asking. */
+      COMPUTER_USE_STATUS: () =>
+        Effect.all({
+          permissions: permissionsRead(COMPUTER_HELPER_OP.PERMISSIONS),
+          apps: computer === undefined ? Effect.succeed([]) : allowedAppsNamed(computer),
+        }),
+      /** macOS asked for the grants it lacks, by its own prompts, and the grants as they stand once it was asked. */
+      COMPUTER_USE_ASK_PERMISSIONS: () => permissionsRead(COMPUTER_HELPER_OP.REQUEST_PERMISSIONS),
     };
 
     return { methods, acts, lifetime } satisfies MacCommandsComposer;

@@ -249,7 +249,7 @@ test("a place the window holds no name for is called by its kind, or by its labe
 
   assert.deepEqual(chips(container), [
     ["agent", "Agent"],
-    ["place", "Run"],
+    ["place", "Automation run"],
     ["place", "Inbox"],
     ["page", "the old matrix"],
     ["page", "Unfurl matrix"],

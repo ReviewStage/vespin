@@ -2,8 +2,8 @@
  * source-sandbox.ts -- a coding agent's sandbox at Vercel's REST boundary, as `@vercel/sandbox` reads it, its shell a real one over a git checkout on disk, for the suites that copy a source agent's work.
  *
  * The double answers Vercel Sandbox's API as the scenario has it: the
- * session's sandbox under its session's name, in the status given, stopped
- * on a snapshot where the scenario says so, a resume
+ * session's sandbox under its session's name, in the status given, owning a
+ * drive of its own where the scenario says so, a resume
  * that brings it up under a fresh session, a stop that stops it where it is
  * sent as JSON and is refused with 415 where not, as Vercel refuses it, a
  * firewall policy written down, and each command run in a checkout the test
@@ -19,6 +19,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   commandRunStreamed,
+  driveAnswered,
   sandboxesListed,
   sandboxFound,
   sandboxListRefusal,
@@ -111,11 +112,11 @@ export interface SourceSandbox {
   readonly answer: (sent: SentToSandbox) => Response | undefined;
 }
 
-/** The double over the checkout given, its sandbox first standing in the status given, or none for a session that never opened one, with a snapshot to resume from where `snapshotted`. */
+/** The double over the checkout given, its sandbox first standing in the status given, or none for a session that never opened one, owning a drive of its own where `ownsDrive`. */
 export function sourceSandbox(
   source: SourceCheckout,
   status: string | undefined,
-  snapshotted = false,
+  ownsDrive = false,
 ): SourceSandbox {
   const name = agentSandboxName(SOURCE_SANDBOX.SESSION);
 
@@ -133,6 +134,14 @@ export function sourceSandbox(
 
     if (parsed.host !== "vercel.com") return undefined;
     const session = /\/sessions\/([^/]+)\//u.exec(parsed.pathname)?.[1] ?? "";
+    const drive = /^\/api\/v2\/sandboxes\/drives\/([^/]+)$/u.exec(parsed.pathname)?.[1];
+
+    // Note that `@vercel/sandbox` names a sandbox's own drive after it, so a lookup by that name alone finds one.
+    if (drive !== undefined) {
+      return ownsDrive && drive === `${name}-drive`
+        ? Response.json(driveAnswered({ id: "drv_source", name: drive }))
+        : Response.json({ error: { code: "not_found" } }, { status: 404 });
+    }
 
     if (parsed.pathname.endsWith("/cmd")) {
       const asked = JSON.parse(body);
@@ -180,7 +189,6 @@ export function sourceSandbox(
       status: state.status ?? "stopped",
       currentSessionId: state.session ?? SOURCE_SANDBOX.STOPPED,
       createdAt: 0,
-      ...(snapshotted ? { currentSnapshotId: "snap_source" } : undefined),
     };
 
     // A lookup by any other name finds none, as for a session that never opened a sandbox.

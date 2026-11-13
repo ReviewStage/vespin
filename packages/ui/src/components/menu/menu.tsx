@@ -198,8 +198,10 @@ export interface MenuAction {
   icon?: React.JSX.Element;
   /** A muted second line under the label, such as who shares a workspace, which a reader hears after it. */
   detail?: string | undefined;
-  /** A quiet mark right after the label, such as an experiment's Experimental tag; it names itself to a reader. */
+  /** A quiet mark right after the label, such as an experiment's Experimental tag or a default's Default, on the label's own line where a detail stands under it; it names itself to a reader, or is heard in `tagWords` where the item has a detail. */
   tag?: React.ReactNode;
+  /** The tag's words, heard after the label where the item is named by its label and detail together, which hides the tag's own words from a reader. */
+  tagWords?: string | undefined;
   /** Where the detail stands: under the label where none is said, or beside it. */
   detailPlace?: MenuDetailPlace | undefined;
   onSelect: () => void;
@@ -223,6 +225,15 @@ export interface MenuAction {
   opens?: boolean | undefined;
   /** Whether choosing it leaves the menu standing, as one of several values a filter toggles is. */
   stays?: boolean | undefined;
+  /**
+   * The row it stands in beside the actions next to it in its group that
+   * name the same row, as a browser's zoom row stands − 125% + after the
+   * word Zoom: the row says its name once, and each of its actions draws
+   * its glyph alone, or its detail where it has no glyph, its label its name
+   * to a reader. Each is still an item of its own, which the keys walk
+   * through in turn; one of them is never a setting, a submenu, or carded.
+   */
+  row?: string | undefined;
   /** The card hung beside the item while the pointer rests on it, as a person's in a people filter; none hangs nothing. */
   card?: React.ReactNode;
   /** Whether its label and detail are a person's words, a repository's or a workspace's name, kept masked in a screen recording even in a menu that unmasks its own (`replayUnmasked`). */
@@ -627,6 +638,29 @@ function itemsOf(menu: HTMLElement): HTMLElement[] {
   );
 }
 
+/** The first of a menu's own items that applies now, which the keys can stand on. */
+function firstAvailable(menu: HTMLElement): HTMLElement | undefined {
+  return itemsOf(menu).find(
+    (item) => !item.matches(":disabled") && item.getAttribute("aria-disabled") !== "true",
+  );
+}
+
+/**
+ * Whether the keys stand where no key reaches a menu: on nothing, on an
+ * element gone, or on an item a choice that stays just dimmed, as Actual
+ * size dims itself once the page is at actual size. Note that a browser
+ * moves the focus off a button disabled under it to the body, where some
+ * leave it on the button, so both count as dropped.
+ */
+function keysDropped(now: Element | null): boolean {
+  return (
+    !(now instanceof HTMLElement) ||
+    now === document.body ||
+    !now.isConnected ||
+    now.matches(":disabled")
+  );
+}
+
 /** The action or submenu of `groups` whose shortcut a key pressed on `menu`'s own items is; nothing for a key pressed in a panel or submenu beside it. */
 function keyedEntryOf(
   groups: readonly (readonly MenuEntry[])[],
@@ -736,13 +770,17 @@ function ItemEnd({ action }: { action: MenuAction }): React.JSX.Element | null {
 
 /**
  * What a reader hears an item as, where its label alone does not say it all:
- * its label, then its detail and the wait it stands for, each after a pause,
- * because the spans would otherwise run together.
+ * its label, then its tag's words, its detail, and the wait it stands for,
+ * each after a pause, because the spans would otherwise run together.
  */
 function heardOf(action: MenuAction): string | undefined {
-  const after = [action.detail, action.busy].filter((words) => words !== undefined);
+  if (action.detail === undefined && action.busy === undefined) return undefined;
 
-  return after.length === 0 ? undefined : [action.label, ...after].join(", ");
+  const after = [action.tagWords, action.detail, action.busy].filter(
+    (words) => words !== undefined,
+  );
+
+  return [action.label, ...after].join(", ");
 }
 
 /** Whether an item draws its detail as a second line under its label, which the item grows to hold. */
@@ -816,12 +854,21 @@ function ItemBody({
         )}
         data-place={beside ? MENU_DETAIL.BESIDE : undefined}
       >
-        <OneLine
-          className={cn("ui-menu-item-label min-w-0", beside ? "flex-initial" : "flex-none")}
-          words={action.label}
-        >
-          <ItemWords masked={action.replayMasked}>{action.label}</ItemWords>
-        </OneLine>
+        {action.tag === undefined || beside ? (
+          <OneLine
+            className={cn("ui-menu-item-label min-w-0", beside ? "flex-initial" : "flex-none")}
+            words={action.label}
+          >
+            <ItemWords masked={action.replayMasked}>{action.label}</ItemWords>
+          </OneLine>
+        ) : (
+          <span className="ui-menu-item-tagged flex min-w-0 flex-none items-center gap-ui-8">
+            <OneLine className="ui-menu-item-label min-w-0" words={action.label}>
+              <ItemWords masked={action.replayMasked}>{action.label}</ItemWords>
+            </OneLine>
+            {action.tag}
+          </span>
+        )}
         {action.detailPlace === MENU_DETAIL.WRAPPED ? (
           <span className="ui-menu-item-detail whitespace-normal">
             <ItemWords masked={detailMasked}>{action.detail}</ItemWords>
@@ -863,15 +910,82 @@ function Carded({
  * column, its label and any detail under it, and at its end its check or
  * hint. A setting is a checkbox item, which says whether it is on.
  */
+/** One line of a group: an entry standing alone, or the run of actions that name one row. */
+type GroupLine =
+  | { readonly entry: MenuEntry }
+  | { readonly row: string; readonly actions: readonly MenuAction[] };
+
+/** A group's lines, from its top: each run of actions next to each other that name the same row drawn as one line. */
+function groupLines(group: readonly MenuEntry[]): GroupLine[] {
+  const lines: GroupLine[] = [];
+
+  for (const entry of group) {
+    const row = "onSelect" in entry ? entry.row : undefined;
+    const last = lines.at(-1);
+
+    if (row === undefined || !("onSelect" in entry)) lines.push({ entry });
+    else if (last !== undefined && "row" in last && last.row === row)
+      lines[lines.length - 1] = { row, actions: [...last.actions, entry] };
+    else lines.push({ row, actions: [entry] });
+  }
+
+  return lines;
+}
+
+/** A row of actions in a menu or a sheet: its name, then each action drawn as `item` draws it, side by side. */
+function ActionRow({
+  row,
+  actions,
+  item,
+}: {
+  row: string;
+  actions: readonly MenuAction[];
+  item: (action: MenuAction) => React.ReactNode;
+}): React.JSX.Element {
+  return (
+    // biome-ignore lint/a11y/useSemanticElements: a group of a menu's items is ARIA's group within its menu, not a form's fieldset.
+    <div
+      role="group"
+      aria-label={row}
+      className="ui-menu-row flex h-menu-row w-full flex-none items-center gap-ui-2 ps-row-inset"
+    >
+      <span
+        className="ui-menu-row-name min-w-0 flex-1 overflow-hidden whitespace-nowrap [mask-image:linear-gradient(to_left,transparent,#000_var(--ui-label-fade))]"
+        aria-hidden="true"
+      >
+        <ItemWords>{row}</ItemWords>
+      </span>
+      {actions.map(item)}
+    </div>
+  );
+}
+
+/** What an action draws in a row: its glyph alone, or its detail where it has no glyph, else its label. */
+function RowFace({ action }: { action: MenuAction }): React.JSX.Element {
+  if (action.icon !== undefined) return <MenuGlyph>{action.icon}</MenuGlyph>;
+
+  return (
+    <span className="tabular-nums">
+      <ItemWords masked={action.replayMasked}>{action.detail ?? action.label}</ItemWords>
+    </span>
+  );
+}
+
+/** The classes an action in a row adds to a menu's row: as wide as its face, at least square, its face centered. */
+const ROW_ITEM = "ui-menu-row-item w-auto min-w-menu-row justify-center px-ui-8";
+
 export function MenuItem({
   action,
   onChoose,
   steered,
+  inRow = false,
 }: {
   action: MenuAction;
   onChoose: () => void;
   /** Where it stands among a field's pinned rows rather than in a menu. */
   steered?: SteeredMenuItem | undefined;
+  /** Whether it stands in a row beside others (`MenuAction`'s `row`), drawing its face alone. */
+  inRow?: boolean;
 }): React.JSX.Element {
   const heard = heardOf(action);
 
@@ -911,6 +1025,19 @@ export function MenuItem({
       pressed(event);
     },
   } as const;
+
+  // An action in a row draws its face alone, so its label is its name to a reader.
+  if (inRow) {
+    return (
+      <DropdownMenuItem
+        {...shared}
+        aria-label={heard ?? action.label}
+        className={cn("ui-menu-item", ROW_ITEM)}
+      >
+        <RowFace action={action} />
+      </DropdownMenuItem>
+    );
+  }
 
   // A setting in a menu says whether it is on as a menu's check does.
   if (action.checked !== undefined) {
@@ -1005,7 +1132,9 @@ function SteeredItem({
 function kindOf(line: Element): MenuLine["kind"] {
   if (line.tagName === "HR" || line.getAttribute("role") === "separator") return MENU_LINE.RULE;
 
-  return line.getAttribute("role")?.startsWith("menuitem") === true
+  const role = line.getAttribute("role");
+
+  return role?.startsWith("menuitem") === true || role === "group"
     ? MENU_LINE.ITEM
     : MENU_LINE.NOTE;
 }
@@ -1715,6 +1844,27 @@ function FloatingMenu({
     (checked ?? items[0])?.focus();
   }, [popup, leaving, openOnChecked]);
 
+  // Note that a choice that stays may dim the item it was made on, which
+  // drops the keys out of the menu; they go to its first item that applies,
+  // or to the menu itself, as a sheet's do, so the arrows, Escape, and Tab
+  // still reach it. Keys standing anywhere else, as in a submenu or a
+  // panel, are left where they stand.
+  useEffect(() => {
+    const menu = element.current;
+    const now = document.activeElement;
+
+    if (menu === null || leaving || !keysDropped(now)) return;
+
+    if (
+      now instanceof HTMLElement &&
+      now.isConnected &&
+      now !== document.body &&
+      !menu.contains(now)
+    )
+      return;
+    (firstAvailable(menu) ?? menu).focus({ preventScroll: true });
+  });
+
   // Note that a press on the opener is left to the opener, because the
   // button's own press is what closes the menu it opened; that a press on
   // an item's card is the menu's own, the card its item's words to read and
@@ -1851,6 +2001,35 @@ function FloatingMenu({
     [panel, backFromPanel],
   );
 
+  /** One entry standing alone on its line: a panel's item, a submenu, or an action. */
+  const entryLine = (entry: MenuEntry) =>
+    isPanel(entry) ? (
+      <PanelItem
+        key={entry.label}
+        entry={entry}
+        open={submenu === entry.label && !leaving}
+        controls={panelId}
+        onEnter={() => enterPanel(entry.label)}
+      />
+    ) : "items" in entry ? (
+      <Submenu
+        key={entry.label}
+        entry={entry}
+        open={submenu === entry.label && !leaving}
+        entering={openOn === entry.label}
+        layer={layer}
+        seen={seen}
+        leaving={leaving}
+        surface={submenuElement}
+        onOpen={() => setSubmenu(entry.label)}
+        // Note that a late close of a submenu another has replaced leaves the other standing.
+        onBack={() => setSubmenu((standing) => (standing === entry.label ? undefined : standing))}
+        onChoose={choose}
+      />
+    ) : (
+      <MenuItem key={entryKey(entry)} action={entry} onChoose={() => choose(entry)} />
+    );
+
   return (
     <DropdownMenu open={!leaving} modal={false}>
       <DropdownMenuContent
@@ -1885,34 +2064,23 @@ function FloatingMenu({
           {groups.map((group, index) => (
             <Fragment key={groupKey(group)}>
               {index > 0 ? <DropdownMenuSeparator className="ui-menu-rule" /> : null}
-              {group.map((entry) =>
-                isPanel(entry) ? (
-                  <PanelItem
-                    key={entry.label}
-                    entry={entry}
-                    open={submenu === entry.label && !leaving}
-                    controls={panelId}
-                    onEnter={() => enterPanel(entry.label)}
-                  />
-                ) : "items" in entry ? (
-                  <Submenu
-                    key={entry.label}
-                    entry={entry}
-                    open={submenu === entry.label && !leaving}
-                    entering={openOn === entry.label}
-                    layer={layer}
-                    seen={seen}
-                    leaving={leaving}
-                    surface={submenuElement}
-                    onOpen={() => setSubmenu(entry.label)}
-                    // Note that a late close of a submenu another has replaced leaves the other standing.
-                    onBack={() =>
-                      setSubmenu((standing) => (standing === entry.label ? undefined : standing))
-                    }
-                    onChoose={choose}
+              {groupLines(group).map((line) =>
+                "row" in line ? (
+                  <ActionRow
+                    key={line.row}
+                    row={line.row}
+                    actions={line.actions}
+                    item={(action) => (
+                      <MenuItem
+                        key={entryKey(action)}
+                        action={action}
+                        inRow
+                        onChoose={() => choose(action)}
+                      />
+                    )}
                   />
                 ) : (
-                  <MenuItem key={entryKey(entry)} action={entry} onChoose={() => choose(entry)} />
+                  entryLine(line.entry)
                 ),
               )}
             </Fragment>
@@ -1971,11 +2139,14 @@ function SheetItem({
   action,
   submenu,
   onChoose,
+  inRow = false,
 }: {
   action: MenuAction;
   /** The submenu it opens in the sheet's place, where it opens one. */
   submenu?: string | undefined;
   onChoose: () => void;
+  /** Whether it stands in a row beside others (`MenuAction`'s `row`), drawing its face alone. */
+  inRow?: boolean;
 }): React.JSX.Element {
   const heard = heardOf(action);
 
@@ -1996,6 +2167,20 @@ function SheetItem({
       onChoose();
     },
   } as const;
+
+  // An action in a row draws its face alone, so its label is its name to a reader.
+  if (inRow) {
+    return (
+      <button
+        {...shared}
+        role="menuitem"
+        aria-label={heard ?? action.label}
+        className={cn(shared.className, ROW_ITEM)}
+      >
+        <RowFace action={action} />
+      </button>
+    );
+  }
 
   const body = <ItemBody action={{ ...action, hint: undefined }} />;
 
@@ -2039,8 +2224,28 @@ function SheetRows({
       {groups.map((group, index) => (
         <Fragment key={groupKey(group)}>
           {index > 0 ? <hr className={cn("ui-menu-rule", DROPDOWN_MENU_RULE)} /> : null}
-          {group.map((entry) =>
-            !("onSelect" in entry) ? (
+          {groupLines(group).map((line) => {
+            if ("row" in line) {
+              return (
+                <ActionRow
+                  key={line.row}
+                  row={line.row}
+                  actions={line.actions}
+                  item={(action) => (
+                    <SheetItem
+                      key={entryKey(action)}
+                      action={action}
+                      inRow
+                      onChoose={() => onChoose(action)}
+                    />
+                  )}
+                />
+              );
+            }
+
+            const { entry } = line;
+
+            return !("onSelect" in entry) ? (
               <SheetItem
                 key={entry.label}
                 action={{
@@ -2054,8 +2259,8 @@ function SheetRows({
               />
             ) : (
               <SheetItem key={entryKey(entry)} action={entry} onChoose={() => onChoose(entry)} />
-            ),
-          )}
+            );
+          })}
         </Fragment>
       ))}
     </>
@@ -2184,15 +2389,12 @@ function MenuSheet({
   }, [list, opened, leaving, openOnChecked]);
 
   // Note that a choice that stays may take its own row away (Retry turning
-  // to a dimmed Reading…), which drops focus on nothing; it goes back to the
-  // page's start, or to the sheet where no row applies now, so the keys still
-  // walk the rows.
+  // to a dimmed Reading…), or dim it, which drops the keys (`keysDropped`);
+  // they go back to the page's first row that applies, or to the sheet where
+  // none does, so the keys still walk the rows.
   useEffect(() => {
-    if (list === null || leaving) return;
-    const now = document.activeElement;
-
-    if (now instanceof HTMLElement && now !== document.body && now.isConnected) return;
-    (startOf(list, false) ?? list.closest<HTMLElement>(".ui-dialog"))?.focus({
+    if (list === null || leaving || !keysDropped(document.activeElement)) return;
+    (firstAvailable(list) ?? list.closest<HTMLElement>(".ui-dialog"))?.focus({
       preventScroll: true,
     });
   });

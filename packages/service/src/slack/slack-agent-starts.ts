@@ -42,15 +42,16 @@
  * message names as `owner/name` where the workspace reaches it, else in the
  * channel's default repository, else in the workspace's, both as an owner
  * or admin named them in Settings, else in the repository of the writer's
- * latest agent in the workspace, else in none. The images the message
- * shared are read from Slack on the bot's token once the writer is found
- * (`SlackBot.download`), sniffed by their bytes and held to the bounds a
- * Start holds a message's files to: a PNG, JPEG, or WebP within them read
+ * latest agent in the workspace, else in none. The images and PDFs the
+ * message shared are read from Slack on the bot's token once the writer is
+ * found (`SlackBot.download`), sniffed by their bytes and held to the bounds
+ * a Start holds a message's files to: a PNG, JPEG, or WebP within them read
  * whole, and a larger one, or one of a type no model reads (a Mac's HEIC
- * screenshot), read as the largest thumbnail Slack made of it that fits, and
- * handed to the agent as the message's files, a Start's or a steer's alike; any other
- * file is left out, and a message of images alone is acted on as one with
- * words.
+ * screenshot), read as the largest thumbnail Slack made of it that fits; a
+ * PDF within them read whole, and one past them left out; each handed to
+ * the agent as the message's files, a Start's or a steer's alike, as the
+ * message box sends them; any other file is left out, and a message of
+ * such files alone is acted on as one with words.
  * Its prompt is the writer's words, the thread's earlier messages fenced as data, since anyone in the channel wrote them, and the
  * message's link; only the writer's own words hand it MCP servers. Its
  * first line, and each message sent on, says Slack carried it, with the
@@ -123,7 +124,11 @@ import { MESSAGE_SENDER, SLACK_THREAD_ORIGIN } from "@repo/database/storage-voca
 import { LIMIT_REACHED_WORDS } from "@repo/features/agent-failure-words";
 import { shownPicturesOf } from "@repo/features/agent-pictures-model";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import { AGENT_BOUNDS, type AgentAttachment } from "@repo/features/agent-wire";
+import {
+  AGENT_ATTACHMENT_TYPE,
+  AGENT_BOUNDS,
+  type AgentAttachment,
+} from "@repo/features/agent-wire";
 import {
   CONVERSATION_MEDIA_TYPE,
   type ConversationMediaType,
@@ -131,6 +136,7 @@ import {
 import { sniffImageType } from "@repo/features/image-signature";
 import { INBOX_IMAGE_TYPE } from "@repo/features/inbox-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { startsLikePdf } from "@repo/features/media-signature";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { TASK_STATUS } from "@repo/features/task-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
@@ -192,11 +198,14 @@ const SHARED_IMAGE_TYPES: ReadonlySet<string> = new Set(Object.values(INBOX_IMAG
 /** The prefix of the type Slack names any image by, whose thumbnail is read where the file itself is not. */
 const IMAGE_TYPE_PREFIX = "image/";
 
-/** What a shared image is named where Slack names it nothing. */
-const SHARED_IMAGE_NAME = "image";
+/** The type Slack names a PDF by, and the extension a PDF it names no type for goes by. */
+const SHARED_PDF = { TYPE: "application/pdf", EXTENSION: ".pdf" } as const;
 
-/** What the prompt says in the member's words' place where they shared images alone. */
-const IMAGES_ALONE = "(The member sent the attached images without words.)";
+/** What a shared file is named where Slack names it nothing, by what it was read as. */
+const SHARED_FILE_NAME = { IMAGE: "image", PDF: "document.pdf" } as const;
+
+/** What the prompt says in the member's words' place where they shared files alone. */
+const FILES_ALONE = "(The member sent the attached files without words.)";
 
 /** The conversation type a direct message to the bot arrives in. */
 const SLACK_IM = "im";
@@ -294,10 +303,10 @@ interface SlackAddressed {
   readonly ts: string;
   /** The thread the message stands in; none for a message that starts one. */
   readonly threadTs: string | undefined;
-  /** The member's words, the bot's mention taken out; empty where the message shared images alone. */
+  /** The member's words, the bot's mention taken out; empty where the message shared files alone. */
   readonly text: string;
-  /** The images the message shared, of any type Slack names an image; none where it shared none. */
-  readonly images: readonly SharedFile[];
+  /** The files the message shared that may be read: an image of any type Slack names one, or a PDF within its bound; none where it shared none. */
+  readonly files: readonly SharedFile[];
 }
 
 /** Where the bot answers: the thread a message stands in, or the one it starts. */
@@ -378,6 +387,23 @@ function sharedImageUrls(file: SharedFile): readonly string[] {
   );
 }
 
+/** Where a shared PDF is read from: the file itself, where Slack names it a PDF by its type or, with none, its name, and says it is within a PDF's bound; none for any other file. */
+function sharedPdfUrl(file: SharedFile): string | undefined {
+  const pdf =
+    file.mimetype === SHARED_PDF.TYPE ||
+    (file.mimetype === undefined &&
+      file.name?.toLowerCase().endsWith(SHARED_PDF.EXTENSION) === true);
+
+  if (!pdf || (file.size !== undefined && file.size > AGENT_BOUNDS.MAX_PDF_BYTES)) return undefined;
+
+  return file.url_private_download;
+}
+
+/** Whether a shared file may be read as one of the message's files: an image with an address, or a PDF as `sharedPdfUrl` takes one. */
+function readableFile(file: SharedFile): boolean {
+  return sharedImageUrls(file).length > 0 || sharedPdfUrl(file) !== undefined;
+}
+
 /** The callback as a message addressed to the bot, or why it is not one: a bot wrote it, an edit or other subtype, or any other event. */
 function addressedOf(callback: EventCallback): SlackAddressed | SlackDrop {
   const { event } = callback;
@@ -399,9 +425,9 @@ function addressedOf(callback: EventCallback): SlackAddressed | SlackDrop {
   }
 
   const text = withoutBotMention(event.text ?? "", botUserId);
-  const images = (event.files ?? []).filter((file) => sharedImageUrls(file).length > 0);
+  const files = (event.files ?? []).filter(readableFile);
 
-  if (text === "" && images.length === 0) return SLACK_DROP.EMPTY;
+  if (text === "" && files.length === 0) return SLACK_DROP.EMPTY;
 
   return {
     teamId: callback.team_id,
@@ -411,18 +437,18 @@ function addressedOf(callback: EventCallback): SlackAddressed | SlackDrop {
     ts: event.ts,
     threadTs: event.thread_ts,
     text,
-    images,
+    files,
   };
 }
 
-/** A shared image's name as a file's travels: its own on one line, bounded, or `image` where it has none. */
-function sharedImageName(file: SharedFile): string {
+/** A shared file's name as a file's travels: its own on one line, bounded, or the one given where it has none. */
+function sharedFileName(file: SharedFile, unnamed: string): string {
   const name = (file.name ?? "")
     .replace(/[\r\n]+/gu, " ")
     .slice(0, AGENT_BOUNDS.MAX_ATTACHMENT_NAME_CHARS)
     .trim();
 
-  return name === "" ? SHARED_IMAGE_NAME : name;
+  return name === "" ? unnamed : name;
 }
 
 /**
@@ -447,34 +473,59 @@ const readSharedImage = Effect.fnUntraced(function* (
   return Option.none();
 });
 
+/** One shared file read: its bytes, and the type the message carries them as. */
+interface SharedRead {
+  readonly bytes: Uint8Array;
+  readonly mediaType: AgentAttachment["mediaType"];
+}
+
 /**
- * The images the message shared, read from Slack and made the files a
- * message carries, in the order shared, each as `readSharedImage` reads it
- * in the room their bytes together leave, as many as a message may carry;
- * one none of whose addresses read is left out, and so takes none of those
- * places.
+ * A shared PDF's bytes, read whole within `room` and a PDF's bound, where
+ * they open as every PDF does; nothing where they did not arrive or open as
+ * something else.
  */
-const sharedImages = Effect.fnUntraced(function* (
+const readSharedPdf = Effect.fnUntraced(function* (
   bot: SlackBotService,
-  images: readonly SharedFile[],
+  url: string,
+  room: number,
+) {
+  const read = yield* bot.download(url, Math.min(room, AGENT_BOUNDS.MAX_PDF_BYTES));
+
+  if (Option.isNone(read) || !startsLikePdf(read.value)) return Option.none();
+
+  return Option.some({ bytes: read.value, mediaType: AGENT_ATTACHMENT_TYPE.PDF });
+});
+
+/**
+ * The files the message shared, read from Slack and made the files a
+ * message carries, in the order shared, an image as `readSharedImage` reads
+ * it and a PDF as `readSharedPdf` does, each in the room their bytes
+ * together leave, as many as a message may carry; one that did not read is
+ * left out, and so takes none of those places.
+ */
+const sharedFiles = Effect.fnUntraced(function* (
+  bot: SlackBotService,
+  files: readonly SharedFile[],
 ) {
   const attachments: AgentAttachment[] = [];
   let bytesTogether = 0;
 
-  for (const file of images) {
+  for (const file of files) {
     if (attachments.length === AGENT_BOUNDS.MAX_ATTACHMENTS) break;
+    const room = AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES - bytesTogether;
+    const pdfUrl = sharedPdfUrl(file);
 
-    const read = yield* readSharedImage(
-      bot,
-      file,
-      AGENT_BOUNDS.MAX_ATTACHMENTS_BYTES - bytesTogether,
-    );
+    const read: Option.Option<SharedRead> =
+      pdfUrl === undefined
+        ? yield* readSharedImage(bot, file, room)
+        : yield* readSharedPdf(bot, pdfUrl, room);
 
     if (Option.isNone(read)) continue;
     const { bytes, mediaType } = read.value;
     bytesTogether += bytes.byteLength;
     const data = Buffer.from(bytes).toString("base64");
-    attachments.push({ name: sharedImageName(file), mediaType, data });
+    const unnamed = pdfUrl === undefined ? SHARED_FILE_NAME.IMAGE : SHARED_FILE_NAME.PDF;
+    attachments.push({ name: sharedFileName(file, unnamed), mediaType, data });
   }
 
   return attachments;
@@ -491,9 +542,7 @@ function plainReply(text: string): SlackMessageContent {
 /** A refusal in the words a reply says it with: one fixed slug, never anything a caller wrote. */
 function refusalReply(what: string, cause: unknown): SlackMessageContent {
   const slug =
-    Predicate.isObjectOrArray(cause) && "error" in cause
-      ? String(cause.error)
-      : "model_refused";
+    Predicate.isObjectOrArray(cause) && "error" in cause ? String(cause.error) : "model_refused";
 
   // A plan's reached limit is said in its own words, not as a refusal's code.
   if (slug === HOSTED_API_ERROR.AGENT_PLAN_LIMIT_REACHED) return plainReply(LIMIT_REACHED_WORDS);
@@ -562,7 +611,7 @@ function startPrompt(
   earlier: readonly { readonly user?: string; readonly bot: boolean; readonly text: string }[],
   permalink: Option.Option<string>,
 ): string {
-  const words = addressed.text === "" ? IMAGES_ALONE : addressed.text.slice(0, PROMPT_BOUND / 2);
+  const words = addressed.text === "" ? FILES_ALONE : addressed.text.slice(0, PROMPT_BOUND / 2);
 
   const where = Option.match(permalink, {
     onNone: () => "in a Slack thread",
@@ -629,7 +678,7 @@ function followUpPrompt(addressed: SlackAddressed, permalink: Option.Option<stri
   });
 
   return [
-    addressed.text === "" ? IMAGES_ALONE : addressed.text.slice(0, PROMPT_BOUND / 2),
+    addressed.text === "" ? FILES_ALONE : addressed.text.slice(0, PROMPT_BOUND / 2),
     "---",
     `A member wrote this in ${where} you were started from. Your final message is posted back in that thread, so make it stand on its own.`,
   ].join("\n\n");
@@ -675,7 +724,7 @@ function continuedReply(link: string): SlackMessageContent {
  * The ended agent continued in a new one as the member, as Continue and
  * `start_agent`'s `from` continue it: handed its work and its transcript, the
  * steps that do not fit summarized, with the member's message as its note
- * and the images it shared as the note's files.
+ * and the files it shared as the note's files.
  * The thread moves to it, the message is marked heard, and one line in the
  * thread links it; a refusal is said instead.
  */
@@ -768,7 +817,7 @@ const sendToAgent = Effect.fnUntraced(function* (
   }
 
   const permalink = yield* bot.permalink(addressed.channel, addressed.ts);
-  const attachments = yield* sharedImages(bot, addressed.images);
+  const attachments = yield* sharedFiles(bot, addressed.files);
 
   const sent = yield* Effect.result(
     steerAgent(
@@ -866,7 +915,7 @@ const startFromSlack = Effect.fnUntraced(function* (
 
   const earlier = messages.filter((message) => Number(message.ts) < Number(addressed.ts));
   const permalink = yield* bot.permalink(addressed.channel, addressed.ts);
-  const attachments = yield* sharedImages(bot, addressed.images);
+  const attachments = yield* sharedFiles(bot, addressed.files);
   const made = yield* Effect.result(slackTaskOf(addressed, organizationId, userId, repository));
 
   if (Result.isFailure(made)) {
@@ -924,7 +973,7 @@ const startFromSlack = Effect.fnUntraced(function* (
 /**
  * A reply in the Slack thread of a DM the bot wrote about an inbox thread,
  * posted on that thread as the member's own reply, as one in the app is,
- * with the images it shared as the reply's files, under Slack's event id,
+ * with the files it shared as the reply's files, under Slack's event id,
  * and marked heard; from anyone but the member the
  * DM went to, or a refusal, it is said in the thread instead.
  */
@@ -952,7 +1001,7 @@ const replyToThreadDm = Effect.fnUntraced(function* (
     messageAsMember(storeWriter({ tools: CODER_TOOL_SET }), member.value, dm.itemId, {
       text: addressed.text,
       clientKey: addressed.eventId,
-      attachments: yield* sharedImages(bot, addressed.images),
+      attachments: yield* sharedFiles(bot, addressed.files),
     }),
   );
 

@@ -27,8 +27,12 @@ export const QUERY_ROOT = {
   HOST_PAIRING: "host-pairing",
   /** Settings › Cloud environment's Variables: a workspace's variables by name (`settings/environment-variables-section.tsx`). */
   WORKSPACE_ENVIRONMENT: "workspace-environment",
-  /** Settings › Cloud environment's scripts: a workspace's install script and each repository's setup and archive scripts (`settings/cloud-setup-sections.tsx`). */
+  /** Settings › Cloud environment's scripts: a workspace's install script and each repository's setup script (`settings/cloud-setup-sections.tsx`). */
   WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
+  /** The Merge queue page: every pull request a workspace's merge queues hold (`desktop/merge-queue-page.tsx`). */
+  MERGE_QUEUE: "merge-queue",
+  /** Settings › This Mac's computer use: the Mac's grants and the apps agents use without asking, as the host reads them through the helper. */
+  COMPUTER_USE_STATUS: "computer-use-status",
   INSTALLED_SKILL: "installed-skill",
   INSTALLED_SKILL_PREVIEW: "installed-skill-preview",
   TASK_NEWEST_REVISION: "task-newest-revision",
@@ -39,6 +43,8 @@ export const QUERY_ROOT = {
   APP_STATE: "appState",
   /** A web page's preview for the card a plain link hangs, by the link's address (`tasks/link-preview-card.tsx`). */
   LINK_PREVIEW: "link-preview",
+  /** A button an agent put in its reply, by the agent and the button (`tasks/reply-button-link.tsx`). */
+  REPLY_BUTTON: "reply-button",
   TASK_FILE: "task-file",
   TASK_TREE: "task-tree",
   PAGE_SOURCE: "page-source",
@@ -56,6 +62,8 @@ export const QUERY_ROOT = {
   AGENT_SHARED_PORT: "agent-shared-port",
   /** A cloud agent's shells and where its sandbox stands, as its Run button reads which run actions run (`tasks/run-actions-button.tsx`). */
   AGENT_SHELLS: "agent-shells",
+  /** A local agent's run actions on this Mac and whether each runs, as its Run button and its run actions' Local tabs read them (`tasks/run-action-shells.tsx`). */
+  MAC_RUN_ACTIONS: "mac-run-actions",
   /** What this Mac spends on the app, read every few seconds while the Resources popover stands open (`desktop/mac-resources.tsx`). */
   MAC_RESOURCES: "mac-resources",
   /** One version of a plan, as its version history draws it (`tasks/use-description-history.ts`). */
@@ -88,6 +96,7 @@ const ACCOUNT_SCOPED_ROOTS: ReadonlySet<unknown> = new Set<string>([
   QUERY_ROOT.HOST_PAIRING,
   QUERY_ROOT.WORKSPACE_ENVIRONMENT,
   QUERY_ROOT.WORKSPACE_SANDBOX_SETUP,
+  QUERY_ROOT.MERGE_QUEUE,
 ]);
 
 /**

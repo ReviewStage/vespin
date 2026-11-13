@@ -21,19 +21,15 @@
  * key is looked for before the clip is read.
  */
 
-import { middlewareGen } from "@orpc/experimental-effect";
-import { PROVIDER_KEY_UNREADABLE } from "@repo/database/models/provider-key-seal";
 import { spendDictationMeter } from "@repo/database/models/quota";
 import { base64Bytes } from "@repo/features/agent-wire";
 import { DICTATION_BOUNDS } from "@repo/features/dictation-wire";
-import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
-import { Clock, Effect, type Redacted } from "effect";
-import { ownApiKeyOf } from "../accounts/own-api-key.js";
-import { HostedEnvironment } from "../environment.js";
+import { Clock, Effect } from "effect";
+import { openAiKeyMiddleware } from "../accounts/openai-key-middleware.js";
 import { dictationDurationOf, recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import { HOSTED_REFUSAL, type UserIdResolver } from "../http/http-effect.js";
 import { logStoreFailure } from "../http/store-failure.js";
-import { accountMiddleware, type HostedCaller, type HostedContext, hosted } from "../orpc/base.js";
+import { accountMiddleware, hosted } from "../orpc/base.js";
 import { transcribeClip } from "./transcription.js";
 
 const MS_PER_SECOND = 1_000;
@@ -41,25 +37,6 @@ const MS_PER_SECOND = 1_000;
 export interface DictationProcedureSeams {
   resolveUserId: UserIdResolver;
 }
-
-/** The caller's own OpenAI API key, or refused as missing where it saved none; unavailable where the store did not answer or the deployment cannot open the key it saved. */
-const openAiKeyMiddleware = middlewareGen<
-  HostedContext & HostedCaller,
-  { readonly openAiKey: Redacted.Redacted<string> }
->(function* ({ context, next }) {
-  const environment = yield* HostedEnvironment;
-
-  const key = yield* ownApiKeyOf(context.userId, PROVIDER_KEY_PROVIDER.OPENAI, environment).pipe(
-    Effect.tapError(logStoreFailure),
-    Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
-  );
-
-  if (key === undefined) return yield* Effect.fail(HOSTED_REFUSAL.OPENAI_KEY_MISSING);
-
-  if (key === PROVIDER_KEY_UNREADABLE) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
-
-  return yield* next({ context: { openAiKey: key } });
-});
 
 /** The clip's bytes out of their base64, whose spelling the wire already held to the alphabet. */
 function clipBytes(base64: string): Uint8Array<ArrayBuffer> {

@@ -263,6 +263,29 @@ test("an ask of the models that never lands is said as failed past its bound, on
   }
 });
 
+test("an ask of the models still out when its tab closes settles nothing, so its bound passing after the window is gone throws nothing", async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+
+  try {
+    handHostReads({});
+    fakeActPort({
+      [ACT_KIND.AGENTS_MODELS_RETRY]: () => Promise.withResolvers<undefined>().promise,
+    });
+    const tab = mount({ taskId: undefined, repository: null });
+    await tab.mount();
+    act(() => tab.control().readModels());
+    await settle();
+
+    for (const root of roots.splice(0)) act(() => root.unmount());
+    // Note that a test file's window is gone once it ends, while a read it left out runs on in the worker; a state set then throws on the missing `window`.
+    vi.stubGlobal("window", undefined);
+    await vi.advanceTimersByTimeAsync(15_000);
+  } finally {
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+  }
+});
+
 test("the task's agents are the followed list's alone, the archived among them, with no read of them asked", async () => {
   const OTHER_TASK = "3c2d1e0f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
   const elsewhere = { ...STARTED, id: "5d4c3b2a-1f0e-4d9c-8b7a-6f5e4d3c2b1a", planId: OTHER_TASK };
@@ -445,6 +468,50 @@ test("a draft's words outlast a relaunch, the plan opening on its draft again un
   const again = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [] });
   await again.mount();
   assert.equal(again.control().draft, undefined);
+});
+
+test("a suggestion's draft keeps its suggestion through a chip change; another suggestion pressed opens on its own brief, the first closed with Undo, and the two put back together go through neither", async () => {
+  const tab = mount({ taskId: TASK, repository: "acme/relay", listedAgents: [STARTED] });
+  await tab.mount();
+
+  const invite = {
+    agentId: AGENT,
+    buttonId: "92f3b536-7e0a-4bc8-a3e0-fa0b1c2d3e4f",
+    label: "Invite",
+  };
+
+  const digest = {
+    agentId: AGENT,
+    buttonId: "a3c4d5e6-7f80-4912-8a3b-4c5d6e7f8091",
+    label: "Digest",
+  };
+
+  act(() => {
+    tab.control().onSuggestDraft(invite, "Send the invite email.", undefined);
+  });
+  act(() =>
+    tab.control().onDraftChange({ choice: { model: "openai/gpt-6.1-sol", effort: "low" } }),
+  );
+  assert.deepEqual(tab.control().draft?.suggestion, invite, "a chip changed keeps the suggestion");
+  act(() => tab.control().onDraftChange({ prompt: "Send the invite email, and retry once." }));
+
+  act(() => {
+    tab.control().onSuggestDraft(digest, "Count invites apart.", undefined);
+  });
+  assert.deepEqual(
+    [tab.control().draft?.suggestion, tab.control().draft?.prompt],
+    [digest, "Count invites apart."],
+    "another suggestion's words never go out through this one",
+  );
+  assert.equal(newestToastSays(), "Draft closedUndo");
+
+  act(() => newestToastAction()?.click());
+  await vi.waitFor(() =>
+    assert.deepEqual(
+      [tab.control().draft?.suggestion, tab.control().draft?.prompt],
+      [undefined, "Count invites apart.\n\nSend the invite email, and retry once."],
+    ),
+  );
 });
 
 test("two windows' draft agents on one plan each keep their own words under their own key", async () => {
