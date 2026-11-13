@@ -92,7 +92,7 @@
     box-shadow: none;
   }
 
-    /* The open row is lifted as a card is, in the surface's fill with a
+  /* The open row is lifted as a card is, in the surface's fill with a
      hairline and a soft shadow. */
   .ui-list-row[data-current="true"][data-current-look="sheet"] {
     background: var(--ui-color-surface);
