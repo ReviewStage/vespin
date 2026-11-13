@@ -5,7 +5,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import { assert, describe, it } from "@effect/vitest";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
-import { Duration, Effect, Layer, Redacted, Schema } from "effect";
+import { Duration, Effect, Layer, Predicate, Redacted, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { GitHub, type InstallationGrant } from "./github.js";
 import { type GitHubHold, GitHubHoldStore } from "./github-hold-store.js";
@@ -282,6 +282,204 @@ describe("GitHub", () => {
         reads().map((request) => request.headers.get("if-none-match")),
         [null, '"v1"'],
       );
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect(
+    "fails a listing that still names a next page at its bound, rather than answering part of it",
+    () => {
+      const { layer } = harness((request) =>
+        Response.json([{ name: "main" }], {
+          headers: { link: `<${request.url.split("?")[0]}?page=9>; rel="next"` },
+        }),
+      );
+
+      return Effect.gen(function* () {
+        const github = yield* GitHub;
+
+        const listed = yield* github
+          .asMember(Redacted.make("gho_member"))
+          .paginate("GET /repos/{owner}/{repo}/branches", REPOSITORY, { maxPages: 2 })
+          .pipe(Effect.flip);
+
+        assert.strictEqual(listed._tag, "GitHubUnreadable");
+      }).pipe(Effect.provide(layer));
+    },
+  );
+
+  it.effect("leaves a body asked for as bytes unread, whatever charset GitHub names", () => {
+    const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]);
+
+    const { layer } = harness(
+      () =>
+        new Response(bytes, {
+          headers: { "content-type": "application/vnd.github.raw; charset=utf-8" },
+        }),
+    );
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+
+      const answer = yield* github
+        .asMember(Redacted.make("gho_member"))
+        .request("GET /repos/{owner}/{repo}/contents/{path}", {
+          ...REPOSITORY,
+          path: "logo.jpg",
+          headers: { accept: "application/vnd.github.raw" },
+          parseSuccessResponseBody: false,
+        });
+
+      const body = Schema.decodeUnknownSync(Schema.instanceOf(ReadableStream))(answer.data);
+      const read = yield* Effect.promise(() => new Response(body).arrayBuffer());
+
+      assert.deepStrictEqual(new Uint8Array(read), bytes);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("fails a refusal in GitHub's own words", () => {
+    const { layer } = harness(() =>
+      json(
+        {
+          message: "Reviews may only be requested from collaborators.",
+          documentation_url: "https://docs.github.com",
+        },
+        422,
+      ),
+    );
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+
+      const refused = yield* readRepository(github.asMember(Redacted.make("gho_member"))).pipe(
+        Effect.flip,
+      );
+
+      assert.deepStrictEqual(
+        { tag: refused._tag, message: refused.message },
+        { tag: "GitHubRejected", message: "Reviews may only be requested from collaborators." },
+      );
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("answers a GraphQL read's partial data beside the errors GitHub gave", () => {
+    const { layer } = harness(() =>
+      Response.json({
+        data: { r0: { name: "hello" }, r1: null },
+        errors: [{ type: "NOT_FOUND", message: "Could not resolve to a Repository." }],
+      }),
+    );
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+
+      const answer = yield* github
+        .asMember(Redacted.make("gho_member"))
+        .graphqlPartial(
+          'query { r0: repository(owner: "octo", name: "hello") { name } r1: repository(owner: "octo", name: "gone") { name } }',
+          {},
+          Schema.Record(Schema.String, Schema.NullOr(Schema.Struct({ name: Schema.String }))),
+        );
+
+      assert.deepStrictEqual(answer, {
+        data: { r0: { name: "hello" }, r1: null },
+        errors: [{ type: "NOT_FOUND", message: "Could not resolve to a Repository." }],
+      });
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("reads a listing whose page wraps its items", () => {
+    const { layer } = harness(() =>
+      Response.json({ total_count: 1, repository_selection: "all", repositories: [{ id: 7 }] }),
+    );
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+
+      const listed = yield* github
+        .asMember(Redacted.make("gho_member"))
+        .paginate("GET /installation/repositories", { per_page: 100 }, { maxPages: 2 });
+
+      assert.deepStrictEqual(
+        listed.map((repository) => repository.id),
+        [7],
+      );
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("fails a refusal that names a retry-after as rate limited until then", () => {
+    const { layer } = harness(() =>
+      json({ message: "You have exceeded a secondary rate limit." }, 403, { "retry-after": "60" }),
+    );
+
+    return Effect.gen(function* () {
+      yield* TestClock.setTime(1_000_000);
+      const github = yield* GitHub;
+
+      const refused = yield* readRepository(github.asMember(Redacted.make("gho_member"))).pipe(
+        Effect.flip,
+      );
+
+      assert.ok(Predicate.isTagged(refused, "GitHubRateLimited"));
+      assert.strictEqual(refused.resetsAt?.getTime(), 1_060_000);
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect(
+    "fails a GraphQL answer whose errors name no type as GitHub's refusal, in its words",
+    () => {
+      const { layer } = harness(() =>
+        Response.json({
+          data: null,
+          errors: [{ message: "Review Can not approve your own pull request" }],
+        }),
+      );
+
+      return Effect.gen(function* () {
+        const github = yield* GitHub;
+
+        const refused = yield* github
+          .asMember(Redacted.make("gho_member"))
+          .graphql("mutation { approve }", {}, Schema.Unknown)
+          .pipe(Effect.flip);
+
+        assert.deepStrictEqual(
+          { tag: refused._tag, message: refused.message },
+          { tag: "GitHubRejected", message: "Review Can not approve your own pull request" },
+        );
+      }).pipe(Effect.provide(layer));
+    },
+  );
+
+  it.effect("hands a byte read its body as it streams, never waiting on the whole of it", () => {
+    const first = new Uint8Array([0x1f, 0x8b]);
+
+    const { layer } = harness(
+      () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start: (controller) => controller.enqueue(first),
+            // Note that the rest never comes, as a large archive's has not yet when its first bytes are read.
+            pull: () => new Promise<void>(() => {}),
+          }),
+          { headers: { "content-type": "application/x-gzip" } },
+        ),
+    );
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+
+      const answer = yield* github
+        .asMember(Redacted.make("gho_member"))
+        .request("GET /repos/{owner}/{repo}/tarball/{ref}", {
+          ...REPOSITORY,
+          ref: "main",
+          parseSuccessResponseBody: false,
+        });
+
+      const body = Schema.decodeUnknownSync(Schema.instanceOf(ReadableStream))(answer.data);
+      const read = yield* Effect.promise(() => body.getReader().read());
+
+      assert.deepStrictEqual(read.value, first);
     }).pipe(Effect.provide(layer));
   });
 });

@@ -76,12 +76,18 @@
  * whole authorization it names at GitHub once the row is gone
  * (`auth/sign-in-revocation.ts`).
  *
- * Nothing here holds a client: the GitHub reads run on the ambient
- * `HttpClient` and the rows are read on the ambient `SqlClient`, so a test
- * stands a fake at the GitHub boundary and a throwaway database beneath it,
- * and the edge serving a request is the one place either is provided. A
- * token leaves only as a `Redacted`, and a failure carries a status or a
- * kind and never the request that carried the bearer.
+ * Every request to GitHub's API goes through `@repo/github`, as the App, an
+ * installation, or a member: a token this service hands out is a
+ * `GitHubBearer`, the module's client for the identity the token is beside
+ * the token itself, so a caller's request is queued, spaced, and held under
+ * the identity GitHub counts it against, and fails with the module's
+ * `GitHubFailure`, read by its tag. Only GitHub's OAuth endpoints, the code
+ * exchange, the refresh, and the revocation, are sent on the ambient
+ * `HttpClient`, and fail with this module's `GitHubUnavailable`. The rows are
+ * read on the ambient `SqlClient`, so a test stands a fake at the GitHub
+ * boundary and a throwaway database beneath it. A token leaves only as a
+ * `Redacted`, and a failure carries a kind and never the request that
+ * carried the bearer.
  */
 
 import { createPrivateKey, createSign, type KeyObject } from "node:crypto";
@@ -112,10 +118,13 @@ import {
 } from "@repo/features/repository-reach-wire";
 import {
   GitHub,
+  type GitHubClient,
+  type GitHubFailure,
   type GitHubHoldStore,
-  type GitHubFailure as GitHubModuleFailure,
+  type GitHubNotFound,
   GitHubPriority,
   type GitHubThrottleGroups,
+  GitHubUnreadable,
   type InstallationGrant,
   PRIORITY,
 } from "@repo/github";
@@ -133,16 +142,14 @@ import {
   Effect,
   Exit,
   Layer,
-  Match,
   Option,
+  Predicate,
   Redacted,
   Result,
   Schema,
   type Scope,
 } from "effect";
-import * as Headers from "effect/http/Headers";
 import * as HttpClient from "effect/http/HttpClient";
-import type * as HttpClientError from "effect/http/HttpClientError";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -154,7 +161,6 @@ import {
   mendInstallationStatus,
   type WorkspaceInstallation,
 } from "./github-installations.js";
-import { GitHubBackground } from "./github-rate-gate.js";
 import {
   GITHUB_TOKEN_ABSENCE,
   type MemberGitHubToken,
@@ -274,9 +280,9 @@ const TOKEN_LIFE = {
   SANDBOX: Duration.minutes(45),
 } as const;
 
-/** A lookup a cache keeps, run in the member's lane rather than the lane of whoever missed first (`./github-rate-gate.ts`). */
+/** A lookup a cache keeps, run at the members' priority rather than at the priority of whoever missed first. */
 const inForeground = <A, E, R>(lookup: Effect.Effect<A, E, R>) =>
-  Effect.provideService(lookup, GitHubBackground, false);
+  Effect.provideService(lookup, GitHubPriority, PRIORITY.MEMBER);
 
 /** The mint as GitHub takes it: the repositories by name, none for every one, and the permissions the token is cut to. */
 interface InstallationTokenRequest {
@@ -294,17 +300,16 @@ export const GitHubAppThrottle = Context.Reference<GitHubThrottleGroups | undefi
   { defaultValue: () => undefined },
 );
 
-/** The statuses the reads here decide on by name; any other is answered as the status it is. */
-export const GITHUB_HTTP_STATUS = {
-  UNAUTHORIZED: 401,
-  FORBIDDEN: 403,
-  NOT_FOUND: 404,
-  /** What a repository with its issues turned off answers on its issues path. */
-  GONE: 410,
-  UNPROCESSABLE: 422,
-  /** GitHub's primary or secondary rate limit, which it may answer as 403 instead. */
-  TOO_MANY_REQUESTS: 429,
-} as const;
+/**
+ * Who a request to GitHub's API is sent as, and the token it is sent with:
+ * the `@repo/github` client of the identity the token is, an installation
+ * or a member, and the token itself, for what leaves the module, such as a
+ * sandbox's `git`. A caller sends on the client, never with the token.
+ */
+export interface GitHubBearer {
+  readonly client: GitHubClient;
+  readonly token: Redacted.Redacted;
+}
 
 /**
  * What GitHub revokes of a user's authorization of the App, as the path of
@@ -324,13 +329,16 @@ const BOT_LOGIN_SUFFIX = "[bot]";
 
 /**
  * GitHub pages a listing at most a hundred to a page. A listing is read page
- * by page until one comes back short, or until the caller has what it came
- * for, and never past this many pages: a GitHub still answering full pages
- * at the bound is a listing that did not end, and is answered as unreadable
- * rather than as the part of it that was read, so a repository past the
+ * by page as GitHub's `link` header leads, until the caller has what it came
+ * for, and never past this many pages: a listing still naming a next page
+ * at the bound did not end, and `@repo/github` fails it as unreadable rather
+ * than answering the part of it that was read, so a repository past the
  * bound is never refused as one the user cannot reach.
  */
-const PAGING = { PER_PAGE: 100, MAX_PAGES: 50 } as const;
+export const PAGING = { PER_PAGE: 100, MAX_PAGES: 50 } as const;
+
+/** A body left unread, as a byte read answers it. */
+const BODY_STREAM = Schema.instanceOf(ReadableStream);
 
 /** The kinds of account an installation's workspace is made for; an enterprise's is none of them. */
 const ACCOUNT_TYPES: readonly GitHubAccountType[] = Object.values(GITHUB_ACCOUNT_TYPE);
@@ -396,30 +404,27 @@ export class GitHubAppNotConfigured extends Data.TaggedError("GitHubAppNotConfig
   }
 }
 
-/** Why GitHub's answer could not be used; the status or the kind alone, never the request that carried a bearer. */
+/** Why one of GitHub's OAuth endpoints could not be used; the kind alone, never the request that carried a secret. */
 export const GITHUB_FAILURE = {
-  /** The request never got an answer. */
+  /** The request never got an answer, or GitHub answered it with a failure. */
   TRANSPORT: "transport",
-  /** GitHub answered with a status the read did not expect. */
-  STATUS: "status",
   /** GitHub answered, but not in the shape the read declares. */
   UNREADABLE: "unreadable",
-  /** GitHub was still answering full pages of a listing at the bound, so the listing did not end. */
-  UNBOUNDED: "unbounded",
 } as const;
 
-type GitHubFailure = (typeof GITHUB_FAILURE)[keyof typeof GITHUB_FAILURE];
+type GitHubOAuthFailure = (typeof GITHUB_FAILURE)[keyof typeof GITHUB_FAILURE];
 
+/**
+ * GitHub's OAuth endpoints, the code exchange, the refresh, and the
+ * revocation, not answering as asked: the one failure of GitHub this module
+ * makes itself, since every request to the API fails with `@repo/github`'s
+ * `GitHubFailure`.
+ */
 export class GitHubUnavailable extends Data.TaggedError("GitHubUnavailable")<{
-  readonly reason: GitHubFailure;
-  readonly status: number | undefined;
-  /** How long GitHub asked to be left alone, where its answer carried a `Retry-After` in seconds. */
-  readonly retryAfter?: Duration.Duration;
+  readonly reason: GitHubOAuthFailure;
 }> {
   override get message(): string {
-    return this.status === undefined
-      ? `GitHub could not be read: ${this.reason}`
-      : `GitHub answered ${this.status}`;
+    return `GitHub could not be read: ${this.reason}`;
   }
 }
 
@@ -445,8 +450,8 @@ class GitHubSignInRequired extends Data.TaggedError("GitHubSignInRequired")<{
   }
 }
 
-/** What a read of GitHub can fail with, apart from the store. */
-export type GitHubReadFailure = GitHubAppNotConfigured | GitHubUnavailable;
+/** What a read of GitHub can fail with, apart from the store: no App, its OAuth endpoints, or the API as `@repo/github` says. */
+export type GitHubReadFailure = GitHubAppNotConfigured | GitHubUnavailable | GitHubFailure;
 
 /** What a read of a workspace's installation can fail with: GitHub, or the store that names the installation. */
 export type GitHubWorkspaceReadFailure = GitHubReadFailure | StoreFailure;
@@ -475,9 +480,6 @@ type TokenUnreached =
   | typeof REPOSITORY_UNREACHED.TOKEN_INVALID
   | typeof REPOSITORY_UNREACHED.TOKEN_NO_ACCESS
   | typeof REPOSITORY_UNREACHED.TOKEN_CANNOT_PUSH;
-
-/** The header GitHub answers a classic token not authorized for an organization's SAML SSO with. */
-const GITHUB_SSO_HEADER = "x-github-sso";
 
 /**
  * The page that authorizes a classic token for an organization's SAML SSO,
@@ -536,11 +538,11 @@ export type GitHubTokenAccess =
       readonly markInvalid: MemberGitHubToken["markInvalid"];
     };
 
-/** A token for one repository: the repository as GitHub spells it, the token, sealed, and whose it is. */
+/** A token for one repository: the repository as GitHub spells it, the bearer, and whose it is. */
 export interface GitHubRepositoryToken {
   readonly repository: GitHubRepository;
   /** An installation token limited to this one repository, good for an hour from its mint; or the member's own token. */
-  readonly token: Redacted.Redacted;
+  readonly bearer: GitHubBearer;
   readonly access: GitHubTokenAccess;
 }
 
@@ -567,10 +569,10 @@ type RepositorySetUnreached =
       readonly repository: string;
     };
 
-/** One installation token for several repositories: each as GitHub spells it, in the order named, and the token, good for an hour from its mint. */
+/** One installation token for several repositories: each as GitHub spells it, in the order named, and the bearer, good for an hour from its mint. */
 export interface GitHubRepositoriesToken {
   readonly repositories: readonly GitHubRepository[];
-  readonly token: Redacted.Redacted;
+  readonly bearer: GitHubBearer;
   readonly access: { readonly kind: typeof GITHUB_ACCESS.APP };
 }
 
@@ -604,7 +606,7 @@ export interface GitHubAppService {
   /** One installation of this App by the id GitHub hands the Setup URL; none for an id that is not this App's. */
   readonly installation: (
     installationId: number,
-  ) => Effect.Effect<Option.Option<GitHubInstallation>, GitHubReadFailure, HttpClient.HttpClient>;
+  ) => Effect.Effect<Option.Option<GitHubInstallation>, GitHubReadFailure>;
   /**
    * Where the browser authorizes the App once, on GitHub's web flow with
    * PKCE S256, so the installer of a connect can be confirmed.
@@ -825,17 +827,17 @@ export interface GitHubAppService {
    * to, read on an installation token the caller holds (`GET
    * /users/<slug>[bot]`) since the App's JWT reaches no user endpoint.
    */
-  readonly appBot: (
+  readonly appBot: (bearer: GitHubBearer) => Effect.Effect<GitHubUser, GitHubReadFailure>;
+  /** The bearer for a token a member holds: the `@repo/github` client for that member's token, and the token. */
+  readonly memberBearer: (
     token: Redacted.Redacted,
-  ) => Effect.Effect<GitHubUser, GitHubReadFailure, HttpClient.HttpClient>;
+  ) => Effect.Effect<GitHubBearer, GitHubAppNotConfigured>;
   /**
    * The GitHub account a token belongs to, read on it (`GET /user`,
    * https://docs.github.com/en/rest/users/users#get-the-authenticated-user):
    * whose a member's own token is, as their commits name them.
    */
-  readonly tokenUser: (
-    token: Redacted.Redacted,
-  ) => Effect.Effect<GitHubUser, GitHubReadFailure, HttpClient.HttpClient>;
+  readonly tokenUser: (bearer: GitHubBearer) => Effect.Effect<GitHubUser, GitHubReadFailure>;
   /**
    * The user's GitHub App token off their sign-in, refreshed and re-sealed on
    * its row when it is about to expire; read where we act as the developer.
@@ -845,11 +847,7 @@ export interface GitHubAppService {
    */
   readonly userToken: (
     userId: string,
-  ) => Effect.Effect<
-    Redacted.Redacted,
-    GitHubUserReadFailure,
-    HttpClient.HttpClient | DatabaseServices
-  >;
+  ) => Effect.Effect<GitHubBearer, GitHubUserReadFailure, HttpClient.HttpClient | DatabaseServices>;
   /**
    * The user's whole authorization of the App revoked at GitHub under the
    * App's client credentials, named by a live access token of theirs
@@ -880,10 +878,10 @@ export interface GitHubAppService {
   >;
 }
 
-/** A user who may push to a repository through the App: their account as a commit names it, and their token. */
+/** A user who may push to a repository through the App: their account as a commit names it, and their bearer. */
 interface GitHubPusher {
   readonly user: GitHubUser;
-  readonly token: Redacted.Redacted;
+  readonly bearer: GitHubBearer;
 }
 
 export class GitHubApp extends Context.Service<GitHubApp, GitHubAppService>()("GitHubApp") {
@@ -924,7 +922,7 @@ const InstallationSchema = Schema.Struct({
 
 type InstallationRecord = typeof InstallationSchema.Type;
 
-const UserInstallationsSchema = Schema.Struct({ installations: Schema.Array(InstallationSchema) });
+const _UserInstallationsSchema = Schema.Struct({ installations: Schema.Array(InstallationSchema) });
 
 const RepositorySchema = Schema.Struct({
   /** GitHub's id for the repository, which a rename or a transfer keeps. */
@@ -939,7 +937,7 @@ const RepositorySchema = Schema.Struct({
 
 type RepositoryRecord = typeof RepositorySchema.Type;
 
-const InstallationRepositoriesSchema = Schema.Struct({
+const _InstallationRepositoriesSchema = Schema.Struct({
   repositories: Schema.Array(RepositorySchema),
 });
 
@@ -997,7 +995,7 @@ const TokenRepositorySchema = Schema.Struct({
 const MEMBER_REPOSITORIES_QUERY = {
   affiliation: "owner,collaborator,organization_member",
   sort: "updated",
-  per_page: String(PAGING.PER_PAGE),
+  per_page: PAGING.PER_PAGE,
 } as const;
 
 const AccountTokenRowSchema = Schema.Struct({
@@ -1269,210 +1267,124 @@ function sameName(left: string, right: string): boolean {
   return left.toLowerCase() === right.toLowerCase();
 }
 
-/** The API path of one repository by `owner/name`, each part encoded. */
-export function repositoryPath(fullName: string): string {
-  const [owner = "", name = ""] = fullName.split("/");
-
-  return `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}`;
+/** A repository as GitHub's routes name it: its owner and its name. */
+interface RepositoryParts {
+  readonly owner: string;
+  readonly repo: string;
 }
 
-/** A `Retry-After` spelled in seconds, as GitHub spells it; none where it is absent or spelled any other way. */
-function retryAfterOf(
-  response: HttpClientResponse.HttpClientResponse,
-): Duration.Duration | undefined {
-  const spelled = Option.getOrUndefined(Headers.get(response.headers, "retry-after"));
+/** The owner and name of a repository by `owner/name`, as GitHub's routes take them. */
+export function repositoryParts(fullName: string): RepositoryParts {
+  const [owner = "", repo = ""] = fullName.split("/");
 
-  if (spelled === undefined || !/^\d+$/u.test(spelled.trim())) return undefined;
-
-  return Duration.seconds(Number(spelled.trim()));
+  return { owner, repo };
 }
 
-/** A transport failure as the kind alone, and how long GitHub asked to wait where it said: the request it carries holds the bearer, and is left behind. */
-function unavailable(error: HttpClientError.HttpClientError): GitHubUnavailable {
-  const response = error.response;
-  const retryAfter = response === undefined ? undefined : retryAfterOf(response);
-
-  return new GitHubUnavailable({
-    reason: response === undefined ? GITHUB_FAILURE.TRANSPORT : GITHUB_FAILURE.STATUS,
-    status: response?.status,
-    ...(retryAfter === undefined ? undefined : { retryAfter }),
-  });
-}
-
-/**
- * A failure of `@repo/github` as the `GitHubUnavailable` this module's
- * callers read: a refusal by its status, a rate limit with how long GitHub
- * asked to be left alone, and an answer off its shape as unreadable.
- */
-function unavailableOf(failure: GitHubModuleFailure): Effect.Effect<never, GitHubUnavailable> {
-  return Match.value(failure).pipe(
-    Match.tagsExhaustive({
-      GitHubRateLimited: (limited) =>
-        Effect.flatMap(Clock.currentTimeMillis, (now) => {
-          const resetsAt = limited.resetsAt?.getTime();
-
-          return Effect.fail(
-            new GitHubUnavailable({
-              reason: GITHUB_FAILURE.STATUS,
-              status: GITHUB_HTTP_STATUS.TOO_MANY_REQUESTS,
-              ...(resetsAt !== undefined && {
-                retryAfter: Duration.millis(Math.max(resetsAt - now, 0)),
-              }),
-            }),
-          );
-        }),
-      GitHubNotFound: () => Effect.fail(statusOf(GITHUB_HTTP_STATUS.NOT_FOUND)),
-      GitHubForbidden: () => Effect.fail(statusOf(GITHUB_HTTP_STATUS.FORBIDDEN)),
-      GitHubUnauthorized: () => Effect.fail(statusOf(GITHUB_HTTP_STATUS.UNAUTHORIZED)),
-      GitHubRejected: (rejected) => Effect.fail(statusOf(rejected.status)),
-      GitHubUnreadable: () =>
-        Effect.fail(
-          new GitHubUnavailable({ reason: GITHUB_FAILURE.UNREADABLE, status: undefined }),
-        ),
-      GitHubUnavailable: () =>
-        Effect.fail(new GitHubUnavailable({ reason: GITHUB_FAILURE.TRANSPORT, status: undefined })),
-    }),
-  );
-}
-
-function statusOf(status: number): GitHubUnavailable {
-  return new GitHubUnavailable({ reason: GITHUB_FAILURE.STATUS, status });
-}
-
-/** GitHub's answer under `status` read as nothing this service can read. */
-export function unreadable(status: number): GitHubUnavailable {
-  return new GitHubUnavailable({ reason: GITHUB_FAILURE.UNREADABLE, status });
-}
-
-/**
- * One read of the API under the bearer given, the path rooted at the API's
- * origin; with none (`null`), an anonymous read, which GitHub answers for a
- * public repository alone and at its unauthenticated rate.
- */
-export function githubRead(
-  path: string,
-  bearer: Redacted.Redacted | null,
-): HttpClientRequest.HttpClientRequest {
-  const request = HttpClientRequest.get(`${GITHUB_API}${path}`).pipe(
-    HttpClientRequest.setHeaders(GITHUB_HEADERS),
-  );
-
-  return bearer === null ? request : HttpClientRequest.bearerToken(request, bearer);
-}
-
-/** One write of the API under the bearer given, its JSON body as given, the path rooted at the API's origin. */
-export function githubPost<Body extends object>(
-  path: string,
-  bearer: Redacted.Redacted,
-  body: Body,
-): HttpClientRequest.HttpClientRequest {
-  return HttpClientRequest.post(`${GITHUB_API}${path}`).pipe(
-    HttpClientRequest.bearerToken(bearer),
-    HttpClientRequest.setHeaders(GITHUB_HEADERS),
-    HttpClientRequest.bodyJsonUnsafe(body),
-  );
-}
-
-/** One write of the API under the bearer given by the method given, its JSON body where one is given, the path rooted at the API's origin. */
-export function githubSendRequest<Body extends object>(
-  method: "POST" | "DELETE",
-  path: string,
-  bearer: Redacted.Redacted,
-  body?: Body,
-): HttpClientRequest.HttpClientRequest {
-  const request = HttpClientRequest.make(method)(`${GITHUB_API}${path}`).pipe(
-    HttpClientRequest.bearerToken(bearer),
-    HttpClientRequest.setHeaders(GITHUB_HEADERS),
-  );
-
-  return body === undefined ? request : HttpClientRequest.bodyJsonUnsafe(request, body);
-}
-
-/** One request sent, its answer still open for the caller to read and close. */
-export function send(
+/** An OAuth endpoint's answer, read whole under its schema; any failure the kind alone, since the request carries a secret. */
+function oauthAnswer<A>(
   request: HttpClientRequest.HttpClientRequest,
-): Effect.Effect<HttpClientResponse.HttpClientResponse, GitHubUnavailable, HttpClient.HttpClient> {
-  return Effect.flatMap(HttpClient.HttpClient, (client) =>
-    Effect.mapError(client.execute(request), unavailable),
+  schema: Schema.Codec<A, unknown>,
+): Effect.Effect<A, GitHubUnavailable, HttpClient.HttpClient> {
+  return Effect.scoped(
+    Effect.flatMap(HttpClient.HttpClient, (client) =>
+      client.execute(request).pipe(
+        Effect.flatMap(HttpClientResponse.filterStatusOk),
+        Effect.mapError(() => new GitHubUnavailable({ reason: GITHUB_FAILURE.TRANSPORT })),
+        Effect.flatMap((ok) =>
+          Effect.mapError(
+            HttpClientResponse.schemaBodyJson(schema)(ok),
+            () => new GitHubUnavailable({ reason: GITHUB_FAILURE.UNREADABLE }),
+          ),
+        ),
+      ),
+    ),
   );
 }
 
-/** Whether a listing read so far holds what the caller came for, so no further page is asked. */
-type Enough<A> = (items: readonly A[]) => boolean;
+/** An answer of GitHub's, as far as its body: what `@repo/github` hands back, or a listing's items gathered. */
+interface GitHubAnswer {
+  readonly data: unknown;
+}
 
-const WHOLE_LISTING: Enough<unknown> = () => false;
+/** What GitHub answered, read under its schema; an answer off the schema is unreadable. */
+export function readBody<A>(
+  answer: GitHubAnswer,
+  schema: Schema.Decoder<A>,
+): Effect.Effect<A, GitHubUnreadable> {
+  return Effect.mapError(
+    Schema.decodeUnknownEffect(schema)(answer.data),
+    (error) => new GitHubUnreadable({ message: error.message }),
+  );
+}
 
-/**
- * A paged listing under the bearer given, read a hundred at a time until a
- * page comes back short or the items read are enough, and never past
- * `PAGING.MAX_PAGES`, where a listing still going is unbounded. Each page's
- * answer is read and closed before the next is asked for.
- */
-function readPages<A>(
-  path: string,
-  token: Redacted.Redacted,
-  readPage: (
-    response: HttpClientResponse.HttpClientResponse,
-  ) => Effect.Effect<readonly A[], GitHubUnavailable>,
-  enough: Enough<A> = WHOLE_LISTING,
-): Effect.Effect<readonly A[], GitHubUnavailable, HttpClient.HttpClient> {
-  return Effect.gen(function* () {
-    const items: A[] = [];
+/** An answer asked for as bytes (`parseSuccessResponseBody: false`), its body the stream `@repo/github` left unread. */
+export function readStream(
+  answer: GitHubAnswer,
+): Effect.Effect<ReadableStream<unknown>, GitHubUnreadable> {
+  return readBody(answer, BODY_STREAM);
+}
 
-    for (let page = 1; page <= PAGING.MAX_PAGES; page += 1) {
-      const request = githubRead(path, token).pipe(
-        HttpClientRequest.setUrlParams({ per_page: String(PAGING.PER_PAGE), page: String(page) }),
-      );
+/** One request to the API, its answer read under its schema. */
+export function githubRead<A>(
+  request: Effect.Effect<GitHubAnswer, GitHubFailure>,
+  schema: Schema.Decoder<A>,
+): Effect.Effect<A, GitHubFailure> {
+  return Effect.flatMap(request, (answer) => readBody(answer, schema));
+}
 
-      const read = yield* Effect.scoped(Effect.flatMap(send(request), readPage));
-      items.push(...read);
-
-      if (read.length < PAGING.PER_PAGE || enough(items)) return items;
-    }
-
-    return yield* new GitHubUnavailable({ reason: GITHUB_FAILURE.UNBOUNDED, status: undefined });
-  });
+/** A read that answers none where GitHub has no such thing (404), and fails as it fails otherwise. */
+export function readOptional<A, E extends { readonly _tag: string }, R>(
+  read: Effect.Effect<A, E | GitHubNotFound, R>,
+) {
+  return read.pipe(
+    Effect.map(Option.some),
+    Effect.catchTag("GitHubNotFound", () => Effect.succeed(Option.none<A>())),
+  );
 }
 
 /** The installations a user access token reaches, every page of them. */
 function installationsOnToken(
-  token: Redacted.Redacted,
-): Effect.Effect<readonly GitHubInstallation[], GitHubUnavailable, HttpClient.HttpClient> {
-  return readPages("/user/installations", token, (response) =>
-    Effect.map(readBody(response, UserInstallationsSchema), (answer) =>
-      answer.installations.map(installationOf),
+  client: GitHubClient,
+): Effect.Effect<readonly GitHubInstallation[], GitHubFailure> {
+  return Effect.map(
+    githubRead(
+      Effect.map(
+        client.paginate(
+          "GET /user/installations",
+          { per_page: PAGING.PER_PAGE },
+          { maxPages: PAGING.MAX_PAGES },
+        ),
+        (items) => ({ data: items }),
+      ),
+      Schema.Array(InstallationSchema),
     ),
+    (installations) => installations.map(installationOf),
   );
 }
 
-/** The repositories an installation token reaches, every page of them or as many as are enough. */
+/** The repositories an installation token reaches, every page of them, or as far as the one named where one is. */
 function repositoriesOnInstallationToken(
-  token: Redacted.Redacted,
-  enough: Enough<GitHubRepository> = WHOLE_LISTING,
-): Effect.Effect<readonly GitHubRepository[], GitHubUnavailable, HttpClient.HttpClient> {
-  return readPages(
-    "/installation/repositories",
-    token,
-    (response) =>
-      Effect.map(readBody(response, InstallationRepositoriesSchema), (answer) =>
-        answer.repositories.map(repositoryOf),
+  client: GitHubClient,
+  named?: string,
+): Effect.Effect<readonly GitHubRepository[], GitHubFailure> {
+  return Effect.map(
+    githubRead(
+      Effect.map(
+        client.paginate(
+          "GET /installation/repositories",
+          { per_page: PAGING.PER_PAGE },
+          {
+            maxPages: PAGING.MAX_PAGES,
+            ...(named !== undefined && {
+              enough: (items) => items.some((one) => sameName(one.full_name, named)),
+            }),
+          },
+        ),
+        (items) => ({ data: items }),
       ),
-    enough,
-  );
-}
-
-/** An OK answer's body under its schema; any other status is the status, and a body off the schema is unreadable. */
-export function readBody<A>(
-  response: HttpClientResponse.HttpClientResponse,
-  schema: Schema.Codec<A, unknown>,
-): Effect.Effect<A, GitHubUnavailable> {
-  return HttpClientResponse.filterStatusOk(response).pipe(
-    Effect.mapError(unavailable),
-    Effect.flatMap((ok) =>
-      Effect.mapError(HttpClientResponse.schemaBodyJson(schema)(ok), () =>
-        unreadable(response.status),
-      ),
+      Schema.Array(RepositorySchema),
     ),
+    (repositories) => repositories.map(repositoryOf),
   );
 }
 
@@ -1487,7 +1399,7 @@ export function markRefusedToken(access: GitHubTokenAccess) {
     access.kind === GITHUB_ACCESS.APP
       ? read
       : Effect.tapError(read, (failure) =>
-          failure instanceof GitHubUnavailable && failure.status === GITHUB_HTTP_STATUS.UNAUTHORIZED
+          Predicate.isTagged(failure, "GitHubUnauthorized")
             ? Effect.ignore(access.markInvalid)
             : Effect.void,
         );
@@ -1531,9 +1443,7 @@ const refreshTokens = /* @__PURE__ */ Effect.fn("web/githubRefreshTokens")(funct
     }),
   );
 
-  const answer = yield* Effect.scoped(
-    Effect.flatMap(send(request), (response) => readBody(response, RefreshAnswerSchema)),
-  );
+  const answer = yield* oauthAnswer(request, RefreshAnswerSchema);
 
   if ("error" in answer) {
     return yield* new GitHubSignInRequired({ reason: SIGN_IN_REQUIRED.REFRESH_REFUSED });
@@ -1600,18 +1510,11 @@ const tokenOfRow = /* @__PURE__ */ Effect.fn("web/githubTokenOfRow")(function* (
  */
 const keepInstallerTokens = /* @__PURE__ */ Effect.fn("web/githubKeepInstallerTokens")(function* (
   settings: ReadySettings,
+  installer: GitHubClient,
   userId: string,
   tokens: typeof RefreshedTokensSchema.Type,
-): Effect.fn.Return<
-  boolean,
-  GitHubUnavailable | StoreFailure,
-  HttpClient.HttpClient | DatabaseServices
-> {
-  const githubUser = yield* Effect.scoped(
-    Effect.flatMap(send(githubRead("/user", Redacted.make(tokens.access_token))), (response) =>
-      readBody(response, UserSchema),
-    ),
-  );
+): Effect.fn.Return<boolean, GitHubFailure | StoreFailure, DatabaseServices> {
+  const githubUser = yield* githubRead(installer.request("GET /user"), UserSchema);
 
   const githubUserId = String(githubUser.id);
   const now = yield* Clock.currentTimeMillis;
@@ -1722,7 +1625,7 @@ function githubAppServiceOver(
       const app = yield* ready;
       const client = yield* SqlClient.SqlClient;
 
-      return yield* client.withTransaction(
+      const token = yield* client.withTransaction(
         Effect.gen(function* () {
           const row = yield* lockGithubAccount(userId);
 
@@ -1733,25 +1636,32 @@ function githubAppServiceOver(
           return yield* tokenOfRow(app, row.value);
         }),
       );
+
+      return yield* memberBearer(token);
     });
 
   const installation = (installationId: number) =>
     Effect.gen(function* () {
-      const jwt = yield* appJwt;
-      const response = yield* send(githubRead(`/app/installations/${installationId}`, jwt));
+      const module = yield* githubModule;
 
-      if (response.status === GITHUB_HTTP_STATUS.NOT_FOUND) return Option.none();
-      const record = yield* readBody(response, InstallationSchema);
+      const record = yield* readOptional(
+        githubRead(
+          module.asApp.request("GET /app/installations/{installation_id}", {
+            installation_id: installationId,
+          }),
+          InstallationSchema,
+        ),
+      );
 
-      return Option.some(installationOf(record));
-    }).pipe(Effect.scoped);
+      return Option.map(record, installationOf);
+    });
 
   /**
-   * A token for the installation, cut as asked, with `lifetime` of its hour
-   * left at least: the one `@repo/github` keeps for the same cut where it has
-   * that left, else one minted as the App. Work no member waits on mints in
-   * the module's background priority, as it waits in the gate's background
-   * lane (`./github-rate-gate.ts`).
+   * A bearer for the installation, cut as asked, with `lifetime` of its hour
+   * left at least: the token `@repo/github` keeps for the same cut where it
+   * has that left, else one minted as the App, beside the module's client
+   * for the same grant, which signs with that token. Work no member waits on
+   * mints at the caller's `GitHubPriority`.
    */
   const mint = (
     installationId: number,
@@ -1760,7 +1670,6 @@ function githubAppServiceOver(
   ) =>
     Effect.gen(function* () {
       const module = yield* githubModule;
-      const background = yield* GitHubBackground;
 
       const grant: InstallationGrant = {
         installationId,
@@ -1768,15 +1677,16 @@ function githubAppServiceOver(
         ...(request.repositories !== undefined && { repositoryNames: request.repositories }),
       };
 
-      const minted = yield* module
-        .installationToken(grant, { minimumLifetime: lifetime })
-        .pipe(
-          Effect.provideService(GitHubPriority, background ? PRIORITY.BACKGROUND : PRIORITY.MEMBER),
-          Effect.catch(unavailableOf),
-        );
+      const minted = yield* module.installationToken(grant, { minimumLifetime: lifetime });
 
-      return { token: minted.token };
+      const bearer: GitHubBearer = { client: module.asInstallation(grant), token: minted.token };
+
+      return bearer;
     });
+
+  /** The bearer for a token a member holds: the module's client for that member, and the token. */
+  const memberBearer = (token: Redacted.Redacted) =>
+    Effect.map(githubModule, (module): GitHubBearer => ({ client: module.asMember(token), token }));
 
   /**
    * The workspace's connected installation as GitHub holds it now, its
@@ -1852,14 +1762,11 @@ function githubAppServiceOver(
       return { onOwner: Option.none<GitHubInstallation>(), running, lapsedOnOwner };
     });
 
-  /** The installation's repositories, every one or as many as are enough, read on a token minted for the listing alone. */
-  const repositoriesOf = (
-    reached: GitHubInstallation,
-    enough: Enough<GitHubRepository> = WHOLE_LISTING,
-  ) =>
+  /** The installation's repositories, every one or as far as the one named, read on a token minted for the listing alone. */
+  const repositoriesOf = (reached: GitHubInstallation, named?: string) =>
     Effect.flatMap(
       mint(reached.id, { permissions: INSTALLATION_TOKEN_PERMISSIONS.LIST }, TOKEN_LIFE.READ),
-      (minted) => repositoriesOnInstallationToken(minted.token, enough),
+      (minted) => repositoriesOnInstallationToken(minted.client, named),
     );
 
   /** Every running installation's repositories, read whole, with the installations themselves; none where none runs. */
@@ -1900,22 +1807,22 @@ function githubAppServiceOver(
         TOKEN_LIFE.READ,
       );
 
-      const response = yield* send(githubRead(repositoryPath(fullName), minted.token));
+      const read = yield* readOptional(
+        githubRead(
+          minted.client.request("GET /repos/{owner}/{repo}", repositoryParts(fullName)),
+          RepositorySchema,
+        ),
+      ).pipe(Effect.catchTag("GitHubForbidden", () => Effect.succeed(Option.none())));
 
-      if (
-        response.status === GITHUB_HTTP_STATUS.NOT_FOUND ||
-        response.status === GITHUB_HTTP_STATUS.FORBIDDEN
-      ) {
+      if (Option.isNone(read) || read.value.full_name === fullName) {
         return Option.none<GitHubRepository>();
       }
 
-      const record = yield* readBody(response, RepositorySchema);
-
-      if (record.full_name === fullName) return Option.none<GitHubRepository>();
+      const record = read.value;
       yield* noteGitHubRepository({ ...sightingOf(record), formerly: fullName });
 
       return Option.some(repositoryOf(record));
-    }).pipe(Effect.scoped);
+    });
 
   /**
    * The repository a name no installation of the workspace lists stood for,
@@ -1986,7 +1893,7 @@ function githubAppServiceOver(
 
       const onOwner = found.onOwner.value;
       const isNamed = (repository: GitHubRepository) => sameName(repository.fullName, fullName);
-      const repositories = yield* repositoriesOf(onOwner, (read) => read.some(isNamed));
+      const repositories = yield* repositoriesOf(onOwner, fullName);
       const repository = repositories.find(isNamed);
 
       if (repository !== undefined) {
@@ -2063,16 +1970,25 @@ function githubAppServiceOver(
         );
       }
 
-      const response = yield* send(githubRead(repositoryPath(fullName), held.success.token));
+      const bearer = yield* memberBearer(held.success.token);
 
-      if (response.status === GITHUB_HTTP_STATUS.UNAUTHORIZED) {
-        yield* held.success.markInvalid;
+      const read = yield* githubRead(
+        bearer.client.request("GET /repos/{owner}/{repo}", repositoryParts(fullName)),
+        TokenRepositorySchema,
+      ).pipe(Effect.result);
 
-        return unreached(REPOSITORY_UNREACHED.TOKEN_INVALID);
-      }
+      if (Result.isFailure(read)) {
+        const refused = read.failure;
 
-      if (response.status === GITHUB_HTTP_STATUS.FORBIDDEN) {
-        const authorizeUrl = ssoAuthorizeUrl(response.headers[GITHUB_SSO_HEADER]);
+        if (Predicate.isTagged(refused, "GitHubUnauthorized")) {
+          yield* held.success.markInvalid;
+
+          return unreached(REPOSITORY_UNREACHED.TOKEN_INVALID);
+        }
+
+        const authorizeUrl = Predicate.isTagged(refused, "GitHubForbidden")
+          ? ssoAuthorizeUrl(refused.sso)
+          : undefined;
 
         if (authorizeUrl !== undefined) {
           const unauthorized: ReachResult = Result.fail({
@@ -2083,16 +1999,18 @@ function githubAppServiceOver(
 
           return unauthorized;
         }
+
+        if (
+          Predicate.isTagged(refused, "GitHubNotFound") ||
+          Predicate.isTagged(refused, "GitHubForbidden")
+        ) {
+          return unreached(REPOSITORY_UNREACHED.TOKEN_NO_ACCESS);
+        }
+
+        return yield* Effect.fail(refused);
       }
 
-      if (
-        response.status === GITHUB_HTTP_STATUS.NOT_FOUND ||
-        response.status === GITHUB_HTTP_STATUS.FORBIDDEN
-      ) {
-        return unreached(REPOSITORY_UNREACHED.TOKEN_NO_ACCESS);
-      }
-
-      const record = yield* readBody(response, TokenRepositorySchema);
+      const record = read.success;
       // Note that GitHub answers a name it renamed or transferred away under the name now, which the store's names move to.
       yield* noteGitHubRepository({
         ...sightingOf(record),
@@ -2109,7 +2027,7 @@ function githubAppServiceOver(
       });
 
       return reachedOn;
-    }).pipe(Effect.scoped);
+    });
 
   /**
    * The repository as the workspace's installation reaches it, which always
@@ -2143,9 +2061,7 @@ function githubAppServiceOver(
         }),
       );
 
-      const answer = yield* Effect.scoped(
-        Effect.flatMap(send(request), (response) => readBody(response, ExchangeAnswerSchema)),
-      );
+      const answer = yield* oauthAnswer(request, ExchangeAnswerSchema);
 
       return "error" in answer ? Option.none() : Option.some(answer);
     });
@@ -2157,15 +2073,20 @@ function githubAppServiceOver(
     revoked: UserAuthorizationPart,
   ) =>
     Effect.scoped(
-      Effect.flatMap(
-        send(
-          HttpClientRequest.delete(`${GITHUB_API}/applications/${app.clientId}/${revoked}`).pipe(
-            HttpClientRequest.basicAuth(app.clientId, Redacted.value(app.clientSecret)),
-            HttpClientRequest.setHeaders(GITHUB_HEADERS),
-            HttpClientRequest.bodyJsonUnsafe({ access_token: Redacted.value(token) }),
+      Effect.flatMap(HttpClient.HttpClient, (client) =>
+        client
+          .execute(
+            HttpClientRequest.delete(`${GITHUB_API}/applications/${app.clientId}/${revoked}`).pipe(
+              HttpClientRequest.basicAuth(app.clientId, Redacted.value(app.clientSecret)),
+              HttpClientRequest.setHeaders(GITHUB_HEADERS),
+              HttpClientRequest.bodyJsonUnsafe({ access_token: Redacted.value(token) }),
+            ),
+          )
+          .pipe(
+            Effect.flatMap(HttpClientResponse.filterStatusOk),
+            Effect.mapError(() => new GitHubUnavailable({ reason: GITHUB_FAILURE.TRANSPORT })),
+            Effect.asVoid,
           ),
-        ),
-        (response) => Effect.mapError(HttpClientResponse.filterStatusOk(response), unavailable),
       ),
     );
 
@@ -2221,18 +2142,20 @@ function githubAppServiceOver(
 
     /** The member's own token, read afresh, and whose it is; none where they no longer keep one GitHub accepts. */
     const memberReadToken = (member: string) =>
-      Effect.map(memberToken(member), (held) =>
+      Effect.flatMap(memberToken(member), (held) =>
         Result.isFailure(held)
-          ? Option.none<HeldToken>()
-          : Option.some<HeldToken>({
-              token: held.success.token,
-              access: {
-                kind: GITHUB_ACCESS.TOKEN,
-                githubLogin: held.success.githubLogin,
-                githubUserId: held.success.githubUserId,
-                markInvalid: held.success.markInvalid,
-              },
-            }),
+          ? Effect.succeed(Option.none<HeldToken>())
+          : Effect.map(memberBearer(held.success.token), (bearer) =>
+              Option.some<HeldToken>({
+                bearer,
+                access: {
+                  kind: GITHUB_ACCESS.TOKEN,
+                  githubLogin: held.success.githubLogin,
+                  githubUserId: held.success.githubUserId,
+                  markInvalid: held.success.markInvalid,
+                },
+              }),
+            ),
       );
 
     /** The member's own token for a repository reached on it, on the terms of `memberReadToken`. */
@@ -2271,7 +2194,7 @@ function githubAppServiceOver(
 
         if (permissions === undefined) return Option.none<GitHubRepositoryToken>();
 
-        const { token } = yield* mint(
+        const bearer = yield* mint(
           on.id,
           { repositories: [repository.name], permissions },
           lifetime,
@@ -2279,7 +2202,7 @@ function githubAppServiceOver(
 
         return Option.some<GitHubRepositoryToken>({
           repository,
-          token,
+          bearer,
           access: { kind: GITHUB_ACCESS.APP },
         });
       });
@@ -2369,12 +2292,13 @@ function githubAppServiceOver(
           if (Option.isNone(exchanged)) return Option.none();
           const tokens = exchanged.value;
           const token = Redacted.make(tokens.access_token);
-          const installations = yield* installationsOnToken(token);
+          const installerBearer = yield* memberBearer(token);
+          const installations = yield* installationsOnToken(installerBearer.client);
 
           // Note that a token without a refresh token is never kept, because no read of the row takes one (`tokenOfRow`).
           const kept =
             Option.isSome(installer) && "refresh_token" in tokens
-              ? yield* keepInstallerTokens(app, installer.value, tokens)
+              ? yield* keepInstallerTokens(app, installerBearer.client, installer.value, tokens)
               : false;
 
           if (!kept) yield* revokeAuthorization(app, token, USER_AUTHORIZATION_PART.TOKEN);
@@ -2392,45 +2316,42 @@ function githubAppServiceOver(
           const held = yield* memberToken(member);
 
           if (Result.isFailure(held)) return Option.none();
+          const bearer = yield* memberBearer(held.success.token);
 
-          const response = yield* send(
-            githubRead("/user/repos", held.success.token).pipe(
-              HttpClientRequest.setUrlParams(MEMBER_REPOSITORIES_QUERY),
+          const listed = yield* githubRead(
+            bearer.client.request("GET /user/repos", MEMBER_REPOSITORIES_QUERY),
+            Schema.Array(TokenRepositorySchema),
+          ).pipe(
+            Effect.map(Option.some),
+            Effect.catchTag("GitHubUnauthorized", () =>
+              Effect.as(held.success.markInvalid, Option.none()),
             ),
           );
 
-          if (response.status === GITHUB_HTTP_STATUS.UNAUTHORIZED) {
-            yield* held.success.markInvalid;
-
-            return Option.none();
-          }
-
-          const listed = yield* readBody(response, Schema.Array(TokenRepositorySchema));
-          const pushed = listed.filter((one) => one.permissions?.push === true);
-
-          return Option.some(pushed.map(repositoryOf));
-        }).pipe(Effect.scoped),
+          return Option.map(listed, (all) =>
+            all.filter((one) => one.permissions?.push === true).map(repositoryOf),
+          );
+        }),
       memberRepositoryReadable: (member, fullName) =>
         Effect.gen(function* () {
           const held = yield* memberToken(member);
 
           if (Result.isFailure(held)) return Option.none<boolean>();
-          const response = yield* send(githubRead(repositoryPath(fullName), held.success.token));
+          const bearer = yield* memberBearer(held.success.token);
 
-          if (response.status === GITHUB_HTTP_STATUS.UNAUTHORIZED) {
-            yield* held.success.markInvalid;
-
-            return Option.none<boolean>();
-          }
-
-          if (response.status >= 200 && response.status < 300) return Option.some(true);
-
-          const refused =
-            response.status === GITHUB_HTTP_STATUS.FORBIDDEN ||
-            response.status === GITHUB_HTTP_STATUS.NOT_FOUND;
-
-          return refused ? Option.some(false) : Option.none<boolean>();
-        }).pipe(Effect.scoped),
+          return yield* bearer.client
+            .request("GET /repos/{owner}/{repo}", repositoryParts(fullName))
+            .pipe(
+              Effect.as(Option.some(true)),
+              Effect.catchTags({
+                GitHubUnauthorized: () =>
+                  Effect.as(held.success.markInvalid, Option.none<boolean>()),
+                GitHubForbidden: () => Effect.succeed(Option.some(false)),
+                GitHubNotFound: () => Effect.succeed(Option.some(false)),
+              }),
+              Effect.orElseSucceed(() => Option.none<boolean>()),
+            );
+        }),
       repositoryReach: (organizationId, fullName, member) =>
         Effect.map(
           reach(organizationId, fullName, member),
@@ -2501,7 +2422,7 @@ function githubAppServiceOver(
 
           const token: GitHubRepositoriesToken = {
             repositories: reached.success.map((one) => one.repository),
-            token: minted.token,
+            bearer: minted,
             access: { kind: GITHUB_ACCESS.APP },
           };
 
@@ -2529,9 +2450,9 @@ function githubAppServiceOver(
                 { permissions: INSTALLATION_TOKEN_PERMISSIONS.PULL_REQUESTS },
                 TOKEN_LIFE.READ,
               ),
-              ({ token }): GitHubRepositoriesToken => ({
+              (bearer): GitHubRepositoriesToken => ({
                 repositories: reached.map((one) => one.repository),
-                token,
+                bearer,
                 access: { kind: GITHUB_ACCESS.APP },
               }),
             ),
@@ -2539,39 +2460,36 @@ function githubAppServiceOver(
         }),
       userPusher: (userId, fullName) =>
         Effect.gen(function* () {
-          const token = yield* userToken(userId);
+          const bearer = yield* userToken(userId);
+          const account = yield* githubRead(bearer.client.request("GET /user"), UserSchema);
 
-          const account = yield* Effect.scoped(
-            Effect.flatMap(send(githubRead("/user", token)), (response) =>
-              readBody(response, UserSchema),
-            ),
-          );
-
-          const repository = yield* Effect.scoped(
-            Effect.flatMap(send(githubRead(repositoryPath(fullName), token)), (response) =>
-              response.status === GITHUB_HTTP_STATUS.NOT_FOUND
-                ? Effect.succeed(Option.none())
-                : Effect.map(readBody(response, RepositoryPermissionsSchema), Option.some),
+          const repository = yield* readOptional(
+            githubRead(
+              bearer.client.request("GET /repos/{owner}/{repo}", repositoryParts(fullName)),
+              RepositoryPermissionsSchema,
             ),
           );
 
           const pushes = Option.isSome(repository) && repository.value.permissions?.push === true;
 
-          return pushes ? Option.some({ user: userOf(account), token }) : Option.none();
+          return pushes ? Option.some({ user: userOf(account), bearer }) : Option.none();
         }),
-      appBot: (token) =>
+      appBot: (bearer) =>
         Effect.gen(function* () {
           const app = yield* ready;
-          const response = yield* send(githubRead(`/users/${app.slug}${BOT_LOGIN_SUFFIX}`, token));
 
-          return userOf(yield* readBody(response, UserSchema));
-        }).pipe(Effect.scoped),
-      tokenUser: (token) =>
-        Effect.gen(function* () {
-          const response = yield* send(githubRead("/user", token));
+          const bot = yield* githubRead(
+            bearer.client.request("GET /users/{username}", {
+              username: `${app.slug}${BOT_LOGIN_SUFFIX}`,
+            }),
+            UserSchema,
+          );
 
-          return userOf(yield* readBody(response, UserSchema));
-        }).pipe(Effect.scoped),
+          return userOf(bot);
+        }),
+      memberBearer,
+      tokenUser: (bearer) =>
+        Effect.map(githubRead(bearer.client.request("GET /user"), UserSchema), userOf),
       userToken,
       revokeUserGrant: (token) =>
         Effect.flatMap(ready, (app) =>

@@ -62,10 +62,11 @@ import {
 } from "@repo/features/agent-wire";
 import { AGENT_START_STATUS } from "@repo/features/contract";
 import type { Sandbox } from "@repo/sandbox";
-import { Clock, Effect, type Layer, Option, type Redacted, Result } from "effect";
+import { Clock, Effect, type Layer, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import { HostedEnvironment } from "../environment.js";
 import { recordServerEventIn, SERVER_AGENT_TOOL, SERVER_EVENT } from "../events/server-events.js";
+import type { GitHubBearer } from "../github/github-app.js";
 import { changesPeople, namedReviewOptions } from "../github/github-people.js";
 import {
   pullRequestByNumber,
@@ -219,7 +220,7 @@ const reachedSession = (userId: string, id: string) =>
  * its repository (`github/repository-pull-request.ts`).
  */
 export const pullRequestChangesRead = (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   subject: PullRequestSubject,
   pullRequest: AgentPullRequest,
 ) =>
@@ -227,17 +228,17 @@ export const pullRequestChangesRead = (
     // Note that the pull request itself is read beside its files for its head and base, which its changed files are read whole at; a read that does not land names neither.
     const [files, people, whole] = yield* Effect.all(
       [
-        pullRequestFiles(token, subject.repository, pullRequest),
-        changesPeople(token, subject, pullRequest.number),
+        pullRequestFiles(bearer, subject.repository, pullRequest),
+        changesPeople(bearer, subject, pullRequest.number),
         Effect.orElseSucceed(
-          pullRequestByNumber(token, subject.repository, pullRequest.number),
+          pullRequestByNumber(bearer, subject.repository, pullRequest.number),
           () => Option.none(),
         ),
       ],
       { concurrency: "unbounded" },
     );
 
-    const commits = yield* readCommits(token, subject.repository, whole, files.files);
+    const commits = yield* readCommits(bearer, subject.repository, whole, files.files);
 
     return {
       url: pullRequest.url,
@@ -265,9 +266,9 @@ export const agentChangesOf = (
 
     const changes = yield* githubReadRefusal(
       Effect.gen(function* () {
-        const { token } = yield* agentPullRequestReach(userId, agent);
+        const { bearer } = yield* agentPullRequestReach(userId, agent);
 
-        return yield* pullRequestChangesRead(token, agent, pullRequest);
+        return yield* pullRequestChangesRead(bearer, agent, pullRequest);
       }),
     );
 
@@ -672,11 +673,11 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
 
       return yield* githubReadRefusal(
         Effect.gen(function* () {
-          const { token } = yield* agentPullRequestReach(userId, agent);
+          const { bearer } = yield* agentPullRequestReach(userId, agent);
 
           return yield* namedReviewOptions(
             agent,
-            yield* pullRequestReviewOptions(token, agent.repository),
+            yield* pullRequestReviewOptions(bearer, agent.repository),
           );
         }),
       );

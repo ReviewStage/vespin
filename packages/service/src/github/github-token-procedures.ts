@@ -42,13 +42,12 @@ import {
   type GitHubTokenRejection,
   type GitHubTokenSummary,
 } from "@repo/features/github-token-wire";
-import { DateTime, Duration, Effect, Option, Redacted, Result, Schema } from "effect";
-import { HttpClient } from "effect/http";
+import { DateTime, Duration, Effect, Option, Predicate, Redacted, Result, Schema } from "effect";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import { hostedStoreOrUnavailable, type UserIdResolver } from "../http/http-effect.js";
 import { createRateBrake } from "../http/rate-brake.js";
 import { accountMiddleware, hosted, keyRingMiddleware } from "../orpc/base.js";
-import { githubRead } from "./github-app.js";
+import { GitHubApp } from "./github-app.js";
 
 const SAVE_BRAKE = {
   windowMs: Duration.toMillis(Duration.hours(1)),
@@ -120,51 +119,42 @@ function expiryOf(header: string | undefined): Date | null {
  *
  * The one read is GitHub's "Get the authenticated user", `GET /user` under
  * `Authorization: Bearer <token>`, `Accept: application/vnd.github+json`,
- * and `X-GitHub-Api-Version: 2022-11-28` (`githubRead`), which answers 401
- * for a token GitHub does not accept:
+ * and `X-GitHub-Api-Version: 2022-11-28`, sent on the token's own
+ * `@repo/github` client, which fails `GitHubUnauthorized` for a token GitHub
+ * does not accept:
  * https://docs.github.com/en/rest/users/users#get-the-authenticated-user
  * https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api
  */
 const checkGitHubToken = /* @__PURE__ */ Effect.fnUntraced(function* (
   token: Redacted.Redacted<string>,
-): Effect.fn.Return<
-  Result.Result<CheckedToken, GitHubTokenRejection>,
-  never,
-  HttpClient.HttpClient
-> {
+): Effect.fn.Return<Result.Result<CheckedToken, GitHubTokenRejection>, never, GitHubApp> {
   if (Redacted.value(token).startsWith(TOKEN_PREFIX.FINE_GRAINED)) {
     return Result.fail(GITHUB_TOKEN_REJECTION.FINE_GRAINED);
   }
 
-  const client = yield* HttpClient.HttpClient;
+  const app = yield* GitHubApp;
 
-  const answered = yield* client.execute(githubRead("/user", token)).pipe(
-    Effect.flatMap((response) =>
-      response.status === 200
-        ? Effect.map(response.json, (body) => ({
-            status: response.status,
-            headers: response.headers,
-            user: Schema.decodeUnknownOption(GitHubUserSchema)(body),
-          }))
-        : Effect.succeed({
-            status: response.status,
-            headers: response.headers,
-            user: Option.none(),
-          }),
-    ),
-    Effect.scoped,
+  const answered = yield* app.memberBearer(token).pipe(
+    Effect.flatMap((bearer) => bearer.client.request("GET /user")),
     Effect.timeout(CHECK_TIMEOUT),
-    Effect.option,
+    Effect.result,
   );
 
-  if (Option.isNone(answered)) return Result.fail(GITHUB_TOKEN_REJECTION.UNREACHABLE);
-  const { status, headers, user } = answered.value;
+  if (Result.isFailure(answered)) {
+    return Result.fail(
+      Predicate.isTagged(answered.failure, "GitHubUnauthorized")
+        ? GITHUB_TOKEN_REJECTION.INVALID
+        : GITHUB_TOKEN_REJECTION.UNREACHABLE,
+    );
+  }
 
-  if (status === 401) return Result.fail(GITHUB_TOKEN_REJECTION.INVALID);
+  const { headers } = answered.success;
+  const expiration = headers[GITHUB_TOKEN_HEADER.EXPIRATION];
+  const user = Schema.decodeUnknownOption(GitHubUserSchema)(answered.success.data);
 
   if (Option.isNone(user)) return Result.fail(GITHUB_TOKEN_REJECTION.UNREACHABLE);
 
-  const scopes = (headers[GITHUB_TOKEN_HEADER.SCOPES] ?? "")
+  const scopes = String(headers[GITHUB_TOKEN_HEADER.SCOPES] ?? "")
     .split(",")
     .map((scope) => scope.trim());
 
@@ -174,7 +164,7 @@ const checkGitHubToken = /* @__PURE__ */ Effect.fnUntraced(function* (
   return Result.succeed({
     githubUserId,
     githubLogin: user.value.login,
-    expiresAt: expiryOf(headers[GITHUB_TOKEN_HEADER.EXPIRATION]),
+    expiresAt: expiryOf(expiration === undefined ? undefined : String(expiration)),
   });
 });
 
