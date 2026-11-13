@@ -1,8 +1,11 @@
 /**
  * use-attached-pictures.ts -- the pictures a message or a start carries, as an agent's composer and the sheets that start work hold them: picked from the system's photo picker or dropped from Photos or Files, compressed as they are read, named as the panel names them, held to the service's bounds, and taken off on a press.
  *
- * A picture is read as a JPEG at `PICTURE_QUALITY`, named "Picture 1",
- * "Picture 2", and on past every picture the holder has, and checked against
+ * A picture is fitted whole under the bound for one image by the app's
+ * photo-scale module (`fitJpeg`), its longest side and quality stepped down
+ * as Messages and Mail scale a photo rather than refuse it; in a build
+ * without the module it is read as a JPEG at `PICTURE_QUALITY`. It is named
+ * "Picture 1", "Picture 2", and on past every picture the holder has, and checked against
  * the service's bounds for one message (`AGENT_BOUNDS`), or the holder's
  * own, such as a note's to the people who make the app, as it is attached
  * and again before it goes, so a refusal is said in the panel's words rather
@@ -23,6 +26,7 @@ import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
 import { launchImageLibraryAsync } from "expo-image-picker";
 import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { photoScaleModule } from "./photo-scale.js";
 
 /** How a picture is compressed as it is read from the library: JPEG at this quality keeps a phone's photo under the service's bound for an image. */
 const PICTURE_QUALITY = 0.7;
@@ -40,9 +44,25 @@ export interface PictureBounds {
   readonly most: number;
   readonly pictureBytes: number;
   readonly totalBytes: number;
-  /** The JPEG quality a picture is read at. */
+  /** The JPEG quality a picture is read at where no module can fit it. */
   readonly quality: number;
   readonly full: string;
+}
+
+/**
+ * The picture at `uri` fitted whole under `maxBytes` as a JPEG in base64, or
+ * `read`'s answer where the photo-scale module isn't in the build; none
+ * where it cannot be read. A picture that never fits comes back at its
+ * smallest try, which the bound then says is too large.
+ */
+function fitted(
+  uri: string,
+  maxBytes: number,
+  read: () => Promise<string | null | undefined>,
+): Promise<string | null | undefined> {
+  if (photoScaleModule === null) return read();
+
+  return photoScaleModule.fitJpeg(uri, maxBytes).catch(() => null);
 }
 
 /** A message's or a start's bounds, the service's for one message. */
@@ -151,12 +171,19 @@ export function useAttachedPictures(
       mediaTypes: ["images"],
       allowsMultipleSelection: true,
       selectionLimit: Math.max(1, bounds.most - pictures.length),
-      quality: bounds.quality,
-      base64: true,
+      // Note that the picker re-encodes and hands over base64 only where no module can fit the picture from its file, so a fitted picture is compressed once.
+      quality: photoScaleModule === null ? bounds.quality : 1,
+      base64: photoScaleModule === null,
     })
-      .then((picked) => {
+      .then(async (picked) => {
         if (picked.canceled) return;
-        add(picked.assets.map((asset) => asset.base64));
+        add(
+          await Promise.all(
+            picked.assets.map((asset) =>
+              fitted(asset.uri, bounds.pictureBytes, () => Promise.resolve(asset.base64)),
+            ),
+          ),
+        );
       })
       .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
   };
@@ -164,14 +191,13 @@ export function useAttachedPictures(
   // How many drops are still being read.
   const [reads, setReads] = useState(0);
 
-  // Each dropped JPEG is read whole and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
+  // Each dropped JPEG is fitted under the bound and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
   const dropped = (uris: readonly string[], unreadable: number) =>
     Promise.all(
       uris.map((uri) => {
         const file = new File(uri);
 
-        return file
-          .base64()
+        return fitted(uri, bounds.pictureBytes, () => file.base64())
           .catch(() => undefined)
           .finally(() => {
             try {

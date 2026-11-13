@@ -13,15 +13,8 @@ import {
   WORKSPACE_PHOTO_TYPE,
   workspacePhotoOfDataUrl,
 } from "@repo/features/workspace-wire";
-import { type NativeModule, requireOptionalNativeModule } from "expo";
 import { launchImageLibraryAsync } from "expo-image-picker";
-
-declare class PhotoScaleModule extends NativeModule {
-  /** The photo at `uri` as a JPEG of its center square, `edge` pixels a side, in base64, at most `maxBytes` long; none where it cannot be read or never fits. */
-  squareJpeg(uri: string, edge: number, maxBytes: number): Promise<string | null>;
-}
-
-const photoScaleModule = requireOptionalNativeModule<PhotoScaleModule>("PhotoScale");
+import { photoScaleModule } from "./photo-scale.js";
 
 /** What a photo the member picked is called where it said no name of its own. */
 const UNNAMED_PHOTO = "The photo";
