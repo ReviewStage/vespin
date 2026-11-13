@@ -764,22 +764,20 @@ export function AgentScreen() {
             </Stack.Toolbar.Menu>
           )}
         </Stack.Toolbar.Menu>
-        {/* Note that a right bar's first item stands at its edge, so the ⋯ leads the list and Archive then Pin stand before it, as Mail stands its acts before More. */}
+        {/* Note that a right bar's first item stands at its edge, so the ⋯ leads the list and Archive then Pin stand before it, as Mail stands its acts before More. Each glyph is named as the ⋯'s is, since a top bar loads an `xcasset` icon through React Native's image loader, which reads no symbol set, and drew an empty capsule. */}
         {barActs ? (
-          <Stack.Toolbar.Button accessibilityLabel={MENU_WORDS.ARCHIVE} onPress={askArchive}>
-            <Stack.Toolbar.Icon xcasset={GLYPH.ARCHIVE} renderingMode="template" />
-          </Stack.Toolbar.Button>
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.ARCHIVE)}
+            accessibilityLabel={MENU_WORDS.ARCHIVE}
+            onPress={askArchive}
+          />
         ) : null}
         {barActs ? (
           <Stack.Toolbar.Button
+            icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
             accessibilityLabel={actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
             onPress={actions.pin}
-          >
-            <Stack.Toolbar.Icon
-              xcasset={actions.pinned ? GLYPH.UNPIN : GLYPH.PIN}
-              renderingMode="template"
-            />
-          </Stack.Toolbar.Button>
+          />
         ) : null}
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
