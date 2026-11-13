@@ -1,5 +1,6 @@
 // index.tsx -- New agent on the task the route's `task` names, as a sheet over its page, filled in from a suggestion where `suggestedBy` and `button` name one.
 
+import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { useLocalSearchParams } from "expo-router";
 import { useState } from "react";
 import { useShownAgent } from "../../agents/use-agent.js";
@@ -15,7 +16,9 @@ export default function StartAgentRoute() {
     button,
   } = useLocalSearchParams<{ task: string; suggestedBy?: string; button?: string }>();
 
-  const opened = useOpenedSuggestion({ suggestedBy, button });
+  const read = useOpenedSuggestion({ suggestedBy, button });
+  // Note that New agent opens only on a new agent's suggestion, so a link naming a message's suggestion never sends it under Start.
+  const opened = read?.view.action.kind === REPLY_BUTTON_ACTION.START ? read : undefined;
   // Note that a suggestion's agent starts on the task of the agent that suggested it, as the service starts it.
   const suggester = useShownAgent(suggestedBy ?? "");
   // The suggestion as first read, held while the sheet stands, so a send that lands or a refetch never draws it anew.
