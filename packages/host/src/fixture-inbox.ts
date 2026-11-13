@@ -841,7 +841,12 @@ function agentsLine(taskId: string): Pick<TaskSummary, "agents"> {
   };
 }
 
-/** The account's own tasks beside the reference journey's: one in progress assigned to it, and one done it created. */
+/**
+ * The account's own tasks beside the reference journey's: one in progress
+ * assigned to it, and one done it created. Note that each row carries both
+ * lists of blocks whole, as a service's rows do, so a block is judged by
+ * the row and never waits on a description the fixture does not hold.
+ */
 const OWN_TASKS: readonly TaskSummary[] = [
   {
     id: TASK.DIGEST,
@@ -857,6 +862,8 @@ const OWN_TASKS: readonly TaskSummary[] = [
     createdBy: ADA,
     assignee: ADA,
     pinnedAt: LANDED - 9 * DAY,
+    blockedBy: [],
+    blocks: [],
     // Note that its followers are the account, its assignee, letting its agents use her machines, and both teammates, one letting them.
     followers: [
       { userId: ADA.userId, assignee: true, machines: true },
@@ -878,6 +885,8 @@ const OWN_TASKS: readonly TaskSummary[] = [
     number: 41,
     ownerId: ADA.userId,
     createdBy: ADA,
+    blockedBy: [],
+    blocks: [],
     ...agentsLine(TASK.ROUNDING),
   },
 ];
@@ -897,6 +906,8 @@ function listedTask(
     ownerId: ADA.userId,
     createdBy: ADA,
     assignee: ADA,
+    blockedBy: [],
+    blocks: [],
     ...more,
   };
 }
@@ -925,6 +936,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     number: 45,
     updatedAt: LANDED - 5 * HOUR,
     priority: TASK_PRIORITY.LOW,
+    blocks: [TASK.INVITES],
   }),
   listedTask(LISTED.LAUNCH, "Launch checklist", {
     repository: "ada/relay",
