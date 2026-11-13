@@ -39,6 +39,7 @@ import {
   SettingsRow,
   type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
+  SettingsRowsFold,
   SettingsRowsSkeleton,
   SettingsSection,
   STATUS_TONE,
@@ -55,7 +56,7 @@ import {
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { Fragment, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { actMutation, pressMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
@@ -69,6 +70,7 @@ import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
 import {
   CommandMachineRow,
   MachineAgentRows,
+  machineAgentsLine,
   machineListedOf,
   useMachineRemove,
   useMachineSettings,
@@ -200,18 +202,27 @@ function standingOf(host: HostLine, book: PresenceBook, joined: boolean): HostSt
     : standing;
 }
 
-/** A host's line under its name, its standing first, as Integrations leads with Connected, and then what it is (`MachineStandingLine`). */
+/** A host's line under its name: a standing that asks something of the member first, then what it is and what it lets agents do (`MachineStandingLine`). */
 function StandingLine({
   host,
   book,
   joined,
+  detail,
 }: {
   host: HostLine;
   book: PresenceBook;
   /** Whether the host joined while the page stands. */
   joined: boolean;
+  /** What it lets agents do (`machineAgentsLine`). */
+  detail: string | undefined;
 }): React.JSX.Element {
-  return <MachineStandingLine standing={standingOf(host, book, joined)} platform={host.platform} />;
+  return (
+    <MachineStandingLine
+      standing={standingOf(host, book, joined)}
+      platform={host.platform}
+      detail={detail}
+    />
+  );
 }
 
 /** What This Mac's switch is called, and what it says while off. */
@@ -249,6 +260,8 @@ function HostRow({
   label,
   book,
   joined,
+  detail,
+  end,
   onRemove,
   locked,
 }: {
@@ -256,6 +269,10 @@ function HostRow({
   /** What the list calls the machine (`machineName`). */
   label: string;
   book: PresenceBook;
+  /** What it lets agents do (`machineAgentsLine`). */
+  detail: string | undefined;
+  /** The chevron of its settings' fold, last in the row's end. */
+  end: React.ReactNode;
   /** Whether the host joined while the page stands, which lights its row once. */
   joined: boolean;
   /** Asks the section's Remove question of this machine. */
@@ -275,10 +292,11 @@ function HostRow({
         },
       ]}
       row={{
-        leading: <MachineMark platform={host.platform} />,
+        leading: <MachineMark platform={host.platform} standing={standingOf(host, book, joined)} />,
         label: <ReplayMask>{label}</ReplayMask>,
-        description: <StandingLine host={host} book={book} joined={joined} />,
+        description: <StandingLine host={host} book={book} joined={joined} detail={detail} />,
         landed: joined,
+        end,
       }}
     />
   );
@@ -298,8 +316,14 @@ function ThisMacRow({
   on,
   needsApproval,
   setupFailed,
+  detail,
+  end,
   onChange,
 }: {
+  /** What it lets agents do (`machineAgentsLine`). */
+  detail: string | undefined;
+  /** The chevron of its settings' fold, last in the row's end. */
+  end: React.ReactNode;
   /** This Mac as the service lists it; none before it does. */
   host: HostLine | undefined;
   book: PresenceBook;
@@ -328,16 +352,21 @@ function ThisMacRow({
       {MACHINE_STANDING_WORDS[DEVICE_STANDING.SETTING_UP]}
     </SettingsRowStateLine>
   ) : (
-    <StandingLine host={host} book={book} joined={true} />
+    <StandingLine host={host} book={book} joined={true} detail={detail} />
   );
+
+  // Note that the dot on the glyph says online or offline only once the host stands; the line says setting up and failed.
+  const standing =
+    on && !setupFailed && host !== undefined ? standingOf(host, book, true) : undefined;
 
   return (
     <>
       <SettingsRow
-        leading={<MachineMark platform={DEVICE_PLATFORM.DARWIN} />}
+        leading={<MachineMark platform={DEVICE_PLATFORM.DARWIN} standing={standing} />}
         label={THIS_MAC}
         description={description}
         labelsControl
+        end={() => end}
       >
         {(control) => (
           <Switch
@@ -640,13 +669,26 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   const named = [...listed, ...commandOnly.map(machineListedOf)];
   const empty = others.length === 0 && thisMac === undefined && commandOnly.length === 0;
 
-  /** A machine's own settings for agents, inset under its row, where its app joined. */
+  /** The machine of the id with its own settings, where its app joined. */
+  const machineOfId = (id: string | undefined) =>
+    id === undefined ? undefined : machines.find((each) => each.id === id);
+
+  /** A machine's own settings for agents, folded under its row, where its app joined. */
   const agentRows = (id: string | undefined) => {
-    const machine = id === undefined ? undefined : machines.find((each) => each.id === id);
+    const machine = machineOfId(id);
 
     return machine === undefined ? null : (
       <MachineAgentRows machine={machine} apps={machineSettings.appsOf(machine.id)} />
     );
+  };
+
+  /** What a machine lets agents do, said under its name, where its app joined. */
+  const agentLine = (id: string | undefined) => {
+    const machine = machineOfId(id);
+
+    return machine === undefined
+      ? undefined
+      : machineAgentsLine(machine, machineSettings.appsOf(machine.id));
   };
 
   const list = (
@@ -658,48 +700,65 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
       ) : loaded ? (
         <>
           {thisMac === undefined ? null : (
-            <>
-              <ThisMacRow
-                host={listedMac}
-                book={book}
-                on={thisMacOn}
-                needsApproval={thisMac.needsApproval === true}
-                setupFailed={thisMac.setupFailed === true}
-                onChange={switchThisMac}
-              />
-              {agentRows(thisMacMachine?.id)}
-            </>
+            <SettingsRowsFold
+              label={MACHINES_WORDS.settingsOf(THIS_MAC)}
+              rows={agentRows(thisMacMachine?.id)}
+              head={(chevron) => (
+                <ThisMacRow
+                  host={listedMac}
+                  book={book}
+                  on={thisMacOn}
+                  needsApproval={thisMac.needsApproval === true}
+                  setupFailed={thisMac.setupFailed === true}
+                  detail={agentLine(thisMacMachine?.id)}
+                  end={chevron}
+                  onChange={switchThisMac}
+                />
+              )}
+            />
           )}
           {others.map((host) => {
             const label = machineName(machineOf(host), named, naming);
 
             return (
-              <Fragment key={host.id}>
-                <HostRow
-                  host={host}
-                  label={label}
-                  book={book}
-                  joined={joinedNow(host)}
-                  onRemove={() => askRemove(host, label)}
-                  locked={removing.busy}
-                />
-                {agentRows(host.id)}
-              </Fragment>
+              <SettingsRowsFold
+                key={host.id}
+                label={MACHINES_WORDS.settingsOf(label)}
+                rows={agentRows(host.id)}
+                head={(chevron) => (
+                  <HostRow
+                    host={host}
+                    label={label}
+                    book={book}
+                    joined={joinedNow(host)}
+                    detail={agentLine(host.id)}
+                    end={chevron}
+                    onRemove={() => askRemove(host, label)}
+                    locked={removing.busy}
+                  />
+                )}
+              />
             );
           })}
           {commandOnly.map((machine) => {
             const label = machineName(machineListedOf(machine), named, naming);
 
             return (
-              <Fragment key={machine.id}>
-                <CommandMachineRow
-                  machine={machine}
-                  label={label}
-                  onRemove={() => machineRemove.ask(machine, label)}
-                  locked={machineRemove.busy}
-                />
-                {agentRows(machine.id)}
-              </Fragment>
+              <SettingsRowsFold
+                key={machine.id}
+                label={MACHINES_WORDS.settingsOf(label)}
+                rows={agentRows(machine.id)}
+                head={(chevron) => (
+                  <CommandMachineRow
+                    machine={machine}
+                    label={label}
+                    detail={agentLine(machine.id)}
+                    end={chevron}
+                    onRemove={() => machineRemove.ask(machine, label)}
+                    locked={machineRemove.busy}
+                  />
+                )}
+              />
             );
           })}
           {machineSettings.failed ? (

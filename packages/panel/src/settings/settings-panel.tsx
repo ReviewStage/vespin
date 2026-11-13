@@ -27,7 +27,6 @@ import { type IntegrationsFilter, IntegrationsSection } from "./integrations-pag
 import { MachineCommandsSection } from "./machine-commands-section.js";
 import { McpSection } from "./mcp-clients-section.js";
 import { MemorySection } from "./memory-page.js";
-import { MicrophoneSection } from "./microphone-section.js";
 import { PreferencesPage } from "./preferences-page.js";
 import { PrivacySection } from "./privacy-section.js";
 import { settingsRowsInput, shownWorkspace } from "./settings-rows.js";
@@ -188,17 +187,11 @@ export function SettingsPanel({
       ) : null}
 
       {view === SETTINGS_VIEW.THIS_MAC && panelView ? (
-        <>
-          <MachineCommandsSection
-            view={panelView}
-            notifications={notifications}
-            microphone={capabilities.includes(HOST_CAPABILITY.MICROPHONE) ? microphone : undefined}
-          />
-          {/* Dictation's microphone, on a platform whose microphone the app asks for itself. */}
-          {capabilities.includes(HOST_CAPABILITY.MICROPHONE) ? (
-            <MicrophoneSection view={panelView} />
-          ) : null}
-        </>
+        <MachineCommandsSection
+          view={panelView}
+          notifications={notifications}
+          microphone={capabilities.includes(HOST_CAPABILITY.MICROPHONE) ? microphone : undefined}
+        />
       ) : null}
 
       {view === SETTINGS_VIEW.EXPERIMENTAL ? (

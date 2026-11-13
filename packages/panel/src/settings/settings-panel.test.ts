@@ -140,13 +140,15 @@ test("This Mac's Permissions say where macOS refused Vespin's notifications, and
       ),
     );
 
-    return container.textContent ?? "";
+    const row = [...container.querySelectorAll(".ui-settings-row")].find(
+      (each) => each.textContent?.startsWith("Notifications") ?? false,
+    );
+
+    return row?.textContent ?? "";
   };
 
-  const offLine = "Off, so a command waiting while Vespin is behind won't say so";
-
-  assert.equal(drawn(NOTIFICATIONS_STATUS.ON).includes(offLine), false);
-  assert.equal(drawn(NOTIFICATIONS_STATUS.OFF).includes(offLine), true);
+  assert.equal(drawn(NOTIFICATIONS_STATUS.ON).includes("Not allowed"), false);
+  assert.equal(drawn(NOTIFICATIONS_STATUS.OFF).includes("Not allowed"), true);
 
   const open = [...container.querySelectorAll("button")].find(
     (button) => button.textContent === "Open System Settings",

@@ -412,7 +412,7 @@ test("the Settings search finds each moved option under its new page", () => {
   }
 });
 
-test("Open Vespin at login stands on This Mac under Startup, drawn as the choice already stored, and Appearance holds it no more", () => {
+test("Open Vespin at login stands on This Mac among its own rows, drawn as the choice already stored, and Appearance holds it no more", () => {
   const page = mount(
     createElement(SettingsHarness, {
       stored: settingsView({ openAtLogin: false }),
@@ -427,9 +427,6 @@ test("Open Vespin at login stands on This Mac under Startup, drawn as the choice
   );
 
   assert.ok(login, "This Mac draws the switch");
-  const group = login.closest("[aria-labelledby]");
-  const heading = group && document.getElementById(group.getAttribute("aria-labelledby") ?? "");
-  assert.equal(heading?.textContent, "Startup");
   assert.equal(login.getAttribute("aria-checked"), "false");
   assert.equal(appearance.includes("Open Vespin at login"), false);
 });
@@ -454,7 +451,7 @@ test("a platform without Mac commands or updates lists no This Mac page, draws A
   assert.deepEqual(foundUnder(page, "Updates"), [], "Updates is found nowhere");
 });
 
-test("a browser, which is no installed app, draws Appearance without Zoom and This Mac without Startup, heads its device group This device, and its search finds neither, while it lists Keyboard shortcuts as the desktop does; the desktop draws them all", () => {
+test("a browser, which is no installed app, draws Appearance without Zoom and This Mac without Open Vespin at login, heads its device group This device, and its search finds neither, while it lists Keyboard shortcuts as the desktop does; the desktop draws them all", () => {
   const drawnOn = (capabilities: readonly HostCapability[]) => {
     const page = mount(createElement(SettingsHarness, { capabilities }));
     const groups = pageGroups(page);
@@ -474,7 +471,7 @@ test("a browser, which is no installed app, draws Appearance without Zoom and Th
       device: groups[2],
       zoom: appearance.includes("Zoom"),
       login: thisMac.includes("Open Vespin at login"),
-      startup: thisMac.includes("Startup"),
+      startup: thisMac.includes("Open Vespin at login"),
       found,
     };
   };
@@ -517,7 +514,6 @@ test("This Mac draws dictation's Microphone permission row and Prefer the Mac's 
     DESKTOP_CAPABILITIES.filter((each) => each !== HOST_CAPABILITY.MICROPHONE),
   );
 
-  assert.ok(desktop.words.includes("Dictation"));
   assert.ok(desktop.words.includes("Prefer the Mac's microphone"));
   assert.ok(desktop.words.includes("Microphone"));
   assert.ok(desktop.found.includes("This Mac"));

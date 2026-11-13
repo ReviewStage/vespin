@@ -84,6 +84,30 @@ function changeRefused(answer: HostDoneAnswerView): string | undefined {
   return "failure" in answer ? MACHINE_SETTINGS_WORDS.CHANGE_FAILED : undefined;
 }
 
+/** What a machine lets agents do, as its folded row says it under its name; none for a machine whose app never joined, which holds no settings. */
+export function machineAgentsLine(
+  machine: MachineLine,
+  apps: ReadonlyMap<string, AllowedApp> | undefined,
+): string | undefined {
+  const settings = machine.settings;
+
+  if (settings === undefined) return undefined;
+  const commands = `${MACHINE_SETTINGS_WORDS.COMMANDS_SHORT}: ${MACHINE_COMMAND_MODE_LABEL[settings.commandMode]}`;
+
+  // Note that the apps are said only where the reader has Computer use on, as their rows are drawn only there.
+  if (apps === undefined) return commands;
+  const count = settings.alwaysAllowedApps.length;
+
+  const used =
+    settings.computerUse === false
+      ? MACHINE_SETTINGS_WORDS.APPS_OFF
+      : count === 0
+        ? MACHINE_SETTINGS_WORDS.APPS_ON
+        : MACHINE_SETTINGS_WORDS.appsAllowed(count);
+
+  return `${commands} · ${used}`;
+}
+
 /** A machine as the list of machines names it (`machineName`). */
 export function machineListedOf(machine: MachineLine): ListedMachine {
   return {
@@ -186,16 +210,25 @@ export function MachineAgentRows({
 export function CommandMachineRow({
   machine,
   label,
+  detail,
+  end,
   onRemove,
   locked,
 }: {
   machine: MachineLine;
   /** What the list calls the machine (`machineName`). */
   label: string;
+  /** What it lets agents do (`machineAgentsLine`). */
+  detail: string | undefined;
+  /** The chevron of its settings' fold, last in the row's end. */
+  end: React.ReactNode;
   onRemove: () => void;
   /** Whether a removal is out, which every Remove waits out. */
   locked: boolean;
 }): React.JSX.Element {
+  const standing = machine.listening ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE;
+  const platform = machine.platform ?? DEVICE_PLATFORM.DARWIN;
+
   return (
     <MenuRow
       thing={label}
@@ -203,14 +236,12 @@ export function CommandMachineRow({
         { label: MACHINES_WORDS.REMOVE, danger: true, disabled: locked, onSelect: onRemove },
       ]}
       row={{
-        leading: <MachineMark platform={machine.platform ?? DEVICE_PLATFORM.DARWIN} />,
+        leading: <MachineMark platform={platform} standing={standing} />,
         label: <ReplayMask>{label}</ReplayMask>,
         description: (
-          <MachineStandingLine
-            standing={machine.listening ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE}
-            platform={machine.platform ?? DEVICE_PLATFORM.DARWIN}
-          />
+          <MachineStandingLine standing={standing} platform={platform} detail={detail} />
         ),
+        end,
       }}
     />
   );

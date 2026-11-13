@@ -146,8 +146,6 @@ export const SECTION = {
   NEW_AGENTS: "new-agents",
   ALWAYS_ALLOWED: SETTINGS_SEARCH_ROW.ALWAYS_ALLOWED,
   PERMISSIONS: "permissions",
-  STARTUP: "startup",
-  DICTATION: "dictation",
   NOTIFICATIONS: "notifications",
   YOUR_SOUNDS: "your-sounds",
   APPEARANCE_GROUP: "appearance-group",
@@ -302,16 +300,6 @@ const SETTINGS_SECTIONS = {
   [SECTION.APPEARANCE_GROUP]: {
     found: SECTION_FOUND.ROWS,
     rows: SECTION_ROWS.SCHEMA,
-  },
-  [SECTION.STARTUP]: {
-    found: SECTION_FOUND.ROWS,
-    rows: SECTION_ROWS.SCHEMA,
-    head: "Startup",
-  },
-  [SECTION.DICTATION]: {
-    found: SECTION_FOUND.ROWS,
-    rows: SECTION_ROWS.SCHEMA,
-    head: "Dictation",
   },
   [SECTION.EXPERIMENTS_WORKSPACE]: {
     found: SECTION_FOUND.HEAD,

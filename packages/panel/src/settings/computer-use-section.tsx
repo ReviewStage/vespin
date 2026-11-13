@@ -1,6 +1,7 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_KIND } from "@repo/host/acts";
 import type { ComputerUseStatus } from "@repo/host/contract";
+import { AccessibilityIcon, ScreenRecordingIcon } from "@repo/ui";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { actFailureWords, askAct } from "../act.js";
 import { refusalShown } from "../failure-report.js";
@@ -31,21 +32,21 @@ const computerUseStatusQuery = queryOptions({
 const COMPUTER_USE_GRANTS = [
   {
     key: "screenRecording",
+    icon: ScreenRecordingIcon,
     label: "Screen Recording",
-    allowed: "Agents see the windows of the apps you allow",
-    missing: "Not allowed yet, so agents cannot see apps' windows",
+    purpose: "To let agents see the windows of the apps you allow.",
   },
   {
     key: "accessibility",
+    icon: AccessibilityIcon,
     label: "Accessibility",
-    allowed: "Agents click and type in the apps you allow",
-    missing: "Not allowed yet, so agents cannot click or type in apps",
+    purpose: "To let agents click and type in the apps you allow.",
   },
 ] as const satisfies readonly {
   key: keyof ComputerUseStatus["permissions"];
+  icon: () => React.JSX.Element;
   label: string;
-  allowed: string;
-  missing: string;
+  purpose: string;
 }[];
 
 /**
@@ -81,10 +82,10 @@ export function ComputerUsePermissionRows(): React.JSX.Element | null {
       {COMPUTER_USE_GRANTS.map((grant) => (
         <PermissionRow
           key={grant.key}
+          icon={<grant.icon />}
           label={grant.label}
           standing={permissions[grant.key] ? PERMISSION_STANDING.ALLOWED : PERMISSION_STANDING.ASK}
-          allowed={grant.allowed}
-          missing={grant.missing}
+          purpose={grant.purpose}
           error={
             firstMissing === grant
               ? refusalShown(askRefused, FAILURE_SURFACE.COMPUTER_USE_PERMISSIONS)

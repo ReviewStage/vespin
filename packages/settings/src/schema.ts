@@ -233,7 +233,6 @@ export const APP_SETTING_SCHEMA = {
     // under no page's reset: Appearance's Reset to defaults once flipped it.
     // The field and its id are unmoved, so a choice already made is kept.
     page: SETTINGS_PAGE.THIS_MAC,
-    section: SETTING_SECTION.STARTUP,
     order: 1,
     visible: desktopAppDrawn,
     sideEffect: SETTING_SIDE_EFFECT.LOGIN_ITEM,
@@ -421,12 +420,12 @@ export const APP_SETTING_SCHEMA = {
     field: "preferBuiltInMicrophone",
     id: APP_SETTING_ID.PREFER_BUILT_IN_MICROPHONE,
     label: "Prefer the Mac's microphone",
+    detail: "Dictation listens on it even when headphones are connected.",
     default: true,
     // Note that it stands on This Mac, under no page's reset, as the switch to
     // open at login does; the field and its id are unmoved, so a choice already made is kept.
     page: SETTINGS_PAGE.THIS_MAC,
-    section: SETTING_SECTION.MICROPHONE,
-    order: 110,
+    order: 4,
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     visible: microphoneRouteDrawn,
   }),

@@ -299,12 +299,13 @@ test("This Mac stands first on the row of the machine it is, its switch on, with
   const text = document.body.textContent ?? "";
 
   assert.ok(text.indexOf("This Mac") < text.indexOf("fra-03"), "This Mac stands first");
-  assert.ok(text.includes("Online · Mac"), text);
   assert.equal(thisMacSwitch().getAttribute("aria-checked"), "true");
 
   const thisMacRow = [...document.querySelectorAll(".ui-settings-row")].find(
     (row) => row.textContent?.includes("This Mac") ?? false,
   );
+
+  assert.notEqual(thisMacRow?.querySelector('[aria-label="Online"]') ?? null, null, "online");
 
   assert.equal(
     (thisMacRow?.querySelector('button[aria-haspopup="menu"]') ?? null) === null,
@@ -325,8 +326,14 @@ test("a host's row says Setting up… while its update runs, though the restart 
   ]);
   const text = document.body.textContent ?? "";
 
-  assert.ok(text.includes("ams-01Online · Linux server"), text);
+  assert.ok(text.includes("ams-01Linux server"), text);
   assert.ok(text.includes("ord-01Setting up… · Linux server"), text);
+
+  const ams = [...document.querySelectorAll(".ui-settings-row")].find(
+    (row) => row.textContent?.includes("ams-01") ?? false,
+  );
+
+  assert.notEqual(ams?.querySelector('[aria-label="Online"]') ?? null, null, "ams-01 is online");
 });
 
 test("each host draws its Remove on its own row, which asks about that host first", async () => {
