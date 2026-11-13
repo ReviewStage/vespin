@@ -95,6 +95,7 @@
     "./models/workspace-seams": "./src/models/workspace-seams.js",
     "./models/workspace-experiment-store": "./src/models/workspace-experiment-store.js",
     "./models/workspace-slug-store": "./src/models/workspace-slug-store.js",
+    "./models/workspace-drive-repositories": "./src/models/workspace-drive-repositories.js",
     "./models/workspace-environment-store": "./src/models/workspace-environment-store.js",
     "./models/workspace-sandbox-script-store": "./src/models/workspace-sandbox-script-store.js",
     "./models/workspace-sandbox-script-run-store": "./src/models/workspace-sandbox-script-run-store.js",
