@@ -117,6 +117,9 @@ const IOS = {
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
   MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
+  MENTION_APPS: notYet(
+    "iOS's composers offer skills after a `/` and no `@` list yet, so no app is offered to mention",
+  ),
   MERGE_QUEUE: notYet("iOS leaves the Merge queue page to the desktop and the web for now"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
   NOTIFICATIONS: byDesign("iOS's Settings screen opens the system's settings itself"),
@@ -231,6 +234,7 @@ export const CLIENT_PARITY = {
     byDesign("Runs agents on the Mac the app is on, which a tab is not"),
     byDesign("Runs agents on the Mac the app is on, which a phone is not"),
   ),
+  [PORT_ACT_KIND.HOSTS_ALLOWED_APPS]: panel(IOS.MENTION_APPS),
   [PORT_ACT_KIND.HOSTS_PAIRING_READ]: EVERYWHERE,
   [PORT_ACT_KIND.HOSTS_PAIRING_APPROVE]: EVERYWHERE,
   [PORT_ACT_KIND.HOSTS_PAIRING_DENY]: EVERYWHERE,

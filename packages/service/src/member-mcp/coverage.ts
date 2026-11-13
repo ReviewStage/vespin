@@ -335,6 +335,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   hosts: {
     list: INTERNAL,
     presence: INTERNAL,
+    // The apps a member's machines always allow are offered in an agent's `@` list; a member's agent reads its own machine's with `computer`.
+    allowedApps: SCREEN_ONLY,
     remove: INTERNAL,
     readPairing: INTERNAL,
     approvePairing: INTERNAL,

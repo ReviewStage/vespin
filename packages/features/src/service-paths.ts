@@ -257,6 +257,8 @@ export const HOSTED_SERVICE_PATH = {
   HOSTS: "/api/hosts",
   /** How long ago the account's own devices last beat, read to keep a label's online state true while it is drawn (GET). */
   DEVICE_PRESENCE: "/api/hosts/presence",
+  /** The apps the account's own machines always allow agents to use, each machine's by its name, as an agent's `@` offers them on the web (GET). `host-wire.ts` declares the body. */
+  HOST_ALLOWED_APPS: "/api/hosts/allowed-apps",
   /** One of the account's hosts removed, its secret refused at once (POST). */
   HOST_REMOVE: "/api/hosts/remove",
   /** A pending pairing read by its code, as the approve screen shows it (POST, so the code rides in the body). `host-wire.ts` declares the bodies. */

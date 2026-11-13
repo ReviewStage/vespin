@@ -18,6 +18,7 @@ import { useAutomation } from "../automation-directory.js";
 import { TILE_SIZE, WorkspaceTile } from "../desktop/workspace-tile.js";
 import { usePerson } from "../member-directory.js";
 import { providerOf } from "../tasks/agent-model.js";
+import { KeptAppIcon, useKeptApps } from "../tasks/agent-pictures.js";
 import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { FileTypeIcon } from "../tasks/file-type-icon.js";
 import { InboxItemChipGlyph } from "../tasks/inbox-item-chip.js";
@@ -191,9 +192,20 @@ function WorkspaceMark({ slug }: { slug: string }): React.JSX.Element {
   return <WorkspaceTile workspace={listed ?? { id: slug, name: slug }} size={TILE_SIZE.INLINE} />;
 }
 
-/** An app on the developer's Mac by its icon, as this Mac draws it; a screen's glyph where the window reads none. */
+/**
+ * An app on the developer's Mac by its icon, as this Mac draws it; off the
+ * Mac, or where it drew none, the icon a `computer` call kept for the app in
+ * the conversation; a screen's glyph where there is neither.
+ */
 function MacAppMark({ app }: { app: string }): React.JSX.Element {
-  return <AppIcon src={useMacAppIcon(app)} />;
+  const own = useMacAppIcon(app);
+  const kept = useKeptApps().get(app)?.icon;
+
+  return own === undefined && kept !== undefined ? (
+    <KeptAppIcon id={kept} />
+  ) : (
+    <AppIcon src={own} />
+  );
 }
 
 /** An automation's mark, or one of its runs': the automation's tile. */
