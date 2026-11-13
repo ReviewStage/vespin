@@ -1332,48 +1332,32 @@ function agentSwipes(
 }
 
 /**
- * What an agent row's long press holds past its swipes, in the panel's
- * agent menu's order (`agentMenuGroups`): Copy link and Open in browser
- * once its workspace is known, then Archive, asked first, where the list
- * offers it. Rename, Copy transcript and Permanently delete stay on the
- * agent's page, which holds the questions and the transcript they need.
+ * What an agent row's long press holds past its swipes, which `RowFrame`
+ * stands in the menu already (Stop, or Archive asked first): the panel's
+ * Copy link and Open in browser (`agentMenuGroups`), once its workspace is
+ * known. Rename, Copy transcript and Permanently delete stay on the agent's
+ * page, which holds the questions and the transcript they need.
  */
 function agentMenuActs(
   link: string | undefined,
   onCopyLink: (link: string) => void,
-  onArchive: (() => void) | undefined,
 ): readonly RowAction[] {
-  const links: readonly RowAction[] =
-    link === undefined
-      ? []
-      : [
-          {
-            label: WORDS.COPY_LINK,
-            symbol: GLYPH.LINK,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => onCopyLink(link),
-          },
-          {
-            label: VERB.OPEN_IN_BROWSER,
-            symbol: GLYPH.OPEN_EXTERNALLY,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => openInSafari(link),
-          },
-        ];
-
-  const archive: readonly RowAction[] =
-    onArchive === undefined
-      ? []
-      : [
-          {
-            label: WORDS.ARCHIVE,
-            symbol: GLYPH.ARCHIVE,
-            tone: ROW_ACTION_TONE.DESTRUCTIVE,
-            onPress: onArchive,
-          },
-        ];
-
-  return [...links, ...archive];
+  return link === undefined
+    ? []
+    : [
+        {
+          label: WORDS.COPY_LINK,
+          symbol: GLYPH.LINK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => onCopyLink(link),
+        },
+        {
+          label: VERB.OPEN_IN_BROWSER,
+          symbol: GLYPH.OPEN_EXTERNALLY,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => openInSafari(link),
+        },
+      ];
 }
 
 type UseAgentArchiveAskResult = {
@@ -1480,11 +1464,7 @@ export function TaskAgentRow({
             }
       }
       trailingActions={agentSwipes(agent, acts, onArchive)}
-      menuActions={agentMenuActs(
-        link,
-        keeping.copyWords,
-        onArchive === undefined ? undefined : () => onArchive(agent.id),
-      )}
+      menuActions={agentMenuActs(link, keeping.copyWords)}
       preview={
         <AgentPreview
           name={name}
