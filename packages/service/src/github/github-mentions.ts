@@ -213,7 +213,8 @@ function unfenced(words: string): string {
   let fence: string | undefined;
   const kept: string[] = [];
 
-  for (const line of words.split("\n")) {
+  // Note that a line may end in CRLF or a lone CR, because GitHub keeps a comment as its browser sent it.
+  for (const line of words.split(/\r\n?|\n/u)) {
     if (fence === undefined) {
       fence = FENCE_OPENER.exec(line)?.[1];
 

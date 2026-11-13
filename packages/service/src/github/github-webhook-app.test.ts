@@ -1532,8 +1532,9 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         const comment = commentDelivery(
           installation.id,
           { number: 7, pullRequest: false },
-          // A tilde inside a sentence opens no fence, so the mention after it is read.
-          `The ~~~ in the expiry header breaks invitations.\n\n@${slug} find out why`,
+          // A tilde inside a sentence opens no fence, and a fence closed on a CRLF line ends there,
+          // so the mention after both is read.
+          `The ~~~ in the expiry header breaks invitations:\r\n\`\`\`\r\nexpires_in: 3600\r\n\`\`\`\r\n@${slug} find out why`,
           MEMBER_WRITER,
           commentId,
         );
