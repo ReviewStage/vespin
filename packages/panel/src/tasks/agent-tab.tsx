@@ -3626,12 +3626,15 @@ function AgentTabView({
           readerId={readerId}
         />
         <AgentPicturesProvider value={pictures}>
-          <ComputerDock
-            agentId={agent.id}
-            messages={dockLines}
-            working={standing.working}
-            onStop={offersStop(agent) ? onStop : undefined}
-          />
+          {/* Note that the dock reads whose Mac the agent uses, as the transcript above it does, to offer Show only on that Mac. */}
+          <MacOwnerProvider value={macOwner}>
+            <ComputerDock
+              agentId={agent.id}
+              messages={dockLines}
+              working={standing.working}
+              onStop={offersStop(agent) ? onStop : undefined}
+            />
+          </MacOwnerProvider>
           <AgentQueueDock
             messages={queue.messages}
             controls={controlsQueue}

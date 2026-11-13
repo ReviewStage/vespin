@@ -636,6 +636,15 @@ export const BROWSER_LIVE_ACT_KIND = {
 } as const;
 
 /**
+ * An app on this Mac brought to the front, answered by the platform shell
+ * (`mac-apps.ts`).
+ */
+export const MAC_APP_ACT_KIND = {
+  /** An app an agent is using on this Mac, by its bundle id, brought forward so the developer can take over. */
+  MAC_APP_SHOW: "macApp.show",
+} as const;
+
+/**
  * The Mac's own Terminal opened for a local agent, answered by the platform
  * shell (`mac-terminals.ts`).
  */
@@ -911,6 +920,7 @@ export const PORT_ACT_KIND = {
   ...CLI_ACT_KIND,
   ...INSTALLED_SKILL_ACT_KIND,
   ...INTEGRATION_ACT_KIND,
+  ...MAC_APP_ACT_KIND,
   ...MAC_COMMAND_ACT_KIND,
   ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
@@ -1136,6 +1146,8 @@ export const PORT_ACT_USE = {
 
   MAC_TERMINAL_LOCAL_AGENT: ACT_USE.WRITE,
 
+  MAC_APP_SHOW: ACT_USE.WRITE,
+
   PORT_FORWARD_SET: ACT_USE.WRITE,
   PORT_SHARE_SET: ACT_USE.WRITE,
 
@@ -1280,6 +1292,7 @@ export const PORT_ACT_USE = {
 export const PLATFORM_PORT_ACT_KIND = {
   ...BROWSER_LIVE_ACT_KIND,
   ...CLI_ACT_KIND,
+  ...MAC_APP_ACT_KIND,
   ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,

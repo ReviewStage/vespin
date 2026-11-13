@@ -46,8 +46,14 @@ function noteWords(
   return `${PRODUCT_NAME} on ${whose} Mac needs ${names} to use apps. Turn ${them} on in Settings › ${THIS_MAC} on that Mac.`;
 }
 
-/** Whether the window is the Mac the call ran on: one that runs Mac commands, signed in as that Mac's owner, or where the window cannot tell whose Mac it was, which is then the reader's own. */
-function isThatMac(runsCommands: boolean, owner: Actor | undefined): boolean {
+/** Whether the window is the Mac an agent's computer calls run on: one that runs Mac commands, signed in as that Mac's owner (`MacOwnerProvider`), or where the window cannot tell whose Mac it is, which is then the reader's own. */
+export function useOnThatMac(): boolean {
+  const owner = useMacOwner();
+
+  const runsCommands =
+    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.MAC_COMMANDS) }).data ===
+    true;
+
   if (!runsCommands) return false;
 
   return owner === undefined || (owner.kind === ACTOR_KIND.PERSON && owner.you);
@@ -63,15 +69,10 @@ export function ComputerPermissionNote({
 }): ReactNode {
   const openSettings = useOpenSettings();
   const owner = useMacOwner();
-
-  const runsCommands =
-    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.MAC_COMMANDS) }).data ===
-    true;
-
+  const thatMac = useOnThatMac();
   const missing = tool === AGENT_TOOL.COMPUTER ? computerPermissionsMissing(output) : undefined;
 
   if (missing === undefined) return null;
-  const thatMac = isThatMac(runsCommands, owner);
   const names = computerPermissionsNamed(missing.permissions);
   const them = missing.permissions.length === 1 ? "it" : "them";
 
