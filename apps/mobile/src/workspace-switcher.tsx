@@ -1,4 +1,4 @@
-// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile at the bar's leading edge, opening the list of every workspace, the account opening Settings, New workspace, and the chosen workspace's Settings… under its name, in a popover in a regular window and a sheet in a compact one.
+// workspace-switcher.tsx -- the workspace the phone works in as a tab's root names it: its tile at the bar's leading edge, opening the panel's list of every workspace, New workspace and Workspace settings, then the account opening Settings, in a popover in a regular window and a sheet in a compact one.
 
 import { LIVE_READ } from "@repo/features/live-wire";
 import { workspaceSharedWords } from "@repo/features/workspace-tile";
@@ -63,8 +63,9 @@ export function switcherWorkspace(
  * choice is kept as the phone's (`chosen-workspace.ts`), which the Inbox, its
  * count, Tasks, and New task follow at once; the account opens Settings on
  * its main list, as Notion's one workspace button does, so the bar holds no
- * photo of its own beside it; New workspace opens its sheet, and the
- * Settings… under the chosen workspace's name opens Settings on its page.
+ * photo of its own beside it; New workspace opens its sheet, and Workspace
+ * settings opens Settings on the chosen workspace's page. A landscape iPad's
+ * sidebar draws it without the account, which its foot holds instead.
  * The list opens over its button in a window regular in both width and
  * height, an iPad's, and from the screen's foot in any other. None before the account's workspaces are read.
  */

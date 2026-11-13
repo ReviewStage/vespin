@@ -6,6 +6,7 @@ import { WORKSPACE_ACT_KIND } from "@repo/host/contract";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
+import { announcedAsAlert, mountAnnouncer } from "../testing/announcer.js";
 import { fakeActPort, refusedOnPort } from "../testing/app-bridge.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { tasksControl } from "../testing/tasks-control.js";
@@ -14,8 +15,9 @@ import { NewWorkspaceSteps } from "./new-workspace-steps.js";
 /**
  * New workspace's cards as the developer walks them: Cancel before Create
  * makes nothing; Create makes the workspace, lists it, and goes on to
- * GitHub, whose Skip lands on the new workspace's Home; and an invitation
- * refused holds the first card on what was refused. Synthetic throughout.
+ * GitHub, whose Skip lands on the new workspace's Home; a Create refused is
+ * said aloud as an alert; and an invitation refused holds the first card on
+ * what was refused. Synthetic throughout.
  */
 
 const PAPERSTAR: Workspace = {
@@ -139,6 +141,22 @@ test("Create makes the workspace and lists it, goes on to GitHub, and Skip lands
   assert.equal(title, "Connect GitHub");
   assert.ok(exit, "once made, the way out reads Close");
   assert.deepEqual(pressed, [`choose:${PAPERSTAR.id}`, "close", "home"]);
+});
+
+test("a Create refused stays on the card and says why aloud", async () => {
+  mountAnnouncer();
+  fakeActPort({
+    [WORKSPACE_ACT_KIND.WORKSPACE_CREATE]: () =>
+      Promise.reject(refusedOnPort("That workspace name is taken.")),
+  });
+  const container = mount([]);
+  type(container, "Workspace", "Paperstar");
+
+  await act(async () => button(container, "Create").click());
+  await settle();
+
+  assert.equal(container.querySelector("h1")?.textContent, "Create a workspace");
+  assert.equal(announcedAsAlert(), "That workspace name is taken.");
 });
 
 test("an invitation refused holds the first card on what was refused, and Continue goes on to GitHub", async () => {

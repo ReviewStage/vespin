@@ -12,6 +12,7 @@ import { openURL } from "expo-linking";
 import { useRouter } from "expo-router";
 import { appStateQuery } from "./host/app-state-query.js";
 import { handHostConnect } from "./host-connect-link.js";
+import { useOnTab } from "./tab-route.js";
 
 /** No pull request of the member's agents read yet. */
 const NO_PULL_REQUESTS: readonly AgentPullRequestLink[] = [];
@@ -35,6 +36,7 @@ export function openInSafari(address: string): void {
  */
 export function useOpenLink(): (address: string) => void {
   const router = useRouter();
+  const onTab = useOnTab();
 
   const { data: pullRequests = NO_PULL_REQUESTS } = useQuery({
     ...appStateQuery,
@@ -53,6 +55,6 @@ export function useOpenLink(): (address: string) => void {
     const route = iosAppRouteOfAddress(address, pullRequests);
 
     if (route === undefined) openInSafari(address);
-    else router.push(route);
+    else router.push(onTab(route));
   };
 }

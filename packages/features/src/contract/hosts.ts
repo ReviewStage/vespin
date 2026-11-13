@@ -6,8 +6,8 @@
  * check encodes the handler's value into the bytes the wire carries
  * (`packages/service/src/orpc/base.ts`).
  *
- * Each declares its own refusals (`declaredProcedure`): the list and the
- * presence refuse as not found only where the service answers before any
+ * Each declares its own refusals (`declaredProcedure`): the list, the
+ * presence, and the apps the account's machines always allow refuse as not found only where the service answers before any
  * procedure matches, an older one without their path, which the window
  * has always read as not found; a remove refuses a host the account does
  * not hold as not found; and a pairing's read, approve, or deny refuses a
@@ -26,6 +26,7 @@ import {
   hostPairingApproveAnswerSchema,
   hostPairingCodeRequestSchema,
   hostsAnswerSchema,
+  machineAllowedAppsAnswerSchema,
 } from "../host-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
@@ -43,6 +44,10 @@ export const hostsContract = {
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.DEVICE_PRESENCE }))
     .output(EffectSchema.flip(devicePresenceAnswerSchema)),
+  allowedApps: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.HOST_ALLOWED_APPS }))
+    .output(EffectSchema.flip(machineAllowedAppsAnswerSchema)),
   remove: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(bodyCap(BODY_BYTES))

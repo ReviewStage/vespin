@@ -105,9 +105,11 @@ import {
 } from "@repo/host/app-state";
 import type { PortActKind, PortActPayload, PortActResult } from "@repo/host/contract";
 import { FIXTURE_IDS, FIXTURE_PAGE } from "@repo/host/fixture-stage";
+import { EXPERIMENT } from "@repo/settings";
 import { agentTab, changesTab, fileTab, pageTab, terminalTab } from "@repo/ui/tab-strip-model";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { longRunHold, longRunPicture, longRunTranscript } from "./agent-long-run-fixture.js";
+import { voiceLiveHold, voiceLiveTranscript, voiceTranscript } from "./agent-voice-fixture.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW, type PullRequestView } from "./task-tab-model.js";
 import type { MainTab } from "./use-main-tabs.js";
 import type { SidePanelState, StagedSidePanel } from "./use-side-panel.js";
@@ -153,6 +155,7 @@ const PULL_REQUEST = {
 const ADA: GitHubPerson = { login: "ada", bot: false };
 const GRACE: GitHubPerson = { login: "grace", bot: false };
 const REVIEW_BOT: GitHubPerson = { login: "review-bot[bot]", bot: true };
+const STATUS_BOT: GitHubPerson = { login: "status-bot[bot]", bot: true };
 
 /** The new file the agent wrote, as its File tab and its diff both read it. */
 const INVITE_LINES: readonly string[] = [
@@ -413,15 +416,8 @@ const WORK: AgentTranscriptMessage = {
   ],
   startedAt: STARTED_AT,
   finishedAt: STARTED_AT + 6 * MINUTE,
-  // What the turn's runner diffed when it ended: the invite it added, the members it wired it into, and the tests and docs beside them.
+  // What the turn's runner counted when it ended: the invite it added, the members it wired it into, and the tests and docs beside them.
   changedFiles: {
-    files: [
-      { path: "src/members/invite.ts", additions: 4, deletions: 0 },
-      { path: "src/members/index.ts", additions: 2, deletions: 1 },
-      { path: "src/members/invite.test.ts", additions: 18, deletions: 0 },
-      { path: "src/members/pending.ts", additions: 6, deletions: 2 },
-      { path: "docs/members.md", additions: 3, deletions: 0 },
-    ],
     total: 5,
     additions: 33,
     deletions: 3,
@@ -782,8 +778,57 @@ const OVERVIEW_CHECKS = {
   },
 };
 
+/**
+ * A review bot's status comment, as such bots write one: an alert holding a
+ * folded section and a task item to tick, and a task item after it, as
+ * written and as GitHub renders it.
+ */
+const STATUS_COMMENT = {
+  body: [
+    "> [!IMPORTANT]",
+    "> ## Review skipped",
+    ">",
+    "> Auto reviews are off for branches other than the default branch.",
+    ">",
+    "> To review this one anyway, tick the box below or comment `@relay-status review`.",
+    ">",
+    "> <details>",
+    "> <summary><strong>Run configuration</strong></summary>",
+    ">",
+    "> - **Profile**: Chill",
+    "> - **Run ID**: `4f1c2a`",
+    ">",
+    "> </details>",
+    ">",
+    "> - [ ] Trigger review",
+    "",
+    "- [ ] **Autofix** · Keep fixing findings and required checks",
+  ].join("\n"),
+  html: [
+    '<div class="markdown-alert markdown-alert-important" dir="auto"><p class="markdown-alert-title" dir="auto"><svg class="octicon octicon-report mr-2" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Z"></path></svg>Important</p>',
+    '<h2 dir="auto">Review skipped</h2>',
+    '<p dir="auto">Auto reviews are off for branches other than the default branch.</p>',
+    '<p dir="auto">To review this one anyway, tick the box below or comment <code class="notranslate">@relay-status review</code>.</p>',
+    "<details>",
+    "<summary><strong>Run configuration</strong></summary>",
+    '<ul dir="auto">',
+    "<li><strong>Profile</strong>: Chill</li>",
+    '<li><strong>Run ID</strong>: <code class="notranslate">4f1c2a</code></li>',
+    "</ul>",
+    "</details>",
+    '<ul class="contains-task-list">',
+    '<li class="task-list-item"><input type="checkbox" id="" disabled="" class="task-list-item-checkbox" aria-label="Incomplete task"> Trigger review</li>',
+    "</ul>",
+    "</div>",
+    '<ul class="contains-task-list">',
+    '<li class="task-list-item"><input type="checkbox" id="" disabled="" class="task-list-item-checkbox" aria-label="Incomplete task"> <strong>Autofix</strong> · Keep fixing findings and required checks</li>',
+    "</ul>",
+  ].join("\n"),
+} as const;
+
 const OVERVIEW_CONVERSATION = {
   pullRequest: {
+    descriptionSubject: "PR_fixture",
     reviewers: [
       { by: GRACE, state: REVIEW_STATE.APPROVED },
       { by: REVIEW_BOT, state: REVIEW_STATE.COMMENTED },
@@ -798,6 +843,14 @@ const OVERVIEW_CONVERSATION = {
         at: STARTED_AT + 9 * MINUTE,
         url: `${PULL_REQUEST.url}#pullrequestreview-1`,
         threads: [EXPIRY_THREAD],
+      },
+      {
+        kind: CONVERSATION_ENTRY.COMMENT,
+        by: STATUS_BOT,
+        ...STATUS_COMMENT,
+        at: STARTED_AT + 10 * MINUTE,
+        url: `${PULL_REQUEST.url}#issuecomment-4`,
+        subject: "IC_status",
       },
       {
         kind: CONVERSATION_ENTRY.REVIEW,
@@ -970,6 +1023,20 @@ const TRANSCRIPT_LENGTH = {
 
 type TranscriptLength = (typeof TRANSCRIPT_LENGTH)[keyof typeof TRANSCRIPT_LENGTH];
 
+/** The calls a voice profile stages into the agent after its turn (`agent-voice-fixture.ts`): settled, or one under way while the agent works. */
+const VOICE_STAGE = {
+  SETTLED: "settled",
+  LIVE: "live",
+} as const;
+
+type VoiceStage = (typeof VOICE_STAGE)[keyof typeof VOICE_STAGE];
+
+/** When the settled profile's calls began: an hour after the agent's turn. */
+const CALLED_AT = STARTED_AT + 60 * MINUTE;
+
+/** When the live profile's call began: a minute before the run opened, so its turn has worked for as long as the call has stood. */
+const LIVE_CALLED_AT = Date.now() - MINUTE;
+
 /** What one agent profile opens beside the agent: its Pull request tab on a view, with the transcript as long as it says, a file's tab, the page it showed, its Terminal staged one way, or the task's description, whose comments the tasks fixture answers. */
 type AgentStage =
   | {
@@ -977,6 +1044,8 @@ type AgentStage =
       readonly transcript?: TranscriptLength;
       /** Whether the agent holds a call on the member's answer (`HELD_CALL`). */
       readonly held?: true;
+      /** The calls into the agent after its turn, the Voice experiment on; none where it was never called. */
+      readonly voice?: VoiceStage;
     }
   | { readonly file: string }
   | { readonly page: string }
@@ -993,6 +1062,8 @@ const AGENT_STAGES: ReadonlyMap<string, AgentStage> = new Map<string, AgentStage
     RUN_PROFILE.AGENT_LONG_RUN,
     { view: PULL_REQUEST_VIEW.CONVERSATION, transcript: TRANSCRIPT_LENGTH.LONG_RUN },
   ],
+  [RUN_PROFILE.AGENT_VOICE, { view: PULL_REQUEST_VIEW.CONVERSATION, voice: VOICE_STAGE.SETTLED }],
+  [RUN_PROFILE.AGENT_VOICE_LIVE, { view: PULL_REQUEST_VIEW.CONVERSATION, voice: VOICE_STAGE.LIVE }],
   [RUN_PROFILE.AGENT_CHECKS, { view: PULL_REQUEST_VIEW.CHECKS }],
   [RUN_PROFILE.AGENT_APPROVAL, { view: PULL_REQUEST_VIEW.CONVERSATION, held: true }],
   [RUN_PROFILE.AGENT_FILES, { view: PULL_REQUEST_VIEW.FILES }],
@@ -1085,9 +1156,25 @@ function postShellPort(stage: Extract<TerminalStage, { kind: typeof TERMINAL_STA
 function stagedTranscript(stage: AgentStage): AppTranscript {
   if (longRun(stage)) return longRunTranscript();
 
+  const voice = voiceStage(stage);
+
+  if (voice === VOICE_STAGE.SETTLED) return voiceTranscript(TRANSCRIPT, CALLED_AT);
+
+  if (voice === VOICE_STAGE.LIVE) return voiceLiveTranscript(TRANSCRIPT, LIVE_CALLED_AT);
+
   return "view" in stage && stage.transcript === TRANSCRIPT_LENGTH.LONG
     ? LONG_TRANSCRIPT
     : TRANSCRIPT;
+}
+
+/** The calls the profile stages into the agent; none where it stages none. */
+function voiceStage(stage: AgentStage): VoiceStage | undefined {
+  return "view" in stage ? stage.voice : undefined;
+}
+
+/** Whether the profile stages a transcript of its own that its hold writes on: the long run's, or a call's under way. */
+function heldOn(stage: AgentStage): boolean {
+  return longRun(stage) || voiceStage(stage) === VOICE_STAGE.LIVE;
 }
 
 /** Whether the profile stages the orchestrator's long run. */
@@ -1183,13 +1270,13 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
 /** Every read the agent's tabs ask through the act door, answered as the service would answer it for this agent; the parts the host holds are staged apart (`STAGED_PARTS`). */
 const ANSWERS: StagedAnswers = {
   [ACT_KIND.AGENTS_LIST]: ({ taskId }, stage) => ({
-    agents: [agentSummary(taskId, longRun(stage), holdsCall(stage))],
+    agents: [agentSummary(taskId, heldOn(stage), holdsCall(stage))],
   }),
   // The held call's answer, kept as the service keeps one, so its row says how it came out.
   [ACT_KIND.AGENTS_ANSWER_APPROVAL]: ({ approvalId, answer }) => ({
     approval: { id: approvalId, status: APPROVAL_STATUS_OF_ANSWER[answer] },
   }),
-  [ACT_KIND.AGENTS_TRANSCRIPT]: () => longRunHold(),
+  [ACT_KIND.AGENTS_TRANSCRIPT]: (_, stage) => (longRun(stage) ? longRunHold() : voiceLiveHold()),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({
     failure: AGENT_CALL_FAILURE.NOT_FOUND,
   }),
@@ -1286,7 +1373,7 @@ export function agentTasksView(profile: string, open: TasksView): TasksView | un
 
   if (!AGENT_STAGES.has(profile) || taskId === undefined) return undefined;
   const stage = AGENT_STAGES.get(profile) ?? { description: true };
-  const agent = agentSummary(taskId, longRun(stage), holdsCall(stage));
+  const agent = agentSummary(taskId, heldOn(stage), holdsCall(stage));
 
   const agents: TaskSummary["agents"] = {
     total: 1,
@@ -1434,6 +1521,29 @@ const STAGED_PARTS = {
   }),
 };
 
+/** Main's settings with the Voice experiment on, one object for each of main's. */
+const VOICE_SETTINGS = new WeakMap<
+  NonNullable<AppStateSnapshot["settings"]>,
+  NonNullable<AppStateSnapshot["settings"]>
+>();
+
+/** Lays the Voice experiment on over main's settings, which a voice profile draws a call's lines behind. */
+function voiceSettings(
+  settings: NonNullable<AppStateSnapshot["settings"]>,
+): NonNullable<AppStateSnapshot["settings"]> {
+  let laid = VOICE_SETTINGS.get(settings);
+
+  if (laid === undefined) {
+    laid = {
+      ...settings,
+      experiments: { ...settings.experiments, [EXPERIMENT.VOICE]: true },
+    };
+    VOICE_SETTINGS.set(settings, laid);
+  }
+
+  return laid;
+}
+
 /**
  * Main's document as an agent profile draws it: the open task's pages held
  * with the page its agent showed, as the window's read of them holds them
@@ -1475,6 +1585,9 @@ export function agentAppState(state: AppStateSnapshot, taskId: string): AppState
 
   return {
     ...state,
+    ...(voiceStage(stage) === undefined || state.settings === undefined
+      ? undefined
+      : { settings: voiceSettings(state.settings) }),
     [LIVE_READ.PAGES]: staged,
     [LIVE_READ.PULL_REQUEST_CHAPTERS]: chapters,
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT], stagedTranscript(stage)),
@@ -1512,6 +1625,9 @@ export function agentSidePanel(
   const stage = AGENT_STAGES.get(profile);
 
   if (stage === undefined) return undefined;
+
+  // A call's lines are the transcript's alone, so the panel beside it is shut.
+  if (voiceStage(stage) !== undefined) return { ...panel, open: false, tab: undefined };
 
   if ("view" in stage) {
     const pullRequest = changesTab(FIXTURE_AGENT_ID);
@@ -1559,8 +1675,8 @@ export function agentActAnswer(
 
   if (stage === undefined) return undefined;
 
-  // Note that only the long run's hold is the fixture's own, which writes its transcript on; any other goes to main, which holds nothing behind its closed gate, the transcript staged whole (`agentAppState`).
-  if (kind === ACT_KIND.AGENTS_TRANSCRIPT && !longRun(stage)) return undefined;
+  // Note that only the long run's hold and a live call's are the fixture's own, which write their transcripts on; any other goes to main, which holds nothing behind its closed gate, the transcript staged whole (`agentAppState`).
+  if (kind === ACT_KIND.AGENTS_TRANSCRIPT && !heldOn(stage)) return undefined;
   // SAFETY: the table is keyed by kind, each answer taking that kind's payload and answering its result.
   const answer = ANSWERS[kind] as StagedAnswer<PortActKind> | undefined;
 

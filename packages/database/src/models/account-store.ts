@@ -9,6 +9,7 @@ import {
 } from "@repo/features/chapters-model-choice";
 import { LINK_OPEN_LIST, type LinkOpen } from "@repo/features/link-open";
 import type { ModelChoice, ModelProvider } from "@repo/features/models-wire";
+import { type LiveVoice, LiveVoiceSchema } from "@repo/features/voices";
 import {
   type AccountExperiment,
   type AccountPreferences,
@@ -20,6 +21,7 @@ import {
   type ExperimentChoices,
   experimentChoicesFrom,
   experimentOn,
+  introsSeenUnion,
   NO_EXPERIMENTS,
   PERMISSION_MODE_LIST,
   PULL_REQUEST_OPEN_LIST,
@@ -80,8 +82,8 @@ export interface AccountPreferencesWritten extends AccountPreferencesRow {
  * stood, so a Mac that knows fewer experiments never erases another's.
  * `preferences` is the shared part; the link choice, the pull request choice, Enter's choice, the
  * commit author, a new agent's permission mode, setup finished, the setup place, when and which sound plays,
- * whether a notification is posted, and the survey's answers are parts of
- * their own, which a build that predates them never sends.
+ * whether a notification is posted, the survey's answers, and the intros
+ * seen are parts of their own, which a build that predates them never sends.
  */
 export interface AccountPreferencesWrite {
   preferences?: AccountPreferences;
@@ -95,8 +97,11 @@ export interface AccountPreferencesWrite {
   soundWhen?: SoundWhen;
   completionSound?: CompletionSound;
   askSound?: CompletionSound;
+  voice?: LiveVoice;
   turnNotifications?: boolean;
   onboardingSurvey?: string;
+  /** The intros the write dismisses, as the JSON list of their ids, stored as their union with what stood. */
+  introsSeen?: string;
   agent?: ModelChoice;
   chaptersModel?: ChaptersPick;
   experiments?: ExperimentChoices;
@@ -117,8 +122,10 @@ const PREFERENCE_COLUMNS = {
   soundWhen: accountPreference.soundWhen,
   completionSound: accountPreference.completionSound,
   askSound: accountPreference.askSound,
+  voice: accountPreference.voice,
   turnNotifications: accountPreference.turnNotifications,
   onboardingSurvey: accountPreference.onboardingSurvey,
+  introsSeen: accountPreference.introsSeen,
   agentModel: accountPreference.agentModel,
   agentEffort: accountPreference.agentEffort,
   agentContextWindow: accountPreference.agentContextWindow,
@@ -138,8 +145,10 @@ const PreferenceRowSchema = Schema.Struct({
   soundWhen: Schema.NullOr(Schema.String),
   completionSound: Schema.NullOr(Schema.String),
   askSound: Schema.NullOr(Schema.String),
+  voice: Schema.NullOr(Schema.String),
   turnNotifications: Schema.NullOr(Schema.Boolean),
   onboardingSurvey: Schema.NullOr(Schema.String),
+  introsSeen: Schema.NullOr(Schema.String),
   agentModel: Schema.NullOr(Schema.String),
   agentEffort: Schema.NullOr(Schema.String),
   agentContextWindow: Schema.NullOr(contextWindowSchema),
@@ -156,6 +165,9 @@ type PreferenceRow = typeof PreferenceRowSchema.Type;
  * disagree.
  */
 function snapshotOf(row: PreferenceRow): AccountPreferencesRow {
+  // Note that the list is read back as `@repo/settings` writes it, since the database spells its JSON with spaces.
+  const introsSeen = introsSeenUnion(row.introsSeen ?? undefined, undefined);
+
   return {
     preferences:
       accountPreferencesFromStored({
@@ -169,10 +181,12 @@ function snapshotOf(row: PreferenceRow): AccountPreferencesRow {
         ...(row.soundWhen ? { soundWhen: row.soundWhen } : undefined),
         ...(row.completionSound ? { completionSound: row.completionSound } : undefined),
         ...(row.askSound ? { askSound: row.askSound } : undefined),
+        ...(row.voice ? { voice: row.voice } : undefined),
         ...(row.turnNotifications === null
           ? undefined
           : { turnNotifications: row.turnNotifications }),
         ...(row.onboardingSurvey ? { onboardingSurvey: row.onboardingSurvey } : undefined),
+        ...(introsSeen === undefined ? undefined : { introsSeen }),
       }) ?? {},
     agent: storedAgentChoice(row),
     // Note that a stored model no build lists any more reads as Haiku, as a row never written does.
@@ -277,6 +291,24 @@ export function readAccountAccess(
   );
 }
 
+const findCreatedAt = SqlSchema.findOneOption({
+  Request: Schema.String,
+  Result: Schema.Struct({ createdAt: InstantColumnSchema }),
+  execute: (userId) =>
+    Database.use((db) =>
+      db.select({ createdAt: user.createdAt }).from(user).where(eq(user.id, userId)).limit(1),
+    ),
+});
+
+/** When the account was made, read off its own `user` row; nothing where there is no such account. */
+export function readAccountCreatedAt(
+  userId: string,
+): Effect.Effect<Date | undefined, StoreFailure, DatabaseServices> {
+  return Effect.map(findCreatedAt(userId), (row) =>
+    Option.match(row, { onNone: () => undefined, onSome: ({ createdAt }) => createdAt }),
+  );
+}
+
 const PreferenceWriteSchema = Schema.Struct({
   userId: Schema.String,
   linkOpen: Schema.optionalKey(Schema.Literals(LINK_OPEN_LIST)),
@@ -289,8 +321,10 @@ const PreferenceWriteSchema = Schema.Struct({
   soundWhen: Schema.optionalKey(Schema.Literals(SOUND_WHEN_LIST)),
   completionSound: Schema.optionalKey(Schema.Literals(COMPLETION_SOUNDS)),
   askSound: Schema.optionalKey(Schema.Literals(COMPLETION_SOUNDS)),
+  voice: Schema.optionalKey(LiveVoiceSchema),
   turnNotifications: Schema.optionalKey(Schema.Boolean),
   onboardingSurvey: Schema.optionalKey(Schema.String),
+  introsSeen: Schema.optionalKey(Schema.String),
   agent: Schema.optionalKey(
     Schema.Struct({
       model: Schema.String,
@@ -326,12 +360,14 @@ function writtenColumns(write: PreferenceWrite) {
       ? undefined
       : { completionSound: write.completionSound }),
     ...(write.askSound === undefined ? undefined : { askSound: write.askSound }),
+    ...(write.voice === undefined ? undefined : { voice: write.voice }),
     ...(write.turnNotifications === undefined
       ? undefined
       : { turnNotifications: write.turnNotifications }),
     ...(write.onboardingSurvey === undefined
       ? undefined
       : { onboardingSurvey: write.onboardingSurvey }),
+    ...(write.introsSeen === undefined ? undefined : { introsSeen: write.introsSeen }),
     ...(write.chaptersModel === undefined ? undefined : { chaptersModel: write.chaptersModel }),
     ...(write.updatedAt === undefined ? undefined : { updatedAt: write.updatedAt }),
     ...(write.agent === undefined
@@ -342,6 +378,16 @@ function writtenColumns(write: PreferenceWrite) {
           agentContextWindow: write.agent.contextWindow ?? null,
         }),
   };
+}
+
+/**
+ * The intros a row holds once `written` is added to them: each id of either
+ * list once, in order, as the JSON list `@repo/settings` stores. Note that it
+ * is worked out in the update itself, so two devices dismissing two cards at
+ * once lose neither.
+ */
+function introsSeenUnionSql(written: string) {
+  return sql`(select jsonb_agg(id order by id)::text from (select jsonb_array_elements_text(coalesce(${accountPreference.introsSeen}, '[]')::jsonb) as id union select jsonb_array_elements_text(${written}::jsonb)) as ids)`;
 }
 
 /**
@@ -356,14 +402,18 @@ const upsertPreference = SqlSchema.findOne({
   execute: (write) => {
     const columns = writtenColumns(write);
 
-    // The experiments are the one part merged rather than replaced: the patch's keys over what stood.
-    const merged =
-      write.experiments === undefined
-        ? columns
+    // The experiments are merged rather than replaced, the patch's keys over what stood, and the intros seen are the union of both lists.
+    const merged = {
+      ...columns,
+      ...(write.experiments === undefined
+        ? undefined
         : {
-            ...columns,
             experiments: sql`coalesce(${accountPreference.experiments}, '{}'::jsonb) || ${JSON.stringify(write.experiments)}::jsonb`,
-          };
+          }),
+      ...(write.introsSeen === undefined
+        ? undefined
+        : { introsSeen: introsSeenUnionSql(write.introsSeen) }),
+    };
 
     return Database.use((db) =>
       db
@@ -409,12 +459,14 @@ export function writeAccountPreferences(
         ? undefined
         : { completionSound: write.completionSound }),
       ...(write.askSound === undefined ? undefined : { askSound: write.askSound }),
+      ...(write.voice === undefined ? undefined : { voice: write.voice }),
       ...(write.turnNotifications === undefined
         ? undefined
         : { turnNotifications: write.turnNotifications }),
       ...(write.onboardingSurvey === undefined
         ? undefined
         : { onboardingSurvey: write.onboardingSurvey }),
+      ...(write.introsSeen === undefined ? undefined : { introsSeen: write.introsSeen }),
       ...(write.agent === undefined ? undefined : { agent: write.agent }),
       ...(write.chaptersModel === undefined ? undefined : { chaptersModel: write.chaptersModel }),
       ...(write.experiments === undefined ? undefined : { experiments: write.experiments }),

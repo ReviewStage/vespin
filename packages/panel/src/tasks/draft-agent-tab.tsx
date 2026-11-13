@@ -284,6 +284,8 @@ export function DraftAgentTab({
         <AgentComposer
           status={AGENT_STATUS.STARTING}
           sendsEmpty={fork !== undefined}
+          // Note that a fork's or a continue's words follow its source's brief as a note, so they can't open on `/goal`.
+          startsGoal={fork === undefined}
           composer={composer}
           sendable={unpaid === undefined}
           model={

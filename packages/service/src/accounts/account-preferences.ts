@@ -30,6 +30,8 @@ import {
   accountPreferencesFromWire,
   accountPreferencesParts,
   experimentChoicesFrom,
+  introsSeenAnswered,
+  introsSeenUnion,
   isOlderOnboardingSurveyJson,
   NO_EXPERIMENTS,
   type OnboardingSurvey,
@@ -59,6 +61,8 @@ import { onboardingSurveyAnswered } from "./onboarding-survey-response.js";
 /** The store the preferences are read from and written to, and the account's fast offer a coding-agent choice is checked against. */
 export interface AccountPreferenceSeams {
   readPreferences: (userId: string) => AccountSeamEffect<AccountPreferencesRow | undefined>;
+  /** When the account was made, by which an account made before the intros shipped reads their launch as seen. */
+  readCreatedAt: (userId: string) => AccountSeamEffect<Date | undefined>;
   /** Which fast versions the account is offered, by which its coding-agent choice may name one (`offeredToAccount`). */
   accountFastOffer: (
     userId: string,
@@ -102,13 +106,23 @@ const snapshotAgent = (
  * The snapshot as the account answers it, the coding-agent default as
  * `snapshotAgent` reads it, the preferences' instant beside it where the
  * preferences were ever written, and the link choice as a part of its own
- * where the account made one.
+ * where the account made one. The intros seen are the launch's for an
+ * account made before they shipped that dismissed none
+ * (`introsSeenAnswered`), which is answered and never stored.
  */
-function snapshotAnswer(row: AccountPreferencesRow | undefined, agent: ModelChoice) {
+function snapshotAnswer(
+  row: AccountPreferencesRow | undefined,
+  agent: ModelChoice,
+  createdAt: Date | undefined,
+) {
   const updatedAt = row?.updatedAt;
+  const { introsSeen: stored, ...preferences } = row?.preferences ?? {};
+  const introsSeen = introsSeenAnswered(stored, createdAt);
 
   return {
-    ...accountPreferencesParts(row?.preferences ?? {}),
+    ...accountPreferencesParts(
+      introsSeen === undefined ? preferences : { ...preferences, introsSeen },
+    ),
     agent,
     chaptersModel: row?.chaptersModel ?? CHAPTERS_MODEL_DEFAULT,
     experiments: row?.experiments ?? NO_EXPERIMENTS,
@@ -172,8 +186,9 @@ export const readOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
   userId: string,
 ) {
   const row = yield* hostedStoreOrUnavailable(seams.readPreferences(userId));
+  const createdAt = yield* hostedStoreOrUnavailable(seams.readCreatedAt(userId));
 
-  return snapshotAnswer(row, yield* snapshotAgent(userId, row));
+  return snapshotAnswer(row, yield* snapshotAgent(userId, row), createdAt);
 });
 
 /**
@@ -202,8 +217,10 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     body.soundWhen === undefined &&
     body.completionSound === undefined &&
     body.askSound === undefined &&
+    body.voice === undefined &&
     body.turnNotifications === undefined &&
     body.onboardingSurvey === undefined &&
+    body.introsSeen === undefined &&
     body.agent === undefined &&
     body.chaptersModel === undefined &&
     body.experiments === undefined
@@ -302,6 +319,13 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     write.askSound = askSound;
   }
 
+  if (body.voice !== undefined) {
+    const voice = ownPreferenceFromWire("voice", body.voice);
+
+    if (voice === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    write.voice = voice;
+  }
+
   if (body.turnNotifications !== undefined) {
     const turnNotifications = ownPreferenceFromWire("turnNotifications", body.turnNotifications);
 
@@ -323,6 +347,14 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     }
 
     write.onboardingSurvey = onboardingSurveyStored(onboardingSurvey);
+  }
+
+  if (body.introsSeen !== undefined) {
+    // Note that the list is stored as one id each, in order, and the store adds it to what stood.
+    const introsSeen = introsSeenUnion(ownPreferenceFromWire("introsSeen", body.introsSeen), "[]");
+
+    if (introsSeen === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    write.introsSeen = introsSeen;
   }
 
   if (body.agent !== undefined) {
@@ -374,5 +406,10 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     yield* onboardingSurveyAnswered(userId, answered);
   }
 
-  return { ...snapshotAnswer(row, yield* snapshotAgent(userId, row)), txid: row.txid };
+  const createdAt = yield* hostedStoreOrUnavailable(seams.readCreatedAt(userId));
+
+  return {
+    ...snapshotAnswer(row, yield* snapshotAgent(userId, row), createdAt),
+    txid: row.txid,
+  };
 });

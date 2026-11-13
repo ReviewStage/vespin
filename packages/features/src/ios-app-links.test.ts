@@ -5,6 +5,7 @@ import {
   iosAppRouteOfAddress,
   iosHostConnectCode,
   iosRouteHidesTabs,
+  iosRouteOnTab,
 } from "./ios-app-links.js";
 import { readLink } from "./link-grammar.js";
 
@@ -96,5 +97,20 @@ describe("the tab bar on a route", () => {
     ["/search", false],
   ])("on %s hidden is %s", (pathname, hidden) => {
     expect(iosRouteHidesTabs(pathname)).toBe(hidden);
+  });
+});
+
+// Note that the regression this catches is a route named on a tab whose stack does not mount it, such as a tab's root on another tab, which would open nothing.
+describe("a route opened from a tab", () => {
+  it.each([
+    ["/tasks/task-1", "inbox", "/(inbox)/tasks/task-1"],
+    ["/tasks/42?workspace=acme", "search", "/(search)/tasks/42?workspace=acme"],
+    ["/tasks/agent/agent-1/pull/7", "inbox", "/(inbox)/tasks/agent/agent-1/pull/7"],
+    ["/inbox/item-1", "tasks", "/(tasks)/inbox/item-1"],
+    ["/tasks/task-1", undefined, "/(tasks)/tasks/task-1"],
+    ["/inbox", "tasks", "/(inbox)/inbox"],
+    ["/start-task", "inbox", "/start-task"],
+  ] as const)("%s from %s opens at %s", (route, standing, opened) => {
+    expect(iosRouteOnTab(route, standing)).toBe(opened);
   });
 });

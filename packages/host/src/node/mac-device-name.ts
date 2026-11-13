@@ -29,7 +29,7 @@ function computerName(): string {
  * first, because the host name is often one the network or Bonjour
  * generated ("Mac-1898.lan") that the member never chose.
  */
-export function macDeviceName(): string {
+export function machineDeviceName(): string {
   const chosen = computerName();
 
   if (chosen.length > 0) return chosen;

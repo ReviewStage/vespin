@@ -13,6 +13,7 @@ import {
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { BROWSER_TAB_OPEN_FAILURE, type BrowserTabOpenFailure } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
+import { INTRO } from "@repo/settings";
 import { surfaceKeepsPress } from "@repo/settings/shortcuts";
 import {
   AddressField,
@@ -33,6 +34,8 @@ import {
   type RemotePointer,
   RemoteSurface,
   type RemoteWheel,
+  RevealArea,
+  revealArea,
   SPINNER_SIZE,
   Spinner,
   TEXT_TONE,
@@ -58,6 +61,7 @@ import { appPlatform } from "../app-platform.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { useTabActions } from "../desktop/strip-tabs.js";
 import { failureShown } from "../failure-report.js";
+import { PageIntro } from "../page-intro.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { appStateIn } from "../use-app-state.js";
@@ -554,6 +558,7 @@ export function CloudBrowserPane({
   /** A member's name by their account's id; none for one not known. */
   memberName: (userId: string) => string | undefined;
 }): React.JSX.Element {
+  const pane = useRef<HTMLElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [bodySize, setBodySize] = useState<CloudBrowserViewport>({ width: 0, height: 0 });
@@ -747,87 +752,93 @@ export function CloudBrowserPane({
   useAnnounceShown(ANNOUNCE.POLITE, notice?.waiting === false ? notice.words : "");
   const isLive = view.phase === CLOUD_BROWSER_PHASE.LIVE;
 
+  // Note that the pane is a reveal area, so the intro rolls up as Got it is pressed and the page closes over it.
   return (
-    <Fill
-      as={FILL_ELEMENT.SECTION}
-      className="browser-view cloud-browser-view file-view"
-      aria-label="Browser"
-    >
-      <CloudBrowserBar
-        address={address}
-        onStep={isLive ? live.step : undefined}
-        whyOff={stepsOffOf(view)}
-        onOpen={live.navigate}
-        disabled={!isLive}
-      />
-      <div className={STANDING_CLASS}>
-        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} truncate>
-          {said ?? ""}
-        </Text>
-        {yours ? (
-          <Button
-            size={BUTTON_SIZE.COMPACT}
-            variant={BUTTON_VARIANT.OUTLINE}
-            icon={<HandIcon aria-hidden="true" />}
-            onClick={live.handBack}
-          >
-            Hand back
-          </Button>
-        ) : (
-          <Button
-            size={BUTTON_SIZE.COMPACT}
-            variant={BUTTON_VARIANT.OUTLINE}
-            icon={<MousePointerClickIcon aria-hidden="true" />}
-            disabled={!isLive}
-            onClick={live.takeOver}
-          >
-            Take over
-          </Button>
-        )}
-      </div>
-      <Fill clip ref={body} className={BODY_CLASS}>
-        <div className="relative flex-none" style={{ width: size.width, height: size.height }}>
-          <RemoteSurface
-            ref={canvas}
-            label="The page"
-            width={size.width}
-            height={size.height}
-            driving={yours}
-            onPointer={pointerInput}
-            onWheel={wheelInput}
-            onKey={keyInput}
-            onPaste={pasteInput}
-          />
-          <CloudBrowserCursor
-            cursor={tab.cursor}
-            lastActedAt={tab.lastActedAt}
-            frame={size}
-            hidden={driven || notice !== undefined}
-            onDarkPage={onDarkPage}
-          />
+    <RevealArea root={pane}>
+      <Fill
+        ref={pane}
+        as={FILL_ELEMENT.SECTION}
+        className="browser-view cloud-browser-view file-view"
+        aria-label="Browser"
+        {...revealArea()}
+      >
+        <CloudBrowserBar
+          address={address}
+          onStep={isLive ? live.step : undefined}
+          whyOff={stepsOffOf(view)}
+          onOpen={live.navigate}
+          disabled={!isLive}
+        />
+        <div className={STANDING_CLASS}>
+          <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} truncate>
+            {said ?? ""}
+          </Text>
+          {yours ? (
+            <Button
+              size={BUTTON_SIZE.COMPACT}
+              variant={BUTTON_VARIANT.OUTLINE}
+              icon={<HandIcon aria-hidden="true" />}
+              onClick={live.handBack}
+            >
+              Hand back
+            </Button>
+          ) : (
+            <Button
+              size={BUTTON_SIZE.COMPACT}
+              variant={BUTTON_VARIANT.OUTLINE}
+              icon={<MousePointerClickIcon aria-hidden="true" />}
+              disabled={!isLive}
+              onClick={live.takeOver}
+            >
+              Take over
+            </Button>
+          )}
         </div>
-        {notice === undefined ? null : notice.waiting ? (
-          <div className={NOTICE_CLASS}>
-            <Spinner delay label={notice.label} size={SPINNER_SIZE.REGION} />
+        <PageIntro intro={INTRO.BROWSER} />
+        <Fill clip ref={body} className={BODY_CLASS}>
+          <div className="relative flex-none" style={{ width: size.width, height: size.height }}>
+            <RemoteSurface
+              ref={canvas}
+              label="The page"
+              width={size.width}
+              height={size.height}
+              driving={yours}
+              onPointer={pointerInput}
+              onWheel={wheelInput}
+              onKey={keyInput}
+              onPaste={pasteInput}
+            />
+            <CloudBrowserCursor
+              cursor={tab.cursor}
+              lastActedAt={tab.lastActedAt}
+              frame={size}
+              hidden={driven || notice !== undefined}
+              onDarkPage={onDarkPage}
+            />
           </div>
-        ) : (
-          <div className={NOTICE_CLASS}>
-            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-              {notice.words}
-            </Text>
-            {resumable ? (
-              <Button
-                size={BUTTON_SIZE.COMPACT}
-                variant={BUTTON_VARIANT.OUTLINE}
-                onClick={() => setGeneration((count) => count + 1)}
-              >
-                Watch again
-              </Button>
-            ) : null}
-          </div>
-        )}
+          {notice === undefined ? null : notice.waiting ? (
+            <div className={NOTICE_CLASS}>
+              <Spinner delay label={notice.label} size={SPINNER_SIZE.REGION} />
+            </div>
+          ) : (
+            <div className={NOTICE_CLASS}>
+              <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+                {notice.words}
+              </Text>
+              {resumable ? (
+                <Button
+                  size={BUTTON_SIZE.COMPACT}
+                  variant={BUTTON_VARIANT.OUTLINE}
+                  onClick={() => setGeneration((count) => count + 1)}
+                >
+                  Watch again
+                </Button>
+              ) : null}
+            </div>
+          )}
+        </Fill>
       </Fill>
-    </Fill>
+    </RevealArea>
   );
 }
 

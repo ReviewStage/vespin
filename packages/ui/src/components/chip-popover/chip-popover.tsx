@@ -33,7 +33,10 @@ import { type FootRow, type MenuRow, SearchableMenu } from "../searchable-menu/s
  * of it, named to a reader by the chip's own name; its rows may stand under
  * no heading, with none chosen, and where its owner takes no pick they only
  * say, each hanging its card, so a press on one changes nothing and the
- * popover stays. Under the rows the owner may pin rows of its own
+ * popover stays. Where its owner hands the rows on now (`checked`), a pick
+ * turns one on or off and the popover stays too, its field (`placeholder`)
+ * finding rows listed only once something is searched, as a task's
+ * followers find the members who do not follow yet. Under the rows the owner may pin rows of its own
  * (`SearchableMenu`'s `FootRow`): a press, or a switch a press turns, which
  * act and leave the popover standing. Its title and the facts' labels are
  * the app's own words, which a screen recording shows as they read; a value
@@ -54,6 +57,12 @@ export interface ChipPopoverMenu {
   readonly rows: readonly MenuRow[];
   /** The id of the row chosen now, drawn checked; none where no row is chosen. */
   readonly value?: string | undefined;
+  /** The rows on now, each drawn checked, where a pick turns a row on or off and leaves the popover standing, as a task's followers. */
+  readonly checked?: ReadonlySet<string> | undefined;
+  /** The search field's placeholder; none draws the rows with no field. */
+  readonly placeholder?: string | undefined;
+  /** Heard as the popover puts itself away, as an owner forgets what it held for one visit. */
+  readonly onClosed?: (() => void) | undefined;
   /** Said where no row is listed. */
   readonly noMatch: string;
   /** What a pick does, which puts the popover away; none where the rows only say, so a press changes nothing. */
@@ -114,9 +123,16 @@ export function ChipPopover({
   /** Whether the chip draws its glyph alone, its words kept for a reader. */
   iconOnly?: boolean | undefined;
 } & ChipPopoverBody): React.JSX.Element {
-  const [open, setOpen] = useState(false);
-  const drawn = useDisclosure(open);
   const { menu } = body;
+  const [open, setOpenTo] = useState(false);
+
+  const setOpen = (next: boolean) => {
+    setOpenTo(next);
+
+    if (open && !next) menu?.onClosed?.();
+  };
+
+  const drawn = useDisclosure(open);
   // The title and the facts under it, where the popover holds them.
   const head = body.title === undefined ? undefined : { title: body.title, facts: body.facts };
   const popoverId = useId();
@@ -186,6 +202,8 @@ export function ChipPopover({
           }
           rows={menu.rows.map((row) => ({ ...row, section: menu.heading }))}
           value={menu.value}
+          checked={menu.checked}
+          placeholder={menu.placeholder}
           noMatch={menu.noMatch}
           foot={menu.foot}
           align={POPOVER_ALIGN.START}
@@ -196,7 +214,9 @@ export function ChipPopover({
 
             // Note that rows that only say take no pick, so a press on one leaves the popover standing.
             if (onPick === undefined) return;
-            close();
+
+            // Note that a pick that turns a row on or off leaves the popover standing, so several are turned in one visit.
+            if (menu.checked === undefined) close();
             onPick(id);
           }}
           onClose={close}

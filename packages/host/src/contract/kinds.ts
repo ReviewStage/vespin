@@ -221,6 +221,8 @@ export const AGENT_ACT_KIND = {
   /** Run agents on this Mac turned on or off, from This Mac's row in Settings › Hosts; only the desktop answers it. */
   HOSTS_THIS_MAC_SET: "hosts.thisMacSet",
   HOSTS_PAIRING_READ: "hosts.pairingRead",
+  /** The apps the account's own machines always allow agents to use, each machine's by its name, which an agent's `@` offers where it is typed off the agent's Mac; asked of the service on every host. */
+  HOSTS_ALLOWED_APPS: "hosts.allowedApps",
   HOSTS_PAIRING_APPROVE: "hosts.pairingApprove",
   HOSTS_PAIRING_DENY: "hosts.pairingDeny",
   AGENTS_LIST: "agents.list",
@@ -521,6 +523,8 @@ export const TASKS_ACT_KIND = {
   TASKS_SET_FOLLOWER_MACHINES: "tasks.setFollowerMachines",
   /** Another member of the task's workspace added as a follower on the service, their machines off; answers as a follow does. */
   TASKS_ADD_FOLLOWER: "tasks.addFollower",
+  /** A follower of the task taken away on the service, which the assignee may not be; answers as a follow does. */
+  TASKS_REMOVE_FOLLOWER: "tasks.removeFollower",
   /** The developer's edit of the open task's document, saved on the service; answers saved, a conflict with the text as it stands now, or why nothing was saved. */
   TASKS_EDIT: "tasks.edit",
   /** A page of GitHub's opened in the browser: a repository, or where our GitHub App is installed. No other address opens through it. */
@@ -636,6 +640,15 @@ export const BROWSER_LIVE_ACT_KIND = {
 } as const;
 
 /**
+ * An app on this Mac brought to the front, answered by the platform shell
+ * (`mac-apps.ts`).
+ */
+export const MAC_APP_ACT_KIND = {
+  /** An app an agent is using on this Mac, by its bundle id, brought forward so the developer can take over. */
+  MAC_APP_SHOW: "macApp.show",
+} as const;
+
+/**
  * The Mac's own Terminal opened for a local agent, answered by the platform
  * shell (`mac-terminals.ts`).
  */
@@ -687,13 +700,13 @@ export const MAC_SHELL_ACT_KIND = {
 export type MacShellActKind = (typeof MAC_SHELL_ACT_KIND)[keyof typeof MAC_SHELL_ACT_KIND];
 
 /**
- * A command an agent asked to run on this Mac (`../mac-command-ask.ts`),
+ * A command an agent asked to run on this Mac (`../machine-command-ask.ts`),
  * answered by the developer from the prompt the panel draws over the window:
  * allowed once, allowed always, which also writes Settings › This Mac to
  * Always allow, or denied. Answered by the host, which holds the ask.
  */
-const MAC_COMMAND_ACT_KIND = {
-  MAC_COMMAND_ANSWER: "macCommands.answer",
+const MACHINE_COMMAND_ACT_KIND = {
+  MACHINE_COMMAND_ANSWER: "macCommands.answer",
   COMPUTER_USE_STATUS: "macCommands.computerUseStatus",
   COMPUTER_USE_APPS: "macCommands.computerUseApps",
   COMPUTER_USE_APP_ICON: "macCommands.computerUseAppIcon",
@@ -911,7 +924,8 @@ export const PORT_ACT_KIND = {
   ...CLI_ACT_KIND,
   ...INSTALLED_SKILL_ACT_KIND,
   ...INTEGRATION_ACT_KIND,
-  ...MAC_COMMAND_ACT_KIND,
+  ...MAC_APP_ACT_KIND,
+  ...MACHINE_COMMAND_ACT_KIND,
   ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
@@ -1017,6 +1031,7 @@ export const PORT_ACT_USE = {
   HOSTS_REMOVE: ACT_USE.WRITE,
   HOSTS_THIS_MAC_SET: ACT_USE.WRITE,
   HOSTS_PAIRING_READ: ACT_USE.FETCH,
+  HOSTS_ALLOWED_APPS: ACT_USE.FETCH,
   HOSTS_PAIRING_APPROVE: ACT_USE.WRITE,
   HOSTS_PAIRING_DENY: ACT_USE.WRITE,
   AGENTS_LIST: ACT_USE.READ,
@@ -1116,7 +1131,7 @@ export const PORT_ACT_USE = {
   MCP_CLIENTS_RETRY: ACT_USE.READ,
   MCP_CLIENTS_REVOKE: ACT_USE.WRITE,
 
-  MAC_COMMAND_ANSWER: ACT_USE.WRITE,
+  MACHINE_COMMAND_ANSWER: ACT_USE.WRITE,
   COMPUTER_USE_STATUS: ACT_USE.FETCH,
   COMPUTER_USE_APPS: ACT_USE.FETCH,
   COMPUTER_USE_APP_ICON: ACT_USE.FETCH,
@@ -1135,6 +1150,8 @@ export const PORT_ACT_USE = {
   MAC_SHELL_ACTIONS: ACT_USE.FETCH,
 
   MAC_TERMINAL_LOCAL_AGENT: ACT_USE.WRITE,
+
+  MAC_APP_SHOW: ACT_USE.WRITE,
 
   PORT_FORWARD_SET: ACT_USE.WRITE,
   PORT_SHARE_SET: ACT_USE.WRITE,
@@ -1165,6 +1182,7 @@ export const PORT_ACT_USE = {
   TASKS_UNFOLLOW: ACT_USE.WRITE,
   TASKS_SET_FOLLOWER_MACHINES: ACT_USE.WRITE,
   TASKS_ADD_FOLLOWER: ACT_USE.WRITE,
+  TASKS_REMOVE_FOLLOWER: ACT_USE.WRITE,
   TASKS_EDIT: ACT_USE.WRITE,
   GITHUB_OPEN: ACT_USE.WRITE,
   WEB_OPEN: ACT_USE.WRITE,
@@ -1280,6 +1298,7 @@ export const PORT_ACT_USE = {
 export const PLATFORM_PORT_ACT_KIND = {
   ...BROWSER_LIVE_ACT_KIND,
   ...CLI_ACT_KIND,
+  ...MAC_APP_ACT_KIND,
   ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,

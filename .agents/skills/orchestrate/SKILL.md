@@ -20,8 +20,8 @@ below as that one. You and the workers talk by `message_agent`.
 
 | Action | How |
 | --- | --- |
-| Ask the user | `post_thread` with a `decide` or `answer` ask, which waits for the reply; where another coding agent started you, to it instead, with `message_agent` and its agent id |
-| Tell the user | `post_thread` without an ask, and your reply; where another coding agent started you, to it instead, as above |
+| Ask the user | `post_thread` with a `decide` or `answer` ask, which waits for the reply; where another coding agent started you, also send it the thread's mention with `message_agent` and its agent id |
+| Tell the user | `post_thread` without an ask, and your reply; where another coding agent started you, also send it the thread's mention, as above |
 | Valid model ids | `list_models` |
 | Your id, for reports | Nothing to record: a started agent is told your id and your mention link |
 | Make a PR's subtask | `create_task` with `parentTaskId` set to your own task's id, `name` set to the PR title, and the PR's scope as `description` |
@@ -66,9 +66,9 @@ report. What the user named in the arguments or the conversation wins.
   a production setting, a secret), it settles a product, design, or
   security question the plan left open, it changes what users see in a way
   the plan did not spell out, or the user asked to review it. Mark each
-  held PR in its brief and tell the user which PRs are held and why, through
-  the table's "Ask the user" row with an approval for each (one
-  inbox item per held PR, mentioning it, once it is open and green).
+  held PR in its brief, saying why: its worker asks the user for the go
+  itself, in one thread of its own with its screenshots, once the PR is
+  open and green, and tells you the answer.
 
 **Cleaning up is your job.** Close each subtask and archive each worker as
 soon as its work is done, never in a batch at the end: a PR's subtask and
@@ -88,23 +88,20 @@ shared PR (a tree), each branch-off chain is a stack of its own. Prefer small
 PRs and deep stacks over a few large PRs. Workers never restack: a
 short-lived restack worker restacks a whole stack in one pass (Step 3).
 
-**You alone talk to the user.** Workers report to you and never to the
-user, so the user hears one voice for the whole rollout. A worker
-posts nothing to the developer's inbox, not even the PR it opened: the
-service tells every agent another agent starts that the inbox is its
-starter's, and the brief repeats it. What a worker would have put there (a
-PR ready for review, a question, a decision, a to-do only the user can do by
-hand, such as adding a secret) comes to you as a report, by
-`message_agent`, and you decide what reaches the user. Keep the user's inbox to what needs them: one item per held
-PR asking for its go, a question or a to-do only they can settle, relayed
-under its own thread, and the final report (Step 4). Never pass a worker's
-routine milestones (opened, fix pushed, CI green, merged) on to the user; the
-final report covers them. A worker's picture cannot travel in a message: the
-worker shows it in its own transcript, and your inbox item mentions the
-worker for the user to open it there. Where another coding agent started you,
-the inbox is that agent's, not yours: everything above that would reach the
-user goes to that agent instead, as the table's "Ask the user" and "Tell the
-user" rows say for it.
+**One thing, one thread.** The user hears of each thing once, from the agent
+that holds it. A worker posts in a thread of its own what the user should
+see or settle of its PR: the go for a held PR, a screenshot or a recording
+of what it built, a question about its PR only the user can answer, a to-do
+only they can do by hand, such as adding a secret. It has the pictures and
+the context, so its thread carries them, and it sends you the thread's
+mention by `message_agent`. You post nothing on a thing a worker's thread
+already holds; mention that thread where you need to. Your own threads are
+for what no one worker holds: a decision that spans PRs, a change to the plan
+itself, and the final report (Step 4). Nobody posts routine milestones
+(opened, fix pushed, CI green, merged); a merge-on-green PR that needs nothing
+of the user gets no thread of its own, and the final report covers it. The service tells every agent
+another agent starts the same: post its own threads, and send its starter
+their mentions.
 
 ## Step 1: Make each subtask and kick off its worker
 
@@ -151,13 +148,16 @@ Every brief must contain:
 3. **Babysit and merge**: watch CI and review comments on the PR, fix what
    fails, and merge as root `AGENTS.md`'s "Merging" says. Say which of the
    two applies: merge on green, taking the kickoff as the go (the default),
-   or hold for an explicit go from the orchestrator, for a PR that needs the
-   user's attention, saying why. A worker on merge-on-green that finds the
-   PR needs the user after all (a review comment it should not settle alone,
-   a change that grew past its brief) does not merge: it first disarms the
-   merge it armed (`gh pr merge --disable-auto`, which also takes the PR out
-   of the merge queue), then reports blocked and waits, and re-arms it only
-   on the orchestrator's go. A PR based on another PR merges only once that
+   or hold for the user's explicit go, for a PR that needs the user's
+   attention, saying why: once the PR is open and green, the worker asks the
+   user for the go itself, in one thread of its own with its screenshots
+   (an Approve or Request changes `decide`), and merges on the answer. A
+   worker on merge-on-green that finds the PR needs the user after all (a
+   review comment it should not settle alone, a change that grew past its
+   brief) does not merge: it first disarms the merge it armed (`gh pr merge
+   --disable-auto`, which also takes the PR out of the merge queue), asks the
+   user in a thread of its own, reports blocked on that thread, and re-arms
+   it only on the user's go. A PR based on another PR merges only once that
    PR has merged and the restack has retargeted it to `main`.
 4. **Report back, do not wait to be asked**: on each milestone (opened, fix
    pushed, CI green, blocked, merged) tell the orchestrator, as the table's
@@ -170,17 +170,18 @@ Every brief must contain:
 
    Also tell it to answer any message the orchestrator sends it, and the
    other workers' PRs and agent ids, and that it messages them too, where
-   their work meets: a shared file, an interface, a PR it builds on. It
-   reports to the orchestrator only, never to the user: it posts nothing to
-   the developer's inbox, and sends the orchestrator instead whatever it would
-   have posted there.
+   their work meets: a shared file, an interface, a PR it builds on. What
+   the user should see or settle of its PR it posts in a thread of its own,
+   pictures drawn in it, and sends the orchestrator that thread's mention;
+   it posts no routine milestone, and no thread at all for a merge-on-green
+   PR that needs nothing of the user.
 5. **Ask, do not guess**: when the task is ambiguous, the plan and the code
    disagree, or a choice would change a PR's shape, send the question to the
    orchestrator the same way and wait for the answer instead of picking an
-   interpretation. So does anything only the user can do by hand (a secret,
-   a repository setting, a test on their Mac): the worker asks the
-   orchestrator, which puts it to the user. The orchestrator holds the
-   whole plan and the user's intent; the worker holds one PR. Small
+   interpretation. The orchestrator holds the whole plan and the user's
+   intent; the worker holds one PR. What only the user can settle or do of
+   its own PR (a secret, a repository setting, a test on their Mac) the
+   worker asks the user in a thread of its own, as item 4 says. Small
    judgment calls stay with the worker.
 
 Keep each PR's subtask (its id and its mention), its worker's ids (its agent
@@ -196,15 +197,17 @@ and each message arrives as a new turn; a worker's
 - **PR opened**: if a PR is waiting on this one, kick its worker off now
   (Step 1) with this PR's branch as its base.
 - **Fix pushed**: if any PR builds on this one, restack (Step 3).
-- **CI green on a held PR**: ask the user for the go (Arguments, above), and
-  relay it to the worker when it comes.
+- **Asked the user**: a worker sends you the mention of a thread it posted.
+  Post nothing of your own on that thing; its answer reaches the worker,
+  which tells you.
 - **Question or blocked**: answer from the plan and the other PRs' state,
-  replying to that worker as the table's "Message a worker" row says. Escalate to the user only when the decision or the
-  to-do is theirs, through the table's "Ask the user" row, and relay the
-  answer back yourself. A merge-on-green PR that
-  turns out to need the user becomes a held PR: if it is already open and
-  green (`gh pr checks <number>`), ask the user for the go now, since no
-  later green report will come to prompt it; otherwise ask on its next one.
+  replying to that worker as the table's "Message a worker" row says. Where
+  the question is the user's and is about that one PR, tell the worker to
+  ask the user in a thread of its own; where it spans PRs or changes the
+  plan, ask the user yourself through the table's "Ask the user" row, and
+  relay the answer to each worker it concerns. A merge-on-green PR that
+  turns out to need the user becomes a held PR: tell its worker to disarm
+  its merge and ask the user for the go itself.
 - **Merged**: if any PR builds on this one, restack (Step 3), which also
   retargets the PR above to `main`. Close the merged PR's subtask and archive
   its worker now, as the table says.
@@ -294,8 +297,12 @@ unless another coding agent started you on it.
 ## Rules
 
 - Never do the PR's implementation work yourself.
-- Only you talk to the user. Workers report to you and never post to the
-  user's inbox; you relay what needs the user and nothing routine.
+- One thing, one thread. A worker posts what the user should see or settle
+  of its PR, pictures included, and sends you the mention; you never post a
+  second thread on something a worker's thread holds, and keep your own
+  threads to what spans PRs and the final report. Nobody posts routine
+  milestones, and a merge-on-green PR that needs nothing of the user gets no
+  thread.
 - Point the user at a worker or PR with a deep link or mention, not an id.
 - One PR per subtask and per worker. Do not reuse a worker or a subtask for
   a second PR; a continuation of a worker takes over its source's PR on its

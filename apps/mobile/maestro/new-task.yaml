@@ -1,4 +1,4 @@
-# new-task.yaml -- New task from the tab bar's round +: Home's composer as a sheet, the task described, its repository and model picked, and the task started with its agent, the agent's page opened; then a task related to another and filed for later with no agent, its page opened; then a draft that Cancel asks before discarding; then a picture attached through the sheet's +, which keeps the sheet as a draft too.
+# new-task.yaml -- New task from the tab bar's round +: Home's composer as a compose sheet, the task described, its repository picked from its capsule over the keyboard, and the task started with its agent, the agent's page opened; then a task related to another from the sheet's + and filed for later with no agent, its page opened; then a draft that Cancel asks before discarding; then a picture attached through the sheet's + Photos, which keeps the sheet as a draft too.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -14,18 +14,16 @@ appId: dev.vespin.ios
 - assertVisible: "Inbox"
 - tapOn: "New task"
 - assertVisible: "Describe the task"
-- assertVisible: "Repository"
+- assertVisible: "ada/relay"
 - waitForAnimationToEnd
 - takeScreenshot: new-task-sheet
 - inputText: "Let a workspace owner revoke a pending invite."
 # Note that iOS's hideKeyboard is a short drag at the screen's middle, which
-# lowers the keyboard because the sheet's form lowers it on a drag
-# (`SettingsForm`); the words field's return key types a new line.
+# lowers the keyboard because the sheet's page lowers it on a drag
+# (`ComposeSheet`); the words field's return key types a new line.
 - hideKeyboard
-# The repository's menu offers what the workspace's GitHub reaches. Note
-# that the menu is opened from the value its row shows, "ada/relay", since
-# the system's menu picker in a form opens from its value alone, never from
-# a press on its row's words.
+# The repository's capsule, which says the one picked, opens a menu of what
+# the workspace's GitHub reaches.
 - tapOn: "ada/relay"
 - assertVisible: "ada/ledger"
 - waitForAnimationToEnd
@@ -50,11 +48,15 @@ appId: dev.vespin.ios
 - assertVisible: "Describe the task"
 - inputText: "Audit the invite emails for broken links."
 - hideKeyboard
-# The relation's menu is opened from its value, "None" until one is picked.
-- tapOn: "None"
+# A relation is picked from the sheet's + menu: Task relation, its kind,
+# then the task it names; it then stands over the words as a capsule.
+- tapOn:
+    id: "new-task-attach"
+- tapOn: "Task relation"
 - tapOn: "Blocked by"
+- tapOn: "Teammate invitations"
 - waitForAnimationToEnd
-- assertVisible: "Task, .*"
+- assertVisible: "Blocked by · Teammate invitations"
 - takeScreenshot: new-task-relation
 - tapOn: "File for later"
 - extendedWaitUntil:
@@ -80,8 +82,8 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     notVisible: "Describe the task"
     timeout: 5000
-# A picture attaches through the sheet's +, which opens the system's photo
-# picker on the library `media/invite-bug.png` was added to. Note that the
+# A picture attaches through the sheet's + menu's Photos, which opens the
+# system's photo picker on the library `media/invite-bug.png` was added to. Note that the
 # picker's grid names its photos differently by iOS version, so it is tried
 # by each name, as Maestro's own gallery recipe does, and confirms with Add,
 # or Done as iOS 27.2 names it; and that a sheet with a picture and no words
@@ -99,6 +101,7 @@ appId: dev.vespin.ios
 - takeScreenshot: new-task-add
 - tapOn:
     id: "new-task-attach"
+- tapOn: "Photos"
 - extendedWaitUntil:
     visible: "Select up to .*"
     timeout: 10000

@@ -14,7 +14,7 @@ import type {
 import { DOCUMENT_REGION, RENAME_FAILED_NOTE, TASKS_PAGE } from "@repo/features/tasks-model";
 import { placeOfTaskTarget, TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
 import { readingWords } from "@repo/features/words";
-import { EXPERIMENT } from "@repo/settings";
+import { EXPERIMENT, INTRO } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BackButton,
@@ -58,6 +58,7 @@ import { LinkWorkspaceProvider } from "../copy-link-item.js";
 import { failureShown, unreadShown } from "../failure-report.js";
 import { FIND_PAGE, FindScope, PageFind } from "../find-in-tab.js";
 import { MemberDirectory } from "../member-directory.js";
+import { PageIntro } from "../page-intro.js";
 import { HERE } from "../places/pressed-address.js";
 import { useAutomationsDoor, useVersionHistoryDoor } from "../places/routed-doors.js";
 import { renameWrite } from "../rename-write.js";
@@ -96,7 +97,6 @@ import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
-import { askTurnFileReveal } from "../tasks/turn-file-reveal.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
@@ -215,6 +215,9 @@ import { useStandingDoor } from "./task-row-parts.js";
 
 /** What the task's page says to a reader while the task is read. */
 const TASK_LOADING_LABEL = readingWords("the task");
+
+/** The Overview's first-visit card, one element across draws, since the description it stands in is drawn again only for a new one. */
+const OVERVIEW_INTRO = <PageIntro intro={INTRO.TASK_OVERVIEW} />;
 
 /**
  * The task's page as it and its placeholder stand it: the column, its
@@ -798,9 +801,8 @@ function DescriptionDocument({
   const pullRequestCardDoor = useSteadyDoor(pullRequestCard);
   const openMentionedFileDoor = useSteadyDoor(openMentionedFile);
 
-  // A turn's files row opens the turn's Changes tab standing on the file pressed (`turn-file-reveal.ts`).
-  const openTurnChangesDoor = useSteadyDoor((agentId: string, messageId: string, path: string) => {
-    askTurnFileReveal(agentId, messageId, path);
+  // A turn's count of files opens the turn's Changes tab.
+  const openTurnChangesDoor = useSteadyDoor((agentId: string, messageId: string) => {
     onPressTab({ kind: TAB_PRESS.PANEL, tab: turnChangesTab(agentId, messageId) });
   });
 
@@ -1398,6 +1400,7 @@ function DescriptionDocument({
           sectionLinks={sectionLinks}
           standing={standing}
           head={descriptionHead}
+          intro={OVERVIEW_INTRO}
           titleActions={!phone}
           shown={overviewShown}
         />

@@ -335,6 +335,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   hosts: {
     list: INTERNAL,
     presence: INTERNAL,
+    // The apps a member's machines always allow are offered in an agent's `@` list; a member's agent reads its own machine's with `computer`.
+    allowedApps: SCREEN_ONLY,
     remove: INTERNAL,
     readPairing: INTERNAL,
     approvePairing: INTERNAL,
@@ -396,13 +398,15 @@ export const MEMBER_MCP_EXCLUSIONS = {
     answerRequest: INTERNAL,
   },
   liveActivities: { startToken: INTERNAL, activityToken: INTERNAL, ended: INTERNAL },
-  macCommands: {
+  machineCommands: {
     waiting: INTERNAL,
     settle: INTERNAL,
+    recording: INTERNAL,
     claim: INTERNAL,
     listening: INTERNAL,
     join: INTERNAL,
     saveDeviceSettings: INTERNAL,
+    saveDeviceAppLooks: INTERNAL,
   },
   pullRequests: { reviewOptions: SCREEN_ONLY },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },
@@ -419,6 +423,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     unfollow: MEMBER_ONLY,
     setMachines: MEMBER_ONLY,
     add: MEMBER_ONLY,
+    remove: MEMBER_ONLY,
   },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },

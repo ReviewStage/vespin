@@ -68,7 +68,7 @@ const WEB = {
     "The tab opens a Browser tab's live view socket itself (web-browser-live.ts)",
   ),
   MAC: byDesign("Reaches the Mac's own shells, loopback, or Terminal, which a tab cannot"),
-  MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
+  MACHINE_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
   MAC_PHOTO: byDesign(
     "A tab cannot run sips; Safari decodes a HEIC itself, and another browser says to export it as JPEG",
   ),
@@ -116,7 +116,13 @@ const IOS = {
   ),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
-  MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
+  MACHINE_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
+  FOLLOWERS: notYet(
+    "iOS's Following sheet adds a follower but leaves taking one away to the desktop and the web for now",
+  ),
+  MENTION_APPS: notYet(
+    "iOS's composers offer skills after a `/` and no `@` list yet, so no app is offered to mention",
+  ),
   MERGE_QUEUE: notYet("iOS leaves the Merge queue page to the desktop and the web for now"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
   NOTIFICATIONS: byDesign("iOS's Settings screen opens the system's settings itself"),
@@ -231,6 +237,7 @@ export const CLIENT_PARITY = {
     byDesign("Runs agents on the Mac the app is on, which a tab is not"),
     byDesign("Runs agents on the Mac the app is on, which a phone is not"),
   ),
+  [PORT_ACT_KIND.HOSTS_ALLOWED_APPS]: panel(IOS.MENTION_APPS),
   [PORT_ACT_KIND.HOSTS_PAIRING_READ]: EVERYWHERE,
   [PORT_ACT_KIND.HOSTS_PAIRING_APPROVE]: EVERYWHERE,
   [PORT_ACT_KIND.HOSTS_PAIRING_DENY]: EVERYWHERE,
@@ -331,7 +338,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MCP_CLIENTS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.MCP_CLIENTS_REVOKE]: EVERYWHERE,
 
-  [PORT_ACT_KIND.MAC_COMMAND_ANSWER]: desktopOnly(WEB.MAC_COMMAND, IOS.MAC_COMMAND),
+  [PORT_ACT_KIND.MACHINE_COMMAND_ANSWER]: desktopOnly(WEB.MACHINE_COMMAND, IOS.MACHINE_COMMAND),
   [PORT_ACT_KIND.COMPUTER_USE_STATUS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.COMPUTER_USE_APPS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.COMPUTER_USE_APP_ICON]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
@@ -350,6 +357,8 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MAC_SHELL_ACTIONS]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
 
   [PORT_ACT_KIND.MAC_TERMINAL_LOCAL_AGENT]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
+
+  [PORT_ACT_KIND.MAC_APP_SHOW]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
 
   [PORT_ACT_KIND.PORT_FORWARD_SET]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.PORT_SHARE_SET]: desktopOnly(WEB.MAC, IOS.DESKTOP_ONLY),
@@ -381,6 +390,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_UNFOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_ADD_FOLLOWER]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_REMOVE_FOLLOWER]: panel(IOS.FOLLOWERS),
   [PORT_ACT_KIND.GITHUB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.WEB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.GITHUB_CONNECT]: panel(IOS.SETTINGS),

@@ -234,7 +234,7 @@ test("an installed skill's chip is no button, yet takes the focus for its card, 
   assert.equal(repository?.querySelector(".ui-hover-card-sub")?.textContent, "Repository skill");
 });
 
-test("a /compact opening a message is the command's chip in the composer and in its sent bubble, hanging the command's card and opening nothing, while one later in the words stays words", async () => {
+test("a /compact opening a message is the command's chip in the composer and in its sent bubble, hanging the command's card and opening nothing, while one later in the words, and a /goal with the Goals experiment off, stay words", async () => {
   const { container } = await mounted(
     createElement(
       "div",
@@ -242,6 +242,8 @@ test("a /compact opening a message is the command's chip in the composer and in 
       createElement(Composer, { words: "/compact keep the plan", commands: true }),
       createElement(SentWords, { text: "/compact keep the plan" }),
       createElement(SentWords, { text: "Then /compact again." }),
+      createElement(Composer, { words: "/goal every test passes", commands: true }),
+      createElement(SentWords, { text: "/goal every test passes" }),
     ),
   );
 

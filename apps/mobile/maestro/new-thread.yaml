@@ -1,4 +1,4 @@
-# new-thread.yaml -- a thread's box turned to start a new thread with its agent, from the thread's ⋯ menu and back from the composer's +, its line asking for the new thread while it is on.
+# new-thread.yaml -- a thread's box turned to start a new thread with its agent from the composer's +, and back, its line asking for the new thread while it is on.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -19,22 +19,21 @@ appId: dev.vespin.ios
 - tapOn: "acceptInvite can add a member twice"
 - assertVisible: "Reply"
 - waitForAnimationToEnd
-# New thread, from the thread's ⋯ menu: the box asks for a new thread, and
-# Got it steps aside, since the next send starts one rather than settling.
-- tapOn:
-    text: "More"
-    index: -1
-- tapOn: "New thread"
-- assertVisible: "Start a new thread"
-- assertNotVisible: "Got it"
-- waitForAnimationToEnd
-- takeScreenshot: new-thread-box
-# The composer's + holds the same choice as a switch, named for the agent;
-# turning it off has the box reply again.
+# New thread, from the composer's +: a switch named for the agent, which has
+# the box ask for a new thread, and Got it steps aside, since the next send
+# starts one rather than settling.
 - tapOn:
     id: "composer-add"
 - assertVisible: "Send as a new thread to.*"
 - takeScreenshot: new-thread-switch
+- tapOn: "Send as a new thread to.*"
+- waitForAnimationToEnd
+- assertVisible: "Start a new thread"
+- assertNotVisible: "Got it"
+- takeScreenshot: new-thread-box
+# Turning the switch off has the box reply again.
+- tapOn:
+    id: "composer-add"
 - tapOn: "Send as a new thread to.*"
 - waitForAnimationToEnd
 - assertVisible: "Reply"

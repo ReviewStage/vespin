@@ -17,6 +17,7 @@ import {
   type DescriptionLastEdit,
   type DescriptionSectionEdit,
   isTaskSettled,
+  TASK_BLOCK_RELATION,
   TASK_MODE,
   TASK_PRIORITY,
   TASK_STATUS,
@@ -64,6 +65,7 @@ import {
   lockTasksForBlocks,
   readTaskBlocks,
   taskBlockedFor,
+  taskBlockIdsFor,
 } from "./task-block-store.js";
 import { followReassignedTask, followStartedTask } from "./task-follower-store.js";
 import { forwardTaskNumber } from "./task-number-store.js";
@@ -356,6 +358,8 @@ const TaskListRowSchema = Schema.Struct({
   pinPosition: Schema.NullOr(Schema.String),
   ...ReaderMarkSchema.fields,
   blocked: Schema.Boolean,
+  blockedBy: Schema.Array(Schema.String),
+  blocks: Schema.Array(Schema.String),
   madeByRun: Schema.Boolean,
 });
 
@@ -939,6 +943,8 @@ const findTasks = SqlSchema.findAll({
           pinPosition: taskPin.position,
           ...READER_MARK_COLUMNS,
           blocked: taskBlockedFor(userId),
+          blockedBy: taskBlockIdsFor(userId, TASK_BLOCK_RELATION.BLOCKED_BY),
+          blocks: taskBlockIdsFor(userId, TASK_BLOCK_RELATION.BLOCKS),
           madeByRun: taskMadeByRun(task.id),
         })
         .from(task)
@@ -1437,7 +1443,8 @@ export function createTaskOnce(
  * pinning, and settling one leave every row where it stood, and the order a
  * pin draws is the window's to draw from `pinPosition` and `pinnedAt`. A
  * task waiting on an open task the account reaches is marked blocked
- * (`taskBlockedFor`), and one an automation's run made for itself is marked
+ * (`taskBlockedFor`) and names the tasks it waits on and that wait on it
+ * (`taskBlockIdsFor`), and one an automation's run made for itself is marked
  * so (`taskMadeByRun`).
  */
 export function listTasks(userId: string): TaskStoreEffect<readonly TaskSummary[]> {
@@ -1455,6 +1462,8 @@ export function listTasks(userId: string): TaskStoreEffect<readonly TaskSummary[
         devices,
       ),
       ...(row.blocked ? { blocked: true } : undefined),
+      blockedBy: row.blockedBy,
+      blocks: row.blocks,
       ...(row.madeByRun ? { madeByRun: true } : undefined),
     }));
   });

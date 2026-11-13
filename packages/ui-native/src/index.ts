@@ -1,5 +1,7 @@
 // index.ts -- @repo/ui-native: the iOS app's components over @expo/ui's SwiftUI, its Markdown in React Native views, and the brand's tokens they draw with.
 
+export { useAnnounced } from "./accessibility.js";
+
 export { AccountBarItem, AccountButton, type BarAccount } from "./account-button.js";
 
 export {
@@ -37,6 +39,13 @@ export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
 
+export {
+  type ChipMenu,
+  type ChipMenuGroup,
+  ComposeSheet,
+  MenuChip,
+} from "./compose-sheet.js";
+
 export { Composer, ComposerFoot, type ComposerMenu } from "./composer.js";
 
 export {
@@ -58,15 +67,23 @@ export {
 
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
 
-export { AttachRow, MenuPickRow, SkillRow, WordsField } from "./form-rows.js";
+export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
 
 export { GlassBar, GlassDock } from "./glass-bar.js";
 
-export { GLYPH, type Glyph, glyphSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
+export {
+  GLYPH,
+  type Glyph,
+  glyphSymbol,
+  type LucideSymbol,
+  type MarkLook,
+  sectionGlyph,
+} from "./glyph.js";
 
 export { BUZZ, type Buzz, buzz } from "./haptics.js";
 
 export {
+  DeniesWaiting,
   HELD_ANSWER,
   type HeldAnswer,
   type HeldCall,
@@ -116,11 +133,13 @@ export {
   WorkingMark,
 } from "./marks.js";
 
+export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
+
 export { monogramOf } from "./monogram.js";
 
 export { type HintOption, HintPickRows, RenameAsk, SwitchRow } from "./option-rows.js";
 
-export { type PageFollowing, PageHeader } from "./page-header.js";
+export { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 
 export {
   PROVIDER_MARK_ASSET,
@@ -140,6 +159,7 @@ export {
   ConfirmAsk,
   MarkRow,
   MergeActRow,
+  type MergeMethodChoice,
   PullRequestHead,
   WORDS_ASK_KIND,
   WordsAsk,
@@ -150,7 +170,14 @@ export {
 
 export { RemindSheet } from "./remind-sheet.js";
 
-export { LIST_LOOK, type ListLook, ListSection, RowForEach, RowList } from "./row-list.js";
+export {
+  LIST_LOOK,
+  type ListLook,
+  ListSection,
+  type RowChoosing,
+  RowForEach,
+  RowList,
+} from "./row-list.js";
 
 export { AgentPreview, type PreviewAgent, TaskPreview, ThreadPreview } from "./row-preview.js";
 
@@ -195,7 +222,11 @@ export {
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  KeptColumns,
+  type KeptView,
+  SplitOverTabs,
   SplitView,
+  UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 
 export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
@@ -241,9 +272,15 @@ export { MARK_SIZE, SPACE } from "./tokens/space.js";
 
 export { BAR_TITLE, TYPE_ROLE } from "./tokens/type.js";
 
-export { AgentHead, AgentTranscript, type OlderPages } from "./transcript.js";
+export {
+  AgentHead,
+  AgentTranscript,
+  type OlderPages,
+  type TranscriptReveal,
+} from "./transcript.js";
 
 export {
+  drawnCallIds,
   NO_TOGGLES,
   openCuts,
   shownMediaIds,
@@ -254,6 +291,7 @@ export {
   transcriptItems,
   transcriptOriginOf,
   withSending,
+  withWaitingLine,
 } from "./transcript-model.js";
 
 export {

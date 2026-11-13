@@ -1,5 +1,5 @@
 /**
- * live-activity-module.ts -- the app's native Live Activity module (`modules/live-activity/`) as JavaScript reads it: the tokens it hands on, an activity's end, the Stop button's requests, a fixture's activity, and the Inbox widget drawn again.
+ * live-activity-module.ts -- the app's native Live Activity module (`modules/live-activity/`) as JavaScript reads it: the tokens it hands on, an activity's end, the Stop button's requests, the phone it sends a background token beside, a fixture's activity, and the Inbox widget drawn again.
  *
  * The module is the app's own, autolinked from `modules/`, so it stands in
  * every build of the app. It is optional here all the same, so a build
@@ -8,6 +8,14 @@
  */
 
 import { type NativeModule, requireOptionalNativeModule } from "expo";
+
+/** The phone as the module keeps it: the service to reach, the phone as the service names it, and the headers the app names itself by. */
+export interface KeptPhone {
+  readonly origin: string;
+  readonly deviceToken: string;
+  readonly environment: string;
+  readonly headers: Readonly<Record<string, string>>;
+}
 
 /** What the module hands on, each as an event. */
 type LiveActivityEvents = {
@@ -26,6 +34,8 @@ declare class LiveActivityModule extends NativeModule<LiveActivityEvents> {
   answerStop(request: string): void;
   /** Starts an activity on the phone from a content state's JSON, as a fixture run does. */
   startFixture(contentState: string): Promise<void>;
+  /** Keeps the phone the service holds, as JSON (`KeptPhone`), so an update token iOS hands while the app is in the background is sent from Swift at once; none forgets it. */
+  keepPhone(phone: string | null): void;
   /** Ends every activity of the app's at once. */
   endAll(): Promise<void>;
   /** Has WidgetKit draw the Inbox widget again, from the snapshot the app just kept in the App Group. */

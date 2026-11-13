@@ -28,6 +28,7 @@ import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-rout
 import { useEffect, useRef, useState } from "react";
 import { useHostActs } from "../host/host-provider.js";
 import { useOpenLink } from "../open-link.js";
+import { useOnOwnTab } from "../tab-route.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import {
   HISTORY_READ,
@@ -73,6 +74,7 @@ function versionLine(line: DescriptionRevisionLine, newest: boolean, now: number
 export function HistoryScreen() {
   const { id = "" } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const history = useTaskHistory(id);
   const now = Date.now();
   const revisions = history.page?.revisions ?? [];
@@ -105,7 +107,7 @@ export function HistoryScreen() {
               detail={versionLine(line, line.seq === newest, now)}
               onPress={() =>
                 router.push({
-                  pathname: VERSION_ROUTE,
+                  pathname: onOwnTab(VERSION_ROUTE),
                   params: {
                     id,
                     seq: String(line.seq),

@@ -1,5 +1,11 @@
 // glyph.ts -- every glyph the app draws, by what it marks: the panel's own Lucide glyph for each place and its own task status marks from the app's asset catalog, and the few iOS draws its own way as SF Symbols.
 
+import {
+  TASK_SECTION_GLYPH,
+  TASK_SECTION_ICON_KIND,
+  type TaskSectionGlyph,
+  type TaskSectionIcon,
+} from "@repo/features/task-section-wire";
 import type { SfSymbol } from "./sf-symbol.js";
 import type { StatusTone } from "./tokens/colors.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
@@ -134,6 +140,7 @@ export const GLYPH = {
   MARK_READ: lucide(LUCIDE_SYMBOL.MAIL_OPEN),
   MARK_UNREAD: lucide(LUCIDE_SYMBOL.MAIL),
   MARK_ALL_READ: lucide(LUCIDE_SYMBOL.CHECK_CHECK),
+  SELECT: lucide(LUCIDE_SYMBOL.LIST_CHECKS),
   ARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE),
   UNARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE_RESTORE),
   MOVE: lucide(LUCIDE_SYMBOL.FOLDER_INPUT),
@@ -197,6 +204,40 @@ export const GLYPH = {
   MCP_TOOL: system("wrench.and.screwdriver"),
   MCP_CLIENTS: system("app.connected.to.app.below.fill"),
 } as const;
+
+/** Each glyph the panel's section icon picker suggests (`TASK_SECTION_GLYPH`), as its Lucide glyph, so a section wears on the phone the icon its member chose. */
+const SECTION_GLYPH: Readonly<Record<TaskSectionGlyph, Glyph>> = {
+  [TASK_SECTION_GLYPH.FOLDER]: lucide(LUCIDE_SYMBOL.FOLDER),
+  [TASK_SECTION_GLYPH.STAR]: lucide(LUCIDE_SYMBOL.STAR),
+  [TASK_SECTION_GLYPH.BOOKMARK]: lucide(LUCIDE_SYMBOL.BOOKMARK),
+  [TASK_SECTION_GLYPH.FLAG]: lucide(LUCIDE_SYMBOL.FLAG),
+  [TASK_SECTION_GLYPH.ROCKET]: lucide(LUCIDE_SYMBOL.ROCKET),
+  [TASK_SECTION_GLYPH.ZAP]: lucide(LUCIDE_SYMBOL.ZAP),
+  [TASK_SECTION_GLYPH.BUG]: lucide(LUCIDE_SYMBOL.BUG),
+  [TASK_SECTION_GLYPH.FLASK]: lucide(LUCIDE_SYMBOL.FLASK_CONICAL),
+  [TASK_SECTION_GLYPH.BRIEFCASE]: lucide(LUCIDE_SYMBOL.BRIEFCASE),
+  [TASK_SECTION_GLYPH.LAYERS]: lucide(LUCIDE_SYMBOL.LAYERS),
+  [TASK_SECTION_GLYPH.HEART]: lucide(LUCIDE_SYMBOL.HEART),
+  [TASK_SECTION_GLYPH.CIRCLE]: lucide(LUCIDE_SYMBOL.CIRCLE),
+};
+
+/** Whether a glyph's name is one the section icon picker suggests. */
+function isSectionGlyph(name: string): name is TaskSectionGlyph {
+  return Object.hasOwn(SECTION_GLYPH, name);
+}
+
+/**
+ * The glyph a section leads with, as the panel's sidebar draws its icon: the
+ * glyph its member chose from the picker's suggestions; the folder, the
+ * picker's first, for an emoji, a glyph the app's catalog doesn't hold, or
+ * no icon, since a sidebar row always leads with a glyph. Note that a
+ * glyph's color is left to the panel, which alone draws it.
+ */
+export function sectionGlyph(icon: TaskSectionIcon | undefined): Glyph {
+  if (icon === undefined || icon.kind === TASK_SECTION_ICON_KIND.EMOJI) return GLYPH.FOLDER;
+
+  return isSectionGlyph(icon.glyph) ? SECTION_GLYPH[icon.glyph] : GLYPH.FOLDER;
+}
 
 /** The glyphs the asset catalog holds, Lucide's and the task status marks, rather than the system's symbols. */
 const CATALOG_SYMBOLS: ReadonlySet<string> = new Set([

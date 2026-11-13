@@ -724,14 +724,16 @@ const decodeCodexConfig = Schema.decodeUnknownSync(CodexConfigSchema);
 const decodeInputLine = Schema.decodeUnknownSync(InputLineSchema);
 
 /** A launch's config, of either harness, read whole: a key its schema does not name fails the read. */
-export const readRunnerConfig = (input: UnparsedWireValue): RunnerConfig => decodeRunnerConfig(input, WHOLE);
+export const readRunnerConfig = (input: UnparsedWireValue): RunnerConfig =>
+  decodeRunnerConfig(input, WHOLE);
 
 /** A Claude Code launch's config, read whole: a key its schema does not name fails the read. */
 export const readClaudeCodeConfig = (input: UnparsedWireValue): ClaudeCodeConfig =>
   decodeClaudeCodeConfig(input, WHOLE);
 
 /** A Codex launch's config, read whole: a key its schema does not name fails the read. */
-export const readCodexConfig = (input: UnparsedWireValue): CodexConfig => decodeCodexConfig(input, WHOLE);
+export const readCodexConfig = (input: UnparsedWireValue): CodexConfig =>
+  decodeCodexConfig(input, WHOLE);
 
 /** A line a runner is handed, read whole: a key its schema does not name fails the read. */
 export const readInputLine = (input: UnparsedWireValue): InputLine => decodeInputLine(input, WHOLE);

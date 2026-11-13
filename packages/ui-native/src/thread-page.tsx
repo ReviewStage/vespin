@@ -1,11 +1,13 @@
-// thread-page.tsx -- an Inbox thread: its path small in the bar, its title as the page's heading, then each message flat, its writer's face or tile, name and time in SwiftUI and its words, pictures, videos, and files in React Native views.
+// thread-page.tsx -- an Inbox thread: its path small in the bar, a menu of what it opens, its title as the page's heading, then each message flat, its writer's face or tile, name and time in SwiftUI and its words, pictures, videos, and files in React Native views.
 
 import {
   HStack,
   Image,
+  Menu,
   RNHostView,
   ScrollView,
   Spacer,
+  Button as SwiftUIButton,
   Text,
   Toolbar,
   ToolbarItem,
@@ -14,7 +16,9 @@ import {
 import {
   accessibilityAddTraits,
   accessibilityElement,
+  accessibilityHidden,
   accessibilityLabel,
+  disabled,
   font,
   foregroundStyle,
   frame,
@@ -30,13 +34,15 @@ import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
+import { BarContent } from "./bar-content.js";
 import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage } from "./glyph.js";
+import { actContent } from "./glyph-label.js";
 import { CopyWordsSwiftMenu } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
-import { type BarMenu, BarMenuButton } from "./split-view.js";
+import { BAR_ITEM_MENU, type BarMenu, BarMenuItem } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -113,6 +119,8 @@ type ThreadPageProps = {
   readonly path: readonly string[];
   /** The status of the task it stands in, its ring leading the path; none for an agent's own thread. */
   readonly status?: TaskStatus | undefined;
+  /** What the path opens, such as its task and its agent, as the panel's crumbs open them, which a press on the path offers as a menu; none leaves it words alone. */
+  readonly pathActions?: BarMenu["actions"] | undefined;
   /** The thread's title, which heads the page. */
   readonly title: string;
   readonly messages: readonly ThreadMessage[];
@@ -174,12 +182,21 @@ function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standi
 /**
  * A split view's detail column's bar: a page's path, small and muted after
  * its task's ring, in the bar's middle, as a compact window's stack draws it
- * in its own bar.
+ * in its own bar. Given what it opens, the path is a menu of them under a
+ * small chevron, as iOS's own title menus stand, so a thread leads to its
+ * task and its agent as the panel's crumbs do.
  */
-export function PathTitle({ path, status }: Pick<ThreadPageProps, "path" | "status">) {
+export function PathTitle({
+  path,
+  status,
+  actions = [],
+}: Pick<ThreadPageProps, "path" | "status"> & {
+  readonly actions?: BarMenu["actions"] | undefined;
+}) {
   const colors = useColors();
+  const words = path.join(PATH_PART);
 
-  return (
+  const title = (
     <HStack spacing={SPACE.TIGHT + 2}>
       {status === undefined ? null : <TaskStatusMark status={status} />}
       <Text
@@ -189,9 +206,33 @@ export function PathTitle({ path, status }: Pick<ThreadPageProps, "path" | "stat
           lineLimit(1),
         ]}
       >
-        {path.join(PATH_PART)}
+        {words}
       </Text>
+      {actions.length === 0 ? null : (
+        <Image
+          {...glyphImage(GLYPH.UNFOLDED)}
+          size={MARK_SIZE.GLYPH - 4}
+          color={colors.TEXT_MUTED}
+          modifiers={[accessibilityHidden(true)]}
+        />
+      )}
     </HStack>
+  );
+
+  if (actions.length === 0) return title;
+
+  return (
+    // Note that the menu takes a bar item's plain look, so the bar's glass is the one layer around the path, as the ⋯ stands.
+    <Menu label={title} modifiers={[...BAR_ITEM_MENU, accessibilityLabel(words)]}>
+      {actions.map((action) => (
+        <SwiftUIButton
+          key={action.label}
+          {...actContent(action.label, action.symbol)}
+          onPress={action.onPress}
+          modifiers={[disabled(action.disabled === true)]}
+        />
+      ))}
+    </Menu>
   );
 }
 
@@ -256,7 +297,10 @@ function MessageView({
   videoAt,
   linkStanding,
   now,
-}: Omit<ThreadPageProps, "path" | "status" | "title" | "messages" | "ask" | "menu" | "foot"> & {
+}: Omit<
+  ThreadPageProps,
+  "path" | "status" | "pathActions" | "title" | "messages" | "ask" | "menu" | "foot"
+> & {
   readonly message: ThreadMessage;
 }) {
   const colors = useColors();
@@ -337,7 +381,9 @@ function MessageView({
  * thread's document moves, and the open ask's card stands under the last.
  */
 export function ThreadPage(props: ThreadPageProps) {
-  const { path, status, title, messages, ask, menu, foot, standing, ...drawing } = props;
+  const { path, status, pathActions, title, messages, ask, menu, foot, standing, ...drawing } =
+    props;
+
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
 
@@ -368,16 +414,16 @@ export function ThreadPage(props: ThreadPageProps) {
         </ScrollView>
         {foot}
       </VStack>
-      <Toolbar.Content>
+      <BarContent>
         <ToolbarItem placement="principal">
-          <PathTitle path={path} status={status} />
+          <PathTitle path={path} status={status} actions={pathActions} />
         </ToolbarItem>
         {menu === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
-            <BarMenuButton menu={menu} />
+            <BarMenuItem menu={menu} />
           </ToolbarItem>
         )}
-      </Toolbar.Content>
+      </BarContent>
     </Toolbar>
   );
 }

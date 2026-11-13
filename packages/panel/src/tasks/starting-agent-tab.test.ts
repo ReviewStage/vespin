@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { type AgentBoot, BOOT_FAILURE, BOOT_PHASE } from "@repo/features/agent-boot";
 import { BOOT_WORDS } from "@repo/features/agent-boot-words";
+import type { AgentQueue } from "@repo/features/agent-queue-wire";
 import { AGENT_BRIEF, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import { readingWords } from "@repo/features/words";
 import { Effect } from "effect";
@@ -34,10 +35,17 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-/** An agent's own tab drawn over a transcript whose first launch stands as `boot` says, answered with the words it draws. */
-function bootingTabWords(boot: AgentBoot): Promise<string> {
+/** An agent's own tab drawn over a transcript whose first launch stands as `boot` says, its queue as `queue` says where one is, answered with the words it draws. */
+function bootingTabWords(boot: AgentBoot, queue?: AgentQueue): Promise<string> {
   return agentTabWords(AGENT_STATUS.RUNNING, [
-    { messages: [], cursor: "0:0", status: AGENT_STATUS.RUNNING, title: null, boot },
+    {
+      messages: [],
+      cursor: "0:0",
+      status: AGENT_STATUS.RUNNING,
+      title: null,
+      boot,
+      ...(queue === undefined ? undefined : { queue }),
+    },
   ]);
 }
 
@@ -99,6 +107,20 @@ test("an agent's tab while its first launch boots reads its empty transcript as 
   );
 });
 
+test("an agent's tab while its start waits on its workspace's drive says Building… in place of its sandbox starting", async () => {
+  const words = await bootingTabWords({
+    phase: BOOT_PHASE.STARTING,
+    since: Date.now(),
+    building: true,
+  });
+
+  assert.ok(words.includes(BOOT_WORDS.BUILDING), "the empty transcript says it is building");
+  assert.ok(
+    !words.includes("Starting a cloud sandbox…"),
+    "Building… stands in place of the sandbox starting",
+  );
+});
+
 test("an agent's tab just made, before its first transcript page lands, says Starting… as the start's own tab did rather than a placeholder", async () => {
   const words = await agentTabWords(AGENT_STATUS.STARTING, []);
 
@@ -112,10 +134,28 @@ test("an agent's tab just made, before its first transcript page lands, says Sta
   );
 });
 
-test("an agent's tab whose machine is up says the agent is starting", async () => {
-  const words = await bootingTabWords({ phase: BOOT_PHASE.HANDING_OFF, since: Date.now() });
+test("an agent's tab whose machine is up says the agent is starting, never counting an edit's wait as starting", async () => {
+  // A boot begun ten minutes ago, its first message going now that a long edit to it ended.
+  const words = await bootingTabWords({
+    phase: BOOT_PHASE.HANDING_OFF,
+    since: Date.now() - 600_000,
+  });
 
   assert.ok(words.includes("Starting the agent…"));
+  assert.ok(!words.includes("10m"), "the edit's wait is not counted as starting");
+});
+
+test("an agent's tab whose machine is up while its first message is held for an edit says it is ready rather than starting", async () => {
+  const words = await bootingTabWords(
+    { phase: BOOT_PHASE.HANDING_OFF, since: Date.now() },
+    {
+      revision: 1,
+      messages: [{ id: "first", text: "Fix the tile", queuedBy: "user-other", editing: true }],
+    },
+  );
+
+  assert.ok(words.includes("Ready. The first message is being edited."));
+  assert.ok(!words.includes("Starting the agent…"), "nothing is starting while the edit holds it");
 });
 
 test("an agent's tab whose first launch failed says why in its empty transcript, with Retry for its starter", async () => {

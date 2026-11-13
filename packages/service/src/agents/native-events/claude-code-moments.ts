@@ -4,7 +4,7 @@ import { redactCredentials } from "@repo/features/credential-redaction";
 import { integrationOfRemoteTool } from "@repo/features/integration-wire";
 import type { ToolCallSettlement } from "@repo/features/turn-run";
 import { type UnparsedWireValue, type WireValue, WireValueSchema } from "@repo/wire";
-import { USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
+import { GOAL_EVENT, type GoalNotice, USAGE_LIMIT_AGENT } from "@repo/wire/ui-messages";
 import { Option, Predicate, Schema } from "effect";
 import { storedServerCall } from "../../integrations/connection-tools.js";
 import {
@@ -190,8 +190,39 @@ const readUser = Schema.decodeUnknownOption(
       content: Schema.Union([Schema.String, Schema.Array(Schema.Unknown)]),
     }),
     tool_use_result: Schema.optionalKey(Schema.Unknown),
+    /** Whether the CLI wrote the line itself, as it writes a Stop hook's feedback, rather than the developer. */
+    isSynthetic: Schema.optionalKey(Schema.Boolean),
   }),
 );
+
+/** The CLI's own answer to a command it ran locally, such as `/goal`, as the synthetic assistant message carrying it names the command. */
+const readLocalCommand = Schema.decodeUnknownOption(
+  Schema.Struct({
+    local_command_run: Schema.Struct({
+      command: Schema.String,
+      args: Schema.optionalKey(Schema.String),
+    }),
+  }),
+);
+
+/** Claude Code's `/goal`, and the words its answers open with where it set or cleared a goal; any other answer of it (its status) stands as words. */
+const GOAL_COMMAND = {
+  NAME: "goal",
+  SET: "Goal set: ",
+  CLEARED: "Goal cleared: ",
+} as const;
+
+/**
+ * A blocking Stop hook's feedback, as the CLI writes it to the model: the
+ * hook's prompt in brackets, then its reason. `/goal` is such a hook, its
+ * prompt the goal's condition, so a line of this shape is the checker's
+ * verdict that the goal is not met yet; a project's own blocking Stop hook
+ * writes the same shape, which the panel draws only where its condition is a
+ * goal's (`goalVerdict`). The line is split at the first
+ * `]: `, since nothing here knows the goal; a condition holding those words is
+ * split inside it, and joined again against the goal it is of there.
+ */
+const STOP_HOOK_FEEDBACK = /^Stop hook feedback:\n\[([\s\S]*?)\]: ([\s\S]*)$/;
 
 /** The status a subagent call's structured answer (`AgentOutput`) says its subagent went on in the background with. */
 const AGENT_ASYNC_LAUNCHED = "async_launched";
@@ -482,8 +513,71 @@ function contextOf(usage: typeof MessageUsageSchema.Type): NativeContextUsage {
   };
 }
 
+/** A goal's move as the transcript keeps it, with nothing counted, since Claude Code's lines say no count. */
+function goalMoment(
+  event: GoalNotice["event"],
+  condition: string,
+  reason: string | null,
+): NativeMoment {
+  return {
+    kind: NATIVE_MOMENT.GOAL,
+    notice: { event, condition, reason, turns: null, tokens: null, tokenBudget: null },
+  };
+}
+
+/** Claude Code's answer to `/goal` where it set or cleared a goal, as the goal's move rather than words; none for any other message, its answer with the goal's status among them. */
+function goalCommandMoments(message: WireValue): readonly NativeMoment[] | undefined {
+  const command = readLocalCommand(message);
+
+  if (Option.isNone(command) || command.value.local_command_run.command !== GOAL_COMMAND.NAME) {
+    return undefined;
+  }
+
+  const read = readAssistant(message);
+
+  if (Option.isNone(read)) return undefined;
+
+  const said = read.value.message.content
+    .flatMap((block) =>
+      Option.match(readTextBlock(block), { onSome: ({ text }) => [text], onNone: () => [] }),
+    )
+    .join("");
+
+  if (said.startsWith(GOAL_COMMAND.SET)) {
+    return [goalMoment(GOAL_EVENT.SET, said.slice(GOAL_COMMAND.SET.length), null)];
+  }
+
+  if (said.startsWith(GOAL_COMMAND.CLEARED)) {
+    return [goalMoment(GOAL_EVENT.CLEARED, said.slice(GOAL_COMMAND.CLEARED.length), null)];
+  }
+
+  return undefined;
+}
+
+/** The checker's verdict a line the CLI wrote itself says, where it is a Stop hook's feedback (`STOP_HOOK_FEEDBACK`). */
+function goalVerdictMoments(content: string | readonly unknown[]): readonly NativeMoment[] {
+  const texts = Predicate.isString(content)
+    ? [content]
+    : content.flatMap((block) =>
+        Option.match(readTextBlock(block), { onSome: ({ text }) => [text], onNone: () => [] }),
+      );
+
+  return texts.flatMap((text) => {
+    const feedback = STOP_HOOK_FEEDBACK.exec(text);
+    const condition = feedback?.[1];
+    const reason = feedback?.[2];
+
+    return condition === undefined || reason === undefined
+      ? []
+      : [goalMoment(GOAL_EVENT.NOT_MET, condition, reason.trim())];
+  });
+}
+
 /** A model call's answer, or the one block of it the SDK streams as a message: a step, and its words, reasoning, and calls. */
 function assistantMoments(message: WireValue): readonly NativeMoment[] {
+  const goal = goalCommandMoments(message);
+
+  if (goal !== undefined) return goal;
   const read = readAssistant(message);
 
   if (Option.isNone(read)) return [];
@@ -573,7 +667,10 @@ function userMoments(message: WireValue, held: NativeHeld): readonly NativeMomen
   if (Option.isNone(read)) return [];
   const { content } = read.value.message;
 
-  if (Predicate.isString(content)) return [];
+  // Note that a line the CLI wrote itself may carry a goal's verdict, and is still read for any call it answers.
+  const verdicts = read.value.isSynthetic === true ? goalVerdictMoments(content) : [];
+
+  if (Predicate.isString(content)) return verdicts;
   const moments: NativeMoment[] = [];
 
   for (const block of content) {
@@ -605,7 +702,9 @@ function userMoments(message: WireValue, held: NativeHeld): readonly NativeMomen
     });
   }
 
-  return moments.length === 0 ? [] : [...moments, { kind: NATIVE_MOMENT.STEP_CLOSED }];
+  return moments.length === 0
+    ? verdicts
+    : [...verdicts, ...moments, { kind: NATIVE_MOMENT.STEP_CLOSED }];
 }
 
 /** A token of the words while they stream: the step a model call opens, and the piece of its words. */

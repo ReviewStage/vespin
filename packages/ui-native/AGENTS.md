@@ -13,7 +13,7 @@ builds a control of its own.
   first, and in its long press menu, which lifts the row's preview
   (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open,
   and a row's link, which an iPad drags out of it (`interactions.ts`, the
-  hover, drag, and drop modifiers the app's native module registers), a
+  drag and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
   `WordsRow` for its description), `GroupRow` (a place a regular window's
   sidebar opens, such as the Inbox with its count), `SplitView` (the app's
@@ -21,7 +21,11 @@ builds a control of its own.
   under its own `ColumnBar`: its inline title, what leads it such as the
   workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
-  caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
+  caller says, and `SplitOverTabs`, the one split view a window wide enough
+  for three columns stands over the hidden tabs, in front of a tab's root and
+  behind a page the tab pushed, with `KeptColumns` keeping each tab's list
+  drawn behind the one shown; a detail is drawn alone, since a page such as
+  `ThreadPage` sets bar items SwiftUI reads from a hidden view too), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePicker` (a list's scopes as the system's segmented control, or its menu picker in a split view's narrow list column), `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),
@@ -29,7 +33,10 @@ builds a control of its own.
   for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
   merge under the checks in a regular window), `ConfirmAsk` (the system's
   alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
-  rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a sheet that starts work,
+  rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a form's words,
+  pictures and choices, `ComposeSheet` for a sheet that starts work (its
+  words filling the page, and the + and `MenuChip` capsule menus in glass
+  over the keyboard),
   `SwitchRow` and `HintPickRows` (a choice among a few, what each does under
   its name) for an agent's options, `RenameAsk` (the system's alert a name is
   typed in),
@@ -51,8 +58,10 @@ builds a control of its own.
   Send, or, with nothing typed, Stop while an agent works; its + is one act
   or a native menu (`ComposerMenu`: an agent's Photos, Options, permission
   mode, and Fast); and its head, inside the same glass, holds an agent's
-  `HeldCallBanner` (the oldest call it holds for an answer, with Deny and
-  Allow), the `SkillSuggestions` a `/` offers, its `QueuedLines` (Steer and
+  `DeniesWaiting` (that a message sent now denies the call waiting, a press
+  scrolling to the call's row, whose Deny and Allow alone answer it), a
+  `HeldCallBanner` only for a call no row draws, such as a subagent's (with
+  Deny and Allow), the `SkillSuggestions` a `/` offers, its `QueuedLines` (Steer and
   Delete), its `AttachedPictures`, and an `AskNote`.
 - **React Native views only where SwiftUI has no piece**, such as the
   transcript's rows, message markdown, a message's `Picture` that opens full
@@ -98,13 +107,17 @@ builds a control of its own.
   `scripts/repository-checks.sh` fails when it drifts. `useColors()` picks the
   theme by the window's color scheme, since SwiftUI is handed plain values.
   The app reads as Vespin beside the desktop, not as iOS's defaults: a
-  screen, a list, and a sidebar stand on the brand's `GROUND` and `SIDEBAR`,
-  never the system's grays; lists stand plain, as the panel's do, never as
+  screen and a list stand on the brand's `GROUND` and `SIDEBAR`, never the
+  system's grays, and so do a split view's list and detail columns
+  themselves (`containerBackground`) and a sheet or popover to its edge
+  (`presentationBackground`); a split view's sidebar paints nothing, so it
+  stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
   inset cards; and the tint is the brand's copper, never the system's blue.
   Only a control's states and a label's hierarchy are the system's.
-- **Rows carry the panel's facts.** `ListRow` is an Inbox thread (the task's
-  status ring, the thread's title and time, and the glyph and words of what
-  it asks, then the task's name), `TaskRow` a task on one line (its status
+- **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
+  panel's three lines (the task's status ring and name, then the thread's
+  title and time, then the glyph and words of what it asks; an agent's own
+  thread, with no task, in two), `TaskRow` a task on one line (its status
   ring, its name, and at its end a thread that needs you, a failed agent,
   one at work, or its pull request, then its key), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
@@ -147,27 +160,40 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Inline titles, no large titles.** A tab's root shows its name small and
   inline. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
-  under it; a split view's detail column draws the same path in its bar. An
+  under it; a split view's detail column draws the same path in its bar. A
+  thread's path opens its task and its agent, as the panel's crumbs do: in a
+  split view's bar the path is a menu of them under a small chevron, as iOS's
+  title menus stand (`PathTitle`'s `actions`), and in a compact window, whose
+  stack's title holds no menu, they lead its ⋯ menu. An
   agent's page names the agent in the bar in the ink instead, as Messages
   names a conversation, since its transcript opens at its newest row.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
-  button is the chevron alone. One button leads every tab's root bar, as
+  button is the chevron alone, and a column's ⋯ is its glyph alone
+  (`BarMenuItem`), never a menu's own button inside the bar's glass. One button leads every tab's root bar, as
   Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile alone
   at the photo's size in the bar's round glass, `SWITCHER_LOOK.TILE`, so the
   screen's title keeps its place beside it, as the App Store's photo does), whose list, as
   Notion's, holds each workspace by its own tile or photo with the chosen one
-  checked in copper, the account by its photo and name opening Settings, New
-  workspace, and Settings… in a section under the chosen workspace's name, in
+  checked in copper, then New workspace and Workspace settings, in the panel's
+  groups and words (`workspaceMenuGroups`), and last the account by its photo
+  and name opening Settings, in every window, in
   a popover over the button in a regular window and a sheet with the medium
   and large detents in a compact one (`SWITCHER_PRESENTATION`), never the
   system's menu, which draws a row's image as a one-ink template; the account's
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. A landscape iPad's sidebar heads its
-  list with the switcher, its tile and its name, and stands Settings at its foot. Nothing draws a
-  copy of glass.
+  list with the switcher, its tile and its name, and stands no Settings gear: Settings
+  opens from the switcher's menu and ⌘,, as Notion's and Linear's iPad sidebars keep it, and
+  the account's photo leads the sidebar's bar only until the switcher can draw. Nothing draws a
+  copy of glass, and glass is one layer: a bar's own, or one glass view
+  (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest). A
+  glass that holds buttons takes no press of its own (not `interactive`),
+  so only the button under a finger or the pointer reacts, and no button
+  is handed a hover effect: the system draws its own on each style, where
+  an added highlight drew a second platter on iPadOS 26.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
   unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from
@@ -175,8 +201,16 @@ navigation, tab bar, swipes, menus, sheets and glass.
   words. An Inbox thread stands roomier, as Mail's message rows do
   (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
   its lines), while a task's row keeps the list's tighter inset.
-- **Group headers** (`ListSection`) are small and muted with a count; a
-  `foldable` one folds in place on a press, its chevron on the left.
+- **Select mode** (`RowList`'s `choosing`) is SwiftUI's own edit mode, as
+  Mail's Select: a round check leads each row, a tap ticks it, two fingers
+  dragged down tick a run, and the swipes step aside. Its screen names the
+  count in the title's place with Done, and stands the acts in the bar at the
+  foot, a compact window's tab bar stepping aside for it.
+- **Group headers** (`ListSection`) are small and muted with a count, or
+  finished of all as `2/5` (`progress`); a `foldable` one folds in place on
+  a press, its chevron on the left; and one given `add` ends in a muted +,
+  one act or the system's menu of several, as Reminders' groups add, so an
+  empty section stands as its header alone rather than a list of add rows.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
   you and what you chose, as the panel draws it: the unread dot, an ask's
   glyph, a count of what needs you, a reminder's time, the selected tab and
@@ -192,8 +226,14 @@ navigation, tab bar, swipes, menus, sheets and glass.
   segments' words short, the system's menu picker naming the scope chosen
   (`SCOPE_LOOK.MENU`). `Chip` is a capsule an act or a choice stands in, such as a
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
-  status, priority and assignee. Each stands
+  status, priority and assignee, and where handed a `FieldMenu`, open the
+  system's pull-down menu of the field's values, as Reminders' fields do. Each stands
   on `SURFACE` inside a hairline.
+- **Grouped forms** (`SettingsForm` and the sheets that start work, pick
+  or remind) read as iOS Settings' cards: their rows stand in the panel's
+  raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
+  (`GROUPED`: the chip's hover gray in light, black in dark), and the sheet
+  around them stands on `GROUPED` too.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
   rows, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it; `AnswerFields`, a row per
@@ -211,7 +251,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   (`pull-request-look.ts`); and its acts in the bar, an act that
   asks first asking in `ConfirmAsk`, but for the merge's press in a regular
   window, whose bar folds it into More: it stands under the checks as a
-  large button (`MergeActRow`), as GitHub's own app draws Merge.
+  large button as wide as its words (`MergeActRow`), as GitHub's own app
+  draws Merge, and as a split button where the repository merges more than
+  one way, its chevron choosing the way as the panel's merge box does.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
   New task; a regular window's bar keeps its labels. A window wide enough

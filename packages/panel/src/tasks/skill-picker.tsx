@@ -40,9 +40,9 @@ import type {
 } from "../description-editor/contract.js";
 import { SettingsPageLink } from "../open-settings.js";
 import {
-  COMMAND_NAMES,
   type CommandReach,
   CommandRef,
+  chippedCommands,
   commandOption,
   matchingCommands,
   runsCommand,
@@ -340,6 +340,14 @@ export function useSkillPicker({
   const known = skills !== undefined && "skills" in skills ? skills.skills : undefined;
   const unread = skills !== undefined && "unread" in skills;
 
+  const reach = commands?.reach;
+
+  // Note that only the commands a box runs stand as chips, so a box with no session sends `/compact` as the words it is, while one starting an agent still takes `/goal`.
+  const chipped = useMemo(
+    () => (reach === undefined ? NO_NAMES : chippedCommands(reach)),
+    [reach?.model, reach?.session, reach?.goal],
+  );
+
   const names = useMemo(
     () => (known === undefined ? NO_NAMES : new Set(known.map((each) => each.name))),
     [known],
@@ -462,8 +470,7 @@ export function useSkillPicker({
         !open || rows.length === 0 ? undefined : comboboxOptionId(listId, at),
     },
     names,
-    // Note that only the commands acting on a session stand as chips, so a box with none sends `/compact` as the words it is.
-    commands: commands?.reach.session === true ? COMMAND_NAMES : NO_NAMES,
+    commands: chipped,
     onTrigger: setTrigger,
     onKey,
     known,

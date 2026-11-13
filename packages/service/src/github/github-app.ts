@@ -217,7 +217,10 @@ const ISSUES_PERMISSION = "issues";
  * issue a link names; contents and pull requests read, which reads what a
  * coding agent published; or contents and pull requests write, which is what
  * its push and pull request need. CI read stands beside the last two where
- * the installation grants it.
+ * the installation grants it. Issues and pull requests write comment as the
+ * App's bot on an issue or a pull request and react to a comment there,
+ * pull requests write alone on a pull request only, where the installation
+ * grants no issues at write.
  */
 const INSTALLATION_TOKEN_PERMISSIONS = {
   LIST: { metadata: "read" },
@@ -227,6 +230,8 @@ const INSTALLATION_TOKEN_PERMISSIONS = {
   PULL_REQUESTS_READING_CI: { contents: "read", pull_requests: "read", ...CI_READ_PERMISSIONS },
   WRITE: { contents: "write", pull_requests: "write" },
   WRITE_READING_CI: { contents: "write", pull_requests: "write", ...CI_READ_PERMISSIONS },
+  COMMENT: { issues: "write", pull_requests: "write" },
+  COMMENT_ON_PULL_REQUESTS: { pull_requests: "write" },
 } as const;
 
 type InstallationTokenPermissions =
@@ -332,6 +337,8 @@ interface GitHubInstallation {
   readonly ciReadable: boolean;
   /** Whether the installation grants the App issues, at read or write, which an issue's read is minted with. */
   readonly issuesReadable: boolean;
+  /** Whether the installation grants the App issues at write, which a comment on an issue as the App's bot is minted with. */
+  readonly issuesWritable: boolean;
   /** Whether the account it is on suspended it, which leaves it minting nothing until it is brought back. */
   readonly suspended: boolean;
 }
@@ -734,6 +741,22 @@ export interface GitHubAppService {
     organizationId: string,
     fullName: string,
     member: string | undefined,
+  ) => Effect.Effect<
+    Option.Option<GitHubRepositoryToken>,
+    GitHubWorkspaceReadFailure,
+    HttpClient.HttpClient | DatabaseServices
+  >;
+  /**
+   * A token the App's bot comments with on an issue or a pull request of a
+   * repository the workspace's installation reaches, and reacts to a
+   * comment there with: never a member's own token, kept as a repository's
+   * is, with issues and pull requests write, or pull requests write alone
+   * where the installation grants no issues at write; none where the installation
+   * does not reach it.
+   */
+  readonly repositoryCommentToken: (
+    organizationId: string,
+    fullName: string,
   ) => Effect.Effect<
     Option.Option<GitHubRepositoryToken>,
     GitHubWorkspaceReadFailure,
@@ -1151,6 +1174,7 @@ function installationOf(record: InstallationRecord): GitHubInstallation {
     repositorySelection: record.repository_selection,
     ciReadable: Object.keys(CI_READ_PERMISSIONS).every((permission) => permission in granted),
     issuesReadable: ISSUES_PERMISSION in granted,
+    issuesWritable: granted[ISSUES_PERMISSION] === "write",
     suspended: record.suspended_at !== undefined && record.suspended_at !== null,
   };
 }
@@ -2378,6 +2402,12 @@ function githubAppService(
               ? INSTALLATION_TOKEN_PERMISSIONS.WRITE_READING_CI
               : INSTALLATION_TOKEN_PERMISSIONS.WRITE,
           TOKEN_KEEPING.FRESH,
+        ),
+      repositoryCommentToken: (organizationId, fullName) =>
+        repositoryToken(organizationId, fullName, undefined, (on) =>
+          on.issuesWritable
+            ? INSTALLATION_TOKEN_PERMISSIONS.COMMENT
+            : INSTALLATION_TOKEN_PERMISSIONS.COMMENT_ON_PULL_REQUESTS,
         ),
       repositorySetReach: (organizationId, fullNames, member) =>
         Effect.map(

@@ -237,7 +237,9 @@ it.effect("the Mac's commands route refuses a session cookie every account route
     );
 
     const asked = () =>
-      new Request(new URL(HOSTED_SERVICE_PATH.MAC_COMMANDS, OWN_ORIGIN), { headers: { cookie } });
+      new Request(new URL(HOSTED_SERVICE_PATH.MACHINE_COMMANDS, OWN_ORIGIN), {
+        headers: { cookie },
+      });
 
     assert.deepEqual(yield* resolveHostedUserId(asked()), Option.some(userId));
     assert.deepEqual(yield* answered(orpcRoute, asked()), {

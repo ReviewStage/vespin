@@ -159,7 +159,7 @@ import {
   runComputerTool,
   storedComputerOutput,
 } from "../computer-tool.js";
-import { macCommandNotRun, RUN_ON_MAC_TOOL, runOnMacTool } from "../mac-command.js";
+import { machineCommandNotRun, RUN_ON_MAC_TOOL, runOnMacTool } from "../machine-command.js";
 import {
   FORGET_MEMORY_TOOL,
   LIST_MEMORIES_TOOL,
@@ -628,14 +628,18 @@ const CATALOG = [
   // The developer's Mac.
   served(RUN_ON_MAC_TOOL, (admitted, input) => runOnMacTool(admitted.target, input), {
     gate: TOOL_GATE.SANDBOX,
-    refused: macCommandNotRun,
+    refused: machineCommandNotRun,
   }),
   // One app on the developer's Mac, offered wherever the agent runs, since the Mac it reaches is the task's assignee's, where the workspace has Computer use on.
-  served(COMPUTER_TOOL, (admitted, input) => runComputerTool(admitted.target, input), {
-    gate: TOOL_GATE.COMPUTER_USE,
-    content: computerContent,
-    refused: macCommandNotRun,
-  }),
+  served(
+    COMPUTER_TOOL,
+    (admitted, input, { sandbox }) => runComputerTool(admitted.target, input, sandbox),
+    {
+      gate: TOOL_GATE.COMPUTER_USE,
+      content: computerContent,
+      refused: machineCommandNotRun,
+    },
+  ),
   // The agent's browser.
   served(BROWSER_TOOL, runAgentBrowser, {
     gate: TOOL_GATE.SANDBOX,

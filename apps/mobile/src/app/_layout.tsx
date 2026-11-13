@@ -26,6 +26,9 @@ import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
+/** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
+const SHORT_SHEET_DETENTS = [0.5, 1];
+
 /**
  * The screens, each behind the account's standing: the tabs, Settings, and
  * the sheets that start a task or an agent or change an agent's model while an account is signed in, and the sign-in screen otherwise, so a
@@ -75,8 +78,17 @@ function GuardedScreens() {
   useHostConnectLink(signedIn && !updateNeeded);
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
-  const sheetPresentation =
-    useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR ? "formSheet" : "modal";
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  const sheetPresentation = regular ? "formSheet" : "modal";
+
+  // Note that a short sheet, a list to pick from or a few rows, opens at half height with its grabber in a compact window, and pulls up to full, as Maps' and Mail's short sheets do; a regular window's form sheet keeps its own size.
+  const shortSheet = regular
+    ? { presentation: "formSheet" as const }
+    : {
+        presentation: "formSheet" as const,
+        sheetAllowedDetents: SHORT_SHEET_DETENTS,
+        sheetGrabberVisible: true,
+      };
 
   return (
     <>
@@ -98,26 +110,14 @@ function GuardedScreens() {
             name="start-agent"
             options={{ presentation: sheetPresentation, title: "New agent" }}
           />
-          <Stack.Screen
-            name="agent-model"
-            options={{ presentation: sheetPresentation, title: "Options" }}
-          />
-          <Stack.Screen
-            name="agent-ports"
-            options={{ presentation: sheetPresentation, title: "Ports" }}
-          />
+          <Stack.Screen name="agent-model" options={{ ...shortSheet, title: "Options" }} />
+          <Stack.Screen name="agent-ports" options={{ ...shortSheet, title: "Ports" }} />
           <Stack.Screen
             name="task-relation"
             options={{ presentation: sheetPresentation, title: "Task relation" }}
           />
-          <Stack.Screen
-            name="move-task"
-            options={{ presentation: sheetPresentation, title: "Move to workspace" }}
-          />
-          <Stack.Screen
-            name="task-following"
-            options={{ presentation: sheetPresentation, title: "Followers" }}
-          />
+          <Stack.Screen name="move-task" options={{ ...shortSheet, title: "Move to workspace" }} />
+          <Stack.Screen name="task-following" options={{ ...shortSheet, title: "Followers" }} />
           <Stack.Screen
             name="add-follower"
             options={{ presentation: sheetPresentation, title: "Add a follower" }}

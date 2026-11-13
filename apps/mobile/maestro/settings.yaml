@@ -1,4 +1,4 @@
-# settings.yaml -- Settings on the Inbox fixture: its list, the phone registered with its pushes working and its "Notify me" picked, About, the Account page with Delete account's question, the Workspace page with its members and invitation, and the Agents page.
+# settings.yaml -- Settings on the Inbox fixture: its list, grouped Workspace then Account, Notifications' page with the phone registered, its pushes working and its "Notify me" picked, About, the Account page with Delete account's question, the Workspace page with its members and invitation, and the Agents page.
 #
 # Launched on the host's Inbox fixture with notifications allowed, so the
 # phone names itself by the fixture's synthetic token, which the fixture
@@ -23,18 +23,28 @@ appId: dev.vespin.ios
 # The account heads the list, pushing to Account.
 - assertVisible: "Ada Lovelace"
 - takeScreenshot: settings
+# Notifications is one row reading the phone's "Notify me" choice, pushing
+# to its own page, as iOS's own Settings keeps an app's.
 - scrollUntilVisible:
-    element: "When I'm away"
+    element:
+      id: "settings-notifications"
+- assertVisible: "Notifications, When I'm away"
+- tapOn:
+    id: "settings-notifications"
+- waitForAnimationToEnd
 # Note that the row is one element, its name and value heard together, and a
 # text matches an element's whole words.
-- assertVisible: "Notifications, Working"
+- assertVisible: "Status, Working"
 - assertVisible: "Open iOS notification settings"
-- waitForAnimationToEnd
 - takeScreenshot: settings-notifications
 # A choice is drawn at once, as the fixture takes it.
 - tapOn: "Always"
 - waitForAnimationToEnd
 - takeScreenshot: settings-notify-always
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
+- assertVisible: "Notifications, Always"
 # About, and the pages still kept on vespin.dev under it.
 - scrollUntilVisible:
     element: "Send feedback"

@@ -1,4 +1,4 @@
-// form-rows.tsx -- the rows a composing sheet's Form holds: the words to send, the skills a `/` in them offers, the pictures attached to them, and a choice among many in the system's menu picker.
+// form-rows.tsx -- the rows a sheet's Form holds: the words to send, the pictures attached to them, and a choice among many in the system's menu picker; and the words on a compose sheet's own page.
 
 import { Button, HStack, Image, Picker, Text, TextField, useNativeState } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
@@ -17,14 +17,9 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { useEffect, useRef } from "react";
-import {
-  type AttachedPicture,
-  AttachedPictures,
-  type SkillSuggestion,
-  SkillSuggestions,
-} from "./composer-head.js";
+import { type AttachedPicture, AttachedPictures } from "./composer-head.js";
 import { GLYPH, glyphImage } from "./glyph.js";
-import { dropPictures, HOVER_EFFECT, hoverEffect } from "./interactions.js";
+import { dropPictures } from "./interactions.js";
 import type { PickOption } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -32,6 +27,14 @@ import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How many lines the words take before anything is typed, and the most they grow to before they scroll. */
 const WORDS_LINES = { min: 4, max: 12 } as const;
+
+/** Where a sheet's words stand: a row of a Form on the surface, or the sheet's own page, growing with no bound as Mail's message body does. */
+export const WORDS_LOOK = {
+  ROW: "row",
+  PAGE: "page",
+} as const;
+
+type WordsLook = (typeof WORDS_LOOK)[keyof typeof WORDS_LOOK];
 
 type WordsFieldProps = {
   /** What the field says before anything is typed: "Describe the task". */
@@ -52,14 +55,17 @@ type WordsFieldProps = {
   readonly disabled?: boolean | undefined;
   /** Whether the words are taken as typed, such as a command or a name, with no correction, capital, or smart dash or quote. */
   readonly verbatim?: boolean | undefined;
+  /** Where the words stand: a Form's row, or the sheet's own page. */
+  readonly look?: WordsLook | undefined;
 };
 
 /**
  * The words a sheet sends, as a row of the system's own multi-line field on
  * the surface: a few lines tall before anything is typed, growing with its
- * words. The field keeps its own words, as a composer's does, and hands
- * each change to its holder, taking the holder's back only where they moved
- * apart from what was typed.
+ * words; or, on a compose sheet's page, the field alone on the sheet's
+ * ground, growing with no bound while the page scrolls. The field keeps its
+ * own words, as a composer's does, and hands each change to its holder,
+ * taking the holder's back only where they moved apart from what was typed.
  */
 export function WordsField({
   placeholder,
@@ -71,6 +77,7 @@ export function WordsField({
   label,
   disabled = false,
   verbatim = false,
+  look = WORDS_LOOK.ROW,
 }: WordsFieldProps) {
   const colors = useColors();
   const text = useNativeState(words ?? initialWords);
@@ -97,8 +104,9 @@ export function WordsField({
       onTextChange={type}
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-        lineLimit(WORDS_LINES),
-        listRowBackground(colors.SURFACE),
+        ...(look === WORDS_LOOK.ROW
+          ? [lineLimit(WORDS_LINES), listRowBackground(colors.RAISED)]
+          : [lineLimit(), frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" })]),
         SwiftModifiers.disabled(disabled),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
         ...(label === undefined ? [] : [accessibilityLabel(label)]),
@@ -106,31 +114,6 @@ export function WordsField({
         ...(verbatim ? [autocorrectionDisabled(), textInputAutocapitalization("never")] : []),
       ]}
     />
-  );
-}
-
-/**
- * The skills a `/` typed in a sheet's words offers, as a row under them on
- * the surface, each written into the words on a press, as an agent's
- * composer offers them over its field (`SkillSuggestions`), with what
- * stands in their place where none is offered.
- */
-export function SkillRow({
-  skills,
-  empty,
-  onPick,
-}: {
-  readonly skills: readonly SkillSuggestion[];
-  /** What stands where no skill is offered: still reading, none matching, or why none were read. */
-  readonly empty: string | undefined;
-  readonly onPick: (name: string) => void;
-}) {
-  const colors = useColors();
-
-  return (
-    <HStack modifiers={[listRowBackground(colors.SURFACE)]}>
-      <SkillSuggestions skills={skills} empty={empty} onPick={onPick} />
-    </HStack>
   );
 }
 
@@ -160,15 +143,14 @@ export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }:
     <HStack
       spacing={SPACE.TIGHT * 2}
       modifiers={[
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         ...(onDropPictures === undefined ? [] : [dropPictures(onDropPictures)]),
       ]}
     >
       <Button
         onPress={onAdd}
         modifiers={[
-          buttonStyle("plain"),
-          hoverEffect(HOVER_EFFECT.HIGHLIGHT),
+          buttonStyle("borderless"),
           accessibilityLabel("Add picture"),
           ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
         ]}
@@ -215,7 +197,7 @@ export function MenuPickRow({ label, options, picked, onPick }: PickRowProps) {
       onSelectionChange={(id) => {
         if (id !== null) onPick(id);
       }}
-      modifiers={[pickerStyle("menu"), tint(colors.TEXT_MUTED), listRowBackground(colors.SURFACE)]}
+      modifiers={[pickerStyle("menu"), tint(colors.TEXT_MUTED), listRowBackground(colors.RAISED)]}
     >
       {options.map((option) => (
         <Text key={option.id} modifiers={[tag(option.id)]}>

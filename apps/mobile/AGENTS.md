@@ -204,17 +204,18 @@ the Home Screen's search; Handoff shows only between real devices.
 
 ## The native interactions module
 
-What `@expo/ui` has no modifier for, an iPad pointer's hover effect and drag
-and drop, is the app's own native module, autolinked from
+What `@expo/ui` has no modifier for, drag and drop, is the app's own native module, autolinked from
 `modules/native-interactions/`: its Swift registers each modifier with
 `@expo/ui`'s registry (`ViewModifierRegistry`) as the module is made, and
 `@repo/ui-native` hands them to its views (`src/interactions.ts`), so no
 screen names one. A row drags out as its vespin.dev link, a task's onto a
-group's header, in the Tasks list or the iPad's sidebar, moves it there, and pictures dropped on
+group's header in the Tasks list, or onto Pinned or a section in the iPad's sidebar, moves it there, and pictures dropped on
 an agent's composer or a sheet that starts work are kept as JPEGs and
 attached. A view handed a modifier the build does not register draws as it
-would without it. No Maestro flow can drag or hover, so these are checked by
-hand on an iPad with a trackpad.
+would without it. A pointer's hover is the system's own on each button, with
+none added, since an added highlight drew a second platter of glass over a
+button's own on iPadOS 26. No Maestro flow can drag or hover, so these are
+checked by hand on an iPad with a trackpad.
 
 ## The photo scaler
 
@@ -304,12 +305,24 @@ pull request with UI shows its screenshots to the developer in a thread.
   the window's width into a compact or regular size class. A compact window
   keeps the system's tab bar with stack navigation. A regular one, whether
   it is an iPad's, the unfolded iPhone Duo's, or a Split View pane, stands
-  list and detail side by side in `NavigationSplitView`; where it is wide
-  enough for three columns, an iPad's in landscape, it hides the tab bar and
-  stands the app sidebar first (`src/screens/app-sidebar.tsx`: the places,
-  Pinned and the member's sections, the workspace switcher, and Settings),
-  as Mail does. Whether the first column stands is one answer every tab
-  shares (`src/sidebar-shown.ts`).
+  list and detail side by side in `NavigationSplitView`, and New task is
+  the list column bar's one trailing compose button, beside its search and
+  ⋯, rather than the tab bar's round +, which only a compact window keeps.
+  Where the window is wide enough for three columns, an iPad's in
+  landscape, it hides the tab bar and stands the app sidebar first, as
+  Mail stands its mailboxes (`src/screens/app-sidebar.tsx`): the workspace
+  switcher heading the list, the Inbox with its count, Tasks, and Search,
+  then Pinned, Following, and each of the member's sections as one row with
+  its count, never a task's own row. A row fills the list column (Tasks
+  every group, a collection only its own tasks), the detail shows the
+  list's selection, and a task dragged onto Pinned or a section is put
+  there. The sidebar's bar holds only the system's toggle: Settings opens
+  from the switcher's menu and ⌘,. The last pick is kept
+  (`src/sidebar-pick.ts`), so a rotation and the next launch come back to
+  it. A portrait iPad and the open Duo keep the tab bar, and their Tasks
+  list draws Pinned, Following, and the sections as groups. Whether the
+  first column stands is one answer every tab shares
+  (`src/sidebar-shown.ts`).
 - **Words match the panel's**: Inbox, Tasks, New task, Mark done, ask, and
   `docs/DESIGN.md`'s copy rules.
 - **Every write goes through `useWrite`** (`src/use-write.ts`). What went

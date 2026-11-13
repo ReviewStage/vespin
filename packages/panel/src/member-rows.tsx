@@ -1,3 +1,4 @@
+import { readerFirst } from "@repo/features/member-order";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readFailedWords, TERM } from "@repo/features/words";
 import type { WorkspaceMember } from "@repo/features/workspace-wire";
@@ -64,18 +65,6 @@ export interface MemberRow {
   readonly terms: readonly string[];
   /** Their card, hung beside the row while the pointer rests on it. */
   readonly card: React.JSX.Element;
-}
-
-/** The members with the reader first and everyone else by name. */
-function readerFirst(
-  members: readonly WorkspaceMember[],
-  readerId: string | undefined,
-): readonly WorkspaceMember[] {
-  return [...members].sort(
-    (one, other) =>
-      Number(other.userId === readerId) - Number(one.userId === readerId) ||
-      one.name.localeCompare(other.name),
-  );
 }
 
 /** The workspace's members as every people menu lists them, the reader first; none while the members are unread. */

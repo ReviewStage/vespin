@@ -1610,16 +1610,18 @@ function runOfCaller(calling: Agent) {
  * that its final message reaches that agent by itself once its turn ends
  * (`coder-host/starter-report.ts`), that it messages it before then with
  * `message_agent` by that agent's id, as every word between two agents goes
- * (`coder-host/agent-message.ts`), then the note it was given. Note that it
- * is not told to keep off the developer's threads: it posts in one what it
- * would post there, as any agent may.
+ * (`coder-host/agent-message.ts`), and that it posts its own threads and
+ * sends that agent each one's mention, so the developer never hears of one
+ * thing from both agents, then the note it was given.
  */
 function startedByNote(starter: Agent, note: string | undefined): string {
   const lead =
     `You were started by another agent of your workspace, ${agentIntroduction(starter)}, ` +
     "not by the developer. Your final message reaches it by itself once your turn ends, so make " +
     "that message your report: what you did, what you published, and what you need of it. To " +
-    `reach it before then, call ${AGENT_TOOL.MESSAGE_AGENT} with its agentId, ${starter.id}.`;
+    `reach it before then, call ${AGENT_TOOL.MESSAGE_AGENT} with its agentId, ${starter.id}. ` +
+    "Post your own threads to the developer, with their pictures, as your instructions say, and " +
+    "send that agent each thread's mention, so it posts none of its own on the same thing.";
 
   return note === undefined ? lead : `${lead}\n\n${note}`;
 }

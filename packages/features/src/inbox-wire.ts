@@ -22,7 +22,7 @@ import { pagePlaceSchema, pageVersionNumberSchema } from "./page-wire.js";
 import { countedNumber, memberRefSchema, wireUuidSchema } from "./service-wire.js";
 import { CODE_PATH_MAX_CHARS, codeLineSchema, workspaceIdSchema } from "./task-wire.js";
 import { boundedText, filledText } from "./text-schema.js";
-import { WEBM_TYPE } from "./video-signature.js";
+import { MP4_TYPE, WEBM_TYPE } from "./video-signature.js";
 
 /**
  * inbox-wire.ts -- the developer's inbox: what a task's coding agents need of the developer, posted by the agents and answered on the desktop.
@@ -218,12 +218,13 @@ export type InboxImageType = (typeof INBOX_IMAGE_TYPE)[keyof typeof INBOX_IMAGE_
 
 /**
  * The types a file of an item's may be kept and served under: any a
- * message's file travels as, or a WebM the agent recorded of what it did and
- * drew in its words as it draws a picture.
+ * message's file travels as, or a recording the agent made of what it did,
+ * a WebM or an H.264 MP4, drawn in its words as it draws a picture.
  */
 export const INBOX_FILE_TYPE = {
   ...AGENT_ATTACHMENT_TYPE,
   WEBM: WEBM_TYPE,
+  MP4: MP4_TYPE,
 } as const;
 
 export type InboxFileType = (typeof INBOX_FILE_TYPE)[keyof typeof INBOX_FILE_TYPE];

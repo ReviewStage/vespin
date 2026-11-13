@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { LINK_OPEN } from "@repo/features/link-open";
+import { LIVE_VOICE } from "@repo/features/voices";
 import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { test } from "vitest";
 import { AGENT_ENTER } from "./agent-enter.js";
@@ -11,6 +12,7 @@ import {
   accountPreferencesParts,
   accountPreferencesToPush,
   accountPreferencesToWrite,
+  snapshotAccountPreferences,
 } from "./schema-access.js";
 import { SOUND_WHEN } from "./sound-when.js";
 
@@ -80,6 +82,19 @@ test("a push carries a link choice changed or cleared since the last sync", () =
   assert.equal(accountPreferencesParts(cleared).linkOpen, LINK_OPEN.BROWSER);
 });
 
+test("an intro dismissed on one device and one on another both stand, through a sync and a write", () => {
+  const here = { introsSeen: '["inbox"]' };
+  const there = { introsSeen: '["automations"]' };
+
+  assert.deepEqual(snapshotAccountPreferences(there, true, here), {
+    introsSeen: '["automations","inbox"]',
+  });
+  assert.equal(
+    accountPreferencesParts(accountPreferencesToWrite(here, there)).introsSeen,
+    '["automations","inbox"]',
+  );
+});
+
 test("the snapshot's preferences part carries only the keys v0.18.0 reads, whatever the account holds", () => {
   // Note that every preference is held, and `Required` makes a new one a compile error here until
   // it is given a value, so a preference added to the shared part is caught below.
@@ -94,8 +109,10 @@ test("the snapshot's preferences part carries only the keys v0.18.0 reads, whate
     soundWhen: SOUND_WHEN.BACKGROUND,
     completionSound: COMPLETION_SOUND.QUACK,
     askSound: COMPLETION_SOUND.QUESTION,
+    voice: LIVE_VOICE.CEDAR,
     turnNotifications: true,
     onboardingSurvey: '{"referral":"other","referralOther":"A meetup","role":"founder"}',
+    introsSeen: '["inbox"]',
   } satisfies Required<AccountPreferences>;
 
   const shared = Object.keys(accountPreferencesParts(everything).preferences);

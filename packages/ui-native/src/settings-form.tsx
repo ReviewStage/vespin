@@ -30,6 +30,7 @@ import {
   scrollContentBackground,
   scrollDismissesKeyboard,
   tint,
+  useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
@@ -108,7 +109,7 @@ function PressedRow({
         buttonStyle("plain"),
         accessibilityLabel(label),
         ...spokenValue(...(value ?? [])),
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
       ]}
     >
@@ -126,15 +127,29 @@ function PressedRow({
  * once, as a composing sheet's words otherwise keep it standing over the
  * rows below them, with no key of the keyboard's own that lowers it.
  */
-export function SettingsForm({ children }: { readonly children: ReactNode }) {
+export function SettingsForm({
+  onContentHeight,
+  children,
+}: {
+  /** Told the height its rows stand in, as they lay out, for a popover that fits it; none where the form fills its place. */
+  readonly onContentHeight?: ((height: number) => void) | undefined;
+  readonly children: ReactNode;
+}) {
   const colors = useColors();
+
+  const measured = useScrollGeometryChange(
+    onContentHeight === undefined
+      ? undefined
+      : (geometry) => onContentHeight(geometry.contentHeight),
+  );
 
   return (
     <Form
       modifiers={[
+        ...(measured === null ? [] : [measured]),
         scrollContentBackground("hidden"),
         scrollDismissesKeyboard("immediately"),
-        background(colors.SIDEBAR),
+        background(colors.GROUPED),
         tint(colors.TEXT),
         font({ textStyle: TYPE_ROLE.ROW_TITLE }),
       ]}
@@ -154,17 +169,19 @@ type HeadRowProps = {
   readonly detail?: string | undefined;
   /** Where a press goes; a row with none takes no press. */
   readonly onPress?: (() => void) | undefined;
+  /** The name a flow finds a pressed row by, where its words are not its own, such as a workspace named for its owner. */
+  readonly testId?: string | undefined;
 };
 
 /** A page's head: its face, its name, its lines, and the chevron where a press goes on, as the account heads iOS's own Settings. */
-function HeadRow({ face, name, line, detail, onPress }: HeadRowProps) {
+function HeadRow({ face, name, line, detail, onPress, testId }: HeadRowProps) {
   const colors = useColors();
 
   const drawn = (
     <HStack
       spacing={SPACE.ROW + 2}
       modifiers={[
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
       ]}
     >
@@ -203,7 +220,7 @@ function HeadRow({ face, name, line, detail, onPress }: HeadRowProps) {
   return onPress === undefined ? (
     drawn
   ) : (
-    <PressedRow label={name} value={[line, detail]} onPress={onPress}>
+    <PressedRow label={name} value={[line, detail]} onPress={onPress} testId={testId}>
       {drawn}
     </PressedRow>
   );
@@ -241,21 +258,29 @@ export function AccountRow({ name, email, picture, detail, onPress }: AccountRow
  * A workspace heading its own page: its tile, as the switcher draws it (its
  * photo, its owner's picture, or its letter on its hue, on a softened square,
  * since a square says a team as a circle says a person), its name, and what
- * the reader is in it.
+ * the reader is in it. Pressed, it goes to the workspace's page, the chevron
+ * at its end, as it heads Settings' Workspace group.
  */
 export function WorkspaceRow({
   workspace,
   role,
+  onPress,
+  testId,
 }: {
   readonly workspace: SwitcherWorkspace;
   /** The reader's role in it, in the panel's words. */
   readonly role: string;
+  /** Where a press goes, such as the Workspace page from Settings' main list; a row with none takes no press. */
+  readonly onPress?: (() => void) | undefined;
+  readonly testId?: string | undefined;
 }) {
   return (
     <HeadRow
       face={<WorkspaceTile workspace={workspace} size={ACCOUNT_FACE_SIZE} />}
       name={workspace.name}
       line={role}
+      onPress={onPress}
+      testId={testId}
     />
   );
 }
@@ -318,7 +343,7 @@ export function ToggleRow({ label, detail, on, disabled: off = false, onChange }
     <Toggle
       isOn={on}
       onIsOnChange={onChange}
-      modifiers={[tint(colors.ACCENT), disabled(off), listRowBackground(colors.SURFACE)]}
+      modifiers={[tint(colors.ACCENT), disabled(off), listRowBackground(colors.RAISED)]}
     >
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
       {detail === undefined ? null : (
@@ -337,7 +362,7 @@ export function ValueRow({ label, value }: { readonly label: string; readonly va
   const colors = useColors();
 
   return (
-    <LabeledContent label={label} modifiers={[listRowBackground(colors.SURFACE)]}>
+    <LabeledContent label={label} modifiers={[listRowBackground(colors.RAISED)]}>
       <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{value}</Text>
     </LabeledContent>
   );
@@ -357,7 +382,7 @@ export function CodeRow({ code, testId }: { readonly code: string; readonly test
       modifiers={[
         font({ textStyle: TYPE_ROLE.PAGE_HEADING, design: "monospaced", weight: "semibold" }),
         foregroundStyle(colors.TEXT),
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         accessibilityLabel(spelled),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
       ]}
@@ -374,7 +399,7 @@ type ActionRowProps = {
   readonly destructive?: boolean | undefined;
   /** Whether it takes no press, such as while another act on the page is out. */
   readonly disabled?: boolean | undefined;
-  /** What the row is heard as, where its words alone would be heard as another row's, such as a workspace's Settings… beside the account's; its words where none is given. */
+  /** What the row is heard as, where its words alone would be heard as another row's, such as two rows that say the same words; its words where none is given. */
   readonly heard?: string | undefined;
   /** A line under its name in the muted ink, such as why it takes no press; none for none. */
   readonly detail?: string | undefined;
@@ -405,7 +430,7 @@ export function ActionRow({
         {...actContent(label, symbol)}
         role={role}
         onPress={onPress}
-        modifiers={[accessibilityLabel(heard), listRowBackground(colors.SURFACE), disabled(off)]}
+        modifiers={[accessibilityLabel(heard), listRowBackground(colors.RAISED), disabled(off)]}
       />
     );
   }
@@ -415,7 +440,7 @@ export function ActionRow({
       role={role}
       onPress={onPress}
       modifiers={[
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         disabled(off),
         accessibilityLabel(heard),
         accessibilityValue(detail),
@@ -478,7 +503,7 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
             buttonStyle("plain"),
             accessibilityLabel(option.label),
             ...(option.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
-            listRowBackground(colors.SURFACE),
+            listRowBackground(colors.RAISED),
           ]}
         >
           <HStack modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}>
@@ -536,7 +561,7 @@ export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRows
             ...(line === undefined ? [] : [accessibilityValue(line)]),
             ...(workspace.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
             disabled(off),
-            listRowBackground(colors.SURFACE),
+            listRowBackground(colors.RAISED),
           ]}
         >
           <HStack
@@ -611,7 +636,7 @@ export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
             accessibilityLabel(name),
             ...(line === undefined ? [] : [accessibilityValue(line)]),
             disabled(off),
-            listRowBackground(colors.SURFACE),
+            listRowBackground(colors.RAISED),
           ]}
         >
           <HStack
@@ -696,14 +721,14 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
   );
 
   if (acts.length === 0) {
-    return <VStack modifiers={[listRowBackground(colors.SURFACE)]}>{face}</VStack>;
+    return <VStack modifiers={[listRowBackground(colors.RAISED)]}>{face}</VStack>;
   }
 
   return (
     <Menu
       label={face}
       modifiers={[
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         accessibilityLabel(badge === undefined ? name : `${name}, ${badge}`),
         ...spokenValue(email, role),
       ]}
@@ -739,7 +764,7 @@ export function FollowerRow({ name, picture, role, machines, heard }: FollowerRo
     <HStack
       spacing={SPACE.ROW}
       modifiers={[
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         accessibilityElement("ignore"),
         accessibilityLabel(name),
         ...spokenValue(role, heard),
@@ -817,11 +842,11 @@ export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
   const heard = [accessibilityLabel(label), ...spokenValue(detail, value)];
 
   if (acts.length === 0) {
-    return <VStack modifiers={[listRowBackground(colors.SURFACE), ...heard]}>{face}</VStack>;
+    return <VStack modifiers={[listRowBackground(colors.RAISED), ...heard]}>{face}</VStack>;
   }
 
   return (
-    <Menu label={face} modifiers={[listRowBackground(colors.SURFACE), ...heard]}>
+    <Menu label={face} modifiers={[listRowBackground(colors.RAISED), ...heard]}>
       <RowActs acts={acts} />
     </Menu>
   );
@@ -913,7 +938,7 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
     );
 
   const placed = [
-    listRowBackground(colors.SURFACE),
+    listRowBackground(colors.RAISED),
     accessibilityElement("combine"),
     accessibilityLabel(words),
     accessibilityValue(detail === undefined ? line : `${detail}, ${line}`),
@@ -1023,7 +1048,7 @@ export function ConnectionRow({ name, lines, act, menu = [] }: ConnectionRowProp
     </HStack>
   );
 
-  const placed = [listRowBackground(colors.SURFACE), ...spokenValue(said)];
+  const placed = [listRowBackground(colors.RAISED), ...spokenValue(said)];
 
   if (menu.length === 0) return <HStack modifiers={placed}>{drawn}</HStack>;
 

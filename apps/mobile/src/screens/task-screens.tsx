@@ -21,6 +21,7 @@ import {
   CHANGE_REPOSITORY,
   CHOOSE_REPOSITORY,
   NO_REPOSITORY,
+  subTaskCount,
   subTasksOf,
   taskFinished,
 } from "@repo/features/task-list-model";
@@ -38,6 +39,7 @@ import {
   NO_ASSIGNEE_WORDS,
   TASK_PRIORITY_WORDS,
   TASK_RELATION_WORDS,
+  TASK_STATUS_TONE,
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import {
@@ -45,8 +47,11 @@ import {
   TASK_TREE_GROUP,
   type TaskTree,
   type TaskTreeGroup,
+  taskTreeCollection,
+  taskTreeCollections,
 } from "@repo/features/task-tree-model";
 import {
+  TASK_PRIORITY_ORDER,
   TASK_RELATION_KIND,
   TASK_STATUS,
   type TaskRelationKind,
@@ -70,6 +75,8 @@ import {
   ConfirmAsk,
   EmptyState,
   GLYPH,
+  type Glyph,
+  GroupRow,
   glyphSymbol,
   LINK_ROW_TONE,
   LIST_LOOK,
@@ -87,11 +94,14 @@ import {
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
+  type StandingMenus,
+  sectionGlyph,
   shareLink,
   type TaskFold,
   TaskHead,
   TaskPreview,
   TaskRow,
+  UNDER_SPLIT_SCREEN,
   useColors,
   WordsRow,
 } from "@repo/ui-native";
@@ -102,13 +112,16 @@ import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
-import { useMemberPictures } from "../member-pictures.js";
+import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
+import { useHandColumns } from "../place-columns.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
+import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import {
   threadComments,
   threadOpen,
@@ -121,6 +134,7 @@ import { useFoundTask } from "../tasks/use-found-task.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
+  type ReadListing,
   type StatusQuestion,
   type TaskAgentLine,
   type TaskOverview,
@@ -135,10 +149,10 @@ import {
   useTasksRead,
   useTaskWrites,
 } from "../tasks/use-tasks.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, type SidebarTasks, useAppSidebar } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, type SidebarTasks, useListColumn, useListLook } from "./app-sidebar.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -172,6 +186,8 @@ const WORDS = {
   SUB_TASKS: "Sub-tasks",
   TASK_RELATIONS: "Task relations",
   STATUS: "Status",
+  PRIORITY: "Priority",
+  ASSIGNEE: "Assignee",
   MORE: { label: "More", symbol: GLYPH.MORE },
   COPY_LINK: "Copy link",
   RENAME: "Rename",
@@ -187,7 +203,7 @@ const WORDS = {
   ARCHIVE: "Archive",
 } as const;
 
-/** The statuses the ⋯ menu's Status offers, in the panel's order. */
+/** The statuses a row's Status and the page's status chip offer, in the panel's order. */
 const STATUS_ORDER: readonly TaskStatus[] = [
   TASK_STATUS.BACKLOG,
   TASK_STATUS.TODO,
@@ -245,6 +261,7 @@ function statusSubmenu(
     choices: STATUS_ORDER.map((status) => ({
       label: TASK_STATUS_WORDS[status],
       symbol: STATUS_MARK_SYMBOL[status],
+      tone: TASK_STATUS_TONE[status],
       on: task.status === status,
       onPress: () => setStatus(task.id, status),
     })),
@@ -395,7 +412,8 @@ type RowActsResult = {
  * parent, where it has one, and the panel's order: Copy link, which raises the share sheet, Rename, in
  * the system's name alert, Mark as read or unread, whichever the task is
  * not, Open in browser, and Permanently delete last, which asks first.
- * Priority and assignee are left to the desktop and the web.
+ * Priority and assignee are set from the chips on the task's page
+ * (`standingMenus`).
  */
 function rowActs(
   task: TaskSummary,
@@ -521,8 +539,8 @@ function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly
  * One task's row, set in by how deep it stands and led by its sub-tasks' fold
  * where it has any: the one row every list of tasks draws, the Search tab's
  * among them. Its key ends the line only where `keyed` asks, as a search's
- * finds do; a regular window's sidebar and list column leave it out, as the
- * panel's sidebar does, since it took the title's room and wrapped there.
+ * finds do; a regular window's list column leaves it out, as the panel's
+ * sidebar does, since it took the title's room and wrapped there.
  */
 export function TaskListRow({
   task,
@@ -633,7 +651,7 @@ function countDrop(taskId: string): (landed: boolean) => boolean {
  */
 function placeIn(
   group: TaskTreeGroup,
-  listing: TasksListing,
+  listing: ReadListing,
 ): ((task: TaskSummary) => void) | undefined {
   if (group.kind === TASK_TREE_GROUP.FOLLOWING) return undefined;
 
@@ -663,6 +681,100 @@ function placeIn(
   };
 }
 
+/** What a link dropped on a group, its header or its sidebar row, does: puts the task it names there (`placeIn`); none where nothing is dropped there. */
+function dropOnto(group: TaskTreeGroup, listing: ReadListing): ((url: string) => void) | undefined {
+  const place = placeIn(group, listing);
+
+  if (place === undefined) return undefined;
+
+  return (url) => {
+    const task = droppedTask(listing.tree, url);
+
+    if (task !== undefined) place(task);
+  };
+}
+
+/** Which parents of a group stand open, and the toggle a parent's chevron calls. */
+type OpenedParents = {
+  readonly opened: ReadonlySet<string>;
+  readonly toggle: (taskId: string) => void;
+};
+
+/**
+ * Which parents of a group stand open. Note that the group's owner holds it,
+ * rather than each row, since a recycled row draws another task once
+ * scrolled past, and rather than the rows, since a folded section drops its
+ * rows and a parent opened before the fold must stand open after it.
+ */
+function useOpenedParents(): OpenedParents {
+  const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
+
+  const toggle = (taskId: string) =>
+    setOpened((was) => {
+      const next = new Set(was);
+
+      if (!next.delete(taskId)) next.add(taskId);
+
+      return next;
+    });
+
+  return { opened, toggle };
+}
+
+/** A group's rows, a task's sub-tasks folded under it, each parent opened and shut by its chevron. */
+function FoldedRows({
+  rows,
+  listing,
+  parents,
+}: {
+  readonly rows: TaskTreeGroup["rows"];
+  readonly listing: TasksListing;
+  readonly parents: OpenedParents;
+}) {
+  const keyed = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
+  const { opened, toggle } = parents;
+
+  const folded = useMemo(
+    () => foldedTaskRows(rows, (taskId) => opened.has(taskId)),
+    [rows, opened],
+  );
+
+  return (
+    <RowForEach data={folded} keyOf={(row) => row.task.id}>
+      {(row) => (
+        <TaskListRow
+          task={row.task}
+          listing={listing}
+          depth={row.depth}
+          keyed={keyed}
+          fold={
+            row.open === undefined
+              ? undefined
+              : { open: row.open, onToggle: () => toggle(row.task.id) }
+          }
+        />
+      )}
+    </RowForEach>
+  );
+}
+
+/** One collection's rows alone, under no header, as the app sidebar picked it. */
+function CollectionRows({
+  collection,
+  listing,
+}: {
+  readonly collection: TaskTreeGroup;
+  readonly listing: TasksListing;
+}) {
+  const parents = useOpenedParents();
+
+  return (
+    <ListSection>
+      <FoldedRows rows={collection.rows} listing={listing} parents={parents} />
+    </ListSection>
+  );
+}
+
 /**
  * One group of the tree as its section: Pinned, Following, a section of the
  * member's, or a repository, folding under its header and count; My tasks
@@ -676,58 +788,25 @@ function GroupSection({
   readonly group: TaskTreeGroup;
   readonly listing: TasksListing;
 }) {
-  const place = placeIn(group, listing);
-  const keyed = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
-
-  // Note that the section holds which parents stand open, rather than each row, since a recycled row draws another task once scrolled past.
-  const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
-
-  const rows = useMemo(
-    () => foldedTaskRows(group.rows, (taskId) => opened.has(taskId)),
-    [group.rows, opened],
-  );
-
-  const toggle = (taskId: string) =>
-    setOpened((was) => {
-      const next = new Set(was);
-
-      if (!next.delete(taskId)) next.add(taskId);
-
-      return next;
-    });
+  const parents = useOpenedParents();
 
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
       count={group.rows.length}
       foldable
-      onDropLink={
-        place === undefined
-          ? undefined
-          : (url) => {
-              const task = droppedTask(listing.tree, url);
-
-              if (task !== undefined) place(task);
-            }
-      }
+      onDropLink={dropOnto(group, listing)}
     >
-      <RowForEach data={rows} keyOf={(row) => row.task.id}>
-        {(row) => (
-          <TaskListRow
-            task={row.task}
-            listing={listing}
-            depth={row.depth}
-            keyed={keyed}
-            fold={
-              row.open === undefined
-                ? undefined
-                : { open: row.open, onToggle: () => toggle(row.task.id) }
-            }
-          />
-        )}
-      </RowForEach>
+      <FoldedRows rows={group.rows} listing={listing} parents={parents} />
     </ListSection>
   );
+}
+
+/** Whether a task stands among a collection's rows, a sub-task under one of them included. */
+function inCollection(collection: TaskTreeGroup): (task: TaskSummary) => boolean {
+  const ids = new Set(collection.rows.map((row) => row.task.id));
+
+  return (task) => ids.has(task.id);
 }
 
 /** Whether the tree lists no task at all. */
@@ -744,6 +823,8 @@ type TasksTreeProps = {
   readonly listing: TasksListing;
   readonly look: ListLook;
   readonly search: string;
+  /** The collection the app sidebar picked, Pinned, Following, or a section, whose rows alone the list draws; every group where none is. */
+  readonly collection?: TaskTreeGroup | undefined;
   readonly selected?: string | undefined;
   readonly onSelect: (id: string) => void;
   /** Reads the list again, on a pull. */
@@ -753,11 +834,25 @@ type TasksTreeProps = {
 /**
  * The Tasks list as the panel's phone Tasks draws it: Pinned, Following,
  * the member's sections, and the repository groups, each folding under its
- * header and count, a task's sub-tasks folded under it; or, while a search is typed,
- * every task of the workspace it finds. A pull reads it again.
+ * header and count, a task's sub-tasks folded under it; or one collection's
+ * rows alone, under no header, where the app sidebar picked it; or, while a
+ * search is typed, every task it finds, of the workspace or of the picked
+ * collection. A pull reads it again.
  */
-function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
-  const { tree, found } = listing;
+function TasksTree({
+  listing,
+  look,
+  search,
+  collection,
+  selected,
+  onSelect,
+  onRefresh,
+}: TasksTreeProps) {
+  const { tree } = listing;
+
+  // Note that a search under a picked collection finds only that collection's tasks, as its title says.
+  const found =
+    collection === undefined ? listing.found : listing.found.filter(inCollection(collection));
 
   if (search.trim() !== "") {
     if (found.length === 0) {
@@ -769,6 +864,18 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
         <ListSection>
           <TaskRows tasks={found} listing={listing} />
         </ListSection>
+      </RowList>
+    );
+  }
+
+  if (collection !== undefined) {
+    if (collection.rows.length === 0) {
+      return <EmptyState title={WORDS.NO_TASKS} symbol={collectionGlyph(collection)} />;
+    }
+
+    return (
+      <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
+        <CollectionRows collection={collection} listing={listing} />
       </RowList>
     );
   }
@@ -792,32 +899,35 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
   );
 }
 
+/** The glyph a collection's sidebar row leads with: Pinned's pin, Following's eye, and a section's own icon, as the panel's sidebar draws it (`sectionGlyph`). */
+function collectionGlyph(group: TaskTreeGroup): Glyph {
+  if (group.kind === TASK_TREE_GROUP.PINNED) return GLYPH.PIN;
+
+  return group.kind === TASK_TREE_GROUP.FOLLOWING ? GLYPH.FOLLOW : sectionGlyph(group.icon);
+}
+
 /**
- * The member's tasks a regular window's app sidebar lists under its places:
- * Pinned, Following, and each of their sections, each folding under its
- * header and count, every row acting as the Tasks tab's does.
+ * The collections a window's app sidebar lists under its places, as Mail
+ * lists its mailboxes: Pinned, Following, and each of the member's
+ * sections, one row each with its count, which a task dragged onto Pinned
+ * or a section is put in, as onto the Tasks list's headers.
  */
 export function useSidebarTasks(): SidebarTasks {
-  const { listing, status, deletion } = useListingAsks(useTasksListing(""));
-  const { tree } = listing;
-
-  const groups = [
-    ...(tree.pinned === undefined ? [] : [tree.pinned]),
-    ...(tree.following === undefined ? [] : [tree.following]),
-    ...tree.sections,
-  ];
+  const listing = useTasksListing("");
+  const collections = taskTreeCollections(listing.tree);
 
   return {
-    sections: groups.map((group) => (
-      <GroupSection key={group.key} group={group} listing={listing} />
+    rows: collections.map((group) => (
+      <GroupRow
+        key={group.key}
+        id={group.key}
+        title={group.title ?? listing.tree.tasksHead}
+        symbol={collectionGlyph(group)}
+        count={group.rows.length}
+        onDropLink={dropOnto(group, listing)}
+      />
     )),
-    ids: new Set(groups.flatMap((group) => group.rows.map(({ task }) => task.id))),
-    ask: (
-      <>
-        <StatusQuestionAsk question={status} />
-        <StatusQuestionAsk question={deletion} />
-      </>
-    ),
+    keys: new Set(collections.map((group) => group.key)),
   };
 }
 
@@ -860,8 +970,8 @@ function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
  * history where the workspace's descriptions stand on, New sub-task, Move
  * to workspace where the reader may move it, Remove parent where it has
  * one, Open in browser, and Permanently delete, red, which asks first; then
- * its Status, each status checked where it stands, Task relation, Move to
- * section, and its repository.
+ * Task relation, Move to section, and its repository. Its status is the
+ * page's status chip's menu (`standingMenus`), so ⋯ holds no Status.
  */
 function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   const { task } = overview;
@@ -906,12 +1016,9 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
       },
     ],
     submenus: [
-      { ...statusSubmenu(task, overview.setStatus), actions: [] },
-      ...[
-        relationSubmenu(task, doors.openRelation),
-        ...placingSubmenus(task, overview.placing),
-      ].map(barSubmenu),
-    ],
+      relationSubmenu(task, doors.openRelation),
+      ...placingSubmenus(task, overview.placing),
+    ].map(barSubmenu),
   };
 }
 
@@ -920,6 +1027,7 @@ function useHistoryDoor(
   workspaceId: string | undefined,
 ): ((task: TaskSummary) => void) | undefined {
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
 
   const { data: descriptions = false } = useQuery({
     ...appStateQuery,
@@ -928,7 +1036,7 @@ function useHistoryDoor(
 
   if (!descriptions) return undefined;
 
-  return (task) => router.push({ pathname: HISTORY_ROUTE, params: { id: task.id } });
+  return (task) => router.push({ pathname: onOwnTab(HISTORY_ROUTE), params: { id: task.id } });
 }
 
 /** Opens New task as a sub-task of the task, as the panel's New sub-task opens its card. */
@@ -945,11 +1053,52 @@ function agentState(status: AgentStatus): AgentRowState {
   return status === AGENT_STATUS.FAILED ? AGENT_ROW_STATE.FAILED : AGENT_ROW_STATE.REST;
 }
 
-/** The task's head: its name, its chips, who follows it, and who created it and when. */
+/**
+ * What a press on each of a task's chips offers, as the panel's chips drop
+ * theirs (`task-standing.tsx`): its status, each of the five by its mark,
+ * asking first where Done or Canceled stops its agents; its priority, the
+ * most pressing first; and its assignee, the workspace's members, the reader
+ * first, then No assignee; each with the one it holds checked.
+ */
+function standingMenus(overview: TaskOverview, members: readonly ListedMember[]): StandingMenus {
+  const { task } = overview;
+  const assigneeId = task.assignee?.userId;
+
+  return {
+    status: { label: WORDS.STATUS, choices: statusSubmenu(task, overview.setStatus).choices },
+    priority: {
+      label: WORDS.PRIORITY,
+      choices: TASK_PRIORITY_ORDER.map((priority) => ({
+        label: TASK_PRIORITY_WORDS[priority],
+        on: task.priority === priority,
+        onPress: () => overview.setPriority(task.id, priority),
+      })),
+    },
+    assignee: {
+      label: WORDS.ASSIGNEE,
+      choices: [
+        ...members.map((member) => ({
+          label: member.name,
+          on: member.userId === assigneeId,
+          onPress: () => overview.setAssignee(task.id, member),
+        })),
+        {
+          label: NO_ASSIGNEE_WORDS,
+          symbol: GLYPH.UNASSIGNED,
+          on: assigneeId === undefined,
+          onPress: () => overview.setAssignee(task.id, null),
+        },
+      ],
+    },
+  };
+}
+
+/** The task's head: its name, its chips, each opening its menu, who follows it, and who created it and when. */
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const { task } = overview;
   const pictureOf = useMemberPictures();
   const following = useFollowingChip(task.id);
+  const members = useListedMembers(task.workspaceId);
 
   return (
     <TaskHead
@@ -966,6 +1115,7 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
             }
       }
       following={following}
+      menus={standingMenus(overview, members)}
       createdBy={
         task.createdBy === undefined
           ? undefined
@@ -994,6 +1144,7 @@ function relationSwipes(
       symbol: GLYPH.RELATIONS,
       choices: TASK_RELATION_ORDER.map((to) => ({
         label: TASK_RELATION_WORDS[to],
+        symbol: RELATION_KIND_SYMBOL[to],
         on: to === kind,
         onPress: () => relations.change(taskId, otherId, kind, to),
       })),
@@ -1007,19 +1158,27 @@ function relationSwipes(
   ];
 }
 
-/** The page's own words for its relation rows. */
+/** The page's own words for its sections' adds. */
 const RELATION_WORDS = {
+  ADD_SUB_TASK: "Add sub-task",
   LINK_SUB_TASK: "Link existing task",
   ADD_RELATION: "Add task relation",
 } as const;
 
+/** What the Sub-tasks count says in its figures' place. */
+function subTasksFinishedWords(finished: number, total: number): string {
+  return `${finished} of ${total} sub-tasks finished`;
+}
+
 /**
- * The task's relations as the panel's two groups list them: its sub-tasks,
- * then New sub-task, which opens New task for one, and Link existing task,
- * which opens the Task relation sheet on Add sub-task; and its parent and the
- * tasks it waits on and holds up, then Add task relation, which opens the
- * sheet on the four kinds. Each related row's swipe and long press change
- * its kind or take it away (`relationSwipes`).
+ * The task's relations as the panel's two groups list them (`plan-relations.tsx`):
+ * its sub-tasks, counted finished of all of them, its header's + offering
+ * New sub-task, which opens New task for one, and Link existing task, which
+ * opens the Task relation sheet on Add sub-task; and, only while it holds a
+ * row, its parent and the tasks it waits on and holds up, each saying how it
+ * stands, its header's + offering the four kinds, which ⋯'s Task relation
+ * offers too while it holds none. Each related row's swipe and long press
+ * change its kind or take it away (`relationSwipes`).
  */
 function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const newSubTask = useNewSubTask();
@@ -1027,6 +1186,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const { task, document, tasks, relations } = overview;
   const byId = new Map(tasks.map((each) => [each.id, each]));
   const subTasks = subTasksOf(tasks, task.id);
+  const finished = subTaskCount(subTasks);
 
   // Note that each side is listed apart, since one task may both wait on this one and hold it up.
   const sides = [
@@ -1038,16 +1198,39 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
     { kind: TASK_RELATION_KIND.BLOCKS, ids: document?.blocks ?? [] },
   ] as const;
 
+  const related = sides.reduce((sum, { ids }) => sum + ids.length, 0);
+
   return (
     <>
-      <ListSection title={WORDS.SUB_TASKS} count={subTasks.length}>
+      <ListSection
+        title={WORDS.SUB_TASKS}
+        progress={
+          finished.total === 0
+            ? undefined
+            : {
+                done: finished.finished,
+                total: finished.total,
+                heard: subTasksFinishedWords(finished.finished, finished.total),
+              }
+        }
+        add={{
+          label: RELATION_WORDS.ADD_SUB_TASK,
+          acts: [
+            { label: WORDS.NEW_SUB_TASK, symbol: GLYPH.ADD, onPress: () => newSubTask(task) },
+            {
+              label: RELATION_WORDS.LINK_SUB_TASK,
+              symbol: GLYPH.LINK,
+              onPress: () => openRelation(task.id, TASK_RELATION_KIND.SUB_TASK),
+            },
+          ],
+        }}
+      >
         {subTasks.map((sub) => (
           <RelationRow
             key={sub.id}
             id={sub.id}
             name={sub.name}
             status={sub.status}
-            relation={TASK_RELATION_WORDS[TASK_RELATION_KIND.SUB_TASK]}
             trailingActions={relationSwipes(
               task.id,
               sub.id,
@@ -1056,39 +1239,41 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
             )}
           />
         ))}
-        <LinkRow symbol={GLYPH.ADD} label={WORDS.NEW_SUB_TASK} onPress={() => newSubTask(task)} />
-        <LinkRow
-          symbol={GLYPH.LINK}
-          label={RELATION_WORDS.LINK_SUB_TASK}
-          onPress={() => openRelation(task.id, TASK_RELATION_KIND.SUB_TASK)}
-        />
       </ListSection>
-      <ListSection
-        title={WORDS.TASK_RELATIONS}
-        count={sides.reduce((sum, { ids }) => sum + ids.length, 0)}
-      >
-        {sides.map(({ kind, ids }) =>
-          ids.map((id) => {
-            const other = byId.get(id);
+      {related === 0 ? null : (
+        <ListSection
+          title={WORDS.TASK_RELATIONS}
+          count={related}
+          add={{
+            label: RELATION_WORDS.ADD_RELATION,
+            // Note that Sub-tasks' own + adds a sub-task, so this one offers the other kinds.
+            acts: TASK_RELATION_ORDER.filter((kind) => kind !== TASK_RELATION_KIND.SUB_TASK).map(
+              (kind) => ({
+                label: TASK_RELATION_VERBS[kind].choose,
+                symbol: RELATION_KIND_SYMBOL[kind],
+                onPress: () => openRelation(task.id, kind),
+              }),
+            ),
+          }}
+        >
+          {sides.map(({ kind, ids }) =>
+            ids.map((id) => {
+              const other = byId.get(id);
 
-            return (
-              <RelationRow
-                key={id}
-                id={id}
-                name={other?.name ?? WORDS.UNLISTED_TASK}
-                status={other?.status}
-                relation={TASK_RELATION_WORDS[kind]}
-                trailingActions={relationSwipes(task.id, id, kind, relations)}
-              />
-            );
-          }),
-        )}
-        <LinkRow
-          symbol={GLYPH.ADD}
-          label={RELATION_WORDS.ADD_RELATION}
-          onPress={() => openRelation(task.id)}
-        />
-      </ListSection>
+              return (
+                <RelationRow
+                  key={id}
+                  id={id}
+                  name={other?.name ?? WORDS.UNLISTED_TASK}
+                  status={other?.status}
+                  relation={TASK_RELATION_WORDS[kind]}
+                  trailingActions={relationSwipes(task.id, id, kind, relations)}
+                />
+              );
+            }),
+          )}
+        </ListSection>
+      )}
     </>
   );
 }
@@ -1196,6 +1381,7 @@ export function TaskAgentRow({
   readonly onArchive?: ((agentId: string) => void) | undefined;
 }) {
   const router = useRouter();
+  const onTab = useOnTab();
   const acts = useAgentRowActs();
   const { agent, waiting, pullRequest } = line;
   const step = useHeldAgentStep(agent.id, agent.status);
@@ -1218,7 +1404,7 @@ export function TaskAgentRow({
               number: pullRequest.number,
               state: pullRequest.state,
               queued: pullRequest.queued,
-              onPress: () => router.push(iosPullRequestRoute(agent.id, pullRequest.number)),
+              onPress: () => router.push(onTab(iosPullRequestRoute(agent.id, pullRequest.number))),
             }
       }
       trailingActions={agentSwipes(agent, acts, onArchive)}
@@ -1239,7 +1425,7 @@ export function TaskAgentRow({
   );
 }
 
-/** The task's agents as the panel's Agents group lists them, New agent after them, which opens its sheet, and the line of its threads that need you. */
+/** The task's agents as the panel's Agents group lists them, counted while it has any, its header's + New agent, which opens its sheet, and the line of its threads that need you. */
 function OverviewAgents({
   overview,
   onArchiveAgent,
@@ -1251,15 +1437,23 @@ function OverviewAgents({
   const { task } = overview;
 
   return (
-    <ListSection title={WORDS.AGENTS} count={overview.agents.length}>
+    <ListSection
+      title={WORDS.AGENTS}
+      count={overview.agents.length === 0 ? undefined : overview.agents.length}
+      add={{
+        label: WORDS.NEW_AGENT,
+        acts: [
+          {
+            label: WORDS.NEW_AGENT,
+            symbol: GLYPH.ADD,
+            onPress: () => router.push({ pathname: "/start-agent", params: { task: task.id } }),
+          },
+        ],
+      }}
+    >
       {overview.agents.map((line) => (
         <TaskAgentRow key={line.agent.id} line={line} task={task} onArchive={onArchiveAgent} />
       ))}
-      <LinkRow
-        symbol={GLYPH.ADD}
-        label={WORDS.NEW_AGENT}
-        onPress={() => router.push({ pathname: "/start-agent", params: { task: task.id } })}
-      />
       {overview.waitingElsewhere === 0 ? null : (
         <LinkRow
           symbol={GLYPH.INBOX}
@@ -1275,6 +1469,7 @@ function OverviewAgents({
 /** The pages the task's agents showed, each opened whole on the app's own page screen, at the version the list holds. */
 function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const { task, pages } = overview;
 
   if (pages.length === 0) return null;
@@ -1289,7 +1484,7 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
           detail={provenanceText(page.at, Date.now())}
           onPress={() =>
             router.push({
-              pathname: "/tasks/page/[id]",
+              pathname: onOwnTab("/tasks/page/[id]"),
               params: {
                 id: page.id,
                 task: task.id,
@@ -1327,6 +1522,7 @@ function OverviewDescription({
   readonly body: string;
 }) {
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const openLink = useOpenLink();
   const { task } = overview;
   const threads = useTaskComments(task.id);
@@ -1343,7 +1539,10 @@ function OverviewDescription({
   );
 
   const openThread = (threadId: string) =>
-    router.push({ pathname: "/tasks/comments/[id]", params: { id: threadId, task: task.id } });
+    router.push({
+      pathname: onOwnTab("/tasks/comments/[id]"),
+      params: { id: threadId, task: task.id },
+    });
 
   if (blocks.length === 0) {
     return (
@@ -1386,7 +1585,7 @@ function OverviewDescription({
                       tone: ROW_ACTION_TONE.NEUTRAL,
                       onPress: () =>
                         router.push({
-                          pathname: "/tasks/comments/new",
+                          pathname: onOwnTab("/tasks/comments/new"),
                           params: {
                             task: task.id,
                             from: `${block.from}`,
@@ -1440,6 +1639,7 @@ function ReadFailedRow({
  */
 function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const { task } = overview;
   const open = useTaskComments(task.id).filter(threadOpen);
   const retry = useTaskCommentsRetry(task.id);
@@ -1464,7 +1664,7 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
           detail={provenanceText(thread.updatedAt, Date.now())}
           onPress={() =>
             router.push({
-              pathname: "/tasks/comments/[id]",
+              pathname: onOwnTab("/tasks/comments/[id]"),
               params: { id: thread.id, task: task.id },
             })
           }
@@ -1492,6 +1692,7 @@ function OverviewPage({
   readonly onArchiveAgent: (agentId: string) => void;
 }) {
   const router = useRouter();
+  const onTab = useOnTab();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
 
@@ -1505,8 +1706,9 @@ function OverviewPage({
 
   // A related task opens on its own Overview, and an agent on its page, where its transcript and its composer stand.
   const open = (id: string) => {
-    if (related.has(id)) router.push(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id }));
-    else if (agents.has(id)) router.push(iosAgentRoute(id));
+    if (related.has(id))
+      router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id })));
+    else if (agents.has(id)) router.push(onTab(iosAgentRoute(id)));
   };
 
   return (
@@ -1550,6 +1752,7 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
 // row pushing its task as the Stack's next screen.
 function TasksStackList(words: TasksSearch) {
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const field = useRefilledSearchField(search);
@@ -1572,7 +1775,9 @@ function TasksStackList(words: TasksSearch) {
           listing={listing}
           look={LIST_LOOK.PLAIN}
           search={search}
-          onSelect={(id) => router.push(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id }))}
+          onSelect={(id) =>
+            router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id })))
+          }
           onRefresh={refreshTasks}
         />
       </Screen>
@@ -1583,10 +1788,12 @@ function TasksStackList(words: TasksSearch) {
 }
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the tree
-// and the picked task side by side, and, where the window is wide enough for
-// three columns, the app sidebar before them, as Mail stands its mailboxes, a
-// mailbox's mail, and a message. The Stack's header steps aside,
-// since the split view draws each column's navigation bar itself.
+// and the picked task side by side. Where the window is wide enough for three
+// columns, the two are handed to the tabs' one split view, which stands them
+// beside the app sidebar, as Mail stands its mailboxes, a mailbox's mail, and
+// a message, and this root draws nothing of its own under it; otherwise the
+// root stands its own split view. The Stack's header steps aside, since the
+// split view draws each column's navigation bar itself.
 function TasksSplitScreen({
   selected,
   select,
@@ -1605,71 +1812,85 @@ function TasksSplitScreen({
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId);
   const read = useTasksRead();
-  const sidebar = useAppSidebar(SIDEBAR_PLACE.TASKS, useSidebarTasks(), selected);
   const archiveAsk = useAgentArchiveAsk();
+  const threeColumns = useThreeColumns();
+  const look = useListLook();
+  const picked = useTasksCollection();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
 
+  // Note that a collection the sidebar picked fills the list only where the sidebar stands, and a portrait window's list keeps every group.
+  const collection =
+    threeColumns && picked !== undefined ? taskTreeCollection(listing.tree, picked) : undefined;
+
+  const list = {
+    view: (
+      <TasksTree
+        listing={listing}
+        look={look}
+        search={search}
+        collection={collection}
+        selected={selected}
+        onSelect={select}
+        onRefresh={refreshTasks}
+      />
+    ),
+    bar: {
+      title: collection?.title ?? TASKS_TITLE,
+      search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
+    },
+  };
+
+  const detail =
+    overview !== undefined ? (
+      <OverviewPage
+        key={overview.task.id}
+        overview={overview}
+        onRefresh={refreshTasks}
+        onArchiveAgent={archiveAsk.archive}
+      />
+    ) : selected === undefined ? (
+      <EmptyState title={SELECT_A_TASK} symbol={GLYPH.TASK} />
+    ) : read && !found.seeking ? (
+      <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
+    ) : (
+      <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
+    );
+
+  const detailBar =
+    overview === undefined
+      ? undefined
+      : {
+          menu: taskMenu(overview, {
+            askDelete: listing.askDelete,
+            newSubTask,
+            history,
+            openRelation,
+            moveDoor,
+          }),
+          path: {
+            path: taskPath(overview.task, overview.workspace),
+            status: overview.task.status,
+          },
+        };
+
+  const first = useListColumn(list);
+  useHandColumns(
+    SIDEBAR_PLACE.TASKS,
+    threeColumns ? { content: list.view, contentBar: list.bar, detail, detailBar } : undefined,
+  );
+
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <Screen>
-        <SplitView
-          {...sidebar.columns({
-            view: (
-              <TasksTree
-                listing={listing}
-                look={sidebar.listLook}
-                search={search}
-                selected={selected}
-                onSelect={select}
-                onRefresh={refreshTasks}
-              />
-            ),
-            bar: {
-              title: TASKS_TITLE,
-              search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
-            },
-          })}
-          detail={
-            overview !== undefined ? (
-              <OverviewPage
-                key={overview.task.id}
-                overview={overview}
-                onRefresh={refreshTasks}
-                onArchiveAgent={archiveAsk.archive}
-              />
-            ) : selected === undefined ? (
-              <EmptyState title={SELECT_A_TASK} symbol={GLYPH.TASK} />
-            ) : read && !found.seeking ? (
-              <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
-            ) : (
-              <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
-            )
-          }
-          detailBar={
-            overview === undefined
-              ? undefined
-              : {
-                  menu: taskMenu(overview, {
-                    askDelete: listing.askDelete,
-                    newSubTask,
-                    history,
-                    openRelation,
-                    moveDoor,
-                  }),
-                  path: {
-                    path: taskPath(overview.task, overview.workspace),
-                    status: overview.task.status,
-                  },
-                }
-          }
-        />
-      </Screen>
+      <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
+      {threeColumns ? null : (
+        <Screen>
+          <SplitView {...first} detail={detail} detailBar={detailBar} />
+        </Screen>
+      )}
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
       {archiveAsk.ask}
-      {sidebar.ask}
     </>
   );
 }

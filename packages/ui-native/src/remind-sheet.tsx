@@ -19,6 +19,7 @@ import {
   foregroundStyle,
   listRowBackground,
   monospacedDigit,
+  presentationBackground,
   presentationDetents,
   presentationDragIndicator,
   scrollContentBackground,
@@ -62,7 +63,7 @@ function TimeRow({ time }: { readonly time: RemindChoice }) {
   const colors = useColors();
 
   return (
-    <SwiftUIButton onPress={time.onPress} modifiers={[listRowBackground(colors.SURFACE)]}>
+    <SwiftUIButton onPress={time.onPress} modifiers={[listRowBackground(colors.RAISED)]}>
       <HStack>
         <Text modifiers={[foregroundStyle(colors.TEXT)]}>{time.label}</Text>
         <Spacer />
@@ -101,13 +102,13 @@ function PickFace({
         modifiers={[
           datePickerStyle("graphical"),
           tint(colors.ACCENT),
-          listRowBackground(colors.SURFACE),
+          listRowBackground(colors.RAISED),
         ]}
       />
       <SwiftUIButton
         {...actContent(REMIND_WORDS.REMIND_ME, GLYPH.TIME)}
         onPress={() => onPick(picked.getTime())}
-        modifiers={[tint(colors.ACCENT), listRowBackground(colors.SURFACE)]}
+        modifiers={[tint(colors.ACCENT), listRowBackground(colors.RAISED)]}
       />
     </Section>
   );
@@ -148,12 +149,14 @@ export function RemindSheet({
           modifiers={[
             presentationDetents(stage === REMIND_STAGE.PICK ? ["large"] : ["medium", "large"]),
             presentationDragIndicator("visible"),
+            // Note that the sheet stands on the form's own ground to its rounded edge and under its drag indicator, which the form's background can't reach.
+            presentationBackground(colors.GROUPED),
           ]}
         >
           <Form
             modifiers={[
               scrollContentBackground("hidden"),
-              background(colors.SIDEBAR),
+              background(colors.GROUPED),
               tint(colors.TEXT),
               font({ textStyle: TYPE_ROLE.ROW_TITLE }),
             ]}
@@ -169,7 +172,7 @@ export function RemindSheet({
                   <SwiftUIButton
                     {...actContent(REMIND_WORDS.PICK, GLYPH.TIME)}
                     onPress={() => setStage(REMIND_STAGE.PICK)}
-                    modifiers={[listRowBackground(colors.SURFACE)]}
+                    modifiers={[listRowBackground(colors.RAISED)]}
                   />
                 </Section>
                 {onClear === undefined ? null : (
@@ -177,7 +180,7 @@ export function RemindSheet({
                     <SwiftUIButton
                       {...actContent(REMIND_WORDS.CLEAR, GLYPH.INBOX)}
                       onPress={onClear}
-                      modifiers={[listRowBackground(colors.SURFACE)]}
+                      modifiers={[listRowBackground(colors.RAISED)]}
                     />
                   </Section>
                 )}

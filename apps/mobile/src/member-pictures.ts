@@ -2,6 +2,7 @@
 
 import { ACCOUNT_STATUS, signedInAccountId } from "@repo/credentials/snapshot";
 import { LIVE_READ } from "@repo/features/live-wire";
+import { readerFirst } from "@repo/features/member-order";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -76,6 +77,36 @@ export function useMemberFaces(workspaceId?: string): MemberOf {
       return member === undefined ? undefined : { name: member.name, picture: member.pictureUrl };
     };
   }, [members]);
+}
+
+/** A member as a people menu lists them: their account id and their name. */
+export type ListedMember = { readonly userId: string; readonly name: string };
+
+/** No members, as before their list is read. */
+const NO_MEMBERS: readonly ListedMember[] = [];
+
+/**
+ * The members of the workspace `workspaceId` names, the reader first and
+ * everyone else by name, as the panel's assignee menu lists them, held
+ * followed while the caller stands, since a task opened by a link may stand
+ * in another workspace than the one the phone works in; none while their
+ * list is unread.
+ */
+export function useListedMembers(workspaceId: string | undefined): readonly ListedMember[] {
+  const acts = useHostActs();
+  const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
+  const members = useMembers(workspaceId);
+  useLiveFollow(workspaceId, (id) => acts[ACT_KIND.WORKSPACE_MEMBERS_FOLLOW]({ workspaceId: id }));
+
+  const readerId = account === undefined ? undefined : signedInAccountId(account);
+
+  return useMemo(
+    () =>
+      members === undefined
+        ? NO_MEMBERS
+        : readerFirst(members, readerId).map(({ userId, name }) => ({ userId, name })),
+    [members, readerId],
+  );
 }
 
 /**

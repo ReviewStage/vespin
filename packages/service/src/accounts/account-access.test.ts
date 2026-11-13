@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import {
   readAccountAccess,
+  readAccountCreatedAt,
   readAccountPreferences,
   writeAccountPreferences,
 } from "@repo/database/models/account-store";
@@ -81,6 +82,7 @@ const openAccounts = () =>
           Option.fromNullishOr(bearers.get(incoming.headers.get("authorization") ?? "")),
         ),
       readPreferences: readAccountPreferences,
+      readCreatedAt: readAccountCreatedAt,
       readAccess: readAccountAccess,
       accountFastOffer,
       writePreferences: writeAccountPreferences,

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { isVideoType } from "@repo/features/conversation-picture-wire";
 import {
   DESCRIPTION_ATTACHMENT_BOUNDS,
   type DescriptionFile,
@@ -11,7 +12,7 @@ import {
   type PlayableVideoType,
   playableVideoTypeSchema,
 } from "@repo/features/video-signature";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
@@ -73,7 +74,7 @@ const countPictures = SqlSchema.findOne({
       db
         .select({
           count: sql<number>`count(*)::int`,
-          videos: sql<number>`(count(*) filter (where ${eq(attachment.contentType, PICTURE_MEDIA_TYPE.WEBM)}))::int`,
+          videos: sql<number>`(count(*) filter (where ${inArray(attachment.contentType, [PICTURE_MEDIA_TYPE.WEBM, PICTURE_MEDIA_TYPE.MP4])}))::int`,
         })
         .from(attachment)
         .where(and(eq(attachment.taskId, taskId), descriptionPicture)),
@@ -171,7 +172,7 @@ export function keepDescriptionAttachment(
         }
 
         if (
-          picture.contentType === PICTURE_MEDIA_TYPE.WEBM &&
+          isVideoType(picture.contentType) &&
           videos >= DESCRIPTION_ATTACHMENT_BOUNDS.MAX_VIDEOS_PER_DESCRIPTION
         ) {
           return { status: DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY_VIDEOS } as const;

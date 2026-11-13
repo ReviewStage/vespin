@@ -1,10 +1,13 @@
 /**
- * video-signature.ts -- what a video's first bytes say it is: a WebM, or not, and the size in pixels its video track states; and whether an MP4 copy of one is one iOS's player streams.
+ * video-signature.ts -- what a video's first bytes say it is: a WebM, an MP4 every player streams, or neither, and the size in pixels its video track states.
  *
  * An agent records what it did in its sandbox as a WebM, the one format the
  * encoder already in its sandbox writes (Playwright's `recordVideo`, or the
  * browser's screencast piped through that encoder), and shows it as it
- * shows a picture (`coder-host/show-image.ts`). As with a picture, the
+ * shows a picture (`coder-host/show-image.ts`). A recording of an app on the
+ * developer's Mac is an H.264 MP4 instead, the one format macOS writes
+ * natively, which every player the app has plays as it is, iOS's among them,
+ * so it is kept as it came, with no copy. As with a picture, the
  * file's name says nothing of what it holds and the type is what it is
  * served under, so the bytes are sniffed: an EBML header opens every
  * Matroska file, and its doctype says which is a WebM. The size is read off
@@ -212,12 +215,56 @@ export function webmDimensions(bytes: Uint8Array): VideoDimensions | undefined {
   return undefined;
 }
 
-/** The four-character types of the MP4 boxes read: the file type, the movie's index, its media, and an H.264 sample entry. */
-const MP4_BOX = { FTYP: "ftyp", MOOV: "moov", MDAT: "mdat", AVC1: "avc1" } as const;
+/** The four-character types of the MP4 boxes read: the file type, the movie's index, a track and its header, its media, and an H.264 sample entry. */
+const MP4_BOX = {
+  FTYP: "ftyp",
+  MOOV: "moov",
+  TRAK: "trak",
+  TKHD: "tkhd",
+  MDAT: "mdat",
+  AVC1: "avc1",
+} as const;
+
+/**
+ * Where a track header's width stands past its version byte and flags: its
+ * times, track id, and duration (20 bytes in version 0, 32 in version 1),
+ * then 52 bytes of layer, group, volume, and matrix; its height follows it.
+ * Each is 16.16 fixed point.
+ */
+const TKHD_WIDTH_AT = { 0: 4 + 20 + 52, 1: 4 + 32 + 52 } as const;
 
 /** The ASCII of the four bytes at `at`. */
 function fourCc(bytes: Uint8Array, at: number): string {
   return String.fromCharCode(...bytes.subarray(at, at + 4));
+}
+
+/** One MP4 box: its type, where its body starts, and where it ends. */
+interface Mp4Box {
+  readonly type: string;
+  readonly body: number;
+  readonly end: number;
+}
+
+/**
+ * The boxes between `from` and `to`, in order, stopping at one whose size
+ * runs past `to`. Each is a 32-bit big-endian size and a type; a size of 1
+ * is a 64-bit size after the type, and a size of 0 runs to `to`.
+ */
+function mp4Boxes(view: DataView, bytes: Uint8Array, from: number, to: number): Mp4Box[] {
+  const boxes: Mp4Box[] = [];
+  let at = from;
+
+  while (at + 8 <= to) {
+    const short = view.getUint32(at);
+    const long = short === 1 && at + 16 <= to;
+    const size = long ? Number(view.getBigUint64(at + 8)) : short === 0 ? to - at : short;
+
+    if (size < 8 || at + size > to) break;
+    boxes.push({ type: fourCc(bytes, at + 4), body: at + (long ? 16 : 8), end: at + size });
+    at += size;
+  }
+
+  return boxes;
 }
 
 /** Whether the bytes hold the ASCII of `word` anywhere between `from` and `to`. */
@@ -227,6 +274,11 @@ function holdsWord(bytes: Uint8Array, word: string, from: number, to: number): b
   }
 
   return false;
+}
+
+/** Whether the bytes open with an MP4's file type box; enough to sniff a stream's first chunk by, which `mp4Dimensions` then holds to an MP4 every player streams. */
+export function startsLikeMp4(head: Uint8Array): boolean {
+  return head.length >= 8 && fourCc(head, 4) === MP4_BOX.FTYP;
 }
 
 /**
@@ -239,26 +291,47 @@ function holdsWord(bytes: Uint8Array, word: string, from: number, to: number): b
 export function streamableMp4(bytes: Uint8Array): boolean {
   if (bytes.length < 8 || fourCc(bytes, 4) !== MP4_BOX.FTYP) return false;
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  let at = 0;
 
-  while (at + 8 <= bytes.length) {
-    const short = view.getUint32(at);
-    const type = fourCc(bytes, at + 4);
+  for (const box of mp4Boxes(view, bytes, 0, bytes.length)) {
+    if (box.type === MP4_BOX.MDAT) return false;
 
-    const size =
-      short === 1 && at + 16 <= bytes.length
-        ? Number(view.getBigUint64(at + 8))
-        : short === 0
-          ? bytes.length - at
-          : short;
-
-    if (size < 8 || at + size > bytes.length) return false;
-
-    if (type === MP4_BOX.MDAT) return false;
-
-    if (type === MP4_BOX.MOOV) return holdsWord(bytes, MP4_BOX.AVC1, at + 8, at + size);
-    at += size;
+    if (box.type === MP4_BOX.MOOV) return holdsWord(bytes, MP4_BOX.AVC1, box.body, box.end);
   }
 
   return false;
+}
+
+/**
+ * The size an MP4's first track that states one is shown at, read off its
+ * track header (`tkhd`); nothing where the bytes are no MP4 a player streams
+ * as it arrives (`streamableMp4`), or no track states a size, as an audio
+ * track's states none.
+ */
+export function mp4Dimensions(bytes: Uint8Array): VideoDimensions | undefined {
+  if (!streamableMp4(bytes)) return undefined;
+  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const index = mp4Boxes(view, bytes, 0, bytes.length).find((box) => box.type === MP4_BOX.MOOV);
+
+  if (index === undefined) return undefined;
+
+  for (const track of mp4Boxes(view, bytes, index.body, index.end)) {
+    if (track.type !== MP4_BOX.TRAK) continue;
+
+    const header = mp4Boxes(view, bytes, track.body, track.end).find(
+      (box) => box.type === MP4_BOX.TKHD,
+    );
+
+    const version = header === undefined ? undefined : bytes[header.body];
+
+    if (header === undefined || (version !== 0 && version !== 1)) continue;
+    const at = header.body + TKHD_WIDTH_AT[version];
+
+    if (at + 8 > header.end) continue;
+    const width = view.getUint32(at) >>> 16;
+    const height = view.getUint32(at + 4) >>> 16;
+
+    if (width > 0 && height > 0) return { width, height };
+  }
+
+  return undefined;
 }
