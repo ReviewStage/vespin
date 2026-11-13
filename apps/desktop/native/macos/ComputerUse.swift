@@ -47,7 +47,7 @@ import UniformTypeIdentifiers
 /// in no screenshot, since a read captures the app's window alone.
 ///
 /// Note that input is never posted to the system's event stream: an element
-/// is pressed through Accessibility, as is a point on a page's element, and
+/// is pressed through Accessibility, as is a point on a page's control, and
 /// any other point is clicked by an event posted to the app's own process
 /// aimed at its window, so the developer keeps the cursor and whatever app
 /// they are typing into. A press answers pressed only once the window's
