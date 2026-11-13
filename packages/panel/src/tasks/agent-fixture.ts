@@ -1459,9 +1459,42 @@ function stagedTranscripts(held: AppTranscripts, transcript: AppTranscript): App
   return laid;
 }
 
-/** Where the agent's `run_on_mac` stands, as the card its Runs on chip hangs reads it: its starter's Mac, listening. */
+/** The followers whose machines the agent's default may be set to. */
+const MACHINE_OWNERS = {
+  ADA: { userId: "user-ada", name: "Ada Lovelace" },
+  MANUEL: { userId: "user-manuel", name: "Manuel Ruiz" },
+} as const;
+
+/** Where the agent's `run_on_mac` stands, as its place chip's Default machine reads it: Ada's Mac mini, listening, among the machines of the followers who let agents use theirs. */
 const RUN_ON_MAC_HELD = {
-  rows: { runOnMac: { on: true, owner: { userId: "user-ada", name: "Ada Lovelace" } } },
+  rows: {
+    runOnMac: {
+      on: true,
+      owner: MACHINE_OWNERS.ADA,
+      machine: { id: "device-ada-mini", name: "Ada's Mac mini" },
+    },
+    machines: [
+      { id: "device-ada-mini", name: "Ada's Mac mini", owner: MACHINE_OWNERS.ADA, online: true },
+      {
+        id: "device-ada-laptop",
+        name: "Ada's MacBook Pro",
+        owner: MACHINE_OWNERS.ADA,
+        online: false,
+      },
+      {
+        id: "device-manuel-laptop",
+        name: "Manuel's MacBook Pro",
+        owner: MACHINE_OWNERS.MANUEL,
+        online: true,
+      },
+      {
+        id: "device-manuel-studio",
+        name: "Manuel's Mac Studio",
+        owner: MACHINE_OWNERS.MANUEL,
+        online: false,
+      },
+    ],
+  },
 } as const;
 
 /** Main's held `run_on_mac` reads with the agent's own laid, one object for each of main's. */

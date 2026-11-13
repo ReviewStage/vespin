@@ -40,7 +40,7 @@ import {
 import { EXPERIMENT } from "@repo/settings";
 import { eq } from "drizzle-orm";
 import { Effect } from "effect";
-import { MACHINE_ROUTE, routeOf } from "./machine-routing.js";
+import { defaultMachinesOf, MACHINE_ROUTE, routeOf } from "./machine-routing.js";
 
 const NO_MACHINE = "Not run: no machine can take it.";
 
@@ -183,6 +183,37 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
           switchedOff.kind === MACHINE_ROUTE.REFUSED ? switchedOff.reason : "",
           /^Not run: Ben doesn't let this task's agents use their machines\./u,
         );
+      }),
+  );
+
+  it.effect(
+    "an agent's default may be set to a machine of anyone who lets the task's agents use theirs, online or not, and to no machine of a follower whose switch is off",
+    () =>
+      Effect.gen(function* () {
+        const { owner, teammate, workspace, taskId, target } = yield* openPeople;
+        const laptop = yield* openMachine(owner, "Laptop", false);
+        const studio = yield* openMachine(teammate, "Studio", true);
+        yield* followTask(owner, { taskId, followerId: teammate, machines: true });
+
+        yield* setWorkspaceExperiment({
+          organizationId: workspace,
+          experiment: EXPERIMENT.FOLLOWING,
+          on: true,
+          by: owner,
+        });
+
+        const listed = (yield* defaultMachinesOf(target)).map(({ id, online }) => ({ id, online }));
+        yield* setFollowerMachines(teammate, taskId, false);
+        const switchedOff = (yield* defaultMachinesOf(target)).map(({ id }) => id);
+
+        assert.deepEqual(
+          [...listed].sort((a, b) => a.id.localeCompare(b.id)),
+          [
+            { id: laptop, online: false },
+            { id: studio, online: true },
+          ].sort((a, b) => a.id.localeCompare(b.id)),
+        );
+        assert.deepEqual(switchedOff, [laptop]);
       }),
   );
 

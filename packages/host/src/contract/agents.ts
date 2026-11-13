@@ -25,6 +25,8 @@ import {
   agentChangesAnswerViewSchema,
   agentChooseParamsSchema,
   agentDefaultAnswerViewSchema,
+  agentDefaultMachineAnswerViewSchema,
+  agentDefaultMachineParamsSchema,
   agentDefaultWriteParamsSchema,
   agentDeleteAnswerViewSchema,
   agentGitHubImageParamsSchema,
@@ -132,6 +134,14 @@ export const AGENT_ACTS = declaredActs({
     refusal: "Could not change the default model on this system.",
     panelOnly: true,
     door: ACT.ROW_WRITE,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  AGENTS_SET_DEFAULT_MACHINE: hostAct({
+    input: agentDefaultMachineParamsSchema,
+    output: agentDefaultMachineAnswerViewSchema,
+    refusal: "Could not change that agent's default machine on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
     unanswered: AGENT_UNANSWERED,
   }),
   AGENTS_CHAPTERS_PROVIDER_WRITE: hostAct({

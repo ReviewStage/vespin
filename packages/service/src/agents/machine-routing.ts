@@ -70,10 +70,14 @@ export type MachineRoute =
       readonly machine?: RoutedMachine;
     };
 
-/** A machine a call may reach, with whether its owner lets the task's agents use it. */
+/** A machine a call may reach, with whether its owner lets the task's agents use it and whether it listened lately. */
 interface Candidate extends CommandMachine {
   readonly lets: boolean;
+  readonly online: boolean;
 }
+
+/** A machine as the panel lists it to be an agent's default: as an answer names it, with whether its owner lets the task's agents use it and whether it listened lately. */
+export type ListedMachine = RoutedMachine & { readonly lets: boolean; readonly online: boolean };
 
 /** The people whose machines the call may reach, each with whether they let the task's agents use them. */
 function peopleOf(routing: MachineRouting) {
@@ -94,6 +98,28 @@ function peopleOf(routing: MachineRouting) {
         all.map((follower) => ({ userId: follower.userId, lets: follower.machines })),
     });
   });
+}
+
+/** The machines of the people given, each with whether its owner lets the task's agents use it and whether it listened lately, and who lets them. */
+function machinesOfPeople(people: readonly { readonly userId: string; readonly lets: boolean }[]) {
+  return Effect.gen(function* () {
+    const lets = new Map(people.map((person) => [person.userId, person.lets]));
+    const machines = yield* commandMachinesOf(people.map((person) => person.userId));
+    const since = (yield* Clock.currentTimeMillis) - Duration.toMillis(ONLINE_WITHIN);
+
+    const candidates: readonly Candidate[] = machines.map((machine) => ({
+      ...machine,
+      lets: lets.get(machine.userId) === true,
+      online: machine.seenAt !== null && machine.seenAt.getTime() >= since,
+    }));
+
+    return { lets, candidates };
+  });
+}
+
+/** The machines a call made under the routing given may reach, as `machinesOfPeople` reads them. */
+function candidatesOf(routing: MachineRouting) {
+  return Effect.flatMap(peopleOf(routing), machinesOfPeople);
 }
 
 function routed(machine: CommandMachine): RoutedMachine {
@@ -119,17 +145,12 @@ function others(reachable: readonly CommandMachine[], refused?: CommandMachine):
 }
 
 /** Why the machine given cannot take a call of the kind given; none where it can. */
-function whyNot(
-  machine: Candidate,
-  kind: MachineCommandKind,
-  online: (machine: CommandMachine) => boolean,
-): string | undefined {
+function whyNot(machine: Candidate, kind: MachineCommandKind): string | undefined {
   if (!machine.lets) {
     return `${machine.ownerName} doesn't let this task's agents use their machines.`;
   }
 
-  if (!online(machine))
-    return `${machine.name} is offline, or ${PRODUCT_NAME} isn't running on it.`;
+  if (!machine.online) return `${machine.name} is offline, or ${PRODUCT_NAME} isn't running on it.`;
 
   if (kind === MACHINE_COMMAND_KIND.SHELL && machine.commandMode === MACHINE_COMMAND_MODE.NEVER) {
     return `${machine.name} doesn't let agents run commands (its Settings › This Mac is set to Never).`;
@@ -156,24 +177,11 @@ export function routeOf(
 ): TaskStoreEffect<MachineRoute> {
   return Effect.gen(function* () {
     const routing = yield* machineRoutingOf(target);
-    const people = yield* peopleOf(routing);
-    const lets = new Map(people.map((person) => [person.userId, person.lets]));
-    const machines = yield* commandMachinesOf(people.map((person) => person.userId));
-
-    const candidates = machines.map((machine) => ({
-      ...machine,
-      lets: lets.get(machine.userId) === true,
-    }));
-
-    const since = (yield* Clock.currentTimeMillis) - Duration.toMillis(ONLINE_WITHIN);
-
-    const online = (machine: CommandMachine) =>
-      machine.seenAt !== null && machine.seenAt.getTime() >= since;
-
-    const reachable = candidates.filter((machine) => whyNot(machine, kind, online) === undefined);
+    const { lets, candidates } = yield* candidatesOf(routing);
+    const reachable = candidates.filter((machine) => whyNot(machine, kind) === undefined);
 
     const to = (machine: Candidate): MachineRoute => {
-      const why = whyNot(machine, kind, online);
+      const why = whyNot(machine, kind);
 
       return why === undefined
         ? { kind: MACHINE_ROUTE.MACHINE, machine: routed(machine) }
@@ -219,7 +227,7 @@ export function routeOf(
 
     // A Mac from before machines claimed commands listens as its account alone, and takes what is queued for none.
     const ownersOnline = candidates.some(
-      (machine) => machine.userId === routing.userId && online(machine),
+      (machine) => machine.userId === routing.userId && machine.online,
     );
 
     if (
@@ -231,5 +239,50 @@ export function routeOf(
     }
 
     return { kind: MACHINE_ROUTE.REFUSED, reason: `${noMachine}${others(reachable)}` };
+  });
+}
+
+/** A machine as a list names it (`ListedMachine`). */
+function listedOf(machine: Candidate): ListedMachine {
+  return { ...routed(machine), lets: machine.lets, online: machine.online };
+}
+
+/**
+ * The machines a call made in the conversation given may reach by policy,
+ * those whose owners let the task's agents use them, online or not, the
+ * one that listened last first: what an agent's default machine may be set
+ * to, and what the panel lists to pick one from.
+ */
+export function defaultMachinesOf(
+  target: ConversationTarget,
+): TaskStoreEffect<readonly ListedMachine[]> {
+  return Effect.gen(function* () {
+    const { candidates } = yield* candidatesOf(yield* machineRoutingOf(target));
+
+    return candidates.filter((machine) => machine.lets).map(listedOf);
+  });
+}
+
+/**
+ * The machines of a task's followers, each with whether its owner lets the
+ * task's agents use it and whether it listened lately, as a follower's card
+ * lists them, read for the account given; none where the account does not
+ * reach the task. Note that the caller decides the workspace has Following on.
+ */
+export function followerMachinesOf(
+  userId: string,
+  taskId: string,
+): TaskStoreEffect<readonly ListedMachine[]> {
+  return Effect.gen(function* () {
+    const followers = yield* listTaskFollowers(userId, taskId);
+
+    if (Option.isNone(followers)) return [];
+
+    const people = followers.value.map((follower) => ({
+      userId: follower.userId,
+      lets: follower.machines,
+    }));
+
+    return (yield* machinesOfPeople(people)).candidates.map(listedOf);
   });
 }

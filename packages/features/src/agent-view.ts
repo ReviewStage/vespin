@@ -218,6 +218,7 @@ const AGENT_ROW_CALLS = {
     startFrom: agentsContract.startFrom,
     change: agentsContract.change,
     delete: agentsContract.delete,
+    setDefaultMachine: agentsContract.setDefaultMachine,
   },
 };
 
@@ -1130,6 +1131,17 @@ export type AgentOverviewConversationAnswerView =
 const agentWorkspaceToolsAnswerViewSchema = answerView(agentsContract.workspaceTools);
 
 export type AgentWorkspaceToolsAnswerView = typeof agentWorkspaceToolsAnswerViewSchema.Type;
+
+/** An agent's default machine set, as the window hears it: its tools as they then stand, or why it is unchanged. */
+export const agentDefaultMachineAnswerViewSchema = answerView(agentsContract.setDefaultMachine);
+
+export type AgentDefaultMachineAnswerView = typeof agentDefaultMachineAnswerViewSchema.Type;
+
+/** One agent's default machine set, as the window asks it: the agent, and the machine by its id. */
+export const agentDefaultMachineParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  machineId: EffectSchema.NonEmptyString,
+});
 
 /** What the reviewer and label pickers of an agent's Pull request tab offer, as the window hears it: the labels, users, and teams, or why there is no answer. */
 const agentReviewOptionsAnswerViewSchema = answerView(agentsContract.reviewOptions, {

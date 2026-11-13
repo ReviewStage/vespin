@@ -31,6 +31,7 @@ import {
   type AgentCallFailure,
   type AgentChangesAnswerView,
   type AgentDefaultAnswer,
+  type AgentDefaultMachineAnswerView,
   type AgentDeleteAnswerView,
   type AgentGitHubImageView,
   type AgentInboxAnsweredView,
@@ -1473,6 +1474,17 @@ export class HostedAgentClient {
     agentId: string,
   ): Effect.Effect<AgentWorkspaceToolsAnswerView, never, HttpClient.HttpClient> {
     return hostedCall(this.#hosted.agents.workspaceTools, { id: agentId });
+  }
+
+  /** One agent's default machine set, where its terminal commands and computer use go when a call names none; answers its tools as they then stand. */
+  setDefaultMachine(
+    agentId: string,
+    machineId: string,
+  ): Effect.Effect<AgentDefaultMachineAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.setDefaultMachine, {
+      params: { id: agentId },
+      body: { machineId },
+    });
   }
 
   /** What the reviewer and label pickers of one agent's Pull request tab offer: its repository's labels, assignable users, and teams as GitHub holds them now. */

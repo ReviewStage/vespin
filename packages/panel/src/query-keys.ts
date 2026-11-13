@@ -37,6 +37,8 @@ export const QUERY_ROOT = {
   COMPUTER_USE_APPS: "computer-use-apps",
   /** One app's icon on this Mac, by its bundle id or its name (`tasks/mac-apps.ts`). */
   COMPUTER_USE_APP_ICON: "computer-use-app-icon",
+  /** A task's followers' machines, with where each stands, as a follower's card lists them (`tasks/following-chip.tsx`). */
+  FOLLOWER_MACHINES: "follower-machines",
   /** The apps the account's own machines always allow, as an agent's `@` lists them off the agent's Mac. */
   MACHINE_ALLOWED_APPS: "machine-allowed-apps",
   INSTALLED_SKILL: "installed-skill",

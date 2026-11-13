@@ -30,9 +30,11 @@ import {
 import { readTaskHeader } from "@repo/database/models/task-store";
 import { workspaceExperimentOn } from "@repo/database/models/workspace-experiment-store";
 import type { TaskFollowersAnswer } from "@repo/features/task-wire";
+import type { TaskMachinesAnswer } from "@repo/features/workspace-tools-wire";
 import { EXPERIMENT } from "@repo/settings";
 import type { TaskFollowerWire } from "@repo/wire";
 import { Effect, Option, Result } from "effect";
+import { followerMachinesOf } from "../agents/machine-routing.js";
 import { experimentOnIn } from "../agents/workspace-experiment-on.js";
 import {
   HOSTED_REFUSAL,
@@ -205,5 +207,26 @@ export function followerReadingsOf(
         })),
       ]),
     );
+  });
+}
+
+/** The machines of the task's followers, each with whose it is, whether its owner lets the task's agents use it, and whether it listened lately, as a follower's card lists them; refused as no task where Following is off or the account does not reach it. */
+export function followerMachinesAsked(
+  userId: string,
+  taskId: string,
+): Effect.Effect<TaskMachinesAnswer, HostedRefusal, DatabaseServices> {
+  return Effect.gen(function* () {
+    yield* followingOnFor(userId, taskId);
+    const machines = yield* hostedStoreOrUnavailable(followerMachinesOf(userId, taskId));
+
+    return {
+      machines: machines.map(({ id, name, owner, online, lets }) => ({
+        id,
+        name,
+        owner,
+        online,
+        lets,
+      })),
+    };
   });
 }

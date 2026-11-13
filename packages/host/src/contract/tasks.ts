@@ -54,6 +54,7 @@ import {
   tasksFollowParamsSchema,
   tasksGitHubPageAnswerSchema,
   tasksLinkStandingParamsSchema,
+  tasksMachinesAnswerSchema,
   tasksMarkReadParamsSchema,
   tasksMoveAnswerSchema,
   tasksMoveParamsSchema,
@@ -292,6 +293,14 @@ export const TASKS_ACTS = declaredActs({
     refusal: "Could not remove that follower on this system.",
     panelOnly: true,
     door: ACT.ROW_WRITE,
+    unanswered: UNANSWERED,
+  }),
+  TASKS_FOLLOWER_MACHINES: hostAct({
+    input: tasksFollowParamsSchema,
+    output: tasksMachinesAnswerSchema,
+    refusal: "Could not read that task's followers' machines on this system.",
+    panelOnly: true,
+    door: ACT.READ,
     unanswered: UNANSWERED,
   }),
   TASKS_EDIT: hostAct({

@@ -8,6 +8,7 @@ import {
   type AgentSummary,
 } from "@repo/features/agent-wire";
 import type { MacOffer } from "@repo/features/models-wire";
+import { AGENT_ACT_KIND } from "@repo/host/contract";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -15,7 +16,7 @@ import { afterEach, beforeAll, test, vi } from "vitest";
 import { appBridge } from "../app-bridge.js";
 import { OpenSettingsProvider } from "../open-settings.js";
 import { fakeActPort } from "../testing/app-bridge.js";
-import { handBeats, handState } from "../testing/app-state.js";
+import { handBeats, handHostReads, handState } from "../testing/app-state.js";
 import { withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { AgentPlace } from "./agent-place.js";
 import type { PlaceMove } from "./move-agent.js";
@@ -124,18 +125,14 @@ function cloudChip(): HTMLButtonElement {
   );
 }
 
-/** The facts the open popover lists, each its label and its value. */
-function factsShown(): readonly (readonly [string, string])[] {
-  return [...document.querySelectorAll(".ui-fact")].map(
-    (fact) =>
-      [
-        fact.querySelector("dt")?.textContent ?? "",
-        fact.querySelector("dd")?.textContent ?? "",
-      ] as const,
-  );
+/** The rows of the listbox a reader hears by the name given, as each reads. */
+function optionsOf(list: string): readonly string[] {
+  return [
+    ...document.querySelectorAll(`[role="listbox"][aria-label="${list}"] [role="option"]`),
+  ].map((option) => option.textContent ?? "");
 }
 
-test("a cloud agent's chip reads Cloud alone, a reader hearing its sandbox's state, and its popover lists the state and the sandbox's size", async () => {
+test("a cloud agent's chip reads Cloud alone, a reader hearing its sandbox's state, and its popover says where it runs", async () => {
   const running = {
     state: SANDBOX_STATE.RUNNING,
     stateAt: Date.now(),
@@ -147,17 +144,13 @@ test("a cloud agent's chip reads Cloud alone, a reader hearing its sandbox's sta
   assert.equal(cloudChip().getAttribute("aria-label"), "Runs on: Cloud, Running");
 
   act(() => cloudChip().click());
-  assert.deepEqual(factsShown(), [
-    ["Status", "Running"],
-    ["CPU", "4 vCPUs"],
-    ["Memory", "8 GB"],
-  ]);
+  assert.deepEqual(optionsOf("Where this agent works"), ["Agent runs inCloud"]);
 
   await placeOf({}, undefined);
   assert.equal(cloudChip().getAttribute("aria-label"), "Runs on: Cloud, Off");
 });
 
-/** The cloud agent's chip drawn with the move given, opened, and the rows its menu lists, the settings the window was asked to open kept. */
+/** The cloud agent's chip drawn with the move given, opened on its Agent runs in row, and the places its submenu lists, the settings the window was asked to open kept. */
 async function placeMenuOf(move: PlaceMove, opened: SettingsLink[]): Promise<HTMLElement[]> {
   clear();
   fakeActPort({});
@@ -184,11 +177,16 @@ async function placeMenuOf(move: PlaceMove, opened: SettingsLink[]): Promise<HTM
   );
   await settle();
   act(() => container.querySelector<HTMLButtonElement>('button[aria-label^="Runs on"]')?.click());
+  act(() => document.querySelector<HTMLElement>('[role="option"]')?.click());
 
-  return [...document.querySelectorAll<HTMLElement>('[role="option"]')];
+  return [
+    ...document.querySelectorAll<HTMLElement>(
+      '[role="listbox"][aria-label="Move this agent to"] [role="option"]',
+    ),
+  ];
 }
 
-test("where a move is offered, the popover lists the places under its facts, Cloud wearing its sandbox's dot, and moves the agent to the one picked, and with no Mac sends the member to add one", async () => {
+test("where a move is offered, Agent runs in opens the places, Cloud wearing its sandbox's dot, and moves the agent to the one picked, and with no Mac sends the member to add one", async () => {
   const moved: AgentRunsOnRequest[] = [];
   const opened: SettingsLink[] = [];
   const studio: MacOffer = { deviceId: DEVICE, name: "Studio", providers: [] };
@@ -201,7 +199,6 @@ test("where a move is offered, the popover lists the places under its facts, Clo
   };
 
   const rows = await placeMenuOf(withMac, opened);
-  assert.deepEqual(factsShown(), [["Status", "Off"]]);
   assert.equal(rows[0]?.querySelector('[role="img"]')?.getAttribute("aria-label"), "Off");
   assert.deepEqual(
     rows.map((row) => row.textContent?.includes("Studio") ?? false),
@@ -214,4 +211,63 @@ test("where a move is offered, the popover lists the places under its facts, Clo
   act(() => bare.find((row) => row.textContent?.includes("Set up a Mac"))?.click());
   assert.deepEqual(opened, [{ page: SETTINGS_VIEW.HOSTS }]);
   assert.equal(moved.length, 1);
+});
+
+test("the Default machine row names the agent's default with its dot, offline as such, and a pick of another machine sets it", async () => {
+  const sent: unknown[] = [];
+  const owner = { userId: "user-ada", name: "Ada Lovelace" };
+
+  fakeActPort({
+    [AGENT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]: (payload) => {
+      sent.push(payload);
+
+      return Promise.resolve({});
+    },
+  });
+
+  handState({});
+  handBeats({});
+
+  handHostReads({
+    workspaceTools: {
+      [AGENT_ID]: {
+        rows: {
+          runOnMac: {
+            on: false,
+            reason: "mac-away",
+            owner,
+            machine: { id: "laptop", name: "Laptop" },
+          },
+          machines: [
+            { id: "laptop", name: "Laptop", owner, online: false },
+            { id: "studio", name: "Studio", owner, online: true },
+          ],
+        },
+      },
+    },
+  });
+  writeAppState(await appBridge().requestAppState());
+  const container = document.createElement("div");
+  document.body.append(container);
+  const root = createRoot(container);
+  roots.push(root);
+  act(() => root.render(withQueryClient(createElement(AgentPlace, { agent: { id: AGENT_ID } }))));
+  await settle();
+  act(() => cloudChip().click());
+  const rows = optionsOf("Where this agent works");
+  act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click());
+  const machines = optionsOf("Terminal commands and computer use go here");
+
+  act(() =>
+    [
+      ...document.querySelectorAll<HTMLElement>(
+        '[role="listbox"][aria-label="Terminal commands and computer use go here"] [role="option"]',
+      ),
+    ][1]?.click(),
+  );
+  await settle();
+
+  assert.deepEqual(rows, ["Agent runs inCloud", "Default machineLaptop, Offline"]);
+  assert.equal(machines.length, 2);
+  assert.deepEqual(sent, [{ agentId: AGENT_ID, machineId: "studio" }]);
 });

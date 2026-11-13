@@ -30,15 +30,16 @@ import {
 } from "@repo/ui";
 import { type Actor, actorName, personActor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
+import { ReplayWords } from "@repo/ui/session-replay-marks";
 import type { TaskFollowerWire } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { type Unreached, unreachedAs } from "../act.js";
+import { askAct, type Unreached, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorHead, ActorMark, ActorStack } from "../actor-ref.js";
-import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { memberRows } from "../member-rows.js";
+import { QUERY_ROOT } from "../query-keys.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
@@ -63,15 +64,13 @@ import { DeviceStandingGlyph, STANDING_WORDS } from "./runs-on.js";
  * workspace is listed only once something is searched, by name or email,
  * so the list says who follows until the reader looks for someone to add.
  * Each row hangs the person's card: a follower's says Assignee or
- * Following, the reader's own machines each with the Runs on menu's dot and
- * its words for where the machine stands, and what the task's agents may do
- * on their machines. Pinned under the list stands the reader's own switch,
+ * Following, their machines each with the Runs on menu's dot and words for
+ * whether it listened for commands lately, read of the service as a card
+ * shows (`TASKS_FOLLOWER_MACHINES`), and what the task's agents may do on
+ * their machines. Pinned under the list stands the reader's own switch,
  * or Follow alone where they do not follow. A write is drawn on the task at
  * once (`compose-tasks.ts`), and a refusal said in a toast. Where the task
  * takes no change, the popover lists the followers alone.
- *
- * Note that a teammate's machines are not listed on their card, since the
- * window reads only the reader's own; machine routing reads them later.
  */
 
 /** A follower write's answer as the window hears it: the host's, or one that never arrived. */
@@ -140,19 +139,37 @@ function useFollowerActors(
   });
 }
 
-/** A follower's card: who they are and Assignee or Following, the reader's own machines with where each stands, and what the task's agents may do on their machines. */
+/** How long a follower's machines read stands before a card shown again asks anew, since where each stands moves by the minute. */
+const MACHINES_FRESH_MS = 15_000;
+
+/** The task's followers' machines, read as a card shows and again once stale; none before they land, or where the read failed. */
+function useFollowerMachines(taskId: string) {
+  const answer = useQuery({
+    queryKey: [QUERY_ROOT.FOLLOWER_MACHINES, taskId],
+    queryFn: () => askAct(ACT_KIND.TASKS_FOLLOWER_MACHINES, { taskId }),
+    staleTime: MACHINES_FRESH_MS,
+    retry: false,
+  }).data;
+
+  return answer === undefined || "failure" in answer ? undefined : answer.machines;
+}
+
+/** A follower's card: who they are and Assignee or Following, their machines with whether each listened for commands lately, and what the task's agents may do on their machines. */
 function FollowerCard({
+  taskId,
   follower,
   actor,
   you,
-  book,
 }: {
+  taskId: string;
   follower: TaskFollowerWire;
   actor: Actor;
   you: boolean;
-  book: PresenceBook;
 }): React.JSX.Element {
-  const machines = you ? [...book.hosts.values()] : [];
+  const machines = (useFollowerMachines(taskId) ?? []).filter(
+    (machine) => machine.owner.userId === follower.userId,
+  );
+
   const whose = you ? "your" : actorName(actor, { possessive: true });
 
   return (
@@ -160,15 +177,17 @@ function FollowerCard({
       <ActorHead actor={actor} sub={followerRoleWords(follower)} />
       {machines.length === 0 ? null : (
         <HoverCardList label="Machines">
-          {machines.map((host) => {
+          {machines.map((machine) => {
             // Note that the card names a machine's standing as the Runs on menu does, its words matching its dot.
-            const standing = presenceStanding(book, host.id) ?? DEVICE_STANDING.CHECKING;
+            const standing = machine.online ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE;
 
             return (
-              <li key={host.id}>
+              <li key={machine.id}>
                 <HoverCardRow
-                  glyph={<DeviceStandingGlyph device={host} standing={standing} hinted={false} />}
-                  label={host.name}
+                  glyph={
+                    <DeviceStandingGlyph device={undefined} standing={standing} hinted={false} />
+                  }
+                  label={<ReplayWords masked>{machine.name}</ReplayWords>}
                   end={STANDING_WORDS[standing]}
                 />
               </li>
@@ -270,7 +289,6 @@ function FollowingShown({
   const { members, readerId } = useMemberDirectory();
   const view = followersView(followers, readerId);
   const actors = useFollowerActors(view.followers, task.assignee);
-  const book = useDevicePresence(on && view.reader !== undefined);
   const writes = useFollowerWrites(task.id);
   // The list as the visit's first press found it, which holds its rows in place until the popover closes.
   const [visit, setVisit] = useState<readonly string[] | undefined>(undefined);
@@ -289,7 +307,7 @@ function FollowingShown({
           label: you ? FOLLOWING_WORDS.YOU : actorName(actor),
           icon: <ActorMark actor={actor} size={ACTOR_SIZE.INLINE} />,
           end: <RowEnd follower={follower} />,
-          card: <FollowerCard follower={follower} actor={actor} you={you} book={book} />,
+          card: <FollowerCard taskId={task.id} follower={follower} actor={actor} you={you} />,
           // Note that the assignee's row says why by its own Assignee mark, so the dimmed row prints no second one.
           ...(follower.assignee && editable
             ? { disabled: FOLLOWING_WORDS.ASSIGNEE_STAYS, why: MENU_ROW_WHY.MARK }

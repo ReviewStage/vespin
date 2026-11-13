@@ -45,6 +45,7 @@ import {
   listWorkspaceAgentLines,
   nativeRouteOfReached,
   readVisibleAgentWorkspace,
+  updateAgentTargetDevice,
 } from "@repo/database/models/agent-store";
 import { devicesNamed } from "@repo/database/models/device-store";
 import { readTaskWorkspace } from "@repo/database/models/task-store";
@@ -90,7 +91,7 @@ import {
   rewoundAgentById,
   warmedAgent,
 } from "./agent-lifecycle.js";
-import { controlsAgent, reachedAgentById } from "./agent-reach.js";
+import { admitsPlanWriter, controlsAgent, reachedAgentById } from "./agent-reach.js";
 import {
   askedPullRequest,
   githubReadRefusal,
@@ -137,7 +138,7 @@ import {
   shellRefusal,
 } from "./terminal/sandbox-reach.js";
 import { listedPage } from "./workspace-agents.js";
-import { runOnMacStanding } from "./workspace-tools.js";
+import { defaultMachineChoices, runOnMacStanding } from "./workspace-tools.js";
 
 export interface AgentsProcedureSeams extends PublishedReach, SandboxDeleteReach {
   resolveUserId: UserIdResolver;
@@ -306,7 +307,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     },
   });
 
-  // Whose Mac the agent's `run_on_mac` runs on, and whether it would run there now.
+  // Whose Mac the agent's `run_on_mac` runs on, whether it would run there now, and the machines its default may be set to.
   const workspaceToolsOf = (userId: string, agentId: string) =>
     Effect.gen(function* () {
       const { agent, target } = yield* reachedAgentById(userId, agentId);
@@ -316,7 +317,9 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       if (Option.isNone(visible)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const runOnMac = yield* hostedStoreOrUnavailable(runOnMacStanding(agent, target));
 
-      return runOnMac === undefined ? {} : { runOnMac };
+      if (runOnMac === undefined) return {};
+
+      return { runOnMac, machines: yield* hostedStoreOrUnavailable(defaultMachineChoices(target)) };
     });
 
   return {
@@ -681,6 +684,29 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** Which of our own tools the agent is offered, and whether its `run_on_mac` would run now. */
     workspaceTools: signedIn.workspaceTools.effect(function* ({ input, context }) {
       return yield* workspaceToolsOf(context.userId, input.id);
+    }),
+    /**
+     * The agent's default machine set, where its terminal commands and
+     * computer use go when a call names none, by a member who may message it,
+     * and only to a machine of someone who lets the task's agents use theirs
+     * (`defaultMachineChoices`), online or not; answering its tools as they
+     * then stand.
+     */
+    setDefaultMachine: signedIn.setDefaultMachine.effect(function* ({ input, context }) {
+      const { userId, agent, target } = yield* reachedAgentById(context.userId, input.params.id);
+
+      if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+      yield* admitsPlanWriter(userId, agent);
+      const { machineId } = input.body;
+      const choices = yield* hostedStoreOrUnavailable(defaultMachineChoices(target));
+
+      if (!choices.some((machine) => machine.id === machineId)) {
+        return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+      }
+
+      yield* hostedStoreOrUnavailable(updateAgentTargetDevice(userId, agent.id, machineId));
+
+      return yield* workspaceToolsOf(userId, agent.id);
     }),
     /** The agent's sandbox resumed from its snapshot (`agent-lifecycle.ts`), the developer's click and nothing else, answering where it stands after. */
     sandboxResume: signedIn.sandboxResume.effect(function* ({ input, context }) {

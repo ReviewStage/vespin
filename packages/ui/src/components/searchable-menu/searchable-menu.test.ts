@@ -392,6 +392,34 @@ test("a listed row with a submenu opens it on Enter or Right rather than being p
   assert.deepEqual(said, ["open mac"]);
 });
 
+test("a submenu's row that cannot be picked takes no highlight and no Enter, as a machine offline in Move this agent to", () => {
+  const said: string[] = [];
+
+  const rows = browserRows(said).map((row) =>
+    row.submenu === undefined
+      ? row
+      : {
+          ...row,
+          submenu: {
+            ...row.submenu,
+            rows: row.submenu.rows.map((choice, index) =>
+              index === 0 ? { ...choice, disabled: "Offline" } : choice,
+            ),
+          },
+        },
+  );
+
+  mount({ placeholder: "Search tabs", rows });
+  press({ key: "ArrowDown" });
+  press({ key: "Enter" });
+  const inside = announced();
+  press({ key: "ArrowUp" });
+  press({ key: "Enter" });
+
+  assert.equal(inside, "This Mac");
+  assert.deepEqual(said, ["open mac"]);
+});
+
 test("a listed row's ⋯ opens its acts beside it, and a press on the row still picks it", () => {
   const said: string[] = [];
 

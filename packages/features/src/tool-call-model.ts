@@ -95,6 +95,8 @@ export interface ToolCallView {
   readonly provider?: IntegrationProvider;
   /** For a call on an app on the developer's Mac, the picture its icon was kept as beside the transcript, which its row wears in its kind's icon's place. */
   readonly appIcon?: string;
+  /** For a terminal command or an action on an app, the machine its answer says it went to, which its row names; absent while it has not answered, and where its answer names none, as one from before machines were named. */
+  readonly machine?: CallMachine;
   /** For a call of an MCP server's tool, or a search of its tools, the server's name as its card gives it, which the row says it ran on. */
   readonly server?: string;
   /** For the same calls, the connection they ran on, which the window names by the account's own name where it holds more than one (`connection-names.tsx`); `server` stands where it does not know it. */
@@ -325,6 +327,29 @@ function browserOutput(output: WireValue): ToolBlock {
   return stringAt(output, "status") === BROWSER_NOT_RUN
     ? textBlock(stringAt(output, "reason") ?? "")
     : jsonBlock(output);
+}
+
+/** A machine a call's answer names: its id and name, and whose it is. */
+export interface CallMachine {
+  readonly id: string;
+  readonly name: string;
+  readonly owner: { readonly userId: string; readonly name: string };
+}
+
+/** The machine a `run_on_mac` or `computer` answer names it went to, or was refused on (`machine`); none where it names none. */
+function callMachineOf(output: WireValue | undefined): CallMachine | undefined {
+  const machine = isRecord(output) ? output.machine : undefined;
+  const id = stringAt(machine, "id");
+  const name = stringAt(machine, "name");
+  const owner = isRecord(machine) ? machine.owner : undefined;
+  const userId = stringAt(owner, "userId");
+  const ownerName = stringAt(owner, "name");
+
+  if (id === undefined || name === undefined || userId === undefined || ownerName === undefined) {
+    return undefined;
+  }
+
+  return { id, name, owner: { userId, name: ownerName } };
 }
 
 /** A command the Mac ran: as a terminal would have shown it, its timeout said where it was killed; or why it was not run. */
@@ -1276,11 +1301,13 @@ const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.RUN_ON_MAC]: ({ input, output }) => {
     const command = stringAt(input, "command") ?? "";
     const description = commandDescription(stringAt(input, "description"));
+    const machine = callMachineOf(output);
 
     return {
       kind: CALL_KIND.MACHINE_COMMAND,
       subject: command,
       ...(description === undefined ? undefined : { description }),
+      ...(machine === undefined ? undefined : { machine }),
       input: { kind: TOOL_BLOCK.COMMAND, text: command },
       output: output === undefined ? undefined : machineCommandOutput(output),
     };
@@ -1288,11 +1315,13 @@ const AGENT_TOOL_VIEWS = {
   [AGENT_TOOL.COMPUTER]: ({ input, output }) => {
     const description = computerCallWords(stringAt(input, "action"));
     const icon = computerAppIcon(output);
+    const machine = callMachineOf(output);
 
     return {
       kind: CALL_KIND.COMPUTER,
       subject: computerAppName(input, output) ?? "",
       ...(description === undefined ? undefined : { description }),
+      ...(machine === undefined ? undefined : { machine }),
       ...(icon === undefined ? undefined : { appIcon: icon }),
       input: jsonBlock(input ?? {}),
       output: output === undefined ? undefined : computerOutput(output),

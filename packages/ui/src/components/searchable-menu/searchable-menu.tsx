@@ -218,7 +218,17 @@ interface Submenu {
   note?: string | undefined;
   /** Whether a pick in it leaves the menu standing, as a choice that changes what the list holds does; in a sheet the list comes back in its place. */
   stays?: boolean | undefined;
+  /** How wide it stands: regular where none is named, or wide where a checked row's name and its end marks need the room, as an agent's default machine with its owner's face. */
+  width?: SubmenuWidth | undefined;
 }
+
+/** How wide a submenu stands beside its row. */
+export const SUBMENU_WIDTH = {
+  REGULAR: "regular",
+  WIDE: "wide",
+} as const;
+
+export type SubmenuWidth = (typeof SUBMENU_WIDTH)[keyof typeof SUBMENU_WIDTH];
 
 /** The acts on a listed row's own thing, opened beside it as a submenu whose rows are presses, not choices. */
 export interface RowActions {
@@ -383,7 +393,7 @@ const HEADING = "ui-searchable-menu-heading px-row-inset pt-ui-8 pb-ui-4";
  * or two.
  */
 const SUBMENU =
-  "ui-searchable-menu-submenu absolute top-0 left-submenu-reach z-1 w-submenu data-[hinted]:w-submenu-hinted data-[side=left]:right-submenu-reach data-[side=left]:left-auto data-[stand=up]:top-auto data-[stand=up]:bottom-0";
+  "ui-searchable-menu-submenu absolute top-0 left-submenu-reach z-1 w-submenu data-[wide]:w-submenu-wide data-[hinted]:w-submenu-hinted data-[side=left]:right-submenu-reach data-[side=left]:left-auto data-[stand=up]:top-auto data-[stand=up]:bottom-0";
 
 /** The row a submenu stands beside, which holds it. */
 const BRANCH = "ui-searchable-menu-branch relative";
@@ -598,6 +608,7 @@ function submenuOptions(open: Submenu, unmasked: boolean): ComboboxOption[] {
     hint: rowWords(row, unmasked, rowHint(row)),
     replayMasked: row.replayMasked,
     card: row.card,
+    disabled: row.disabled !== undefined,
     current: row.id === open.value,
   }));
 }
@@ -883,9 +894,9 @@ export function SearchableMenu(
   const subAt = highlightOver({
     moved: submenu?.moved,
     chosen: subChosen,
-    first: open === undefined || open.rows.length === 0 ? NOWHERE : 0,
+    first: open === undefined ? NOWHERE : open.rows.findIndex((row) => row.disabled === undefined),
     count: open?.rows.length ?? 0,
-    blocked: () => false,
+    blocked: (index) => open?.rows[index]?.disabled !== undefined,
   });
 
   const listId = useId();
@@ -1066,7 +1077,7 @@ export function SearchableMenu(
     if (open !== undefined) {
       const row = open.rows[index];
 
-      if (row !== undefined) pickIn(open, row.id);
+      if (row !== undefined && row.disabled === undefined) pickIn(open, row.id);
 
       return;
     }
@@ -1088,7 +1099,7 @@ export function SearchableMenu(
     open: true,
     active: steered,
     count: open === undefined ? matches.length + foot.length : open.rows.length,
-    skipped: open === undefined ? blocked : undefined,
+    skipped: open === undefined ? blocked : (index) => open.rows[index]?.disabled !== undefined,
     controls: controlled.join(" "),
     activeId: subActive ?? listActive ?? footActive,
     onActiveChange: (index) => {
@@ -1191,6 +1202,7 @@ export function SearchableMenu(
       data-side={place.side}
       data-stand={place.stand}
       data-hinted={shown.rows.some((row) => row.detailUnder === true) ? "" : undefined}
+      data-wide={shown.width === SUBMENU_WIDTH.WIDE ? "" : undefined}
       style={cssCustomProperties({ "--ui-submenu-shift": `${place.shift}px` })}
       onMouseDown={(event) => event.preventDefault()}
     >

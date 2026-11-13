@@ -13,16 +13,21 @@ import {
   CHIP_WIDTH,
   ChipName,
   ChipPopover,
-  type ChipPopoverFact,
   type ChipPopoverMenu,
   HoverCard,
   HoverCardHead,
+  HoverCardList,
   HoverCardNote,
+  HoverCardRow,
   type MenuRow,
   POPOVER_ALIGN,
   POPOVER_WIDTH,
   STATUS_TONE,
   StaticChip,
+  TEXT_ELEMENT,
+  TEXT_TONE,
+  TEXT_VARIANT,
+  Text,
   Tooltip,
   useSecond,
   VisuallyHidden,
@@ -33,6 +38,7 @@ import { presenceStanding, useDevicePresence } from "../device-presence.js";
 import { useThisMac } from "../machine-name.js";
 import { useOpenSettings } from "../open-settings.js";
 import { Picker } from "../settings/picker-row.js";
+import { useDefaultMachineRow } from "./agent-machines.js";
 import type { PlaceMove } from "./move-agent.js";
 import { CLOUD_ROW, DeviceGlyph, DeviceStandingGlyph, rowRequest, runsOnRows } from "./runs-on.js";
 import {
@@ -51,9 +57,10 @@ import {
  * them, so an agent reads alike before and after it starts.
  *
  * An agent in a sandbox says "Cloud" alone beside the cloud glyph, which
- * wears a dot for where its sandbox stands, and a press opens its popover:
- * the sandbox's status and size, and where a move is offered
- * (`move-agent.tsx`'s `useMovePlace`), the places to move it to (`CloudChip`).
+ * wears a dot for where its sandbox stands, and a press opens its popover,
+ * "Where this agent works": where it runs, with the places to move it to
+ * where a move is offered (`move-agent.tsx`'s `useMovePlace`), and its
+ * default machine (`CloudChip`).
  *
  * An agent on a device is the move control where a move is offered, ending
  * in its chevron and dropping the places to move it to (`PlaceMenuChip`),
@@ -102,37 +109,112 @@ function macWords(name: string, standing: DeviceStanding | undefined): string {
 /** What the card says under its head of an agent on a device. */
 const DEVICE_NOTE = "This agent runs on this device. Set when it was started.";
 
-/** What a Cloud chip's popover says: its title, its facts' labels, and its menu's heading. */
+/** What a Cloud chip's popover says: its title, its rows' labels, the move's heading, and its sandbox card's words. */
 const CLOUD_WORDS = {
-  TITLE: "Cloud sandbox",
-  STATUS: "Status",
+  TITLE: "Where this agent works",
+  RUNS_IN: "Agent runs in",
+  MOVE_TO: "Move this agent to",
+  SANDBOX: "Cloud sandbox",
+  MACHINE: "Machine",
   CPU: "CPU",
   MEMORY: "Memory",
-  MOVE_TO: "Move to",
 } as const;
 
-/** A cloud agent's facts: its sandbox's state, and where the service says it, its size. */
-function cloudFacts(
+/** The Agent runs in row's id, which no place's id is. */
+const RUNS_IN_ROW = "runs-in";
+
+/** A cloud agent's sandbox card: its state, and where the service says it, its size. */
+function SandboxCard({
+  state,
+  vcpus,
+}: {
+  state: ReturnType<typeof useSandboxState>;
+  vcpus: number | undefined;
+}): React.JSX.Element {
+  return (
+    <HoverCard>
+      <HoverCardHead
+        glyph={<SandboxStateGlyph state={state} />}
+        name={CLOUD_WORDS.SANDBOX}
+        sub={<SandboxStateWords state={state} />}
+      />
+      {vcpus === undefined ? null : (
+        <HoverCardList label={CLOUD_WORDS.MACHINE}>
+          <li>
+            <HoverCardRow
+              glyph={<GLYPH.CPU aria-hidden="true" />}
+              label={CLOUD_WORDS.CPU}
+              end={`${vcpus} vCPUs`}
+            />
+          </li>
+          <li>
+            <HoverCardRow
+              glyph={<GLYPH.RAM aria-hidden="true" />}
+              label={CLOUD_WORDS.MEMORY}
+              end={`${sandboxMemoryGb(vcpus)} GB`}
+            />
+          </li>
+        </HoverCardList>
+      )}
+    </HoverCard>
+  );
+}
+
+/**
+ * The Agent runs in row: Cloud at its end, and where a move is offered, the
+ * places to move the agent to beside it under "Move this agent to", as the
+ * move control lists them (`useMoveMenu`): its own Cloud row checked,
+ * wearing the chip's dot and its sandbox's state, its card the sandbox's
+ * size, each device with its standing's dot, one offline listed but not
+ * picked, and what a move does said once under them. With no move offered,
+ * the row hangs the sandbox's card itself.
+ */
+function useRunsInRow(
   state: ReturnType<typeof useSandboxState>,
   vcpus: number | undefined,
-): readonly ChipPopoverFact[] {
-  const status: ChipPopoverFact = {
-    label: CLOUD_WORDS.STATUS,
-    icon: <GLYPH.SANDBOX_STATE aria-hidden="true" />,
-    value: <SandboxStateWords state={state} />,
+  move: PlaceMove | undefined,
+): MenuRow {
+  const menu = useMoveMenu(CLOUD_ROW, move);
+  const card = <SandboxCard state={state} vcpus={vcpus} />;
+
+  const row: MenuRow = {
+    id: RUNS_IN_ROW,
+    label: CLOUD_WORDS.RUNS_IN,
+    icon: <GLYPH.CLOUD aria-hidden="true" />,
+    end: (
+      <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+        {RUNS_ON_WORDS.CLOUD}
+      </Text>
+    ),
   };
 
-  if (vcpus === undefined) return [status];
+  if (menu === undefined) return { ...row, card };
 
-  return [
-    status,
-    { label: CLOUD_WORDS.CPU, icon: <GLYPH.CPU aria-hidden="true" />, value: `${vcpus} vCPUs` },
-    {
-      label: CLOUD_WORDS.MEMORY,
-      icon: <GLYPH.RAM aria-hidden="true" />,
-      value: `${sandboxMemoryGb(vcpus)} GB`,
+  // Note that what a move does is said once under the places, since the submenu is too narrow to say it on each.
+  const rows = menu.rows.map((place): MenuRow => {
+    if (place.id === CLOUD_ROW) {
+      return {
+        ...place,
+        icon: <SandboxStateGlyph state={state} />,
+        detail: SANDBOX_STATE_WORDS[state],
+        card,
+      };
+    }
+
+    return place.detail === move?.detail ? { ...place, detail: undefined } : place;
+  });
+
+  return {
+    ...row,
+    submenu: {
+      label: CLOUD_WORDS.MOVE_TO,
+      heading: CLOUD_WORDS.MOVE_TO,
+      rows,
+      value: menu.value,
+      note: move?.detail,
+      onPick: (id) => menu.onPick?.(id),
     },
-  ];
+  };
 }
 
 /**
@@ -140,47 +222,44 @@ function cloudFacts(
  * while off, starting while it boots, and complete while it runs
  * (`sandbox-place.tsx`), beside "Cloud" alone, the state said to a reader
  * and in the popover, never in a hint on the chip. A press opens its
- * popover (`@repo/ui`'s `ChipPopover`), headed "Cloud sandbox": the sandbox's Status, CPU, and Memory, and where a
- * move is offered, the places to move the agent to under "Move to", as the
- * move control lists them (`useMoveMenu`), its own Cloud row wearing the
- * chip's dot as each device's row wears its own.
+ * popover (`@repo/ui`'s `ChipPopover`), headed "Where this agent works",
+ * one section of two rows, each with its value at its end and a chevron
+ * where it opens a submenu: Agent runs in, where the agent itself runs and
+ * the places to move it to (`useRunsInRow`), and Default machine, where its
+ * terminal commands and computer use go when a call names none
+ * (`agent-machines.tsx`), for an agent offered them.
  */
 function CloudChip({
+  agentId,
   sandbox,
   vcpus,
   move,
   narrow,
 }: {
+  agentId: string;
   sandbox: AgentSummary["sandbox"];
-  /** The vCPUs its sandbox opens with, which the popover names with their memory; none from a service older than it. */
+  /** The vCPUs its sandbox opens with, which its card names with their memory; none from a service older than it. */
   vcpus: number | undefined;
   move: PlaceMove | undefined;
   narrow: boolean;
 }): React.JSX.Element {
   const state = useSandboxState(sandbox);
-  const menu = useMoveMenu(CLOUD_ROW, move);
-  const stateWords = SANDBOX_STATE_WORDS[state];
-  const glyph = <SandboxStateGlyph state={state} />;
-
-  const moveMenu =
-    menu === undefined
-      ? undefined
-      : {
-          heading: CLOUD_WORDS.MOVE_TO,
-          ...menu,
-          rows: menu.rows.map((row) => (row.id === CLOUD_ROW ? { ...row, icon: glyph } : row)),
-        };
+  const runsIn = useRunsInRow(state, vcpus, move);
+  const defaultMachine = useDefaultMachineRow(agentId);
 
   return (
     <ChipPopover
       label={RUNS_ON_WORDS.LABEL}
-      glyph={glyph}
+      glyph={<SandboxStateGlyph state={state} />}
       words={RUNS_ON_WORDS.CLOUD}
-      said={stateWords}
+      said={SANDBOX_STATE_WORDS[state]}
       iconOnly={narrow}
       title={CLOUD_WORDS.TITLE}
-      facts={cloudFacts(state, vcpus)}
-      menu={moveMenu}
+      facts={[]}
+      menu={{
+        rows: defaultMachine === undefined ? [runsIn] : [runsIn, defaultMachine],
+        noMatch: RUNS_ON_WORDS.NO_MATCH,
+      }}
     />
   );
 }
@@ -198,7 +277,13 @@ export function AgentPlace({
 }): React.JSX.Element | null {
   if (agent.machine !== AGENT_MACHINE.DEVICE) {
     return (
-      <CloudChip sandbox={agent.sandbox} vcpus={agent.sandboxVcpus} move={move} narrow={narrow} />
+      <CloudChip
+        agentId={agent.id}
+        sandbox={agent.sandbox}
+        vcpus={agent.sandboxVcpus}
+        move={move}
+        narrow={narrow}
+      />
     );
   }
 

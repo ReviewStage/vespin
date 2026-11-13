@@ -394,6 +394,7 @@ export type TasksClient = Pick<
   | "setFollowerMachines"
   | "addFollower"
   | "removeFollower"
+  | "followerMachines"
 >;
 
 export interface TasksDependencies {
@@ -2591,6 +2592,11 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     }),
     TASKS_ADD_FOLLOWER: declaredWrite(dependencies.pool, followerAdded),
     TASKS_REMOVE_FOLLOWER: declaredWrite(dependencies.pool, followerRemoved),
+    // Note that a follower's machines are asked of the service as a card shows and held nowhere here, since where each stands moves by the minute.
+    TASKS_FOLLOWER_MACHINES: ({ taskId }) =>
+      gate()
+        ? served(client.followerMachines(taskId))
+        : Effect.succeed({ failure: TASK_CALL_FAILURE.UNANSWERED }),
     TASKS_CHANGE_RELATION: declaredWrite(dependencies.pool, relationChanged, {
       read: (read) =>
         Effect.sync(() => ({

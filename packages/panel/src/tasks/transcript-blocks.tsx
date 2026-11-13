@@ -9,6 +9,7 @@ import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { GLYPH_STATE } from "@repo/features/glyph-state";
 import type { IntegrationProvider } from "@repo/features/integration-wire";
 import { GITHUB_DEFAULT_BRANCH, GITHUB_PAGE, gitHubPageLink } from "@repo/features/link-grammar";
+import { machineName } from "@repo/features/machine-name";
 import { mayNameChip } from "@repo/features/mention-link";
 import type { CatalogModel, ModelChoice } from "@repo/features/models-wire";
 import { cardTitle } from "@repo/features/plain-words";
@@ -20,7 +21,7 @@ import {
   type ToolBlock,
   type ToolState,
 } from "@repo/features/tool-call-block";
-import { type SentWords, todosCount } from "@repo/features/tool-call-model";
+import { type CallMachine, type SentWords, todosCount } from "@repo/features/tool-call-model";
 import {
   agentCallLine,
   CALL_KIND,
@@ -140,6 +141,7 @@ import {
 } from "@repo/ui/markdown";
 import { QUOTE_CLASS } from "@repo/ui/quote-face";
 import { UNREPORTED } from "@repo/ui/reported-failure";
+import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { Predicate } from "effect";
 import {
@@ -181,6 +183,7 @@ import {
 import { useDrawnDark } from "../drawn-dark.js";
 import { EntityGlyph } from "../entities/entity-glyph.js";
 import { FIND_DETAIL, FindDetailFolds } from "../find-in-tab.js";
+import { useThisMac } from "../machine-name.js";
 import { OUTSIDE_GLYPH_CLASS } from "../picture-block.js";
 import { StateGlyph } from "../state-glyph.js";
 import { TextLink } from "../text-link.js";
@@ -1407,6 +1410,26 @@ export function useMacOwner(): Actor | undefined {
   return useContext(MacOwnerContext);
 }
 
+/** The machine a terminal command or an action on an app made now would go to, as the agent's standing names it (`workspaceTools.runOnMac.machine`), which a call still unanswered names; none where it names none. */
+const RoutedMachineContext = createContext<Pick<CallMachine, "id" | "name"> | undefined>(undefined);
+
+/** Names whose Mac the transcript under it ran its Mac commands on (`MacOwnerProvider`), and the machine it would send a call to now, which a call still unanswered names. */
+export function CallPlaceProvider({
+  owner,
+  machine,
+  children,
+}: {
+  owner: Actor | undefined;
+  machine: Pick<CallMachine, "id" | "name"> | undefined;
+  children: ReactNode;
+}): React.JSX.Element {
+  return (
+    <MacOwnerContext.Provider value={owner}>
+      <RoutedMachineContext.Provider value={machine}>{children}</RoutedMachineContext.Provider>
+    </MacOwnerContext.Provider>
+  );
+}
+
 export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> &
   Pick<ToolHeaderProps, "state" | "subject"> & {
     kind: CallKind;
@@ -1416,6 +1439,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     appIcon?: string | undefined;
     /** For a call of an MCP server's tool, the server's name, which the row says it ran on beside its line. */
     server?: string | undefined;
+    /** For a terminal command or an action on an app, the machine its answer says it went to, which the row says it ran on; none where its answer names none or it has not answered. */
+    machine?: CallMachine | undefined;
     /** For a command, the plain words the model said it is for, which the row says in its verb's place; the closed row previews the command's first line after them, and the body holds it whole. */
     description?: string | undefined;
     /** For a call about one coding agent, the agent, whose chip the row names it by in the place of "the coding agent"; none where the agent is not known. */
@@ -1489,6 +1514,7 @@ export function TranscriptTool({
   provider,
   appIcon,
   server,
+  machine,
   subject,
   description,
   agent,
@@ -1516,6 +1542,11 @@ export function TranscriptTool({
 
   const command = isCommandKind(kind);
   const macOwner = useContext(MacOwnerContext);
+  // Note that a call names the machine its answer names, and one still unanswered the machine the agent's calls go to now, so a row never names the starter's Mac for a call routed elsewhere.
+  const routed = useContext(RoutedMachineContext);
+  const thisMac = useThisMac();
+  const unanswered = state === TOOL_STATE.INPUT_STREAMING || state === TOOL_STATE.INPUT_AVAILABLE;
+  const onMachine = machine ?? (unanswered ? routed : undefined);
   const opened = useHeldOpen(held?.waiting === true);
 
   const row = (
@@ -1538,7 +1569,15 @@ export function TranscriptTool({
         subjectInBody={(command && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject)}
         place={
           (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
-          macOwner !== undefined ? (
+          onMachine !== undefined ? (
+            <ActorLine>
+              {"On "}
+              <ReplayWords masked>
+                {machineName({ deviceId: onMachine.id, name: onMachine.name }, [], thisMac)}
+              </ReplayWords>
+            </ActorLine>
+          ) : (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
+            macOwner !== undefined ? (
             <ActorLine>
               {"On "}
               <ActorRef actor={macOwner} sentence possessive />
