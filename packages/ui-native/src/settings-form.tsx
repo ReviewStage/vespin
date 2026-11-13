@@ -46,6 +46,9 @@ import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 /** An account's face in its row, larger than a list's. */
 const ACCOUNT_FACE_SIZE = 36;
 
+/** A face or tile a picking or member row leads with, in points, before Dynamic Type scales it: smaller than the account's, since the row is a plain one. */
+const ROW_FACE_SIZE = ACCOUNT_FACE_SIZE - 8;
+
 /** An account's face heading its own page, as large as Apple Account's photo stands over its name. */
 const ACCOUNT_HEAD_FACE_SIZE = 72;
 
@@ -287,9 +290,11 @@ type AccountRowProps = {
  * as the account heads iOS's own Settings.
  */
 export function AccountRow({ name, email, picture, detail, onPress }: AccountRowProps) {
+  const faceSize = useScaledSize(ACCOUNT_FACE_SIZE);
+
   return (
     <HeadRow
-      face={<Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE} />}
+      face={<Avatar name={name} picture={picture} size={faceSize} />}
       name={name}
       line={email}
       detail={detail}
@@ -362,9 +367,11 @@ export function WorkspaceRow({
   readonly onPress?: (() => void) | undefined;
   readonly testId?: string | undefined;
 }) {
+  const faceSize = useScaledSize(ACCOUNT_FACE_SIZE);
+
   return (
     <HeadRow
-      face={<WorkspaceTile workspace={workspace} size={ACCOUNT_FACE_SIZE} />}
+      face={<WorkspaceTile workspace={workspace} size={faceSize} />}
       name={workspace.name}
       line={role}
       onPress={onPress}
@@ -682,6 +689,7 @@ type WorkspacePickRowsProps = {
  */
 export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRowsProps) {
   const colors = useColors();
+  const faceSize = useScaledSize(ROW_FACE_SIZE);
 
   return (
     <>
@@ -701,7 +709,7 @@ export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRows
             spacing={SPACE.ROW}
             modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
           >
-            <WorkspaceTile workspace={workspace} size={ACCOUNT_FACE_SIZE - 8} />
+            <WorkspaceTile workspace={workspace} size={faceSize} />
             <VStack alignment="leading" spacing={1}>
               <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
                 {workspace.name}
@@ -750,6 +758,7 @@ type PersonPickRowsProps = {
  */
 export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
   const colors = useColors();
+  const faceSize = useScaledSize(ROW_FACE_SIZE);
 
   return (
     <>
@@ -768,7 +777,7 @@ export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
             spacing={SPACE.ROW}
             modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
           >
-            <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
+            <Avatar name={name} picture={picture} size={faceSize} />
             <VStack alignment="leading" spacing={1}>
               <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
                 {name}
@@ -824,10 +833,11 @@ type MemberRowProps = {
  */
 export function MemberRow({ name, email, picture, role, badge, acts }: MemberRowProps) {
   const colors = useColors();
+  const faceSize = useScaledSize(ROW_FACE_SIZE);
 
   const face = (
     <HStack spacing={SPACE.ROW}>
-      <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
+      <Avatar name={name} picture={picture} size={faceSize} />
       <WordsAndEnd
         words={
           <VStack alignment="leading" spacing={1}>
@@ -892,6 +902,7 @@ type FollowerRowProps = {
  */
 export function FollowerRow({ name, picture, role, machines, heard }: FollowerRowProps) {
   const colors = useColors();
+  const faceSize = useScaledSize(ROW_FACE_SIZE);
 
   return (
     <HStack
@@ -903,7 +914,7 @@ export function FollowerRow({ name, picture, role, machines, heard }: FollowerRo
         ...spokenValue(role, heard),
       ]}
     >
-      <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
+      <Avatar name={name} picture={picture} size={faceSize} />
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
       {role === undefined ? null : (
         <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>

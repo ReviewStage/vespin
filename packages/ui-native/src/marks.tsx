@@ -28,6 +28,7 @@ import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standin
 import type { TaskStatus } from "@repo/features/task-wire";
 import { useState } from "react";
 import { Image as Photo, PixelRatio, View } from "react-native";
+import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { monogramOf } from "./monogram.js";
 import { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
@@ -55,11 +56,12 @@ export function UnreadDot({
   readonly faded?: boolean;
 }) {
   const colors = useColors();
+  const dot = useScaledSize(MARK_SIZE.DOT);
 
   return (
     <Circle
       modifiers={[
-        frame({ width: MARK_SIZE.DOT, height: MARK_SIZE.DOT }),
+        frame({ width: dot, height: dot }),
         foregroundStyle(colors.ACCENT),
         opacity(unread ? (faded ? FADED_OPACITY : 1) : 0),
         unread ? accessibilityLabel("Unread") : accessibilityHidden(),
@@ -103,11 +105,12 @@ export function ToneGlyph({
  */
 export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
   const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.GLYPH);
 
   return (
     <Image
       {...glyphImage(STATUS_MARK_SYMBOL[status])}
-      size={MARK_SIZE.GLYPH}
+      size={size}
       color={toneColor(colors, TASK_STATUS_TONE[status])}
       modifiers={[accessibilityLabel(TASK_STATUS_WORDS[status])]}
     />
@@ -287,11 +290,12 @@ export function AgentTile({
 /** The dot a row ends with where a thread of it waits on the reader, in the attention ink, heard as Needs you. */
 export function NeedsYouDot() {
   const colors = useColors();
+  const dot = useScaledSize(MARK_SIZE.DOT);
 
   return (
     <Circle
       modifiers={[
-        frame({ width: MARK_SIZE.DOT, height: MARK_SIZE.DOT }),
+        frame({ width: dot, height: dot }),
         foregroundStyle(colors.ATTENTION),
         accessibilityLabel(NEEDS_YOU.LABEL),
       ]}
