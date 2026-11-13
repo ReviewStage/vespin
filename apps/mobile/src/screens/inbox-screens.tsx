@@ -97,6 +97,7 @@ import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
@@ -569,6 +570,8 @@ function ThreadDetail({
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
+  const onTab = useOnTab();
 
   // Whether this thread still stands, so a start that answers after the reader left it opens nothing over where they went.
   const shown = useRef(false);
@@ -593,7 +596,7 @@ function ThreadDetail({
   const openStarted = (id: string) => {
     if (!shown.current || !navigation.isFocused() || !front.current) return;
 
-    if (place.inStack) router.replace(`/inbox/${encodeURIComponent(id)}`);
+    if (place.inStack) router.replace(onOwnTab(`/inbox/${encodeURIComponent(id)}`));
     else place.onOpen(id);
   };
 
@@ -622,12 +625,12 @@ function ThreadDetail({
       label: PATH_OPENS.TASK,
       symbol: GLYPH.TASK,
       onPress: () =>
-        router.push(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: holder.task.id })),
+        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: holder.task.id }))),
     },
     {
       label: PATH_OPENS.AGENT,
       symbol: GLYPH.AGENT,
-      onPress: () => router.push(iosAgentRoute(item.agentId)),
+      onPress: () => router.push(onTab(iosAgentRoute(item.agentId))),
     },
   ] as const;
 
@@ -892,6 +895,7 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
 // next screen.
 function InboxStackList(words: InboxSearch) {
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
 
   const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing } =
@@ -967,7 +971,9 @@ function InboxStackList(words: InboxSearch) {
               listed={listing.listed}
               readerId={listing.readerId}
               onSelect={(id) =>
-                router.push(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id }))
+                router.push(
+                  onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.INBOX_ITEM, itemId: id })),
+                )
               }
               onRefresh={acts.refresh}
               onMark={acts.mark}

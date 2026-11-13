@@ -114,6 +114,7 @@ import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { useOnOwnTab } from "../tab-route.js";
 import { PageScreen } from "./page-screens.js";
 
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
@@ -457,6 +458,7 @@ export function AgentScreen() {
 
   useSurfaceOpen(PRODUCT_SURFACE.AGENT, id);
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const navigation = useNavigation();
   const openLink = useOpenLink();
   const colors = useColors();
@@ -638,7 +640,7 @@ export function AgentScreen() {
 
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) =>
     router.push({
-      pathname: "/tasks/agent/[id]/page",
+      pathname: onOwnTab("/tasks/agent/[id]/page"),
       params: { id, page: item.page, version: String(item.version), title: item.title },
     });
 
@@ -793,7 +795,7 @@ export function AgentScreen() {
           onOpenAddress={openInSafari}
           onOpenPullRequest={(item) =>
             router.push({
-              pathname: "/tasks/agent/[id]/pull/[number]",
+              pathname: onOwnTab("/tasks/agent/[id]/pull/[number]"),
               params: { id, number: String(item.number) },
             })
           }

@@ -1,0 +1,54 @@
+# related.yaml -- a thread's task and agent, from its ⋯ menu, each pushed onto the Inbox's own stack in a compact window, so Back lands on the thread again, as Mail and Messages push; a regular window selects them on Tasks beside its list instead, which `tasks.yaml` walks.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, whose invite recording thread stands
+# on the Teammate invitations task under its invitations agent
+# (`@repo/host/fixture-inbox`). Note that a chip in a message opens on the
+# tab the path menu does (`useOpenLink` through `useOnTab`), but stands mid-line, where
+# no element of its own is heard, so no flow taps it.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- tapOn: "Recorded the invite flow"
+- assertVisible: ".*walked the invite flow.*"
+- waitForAnimationToEnd
+- takeScreenshot: related-thread
+# Only a compact window pushes the thread over the list, with its back button.
+- runFlow:
+    when:
+      visible:
+        id: "BackButton"
+    commands:
+      # The ⋯ menu leads with the thread's path: Open task, then Open agent.
+      - tapOn:
+          text: "More"
+          index: -1
+      - tapOn: "Open task"
+      - assertVisible: "Agents"
+      - waitForAnimationToEnd
+      - takeScreenshot: related-task
+      - tapOn:
+          id: "BackButton"
+      - assertVisible: ".*walked the invite flow.*"
+      - waitForAnimationToEnd
+      - takeScreenshot: related-task-back
+      - tapOn:
+          text: "More"
+          index: -1
+      - tapOn: "Open agent"
+      - extendedWaitUntil:
+          visible: "Add a way to resend an invite that expired."
+          timeout: 30000
+      - waitForAnimationToEnd:
+          timeout: 5000
+      - takeScreenshot: related-agent
+      - tapOn:
+          id: "BackButton"
+      - assertVisible: ".*walked the invite flow.*"
+      - waitForAnimationToEnd
+      - takeScreenshot: related-agent-back

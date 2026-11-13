@@ -34,6 +34,7 @@ import { useHandColumns } from "../place-columns.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
+import { useOnTab } from "../tab-route.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
@@ -172,11 +173,12 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
   const remind = useRemindSheet();
   const archiveAsk = useAgentArchiveAsk();
   const routes = foundRoutes(found);
+  const onTab = useOnTab();
 
   const open = (id: string) => {
     const route = routes.get(id);
 
-    if (route !== undefined) router.push(route);
+    if (route !== undefined) router.push(onTab(route));
   };
 
   const shown = scopedFound(found, scope);
