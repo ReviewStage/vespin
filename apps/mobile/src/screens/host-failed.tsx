@@ -17,7 +17,7 @@ export function HostFailedScreen({ onRetry }: { readonly onRetry: () => void }) 
   );
 }
 
-/** The brand's ground alone, standing while the host starts, so nothing of the window's own black shows between the splash and the first screen. */
+/** The brand's ground alone, standing under the splash while the host starts, so nothing of the window's own black shows should the splash come down first. */
 export function HostStartingScreen() {
   return (
     <Screen>
