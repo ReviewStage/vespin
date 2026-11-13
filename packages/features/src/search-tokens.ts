@@ -32,19 +32,23 @@ export interface MatchRange {
 
 /**
  * A line lowercased, with where each of its code units came from in the line.
- * Note that we lowercase one character at a time, because a character can
- * lowercase longer (`İ` becomes `i` and a combining dot), and an offset in
- * the lowered line would then fall short of the character it names.
+ * Note that we lowercase the line whole, as `searchTokens` does a query,
+ * because a letter can lowercase by its place (a final `Σ` is `ς`), and we
+ * map each character's own lowering, because a letter can lowercase longer
+ * (`İ` becomes `i` and a combining dot), so an offset into the lowered line
+ * would otherwise fall short of the character it names. Where the two
+ * lowerings differ in length the map would drift, so the character-by-character
+ * lowering is matched instead.
  */
 function loweredWithOrigins(text: string) {
-  let lowered = "";
+  let byCharacter = "";
   const starts: number[] = [];
   const ends: number[] = [];
   let at = 0;
 
   for (const character of text) {
     const low = character.toLowerCase();
-    lowered += low;
+    byCharacter += low;
 
     for (let unit = 0; unit < low.length; unit += 1) {
       starts.push(at);
@@ -54,7 +58,9 @@ function loweredWithOrigins(text: string) {
     at += character.length;
   }
 
-  return { lowered, starts, ends };
+  const whole = text.toLowerCase();
+
+  return { lowered: whole.length === byCharacter.length ? whole : byCharacter, starts, ends };
 }
 
 /**
