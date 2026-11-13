@@ -494,9 +494,13 @@ function WideRail({
     return () => sized.disconnect();
   }, []);
 
-  // Note that lines arriving or going move every line's place without the column changing size, so they are read again, and an open stack put back at its line.
+  // Note that lines arriving or going move every line's place without the column changing size, so they are read again, the line held kept to those still drawn, and an open stack put back at its line.
   useLayoutEffect(() => {
+    const last = marks.length - 1;
+
     layout.current = undefined;
+    inFront.current = Math.min(inFront.current, last);
+    setActive((was) => Math.min(was, last));
 
     if (opened.current) moveTo(inFront.current);
   }, [marks]);
