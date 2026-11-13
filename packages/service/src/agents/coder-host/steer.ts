@@ -39,7 +39,6 @@ import { MENTION_KIND, withoutMemberLinks } from "@repo/features/mention-link";
 import { agentName } from "@repo/features/model-label";
 import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
-import { EXPERIMENT } from "@repo/settings";
 import { sentLineId } from "@repo/wire/host-ids";
 import { Clock, Effect, Option, Result } from "effect";
 import type * as HttpClient from "effect/http/HttpClient";
@@ -74,7 +73,7 @@ import {
   type SessionUnreachable,
   type TypedTurn,
 } from "../sessions/agent-sessions.js";
-import { experimentOnIn } from "../workspace-experiment-on.js";
+import { experimentsOnIn } from "../workspace-experiment-on.js";
 import { workspaceStepOf, writtenMention } from "../written-mentions.js";
 import { messageCredentialMissing } from "./agent-runtime-choice.js";
 import { harnessOf, nativeRuntimeOfSession } from "./native-runtime.js";
@@ -606,14 +605,18 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
 
   const reads = yield* Effect.fromResult(reached.reads);
 
-  const mentioned = reviewers
-    ? undefined
-    : mentionedContext(
-        pointed,
-        task,
-        reads,
-        yield* experimentOnIn(agent.organizationId, EXPERIMENT.DESCRIPTIONS),
-      );
+  const experiments = reviewers ? undefined : yield* experimentsOnIn(agent);
+
+  const mentioned =
+    experiments === undefined
+      ? undefined
+      : mentionedContext(
+          pointed,
+          task,
+          reads,
+          experiments.descriptionsOn,
+          experiments.computerUseOn,
+        );
 
   const running = yield* Effect.fromResult(read.running);
   const label = yield* Effect.fromResult(read.label);

@@ -19,6 +19,7 @@ import {
   type DescriptionMention,
   handedMentionsIn,
   linkChipOf,
+  type MacAppMention,
   MENTION_KIND,
   type Mention,
   mentionName,
@@ -271,6 +272,7 @@ type Handed =
   | LinesMention
   | TaskMention
   | PersonMention
+  | MacAppMention
   | NumberedTask;
 
 /**
@@ -354,6 +356,16 @@ function personNoteOf(userId: string, name: string, reads: MentionedReads): stri
   if (person === undefined) return `The person "${name}": not a member of your workspace.`;
 
   return `The developer pointed you at ${person.name}, ${ROLE_WORDS[person.role]} of your workspace. No tool of yours reaches them, so where the work needs them, name them in what you write, as the developer's mention of them is written.`;
+}
+
+/**
+ * What a mention of an app on the developer's Mac is handed as: that they
+ * pointed the agent at it, so `computer` is welcome for it ahead of the
+ * routing its description gives, and how to name it. Note that it allows
+ * nothing: the Mac still asks the developer about an app not yet allowed.
+ */
+function macAppNoteOf({ app }: MacAppMention, name: string): string {
+  return `The developer pointed you at the app ${name} on their Mac (\`${app}\`) for this message: use \`${AGENT_TOOL.COMPUTER}\` on it with \`app: "${app}"\`, ahead of the other routes its description puts first, for this app alone. Where it is not running, your first \`get_app_state\` opens it behind their windows; their Mac may still ask them to allow it.`;
 }
 
 /** What a mention of a file's lines is handed as: the lines, the commit they were read at, and how to read just those; nothing for a whole file. */
@@ -443,6 +455,7 @@ function handedMention(
     case MENTION_KIND.PERSON:
     case MENTION_KIND.SERVER:
     case MENTION_KIND.TOOL:
+    case MENTION_KIND.MAC_APP:
       return mention;
     // A well-known site's page has no server to read it through, and its address is in the words already, unless an integration reads it.
     case MENTION_KIND.LINK: {
@@ -505,6 +518,8 @@ function sameMention(first: Handed, second: Handed): boolean {
       );
     case MENTION_KIND.PERSON:
       return second.kind === MENTION_KIND.PERSON && first.userId === second.userId;
+    case MENTION_KIND.MAC_APP:
+      return second.kind === MENTION_KIND.MAC_APP && first.app === second.app;
     case HANDED_KIND.NUMBERED_TASK:
       return second.kind === HANDED_KIND.NUMBERED_TASK && first.taskId === second.taskId;
   }
@@ -532,6 +547,8 @@ function handedAs(
     case MENTION_KIND.TOOL:
     case MENTION_KIND.LINK:
       return noteOf(mention);
+    case MENTION_KIND.MAC_APP:
+      return macAppNoteOf(mention, name);
     case HANDED_KIND.NUMBERED_TASK:
       return numberedTaskNoteOf(mention);
   }
@@ -592,13 +609,15 @@ export function mentionedServers(words: string, repository: string | null): read
  * task as the send read it, each of its pages and each of the workspace's
  * agents and people they mention, as the send read them into `reads`, and a note for
  * each MCP server or tool they mention; nothing where they mention none of
- * these. An agent whose workspace has Task descriptions off (`workspace-experiment-on.ts`) is handed no excerpt of the description.
+ * these. An agent whose workspace has Task descriptions off (`workspace-experiment-on.ts`) is handed no excerpt of the description,
+ * and one whose Mac owner has Computer use off is handed nothing of an app on a Mac, since it has no tool that reaches one.
  */
 export function mentionedContext(
   words: string,
   task: Task | undefined,
   reads: MentionedReads = NO_MENTIONED_READS,
   descriptionsOn = true,
+  computerUseOn = true,
 ): string | undefined {
   const named: HandedMention[] = [];
   const repository = task?.repository ?? null;
@@ -615,6 +634,8 @@ export function mentionedContext(
     ) {
       continue;
     }
+
+    if (!computerUseOn && handed.kind === MENTION_KIND.MAC_APP) continue;
 
     // A bare address is named by what it says of the thing, a section by its anchor, as its chip is.
     const name = linkChipOf(label, target, repository)?.name ?? mentionName(label);

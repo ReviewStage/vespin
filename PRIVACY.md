@@ -153,6 +153,12 @@ agents terminals, password managers, System Settings, or Vespin itself, but
 on screen included. You can take an app off the always-allowed list, or turn
 computer use off, in Settings › This Mac.
 
+When you type `@` in a message to an agent, Vespin lists the apps running and
+installed on that Mac so you can point the agent at one. The list is read on
+your Mac and never leaves it; only an app you pick is sent, by its name and
+bundle id, as part of your message, which the agent and anyone who can open
+the task can read.
+
 ### Agents on your own machines
 
 Agents can run directly on This Mac, once you turn on its toggle in Machines,

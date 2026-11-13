@@ -54,6 +54,7 @@ import {
 } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppInboxItems, AppStateSnapshot } from "@repo/host/app-state";
+import type { MacApp } from "@repo/host/contract";
 import { EXPERIMENT } from "@repo/settings";
 import { SHORTCUT_KEY } from "@repo/settings/shortcuts";
 import {
@@ -128,6 +129,7 @@ import {
 import { fileFolder } from "./file-ref-model.js";
 import { InboxItemChipCard } from "./inbox-item-chip.js";
 import { inboxItemGlyph } from "./inbox-item-parts.js";
+import { useMacApps } from "./mac-apps.js";
 import { PageCard } from "./page-card.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
@@ -264,6 +266,8 @@ const MENTION_GROUP = {
   AUTOMATIONS: "Automations",
   PULL_REQUESTS: "Pull requests",
   SKILLS: "Skills",
+  /** The apps on the developer's Mac, which an agent uses through `computer`. */
+  APPS: "Apps",
   SERVERS: MCP_SERVER_LABEL.many,
   FROM: "Browse",
 } as const;
@@ -281,6 +285,7 @@ const MENTION_FROM = {
   PULL_REQUESTS: "prs",
   SKILLS: "skills",
   DATES: "dates",
+  APPS: "apps",
   SERVERS: "servers",
   SERVER: "server",
 } as const;
@@ -298,6 +303,7 @@ const KIND_ENTITY = {
   [MENTION_FROM.PULL_REQUESTS]: ENTITY_KIND.PULL_REQUEST,
   [MENTION_FROM.SKILLS]: ENTITY_KIND.SKILL,
   [MENTION_FROM.DATES]: ENTITY_KIND.DATE,
+  [MENTION_FROM.APPS]: ENTITY_KIND.MAC_APP,
   [MENTION_FROM.SERVERS]: ENTITY_KIND.SERVER,
 } as const satisfies Record<
   Exclude<
@@ -841,6 +847,28 @@ function pullRequestRows(pullRequests: readonly MentionablePullRequest[]): Menti
   });
 }
 
+/** What an app's row says after its name: that the developer always allows it, or that it runs now. */
+const APP_DETAIL = { ALLOWED: "Always allowed", RUNNING: "Running" } as const;
+
+/**
+ * Each app on this Mac's row, as the host lists them, those running first:
+ * a pick names it by its bundle id, or by its name where it has none, and it
+ * is found by either. Note that routing's R3 adds the Mac each row stands on
+ * once a command can name one; until then a row names the app alone.
+ */
+function appRows(apps: readonly MacApp[]): MentionRow[] {
+  return apps.map(({ name, bundleId, running, allowed }) => {
+    const detail = allowed ? APP_DETAIL.ALLOWED : running ? APP_DETAIL.RUNNING : undefined;
+
+    return {
+      mention: { kind: MENTION_KIND.MAC_APP, app: bundleId ?? name },
+      name,
+      detail,
+      terms: bundleId === undefined ? name : `${name} ${bundleId}`,
+    };
+  });
+}
+
 /** Each connected server's row, and where asked each of its tools' rows as far as its read answered, found by the server's name and the tool's. */
 function serverRows(
   servers: readonly NamedServer[],
@@ -1107,6 +1135,8 @@ interface KindRows {
   readonly skills: readonly MentionRow[];
   /** The date the words name, or the dates a list narrowed to dates offers. */
   readonly dates: readonly MentionRow[];
+  /** The apps on this Mac, those running first. */
+  readonly apps: readonly MentionRow[];
   /** The connected servers' rows, or the one server's the list is narrowed to. */
   readonly servers: readonly MentionRow[];
 }
@@ -1142,6 +1172,8 @@ function narrowedRows(
       return best(rows.skills, term, PER_KIND);
     case MENTION_FROM.DATES:
       return rows.dates;
+    case MENTION_FROM.APPS:
+      return best(rows.apps, term, PER_KIND);
     case MENTION_FROM.SERVERS:
     case MENTION_FROM.SERVER:
       return best(rows.servers, term, PER_KIND);
@@ -1255,6 +1287,7 @@ function groupsFor(
     group(MENTION_GROUP.AUTOMATIONS, rows.automations, MENTION_FROM.AUTOMATIONS),
     group(MENTION_GROUP.PULL_REQUESTS, rows.pullRequests, MENTION_FROM.PULL_REQUESTS),
     group(MENTION_GROUP.SKILLS, rows.skills, MENTION_FROM.SKILLS),
+    group(MENTION_GROUP.APPS, rows.apps, MENTION_FROM.APPS),
     group(MENTION_GROUP.SERVERS, rows.servers, MENTION_FROM.SERVERS),
   ].filter((each) => each.rows.length > 0);
 }
@@ -1711,7 +1744,8 @@ function repositoryPathsQueryOptions(place: {
  * holds it, its repository's files and folders where it names one, its
  * Inbox threads and automations where it holds any, the pull requests
  * the plan's agents published, the repository's skills where the words go
- * to an agent, dates wherever the list stands, every connected server at
+ * to an agent, dates wherever the list stands, the apps on this Mac where
+ * the words go to an agent and it may read them, every connected server at
  * once, and each connected server alone, the first of each provider
  * narrowed to by the provider's own word.
  */
@@ -1724,6 +1758,7 @@ function kindsOf(
   tasks: number,
   inbox: { readonly threads: number; readonly automations: number },
   descriptionsOn: boolean,
+  apps: number,
 ): readonly MentionKind[] {
   const { holder, repository } = source;
   const taskId = holder?.taskId;
@@ -1753,6 +1788,7 @@ function kindsOf(
     [MENTION_FROM.PULL_REQUESTS, MENTION_GROUP.PULL_REQUESTS, pullRequests > 0],
     [MENTION_FROM.SKILLS, MENTION_GROUP.SKILLS, (skills?.known ?? []).length > 0],
     [MENTION_FROM.DATES, MENTION_GROUP.DATES, true],
+    [MENTION_FROM.APPS, MENTION_GROUP.APPS, apps > 0],
     [MENTION_FROM.SERVERS, MENTION_GROUP.SERVERS, servers.length > 0],
   ];
 
@@ -1824,6 +1860,7 @@ export function useMentionPicker({
   self,
   skills,
   servers = NO_SERVERS,
+  macApps = false,
   room,
   side,
   onChoose,
@@ -1835,6 +1872,8 @@ export function useMentionPicker({
   skills?: MentionSkills | undefined;
   /** The account's connected MCP servers, where the words go to an agent; none for the description's own words. */
   servers?: readonly NamedServer[] | undefined;
+  /** Whether the list offers the apps on this Mac, where the words go to an agent; never for the description's own words. */
+  macApps?: boolean | undefined;
   /** The box the editor stands in: a press in it is the editor's, and the date picker hangs in it. */
   room: RefObject<HTMLElement | null>;
   side: MentionMenuSide;
@@ -1941,6 +1980,10 @@ export function useMentionPicker({
       ? undefined
       : taskKey(tasksWorkspace.name, planNumber);
 
+  // The apps on this Mac are read while the list stands open, where it may read them (`mac-apps.ts`).
+  const apps = useMacApps(open && macApps);
+  const appRowsOffered = open ? appRows(apps) : [];
+
   // The list is narrowed to the kind a key opened or whose word was typed, and searched by the words after it.
   const kinds = open
     ? kindsOf(
@@ -1955,6 +1998,7 @@ export function useMentionPicker({
           automations: automationRowsOffered.length,
         },
         descriptionsOn,
+        appRowsOffered.length,
       )
     : [];
 
@@ -2048,6 +2092,7 @@ export function useMentionPicker({
             pullRequests: pullRequestRows(source.pullRequests ?? NO_PULL_REQUESTS),
             skills: skillRows(skills?.known ?? []),
             dates: dateRows(term, narrow?.from === MENTION_FROM.DATES, now, readerZone()),
+            apps: appRowsOffered,
             // A list narrowed to one server offers its tools before a word is typed.
             servers:
               narrow?.from === MENTION_FROM.SERVER

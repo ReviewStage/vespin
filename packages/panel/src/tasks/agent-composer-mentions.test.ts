@@ -282,6 +282,12 @@ const LISTED_TOOLS = [
   { name: "..", description: "A name an address resolves away." },
 ];
 
+/** The apps on this Mac, as its host lists them. */
+const MAC_APPS = [
+  { name: "Simulator", bundleId: "com.apple.iphonesimulator", running: true, allowed: false },
+  { name: "Notes", bundleId: "com.apple.Notes", running: false, allowed: true },
+];
+
 /** What main answers the box's acts with on the act port, every one told. */
 function answer(request: AnyAct): Promise<FakeActAnswer> {
   told.push(request);
@@ -295,6 +301,15 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
     deliverTasks(tasksView());
 
     return Promise.resolve({ status: FAKE_ANSWER.DONE, value: undefined });
+  }
+
+  // The Mac lists Simulator running and Notes installed, and draws no icon of its own for either.
+  if (request.kind === ACT_KIND.COMPUTER_USE_APPS) {
+    return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { apps: MAC_APPS } });
+  }
+
+  if (request.kind === ACT_KIND.COMPUTER_USE_APP_ICON) {
+    return Promise.resolve({ status: FAKE_ANSWER.DONE, value: {} });
   }
 
   return Promise.resolve(
@@ -784,6 +799,41 @@ test("an @ in the box browses the account's connected MCP servers as one kind, a
   assert.deepEqual(tools, ["Linear · list_issues"]);
   assert.deepEqual(sent, [
     `Use ${mentionMarkdown({ kind: MENTION_KIND.TOOL, provider: INTEGRATION_PROVIDER.LINEAR, tool: "list_issues" }, "Linear · list_issues", PLACE)}`,
+  ]);
+});
+
+test("with Computer use on, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
+  const sent: string[] = [];
+
+  const sender: MessageSender = (_agentId, text) => {
+    sent.push(text);
+
+    return new Promise<AgentAgentAnswer>(ignore);
+  };
+
+  const state = stateWith(experimentsOn(EXPERIMENT.DESCRIPTIONS, EXPERIMENT.COMPUTER_USE), {
+    tasks: tasksView(),
+  });
+
+  fakeActs({ act: answer, requestAppState: () => Promise.resolve(state) });
+  const { container } = drawing(
+    createElement(Box, { sender, skills: noSkills }),
+    planPage([]),
+    state,
+  );
+  await settle();
+
+  typeInComposer(container, "Check @sim");
+  await settle();
+  const apps = groupsListed(container).find(([group]) => group === "Apps");
+  pressInComposer(container, "Enter");
+  await settle();
+  pressInComposer(container, "Enter");
+  await settle();
+
+  assert.deepEqual(apps, ["Apps", ["Simulator"]]);
+  assert.deepEqual(sent, [
+    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.iphonesimulator" }, "Simulator", PLACE)}`,
   ]);
 });
 

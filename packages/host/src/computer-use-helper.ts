@@ -48,11 +48,13 @@ export const COMPUTER_HELPER_FAILURE = {
 
 /**
  * The requests beyond the agent's actions: one app named, without launching
- * it, so the developer can be asked about it; and the Mac's two grants,
+ * it, so the developer can be asked about it; the apps installed, without
+ * their icons, for the developer's @ list; and the Mac's two grants,
  * read, or asked for by macOS's own prompts, for Settings to show.
  */
 export const COMPUTER_HELPER_OP = {
   DESCRIBE_APP: "describe_app",
+  LIST_INSTALLED_APPS: "list_installed_apps",
   PERMISSIONS: "permissions",
   REQUEST_PERMISSIONS: "request_permissions",
 } as const;
@@ -62,6 +64,7 @@ export type ComputerHelperRequest =
   | { readonly op: typeof COMPUTER_HELPER_OP.DESCRIBE_APP; readonly app: string }
   | {
       readonly op:
+        | typeof COMPUTER_HELPER_OP.LIST_INSTALLED_APPS
         | typeof COMPUTER_HELPER_OP.PERMISSIONS
         | typeof COMPUTER_HELPER_OP.REQUEST_PERMISSIONS;
     };

@@ -115,7 +115,7 @@ export {
   isLiveFollow,
 } from "./live-follow.js";
 
-export { type ComputerUseStatus, MAC_COMMAND_ACTS } from "./mac-commands.js";
+export { type ComputerUseStatus, MAC_COMMAND_ACTS, type MacApp } from "./mac-commands.js";
 
 export {
   MAC_PROCESS_KIND,

@@ -190,6 +190,7 @@ const ENTITY_CARD: EntityCards = {
   [ENTITY_KIND.REPOSITORY]: OWN_CARD,
   [ENTITY_KIND.WORKSPACE]: OWN_CARD,
   [ENTITY_KIND.DATE]: OWN_CARD,
+  [ENTITY_KIND.MAC_APP]: OWN_CARD,
 };
 
 /** An entity's card drawn through its kind's own entry. */

@@ -1,5 +1,5 @@
 import { ENTITY_KIND, type EntityKind } from "@repo/features/entity-kind";
-import { ProductMark } from "@repo/ui";
+import { AppIcon, ProductMark } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 
 /**
@@ -52,6 +52,8 @@ const ENTITY_GLYPH: Readonly<Record<EntityKind, () => React.JSX.Element>> = {
   [ENTITY_KIND.REPOSITORY]: GLYPH.REPOSITORY,
   [ENTITY_KIND.WORKSPACE]: GLYPH.WORKSPACE,
   [ENTITY_KIND.DATE]: GLYPH.DATE,
+  // Note that an app on a Mac whose icon is not known wears the screen an app's icon stands in for.
+  [ENTITY_KIND.MAC_APP]: () => <AppIcon />,
 };
 
 /** The glyph of an entity of `kind` where nothing more of it is known. */
