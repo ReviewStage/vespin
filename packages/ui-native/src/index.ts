@@ -25,6 +25,7 @@ export {
   type ButtonSize,
   Chip,
   FieldChip,
+  FollowingChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -57,11 +58,11 @@ export {
 
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
 
-export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
+export { AttachRow, MenuPickRow, SkillRow, WordsField } from "./form-rows.js";
 
 export { GlassBar, GlassDock } from "./glass-bar.js";
 
-export { type Glyph, isLucideSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
+export { GLYPH, type Glyph, glyphSymbol, type LucideSymbol, type MarkLook } from "./glyph.js";
 
 export { BUZZ, type Buzz, buzz } from "./haptics.js";
 
@@ -99,6 +100,8 @@ export {
 
 export { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 
+export { markdownGithubPages, markdownReplyButtons } from "./markdown-model.js";
+
 export { MarkdownPage } from "./markdown-page.js";
 
 export {
@@ -117,7 +120,7 @@ export { monogramOf } from "./monogram.js";
 
 export { type HintOption, HintPickRows, RenameAsk, SwitchRow } from "./option-rows.js";
 
-export { PageHeader } from "./page-header.js";
+export { type PageFollowing, PageHeader } from "./page-header.js";
 
 export {
   PROVIDER_MARK_ASSET,
@@ -130,7 +133,6 @@ export { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 export {
   CHECK_LOOK,
   CHECK_SUMMARY_LOOK,
-  pullRequestLook,
   REVIEW_LOOK,
 } from "./pull-request-look.js";
 
@@ -163,9 +165,17 @@ export { SealedPage } from "./sealed-page.js";
 export {
   AccountRow,
   ActionRow,
+  CodeRow,
+  type ConnectionLine,
+  ConnectionRow,
+  FollowerRow,
   MemberRow,
   type MemberRowAct,
+  MenuRow,
+  type MenuRowAct,
   NoteRow,
+  type PersonPickOption,
+  PersonPickRows,
   type PickOption,
   PickRows,
   PUSH_ROW_GOES,
@@ -174,10 +184,10 @@ export {
   SettingsForm,
   ToggleRow,
   ValueRow,
+  type WorkspacePickOption,
+  WorkspacePickRows,
   WorkspaceRow,
 } from "./settings-form.js";
-
-export type { SfSymbol } from "./sf-symbol.js";
 
 export {
   type BarAction,
@@ -188,9 +198,11 @@ export {
   SplitView,
 } from "./split-view.js";
 
-export { STATUS_MARK_LOOK } from "./status-mark-model.js";
+export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 
-export { askForName, type NameAsk, shareLink } from "./system-asks.js";
+export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
+
+export { askForName, type NameAsk, shareLink, shareWords } from "./system-asks.js";
 
 export {
   AGENT_ROW_STATE,
@@ -240,6 +252,8 @@ export {
   type TranscriptToggles,
   toggledAt,
   transcriptItems,
+  transcriptOriginOf,
+  withSending,
 } from "./transcript-model.js";
 
 export {
@@ -257,12 +271,13 @@ export { Video } from "./video.js";
 export {
   newWorkspaceAction,
   SWITCHER_LOOK,
+  SWITCHER_PRESENTATION,
   type SwitcherAccount,
   type SwitcherAction,
   type SwitcherLook,
-  type SwitcherWorkspace,
+  type SwitcherPresentation,
   WorkspaceSwitcher,
-  WorkspaceSwitcherMenu,
-  WorkspaceTile,
-  workspaceSettingsAction,
+  WorkspaceSwitcherItem,
 } from "./workspace-switcher.js";
+
+export { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";

@@ -139,6 +139,21 @@ function screenshotsOf(output: UnparsedWireValue): readonly CalledPicture[] {
   return found;
 }
 
+/** What a computer call's window is named by where its answer names no app. */
+const WINDOW_NAME = "window";
+
+/** The window a computer call read and the transcript names, under the app's name; nothing for a call that read none. */
+function windowOf(output: UnparsedWireValue): readonly CalledPicture[] {
+  if (!isRecord(output) || !isRecord(output.kept)) return [];
+
+  const name =
+    isRecord(output.app) && isWireString(output.app.name) ? output.app.name : WINDOW_NAME;
+
+  const called = calledPicture(output.kept, name);
+
+  return called === undefined ? [] : [called];
+}
+
 /** The step a browser call's recording answers once stopped and kept. */
 const STOP_RECORDING_ACTION = "stop_recording";
 
@@ -171,7 +186,8 @@ export function recordedVideosOf(
 
 /**
  * The pictures a call answered, in order: a browser call's screenshots,
- * each named by its place (`screenshot-1`); an integration's pictures, each
+ * each named by its place (`screenshot-1`); a computer call's window, named
+ * by its app; an integration's pictures, each
  * named after the remote tool that answered it (`extract_images-1`), or the
  * call's own name where it names none; nothing for an output that is
  * neither, as every other call's is.
@@ -182,6 +198,8 @@ export function calledPicturesOf(
   output: UnparsedWireValue,
 ): readonly CalledPicture[] {
   if (tool === AGENT_TOOL.BROWSER) return screenshotsOf(output);
+
+  if (tool === AGENT_TOOL.COMPUTER) return windowOf(output);
 
   if (!Array.isArray(output)) return [];
   const named = isRecord(input) && isWireString(input.remoteTool) ? input.remoteTool : tool;

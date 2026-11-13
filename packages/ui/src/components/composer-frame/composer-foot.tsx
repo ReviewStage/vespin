@@ -145,10 +145,12 @@ export interface ComposerNote {
 /**
  * The foot's own box, at its frame's inset: a card's at the card's, a
  * field's or an input's a step tighter in its well, and a bare frame's flush
- * with the words over it, since the card around it insets both.
+ * with the words over it, since the card around it insets both. It is the
+ * container its presses answer their room from, as a call's status gives
+ * way in a narrow foot (`CallLive`).
  */
 const FOOT =
-  "ui-composer-foot flex flex-col gap-tight-gap px-ui-12 pt-0 pb-ui-12 " +
+  "ui-composer-foot @container/ui-composer-foot flex flex-col gap-tight-gap px-ui-12 pt-0 pb-ui-12 " +
   "group-data-[look=field]/composer:px-ui-6 group-data-[look=field]/composer:pt-ui-2 group-data-[look=field]/composer:pb-ui-6 " +
   "group-data-[look=input]/composer:px-ui-6 group-data-[look=input]/composer:pt-ui-2 group-data-[look=input]/composer:pb-ui-6 " +
   "group-data-[look=bare]/composer:px-0";

@@ -7,6 +7,7 @@ import {
 } from "@repo/features/agent-wire";
 import { DEVICE_PLATFORM, type DevicePlatform } from "@repo/features/device-agent-wire";
 import { devicePlatformOf } from "@repo/features/device-platform";
+import { machineName, type ThisMac } from "@repo/features/machine-name";
 import type { MacOffer } from "@repo/features/models-wire";
 import { agentRunsOnWords, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
 import type { TaskRunsOnRequest } from "@repo/features/task-wire";
@@ -29,7 +30,7 @@ import { GLYPH, ICON_SIZE } from "@repo/ui/icons";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { Schema } from "effect";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
-import { machineName, type ThisMac, useThisMac } from "../machine-name.js";
+import { useThisMac } from "../machine-name.js";
 import { Picker } from "../settings/picker-row.js";
 import { keptKey, useKept } from "../use-kept.js";
 
@@ -98,8 +99,8 @@ function offerStanding(device: MacOffer, book: PresenceBook): DeviceStanding {
   );
 }
 
-/** What each standing is called. */
-const STANDING_WORDS = {
+/** What each standing is called, as a list of places and a follower's card say it. */
+export const STANDING_WORDS = {
   [DEVICE_STANDING.ONLINE]: RUNS_ON_WORDS.ONLINE,
   [DEVICE_STANDING.OFFLINE]: RUNS_ON_WORDS.OFFLINE,
   [DEVICE_STANDING.UNKNOWN]: RUNS_ON_WORDS.UNKNOWN,

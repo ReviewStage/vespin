@@ -15,6 +15,7 @@
  */
 
 import type { ProductEventPropertiesFor, ProductSurfaceEventName } from "@repo/features/analytics";
+import type { HandoffActivity } from "@repo/features/ios-system-activity";
 import type { FramedPage } from "@repo/features/page-frame";
 import {
   type AppCommand,
@@ -51,10 +52,16 @@ export interface AppPlatform {
   /**
    * Puts words on the system clipboard as rich text, their HTML and their
    * plain text together, so they paste with their links and bold where a
-   * field takes HTML and as words where it takes text; rejects where the
-   * clipboard refused them.
+   * field takes HTML and as words where it takes text; and, where a picture
+   * is copied alone, its PNG beside them, given as `copyImage` takes one, so
+   * it pastes as the picture where a field takes only pictures. Rejects
+   * where the clipboard refused them.
    */
-  copyRich(rich: { readonly html: string; readonly text: string }): Promise<void>;
+  copyRich(rich: {
+    readonly html: string;
+    readonly text: string;
+    readonly png?: Promise<string> | undefined;
+  }): Promise<void>;
   /** Saves the text as a file of the name given, where the person chooses; answers whether it was saved rather than declined. */
   saveFile(file: { readonly name: string; readonly text: string }): Promise<boolean>;
   /** Brings the panel forward, where the shell can. */
@@ -142,6 +149,12 @@ export interface AppPlatform {
    * this out.
    */
   menuOffers?(commands: readonly AppCommand[]): void;
+  /**
+   * Hears the thread, task, agent, or pull request the window shows, or none,
+   * each time that changes, so a shell on a Mac hands it off to the member's
+   * iPhone. A browser tab cannot advertise one, so the web leaves this out.
+   */
+  handoff?(activity: HandoffActivity | null): void;
   /**
    * Ends a maintainer's sign-in as the member signed in (`impersonated` on
    * the account) and takes them back to that member's page of the admin

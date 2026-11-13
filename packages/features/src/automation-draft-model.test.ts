@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { Schema } from "effect";
 import { test } from "vitest";
 import {
   automationDraft,
@@ -9,6 +10,7 @@ import {
   draftNextRuns,
   draftProblems,
   filterValuesOf,
+  onceDateOf,
   SCHEDULE_KIND,
   sameDraft,
   scheduleDraftOf,
@@ -24,6 +26,7 @@ import {
   AUTOMATION_TARGET,
   AUTOMATION_TRIGGER,
   type AutomationSummary,
+  automationTriggerSchema,
   GITHUB_SENDER,
   GITHUB_TRIGGER_EVENT,
   PULL_REQUEST_MOMENT,
@@ -77,7 +80,7 @@ test("a cron the picker writes reads back as its kind and time, and any other is
   assert.equal(scheduleDraftOf("15 * * * *").kind, SCHEDULE_KIND.HOURLY);
   assert.deepEqual(
     { ...scheduleDraftOf("0 9 * * 7") },
-    { kind: SCHEDULE_KIND.WEEKLY, hour: 9, minute: 0, weekday: 0, cron: "0 9 * * 7" },
+    { kind: SCHEDULE_KIND.WEEKLY, hour: 9, minute: 0, weekday: 0, date: "", cron: "0 9 * * 7" },
   );
 
   for (const cron of ["0 9 1 * *", "*/30 9-17 * * 1-5", "0 25 * * *", "0 9 * * 1,3"]) {
@@ -85,6 +88,47 @@ test("a cron the picker writes reads back as its kind and time, and any other is
     assert.equal(read.kind, SCHEDULE_KIND.CUSTOM, cron);
     assert.equal(cronOf(read), cron, cron);
   }
+});
+
+test("a Once draft writes its date and time on its zone's clock as the trigger's at, which the wire reads, runs that once, and is refused once past unless it stands as it opened", () => {
+  const fresh = automationDraft(undefined, DEFAULTS);
+
+  const once = {
+    ...fresh,
+    name: "Check adoption",
+    prompt: "Check whether 0.33.0 has been adopted.",
+    schedule: {
+      ...fresh.schedule,
+      kind: SCHEDULE_KIND.ONCE,
+      date: "2026-01-27",
+      hour: 9,
+      minute: 5,
+    },
+  };
+
+  const trigger = {
+    kind: AUTOMATION_TRIGGER.SCHEDULE,
+    at: "2026-01-27T09:05",
+    timezone: DEFAULTS.timezone,
+  };
+
+  assert.deepEqual(createRequestOf(once, "workspace-acme").trigger, trigger);
+  assert.deepEqual(Schema.decodeUnknownSync(automationTriggerSchema)(trigger), trigger);
+  assert.throws(() =>
+    Schema.decodeUnknownSync(automationTriggerSchema)({ ...trigger, at: "2026-01-27 09:05" }),
+  );
+  // Nine past nine in New York in January is 14:05 UTC.
+  assert.deepEqual(draftNextRuns(once, NOW, 2), [Date.parse("2026-01-27T14:05:00Z")]);
+
+  const past = { ...once, schedule: { ...once.schedule, date: "2026-01-02" } };
+  assert.equal(draftProblems(past, false, NOW)[DRAFT_FIELD.SCHEDULE], "Pick a time in the future.");
+  assert.deepEqual(draftProblems(past, false, NOW, past), {}, "a spent one may still be renamed");
+  assert.equal(onceDateOf("Jan 27", NOW, DEFAULTS.timezone), "2026-01-27");
+  assert.equal(
+    onceDateOf("Jan 27 at 5pm", NOW, DEFAULTS.timezone),
+    undefined,
+    "a time typed in the date's field is refused, not dropped",
+  );
 });
 
 test("a new draft runs at nine on weekdays in the window's zone, and a saved one opens as it was saved", () => {
@@ -309,15 +353,15 @@ test("a GitHub trigger's settings are written as the row of choices leaves them,
 
   const opened = automationDraft(onEvent, DEFAULTS);
 
-  const chosen = {
-    ...opened,
-    githubSettings: {
-      senders: [GITHUB_SENDER.PEOPLE, GITHUB_SENDER.APP_AGENTS],
-      moments: [PULL_REQUEST_MOMENT.OPENED, PULL_REQUEST_MOMENT.READY],
-      drafts: true,
-      forks: false,
-    },
+  // Prereleases speak to a release alone, so an update's trigger is written without them.
+  const said = {
+    senders: [GITHUB_SENDER.PEOPLE, GITHUB_SENDER.APP_AGENTS],
+    moments: [PULL_REQUEST_MOMENT.OPENED, PULL_REQUEST_MOMENT.READY],
+    drafts: true,
+    forks: false,
   };
+
+  const chosen = { ...opened, githubSettings: { ...said, prereleases: false } };
 
   assert.equal(
     changeOf(opened, onEvent, DEFAULTS),
@@ -328,7 +372,7 @@ test("a GitHub trigger's settings are written as the row of choices leaves them,
     trigger: {
       kind: AUTOMATION_TRIGGER.GITHUB,
       event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
-      ...chosen.githubSettings,
+      ...said,
     },
   });
   assert.deepEqual(

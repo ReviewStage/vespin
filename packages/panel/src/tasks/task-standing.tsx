@@ -1,4 +1,5 @@
 import { FAILURE_CONDITION, FAILURE_SURFACE } from "@repo/features/shown-failure";
+import type { TaskRelationSubject } from "@repo/features/task-relation-model";
 import {
   NO_ASSIGNEE_WORDS,
   TASK_PRIORITY_WORDS,
@@ -45,12 +46,9 @@ import { memberReadNote, memberRows } from "../member-rows.js";
 import { Highlighted } from "../search-field.js";
 import { Picker } from "../settings/picker-row.js";
 import { useTaskCard } from "./chip-cards.js";
+import { FollowingChip } from "./following-chip.js";
 import { type RepositoryChooser, useRepositoryMenu } from "./repository-chip.js";
-import {
-  TaskRelationAsked,
-  type TaskRelationSubject,
-  type TaskRelationsDoor,
-} from "./task-relation-menu.js";
+import { TaskRelationAsked, type TaskRelationsDoor } from "./task-relation-menu.js";
 
 /**
  * task-standing.tsx -- a task's head over its description: the path to it, then the chips that say and change where it stands, how much it matters, and who is on it.
@@ -67,7 +65,8 @@ import {
  * window's own menu (`picker-row.tsx`): the status, each of the five with
  * its mark, the priority, each with its bars, and the assignee, each member
  * of the workspace by face and name, the reader first, and No assignee on
- * the dashed unassigned mark; then, where the page hands their door, the
+ * the dashed unassigned mark; then, while the workspace has Following on,
+ * the task's followers (`following-chip.tsx`); then, where the page hands their door, the
  * box the add menu hangs from when the task's menus or ⌘K ask for it
  * (`task-relation-menu.tsx`). The task's sub-tasks and relations stand as
  * groups of their own under the byline (`plan-relations.tsx`). A pick
@@ -548,6 +547,7 @@ export function TaskStandingChips({
             onPick={onSet === undefined ? undefined : (assigneeId) => onSet({ assigneeId })}
           />
         </ReplayWords>
+        <FollowingChip task={task} editable={onSet !== undefined} />
         {asked}
       </Inline>
     </div>

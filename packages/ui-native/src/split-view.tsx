@@ -12,6 +12,7 @@ import {
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
+  disabled,
   navigationBarTitleDisplayMode,
   navigationSplitViewStyle,
   navigationTitle,
@@ -19,7 +20,9 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
-import type { SfSymbol } from "./sf-symbol.js";
+import type { Glyph } from "./glyph.js";
+import { actContent, menuLabel } from "./glyph-label.js";
+import type { MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 
 /** What the first column holds, so it is drawn afresh as that changes. */
@@ -28,7 +31,7 @@ const FIRST_COLUMN = { APP_SIDEBAR: "app-sidebar", LIST: "list" } as const;
 /** An act a bar holds by its symbol alone, such as Settings. */
 export type BarAction = {
   readonly label: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly onPress: () => void;
 };
 
@@ -39,15 +42,11 @@ export type BarAction = {
  */
 export type BarMenu = {
   readonly label: string;
-  readonly symbol: SfSymbol;
-  readonly choices: readonly {
-    readonly label: string;
-    readonly on: boolean;
-    readonly onPress: () => void;
-  }[];
+  readonly symbol: Glyph;
+  readonly choices: readonly MenuChoice[];
   readonly actions: readonly {
     readonly label: string;
-    readonly symbol: SfSymbol;
+    readonly symbol: Glyph;
     readonly disabled?: boolean | undefined;
     /** Whether the act takes something away for good, such as Permanently delete, which the system draws red. */
     readonly destructive?: boolean | undefined;
@@ -108,11 +107,11 @@ type SplitViewProps = {
 /** A bar's menu as SwiftUI's: each choice a toggle the system checks, then a rule, then each act. */
 export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
   return (
-    <Menu label={menu.label} systemImage={menu.symbol}>
+    <Menu label={menuLabel(menu.label, menu.symbol)}>
       {menu.choices.map((choice) => (
         <Toggle
           key={choice.label}
-          label={choice.label}
+          {...actContent(choice.label, choice.symbol)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />
@@ -121,10 +120,9 @@ export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
       {menu.actions.map((action) => (
         <SwiftUIButton
           key={action.label}
-          label={action.label}
-          systemImage={action.symbol}
+          {...actContent(action.label, action.symbol)}
           onPress={action.onPress}
-          {...(action.disabled === true ? { disabled: true } : {})}
+          modifiers={[disabled(action.disabled === true)]}
           {...(action.destructive === true ? { role: "destructive" } : {})}
         />
       ))}
@@ -137,9 +135,7 @@ export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
 
 /** A bar act as SwiftUI's button, its symbol alone, heard by its words. */
 function BarActionButton({ action }: { readonly action: BarAction }) {
-  return (
-    <SwiftUIButton label={action.label} systemImage={action.symbol} onPress={action.onPress} />
-  );
+  return <SwiftUIButton {...actContent(action.label, action.symbol)} onPress={action.onPress} />;
 }
 
 /** Whether a bar holds anything for the toolbar to draw. */

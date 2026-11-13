@@ -297,7 +297,7 @@ function viewerGroups(input: {
   readonly picture: string | undefined;
   /** Whether the window holds the file's bytes, which alone are copied and saved (`heldBytes`). */
   readonly held: boolean;
-  /** Whether the file is a picture or a video, which the place's action is offered for. */
+  /** Whether the file is a picture, a video, or a PDF, which the place's action is offered for. */
   readonly media: boolean;
   readonly zoom: ImageZoom;
   readonly action: ViewerAction | undefined;
@@ -604,8 +604,8 @@ export function AttachmentViewer({
   const image = picture !== undefined;
   const held = heldBytes(file);
   const video = view === ATTACHMENT_VIEW.VIDEO;
-  // The place's own action takes the file itself, so it is offered for a picture or a video, never a diagram's code.
-  const media = view === ATTACHMENT_VIEW.IMAGE || video;
+  // The place's own action takes the file itself, so it is offered for a picture, a video, or a PDF, never a diagram's code.
+  const media = view === ATTACHMENT_VIEW.IMAGE || video || view === ATTACHMENT_VIEW.PDF;
   // A phone walks the files from its ⋯ and the arrow keys, with no room beside the card for the arrows or under it for the strip.
   const walking = !phone && files.length > 1;
   // A video takes a card of its own shape, so no ground stands beside it; a phone's fills the screen as its header does.

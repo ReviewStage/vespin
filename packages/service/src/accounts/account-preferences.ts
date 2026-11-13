@@ -30,9 +30,11 @@ import {
   accountPreferencesFromWire,
   accountPreferencesParts,
   experimentChoicesFrom,
+  isOlderOnboardingSurveyJson,
   NO_EXPERIMENTS,
   type OnboardingSurvey,
   onboardingSurveyFrom,
+  onboardingSurveyHasAnswer,
   onboardingSurveyStored,
   ownPreferenceFromWire,
 } from "@repo/settings";
@@ -349,11 +351,26 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
       : (yield* hostedStoreOrUnavailable(seams.readPreferences(userId)))?.preferences
           .onboardingSurvey;
 
+  const keptBefore = onboardingSurveyFrom(answeredBefore);
+
+  // Note that an older desktop app, which cannot read answers kept as lists, writes back the lone answers it kept itself, so answers in its shape leave answers already kept as they stand.
+  if (
+    keptBefore !== undefined &&
+    onboardingSurveyHasAnswer(keptBefore) &&
+    isOlderOnboardingSurveyJson(body.onboardingSurvey)
+  ) {
+    write.onboardingSurvey = onboardingSurveyStored(keptBefore);
+  }
+
   const row = yield* hostedStoreOrUnavailable(seams.writePreferences(userId, write));
-  // The survey's answers, once kept and changed, are recorded as a response to our onboarding survey.
+  // The survey's answers, once kept and changed, are recorded as a response to our onboarding survey; answers all taken back post nothing.
   const answered = onboardingSurveyFrom(write.onboardingSurvey);
 
-  if (answered !== undefined && !sameSurvey(onboardingSurveyFrom(answeredBefore), answered)) {
+  if (
+    answered !== undefined &&
+    onboardingSurveyHasAnswer(answered) &&
+    !sameSurvey(keptBefore, answered)
+  ) {
     yield* onboardingSurveyAnswered(userId, answered);
   }
 

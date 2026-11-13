@@ -1,4 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
+import { accountExperimentOn } from "@repo/database/models/account-store";
 import { type Agent, readAgentRouting } from "@repo/database/models/agent-store";
 import { cancelAgentWakeup } from "@repo/database/models/agent-wakeups";
 import {
@@ -25,7 +26,7 @@ import {
 import { admitsPlanWriter, controlsAgent } from "../agent-reach.js";
 import { LaunchRefused, RESTORE_OUTCOME } from "../machine/agent-machine.js";
 import { deploymentLifecycle } from "../machine/agent-machines.js";
-import { experimentOnIn } from "../workspace-experiment-on.js";
+import type { AgentSandbox } from "../terminal/agent-sandbox.js";
 import { harnessOf } from "./native-runtime.js";
 import { runnerHalted } from "./runtime-sessions.js";
 
@@ -105,7 +106,11 @@ export function refusedByMachine(cause: unknown): HostedRefusal {
 const restoredForRewind = /* @__PURE__ */ Effect.fnUntraced(function* (
   target: ConversationTarget,
   snapshot: TurnCheckoutSnapshot,
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
+): Effect.fn.Return<
+  void,
+  HostedRefusal,
+  DatabaseServices | HttpClient.HttpClient | Sandbox | AgentSandbox
+> {
   const sessionId = yield* hostedStoreOrUnavailable(recordedRuntimeSession(target));
 
   if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.CHECKOUT_SNAPSHOT_MISSING);
@@ -139,15 +144,22 @@ export const rewoundAgent = /* @__PURE__ */ Effect.fn("web/rewoundAgent")(functi
   agent: Agent,
   messageId: string,
   restoreFiles = false,
-): Effect.fn.Return<void, HostedRefusal, DatabaseServices | HttpClient.HttpClient | Sandbox> {
+): Effect.fn.Return<
+  void,
+  HostedRefusal,
+  DatabaseServices | HttpClient.HttpClient | Sandbox | AgentSandbox
+> {
   // An agent on its starter's own GitHub token takes words from its starter alone, and so is rewound by them alone.
   if (!controlsAgent(account, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* admitsPlanWriter(account, agent);
 
   if (agent.archivedAt !== null) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
-  // The files go back only while the agent's workspace has the experiment on: off, no window offers the choice, so a request asking it is malformed.
-  if (restoreFiles && !(yield* experimentOnIn(agent.organizationId, EXPERIMENT.REWIND_FILES))) {
+  // The files go back only while the account rewinding has the experiment on: off, no window of theirs offers the choice, so a request asking it is malformed.
+  if (
+    restoreFiles &&
+    !(yield* hostedStoreOrUnavailable(accountExperimentOn(account, EXPERIMENT.REWIND_FILES)))
+  ) {
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
   }
 

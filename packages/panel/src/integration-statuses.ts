@@ -3,19 +3,19 @@ import { serverStandings } from "@repo/features/agent-servers-model";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import {
   signInBegun as begunSignIn,
-  SIGN_IN,
+  nextSignInDeadline,
   type SignIn,
-  signInAfterRead,
+  type SignIns,
+  serverAccounts,
+  serverStatus,
+  signInByGitHub,
+  signInsAfterRead,
 } from "@repo/features/integration-sign-in";
 import type { IntegrationStatusView } from "@repo/features/integration-view";
 import {
-  INTEGRATION_GRANT,
-  INTEGRATION_GRANT_OF,
-  INTEGRATION_PROVIDER_LIST,
   INTEGRATION_STATUS,
   type IntegrationAccount,
   type IntegrationProvider,
-  type IntegrationSignInFailure,
   type IntegrationStatus,
   integrationConnectionOf,
 } from "@repo/features/integration-wire";
@@ -81,8 +81,6 @@ export interface IntegrationStatuses {
 /** Where each server stands, by its name: every provider's own word, and every account's. */
 type Standing = ReadonlyMap<string, IntegrationStatus>;
 
-type SignIns = ReadonlyMap<string, SignIn>;
-
 const NO_ACCOUNTS: readonly IntegrationAccount[] = [];
 
 const NO_PROVIDERS: readonly IntegrationProvider[] = [];
@@ -104,67 +102,6 @@ function untilDeadline(deadline: number, passed: () => void): Effect.Effect<void
   return Effect.flatMap(Clock.currentTimeMillis, (now) =>
     Effect.andThen(Effect.sleep(Duration.millis(Math.max(0, deadline - now))), Effect.sync(passed)),
   );
-}
-
-/**
- * Every server's sign-in as the host's read leaves it, with the sign-in
- * failures it named, read at `read`'s mark and instant. Note that a server
- * whose standing did not move since the read before (`before`), and that it
- * names no failure of, is passed over, unless the deadline asked (`before`
- * none), because the slice is laid again whenever anything of it moves,
- * GitHub's standing among it, which may land before a sign-in just begun
- * reaches it: that is no word on how the sign-in went.
- */
-function signInsAfterRead(
-  signIns: SignIns,
-  standing: Standing,
-  failures: readonly IntegrationSignInFailure[],
-  before: Standing | undefined,
-  read: { readonly mark: number; readonly at: number },
-): SignIns {
-  const next = new Map<string, SignIn>();
-  const servers = new Set([...INTEGRATION_PROVIDER_LIST, ...standing.keys(), ...signIns.keys()]);
-
-  for (const server of servers) {
-    const status = standing.get(server);
-    const held = signIns.get(server);
-    const named = failures.find((failure) => (failure.connection ?? failure.provider) === server);
-
-    const failure =
-      named === undefined
-        ? undefined
-        : {
-            reason: named.reason,
-            ...(named.message !== undefined ? { message: named.message } : undefined),
-          };
-
-    const signIn =
-      failure === undefined && before !== undefined && before.get(server) === status
-        ? held
-        : signInAfterRead(held, { status, failure, ...read });
-
-    if (signIn !== undefined) next.set(server, signIn);
-  }
-
-  return next;
-}
-
-/** Whether the server is granted by the account's own GitHub, whose connect the service never answers pending. */
-function byGitHub(server: string): boolean {
-  const provider = providerOfServer(server);
-
-  return (
-    provider !== undefined && INTEGRATION_GRANT_OF[provider] === INTEGRATION_GRANT.GITHUB_SIGN_IN
-  );
-}
-
-/** The earliest deadline of a sign-in waited on, which the wait is armed for whenever it moves. */
-function nextDeadline(signIns: SignIns): number | undefined {
-  const deadlines = [...signIns.values()].flatMap((signIn) =>
-    signIn.kind === SIGN_IN.WAITING ? [signIn.deadline] : [],
-  );
-
-  return deadlines.length === 0 ? undefined : Math.min(...deadlines);
 }
 
 /** What every surface shares of one account's integrations beside the slice: the sign-ins the window waits on. */
@@ -283,7 +220,7 @@ export function useIntegrationStatuses(): IntegrationStatuses {
     if (latest !== undefined) tell(latest, true);
   }, [passed, ledger, tell]);
 
-  const deadline = nextDeadline(signIns);
+  const deadline = nextSignInDeadline(signIns);
   useEffect(() => {
     if (deadline !== undefined) wait.start(untilDeadline(deadline, () => setPassed((n) => n + 1)));
   }, [deadline, wait]);
@@ -296,7 +233,7 @@ export function useIntegrationStatuses(): IntegrationStatuses {
     (server: string) => {
       if (ledger.told?.standing.get(server) === INTEGRATION_STATUS.CONNECTED) return;
       ledger.marks += 1;
-      const signIn = begunSignIn(ledger.marks, clockNow(), !byGitHub(server));
+      const signIn = begunSignIn(ledger.marks, clockNow(), !signInByGitHub(server));
       change((book) => withSignIns(book, (held) => new Map(held).set(server, signIn)));
     },
     [ledger, change],
@@ -323,7 +260,7 @@ export function useIntegrationStatuses(): IntegrationStatuses {
         }),
       );
 
-      const canceled: IntegrationStatusView | undefined = byGitHub(server)
+      const canceled: IntegrationStatusView | undefined = signInByGitHub(server)
         ? { status: INTEGRATION_STATUS.DISCONNECTED }
         : await cancelIntegration({
             provider,
@@ -354,64 +291,14 @@ export function useIntegrationStatuses(): IntegrationStatuses {
     [cancelIntegration, book, change, ledger],
   );
 
-  /**
-   * Where a server stands: the host's read's word, or, for an account the window began a sign-in for that the read does
-   * not list, its sign-in's: pending while it waits, else disconnected, its
-   * failure said on its line.
-   */
-  const statusOf = (server: string): IntegrationStatus | undefined => {
-    const read = standing?.get(server);
-
-    if (read !== undefined) return read;
-    const signIn = signIns.get(server);
-
-    if (signIn === undefined) return undefined;
-
-    return signIn.kind === SIGN_IN.WAITING
-      ? INTEGRATION_STATUS.PENDING
-      : INTEGRATION_STATUS.DISCONNECTED;
-  };
-
+  const statusOf = (server: string) => serverStatus(standing, signIns, server);
   const accounts = answer?.accounts ?? NO_ACCOUNTS;
   const addable = answer?.addable ?? NO_PROVIDERS;
-
-  // Note that an account added from a surface stands as a row from its
-  // sign-in alone, because the host's read lists it only once the service
-  // holds it, and one whose first sign-in failed has gone from the service
-  // while its failure is still said. The provider's first name is the
-  // provider's own row while no account of it is listed, and an account's
-  // row of its own beside one that is.
-  const unlisted = [...signIns.keys()].flatMap((server): IntegrationAccount[] => {
-    const added = integrationConnectionOf(server);
-
-    if (added === undefined) return [];
-
-    if (accounts.some((account) => account.connection === server)) return [];
-
-    if (added.place === 1 && !accounts.some((account) => account.provider === added.provider)) {
-      return [];
-    }
-
-    return [
-      {
-        provider: added.provider,
-        connection: server,
-        status: statusOf(server) ?? INTEGRATION_STATUS.PENDING,
-      },
-    ];
-  });
 
   return {
     statusOf,
     listed: (server) => accounts.some((account) => account.connection === server),
-    accountsOf: (provider) =>
-      [...accounts, ...unlisted]
-        .filter((account) => account.provider === provider)
-        .toSorted(
-          (a, b) =>
-            (integrationConnectionOf(a.connection)?.place ?? 0) -
-            (integrationConnectionOf(b.connection)?.place ?? 0),
-        ),
+    accountsOf: (provider) => serverAccounts(provider, accounts, signIns, statusOf),
     canAdd: (provider) => addable.includes(provider),
     signInOf: (server) => signIns.get(server),
     readFailed: held.isError,

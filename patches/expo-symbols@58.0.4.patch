@@ -1,0 +1,13 @@
+diff --git a/ios/SymbolView.swift b/ios/SymbolView.swift
+index d3209d17a4a0f91a2b6a18688a93e574a7da7d71..c20a3041cd8f9c8538e7a6548865cd0ecc3194c0 100644
+--- a/ios/SymbolView.swift
++++ b/ios/SymbolView.swift
+@@ -48,7 +48,7 @@ class SymbolView: ExpoView {
+ 
+ #if !os(macOS)
+   private func reloadSymbolIOS() {
+-    guard let image = UIImage(systemName: name) else {
++    guard let image = UIImage(systemName: name) ?? UIImage(named: name) else {
+       return
+     }
+     imageView.image = image

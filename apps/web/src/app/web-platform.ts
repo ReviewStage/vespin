@@ -51,6 +51,11 @@ export function downloadText(file: {
   return Promise.resolve(true);
 }
 
+/** Puts words on the browser's clipboard as plain text. */
+export function copyText(words: string): Promise<void> {
+  return navigator.clipboard.writeText(words);
+}
+
 /**
  * Puts a PNG, its bytes in base64 once drawn, on the browser's clipboard as
  * a picture. Note that the write is asked for now, with the picture still a
@@ -66,20 +71,30 @@ export function copyPng(png: Promise<string>): Promise<void> {
   return navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
 }
 
-/** Puts words on the browser's clipboard as rich text, their HTML beside their plain text. */
+/** Puts words on the browser's clipboard as rich text, their HTML beside their plain text, and a PNG beside them where one is given, still being drawn as `copyPng` takes one. */
 export function copyRichText({
   html,
   text,
+  png,
 }: {
   readonly html: string;
   readonly text: string;
+  readonly png?: Promise<string> | undefined;
 }): Promise<void> {
-  return navigator.clipboard.write([
-    new ClipboardItem({
-      "text/html": new Blob([html], { type: "text/html" }),
-      "text/plain": new Blob([text], { type: "text/plain" }),
-    }),
-  ]);
+  const words = {
+    "text/html": new Blob([html], { type: "text/html" }),
+    "text/plain": new Blob([text], { type: "text/plain" }),
+  };
+
+  if (png === undefined) return navigator.clipboard.write([new ClipboardItem(words)]);
+
+  const picture = png.then((base64) => {
+    const bytes = Uint8Array.from(atob(base64), (each) => each.charCodeAt(0));
+
+    return new Blob([bytes], { type: "image/png" });
+  });
+
+  return navigator.clipboard.write([new ClipboardItem({ ...words, "image/png": picture })]);
 }
 
 /**
@@ -204,7 +219,7 @@ export function webPlatform(
   const platform: AppPlatform = {
     commandKey,
     browserTab: true,
-    copyText: (words) => navigator.clipboard.writeText(words),
+    copyText,
     copyImage: copyPng,
     copyRich: copyRichText,
     saveFile: downloadText,

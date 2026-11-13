@@ -1,3 +1,4 @@
+import { CHANGE_RELATION, REMOVE_RELATION } from "@repo/features/task-relation-model";
 import {
   CHIP_LOOK,
   CHIP_SIZE,
@@ -9,7 +10,6 @@ import {
   SearchableMenu,
   STATUS_TONE,
 } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
 import { ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useDisclosure } from "@repo/ui/use-disclosure";
 import { useId, useRef, useState } from "react";
@@ -29,8 +29,8 @@ import { useId, useRef, useState } from "react";
 
 /** What the pill's menu names the kinds and the relation's taking away. */
 const WORDS = {
-  CHANGE: "Change relation",
-  REMOVE: "Remove relation",
+  CHANGE: CHANGE_RELATION,
+  REMOVE: REMOVE_RELATION,
   NO_MATCH: "No kinds match",
 } as const;
 
@@ -91,7 +91,6 @@ export function RelationKindPill<Kind extends string>({
     {
       id: REMOVE_ROW_ID,
       label: WORDS.REMOVE,
-      icon: <GLYPH.CLOSE />,
       onPress: () => {
         close();
         onRemove();

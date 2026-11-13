@@ -96,6 +96,8 @@ export * from "./pull-request-chapters.js";
 
 export * from "./push-device.js";
 
+export * from "./reply-button.js";
+
 export * from "./repository-pin.js";
 
 export * from "./runner-line.js";
@@ -114,6 +116,8 @@ export * from "./task.js";
 
 export * from "./task-block.js";
 
+export * from "./task-follower.js";
+
 export * from "./task-page.js";
 
 export * from "./task-pin.js";
@@ -123,6 +127,8 @@ export * from "./task-read.js";
 export * from "./task-section.js";
 
 export * from "./usage.js";
+
+export * from "./voice-call.js";
 
 export * from "./workspace-environment-variable.js";
 

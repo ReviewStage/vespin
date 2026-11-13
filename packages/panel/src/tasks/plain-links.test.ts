@@ -192,9 +192,14 @@ test("the description's editor draws a plain link as every place does, whole", a
   act(() => rollout.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true })));
   await act(async () => undefined);
 
+  // Note that a link the read view draws as a chip opens as that chip, so only the plain ones stand as links.
   assert.deepEqual(
     [...container.querySelectorAll(".description-document-text a")].map((link) => link.textContent),
-    ["the rollout", "the store", "the docs", BARE],
+    ["the docs", BARE],
+  );
+  assert.equal(
+    container.querySelectorAll('.description-document-text [data-chip="mention"]').length,
+    2,
   );
 });
 

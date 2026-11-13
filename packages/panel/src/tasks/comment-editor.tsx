@@ -1,3 +1,4 @@
+import { fencedBlock } from "@repo/features/markdown-fence";
 import { PULL_REQUEST_WRITE_BOUNDS } from "@repo/features/pull-request-write-wire";
 import {
   ANNOUNCE,
@@ -25,7 +26,6 @@ import { useAnnounceShown } from "../use-announce-shown.js";
 import type { OwnBlock } from "./block-picker.js";
 import { REPLY_LOOK, type ReplyVariant } from "./comment-variant.js";
 import { MarkdownEditor } from "./markdown-editor.js";
-import { fencedBlock } from "./markdown-fence.js";
 
 /**
  * comment-editor.tsx -- words a member sends to GitHub as Markdown, written on the description's editor: a pull request's comment, a review's, a line's, a thread's reply, and a pending comment's edit.

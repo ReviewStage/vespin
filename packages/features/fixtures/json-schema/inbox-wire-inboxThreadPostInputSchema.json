@@ -160,7 +160,7 @@
                 "minLength": 1,
                 "maxLength": 600
               },
-              "maxItems": 8
+              "maxItems": 50
             }
           },
           "required": [
@@ -221,7 +221,7 @@
                 "additionalProperties": false
               },
               "minItems": 1,
-              "maxItems": 8
+              "maxItems": 50
             }
           },
           "required": [

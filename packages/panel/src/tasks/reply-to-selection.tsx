@@ -1,7 +1,7 @@
+import { replyOf } from "@repo/features/reply-quote";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { Button, MENU_SURFACE_FLOW, MenuSurface, Tooltip, useWait } from "@repo/ui";
 import { clipsAround, cutTo as cutToClips } from "@repo/ui/clip-room";
-import { replyOf } from "@repo/ui/reply-quote";
 import { type ViewportBox, visibleViewport } from "@repo/ui/visible-viewport";
 import { Duration, Effect } from "effect";
 import { ReplyIcon } from "lucide-react";

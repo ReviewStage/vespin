@@ -1043,7 +1043,7 @@ export function PagePane({
 
   const versionWords = `Version ${version} of ${page.version}`;
   // Note that the zoom sizes the page alone, so it stands nowhere while the source is shown.
-  const zoom = showingSource ? [] : zoomActions(pageZoom.zoom, pageZoom.press);
+  const zoom = showingSource ? [] : zoomActions(pageZoom.zoom, pageZoom.zoomBy);
   useTabActions(
     phone
       ? [
@@ -1127,7 +1127,7 @@ export function PagePane({
                         // Note that the press is gone once the page is at actual size, so the keys it held move on to its neighbor.
                         if (document.activeElement === event.currentTarget)
                           sourceToggle.current?.focus();
-                        pageZoom.press(PAGE_ZOOM_KEY.ACTUAL);
+                        pageZoom.zoomBy(PAGE_ZOOM_KEY.ACTUAL);
                       }}
                     >
                       {pageZoomWords(pageZoom.zoom)}

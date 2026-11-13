@@ -1,5 +1,5 @@
 /**
- * routed-doors.ts -- the doors into and out of the Board, a person's page, Admin, the Automations pages, the Inbox, and a version history, each its route's move held by the window's leave guard.
+ * routed-doors.ts -- the doors into and out of the Board, a person's page, Admin, the Automations pages, the Merge queue page, the Inbox, and a version history, each its route's move held by the window's leave guard.
  *
  * A routed place's open and close are its route's moves (`workspace-routes.ts`,
  * `admin/admin-route.ts`, `automations-route.ts`, `inbox-route.ts`)
@@ -29,6 +29,7 @@ import { useAdminRoute } from "../admin/admin-route.js";
 import type { AdminView } from "../admin/routing.js";
 import { useAutomationsRoute } from "../automations-route.js";
 import { type InboxAt, useInboxRoute } from "../inbox-route.js";
+import { useMergeQueueRoute } from "../merge-queue-route.js";
 import { beginPanelSpan, PANEL_SPAN } from "../panel-spans.js";
 import { AUTOMATIONS_PAGE, type AutomationsPlace } from "../tasks/automations-place.js";
 import type { InboxChoice, TasksControl } from "../tasks/use-tasks-tab.js";
@@ -166,6 +167,29 @@ export function useAutomationsDoor(
     open: (place = { kind: AUTOMATIONS_PAGE.LIST }) =>
       placeLeave.arrive(() => {
         if (workspace !== undefined) route.onOpen(place, stepOf(workspace));
+      }, NOTHING),
+    close: () => placeLeave.arrive(route.onClose, NOTHING),
+  };
+}
+
+/** The Merge queue page: the presses that open and leave it. */
+export interface MergeQueueDoor {
+  /** Opens the page under the listed workspace, marking the pull request at the GitHub address `pullRequest` where one is named; nothing while none is listed. */
+  readonly open: (pullRequest?: string) => void;
+  readonly close: () => void;
+}
+
+/** The Merge queue page's doors, under the listed workspace as the tab stands. */
+export function useMergeQueueDoor(
+  tasks: Pick<TasksControl, "placeLeave" | "workspace">,
+): MergeQueueDoor {
+  const route = useMergeQueueRoute();
+  const { placeLeave, workspace } = tasks;
+
+  return {
+    open: (pullRequest) =>
+      placeLeave.arrive(() => {
+        if (workspace !== undefined) route.onOpen(stepOf(workspace), pullRequest);
       }, NOTHING),
     close: () => placeLeave.arrive(route.onClose, NOTHING),
   };

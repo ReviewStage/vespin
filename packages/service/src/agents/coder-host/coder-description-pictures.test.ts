@@ -14,14 +14,13 @@ import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace, openWorkspace } from "@repo/database/testing";
 import { descriptionAttachmentOf } from "@repo/features/description-attachment-link";
-import { DESCRIPTION_ATTACHMENT_BOUNDS } from "@repo/features/description-attachment-wire";
-import { descriptionSections } from "@repo/features/description-document";
 import {
-  PICTURE_BOUNDS,
-  PICTURE_MEDIA_TYPE,
-  PICTURE_TYPE,
-  type Picture,
-} from "@repo/features/picture-wire";
+  DESCRIPTION_ATTACHMENT_BOUNDS,
+  DESCRIPTION_FILE_TYPE,
+  type DescriptionFile,
+} from "@repo/features/description-attachment-wire";
+import { descriptionSections } from "@repo/features/description-document";
+import { PICTURE_BOUNDS, PICTURE_MEDIA_TYPE, PICTURE_TYPE } from "@repo/features/picture-wire";
 import { unparsedWire } from "@repo/wire";
 import { paddedTo, webmBytes } from "@repo/wire/testing";
 import { Effect, Option } from "effect";
@@ -173,7 +172,7 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
         if (named === undefined) return;
 
         for (const member of [owner, teammate]) {
-          const read: Option.Option<Picture> = yield* readDescriptionAttachment(
+          const read: Option.Option<DescriptionFile> = yield* readDescriptionAttachment(
             member,
             taskId,
             named.attachmentId,
@@ -196,6 +195,46 @@ it.layer(getTestDB())("edit_description's pictures", (it) => {
         assert.deepEqual(
           stored.agentEdits.map((edit) => [edit.agentId, edit.notes.length]),
           [[agentId, 2]],
+        );
+      }),
+  );
+
+  it.effect(
+    "a PDF the agent names is kept as a PDF and its line written under the file's own name",
+    () =>
+      Effect.gen(function* () {
+        const { owner, taskId, agentId } = yield* openAgentTask;
+        const report = new TextEncoder().encode("%PDF-1.7\n%%EOF\n");
+        const sandbox = sandboxWith({ "out/invite-audit.pdf": report });
+
+        const answer = yield* recordDescriptionEdit(
+          { userId: owner, taskId },
+          { agentId },
+          unparsedWire(pictureCall("out/invite-audit.pdf")),
+          0,
+          sandbox,
+        );
+
+        assert.deepEqual(answer, { status: ACTION_RESULT_STATUS.ACCEPTED, taken: 1 });
+        const stored = Option.getOrThrow(yield* readTask(owner, taskId));
+        const line = stored.text.trimEnd().split("\n").at(-1) ?? "";
+
+        const [, address] =
+          /^!\[invite-audit\.pdf\]\((\S+) "Pending invites sit in the list"\)$/u.exec(line) ?? [];
+
+        assert.ok(address, line);
+        const named = descriptionAttachmentOf(address);
+        assert.ok(named);
+
+        const read: Option.Option<DescriptionFile> = yield* readDescriptionAttachment(
+          owner,
+          taskId,
+          named.attachmentId,
+        );
+
+        assert.deepEqual(
+          Option.map(read, ({ contentType }) => contentType),
+          Option.some(DESCRIPTION_FILE_TYPE.PDF),
         );
       }),
   );

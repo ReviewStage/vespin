@@ -3,11 +3,12 @@ import { DESCRIPTION_ACTOR, TASK_BOUNDS, type Task } from "@repo/features/task-w
 import {
   ANNOUNCE,
   Button,
+  DropLine,
+  type DropLineAt,
   EDITABLE_BLOCK_KIND,
   EDITABLE_HEADING_LEAVE,
   EDITABLE_TEXT_BLOCK_SELECTOR,
   EditableBlock,
-  type EditableBlockDrop,
   EditableHeading,
   headingCaretAtEnd,
   PageHeader,
@@ -27,10 +28,12 @@ import {
   type DescriptionEditorPlacement,
   type EditorAnchor,
   type EditorAnchors,
+  type PictureLanding,
   PLACEMENT_END,
+  type PlacedPicture,
   type PlacedWords,
 } from "../description-editor/contract.js";
-import { imageFiles } from "../picture-files.js";
+import { descriptionFiles, offersDescriptionFiles } from "../picture-files.js";
 import { useAnnounceShown } from "../use-announce-shown.js";
 import { UNIT_ATTRIBUTED_CLASS } from "./description-unit-look.js";
 import { useEditorPictures } from "./editor-pictures.js";
@@ -51,8 +54,9 @@ import {
  * editable. A click into a section's words opens the whole text in place,
  * the caret where the click landed, or the words its press selected selected
  * again, the format toolbar over them as over words selected in the editor
- * (`clickPlacement`), and so do pictures dropped on them, laid in where
- * they landed (`dropPlacement`), and so does a press on the empty room
+ * (`clickPlacement`), and so do pictures dropped anywhere over the text,
+ * laid in at the boundary they landed nearest, which a line marks while they
+ * are carried (`useFileDrop`), and so does a press on the empty room
  * around the text (`useTextRoom`); the editor is TipTap, from the editor
  * bundle the panel starts loading as it first paints, and again the first
  * time a section is hovered or selected (`../bundle-loader.ts`), and draws the words exactly as the
@@ -83,6 +87,9 @@ export const EDITOR_ROOM_CLASS = "description-document-editor";
 /** What the developer does that ends the editor keeping the words it opened on where they stood: a scroll, a press, or a key. */
 const KEEPING_ENDS = ["wheel", "touchstart", "pointerdown", "keydown"] as const;
 
+/** A picture drawn in the text, whose press opens the editor with it selected. */
+const PICTURE_SELECTOR = ".picture-block";
+
 /** How long the typing pauses before the document hears the text. */
 const DRAFT_PAUSE = Duration.millis(150);
 
@@ -112,13 +119,13 @@ function useTypingPause(): UseTypingPauseResult {
   };
 }
 
-/** Whether a click lands on words to edit: not on a link, a button bar a picture's, a video's player, a task's checkbox or the label around it, or the section's byline. */
+/** Whether a click lands on words to edit: not on a link, a button bar a picture's, a video's player, a PDF's chip, a task's checkbox or the label around it, or the section's byline. */
 function pressesWords(target: EventTarget): boolean {
-  // Note that a mention's chip is its own, a link's or a folder's that opens nothing alike, and so is the byline's row, whose writer and ⋯ are presses of their own, a button in the words, a diagram's Show code say, and a task's checkbox, which ticks its item, and the label around it, whose press a finger takes beside the box and hands to it; a comment's marked words open its thread and the editor at them alike. A picture's press is a button that hands on only the press it does not take, a diagram's under a mouse in a wide room, which is the words' as the bare picture's was. A video's player is its own whole, its frame and every control in it, whatever they are drawn as, since a press there plays, seeks, or enlarges it; its caption is the words'.
+  // Note that a mention's chip is its own, a link's or a folder's that opens nothing alike, and so is the byline's row, whose writer and ⋯ are presses of their own, a button in the words, a diagram's Show code say, and a task's checkbox, which ticks its item, and the label around it, whose press a finger takes beside the box and hands to it; a comment's marked words open its thread and the editor at them alike. A picture's press is a button that hands on only the press it does not take, a diagram's under a mouse in a wide room, which is the words' as the bare picture's was. A video's player is its own whole, its frame and every control in it, whatever they are drawn as, since a press there plays, seeks, or enlarges it, and so is a PDF's chip, whose press opens it; its caption is the words'.
   return !(
     target instanceof Element &&
     target.closest(
-      "a, button:not(.ui-picture-tile), input, label, [data-mention-ref], .description-unit-row, .picture-block[data-video] > :not(.picture-caption)",
+      "a, button:not(.ui-picture-tile), input, label, [data-mention-ref], .description-unit-row, .picture-block:is([data-video], [data-file]) > :not(.picture-caption)",
     ) !== null
   );
 }
@@ -180,6 +187,20 @@ function sectionWordsAt(
   return { section, text, occurrence, offset: range.startOffset, code, top: lineTop(range, words) };
 }
 
+/** The picture a press landed on in a section's drawn block, by how many the block draws before it (`PlacedPicture`); none off a picture, and none on a picture's caption, which is words. */
+function sectionPictureAt(
+  block: HTMLElement,
+  section: number,
+  target: Element,
+): PlacedPicture | undefined {
+  const picture = target.closest(PICTURE_SELECTOR);
+
+  if (picture === null || target.closest(".picture-caption") !== null) return undefined;
+  const occurrence = [...block.querySelectorAll(PICTURE_SELECTOR)].indexOf(picture);
+
+  return occurrence === -1 ? undefined : { section, occurrence };
+}
+
 /** Whether an element is a heading that opens a section, as the editor counts them (`SECTION_LEVELS`). */
 function opensSection(element: Element | null | undefined): element is HTMLHeadingElement {
   return (
@@ -233,7 +254,8 @@ export function documentWordsAt(root: HTMLElement, range: Range): PlacedWords | 
 
 /**
  * Where a click on drawn words opens their editor, each of its words found
- * by `place`: on the words the click landed on, or, where its press selected
+ * by `place`: on the picture the click landed on, found by `pictureOf`, which
+ * the editor opens selected, on the words it landed on, or, where its press selected
  * words, selecting them again from where the selection started to where it
  * ended, so the editor's format toolbar stands over them as over words
  * selected in the editor. None where it landed on no words to edit, or
@@ -245,8 +267,13 @@ export function clickPlacement(
   x: number,
   y: number,
   place: (range: Range) => PlacedWords | undefined,
+  pictureOf?: (target: Element) => PlacedPicture | undefined,
 ): DescriptionEditorPlacement | undefined {
   if (!pressesWords(target)) return undefined;
+  const picture = target instanceof Element ? pictureOf?.(target) : undefined;
+
+  // A press on a picture opens the editor with that picture selected, never on words beside it.
+  if (picture !== undefined) return { x, y, picture };
   const selection = window.getSelection();
 
   if (selection === null || selection.isCollapsed) {
@@ -263,21 +290,29 @@ export function clickPlacement(
   return from === undefined || words === undefined ? undefined : { x, y, words, from };
 }
 
+/** Files dropped on the text, at the point on the line they land beside, and where around it they land (`fileDropSpot`). */
+interface FileDrop {
+  readonly files: readonly File[];
+  readonly x: number;
+  readonly y: number;
+  readonly landing: PictureLanding;
+}
+
 /**
- * Where pictures dropped on the drawn text open the editor: at the words they
- * landed on, as a click's caret is, with the image files among those
- * dropped, which the editor lays in there; none where none is a picture.
+ * Where pictures dropped on the text put the caret: at the words they
+ * landed on, as a click's caret is, with the image files and PDFs among
+ * those dropped, which the editor lays in there; none where none is either.
  */
 function dropPlacement(
-  { files, x, y }: EditableBlockDrop,
+  { files, x, y, landing }: FileDrop,
   place: (range: Range) => PlacedWords | undefined,
 ): DescriptionEditorPlacement | undefined {
-  const pictures = imageFiles(files);
+  const pictures = descriptionFiles(files);
 
   if (pictures.length === 0) return undefined;
   const range = rangeAt(x, y);
 
-  return { x, y, words: range === null ? undefined : place(range), pictures };
+  return { x, y, words: range === null ? undefined : place(range), pictures, landing };
 }
 
 /** Where the words a closing editor's caret stood on stand in the drawn text now; none where the drawn text holds no such words. */
@@ -480,6 +515,305 @@ export function useTextRoom({
   }, [held, room, placing]);
 }
 
+/** What a block of the text is, as a file drag finds the line its files land below: a line of words, a code block, a table whole, or a rule. */
+const LINE_BLOCKS = "p, h1, h2, h3, h4, h5, h6, pre, table, hr, li";
+
+/** Where a box of the text stands in the window. */
+interface LineBox {
+  readonly top: number;
+  readonly bottom: number;
+  readonly left: number;
+  readonly right: number;
+}
+
+/** A line of the text: its block and where the block's own line stands. */
+interface TextLine {
+  readonly block: Element;
+  readonly box: LineBox;
+}
+
+/** Where a file drag lands: the line marking the boundary its files go in at, the point on the words beside it where the caret is put for them, and where around that line they land. */
+interface FileDropSpot {
+  readonly line: DropLineAt;
+  readonly x: number;
+  readonly y: number;
+  readonly landing: PictureLanding;
+}
+
+/** Whether a drag carries files, which is all the text takes from one. */
+function carriesFiles(event: DragEvent): boolean {
+  return event.dataTransfer?.types.includes("Files") ?? false;
+}
+
+/** Where an element stands in the window. */
+function boxOf(element: Element): LineBox {
+  const { top, bottom, left, right } = element.getBoundingClientRect();
+
+  return { top, bottom, left, right };
+}
+
+/** Where a block's own line stands: a list item's above the list nested in it, which pictures laid in on its line stand above. */
+function lineBoxOf(block: Element): LineBox {
+  const box = boxOf(block);
+  const nested = block.tagName === "LI" ? block.querySelector(":scope > ul, :scope > ol") : null;
+
+  return { ...box, bottom: nested?.getBoundingClientRect().top ?? box.bottom };
+}
+
+/**
+ * The text's lines under `root`, in `within`, top to bottom: each a block as
+ * the editor lays pictures in below one, so a cell's words count as their
+ * table, a list item's words as their item, and nothing drawn inside a
+ * picture or a code block's header counts.
+ */
+function textLines(root: HTMLElement, within: string): TextLine[] {
+  const blocks = [...root.querySelectorAll(`:is(${within}) :is(${LINE_BLOCKS})`)].filter(
+    (block) =>
+      (block.tagName === "TABLE" || block.parentElement?.closest("table") == null) &&
+      !(block.tagName === "LI" && block.querySelector(":scope > p") !== null) &&
+      block.closest('[contenteditable="false"]') === null,
+  );
+
+  return blocks.flatMap((block) => {
+    const box = lineBoxOf(block);
+
+    return box.bottom > box.top ? [{ block, box }] : [];
+  });
+}
+
+/** The list items a block stands in, outermost first, each drawn from where its words start. */
+function itemsAround(block: Element): Element[] {
+  const items: Element[] = [];
+
+  for (
+    let item = block.closest("li");
+    item !== null;
+    item = item.parentElement?.closest("li") ?? null
+  ) {
+    items.unshift(item);
+  }
+
+  return items;
+}
+
+/**
+ * How deep in its lists a drop below `block` lands, by where the pointer
+ * stands across, as a document editor's drag nests a block: as deep as the
+ * items whose words start left of the pointer, so at or left of the list's
+ * words it lands after the list, at the top level.
+ */
+function dropDepth(items: readonly Element[], x: number): number {
+  const deeper = items.findIndex((item) => x <= item.getBoundingClientRect().left);
+
+  return deeper === -1 ? items.length : deeper;
+}
+
+/** Where the boundary a drop at `depth` lands at stands: below the line itself at its own depth, else below the list or the item that depth holds it in, from where that depth's words start. */
+function boundaryAt(line: TextLine, items: readonly Element[], depth: number): LineBox {
+  if (depth >= items.length) return line.box;
+  const holder = depth === 0 ? items[0]?.parentElement : items[depth - 1];
+
+  return holder == null ? line.box : boxOf(holder);
+}
+
+/**
+ * Where files carried to (`x`, `y`) land: before the first line where `y`
+ * stands above it; else below the line `y` stands on, or the line above the
+ * gap it stands in, as deep in its lists as `x` says (`dropDepth`). The
+ * line is drawn at that boundary, midway to the next line below it, from
+ * where that depth's words start; the caret goes on the words of the line
+ * the drop is below, or the first line's. None over no line.
+ */
+function fileDropSpot(lines: readonly TextLine[], x: number, y: number): FileDropSpot | undefined {
+  const [first] = lines;
+  const index = lines.findLastIndex((line) => line.box.top <= y);
+  const line = lines[index];
+
+  if (first === undefined) return undefined;
+
+  if (line === undefined) {
+    const { top, left, right } = first.box;
+
+    return {
+      line: { top: top - 1, left, width: right - left },
+      x: left + 1,
+      y: top + 1,
+      landing: { first: true },
+    };
+  }
+
+  const items = itemsAround(line.block);
+  const depth = dropDepth(items, x);
+  const edge = boundaryAt(line, items, depth);
+  const next = lines.find((each) => each.box.top >= edge.bottom)?.box;
+  const top = next === undefined ? edge.bottom : (edge.bottom + next.top) / 2;
+  const { box } = line;
+
+  return {
+    line: { top, left: edge.left, width: edge.right - edge.left },
+    x: Math.min(Math.max(x, box.left + 1), box.right - 1),
+    y: box.bottom - 1,
+    landing: { depth },
+  };
+}
+
+/** Where the text's room starts down the window: under the hairline parting the head from the text, else at the text's top; none while no text is drawn. */
+function textFloor(root: HTMLElement, within: string): number | undefined {
+  const text = root.querySelector(within)?.getBoundingClientRect().top;
+  const rule = root.querySelector(".document-rule")?.getBoundingClientRect().bottom;
+
+  return text === undefined ? undefined : Math.min(text, rule ?? text);
+}
+
+/** What holds the text's lines: the open editor's text, since the drawn sections stand only while it loads, or the drawn sections. */
+function linesWithin(open: boolean): string {
+  return open ? `.${EDITOR_ROOM_CLASS} .ProseMirror` : EDITABLE_TEXT_BLOCK_SELECTOR;
+}
+
+/** Whether two lines stand in the same place, which a drag over the same line draws once. */
+function sameLine(a: DropLineAt | undefined, b: DropLineAt | undefined): boolean {
+  return a === b || (a?.top === b?.top && a?.left === b?.left && a?.width === b?.width);
+}
+
+/** The words a range starts in, in whichever of the drawn text's sections holds them; none outside one. */
+function drawnWordsAt(body: HTMLElement, range: Range): PlacedWords | undefined {
+  const block = range.startContainer.parentElement?.closest<HTMLElement>(
+    EDITABLE_TEXT_BLOCK_SELECTOR,
+  );
+
+  if (block == null) return undefined;
+  const section = [...body.querySelectorAll(EDITABLE_TEXT_BLOCK_SELECTOR)].indexOf(block);
+
+  return sectionWordsAt(block, section, range);
+}
+
+/**
+ * The text as a place to drop files, drawn or open in the editor: a drag
+ * of files anywhere over the column below the hairline parting the head
+ * from the text, its gaps between blocks and its margins included, is the
+ * text's, so the window never opens a file, and the system shows a copy
+ * where it carries one the text keeps (`offersDescriptionFiles`). It lands before the
+ * first line, or below the line it stands on or the
+ * line above the gap it stands in, as deep in its lists as the pointer
+ * stands across (`fileDropSpot`), which the line answered marks while the
+ * files are carried. A drop puts the caret on that line's words, opening the
+ * editor there while it is closed (`dropPlacement`), and the editor lays
+ * its pictures in where the line marked (`PictureLanding`). Note that the drag is taken before the
+ * editor's own handling, so the editor's text caret for a drop never draws
+ * beside the line. A drag is taken but refused, no line drawn and no copy
+ * shown, where it carries no file the text keeps, or while an editor opened
+ * is still loading, since nothing could lay its files in yet. None while
+ * `editable` is false.
+ */
+function useFileDrop({
+  body,
+  room,
+  editing,
+  handle,
+  editable,
+}: {
+  /** What holds the text, drawn or in its editor. */
+  body: React.RefObject<HTMLElement | null>;
+  /** The scrolling column the text stands in. */
+  room: React.RefObject<HTMLElement | null>;
+  editing: DescriptionEditing;
+  /** The open editor's handle, whose caret a drop moves while it is open. */
+  handle: React.RefObject<DescriptionEditorHandle | undefined>;
+  editable: boolean;
+}): DropLineAt | undefined {
+  const [line, setLine] = useState<DropLineAt | undefined>(undefined);
+  const latest = useRef(editing);
+  latest.current = editing;
+  useEffect(() => {
+    const column = room.current;
+
+    if (!editable || column === null) return;
+
+    // Whether the open editor is still loading, its drawn sections standing in its place, where a drop could lay nothing in yet.
+    const loading = () =>
+      latest.current.editor !== undefined && body.current?.querySelector(linesWithin(true)) == null;
+
+    // Note that an editor still loading draws the sections in its place, whose lines a drag reads meanwhile.
+    const spotOf = (event: DragEvent) => {
+      const text = body.current;
+      const within = linesWithin(text?.querySelector(linesWithin(true)) != null);
+      const floor = text === null ? undefined : textFloor(text, within);
+
+      if (text === null || floor === undefined || event.clientY < floor) return undefined;
+
+      return fileDropSpot(textLines(text, within), event.clientX, event.clientY);
+    };
+
+    // Whether a drag over the text is refused: no line, and no copy, though it is still held so the window never opens its files.
+    const refused = (event: DragEvent) =>
+      loading() || !offersDescriptionFiles(event.dataTransfer?.items ?? []);
+
+    const over = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      const spot = spotOf(event);
+      const refuse = refused(event);
+      const at = refuse ? undefined : spot?.line;
+      setLine((was) => (sameLine(was, at) ? was : at));
+
+      if (spot === undefined) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (event.dataTransfer !== null) event.dataTransfer.dropEffect = refuse ? "none" : "copy";
+    };
+
+    const left = (event: DragEvent) => {
+      const into = event.relatedTarget;
+
+      if (!(into instanceof Node) || !column.contains(into)) setLine(undefined);
+    };
+
+    const dropped = (event: DragEvent) => {
+      if (!carriesFiles(event)) return;
+      setLine(undefined);
+      const spot = spotOf(event);
+      const text = body.current;
+
+      if (spot === undefined || text === null) return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (loading()) return;
+      const files = Array.from(event.dataTransfer?.files ?? []);
+      const open = latest.current.editor !== undefined;
+      const place = (range: Range) => (open ? undefined : drawnWordsAt(text, range));
+      const placement = dropPlacement({ files, ...spot }, place);
+
+      if (placement === undefined) return;
+
+      if (open) handle.current?.focusAt(placement);
+      else latest.current.open(placement);
+    };
+
+    column.addEventListener("dragenter", over, true);
+    column.addEventListener("dragover", over, true);
+    column.addEventListener("dragleave", left, true);
+    column.addEventListener("drop", dropped, true);
+
+    return () => {
+      column.removeEventListener("dragenter", over, true);
+      column.removeEventListener("dragover", over, true);
+      column.removeEventListener("dragleave", left, true);
+      column.removeEventListener("drop", dropped, true);
+      setLine(undefined);
+    };
+  }, [editable, room, body, handle]);
+
+  return line;
+}
+
+/** The text taking a drag of files anywhere over it (`useFileDrop`), drawing the line where they would land; held apart so the line's moves draw nothing else. */
+export function TextFileDrop(props: Parameters<typeof useFileDrop>[0]): React.JSX.Element | null {
+  const line = useFileDrop(props);
+
+  return line === undefined ? null : <DropLine at={line} />;
+}
+
 /** The block an editor closed from by the keyboard takes the keyboard back, once. */
 function useSelectedOnClose(editing: DescriptionEditing, key: EditorHost, take: () => void): void {
   useEffect(() => {
@@ -526,15 +860,12 @@ export function DocumentBlock({
         editing.select(host);
       }}
       onPress={({ target, x, y, block: pressed }) => {
-        const placement = clickPlacement(target, x, y, (range) =>
-          sectionWordsAt(pressed, section, range),
-        );
-
-        if (placement !== undefined) editing.open(placement);
-      }}
-      onDropFiles={(drop) => {
-        const placement = dropPlacement(drop, (range) =>
-          sectionWordsAt(drop.block, section, range),
+        const placement = clickPlacement(
+          target,
+          x,
+          y,
+          (range) => sectionWordsAt(pressed, section, range),
+          (at) => sectionPictureAt(pressed, section, at),
         );
 
         if (placement !== undefined) editing.open(placement);
@@ -579,11 +910,6 @@ export function EmptyDocumentBlock({
         editing.select(EDITOR_PLACE.EMPTY);
       }}
       onPress={() => editing.open(PLACEMENT_END)}
-      onDropFiles={(drop) => {
-        const placement = dropPlacement(drop, () => undefined);
-
-        if (placement !== undefined) editing.open(placement);
-      }}
       onOpen={() => editing.open(PLACEMENT_END)}
     >
       {children}
@@ -1108,7 +1434,8 @@ export function DescriptionDocumentEditor({
     },
   });
   // Note that the words a click opened the editor on are kept where they
-  // stood, since the editor may draw what stands above them at another
+  // stood, and the change a step through the history opened it on is kept
+  // in view, since the editor may draw what stands above them at another
   // height than the text did, a picture, a table or a diagram's preview say,
   // and again each time the editor's height changes as what it draws later
   // lands, a diagram's preview or a chip, until the developer scrolls,
@@ -1118,15 +1445,27 @@ export function DescriptionDocumentEditor({
     // Note that a press on the room while the bundle loaded is where the editor opens, which keeps no words.
     const place = pending ?? editing.placement;
     const target = place !== undefined && "words" in place ? place.words?.top : undefined;
+    const stepped = editing.step !== undefined;
     const column = scroller?.current;
     const text = room.current;
 
-    if (target === undefined || column == null || text === null) return;
+    if ((target === undefined && !stepped) || column == null || text === null) return;
 
+    // Note that the change a step took back or put back is brought to the column's middle only where it stands out of view, since it most often stands where the developer just left it.
     const keep = () => {
       const top = handle.current?.wordsTop();
 
-      if (top !== undefined) column.scrollTop += top - target;
+      if (top === undefined) return;
+
+      if (target !== undefined) {
+        column.scrollTop += top - target;
+
+        return;
+      }
+
+      const box = column.getBoundingClientRect();
+
+      if (top < box.top || top > box.bottom) column.scrollTop += top - (box.top + box.height / 2);
     };
 
     keep();
@@ -1186,6 +1525,10 @@ export function DescriptionDocumentEditor({
       anchors={commentAnchors}
       onComment={onComment}
       diagrams
+      history={
+        editing.history === undefined ? undefined : { kept: editing.history, step: editing.step }
+      }
+      onClosed={editing.keepHistory}
     >
       <DocumentNote editor={editor} editing={editing} />
     </MarkdownEditor>

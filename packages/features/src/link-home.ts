@@ -132,6 +132,7 @@ export const RESERVED_WORKSPACE_SLUGS: ReadonlySet<string> = new Set([
   "downloads",
   "feed",
   "github-installed",
+  "guides",
   "help",
   "home",
   "inbox",

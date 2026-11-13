@@ -1,0 +1,29 @@
+# settings-machine-connect.yaml -- a machine's pairing on the Inbox fixture, as its link opens it: Settings › Machines asks "Connect Ada's Mac mini?" over the machine, what it is and where its start came from, the code and when it expires, then Deny says it's denied.
+#
+# Launched with `-connect <code>`, which hands the app the code as the
+# pairing's link would (`host-connect-link.ts`), on the host's Inbox fixture,
+# whose one waiting pairing is that code's (`@repo/host/fixture-inbox`), so
+# no server is reached. Deny is pressed rather than Connect, since it ends
+# on a page of its own to shoot; Connect goes on to the list of machines.
+appId: dev.vespin.ios
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      connect: "BCDF-GHJK"
+- extendedWaitUntil:
+    visible: "Connect Ada's Mac mini?"
+    timeout: 15000
+- assertVisible: "Ada's Mac mini"
+- assertVisible: ".*203.0.113.7.*"
+- assertVisible: "Connect it only if you ran the command on it, and this code matches the one it shows."
+- assertVisible:
+    id: "machine-connect-code"
+- assertVisible: "This code expires at .*"
+- takeScreenshot: settings-machine-connect
+- tapOn: "Deny"
+- extendedWaitUntil:
+    visible: "Denied Ada's Mac mini"
+    timeout: 5000
+- takeScreenshot: settings-machine-connect-denied

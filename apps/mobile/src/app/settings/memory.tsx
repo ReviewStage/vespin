@@ -1,13 +1,12 @@
-// memory.tsx -- Settings' Memory page for the workspace the app works in: the facts and conventions its agents kept, most recalled first, searched from the bar, and deleted with a swipe, asked first, where the reader may.
+// memory.tsx -- Settings' Memory page for the workspace the app works in: the facts and conventions its agents kept, most recalled first, searched from the bar, added from the bar's +, and edited with a press or deleted with a swipe, asked first, where the reader may.
 
-import { LIVE_READ } from "@repo/features/live-wire";
 import {
+  ADD_MEMORY,
   forgetQuestion,
   MEMORY_ACT,
   MEMORY_PAGE_WORDS,
   MEMORY_RECALLS_WORDS,
   memoriesByUse,
-  memoryUse,
   recallsText,
 } from "@repo/features/memory-settings-words";
 import type { MemorySummary } from "@repo/features/memory-wire";
@@ -16,29 +15,32 @@ import { agoText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateSnapshot } from "@repo/host/app-state";
-import { selectWorkspaces } from "@repo/host/app-state-reads";
+import { selectWorkspaceMemories, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   ConfirmAsk,
   EmptyState,
+  GLYPH,
+  glyphSymbol,
   ListSection,
   NoteRow,
   Screen,
   SettingsForm,
+  useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack } from "expo-router";
-import { useCallback, useState } from "react";
+import { Stack, useRouter } from "expo-router";
+import { useMemo, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
+import { SETTINGS_ROUTE } from "../../settings-button.js";
 import { useWrite } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
 /** The glyph a page of memories stands under, the panel's brain. */
-const MEMORY_SYMBOL = "brain";
+const MEMORY_SYMBOL = GLYPH.MEMORY;
 
 /** What a memory kept by an account since deleted names its keeper as. */
 const FORMER_KEEPER = "Former member";
@@ -46,11 +48,6 @@ const FORMER_KEEPER = "Former member";
 /** Says on the console a read asked again that did not go; the page still says the read failed. */
 function retryLost(cause: unknown): void {
   console.error("Reading the memories again did not go.", cause);
-}
-
-/** The memories the host holds for one workspace, as a `select`; none until read. */
-function heldMemories(workspaceId: string) {
-  return (state: AppStateSnapshot) => state[LIVE_READ.MEMORIES][workspaceId];
 }
 
 /** Whose words a memory holds, as the search reads them. */
@@ -76,6 +73,8 @@ export default function MemoryScreen() {
 }
 
 function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
+  const colors = useColors();
+  const router = useRouter();
   const acts = useHostActs();
   const write = useWrite();
   const workspaceId = workspace.id;
@@ -85,7 +84,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
 
   const { data: held } = useQuery({
     ...appStateQuery,
-    select: useCallback(heldMemories(workspaceId), [workspaceId]),
+    select: useMemo(() => selectWorkspaceMemories(workspaceId), [workspaceId]),
   });
 
   const memories = held?.rows;
@@ -104,6 +103,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
   const forget = (memory: MemorySummary) =>
     void write(() => acts[ACT_KIND.MEMORIES_FORGET]({ workspaceId, id: memory.id }), {
       refused: (answer) => ("failure" in answer ? MEMORY_PAGE_WORDS.FORGET_FAILED : undefined),
+      retry: true,
     });
 
   const body =
@@ -111,7 +111,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
       held?.failed === true ? (
         <EmptyState
           title={MEMORY_PAGE_WORDS.FAILED}
-          symbol="exclamationmark.triangle"
+          symbol={GLYPH.FAILED}
           action={{
             label: VERB.RETRY,
             onPress: () => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost),
@@ -123,7 +123,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
     ) : memories.length === 0 ? (
       <EmptyState title={MEMORY_PAGE_WORDS.EMPTY} symbol={MEMORY_SYMBOL} />
     ) : listed.length === 0 ? (
-      <EmptyState title={MEMORY_PAGE_WORDS.NO_MATCH} symbol="magnifyingglass" />
+      <EmptyState title={MEMORY_PAGE_WORDS.NO_MATCH} symbol={GLYPH.SEARCH} />
     ) : (
       <SettingsForm>
         <ListSection
@@ -136,7 +136,18 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
               key={memory.id}
               words={memory.text}
               line={memoryLine(memory, now)}
-              badge={memoryUse(memory, now)}
+              edit={
+                memory.forgettable
+                  ? {
+                      label: MEMORY_ACT.EDIT,
+                      onPress: () =>
+                        router.push({
+                          pathname: SETTINGS_ROUTE.MEMORY_EDIT,
+                          params: { memory: memory.id },
+                        }),
+                    }
+                  : undefined
+              }
               remove={
                 memory.forgettable
                   ? { label: MEMORY_ACT.FORGET, onPress: () => setAsked(memory) }
@@ -157,6 +168,15 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
           onCancelButtonPress={() => setQuery("")}
         />
       </Stack.Screen>
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          icon={glyphSymbol(GLYPH.ADD)}
+          tintColor={colors.TEXT}
+          accessibilityLabel={ADD_MEMORY}
+          disabled={memories === undefined}
+          onPress={() => router.push(SETTINGS_ROUTE.MEMORY_EDIT)}
+        />
+      </Stack.Toolbar>
       <Screen>{body}</Screen>
       <ConfirmAsk
         title={question.title}

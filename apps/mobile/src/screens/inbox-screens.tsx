@@ -44,14 +44,16 @@ import {
   INBOX_FEED,
   type InboxFeed,
   selectAgentHarnesses,
-  selectAgentTitles,
+  selectAgentNames,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
   type BarMenu,
   EmptyState,
+  GLYPH,
   GlassDock,
+  glyphSymbol,
   LIST_LOOK,
   type ListLook,
   ListRow,
@@ -74,8 +76,8 @@ import {
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useState } from "react";
+import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import {
   useInboxActs,
@@ -93,6 +95,7 @@ import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { useLinkStandings } from "../tasks/use-link-standings.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -114,16 +117,16 @@ const SCOPE_LABEL = "Filter";
 const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INBOX_SHOW.OPEN]);
 
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
-const MORE = { label: "More", symbol: "ellipsis" } as const;
+const MORE = { label: "More", symbol: GLYPH.MORE } as const;
 
 /** What a video the words draw in place is heard as, its file's name being the words' own alt. */
 const VIDEO_LABEL = "Video";
 
-/** No agent's title held. */
-const NO_TITLES: ReadonlyMap<string, string> = new Map();
+/** No agent's name held. */
+const NO_NAMES: ReadonlyMap<string, string> = new Map();
 
-/** What an agent is called where the document holds no title for it yet. */
-const UNTITLED_AGENT = "Agent";
+/** What an agent is called where the task list does not hold it, as the panel's tab names one it cannot find. */
+const UNLISTED_AGENT = "Agent";
 
 /** How many of a thread's newest messages its row reads for its preview: more than the preview draws, since a file sent alone says nothing there. */
 const PREVIEW_TAIL = 6;
@@ -229,8 +232,7 @@ function InboxRow({
   const { holder, item } = listed;
   const unread = isUnread(item);
   const waitsOn = inboxWaitsOn(item);
-  const titles = useAgentTitles();
-  const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const agentName = useAgentNames().get(item.agentId) ?? UNLISTED_AGENT;
   const harness = useAgentHarness(item.agentId);
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
@@ -256,7 +258,7 @@ function InboxRow({
       ? [
           {
             label: RESOLVE,
-            symbol: "checkmark.circle",
+            symbol: GLYPH.RESOLVED,
             tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: () => onResolve(item),
           } as const,
@@ -289,7 +291,7 @@ function InboxRow({
       leadingActions={[
         {
           label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-          symbol: unread ? "envelope.open" : "envelope.badge",
+          symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
           tone: ROW_ACTION_TONE.NEUTRAL,
           onPress: () => onMark(item.id, !unread),
         },
@@ -327,23 +329,23 @@ function InboxEmpty({
   readonly onRetry: () => void;
 }) {
   if (feed === INBOX_FEED.READING)
-    return <EmptyState title={READING_INBOX} symbol="tray" loading />;
+    return <EmptyState title={READING_INBOX} symbol={GLYPH.INBOX} loading />;
 
   if (feed === INBOX_FEED.FAILED) {
     return (
       <EmptyState
         title={INBOX_NOT_READ}
-        symbol="exclamationmark.triangle"
+        symbol={GLYPH.FAILED}
         action={{ label: RETRY, onPress: onRetry }}
       />
     );
   }
 
   if (search.trim() !== "") {
-    return <EmptyState title={noMatchWords(search.trim())} symbol="magnifyingglass" />;
+    return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
   }
 
-  return <EmptyState title={INBOX_SHOW_EMPTY[INBOX_WHOSE.MINE][show]} symbol="tray" />;
+  return <EmptyState title={INBOX_SHOW_EMPTY[INBOX_WHOSE.MINE][show]} symbol={GLYPH.INBOX} />;
 }
 
 /** The Inbox's scopes as its pills, the one shown filled, Questions and Open with their counts. */
@@ -371,7 +373,7 @@ function moreMenu(
     actions: [
       {
         label: MARK_ALL_READ,
-        symbol: "envelope.open",
+        symbol: GLYPH.MARK_ALL_READ,
         disabled: unread.length === 0,
         onPress: () => markAll(unread),
       },
@@ -379,9 +381,9 @@ function moreMenu(
   };
 }
 
-/** Every agent's title the document holds, by the agent's id. */
-function useAgentTitles(): ReadonlyMap<string, string> {
-  const { data = NO_TITLES } = useQuery({ ...appStateQuery, select: selectAgentTitles });
+/** Every agent's name the document holds, by the agent's id, as the panel names it. */
+function useAgentNames(): ReadonlyMap<string, string> {
+  const { data = NO_NAMES } = useQuery({ ...appStateQuery, select: selectAgentNames });
 
   return data;
 }
@@ -400,7 +402,12 @@ function useAgentHarness(agentId: string): ModelProvider | undefined {
  */
 type ThreadPlace =
   | { readonly inStack: true }
-  | { readonly inStack: false; readonly onRemind: (item: InboxItem) => void };
+  | {
+      readonly inStack: false;
+      readonly onRemind: (item: InboxItem) => void;
+      /** Selects another thread in the split view, such as one the box just started. */
+      readonly onOpen: (id: string) => void;
+    };
 
 /**
  * A thread's page from its item: its path, its subject, each message with
@@ -427,8 +434,7 @@ function ThreadDetail({
   const colors = useColors();
   const { holder, item } = listed;
   const openLink = useOpenLink();
-  const titles = useAgentTitles();
-  const agentName = titles.get(item.agentId) ?? UNTITLED_AGENT;
+  const agentName = useAgentNames().get(item.agentId) ?? UNLISTED_AGENT;
   const harness = useAgentHarness(item.agentId);
   const pictureOf = useMemberPictures();
 
@@ -490,11 +496,35 @@ function ThreadDetail({
   const { sources, sizes } = useThreadMedia(item.id, media);
   useReadOnOpen(listed);
   useScreenActivity((all) => threadActivity(listed, all));
-  const answer = useThreadAnswer(listed);
+  const router = useRouter();
+
+  // Whether this thread still stands, so a start that answers after the reader left it opens nothing over where they went.
+  const shown = useRef(false);
+  useEffect(() => {
+    shown.current = true;
+
+    return () => {
+      shown.current = false;
+    };
+  }, []);
+
+  const navigation = useNavigation();
+
+  // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front: a stack's screen covered by another stays mounted.
+  const openStarted = (id: string) => {
+    if (!shown.current || !navigation.isFocused()) return;
+
+    if (place.inStack) router.replace(`/inbox/${encodeURIComponent(id)}`);
+    else place.onOpen(id);
+  };
+
+  const answer = useThreadAnswer(listed, openStarted);
   const remind = useRemindSheet();
   const inStack = place.inStack;
   const openRemind = place.inStack ? remind.open : place.onRemind;
   const menu = threadMenu(item, answer, () => openRemind(item));
+
+  const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
   const drawn: readonly ThreadMessage[] = messages.map((message) => ({
     ...message,
@@ -564,6 +594,13 @@ function ThreadDetail({
 
   const path = [holder.task.name, agentName];
 
+  // A chip's pull request in the thread is read through its task's own workspace, as the panel's Inbox reads it.
+  const linkStanding = useLinkStandings(
+    messageWords,
+    holder.task.repository,
+    workspaces.find((each) => each.id === workspaceId),
+  );
+
   const page = (
     <ThreadPage
       path={path}
@@ -574,6 +611,7 @@ function ThreadDetail({
       onOpenLink={openLink}
       pictureSource={pictureSource}
       videoAt={videoAt}
+      linkStanding={linkStanding}
       standing={item.status === INBOX_STATUS.OPEN ? undefined : inboxSettledStanding(item)}
       ask={
         <OpenAskCard
@@ -597,7 +635,12 @@ function ThreadDetail({
           }}
         />
       }
-      {...(inStack ? {} : { menu, foot: <ThreadComposer item={item} answer={answer} inColumn /> })}
+      {...(inStack
+        ? {}
+        : {
+            menu,
+            foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
+          })}
     />
   );
 
@@ -612,11 +655,11 @@ function ThreadDetail({
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon={menu.symbol} accessibilityLabel={menu.label}>
+        <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
           {menu.actions.map((action) => (
             <Stack.Toolbar.MenuAction
               key={action.label}
-              icon={action.symbol}
+              icon={glyphSymbol(action.symbol)}
               onPress={action.onPress}
             >
               {action.label}
@@ -624,7 +667,7 @@ function ThreadDetail({
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
-      <GlassDock bar={<ThreadComposer item={item} answer={answer} />}>
+      <GlassDock bar={<ThreadComposer item={item} answer={answer} agentName={agentName} />}>
         <Screen>{page}</Screen>
       </GlassDock>
       {remind.sheet}
@@ -632,28 +675,28 @@ function ThreadDetail({
   );
 }
 
-/** What stands where a thread named by its id is not drawn: that the feed is still read, that it could not be, with Retry, or that it holds no such thread. */
-function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
-  const { refresh, refreshTasks } = useInboxActs();
-
+/** What stands where a thread named by its id is not drawn: that it is still read, that it could not be, with Retry, or that no such thread is the account's to read. */
+function ThreadNotDrawn({
+  feed,
+  onRetry,
+}: {
+  readonly feed: InboxFeed;
+  readonly onRetry: () => void;
+}) {
   if (feed === INBOX_FEED.READING)
-    return <EmptyState title={READING_INBOX} symbol="tray" loading />;
+    return <EmptyState title={READING_INBOX} symbol={GLYPH.INBOX} loading />;
 
   if (feed === INBOX_FEED.FAILED) {
     return (
       <EmptyState
         title={INBOX_NOT_READ}
-        symbol="exclamationmark.triangle"
-        action={{
-          label: RETRY,
-          // The feed or the task list that holds the thread failed, so both are read again.
-          onPress: () => void Promise.all([refresh(), refreshTasks()]),
-        }}
+        symbol={GLYPH.FAILED}
+        action={{ label: RETRY, onPress: onRetry }}
       />
     );
   }
 
-  return <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />;
+  return <EmptyState title={THREAD_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />;
 }
 
 /**
@@ -664,15 +707,23 @@ function ThreadNotDrawn({ feed }: { readonly feed: InboxFeed }) {
 function ThreadColumn({
   id,
   onRemind,
+  onOpen,
 }: {
   readonly id: string;
   readonly onRemind: (item: InboxItem) => void;
+  readonly onOpen: (id: string) => void;
 }) {
-  const { listed, readerId, feed } = useInboxThread(id);
+  const { listed, readerId, feed, retry } = useInboxThread(id);
 
-  if (listed === undefined) return <ThreadNotDrawn feed={feed} />;
+  if (listed === undefined) return <ThreadNotDrawn feed={feed} onRetry={retry} />;
 
-  return <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: false, onRemind }} />;
+  return (
+    <ThreadDetail
+      listed={listed}
+      readerId={readerId}
+      place={{ inStack: false, onRemind, onOpen }}
+    />
+  );
 }
 
 /** The list's search words and how to change them, held by the tab's root screen above its two layouts. */
@@ -715,11 +766,11 @@ function InboxStackList(words: InboxSearch) {
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon={menu.symbol} accessibilityLabel={menu.label}>
+        <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
           {menu.actions.map((action) => (
             <Stack.Toolbar.MenuAction
               key={action.label}
-              icon={action.symbol}
+              icon={glyphSymbol(action.symbol)}
               disabled={action.disabled === true}
               onPress={action.onPress}
             >
@@ -819,9 +870,9 @@ function InboxSplitScreen({
           })}
           detail={
             selected === undefined ? (
-              <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol="tray" />
+              <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.INBOX} />
             ) : (
-              <ThreadColumn key={selected} id={selected} onRemind={remind.open} />
+              <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
             )
           }
         />
@@ -849,7 +900,7 @@ export function InboxListScreen() {
 /** The Inbox's pushed screen: one thread, named by the route's `id`, its path small in the bar over its heading. */
 export function InboxThreadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { listed, readerId, feed } = useInboxThread(id);
+  const { listed, readerId, feed, retry } = useInboxThread(id);
   const handed = useHandToSplit(SPLIT_TAB.INBOX, id);
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.THREAD, id);
 
@@ -864,7 +915,7 @@ export function InboxThreadScreen() {
         <ThreadDetail listed={listed} readerId={readerId} place={{ inStack: true }} />
       ) : (
         <Screen>
-          <ThreadNotDrawn feed={feed} />
+          <ThreadNotDrawn feed={feed} onRetry={retry} />
         </Screen>
       )}
     </>

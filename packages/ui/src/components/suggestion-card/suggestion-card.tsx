@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { ForwardIcon, PlusIcon } from "../../icons/lucide-glyphs.js";
 import { CARD_CORNER, CARD_HOVER, CARD_PADDING, Card } from "../card/card.js";
 import { CardPress } from "../card-press/card-press.js";
+import { GROUP_HEADING, GroupHeader } from "../group-header/group-header.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 
 /**
@@ -28,15 +29,12 @@ export function SuggestionCards({
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <section className="ui-suggestions flex w-full flex-col gap-control-gap" aria-label={title}>
-      <div className="ui-suggestions-head px-ui-2">
-        <Text variant={TEXT_VARIANT.SECTION} tone={TEXT_TONE.MUTED} as={TEXT_ELEMENT.H2}>
-          {title}
-        </Text>
-      </div>
-      <div className="ui-suggestion-cards grid grid-cols-suggestion-cards gap-block-gap">
-        {children}
-      </div>
+    <section className="ui-suggestions flex w-full flex-col" aria-label={title}>
+      <GroupHeader heading={GROUP_HEADING.H2} label={title}>
+        <div className="ui-suggestion-cards grid grid-cols-suggestion-cards gap-block-gap">
+          {children}
+        </div>
+      </GroupHeader>
     </section>
   );
 }

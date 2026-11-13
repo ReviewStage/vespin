@@ -2,7 +2,7 @@
  * keeping.ts -- what the app does with a picture, a recording, a file, or a message's words that a long press or the full-screen viewer's share button asks for: copies it to the system's pasteboard, saves it to Photos, or opens the system's share sheet on it, buzzing as a copy or a save goes and saying in the failure notice what did not.
  *
  * The desktop and the web copy and save through the window's act port
- * (`WINDOW_COPY_IMAGE`, `WINDOW_SAVE_FILE`); the phone has the system's
+ * (`WINDOW_COPY_IMAGE`, `WINDOW_COPY_RICH`, `WINDOW_SAVE_FILE`); the phone has the system's
  * own pasteboard, Photos, and share sheet, so it answers them here, as it
  * copies a link through `expo-clipboard`. A picture is held as its
  * `data:` address, so it is written under the app's caches before Photos
@@ -10,11 +10,14 @@
  * file is already the file the app wrote (`cached-media.ts`). Photos is
  * asked for add-only access, once, the first time something is saved, and
  * a refusal says where it is allowed again rather than offering Try again.
+ * A draft's Copy message puts its body on the pasteboard as rich text.
  * Note that these do not go through `useWrite`, since nothing here reaches
  * the service: a copy that fails while the phone is offline failed on the
  * phone, and says so rather than the offline hint.
  */
 
+import type { DraftCopy } from "@repo/features/draft-text";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
   BUZZ,
   buzz,
@@ -27,13 +30,14 @@ import {
   NOTICE_KIND,
   useFailureNotices,
 } from "@repo/ui-native";
-import { setImageAsync, setStringAsync } from "expo-clipboard";
+import { StringFormat, setImageAsync, setStringAsync } from "expo-clipboard";
 import { randomUUID } from "expo-crypto";
 import { File } from "expo-file-system";
 import { Asset, requestPermissionsAsync } from "expo-media-library";
 import { useMemo } from "react";
 import { Share } from "react-native";
 import { cachedFile } from "./cached-media.js";
+import { richPasteboardModule } from "./rich-pasteboard-module.js";
 
 /** What each act that did not go says, in the panel's words for a copy that failed. */
 const KEEP_FAILED = {
@@ -43,8 +47,7 @@ const KEEP_FAILED = {
 } as const satisfies Record<KeepAct, string>;
 
 /** What a save says where Photos refused the app, which only the system's Settings allows again. */
-const PHOTOS_REFUSED =
-  "Vespin can't save to Photos. Allow it in Settings › Privacy & Security › Photos.";
+const PHOTOS_REFUSED = `${PRODUCT_NAME} can't save to Photos. Allow it in Settings › Privacy & Security › Photos.`;
 
 /** The folder prefix a picture written to be saved or shared stands under in the app's caches. */
 const KEPT_PREFIX = "kept";
@@ -54,6 +57,12 @@ const PICTURE_NAME = "Picture";
 
 /** The longest a picture's file name runs, taken from what it shows. */
 const NAME_MAX = 60;
+
+/** What a draft's HTML opens with: its encoding, which the system reads as Latin-1 where none is named. */
+const RICH_HEAD = '<meta charset="utf-8">';
+
+/** The face a draft's words paste in, the system's, where HTML with no face of its own pastes into Mail in Times. */
+const RICH_FACE = "font-family: -apple-system, sans-serif";
 
 /** Photos refused the app's add-only access. */
 class PhotosRefused extends Error {}
@@ -91,6 +100,30 @@ async function copied(kept: Kept): Promise<void> {
   }
 
   await setStringAsync(await new File(kept.source).text());
+}
+
+/**
+ * Copies a draft's body as one pasteboard item holding its HTML, the rich
+ * text the system reads from it, and its plain words, a link's address after
+ * its label, as the desktop writes HTML and plain words together
+ * (`modules/rich-pasteboard/`). Note that the words are set in the system's
+ * face, since HTML read with no face of its own pastes into Mail in Times;
+ * and that the HTML names its encoding, since the system reads HTML that
+ * names none as Latin-1, which garbles a curly quote, a dash, or an emoji.
+ * A build without the module copies through expo-clipboard's HTML input,
+ * whose plain words are the system's reading of the HTML, each link by its
+ * label alone.
+ */
+async function copiedRich(copy: DraftCopy): Promise<void> {
+  const html = `${RICH_HEAD}<span style="${RICH_FACE}">${copy.html}</span>`;
+
+  if (richPasteboardModule !== null) {
+    await richPasteboardModule.copy(html, copy.text);
+
+    return;
+  }
+
+  await setStringAsync(html, { inputFormat: StringFormat.HTML });
 }
 
 /** Saves a picture or a recording to Photos, asking for add-only access the first time. */
@@ -146,6 +179,8 @@ export function useKeeping(): Keeping {
         run(() => KEEP_WORK[act](kept), KEEP_FAILED[act], act !== KEEP_ACT.SHARE),
       copyWords: (words) =>
         run(() => setStringAsync(words).then(() => undefined), KEEP_FAILED[KEEP_ACT.COPY], true),
+      copyRich: (copy) =>
+        run(() => copiedRich(copy).then(() => undefined), KEEP_FAILED[KEEP_ACT.COPY], true),
     };
   }, [notices]);
 }

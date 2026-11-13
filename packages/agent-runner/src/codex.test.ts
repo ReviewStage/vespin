@@ -55,7 +55,11 @@ import {
   type Script,
   type Spawned,
 } from "./testing/fake-app-server.js";
-import { fakeCheckoutSnapshots, fakeSnapshotOf } from "./testing/fake-checkout-snapshots.js";
+import {
+  fakeCheckoutSnapshots,
+  fakeFilesOf,
+  fakeSnapshotOf,
+} from "./testing/fake-checkout-snapshots.js";
 import { fakeClaudeCode } from "./testing/fake-claude-code.js";
 import { fakeProbe } from "./testing/fake-probe.js";
 import { makeFakeService } from "./testing/fake-service.js";
@@ -225,6 +229,8 @@ function launch(
   extra: {
     readonly http?: Layer.Layer<HttpClient.HttpClient>;
     readonly probe?: ReturnType<typeof fakeProbe>;
+    /** Whether each turn changed files (`fakeFilesOf`). */
+    readonly changed?: boolean;
   } = {},
 ) {
   return Effect.gen(function* () {
@@ -248,7 +254,7 @@ function launch(
           extra.http ?? service.layer,
           claude.layer,
           probe.layer,
-          fakeCheckoutSnapshots().layer,
+          fakeCheckoutSnapshots(false, extra.changed === true).layer,
           Logger.layer([recorder]),
         ),
       ),
@@ -488,11 +494,11 @@ it.effect(
 );
 
 it.effect(
-  "keeps a warm launch up past its completed turn, posting IDLE, and ends it as idled on Vespin's retire",
+  "keeps a warm launch up past its completed turn, posting IDLE with the files the turn changed, and ends it as idled on Vespin's retire",
   () =>
     Effect.gen(function* () {
       const service = fakeService();
-      const { spawned, write, run } = yield* launch([WORKFLOW], service);
+      const { spawned, write, run } = yield* launch([WORKFLOW], service, ENV, { changed: true });
       yield* write({ ...CONFIG, warm: true });
       yield* write(message("The probe's first turn.", LINE.FIRST));
       yield* write(message("Also, before your final reply, append the line.", LINE.STEERED));
@@ -513,6 +519,11 @@ it.effect(
         RUNNER_EVENT.IDLE,
         RUNNER_EVENT.END,
       ]);
+      // The turn's files ride its IDLE, read from the snapshot its first line opened on; the idled END ended no turn, so carries none.
+      assert.deepEqual(service.applied.at(-2)?.message, {
+        type: RUNNER_EVENT.IDLE,
+        files: fakeFilesOf(fakeSnapshotOf(CONFIG.cwd, LINE.FIRST).commit),
+      });
       assert.deepEqual(service.applied.at(-1)?.message, {
         type: RUNNER_EVENT.END,
         reason: RUNNER_END.IDLED,

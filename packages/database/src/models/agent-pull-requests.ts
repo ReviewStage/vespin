@@ -15,14 +15,15 @@
  */
 
 import { PULL_REQUEST_STATE } from "@repo/features/agent-wire";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database } from "../core/query.js";
 import { agentTable, type StoredPullRequest } from "../schemas/agent.js";
 import { agentPullRequest } from "../schemas/agent-pull-request.js";
+import { task } from "../schemas/task.js";
 import { type AgentStoreEffect, newlyMerged, PublishedColumnSchema } from "./agent-store.js";
-import { agentReachableBy } from "./workspace-store.js";
+import { agentReachableBy, agentVisibleTo } from "./workspace-store.js";
 
 /** One pull request a read of GitHub found or read again: the repository it is in as the agent keeps it, the branch it was opened from, and the pull request as GitHub answered. */
 export interface AgentPullRequestRead {
@@ -44,6 +45,67 @@ const AgentPullRequestRowSchema = Schema.Struct({
 });
 
 const AgentKeySchema = Schema.Struct({ userId: Schema.String, agentId: Schema.String });
+
+/** One pull request by its repository, as `owner/name` in any case, and its number. */
+export interface PullRequestKey {
+  readonly repository: string;
+  readonly number: number;
+}
+
+/** The task a pull request belongs to: the task of an agent that opened it. */
+export interface PullRequestTask extends PullRequestKey {
+  readonly taskId: string;
+  readonly taskNumber: number;
+  readonly taskName: string;
+}
+
+const PullRequestTaskSchema = Schema.Struct({
+  repository: Schema.String,
+  number: Schema.Number,
+  taskId: Schema.String,
+  taskNumber: Schema.Number,
+  taskName: Schema.String,
+});
+
+/**
+ * The tasks of the workspace whose agents opened a pull request of these
+ * repositories under these numbers, as the account sees each agent and its
+ * task (`agentVisibleTo`), each repository read lower case, the earliest
+ * linked first. Note that the repositories and the numbers are matched
+ * apart, so a caller keeps only the pairs it named.
+ */
+const findPullRequestTasks = SqlSchema.findAll({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    workspaceId: Schema.String,
+    repositories: Schema.Array(Schema.String),
+    numbers: Schema.Array(Schema.Number),
+  }),
+  Result: PullRequestTaskSchema,
+  execute: ({ userId, workspaceId, repositories, numbers }) =>
+    Database.use((db) =>
+      db
+        .select({
+          repository: sql<string>`lower(${agentPullRequest.repository})`,
+          number: agentPullRequest.number,
+          taskId: task.id,
+          taskNumber: task.number,
+          taskName: task.name,
+        })
+        .from(agentPullRequest)
+        .innerJoin(agentTable, eq(agentTable.id, agentPullRequest.agentId))
+        .innerJoin(task, eq(task.id, agentTable.taskId))
+        .where(
+          and(
+            eq(task.organizationId, workspaceId),
+            agentVisibleTo(userId),
+            inArray(sql`lower(${agentPullRequest.repository})`, repositories),
+            inArray(agentPullRequest.number, numbers),
+          ),
+        )
+        .orderBy(asc(agentPullRequest.createdAt)),
+    ),
+});
 
 /** The agent's row under its lock, as the account reaches the agent; none where it does not. */
 const lockAgent = SqlSchema.findOneOption({
@@ -117,6 +179,53 @@ export function readAgentPullRequests(
   agentId: string,
 ): AgentStoreEffect<readonly AgentPullRequestRow[]> {
   return findAgentPullRequests({ userId, agentId });
+}
+
+/**
+ * The task each pull request named belongs to in the workspace, through the
+ * pull requests its agents opened, as the account sees the agent and its
+ * task; a pull request no agent of a task the account sees opened is left
+ * out, and one opened from agents of several tasks answers the task that
+ * linked it first. Each answer names the repository lower case.
+ */
+export function readPullRequestTasks(
+  userId: string,
+  workspaceId: string,
+  pulls: readonly PullRequestKey[],
+): AgentStoreEffect<readonly PullRequestTask[]> {
+  if (pulls.length === 0) return Effect.succeed([]);
+
+  // Note that pulls are keyed by repository and then number, each its own key, never one spelled of both.
+  const named = new Map<string, Set<number>>();
+
+  for (const pull of pulls) {
+    const repository = pull.repository.toLowerCase();
+    named.set(repository, (named.get(repository) ?? new Set()).add(pull.number));
+  }
+
+  return Effect.map(
+    findPullRequestTasks({
+      userId,
+      workspaceId,
+      repositories: [...named.keys()],
+      numbers: [...new Set(pulls.map((pull) => pull.number))],
+    }),
+    (rows) => {
+      const found = new Map<string, Map<number, PullRequestTask>>();
+
+      for (const row of rows) {
+        const inRepository = found.get(row.repository) ?? new Map<number, PullRequestTask>();
+
+        if (named.get(row.repository)?.has(row.number) !== true || inRepository.has(row.number)) {
+          continue;
+        }
+
+        found.set(row.repository, inRepository.set(row.number, row));
+      }
+
+      return [...found.values()].flatMap((inRepository) => [...inRepository.values()]);
+    },
+  );
 }
 
 /**

@@ -6,7 +6,7 @@ import { TAB_WORDS } from "@repo/ui/tab-strip-model";
 import { useAsyncAction } from "@repo/ui/use-async-action";
 import { useEffect, useRef, useState } from "react";
 import { useAgentDefault } from "../account-choices.js";
-import { ConversationEmptyState } from "../ai-elements/conversation.js";
+import { ConversationLead } from "../ai-elements/conversation.js";
 import { useNewAgentPermissionMode } from "./agent-approvals.js";
 import { AgentComposer, COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { agentName, unrunnableChoice } from "./agent-model.js";
@@ -14,7 +14,7 @@ import type { TranscriptCards } from "./agent-tab.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { ArchivedComposerNote } from "./archived-note.js";
 import { ConnectAgentBanner } from "./connect-agent-banner.js";
-import { ForkChip } from "./fork-action.js";
+import { ForkChip, SuggestionChip } from "./fork-action.js";
 import { forkChoice, startingWords } from "./fork-model.js";
 import { NewTaskRunsOnChip, useStartRunsOn } from "./runs-on.js";
 import type { AgentComposerControl, ComposerNote } from "./use-agent-composer.js";
@@ -58,7 +58,8 @@ import { WorkingLine } from "./working-time.js";
  * on its whole transcript the same way, its chip naming the source alone.
  * While a fork's or a continue's Start is out, which copies the source's
  * work before the new agent starts and may take a while, the tab stands on
- * a working line saying so, counting from the send, over the held box;
+ * a working line at the log's top saying so, counting from the send, as the
+ * agent's own tab says its start, over the held box;
  * once it lands the tab gives way to the new agent's, and a Start that did
  * not land leaves the line for the note and Retry under the box, the words
  * kept.
@@ -132,14 +133,12 @@ export function DraftAgentTab({
   const latest = useRef(control);
   latest.current = control;
 
-  const { fork } = draft;
+  const { fork, suggestion } = draft;
+  const listed = [...(control.agents ?? []), ...(control.archived ?? [])];
+  const source = fork === undefined ? undefined : listed.find((agent) => agent.id === fork.agentId);
 
-  const source =
-    fork === undefined
-      ? undefined
-      : [...(control.agents ?? []), ...(control.archived ?? [])].find(
-          (agent) => agent.id === fork.agentId,
-        );
+  const suggester =
+    suggestion === undefined ? undefined : listed.find((agent) => agent.id === suggestion.agentId);
 
   // A fork runs on its source's model and effort until the developer picks another.
   const choice = draft.choice ?? (source === undefined ? fallback : forkChoice(source));
@@ -180,6 +179,24 @@ export function DraftAgentTab({
     if (unpaid !== undefined) return;
 
     if (fork === undefined && !hasWordsOrFiles(prompt, draft.attachments)) return;
+
+    if (suggestion !== undefined) {
+      void starting.run(() =>
+        latest.current.startSuggestion(
+          draft.id,
+          suggestion,
+          prompt,
+          draft.choice,
+          draft.attachments,
+          draft.disabledServers,
+          draft.runsOn,
+          draft.permissionMode,
+        ),
+      );
+
+      return;
+    }
+
     void starting.run(() => {
       if (draft.refused !== undefined) latest.current.onDraftChange({ refused: undefined });
       const { id, choice, attachments, disabledServers, permissionMode } = draft;
@@ -240,16 +257,24 @@ export function DraftAgentTab({
   return (
     <AgentTabFrame label={TAB_WORDS.NEW_AGENT}>
       {sentAt === undefined || fork === undefined ? null : (
-        <ConversationEmptyState>
+        <ConversationLead>
           <StartingLine
             source={source === undefined ? undefined : agentName(source, control.models)}
             sentAt={sentAt}
           />
-        </ConversationEmptyState>
+        </ConversationLead>
       )}
       <AgentTabFoot>
         {fork === undefined ? null : (
           <ForkChip fork={fork} source={source} cards={cards} onDrop={control.onDropFork} />
+        )}
+        {suggestion === undefined ? null : (
+          <SuggestionChip
+            suggestion={suggestion}
+            source={suggester}
+            cards={cards}
+            onDrop={control.onDropFork}
+          />
         )}
         {unpaid === undefined || control.models === undefined ? null : (
           <div className={COMPOSER_DOCK_CLASS}>
@@ -284,15 +309,19 @@ export function DraftAgentTab({
           followsUp={false}
           keywords={control.keywords}
           skills={control.readSkills}
-          tools={(narrow) => (
-            <NewTaskRunsOnChip
-              devices={devices}
-              device={device}
-              disabled={sending}
-              narrow={narrow}
-              onChoose={choosePlace}
-            />
-          )}
+          tools={
+            suggestion === undefined
+              ? (narrow) => (
+                  <NewTaskRunsOnChip
+                    devices={devices}
+                    device={device}
+                    disabled={sending}
+                    narrow={narrow}
+                    onChoose={choosePlace}
+                  />
+                )
+              : undefined
+          }
         />
       </AgentTabFoot>
     </AgentTabFrame>

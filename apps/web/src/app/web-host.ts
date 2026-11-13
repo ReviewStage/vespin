@@ -86,7 +86,6 @@ import type { NotificationsStatus } from "@repo/settings/settings-controls";
 import type { RouterHistory } from "@tanstack/react-router";
 import { Cause, ConfigProvider, Context, Effect, Layer, Path, Queue, Stream } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
-import { version as appVersion } from "../../package.json";
 import { type ConnectTabs, connectTabs, tabBrowser } from "./connect-tab";
 import { FILES_KEY, localStorageFileSystem, tabStorage } from "./local-storage-file-system";
 import { type PageLeave, tabLeave } from "./page-leave";
@@ -98,7 +97,15 @@ import {
   tabNotificationsStatus,
   webNoticeDoors,
 } from "./web-notices";
-import { copyPng, copyRichText, downloadText, openTab, webPlatform } from "./web-platform";
+import {
+  copyPng,
+  copyRichText,
+  copyText,
+  downloadText,
+  openTab,
+  webPlatform,
+} from "./web-platform";
+import { webDeploymentCommit } from "./web-sentry";
 import { openTerminalSocketFromPage } from "./web-terminal-socket";
 
 /** Where the host in the tab keeps its files, inside the browser's storage (`local-storage-file-system.ts`). */
@@ -106,9 +113,6 @@ const STATE_ROOT = "/app";
 
 /** The platform a tab names in app state, where the desktop names Node's `process.platform`. */
 const RUN_PLATFORM = { WEB: "web" } as const;
-
-/** The path feedback is posted to on the tab's own origin, which takes no credential (`server/feedback.mjs`). */
-const FEEDBACK_PATH = "/api/feedback";
 
 /** The page every act is from: a tab holds one panel and nothing else. */
 type WebSender = Window;
@@ -251,6 +255,14 @@ function tabOnline(): Stream.Stream<boolean> {
   );
 }
 
+/**
+ * The version this tab reports itself as: the commit it was deployed from,
+ * which is the only name a web build has, or none on a development server.
+ * Never the package's `version` field, which no deploy bumps, so a count
+ * filed under it would name a release this tab is not.
+ */
+const appVersion = webDeploymentCommit();
+
 /** Every seam the host's kernel and assembly stand on, as the tab answers it. */
 function seamLayers(storage: Storage, fixture: RunProfile | undefined) {
   return Layer.mergeAll(
@@ -314,7 +326,7 @@ function platformProcedures(
   { operator, fork }: PlatformHost,
 ): PlatformActProcedures<WebSender> {
   const port = actPortFor<WebSender>();
-  const feedback = feedbackDelivery({ url: new URL(FEEDBACK_PATH, location.origin).href });
+  const feedback = feedbackDelivery({ baseUrl: location.origin });
   const KIND = WINDOW_SURFACE_ACT_KIND;
 
   return {
@@ -326,13 +338,17 @@ function platformProcedures(
       fork,
     }),
     [KIND.WINDOW_COPY_TEXT]: port[KIND.WINDOW_COPY_TEXT].handler(({ input }) =>
-      navigator.clipboard.writeText(input.words),
+      copyText(input.words),
     ),
     [KIND.WINDOW_COPY_IMAGE]: port[KIND.WINDOW_COPY_IMAGE].handler(({ input }) =>
       copyPng(Promise.resolve(input.png)),
     ),
     [KIND.WINDOW_COPY_RICH]: port[KIND.WINDOW_COPY_RICH].handler(({ input }) =>
-      copyRichText(input),
+      copyRichText({
+        html: input.html,
+        text: input.text,
+        png: input.png === undefined ? undefined : Promise.resolve(input.png),
+      }),
     ),
     [KIND.WINDOW_SAVE_FILE]: port[KIND.WINDOW_SAVE_FILE].handler(({ input }) =>
       downloadText({ name: input.name, text: input.text }),

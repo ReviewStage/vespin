@@ -176,10 +176,6 @@
           "dest": "/api/workspace-mcp.js?route=agents/mcp&route-path=agents/mcp/integrations/$1"
         },
         {
-          "src": "/api/maintenance/base-drives",
-          "dest": "/api/base-drive-refresh.js?route=maintenance/base-drives"
-        },
-        {
           "src": "/api/account/integrations/connected",
           "dest": "/api/default.js?route=account/integrations/connected"
         },
@@ -407,7 +403,7 @@
           }
         },
         {
-          "src": "/(?!(?:404|about|accept-invitation|account|admin|agents|api|app|assets|auth|billing|blog|board|changelog|cli|connect|connect-github|consent|dashboard|desktop-session|docs|download|downloads|feed|github-installed|help|home|inbox|install|integration-connected|integrations|invite|join|k7x2|legal|login|logout|mac|mcp|mintlify-assets|new|notifications|oauth|open|page-in-mac-app|pages|plan|plans|pricing|privacy|r8v3|search|security|settings|sign-in|sign-out|sign-up|status|support|task|tasks|team|teams|terms|workspaces)/?$)(?=[A-Za-z0-9_-]{1,96}/?$)(?:[a-z0-9-]+|[A-Za-z0-9]{32}|personal-[A-Za-z0-9_-]+)/?",
+          "src": "/(?!(?:404|about|accept-invitation|account|admin|agents|api|app|assets|auth|billing|blog|board|changelog|cli|connect|connect-github|consent|dashboard|desktop-session|docs|download|downloads|feed|github-installed|guides|help|home|inbox|install|integration-connected|integrations|invite|join|k7x2|legal|login|logout|mac|mcp|mintlify-assets|new|notifications|oauth|open|page-in-mac-app|pages|plan|plans|pricing|privacy|r8v3|search|security|settings|sign-in|sign-out|sign-up|status|support|task|tasks|team|teams|terms|workspaces)/?$)(?=[A-Za-z0-9_-]{1,96}/?$)(?:[a-z0-9-]+|[A-Za-z0-9]{32}|personal-[A-Za-z0-9_-]+)/?",
           "dest": "/app.html",
           "headers": {
             "Content-Security-Policy": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self'; img-src 'self' data: https://*.googleusercontent.com https://github.com https://avatars.githubusercontent.com; font-src 'self' data:; media-src 'self' blob:; manifest-src 'self'; connect-src 'self' https://*.ingest.us.sentry.io; worker-src 'self' blob:; frame-src 'self' https://vespin.page; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'",
@@ -479,7 +475,7 @@
           }
         },
         {
-          "src": "/(about|privacy|changelog|changelog/page/\\d+|changelog/\\d+\\.\\d+\\.\\d+)/",
+          "src": "/(about|privacy|changelog|changelog/page/\\d+|changelog/\\d+\\.\\d+\\.\\d+|guides|guides/[a-z0-9]+(?:-[a-z0-9]+)*)/",
           "status": 308,
           "headers": {
             "Location": "/$1"
@@ -510,6 +506,14 @@
           "dest": "/changelog/$1.html"
         },
         {
+          "src": "/guides",
+          "dest": "/guides.html"
+        },
+        {
+          "src": "/guides/([a-z0-9]+(?:-[a-z0-9]+)*)",
+          "dest": "/guides/$1.html"
+        },
+        {
           "src": "/[A-Za-z0-9_-]+/?",
           "dest": "/404.html",
           "status": 404
@@ -521,11 +525,6 @@
     "maintenance-sweep": {
       "schedule": "* * * * *",
       "path": "/api/maintenance/sweep",
-      "requestMethod": "GET"
-    },
-    "base-drive-refresh": {
-      "schedule": "0 8 * * *",
-      "path": "/api/maintenance/base-drives",
       "requestMethod": "GET"
     }
   },

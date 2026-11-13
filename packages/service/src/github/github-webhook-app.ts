@@ -9,10 +9,24 @@ import {
   noteGitHubRepository,
   type RepositorySighting,
 } from "@repo/database/models/github-repositories";
+import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
-import { EXCESS_KEYS, HTTP_METHOD, type UnparsedWireValue } from "@repo/wire";
+import { EXCESS_KEYS, HTTP_METHOD, type UnparsedWireValue, WireValueSchema } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
-import { Clock, Effect, Layer, Redacted, Result, Schema } from "effect";
+import { send } from "@vercel/queue";
+import {
+  Clock,
+  Config,
+  ConfigProvider,
+  Context,
+  Duration,
+  Effect,
+  Layer,
+  Option,
+  Redacted,
+  Result,
+  Schema,
+} from "effect";
 import {
   type HttpClient,
   HttpRouter,
@@ -22,6 +36,7 @@ import {
 import { agentPublished } from "../agents/coder-host/published.js";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
 import { installationDriveRegenerated } from "../agents/workspace-drive.js";
+import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../auth/auth-deployment.js";
 import { cadenceOrUnavailable } from "../automations/automation-cadence.js";
 import { queueGithubRuns } from "../automations/automation-github.js";
 import type { SessionsForAccount } from "../automations/automation-runs.js";
@@ -36,9 +51,11 @@ import {
   parseJsonBytes,
   readBodyBytesEffect,
 } from "../http/http-effect.js";
+import { QUEUE_ACKNOWLEDGED, queueConsumer } from "../queues/queue-consumer.js";
 import { ANY_METHOD, type WebRoutes } from "../route.js";
 import { agentWakeOf, checksCompletedWakeOf, wakeAgents } from "./agent-wakes.js";
 import { clearRevokedAuthorization, GitHubApp } from "./github-app.js";
+import { GITHUB_DELIVERY_READ } from "./github-delivery-read-bounds.js";
 import { setInstallationStatus } from "./github-installations.js";
 import { GitHubBackground } from "./github-rate-gate.js";
 
@@ -64,6 +81,15 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * read that fails is logged by its kind alone and the delivery is still
  * answered, since GitHub retries nothing on its own and the next delivery
  * or the tab's next read reads again.
+ *
+ * A delivery's reads of GitHub, the pull requests read again and the
+ * agents told, run past its answer on production and on a Preview: they are
+ * published to the github-delivery-reads queue, whose consumer is a function
+ * of its own, so a burst of deliveries never shares an instance with a
+ * member's request, as GitHub asks
+ * (https://docs.github.com/en/webhooks/using-webhooks/best-practices-for-using-webhooks).
+ * Anywhere else, as in a test, the reads run in the delivery before its
+ * answer.
  *
  * Before anything else of a delivery is read, the repository it names is
  * recorded by GitHub's id under the name it carries
@@ -157,31 +183,21 @@ const INSTALLATION_ACTION_STATUS: ReadonlyMap<string, GitHubInstallationStatus> 
   ["unsuspend", GITHUB_INSTALLATION_STATUS.ACTIVE],
 ]);
 
-/** The installation actions after which the repositories it grants changed, as GitHub spells them. */
+/** The installation actions after which repositories it granted left it, as GitHub spells them. */
 const GRANT_CHANGE_ACTION = {
-  CREATED: "created",
   DELETED: "deleted",
-  UNSUSPEND: "unsuspend",
-  /** An `installation_repositories` delivery's: repositories given to the installation. */
-  ADDED: "added",
   /** An `installation_repositories` delivery's: repositories taken from it. */
   REMOVED: "removed",
 } as const;
 
-/** The actions, by event, after which the workspace's drive is regenerated, since the repositories it connects changed. */
+/**
+ * The actions, by event, after which the workspace's drive is regenerated,
+ * since repositories left it. A grant fills nothing: a start in a repository
+ * the drive lacks clones it (`workspace-drive.ts`).
+ */
 const DRIVE_CHANGE_ACTIONS: ReadonlyMap<string, ReadonlySet<string>> = new Map([
-  [
-    WEBHOOK_EVENT.INSTALLATION,
-    new Set<string>([
-      GRANT_CHANGE_ACTION.CREATED,
-      GRANT_CHANGE_ACTION.DELETED,
-      GRANT_CHANGE_ACTION.UNSUSPEND,
-    ]),
-  ],
-  [
-    WEBHOOK_EVENT.INSTALLATION_REPOSITORIES,
-    new Set<string>([GRANT_CHANGE_ACTION.ADDED, GRANT_CHANGE_ACTION.REMOVED]),
-  ],
+  [WEBHOOK_EVENT.INSTALLATION, new Set<string>([GRANT_CHANGE_ACTION.DELETED])],
+  [WEBHOOK_EVENT.INSTALLATION_REPOSITORIES, new Set<string>([GRANT_CHANGE_ACTION.REMOVED])],
 ]);
 
 /** A pull request's actions that change what a task's row says of it: where it stands, its merge queue among it, its title, or its size. */
@@ -422,7 +438,7 @@ function installationTarget(
     : { installationId: read.success.installation.id, status };
 }
 
-/** The installation a delivery says now grants other repositories; nothing for any other event or action. */
+/** The installation a delivery says repositories left; nothing for any other event or action. */
 function installationRegranted(event: string, payload: UnparsedWireValue): number | undefined {
   const actions = DRIVE_CHANGE_ACTIONS.get(event);
 
@@ -475,6 +491,146 @@ const readAgainOnBranches = /* @__PURE__ */ Effect.fn("web/githubWebhookReadAgai
 
   return landed.filter(Boolean).length;
 });
+
+/** A delivery as its reads are handed on: its event, its id, and its payload as GitHub sent it. */
+interface DeliveryToRead {
+  readonly event: string;
+  readonly deliveryId: string;
+  readonly payload: UnparsedWireValue;
+}
+
+/** What a delivery's reads came to: the agents' pull requests read again, and the agents told. */
+interface DeliveryReadCounts {
+  readonly read: number;
+  readonly told: number;
+}
+
+type DeliveryReadServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox;
+
+const NOTHING_READ: DeliveryReadCounts = { read: 0, told: 0 };
+
+/**
+ * A delivery's reads of GitHub: what the agents on its branches published
+ * read again, then the agents its review, comment, failure, or finished
+ * checks concern told, in the background lane, since no member waits on it.
+ */
+const deliveryReads = /* @__PURE__ */ Effect.fn("web/githubDeliveryReads")(
+  function* ({
+    event,
+    deliveryId,
+    payload,
+  }: DeliveryToRead): Effect.fn.Return<DeliveryReadCounts, HostedRefusal, DeliveryReadServices> {
+    // A deployment with no App configured knows no bot of its own, so every bot is another's.
+    const agentLogin = yield* Effect.orElseSucceed((yield* GitHubApp).botLogin, () => undefined);
+    const target = deliveryTarget(event, payload);
+    const read = target === undefined ? 0 : yield* readAgainOnBranches(target);
+    const now = yield* Clock.currentTimeMillis;
+    // Note that the checks finishing are read after the agents' pull requests were read again above,
+    // because a wake tells only the agents whose row keeps the finished commit as their head.
+    const wakes = [agentWakeOf(event, payload, now), checksCompletedWakeOf(event, payload, now)];
+    // Each agent's sessions as the deployment acting for its owner, as an automation's run reaches them.
+    const sessionsForAccount: SessionsForAccount = routedSessions;
+
+    const counts = yield* Effect.forEach(wakes, (wake) =>
+      wake === undefined
+        ? Effect.succeed(0)
+        : wakeAgents(sessionsForAccount, wake, deliveryId, agentLogin),
+    );
+
+    return { read, told: counts.reduce((sum, count) => sum + count, 0) };
+  },
+  Effect.provideService(GitHubBackground, true),
+);
+
+/** A delivery's reads as a queue message carries them. */
+const DeliveryMessageSchema = Schema.Struct({
+  event: Schema.String,
+  deliveryId: Schema.String,
+  payload: WireValueSchema,
+});
+
+/** On Vercel: the reads published to their topic under GitHub's id for the delivery, so a redelivery is dropped; a publish that failed fails the delivery. */
+const vercelHand = (delivery: DeliveryToRead) =>
+  Effect.tryPromise(() =>
+    send(GITHUB_DELIVERY_READ.TOPIC, delivery, {
+      idempotencyKey: delivery.deliveryId,
+      retentionSeconds: Math.ceil(Duration.toSeconds(GITHUB_DELIVERY_READ.RETAINED)),
+    }),
+  ).pipe(
+    Effect.timeout(GITHUB_DELIVERY_READ.PUBLISH_WAIT),
+    Effect.as(NOTHING_READ),
+    Effect.mapError(() => HOSTED_REFUSAL.UNAVAILABLE),
+  );
+
+interface GitHubDeliveryReadsService {
+  /** The delivery's reads handed on, answering what they came to where they ran before the answer. */
+  readonly hand: (
+    delivery: DeliveryToRead,
+  ) => Effect.Effect<DeliveryReadCounts, HostedRefusal, DeliveryReadServices>;
+}
+
+/** Where a delivery's reads run: in the delivery by default, as a test or a local run has it. */
+const GitHubDeliveryReads = Context.Reference<GitHubDeliveryReadsService>(
+  "@repo/service/GitHubDeliveryReads",
+  { defaultValue: () => ({ hand: deliveryReads }) },
+);
+
+/** The reads as the deployment's environment names them: on Vercel's queue on production and on a Preview, in the delivery anywhere else. */
+export const githubDeliveryReadsFromEnvironment = Layer.effect(
+  GitHubDeliveryReads,
+  Effect.map(
+    Config.option(Config.String(AUTH_DEPLOYMENT_ENVIRONMENT.ENVIRONMENT)),
+    (deployment): GitHubDeliveryReadsService => ({
+      hand: Option.exists(
+        deployment,
+        (named) =>
+          named === DEPLOYMENT_ENVIRONMENT.PRODUCTION || named === DEPLOYMENT_ENVIRONMENT.PREVIEW,
+      )
+        ? vercelHand
+        : deliveryReads,
+    }),
+  ).pipe(
+    Effect.provideServiceEffect(
+      ConfigProvider.ConfigProvider,
+      Effect.sync(() => ConfigProvider.fromEnv()),
+    ),
+  ),
+);
+
+/**
+ * The consumer's route handler over the services the function's runtime
+ * handed it: each delivery's reads run and acknowledged, one that does not
+ * decode dropped, and a failure left for the queue to deliver again after
+ * `GITHUB_DELIVERY_READ.FAILED_AGAIN`.
+ */
+export function githubDeliveryReadsHandler(
+  services: Context.Context<DeliveryReadServices>,
+): (request: Request) => Promise<Response> {
+  return queueConsumer(
+    services,
+    (message) =>
+      Effect.gen(function* () {
+        const decoded = yield* Effect.option(
+          Schema.decodeUnknownEffect(DeliveryMessageSchema)(message),
+        );
+
+        if (Option.isNone(decoded)) {
+          yield* Effect.logError("a github-delivery-reads message did not decode; it is dropped");
+
+          return QUEUE_ACKNOWLEDGED;
+        }
+
+        yield* deliveryReads(decoded.value).pipe(
+          Effect.tapCause((cause) =>
+            Effect.logWarning(`a delivery's reads will run again: ${causeKind(cause)}`),
+          ),
+        );
+
+        return QUEUE_ACKNOWLEDGED;
+      }),
+    GITHUB_DELIVERY_READ.FAILED_AGAIN,
+  );
+}
 
 /** POST: one delivery, its signature confirmed before anything of it is read. */
 const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
@@ -547,27 +703,13 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
       queueGithubRuns(request.headers[DELIVERY_HEADER.DELIVERY] ?? "", event, payload, agentLogin),
     );
 
-    const target = deliveryTarget(event, payload);
-    const read = target === undefined ? 0 : yield* readAgainOnBranches(target);
-    const now = yield* Clock.currentTimeMillis;
-    // Note that the checks finishing are read after the agents' pull requests were read again above,
-    // because a wake tells only the agents whose row keeps the finished commit as their head.
-    const wakes = [agentWakeOf(event, payload, now), checksCompletedWakeOf(event, payload, now)];
-    // Each agent's sessions as the deployment acting for its owner, as an automation's run reaches them.
-    const sessionsForAccount: SessionsForAccount = routedSessions;
+    const delivery = {
+      event,
+      deliveryId: request.headers[DELIVERY_HEADER.DELIVERY] ?? "",
+      payload,
+    };
 
-    const counts = yield* Effect.forEach(wakes, (wake) =>
-      wake === undefined
-        ? Effect.succeed(0)
-        : wakeAgents(
-            sessionsForAccount,
-            wake,
-            request.headers[DELIVERY_HEADER.DELIVERY] ?? "",
-            agentLogin,
-          ),
-    );
-
-    const told = counts.reduce((sum, count) => sum + count, 0);
+    const { read, told } = yield* (yield* GitHubDeliveryReads).hand(delivery);
 
     return hostedJsonResponse(200, { read, queued, told });
   },

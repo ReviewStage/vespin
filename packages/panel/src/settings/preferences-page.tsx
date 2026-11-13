@@ -15,6 +15,7 @@ import { SettingsSection } from "@repo/ui";
 import { ACTOR_KIND, type Actor, accountActor } from "@repo/ui/actor-model";
 import { ActorStack } from "../actor-ref.js";
 import { SchemaSettingRows } from "./schema-rows.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import { SoundsSection } from "./sounds-section.js";
 
 /**
@@ -62,7 +63,7 @@ function AgentsSection({
     ) : undefined;
 
   return (
-    <SettingsSection title="Agents">
+    <SettingsSection {...settingsSectionHead(SECTION.PREFERENCES_AGENTS)}>
       <SchemaSettingRows
         page={SCHEMA_SETTINGS_PAGE.PREFERENCES}
         section={SETTING_SECTION.AGENTS}
@@ -87,7 +88,7 @@ export function PreferencesPage({
 }): React.JSX.Element {
   return (
     <>
-      <SettingsSection title="General">
+      <SettingsSection {...settingsSectionHead(SECTION.PREFERENCES_GENERAL)}>
         <SchemaSettingRows
           page={SCHEMA_SETTINGS_PAGE.PREFERENCES}
           section={SETTING_SECTION.GENERAL}

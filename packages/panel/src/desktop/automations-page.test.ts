@@ -608,6 +608,23 @@ test("a deletion asks first, then goes back to the list without the automation",
   assert.ok(!rows(page).some(([name]) => name === SWEEP.name));
 });
 
+test("a deletion the service refuses says why in the deletion's words, not a save's", async () => {
+  world.deleteRefusal = AUTOMATION_CALL_FAILURE.UNANSWERED;
+  mountPages({ kind: AUTOMATIONS_PAGE.EDIT, automationId: SWEEP.id });
+  await settle();
+
+  act(() => button("Automation actions").click());
+  act(() => menuItem("Delete").click());
+  await settle();
+  act(() => dialogButton("Delete automation").click());
+  await settle();
+
+  assert.match(
+    document.querySelector("[role=dialog], [role=alertdialog]")?.textContent ?? "",
+    /The automation could not be deleted\. Try again\./u,
+  );
+});
+
 test("a row's Delete asks first, and once confirmed the row leaves the list and the history passes over its page", async () => {
   const page = mountPages({ kind: AUTOMATIONS_PAGE.LIST });
   await settle();
@@ -1208,7 +1225,7 @@ test("Escape keeps a new page whose schedule was changed, though nothing was typ
   const page = mountPages({ kind: AUTOMATIONS_PAGE.NEW });
   await settle();
 
-  pick(page, "Repeats", "Daily");
+  pick(page, "Runs", "Daily");
   act(() => runAppCommand(APP_COMMAND.EXIT_AUTOMATIONS));
 
   assert.equal(world.places.length, 1);
@@ -1226,7 +1243,7 @@ async function mountNewScheduled(): Promise<HTMLElement> {
 
 test("a schedule repeated weekly is saved on Monday at nine, as its day and time are first drawn", async () => {
   const page = await mountNewScheduled();
-  pick(page, "Repeats", "Weekly");
+  pick(page, "Runs", "Weekly");
   act(() => button("Create automation").click());
   await settle();
 
@@ -1402,7 +1419,12 @@ test("a new automation started from Triage a red main or Investigate Sentry aler
       preset: made.preset,
       trigger:
         made.trigger.kind === AUTOMATION_TRIGGER.GITHUB
-          ? { kind: made.trigger.kind, event: made.trigger.event, branches: made.trigger.branches }
+          ? {
+              kind: made.trigger.kind,
+              event: made.trigger.event,
+              branches: made.trigger.branches,
+              defaultBranch: made.trigger.defaultBranch,
+            }
           : made.trigger,
       scope: made.scope,
       target: made.target,
@@ -1414,7 +1436,8 @@ test("a new automation started from Triage a red main or Investigate Sentry aler
         trigger: {
           kind: AUTOMATION_TRIGGER.GITHUB,
           event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
-          branches: ["main", "master"],
+          branches: undefined,
+          defaultBranch: true,
         },
         scope: AUTOMATION_SCOPE.WORKSPACE,
         target: { kind: AUTOMATION_TARGET.SAME_AGENT, agentId: null },
@@ -1534,7 +1557,7 @@ test("a schedule's time zone is saved as searched for and picked", async () => {
 
 test("a custom cron is saved as written, in the zone the schedule already had", async () => {
   const page = await mountWeeklySweep();
-  pick(page, "Repeats", "Custom");
+  pick(page, "Runs", "Custom");
   type(page.querySelector("input[aria-label='Cron']"), "15 2 * * 1-5");
   act(() => button("Save").click());
   await settle();

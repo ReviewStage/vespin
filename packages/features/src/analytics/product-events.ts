@@ -40,6 +40,8 @@ export const PRODUCT_EVENT = {
   SEARCH_OPEN: "search:open",
   SURFACE_OPEN: "surface:open",
   UPDATE_ACTION: "update:action",
+  /** An update the Updates row drew as failed, a check's or an install's, by the kind of failure and the build it failed on. */
+  UPDATE_FAIL: "update:fail",
   FEEDBACK_SEND: "feedback:send",
   VOICE_PERMISSION: "voice:permission",
   SETTING_UPDATE: "setting:update",
@@ -89,6 +91,7 @@ export const PRODUCT_EVENT_PROPERTY = {
   IMAGE_COUNT: "image_count",
   ACCOUNT_ACTION: "account_action",
   UPDATE_ACTION: "update_action",
+  UPDATE_FAILURE: "update_failure",
   PANEL_TAB: "panel_tab",
   SETTINGS_VIEW: "settings_view",
   SEARCH_SURFACE: "search_surface",
@@ -135,6 +138,22 @@ export const PRODUCT_UPDATE_ACTION = {
 } as const;
 
 type ProductUpdateAction = (typeof PRODUCT_UPDATE_ACTION)[keyof typeof PRODUCT_UPDATE_ACTION];
+
+/**
+ * Why an update failed, as the Updates row names it: an install a read-only
+ * volume refused, a build whose signature the installed app's requirement
+ * refused, or any other failure, a check's or an install's. The words of
+ * the error never travel: a kind here, the build's version beside it, and
+ * nothing else, so a path or a volume's name has no shape to ride in.
+ */
+export const PRODUCT_UPDATE_FAILURE = {
+  READ_ONLY_VOLUME: "read_only_volume",
+  SIGNATURE: "signature",
+  OTHER: "other",
+} as const;
+
+export type ProductUpdateFailure =
+  (typeof PRODUCT_UPDATE_FAILURE)[keyof typeof PRODUCT_UPDATE_FAILURE];
 
 /** Which half of the panel is drawn, said exactly as `APP_PANEL_TAB` says it. */
 const PRODUCT_PANEL_TAB = {
@@ -303,6 +322,12 @@ export const PRODUCT_EXPERIMENT = {
   /** Removed with Chat on the right, so no build sends it now; kept because an older build's batch still may, and one unread value refuses the batch. */
   CHAT_ON_THE_RIGHT: "chat-on-the-right",
   RUN_ACTIONS: "run-actions",
+  MERGE_QUEUE: "merge-queue",
+  TURN_CHANGES: "turn-changes",
+  REPLY_BUTTONS: "reply-buttons",
+  FOLLOWING: "following",
+  COMPUTER_USE: "computer-use",
+  VOICE: "voice",
 } as const;
 
 export type ProductExperiment = (typeof PRODUCT_EXPERIMENT)[keyof typeof PRODUCT_EXPERIMENT];
@@ -392,6 +417,7 @@ interface ProductEventPropertyValue {
   [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT]: ProductSessionCountBucket;
   [PRODUCT_EVENT_PROPERTY.ACCOUNT_ACTION]: ProductAccountAction;
   [PRODUCT_EVENT_PROPERTY.UPDATE_ACTION]: ProductUpdateAction;
+  [PRODUCT_EVENT_PROPERTY.UPDATE_FAILURE]: ProductUpdateFailure;
   [PRODUCT_EVENT_PROPERTY.PANEL_TAB]: ProductPanelTab;
   [PRODUCT_EVENT_PROPERTY.SETTINGS_VIEW]: ProductSettingsView;
   [PRODUCT_EVENT_PROPERTY.SEARCH_SURFACE]: ProductSearchSurface;
@@ -410,8 +436,9 @@ interface ProductEventPropertyValue {
 
 /**
  * The properties no set can enumerate. Each gets a named reader instead, and
- * all are narrower than free text by construction: a version parses as `x.y.z`
- * or not at all, and a count must be a rung of the ladder above.
+ * all are narrower than free text by construction: a version is a build's
+ * (`isProductBuildVersion`) or nothing, and a count must be a rung of the
+ * ladder above.
  */
 type EnumeratedProductEventProperty = Exclude<
   ProductEventProperty,
@@ -426,6 +453,7 @@ type EnumeratedProductEventProperty = Exclude<
 const PRODUCT_EVENT_PROPERTY_VALUES = {
   [PRODUCT_EVENT_PROPERTY.ACCOUNT_ACTION]: Object.values(PRODUCT_ACCOUNT_ACTION),
   [PRODUCT_EVENT_PROPERTY.UPDATE_ACTION]: Object.values(PRODUCT_UPDATE_ACTION),
+  [PRODUCT_EVENT_PROPERTY.UPDATE_FAILURE]: Object.values(PRODUCT_UPDATE_FAILURE),
   [PRODUCT_EVENT_PROPERTY.PANEL_TAB]: Object.values(PRODUCT_PANEL_TAB),
   [PRODUCT_EVENT_PROPERTY.SETTINGS_VIEW]: Object.values(PRODUCT_SETTINGS_VIEW),
   [PRODUCT_EVENT_PROPERTY.SEARCH_SURFACE]: Object.values(PRODUCT_SEARCH_SURFACE),
@@ -456,6 +484,10 @@ const PRODUCT_EVENT_PROPERTIES = {
   [PRODUCT_EVENT.SEARCH_OPEN]: [PRODUCT_EVENT_PROPERTY.SEARCH_SURFACE],
   [PRODUCT_EVENT.SURFACE_OPEN]: [PRODUCT_EVENT_PROPERTY.SURFACE, PRODUCT_EVENT_PROPERTY.LAYOUT],
   [PRODUCT_EVENT.UPDATE_ACTION]: [PRODUCT_EVENT_PROPERTY.UPDATE_ACTION],
+  [PRODUCT_EVENT.UPDATE_FAIL]: [
+    PRODUCT_EVENT_PROPERTY.UPDATE_FAILURE,
+    PRODUCT_EVENT_PROPERTY.APP_VERSION,
+  ],
   [PRODUCT_EVENT.FEEDBACK_SEND]: [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT],
   [PRODUCT_EVENT.VOICE_PERMISSION]: [PRODUCT_EVENT_PROPERTY.PERMISSION_RESULT],
   [PRODUCT_EVENT.SETTING_UPDATE]: [
@@ -603,9 +635,23 @@ function bucketReader(value: UnparsedWireValue): ProductSessionCountBucket | und
  * two can never disagree; the two no set can enumerate are named here, beside
  * an experiment's scope, which reads a missing one as the account's, which
  * is what makes "no free text" a property of the type rather than a promise
- * about call sites: a version that is not `x.y.z` and a count that is not a
+ * about call sites: a version that names no build and a count that is not a
  * rung are both discarded.
  */
+/** A deployment's commit, as the web app names the build it is: forty hex digits and nothing else. */
+const DEPLOYMENT_COMMIT_PATTERN = /^[0-9a-f]{40}$/;
+
+/**
+ * Whether a string names a build: a release version, `x.y.z`, as the desktop
+ * and the iPhone app are named, or a deployment's commit, as the web app is,
+ * which is deployed from `main` on every merge and has no version of its own.
+ * Either shape has no room for a word, which is what keeps the property out
+ * of free text.
+ */
+export function isProductBuildVersion(value: string): boolean {
+  return parseReleaseVersion(value) !== undefined || DEPLOYMENT_COMMIT_PATTERN.test(value);
+}
+
 const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
   // SAFETY: the source is keyed by exactly the enumerable properties, and each
   // reader answers a member of the set filed under the key it lands on, which
@@ -618,7 +664,7 @@ const PRODUCT_EVENT_PROPERTY_READER: PropertyReader = {
     ]),
   ) as Pick<PropertyReader, EnumeratedProductEventProperty>),
   [PRODUCT_EVENT_PROPERTY.APP_VERSION]: (value) =>
-    isWireString(value) && parseReleaseVersion(value) ? value.trim() : undefined,
+    isWireString(value) && isProductBuildVersion(value.trim()) ? value.trim() : undefined,
   [PRODUCT_EVENT_PROPERTY.IMAGE_COUNT]: bucketReader,
   [PRODUCT_EVENT_PROPERTY.ATTEMPT]: bucketReader,
   [PRODUCT_EVENT_PROPERTY.ELAPSED_SECONDS]: elapsedReader,
@@ -725,9 +771,7 @@ export const PRODUCT_EVENT_BUILD_FIELD = {
 const ProductEventBuildSchema = Schema.Struct({
   [PRODUCT_EVENT_BUILD_FIELD.APP_VERSION]: Schema.optionalKey(
     Schema.String.check(
-      Schema.makeFilter(
-        (value) => value === value.trim() && parseReleaseVersion(value) !== undefined,
-      ),
+      Schema.makeFilter((value) => value === value.trim() && isProductBuildVersion(value)),
     ),
   ),
   [PRODUCT_EVENT_BUILD_FIELD.PACKAGED]: Schema.optionalKey(Schema.Boolean),

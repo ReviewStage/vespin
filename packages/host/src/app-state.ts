@@ -18,6 +18,7 @@ import {
   type InboxScopeKind,
   PULL_REQUEST_PART,
   type PullRequestPart,
+  type SendingMessage,
 } from "@repo/features/agent-view";
 import type {
   AgentMessagesAnswer,
@@ -74,7 +75,12 @@ import { readEither } from "@repo/wire/effect";
 import { Equal, Predicate, Result, Schema } from "effect";
 import type { MacCommandAsk } from "./mac-command-ask.js";
 
-export type { MacCommandAsk } from "./mac-command-ask.js";
+export {
+  isMacShellAsk,
+  type MacAppAsk,
+  type MacCommandAsk,
+  type MacShellAsk,
+} from "./mac-command-ask.js";
 
 /**
  * The launch profiles a window answers to. A fixture run stages the panel's
@@ -323,6 +329,12 @@ export interface AppTranscript {
   /** How many readable pages were told, which an ask counts from to know a page landed after it. */
   readonly pages: number;
   readonly failure?: AppTranscriptFailure;
+  /**
+   * The messages on their way to the agent, oldest first, from the moment
+   * each was sent until its row lands in `messages`, as the host draws them
+   * (`agent-queue-writes.ts`); none on a worker's transcript.
+   */
+  readonly sending?: readonly SendingMessage[];
 }
 
 /**

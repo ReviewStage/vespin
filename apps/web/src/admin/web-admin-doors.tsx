@@ -21,13 +21,9 @@ import type {
   AdminWorkspaceDetail,
   AdminWorkspaceList,
 } from "@repo/features/admin-answer-wire";
+import type { AdminCatalog } from "@repo/features/admin-catalog-wire";
 import type { AdminCost } from "@repo/features/admin-cost-wire";
-import {
-  ADMIN_HTTP_STATUS,
-  ADMIN_REFUSED,
-  ADMIN_USER_ID_PARAM,
-  type AdminRefused,
-} from "@repo/features/admin-wire";
+import { ADMIN_REFUSED, ADMIN_USER_ID_PARAM, adminRefusedOf } from "@repo/features/admin-wire";
 import {
   BrowserRedirected,
   browserClient,
@@ -49,14 +45,6 @@ import {
 import { impersonate } from "../auth-client";
 import { ForbiddenCard, SignInCard } from "./chrome/gate-cards";
 
-/** The word the screens tell a refusal apart by, from the status it was answered under. */
-const REFUSED_BY_STATUS: ReadonlyMap<number, AdminRefused> = new Map([
-  [ADMIN_HTTP_STATUS.UNAUTHORIZED, ADMIN_REFUSED.SIGNED_OUT],
-  [ADMIN_HTTP_STATUS.FORBIDDEN, ADMIN_REFUSED.FORBIDDEN],
-  [ADMIN_HTTP_STATUS.NOT_FOUND, ADMIN_REFUSED.MISSING],
-  [ADMIN_HTTP_STATUS.SERVICE_UNAVAILABLE, ADMIN_REFUSED.UNAVAILABLE],
-]);
-
 /**
  * One read on the browser client, its refusal worded for the screens; any
  * other failure passes through as it came, as the screen's own.
@@ -68,7 +56,7 @@ async function asked<T>(read: Promise<unknown>): Promise<T> {
   } catch (cause) {
     if (cause instanceof BrowserRedirected) throw new AdminReadRefused(ADMIN_REFUSED.INTERCEPTED);
     const status = browserRefusal(cause)?.status;
-    const refused = status === undefined ? undefined : REFUSED_BY_STATUS.get(status);
+    const refused = status === undefined ? undefined : adminRefusedOf(status);
 
     if (refused !== undefined) throw new AdminReadRefused(refused);
     throw cause;
@@ -76,6 +64,7 @@ async function asked<T>(read: Promise<unknown>): Promise<T> {
 }
 
 const WEB_ADMIN_READS: AdminReads = {
+  catalog: (signal) => asked<AdminCatalog>(browserClient.admin.catalog({}, { signal })),
   metrics: (query, signal) => asked<AdminMetrics>(browserClient.admin.metrics(query, { signal })),
   cost: (query, signal) => asked<AdminCost>(browserClient.admin.cost(query, { signal })),
   reliability: (query, signal) =>

@@ -2,16 +2,16 @@ import assert from "node:assert/strict";
 import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
 import { INSTALLED_SKILL_CALL_FAILURE } from "@repo/features/installed-skill-view";
 import { INSTALLED_SKILL_SCOPE, INSTALLED_SKILL_SOURCE } from "@repo/features/installed-skill-wire";
-import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
-import { test } from "vitest";
+import { installScopes } from "@repo/features/skill-install-model";
 import {
   failureLine,
   fencedSkillFile,
-  installScopes,
   SKILL_ACTION,
   skillActions,
   skillGroups,
-} from "./skills-model.js";
+} from "@repo/features/skills-settings-words";
+import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import { test } from "vitest";
 
 /**
  * Settings › Skills judged without drawing: the workspace's skills before

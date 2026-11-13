@@ -41,7 +41,6 @@ import { Clock, DateTime, Effect, Layer, Option, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { SqlClient } from "effect/sql";
 import { afterEach, vi } from "vitest";
-import { REPOSITORY_SANDBOX_CONTRACT } from "../agents/repository-sandbox-contract.js";
 import { WorkspaceDriveFills, workspaceDriveName } from "../agents/workspace-drive.js";
 import { HostedEnvironment, type HostedEnvironmentValues } from "../environment.js";
 import { keptAfterResponse } from "../http/after-response.js";
@@ -445,7 +444,7 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
   );
 
   it.effect(
-    "repositories added to an installation have its workspace's drive filled with them past the answer",
+    "repositories added to an installation fill nothing, and repositories removed from it regenerate its workspace's drive past the answer",
     () =>
       Effect.gen(function* () {
         const owner = yield* openGithubUser();
@@ -462,31 +461,33 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         yield* connectWorkspaceGitHub(workspaceId, installation);
         const filling = { sandbox: memorySandbox(), after: keptAfterResponse() };
 
-        const added = {
-          action: "added",
-          installation: { id: installation.id },
-          repositories_added: [{ full_name: RELAY_FULL_NAME }],
-        };
+        const grantChange = (action: string) =>
+          Effect.gen(function* () {
+            const answered = yield* answer(
+              github,
+              SECRET,
+              delivery("installation_repositories", {
+                action,
+                installation: { id: installation.id },
+                [`repositories_${action}`]: [{ full_name: RELAY_FULL_NAME }],
+              }),
+              {},
+              filling,
+            );
 
-        const answered = yield* answer(
-          github,
-          SECRET,
-          delivery("installation_repositories", added),
-          {},
-          filling,
-        );
+            yield* filling.after.run.pipe(Effect.provide(github.layer));
 
-        yield* filling.after.run.pipe(Effect.provide(github.layer));
+            return { answered, drives: [...filling.sandbox.state.drives.keys()] };
+          });
 
-        const drive = workspaceDriveName(workspaceId);
+        const added = yield* grantChange("added");
+        const removed = yield* grantChange("removed");
 
-        const folders = filling.sandbox.state.commands.flatMap(
-          (command) => command.ask.env?.[REPOSITORY_SANDBOX_CONTRACT.VARIABLE.FOLDER] ?? [],
-        );
-
-        assert.deepEqual(answered, { status: 200, body: { read: 0 } });
-        assert.deepEqual([...filling.sandbox.state.drives.keys()], [drive]);
-        assert.deepEqual(folders, ["acme/relay"]);
+        assert.deepEqual(added, { answered: { status: 200, body: { read: 0 } }, drives: [] });
+        assert.deepEqual(removed, {
+          answered: { status: 200, body: { read: 0 } },
+          drives: [workspaceDriveName(workspaceId)],
+        });
       }),
   );
 
@@ -937,79 +938,284 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
       }),
   );
 
-  it.effect("a failed check suite queues a run, but not on a coding agent's own luke/ branch", () =>
-    Effect.gen(function* () {
-      const owner = yield* openGithubUser();
-      yield* connectAgentApiKeys(owner);
-      const repositoryName = `Acme/ci-${randomUUID()}`;
-      const task = yield* startTask(owner, { name: "CI", repository: repositoryName });
+  it.effect(
+    "a failed check suite queues a run on a branch it keeps to or on the repository's default branch, but not on a coding agent's own luke/ branch",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        yield* connectAgentApiKeys(owner);
+        const repositoryName = `Acme/ci-${randomUUID()}`;
+        const task = yield* startTask(owner, { name: "CI", repository: repositoryName });
 
-      const made = Option.getOrThrow(
+        const made = Option.getOrThrow(
+          yield* createAutomation(owner, {
+            organizationId: task.workspaceId,
+            repositories: task.repository === null ? [] : [task.repository],
+            name: "Fix main",
+            trigger: {
+              kind: AUTOMATION_TRIGGER.GITHUB,
+              event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
+              branches: ["main", "luke/fix-ci"],
+            },
+            action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Make main green." },
+            guards: AUTOMATION_DEFAULT_GUARDS,
+            nextRunAt: null,
+            webhookSecretHash: null,
+          }),
+        );
+
         yield* createAutomation(owner, {
           organizationId: task.workspaceId,
           repositories: task.repository === null ? [] : [task.repository],
-          name: "Fix main",
+          name: "Fix the default branch",
           trigger: {
             kind: AUTOMATION_TRIGGER.GITHUB,
             event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
-            branches: ["main", "luke/fix-ci"],
+            defaultBranch: true,
           },
-          action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Make main green." },
+          action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Make trunk green." },
           guards: AUTOMATION_DEFAULT_GUARDS,
           nextRunAt: null,
           webhookSecretHash: null,
-        }),
-      );
+        });
 
-      const github = githubReaching([]);
+        const github = githubReaching([]);
 
-      const suite = (branch: string, conclusion: string) => ({
-        action: "completed",
-        repository: { full_name: repositoryName, html_url: `https://github.com/${repositoryName}` },
-        check_suite: { head_branch: branch, head_sha: "f00dfeed", conclusion, pull_requests: [] },
-      });
-
-      const failedMain = yield* answer(
-        github,
-        SECRET,
-        delivery("check_suite", suite("main", "failure")),
-      );
-
-      const passedMain = yield* answer(
-        github,
-        SECRET,
-        delivery("check_suite", suite("main", "success")),
-      );
-
-      const failedAgent = yield* answer(
-        github,
-        SECRET,
-        delivery("check_suite", suite("luke/fix-ci", "failure")),
-      );
-
-      assert.deepEqual(
-        [failedMain.body, passedMain.body, failedAgent.body],
-        [
-          { read: 0, queued: 1, told: 0 },
-          { read: 0, queued: 0, told: 0 },
-          { read: 0, queued: 0, told: 0 },
-        ],
-      );
-      assert.deepEqual(
-        (yield* listAutomationRuns(owner, made.id)).map((run) => run.firing),
-        [
-          {
-            kind: AUTOMATION_FIRING.GITHUB,
-            event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
-            repository: repositoryName,
-            branch: "main",
-            url: `https://github.com/${repositoryName}/commit/f00dfeed`,
+        // The repository's default branch is trunk, so neither main nor a feature branch is it.
+        const suite = (branch: string, conclusion: string) => ({
+          action: "completed",
+          repository: {
+            full_name: repositoryName,
+            html_url: `https://github.com/${repositoryName}`,
+            default_branch: "trunk",
           },
-        ],
-        "the failed commit is kept by its address",
-      );
-    }),
+          check_suite: { head_branch: branch, head_sha: "f00dfeed", conclusion, pull_requests: [] },
+        });
+
+        const failedMain = yield* answer(
+          github,
+          SECRET,
+          delivery("check_suite", suite("main", "failure")),
+        );
+
+        const passedMain = yield* answer(
+          github,
+          SECRET,
+          delivery("check_suite", suite("main", "success")),
+        );
+
+        const failedAgent = yield* answer(
+          github,
+          SECRET,
+          delivery("check_suite", suite("luke/fix-ci", "failure")),
+        );
+
+        const failedTrunk = yield* answer(
+          github,
+          SECRET,
+          delivery("check_suite", suite("trunk", "failure")),
+        );
+
+        const failedFeature = yield* answer(
+          github,
+          SECRET,
+          delivery("check_suite", suite("ada/feature", "failure")),
+        );
+
+        assert.deepEqual(
+          [
+            failedMain.body,
+            passedMain.body,
+            failedAgent.body,
+            failedTrunk.body,
+            failedFeature.body,
+          ],
+          [
+            { read: 0, queued: 1, told: 0 },
+            { read: 0, queued: 0, told: 0 },
+            { read: 0, queued: 0, told: 0 },
+            { read: 0, queued: 1, told: 0 },
+            { read: 0, queued: 0, told: 0 },
+          ],
+        );
+        assert.deepEqual(
+          (yield* listAutomationRuns(owner, made.id)).map((run) => run.firing),
+          [
+            {
+              kind: AUTOMATION_FIRING.GITHUB,
+              event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
+              repository: repositoryName,
+              branch: "main",
+              url: `https://github.com/${repositoryName}/commit/f00dfeed`,
+            },
+          ],
+          "the failed commit is kept by its address",
+        );
+      }),
   );
+  it.effect(
+    "a pull request merged into the default branch queues a run read by whose pull request it is, while one closed unmerged, an agent's own, or one merged elsewhere queues none",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        yield* connectAgentApiKeys(owner);
+        const repositoryName = `Acme/merged-${randomUUID()}`;
+        const task = yield* startTask(owner, { name: "Merges", repository: repositoryName });
+
+        const made = Option.getOrThrow(
+          yield* createAutomation(owner, {
+            organizationId: task.workspaceId,
+            repositories: [repositoryName],
+            name: "Write the changelog",
+            trigger: {
+              kind: AUTOMATION_TRIGGER.GITHUB,
+              event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED,
+              defaultBranch: true,
+            },
+            action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Note this merge in the changelog." },
+            guards: AUTOMATION_DEFAULT_GUARDS,
+            nextRunAt: null,
+            webhookSecretHash: null,
+          }),
+        );
+
+        const github = githubReaching([]);
+
+        // The merge queue's bot merges it; the person who opened it is whom it is read by.
+        const closed = (options: { merged: boolean; head?: string; base?: string }) => ({
+          action: "closed",
+          repository: { full_name: repositoryName, default_branch: "trunk" },
+          sender: { type: "Bot", login: "github-merge-queue[bot]" },
+          pull_request: {
+            number: 9,
+            title: "Teammate invitations",
+            html_url: `https://github.com/${repositoryName}/pull/9`,
+            labels: [],
+            base: { ref: options.base ?? "trunk" },
+            head: { ref: options.head ?? "ada/invitations", repo: { full_name: repositoryName } },
+            draft: false,
+            merged: options.merged,
+            user: { type: "User", login: "ada" },
+          },
+        });
+
+        const queued = (payload: WireBoundaryInput) =>
+          Effect.map(answer(github, SECRET, delivery("pull_request", payload)), (got) => got.body);
+
+        assert.deepEqual(
+          [
+            yield* queued(closed({ merged: true })),
+            yield* queued(closed({ merged: false })),
+            yield* queued(closed({ merged: true, head: "agent/invitations" })),
+            yield* queued(closed({ merged: true, base: "release" })),
+          ],
+          [1, 0, 0, 0].map((count) => ({ read: 0, queued: count, told: 0 })),
+        );
+        assert.deepEqual(
+          (yield* listAutomationRuns(owner, made.id)).map((run) => run.firing),
+          [
+            {
+              kind: AUTOMATION_FIRING.GITHUB,
+              event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED,
+              repository: repositoryName,
+              number: 9,
+              title: "Teammate invitations",
+              branch: "trunk",
+              url: `https://github.com/${repositoryName}/pull/9`,
+            },
+          ],
+        );
+      }),
+  );
+
+  it.effect(
+    "a release published queues a run with its tag, name, and address, for a tag the trigger names, and a prerelease only where the trigger includes them",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        yield* connectAgentApiKeys(owner);
+        const repositoryName = `Acme/releases-${randomUUID()}`;
+        const task = yield* startTask(owner, { name: "Releases", repository: repositoryName });
+
+        const listening = (trigger: AutomationTrigger) =>
+          Effect.map(
+            createAutomation(owner, {
+              organizationId: task.workspaceId,
+              repositories: [repositoryName],
+              name: "Announce the release",
+              trigger,
+              action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Announce this release." },
+              guards: AUTOMATION_DEFAULT_GUARDS,
+              nextRunAt: null,
+              webhookSecretHash: null,
+            }),
+            Option.getOrThrow,
+          );
+
+        const stable = yield* listening({
+          kind: AUTOMATION_TRIGGER.GITHUB,
+          event: GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED,
+          tags: ["v2.0.0"],
+        });
+
+        const everyRelease = yield* listening({
+          kind: AUTOMATION_TRIGGER.GITHUB,
+          event: GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED,
+          prereleases: true,
+        });
+
+        const github = githubReaching([]);
+
+        const release = (action: string, tag: string, prerelease: boolean) => ({
+          action,
+          repository: { full_name: repositoryName },
+          sender: { type: "User", login: "ada" },
+          release: {
+            tag_name: tag,
+            name: `Release ${tag}`,
+            html_url: `https://github.com/${repositoryName}/releases/tag/${tag}`,
+            prerelease,
+            body: "Never read by the webhook.",
+          },
+        });
+
+        const runsOf = (automation: { readonly id: string }) =>
+          Effect.map(listAutomationRuns(owner, automation.id), (runs) => runs.length);
+
+        const counts = [];
+
+        for (const payload of [
+          release("published", "v2.0.0", false),
+          release("published", "v2.1.0-beta.1", true),
+          release("published", "v2.0.1", false),
+          release("created", "v2.0.0", false),
+        ]) {
+          yield* answer(github, SECRET, delivery("release", payload));
+          counts.push([yield* runsOf(stable), yield* runsOf(everyRelease)]);
+        }
+
+        assert.deepEqual(counts, [
+          [1, 1], // the tag the first names: both
+          [1, 2], // a prerelease: only the trigger that includes them
+          [1, 3], // another tag: only the trigger that names none
+          [1, 3], // created, not published: neither
+        ]);
+        assert.deepEqual(
+          (yield* listAutomationRuns(owner, stable.id)).map((run) => run.firing),
+          [
+            {
+              kind: AUTOMATION_FIRING.GITHUB,
+              event: GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED,
+              repository: repositoryName,
+              title: "Release v2.0.0",
+              tag: "v2.0.0",
+              url: `https://github.com/${repositoryName}/releases/tag/v2.0.0`,
+            },
+          ],
+        );
+      }),
+  );
+
   it.effect(
     "a person's review on an agent's branch wakes the agent through its harness acting for its owner",
     () =>

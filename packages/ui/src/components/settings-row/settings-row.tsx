@@ -78,6 +78,12 @@ import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
  * (`SETTINGS_ROW_INDENT.MARK`) to its parent's words, its rule starting
  * there too, so the card reads as one subject with its parts under it.
  *
+ * A row whose words run to several lines, a note's, may stand its lead, its
+ * controls, and its end on its name's first line (`SETTINGS_ROW_ALIGN.FIRST_LINE`)
+ * rather than centered on its words, as a list of notes keeps each note's
+ * date at its top, so a column of such rows lines them up whatever each
+ * note's length.
+ *
  * A row that keeps its controls beside its words at any width says so
  * (`SETTINGS_ROW_CONTROLS.BESIDE`): its words wrap rather than its controls
  * dropping, as a list whose rows each end in a short button and a ⋯ keeps
@@ -144,6 +150,14 @@ export const SETTINGS_ROW_CONTROLS = {
 
 export type SettingsRowControls =
   (typeof SETTINGS_ROW_CONTROLS)[keyof typeof SETTINGS_ROW_CONTROLS];
+
+/** Where a row stands its lead, its controls, and its end against its words: centered on them, or on its name's first line. */
+export const SETTINGS_ROW_ALIGN = {
+  CENTER: "center",
+  FIRST_LINE: "first-line",
+} as const;
+
+export type SettingsRowAlign = (typeof SETTINGS_ROW_ALIGN)[keyof typeof SETTINGS_ROW_ALIGN];
 
 /** What a row hands the controls it holds. */
 export interface SettingsRowControl {
@@ -235,7 +249,9 @@ export function SettingsRow({
   lead = SETTINGS_ROW_LEAD.MARK,
   labelsControl = false,
   controls = SETTINGS_ROW_CONTROLS.DROP,
+  align = SETTINGS_ROW_ALIGN.CENTER,
   landed = false,
+  editing = false,
   children,
   end,
   below,
@@ -258,8 +274,12 @@ export function SettingsRow({
   labelsControl?: boolean | undefined;
   /** Where its controls stand where they would leave its words less than a legible stretch; dropped below them where none is named. */
   controls?: SettingsRowControls | undefined;
+  /** Where its lead, controls, and end stand against its words; centered on them where none is named. */
+  align?: SettingsRowAlign | undefined;
   /** Whether the row just arrived, which lights it once. */
   landed?: boolean | undefined;
+  /** Whether its words are being typed in place (`TEXT_FIELD_SIZE.INLINE`), which rings the whole row in the accent, as an unsaved script's editor is edged, until its Save or Cancel. */
+  editing?: boolean | undefined;
   /** The row's controls, handed the row's ids to name and describe them by; they drop below the words where they would leave them less than a legible stretch. */
   children?: ((control: SettingsRowControl) => ReactNode) | undefined;
   /** What the row ends in at any width, on its name's line after its controls: its ⋯, a fold's chevron, a dismiss. */
@@ -295,10 +315,12 @@ export function SettingsRow({
 
   // Note that a compact row's controls wrap below its words only where they cannot fit at all, so its line wraps as plainly as it can.
   const wraps = density === SETTINGS_ROW_DENSITY.COMPACT;
+  // Note that a row standing its parts on its name's first line overrides each box's centering, which cn's merge lets the later utility win.
+  const top = align === SETTINGS_ROW_ALIGN.FIRST_LINE ? "items-start" : undefined;
 
   const words = (
     <>
-      <div className="ui-settings-row-subject flex min-w-0 items-center gap-ui-12">
+      <div className={cn("ui-settings-row-subject flex min-w-0 items-center gap-ui-12", top)}>
         {led ? (
           <ItemMedia className={lead === SETTINGS_ROW_LEAD.FACE ? FACE_LEAD : undefined}>
             {leading}
@@ -316,14 +338,15 @@ export function SettingsRow({
           {described ? <ItemDescription id={descriptionId}>{description}</ItemDescription> : null}
         </ItemContent>
       </div>
-      <ItemActions>{children?.(control)}</ItemActions>
+      <ItemActions className={top}>{children?.(control)}</ItemActions>
     </>
   );
 
   return (
     <div
-      className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent"
+      className="ui-settings-row @container/ui-settings-row min-w-0 data-[indent=mark]:ms-settings-row-indent data-[editing=true]:rounded-control data-[editing=true]:ring-1 data-[editing=true]:ring-accent-fill data-[editing=true]:ring-inset"
       data-invalid={failed}
+      data-editing={editing || undefined}
       data-density={density}
       data-indent={indent}
       data-labels-control={labelsControl}
@@ -333,11 +356,16 @@ export function SettingsRow({
     >
       <Item size={density} className={indent === SETTINGS_ROW_INDENT.MARK ? "ps-0" : undefined}>
         {end === undefined ? (
-          <div className={wraps ? LINE_CLASS.WRAPPING : LINE_CLASS.PLAIN}>{words}</div>
+          <div className={cn(wraps ? LINE_CLASS.WRAPPING : LINE_CLASS.PLAIN, top)}>{words}</div>
         ) : (
-          <div className="ui-settings-row-line flex items-center">
-            <div className={wraps ? MAIN_CLASS.WRAPPING : MAIN_CLASS.PLAIN}>{words}</div>
-            <div className="ui-settings-row-end flex flex-none items-center gap-control-gap empty:hidden">
+          <div className={cn("ui-settings-row-line flex items-center", top)}>
+            <div className={cn(wraps ? MAIN_CLASS.WRAPPING : MAIN_CLASS.PLAIN, top)}>{words}</div>
+            <div
+              className={cn(
+                "ui-settings-row-end flex flex-none items-center gap-control-gap empty:hidden",
+                top,
+              )}
+            >
               {end(control)}
             </div>
           </div>
@@ -391,6 +419,11 @@ export function SettingsRowMeter({
       <Progress value={value} tone={tone} size={PROGRESS_SIZE.THIN} />
     </span>
   );
+}
+
+/** One small press under a row's description, on a line of its own: a plan's Use reset under its meters. */
+export function SettingsRowAction({ children }: { children: ReactNode }): React.JSX.Element {
+  return <span className="ui-settings-row-action mt-ui-8 flex">{children}</span>;
 }
 
 /** How much of each of its usage windows a row's plan has used, as meters under its state line (`UsageMeters`). */

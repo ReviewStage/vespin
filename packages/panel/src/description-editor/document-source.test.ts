@@ -65,10 +65,14 @@ afterEach(() => {
 });
 
 /** The document in an editor, with what it would hand over now, as a document or, by `ends`, a message. */
-function opened(markdown: string, ends: BlankEnds = BLANK_ENDS.KEPT) {
+function opened(
+  markdown: string,
+  ends: BlankEnds = BLANK_ENDS.KEPT,
+  namesChip?: (target: string) => boolean,
+) {
   const extensions = markdownExtensions();
   const manager = documentManager(extensions);
-  const source = documentOpened(manager, markdown);
+  const source = documentOpened(manager, markdown, namesChip);
   const host = document.createElement("div");
   document.body.append(host);
 
@@ -402,6 +406,45 @@ test("a tight list switching between bullets and task items is handed over untou
   assert.equal(handedOver(), text.replace("two", "two again"));
 });
 
+test("a paragraph opening on a short word and a period stays a paragraph when it is edited", () => {
+  const text = "Mr. Smith asked for the export.\n";
+  const { editor, handedOver } = opened(text);
+
+  typedAtEnd(editor, " Done.");
+
+  assert.equal(handedOver(), "Mr. Smith asked for the export. Done.\n");
+});
+
+test("inline code inside a link, bold, or italics opens valid and keeps them when its line is edited", () => {
+  const text =
+    "See [`store.ts`](https://x.dev/store.ts), run **`pnpm i`**, then *`dev`*, `a`**`b`**`c`.\n";
+
+  const { editor, handedOver } = opened(text);
+
+  editor.state.doc.check();
+  typedAtEnd(editor, " Done.");
+
+  assert.equal(handedOver(), text.replace(".\n", ". Done.\n"));
+});
+
+test("blocks written with no blank line between them stay so when another block is edited", () => {
+  const text = "## Steps\nDo these in order:\n- Install\n- Run\n\n```sh\npnpm dev\n```\nThe end.\n";
+  const { editor, handedOver } = opened(text);
+
+  typedAtEnd(editor, " Fixed.");
+
+  assert.equal(handedOver(), text.replace("The end.", "The end. Fixed."));
+});
+
+test("a code block after a second paragraph in a numbered item keeps its lines when the list is edited", () => {
+  const text = "1. Install:\n\n   Then:\n   ```sh\n   pnpm install\n   ```\n2. Run.\n";
+  const { editor, handedOver } = opened(text);
+
+  typedAtEnd(editor, " Done.");
+
+  assert.equal(handedOver(), text.replace("Run.", "Run. Done."));
+});
+
 test("a task item wrapped onto a second line stays one item when the checklist is edited", () => {
   const text = "- [ ] Write the migration\n  and its rollback\n- [ ] Ship it\n";
   const { editor, handedOver } = opened(text);
@@ -426,4 +469,114 @@ test("a checklist laid in after a list that ends the text without a line break s
   });
 
   assert.equal(handedOver(), "- one\n- [ ] two");
+});
+
+test("a code block laid in after a last line written with no line break stands apart from it", () => {
+  const { editor, handedOver } = opened("Intro");
+
+  editor.commands.insertContentAt(editor.state.doc.content.size, {
+    type: "codeBlock",
+    attrs: { language: "sh" },
+    content: [{ type: "text", text: "pwd" }],
+  });
+
+  assert.equal(handedOver(), "Intro\n\n```sh\npwd\n```");
+});
+
+test("a paragraph opening on a short word and a period after a numbered list stays a paragraph when the list is edited", () => {
+  const text = "1. Export\n\nMr. Smith asked for the export.\n";
+  const { editor, handedOver } = opened(text);
+
+  editor.commands.setTextSelection(Selection.atStart(editor.state.doc).from);
+  editor.commands.insertContent("Then ");
+
+  assert.equal(handedOver(), "1. Then Export\n\nMr. Smith asked for the export.\n");
+});
+
+test("a lettered line indented under a numbered item stays the item's words when the list is edited", () => {
+  const { editor, handedOver } = opened("1. People\n   Mr. Smith\n2. Finish\n");
+
+  editor.commands.setTextSelection(Selection.atStart(editor.state.doc).from);
+  editor.commands.insertContent("Then ");
+
+  assert.deepEqual(
+    editor.getJSON().content?.map((block) => block.type),
+    ["orderedList"],
+  );
+  assert.equal(handedOver(), "1. Then People\nMr. Smith\n2. Finish\n");
+});
+
+test.each([
+  {
+    block: "a GitHub alert in a list item keeps its marker",
+    text: "- Before you start\n\n  > [!WARNING]\n  > Back up the database.\n",
+    words: "Before you start",
+    saved: "- Before you start now\n  > [!WARNING]\n  > Back up the database.\n",
+  },
+  {
+    block: "a code line written as an escaped alert keeps its backslashes",
+    text: "```md\n> \\[!NOTE\\]\nRun it\n```\n",
+    words: "> \\[!NOTE\\]\nRun it",
+    saved: "```md\n> \\[!NOTE\\]\nRun it now\n```\n",
+  },
+  {
+    block: "a code line written as a quoted fence leaves the code open",
+    text: "```md\n> ```\n> \\[!NOTE\\]\nRun it\n```\n",
+    words: "> ```\n> \\[!NOTE\\]\nRun it",
+    saved: "```md\n> ```\n> \\[!NOTE\\]\nRun it now\n```\n",
+  },
+  {
+    block: "a table gains no blank line over it",
+    text: "The steps:\n\n| Step | Command    |\n| ---- | ---------- |\n| Run  | `pnpm dev` |\n",
+    words: "Run",
+    saved:
+      "The steps:\n\n| Step    | Command    |\n| ------- | ---------- |\n| Run now | `pnpm dev` |\n",
+  },
+])("an edited block is re-printed as GitHub draws it: $block", ({ text, words, saved }) => {
+  const { editor, handedOver } = opened(text);
+  let end = 0;
+  editor.state.doc.descendants((node, pos) => {
+    if (node.text === words) end = pos + node.nodeSize;
+  });
+
+  editor.chain().setTextSelection(end).insertContent(" now").run();
+
+  assert.equal(handedOver(), saved);
+});
+
+test("a kept line over an indented code block keeps the code apart once the heading between them is deleted", () => {
+  const { editor, handedOver } = opened("Intro\n## Remove\n    alpha\n\n    beta\n");
+  const intro = editor.state.doc.child(0).nodeSize;
+
+  editor.commands.deleteRange({ from: intro, to: intro + editor.state.doc.child(1).nodeSize });
+
+  assert.equal(handedOver(), "Intro\n\n    alpha\n\n    beta\n");
+});
+
+test("a paragraph wrapped onto a second line draws as one line and keeps its wrap when its words are retyped", async () => {
+  const text = "We ship the migration\nand its rollback\n";
+  const { host, handedOver } = opened(text);
+
+  assert.equal(host.querySelector("p")?.textContent, "We ship the migration and its rollback");
+  await retype(host, "its rollback", "its rollback today");
+
+  assert.equal(handedOver(), "We ship the migration\nand its rollback today\n");
+});
+
+test("links the read view draws as chips open as chips and are saved as written when their line is edited", () => {
+  const text =
+    'Shipped in https://github.com/acme/app/pull/12 with [`store.ts`](https://github.com/acme/app/blob/HEAD/store.ts), [mention://file/app.ts](mention://file/app.ts), and [the app](https://github.com/acme/app "Open the app").\n';
+
+  const { editor, handedOver } = opened(
+    text,
+    BLANK_ENDS.KEPT,
+    (target) => target.startsWith("https://github.com/") || target.startsWith("mention://"),
+  );
+
+  typedAtEnd(editor, " Done.");
+  const chips = editor.getJSON().content?.[0]?.content?.filter((node) => node.type === "mention");
+
+  // Note that a titled link stays a link, since a chip has no place for its title.
+  assert.equal(chips?.length, 3);
+  assert.equal(handedOver(), text.replace(").\n", "). Done.\n"));
 });

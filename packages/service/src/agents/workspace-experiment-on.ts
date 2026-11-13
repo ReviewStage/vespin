@@ -1,5 +1,5 @@
 /**
- * workspace-experiment-on.ts -- whether a workspace experiment is on in the workspace the work is in, which decides what of Task descriptions, Memory, and Done and follow-ups an agent or a member's call is offered, handed, and told.
+ * workspace-experiment-on.ts -- whether a workspace experiment is on in the workspace the work is in, which decides what of Task descriptions and Memory an agent or a member's call is offered, handed, and told, read beside the agent's starter's choice of Done and follow-ups and whether Computer use is on for the member whose Mac an agent reaches.
  *
  * Every gate of a workspace experiment asks here, for the workspace the work
  * stands in: an agent's own (`agent.organizationId`), a task's
@@ -13,6 +13,8 @@
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
+import { accountExperimentOn } from "@repo/database/models/account-store";
+import { macOwnerOf } from "@repo/database/models/mac-command-store";
 import {
   workspaceExperimentOn,
   workspaceExperimentsOf,
@@ -56,48 +58,78 @@ export function experimentOnSinceIn(
 }
 
 /**
- * The workspace's experiments as an agent's tools, their words, and its
- * instructions are built by: each of Task descriptions and Memory on
- * or off. An agent is told nothing of one that is off, so every word that
- * names one is chosen by this.
+ * The experiments an agent's tools, their words, and its instructions are
+ * built by: its workspace's Task descriptions, Memory, and Reply buttons,
+ * Done and follow-ups as the account that started the agent chose it, on or
+ * off, and Computer use, which is no workspace's but the account's whose Mac
+ * the agent reaches (`macOwnerOf`), since that member alone is who it acts
+ * for. An agent is told nothing of one that is off, so every word that names
+ * one is chosen by this.
  */
 export interface ExperimentsOn {
   readonly descriptionsOn: boolean;
   readonly memoryOn: boolean;
   readonly turnEndOn: boolean;
+  readonly replyButtonsOn: boolean;
+  readonly computerUseOn: boolean;
 }
 
-/** Every workspace experiment on: the words a tool is declared in where nothing narrows it, as the goldens hold them. */
+/** Every experiment on: the words a tool is declared in where nothing narrows it, as the goldens hold them. */
 export const EVERY_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: true,
   memoryOn: true,
   turnEndOn: true,
+  replyButtonsOn: true,
+  computerUseOn: true,
 };
 
-/** Every workspace experiment off. */
+/** Every experiment off. */
 export const NO_EXPERIMENT_ON: ExperimentsOn = {
   descriptionsOn: false,
   memoryOn: false,
   turnEndOn: false,
+  replyButtonsOn: false,
+  computerUseOn: false,
 };
 
+/** The agent an agent's experiments are read for: its workspace, the account that started it, and the conversation whose Mac owner's own Computer use is read. */
+export interface ExperimentsOf {
+  readonly organizationId: string;
+  readonly userId: string;
+  readonly conversationId: string;
+}
+
 /**
- * The workspace's experiments, read in one statement; none where they cannot
- * be read, logged for the operator. For a caller that must tell a failed
- * read from a workspace with every experiment off, as a restart does.
+ * The agent's experiments, its workspace's read in one statement beside its
+ * starter's account and its Mac owner's; none where they cannot be read,
+ * logged for the operator. For a caller that must tell a failed read from
+ * every experiment off, as a restart does.
  */
 export function experimentsReadIn(
-  workspaceId: string,
+  agent: ExperimentsOf,
 ): Effect.Effect<Option.Option<ExperimentsOn>, never, DatabaseServices> {
-  return workspaceExperimentsOf(workspaceId).pipe(
-    Effect.map((standings) => {
+  const target = { userId: agent.userId, conversationId: agent.conversationId };
+
+  return Effect.all(
+    [
+      workspaceExperimentsOf(agent.organizationId),
+      accountExperimentOn(agent.userId, EXPERIMENT.TURN_END),
+      Effect.flatMap(macOwnerOf(target), (owner) =>
+        accountExperimentOn(owner, EXPERIMENT.COMPUTER_USE),
+      ),
+    ],
+    { concurrency: "unbounded" },
+  ).pipe(
+    Effect.map(([standings, turnEndOn, computerUseOn]) => {
       const on = (experiment: WorkspaceExperiment) =>
         standings.some((standing) => standing.experiment === experiment && standing.on);
 
       return Option.some({
         descriptionsOn: on(EXPERIMENT.DESCRIPTIONS),
         memoryOn: on(EXPERIMENT.MEMORY),
-        turnEndOn: on(EXPERIMENT.TURN_END),
+        turnEndOn,
+        replyButtonsOn: on(EXPERIMENT.REPLY_BUTTONS),
+        computerUseOn,
       });
     }),
     Effect.tapError(logStoreFailure),
@@ -105,12 +137,12 @@ export function experimentsReadIn(
   );
 }
 
-/** The workspace's experiments, read in one statement; where they cannot be read, every one is off, logged for the operator. */
+/** The agent's experiments, as above; where they cannot be read, every one is off, logged for the operator. */
 export function experimentsOnIn(
-  workspaceId: string,
+  agent: ExperimentsOf,
 ): Effect.Effect<ExperimentsOn, never, DatabaseServices> {
   return Effect.map(
-    experimentsReadIn(workspaceId),
+    experimentsReadIn(agent),
     Option.getOrElse(() => NO_EXPERIMENT_ON),
   );
 }

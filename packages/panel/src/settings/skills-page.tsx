@@ -10,10 +10,19 @@ import {
 import { formatBytes } from "@repo/features/number-format";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import type { SkillOption } from "@repo/features/skill-mention";
+import {
+  failureLine,
+  fencedSkillFile,
+  SKILL_ACTION,
+  SKILLS_LINE,
+  type SkillAction,
+  type SkillRow,
+  skillActions,
+  skillGroups,
+} from "@repo/features/skills-settings-words";
 import { readingWords } from "@repo/features/words";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
   BUTTON_VARIANT,
   Button,
@@ -68,18 +77,8 @@ import { AddSkillDialog } from "./add-skill-dialog.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { shownWorkspace } from "./settings-rows.js";
-import {
-  failureLine,
-  fencedSkillFile,
-  removeQuestion,
-  SKILL_ACTION,
-  SKILLS_LINE,
-  type SkillAction,
-  type SkillRow,
-  skillActions,
-  skillGroups,
-  workspaceGroupTitle,
-} from "./skills-model.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
+import { removeQuestion } from "./skills-model.js";
 import type { WorkspaceSettingsControl } from "./workspace-page.js";
 
 /**
@@ -434,21 +433,16 @@ function ShownSkills({
     </Button>
   );
 
-  const workspaceTitle = <ReplayMask>{workspaceGroupTitle(workspace)}</ReplayMask>;
-
   // Note that the first group's heading is where a search for Add skill lands, and where a failed read stands under its Add.
   const first =
-    workspace.personal === true
-      ? { title: SKILLS_LINE.PERSONAL, scope: INSTALLED_SKILL_SCOPE.PERSONAL }
-      : { title: workspaceTitle, scope: INSTALLED_SKILL_SCOPE.WORKSPACE };
+    workspace.personal === true ? INSTALLED_SKILL_SCOPE.PERSONAL : INSTALLED_SKILL_SCOPE.WORKSPACE;
 
   return (
     <>
       {skills === undefined && held.isError ? (
         <SettingsSection
-          title={first.title}
-          action={addTo(first.scope)}
-          anchor={SETTINGS_SEARCH_ROW.ADD_SKILL}
+          {...settingsSectionHead(SECTION.SKILLS_FIRST, { workspace })}
+          action={addTo(first)}
         >
           <ReadFailed
             line={SKILLS_LINE.READ_FAILED}
@@ -460,17 +454,17 @@ function ShownSkills({
         <>
           {workspace.personal === true ? null : (
             <SettingsSection
-              title={workspaceTitle}
+              {...settingsSectionHead(SECTION.SKILLS_FIRST, { workspace })}
               action={addTo(INSTALLED_SKILL_SCOPE.WORKSPACE)}
-              anchor={SETTINGS_SEARCH_ROW.ADD_SKILL}
             >
               {rows(groups?.workspace)}
             </SettingsSection>
           )}
           <SettingsSection
-            title={SKILLS_LINE.PERSONAL}
+            {...(workspace.personal === true
+              ? settingsSectionHead(SECTION.SKILLS_FIRST, { workspace })
+              : settingsSectionHead(SECTION.SKILLS_PERSONAL))}
             action={addTo(INSTALLED_SKILL_SCOPE.PERSONAL)}
-            anchor={workspace.personal === true ? SETTINGS_SEARCH_ROW.ADD_SKILL : undefined}
           >
             {rows(groups?.personal)}
           </SettingsSection>

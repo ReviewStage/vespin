@@ -24,7 +24,7 @@ const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis));
 const liveCommandsOf = (userId: string, kinds: readonly MacCommandKind[]) =>
   Effect.gen(function* () {
     const statements = Option.getOrThrow(
-      macCommandsRead.statements({ userId, kinds: macCommandKindsQuery(kinds) }),
+      macCommandsRead.statements({ userId, kinds: macCommandKindsQuery(kinds), device: "" }),
     );
 
     const sqlClient = yield* SqlClient.SqlClient;

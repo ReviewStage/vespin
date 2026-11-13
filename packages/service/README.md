@@ -1057,7 +1057,7 @@ connector is a plain OAuth connector over it, with Neon's two scopes
 (Neon's consent page still asks whether to allow writes):
 
 ```
-(umask 077; curl -s https://mcp.neon.tech/api/register -H 'content-type: application/json' -d '{"client_name":"Vespin","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"client_secret_post","scope":"read write"}' > ~/neon-client.json)
+(umask 077; curl -s https://mcp.neon.tech/api/register -H 'content-type: application/json' -d '{"client_name":"Vespin","logo_uri":"https://vespin.dev/app-icon-512.png","client_uri":"https://vespin.dev","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"client_secret_post","scope":"read write"}' > ~/neon-client.json)
 # ~/neon.json, from its client_id and client_secret, written under the same umask:
 # {"serverUrl":"https://mcp.neon.tech","clientId":"…","clientSecret":"…","tokenEndpointAuthMethod":"client_secret_post","pkceRequired":true,"userAuthorization":{"enabled":true,"scopes":["read","write"]},"refreshTokens":{"enabled":true}}
 vercel connect create mcp.neon.tech --name neon --connector-type oauth --data @"$HOME/neon.json" --json
@@ -1080,7 +1080,7 @@ is. Each grant belongs to the one Executor organization the developer picks
 on its consent page.
 
 ```
-(umask 077; curl -s https://app.executor.sh/api/auth/oauth2/register -H 'content-type: application/json' -d '{"client_name":"Vespin","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none","scope":"mcp offline_access"}' > ~/executor-client.json)
+(umask 077; curl -s https://app.executor.sh/api/auth/oauth2/register -H 'content-type: application/json' -d '{"client_name":"Vespin","logo_uri":"https://vespin.dev/app-icon-512.png","client_uri":"https://vespin.dev","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none","scope":"mcp offline_access"}' > ~/executor-client.json)
 jq '{data:{clientId:.client_id,tokenEndpointAuthMethod:"none",pkceRequired:true,codeChallengeMethod:"S256",defaultResource:"https://mcp.executor.sh/mcp",userAuthorization:{enabled:true,scopes:["mcp","offline_access"]}}}' ~/executor-client.json > ~/executor-patch.json
 (umask 077; vercel api "/v1/connect/connectors/<connector-id>?teamId=<team-id>" > ~/executor-before.json)   # the backup
 vercel api "/v2/connect/connectors/<connector-id>?teamId=<team-id>" -X PATCH --input ~/executor-patch.json
@@ -1136,9 +1136,18 @@ Set `GMAIL_ALLOWED_ACCOUNTS`, `GOOGLE_CALENDAR_ALLOWED_ACCOUNTS`, and
 until the app is verified, so no other account is offered a sign-in Google
 would refuse or count against the unverified cap.
 
-**Granola's, PostHog's, Supabase's, and Y Combinator's connectors.** Each
-is created as above and then corrected in place, its UID unchanged, because
-the client Connect registers for it fails at the provider:
+**Granola's, Mercury's, PostHog's, Supabase's, and Y Combinator's
+connectors.** Each is created as above and then corrected in place, its UID
+unchanged, because the client Connect registers for it fails at the
+provider or names us wrongly there:
+
+- Mercury's consent page names a client "Mercury MCP for" its
+  `client_name`, and Connect's registration names it after the connector,
+  so it read "Mercury MCP for vespin-mercury". A public client named
+  `Vespin` is registered by hand at `https://mcp.mercury.com/register`
+  (`"token_endpoint_auth_method":"none"`, with the connector's scopes as
+  its `scope`), and the connector is PATCHed to it as Granola's is below.
+  Mercury drops its `logo_uri`.
 
 - Granola and PostHog publish client ID metadata documents and
   `private_key_jwt`, and Connect signs a client assertion whose audience
@@ -1149,6 +1158,7 @@ the client Connect registers for it fails at the provider:
   `https://oauth.posthog.com/oauth/register/`) with
   `"token_endpoint_auth_method":"none"`, and the connector is PATCHed to it:
   `{"data":{"clientId":"…","tokenEndpointAuthMethod":"none","pkceRequired":true,"codeChallengeMethod":"S256"}}`.
+  PostHog's registration also names our logo (below).
 - Supabase's authorization server publishes no client ID metadata document
   support and answered Connect's client "Unrecognized client_id". It takes
   confidential clients alone, so one is registered by hand at
@@ -1156,6 +1166,11 @@ the client Connect registers for it fails at the provider:
   `"token_endpoint_auth_method":"client_secret_post"`, and the connector is
   PATCHed to its `clientId` and `clientSecret` with
   `"tokenEndpointAuthMethod":"client_secret_post"` and `"pkceRequired":true`.
+  Supabase has since forgotten a client registered this way, although its
+  secret never expires (`client_secret_expires_at` 0): its authorize answered
+  "Unrecognized client_id" (422) and every grant stood expired. A Supabase
+  sign-in that fails so is mended by registering again and PATCHing the
+  connector to the new client.
 - Y Combinator's protected resource is its origin
   (`https://api.ycombinator.com/.well-known/oauth-protected-resource`
   answers `"resource":"https://api.ycombinator.com"`, and the path-scoped
@@ -1165,7 +1180,16 @@ the client Connect registers for it fails at the provider:
   `{"data":{"defaultResource":"https://api.ycombinator.com"}}`.
 
 Each registration names `https://connect.vercel.com/callback`, the redirect
-a connector without a `redirectUri` of its own replays, and is written under
+a connector without a `redirectUri` of its own replays, and
+`"logo_uri":"https://vespin.dev/app-icon-512.png"` with
+`"client_uri":"https://vespin.dev"`, the logo the client metadata documents
+Connect publishes for its own clients carry, so a consent page that draws a
+client's logo draws ours rather than a placeholder. PostHog's and Executor's
+registrations keep it; Granola's, Mercury's, Neon's, and Supabase's drop
+it, and Supabase's consent page draws its own mark instead. No provider here lets a registered client be changed, so
+giving one a logo means a new client and the connector PATCHed to it, and
+every member who connected it signs in again, since a refresh token answers
+only the client it was issued to. Each registration is written under
 `umask 077`, and every registration file is deleted once its PATCH is in,
 as Neon's is, since nothing reads it again and Supabase's holds its secret.
 The backup a PATCH is taken against is written the same way, since a
@@ -1175,7 +1199,7 @@ provider connects, the one way back if it does not
 Granola's, for example:
 
 ```
-(umask 077; curl -s https://mcp-auth.granola.ai/oauth2/register -H 'content-type: application/json' -d '{"client_name":"Vespin","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"}' > ~/granola-client.json)
+(umask 077; curl -s https://mcp-auth.granola.ai/oauth2/register -H 'content-type: application/json' -d '{"client_name":"Vespin","logo_uri":"https://vespin.dev/app-icon-512.png","client_uri":"https://vespin.dev","redirect_uris":["https://connect.vercel.com/callback"],"grant_types":["authorization_code","refresh_token"],"response_types":["code"],"token_endpoint_auth_method":"none"}' > ~/granola-client.json)
 jq '{data:{clientId:.client_id,tokenEndpointAuthMethod:"none",pkceRequired:true,codeChallengeMethod:"S256"}}' ~/granola-client.json > ~/granola-patch.json
 (umask 077; vercel api "/v1/connect/connectors/<connector-id>?teamId=<team-id>" > ~/granola-before.json)   # the backup
 vercel api "/v2/connect/connectors/<connector-id>?teamId=<team-id>" -X PATCH --input ~/granola-patch.json
@@ -2316,15 +2340,19 @@ A GitHub trigger fires on the Vespin App's own webhook
 pull request opened or labeled, a pull request ready for review opened,
 reopened, marked ready, or pushed to (`pull-request-updated`; a draft fires
 nothing until it is marked ready, and an opened pull request is both this and
-`pull-request-opened`), an issue opened or labeled, a check suite that
-completed as `failure` or `timed_out`, and a push to a branch, each in any of
+`pull-request-opened`), a pull request merged (`pull-request-merged`: a
+`pull_request` delivery closed with `merged` true), an issue opened or
+labeled, a check suite that completed as `failure` or `timed_out`, a push to
+a branch, and a release published (`release-published`, which the App must
+subscribe to `release` deliveries for), each in any of
 the automation's repositories (matched the way GitHub folds a name's case),
 of an owner still a member of
 the automation's workspace, filtered by the trigger's labels (the label just applied, or
 any label of what was opened) and branches (a pull request's base, a check
-suite's or a push's branch). Only the repository, the number, title, and
-address of the issue or pull request, the branch, and a failed check's
-commit by its address are read; never a body. The run's agent starts in the
+suite's or a push's branch), and a release by its tags, exactly as named.
+Only the repository, the number, title, and
+address of the issue or pull request, the branch, a release's tag, name, and
+address, and a failed check's commit by its address are read; never a body. The run's agent starts in the
 repository the event named, as the automation spells it among its
 repositories; a run whose automation no longer lists that repository by the
 time the sweep acts on it is skipped as `repository-changed`. A run is queued under the delivery's `X-GitHub-Delivery`, which a
@@ -2334,18 +2362,21 @@ inside GitHub's ten seconds. Each event is read with who sent it: Vespin's
 agents where the sender is the App's own bot (`<slug>[bot]`), another bot,
 or a person; and, for a pull request, its moment (opened or reopened, marked
 ready, pushed to), whether it is a draft, and whether it comes from a fork
-(its head in another repository, or in none). The trigger's settings choose
-among them (`senders`, `moments`, `drafts`, `forks` in
+(its head in another repository, or in none); and, for a release, whether it
+is a prerelease. A merged pull request is read by whose pull request it is,
+by the same rules, never by who merged it, which is most often the merge
+queue's bot. The trigger's settings choose
+among them (`senders`, `moments`, `drafts`, `forks`, `prereleases` in
 `@repo/features/automation-wire`): people's events alone, every moment, and
-no draft or fork where it names none. An automation cannot fire itself
+no draft, fork, or prerelease where it names none. An automation cannot fire itself
 whatever its settings say: a push by Vespin's agents, to a branch or to a pull
 request, fires nothing, and neither does a failed check on an agent's branch (`agent/`, or `luke/` before it),
 where an agent works and already watches its checks.
 The agent is handed the event by number, address, and branch, its title
 fenced as the event's own text to read as data, its angle brackets spelled
-as entities so it cannot close the fence, and reads the rest with `gh`. The App must subscribe to the Issues and Push events beside the pull
+as entities so it cannot close the fence, and reads the rest with `gh`. The App must subscribe to the Issues, Push, and Release events beside the pull
 request and check events it already reads, a setting of the App on GitHub
-rather than of this repository; until it does, those two triggers never
+rather than of this repository; until it does, those triggers never
 fire.
 
 ## The tasks group
@@ -2736,12 +2767,6 @@ a 60-second duration (`MAINTENANCE_SWEEP.MAX_DURATION_SECONDS` in
 `src/maintenance/maintenance-sweep.ts`; the route, through
 `src/maintenance/maintenance-app.ts`, hands it the deployment's seams. A static
 schedule runs only on production unless it is enabled on a Preview branch by hand.
-
-Once a day, at 08:00 UTC, the `base-drive-refresh` schedule calls
-`apps/web/server/routes/maintenance/base-drives.ts` under the same `CRON_SECRET`,
-in a function group of its own (`base-drive-refresh`, 800 seconds). It fills
-every connected workspace's drive (`src/agents/base-drive-refresh.ts`), one
-after another, each failure logged and passed by for the next day's run.
 
 The sweep ends what no request will. `MaintenanceSweeps`
 (`src/maintenance/maintenance-sweep.ts`) runs its sweeps in turn and

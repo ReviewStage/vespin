@@ -28,6 +28,7 @@ import {
   pickerStyle,
   strokeBorder,
   tag,
+  textFieldStyle,
   tint,
   toggleStyle,
 } from "@expo/ui/swift-ui/modifiers";
@@ -36,7 +37,7 @@ import { Predicate } from "effect";
 import { Fragment, type ReactNode } from "react";
 import { useAnnounced } from "./accessibility.js";
 import { Chip } from "./button.js";
-import type { SfSymbol } from "./sf-symbol.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -46,6 +47,9 @@ const HAIRLINE = 0.5;
 
 /** A row's inner margins, as a decide option's. */
 const ROW_PADDING = { horizontal: SPACE.EDGE - 2, vertical: SPACE.ROW + 1 } as const;
+
+/** How far a typed field's words stand inside its box, as the composer's field holds its own. */
+const FIELD_PADDING = { horizontal: SPACE.ROW, vertical: SPACE.TIGHT * 2 } as const;
 
 /** What a ticked step is heard as after its words. */
 const TICKED = "ticked";
@@ -78,7 +82,7 @@ export type AnswerField = {
 /** One act under the card, such as Mark done: its words and its glyph. */
 export type AskAct = {
   readonly label: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly onPress: () => void;
 };
 
@@ -177,7 +181,7 @@ function StepRow({
         ]}
       >
         <Image
-          systemName={ticked ? "checkmark.circle.fill" : "circle"}
+          {...glyphImage(ticked ? GLYPH.ROUND_BOX_TICKED : GLYPH.ROUND_BOX)}
           size={MARK_SIZE.LEAD}
           color={ticked ? colors.ACCENT : colors.TEXT_MUTED}
         />
@@ -253,7 +257,12 @@ function FieldWords({
   );
 }
 
-/** A text or number field: its label over the system's field, a number's with the decimal pad. */
+/**
+ * A text or number field: its label over the system's field, drawn as a
+ * field (a box on the ground inside the card's hairline, as the panel's
+ * answer box stands) rather than words with nothing round them, and heard
+ * by its label; a number's with the decimal pad.
+ */
 function TypedFieldRow({
   field,
   onChange,
@@ -276,8 +285,23 @@ function TypedFieldRow({
         text={text}
         onTextChange={onChange}
         modifiers={[
+          textFieldStyle("plain"),
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
           foregroundStyle(colors.TEXT),
+          padding(FIELD_PADDING),
+          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+          background(
+            colors.GROUND,
+            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.TAG }),
+          ),
+          strokeBorder({
+            content: colors.CHIP_EDGE,
+            // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
+            shape: "roundedRectangle",
+            cornerRadius: RADIUS.TAG,
+            style: { lineWidth: HAIRLINE },
+          }),
+          accessibilityLabel(field.label),
           accessibilityIdentifier(`answer-field-${field.label}`),
           ...(field.kind === ANSWER_FIELD.NUMBER ? [keyboardType("decimal-pad")] : []),
         ]}

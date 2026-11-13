@@ -30,6 +30,7 @@ import {
   setProviderKeyFastAccess,
 } from "@repo/database/models/provider-key-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { readReplyButton } from "@repo/database/models/reply-buttons";
 import { writePage } from "@repo/database/models/task-pages";
 import { listTaskSections, writeTaskSections } from "@repo/database/models/task-section-store";
 import {
@@ -95,6 +96,7 @@ import {
   PROVIDER_KEY_KIND,
   PROVIDER_KEY_PROVIDER,
 } from "@repo/features/provider-key-wire";
+import { REPLY_BUTTON_ACTION, readReplyButtonLink } from "@repo/features/reply-button-wire";
 import { TASK_SECTION_WRITE } from "@repo/features/task-section-wire";
 import {
   DESCRIPTION_ACTOR,
@@ -105,7 +107,7 @@ import {
   TASK_STATUS,
 } from "@repo/features/task-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { EXPERIMENT } from "@repo/settings";
+import { EXPERIMENT, type WorkspaceExperiment } from "@repo/settings";
 import {
   MESSAGE_CHANNEL,
   type UnparsedWireValue,
@@ -181,6 +183,7 @@ import { runReadAgentTranscript } from "../agent-transcript-tool.js";
 import { AUTOMATION_TOOL_REFUSAL } from "../automation-tools.js";
 import { AgentBrowser } from "../browser/agent-browser.js";
 import { FORGET_MEMORY_TOOL, LIST_MEMORIES_TOOL } from "../memory-tools.js";
+import { ADD_SUGGESTION_REFUSAL, ADD_SUGGESTION_TOOL } from "../reply-buttons/add-suggestion.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
   type AgentSessions,
@@ -1592,6 +1595,14 @@ test("start_agent shows the model the recorded input, images among it, and one t
     GOLDEN_ROOT,
     "start-agent-input-off",
     startAgentToolOf(NO_EXPERIMENT_ON).inputSchema,
+  );
+});
+
+test("add_suggestion shows the model the recorded input", async () => {
+  await settleJsonSchemaGolden(
+    GOLDEN_ROOT,
+    "add-suggestion-input",
+    ADD_SUGGESTION_TOOL.inputSchema,
   );
 });
 
@@ -3331,6 +3342,50 @@ test("message_agent hands another agent of the workspace the words under the sen
   );
 });
 
+test("add_suggestion keeps the start or the send a suggestion runs, answers the link the agent writes it by, and refuses a send to the agent itself", async () => {
+  const { workspaceId, agents } = await openWorkspaces();
+  const agentSessions = await fakeCoderSessions(workspaceId);
+  const owner = agents.caller.userId;
+  await turnExperiment(workspaceId, owner, EXPERIMENT.REPLY_BUTTONS, true);
+  const call = await peerCaller(hostOf(), agents.caller, agentSessions.services);
+  const start = { prompt: PROMPT, model: OPUS, effort: "high" };
+  const send = { agentId: agents.teammates.id, text: NOTE };
+
+  for (const [label, asked] of [
+    ["Send the reminder", { start }],
+    ["Tell billing", { send }],
+  ] as const) {
+    const made = await call(AGENT_TOOL.ADD_SUGGESTION, { label, ...asked }, label);
+    assert.equal(made.status, ACTION_RESULT_STATUS.ACCEPTED, JSON.stringify(made));
+    const link = readReplyButtonLink(String(made.link));
+    assert.equal(link?.agentId, agents.caller.id);
+
+    const kept = Option.getOrThrow(
+      await database.run(readReplyButton(owner, link?.buttonId ?? "")),
+    );
+
+    assert.deepEqual(
+      { label: kept.label, action: kept.action },
+      {
+        label,
+        action:
+          "start" in asked
+            ? { kind: REPLY_BUTTON_ACTION.START, ...start }
+            : { kind: REPLY_BUTTON_ACTION.SEND, ...send },
+      },
+    );
+  }
+
+  assert.deepEqual(
+    await call(
+      AGENT_TOOL.ADD_SUGGESTION,
+      { label: "Tell myself", send: { agentId: agents.caller.id, text: NOTE } },
+      "self",
+    ),
+    { status: ACTION_RESULT_STATUS.REJECTED, reason: ADD_SUGGESTION_REFUSAL.SELF },
+  );
+});
+
 test("message_agent brings an archived agent back and hands it the words", async () => {
   const { workspaceId, agents } = await openWorkspaces();
   const agentSessions = await fakeCoderSessions(workspaceId);
@@ -4889,7 +4944,7 @@ test("create_automation and update_automation take a Sentry trigger once the wor
 async function turnExperiment(
   organizationId: string,
   by: string,
-  experiment: typeof EXPERIMENT.DESCRIPTIONS | typeof EXPERIMENT.MEMORY,
+  experiment: WorkspaceExperiment,
   on: boolean,
 ): Promise<void> {
   await database.run(setWorkspaceExperiment({ organizationId, experiment, on, by }));

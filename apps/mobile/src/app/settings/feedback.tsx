@@ -21,6 +21,8 @@ import {
   BUZZ,
   buzz,
   ConfirmAsk,
+  GLYPH,
+  glyphSymbol,
   ListSection,
   ScopePicker,
   Screen,
@@ -106,6 +108,15 @@ export default function FeedbackScreen() {
   const [sending, setSending] = useState(false);
   // Whether a send is out, read at the press itself.
   const out = useRef(false);
+  // Whether the page still stands, since a note discarded while its send was out leaves a send that must not take the screen now in front back with it.
+  const standing = useRef(true);
+  useEffect(() => {
+    standing.current = true;
+
+    return () => {
+      standing.current = false;
+    };
+  }, []);
   // How many notes went, by which the field is drawn afresh once the words it held were sent.
   const [sends, setSends] = useState(0);
   const feedbackPictures = useAttachedPictures(setNote, undefined, FEEDBACK_PICTURES);
@@ -192,7 +203,7 @@ export default function FeedbackScreen() {
       }
 
       // Note that a picture dropped while the send was out and still being read keeps the page too, so it lands where it can be seen.
-      if (edited || added || otherHeld || now.reading) return;
+      if (!standing.current || edited || added || otherHeld || now.reading) return;
       kept.release();
       router.back();
     });
@@ -212,7 +223,7 @@ export default function FeedbackScreen() {
       <Stack.Screen options={{ title: FEEDBACK_WORDS.TITLE }} />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button
-          icon="arrow.up"
+          icon={glyphSymbol(GLYPH.SEND)}
           variant="prominent"
           tintColor={colors.ACCENT}
           accessibilityLabel={sending ? FEEDBACK_WORDS.SENDING : FEEDBACK_WORDS.SEND}
@@ -225,7 +236,11 @@ export default function FeedbackScreen() {
         act={DISCARD_WORDS.DISCARD}
         destructive
         presented={kept.asking}
-        onAct={kept.discard}
+        onAct={() => {
+          // Note that the page stands no longer from the discard itself, since it stays mounted through its exit, and a send landing then must not go back from the screen in front.
+          standing.current = false;
+          kept.discard();
+        }}
         onDismiss={kept.stay}
       />
       <Screen>

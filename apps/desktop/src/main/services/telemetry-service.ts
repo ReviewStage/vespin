@@ -18,7 +18,9 @@ import { sentryTracesSampler } from "@repo/features/sentry-tracing";
 import { type RunMode, sentryReportingEnabled } from "@repo/host";
 import type { AppStateStore } from "@repo/host/client";
 import type { EffectDesktopService } from "@repo/host/desktop-service";
+import type { ReportAttributes } from "@repo/host/effect";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
+import { sendLineToSentry } from "@repo/host/sentry-line";
 import * as Sentry from "@sentry/electron/main";
 import { Data, Effect, Exit, type Layer, Option, Predicate, Scope, Stream, Tracer } from "effect";
 import {
@@ -84,27 +86,15 @@ export function initializeCrashReporting(runMode: RunMode, environment: SentryEn
 /** What every line This Mac's host setup reports opens with (`compose-this-mac-host.ts`). */
 const THIS_MAC_LINE = "this Mac's host";
 
-/** Whether a reported line says something failed, which Sentry is told as an error rather than a log line. */
-const FAILING = /could not|couldn't|failed|refused/i;
-
 /**
  * A line main reports, told to Sentry where it is about This Mac's host
- * setup, up to what its step said of itself: as an error where it says
- * something failed, as a log line otherwise. Note that only those lines
- * leave, and only our own words of them, so a command's output and every
- * other line main reports stay on stderr.
+ * setup, as `sendLineToSentry` sends it: our own words of it, a step tried
+ * again as a warning until it persists. Note that only those lines leave,
+ * so every other line main reports stays on stderr.
  */
-export function reportThisMacToSentry(message: string): void {
+export function reportThisMacToSentry(message: string, attributes?: ReportAttributes): void {
   if (!message.startsWith(THIS_MAC_LINE)) return;
-  const ours = ownWords(message);
-
-  if (FAILING.test(ours)) Sentry.captureMessage(ours, "error");
-  else Sentry.logger.info(ours);
-}
-
-/** A reported line up to what a step said of itself, so a command's output after it stays on stderr: `this Mac's host: could not install it` of `…: <stderr>`. */
-function ownWords(message: string): string {
-  return message.split(": ").slice(0, 2).join(": ");
+  sendLineToSentry(Sentry, message, attributes);
 }
 
 /** Sentry's status code for a span that ended in error, as its SDK writes it. */

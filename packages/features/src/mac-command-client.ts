@@ -7,6 +7,8 @@ import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import {
   type MacCommandKind,
   type MacCommandResult,
+  type MacDeviceJoinRequest,
+  type MacDeviceSettings,
   macCommandKindsQuery,
 } from "./mac-command-wire.js";
 
@@ -67,12 +69,30 @@ export class HostedMacCommandClient {
    * where the service refused it (another took it, or it waited too long),
    * or unanswered, which the caller may ask again.
    */
-  claim(id: string) {
-    return hostedCall(this.#hosted.macCommands.claim, { id });
+  claim(id: string, deviceId?: string) {
+    return hostedCall(
+      this.#hosted.macCommands.claim,
+      deviceId === undefined ? { id } : { id, deviceId },
+    );
   }
 
-  /** That this Mac listens now for the kinds named. */
-  listening(kinds: readonly MacCommandKind[]) {
-    return hostedCall(this.#hosted.macCommands.listening, { kinds: macCommandKindsQuery(kinds) });
+  /** That this Mac listens now for the kinds named, as the device it joined as where it did. */
+  listening(kinds: readonly MacCommandKind[], deviceId?: string) {
+    const query = macCommandKindsQuery(kinds);
+
+    return hostedCall(
+      this.#hosted.macCommands.listening,
+      deviceId === undefined ? { kinds: query } : { kinds: query, deviceId },
+    );
+  }
+
+  /** This Mac joined as the device given, carrying its own settings up where the service holds none yet: the device's settings as the service keeps them. */
+  join(request: MacDeviceJoinRequest) {
+    return hostedCall(this.#hosted.macCommands.join, request);
+  }
+
+  /** The device's settings written, as the member changed them on this Mac. */
+  saveDeviceSettings(deviceId: string, settings: MacDeviceSettings) {
+    return hostedCall(this.#hosted.macCommands.saveDeviceSettings, { deviceId, settings });
   }
 }

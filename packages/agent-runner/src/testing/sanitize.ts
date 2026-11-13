@@ -1,8 +1,9 @@
 /**
  * sanitize.ts -- the app-server's messages made safe to commit as fixtures: no token, no account id, no email, and every id renamed consistently so a thread can still be followed through them.
  *
- * Its leak guard (`findLeaks`) is what the committed recording,
- * `app-server.jsonl`, must pass.
+ * Its leak guard (`findLeaks`) is what the repository guard holds the
+ * committed recording, `app-server.jsonl`, to
+ * (`tools/oxlint/vespin/guards/probe-fixtures.ts`).
  *
  * Three passes over every string, in order: the secrets this run knows by
  * value (the access, refresh and ID tokens, the issued client id, the host
@@ -156,7 +157,8 @@ export function findLeaks(text: string, secrets: readonly KnownSecret[]): readon
   );
 
   const matched = SECRET_PATTERNS.flatMap((secret) =>
-    secret.name !== "sha256" && text.replaceAll("user@example.com", "").match(secret.pattern) !== null
+    secret.name !== "sha256" &&
+    text.replaceAll("user@example.com", "").match(secret.pattern) !== null
       ? [secret.name]
       : [],
   );

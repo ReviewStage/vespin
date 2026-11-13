@@ -1,5 +1,6 @@
 import { linkTarget } from "@repo/features/link-grammar";
-import { keptBlankLines } from "@repo/ui/reply-quote";
+import { keptBlankLines } from "@repo/features/reply-quote";
+import { withoutTrailingNewlines } from "@repo/features/trailing-newlines";
 import { type ReactNode, useCallback } from "react";
 
 /**
@@ -117,7 +118,7 @@ function codeSpan(words: string): string {
 function fencedBlock(code: string): string {
   const fence = "`".repeat(Math.max(3, longestTicks(code) + 1));
 
-  return `${BLOCK_GAP}${fence}${NEWLINE}${code.replace(/\n+$/u, "")}${NEWLINE}${fence}${BLOCK_GAP}`;
+  return `${BLOCK_GAP}${fence}${NEWLINE}${withoutTrailingNewlines(code)}${NEWLINE}${fence}${BLOCK_GAP}`;
 }
 
 /** Words standing as a block of their own. */

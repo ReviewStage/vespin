@@ -6,10 +6,26 @@ import {
   type ScheduledAutomation,
 } from "@repo/database/models/automation-store";
 import type { TaskStoreFailure } from "@repo/database/models/task-store";
-import { AUTOMATION_TRIGGER, automationFiringSchema } from "@repo/features/automation-wire";
+import { onceInstant } from "@repo/features/automation-schedule";
+import {
+  AUTOMATION_TRIGGER,
+  automationFiringSchema,
+  type ScheduleTrigger,
+  scheduleRunsOnce,
+} from "@repo/features/automation-wire";
 import { send } from "@vercel/queue";
 import { type Schedule, Schedules, SchedulesApiError } from "@vercel/schedules";
-import { Config, ConfigProvider, Context, Data, Effect, Layer, Option, Schema } from "effect";
+import {
+  Clock,
+  Config,
+  ConfigProvider,
+  Context,
+  Data,
+  Effect,
+  Layer,
+  Option,
+  Schema,
+} from "effect";
 import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../auth/auth-deployment.js";
 import { HOSTED_REFUSAL, type HostedRefusal } from "../http/http-effect.js";
 import { logStoreFailure } from "../http/store-failure.js";
@@ -21,7 +37,12 @@ import { AUTOMATION_RUNS } from "./automation-run-bounds.js";
  * A scheduled automation is one Vercel schedule, named by the automation's
  * id in a namespace of its workspace's id, its cron and IANA zone the
  * trigger's own, since a trigger is five-field cron read in a named zone
- * already (`@repo/features/automation-schedule`). Saving an automation
+ * already (`@repo/features/automation-schedule`); a one-time trigger is a
+ * `single` schedule at its date and time, read in its zone the same way.
+ * Vercel writes neither kind over the other, nor a one-time schedule whose
+ * instant has passed, so such a schedule is deleted and made anew; and a
+ * one-time schedule paused or past is kept as none, since it would never
+ * fire, and is made again should it be moved on and turned on. Saving an automation
  * keeps its schedule as the automation then stands: made where it is
  * missing, its cron and zone written where it stands, enabled or disabled
  * as the automation is, and deleted once the automation is gone or fires
@@ -152,6 +173,31 @@ function vercelCall<A>(
 
 const NOT_FOUND = "not_found";
 
+/** Vercel's codes for a schedule it will not write in place: one moved between cron and once, or a one-time one already past. */
+const REWRITE_REFUSED: readonly string[] = [
+  "schedule_type_change_not_allowed",
+  "schedule_single_at_passed",
+];
+
+/** A schedule trigger as Vercel's expression: its cron, or its one date and time. */
+function expressionOf(trigger: ScheduleTrigger): Schedule["expression"] {
+  return scheduleRunsOnce(trigger)
+    ? { type: "single", at: trigger.at }
+    : { type: "cron", cron: trigger.cron };
+}
+
+/** Whether a schedule could never fire as it stands: one-time, and paused or due no more after `now`. */
+function neverFires(
+  automation: CadencedAutomation,
+  trigger: ScheduleTrigger,
+  now: number,
+): boolean {
+  if (!scheduleRunsOnce(trigger)) return false;
+  const instant = onceInstant(trigger);
+
+  return !automation.enabled || instant === undefined || instant.getTime() <= now;
+}
+
 /** The schedule deleted; one already gone is what was asked. */
 const forgetSchedule = (automation: Pick<CadencedAutomation, "id" | "organizationId">) =>
   vercelCall(CADENCE_OPERATION.FORGET, () =>
@@ -172,20 +218,29 @@ const keepSchedule = Effect.fnUntraced(function* (automation: CadencedAutomation
   const { trigger } = automation;
 
   if (trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE) return yield* forgetSchedule(automation);
+
+  if (neverFires(automation, trigger, yield* Clock.currentTimeMillis)) {
+    return yield* forgetSchedule(automation);
+  }
+
   const identity = { name: automation.id, namespace: automation.organizationId };
 
   const cadence = {
-    expression: { type: "cron", cron: trigger.cron },
+    expression: expressionOf(trigger),
     timezone: trigger.timezone,
     target: { topic: AUTOMATION_RUNS.TOPIC },
   } as const;
 
+  const made = () =>
+    vercelCall(CADENCE_OPERATION.KEEP, () => Schedules.create({ ...identity, ...cadence }));
+
   const kept: Schedule = yield* vercelCall(CADENCE_OPERATION.KEEP, () =>
     Schedules.update({ ...identity, ...cadence }),
   ).pipe(
+    Effect.catchIf((failure) => failure.code === NOT_FOUND, made),
     Effect.catchIf(
-      (failure) => failure.code === NOT_FOUND,
-      () => vercelCall(CADENCE_OPERATION.KEEP, () => Schedules.create({ ...identity, ...cadence })),
+      (failure) => failure.code !== undefined && REWRITE_REFUSED.includes(failure.code),
+      () => Effect.andThen(forgetSchedule(automation), made),
     ),
   );
 

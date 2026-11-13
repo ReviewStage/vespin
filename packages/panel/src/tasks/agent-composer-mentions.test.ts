@@ -69,6 +69,7 @@ import {
 import { settleQueries, withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { peopleRead, withPeopleRead } from "../testing/people-read.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { AgentComposer } from "./agent-composer.js";
@@ -83,6 +84,9 @@ import {
 import { TranscriptWords } from "./transcript-blocks.js";
 import { type MessageSender, useAgentComposer } from "./use-agent-composer.js";
 import { OpenLinkProvider } from "./use-open-link.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * `@` in an agent's message box and its transcript, on a task's page and
@@ -278,6 +282,12 @@ const LISTED_TOOLS = [
   { name: "..", description: "A name an address resolves away." },
 ];
 
+/** The apps on this Mac, as its host lists them. */
+const MAC_APPS = [
+  { name: "Simulator", bundleId: "com.apple.iphonesimulator", running: true, allowed: false },
+  { name: "Notes", bundleId: "com.apple.Notes", running: false, allowed: true },
+];
+
 /** What main answers the box's acts with on the act port, every one told. */
 function answer(request: AnyAct): Promise<FakeActAnswer> {
   told.push(request);
@@ -291,6 +301,15 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
     deliverTasks(tasksView());
 
     return Promise.resolve({ status: FAKE_ANSWER.DONE, value: undefined });
+  }
+
+  // The Mac lists Simulator running and Notes installed, and draws no icon of its own for either.
+  if (request.kind === ACT_KIND.COMPUTER_USE_APPS) {
+    return Promise.resolve({ status: FAKE_ANSWER.DONE, value: { apps: MAC_APPS } });
+  }
+
+  if (request.kind === ACT_KIND.COMPUTER_USE_APP_ICON) {
+    return Promise.resolve({ status: FAKE_ANSWER.DONE, value: {} });
   }
 
   return Promise.resolve(
@@ -415,10 +434,12 @@ function taskPage(opened: Mention[] = []): TaskMentionsValue {
 /** The box on the composer's own control, its sends answered by `sender`. */
 function Box({ sender, skills }: { sender: MessageSender; skills: SkillSource }): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox(SELF_ID),
+    unsend: unsendOutbox,
     agentId: SELF_ID,
     taskId: TASK_ID,
     messages: [],
-    send: sender,
+    send: outboxed(sender),
   });
 
   return createElement(AgentComposer, { ...QUIET_COMPOSER, agentId: SELF_ID, composer, skills });
@@ -461,7 +482,7 @@ function drawn(node: ReactNode, page: TaskMentionsValue | undefined): HTMLElemen
 async function box(page: TaskMentionsValue | undefined, skills: SkillSource = noSkills) {
   const sent: string[] = [];
 
-  const sender: MessageSender = (_agentId, text) => {
+  const sender: MessageSender = (_agentId, { text }) => {
     sent.push(text);
 
     return new Promise<AgentAgentAnswer>(ignore);
@@ -781,6 +802,43 @@ test("an @ in the box browses the account's connected MCP servers as one kind, a
   ]);
 });
 
+test("with Computer use on, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
+  const sent: string[] = [];
+
+  const sender: MessageSender = (_agentId, { text }) => {
+    sent.push(text);
+
+    return new Promise<AgentAgentAnswer>(ignore);
+  };
+
+  const state = stateWith(experimentsOn(EXPERIMENT.DESCRIPTIONS, EXPERIMENT.COMPUTER_USE), {
+    tasks: tasksView(),
+  });
+
+  fakeActs({ act: answer, requestAppState: () => Promise.resolve(state) });
+
+  const { container } = drawing(
+    createElement(Box, { sender, skills: noSkills }),
+    planPage([]),
+    state,
+  );
+
+  await settle();
+
+  typeInComposer(container, "Check @sim");
+  await settle();
+  const apps = groupsListed(container).find(([group]) => group === "Apps");
+  pressInComposer(container, "Enter");
+  await settle();
+  pressInComposer(container, "Enter");
+  await settle();
+
+  assert.deepEqual(apps, ["Apps", ["Simulator"]]);
+  assert.deepEqual(sent, [
+    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.apple.iphonesimulator" }, "Simulator", PLACE)}`,
+  ]);
+});
+
 test("an @ in the box offers the repository's skills, a pick written as the /name chip the / list writes", async () => {
   const release: SkillSource = () =>
     Promise.resolve({
@@ -1072,7 +1130,7 @@ const rest = Effect.gen(function* () {
 async function workspaceBox() {
   const sent: string[] = [];
 
-  const sender: MessageSender = (_agentId, text) => {
+  const sender: MessageSender = (_agentId, { text }) => {
     sent.push(text);
 
     return new Promise<AgentAgentAnswer>(ignore);
@@ -1958,7 +2016,7 @@ function amongMembers(node: ReactElement): ReactElement {
 async function memberBox() {
   const sent: string[] = [];
 
-  const sender: MessageSender = (_agentId, text) => {
+  const sender: MessageSender = (_agentId, { text }) => {
     sent.push(text);
 
     return new Promise<AgentAgentAnswer>(ignore);

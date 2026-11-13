@@ -125,7 +125,7 @@ function Buttons(): React.JSX.Element {
             Invite
           </Button>
           <Button variant={BUTTON_VARIANT.DANGER_OUTLINE} icon={<TrashIcon />}>
-            Remove
+            Delete
           </Button>
         </Inline>
       </CatalogSection>
@@ -146,6 +146,14 @@ function Buttons(): React.JSX.Element {
             </ButtonLink>
           ))}
           <IconButtonLink href="#buttons-link" icon={<PlusIcon />} label="New task" />
+          <ButtonLink
+            variant={BUTTON_VARIANT.OUTLINE}
+            size={BUTTON_SIZE.COMPACT}
+            icon={<PlusIcon />}
+            href="#buttons-link"
+          >
+            compact
+          </ButtonLink>
         </Inline>
       </CatalogSection>
       <CatalogSection id="buttons-compact" title="Compact, a row's marks">

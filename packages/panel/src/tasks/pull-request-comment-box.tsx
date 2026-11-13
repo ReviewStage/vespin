@@ -1,5 +1,4 @@
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
-import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "@repo/ui";
 import { useRef, useState } from "react";
 import { CommentEditor, overCommentBound } from "./comment-editor.js";
 import { REPLY_VARIANT } from "./comment-variant.js";
@@ -28,6 +27,7 @@ import {
 
 /** The box's own words. */
 const COMMENT_WORDS = {
+  /** What the box's section is called to a reader, as its placeholder says. */
   TITLE: "Add a comment",
   FIELD: "Comment",
   PLACEHOLDER: "Add a comment",
@@ -50,7 +50,7 @@ export function usePullRequestComment(agentId: string, onWritten: ReadAgain): Pu
   return { writes, body, setBody };
 }
 
-/** The box: its heading, the words written as they are drawn, with Comment in their foot, which Enter in the words presses too, and GitHub's answer where it did not take the last one. */
+/** The box, headed by nothing but its placeholder, which already says what it is for: the words written as they are drawn, with Comment in their foot, which Enter in the words presses too, and GitHub's answer where it did not take the last one. */
 export function PullRequestCommentBox({
   comment,
 }: {
@@ -71,14 +71,6 @@ export function PullRequestCommentBox({
       className="pull-request-section pull-request-comment-box flex flex-col gap-control-gap"
       aria-label={COMMENT_WORDS.TITLE}
     >
-      <Text
-        as={TEXT_ELEMENT.H3}
-        variant={TEXT_VARIANT.GROUP}
-        truncate
-        className="pull-request-heading mx-0 mt-0 mb-item-gap flex items-baseline gap-item-gap px-row-inset"
-      >
-        {COMMENT_WORDS.TITLE}
-      </Text>
       <CommentEditor
         variant={REPLY_VARIANT.REPLY}
         label={COMMENT_WORDS.FIELD}

@@ -5,7 +5,6 @@ import { MessageAction } from "../ai-elements/message.js";
 import { copyThroughShell, LINK_COPY } from "../copy-feedback.js";
 import { useCopyLink } from "../copy-link-item.js";
 import { ForkMessageAction } from "./fork-action.js";
-import type { ForkCut } from "./fork-model.js";
 import { useMessagePlace } from "./message-links.js";
 import {
   EditMessageAction,
@@ -30,19 +29,16 @@ export function CopyMessageAction({
   copyable = true,
   messageId,
   forkable = false,
-  forkCut,
   lead,
   rewind,
 }: {
   words: string;
-  /** Whether its words are whole and there are any, which its Copy needs; a turn still running, or one with no words, is offered no Copy. */
+  /** Whether it has any words, which its Copy needs. */
   copyable?: boolean;
   /** The message's id, by which its transcript names it for its Copy link; none where it has no link. */
   messageId?: string | undefined;
   /** Whether the message is the agent's own, which its tab may offer to fork. */
   forkable?: boolean;
-  /** Where its fork cuts it, where it is a reply still being written; none where a fork keeps it whole. */
-  forkCut?: ForkCut | undefined;
   /** An action of the message's own set before Copy. */
   lead?: ReactNode;
   /** How its tab may offer to rewind to it: Edit on a line of the developer's, Rewind conversation to here on the agent's own; none where it offers neither. */
@@ -72,7 +68,7 @@ export function CopyMessageAction({
         </MessageAction>
       )}
       {!forkable || messageId === undefined ? null : (
-        <ForkMessageAction messageId={messageId} words={words} cut={forkCut} />
+        <ForkMessageAction messageId={messageId} words={words} />
       )}
       {rewind === undefined || messageId === undefined ? null : rewind === REWIND_ACTION.REVERT ? (
         <RevertMessageAction messageId={messageId} />

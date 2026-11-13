@@ -106,7 +106,7 @@ function RefusedOnce(): React.JSX.Element {
 
   return (
     <Asking
-      label="Delete key…"
+      label="Delete key"
       question={{
         title: "Delete the OpenAI key?",
         body: `${PRODUCT_NAME} stops using it at once. Agents that are running finish on it.`,
@@ -222,10 +222,10 @@ function KeyInADialog(): React.JSX.Element {
             <Button
               variant={BUTTON_VARIANT.DANGER_OUTLINE}
               busy={removal.busy}
-              busyLabel="Removing"
+              busyLabel="Deleting"
               onClick={removal.ask}
             >
-              Remove
+              Delete
             </Button>
           </Inline>
         ) : (
@@ -234,10 +234,10 @@ function KeyInADialog(): React.JSX.Element {
         <FootQuestion
           confirm={removal}
           question={{
-            title: "Remove your OpenAI API key?",
+            title: "Delete your OpenAI API key?",
             body: "Calls and dictation will be off until a key is saved again.",
-            verb: "Remove key",
-            running: "Removing",
+            verb: "Delete key",
+            running: "Deleting",
             loss: CONFIRM_LOSS.IRREVERSIBLE,
           }}
         />
@@ -252,7 +252,7 @@ function ConfirmDialogs(): React.JSX.Element {
       <Inline>
         <RefusedOnce />
         <Asking
-          label="Remove member…"
+          label="Remove member"
           question={{
             title: "Remove Ada Lovelace from the workspace?",
             body: "Ada loses access to its tasks at once, and can be invited again later.",
@@ -262,7 +262,7 @@ function ConfirmDialogs(): React.JSX.Element {
           }}
         />
         <Asking
-          label="Delete task…"
+          label="Delete task"
           question={{
             title:
               "Delete “Quarterly planning for the platform team’s migration to the new build system”?",
@@ -274,7 +274,7 @@ function ConfirmDialogs(): React.JSX.Element {
         />
         <Named />
         <Asking
-          label="Delete account…"
+          label="Delete account"
           gate="ada@example.com"
           question={{
             title: "Delete the account ada@example.com?",
@@ -285,7 +285,7 @@ function ConfirmDialogs(): React.JSX.Element {
           }}
         />
         <Asking
-          label="Delete workspace…"
+          label="Delete workspace"
           gate="Acme"
           question={{
             title: "Delete Acme?",

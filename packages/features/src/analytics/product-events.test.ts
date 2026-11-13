@@ -33,6 +33,35 @@ test("prose cannot pass as a property value", () => {
   );
 });
 
+test("a deployment's commit names a build as a release version does, and a shorter hash does not", () => {
+  const commit = "f580775ef9ece91b7ebc8ebac5430cc01d3699f5";
+
+  assert.deepEqual(
+    productEventFromWire({
+      name: PRODUCT_EVENT.APP_LAUNCH,
+      at: AT,
+      properties: { [PRODUCT_EVENT_PROPERTY.APP_VERSION]: commit },
+    }),
+    {
+      name: PRODUCT_EVENT.APP_LAUNCH,
+      at: AT,
+      properties: { [PRODUCT_EVENT_PROPERTY.APP_VERSION]: commit },
+    },
+  );
+  assert.deepEqual(
+    productEventBuildFromWire({ events: [], build: { app_version: commit, packaged: true } }),
+    { app_version: commit, packaged: true },
+  );
+  assert.equal(
+    productEventFromWire({
+      name: PRODUCT_EVENT.APP_LAUNCH,
+      at: AT,
+      properties: { [PRODUCT_EVENT_PROPERTY.APP_VERSION]: commit.slice(0, 7) },
+    }),
+    undefined,
+  );
+});
+
 test("nothing on the envelope survives except what the allowlist names", () => {
   const event = productEventFromWire({
     name: PRODUCT_EVENT.APP_LAUNCH,

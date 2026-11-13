@@ -6,6 +6,7 @@ import { it } from "@effect/vitest";
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { LINK_OPEN } from "@repo/features/link-open";
+import { MAC_COMMAND_MODE } from "@repo/features/mac-command-wire";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import {
   type AccountPreferenceField,
@@ -21,7 +22,6 @@ import {
   EXPERIMENT,
   type ExperimentChoices,
   KEEP_AWAKE,
-  MAC_COMMAND_MODE,
   PULL_REQUEST_OPEN,
   SETTINGS_RESET_SCOPE,
   SOUND_WHEN,
@@ -199,6 +199,10 @@ const SAMPLE_VALUE = {
   keepAwake: KEEP_AWAKE.PLUGGED_IN,
   // Steer is the default, so Queue is the choice that has to survive a reopen.
   agentEnter: AGENT_ENTER.QUEUE,
+  // On is the default, so agents kept off this Mac's apps is the choice that has to survive a reopen.
+  computerUse: false,
+  // No app is the default, so an app answered Always allow for is the state that has to survive a reopen.
+  computerUseApps: '["com.apple.iphonesimulator"]',
   // You with our bot as co-author is the default, so the bot alone is the choice that has to survive a reopen.
   commitAuthor: COMMIT_AUTHOR.APP,
   // Full access is the default, so Ask for approval is the choice that has to survive a reopen.

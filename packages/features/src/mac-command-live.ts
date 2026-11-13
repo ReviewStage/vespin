@@ -18,15 +18,14 @@ import {
   orderedLiveRows,
 } from "./live-read.js";
 import { LIVE_USER_QUERY } from "./live-wire.js";
-import { type MacCommand, macCommandSchema } from "./mac-command-wire.js";
+import { MAC_COMMAND_KIND, type MacCommand, macCommandOfStored } from "./mac-command-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber } from "./service-wire.js";
 
-const [macShellCommandSchema] = macCommandSchema.members;
-
 /**
  * The commands of the kinds a Mac runs that no Mac of the account has
- * claimed yet: one part, each the command of its kind, and when it was
+ * claimed yet, of those the device it joined as may claim (`device`), or
+ * those queued for no device where it names none: one part, each the command of its kind, and when it was
  * queued in epoch milliseconds, the earliest queued first, so the Mac
  * claims them in the order they were asked for. The kinds are the read's
  * query as the Mac spells them (`macCommandKindsQuery`). Note that a column
@@ -35,11 +34,21 @@ const [macShellCommandSchema] = macCommandSchema.members;
 export const MAC_COMMANDS_READ = liveRead({
   name: "macCommands",
   path: HOSTED_SERVICE_PATH.LIVE_MAC_COMMANDS,
-  params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER, kinds: LIVE_PARAM.OPTIONAL_TEXT },
+  params: {
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    kinds: LIVE_PARAM.OPTIONAL_TEXT,
+    device: LIVE_PARAM.OPTIONAL_ID,
+  },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
     commands: liveRows({
-      row: Schema.Struct({ ...macShellCommandSchema.fields, queuedAt: countedNumber }),
+      row: Schema.Struct({
+        id: Schema.String,
+        kind: Schema.Literals(Object.values(MAC_COMMAND_KIND)),
+        command: Schema.String,
+        timeoutSeconds: Schema.Number,
+        queuedAt: countedNumber,
+      }),
       key: "id",
       order: [
         ["queuedAt", ORDER.ASC],
@@ -55,12 +64,9 @@ export type MacCommandsLiveAnswer = LiveReadAnswer<typeof MAC_COMMANDS_READ>;
 export function macCommandsOfLiveRows(
   rows: typeof MAC_COMMANDS_READ.rows.Type,
 ): readonly MacCommand[] {
-  return orderedLiveRows(MAC_COMMANDS_READ.parts.commands, rows.commands).map(
-    (row): MacCommand => ({
-      id: row.id,
-      kind: row.kind,
-      command: row.command,
-      timeoutSeconds: row.timeoutSeconds,
-    }),
-  );
+  return orderedLiveRows(MAC_COMMANDS_READ.parts.commands, rows.commands).flatMap((row) => {
+    const command = macCommandOfStored(row);
+
+    return command === undefined ? [] : [command];
+  });
 }

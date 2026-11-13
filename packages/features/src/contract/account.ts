@@ -44,6 +44,7 @@ import {
 import {
   ALLOWED_COMMAND_QUERY,
   allowedCommandAddRequestSchema,
+  allowedCommandEditRequestSchema,
   allowedCommandIdSchema,
   allowedCommandsAnswerSchema,
 } from "../allowed-command-wire.js";
@@ -66,6 +67,7 @@ import {
   PROVIDER_KEY_QUERY,
   providerKeyForAgentsRequestSchema,
   providerKeyKindSchema,
+  providerKeyResetCreditRequestSchema,
   providerKeySaveRequestSchema,
   providerKeysAnswerSchema,
   subscriptionIdSchema,
@@ -104,7 +106,7 @@ const SOUND_BODY_BYTES = Math.ceil(SOUND_CLIP_BOUNDS.MAX_BYTES / 3) * 4 + 1_024;
 /** A rename or a choice is a sound's id and a name of at most 64 characters at JSON's widest escape, so a body past this is not one. */
 const SOUND_RENAME_BODY_BYTES = 1_024;
 
-/** An always-allowed command's add is at most eight tokens of at most 128 characters each at JSON's widest escape, so a body past this is not one. */
+/** An always-allowed command's add or edit is at most eight tokens of at most 128 characters each at JSON's widest escape, so a body past this is not one. */
 const ALLOWED_COMMAND_BODY_BYTES = 8_192;
 
 /** A device-code login's poll or cancel is one login id of at most 64 characters, so a body past this is not one. */
@@ -136,6 +138,11 @@ export const accountContract = {
   setProviderKeyForAgents: declaredProcedure
     .meta(openapi({ method: HTTP_METHOD.PATCH, path: HOSTED_SERVICE_PATH.ACCOUNT_PROVIDER_KEYS }))
     .input(exactInput(providerKeyForAgentsRequestSchema))
+    .output(EffectSchema.flip(providerKeysAnswerSchema)),
+  /** One of a ChatGPT plan's reset credits spent under the press's key, its limit lifted and its waiting agents carried on, answering the keys as they then stand and how the spend went, which is absent where the account holds no such plan or ChatGPT answered nothing, so the press may be sent again under the same key. */
+  useResetCredit: declaredProcedure
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.ACCOUNT_RESET_CREDIT }))
+    .input(exactInput(providerKeyResetCreditRequestSchema))
     .output(EffectSchema.flip(providerKeysAnswerSchema)),
   renameSubscription: declaredProcedure
     .meta(bodyCap(PROVIDER_KEY_BODY_BYTES))
@@ -219,6 +226,14 @@ export const accountContract = {
     .meta(bodyCap(ALLOWED_COMMAND_BODY_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.ACCOUNT_ALLOWED_COMMANDS }))
     .input(exactInput(allowedCommandAddRequestSchema))
+    .output(EffectSchema.flip(allowedCommandsAnswerSchema)),
+  /** One of the account's commands given first words typed by hand, standing as added by hand now, answered with the list as it then stands; where the list keeps those words already the edited one goes, and one it keeps not is left as it is. */
+  editAllowedCommand: declaredProcedure
+    .meta(bodyCap(ALLOWED_COMMAND_BODY_BYTES))
+    .meta(
+      openapi({ method: HTTP_METHOD.PATCH, path: HOSTED_SERVICE_PATH.ACCOUNT_ALLOWED_COMMANDS }),
+    )
+    .input(exactInput(allowedCommandEditRequestSchema))
     .output(EffectSchema.flip(allowedCommandsAnswerSchema)),
   /** One of the account's commands removed, whether or not it kept it, answered with the list as it then stands; the command rides in the query, since a `DELETE` carries no body. */
   removeAllowedCommand: declaredProcedure

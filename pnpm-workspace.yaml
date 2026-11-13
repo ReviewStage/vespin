@@ -2,6 +2,7 @@ packages:
   - "apps/*"
   - "packages/*"
   - "tools/*"
+  - "tools/oxlint/vespin"
 
 catalog:
   typescript: 7.0.2
@@ -140,6 +141,14 @@ patchedDependencies:
 # over. Delete it when `@sentry/electron` moves to a browser SDK that has it.
   "@sentry/browser@11.8.0": patches/@sentry__browser@11.8.0.patch
 #
+# `expo-symbols` 58.0.4's `SymbolView` reads its name as an SF Symbol alone
+# (`UIImage(systemName:)`), so a custom symbol the app's asset catalog holds,
+# such as the Lucide glyphs `@repo/ui-native` draws, stays blank. The patch
+# falls back to the catalog (`UIImage(named:)`), as react-native-screens'
+# `RNSImageLoadingHelper` does for a tab's icon. Delete it when an
+# `expo-symbols` release loads a symbol set by name.
+  expo-symbols@58.0.4: patches/expo-symbols@58.0.4.patch
+#
 # `react-native-screens` 4.30.1 loops over a native-stack header's live
 # subviews in `updateHeaderStateInShadowTreeInContextOfNavigationBar:` while
 # each subview's shadow state update commits and mounts synchronously, so a
@@ -147,9 +156,48 @@ patchedDependencies:
 # while being enumerated" and the app aborts. Turning an iPhone to landscape
 # and back on the Tasks list or the Inbox did it on TestFlight 20, whose bar
 # held two resizing leading items and a title view. The patch loops over a
-# copy, as upstream's react-native-screens#4851 does. Delete it when a
-# react-native-screens release carries #4851.
+# copy, as upstream's react-native-screens#4851 does. And a header button's
+# or a menu item's icon is read as an SF Symbol alone (`systemImageNamed:`),
+# so the Lucide glyphs `@repo/ui-native` draws stood blank in a bar; the patch
+# falls back to the app's asset catalog (`imageNamed:`), as its own tab icons
+# already do. Delete the first when a react-native-screens release carries
+# #4851, and the second when one reads a bar item's symbol from the catalog.
   react-native-screens@4.30.1: patches/react-native-screens@4.30.1.patch
+#
+# `@sentry/react-native` 8.28.0's native start (`RNSentrySDK.start`, which the
+# iOS app's AppDelegate calls first at launch, `useNativeInit`) reads the
+# bundled `sentry.options.json`; where that names no DSN, as a local or
+# simulator build's does, both its parse and its `{}` fallback fail ("Invalid
+# DSN URL") and it starts the SDK with no options at all, which faults in
+# `+[SentrySDKInternal startWithOptions:]` (EXC_BAD_ACCESS at 0x10) on some
+# launches. The patch returns without starting where no options could be made,
+# so a DSN-less build starts nothing natively and a build with a DSN is
+# unchanged. Delete it when a release stops starting with nil options.
+  "@sentry/react-native@8.28.0": patches/@sentry__react-native@8.28.0.patch
+#
+# `@tiptap/extension-list` 3.33.1 strips an ordered list item's continuation
+# lines by the marker's width less its `.` or `)`, so each line of a code
+# block in a numbered item opens with a stray space, one more on every save,
+# and a code block after a second paragraph in the item is dropped. The patch
+# makes upstream's one-line change in ueberdosis/tiptap#8405 (#8404): strip the
+# width the item's first line actually gives its words. Delete it when a
+# TipTap release carries #8405.
+  "@tiptap/extension-list@3.33.1": patches/@tiptap__extension-list@3.33.1.patch
+#
+# `@tiptap/markdown` 3.33.1 is patched for two things. It writes two code spans
+# that touch as one span where another mark changes between them, so an edited
+# line holding inline code right against bold inline code saved one span with
+# the bold's asterisks inside it; the patch makes the serializer half of
+# upstream's ueberdosis/tiptap#8662 (#8637): a code span is written innermost,
+# closed where another mark opens or closes while it goes on, and opened again
+# after. And its `MarkdownManager` registers its extensions' tokenizers on the
+# global `marked` for good, so every editor opened adds about six more and
+# parsing a description slows with each one (ueberdosis/tiptap#8316): a
+# 20-section description took ~16 ms to open in a fresh window and ~300 ms
+# after 400 editors had opened; the patch makes upstream's one-line change in
+# ueberdosis/tiptap#8317, each manager lexing with a `marked` of its own.
+# Delete each half when a TipTap release carries its PR.
+  "@tiptap/markdown@3.33.1": patches/@tiptap__markdown@3.33.1.patch
 
 # Transitive versions raised past a published advisory, each within the major
 # its dependents already take. Delete a line once nothing resolves below it.

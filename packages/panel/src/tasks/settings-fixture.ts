@@ -66,8 +66,6 @@ import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import type { TasksView } from "@repo/features/tasks-view";
 import type { WorkspaceVariable } from "@repo/features/workspace-environment-wire";
 import {
-  REPOSITORY_SCRIPT_KIND,
-  type RepositoryScriptKind,
   RUN_ACTION_AVAILABILITY,
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
@@ -131,9 +129,11 @@ const ACCOUNT: AccountSnapshot = {
 /** An admin of the service, read, so Admin stands rather than waiting on the read. */
 const ADMIN_ACCESS = { admin: true } as const;
 
-/** The account's own experiments the staged pages stand behind: Skills'. Memory's is its workspaces' (`tasks-fixture.ts`). */
+/** The account's own experiments the staged pages stand behind: Skills', Rewind restores files', and Turn changes'. Memory's is its workspaces' (`tasks-fixture.ts`). */
 const STAGED_EXPERIMENTS = {
   [EXPERIMENT.SKILLS]: true,
+  [EXPERIMENT.REWIND_FILES]: true,
+  [EXPERIMENT.TURN_CHANGES]: true,
 } as const;
 
 /** The staged hosts, by id. */
@@ -504,11 +504,25 @@ const MEMORY_AGENTS: readonly ListedAgent[] = [
 
 /**
  * The workspace's memories, the most recently kept first, as the service
- * lists them: some used by agents often, two kept in the last week, and two
- * no agent has been handed in thirty days, so the page draws each of its
- * lines.
+ * lists them: some used by agents often, some kept in the last week, and
+ * some no agent has been handed in thirty days, so each of the page's views
+ * holds a few; and some run to several sentences, as agents' often do, so a
+ * row cuts its words short.
  */
 const MEMORIES: readonly MemorySummary[] = [
+  memory(
+    7,
+    "Usage alerts fire once per threshold per billing period: the 80% alert sets `alerted_80_at` on the subscription row, and the job skips any row where it is already set, so a retried job never mails a customer twice. Reset both columns when the period rolls over.",
+    THEO,
+    0.5,
+    {
+      source: {
+        ...USAGE_ALERTS,
+        agentId: MEMORY_AGENT.CLAUDE,
+        messageId: "7f1b5d9e-4a6c-4b8d-8e2f-5a7c9b1d3e4f",
+      },
+    },
+  ),
   memory(1, "Migrations are generated with `pnpm db:generate`, never written by hand.", MAYA, 1, {
     source: {
       ...USAGE_ALERTS,
@@ -529,15 +543,40 @@ const MEMORIES: readonly MemorySummary[] = [
       lastRecalledAt: NOW - DAY,
     },
   ),
+  memory(
+    8,
+    "Every request to the payments provider goes through `billing/client.ts`, which retries a 409 or a 5xx three times with jittered backoff and adds an idempotency key derived from the export row's id. Never call the provider's SDK directly from a job or a route.",
+    MAYA,
+    6,
+    {
+      source: { ...USAGE_ALERTS, agentId: MEMORY_AGENT.CODEX, messageId: null },
+      recalls30d: 4,
+      lastRecalledAt: NOW - 5 * HOUR,
+    },
+  ),
   memory(4, "The billing export runs nightly at 02:00 UTC and must finish by 04:00.", THEO, 9, {
     source: { ...USAGE_ALERTS, agentId: MEMORY_AGENT.CODEX, messageId: null },
     recalls30d: 12,
     lastRecalledAt: NOW - 3 * DAY,
   }),
+  memory(
+    9,
+    "The web app's end-to-end suite runs against a seeded Postgres in Docker (`pnpm e2e:db`), never the shared staging database; a test that needs a customer makes one through the factories in `tests/support/` and deletes nothing it did not create.",
+    MAYA,
+    21,
+    { recalls30d: 22, lastRecalledAt: NOW - 6 * HOUR },
+  ),
   memory(5, "Staging deploys pause on Fridays after 3 PM Pacific.", ADA, 40, {
     lastRecalledAt: NOW - 36 * DAY,
   }),
   memory(6, "Feature flags live in `src/flags.ts`, one constant per flag.", null, 45),
+  memory(
+    10,
+    'Release notes are written in the present tense from the customer\'s side ("Exports finish faster"), one line per change, grouped under New, Improved, and Fixed, and never name an internal ticket or a teammate.',
+    ADA,
+    62,
+    { lastRecalledAt: NOW - 48 * DAY },
+  ),
 ];
 
 /* ----- Admin ----- */
@@ -773,10 +812,9 @@ const SETUP_RUN_AGENT = {
 
 /**
  * Acme's sandbox setup, as a save leaves it: an install script, setup
- * scripts for two of its repositories, an archive script for one, and run
- * actions for one, each script with how it last ran: the install script
- * and the archive script cleanly, `acme/api`'s setup script failing, and
- * `acme/relay`'s saved since its run.
+ * scripts for two of its repositories, and run actions for one, each script
+ * with how it last ran: the install script cleanly, `acme/api`'s setup
+ * script failing, and `acme/relay`'s saved since its run.
  */
 let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
   install: {
@@ -802,14 +840,7 @@ let acmeSandboxSetup: WorkspaceSandboxSetupAnswer = {
       lastRun: { ranAt: NOW - 3 * DAY, exitCode: 0, agent: SETUP_RUN_AGENT.RELAY },
     },
   ],
-  archives: [
-    {
-      repository: "acme/relay",
-      script: "docker compose down --volumes\n./scripts/drop-preview-database.sh",
-      updatedAt: NOW - DAY,
-      lastRun: { ranAt: NOW - HOUR, exitCode: 0, agent: SETUP_RUN_AGENT.RELAY },
-    },
-  ],
+  archives: [],
   runActions: [
     {
       repository: "acme/relay",
@@ -860,11 +891,7 @@ function runActionsAnswer(repository: string, actions: readonly RunActionPut[]) 
 }
 
 /** The setup a save leaves, an empty script removing it, its repositories in name order as the service answers them. */
-function sandboxSetupAnswer(
-  repository: string | undefined,
-  script: string,
-  kind: RepositoryScriptKind = REPOSITORY_SCRIPT_KIND.SETUP,
-) {
+function sandboxSetupAnswer(repository: string | undefined, script: string) {
   const removes = script.trim() === "";
 
   if (repository === undefined) {
@@ -876,14 +903,12 @@ function sandboxSetupAnswer(
     return acmeSandboxSetup;
   }
 
-  const list = kind === REPOSITORY_SCRIPT_KIND.ARCHIVE ? "archives" : "setups";
-
   const named = (each: { readonly repository: string }) =>
     each.repository.toLowerCase() === repository.toLowerCase();
 
-  const others = acmeSandboxSetup[list].filter((each) => !named(each));
+  const others = acmeSandboxSetup.setups.filter((each) => !named(each));
   // A save keeps the script's last run, which ran before it.
-  const lastRun = acmeSandboxSetup[list].find(named)?.lastRun;
+  const lastRun = acmeSandboxSetup.setups.find(named)?.lastRun;
 
   const saved = {
     repository,
@@ -895,7 +920,7 @@ function sandboxSetupAnswer(
   const scripts = removes ? others : [...others, saved];
   acmeSandboxSetup = {
     ...acmeSandboxSetup,
-    [list]: scripts.sort((one, other) =>
+    setups: scripts.sort((one, other) =>
       one.repository.toLowerCase().localeCompare(other.repository.toLowerCase()),
     ),
   };
@@ -960,8 +985,8 @@ const ANSWERS: StagedAnswers = {
     variablesAnswer(acmeVariables.filter((variable) => variable.name !== name)),
   [ACT_KIND.WORKSPACE_SANDBOX_SETUP_READ]: () => acmeSandboxSetup,
   [ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: ({ script }) => sandboxSetupAnswer(undefined, script),
-  [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script, kind }) =>
-    sandboxSetupAnswer(repository, script, kind),
+  [ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: ({ repository, script }) =>
+    sandboxSetupAnswer(repository, script),
   [ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT]: ({ repository, actions }) =>
     runActionsAnswer(repository, actions),
   [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId: id }) =>
@@ -1130,7 +1155,7 @@ let stagedCommands: readonly AllowedCommand[] = [
   },
   {
     id: "bd5a9b3c-8eaf-4fc0-9c6d-9eb03f5b7c8d",
-    prefix: ["pnpm", "test"],
+    prefix: ["pnpm", "typecheck"],
     agentId: MEMORY_AGENT.CLAUDE,
     addedAt: NOW - 2 * HOUR,
   },
@@ -1144,19 +1169,27 @@ function heldCommands(commands: readonly AllowedCommand[]): AppAllowedCommands {
 /** The staged commands as the host holds them, one object until a write moves them. */
 let stagedAllowedCommands = heldCommands(stagedCommands);
 
-/** The staged commands after one write, as the service keeps them: an add stands last, unless its words are kept already, and a removal goes. */
+/** A command added by hand now, as the service keeps one. */
+function addedByHand(prefix: readonly string[], id: string = crypto.randomUUID()): AllowedCommand {
+  return { id, prefix, agentId: null, addedAt: Date.now() };
+}
+
+/**
+ * The staged commands after one write, as the service keeps them: an add
+ * stands last, unless its words are kept already; an edit takes the new
+ * words and stands last as added by hand, or goes where they are kept; and
+ * a removal goes.
+ */
 function allowedCommandWritten(write: AllowedCommandWriteParams): AllowedCommandsWriteAnswerView {
   if ("add" in write) {
     if (!stagedCommands.some((each) => samePrefix(each.prefix, write.add))) {
-      const added = {
-        id: crypto.randomUUID(),
-        prefix: write.add,
-        agentId: null,
-        addedAt: Date.now(),
-      };
-
-      stagedCommands = [...stagedCommands, added];
+      stagedCommands = [...stagedCommands, addedByHand(write.add)];
     }
+  } else if ("edit" in write) {
+    const edited = stagedCommands.find((each) => samePrefix(each.prefix, write.edit));
+    const others = stagedCommands.filter((each) => each !== edited);
+    const kept = others.some((each) => samePrefix(each.prefix, write.to));
+    stagedCommands = kept ? others : [...others, addedByHand(write.to, edited?.id)];
   } else {
     stagedCommands = stagedCommands.filter((each) => !samePrefix(each.prefix, write.remove));
   }
@@ -1201,8 +1234,25 @@ const STAGED_TOKEN_REPOSITORIES: AppTokenRepositories = {
   [WORKSPACE.PERSONAL]: { rows: [] },
 };
 
-/** The staged workspace's memories, as the host holds them for Settings › Memory; one object across deliveries. */
-const STAGED_MEMORIES: AppMemories = { [WORKSPACE.ACME]: { rows: MEMORIES } };
+/** The staged workspace's memories, as the host holds them for Settings › Memory, aged on the window's clock as staging begins; one object across deliveries. */
+let stagedMemories: AppMemories | undefined;
+
+function memoriesStaged(): AppMemories {
+  if (stagedMemories !== undefined) return stagedMemories;
+  // Note that New and Unused are read against the window's own clock, which no staged instant stands still for, so every instant moves by how far it stands past the fixture's, as the hosts' beats are aged.
+  const shift = Date.now() - NOW;
+
+  const rows = MEMORIES.map((each) => ({
+    ...each,
+    createdAt: each.createdAt + shift,
+    updatedAt: each.updatedAt + shift,
+    lastRecalledAt: each.lastRecalledAt === null ? null : each.lastRecalledAt + shift,
+  }));
+
+  stagedMemories = { [WORKSPACE.ACME]: { rows } };
+
+  return stagedMemories;
+}
 
 /** The staged workspace's skills and the account's own, as the host holds them for Settings › Skills; one object across deliveries. */
 const STAGED_SKILLS: AppInstalledSkills = { [WORKSPACE.ACME]: { rows: skills(WORKSPACE.ACME) } };
@@ -1285,13 +1335,19 @@ const STAGED_INTEGRATIONS: AppIntegrations = {
  * own integrations, and Acme's Slack channels, and the staged workspace's
  * memories and skills held. The members are held under every profile rather
  * than only the signed-in ones, because ⌘K's People, a task's assignee and
- * creator faces, and the person page read them wherever the window stands.
+ * creator faces, and the person page read them wherever the window stands;
+ * so are the staged experiments, because a task's agent draws its turns'
+ * files and offers its files back on Rewind by the reader's own choice.
  * Each slice laid over is one object across deliveries, but the settings,
  * which carry main's own, so a delivery that moves nothing of them draws
  * nothing again.
  */
 export function settingsAppState(profile: string, state: AppStateSnapshot): AppStateSnapshot {
-  const held = { ...state, [LIVE_READ.WORKSPACE_MEMBERS]: HELD_MEMBERS };
+  const held = {
+    ...state,
+    [LIVE_READ.WORKSPACE_MEMBERS]: HELD_MEMBERS,
+    ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
+  };
 
   if (!SIGNED_IN_PROFILES.has(profile)) return held;
 
@@ -1306,7 +1362,7 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
     [LIVE_READ.INTEGRATIONS]: STAGED_INTEGRATIONS,
     [LIVE_READ.WORKSPACE_INVITATIONS]: HELD_INVITATIONS,
     [LIVE_READ.INTEGRATION_TOOLS]: STAGED_TOOLS,
-    [LIVE_READ.MEMORIES]: STAGED_MEMORIES,
+    [LIVE_READ.MEMORIES]: memoriesStaged(),
     [LIVE_READ.MODELS]: STAGED_MODELS,
     [LIVE_READ.WORKSPACE_INTEGRATIONS]: STAGED_WORKSPACE_INTEGRATIONS,
     [LIVE_READ.SLACK_CHANNELS]: STAGED_SLACK_CHANNELS,
@@ -1316,7 +1372,6 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
     [LIVE_READ.TOKEN_REPOSITORIES]: STAGED_TOKEN_REPOSITORIES,
     [LIVE_READ.MCP_CLIENTS]: STAGED_MCP_CLIENTS,
     [LIVE_READ.REPOSITORY_LISTS]: STAGED_REPOSITORIES,
-    ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
   };
 }
 

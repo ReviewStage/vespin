@@ -1,5 +1,7 @@
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import {
+  EXPERIMENT,
+  experimentOn,
   SETTINGS_PAGE as SCHEMA_SETTINGS_PAGE,
   SETTING_SECTION,
   type SettingsRowsInput,
@@ -7,8 +9,10 @@ import {
 } from "@repo/settings";
 import { NOTIFICATIONS_STATUS, type NotificationsControl } from "@repo/settings/settings-controls";
 import { SettingsSection } from "@repo/ui";
+import { ComputerUseSection } from "./computer-use-section.js";
 import { NotificationsOff } from "./notifications-off.js";
 import { SchemaSettingRows } from "./schema-rows.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import type { SettingsWrites } from "./writes.js";
 
 /** What the line says where macOS refused the app's last notification, by whether this is the packaged app. */
@@ -27,7 +31,9 @@ const NOTIFICATIONS_OFF_WORDS = {
  * notification, so where macOS refused the app's last one a line under the choice
  * says so and opens System Settings, where they are turned back on; a
  * development build runs inside Electron's own app, which macOS lists it
- * as, and the line names it so. Startup holds whether the app opens at login, since it is the Mac
+ * as, and the line names it so. Where Computer use is on, its grants and
+ * the apps agents use without asking stand next (`computer-use-section.tsx`).
+ * Startup holds whether the app opens at login, since it is the Mac
  * that starts it; it stands only where the installed app does, so a page
  * with none of its rows draws no empty heading.
  */
@@ -58,8 +64,11 @@ export function MacCommandsSection({
           />
         ) : null}
       </SettingsSection>
+      {experimentOn(view.settings.experiments, EXPERIMENT.COMPUTER_USE) ? (
+        <ComputerUseSection view={view} writes={writes} />
+      ) : null}
       {startup ? (
-        <SettingsSection title="Startup">
+        <SettingsSection {...settingsSectionHead(SECTION.STARTUP)}>
           <SchemaSettingRows
             page={SCHEMA_SETTINGS_PAGE.THIS_MAC}
             section={SETTING_SECTION.STARTUP}

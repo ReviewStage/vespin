@@ -13,41 +13,37 @@
  * One whose sandbox stopped was left unfinished by a fill that failed or
  * was cut off, since a fill touches its sandbox while it runs and an
  * untouched one stops when idle, so the next fill deletes it and fills
- * again.
+ * again. A fill runs in the one call that asked for it, past its answer
+ * (`@repo/sandbox`'s `filledDrive`).
  *
- * A fill runs as a chain of steps, so no function's bound cuts it off
- * whatever the workspace's size: each step syncs repositories for
- * `WORKSPACE_DRIVE_FILL.STEP` and then publishes the next, from the
- * repository it reached, to the workspace-drive-fills queue
- * (`workspaceDriveFillsHandler`), which resumes the same sandbox; a step
- * that failed comes again. The first step runs where the fill was asked.
- *
- * A fill lists the repositories as they stand now and, one after another,
- * brings each to its default branch in its folder, fetched where it stands
- * and cloned where it does not (`syncWorkspaceRepository`), on a read token
- * for that repository alone at the firewall for the run, its installation's
- * or its adder's own. No dependency is installed on it. A repository that
- * fails is logged and the next one goes on, so one broken repository never leaves the rest unfilled. Then
+ * A fill lists the repositories as they stand now and, a batch of
+ * `WORKSPACE_DRIVE.BATCH` at a time, brings each to its default branch
+ * in its folder, fetched where it stands and cloned where it does not
+ * (`syncedWorkspaceRepositories`), several at once in one run, on a read
+ * token for each repository alone, its installation's or its adder's own,
+ * every token of the batch at the firewall for the run. No dependency is
+ * installed on it. A repository that fails is reported and the rest go on,
+ * so one broken repository never leaves the rest unfilled. Then
  * every folder of a repository no longer listed is deleted
  * (`prunedWorkspaceFolders`), so a disconnected repository leaves the drive;
  * a listing that failed fills nothing, so nothing is deleted on a GitHub
  * that did not answer.
  *
- * The drive is regenerated past the request's answer whenever a repository
- * is connected or disconnected: a workspace connecting its installation
- * (`github-install-app.ts`), GitHub creating, unsuspending, or deleting an
- * installation, or adding repositories to it or removing them
- * (`github-webhook-app.ts`), and a member adding or removing a repository on
- * their token (`workspace-repositories.ts`). The daily refresh fills every
- * drive that is missing or unfinished (`base-drive-refresh.ts`), and the
- * drive is deleted with its workspace (`workspace-deletion.ts`). The fill's sandbox
- * writes its firewall under the workspace's first owner.
+ * A connect or a grant fills nothing, since a workspace may grant far more
+ * repositories than one function can clone, and a new workspace has no
+ * drive until one is built; a start that finds none clones into its own
+ * sandbox. The drive is regenerated past the request's answer only as a
+ * repository leaves it: GitHub deleting an installation or removing
+ * repositories from it (`github-webhook-app.ts`), and a member removing a
+ * repository added on their token (`workspace-repositories.ts`), and the
+ * drive is deleted with its workspace (`workspace-deletion.ts`). The fill's
+ * sandbox writes its firewall under the workspace's first owner.
  *
- * A drive that is not whole sends its workspace's agents to the image to
- * clone, so every way one ends up so is reported to Sentry as
+ * Nothing refills a drive on a timer, so a drive that is not whole stays so
+ * until someone fixes it: every way one ends up so is reported to Sentry as
  * a `WorkspaceDriveBroken` issue (`reportedBroken`), a repository whose fill
- * failed, a fill that failed whole, and a start that found the drive gone or
- * left unfinished, each naming the workspace.
+ * failed, a fill that failed whole, and a start that found the drive left
+ * unfinished, each naming the workspace.
  */
 
 import { createHash } from "node:crypto";
@@ -62,37 +58,16 @@ import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
 import { causeKind } from "@repo/runtime/effect";
 import {
   deletedIfStill,
+  filledDrive,
   type ListedSandbox,
-  resumedRunning,
   SANDBOX_STATUS,
-  SANDBOX_TOUCH_EVERY,
   Sandbox,
-  type SandboxRunning,
-  type SandboxService,
-  touchSandbox,
   UP_STATUSES,
 } from "@repo/sandbox";
-import { send } from "@vercel/queue";
-import {
-  Cause,
-  Clock,
-  Config,
-  ConfigProvider,
-  Context,
-  Data,
-  Duration,
-  Effect,
-  ErrorReporter,
-  Layer,
-  Option,
-  Schema,
-} from "effect";
-import type { HttpClient } from "effect/http";
-import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../auth/auth-deployment.js";
+import { Cause, Context, Data, Effect, ErrorReporter, Layer, Option } from "effect";
 import { GitHubApp } from "../github/github-app.js";
 import { GitHubBackground } from "../github/github-rate-gate.js";
 import { afterResponse } from "../http/after-response.js";
-import { QUEUE_ACKNOWLEDGED, queueConsumer } from "../queues/queue-consumer.js";
 import { AgentImage } from "./coder-host/agent-image.js";
 import {
   firewallSessionOf,
@@ -104,9 +79,8 @@ import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 import {
   prunedWorkspaceFolders,
   type RepositorySandbox,
-  syncWorkspaceRepository,
+  syncedWorkspaceRepositories,
 } from "./repository-shell.js";
-import { WORKSPACE_DRIVE_FILL } from "./workspace-drive-fill-bounds.js";
 
 /**
  * What every per-repository drive, from before workspace drives, is named
@@ -120,8 +94,8 @@ export const WORKSPACE_DRIVE = {
   NAME_PREFIX: "agent-workspace-drive-",
   /** Where the drive is mounted: each repository's folder stands under it. */
   MOUNT: REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE,
-  /** How long a step waits on the fill's stopped sandbox to resume. */
-  RESUME_WAIT: Duration.minutes(2),
+  /** How many repositories a fill syncs in one run, their tokens minted at once and standing at the firewall together. */
+  BATCH: 16,
 } as const;
 
 /** What fills a workspace's drive in a function that may: the edge's runner a fill's checkout runs through, and the agents' image it opens from. */
@@ -152,8 +126,6 @@ export const DRIVE_BROKEN = {
   REPOSITORY_FAILED: "repository_failed",
   /** A fill failed whole, before or past its repositories. */
   FILL_FAILED: "fill_failed",
-  /** A start forked the drive and found none. */
-  GONE: "gone",
   /** A start found a fill's sandbox left past its grace, so the drive is unfinished. */
   UNFINISHED: "unfinished",
 } as const;
@@ -269,289 +241,115 @@ const heldRepositories = (workspace: BaseDriveWorkspace) =>
     return [...installed, ...onTokens];
   });
 
-/** One repository brought to its default branch in its folder, on a read token minted for it now, nothing where the workspace no longer reaches it. */
-const heldOne = (sandbox: RepositorySandbox, workspaceId: string, held: HeldRepository) =>
-  Effect.gen(function* () {
-    const reached = yield* (yield* GitHubApp).repositoryReadToken(
-      workspaceId,
-      held.fullName,
-      held.member,
-    );
-
-    if (Option.isNone(reached)) return;
-    const { repository, token, access } = reached.value;
-    yield* syncWorkspaceRepository(
-      sandbox,
-      {
-        fullName: repository.fullName,
-        branch: repository.defaultBranch,
-        folder: workspaceFolderOf(repository.fullName),
-      },
-      token,
-      access,
-    );
-  });
-
-/** What a fill's steps run against: the store, GitHub, and the sandboxes. */
-export type DriveFillServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox;
-
-/** The next step of a fill: the edge's runner and image it fills with, the workspace, and the place in its repositories it starts at. */
-interface NextFillStep {
-  readonly run: SandboxRunner;
-  readonly image: string;
-  readonly workspace: BaseDriveWorkspace;
-  readonly from: number;
-}
-
-interface DriveFillStepsService {
-  /** The next step handed on, to run after this one's function has answered; a publish that failed is reported, and the fill is left unfinished. */
-  readonly publish: (next: NextFillStep) => Effect.Effect<void, never, DriveFillServices>;
-}
-
-/** A step as the queue carries it: the workspace, and the place in its repositories the step starts at. */
-const FillStepSchema = Schema.Struct({ workspaceId: Schema.String, from: Schema.Number });
-
-/** The fill's sandbox created anew for its first step, a stopped one a fill left deleted first; none where another fill holds the name. */
-const openedForFill = (api: SandboxService, name: string, image: string) =>
-  Effect.gen(function* () {
-    const read = readOf(yield* api.get(name));
-
-    if (read.state === DRIVE_STATE.FILLING) return undefined;
-
-    if (read.state === DRIVE_STATE.WANTED && !(yield* deletedIfStill(read.stale))) return undefined;
-
-    const created = yield* api
-      .create({
-        name,
-        from: { image },
-        drive: { fill: name, at: WORKSPACE_DRIVE.MOUNT },
-        tags: {},
-        vcpus: SANDBOX_SIZE.VCPUS,
-        env: {},
-      })
-      .pipe(
-        Effect.map(Option.some),
-        Effect.catchTag("SandboxNameTaken", () => Effect.succeed(Option.none())),
-      );
-
-    if (Option.isNone(created)) return undefined;
-
-    return { name, running: created.value.running } satisfies SandboxRunning;
-  });
-
-/** The fill's sandbox a later step goes on in, resumed where it stopped; none where it stands no more, as a fill ended or deleted since. */
-const resumedForFill = (api: SandboxService, name: string) =>
-  Effect.gen(function* () {
-    const found = yield* api.get(name);
-
-    if (found === undefined) return undefined;
-
-    if (found.status === SANDBOX_STATUS.RUNNING && found.running !== undefined) {
-      return { name, running: found.running } satisfies SandboxRunning;
-    }
-
-    return yield* resumedRunning(name).pipe(
-      Effect.timeoutOrElse({
-        duration: WORKSPACE_DRIVE.RESUME_WAIT,
-        orElse: () => Effect.fail(new Error("the fill's sandbox did not resume")),
-      }),
-    );
-  });
+/** A repository's sync failure reported and passed by; an interruption, the function's own deadline, still ends the step. */
+const reportedFailed = (workspaceId: string) => (cause: Cause.Cause<unknown>) =>
+  Cause.hasInterruptsOnly(cause)
+    ? Effect.failCause(cause)
+    : reportedBroken(workspaceId, DRIVE_BROKEN.REPOSITORY_FAILED, causeKind(cause));
 
 /**
- * One step of the workspace's drive's fill, from the repository at `from`:
- * the first creates the fill's sandbox and a later one goes on in it. It
- * brings each repository to its default branch in its folder, one after
- * another, a failure reported and passed by, until `WORKSPACE_DRIVE_FILL.STEP`
- * has passed, when it hands the rest to the next step; the last deletes
- * every folder of a repository no longer connected and then the sandbox,
- * which leaves the drive whole. A step that failed stops the sandbox, so the
- * drive reads unfinished until a step comes again. Answers whether this
- * call held the fill: false where another fill holds it, or none stands to
- * go on with.
+ * A batch of repositories each brought to its default branch in its folder,
+ * in one run, on read tokens minted for them now, all at once; one the
+ * workspace no longer reaches is left out, and each that failed, to mint or
+ * to sync, is reported and passed by. Note that a run that failed whole, its
+ * firewall or the sandbox, fails the fill, which leaves the drive
+ * unfinished rather than passing the whole batch by.
  */
-const filledFrom = (
-  run: SandboxRunner,
-  image: string,
-  workspace: BaseDriveWorkspace,
-  from: number,
-): Effect.Effect<boolean, unknown, DriveFillServices> =>
+const heldBatch = (
+  sandbox: RepositorySandbox,
+  workspaceId: string,
+  held: readonly HeldRepository[],
+) =>
   Effect.gen(function* () {
-    const api = yield* Sandbox;
-    const name = workspaceDriveName(workspace.workspaceId);
+    const app = yield* GitHubApp;
 
-    const running: SandboxRunning | undefined = yield* from === 0
-      ? openedForFill(api, name, image)
-      : resumedForFill(api, name);
-
-    if (running === undefined) return false;
-    const repositories = yield* heldRepositories(workspace);
-    const context = yield* Effect.context<DatabaseServices>();
-
-    const deadline =
-      (yield* Clock.currentTimeMillis) + Duration.toMillis(WORKSPACE_DRIVE_FILL.STEP);
-
-    const sandbox = repositorySandboxOver(
-      api,
-      running,
-      run,
-      repositoryFirewallOver(api, context, firewallSessionOf(running, workspace.userId), {}),
-    );
-
-    const finished = yield* Effect.gen(function* () {
-      yield* touchSandbox(name).pipe(
-        Effect.delay(SANDBOX_TOUCH_EVERY),
-        Effect.forever,
-        Effect.forkScoped,
-      );
-
-      for (const [offset, held] of repositories.slice(from).entries()) {
-        if ((yield* Clock.currentTimeMillis) >= deadline) {
-          yield* (yield* DriveFillSteps).publish({ run, image, workspace, from: from + offset });
-
-          return false;
-        }
-
-        yield* heldOne(sandbox, workspace.workspaceId, held).pipe(
-          Effect.catchCause((cause) =>
-            Cause.hasInterruptsOnly(cause)
-              ? Effect.failCause(cause)
-              : reportedBroken(
-                  workspace.workspaceId,
-                  DRIVE_BROKEN.REPOSITORY_FAILED,
-                  causeKind(cause),
-                ),
+    const reached = yield* Effect.forEach(
+      held,
+      (each) =>
+        app
+          .repositoryReadToken(workspaceId, each.fullName, each.member)
+          .pipe(
+            Effect.catchCause((cause) =>
+              Effect.as(reportedFailed(workspaceId)(cause), Option.none()),
+            ),
           ),
-        );
-      }
-
-      // A repository that failed above is still connected, so its folder is kept as it stood.
-      yield* prunedWorkspaceFolders(
-        sandbox,
-        repositories.map((held) => workspaceFolderOf(held.fullName)),
-      );
-
-      return true;
-    }).pipe(
-      Effect.scoped,
-      Effect.tapError(() => Effect.ignore(api.stop(running))),
+      { concurrency: "unbounded" },
     );
 
-    // Note that the sandbox is stopped before its delete, because the stop lets go of the drive at once.
-    if (finished) {
-      yield* api.stop(running);
-      yield* api.delete(name);
-    }
+    const batch = reached.flatMap((each) =>
+      Option.isNone(each)
+        ? []
+        : [
+            {
+              fullName: each.value.repository.fullName,
+              branch: each.value.repository.defaultBranch,
+              folder: workspaceFolderOf(each.value.repository.fullName),
+              token: each.value.token,
+              access: each.value.access,
+            },
+          ],
+    );
 
-    return true;
-  }).pipe(Effect.withSpan("web/fillWorkspaceDriveStep"));
+    if (batch.length === 0) return;
+    const failed = yield* syncedWorkspaceRepositories(sandbox, batch);
 
-/** On Vercel: the next step sent to the topic, kept for `WORKSPACE_DRIVE_FILL.RETAINED`; a send that failed is reported. */
-const vercelPublish = ({ workspace, from }: NextFillStep) =>
-  Effect.tryPromise(() =>
-    send(
-      WORKSPACE_DRIVE_FILL.TOPIC,
-      { workspaceId: workspace.workspaceId, from },
-      { retentionSeconds: Math.ceil(Duration.toSeconds(WORKSPACE_DRIVE_FILL.RETAINED)) },
-    ),
-  ).pipe(
-    Effect.timeout(WORKSPACE_DRIVE_FILL.PUBLISH_WAIT),
-    Effect.catchCause((cause) =>
-      reportedBroken(workspace.workspaceId, DRIVE_BROKEN.FILL_FAILED, causeKind(cause)),
-    ),
-  );
+    // Note that the folder is left out of the report, since a repository's name is the workspace's own.
+    yield* Effect.forEach(
+      failed,
+      () => reportedBroken(workspaceId, DRIVE_BROKEN.REPOSITORY_FAILED, "the sync failed"),
+      { discard: true },
+    );
+  });
 
-/** Off Vercel: the next step run here and now, since no function's bound cuts a fill off in this process; a step that failed is reported. */
-const inProcessPublish = (next: NextFillStep): Effect.Effect<void, never, DriveFillServices> =>
-  filledFrom(next.run, next.image, next.workspace, next.from).pipe(
-    Effect.asVoid,
-    Effect.catchCause((cause) =>
-      reportedBroken(next.workspace.workspaceId, DRIVE_BROKEN.FILL_FAILED, causeKind(cause)),
-    ),
-  );
-
-/** Where a fill's next step goes: this process by default, as a test or a local run has it. */
-export const DriveFillSteps = Context.Reference<DriveFillStepsService>(
-  "@repo/service/DriveFillSteps",
-  { defaultValue: () => ({ publish: inProcessPublish }) },
-);
-
-/** The steps' queue as the deployment's environment names it: Vercel's on production and on a Preview, this process's anywhere else. */
-export const driveFillStepsFromEnvironment = Layer.effect(
-  DriveFillSteps,
-  Effect.map(
-    Config.option(Config.String(AUTH_DEPLOYMENT_ENVIRONMENT.ENVIRONMENT)),
-    (deployment): DriveFillStepsService => ({
-      publish: Option.exists(
-        deployment,
-        (named) =>
-          named === DEPLOYMENT_ENVIRONMENT.PRODUCTION || named === DEPLOYMENT_ENVIRONMENT.PREVIEW,
-      )
-        ? vercelPublish
-        : inProcessPublish,
-    }),
-  ).pipe(
-    Effect.provideServiceEffect(
-      ConfigProvider.ConfigProvider,
-      Effect.sync(() => ConfigProvider.fromEnv()),
-    ),
-  ),
-);
-
-/** The workspace's drive's fill begun from its first repository, going on in later steps past this call where it is long; whether this call took the fill. */
-export const fillWorkspaceDrive = (
+/**
+ * The workspace's drive filled as its repositories stand now, from the image
+ * given: each brought to its default branch in its folder, a batch at a
+ * time, a failure reported and passed by, then every folder of a repository
+ * no longer connected deleted. Answers whether this call filled it: false
+ * where another fill holds it.
+ */
+export const fillWorkspaceDrive = Effect.fn("web/fillWorkspaceDrive")(function* (
   run: SandboxRunner,
   image: string,
   workspace: BaseDriveWorkspace,
-) => filledFrom(run, image, workspace, 0);
+) {
+  const api = yield* Sandbox;
+  const name = workspaceDriveName(workspace.workspaceId);
+  const read = readOf(yield* api.get(name));
 
-/**
- * The consumer's route handler over the services the function's runtime
- * handed it: each step run and acknowledged once settled, one whose
- * workspace has no owner no more dropped, and one that failed left for the
- * queue to deliver again after `WORKSPACE_DRIVE_FILL.FAILED_AGAIN`.
- */
-export function workspaceDriveFillsHandler(
-  services: Context.Context<DriveFillServices>,
-): (request: Request) => Promise<Response> {
-  return queueConsumer(
-    services,
-    (message) =>
+  if (read.state === DRIVE_STATE.FILLING) return false;
+
+  if (read.state === DRIVE_STATE.WANTED && !(yield* deletedIfStill(read.stale))) return false;
+  const repositories = yield* heldRepositories(workspace);
+  const context = yield* Effect.context<DatabaseServices>();
+
+  return yield* filledDrive(
+    { name, drive: name, at: WORKSPACE_DRIVE.MOUNT, image, vcpus: SANDBOX_SIZE.VCPUS },
+    (running) =>
       Effect.gen(function* () {
-        const decoded = yield* Effect.option(Schema.decodeUnknownEffect(FillStepSchema)(message));
-
-        if (Option.isNone(decoded)) {
-          yield* Effect.logError("a workspace-drive-fills message did not decode; it is dropped");
-
-          return QUEUE_ACKNOWLEDGED;
-        }
-
-        const { workspaceId, from } = decoded.value;
-        const workspace = yield* workspaceDriveOwner(workspaceId);
-
-        if (Option.isNone(workspace)) return QUEUE_ACKNOWLEDGED;
-        // Note that the fills ride beside the runtime's services (`native-agents.ts`), so they are read as an option.
-        const fills = yield* Effect.serviceOption(WorkspaceDriveFills);
-
-        if (Option.isNone(fills)) {
-          yield* Effect.logError("a workspace drive's fill step reached a function with no fills");
-
-          return QUEUE_ACKNOWLEDGED;
-        }
-
-        const image = yield* fills.value.image;
-        yield* filledFrom(fills.value.run, image, workspace.value, from).pipe(
-          Effect.provideService(GitHubBackground, true),
-          Effect.tapCause((cause) =>
-            Effect.logWarning(`a workspace drive's fill step will run again: ${causeKind(cause)}`),
-          ),
+        const sandbox = repositorySandboxOver(
+          api,
+          running,
+          run,
+          repositoryFirewallOver(api, context, firewallSessionOf(running, workspace.userId), {}),
         );
 
-        return QUEUE_ACKNOWLEDGED;
+        for (let at = 0; at < repositories.length; at += WORKSPACE_DRIVE.BATCH) {
+          yield* heldBatch(
+            sandbox,
+            workspace.workspaceId,
+            repositories.slice(at, at + WORKSPACE_DRIVE.BATCH),
+          );
+        }
+
+        // A repository that failed above is still connected, so its folder is kept as it stood.
+        yield* prunedWorkspaceFolders(
+          sandbox,
+          repositories.map((held) => workspaceFolderOf(held.fullName)),
+        );
       }),
-    WORKSPACE_DRIVE_FILL.FAILED_AGAIN,
   );
-}
+});
 
 /** The workspace's drive regenerated past the answer, where the function fills drives; its GitHub reads in the background lane, since no member waits on them. */
 const regeneratedFor = (workspace: Option.Option<BaseDriveWorkspace>) =>
@@ -581,14 +379,14 @@ const regeneratedFor = (workspace: Option.Option<BaseDriveWorkspace>) =>
     );
   });
 
-/** The workspace's drive regenerated past the answer, as a repository of it is connected or disconnected; a workspace the store could not read regenerates nothing. */
+/** The workspace's drive regenerated past the answer, as a repository leaves it; a workspace the store could not read regenerates nothing. */
 export const workspaceDriveRegenerated = (workspaceId: string) =>
   Effect.flatMap(
     Effect.orElseSucceed(workspaceDriveOwner(workspaceId), () => Option.none()),
     regeneratedFor,
   );
 
-/** The drive of the workspace an installation is linked to regenerated past the answer, as GitHub says its repositories changed. */
+/** The drive of the workspace an installation is linked to regenerated past the answer, as GitHub says repositories left it. */
 export const installationDriveRegenerated = (installationId: number) =>
   Effect.flatMap(
     Effect.orElseSucceed(baseDriveWorkspaceOfInstallation(installationId), () => Option.none()),

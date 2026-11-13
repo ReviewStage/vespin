@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { CHECKOUT_DIFF_EXIT } from "@repo/agent-runner/checkout-diff";
 import { Database } from "@repo/database/core/query";
 import { RUNNER_LOST_DETAIL } from "@repo/database/models/abandoned-turns";
 import {
@@ -36,7 +37,6 @@ import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { DEVICE_LAYOUT, expectTopicsFire, getTestDB } from "@repo/database/testing";
 import { AGENT_FAILURE } from "@repo/features/agent-wire";
-import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
 import { CHECKOUT_RESTORE_EXIT } from "@repo/features/checkout-restore";
 import {
   DEVICE_AGENT_LINE_KIND,
@@ -46,6 +46,7 @@ import {
   DEVICE_LAUNCH_UNSTARTED,
   type DeviceLaunchStep,
   type DeviceLaunchUnstarted,
+  deviceAgentFilesPayloadSchema,
   deviceAgentLaunchPayloadSchema,
 } from "@repo/features/device-agent-wire";
 import { TURN_FAILURE } from "@repo/features/turn-run";
@@ -85,6 +86,7 @@ import {
   deviceAgentRequestsFor,
   settledDeviceAgentLine,
 } from "../device-agent.js";
+import { AgentSandbox, type AgentSandboxService } from "../terminal/agent-sandbox.js";
 import { CHECKOUT_DIFF_OUTCOME, LaunchRefused, RESTORE_OUTCOME } from "./agent-machine.js";
 import { deviceMachine, MAC_MACHINE } from "./device-machine.js";
 
@@ -163,8 +165,13 @@ const untilQueued = (userId: string, deviceId: string) =>
     return Option.getOrThrow(Option.fromNullishOr(line));
   });
 
-/** GitHub unreached, and sandboxes kept in memory, which a Mac's agent never reaches. */
-const NO_REACH = Layer.merge(NO_GITHUB, memorySandbox().layer);
+/** GitHub unreached, and sandboxes kept in memory, which a Mac's agent never reaches, nor the Terminal's wake of one. */
+const NO_REACH = Layer.mergeAll(
+  NO_GITHUB,
+  memorySandbox().layer,
+  // SAFETY: a Mac's agent has no sandbox to wake, so no call of it is ever made.
+  Layer.succeed(AgentSandbox, {} as AgentSandboxService),
+);
 
 it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMENT), NO_REACH))(
   "a local agent's machine",
@@ -471,6 +478,50 @@ it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMEN
           "nothing was asked of it",
         );
       }),
+    );
+
+    it.effect(
+      "a file written by session goes in a files line under the agent's attachments folder its Mac registered, and the write answers its path once the Mac settled the line as written, and is unavailable where the Mac settled it as not",
+      () =>
+        Effect.gen(function* () {
+          const { userId, deviceId, agent, session } = yield* openLocalAgent();
+          const machine = yield* deviceMachine;
+          const contents = new TextEncoder().encode("%PDF-1.7 the spec");
+
+          const writing = yield* Effect.forkChild(
+            machine.writeFile(session, { name: "description/spec.pdf", contents }),
+          );
+
+          const line = yield* untilQueued(userId, deviceId);
+          yield* claimedDeviceAgentLine(userId, deviceId, line.id);
+          yield* TestClock.adjust("1 second");
+          const waiting = writing.pollUnsafe();
+          yield* settledDeviceAgentLine(userId, deviceId, line.id, 0);
+          yield* TestClock.adjust("1 second");
+          const path = `${DEVICE_LAYOUT.attachmentsFolder}/${agent.id}/description/spec.pdf`;
+          const written = yield* Fiber.join(writing);
+
+          const failing = yield* Effect.forkChild(
+            machine.writeFile(session, { name: "description/other.pdf", contents }),
+          );
+
+          const unwritten = yield* untilQueued(userId, deviceId);
+          yield* claimedDeviceAgentLine(userId, deviceId, unwritten.id);
+          yield* settledDeviceAgentLine(userId, deviceId, unwritten.id, 1);
+          yield* TestClock.adjust("1 second");
+          const failed = yield* Effect.flip(Fiber.join(failing));
+
+          assert.equal(waiting, undefined, "the write waits for the Mac to settle its line");
+          assert.equal(written, path);
+          assert.ok(
+            failed instanceof SandboxUnavailable,
+            "a file the Mac did not write is no path",
+          );
+          assert.equal(line.kind, DEVICE_AGENT_LINE_KIND.FILES);
+          assert.deepEqual(Schema.decodeUnknownSync(deviceAgentFilesPayloadSchema)(line.payload), {
+            files: [{ path, mode: 0o644, contents }],
+          });
+        }),
     );
 
     it.effect(

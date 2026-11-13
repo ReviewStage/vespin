@@ -7,8 +7,8 @@
 // The brand's colors: every --ui-color-* role a change of brand changes,
 // in the light theme and the dark, for the desktop and the site alike. The
 // roles a brand leaves alone (the fills and edges drawn as alphas of the ink,
-// shadows, the identity and chart hues, find's yellows) stay in @repo/ui's
-// palettes.css. Each entry is one brand; `BRAND` names the one the product
+// shadows, the chart hues, find's yellows) stay in @repo/ui's palettes.css,
+// but for the identity hues below, which the iOS app draws too. Each entry is one brand; `BRAND` names the one the product
 // wears, so a rebrand is a new entry and that one name, and a second theme
 // is a second entry the generator writes under a selector of its own.
 //
@@ -23,6 +23,8 @@
 // under way is the one status that would otherwise share it, so it is a blue
 // of its own at 250 degrees, at the other status inks' lightness, and a
 // running agent reads apart from one that needs you.
+import { GEIST_BLACK, GEIST_WHITE, geistTheme } from "./geist.mjs";
+
 const COPPER = {
   LIGHT: { FILL: "#a7611b", INK: "#8e5323" },
   DARK: { FILL: "#cf7b26", INK: "#f19a4b" },
@@ -33,6 +35,29 @@ const COPPER = {
 // of something else's, so it is the same in either theme, and the window
 // draws it from these where it shows how a commit reads on GitHub.
 const AVATAR = { TILE: "#171412", INK: COPPER.DARK.FILL };
+
+// Geist (geist.mjs): every role names a step of Geist's, its grays and
+// backgrounds for the grounds and the words and its amber-900 for the one
+// accent: a burnt orange in the light theme and an orange in the dark. Each
+// role takes the step Geist names for it: background-100 the ground and
+// background-200 the frame and the wells, gray-100 to 300 a control's rest,
+// hover, and press, gray-400 and 500 its edges, gray-900 the secondary
+// words and gray-1000 the primary. A status ink is its scale's 900, Geist's
+// accessible text step. Attention shares the accent, as copper's did, and so
+// does a start, which copper drew in a yellow Geist has no scale for; work
+// under way is Geist's blue, as it was copper's.
+//
+// A card (the surface) is the ground's own background-100 in the light
+// theme, standing off it by Geist's card shadow, and gray-100 in the dark,
+// where a shadow falls black on black, so it stands off the ground by its
+// fill.
+//
+// Note that words on the dark fill are the light theme's gray-1000, since
+// white reads on that orange at under 2:1, and attention's fill and its
+// words are the accent's, so one orange means the same in every place it is
+// drawn.
+const GEIST_LIGHT = geistTheme("LIGHT");
+const GEIST_DARK = geistTheme("DARK");
 
 const BRAND_PALETTES = {
   COPPER: {
@@ -109,6 +134,98 @@ const BRAND_PALETTES = {
       AVATAR_INK: AVATAR.INK,
     },
   },
+  GEIST: {
+    LIGHT: {
+      GROUND: GEIST_LIGHT.BACKGROUND[100],
+      SURFACE: GEIST_LIGHT.BACKGROUND[100],
+      OVERLAY: GEIST_LIGHT.BACKGROUND[100],
+      SIDEBAR: GEIST_LIGHT.BACKGROUND[200],
+      SIDEBAR_INK: GEIST_LIGHT.GRAY[900],
+      WELL: GEIST_LIGHT.BACKGROUND[200],
+      CODE_GROUND: GEIST_LIGHT.BACKGROUND[200],
+      CHIP: GEIST_LIGHT.BACKGROUND[100],
+      CHIP_HOVER: GEIST_LIGHT.GRAY[100],
+      CHIP_SELECTED: GEIST_LIGHT.GRAY[200],
+      CHIP_EDGE: GEIST_LIGHT.GRAY[400],
+      CHIP_EDGE_STRONG: GEIST_LIGHT.GRAY[500],
+      INK: GEIST_BLACK,
+      TEXT: GEIST_LIGHT.GRAY[1000],
+      TEXT_BODY: GEIST_LIGHT.GRAY[1000],
+      TEXT_MUTED: GEIST_LIGHT.GRAY[900],
+      ACCENT: GEIST_LIGHT.AMBER[900],
+      ON_ACCENT: GEIST_WHITE,
+      ON_ACCENT_MUTED: GEIST_WHITE,
+      ACCENT_TEXT: GEIST_LIGHT.AMBER[900],
+      FOCUS_RING: GEIST_LIGHT.AMBER[900],
+      SWITCH_ON: GEIST_LIGHT.AMBER[900],
+      DANGER: GEIST_LIGHT.RED[900],
+      DANGER_TEXT: GEIST_LIGHT.RED[900],
+      DANGER_FILL: GEIST_LIGHT.RED[900],
+      ATTENTION: GEIST_LIGHT.AMBER[900],
+      ATTENTION_FILL: GEIST_LIGHT.AMBER[900],
+      WORKING: GEIST_LIGHT.BLUE[900],
+      STARTING: GEIST_LIGHT.AMBER[900],
+      COMPLETE: GEIST_LIGHT.GREEN[900],
+      MERGED: GEIST_LIGHT.PURPLE[900],
+      AVATAR_TILE: AVATAR.TILE,
+      AVATAR_INK: AVATAR.INK,
+    },
+    DARK: {
+      GROUND: GEIST_DARK.BACKGROUND[100],
+      SURFACE: GEIST_DARK.GRAY[100],
+      OVERLAY: GEIST_DARK.GRAY[100],
+      SIDEBAR: GEIST_DARK.BACKGROUND[200],
+      SIDEBAR_INK: GEIST_DARK.GRAY[900],
+      WELL: GEIST_DARK.BACKGROUND[200],
+      CODE_GROUND: GEIST_DARK.BACKGROUND[200],
+      CHIP: GEIST_DARK.GRAY[100],
+      CHIP_HOVER: GEIST_DARK.GRAY[200],
+      CHIP_SELECTED: GEIST_DARK.GRAY[300],
+      CHIP_EDGE: GEIST_DARK.GRAY[400],
+      CHIP_EDGE_STRONG: GEIST_DARK.GRAY[500],
+      INK: GEIST_WHITE,
+      TEXT: GEIST_DARK.GRAY[1000],
+      TEXT_BODY: GEIST_DARK.GRAY[1000],
+      TEXT_MUTED: GEIST_DARK.GRAY[900],
+      ACCENT: GEIST_DARK.AMBER[900],
+      ON_ACCENT: GEIST_LIGHT.GRAY[1000],
+      ON_ACCENT_MUTED: GEIST_LIGHT.GRAY[1000],
+      ACCENT_TEXT: GEIST_DARK.AMBER[900],
+      FOCUS_RING: GEIST_DARK.AMBER[900],
+      SWITCH_ON: GEIST_DARK.AMBER[900],
+      DANGER: GEIST_DARK.RED[900],
+      DANGER_TEXT: GEIST_DARK.RED[900],
+      DANGER_FILL: GEIST_DARK.RED[800],
+      ATTENTION: GEIST_DARK.AMBER[900],
+      ATTENTION_FILL: GEIST_DARK.AMBER[900],
+      WORKING: GEIST_DARK.BLUE[900],
+      STARTING: GEIST_DARK.AMBER[900],
+      COMPLETE: GEIST_DARK.GREEN[900],
+      MERGED: GEIST_DARK.PURPLE[900],
+      AVATAR_TILE: AVATAR.TILE,
+      AVATAR_INK: AVATAR.INK,
+    },
+  },
 };
 
-export const BRAND = BRAND_PALETTES.COPPER;
+// The brand the window, the site, and the iOS app wear.
+export const BRAND = BRAND_PALETTES.GEIST;
+
+// The brand the cut artwork wears: the icon, the mark, the cards, and the
+// DMG's ground, which generate-brand-assets.mjs draws. Note that it stays
+// copper while Geist is tried on the surfaces, so the trial redraws no
+// committed artwork.
+export const ARTWORK_BRAND = BRAND_PALETTES.COPPER;
+
+// A person's disc and a workspace's tile: six muted hues read off an id
+// (@repo/features/workspace-tile's identityHue, from 1), each holding its
+// white letter at AA on either ground. None is copper, so no one's disc reads
+// as attention's beside a row. No brand changes them, but the window
+// (identity.css) and the iOS app (identity-hues.ts) both draw them, so they
+// are written from here rather than kept twice.
+export const IDENTITY = {
+  LIGHT: ["#4a5fc0", "#23766f", "#237293", "#a8435f", "#6a4fbd", "#3f7434"],
+  DARK: ["#4f63b8", "#2b7f78", "#2a7899", "#a24a63", "#6c55b3", "#477a3a"],
+  // The letter's ink on every hue.
+  ON: "#ffffff",
+};

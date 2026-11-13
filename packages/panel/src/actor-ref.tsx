@@ -54,7 +54,7 @@ import { GLYPH } from "@repo/ui/icons";
 import { BotIcon, HistoryIcon, type LucideIcon, UserRoundIcon, UserRoundXIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { useAutomation } from "./automation-directory.js";
-import { automationNextText, automationOwnerName } from "./desktop/automation-words.js";
+import { automationNextText, automationOwnerFor } from "./desktop/automation-words.js";
 import { useCreator } from "./member-directory.js";
 import { useActorDoor, usePreloadedPerson } from "./person-door.js";
 import { StateGlyph } from "./state-glyph.js";
@@ -648,7 +648,7 @@ export function BotBadge({ actor }: { actor: Actor }): React.JSX.Element | null 
 }
 
 /** An actor's card head: its mark at a card's size, its name, which `onOpen` makes the press that opens its page, and the line under it. */
-function ActorHead({
+export function ActorHead({
   actor,
   sub,
   onOpen,
@@ -881,19 +881,20 @@ export function AutomationCard({
     <HoverCard data-actor-card={actor.kind}>
       <ActorHead
         actor={actor}
-        sub={subLine(
-          automationTriggerText(automation.trigger, automation.repositories ?? []),
-          automationOwnerName(automationOwner(automation), workspaceName, automation.mine === true),
-        )}
+        sub={`${automationTriggerText(automation.trigger, automation.repositories ?? [])}, ${automationOwnerFor(automationOwner(automation), workspaceName, automation.mine === true)}`}
         onOpen={onOpen}
       />
       {nextWords === undefined ? null : <HoverCardNote>{nextWords}</HoverCardNote>}
       {lastRun === null ? null : (
-        <HoverCardNote>
-          {"Last ran "}
-          <Time at={lastRun.firedAt} now={now} hint={false} look={TIME_LOOK.AGO} />
-          {` · ${automationRunLine(lastRun, automation.mine === true ? undefined : "its creator")}`}
-        </HoverCardNote>
+        <>
+          <HoverCardNote>
+            {"Last ran "}
+            <Time at={lastRun.firedAt} now={now} hint={false} look={TIME_LOOK.AGO} />
+          </HoverCardNote>
+          <HoverCardNote>
+            {automationRunLine(lastRun, automation.mine === true ? undefined : "its creator")}
+          </HoverCardNote>
+        </>
       )}
       <AutomationMaker automation={automation} now={now} />
     </HoverCard>
@@ -1154,10 +1155,12 @@ const MORE_FACES_LABEL = "Everyone else";
 
 /**
  * How many more a pile holds, in a pill of a face's height on the tile,
- * ringed by the ground as the faces are.
+ * ringed by the ground as the faces are. Note that it is positioned as the
+ * faces are, so as the last of them it paints over the face before it, as
+ * each face does, rather than under it.
  */
 const PILE_COUNT =
-  "actor-stack-more inline-grid h-avatar-stack min-w-avatar-stack place-items-center rounded-ui-full bg-actor-tile px-tight-gap text-caption-inline font-ui-semibold text-muted-foreground tabular-nums shadow-actor-ring";
+  "actor-stack-more relative inline-grid h-avatar-stack min-w-avatar-stack place-items-center rounded-ui-full bg-actor-tile px-tight-gap text-caption-inline font-ui-semibold text-muted-foreground tabular-nums shadow-actor-ring";
 
 /**
  * How far a pile's face or count stands from the one before it: each

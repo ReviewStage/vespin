@@ -31,7 +31,8 @@ export interface GatewayWiringDependencies {
   state: AppStateStore;
   /** This machine's native capabilities, performed here at the host's ask. */
   node: {
-    openExternal: (url: string) => Promise<void>;
+    /** Opens an address outside the app; a sign-in's names the page it lands on once settled, which a node may close its sheet at, and another ignores. */
+    openExternal: (url: string, landing?: string) => Promise<void>;
   };
 }
 
@@ -71,12 +72,13 @@ export const wireGateway = /* @__PURE__ */ Effect.fn("client/wireGateway")(funct
 
       switch (capability) {
         case HOST_NODE_CAPABILITY.OPEN_EXTERNAL: {
-          const { url } = params;
+          const { url, landing } = params;
 
           if (!isWireString(url)) return failed("open needs a url");
 
           return Effect.tryPromise({
-            try: () => dependencies.node.openExternal(url),
+            try: () =>
+              dependencies.node.openExternal(url, isWireString(landing) ? landing : undefined),
             catch: (cause) => new OpenExternalFailed({ cause }),
           }).pipe(
             Effect.as<NodeCapabilityResult>({

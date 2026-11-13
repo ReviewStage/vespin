@@ -1,3 +1,4 @@
+import { posix } from "node:path";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   DESCRIPTION_ATTACHMENT_KEEP,
@@ -7,11 +8,16 @@ import type { DescriptionWriter } from "@repo/database/models/description-revisi
 import { readTaskHeader } from "@repo/database/models/task-store";
 import { workspaceOf } from "@repo/database/models/workspace-store";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
+import { AGENT_BOUNDS } from "@repo/features/agent-wire";
 import {
   descriptionAttachmentAddress,
   taskPictureMarkdown,
 } from "@repo/features/description-attachment-link";
-import { DESCRIPTION_ATTACHMENT_BOUNDS } from "@repo/features/description-attachment-wire";
+import {
+  DESCRIPTION_ATTACHMENT_BOUNDS,
+  type DescriptionFile,
+  isPdfFile,
+} from "@repo/features/description-attachment-wire";
 import {
   type DescriptionNote,
   descriptionNoteSectionSchema,
@@ -22,7 +28,7 @@ import {
   readNotes,
 } from "@repo/features/description-notes";
 import { placeholderLinksIn } from "@repo/features/mention-link";
-import { PICTURE_BOUNDS, type Picture } from "@repo/features/picture-wire";
+import { PICTURE_BOUNDS } from "@repo/features/picture-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { DESCRIPTION_ACTOR } from "@repo/features/task-wire";
 import { trimmedText } from "@repo/features/text-schema";
@@ -46,7 +52,7 @@ import {
 } from "../../tasks/description-notes.js";
 import { placeholderLinksWords } from "../link-rule.js";
 import { CODER } from "./bounds.js";
-import { type InboxSandboxDoor, readSandboxMedia } from "./inbox-image.js";
+import { type InboxSandboxDoor, readSandboxBodyFile } from "./inbox-image.js";
 
 /**
  * description-edit.ts -- the coding agent's `edit_description` tool: the notetaker's own notes, taken into the description of the task it names, and pictures from its sandbox added to it.
@@ -75,7 +81,10 @@ import { type InboxSandboxDoor, readSandboxMedia } from "./inbox-image.js";
  * a recording as it is and up to a video's bound, kept as one of the description's
  * pictures as the member the turn runs for, and written as the picture's
  * line at the end of its section, an added point like any other, so the
- * save is the agent's and its byline names it. Every file is read before any
+ * save is the agent's and its byline names it. A PDF named the same way, a
+ * report it wrote, is kept beside them as a file, sniffed by its `%PDF-` as
+ * an inbox post's is, held to a PDF's bound, and written as a picture's line
+ * under its file's own name, which the description draws as a file chip. Every file is read before any
  * picture is kept, and a call with a picture to mend saves nothing.
  *
  * A member's own notes, which an outside agent takes for them through the
@@ -93,6 +102,9 @@ const DESCRIPTION_EDIT = {
   MAX_CAPTION_CHARS: 200,
 } as const;
 
+/** A PDF's bound in megabytes, as the words the model reads say it. */
+const MAX_PDF_MB = (AGENT_BOUNDS.MAX_PDF_BYTES / 1_000_000).toFixed(1);
+
 /** One picture the agent adds: its file in the sandbox, its words, and the section it goes under. */
 const pictureSchema = Schema.Struct({
   section: descriptionNoteSectionSchema,
@@ -100,7 +112,8 @@ const pictureSchema = Schema.Struct({
     trimmedText(DESCRIPTION_EDIT.MAX_PATH_CHARS),
     "The picture's file in your sandbox, such as a screenshot you took or a recording you made of " +
       `a flow, relative to your working folder or absolute: a PNG, JPEG, or WebP of at most ${PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB, ` +
-      `or a WebM video of at most ${PICTURE_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB, which the description plays.`,
+      `a WebM video of at most ${PICTURE_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB, which the description plays, ` +
+      `or a PDF of at most ${MAX_PDF_MB} MB, which it keeps as a file under the file's own name.`,
   ),
   alt: describeWire(
     trimmedText(DESCRIPTION_EDIT.MAX_ALT_CHARS),
@@ -154,7 +167,7 @@ export const EDIT_DESCRIPTION_TOOL = {
     "made, each under the heading it belongs to. Write a file, a pull request, or an issue a note names as a mention, " +
     "a Markdown link to its page whose words start with @, such as [@store.ts](https://github.com/<owner>/<name>/blob/HEAD/<path>), so the description draws it as a chip. " +
     "To add a picture, such as a screenshot of what you built, name its file in your sandbox " +
-    "under pictures, with alt text saying what it shows. " +
+    "under pictures, with alt text saying what it shows; a PDF you wrote goes there too. " +
     "Every save is recorded in the description as yours. The developer reads the description when they next " +
     `open it in ${PRODUCT_NAME}; you do not wait for an answer. A call's notes and pictures land together ` +
     "or not at all: where one names text or a heading the description does not hold exactly once, " +
@@ -185,8 +198,8 @@ const MISSED_FIND_CHARS = 200;
 export const TASK_PICTURE_FILE_REFUSAL = {
   NO_FILE: "Not saved: a picture names no file in your sandbox:",
   NOT_IMAGE:
-    "Not saved: a picture names a file that is not a PNG, JPEG, or WebP image, or a WebM video that states its size:",
-  TOO_LARGE: `Not saved: a picture names an image larger than ${PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB, or a video larger than ${PICTURE_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB; take it smaller, or at one screen scale, or record a shorter flow:`,
+    "Not saved: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM video that states its size, or a PDF:",
+  TOO_LARGE: `Not saved: a picture names an image larger than ${PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB, a video larger than ${PICTURE_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB, or a PDF larger than ${MAX_PDF_MB} MB; take it smaller, or at one screen scale, or record a shorter flow:`,
   UNREADABLE: "Not saved: a picture's file could not be read from your sandbox:",
 } as const;
 
@@ -281,17 +294,18 @@ function missedNote(note: DescriptionNote): string {
   return `${note.kind} ${find}`;
 }
 
-/** A picture the call adds, with its file as read from the sandbox. */
+/** A picture the call adds, with its file as read from the sandbox and the name a PDF is written under. */
 interface PictureRead {
   readonly picture: TaskPicture;
-  readonly file: Picture;
+  readonly file: DescriptionFile;
+  readonly name: string;
 }
 
 /**
  * Every picture's file read from the sandbox, in order, or the refusal of
  * the first that is not, naming its path. Note that a file is read under an
- * inbox post's bounds, because a description holds an image and a recording to the
- * same two (`PICTURE_BOUNDS`).
+ * inbox post's bounds, because a description holds an image, a recording,
+ * and a PDF to the same three (`PICTURE_BOUNDS`, `AGENT_BOUNDS.MAX_PDF_BYTES`).
  */
 function readPictureFiles(
   pictures: readonly TaskPicture[],
@@ -303,7 +317,7 @@ function readPictureFiles(
     for (const picture of pictures) {
       const { path } = picture;
 
-      const file = yield* readSandboxMedia(
+      const file = yield* readSandboxBodyFile(
         sandbox,
         CODER.CHECKOUT_PATH,
         path,
@@ -311,7 +325,7 @@ function readPictureFiles(
       );
 
       if (Result.isFailure(file)) return Result.fail(file.failure);
-      read.push({ picture, file: file.success });
+      read.push({ picture, file: file.success, name: posix.basename(path) || path });
     }
 
     return Result.succeed(read);
@@ -376,7 +390,7 @@ function keptAsNotes(
   return Effect.gen(function* () {
     const notes: DescriptionNote[] = [];
 
-    for (const { picture, file } of read.files) {
+    for (const { picture, file, name } of read.files) {
       const kept = yield* keepDescriptionAttachment(binding.userId, binding.taskId, file);
 
       if (kept.status === DESCRIPTION_ATTACHMENT_KEEP.TOO_MANY) {
@@ -403,7 +417,8 @@ function keptAsNotes(
       notes.push({
         kind: NOTE_KIND.ADD,
         section: picture.section,
-        text: taskPictureMarkdown(address, picture.alt, picture.caption),
+        // Note that a PDF is written under its file's name, which the description draws its chip by.
+        text: taskPictureMarkdown(address, isPdfFile(file) ? name : picture.alt, picture.caption),
       });
     }
 

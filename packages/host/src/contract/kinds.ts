@@ -3,9 +3,9 @@
  *
  * Kept free of every import, oRPC and every schema among them, so `acts.ts`
  * can spell these kinds in `ACT_KIND` without resolving the contract behind
- * them, and so `PORT_ACT_USE` can be read from this file as it stands:
- * that is why each kind's use is declared here rather than on its
- * procedure, and why a
+ * them, and so the lint rule `vespin/no-follow-outside-host-read` can
+ * load this file as it stands to read `PORT_ACT_USE`: that is why each
+ * kind's use is declared here rather than on its procedure, and why a
  * declared act (`declared-act.ts`) reads its kind and use from here by its
  * name rather than restating them. A kind here is the key of its procedure
  * in `actContract`, so the panel's act door calls a kind by its own name.
@@ -41,6 +41,8 @@ export const ACCOUNT_ASK_ACT_KIND = {
   PROVIDER_KEYS_REMOVE: "providerKeys.remove",
   /** A connected plan's default for the account's coding agents turned on or off, from beside its row in Settings. */
   PROVIDER_KEYS_FOR_AGENTS: "providerKeys.forAgents",
+  /** One of a ChatGPT plan's rate-limit reset credits spent from Settings or a limit notice's Use reset, under the press's key. */
+  PROVIDER_KEYS_USE_RESET_CREDIT: "providerKeys.useResetCredit",
   /** One of the account's subscriptions named, or its name cleared, from its row in Settings. */
   SUBSCRIPTION_RENAME: "providerKeys.rename",
   /** The account's subscriptions of a kind put in a new order, as their list in Settings was dragged. */
@@ -256,6 +258,12 @@ export const AGENT_ACT_KIND = {
   AGENTS_BOOT: "agents.boot",
   /** An agent on screen kept warm for the next message, said at once and then every minute while it stays there (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
+  /** A message of the member's the service refused let go, from its Delete or its Edit, which took its words back into the box (`agent-queue-writes.ts`). */
+  AGENTS_UNSEND: "agents.unsend",
+  /** A button in an agent's reply as the transcript draws it, asked of the service as it is drawn (`reply-button-wire.ts`). */
+  AGENTS_REPLY_BUTTON: "agents.replyButton",
+  /** A suggestion in an agent's reply sent by the member from its draft, which the service runs once. */
+  AGENTS_REPLY_BUTTON_PRESS: "agents.replyButtonPress",
   /** The ports listened on in an agent's cloud sandbox, asked of the service as the plug's menu stands open, on a host that forwards none. */
   AGENTS_PORTS: "agents.ports",
   /** The agent's port shared by public link now, asked of the service beside its ports. */
@@ -505,6 +513,14 @@ export const TASKS_ACT_KIND = {
   TASKS_SET_PARENT: "tasks.setParent",
   /** One relation of a task moved to another kind on the service, in one call; answers the task's relations as they then stand, or why they are unchanged. */
   TASKS_CHANGE_RELATION: "tasks.changeRelation",
+  /** The account follows a task on the service, its machines off; answers the task's followers as they then stand, or why they are unchanged. */
+  TASKS_FOLLOW: "tasks.follow",
+  /** The account stops following a task on the service, which its assignee may not; answers as a follow does. */
+  TASKS_UNFOLLOW: "tasks.unfollow",
+  /** The account's own switch on a task it follows, whether the task's agents may use its machines, set on the service; answers as a follow does. */
+  TASKS_SET_FOLLOWER_MACHINES: "tasks.setFollowerMachines",
+  /** Another member of the task's workspace added as a follower on the service, their machines off; answers as a follow does. */
+  TASKS_ADD_FOLLOWER: "tasks.addFollower",
   /** The developer's edit of the open task's document, saved on the service; answers saved, a conflict with the text as it stands now, or why nothing was saved. */
   TASKS_EDIT: "tasks.edit",
   /** A page of GitHub's opened in the browser: a repository, or where our GitHub App is installed. No other address opens through it. */
@@ -678,6 +694,10 @@ export type MacShellActKind = (typeof MAC_SHELL_ACT_KIND)[keyof typeof MAC_SHELL
  */
 const MAC_COMMAND_ACT_KIND = {
   MAC_COMMAND_ANSWER: "macCommands.answer",
+  COMPUTER_USE_STATUS: "macCommands.computerUseStatus",
+  COMPUTER_USE_APPS: "macCommands.computerUseApps",
+  COMPUTER_USE_APP_ICON: "macCommands.computerUseAppIcon",
+  COMPUTER_USE_ASK_PERMISSIONS: "macCommands.computerUseAskPermissions",
 } as const;
 
 /**
@@ -821,6 +841,8 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
   WORKSPACE_REPOSITORY_SETUP_PUT: "workspace.repositorySetupPut",
   WORKSPACE_RUN_ACTIONS_PUT: "workspace.runActionsPut",
+  /** Every pull request GitHub's merge queues hold across a workspace's repositories, read as the Merge queue page opens and again while it stands; refused while the account's Merge queue experiment is off. */
+  WORKSPACE_MERGE_QUEUE_READ: "workspace.mergeQueueRead",
 } as const;
 
 /**
@@ -868,6 +890,12 @@ export const WINDOW_SURFACE_ACT_KIND = {
    * nothing in the focused panel would run.
    */
   WINDOW_MENU_OFFERS: "window.menuOffers",
+  /**
+   * The thread, task, agent, or pull request the asking panel shows now,
+   * told whenever it changes, or none, so the Mac hands it off to the
+   * member's iPhone as the phone's own screen for it would.
+   */
+  WINDOW_HANDOFF: "window.handoff",
   FEEDBACK_SEND: "feedback.send",
 } as const;
 
@@ -900,7 +928,8 @@ export const PORT_ACT_KIND = {
 export type PortActKind = (typeof PORT_ACT_KIND)[keyof typeof PORT_ACT_KIND];
 
 /**
- * What an act kind does with what it answers: a READ answers data that
+ * What an act kind does with what it answers, which the panel's lint rule
+ * `vespin/no-follow-outside-host-read` reads: a READ answers data that
  * can change while a surface shows it, so a surface reads it only through
  * a live read's query, over what the host holds; a FETCH answers what cannot
  * change for what was asked, such as content read once, a lookup as a link
@@ -923,8 +952,8 @@ export type ActUse = (typeof ACT_USE)[keyof typeof ACT_USE];
  * a Terminal tab's or a live view's stream, whose bytes never reach app
  * state; `TASKS_REFRESH` is a WRITE, the task list's Try again, because the
  * host follows the list from the account gate opening and only a press asks
- * it again; `AGENTS_CHANGES`, `TASKS_TREE`, and `TERMINAL_LIST` are
- * FETCHes, though each answers what stands now, because each is asked again
+ * it again; `AGENTS_CHANGES`, `TASKS_TREE`, `TERMINAL_LIST`, and
+ * `MAC_SHELL_ACTIONS` are FETCHes, though each answers what stands now, because each is asked again
  * whenever it is shown and nothing keeps it, as is `AGENTS_MESSAGES`, Copy
  * transcript's read on its press; `AGENTS_TRANSCRIPT_OLDER` is a WRITE,
  * because it lays an older page on the held transcript and answers only
@@ -944,6 +973,7 @@ export const PORT_ACT_USE = {
   PROVIDER_KEYS_SAVE: ACT_USE.WRITE,
   PROVIDER_KEYS_REMOVE: ACT_USE.WRITE,
   PROVIDER_KEYS_FOR_AGENTS: ACT_USE.WRITE,
+  PROVIDER_KEYS_USE_RESET_CREDIT: ACT_USE.WRITE,
   SUBSCRIPTION_RENAME: ACT_USE.WRITE,
   SUBSCRIPTIONS_REORDER: ACT_USE.WRITE,
   CHATGPT_DEVICE_START: ACT_USE.WRITE,
@@ -1009,6 +1039,9 @@ export const PORT_ACT_USE = {
   AGENTS_CLEAR: ACT_USE.WRITE,
   AGENTS_BOOT: ACT_USE.WRITE,
   AGENTS_WARM: ACT_USE.WRITE,
+  AGENTS_UNSEND: ACT_USE.WRITE,
+  AGENTS_REPLY_BUTTON: ACT_USE.FETCH,
+  AGENTS_REPLY_BUTTON_PRESS: ACT_USE.WRITE,
   AGENTS_PORTS: ACT_USE.FETCH,
   AGENTS_PORT_SHARED: ACT_USE.FETCH,
   AGENTS_PORT_SHARE: ACT_USE.WRITE,
@@ -1084,6 +1117,10 @@ export const PORT_ACT_USE = {
   MCP_CLIENTS_REVOKE: ACT_USE.WRITE,
 
   MAC_COMMAND_ANSWER: ACT_USE.WRITE,
+  COMPUTER_USE_STATUS: ACT_USE.FETCH,
+  COMPUTER_USE_APPS: ACT_USE.FETCH,
+  COMPUTER_USE_APP_ICON: ACT_USE.FETCH,
+  COMPUTER_USE_ASK_PERMISSIONS: ACT_USE.WRITE,
 
   MAC_PHOTO_TO_JPEG: ACT_USE.FETCH,
 
@@ -1095,7 +1132,7 @@ export const PORT_ACT_USE = {
   MAC_SHELL_CLOSE: ACT_USE.WRITE,
   MAC_SHELL_RUN_ACTION: ACT_USE.WRITE,
   MAC_SHELL_STOP_ACTION: ACT_USE.WRITE,
-  MAC_SHELL_ACTIONS: ACT_USE.READ,
+  MAC_SHELL_ACTIONS: ACT_USE.FETCH,
 
   MAC_TERMINAL_LOCAL_AGENT: ACT_USE.WRITE,
 
@@ -1124,6 +1161,10 @@ export const PORT_ACT_USE = {
   TASKS_BLOCK: ACT_USE.WRITE,
   TASKS_SET_PARENT: ACT_USE.WRITE,
   TASKS_CHANGE_RELATION: ACT_USE.WRITE,
+  TASKS_FOLLOW: ACT_USE.WRITE,
+  TASKS_UNFOLLOW: ACT_USE.WRITE,
+  TASKS_SET_FOLLOWER_MACHINES: ACT_USE.WRITE,
+  TASKS_ADD_FOLLOWER: ACT_USE.WRITE,
   TASKS_EDIT: ACT_USE.WRITE,
   GITHUB_OPEN: ACT_USE.WRITE,
   WEB_OPEN: ACT_USE.WRITE,
@@ -1186,6 +1227,7 @@ export const PORT_ACT_USE = {
   WINDOW_CAPTURE: ACT_USE.FETCH,
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,
   WINDOW_MENU_OFFERS: ACT_USE.WRITE,
+  WINDOW_HANDOFF: ACT_USE.WRITE,
   FEEDBACK_SEND: ACT_USE.WRITE,
 
   WORKSPACE_CREATE: ACT_USE.WRITE,
@@ -1227,6 +1269,7 @@ export const PORT_ACT_USE = {
   WORKSPACE_INSTALL_SCRIPT_PUT: ACT_USE.WRITE,
   WORKSPACE_REPOSITORY_SETUP_PUT: ACT_USE.WRITE,
   WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
+  WORKSPACE_MERGE_QUEUE_READ: ACT_USE.FETCH,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
 
 /**

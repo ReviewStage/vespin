@@ -1,3 +1,8 @@
+import {
+  MAC_COMMAND_MODE,
+  type MacCommandMode,
+  macCommandModeSchema,
+} from "@repo/features/mac-command-wire";
 import type { UnparsedWireValue } from "@repo/wire";
 import { Schema } from "effect";
 
@@ -9,20 +14,6 @@ import { Schema } from "effect";
  * run (`compose-mac-commands.ts`), and the prompt's Allow all commands writes it.
  */
 
-// Note that the order is the menu's, from least freedom to most.
-export const MAC_COMMAND_MODE = {
-  /** The Mac takes no commands. */
-  NEVER: "never",
-  /** Each command is shown to the developer first, and runs only once they allow it. */
-  ASK: "ask",
-  /** Any command from any of the account's agents runs without asking. */
-  ALWAYS: "always",
-} as const;
-
-export type MacCommandMode = (typeof MAC_COMMAND_MODE)[keyof typeof MAC_COMMAND_MODE];
-
-export const MAC_COMMAND_MODE_LIST: readonly MacCommandMode[] = Object.values(MAC_COMMAND_MODE);
-
 /** What the setting is called, wherever its control stands. */
 export const MAC_COMMANDS_LABEL = "Let agents run commands on this Mac";
 
@@ -33,7 +24,7 @@ export const MAC_COMMAND_MODE_LABEL = {
   [MAC_COMMAND_MODE.ALWAYS]: "Always allow",
 } as const satisfies Record<MacCommandMode, string>;
 
-const readsMacCommandMode = Schema.is(Schema.Literals(MAC_COMMAND_MODE_LIST));
+const readsMacCommandMode = Schema.is(macCommandModeSchema);
 
 export function isMacCommandMode(value: UnparsedWireValue): value is MacCommandMode {
   return readsMacCommandMode(value);

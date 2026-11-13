@@ -89,18 +89,21 @@ test("the workspace's automations come before the personal ones, and an owner wi
   assert.deepEqual(automationGroups([]), []);
 });
 
-test("a schedule the picker writes is said in words in its zone's city, and any other as its cron", () => {
-  const said = (cron: string, timezone = "America/New_York") =>
-    automationTriggerText({ kind: AUTOMATION_TRIGGER.SCHEDULE, cron, timezone });
+test("a schedule the picker writes is said in words, naming its zone only where it is not the reader's, and any other as its cron", () => {
+  const said = (cron: string, timezone = "America/New_York", reader = "Europe/Paris") =>
+    automationTriggerText({ kind: AUTOMATION_TRIGGER.SCHEDULE, cron, timezone }, [], reader);
 
-  assert.equal(said("0 9 * * 1-5"), "Weekdays at 9:00 AM · New York");
-  assert.equal(said("30 7 * * *", "Europe/London"), "Every day at 7:30 AM · London");
-  assert.equal(said("0 9 * * 1"), "Mondays at 9:00 AM · New York");
-  assert.equal(said("0 9 * * 0"), "Sundays at 9:00 AM · New York");
-  assert.equal(said("0 * * * *", "UTC"), "Every hour · UTC");
-  assert.equal(said("5 14 * * *"), "Every day at 2:05 PM · New York");
-  assert.equal(said("0 9 1 * *"), "0 9 1 * * · New York");
-  assert.equal(said("*/30 9-17 * * 1-5"), "*/30 9-17 * * 1-5 · New York");
+  assert.equal(said("0 9 * * 1-5"), "Weekdays at 9:00 AM Eastern Time");
+  assert.equal(said("30 7 * * *", "Europe/London"), "Every day at 7:30 AM United Kingdom Time");
+  assert.equal(said("0 9 * * 1"), "Mondays at 9:00 AM Eastern Time");
+  assert.equal(said("0 9 * * 0"), "Sundays at 9:00 AM Eastern Time");
+  assert.equal(said("0 * * * *", "UTC"), "Every hour");
+  assert.equal(said("0 9 * * 1-5", "UTC"), "Weekdays at 9:00 AM UTC");
+  assert.equal(said("5 14 * * *"), "Every day at 2:05 PM Eastern Time");
+  assert.equal(said("0 9 1 * *"), "0 9 1 * *, Eastern Time");
+  assert.equal(said("*/30 9-17 * * 1-5"), "*/30 9-17 * * 1-5, Eastern Time");
+  assert.equal(said("0 9 * * 1-5", "America/New_York", "America/New_York"), "Weekdays at 9:00 AM");
+  assert.equal(said("0 9 * * 1-5", "Europe/Lisbon"), "Weekdays at 9:00 AM Western European Time");
 });
 
 test("a GitHub event is said as what happens, by whom, where, and the labels, branches, drafts, and forks it keeps to, and a webhook as its call", () => {
@@ -154,6 +157,18 @@ test("a GitHub event is said as what happens, by whom, where, and the labels, br
       ["acme/ledger"],
     ),
     "When a check fails in acme/ledger",
+  );
+  assert.equal(
+    automationTriggerText(
+      {
+        kind: AUTOMATION_TRIGGER.GITHUB,
+        event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
+        defaultBranch: true,
+        branches: ["release"],
+      },
+      ["acme/ledger"],
+    ),
+    "When a check fails in acme/ledger on the default branch or release",
   );
   assert.equal(
     automationTriggerText({ kind: AUTOMATION_TRIGGER.WEBHOOK }, ["acme/ledger"]),
@@ -342,7 +357,7 @@ test("a run's line says why it did not start, else where its agent stands, or th
         reason: AUTOMATION_RUN_REASON.AGENT_REPLACED,
       }),
     ),
-    "Working · Started a fresh agent: the one its runs went to was gone or archived.",
+    "Working. Started a fresh agent: the one its runs went to was gone or archived.",
   );
   assert.equal(automationRunLine(run({ agent: null })), "Its agent is gone");
   assert.equal(automationRunLine(run({ agent: agent(AGENT_STATUS.FAILED) })), "Failed");
@@ -431,13 +446,13 @@ test("a Sentry trigger is said as its event in Sentry, then the projects, enviro
         level: [SENTRY_LEVEL.FATAL, SENTRY_LEVEL.ERROR],
       }),
     ),
-    "When a new issue is created in Sentry · web, api · production · error, fatal",
+    "When a new issue is created in Sentry, for web or api, in production, at error or fatal level",
   );
   assert.equal(
     automationTriggerText(
       sentry(SENTRY_TRIGGER_EVENT.ALERT_TRIGGERED, { level: [SENTRY_LEVEL.WARNING] }),
     ),
-    "When an alert fires in Sentry · warning",
+    "When an alert fires in Sentry, at warning level",
   );
 });
 

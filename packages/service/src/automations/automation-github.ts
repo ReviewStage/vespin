@@ -26,14 +26,17 @@ import { AutomationCadence, type AutomationCadenceUnavailable } from "./automati
  *
  * Our GitHub App's webhook (`github-webhook-app.ts`) hands every signed
  * delivery here as well. A pull request opened or labeled, a pull request
- * ready for review opened, reopened, marked ready, or pushed to, an issue
- * opened or labeled, a check suite that completed without passing, and a
- * push to a branch are read; nothing else is. A pull request opened is
+ * ready for review opened, reopened, marked ready, or pushed to, a pull
+ * request merged, an issue opened or labeled, a check suite that completed
+ * without passing, a push to a branch, and a release published are read;
+ * nothing else is. A pull request opened is
  * both its own event and an update, so it fires the automations listening
  * for either. Only what the run's history shows is
  * read off the delivery: the repository, the number, title, and address of
- * the issue or pull request, the branch, and a failed check's commit by its
- * address, never a body. The firing is
+ * the issue or pull request, the branch, a release's tag, name, and
+ * address, and a failed check's commit by its
+ * address, never a body; beside it, the repository's default branch, which
+ * a trigger may keep to and no history shows. The firing is
  * published under GitHub's own delivery id, which a redelivery carries
  * again, so a delivery GitHub sends twice records one run per automation;
  * the automation-runs queue's consumer records and starts it
@@ -45,7 +48,9 @@ import { AutomationCadence, type AutomationCadenceUnavailable } from "./automati
  * from an agent's branch, which is a coding agent writing as its developer),
  * or another bot, and, for a pull request, the moment it is
  * (opened, marked ready, or pushed to), whether it is a draft, and whether
- * it comes from a fork; an issue an agent opened as its developer has no
+ * it comes from a fork, and for a release whether it is a prerelease; a
+ * merged pull request is read by whose pull request it is rather than by
+ * who merged it, which is often the merge queue's bot; an issue an agent opened as its developer has no
  * branch to tell it by, and reads as people's; the trigger's own settings say which of those fire
  * it (`triggerMatches`), people's events alone and no draft or fork where
  * it names none. Two things fire nothing whatever a trigger says, so an
@@ -62,12 +67,15 @@ const GITHUB_EVENT = {
   ISSUES: "issues",
   CHECK_SUITE: "check_suite",
   PUSH: "push",
+  RELEASE: "release",
 } as const;
 
 const GITHUB_ACTION = {
   OPENED: "opened",
   LABELED: "labeled",
   COMPLETED: "completed",
+  CLOSED: "closed",
+  PUBLISHED: "published",
 } as const;
 
 /** The conclusions of a check suite that read as failed. */
@@ -102,7 +110,13 @@ const AGENT_OPENING_ACTIONS: ReadonlySet<string> = new Set([
 const MAXIMUM_AUTOMATIONS = 100;
 
 const LabelSchema = Schema.Struct({ name: Schema.String });
-const RepositorySchema = Schema.Struct({ full_name: Schema.String });
+
+// Note that every delivery's repository names its default branch, read as optional so a delivery that left it out is still read, its default branch then matching nothing.
+const RepositorySchema = Schema.Struct({
+  full_name: Schema.String,
+  default_branch: Schema.optionalKey(Schema.String),
+});
+
 const SenderSchema = Schema.Struct({ type: Schema.String, login: Schema.String });
 
 const PullRequestSchema = Schema.Struct({
@@ -124,6 +138,9 @@ const PullRequestSchema = Schema.Struct({
       }),
     ),
     draft: Schema.optionalKey(Schema.Boolean),
+    // Whether a closed pull request was merged, and who opened it, whom a merge is read by.
+    merged: Schema.optionalKey(Schema.NullOr(Schema.Boolean)),
+    user: Schema.optionalKey(Schema.NullOr(SenderSchema)),
   }),
 });
 
@@ -144,7 +161,11 @@ const IssueSchema = Schema.Struct({
 
 const CheckSuiteSchema = Schema.Struct({
   action: Schema.String,
-  repository: Schema.Struct({ full_name: Schema.String, html_url: Schema.String }),
+  repository: Schema.Struct({
+    full_name: Schema.String,
+    html_url: Schema.String,
+    default_branch: Schema.optionalKey(Schema.String),
+  }),
   check_suite: Schema.Struct({
     head_branch: Schema.NullOr(Schema.String),
     head_sha: Schema.String,
@@ -160,13 +181,27 @@ const PushSchema = Schema.Struct({
   sender: SenderSchema,
 });
 
+const ReleaseSchema = Schema.Struct({
+  action: Schema.String,
+  repository: RepositorySchema,
+  sender: SenderSchema,
+  release: Schema.Struct({
+    tag_name: Schema.String,
+    name: Schema.optionalKey(Schema.NullOr(Schema.String)),
+    html_url: Schema.String,
+    prerelease: Schema.Boolean,
+  }),
+});
+
 /**
  * One delivery read as a trigger: the event, the repository, the firing the
  * history keeps, the labels a label filter is read against (the one just
  * applied, or every label of what was opened), the branch a branch filter
+ * is read against, the repository's default branch a trigger kept to it
  * is read against, who sent it (none for a check, which names no sender),
- * the moment of a pull request's update, whether it is a push, and whether
- * a pull request is a draft or a fork's.
+ * the moment of a pull request's update, whether it is a push, whether
+ * a pull request is a draft or a fork's, and a release's tag and whether it
+ * is a prerelease.
  */
 interface GitHubEventRead {
   readonly event: GitHubTriggerEvent;
@@ -174,11 +209,14 @@ interface GitHubEventRead {
   readonly firing: AutomationFiring;
   readonly labels: readonly string[];
   readonly branch: string | undefined;
+  readonly defaultBranch: string | undefined;
   readonly sender: GitHubSender | undefined;
   readonly moment: PullRequestMoment | undefined;
   readonly pushed: boolean;
   readonly draft: boolean;
   readonly fork: boolean;
+  readonly tag: string | undefined;
+  readonly prerelease: boolean;
 }
 
 /** Who sent a delivery: our agents where it is the App's own bot, another bot, or a person. */
@@ -193,12 +231,21 @@ function senderOf(
   return sender.type === BOT_SENDER ? GITHUB_SENDER.OTHER_BOTS : GITHUB_SENDER.PEOPLE;
 }
 
+/** Whether a pull request's delivery is its merge: closed, and merged. */
+function isMerge(read: typeof PullRequestSchema.Type): boolean {
+  return read.action === GITHUB_ACTION.CLOSED && read.pull_request.merged === true;
+}
+
 /**
  * Who sent a pull request's delivery. A person who opened, reopened, or
  * marked ready a pull request from an agent's branch of the repository's own
  * counts as our agents, because a coding agent that writes as its developer
  * opens its pull request on their token, so GitHub names the developer;
- * the branch is where every coding agent works. Note that a person doing
+ * the branch is where every coding agent works. A merge is read by whose
+ * pull request it is, by the same rule, rather than by who merged it,
+ * because the merge queue's bot merges most of them and an agent's own
+ * pull request merging must not fire an automation that hears people
+ * alone. Note that a person doing
  * the same by hand reads as our agents too, which mislabels the event
  * and grants nothing, and that a push is read by its sender alone, which
  * is the App's for every push an agent makes.
@@ -208,10 +255,12 @@ function pullRequestSender(
   agentLogin: string | undefined,
   fork: boolean,
 ): GitHubSender {
-  const sender = senderOf(read.sender, agentLogin);
+  const merged = isMerge(read);
+  const actor = merged ? (read.pull_request.user ?? read.sender) : read.sender;
+  const sender = senderOf(actor, agentLogin);
   const head = read.pull_request.head?.ref;
   const agentBranch = head !== undefined && isAgentBranch(head);
-  const agentOpened = !fork && agentBranch && AGENT_OPENING_ACTIONS.has(read.action);
+  const agentOpened = !fork && agentBranch && (merged || AGENT_OPENING_ACTIONS.has(read.action));
 
   return sender === GITHUB_SENDER.PEOPLE && agentOpened ? GITHUB_SENDER.APP_AGENTS : sender;
 }
@@ -239,9 +288,10 @@ function itemEvent(
 
 /**
  * The events a pull request's delivery is: opened or labeled, as
- * `itemEvent` reads them, and an update where its action is one of the
- * moments an update fires on, each read with who sent it, whether it is a
- * draft, and whether it comes from a fork, for the trigger to choose.
+ * `itemEvent` reads them, an update where its action is one of the
+ * moments an update fires on, and a merge, each read with who sent it,
+ * whether it is a draft, and whether it comes from a fork, for the trigger
+ * to choose.
  */
 function pullRequestEvents(
   read: typeof PullRequestSchema.Type,
@@ -266,15 +316,21 @@ function pullRequestEvents(
     repository: repository.full_name,
     labels: label === undefined ? pull.labels.map((one) => one.name) : [label.name],
     branch: pull.base.ref,
+    defaultBranch: repository.default_branch,
     sender: pullRequestSender(read, agentLogin, fork),
     pushed: moment === PULL_REQUEST_MOMENT.PUSHED,
     draft: pull.draft === true,
     fork,
+    tag: undefined,
+    prerelease: false,
   };
 
   const kinds = [
     ...(kind === undefined ? [] : [{ event: kind, moment: undefined }]),
     ...(moment === undefined ? [] : [{ event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED, moment }]),
+    ...(isMerge(read)
+      ? [{ event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED, moment: undefined }]
+      : []),
   ];
 
   return kinds.map(({ event, moment: at }) => ({
@@ -310,14 +366,21 @@ function githubEventsOf(
   return read === undefined ? [] : [read];
 }
 
-/** An issue's, a check suite's, or a push's delivery as a trigger, where it is one an automation listens for; nothing otherwise. */
+/** An issue's, a check suite's, a push's, or a release's delivery as a trigger, where it is one an automation listens for; nothing otherwise. */
 function githubEventOf(
   event: string,
   payload: UnparsedWireValue,
   agentLogin: string | undefined,
 ): GitHubEventRead | undefined {
   // Of an issue, a check, or a push, only who sent it is read beside the event itself.
-  const plain = { moment: undefined, pushed: false, draft: false, fork: false } as const;
+  const plain = {
+    moment: undefined,
+    pushed: false,
+    draft: false,
+    fork: false,
+    tag: undefined,
+    prerelease: false,
+  } as const;
 
   switch (event) {
     case GITHUB_EVENT.ISSUES: {
@@ -344,6 +407,7 @@ function githubEventOf(
         repository: repository.full_name,
         labels: label === undefined ? issue.labels.map((each) => each.name) : [label.name],
         branch: undefined,
+        defaultBranch: repository.default_branch,
         firing: {
           kind: AUTOMATION_FIRING.GITHUB,
           event: kind,
@@ -379,6 +443,7 @@ function githubEventOf(
         repository: repository.full_name,
         labels: [],
         branch,
+        defaultBranch: repository.default_branch,
         firing: {
           kind: AUTOMATION_FIRING.GITHUB,
           event: GITHUB_TRIGGER_EVENT.CHECK_FAILED,
@@ -407,12 +472,44 @@ function githubEventOf(
         repository: repository.full_name,
         labels: [],
         branch,
+        defaultBranch: repository.default_branch,
         firing: {
           kind: AUTOMATION_FIRING.GITHUB,
           event: GITHUB_TRIGGER_EVENT.PUSH,
           repository: repository.full_name,
           branch,
           url: compare,
+        },
+      };
+    }
+
+    case GITHUB_EVENT.RELEASE: {
+      const read = readDelivery(ReleaseSchema, payload);
+
+      if (Result.isFailure(read) || read.success.action !== GITHUB_ACTION.PUBLISHED) {
+        return undefined;
+      }
+
+      const { release, repository, sender } = read.success;
+      const name = release.name?.trim();
+
+      return {
+        ...plain,
+        sender: senderOf(sender, agentLogin),
+        event: GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED,
+        repository: repository.full_name,
+        labels: [],
+        branch: undefined,
+        defaultBranch: repository.default_branch,
+        tag: release.tag_name,
+        prerelease: release.prerelease,
+        firing: {
+          kind: AUTOMATION_FIRING.GITHUB,
+          event: GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED,
+          repository: repository.full_name,
+          ...(name === undefined || name === "" ? undefined : { title: name }),
+          tag: release.tag_name,
+          url: release.html_url,
         },
       };
     }
@@ -426,8 +523,9 @@ function githubEventOf(
  * Whether the trigger listens for this event: its event, whose events it
  * hears (people's alone where it names none), the moments of an update it
  * fires on (every one where it names none), a draft or a fork's pull
- * request only where it asks for them, and its label and branch filters
- * where it names any. Note that a push by our agents fires nothing
+ * request or a prerelease only where it asks for them, and its label,
+ * branch, and tag filters where it names any, the repository's default
+ * branch among them. Note that a push by our agents fires nothing
  * whatever the trigger says, because an agent answering its own run with
  * a push would start that run again.
  */
@@ -446,12 +544,19 @@ function triggerMatches(trigger: AutomationTrigger, read: GitHubEventRead): bool
 
   if (read.moment !== undefined && !moments.includes(read.moment)) return false;
 
-  if ((read.draft && trigger.drafts !== true) || (read.fork && trigger.forks !== true)) {
+  if (
+    (read.draft && trigger.drafts !== true) ||
+    (read.fork && trigger.forks !== true) ||
+    (read.prerelease && trigger.prereleases !== true)
+  ) {
     return false;
   }
 
   const labels = trigger.labels ?? [];
   const branches = trigger.branches ?? [];
+  const tags = trigger.tags ?? [];
+  // A tag is matched exactly, as git names it.
+  const tagged = tags.length === 0 || (read.tag !== undefined && tags.includes(read.tag));
 
   // A label is matched the way GitHub folds a label's case.
   const labeled =
@@ -460,10 +565,18 @@ function triggerMatches(trigger: AutomationTrigger, read: GitHubEventRead): bool
       read.labels.some((label) => label.toLowerCase() === wanted.toLowerCase()),
     );
 
-  const branched =
-    branches.length === 0 || (read.branch !== undefined && branches.includes(read.branch));
+  // A trigger kept to the default branch matches the one the delivery names, beside any branches named.
+  const onDefault =
+    trigger.defaultBranch === true &&
+    read.branch !== undefined &&
+    read.branch === read.defaultBranch;
 
-  return labeled && branched;
+  const branched =
+    (branches.length === 0 && trigger.defaultBranch !== true) ||
+    onDefault ||
+    (read.branch !== undefined && branches.includes(read.branch));
+
+  return labeled && branched && tagged;
 }
 
 /** Publishes a firing under the delivery's id for every automation listening for the one event read, answering how many it published. */

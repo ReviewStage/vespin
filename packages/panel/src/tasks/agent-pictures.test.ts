@@ -922,11 +922,27 @@ test("an image a line's row names by the picture it was kept as is read through 
 });
 
 test.each([
-  { words: "Make this [Picture 1] bigger.", inWords: ["Open Picture 1"], inRow: [] },
-  { words: "Name it `[Picture 1]` in the code.", inWords: [], inRow: ["Picture 1"] },
+  {
+    words: "Make this [Picture 1] bigger.",
+    name: "Picture 1",
+    inWords: [["Open Picture 1", "data:image/png;base64,AAAA"]],
+    inRow: [],
+  },
+  {
+    words: "Make this [File: IMG_1234.png] bigger.",
+    name: "IMG_1234.png",
+    inWords: [["Open IMG_1234.png", "data:image/png;base64,AAAA"]],
+    inRow: [],
+  },
+  {
+    words: "Name it `[Picture 1]` in the code.",
+    name: "Picture 1",
+    inWords: [],
+    inRow: ["Picture 1"],
+  },
 ])(
-  "a line's picture is its chip where its words name it, and stays among its files where only code names it: $words",
-  async ({ words, inWords, inRow }) => {
+  "a line's picture is its thumbnail chip where its words name it, by its own name or a picture's, and stays among its files where only code names it: $words",
+  async ({ words, name, inWords, inRow }) => {
     const { container } = await drawn({
       id: "line",
       role: MESSAGE_ROLE.USER,
@@ -935,16 +951,16 @@ test.each([
         {
           type: "file",
           mediaType: INBOX_IMAGE_TYPE.PNG,
-          filename: "Picture 1",
+          filename: name,
           url: "data:image/png;base64,AAAA",
         },
       ],
     });
 
     assert.deepEqual(
-      [...container.querySelectorAll('[aria-label^="Open Picture"]')].flatMap((chip) =>
+      [...container.querySelectorAll(`[aria-label="Open ${name}"]`)].flatMap((chip) =>
         chip.closest('ul[aria-label="Attached files"]') === null
-          ? [chip.getAttribute("aria-label")]
+          ? [[chip.getAttribute("aria-label"), chip.querySelector("img")?.getAttribute("src")]]
           : [],
       ),
       inWords,

@@ -295,6 +295,14 @@ body {
   gap: var(--ui-space-12);
 }
 
+/* A page's column an intro card heads, its card as wide as the column. */
+.catalog-intro-room {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-12);
+  width: 100%;
+}
+
 /* A row of attachment chips, with room above for the discs on their corners. */
 .catalog-attachments {
   display: flex;
@@ -303,6 +311,25 @@ body {
   margin: 0;
   padding: var(--ui-space-12) 0 0;
   list-style: none;
+}
+
+/* Pictures in written words side by side, each the box its upload's cover lays itself over. */
+.catalog-upload-covers {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--ui-space-16);
+}
+
+.catalog-upload-cover {
+  position: relative;
+  width: 280px;
+  max-width: 100%;
+}
+
+.catalog-upload-cover > img {
+  display: block;
+  width: 100%;
+  height: auto;
 }
 
 /* A column narrower than a phone, where long words have to wrap. */
@@ -534,6 +561,11 @@ body {
 
 .catalog-settings-frame-narrow {
   max-width: 400px;
+}
+
+/* Wide enough for a page at the wide measure to stand at it. */
+.catalog-settings-frame-wide {
+  max-width: 1120px;
 }
 
 /* A key's field and its presses, grown under its row: the field takes the

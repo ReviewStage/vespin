@@ -53,6 +53,31 @@
             "kind": {
               "type": "string",
               "enum": [
+                "schedule"
+              ]
+            },
+            "at": {
+              "type": "string"
+            },
+            "timezone": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
+            }
+          },
+          "required": [
+            "kind",
+            "at",
+            "timezone"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
                 "github"
               ]
             },
@@ -65,7 +90,9 @@
                 "issue-opened",
                 "issue-labeled",
                 "check-failed",
-                "push"
+                "push",
+                "pull-request-merged",
+                "release-published"
               ]
             },
             "labels": {
@@ -85,6 +112,9 @@
                 "maxLength": 100
               },
               "maxItems": 10
+            },
+            "defaultBranch": {
+              "type": "boolean"
             },
             "senders": {
               "type": "array",
@@ -112,6 +142,18 @@
               "type": "boolean"
             },
             "forks": {
+              "type": "boolean"
+            },
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "maxItems": 10
+            },
+            "prereleases": {
               "type": "boolean"
             }
           },
@@ -191,7 +233,7 @@
           "additionalProperties": false
         }
       ],
-      "description": "cron: five fields in an IANA timezone, at most every fifteen minutes. GitHub senders default to people, moments (pull-request-updated only) to all, drafts and forks to false. Sentry: prefer alert-triggered, fired by an alert rule whose action is \"Send a notification via Vespin\"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page."
+      "description": "cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and time on that zone's clock, to run once, after which it is paused. GitHub senders default to people (for pull-request-merged, whose pull request it is), moments (pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) to false; tags match a release's tag exactly. Sentry: prefer alert-triggered, fired by an alert rule whose action is \"Send a notification via Vespin\"; issue-created fires on every new issue. A filter matches any of its values, and every filter given must. Webhooks are made only on the automations page."
     },
     "repositories": {
       "type": "array",

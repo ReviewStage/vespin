@@ -85,6 +85,12 @@ export const INBOX_BOX_WORDS = {
   SEND: "Send",
   /** What settles a notice that waits on the reader's nod without messaging its agent. */
   GOT_IT: "Got it",
+  /** What Send reads while the box starts a new thread with the thread's agent rather than replying. */
+  START_THREAD: "Start thread",
+  /** What the box's line asks for while it starts a new thread. */
+  NEW_THREAD_PLACEHOLDER: "Start a new thread",
+  /** What the choice that turns the next send into a new thread says before the agent's name. */
+  SEND_AS_NEW: "Send as a new thread to",
 } as const;
 
 /**

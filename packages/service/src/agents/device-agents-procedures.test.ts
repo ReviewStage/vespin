@@ -249,11 +249,13 @@ function publishedRelease() {
 }
 
 /** A box's pairing start with no credential, from the address given where one is, at the version given or the floor's. */
-function startPairing(init: { readonly version?: string; readonly ip?: string } = {}) {
+function startPairing(
+  init: { readonly version?: string; readonly ip?: string; readonly name?: string } = {},
+) {
   return request(undefined, PATH.PAIRING_START, {
     version: init.version ?? HOST_VERSION.FLOOR,
     ...(init.ip !== undefined && { ip: init.ip }),
-    body: { name: "fra-01", platform: DEVICE_PLATFORM.LINUX, arch: DEVICE_ARCH.X64 },
+    body: { name: init.name ?? "fra-01", platform: DEVICE_PLATFORM.LINUX, arch: DEVICE_ARCH.X64 },
   });
 }
 
@@ -822,6 +824,62 @@ it.layer(SERVICES)("a local agent's Mac", (it) => {
         assert.deepEqual(countedProperties(owner, SERVER_EVENT.HOST_PAIRING_CHANGE), [
           { action: SERVER_HOST_PAIRING_ACTION.APPROVE },
         ]);
+      }),
+  );
+
+  // Note that the regression this catches is a name kept as the box sent it, whose line break draws a facts line of a stranger's own under it where a member approves its pairing, or whose bidi override turns its words around.
+  it.effect(
+    "a machine's name is kept on one line with no control or format character, from its start and its register; a start with nothing else is refused, and a register is named for its platform",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* account();
+
+        const started = yield* answerOf(
+          startPairing({ name: "Dean's MacBook Pro\nmacOS · arm64 · 192.168.1.23\u202E" }),
+        );
+
+        const { pollSecret, userCode }: { pollSecret: string; userCode: string } = started.body;
+        const read = yield* byCode(owner, PATH.PAIRING, userCode);
+        yield* byCode(owner, PATH.PAIRING_APPROVE, userCode);
+        const handed = yield* pollPairing(pollSecret);
+        const deviceId: string = handed.body.deviceId;
+        const secret: string = handed.body.deviceSecret;
+
+        yield* statusOf(
+          request(secret, PATH.DEVICES, {
+            version: HOST_VERSION.FLOOR,
+            body: {
+              ...registered(deviceId),
+              name: "fra-01\u0000\t\u2066box",
+              platform: DEVICE_PLATFORM.LINUX,
+              home: "/srv/luke",
+            },
+          }),
+        );
+
+        const listed = yield* answerOf(request(owner, PATH.HOSTS));
+
+        // Note that a joined machine whose name keeps nothing that draws is named for its platform, never refused, since no one stands at its terminal.
+        const blankRegister = yield* statusOf(
+          request(secret, PATH.DEVICES, {
+            version: HOST_VERSION.FLOOR,
+            body: {
+              ...registered(deviceId),
+              name: "\u200D\t",
+              platform: DEVICE_PLATFORM.LINUX,
+              home: "/srv/luke",
+            },
+          }),
+        );
+
+        const relisted = yield* answerOf(request(owner, PATH.HOSTS));
+        const blank = yield* statusOf(startPairing({ name: "\u202E\n\t" }));
+
+        assert.equal(read.body.name, "Dean's MacBook Pro macOS · arm64 · 192.168.1.23");
+        assert.equal(listed.body.hosts[0]?.name, "fra-01 box");
+        assert.equal(blankRegister, HOSTED_HTTP_STATUS.OK);
+        assert.equal(relisted.body.hosts[0]?.name, "Linux server");
+        assert.equal(blank, HOSTED_HTTP_STATUS.BAD_REQUEST);
       }),
   );
 

@@ -29,6 +29,7 @@ import {
   isNotNull,
   lt,
   max,
+  not,
   notExists,
   or,
   type SQL,
@@ -42,6 +43,7 @@ import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from
 import {
   conversations,
   messages,
+  recordedSpokenLine,
   type StoredTurnUsage,
   standingLine,
   turns,
@@ -1220,6 +1222,8 @@ const findSentLine = SqlSchema.findOneOption({
             eq(messages.clientId, key.clientId),
             // A line its hand-over withdrew was not sent, and a send repeated under its key sends it afresh.
             standingLine(messages),
+            // A line said on a call that no delegation handed on yet was recorded, not sent.
+            not(recordedSpokenLine(messages)),
             // A line its dispatch claim still hands over is not sent yet: the hand-over may withdraw it.
             sql`not (${conversations.dispatchLine} is not distinct from ${messages.id} and ${conversations.dispatchClaimedAt} > ${key.claimExpiredBefore})`,
           ),
@@ -1285,6 +1289,7 @@ const TURN_FIELDS = {
   failure: turns.failure,
   cancelRequestedAt: turns.cancelRequestedAt,
   fastRefused: turns.fastRefused,
+  files: turns.files,
 };
 
 const TurnRowSchema = Schema.Struct({
@@ -1308,6 +1313,8 @@ const TurnRowSchema = Schema.Struct({
   cancelRequestedAt: Schema.NullOr(InstantColumnSchema),
   /** Whether a step of the turn ran at standard speed because Anthropic refused it Fast. */
   fastRefused: Schema.Boolean,
+  /** The files the turn changed, as its runner diffed them when it ended; read as the record reads it (`turn-record.ts`). */
+  files: Schema.NullOr(WireValueSchema),
 });
 
 export type StoredTurnRecord = typeof TurnRowSchema.Type;

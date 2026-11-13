@@ -5,7 +5,7 @@ import {
   base64Bytes,
 } from "@repo/features/agent-wire";
 import {
-  nextPictureName,
+  attachedPictureName,
   unusedName,
   writableName,
   writtenMarkers,
@@ -46,17 +46,20 @@ import { type FileDrop, useFileDrop } from "./use-file-drop.js";
  * together, and the first file that cannot come says why in the box's
  * note while the ones that can still come.
  *
- * A box that takes files into its words (`inWords`) attaches each image
- * under a picture's name, "Picture 1" and on, and every other file under its
- * own name made one a marker can spell and no other file of the box holds
- * (`@repo/features/file-marker`), and has each one's marker put in as a chip
+ * A box that takes files into its words (`inWords`) attaches each file
+ * under its own name made one a marker can spell and no other file of the
+ * box holds, and an image with no name of its own, a pasted screenshot,
+ * under a picture's name, "Picture 1" and on (`@repo/features/file-marker`), and has each one's marker put in as a chip
  * where the caret stands the moment the files are handed, before they are
  * read, so words typed meanwhile follow it, as a long paste taken as a file
  * is put in where it was pasted; the chip draws its file once it is read,
  * and a file that does not come takes its chip back out. A file whose
  * marker was in the words goes with it: deleting its chip takes the file
  * off, and undo bringing the chip back brings the file back (`follow`),
- * until the message goes (`settle`). A file the words could not take, the
+ * until the message goes (`settle`). A chip copied out of a box carries its
+ * file (`known`), and pasted into a box that does not hold that file brings
+ * it, taken under a name of this box's as a file handed to it is (`adopt`).
+ * A file the words could not take, the
  * box's editor not loaded or its bound reached, stays attached beside the
  * words, as every file stood before markers.
  */
@@ -231,6 +234,13 @@ function withFiles(
   return { attachments, refusal };
 }
 
+/** A file handed to a box whose bytes may still be on their way, as a description's picture pasted in is read: the name and type it is named by, and the file once read, or nothing where it could not be. */
+export interface PendingFile {
+  readonly name: string;
+  readonly type: string;
+  readonly file: Promise<File | undefined>;
+}
+
 /** Where a box keeps its files: the files as it draws them, and a change handed what it holds as the change lands. */
 interface AttachedFilesHolder {
   readonly attachments: readonly AgentAttachment[];
@@ -268,6 +278,10 @@ export interface AttachedFiles {
   readonly attach: (files: readonly File[]) => void;
   /** Takes pasted files as a drop takes them, answering whether there were any, so text pastes as it always does. */
   readonly paste: (files: readonly File[]) => boolean;
+  /** Takes files the chips pasted into its words carried in, their chips already there, answering the name each is taken under, in order, or nothing where the box takes none into its words now. */
+  readonly adopt: (files: readonly PendingFile[]) => readonly string[] | undefined;
+  /** The file the box knows by the name, held or taken off with its chip, which a copy of its chip carries. */
+  readonly known: (name: string) => AgentAttachment | undefined;
   /** Takes pasted words as a text file where they run long and the box has room for them as one, answering whether it did. */
   readonly pasteText: (words: string) => boolean;
   readonly remove: (index: number) => void;
@@ -322,13 +336,15 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
   const usedNames = () =>
     new Set([...heldNow().map((file) => file.name), ...stashed.current.keys(), ...minted.current]);
 
-  /** The names files handed to the box go by, minted as they are handed: a picture as the next picture, any other file by its own name written so a marker can carry it, each past every name used, so no two files of the box share one. */
-  const named = (files: readonly File[]): readonly string[] => {
+  /** The names files handed to the box go by, minted as they are handed: each file by its own name written so a marker can carry it, a picture with none of its own as the next picture, each past every name used, so no two files of the box share one. */
+  const named = (
+    files: readonly { readonly name: string; readonly type: string }[],
+  ): readonly string[] => {
     const used = usedNames();
 
     return files.map((file) => {
       const name = isPictureFile(file)
-        ? nextPictureName(used)
+        ? attachedPictureName(file.name, used)
         : unusedName(writableName(file.name), used);
 
       used.add(name);
@@ -388,6 +404,35 @@ export function useAttachedFiles(options: AttachedFilesOptions): AttachedFiles {
 
       return true;
     },
+    adopt: (pending) => {
+      const { held, inWords } = latest.current;
+
+      if (pending.length === 0 || held === true || inWords === undefined) return undefined;
+      // Note that the names are minted before the chips land, so the words name them as they are read, as a file handed to the box is.
+      const names = named(pending);
+
+      for (const name of names) placed.current.add(name);
+      setReading((count) => count + 1);
+      void Promise.all(pending.map((each) => each.file))
+        .then(async (files) => {
+          const kept = files.flatMap((file, at) => (file === undefined ? [] : [at]));
+
+          const done = await readFiles(
+            kept.flatMap((at) => files[at] ?? []),
+            kept.map((at) => names[at] ?? ""),
+          );
+
+          const lost = names.find((_, at) => files[at] === undefined);
+          take(
+            { ...done, refusal: lost === undefined ? done.refusal : REFUSAL.UNREADABLE(lost) },
+            names,
+          );
+        })
+        .finally(() => setReading((count) => count - 1));
+
+      return names;
+    },
+    known: (name) => heldNow().find((file) => file.name === name) ?? stashed.current.get(name),
     pasteText: (words) => {
       const { most = AGENT_BOUNDS.MAX_ATTACHMENTS, held } = latest.current;
 

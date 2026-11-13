@@ -38,8 +38,9 @@
  * its instant.
  */
 
-import { AGENT_MACHINE } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
+import { TurnFilesSummarySchema, type TurnFilesSummaryView } from "@repo/features/turn-files-wire";
 import {
   TURN_OPEN,
   TURN_ORIGIN,
@@ -261,6 +262,7 @@ const endOpen = SqlSchema.findAll({
     failureDetail: Schema.NullOr(Schema.String),
     usage: Schema.NullOr(TurnUsageColumnSchema),
     responseIds: Schema.Array(Schema.String),
+    files: Schema.NullOr(TurnFilesSummarySchema),
   }),
   Result: IdSchema,
   execute: (row) =>
@@ -274,6 +276,7 @@ const endOpen = SqlSchema.findAll({
           failureDetail: row.failureDetail,
           usage: row.usage,
           responseIds: [...row.responseIds],
+          files: row.files,
         })
         .where(
           and(
@@ -683,6 +686,43 @@ const releaseWaited = SqlSchema.findAll({
     ),
 });
 
+/** The running and queued turns no Stop was asked of that wait on a limit's reset, of the account's agents its ChatGPT plans pay for, their wait cleared now. */
+const releasePlanWaits = SqlSchema.findAll({
+  Request: Schema.Struct({ userId: Schema.String }),
+  Result: WaitedTurnSchema,
+  execute: ({ userId }) =>
+    Database.use((db) =>
+      db
+        .update(turns)
+        .set({ waitsUntil: null })
+        .where(
+          and(
+            inArray(turns.status, [TURN_STATUS.RUNNING, TURN_STATUS.QUEUED]),
+            isNull(turns.cancelRequestedAt),
+            isNotNull(turns.waitsUntil),
+            inArray(
+              turns.conversationId,
+              db
+                .select({ id: agentTable.conversationId })
+                .from(agentTable)
+                .where(
+                  and(
+                    eq(agentTable.userId, userId),
+                    eq(agentTable.payer, AGENT_PAYER.CHATGPT_SUBSCRIPTION),
+                  ),
+                ),
+            ),
+          ),
+        )
+        .returning({
+          userId: turns.userId,
+          conversationId: turns.conversationId,
+          turnId: turns.id,
+          status: turns.status,
+        }),
+    ),
+});
+
 /** The conversation's running turns under an attempt older than the launch named, whose runner that launch replaced. */
 const findSuperseded = SqlSchema.findAll({
   Request: Schema.Struct({ conversationId: Schema.String, launch: Schema.Number }),
@@ -937,6 +977,8 @@ export interface TurnEnd {
   readonly failureDetail: string | null;
   readonly usage: typeof TurnUsageColumnSchema.Type | null;
   readonly responseIds: readonly string[];
+  /** The files the turn changed, as its runner diffed its checkout when it ended; null where it changed none or none was read. */
+  readonly files: TurnFilesSummaryView | null;
 }
 
 /**
@@ -1250,6 +1292,17 @@ export function releaseWaitedTurns(
   limit: number,
 ): TurnStateEffect<readonly WaitedTurn[]> {
   return releaseWaited({ at, limit });
+}
+
+/**
+ * The waiting turns of the account's agents its ChatGPT plans pay for, their
+ * wait cleared before the reset, as a reset credit spent on one of its plans
+ * gives them room: answers them for a launch now, as the sweep's release
+ * does, whose payer choice finds the plan with room, and none where none
+ * waited, so of two releases at once only one hands a turn on.
+ */
+export function releasePlanWaitedTurns(userId: string): TurnStateEffect<readonly WaitedTurn[]> {
+  return releasePlanWaits({ userId });
 }
 
 /** Settles the turn a rewind keeps as its conversation's first, its work dropped, with no Stop or failure on it. */

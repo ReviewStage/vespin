@@ -85,6 +85,10 @@ export const ENTITY_KIND = {
   REPOSITORY: OWN_KIND.REPOSITORY,
   WORKSPACE: OWN_KIND.WORKSPACE,
   DATE: MENTION_KIND.DATE,
+  /** An app on the developer's Mac. */
+  MAC_APP: MENTION_KIND.MAC_APP,
+  /** The developer's Mac as a whole. */
+  COMPUTER: MENTION_KIND.COMPUTER,
 } as const satisfies Record<string, Entity["kind"]>;
 
 export type EntityKind = (typeof ENTITY_KIND)[keyof typeof ENTITY_KIND];
@@ -290,6 +294,8 @@ const ENTITY_NAME: EntityNames = {
   [ENTITY_KIND.REPOSITORY]: NO_LIVE_NAME,
   [ENTITY_KIND.WORKSPACE]: NO_LIVE_NAME,
   [ENTITY_KIND.DATE]: NO_LIVE_NAME,
+  [ENTITY_KIND.MAC_APP]: NO_LIVE_NAME,
+  [ENTITY_KIND.COMPUTER]: NO_LIVE_NAME,
 };
 
 /**
@@ -332,6 +338,8 @@ export const ENTITY_WORD: Readonly<Record<EntityKind, string>> = {
   [ENTITY_KIND.REPOSITORY]: TERM.REPOSITORY.one,
   [ENTITY_KIND.WORKSPACE]: "workspace",
   [ENTITY_KIND.DATE]: "date",
+  [ENTITY_KIND.MAC_APP]: "app",
+  [ENTITY_KIND.COMPUTER]: "computer",
 };
 
 /**

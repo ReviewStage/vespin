@@ -30,6 +30,7 @@ export const ADMIN_ROUTE_PATH = {
   WORKSPACES: "/api/admin/workspaces",
   WORKSPACE: "/api/admin/workspace",
   RELIABILITY: "/api/admin/reliability",
+  CATALOG: "/api/admin/catalog",
 } as const;
 
 export const ADMIN_ERROR = {
@@ -307,6 +308,7 @@ export function adminWorkspaceId(value: string | undefined): string | undefined 
  * app's host carries to the service for it, and where each is served.
  */
 export const ADMIN_READ = {
+  CATALOG: "catalog",
   COST: "cost",
   DAY: "day",
   METRICS: "metrics",
@@ -321,6 +323,7 @@ export type AdminReadProcedure = (typeof ADMIN_READ)[keyof typeof ADMIN_READ];
 
 /** Where each admin read is served. */
 export const ADMIN_READ_PATH = {
+  [ADMIN_READ.CATALOG]: ADMIN_ROUTE_PATH.CATALOG,
   [ADMIN_READ.COST]: ADMIN_ROUTE_PATH.COST,
   [ADMIN_READ.DAY]: ADMIN_ROUTE_PATH.DAY,
   [ADMIN_READ.METRICS]: ADMIN_ROUTE_PATH.METRICS,
@@ -347,6 +350,19 @@ export const ADMIN_REFUSED = {
 } as const;
 
 export type AdminRefused = (typeof ADMIN_REFUSED)[keyof typeof ADMIN_REFUSED];
+
+/** The word a screen tells a refusal apart by, from the status the admin routes answer it under. */
+const REFUSED_BY_STATUS: ReadonlyMap<number, AdminRefused> = new Map([
+  [ADMIN_HTTP_STATUS.UNAUTHORIZED, ADMIN_REFUSED.SIGNED_OUT],
+  [ADMIN_HTTP_STATUS.FORBIDDEN, ADMIN_REFUSED.FORBIDDEN],
+  [ADMIN_HTTP_STATUS.NOT_FOUND, ADMIN_REFUSED.MISSING],
+  [ADMIN_HTTP_STATUS.SERVICE_UNAVAILABLE, ADMIN_REFUSED.UNAVAILABLE],
+]);
+
+/** The refusal an admin read answered under `status` stands for, whichever client asked; none for a status no screen tells apart. */
+export function adminRefusedOf(status: number): AdminRefused | undefined {
+  return REFUSED_BY_STATUS.get(status);
+}
 
 /** An admin read that failed for no reason a screen tells apart: the screen words it as its own. */
 export const ADMIN_UNANSWERED = "unanswered";

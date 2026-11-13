@@ -19,6 +19,7 @@ import {
   type ReviewState,
 } from "./agent-wire.js";
 import { saidWords } from "./integration-health.js";
+import { MERGE_QUEUE_ENTRY_STATE, type MergeQueueEntryState } from "./merge-queue-wire.js";
 import {
   MERGE_METHOD,
   type MergeMethod,
@@ -59,12 +60,70 @@ export const PULL_REQUEST_STATE_LABEL = {
   [PULL_REQUEST_STATE.CLOSED]: "Closed",
 } as const satisfies Record<PullRequestState, string>;
 
+/** What a mark is drawn for beyond where a pull request stands: an open one in the merge queue. */
+export const PULL_REQUEST_MARK_QUEUED = "queued";
+
+/** What a pull request's mark is drawn for: where it stands, or queued. */
+export type PullRequestMarkState = PullRequestState | typeof PULL_REQUEST_MARK_QUEUED;
+
+/** Where a pull request's mark says it stands, on the panel and the iPhone alike: queued where it is open and the merge queue holds it, else where it stands. */
+export function pullRequestMarkState(pullRequest: {
+  readonly state: PullRequestState;
+  readonly queued?: boolean | undefined;
+}): PullRequestMarkState {
+  return pullRequest.queued === true && pullRequest.state === PULL_REQUEST_STATE.OPEN
+    ? PULL_REQUEST_MARK_QUEUED
+    : pullRequest.state;
+}
+
 /** What the row says of an open pull request GitHub's merge queue holds, as its tab's pill says it. */
 export const QUEUED_LABEL = "Queued";
+
+/** Where a pull request's mark says it stands, in the word a row is heard by: Queued for an open one the merge queue holds, else its state's word. */
+export function pullRequestMarkLabel(pullRequest: {
+  readonly state: PullRequestState;
+  readonly queued?: boolean | undefined;
+}): string {
+  const mark = pullRequestMarkState(pullRequest);
+
+  return mark === PULL_REQUEST_MARK_QUEUED ? QUEUED_LABEL : PULL_REQUEST_STATE_LABEL[mark];
+}
 
 /** How a pull request the merge queue holds is said where its place is known: "Queued #3", else "Queued". */
 export function queuedLabel(position: number | undefined): string {
   return position === undefined ? QUEUED_LABEL : `${QUEUED_LABEL} #${position}`;
+}
+
+/** Where a pull request in a merge queue stands, as the Merge queue page's badge says it. */
+export const MERGE_QUEUE_STAGE = {
+  WAITING: "waiting",
+  CHECKING: "checking",
+  MERGING: "merging",
+  FAILING: "failing",
+} as const;
+
+export type MergeQueueStage = (typeof MERGE_QUEUE_STAGE)[keyof typeof MERGE_QUEUE_STAGE];
+
+/** The stage each of GitHub's queue states reads as: a locked queue still merges what it holds, so it reads as merging. */
+const STAGE_OF_STATE = {
+  [MERGE_QUEUE_ENTRY_STATE.QUEUED]: MERGE_QUEUE_STAGE.WAITING,
+  [MERGE_QUEUE_ENTRY_STATE.AWAITING_CHECKS]: MERGE_QUEUE_STAGE.CHECKING,
+  [MERGE_QUEUE_ENTRY_STATE.MERGEABLE]: MERGE_QUEUE_STAGE.MERGING,
+  [MERGE_QUEUE_ENTRY_STATE.LOCKED]: MERGE_QUEUE_STAGE.MERGING,
+  [MERGE_QUEUE_ENTRY_STATE.UNMERGEABLE]: MERGE_QUEUE_STAGE.FAILING,
+} as const satisfies Record<MergeQueueEntryState, MergeQueueStage>;
+
+/** Each stage in the word its badge says. */
+export const MERGE_QUEUE_STAGE_LABEL = {
+  [MERGE_QUEUE_STAGE.WAITING]: "Waiting",
+  [MERGE_QUEUE_STAGE.CHECKING]: "Checking",
+  [MERGE_QUEUE_STAGE.MERGING]: "Merging",
+  [MERGE_QUEUE_STAGE.FAILING]: "Failing",
+} as const satisfies Record<MergeQueueStage, string>;
+
+/** The stage a queue entry in GitHub's `state` stands at. */
+export function mergeQueueStage(state: MergeQueueEntryState): MergeQueueStage {
+  return STAGE_OF_STATE[state];
 }
 
 /** What leaving GitHub's merge queue costs the pull requests behind it, said as Remove from queue and a queued Close each ask. */

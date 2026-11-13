@@ -60,6 +60,7 @@ import { slackChannelRepository, slackInstallation } from "../schemas/slack-inst
 import { conversations, messages, turns } from "../schemas/storage.js";
 import { task } from "../schemas/task.js";
 import { taskBlock } from "../schemas/task-block.js";
+import { taskFollower } from "../schemas/task-follower.js";
 import { taskPageVersion } from "../schemas/task-page.js";
 import { taskPin } from "../schemas/task-pin.js";
 import { taskRead } from "../schemas/task-read.js";
@@ -106,6 +107,24 @@ export const taskBlockSync = defineSyncTable(taskBlock, {
       through: task,
       key: task.id,
       by: taskBlock.blockedTaskId,
+      topics: [{ kind: TOPIC.WORKSPACE, column: task.organizationId }],
+    },
+  ],
+  log: LOG.EVERY,
+});
+
+/**
+ * A member following a task, on the task's topic and, through the task, its
+ * workspace's, so every member's task list hears a follow, an unfollow, or a
+ * follower's switch at once, as each list reads every task's followers.
+ */
+export const taskFollowerSync = defineSyncTable(taskFollower, {
+  topics: [
+    { kind: TOPIC.TASK, column: taskFollower.taskId },
+    {
+      through: task,
+      key: task.id,
+      by: taskFollower.taskId,
       topics: [{ kind: TOPIC.WORKSPACE, column: task.organizationId }],
     },
   ],
@@ -329,9 +348,15 @@ export const workspaceFormerSlugSync = defineSyncTable(workspaceFormerSlug, {
   topics: [{ kind: TOPIC.WORKSPACE, column: workspaceFormerSlug.organizationId }],
 });
 
-/** An experiment a workspace's admin turned on or off, on the workspace's topic, so every member's panel follows the switch. */
+/**
+ * An experiment a workspace's admin turned on or off, on the workspace's
+ * topic, so every member's panel follows the switch. Logged, because the
+ * task list answers each task's followers only while its workspace has
+ * Following on, and reads its tasks again past a sync id when it flips.
+ */
 export const workspaceExperimentSync = defineSyncTable(workspaceExperiment, {
   topics: [{ kind: TOPIC.WORKSPACE, column: workspaceExperiment.organizationId }],
+  log: LOG.EVERY,
 });
 
 /** A GitHub App installation connected to a workspace, on the workspace's topic. */
@@ -393,8 +418,9 @@ export const taskReadSync = defineSyncTable(taskRead, {
 /**
  * A command an agent queued for the account's Mac, on the account's topic,
  * which the Mac's read of the commands it may claim is woken on. Note that
- * the account's listener row (`mac_command_listener`), which every such read
- * rewrites, is not captured: no read waits on it.
+ * the account's and each device's listener rows (`mac_command_listener`,
+ * `mac_command_device_listener`), which every such read rewrites, are not
+ * captured: no read waits on them.
  */
 export const macCommandSync = defineSyncTable(macCommand, {
   topics: [{ kind: TOPIC.ACCOUNT, column: macCommand.userId }],
@@ -832,6 +858,7 @@ export const agentDelegationSync = defineSyncTable(agentDelegationTable, {
 export const SYNC_TABLES: readonly SyncTable[] = [
   taskSync,
   taskBlockSync,
+  taskFollowerSync,
   agentSync,
   agentPullRequestSync,
   agentApprovalSync,

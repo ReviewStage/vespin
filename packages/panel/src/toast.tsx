@@ -66,7 +66,7 @@ import {
   type ToastTone,
 } from "@repo/ui";
 import { useEffect, useRef } from "react";
-import { appPlatform } from "./app-platform.js";
+import { copyThroughShell } from "./copy-feedback.js";
 import { failureOfConnection, reportShownFailure, type ShownFailure } from "./failure-report.js";
 
 /** What a failure toast's copy button copies, as "Copy details" names it. */
@@ -363,7 +363,7 @@ function ToastCard({ toast }: { toast: StandingToast<ToastData> }): React.JSX.El
   const copy: ToastCopy | undefined =
     details === undefined
       ? undefined
-      : { text: details, what: DETAILS_WHAT, copy: (text) => appPlatform().copyText(text) };
+      : { text: details, what: DETAILS_WHAT, copy: copyThroughShell };
 
   return (
     <Toast

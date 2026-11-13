@@ -52,7 +52,11 @@ import {
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
+import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
+import type { HostLine } from "@repo/features/host-live";
+import { HOST_PAIRING_CALL_FAILURE } from "@repo/features/host-pairing-view";
+import type { HostPairingAnswer } from "@repo/features/host-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_APPROVAL_OPTION,
@@ -75,6 +79,15 @@ import {
   inboxSendingDrawn,
   takenBackNow,
 } from "@repo/features/inbox-writes";
+import {
+  type InstalledSkillCandidate,
+  type InstalledSkillPreview,
+  type InstalledSkillSummary,
+  SKILL_PASTE_KIND,
+  UNSUPPORTED_PREVIEW,
+} from "@repo/features/installed-skill-route-wire";
+import { INSTALLED_SKILL_CALL_FAILURE } from "@repo/features/installed-skill-view";
+import { INSTALLED_SKILL_SCOPE, INSTALLED_SKILL_SOURCE } from "@repo/features/installed-skill-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import {
   INTEGRATION_PROVIDER,
@@ -83,7 +96,8 @@ import {
 } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
-import type { MemorySummary } from "@repo/features/memory-wire";
+import type { McpClient } from "@repo/features/mcp-client-wire";
+import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
   MODEL_PROVIDER,
   MODEL_SPEED,
@@ -94,6 +108,8 @@ import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
 import {
+  DESCRIPTION_ACTOR,
+  type DescriptionRevisionsAnswer,
   TASK_PRIORITY,
   TASK_SKILL_SOURCE,
   TASK_STATUS,
@@ -169,6 +185,9 @@ const STAGED_PROFILES: ReadonlySet<string> = new Set<string>([
 /** The account signed in: the owner of the fixture's first workspace, which is named for it. */
 const ADA = { userId: "user-ada", name: "Ada Lovelace" } as const;
 
+/** A teammate, the workspace's admin, who is assigned a task the account follows. */
+const GRACE = { userId: "user-grace", name: "Grace Hopper" } as const;
+
 /**
  * The sign-in pictures the fixture's people stand in with: organizations'
  * logos on GitHub's avatar host, which the apps may load pictures from,
@@ -196,12 +215,15 @@ const TASK = {
   ROUNDING: "4dae6081-2f5b-4c73-9e9b-5a6b7c8d9ea4",
 } as const;
 
-/** The account's tasks that hold no item, which fill out its Tasks list: a sub-task of the reference journey's, one in a second repository, and one in a section of its own. */
+/** The account's tasks that hold no item, which fill out its Tasks list: a sub-task of the reference journey's, one in a second repository, one in a section of its own, a teammate's it follows, and one filed for later and one canceled, so every status's mark is drawn. */
 const LISTED = {
   COPY: "81e2a425-6d9f-4ab7-92df-9eafb0c1d2e8",
   ALERTS: "92f3b536-7eaf-4bc8-a3ea-afb0c1d2e3f9",
   LAUNCH: "a304c647-8fb0-4cd9-b4fb-b0c1d2e3f40a",
   SECTION: "b415d758-90c1-4dea-85ac-c1d2e3f4051b",
+  BILLING: "c526e869-a1d2-4efb-96bd-d2e3f405162c",
+  EXPORT: "d637f97a-b2e3-4f0c-87ce-e3f405162737",
+  DIGEST_V1: "e748a08b-c3f4-4a1d-98df-f405162738f4",
 } as const;
 
 /** The agents that posted the items, one at work on each task. */
@@ -832,6 +854,12 @@ const OWN_TASKS: readonly TaskSummary[] = [
     createdBy: ADA,
     assignee: ADA,
     pinnedAt: LANDED - 9 * DAY,
+    // Note that its followers are the account, its assignee, letting its agents use her machines, and both teammates, one letting them.
+    followers: [
+      { userId: ADA.userId, assignee: true, machines: true },
+      { userId: GRACE.userId, assignee: false, machines: true },
+      { userId: "user-alan", assignee: false, machines: false },
+    ],
     ...agentsLine(TASK.DIGEST),
   },
   {
@@ -873,8 +901,10 @@ function listedTask(
 /**
  * The account's tasks that hold no item, which fill out its Tasks list as
  * the sidebar stands it: a sub-task under the reference journey's, a task
- * in a second repository, so the list draws its repositories' headings, and
- * one the account keeps in a section of its own.
+ * in a second repository, so the list draws its repositories' headings,
+ * one the account keeps in a section of its own, a teammate's it
+ * follows, which the list draws under Following, and one filed for later
+ * and one canceled, so the list draws every status's mark.
  */
 const LISTED_TASKS: readonly TaskSummary[] = [
   listedTask(LISTED.COPY, "Invite email copy", {
@@ -896,6 +926,34 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     status: TASK_STATUS.IN_PROGRESS,
     number: 46,
     updatedAt: LANDED - 7 * HOUR,
+  }),
+  // Note that the account follows a teammate's task, which the Tasks list draws under Following.
+  listedTask(LISTED.BILLING, "Billing export", {
+    repository: "ada/relay",
+    status: TASK_STATUS.IN_PROGRESS,
+    number: 47,
+    updatedAt: LANDED - 9 * HOUR,
+    ownerId: GRACE.userId,
+    createdBy: GRACE,
+    assignee: GRACE,
+    followers: [
+      { userId: GRACE.userId, assignee: true, machines: true },
+      { userId: ADA.userId, assignee: false, machines: false },
+    ],
+  }),
+  listedTask(LISTED.EXPORT, "Ledger CSV export", {
+    repository: "ada/ledger",
+    status: TASK_STATUS.BACKLOG,
+    number: 48,
+    updatedAt: LANDED - 2 * DAY,
+    priority: TASK_PRIORITY.LOW,
+  }),
+  listedTask(LISTED.DIGEST_V1, "Daily digest email", {
+    repository: "ada/relay",
+    status: TASK_STATUS.CANCELED,
+    number: 49,
+    updatedAt: LANDED - 5 * DAY,
+    completedAt: LANDED - 5 * DAY,
   }),
 ];
 
@@ -975,6 +1033,24 @@ const MEMBERS: WorkspaceMembersAnswer = {
   ],
 };
 
+/** The id a memory the fixture is asked to keep anew is kept under. */
+export const NEW_MEMORY_ID = "5b0c4c1e-3f7a-4d8e-9a51-1c2d3e4f5a64";
+
+/** A memory as the fixture keeps one: by Ada, a correction keeping its memory's id, its time and its recalls, and a new one under its own id. */
+function savedMemory(text: string, corrected: MemorySummary | undefined): MemorySummary {
+  return {
+    id: corrected?.id ?? NEW_MEMORY_ID,
+    text,
+    keptBy: { userId: ADA.userId, name: ADA.name },
+    forgettable: true,
+    createdAt: corrected?.createdAt ?? LANDED,
+    updatedAt: LANDED,
+    source: null,
+    recalls30d: corrected?.recalls30d ?? 0,
+    lastRecalledAt: corrected?.lastRecalledAt ?? null,
+  };
+}
+
 /**
  * The fixture workspace's memories, as Settings › Memory lists them: one an
  * agent of the account kept and agents recall often, one Grace kept this
@@ -1014,6 +1090,202 @@ const MEMORIES: readonly MemorySummary[] = [
     source: null,
     recalls30d: 0,
     lastRecalledAt: null,
+  },
+];
+
+/** The code of the one pairing waiting on the account, as a machine's link names it (`maestro/settings-machine-connect.yaml`). */
+const PENDING_PAIRING_CODE = "BCDFGHJK";
+
+/** The machine waiting on that code, as it named itself, and when its code lapses: ten minutes after the fixture landed. */
+const PENDING_PAIRING: HostPairingAnswer = {
+  name: "Ada's Mac mini",
+  platform: DEVICE_PLATFORM.DARWIN,
+  arch: DEVICE_ARCH.ARM64,
+  ip: "203.0.113.7",
+  expiresAt: LANDED + 10 * 60_000,
+};
+
+/** A pairing's read, approve, or deny, as the service answers it: the waiting machine for its code, and no pending pairing for any other. */
+function pairingAnswer<Answer>(code: string, answer: Answer) {
+  return code === PENDING_PAIRING_CODE ? answer : { failure: HOST_PAIRING_CALL_FAILURE.NOT_FOUND };
+}
+
+/** The account's machines, as Settings › Machines lists them: a Mac online and a Linux server the sweep marks away. */
+const HOSTS: readonly HostLine[] = [
+  {
+    id: "7a1c9e3b-2f4d-4c6a-8b0e-5d7f9a1c3e52",
+    name: "Ada's MacBook Pro",
+    platform: DEVICE_PLATFORM.DARWIN,
+    model: "MacBook Pro (M4 Pro, 2024)",
+    calledIn: true,
+  },
+  {
+    id: "3f6b0c2e-8d1a-4b5e-9c7d-2a4e6f8b0d14",
+    name: "build-box",
+    platform: DEVICE_PLATFORM.LINUX,
+    calledIn: true,
+    away: true,
+  },
+];
+
+/** The skills a fixture run's Add skill finds in its repository, the one the paste named ticked. */
+const SOURCE_SKILLS: readonly InstalledSkillCandidate[] = [
+  {
+    name: "frontend-design",
+    description: "Lay out a screen from the team's design tokens.",
+    path: "skills/frontend-design",
+    bytes: 2_048,
+    selected: true,
+    fileCount: 2,
+    problems: [],
+  },
+  {
+    name: "changelog",
+    description: "Write a changelog entry from the commits since the last tag.",
+    path: "skills/changelog",
+    bytes: 1_536,
+    selected: false,
+    fileCount: 1,
+    problems: [],
+  },
+];
+
+/** The repository a fixture run's Add skill reads. */
+const SKILL_SOURCE_PREVIEW: InstalledSkillPreview = {
+  kind: SKILL_PASTE_KIND.SOURCE,
+  owner: "acme",
+  repo: "agent-skills",
+  ref: "main",
+  sha: "7a1b2c3d4e5f60718293a4b5c6d7e8f901a2b3c4",
+  skills: SOURCE_SKILLS,
+  missing: [],
+};
+
+/** A frontmatter line's value, such as a pasted skill's `name:`. */
+function frontmatterValue(text: string, key: string): string | undefined {
+  const line = text.split("\n").find((each) => each.startsWith(`${key}:`));
+
+  return line?.slice(key.length + 1).trim();
+}
+
+/** What a fixture run's Add skill reads a paste as: a skill's text where it opens on frontmatter, a GitHub source where it names one, and nothing we install from otherwise. */
+function skillPreviewOf(text: string): InstalledSkillPreview {
+  const pasted = text.trim();
+
+  if (!pasted.startsWith("---")) {
+    return /github\.com|^npx skills add |^[\w.-]+\/[\w.-]+$/.test(pasted)
+      ? SKILL_SOURCE_PREVIEW
+      : UNSUPPORTED_PREVIEW;
+  }
+
+  // Note that a key the frontmatter leaves out reads as empty, as the page fills an absent one.
+  return {
+    kind: SKILL_PASTE_KIND.TEXT,
+    name: frontmatterValue(pasted, "name") ?? "",
+    description: frontmatterValue(pasted, "description") ?? "",
+    bytes: pasted.length,
+    problems: [],
+  };
+}
+
+/** A skill a fixture run's Add skill installed, as the service answers it: the account's own, by Ada. */
+function installedSkill(name: string, description: string): InstalledSkillSummary {
+  return {
+    id: "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e59",
+    scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+    name,
+    description,
+    userInvocable: true,
+    source: { type: INSTALLED_SKILL_SOURCE.TEXT },
+    enabled: true,
+    installedBy: ADA.userId,
+    manageable: true,
+    createdAt: LANDED,
+    updatedAt: LANDED,
+  };
+}
+
+/** The account's own skills, as Settings › Skills lists them: one read from GitHub at a commit, and one pasted. */
+const INSTALLED_SKILLS: readonly InstalledSkillSummary[] = [
+  {
+    id: "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e51",
+    scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+    name: "release-notes",
+    description: "Write a release's notes from the pull requests merged since the last tag.",
+    userInvocable: true,
+    source: {
+      type: INSTALLED_SKILL_SOURCE.GITHUB,
+      owner: "ada",
+      repo: "skills",
+      path: "release-notes",
+      ref: "main",
+      sha: "3f9c2e1a7b4d6e8f0a1b2c3d4e5f6a7b8c9d0e1f",
+    },
+    enabled: true,
+    installedBy: ADA.userId,
+    manageable: true,
+    createdAt: LANDED - 9 * DAY,
+    updatedAt: LANDED - 9 * DAY,
+  },
+  {
+    id: "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e52",
+    scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+    name: "pr-style",
+    description: "Title and describe a pull request the way this team does.",
+    userInvocable: false,
+    source: { type: INSTALLED_SKILL_SOURCE.TEXT },
+    enabled: true,
+    installedBy: ADA.userId,
+    manageable: true,
+    createdAt: LANDED - 3 * DAY,
+    updatedAt: LANDED - 3 * DAY,
+  },
+];
+
+/** What Open reads of each fixture skill, by its id: its SKILL.md, and the files beside it. */
+const INSTALLED_SKILL_FILES: ReadonlyMap<
+  string,
+  {
+    readonly skillFile: string;
+    readonly files: readonly { readonly path: string; readonly bytes: number }[];
+  }
+> = new Map([
+  [
+    "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e51",
+    {
+      skillFile:
+        "---\nname: release-notes\ndescription: Write a release's notes from the pull requests merged since the last tag.\n---\n\n# Release notes\n\nList each merged pull request under its kind.\n",
+      files: [
+        { path: "SKILL.md", bytes: 214 },
+        { path: "template.md", bytes: 1_204 },
+      ],
+    },
+  ],
+  [
+    "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e52",
+    {
+      skillFile:
+        "---\nname: pr-style\ndescription: Title and describe a pull request the way this team does.\n---\n\n# Pull request style\n\nTitle it as a Conventional Commit, and say what changed and why.\n",
+      files: [{ path: "SKILL.md", bytes: 196 }],
+    },
+  ],
+]);
+
+/** The apps the account allowed to use it over MCP, as Settings › MCP lists them: one signing in on this computer, active today, and one on the web. */
+const MCP_CLIENTS: readonly McpClient[] = [
+  {
+    clientId: "mcp-client-terminal",
+    name: "Claude Code",
+    redirectUris: ["http://localhost:53682/callback"],
+    allowedAt: LANDED - 12 * DAY,
+    lastRefreshedAt: LANDED - 3 * HOUR,
+  },
+  {
+    clientId: "mcp-client-web",
+    name: "ChatGPT",
+    redirectUris: ["https://chatgpt.com/connector_platform_oauth_redirect"],
+    allowedAt: LANDED - 30 * DAY,
+    lastRefreshedAt: null,
   },
 ];
 
@@ -1205,6 +1477,54 @@ function invitesDocument(listed: TaskSummary): Task {
     blockedBy: [LISTED.ALERTS],
     blocks: [],
   };
+}
+
+/**
+ * The reference journey's description history, newest first, as its
+ * version history lists it: its agent's last revision, which is the
+ * description as it stands, Ada's before it, and the description before
+ * its history began.
+ */
+const INVITES_HISTORY: DescriptionRevisionsAnswer = {
+  revisions: [
+    {
+      seq: 3,
+      lastEdit: {
+        actor: DESCRIPTION_ACTOR.AGENT,
+        label: "Build the invite flow",
+        agentId: AGENT.INVITES,
+        at: LANDED - HOUR,
+        duringCall: false,
+      },
+      agentId: AGENT.INVITES,
+      startedAt: LANDED - 2 * HOUR,
+      changes: 4,
+    },
+    {
+      seq: 2,
+      lastEdit: {
+        actor: DESCRIPTION_ACTOR.DEVELOPER,
+        by: { userId: ADA.userId, name: ADA.name },
+        at: LANDED - DAY,
+        duringCall: false,
+      },
+      startedAt: LANDED - DAY - HOUR,
+      changes: 2,
+    },
+    {
+      seq: 1,
+      lastEdit: { actor: DESCRIPTION_ACTOR.EARLIER, at: LANDED - 3 * DAY, duringCall: false },
+      startedAt: LANDED - 3 * DAY,
+      changes: 0,
+    },
+  ],
+};
+
+/** The reference journey's description as one of its versions left it: whole at the newest, its opening alone before. */
+function invitesVersionBody(seq: number): string {
+  const newest = INVITES_HISTORY.revisions[0]?.seq;
+
+  return seq === newest ? INVITES_DESCRIPTION : (INVITES_DESCRIPTION.split("\n\n")[0] ?? "");
 }
 
 /** The pages the reference journey's agent showed, as its task's page lists them. */
@@ -1545,6 +1865,20 @@ const INTEGRATIONS: IntegrationStatusesAnswer = {
   ],
 };
 
+/**
+ * What each connected server answered when asked for its tools: GitHub's,
+ * Linear's, and Relay's Notion list theirs, and the Personal Notion's read
+ * couldn't be answered, so Settings › Integrations says so with Try again.
+ */
+const INTEGRATION_TOOLS: AppStateSnapshot[typeof LIVE_READ.INTEGRATION_TOOLS] = {
+  github: {
+    rows: { tools: [{ name: "search_code", description: "Search code across repositories" }] },
+  },
+  linear: { rows: { tools: [{ name: "list_issues", description: "List the team's issues" }] } },
+  notion: { rows: { tools: [{ name: "search", description: "Search the workspace's pages" }] } },
+  "notion-2": { failed: true },
+};
+
 /** The skills the invitations task's repository keeps, as the service finds them. */
 const SKILLS = {
   repository: "ada/relay",
@@ -1620,8 +1954,26 @@ export function inboxAppState(
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
+    [LIVE_READ.INTEGRATION_TOOLS]: INTEGRATION_TOOLS,
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
-    [LIVE_READ.MEMORIES]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES } },
+    // Note that Relay, the team a flow switches to, holds no memories and none of its own skills, so its pages draw their empty states rather than reading for good; the account's own skills stand in every workspace.
+    [LIVE_READ.MEMORIES]: {
+      [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES },
+      [TEAM_WORKSPACE.id]: { rows: [] },
+    },
+    [LIVE_READ.MCP_CLIENTS]: {
+      [ADA.userId]: { rows: { serverUrl: "https://vespin.dev/api/mcp", clients: MCP_CLIENTS } },
+    },
+    [LIVE_READ.INSTALLED_SKILLS]: {
+      [FIXTURE_IDS.WORKSPACE]: { rows: INSTALLED_SKILLS },
+      [TEAM_WORKSPACE.id]: { rows: INSTALLED_SKILLS },
+    },
+    [LIVE_READ.HOSTS]: {
+      [ADA.userId]: {
+        rows: { hosts: HOSTS, installScriptUrl: "https://vespin.dev/install-host.sh" },
+      },
+    },
+    [LIVE_READ.HISTORY]: { ...state[LIVE_READ.HISTORY], [TASK.INVITES]: { rows: INVITES_HISTORY } },
     [LIVE_READ.WORKSPACE_PHOTOS]: {
       ...state[LIVE_READ.WORKSPACE_PHOTOS],
       [TEAM_WORKSPACE.id]: { rows: TEAM_PHOTO },
@@ -1670,6 +2022,48 @@ export function inboxRemindersAppState(
   return {
     ...state,
     [LIVE_READ.INBOX_ITEMS]: { rows: { [INBOX_SCOPE_KIND.PLAN]: reminded } },
+  };
+}
+
+/** The words a fixture run saved, by the memory's id: one of its own corrected, or a new one under the id the save answered. */
+export type SavedMemoryWords = ReadonlyMap<string, string>;
+
+/**
+ * The fixture workspace's memories with the words a run saved: a
+ * correction over its own row, as the host draws one the moment it is sent,
+ * and a new memory at the head, as the memories' live read carries one in
+ * soon after it is kept. The document handed in where none was saved. Note
+ * that a run keeps one new memory, since every new one is answered under the
+ * same id.
+ */
+export function savedMemoriesAppState(
+  state: AppStateSnapshot,
+  words: SavedMemoryWords,
+): AppStateSnapshot {
+  const held = state[LIVE_READ.MEMORIES][FIXTURE_IDS.WORKSPACE];
+  const rows = held?.rows;
+
+  if (words.size === 0 || held === undefined || rows === undefined) return state;
+
+  const corrected = rows.map((memory) => {
+    const text = words.get(memory.id);
+
+    return text === undefined ? memory : { ...memory, text, updatedAt: LANDED };
+  });
+
+  const added = words.get(NEW_MEMORY_ID);
+
+  const saved =
+    added === undefined || rows.some((memory) => memory.id === NEW_MEMORY_ID)
+      ? corrected
+      : [savedMemory(added, undefined), ...corrected];
+
+  return {
+    ...state,
+    [LIVE_READ.MEMORIES]: {
+      ...state[LIVE_READ.MEMORIES],
+      [FIXTURE_IDS.WORKSPACE]: { ...held, rows: saved },
+    },
   };
 }
 
@@ -1847,6 +2241,35 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
+  // Note that a pairing is read, approved, and denied as the service would answer, though nothing here makes a machine.
+  [ACT_KIND.HOSTS_PAIRING_READ]: ({ code }) => pairingAnswer(code, PENDING_PAIRING),
+  [ACT_KIND.HOSTS_PAIRING_APPROVE]: ({ code }) =>
+    pairingAnswer(code, { deviceId: "00000000-0000-4000-8000-0000000000a1" }),
+  [ACT_KIND.HOSTS_PAIRING_DENY]: ({ code }) => pairingAnswer(code, { done: true as const }),
+  // Note that an account's rename is taken as the service takes one, the account answered under the label asked, though nothing here moves.
+  [ACT_KIND.INTEGRATIONS_RENAME]: ({ provider, connection, label }) => ({
+    account: { provider, connection, label, status: INTEGRATION_STATUS.CONNECTED },
+  }),
+  // Note that Add skill's paste is read as the service reads one, though no repository is reached, and its install is taken and answered, though nothing here moves.
+  [ACT_KIND.INSTALLED_SKILLS_PREVIEW]: ({ text }) => skillPreviewOf(text),
+  [ACT_KIND.INSTALLED_SKILLS_INSTALL]: (request) => ({
+    skills:
+      request.skills === undefined
+        ? [installedSkill(request.name ?? "", request.description ?? "")]
+        : request.skills.map((name) =>
+            installedSkill(
+              name,
+              SOURCE_SKILLS.find((each) => each.name === name)?.description ?? "",
+            ),
+          ),
+  }),
+  [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId }) => {
+    const read = INSTALLED_SKILL_FILES.get(skillId);
+
+    return read === undefined
+      ? { failure: INSTALLED_SKILL_CALL_FAILURE.NOT_FOUND }
+      : { id: skillId, skillFile: read.skillFile, files: [...read.files] };
+  },
   [ACT_KIND.AGENTS_LIST]: ({ taskId }) => {
     const agent = AGENTS.get(taskId);
 
@@ -1886,8 +2309,22 @@ const ANSWERS: StagedAnswers = {
   },
   // Note that a status is taken as the service takes one, though nothing here moves, so the window draws the change it asked for itself.
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
+  // Note that a version of the reference journey's description is read as the service reads one, and a restore is taken as the service takes one, though nothing here moves.
+  [ACT_KIND.TASKS_REVISION]: ({ seq }) => ({
+    revision: { seq, document: { body: invitesVersionBody(seq), assumptions: [] }, previous: null },
+  }),
+  [ACT_KIND.TASKS_RESTORE]: () => true,
   // Note that a note to the people who make the app is taken as the feedback service takes one, and goes nowhere, so a run that sends one mails no one.
   [ACT_KIND.FEEDBACK_SEND]: () => ({ delivered: true }),
+  // Note that a memory's words are kept as the service keeps them, by Ada, a correction keeping its memory's id, though nothing here moves; the mobile fixture lays the saved words over the list itself (`savedMemoriesAppState`).
+  [ACT_KIND.MEMORIES_SAVE]: ({ text, replaces }) => {
+    const corrected = MEMORIES.find((memory) => memory.id === replaces);
+
+    return {
+      outcome: corrected === undefined ? MEMORY_SAVED.KEPT : MEMORY_SAVED.CORRECTED,
+      memory: savedMemory(text, corrected),
+    };
+  },
   // The invitations agent's pictures and recording, by the ids its transcript names them by; an older page of it stands nowhere.
   [ACT_KIND.AGENTS_PICTURE]: ({ pictureId, playable }) => fixtureAgentPicture(pictureId, playable),
   [ACT_KIND.AGENTS_TRANSCRIPT_OLDER]: () => ({ failure: AGENT_CALL_FAILURE.NOT_FOUND }),
@@ -1930,6 +2367,13 @@ const ANSWERS: StagedAnswers = {
   },
   // Note that a change to one of the invitations agent's pull requests is taken as GitHub takes one, and the run lays how it moved it over the parts (`pullRequestPartsAppState`).
   [ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: () => ({ outcome: PULL_REQUEST_WRITE_OUTCOME.DONE }),
+  // An agent's sandbox listens on two ports, one served by Vite, and shares neither, so its Ports sheet lists them and offers Share.
+  [ACT_KIND.AGENTS_PORTS]: () => ({
+    running: true,
+    ports: [3000, 5173],
+    labels: [{ port: 5173, label: "vite" }],
+  }),
+  [ACT_KIND.AGENTS_PORT_SHARED]: () => ({ shared: null }),
   // Note that a message, a queue change, and a Stop are taken as the service takes them, answered with the agent or the queue as it then stands, though nothing here moves, so the transcript reads as staged.
   [ACT_KIND.AGENTS_MESSAGE]: ({ agentId }) => {
     const held = stagedAgent(agentId);

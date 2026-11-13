@@ -1,3 +1,5 @@
+import { TASK_MARK_ELEMENT, TASK_MARK_ROLE, TASK_STATUS_MARK } from "@repo/brand/task-status-marks";
+import { TASK_STATUS_TONE } from "@repo/features/task-standing-words";
 import {
   TASK_PRIORITY,
   TASK_STATUS,
@@ -5,7 +7,7 @@ import {
   type TaskStatus,
 } from "@repo/features/task-wire";
 import React from "react";
-import { STATUS_TONE, type StatusTone } from "../status-tone.js";
+import type { StatusTone } from "../status-tone.js";
 
 // `tsx` executes imported workspace-package JSX with the classic runtime.
 void React;
@@ -16,7 +18,8 @@ void React;
  * A status is a ring that fills as work moves through it: dashed while it
  * is filed for later, an empty ring to do, half filled under way, and a
  * filled disc once settled, with a check for done and a cross for
- * canceled. A priority is three bars, as many lit as it matters, an
+ * canceled, drawn from `@repo/brand`'s one table, which the iOS app's
+ * status symbols are cut from too. A priority is three bars, as many lit as it matters, an
  * attention square for urgent, and three dashes for one no one weighed.
  * A status draws in its status tone's ink, under way in the working blue
  * and done in the green every other done wears, and a priority in its own
@@ -52,70 +55,56 @@ const BARS = [
   { x: MARK_EDGE.end - BAR_WIDTH, y: MARK_EDGE.start, height: 11 },
 ] as const;
 
-/** The tone each status is drawn in: at rest, under way, or finished well. */
-const STATUS_MARK_TONE = {
-  [TASK_STATUS.BACKLOG]: STATUS_TONE.NEUTRAL,
-  [TASK_STATUS.TODO]: STATUS_TONE.NEUTRAL,
-  [TASK_STATUS.IN_PROGRESS]: STATUS_TONE.WORKING,
-  [TASK_STATUS.DONE]: STATUS_TONE.COMPLETE,
-  [TASK_STATUS.CANCELED]: STATUS_TONE.NEUTRAL,
-} as const satisfies Record<TaskStatus, StatusTone>;
+/** Each status's mark, from `@repo/brand`'s table. */
+const STATUS_MARK = {
+  [TASK_STATUS.BACKLOG]: TASK_STATUS_MARK.BACKLOG,
+  [TASK_STATUS.TODO]: TASK_STATUS_MARK.TODO,
+  [TASK_STATUS.IN_PROGRESS]: TASK_STATUS_MARK.IN_PROGRESS,
+  [TASK_STATUS.DONE]: TASK_STATUS_MARK.DONE,
+  [TASK_STATUS.CANCELED]: TASK_STATUS_MARK.CANCELED,
+} as const satisfies Record<TaskStatus, (typeof TASK_STATUS_MARK)[keyof typeof TASK_STATUS_MARK]>;
 
-/** The ring every status but the settled ones draws, dashed for the backlog. */
-function Ring({ dashed }: { dashed: boolean }): React.JSX.Element {
+type StatusPart = (typeof STATUS_MARK)[TaskStatus][number];
+
+/** The class each part's role is drawn with: a line stroked, a fill, or a cut stroked in the ground's ink. */
+const PART_CLASS = {
+  [TASK_MARK_ROLE.LINE]: "ui-task-mark-line",
+  [TASK_MARK_ROLE.FILL]: "ui-task-mark-fill",
+  [TASK_MARK_ROLE.CUT]: "ui-task-mark-cut",
+} as const;
+
+/** One part of a status's mark, as the element its table names. */
+function statusPart(part: StatusPart, index: number): React.JSX.Element {
+  const className = PART_CLASS[part.role];
+
+  if (part.element === TASK_MARK_ELEMENT.PATH)
+    return <path key={index} className={className} d={part.d} />;
+
   return (
     <circle
-      className="ui-task-mark-line"
-      cx="7"
-      cy="7"
-      r="5.5"
-      strokeDasharray={dashed ? "2 1.8" : undefined}
+      key={index}
+      className={className}
+      cx={part.cx}
+      cy={part.cy}
+      r={part.r}
+      strokeDasharray={"dash" in part ? part.dash.join(" ") : undefined}
     />
   );
 }
 
-/** What a status draws inside its 14-unit box. */
-function statusBody(status: TaskStatus): React.JSX.Element {
-  switch (status) {
-    case TASK_STATUS.BACKLOG:
-      return <Ring dashed />;
-    case TASK_STATUS.TODO:
-      return <Ring dashed={false} />;
-    case TASK_STATUS.IN_PROGRESS:
-      return (
-        <>
-          <Ring dashed={false} />
-          <path className="ui-task-mark-fill" d="M7 3.5a3.5 3.5 0 0 1 0 7Z" />
-        </>
-      );
-    case TASK_STATUS.DONE:
-      return (
-        <>
-          <circle className="ui-task-mark-fill" cx="7" cy="7" r="6.25" />
-          <path className="ui-task-mark-cut" d="M4.4 7.2l1.8 1.8 3.5-3.6" />
-        </>
-      );
-    case TASK_STATUS.CANCELED:
-      return (
-        <>
-          <circle className="ui-task-mark-fill" cx="7" cy="7" r="6.25" />
-          <path className="ui-task-mark-cut" d="M5 5l4 4M9 5l-4 4" />
-        </>
-      );
-  }
-}
-
 /** A task's status as its mark, in the tone of the status it stands for. */
 export function TaskStatusMark({ status }: { status: TaskStatus }): React.JSX.Element {
+  const tone: StatusTone = TASK_STATUS_TONE[status];
+
   return (
     <svg
       className="ui-task-mark ui-task-status-mark"
       data-status={status}
-      data-tone={STATUS_MARK_TONE[status]}
+      data-tone={tone}
       viewBox="0 0 14 14"
       aria-hidden="true"
     >
-      {statusBody(status)}
+      {STATUS_MARK[status].map(statusPart)}
     </svg>
   );
 }

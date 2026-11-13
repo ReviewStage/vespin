@@ -15,9 +15,10 @@
  * A Spotlight item is named by its vespin.dev link, which is also what the
  * app is handed when the item is tapped, so one string both finds the item
  * to update or remove and opens it. The app holds the index in step with the
- * lists the document holds (`spotlightChanges`), each change sent alone.
+ * lists the document holds (`spotlightIndexKeeper`), each change sent alone.
  */
 
+import { Schema as EffectSchema } from "effect";
 import { type InboxListed, inboxMemberName, inboxPreview } from "./inbox-list-model.js";
 import { iosAppRouteOf, iosPullRequestRoute } from "./ios-app-links.js";
 import {
@@ -25,8 +26,11 @@ import {
   type LinkDestination,
   linkOf,
   linkWorkspaceStep,
+  type ReadLink,
   readLink,
+  taskLinkStep,
 } from "./link-grammar.js";
+import { LINK_ORIGIN } from "./link-home.js";
 import { cardTitle } from "./plain-words.js";
 import { TASK_STATUS_WORDS } from "./task-standing-words.js";
 import type { TaskSummary } from "./task-wire.js";
@@ -148,6 +152,67 @@ export function pullRequestActivity(
   };
 }
 
+/** Whether `url` is a page of ours a link names, on the home host over HTTPS, which is all Handoff may offer from a window. */
+function isOurPage(url: string): boolean {
+  return url.startsWith(`${LINK_ORIGIN}/`) && readLink(url) !== undefined;
+}
+
+/** What a desktop window advertises for Handoff: the vespin.dev page it shows, as a browser would, and never another site's. */
+export const handoffActivitySchema = EffectSchema.Struct({
+  webpageUrl: EffectSchema.String.check(EffectSchema.makeFilter(isOurPage)),
+});
+
+export type HandoffActivity = typeof handoffActivitySchema.Type;
+
+/** What the window holds that a link names only by its number: its tasks and their workspaces. */
+export interface HandoffReads {
+  readonly tasks: readonly Pick<TaskSummary, "id" | "number" | "workspaceId">[];
+  readonly workspaces: readonly Workspace[];
+}
+
+/**
+ * The page a desktop window hands off while `link` is what it shows, as a
+ * browser hands off its page: the iPhone app claims vespin.dev for Handoff
+ * and opens the page where it would open a link to it
+ * (`iosContinuedRouteOf`), so only a place the app draws a screen for is
+ * handed off. Note that it carries no `userInfo`, since iOS empties it on a
+ * browsing activity, so a pull request is handed off as its agent, whose
+ * page shows it, rather than as its Changes, which the app leaves to the
+ * web. A task is named by its id, as the phone's own activity names it,
+ * since a number is its workspace's alone, so one the window holds no row
+ * for hands off nothing rather than a number the phone could find in
+ * another workspace.
+ */
+export function desktopHandoffOf(link: ReadLink, reads: HandoffReads): HandoffActivity | undefined {
+  const { place, workspace } = link;
+
+  switch (place.kind) {
+    case LINK_DESTINATION.INBOX_ITEM:
+    case LINK_DESTINATION.AGENT:
+      return { webpageUrl: linkOf(place, workspace) };
+    case LINK_DESTINATION.CHANGES: {
+      const agent: LinkDestination = { ...place, kind: LINK_DESTINATION.AGENT };
+
+      return { webpageUrl: linkOf(agent, workspace) };
+    }
+
+    case LINK_DESTINATION.TASK: {
+      const task = reads.tasks.find(
+        (each) =>
+          taskLinkStep(each) === place.planId &&
+          linkWorkspaceStep(each.workspaceId, reads.workspaces) === workspace,
+      );
+
+      if (task === undefined) return undefined;
+
+      return { webpageUrl: linkOf({ kind: LINK_DESTINATION.TASK, planId: task.id }, workspace) };
+    }
+
+    default:
+      return undefined;
+  }
+}
+
 /**
  * The Spotlight items of one workspace's tasks and Inbox threads: each task
  * by its name, its status and workspace under it, and each thread by its
@@ -215,6 +280,74 @@ export function spotlightChanges(
 }
 
 /**
+ * The app's Spotlight index as its native module writes it. Note that the
+ * module sends each call to the system in the order it is made, without
+ * waiting on the answer to the one before, so a call never waits on another
+ * the system has not answered.
+ */
+export interface SpotlightIndexPort {
+  /** Empties the index and adds the items, answered once both are done, or a while after the items where emptying is never answered, and refused where either was. */
+  readonly replaceAll: (items: readonly SpotlightItem[]) => Promise<void>;
+  /** Adds the items, or updates those it holds by their ids. */
+  readonly index: (items: readonly SpotlightItem[]) => Promise<void>;
+  /** Removes the items of these ids. */
+  readonly remove: (ids: readonly string[]) => Promise<void>;
+  /** Empties the index. */
+  readonly removeAll: () => Promise<void>;
+}
+
+/**
+ * Holds `port` to the lists each call names while an account is signed in,
+ * and empties it once none is: the whole index made anew at the first
+ * lists, each change sent alone after them. Note that each call is sent
+ * without waiting on the last, because the system was seen never to answer
+ * emptying an index it holds nothing of, and every change waiting behind
+ * that answer left the index empty for the whole launch; and that a call
+ * the system refuses has the next lists make the index anew, since what it
+ * holds is no longer known.
+ */
+export function spotlightIndexKeeper(
+  port: SpotlightIndexPort,
+  refused: (cause: unknown) => void,
+): (signedIn: boolean, items: readonly SpotlightItem[]) => void {
+  // What the index holds as far as this launch knows: unknown until it is first made anew, and null once emptied for no account.
+  let indexed: Map<string, SpotlightItem> | null | undefined;
+
+  const send = (change: Promise<void>) => {
+    change.catch((cause: unknown) => {
+      indexed = undefined;
+      refused(cause);
+    });
+  };
+
+  return (signedIn, items) => {
+    // Note that a launch with no account empties the index too, since one signed out while the app was closed left its items.
+    if (!signedIn) {
+      if (indexed === null) return;
+      indexed = null;
+      send(port.removeAll());
+
+      return;
+    }
+
+    const held = indexed;
+    indexed = new Map(items.map((item) => [item.id, item]));
+
+    if (held === undefined || held === null) {
+      send(port.replaceAll(items));
+
+      return;
+    }
+
+    const { index, remove } = spotlightChanges(held, items);
+
+    if (remove.length > 0) send(port.remove(remove));
+
+    if (index.length > 0) send(port.index(index));
+  };
+}
+
+/**
  * The app's route for a continued activity or a tapped Spotlight item: a
  * pull request's on its own screen, by its agent's Changes and its number,
  * and any other link where the app draws its place; none for a link it
@@ -232,5 +365,5 @@ export function iosContinuedRouteOf(continued: ContinuedActivity): string | unde
       ? iosPullRequestRoute(place.agentId, pullRequest)
       : undefined;
 
-  return iosAppRouteOf(place);
+  return iosAppRouteOf(place, read.workspace);
 }

@@ -6,6 +6,7 @@ import {
 import { index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
+import { device } from "./device.js";
 
 /**
  * mac-command.ts -- a command an agent asked to run on the developer's Mac, queued until a Mac of the account runs it.
@@ -13,8 +14,11 @@ import { user } from "./auth.js";
  * The agent's call inserts the row and waits on it; a signed-in Mac holding
  * the account's read claims it, runs it, and writes its result; the call
  * reads the result and deletes the row, so a row stands only while its call
- * does. A Mac claims only rows of the kinds its read named. Every row
- * belongs to the account and leaves with it.
+ * does. A Mac claims only rows of the kinds its read named. A row naming a
+ * device is claimed by that device alone; a row naming none, as every row
+ * queued before devices were, by any Mac of the account, which is the path
+ * that drains as every Mac comes to claim as a device. Every row belongs to
+ * the account and leaves with it.
  */
 export const macCommand = pgTable(
   "mac_command",
@@ -23,9 +27,15 @@ export const macCommand = pgTable(
     userId: text("user_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
+    /**
+     * The machine the command is for, which alone may claim it; null for a
+     * command any Mac of the account may claim. Note that it leaves with its
+     * device, since no other machine may run what was meant for that one.
+     */
+    deviceId: uuid("device_id").references(() => device.id, { onDelete: "cascade" }),
     /** What the command asks; a row queued before kinds were is a shell command. */
     kind: text("kind").$type<MacCommandKind>().notNull().default(MAC_COMMAND_KIND.SHELL),
-    /** A shell command's text; null for any other kind. */
+    /** What it asks: a shell command's text, or a computer command's request as JSON (`storedMacCommandText`). */
     command: text("command"),
     timeoutSeconds: integer("timeout_seconds").notNull(),
     queuedAt: timestamptz("queued_at").notNull(),
@@ -47,5 +57,18 @@ export const macCommandListener = pgTable("mac_command_listener", {
   userId: text("user_id")
     .primaryKey()
     .references(() => user.id, { onDelete: "cascade" }),
+  seenAt: timestamptz("seen_at").notNull(),
+});
+
+/**
+ * When a device last held the read for its commands, which is what a call
+ * meant for that machine reads as it being there to take one. One row per
+ * device, moved on every read, beside the account's own row above, which
+ * every Mac that listens moves too.
+ */
+export const macCommandDeviceListener = pgTable("mac_command_device_listener", {
+  deviceId: uuid("device_id")
+    .primaryKey()
+    .references(() => device.id, { onDelete: "cascade" }),
   seenAt: timestamptz("seen_at").notNull(),
 });

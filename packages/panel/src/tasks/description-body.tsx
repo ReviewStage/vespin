@@ -17,6 +17,7 @@ import {
 import { agoText, dateOfText, momentText, sinceText } from "@repo/features/time-format";
 import { readingWords } from "@repo/features/words";
 import { EXPERIMENT } from "@repo/settings";
+import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   Button,
   DocumentRule,
@@ -54,10 +55,12 @@ import {
 } from "react";
 import { KEPT, type Kept, notKept } from "../act.js";
 import { ActorStack } from "../actor-ref.js";
+import { useAppCommand } from "../app-commands.js";
 import { LINK_COPY, useCopyToast } from "../copy-feedback.js";
 import {
   DESCRIPTION_PLACEHOLDER,
   type DescriptionEditorHandle,
+  HISTORY_STEP,
 } from "../description-editor/contract.js";
 import { useEditedLinksHost } from "../link-menu.js";
 import {
@@ -81,6 +84,7 @@ import {
   DocumentBlock,
   EditableTitle,
   EmptyDocumentBlock,
+  TextFileDrop,
   textBoxOf,
   useTextRoom,
   useWordsKeptOnClose,
@@ -1399,6 +1403,47 @@ export const DescriptionBody = memo(function DescriptionBody({
     return () => window.removeEventListener("keydown", select);
   }, [editable]);
 
+  // ⌘Z and ⇧⌘Z in the drawn text open the editor a step back or forward
+  // through the history it left as it closed, while the text is still the one
+  // it left, as a document editor's undo reaches the page whether or not the
+  // caret is in it. Note that they are offered only while the focus stands on
+  // the page or nowhere, where they answer over the window's own undo, and a
+  // field's typing keeps its own.
+  const onPage = useCallback(() => {
+    const focused = document.activeElement;
+
+    return (
+      focused === null || focused === document.body || scroller.current?.contains(focused) === true
+    );
+  }, []);
+
+  const [focusOnPage, setFocusOnPage] = useState(onPage);
+  useEffect(() => {
+    if (!editable) return;
+    const heard = () => setFocusOnPage(onPage());
+    document.addEventListener("focusin", heard);
+    document.addEventListener("focusout", heard);
+
+    return () => {
+      document.removeEventListener("focusin", heard);
+      document.removeEventListener("focusout", heard);
+    };
+  }, [editable, onPage]);
+
+  const stepping =
+    editable && shown && focusOnPage && editing.editor === undefined ? editing.history : undefined;
+
+  useAppCommand(
+    APP_COMMAND.UNDO,
+    stepping?.undoes === true ? () => editing.stepHistory(HISTORY_STEP.UNDO) : undefined,
+    onPage,
+  );
+  useAppCommand(
+    APP_COMMAND.REDO,
+    stepping?.redoes === true ? () => editing.stepHistory(HISTORY_STEP.REDO) : undefined,
+    onPage,
+  );
+
   // An ask to show a section scrolls the document's own scroller to it, or
   // to the top where the description no longer holds it.
   const revealed = useRef<number | undefined>(undefined);
@@ -1748,6 +1793,14 @@ export const DescriptionBody = memo(function DescriptionBody({
           )}
         </WordsDatePickerRoom>
       </DescriptionBodyColumn>
+      {/* Files carried over the text, drawn or open, are taken anywhere over it, a line marking where they land. */}
+      <TextFileDrop
+        body={body}
+        room={scroller}
+        editing={editing}
+        handle={editorHandle}
+        editable={editable && units !== undefined}
+      />
     </DocumentScroll>
   );
 
@@ -1756,6 +1809,7 @@ export const DescriptionBody = memo(function DescriptionBody({
       taskId={task.id}
       text={task.document.body}
       sectionNote={(heading) => pictureNoteOf(marks, heading)}
+      editable={editable}
     >
       {column}
     </DescriptionPictures>

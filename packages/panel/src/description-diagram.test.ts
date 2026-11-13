@@ -16,7 +16,6 @@ import { act, createElement, type ReactElement, type ReactNode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test } from "vitest";
 import type { SideBundles } from "./bundle-loader.js";
-import { DiagramPreview } from "./description-diagram.js";
 import { MarkdownMessage } from "./markdown-message.js";
 import { SHELL_ROOM } from "./shell-room.js";
 import { ShellRoomContext } from "./stage-room.js";
@@ -213,34 +212,6 @@ test("a diagram's picture is named for its title, or its first line where it has
     "Diagram: flowchart LR",
     "Diagram: Votes so far",
   ]);
-});
-
-test("while an edited diagram is drawn again, the picture kept is still named for the code it shows", async () => {
-  const before = "---\ntitle: Before\n---\nflowchart LR\n  A --> B";
-  const after = "---\ntitle: After\n---\nflowchart LR\n  A --> B";
-  const container = document.body.appendChild(document.createElement("div"));
-  const root = createRoot(container);
-  roots.push(root);
-
-  const show = (code: string, previous: string | undefined) =>
-    act(() =>
-      root.render(
-        withExperiments(
-          experimentsOn(EXPERIMENT.DESCRIPTIONS),
-          onSideBundles(bundles, createElement(DiagramPreview, { code, previous })),
-        ),
-      ),
-    );
-
-  const alt = () => container.querySelector("img")?.getAttribute("alt");
-  show(before, undefined);
-  await settle();
-
-  show(after, before);
-
-  assert.equal(alt(), "Diagram: Before");
-  await settle();
-  assert.equal(alt(), "Diagram: After");
 });
 
 test("Show code puts the fence's code in the picture's place, and Show diagram brings the picture back", async () => {

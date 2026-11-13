@@ -9,7 +9,8 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { useAccessibilitySize } from "./accessibility.js";
-import { FieldChip, StatusChip } from "./button.js";
+import { FieldChip, FollowingChip, StatusChip } from "./button.js";
+import { GLYPH } from "./glyph.js";
 import type { Face } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -25,17 +26,34 @@ type PageHeaderProps = {
   readonly priority?: string | undefined;
   /** Who a task is assigned to, drawn as a chip with their face, or the words for no one beside an empty face. */
   readonly assignee?: (Face & { readonly nobody: boolean }) | undefined;
+  /** Who follows a task, drawn as a chip under its fields that opens them; none while its workspace has Following off. */
+  readonly following?: PageFollowing | undefined;
+};
+
+/** Who follows a task as its page's chip says it (`FollowingChip`). */
+export type PageFollowing = {
+  readonly label: string;
+  readonly faces: readonly Face[];
+  readonly more: number;
+  readonly hint: string;
+  readonly heard: string;
+  readonly onPress: () => void;
 };
 
 /**
  * A page's heading in 20 pt semibold, heard as a heading, the bar above it
  * holding its path; under it a task's status, priority, and assignee as
  * small chips, one to a line at an accessibility size, and a line in the
- * body's ink.
+ * body's ink. A task's followers stand under its fields as a chip that
+ * opens them, on a line of its own, since a fourth chip runs off a phone's
+ * screen.
  */
-export function PageHeader({ title, summary, status, priority, assignee }: PageHeaderProps) {
+export function PageHeader(props: PageHeaderProps) {
+  const { title, summary, status, priority, assignee, following } = props;
   const colors = useColors();
+
   const chips = status !== undefined || priority !== undefined || assignee !== undefined;
+
   // Note that at an accessibility size the chips stand one to a line, since three in a row run off a phone's screen.
   const stacked = useAccessibilitySize();
 
@@ -44,7 +62,7 @@ export function PageHeader({ title, summary, status, priority, assignee }: PageH
       {status === undefined ? null : <StatusChip status={status} />}
       {priority === undefined ? null : <FieldChip label={priority} />}
       {assignee === undefined ? null : assignee.nobody ? (
-        <FieldChip label={assignee.name} symbol="person.crop.circle.dashed" />
+        <FieldChip label={assignee.name} symbol={GLYPH.UNASSIGNED} />
       ) : (
         <FieldChip label={assignee.name} face={assignee} />
       )}
@@ -73,6 +91,7 @@ export function PageHeader({ title, summary, status, priority, assignee }: PageH
       ) : (
         <HStack spacing={SPACE.TIGHT + 2}>{chipRow}</HStack>
       )}
+      {following === undefined ? null : <FollowingChip {...following} />}
       {summary === undefined ? null : (
         <Text
           modifiers={[font({ textStyle: TYPE_ROLE.ROW_TITLE }), foregroundStyle(colors.TEXT_BODY)]}

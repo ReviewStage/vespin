@@ -16,10 +16,12 @@ export const hostedUsage = pgTable(
       .references(() => user.id, { onDelete: "cascade" }),
     /** The UTC day the counter covers, as YYYY-MM-DD. */
     day: text("day").notNull(),
-    /** Hosted operations spent: a Live session opened, a brain turn, and a dictated clip count alike. */
+    /** Hosted operations spent: a dictated clip and a finished voice call count alike. */
     calls: integer("calls").default(0).notNull(),
     /** Seconds of dictated audio transcribed on our key. */
     dictationSeconds: doublePrecision("dictation_seconds").default(0).notNull(),
+    /** Seconds of voice calls held on the account's own OpenAI key, as the caller's panel timed them. */
+    voiceSeconds: doublePrecision("voice_seconds").default(0).notNull(),
   },
   (table) => [primaryKey({ columns: [table.userId, table.day] })],
 );

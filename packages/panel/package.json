@@ -16,8 +16,12 @@
     "./admin/prefs": "./src/admin/prefs.js",
     "./admin/routing": "./src/admin/routing.js",
     "./admin/sources.css": "./src/admin/sources.css",
+    "./admin/screens/agents": "./src/admin/screens/agents.js",
+    "./admin/screens/prompts": "./src/admin/screens/prompts.js",
+    "./admin/screens/tools": "./src/admin/screens/tools.js",
     "./admin/screens/account": "./src/admin/screens/account.js",
     "./admin/screens/cost": "./src/admin/screens/cost.js",
+    "./admin/screens/limits": "./src/admin/screens/limits.js",
     "./admin/screens/dashboard": "./src/admin/screens/dashboard.js",
     "./admin/screens/day": "./src/admin/screens/day.js",
     "./admin/screens/reliability": "./src/admin/screens/reliability.js",
@@ -74,6 +78,7 @@
     "typecheck": "NODE_OPTIONS=--max-old-space-size=4096 tsc --project tsconfig.json"
   },
   "dependencies": {
+    "@repo/agent-runner": "workspace:*",
     "@repo/brand": "workspace:*",
     "@repo/credentials": "workspace:*",
     "@repo/features": "workspace:*",
@@ -89,6 +94,7 @@
     "@tanstack/react-store": "catalog:",
     "@tiptap/core": "3.33.1",
     "@tiptap/extension-blockquote": "3.33.1",
+    "@tiptap/extension-code": "3.33.1",
     "@tiptap/extension-heading": "3.33.1",
     "@tiptap/extension-image": "3.33.1",
     "@tiptap/extension-list": "3.33.1",

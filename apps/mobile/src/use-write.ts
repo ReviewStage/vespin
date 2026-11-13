@@ -46,11 +46,15 @@ interface WriteSaying<Answer> {
   /**
    * What the write sets, such as a thread's reminder or a task's status, by
    * which a newer write of the same thing makes an older one's Try again do
-   * nothing, so it never puts back an older choice over a newer one.
+   * nothing, so it never puts back an older choice over a newer one; a
+   * write that sets several things, such as a relation change that moves a
+   * parent between two tasks, names each.
    */
-  readonly subject?: WriteSubject | undefined;
+  readonly subject?: WriteSubject | readonly WriteSubject[] | undefined;
   /** The buzz a write that went plays; none for one that goes quietly, such as a read mark. */
   readonly went?: Buzz | undefined;
+  /** What runs once the write went, whether on its first send or a Try again, such as the notice that offers its Undo. */
+  readonly done?: (() => void) | undefined;
   /**
    * Says the refusal in place, beside what the write came from, rather than
    * in the notice, such as a send whose words go back into its field; it is
@@ -74,6 +78,10 @@ export const WRITE_SUBJECT = {
   TASK_PIN: "task-pin",
   TASK_READ: "task-read",
   TASK_NAME: "task-name",
+  TASK_REPOSITORY: "task-repository",
+  TASK_PARENT: "task-parent",
+  TASK_SECTION: "task-section",
+  TASK_FOLLOWING: "task-following",
 } as const;
 
 export type WriteSubjectKind = (typeof WRITE_SUBJECT)[keyof typeof WRITE_SUBJECT];
@@ -172,12 +180,12 @@ export function useWrite(): Write {
   const write: Write = useCallback(
     <Answer>(act: () => PromiseLike<Answer>, saying: WriteSaying<Answer> = {}) => {
       const send = (): Promise<boolean> => {
-        const { subject } = saying;
-        const sent = subject === undefined ? 0 : sentAnew(subject);
+        const subjects = saying.subject === undefined ? [] : [saying.subject].flat();
+        const sent = subjects.map((subject) => ({ subject, count: sentAnew(subject) }));
 
-        // Note that Try again sends nothing once a newer write of the same subject was sent.
+        // Note that Try again sends nothing once a newer write of any of its subjects was sent.
         const again = () => {
-          if (subject === undefined || stillNewest(subject, sent)) void send();
+          if (sent.every(({ subject, count }) => stillNewest(subject, count))) void send();
         };
 
         const failed = (words: string, unreached: boolean, retry: boolean): false => {
@@ -219,6 +227,7 @@ export function useWrite(): Write {
             if (words !== undefined) return failed(words, false, retry);
 
             if (saying.went !== undefined) buzz(saying.went);
+            saying.done?.();
 
             return true;
           },

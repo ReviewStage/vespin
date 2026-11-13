@@ -134,7 +134,7 @@ const SOUNDS: readonly MenuRow[] = [
       thing: "Sound",
       rows: [
         { id: "rename", label: "Rename…" },
-        { id: "remove", label: "Remove…" },
+        { id: "delete", label: "Delete" },
       ],
       onPick: () => undefined,
     },

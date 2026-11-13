@@ -1,7 +1,7 @@
 // update-needed.tsx -- the screen that stands in front of every other while the service refuses this build as older than it serves: it says so, and Update opens TestFlight.
 
 import { BUILD_TOO_OLD_WORDS } from "@repo/features/words";
-import { EmptyState, Screen } from "@repo/ui-native";
+import { EmptyState, GLYPH, Screen } from "@repo/ui-native";
 import { openURL } from "expo-linking";
 
 export { ScreenBoundary as ErrorBoundary } from "../screen-boundary.js";
@@ -38,7 +38,7 @@ export default function UpdateNeededScreen() {
     <Screen>
       <EmptyState
         title={BUILD_TOO_OLD_WORDS}
-        symbol="arrow.down.app"
+        symbol={GLYPH.UPDATE}
         description={UPDATE_WORDS.DESCRIPTION}
         action={{ label: UPDATE_WORDS.UPDATE, onPress: openTestFlight }}
       />

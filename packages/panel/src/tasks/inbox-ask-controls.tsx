@@ -1,3 +1,4 @@
+import { draftKindOf } from "@repo/features/draft-text";
 import { ASK_PRESS, INBOX_MISSING, type InboxMissing } from "@repo/features/inbox-ask-words";
 import {
   answeredDraft,
@@ -61,7 +62,6 @@ import {
   TextField,
 } from "@repo/ui";
 import { isComposingKey } from "@repo/ui/composing-key";
-import { draftKindOf } from "@repo/ui/draft-text";
 import { CheckIcon, Undo2Icon } from "@repo/ui/icons";
 import { Fragment } from "react";
 import { copyThroughShell } from "../copy-feedback.js";
