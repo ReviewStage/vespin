@@ -22,14 +22,25 @@ appId: dev.vespin.ios
 - assertVisible: "The web server's tests run on PGlite through `test:store`."
 - assertVisible: "Release dates are written in Eastern time, never UTC."
 - takeScreenshot: settings-memory
-# The search narrows the list by a memory's words or whose they are.
+# The search narrows the list by a memory's words or whose they are. Note
+# that a wide window, the iPhone Duo's, folds the search field into a Search
+# button at the toolbar's end, which stands the field once pressed.
+- runFlow:
+    when:
+      notVisible: "Search memories"
+    commands:
+      - tapOn: "Search"
+      - waitForAnimationToEnd
 - tapOn: "Search memories"
 - inputText: "Grace"
 - assertVisible: "Release dates are written in Eastern time, never UTC."
 - assertNotVisible: "The staging database is reset every Sunday night."
 - waitForAnimationToEnd
 - takeScreenshot: settings-memory-search
-- tapOn: "Cancel"
+# The search is put away by the close button beside its field, as iOS 27
+# draws a toolbar's search.
+- tapOn: "close"
+- waitForAnimationToEnd
 # A long press offers Delete, which asks first.
 - longPressOn: "The staging database is reset every Sunday night."
 - tapOn: "Delete"

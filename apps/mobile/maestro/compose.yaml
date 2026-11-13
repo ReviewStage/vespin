@@ -76,6 +76,8 @@ appId: dev.vespin.ios
 # The mode taken stands picked in the options sheet the + also opens.
 - tapOn: "Add"
 - tapOn: "Options"
+- runFlow:
+    file: subflows/full-sheet.yaml
 - assertVisible:
     text: "Approve for me.*"
     selected: true

@@ -168,6 +168,10 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: agent-options-fast
+# Note that the sheet is drawn up first, because its permissions and their
+# note stand below a short window's fold.
+- runFlow:
+    file: subflows/full-sheet.yaml
 - tapOn: "Approve for me.*"
 - assertVisible: "Takes effect from the next turn."
 - waitForAnimationToEnd:

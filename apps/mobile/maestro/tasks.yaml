@@ -233,10 +233,15 @@ onFlowComplete:
 # offering Open in browser, and back leads to the Overview. A tap off the
 # menu closes it.
 # Note that the wait is long, because the first web view a freshly booted
-# simulator opens launches WebKit's processes, as `agent.yaml` says.
-- scrollUntilVisible:
-    element: "Invite funnel"
-    direction: UP
+# simulator opens launches WebKit's processes, as `agent.yaml` says; and
+# that the page is scrolled to in short steps until it stands clear under
+# the task's name in the bar (`scroll-to.yaml`'s `BELOW`), because a scroll
+# that stops once it shows leaves it under the bar, where the tap misses it.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: "Invite funnel"
+      BELOW: "relay › AL-42"
 - tapOn: "Invite funnel"
 - extendedWaitUntil:
     visible: "Invites sent in the staging workspace.*"

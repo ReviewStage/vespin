@@ -10,8 +10,12 @@
 # screen found neither way and tapped nothing. Each way waits for its tab
 # up to half a minute, as long as a loaded runner's cold launch has taken.
 # On an iPhone, a page scrolled down collapses the tab bar to its current
-# tab alone, heard as "Collapsed" and with no id, so the bar is waited for,
-# and a collapsed one pressed to stand its tabs again, before the tab.
+# tab alone, heard as "Collapsed" and with no id, and a page pushed over a
+# tab's list hides the bar, so until the tab's id stands a collapsed bar is
+# pressed to stand its tabs again and a pushed page is gone back from, as a
+# person would. Note that the bar is never waited for by its own name, "Tab
+# Bar", because a wide window, the iPhone Duo's, draws the tabs as a rail
+# that carries their ids but no such name.
 appId: dev.vespin.ios
 env:
   FLOATING_TABS: ${FLOATING_TABS || 'false'}
@@ -20,14 +24,26 @@ env:
     when:
       true: ${FLOATING_TABS != 'true'}
     commands:
-      - extendedWaitUntil:
-          visible: "Tab Bar"
-          timeout: 30000
-      - runFlow:
-          when:
-            visible: "Collapsed"
+      - repeat:
+          times: 10
+          while:
+            notVisible:
+              id: "${TAB.toLowerCase()}-tab"
           commands:
-            - tapOn: "Collapsed"
+            - runFlow:
+                when:
+                  visible: "Collapsed"
+                commands:
+                  - tapOn: "Collapsed"
+            - runFlow:
+                when:
+                  visible:
+                    id: "BackButton"
+                  notVisible:
+                    id: "${TAB.toLowerCase()}-tab"
+                commands:
+                  - tapOn:
+                      id: "BackButton"
             - waitForAnimationToEnd
       - extendedWaitUntil:
           visible:

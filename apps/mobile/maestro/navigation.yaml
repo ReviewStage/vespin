@@ -85,9 +85,13 @@ onFlowComplete:
       - assertVisible: ".*, Settings"
       - assertVisible: "Workspace settings|Settings…"
       - takeScreenshot: switcher-settings
-      - tapOn:
-          point: "50%, 90%"
-      - waitForAnimationToEnd
+      # Note that the switcher's list is a sheet at the window's foot, so it
+      # is put away by a tap above it, since one low on the window lands on
+      # its Settings row.
+      - runFlow:
+          file: subflows/dismiss.yaml
+          env:
+            POINT: "50%, 20%"
       - runFlow:
           file: subflows/tab.yaml
           env:

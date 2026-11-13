@@ -17,12 +17,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "acceptInvite can add a member twice"
-    direction: DOWN
-    centerElement: true
-- waitForAnimationToEnd
-- tapOn: "acceptInvite can add a member twice"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "acceptInvite can add a member twice"
 - assertVisible: "Got it"
 - waitForAnimationToEnd
 - takeScreenshot: got-it
@@ -50,12 +48,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "What the expired invite page says"
-    direction: DOWN
-    centerElement: true
-- waitForAnimationToEnd
-- tapOn: "What the expired invite page says"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "What the expired invite page says"
 - waitForAnimationToEnd
 # Note that on an iPhone the thread's ⋯ is the one "More"; a split view's list has its own first, so where Resolve did not open the thread's is tapped by its place, a second time where that tap only closed the list's menu. Maestro 2.12 finds no "More" by a negative index.
 - extendedWaitUntil:

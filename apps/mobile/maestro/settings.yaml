@@ -28,7 +28,11 @@ appId: dev.vespin.ios
 - scrollUntilVisible:
     element:
       id: "settings-notifications"
-- assertVisible: "Notifications, When I'm away"
+# Note that the row's value is checked on the row itself, its words standing
+# apart from its name in the tree.
+- assertVisible:
+    id: "settings-notifications"
+    text: "When I'm away"
 - tapOn:
     id: "settings-notifications"
 - waitForAnimationToEnd

@@ -35,5 +35,9 @@ appId: dev.vespin.ios
 - tapOn: "Send"
 - waitForAnimationToEnd
 # Settings' list stands again, Email beside Send feedback under About.
-- assertVisible: "Email"
+# Note that the list is scrolled to it, because a short window, the iPhone
+# Duo's, stands About below its fold.
+- scrollUntilVisible:
+    element: "Email"
+    direction: DOWN
 - takeScreenshot: feedback-sent

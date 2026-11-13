@@ -26,8 +26,13 @@ appId: dev.vespin.ios
     timeout: 5000
 - takeScreenshot: accessibility-inbox
 # A thread: its title as the page's heading, each message's writer line, and
-# the composer docked at its foot.
-- tapOn: "Recorded the invite flow"
+# the composer docked at its foot. Note that the row is opened through
+# `open-row.yaml`, because at this text size it stands at the window's foot,
+# under the tab bar.
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Recorded the invite flow"
 - assertVisible: ".*walked the invite flow.*"
 - waitForAnimationToEnd:
     timeout: 5000

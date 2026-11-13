@@ -1,0 +1,13 @@
+# full-sheet.yaml -- draws a sheet standing at half the window's height up to its full height, so its rows below the fold stand on screen.
+#
+# Note that the sheet is dragged by a swipe that starts inside it, low on the
+# window, rather than scrolled to an element, because Maestro's scroll swipes
+# from the window's middle, which a half-height sheet on a short window, the
+# iPhone Duo's, leaves above it, on the page behind.
+appId: dev.vespin.ios
+---
+- swipe:
+    start: "50%, 85%"
+    end: "50%, 15%"
+    duration: 800
+- waitForAnimationToEnd

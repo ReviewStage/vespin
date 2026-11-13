@@ -64,8 +64,10 @@ with it. Touch nothing of the developer's outside the checkout.
   image) runs only by hand, on any branch. It generates
   the native project, builds the Release simulator app, runs the Maestro flows
   on the iPhone 18 Pro, the iPhone Duo as it boots, and the iPad Pro 11-inch,
-  and uploads their screenshots as the `mobile-screenshots` artifact, kept
-  whether or not the flows passed.
+  each a job of its own on its own runner, in parallel, and uploads each
+  simulator's screenshots as an artifact of its own,
+  `mobile-screenshots-<simulator slug>`, kept whether or not the flows
+  passed.
 
 A pull request merges on the Linux checks alone, with no device check first;
 device problems show in the TestFlight builds. For screenshots, ask for a run
@@ -80,11 +82,11 @@ Then read its screenshots:
 
 ```
 gh run list --branch <your branch> --workflow "iOS simulators" --limit 1 --json databaseId --jq '.[0].databaseId'
-gh run download <run id> --name mobile-screenshots --dir /tmp/mobile-screenshots
+gh run download <run id> --pattern 'mobile-screenshots-*' --dir /tmp/mobile-screenshots
 ```
 
 Each simulator's pictures, in each appearance, are under
-`/tmp/mobile-screenshots/<slug>/<light|dark>/debug/<flow>/takeScreenshot/`,
+`/tmp/mobile-screenshots/mobile-screenshots-<slug>/<light|dark>/debug/<flow>/takeScreenshot/`,
 named as the flow's `takeScreenshot` steps name them; a failed step's own
 screenshot is under `debug/<flow>/screenshots/` beside them, with the screen's
 tree at that step under `debug/<flow>/screen-hierarchy/` and Maestro's log
@@ -289,14 +291,17 @@ A flow is written one way throughout:
   way by the device it runs on, never by what is on screen a moment.
 - **A repeated step is a subflow** under `maestro/subflows/`, run with
   `runFlow` and its `env`: `open-row.yaml` and `row-menu.yaml` scroll to a
-  row and let the list settle before its tap or long press, `scroll-to.yaml`
+  row, move it clear of the tab bar (`clear-of-tabs.yaml`), and let the list
+  settle before its tap or long press, `full-sheet.yaml` draws a half-height
+  sheet up to its full height, `scroll-to.yaml`
   centers an element on a page, so neither a bar nor the reply box covers
   it, or with `ABOVE` scrolls it above a control, for an element at a list's
   end, which no scroll can center, or with `BELOW` scrolls up in short slow
   steps until it stands clear under the bar, for a page whose floating
-  controls a centering swipe can leave it under, `tab.yaml` opens a tab, and `dismiss.yaml` closes a menu by a tap off
-  it. Maestro reads a swipe's points as the flow is parsed, so a swipe stays
-  in its flow.
+  controls a centering swipe can leave it under, `tab.yaml` opens a tab,
+  going back from a pushed page first, and `dismiss.yaml` closes a menu by a
+  tap off it. Maestro reads a swipe's points as the flow is parsed, so a
+  swipe's points are never a subflow's `env`.
 - **A swipe is closed before the next press**, by pressing its action or a
   tap on the row across from it, since a row left open takes the next press
   on the list only to close itself; a tap off the list, on a bar, leaves it
