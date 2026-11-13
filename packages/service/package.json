@@ -190,6 +190,8 @@
     "./terminal/service": "./src/terminal/service.js",
     "./tunnel/production": "./src/tunnel/production.js",
     "./tunnel/service": "./src/tunnel/service.js",
+    "./voice/voice-call-bounds": "./src/voice/voice-call-bounds.js",
+    "./voice/voice-call-lease": "./src/voice/voice-call-lease.js",
     "./testing/agent-browser-fake": "./src/testing/agent-browser-fake.js",
     "./testing/agent-credentials": "./src/testing/agent-credentials.js",
     "./testing/apns-fake": "./src/testing/apns-fake.js",
