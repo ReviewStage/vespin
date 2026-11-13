@@ -185,7 +185,7 @@ export const GLYPH = {
   EXPAND: system("arrow.up.left.and.arrow.down.right"),
   COLLAPSE: system("arrow.down.right.and.arrow.up.left"),
   // A list's filter, Mail's own button over its list, filled while a filter other than the first stands.
-  FILTER: system("line.3.horizontal.decrease"),
+  FILTER: system("line.3.horizontal.decrease.circle"),
   FILTERED: system("line.3.horizontal.decrease.circle.fill"),
   STOP_TURN: system("stop.fill"),
   // A task's status ring, the panel's own mark.
