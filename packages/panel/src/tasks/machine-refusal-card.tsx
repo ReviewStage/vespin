@@ -43,11 +43,12 @@ import { TranscriptAgent } from "./line-cards.js";
  * why as data (`why`) and names the machines that could take it now
  * (`others`), beside the words the model reads (`machineRefusalOf`). The
  * card says why in its own words, as a failure note does (`Banner`'s
- * card, its mark in the danger ink), and offers each other machine by name,
- * wearing its glyph and the dot of whether it listens now, as the Default
- * machine row draws it, and a teammate's its owner's face; a machine the
- * agent's tools no longer list keeps the dot it had when it was offered. A press makes that machine the
- * agent's default, through the same request the Default machine row sends
+ * card, its mark in the danger ink), and offers each other machine as the
+ * Default machine menu lists it: its glyph wearing the dot of whether it
+ * listens now, a teammate's face, then its name, the line above saying
+ * what a press does; a machine the agent's tools no longer list keeps the
+ * dot it had when it was offered. A press makes that machine the agent's
+ * default, through the same request the Default machine row sends
  * (`agent-machines.tsx`), then tells the agent to try again there, as a
  * member's own message does, naming the machine's id so the agent may name
  * it in its call; one taken holds the card's other presses off. With no
@@ -60,9 +61,8 @@ import { TranscriptAgent } from "./line-cards.js";
 
 /** What the card says and sends. */
 const MACHINE_REFUSAL_WORDS = {
-  OFFER: "Make another machine this agent's default and try again:",
+  OFFER: "Make one of these this agent's default and try again:",
   NO_OTHER: "No other machine can take it now.",
-  USE: "Use",
   USING: "Setting the default",
   REFUSED: "The default machine could not be changed.",
   UNSENT: "The default machine changed, but the agent could not be told to try again.",
@@ -244,7 +244,6 @@ export function MachineRefusalCard({
             disabled={pressed !== undefined}
             onClick={() => use(machine)}
           >
-            {MACHINE_REFUSAL_WORDS.USE}{" "}
             {machine.owner.userId === readerId ? null : (
               <>
                 <ActorMark
