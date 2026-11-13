@@ -1,0 +1,35 @@
+# select.yaml -- the Inbox's Select mode, as Mail's: Select from its ⋯ menu, two threads ticked, the count in the title's place with Done, the acts on them in the bar at the foot, and Done letting them go.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, as `inbox.yaml` is, so no server is
+# reached. Nothing is sent: the flow shows the mode and leaves it.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- waitForAnimationToEnd
+# Select stands first in the Inbox's ⋯ menu; a regular window's list column
+# holds its own ⋯, the last "More" on screen.
+- tapOn:
+    text: "More"
+    index: -1
+- tapOn: "Select"
+- waitForAnimationToEnd
+- assertVisible: "Done"
+- takeScreenshot: select-none
+# A tap on a row ticks it rather than opening it.
+- tapOn: "Recorded the invite flow"
+- tapOn: "acceptInvite can add a member twice"
+- assertVisible: "2 selected"
+- assertNotVisible: "Reply"
+- waitForAnimationToEnd
+- takeScreenshot: select-two
+# Done lets the threads go, and the list opens a thread on a tap again.
+- tapOn: "Done"
+- waitForAnimationToEnd
+- assertNotVisible: "2 selected"
+- takeScreenshot: select-done

@@ -28,8 +28,13 @@ import {
   taskHolder,
   waitsOnReaderNow,
 } from "@repo/features/inbox-list-model";
-import type { InboxItem, InboxItemHome } from "@repo/features/inbox-wire";
-import { markedNote, NOT_RESOLVED, REMIND_REFUSED } from "@repo/features/inbox-write-words";
+import { INBOX_STATUS, type InboxItem, type InboxItemHome } from "@repo/features/inbox-wire";
+import {
+  closedNote,
+  markedNote,
+  NOT_RESOLVED,
+  REMIND_REFUSED,
+} from "@repo/features/inbox-write-words";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { searchTokens } from "@repo/features/search-tokens";
 import { TASKS_READ } from "@repo/features/tasks-view";
@@ -60,7 +65,13 @@ import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import { dismissThreadNotifications } from "../notification-task.js";
 import { useWrite, WRITE_SUBJECT } from "../use-write.js";
-import { refusedWords, SETTLE, useSendsDrawn, useSettleUndo } from "./use-thread-answer.js";
+import {
+  refusedWords,
+  SETTLE,
+  type SettledThread,
+  useSendsDrawn,
+  useSettleUndo,
+} from "./use-thread-answer.js";
 
 /** What a thread's videos and files are named under among the app's caches. */
 const INBOX_MEDIA_PREFIX = "inbox";
@@ -447,6 +458,12 @@ export function useInboxActs(): {
   /** Resolves an open thread against the revision its row drew, as the thread's own Resolve does, buzzing as it lands or is refused, and offering Undo once it went. */
   readonly resolve: (item: InboxItem) => void;
   readonly markAll: (itemIds: readonly string[]) => void;
+  /** Marks several threads read or unread at once, as one write, saying how many the service took where it refused some. */
+  readonly markMany: (itemIds: readonly string[], unread: boolean) => void;
+  /** Sets or clears the reminder of several threads at once, as one write. */
+  readonly remindMany: (itemIds: readonly string[], until: number | null) => void;
+  /** Resolves several open threads at once, each against the revision its row drew, as one write, offering one Undo that takes back every one that went. */
+  readonly resolveMany: (items: readonly InboxItem[]) => void;
   readonly refresh: () => Promise<void>;
   readonly refreshTasks: () => Promise<void>;
 } {
@@ -498,7 +515,7 @@ export function useInboxActs(): {
             retry: (answer) => "failure" in answer,
             went: BUZZ.SUCCESS,
             // Note that a Try again that went offers Undo as the first send's would.
-            done: () => settled(item, clientKey, SETTLE.RESOLVE),
+            done: () => settled([{ item, key: clientKey }], SETTLE.RESOLVE),
           },
         );
       },
@@ -510,6 +527,95 @@ export function useInboxActs(): {
           retry: true,
           went: BUZZ.SUCCESS,
         });
+      },
+      markMany: (itemIds, unread) => {
+        if (itemIds.length === 0) return;
+        write(
+          () =>
+            Promise.all(
+              itemIds.map((itemId) =>
+                Promise.resolve(acts[ACT_KIND.AGENTS_INBOX_READ_STATE]({ itemId, unread })).then(
+                  (answer) => !("failure" in answer),
+                  () => false,
+                ),
+              ),
+            ),
+          {
+            refused: (landed) => {
+              const marked = landed.filter(Boolean).length;
+
+              return marked === landed.length
+                ? undefined
+                : markedNote(unread, marked, landed.length - marked);
+            },
+            went: BUZZ.SUCCESS,
+          },
+        );
+      },
+      remindMany: (itemIds, until) => {
+        if (itemIds.length === 0) return;
+        write(
+          () =>
+            Promise.all(
+              itemIds.map((itemId) =>
+                Promise.resolve(acts[ACT_KIND.AGENTS_INBOX_REMIND]({ itemId, until })).then(
+                  (answer) => !("failure" in answer),
+                  () => false,
+                ),
+              ),
+            ),
+          {
+            refused: (set) =>
+              set.every(Boolean)
+                ? undefined
+                : until === null
+                  ? REMIND_REFUSED.CLEAR
+                  : REMIND_REFUSED.SET,
+            went: BUZZ.SUCCESS,
+          },
+        );
+      },
+      resolveMany: (items) => {
+        const open = items.filter((item) => item.status === INBOX_STATUS.OPEN);
+
+        if (open.length === 0) return;
+        // Note that one key stands for each thread's press, so the closes never go twice.
+        const keyed: readonly SettledThread[] = open.map((item) => ({ item, key: randomUUID() }));
+        let taken: readonly SettledThread[] = [];
+        write(
+          () =>
+            Promise.all(
+              keyed.map(({ item, key }) =>
+                Promise.resolve(
+                  acts[ACT_KIND.AGENTS_INBOX_CLOSE]({
+                    itemId: item.id,
+                    revision: item.revision,
+                    clientKey: key,
+                  }),
+                ).then(
+                  (answer) => !("failure" in answer) && answer.taken,
+                  () => false,
+                ),
+              ),
+            ).then((went) => {
+              taken = keyed.filter((_, at) => went[at] === true);
+
+              return went;
+            }),
+          {
+            // Note that a resolve none of whose closes went says so; one some of which went says how many in the notice that offers their Undo.
+            refused: () => (taken.length === 0 ? closedNote(0, keyed.length) : undefined),
+            went: BUZZ.SUCCESS,
+            done: () =>
+              settled(
+                taken,
+                SETTLE.RESOLVE,
+                taken.length === keyed.length
+                  ? undefined
+                  : closedNote(taken.length, keyed.length - taken.length),
+              ),
+          },
+        );
       },
       refresh: () =>
         acts[ACT_KIND.AGENTS_INBOX_ITEMS_RETRY]().catch(refused("Reading the inbox again")),

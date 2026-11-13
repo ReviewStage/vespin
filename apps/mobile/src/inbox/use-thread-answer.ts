@@ -58,6 +58,7 @@ import {
   RESOLVE_UNTAKEN,
   resolvedWords,
   TOOK_BACK,
+  type TookBack,
   untakenSaid,
 } from "@repo/features/inbox-write-words";
 import {
@@ -258,39 +259,70 @@ export function useSendsDrawn<Group extends { readonly items: readonly InboxItem
 
 /* ----- Undo ----- */
 
+/** A thread a settle went on, and the key it went under, by which its Undo takes it back. */
+export interface SettledThread {
+  readonly item: InboxItem;
+  readonly key: string;
+}
+
+/** Whether a take-back the service answered took the settle back, an unreached one counting as not. */
+function tookBack(
+  answer: { readonly outcome: TookBack } | { readonly failure: unknown },
+): TookBack {
+  return "failure" in answer ? TOOK_BACK.UNREACHED : answer.outcome;
+}
+
 /**
- * Says a settle that went in the app's one notice, the thread by its title,
- * with Undo, which takes it back by the key it went under, as the panel's
- * toast does: the thread open again, waiting on the reader; or, where the
- * service did not take it back, says why, with Try again where the take-back
- * was not reached.
+ * Says a settle that went in the app's one notice, the thread by its title or
+ * the threads by how many, or in `words` where the caller says it otherwise,
+ * such as how many went of several, with Undo, which takes each back by the
+ * key it went under, as the panel's toast does: the threads open again,
+ * waiting on the reader; or, where the service did not take one back, says
+ * why, with Try again where no take-back was reached.
  */
-export function useSettleUndo(): (item: InboxItem, key: string, settle: Settle) => void {
+export function useSettleUndo(): (
+  threads: readonly SettledThread[],
+  settle: Settle,
+  words?: string,
+) => void {
   const notices = useFailureNotices();
   const acts = useHostActs();
   const write = useWrite();
 
   return useCallback(
-    (item, key, settle) => {
+    (threads, settle, words) => {
+      // Note that every take-back goes as one write, so several answer with one buzz and one notice rather than one each, and that Try again sends again only those no answer reached.
       const takeBack = () => {
-        letGoCloses(item.id);
+        for (const { item } of threads) letGoCloses(item.id);
+        let unreached = threads;
         void write(
-          () => acts[ACT_KIND.AGENTS_INBOX_TAKE_BACK]({ itemId: item.id, clientKey: key }),
-          {
-            refused: (answer) =>
-              untakenSaid(
-                ["failure" in answer ? TOOK_BACK.UNREACHED : answer.outcome],
-                settle.untaken,
+          () =>
+            Promise.all(
+              unreached.map(({ item, key }) =>
+                Promise.resolve(
+                  acts[ACT_KIND.AGENTS_INBOX_TAKE_BACK]({ itemId: item.id, clientKey: key }),
+                ).then(tookBack, () => TOOK_BACK.UNREACHED),
               ),
+            ).then((outcomes) => {
+              unreached = unreached.filter((_, at) => outcomes[at] === TOOK_BACK.UNREACHED);
+
+              return outcomes;
+            }),
+          {
+            refused: (outcomes) => untakenSaid(outcomes, settle.untaken),
             unanswered: settle.untaken.unreached,
-            // Note that only a take-back the service never answered offers Try again, under the same key; one it refused never takes.
-            retry: (answer) => "failure" in answer,
+            // Note that only a take-back the service never answered offers Try again, under the same keys; one it refused never takes.
+            retry: (outcomes) => outcomes.includes(TOOK_BACK.UNREACHED),
             went: BUZZ.SUCCESS,
           },
         );
       };
 
-      notices.say({ kind: NOTICE_KIND.DONE, words: settle.words([item]), undo: takeBack });
+      notices.say({
+        kind: NOTICE_KIND.DONE,
+        words: words ?? settle.words(threads.map(({ item }) => item)),
+        undo: takeBack,
+      });
     },
     [notices, acts, write],
   );
@@ -442,7 +474,7 @@ export function useThreadAnswer(
         unanswered: refusedWords(AGENT_CALL_FAILURE.UNANSWERED),
         inPlace: (words) => refuse(key, draft, words),
         went: BUZZ.SUCCESS,
-        done: () => settled(item, key, SETTLE.RESOLVE),
+        done: () => settled([{ item, key }], SETTLE.RESOLVE),
       },
     );
   };
@@ -480,7 +512,7 @@ export function useThreadAnswer(
     ).then((went) => {
       nodding.delete(itemId);
 
-      if (went && taken) settled(item, key, SETTLE.ACKNOWLEDGE);
+      if (went && taken) settled([{ item, key }], SETTLE.ACKNOWLEDGE);
     });
   };
 

@@ -201,6 +201,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   words. An Inbox thread stands roomier, as Mail's message rows do
   (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
   its lines), while a task's row keeps the list's tighter inset.
+- **Select mode** (`RowList`'s `choosing`) is SwiftUI's own edit mode, as
+  Mail's Select: a round check leads each row, a tap ticks it, two fingers
+  dragged down tick a run, and the swipes step aside. Its screen names the
+  count in the title's place with Done, and stands the acts in the bar at the
+  foot, a compact window's tab bar stepping aside for it.
 - **Group headers** (`ListSection`) are small and muted with a count, or
   finished of all as `2/5` (`progress`); a `foldable` one folds in place on
   a press, its chevron on the left; and one given `add` ends in a muted +,
