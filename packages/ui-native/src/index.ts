@@ -1,5 +1,7 @@
 // index.ts -- @repo/ui-native: the iOS app's components over @expo/ui's SwiftUI, its Markdown in React Native views, and the brand's tokens they draw with.
 
+export { useAnnounced } from "./accessibility.js";
+
 export { AccountBarItem, AccountButton, type BarAccount } from "./account-button.js";
 
 export {

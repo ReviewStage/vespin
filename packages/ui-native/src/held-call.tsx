@@ -13,7 +13,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { APPROVAL_PRESS_WORDS, DENIES_WAITING } from "@repo/features/agent-approval-model";
 import { APPROVAL_ANSWER } from "@repo/features/agent-approval-wire";
-import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
+import { useAccessibilitySize } from "./accessibility.js";
 import { AskNote } from "./ask-card.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, glyphImage } from "./glyph.js";
@@ -175,13 +175,12 @@ type HeldCallBannerProps = Pick<HeldCall, "answering" | "note" | "onAnswer"> & {
  * waits that no row of the transcript draws, such as a subagent's, so it is
  * still answered: a raised hand and how many wait in the attention ink,
  * what the oldest asks, and Deny and Allow. A call whose row is drawn is
- * answered there alone, as on the panel.
+ * answered there alone, as on the panel. The page tells VoiceOver of every
+ * call waiting from its composer, which stands while this comes and goes.
  */
 export function HeldCallBanner({ waiting, asks, answering, note, onAnswer }: HeldCallBannerProps) {
   const colors = useColors();
   const large = useAccessibilitySize();
-  // Note that the banner is told to VoiceOver as it stands, since an agent held for an answer waits on the reader wherever they are.
-  useAnnounced(`${waiting}, ${asks}`, true);
 
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>

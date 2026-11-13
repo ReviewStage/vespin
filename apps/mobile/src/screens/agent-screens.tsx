@@ -69,6 +69,7 @@ import {
   toggledAt,
   transcriptItems,
   transcriptOriginOf,
+  useAnnounced,
   useColors,
   withSending,
   withWaitingLine,
@@ -281,9 +282,11 @@ function AgentComposerBar({
   readonly note: string | undefined;
 }) {
   const said = composer.note ?? note;
-  const { banner } = approvals;
+  const { banner, waiting } = approvals;
+  // Note that the bar tells VoiceOver of a call waiting, since it stands while the call's row may lie out of the list's drawn window, and an agent held for an answer waits on the reader wherever they are.
+  useAnnounced(waiting === undefined ? undefined : `${waiting.words}, ${waiting.asks}`, true);
   // Note that a message sent now denies the calls waiting only where Send would not queue it behind the turn.
-  const denies = approvals.waiting !== undefined && !composer.sendQueues;
+  const denies = waiting !== undefined && !composer.sendQueues;
 
   const head =
     !denies &&
