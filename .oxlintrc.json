@@ -95,6 +95,7 @@
     "vespin/no-shortcut-flag": "error",
     "vespin/no-source-read-in-test": "error",
     "vespin/one-message-box": "error",
+    "vespin/press-shape-on-label": "error",
     "vespin/retired": "error",
     "vespin/row-behavior-in-row": "error",
     "vespin/sandbox-delete-in-one-place": "error",

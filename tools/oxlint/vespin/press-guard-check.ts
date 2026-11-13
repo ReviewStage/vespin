@@ -25,6 +25,7 @@ import {
 import { PRESS_LISTENER_GUARD_RULE } from "./shared/press-listener-guard.ts";
 import { TYPESCRIPT_SOURCE } from "./shared/repository-path.ts";
 import { namesRetired, RETIRED_GUARD_RULE } from "./shared/retired.ts";
+import { PRESS_SHAPE_GUARD_RULE } from "./shared/press-shape-guard.ts";
 import { ROW_BEHAVIOR_GUARD_RULE } from "./shared/row-behavior-guard.ts";
 import { namesSandboxDelete, SANDBOX_DELETE_GUARD_RULE } from "./shared/sandbox-delete-guard.ts";
 import { SETTINGS_ROW_END_GUARD_RULE } from "./shared/settings-row-end-guard.ts";
@@ -47,8 +48,8 @@ import {
  * `@repo/ui-native` holding one that would silence
  * `no-raw-press-outside-ui-native`, on any JSX-capable
  * file holding one that would silence `skeleton-through-components`,
- * `settings-row-end`, `row-behavior-in-row`, whose list of row components
- * is the only way past it, on a Settings page's file holding one that would
+ * `settings-row-end`, `press-shape-on-label`, `row-behavior-in-row`, whose
+ * list of row components is the only way past it, on a Settings page's file holding one that would
  * silence `settings-section-declared`, which has no way past it, on any TypeScript file holding one that would
  * silence `one-message-box`, whose list of builders is the only way past it, or
  * `sandbox-delete-in-one-place`, whose list of deleters is the only way past it, or `async-press-needs-busy`, whose baseline is the
@@ -164,6 +165,13 @@ const GUARDS = [
       namesSandboxDelete(readFileSync(absolute, "utf8")),
     remedy:
       "Delete the agent's sandbox through packages/service/src/agents/session-sandboxes.ts, or name a file that must delete one in tools/oxlint/vespin/sandbox-deletes.json with its reason",
+  },
+  {
+    rule: PRESS_SHAPE_GUARD_RULE,
+    sources: JSX_SOURCE,
+    watches: () => true,
+    remedy:
+      "Put the contentShape, and the frame it fills, on the button's or menu's label, where a SwiftUI control takes its press",
   },
   {
     rule: SKELETON_GUARD_RULE,

@@ -25,6 +25,7 @@ import { noReducedMotionQueryRule } from "./rules/no-reduced-motion-query.ts";
 import { noShadcnFocusRingRule } from "./rules/no-shadcn-focus-ring.ts";
 import { noShortcutFlagRule } from "./rules/no-shortcut-flag.ts";
 import { noSourceReadInTestRule } from "./rules/no-source-read-in-test.ts";
+import { pressShapeOnLabelRule } from "./rules/press-shape-on-label.ts";
 import { oneMessageBoxRule } from "./rules/one-message-box.ts";
 import { retiredRule } from "./rules/retired.ts";
 import { rowBehaviorInRowRule } from "./rules/row-behavior-in-row.ts";
@@ -66,6 +67,7 @@ const antiSlopPlugin = eslintCompatPlugin({
     "no-raw-heading-outside-ui": noRawHeadingOutsideUiRule,
     "no-raw-press-outside-ui": noRawPressOutsideUiRule,
     "no-raw-press-outside-ui-native": noRawPressOutsideUiNativeRule,
+    "press-shape-on-label": pressShapeOnLabelRule,
     "no-reduced-motion-query": noReducedMotionQueryRule,
     "no-shadcn-focus-ring": noShadcnFocusRingRule,
     "no-shortcut-flag": noShortcutFlagRule,
