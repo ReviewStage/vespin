@@ -1,0 +1,100 @@
+main at 2810bc9fe perf(database): bound each step of the transcript page walk by the key's index (#8932)
+install 0
+export 0
+signed 0
+a11y-ipad26 list flow 0
+a11y-ipad26 list hierarchy 0 nodes 358 depth 73 bytes   547978
+a11y-ipad26 list idb 0 elems 15 title 1 reply 0 msg 1 more 0
+a11y-ipad26 list log hits: 802
+ 161 maxDepth = 2147483647;
+  99 Df testmanagerd[49286:391dbc] [com.apple.dt.xctest:Default] Snapshot attributes 5004, 5003, 5058, 5019, 2004, 2087, 2003, 5002, 2123, 2021, 2001, 2086, 2094, 5043, 2158
+  87 Df testmanagerd[49286:391dbc] [com.apple.dt.xctest:Default] Captured accessibility snapshot data in 0.00s
+  40 Df testmanagerd[50992:395855] [com.apple.dt.xctest:Default] Captured accessibility snapshot data in 0.00s
+a11y-ipad26 thread flow 0
+a11y-ipad26 thread hierarchy 0 nodes 425 depth 93 bytes   661144
+a11y-ipad26 thread idb 0 elems 30 title 1 reply 1 msg 1 more 0
+a11y-ipad26 thread log hits: 952
+ 191 maxDepth = 2147483647;
+  98 Df testmanagerd[50992:395855] [com.apple.dt.xctest:Default] Captured accessibility snapshot data in 0.00s
+  85 Df testmanagerd[50992:395855] [com.apple.dt.xctest:Default] Snapshot attributes 5004, 5003, 5058, 5019, 2004, 2087, 2003, 5002, 2123, 2021, 2001, 2086, 2094, 5043, 2158
+  60 Df testmanagerd[49286:391dbc] [com.apple.dt.xctest:Default] Snapshot attributes 5004, 5003, 5058, 5019, 2004, 2087, 2003, 5002, 2123, 2021, 2001, 2086, 2094, 5043, 2158
+a11y-ipad26 task flow 0
+a11y-ipad26 task hierarchy 0 nodes 406 depth 73 bytes   619029
+a11y-ipad26 task idb 0 elems 28 title 0 reply 0 msg 0 more 0
+a11y-ipad26 task log hits: 980
+ 195 maxDepth = 2147483647;
+ 146 Df testmanagerd[50992:395855] [com.apple.dt.xctest:Default] Captured accessibility snapshot data in 0.00s
+ 131 Df testmanagerd[50992:395855] [com.apple.dt.xctest:Default] Snapshot attributes 5004, 5003, 5058, 5019, 2004, 2087, 2003, 5002, 2123, 2021, 2001, 2086, 2094, 5043, 2158
+  46 snapshotKeyHonorModalViews = 0;
+a11y-ipad27 list flow 0
+a11y-ipad27 list hierarchy 0 nodes 383 depth 71 bytes   576485
+a11y-ipad27 list idb 0 elems 16 title 1 reply 0 msg 1 more 0
+a11y-ipad27 list log hits: 1143
+ 156 E  testmanagerd[52511:399b15] [com.apple.dt.xctest:Default] XCTAS Error: XCTAutomationSupportErrorUnknownElement: Error getting main window kAXErrorServerNotFound
+ 156 E  testmanagerd[52511:399b15] [com.apple.dt.xctest:Default] XCTAS Error: Error Domain=com.apple.dt.xctest.automation-support.error Code=8 "Error getting main window kAXErrorServerNotFound" UserInfo={N
+ 156 	5   XCTAutomationSupport                0x0000000105346200 __56-[XCTElementSnapshotRequest loadSnapshotAndReturnError:]_block_invoke_2 + 52
+ 156 	4   XCTAutomationSupport                0x0000000105348318 -[XCTElementSnapshotRequest(PlatformImplementation) accessibilitySnapshotOrError:] + 132
+a11y-ipad27 thread flow 0
+a11y-ipad27 thread hierarchy 0 nodes 467 depth 105 bytes   725647
+a11y-ipad27 thread idb 0 elems 33 title 1 reply 1 msg 1 more 1
+a11y-ipad27 thread log hits: 2746
+ 380 E  testmanagerd[52511:399b15] [com.apple.dt.xctest:Default] XCTAS Error: XCTAutomationSupportErrorUnknownElement: Error getting main window kAXErrorServerNotFound
+ 380 E  testmanagerd[52511:399b15] [com.apple.dt.xctest:Default] XCTAS Error: Error Domain=com.apple.dt.xctest.automation-support.error Code=8 "Error getting main window kAXErrorServerNotFound" UserInfo={N
+ 380 	5   XCTAutomationSupport                0x0000000105346200 __56-[XCTElementSnapshotRequest loadSnapshotAndReturnError:]_block_invoke_2 + 52
+ 380 	4   XCTAutomationSupport                0x0000000105348318 -[XCTElementSnapshotRequest(PlatformImplementation) accessibilitySnapshotOrError:] + 132
+a11y-ipad27 task flow 0
+a11y-ipad27 task hierarchy 0 nodes 429 depth 73 bytes   644170
+a11y-ipad27 task idb 0 elems 29 title 0 reply 0 msg 0 more 0
+a11y-ipad27 task log hits: 4193
+ 580 E  testmanagerd[52511:399b15] [com.apple.dt.xctest:Default] XCTAS Error: XCTAutomationSupportErrorUnknownElement: Error getting main window kAXErrorServerNotFound
+ 580 E  testmanagerd[52511:399b15] [com.apple.dt.xctest:Default] XCTAS Error: Error Domain=com.apple.dt.xctest.automation-support.error Code=8 "Error getting main window kAXErrorServerNotFound" UserInfo={N
+ 580 	5   XCTAutomationSupport                0x0000000105346200 __56-[XCTElementSnapshotRequest loadSnapshotAndReturnError:]_block_invoke_2 + 52
+ 580 	4   XCTAutomationSupport                0x0000000105348318 -[XCTElementSnapshotRequest(PlatformImplementation) accessibilitySnapshotOrError:] + 132
+a11y-ipad26p list flow 0
+a11y-ipad26p list hierarchy 0 nodes 256 depth 101 bytes   487794
+a11y-ipad26p list idb 0 elems 8 title 0 reply 0 msg 0 more 0
+a11y-ipad26p list log hits: 211
+  41 maxDepth = 2147483647;
+  33 Df testmanagerd[53969:39d700] [com.apple.dt.xctest:Default] Snapshot attributes 5004, 5003, 5058, 5019, 2004, 2087, 2003, 5002, 2123, 2021, 2001, 2086, 2094, 5043, 2158
+  32 Df testmanagerd[53969:39d700] [com.apple.dt.xctest:Default] Captured accessibility snapshot data in 0.00s
+   8 snapshotKeyHonorModalViews = 0;
+a11y-ipad26p thread flow 0
+a11y-ipad26p thread hierarchy 0 nodes 339 depth 119 bytes   661202
+a11y-ipad26p thread idb 0 elems 23 title 1 reply 1 msg 1 more 0
+a11y-ipad26p thread log hits: 1308
+ 285 maxDepth = 2147483647;
+ 265 Df testmanagerd[53969:39d700] [com.apple.dt.xctest:Default] Snapshot attributes 5004, 5003, 5058, 5019, 2004, 2087, 2003, 5002, 2123, 2021, 2001, 2086, 2094, 5043, 2158
+ 168 Df testmanagerd[53969:39d700] [com.apple.dt.xctest:Default] Captured accessibility snapshot data in 0.00s
+  95 Df testmanagerd[53969:39d700] [com.apple.dt.xctest:Default] Captured accessibility snapshot data in 0.09s
+a11y-ipad26p task flow 0
+a11y-ipad26p task hierarchy 0 nodes 291 depth 101 bytes   554351
+a11y-ipad26p task idb 0 elems 17 title 0 reply 0 msg 0 more 0
+a11y-ipad26p task log hits: 1637
+ 351 maxDepth = 2147483647;
+ 311 Df testmanagerd[53969:39d700] [com.apple.dt.xctest:Default] Snapshot attributes 5004, 5003, 5058, 5019, 2004, 2087, 2003, 5002, 2123, 2021, 2001, 2086, 2094, 5043, 2158
+ 223 Df testmanagerd[53969:39d700] [com.apple.dt.xctest:Default] Captured accessibility snapshot data in 0.00s
+  97 Df testmanagerd[53969:39d700] [com.apple.dt.xctest:Default] Captured accessibility snapshot data in 0.09s
+a11y-iphone list flow 0
+a11y-iphone list hierarchy 0 nodes 265 depth 81 bytes   426504
+a11y-iphone list idb 0 elems 14 title 1 reply 0 msg 1 more 0
+a11y-iphone list log hits: 270
+  51 maxDepth = 2147483647;
+  51 Df testmanagerd[57949:3a2a7f] [com.apple.dt.xctest:Default] Snapshot attributes 5004, 5003, 5058, 5019, 2004, 2087, 2003, 5002, 2123, 2021, 2001, 2086, 2094, 5043, 2158
+  29 Df testmanagerd[57949:3a2a7f] [com.apple.dt.xctest:Default] Captured accessibility snapshot data in 0.00s
+  15 Df maestro-driver-iosUITests-Runner[57952:3a2ab9] (Foundation) [Start] View hierarchy snapshot for Application 'com.apple.springboard'
+a11y-iphone thread flow 0
+a11y-iphone thread hierarchy 0 nodes 150 depth 115 bytes   240229
+a11y-iphone thread idb 0 elems 17 title 1 reply 1 msg 1 more 0
+a11y-iphone thread log hits: 1728
+ 339 maxDepth = 2147483647;
+ 339 Df testmanagerd[57949:3a2a7f] [com.apple.dt.xctest:Default] Snapshot attributes 5004, 5003, 5058, 5019, 2004, 2087, 2003, 5002, 2123, 2021, 2001, 2086, 2094, 5043, 2158
+ 178 Df testmanagerd[57949:3a2a7f] [com.apple.dt.xctest:Default] Captured accessibility snapshot data in 0.00s
+ 127 Df maestro-driver-iosUITests-Runner[58339:3a394a] (Foundation) [Start] View hierarchy snapshot for Application 'dev.vespin.ios'
+a11y-iphone task flow 0
+a11y-iphone task hierarchy 0 nodes 138 depth 83 bytes   189077
+a11y-iphone task idb 0 elems 13 title 0 reply 0 msg 0 more 0
+a11y-iphone task log hits: 2029
+ 395 maxDepth = 2147483647;
+ 395 Df testmanagerd[57949:3a2a7f] [com.apple.dt.xctest:Default] Snapshot attributes 5004, 5003, 5058, 5019, 2004, 2087, 2003, 5002, 2123, 2021, 2001, 2086, 2094, 5043, 2158
+ 211 Df testmanagerd[57949:3a2a7f] [com.apple.dt.xctest:Default] Captured accessibility snapshot data in 0.00s
+ 127 Df maestro-driver-iosUITests-Runner[58339:3a394a] (Foundation) [Start] View hierarchy snapshot for Application 'dev.vespin.ios'
