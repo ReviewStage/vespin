@@ -102,6 +102,7 @@ export {
   type KeepAct,
   type Kept,
   type KeptKind,
+  type WindowFrame,
 } from "./keep-model.js";
 
 export {

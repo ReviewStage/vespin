@@ -1,5 +1,5 @@
 /**
- * keeping.ts -- what the app does with a picture, a recording, a file, or a message's words that a long press or the full-screen viewer's share button asks for: copies it to the system's pasteboard, saves it to Photos, or opens the system's share sheet on it, buzzing as a copy or a save goes and saying in the failure notice what did not.
+ * keeping.ts -- what the app does with a picture, a recording, a file, or a message's words that a press or a long press asks for: opens it full screen in the system's Quick Look, copies it to the system's pasteboard, saves it to Photos, or opens the system's share sheet on it, buzzing as a copy or a save goes and saying in the failure notice what did not.
  *
  * The desktop and the web copy and save through the window's act port
  * (`WINDOW_COPY_IMAGE`, `WINDOW_COPY_RICH`, `WINDOW_SAVE_FILE`); the phone has the system's
@@ -7,7 +7,10 @@
  * copies a link through `expo-clipboard`. A picture is held as its
  * `data:` address, so it is written under the app's caches before Photos
  * or the share sheet takes it, named for what it shows; a recording or a
- * file is already the file the app wrote (`cached-media.ts`). Photos is
+ * file is already the file the app wrote (`cached-media.ts`). Quick Look
+ * reads a file too, so a picture is written the same way before it opens,
+ * and one drawn from a web address is fetched under the caches first; Quick
+ * Look's own share button then offers Copy and Save Image. Photos is
  * asked for add-only access, once, the first time something is saved, and
  * a refusal says where it is allowed again rather than offering Try again.
  * A draft's Copy message puts its body on the pasteboard as rich text.
@@ -29,14 +32,16 @@ import {
   type Kept,
   NOTICE_KIND,
   useFailureNotices,
+  type WindowFrame,
 } from "@repo/ui-native";
 import { StringFormat, setImageAsync, setStringAsync } from "expo-clipboard";
 import { randomUUID } from "expo-crypto";
-import { File } from "expo-file-system";
+import { Directory, File, Paths } from "expo-file-system";
 import { Asset, requestPermissionsAsync } from "expo-media-library";
 import { useMemo } from "react";
 import { Share } from "react-native";
 import { cachedFile } from "./cached-media.js";
+import { quickLookModule } from "./quick-look-module.js";
 import { richPasteboardModule } from "./rich-pasteboard-module.js";
 
 /** What each act that did not go says, in the panel's words for a copy that failed. */
@@ -63,6 +68,18 @@ const RICH_HEAD = '<meta charset="utf-8">';
 
 /** The face a draft's words paste in, the system's, where HTML with no face of its own pastes into Mail in Times. */
 const RICH_FACE = "font-family: -apple-system, sans-serif";
+
+/** What an open that did not go says. */
+const OPEN_FAILED = "Could not open that. Try again.";
+
+/** The folder prefix a picture fetched from its web address stands under in the app's caches. */
+const FETCHED_PREFIX = "fetched";
+
+/** A web address, from which a picture drawn from the web is fetched. */
+const WEB_ADDRESS = /^https?:\/\//iu;
+
+/** The scheme of a file the app already wrote, which Quick Look reads as it is. */
+const FILE_ADDRESS = "file://";
 
 /** Photos refused the app's add-only access. */
 class PhotosRefused extends Error {}
@@ -139,6 +156,37 @@ async function shared(kept: Kept): Promise<void> {
   await Share.share({ url: await fileOf(kept), title: kept.name });
 }
 
+/** A picture drawn from a web address, fetched under the app's caches in a folder of its own, under the name its address ends in. */
+async function fetchedPicture(source: string): Promise<string> {
+  const folder = new Directory(Paths.cache, `${FETCHED_PREFIX}-${randomUUID()}`);
+  folder.create({ intermediates: true, idempotent: true });
+
+  return (await File.downloadFileAsync(source, folder)).uri;
+}
+
+/** The file Quick Look reads: a picture written from its bytes or fetched from its address, or the file a recording or a file already is. */
+function previewFile(kept: Kept): Promise<string> {
+  if (kept.kind !== KEPT_KIND.PICTURE || kept.source.startsWith(FILE_ADDRESS)) {
+    return Promise.resolve(kept.source);
+  }
+
+  return WEB_ADDRESS.test(kept.source) ? fetchedPicture(kept.source) : fileOf(kept);
+}
+
+/**
+ * Opens a picture or a file full screen in the system's Quick Look, grown
+ * from the thumbnail's frame (`modules/quick-look/`). Note that a file
+ * Quick Look can't read, and every file in a build without the module, opens
+ * the share sheet instead, which offers an app that reads it.
+ */
+async function opened(kept: Kept, from: WindowFrame | undefined): Promise<void> {
+  const file = await previewFile(kept);
+  const frame = from === undefined ? null : [from.x, from.y, from.width, from.height];
+  const shown = quickLookModule !== null && (await quickLookModule.preview(file, kept.name, frame));
+
+  if (!shown) await Share.share({ url: file, title: kept.name });
+}
+
 /** Each act's work. */
 const KEEP_WORK = {
   [KEEP_ACT.COPY]: copied,
@@ -175,6 +223,7 @@ export function useKeeping(): Keeping {
     };
 
     return {
+      open: (kept, from) => run(() => opened(kept, from), OPEN_FAILED, false),
       keep: (kept, act) =>
         run(() => KEEP_WORK[act](kept), KEEP_FAILED[act], act !== KEEP_ACT.SHARE),
       copyWords: (words) =>

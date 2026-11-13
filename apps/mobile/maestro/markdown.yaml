@@ -27,9 +27,9 @@ appId: dev.vespin.ios
     element: "The invite page"
     direction: DOWN
 - takeScreenshot: markdown-end
+# The picture opens in the system's Quick Look, whose Done closes it.
 - tapOn: "The invite page"
-- assertVisible:
-    id: "markdown-picture-done"
+- assertVisible: "Done"
+- waitForAnimationToEnd
 - takeScreenshot: markdown-picture
-- tapOn:
-    id: "markdown-picture-done"
+- tapOn: "Done"

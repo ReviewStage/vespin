@@ -53,6 +53,14 @@ export type Kept =
       readonly mediaType: string;
     };
 
+/** Where a thumbnail stands in its window, which Quick Look grows a picture or a file from and shrinks it back into. */
+export interface WindowFrame {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
 /** A picture's bytes as its `data:` address holds them. */
 export interface HeldPicture {
   readonly mediaType: string;

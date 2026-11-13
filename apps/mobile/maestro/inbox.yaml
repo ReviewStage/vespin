@@ -72,12 +72,12 @@ appId: dev.vespin.ios
 - assertVisible: ".*walked the invite flow.*"
 - waitForAnimationToEnd
 - takeScreenshot: inbox-thread
+# The picture opens in the system's Quick Look, whose Done closes it.
 - tapOn: "The invite page"
-- assertVisible:
-    id: "markdown-picture-done"
+- assertVisible: "Done"
+- waitForAnimationToEnd
 - takeScreenshot: inbox-picture
-- tapOn:
-    id: "markdown-picture-done"
+- tapOn: "Done"
 - scrollUntilVisible:
     element: "invite-flow.webm.*"
     direction: DOWN
@@ -105,16 +105,14 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: inbox-file
 - tapOn: "invite-test-plan.pdf, PDF.*"
-# The viewer stands as file-viewer only once WebKit has drawn the PDF, so the
-# flow waits for it rather than shooting the spinner.
+# The PDF opens in the system's Quick Look, titled with its name, and its Done
+# closes it.
 - extendedWaitUntil:
-    visible:
-      id: "file-viewer"
+    visible: "Done"
     timeout: 15000
 - waitForAnimationToEnd
 - takeScreenshot: inbox-pdf
-- tapOn:
-    id: "file-viewer-done"
+- tapOn: "Done"
 - waitForAnimationToEnd
 # The thread's ⋯ menu opens Remind me too: a compact window's bar holds the
 # menu, and a regular window's detail column its own, the last "More" on
