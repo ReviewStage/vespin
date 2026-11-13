@@ -9,7 +9,7 @@ import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { device } from "../../schemas/device.js";
-import { DEVICE_LAYOUT, getTestDB } from "../../testing/index.js";
+import { DEVICE_LAYOUT, getTestDB, joinWorkspace, openWorkspace } from "../../testing/index.js";
 import {
   allowedAppsOf,
   beatDevice,
@@ -20,6 +20,7 @@ import {
   registerDevice,
   saveCommandDeviceSettings,
   saveDeviceAppLooks,
+  workspaceMachinesOf,
 } from "../device-store.js";
 import { enrollOwnDevice, hostsOf, removeHost } from "../host-store.js";
 
@@ -29,7 +30,9 @@ import { enrollOwnDevice, hostsOf, removeHost } from "../host-store.js";
  * over, a Mac that stopped beating is no longer read as there, a host's
  * update stands until its own beat names none, a Mac quiet past fresh is marked away once and its next beat clears it, and the Macs a read's local agents name are read by their ids alone.
  * A Mac joining for its commands carries its own settings up once, and the
- * apps each machine always allows are read by its own account alone.
+ * apps each machine always allows are read by its own account alone. A
+ * workspace's machines are read by its members alone, and name only those of
+ * its members.
  * Synthetic accounts and Macs throughout.
  */
 
@@ -45,6 +48,41 @@ const openAccounts = Effect.gen(function* () {
 });
 
 it.layer(getTestDB())("the device store", (it) => {
+  it.effect(
+    "a workspace's machines are read by its members alone, and are its members' alone",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const outsider = `user-${randomUUID()}`;
+        const db = yield* Database;
+        yield* db
+          .insert(user)
+          .values({ id: outsider, name: "Test User", email: `${outsider}@app.test` });
+        const shared = yield* openWorkspace(owner);
+        yield* joinWorkspace(shared, other);
+        const elsewhere = yield* openWorkspace(outsider);
+        const [studio, laptop, theirs] = [randomUUID(), randomUUID(), randomUUID()];
+        yield* registerDevice(other, { id: studio, name: "Studio", ...DEVICE_LAYOUT });
+        yield* registerDevice(owner, { id: laptop, name: "Laptop", ...DEVICE_LAYOUT });
+        yield* registerDevice(outsider, { id: theirs, name: "Outside", ...DEVICE_LAYOUT });
+        const darwin = DEVICE_PLATFORM.DARWIN;
+
+        assert.deepEqual(yield* workspaceMachinesOf(owner, shared), [
+          { id: laptop, name: "Laptop", platform: darwin, userId: owner },
+          { id: studio, name: "Studio", platform: darwin, userId: other },
+        ]);
+        assert.deepEqual(yield* workspaceMachinesOf(owner, shared, other), [
+          { id: studio, name: "Studio", platform: darwin, userId: other },
+        ]);
+        assert.deepEqual(yield* workspaceMachinesOf(outsider, shared), [], "not a member");
+        assert.deepEqual(
+          yield* workspaceMachinesOf(outsider, elsewhere, other),
+          [],
+          "a workspace the member is not in",
+        );
+      }),
+  );
+
   it.effect("another account neither takes over, beats, nor reads an account's Mac", () =>
     Effect.gen(function* () {
       const { owner, other } = yield* openAccounts;

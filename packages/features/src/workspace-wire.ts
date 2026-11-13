@@ -1,4 +1,5 @@
 import { Schema as EffectSchema } from "effect";
+import { DEVICE_PLATFORM } from "./device-agent-wire.js";
 import { githubRepositoryFullNameSchema } from "./github-repositories-wire.js";
 import { RESERVED_WORKSPACE_SLUGS } from "./link-home.js";
 import {
@@ -409,6 +410,34 @@ export type WorkspaceMembersAnswer = typeof workspaceMembersAnswerSchema.Type;
 
 /** The query a members read names its workspace under. */
 export const WORKSPACE_MEMBERS_QUERY = { WORKSPACE_ID: "workspaceId" } as const;
+
+/** A workspace's machines read (GET query): the workspace the reader stands in, and one member of it where the read is of theirs alone. */
+export const workspaceMachinesRequestSchema = EffectSchema.Struct({
+  workspaceId: workspaceIdSchema,
+  userId: EffectSchema.optionalKey(EffectSchema.String.check(EffectSchema.isNonEmpty())),
+});
+
+/**
+ * The machines of a workspace's members, by name (GET), as any member of it
+ * sees them: each one's id, which a mention and a call name it by, its name
+ * and platform, and whose it is. Nothing else of a machine is said, neither
+ * its settings nor whether agents may use it, which is its owner's and the
+ * task's.
+ */
+export const workspaceMachinesAnswerSchema = EffectSchema.Struct({
+  machines: EffectSchema.Array(
+    EffectSchema.Struct({
+      id: EffectSchema.String,
+      name: EffectSchema.String,
+      platform: EffectSchema.Literals(Object.values(DEVICE_PLATFORM)),
+      userId: EffectSchema.String,
+    }),
+  ),
+});
+
+export type WorkspaceMachinesAnswer = typeof workspaceMachinesAnswerSchema.Type;
+
+export type WorkspaceMachine = WorkspaceMachinesAnswer["machines"][number];
 
 /** Removing one member from a workspace (POST), answered with the members who remain. */
 export const workspaceMemberRemovalSchema = EffectSchema.Struct({

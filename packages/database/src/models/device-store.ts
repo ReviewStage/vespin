@@ -1,8 +1,11 @@
 /**
- * device-store.ts -- an account's devices that can run its local agents or take its agents' commands: registered, beaten with where a host's update stands, read for the ones there now, and joined with their own settings for commands.
+ * device-store.ts -- an account's devices that can run its local agents or take its agents' commands: registered, beaten with where a host's update stands, read for the ones there now, joined with their own settings for commands, and listed to the workspace's members.
  *
  * Every function is an effect over the ambient `SqlClient`, keyed by the
- * account, so no account moves, beats, or reads another's Mac. A register
+ * account, so no account moves, beats, or reads another's Mac, bar a
+ * workspace's machines, which name only what each machine is and whose,
+ * read through a workspace the reader and the owner both stand in
+ * (`workspaceMachinesOf`). A register
  * under an id another account holds writes nothing and answers false, so a
  * desktop cannot take over a Mac by naming its id (`../schemas/device.ts`).
  */
@@ -31,11 +34,13 @@ import {
   machineCommandModeSchema,
   machineDeviceSettingsSchema,
 } from "@repo/features/machine-command-wire";
-import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { member } from "../schemas/auth.js";
 import { device } from "../schemas/device.js";
+import { workspaceReachableBy } from "./workspace-store.js";
 
 type DeviceEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -459,6 +464,43 @@ const findAllowedApps = SqlSchema.findAll({
     ),
 });
 
+const findWorkspaceMachines = SqlSchema.findAll({
+  Request: Schema.Struct({
+    readerId: Schema.String,
+    workspaceId: Schema.String,
+    memberId: Schema.NullOr(Schema.String),
+  }),
+  Result: Schema.Struct({
+    id: Schema.String,
+    name: Schema.String,
+    platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
+    userId: Schema.String,
+  }),
+  execute: ({ readerId, workspaceId, memberId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: device.id,
+          name: device.name,
+          platform: device.platform,
+          userId: device.userId,
+        })
+        .from(device)
+        .innerJoin(
+          member,
+          and(eq(member.userId, device.userId), eq(member.organizationId, workspaceId)),
+        )
+        .where(
+          and(
+            isNull(device.removedAt),
+            workspaceReachableBy(readerId, workspaceId),
+            memberId === null ? undefined : eq(device.userId, memberId),
+          ),
+        )
+        .orderBy(asc(device.name), asc(device.id)),
+    ),
+});
+
 /**
  * Registers the Mac under the account, or renames, relocates, and beats it
  * where the account holds it already, with the machine it runs on where it
@@ -646,4 +688,29 @@ export function saveCommandDeviceSettings(
   settings: MachineDeviceSettings,
 ): DeviceEffect<boolean> {
   return Effect.map(writeSettings({ userId, id, ...settings }), (rows) => rows.length > 0);
+}
+
+/** A machine of a workspace's member as the workspace's members see it: its id, name, platform, and whose it is. */
+export interface WorkspaceMachine {
+  readonly id: string;
+  readonly name: string;
+  readonly platform: DevicePlatform;
+  readonly userId: string;
+}
+
+/**
+ * The machines of a workspace's members, none removed, by name, as any
+ * member of it sees them: none unless the reader stands in the workspace,
+ * and only those of an owner who stands in it too, so a reader never reads
+ * the machines of someone who shares no workspace with them; one member's
+ * alone where `memberId` names one. Note that it selects no secret,
+ * setting, or folder, since a teammate is shown only what each machine is
+ * and whose.
+ */
+export function workspaceMachinesOf(
+  readerId: string,
+  workspaceId: string,
+  memberId?: string,
+): DeviceEffect<readonly WorkspaceMachine[]> {
+  return findWorkspaceMachines({ readerId, workspaceId, memberId: memberId ?? null });
 }
