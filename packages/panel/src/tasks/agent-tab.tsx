@@ -2612,10 +2612,12 @@ function transcriptPlacing(
   const opening = !replayed || first === undefined ? undefined : replayOpening(first);
   // A line that reached a turn while it ran is drawn inside that turn, where it arrived.
   const placed = placedMessages(messages, (id) => undelivered.has(id) || unsent.has(id));
+
   // Note that the reply is the newest unfinished one rather than the last row, because a line that did not go stands after it, and a finished reply is not the next turn's, whose reply has yet to land.
   const newest = working
     ? placed.findLast((row) => row.message.role === MESSAGE_ROLE.ASSISTANT)?.message
     : undefined;
+
   const writing = newest?.finishedAt === undefined ? newest?.id : undefined;
 
   return { todos, first, opening, placed, writing };
