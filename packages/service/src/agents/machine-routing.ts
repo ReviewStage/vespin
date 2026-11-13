@@ -201,7 +201,10 @@ function whyNot(
 
   // Note that a machine whose app never carried its switch up decides on the Mac itself, as before the switch was kept here.
   if (kind === MACHINE_COMMAND_KIND.COMPUTER && machine.computerUse === false) {
-    return `${machine.name} doesn't let agents use its apps (its Settings › Let agents use apps on this Mac is off).`;
+    return {
+      code: MACHINE_UNREACHED.APPS_OFF,
+      words: `Not run: ${machine.name} doesn't let agents use its apps (Let agents use its apps is off for it in Settings › Machines).`,
+    };
   }
 
   return undefined;

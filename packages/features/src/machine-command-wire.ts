@@ -644,6 +644,8 @@ export const MACHINE_UNREACHED = {
   NOT_LET: "not-let",
   /** The machine is set to Never, so it runs no terminal command. */
   COMMANDS_NEVER: "commands-never",
+  /** The machine's switch that lets agents use its apps is off, so it takes no computer use. */
+  APPS_OFF: "apps-off",
   /** The agent's default machine was removed, or its owner no longer lets the task's agents use it. */
   DEFAULT_GONE: "default-gone",
   /** The call named a machine this task's agents may not use. */

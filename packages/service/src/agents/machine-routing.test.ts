@@ -148,8 +148,13 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
 
         assert.match(
           appsOff.kind === MACHINE_ROUTE.REFUSED ? appsOff.reason : "",
-          /^Not run: Laptop doesn't let agents use its apps \(its Settings › Let agents use apps on this Mac is off\)\./u,
+          /^Not run: Laptop doesn't let agents use its apps \(Let agents use its apps is off for it in Settings › Machines\)\./u,
           "an action on an app is refused where the machine's apps switch is off",
+        );
+        assert.equal(
+          appsOff.kind === MACHINE_ROUTE.REFUSED ? appsOff.why : undefined,
+          MACHINE_UNREACHED.APPS_OFF,
+          "and says why as data, for the card",
         );
         assert.deepEqual(
           yield* route(target, { machineId: laptop }),

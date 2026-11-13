@@ -119,6 +119,8 @@ function WhyWords({
       );
     case MACHINE_UNREACHED.COMMANDS_NEVER:
       return <>{name ?? "The machine"} doesn't let agents run terminal commands.</>;
+    case MACHINE_UNREACHED.APPS_OFF:
+      return <>{name ?? "The machine"} doesn't let agents use apps.</>;
     case MACHINE_UNREACHED.DEFAULT_GONE:
       return "This agent's default machine was removed, or its owner no longer lets this task's agents use it.";
     case MACHINE_UNREACHED.UNKNOWN_MACHINE:
