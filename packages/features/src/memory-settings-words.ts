@@ -59,14 +59,22 @@ export function memorySaveRefusal(answer: MemorySaveAnswerView): string | undefi
   return "failure" in answer ? MEMORY_SAVE_REFUSAL[answer.failure] : undefined;
 }
 
-/** What a memory's row says of its recalls where agents were handed it in none of the window: when last, or never. */
+/** What a memory's row says of its recalls besides their count: none in the window, when last, or never. */
 export const MEMORY_UNRECALLED_WORDS = {
-  LAST: "Last recalled",
+  NONE: "No recalls",
+  LAST: "Last",
   NEVER: "Never recalled",
 } as const;
 
 /** What a caption says Recalls counts. */
 export const MEMORY_RECALLS_WORDS = `Recalls count the last ${MEMORY_RECALL_WINDOW_DAYS} days`;
+
+/** What a memory's row says of who saved it: "Saved 2h ago by" its keeper "from" the agent it came from. */
+export const MEMORY_SAVED_WORDS = {
+  SAVED: "Saved",
+  BY: "by",
+  FROM: "from",
+} as const;
 
 /** How often agents were handed a memory in the recall window, as a line says it: "3 recalls". */
 export function recallsText(recalls: number): string {
@@ -149,13 +157,17 @@ export function memoriesInView(
     : listed.sort((one, other) => lastUsed(one) - lastUsed(other));
 }
 
-/** What the Unused view says over its memories, and its press that chooses them all. */
-export function unusedWords(count: number) {
-  return {
-    line: `No agent recalled ${count === 1 ? "this memory" : `these ${countWords(count, TERM.MEMORY)}`} in the last ${MEMORY_RECALL_WINDOW_DAYS} days.`,
-    choose: count === 1 ? "Select it" : `Select all ${count.toLocaleString("en-US")}`,
-  } as const;
+/** What the Unused view's press that chooses all `count` of its memories says. */
+export function selectAllWords(count: number): string {
+  return `Select all ${count.toLocaleString("en-US")}`;
 }
+
+/** What each view says of what it lists, over its rows. */
+export const MEMORY_VIEW_CAPTION = {
+  [MEMORY_VIEW.ALL]: `Most recalled first. Recalls count the last ${MEMORY_RECALL_WINDOW_DAYS} days.`,
+  [MEMORY_VIEW.NEW]: `Saved in the last ${MEMORY_NEW_DAYS} days, newest first.`,
+  [MEMORY_VIEW.UNUSED]: `No agent recalled these in the last ${MEMORY_RECALL_WINDOW_DAYS} days, the longest unused first.`,
+} as const satisfies Record<MemoryView, string>;
 
 /** What a view with nothing in it says. */
 export const MEMORY_VIEW_EMPTY = {

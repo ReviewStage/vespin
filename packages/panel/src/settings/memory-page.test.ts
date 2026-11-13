@@ -292,7 +292,7 @@ beforeAll(() => {
   return Effect.runPromise(editorBundleLanded);
 });
 
-const rows = (page: HTMLElement) => [...page.querySelectorAll<HTMLElement>(".ui-list-row")];
+const rows = (page: HTMLElement) => [...page.querySelectorAll<HTMLElement>(".menu-row")];
 
 const words = (page: HTMLElement) =>
   rows(page).map((row) => row.querySelector(".memory-text")?.textContent);
@@ -311,7 +311,7 @@ const dialog = () =>
 
 /** A memory row's box, which chooses it. */
 const boxOf = (page: HTMLElement, memory: MemorySummary) =>
-  rowOf(page, memory).querySelector<HTMLElement>(".ui-select-box") ??
+  rowOf(page, memory).querySelector<HTMLElement>('[role="checkbox"]') ??
   assert.fail("no box on the row");
 
 /** The card's field a memory's words are written in, where one stands; the card hangs over the window, outside the page. */
@@ -627,7 +627,7 @@ test("a memory no agent was ever handed says it was never recalled", async () =>
   const { page } = await mount();
 
   assert.equal(
-    rowOf(page, DEPLOYS).querySelector(".ui-list-row-meta")?.textContent,
+    rowOf(page, DEPLOYS).querySelector(".ui-settings-row-value")?.textContent,
     "Never recalled",
   );
 });

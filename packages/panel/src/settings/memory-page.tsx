@@ -7,9 +7,10 @@ import {
   MEMORY_ACT,
   MEMORY_EDITOR_WORDS,
   MEMORY_PAGE_WORDS,
-  MEMORY_RECALLS_WORDS,
+  MEMORY_SAVED_WORDS,
   MEMORY_UNRECALLED_WORDS,
   MEMORY_VIEW,
+  MEMORY_VIEW_CAPTION,
   MEMORY_VIEW_EMPTY,
   MEMORY_VIEW_WORDS,
   MEMORY_VIEWS,
@@ -17,7 +18,7 @@ import {
   memoriesInView,
   memorySaveRefusal,
   recallsText,
-  unusedWords,
+  selectAllWords,
 } from "@repo/features/memory-settings-words";
 import { MEMORY_BOUNDS, type MemorySummary } from "@repo/features/memory-wire";
 import { encodeMention, MENTION_KIND } from "@repo/features/mention-link";
@@ -35,12 +36,11 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
-  BANNER_LOOK,
-  Banner,
   BUTTON_VARIANT,
   Button,
   CHIP_LOOK,
   CHOICE_BAR_LOOK,
+  Checkbox,
   Chip,
   ChipName,
   ChoiceBar,
@@ -55,29 +55,27 @@ import {
   GAP,
   IconButton,
   Inline,
+  JUSTIFY,
   LIST_MOTION_WAY,
-  LIST_ROW_LEAD,
-  LIST_ROW_META,
-  LIST_ROW_TITLE_LINES,
-  List,
   ListMotion,
-  ListRow,
-  type ListRowMenu,
-  type MenuEntry,
   PlusIcon,
+  SETTINGS_ROW_ALIGN,
+  SETTINGS_ROW_CONTROLS,
+  SETTINGS_ROW_STATE,
   SETTINGS_SECTION_FRAME,
+  SETTINGS_SKELETON_CONTROL,
   SearchField,
   SearchIcon,
   type SelectionAct,
   SelectionBar,
   SettingsLine,
+  SettingsRowNote,
+  type SettingsRowSkeletonLayout,
+  SettingsRowStateLine,
+  SettingsRowsSkeleton,
+  SettingsRowValue,
   SettingsSection,
-  SKELETON_KIND,
-  Skeleton,
-  SkeletonRegion,
-  STATUS_TONE,
   Stack,
-  selectionMenu,
   TEXT_ELEMENT,
   TEXT_TONE,
   TEXT_VARIANT,
@@ -86,7 +84,6 @@ import {
   Time,
   Tooltip,
   TrashIcon,
-  UnreadMark,
   useConfirmDialog,
   useLeaving,
   useMenu,
@@ -99,13 +96,13 @@ import {
   personActor,
 } from "@repo/ui/actor-model";
 import { GLYPH, ListFilterIcon } from "@repo/ui/icons";
-import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
+import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { mutationOptions, useIsMutating, useMutation, useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
 import { type ReactNode, type RefObject, useId, useMemo, useRef, useState } from "react";
 import { actFailureWords, sendAct } from "../act.js";
-import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
+import { ACTOR_SIZE, ActorLine, ActorMark, ActorRef } from "../actor-ref.js";
 import { ANSWER_ACCEPTED, sameAnswer, useConfirmAct } from "../confirm-act.js";
 import { useCopyToast } from "../copy-feedback.js";
 import { EDITOR_ROOT_SELECTOR } from "../description-editor/contract.js";
@@ -122,6 +119,7 @@ import { useKnownNames } from "../tasks/use-known-names.js";
 import { useOpenPlace } from "../tasks/use-open-link.js";
 import { useHeldThroughExit } from "../use-held-through-exit.js";
 import { ReadFailed } from "./marks.js";
+import { MenuRow } from "./menu-row.js";
 
 /**
  * memory-page.tsx -- Settings › Memory: the facts and conventions the workspace's coding agents kept, listed a row each under views for reading, reviewing, and pruning them, edited and added in place, and forgotten one at a time or several at once.
@@ -144,25 +142,25 @@ import { ReadFailed } from "./marks.js";
  * thirty days first, then the most recently kept or corrected; New, those
  * kept in the last week, the newest first, for a member to read over while
  * a wrong one is still young; and Unused, those no agent recalled in the
- * window though kept before it opened, the longest out of use first, over a
- * strip that says so and chooses them all to prune. A caption says how many
- * memories the view holds and what recalls count.
+ * window though kept before it opened, the longest out of use first, with
+ * Select all at the bar's end to choose them all to prune. A caption under
+ * the bar says what the view lists.
  *
- * The memories stand in a list (`List`), one row each, so a memory's words
- * take the page's width rather than a column's. A row: the box it is chosen
- * by, in the gutter at its start; its words, drawn as the notes are since a
- * memory is Markdown (`pnpm db:generate` in backticks), cut short at two
- * lines and said whole in the hint over them where they are; under them,
- * whose they are, when they were saved, and the agent that saved them, as
- * that agent's mention chip, wearing its harness's mark, whose press opens
- * the agent's transcript at the line that kept it, or the task's chip where
- * the window cannot name the agent; at the end of its first line, how often
- * agents were handed it in the window and when last, or when last before
- * it, or never; and its ⋯. A row opens nothing. Its ⋯, a right-click on it,
- * and the menu key offer Edit, Copy text, and Delete to a reader who may
- * change it: its words are theirs, or they own or administer the
- * workspace. To any other reader Edit stands nowhere and Delete stands
- * unavailable, saying who may.
+ * The memories stand in a Settings card, a row each (`MenuRow`), as
+ * Always allowed's commands do, at Settings' own measure. A row: the box it
+ * is chosen by; its words, drawn as the notes are since a memory is
+ * Markdown (`pnpm db:generate` in backticks), held to two lines and said
+ * whole in the hint over them where they are cut (`SettingsRowNote`); under
+ * them, "Saved 2h ago by" whose they are, "from" the agent that saved them,
+ * as that agent's mention chip, wearing its harness's mark, whose press
+ * opens the agent's transcript at the line that kept it, or the task's chip
+ * where the window cannot name the agent; and on its first line
+ * (`SETTINGS_ROW_ALIGN.FIRST_LINE`), how often agents were handed it in the
+ * window over when last, or never, and its ⋯. A row opens nothing. Its ⋯,
+ * a right-click on it, and the menu key offer Edit, Copy text, and Delete
+ * to a reader who may change it: its words are theirs, or they own or
+ * administer the workspace. To any other reader Edit stands nowhere and
+ * Delete stands unavailable, saying who may.
  *
  * Edit and Add memory open New task's card over the window (`Dialog`'s
  * composer size), headed Edit memory or New memory, holding the agent's
@@ -201,21 +199,19 @@ const PAGE_LINE = {
 const FILTER = "Filter";
 const KEPT_BY = "Saved by";
 
-/** What the list is called to a reader. */
-const LIST_LABEL = MEMORY_PAGE_WORDS.TITLE;
-
 /** What the views are called to a reader. */
 const VIEWS_LABEL = "Views";
 
-/** The rows that stand while the memories are read: how wide each's words, its line under them, and its recalls stand. */
-const SKELETON_ROWS = [
-  { words: "86%", line: "34%" },
-  { words: "64%", line: "42%" },
-  { words: "74%", line: "30%" },
-] as const;
+/** A memory's row as it stands while the memories are read: its words, who saved them under, its recalls, and its ⋯, led by its box. */
+const MEMORY_ROW_SKELETON: SettingsRowSkeletonLayout = {
+  described: true,
+  controls: [],
+  end: [SETTINGS_SKELETON_CONTROL.MORE],
+  mark: "16px",
+};
 
-/** How wide a skeleton row's recalls stand. */
-const SKELETON_USE = "96px";
+/** How many rows stand while the memories are read. */
+const SKELETON_ROWS = [MEMORY_ROW_SKELETON, MEMORY_ROW_SKELETON, MEMORY_ROW_SKELETON] as const;
 
 /** The key the Kept by filter keeps everyone who left the workspace under, together. */
 const FORMER_KEY = "former";
@@ -331,100 +327,104 @@ function SourceChip({
   return chip ?? null;
 }
 
-/** A memory's recalls, as its row's end says them: how many in the window and when last, when last before it, or never. */
+/** A memory's recalls, as its row's end says them on its first lines: how many in the window, then when last, or never. */
 function MemoryUse({ memory }: { memory: MemorySummary }): React.JSX.Element {
   const { recalls30d, lastRecalledAt } = memory;
 
-  if (lastRecalledAt === null) return <>{MEMORY_UNRECALLED_WORDS.NEVER}</>;
-  const last = <Time at={lastRecalledAt} look={TIME_LOOK.AGO} hint={false} />;
+  if (lastRecalledAt === null) {
+    return <SettingsRowValue>{MEMORY_UNRECALLED_WORDS.NEVER}</SettingsRowValue>;
+  }
 
-  // Note that a memory recalled before the window and not since counts none in it, so its row says when last alone.
-  return recalls30d === 0 ? (
-    <>
-      {MEMORY_UNRECALLED_WORDS.LAST} {last}
-    </>
-  ) : (
-    <>
-      {recallsText(recalls30d)} · last {last}
-    </>
+  // Note that a memory recalled before the window and not since counts none in it, and its second line still says when last.
+  return (
+    <SettingsRowValue>
+      {recalls30d === 0 ? MEMORY_UNRECALLED_WORDS.NONE : recallsText(recalls30d)}
+      <Text as={TEXT_ELEMENT.DIV} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+        {MEMORY_UNRECALLED_WORDS.LAST}{" "}
+        <Time at={lastRecalledAt} look={TIME_LOOK.AGO} hint={false} />
+      </Text>
+    </SettingsRowValue>
+  );
+}
+
+/** Who saved a memory and when, as Always allowed says who added a command: "Saved 2h ago by" its keeper, "from" the agent it came from. */
+function SavedLine({
+  shown,
+  workspaceStep,
+}: {
+  shown: ShownMemory;
+  workspaceStep: string;
+}): React.JSX.Element {
+  const { memory, actor, agentName } = shown;
+
+  return (
+    // Note that whom and whence are parts of their own, so a narrow row wraps between them rather than cutting a name.
+    <SettingsRowStateLine state={SETTINGS_ROW_STATE.PLAIN} block wrap>
+      <ActorLine>
+        {`${MEMORY_SAVED_WORDS.SAVED} `}
+        <Time at={memory.updatedAt} look={TIME_LOOK.AGO} />
+        {` ${MEMORY_SAVED_WORDS.BY} `}
+        <ActorRef actor={actor} />
+      </ActorLine>
+      {memory.source === null ? null : (
+        <ActorLine>
+          {/* Note that the space between the parts leads this one's words, since a flex line drops a run of spaces standing alone. */}
+          {` ${MEMORY_SAVED_WORDS.FROM} `}
+          <SourceChip source={memory.source} agentName={agentName} workspaceStep={workspaceStep} />
+        </ActorLine>
+      )}
+    </SettingsRowStateLine>
   );
 }
 
 /**
- * One memory's row: its words, cut short at two lines and said whole in the
- * hint over them where they are; whose they are, when they were saved, and
- * the agent they came from on the line under them; its recalls at the end of
- * its first line; chosen by its box; and its acts in its ⋯.
+ * One memory's row, a Settings row as Always allowed's commands are: the
+ * box it is chosen by, its words held to two lines, who saved them when
+ * and from which agent under them, and its recalls and ⋯ on its first line.
  */
 function MemoryRow({
   shown,
   found,
+  chosen,
+  onChoose,
   menu,
   workspaceStep,
 }: {
   shown: ShownMemory;
   /** The words the search asks for, lit where they landed. */
   found: readonly string[];
-  menu: ListRowMenu;
+  chosen: boolean;
+  onChoose: () => void;
+  menu: MemoryMenu;
   /** The step the workspace's links name it by, which a memory's source is written under. */
   workspaceStep: string;
 }): React.JSX.Element {
-  const { memory, actor, agentName } = shown;
-  const [clipped, setClipped] = useState(false);
+  const { memory } = shown;
+  const words = plainWords(memory.text);
 
   return (
-    <ListRow
-      // Note that a memory is never unread: the empty gutter is the room its select box stands in, as the Inbox's rows keep it.
-      leading={<UnreadMark unread={false} />}
-      title={<MemoryWords text={memory.text} found={found} whole={clipped} />}
-      titleLines={LIST_ROW_TITLE_LINES.TWO}
-      onTitleClipped={setClipped}
-      lead={{ icon: <ActorMark actor={actor} size={ACTOR_SIZE.INLINE} />, label: actorName(actor) }}
-      leadAt={LIST_ROW_LEAD.INLINE}
-      description={
-        <>
-          Saved <Time at={memory.updatedAt} look={TIME_LOOK.AGO} hint={false} />
-          {memory.source === null ? null : (
-            <>
-              {" · "}
-              <SourceChip
-                source={memory.source}
-                agentName={agentName}
-                workspaceStep={workspaceStep}
-              />
-            </>
-          )}
-        </>
-      }
-      meta={<MemoryUse memory={memory} />}
-      metaAt={LIST_ROW_META.TITLE}
-      selectKey={memory.id}
-      selectBox
-      menu={menu}
+    <MenuRow
+      thing="Memory"
+      actions={menu.actions}
+      {...(menu.heading === undefined ? undefined : { heading: menu.heading })}
+      row={{
+        leading: <Checkbox label={`Select: ${words}`} checked={chosen} onChange={onChoose} />,
+        label: <MemoryWords text={memory.text} words={words} found={found} />,
+        description: <SavedLine shown={shown} workspaceStep={workspaceStep} />,
+        control: <MemoryUse memory={memory} />,
+        controls: SETTINGS_ROW_CONTROLS.BESIDE,
+        align: SETTINGS_ROW_ALIGN.FIRST_LINE,
+      }}
     />
   );
 }
 
-/** The memories while they are read: rows of bones standing as a memory's row does, under a label a reader hears. */
+/** The memories while they are read: a card of rows shaped as a memory's, under a label a reader hears. */
 function MemoriesSkeleton({ label }: { label: string }): React.JSX.Element {
   return (
-    <SkeletonRegion label={label}>
-      <List label={LIST_LABEL}>
-        {SKELETON_ROWS.map(({ words, line }) => (
-          <ListRow
-            key={words}
-            leading={<UnreadMark unread={false} />}
-            title={<Skeleton width={words} />}
-            titleLines={LIST_ROW_TITLE_LINES.TWO}
-            lead={{ icon: <Skeleton kind={SKELETON_KIND.CIRCLE} />, label: "" }}
-            leadAt={LIST_ROW_LEAD.INLINE}
-            description={<Skeleton width={line} />}
-            meta={<Skeleton width={SKELETON_USE} />}
-            metaAt={LIST_ROW_META.TITLE}
-          />
-        ))}
-      </List>
-    </SkeletonRegion>
+    <SettingsSection>
+      <SettingsRowsSkeleton label={label} rows={SKELETON_ROWS} />
+    </SettingsSection>
   );
 }
 
@@ -432,6 +432,12 @@ function MemoriesSkeleton({ label }: { label: string }): React.JSX.Element {
 interface ChosenMemories {
   readonly count: number;
   readonly acts: readonly SelectionAct[];
+}
+
+/** A row's menu: its acts in groups, and the line over them saying what they act on where the row's words do not. */
+interface MemoryMenu {
+  readonly actions: readonly (readonly MenuAction[])[];
+  readonly heading: string | undefined;
 }
 
 /** A memory's own acts, in its ⋯ and its right-click: Edit and Copy text, then Delete. */
@@ -443,7 +449,7 @@ function memoryMenu(
     readonly onCopy: () => void;
     readonly onForget: () => void;
   },
-): readonly (readonly MenuEntry[])[] {
+): readonly (readonly MenuAction[])[] {
   const { memory, actor } = shown;
 
   return [
@@ -469,19 +475,32 @@ function memoryMenu(
   ];
 }
 
-/** A row's menu: the memory's own acts, or the bar's under how many where it stands chosen among several. */
+/** A row's menu: the memory's own acts, or the bar's under how many where it stands chosen among several, what loses something last. */
 function rowMenuOf(
   chosen: ChosenMemories | undefined,
-  groups: readonly (readonly MenuEntry[])[],
-): ListRowMenu {
-  return chosen === undefined
-    ? { thing: "Memory", groups, replayUnmasked: true }
-    : {
-        thing: "Memory",
-        heading: <ReplayUnmask>{countWords(chosen.count, TERM.MEMORY)}</ReplayUnmask>,
-        groups: selectionMenu(chosen.acts),
-        replayUnmasked: true,
-      };
+  own: readonly (readonly MenuAction[])[],
+): MemoryMenu {
+  if (chosen === undefined) return { actions: own, heading: undefined };
+
+  // Note that every act the bar offers here does its act rather than dropping a menu of choices.
+  const actions = (danger: boolean): readonly MenuAction[] =>
+    chosen.acts.flatMap((act) =>
+      act.onAct === undefined || (act.danger === true) !== danger
+        ? []
+        : [
+            {
+              label: act.label,
+              ...(act.icon === undefined ? undefined : { icon: act.icon }),
+              danger,
+              onSelect: act.onAct,
+            },
+          ],
+    );
+
+  return {
+    actions: [actions(false), actions(true)],
+    heading: countWords(chosen.count, TERM.MEMORY),
+  };
 }
 
 /** One keeper the Kept by filter offers: whom it files under, their name and face, and how many they kept. */
@@ -722,25 +741,23 @@ function saveAnswered(answer: MemorySaveAnswerView): ActionResult {
     : { status: ACTION_RESULT_STATUS.REJECTED, reason: refusal };
 }
 
-/** A memory's words as its row draws them: lit where the search landed, and said whole in the hint over them where its row cuts them short. */
+/** A memory's words as its row draws them: lit where the search landed, held to two lines, and said whole in the hint over them where they are cut. */
 function MemoryWords({
   text,
+  words,
   found,
-  whole,
 }: {
   text: string;
+  /** The words as plain text, which the hint says. */
+  words: string;
   /** The words the search asks for, lit where they landed. */
   found: readonly string[];
-  /** Whether the row cuts the words short, so the hint says them whole. */
-  whole: boolean;
 }): React.JSX.Element {
   return (
-    <Tooltip label={whole ? plainWords(text) : undefined}>
-      <div className="memory-words">
-        {/* A memory's words stand inside its row, so they stay words going nowhere, links among them. */}
-        <MarkdownMessage words={text} className="memory-text" found={found} link={null} />
-      </div>
-    </Tooltip>
+    <SettingsRowNote words={words}>
+      {/* A memory's words stand inside its row, so they stay words going nowhere, links among them. */}
+      <MarkdownMessage words={text} className="memory-text" found={found} link={null} />
+    </SettingsRowNote>
   );
 }
 
@@ -1087,11 +1104,9 @@ function MemoryList({
     count: formatCount(inView(each).length),
   }));
 
-  const unused = unusedWords(listed.length);
-
   const keepers = keepersOf(searched);
 
-  const rowMenu = (row: ShownMemory): ListRowMenu => {
+  const rowMenu = (row: ShownMemory): MemoryMenu => {
     const { memory } = row;
 
     return rowMenuOf(
@@ -1125,65 +1140,56 @@ function MemoryList({
           </div>
           <KeptByChips keepers={keepersOf(all)} kept={kept} onKept={setKept} />
           {memories.length === 0 ? null : (
-            <ChoiceBar
-              label={VIEWS_LABEL}
-              items={viewItems}
-              value={view}
-              look={CHOICE_BAR_LOOK.SEGMENTED}
-              panels={(each) => ({ tab: tabIds[each], panel: panelId })}
-              onChange={setView}
-            />
+            <Inline justify={JUSTIFY.BETWEEN}>
+              <ChoiceBar
+                label={VIEWS_LABEL}
+                items={viewItems}
+                value={view}
+                look={CHOICE_BAR_LOOK.SEGMENTED}
+                panels={(each) => ({ tab: tabIds[each], panel: panelId })}
+                onChange={setView}
+              />
+              {view === MEMORY_VIEW.UNUSED && listed.length > 1 ? (
+                <Button
+                  variant={BUTTON_VARIANT.OUTLINE}
+                  onClick={() => setSelected(new Set(listed.map((each) => each.memory.id)))}
+                >
+                  {selectAllWords(listed.length)}
+                </Button>
+              ) : null}
+            </Inline>
           )}
           {listed.length === 0 ? null : (
             <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-              {`${countWords(listed.length, TERM.MEMORY)} · ${MEMORY_RECALLS_WORDS}`}
+              {MEMORY_VIEW_CAPTION[view]}
             </Text>
           )}
         </Stack>
         <div id={panelId} role="tabpanel" aria-labelledby={tabIds[view]}>
-          <Stack gap={GAP.CONTROL}>
-            {view === MEMORY_VIEW.UNUSED && listed.length > 0 ? (
-              <Banner
-                look={BANNER_LOOK.STRIP}
-                tone={STATUS_TONE.ATTENTION}
-                glyph={<GLYPH.TIME />}
-                actions={
-                  <Button
-                    variant={BUTTON_VARIANT.OUTLINE}
-                    onClick={() => setSelected(new Set(listed.map((each) => each.memory.id)))}
-                  >
-                    {unused.choose}
-                  </Button>
-                }
-              >
-                {unused.line}
-              </Banner>
-            ) : null}
-            {listed.length === 0 ? (
-              <NothingShown
-                // Note that a view the search and the filter leave empty while another holds their matches says so as the view, not as a search that missed.
-                narrowed={narrowed.length === 0 && (found.length > 0 || kept.size > 0)}
-                empty={MEMORY_VIEW_EMPTY[memories.length === 0 ? MEMORY_VIEW.ALL : view]}
-                onClear={clear}
-              />
-            ) : (
-              <List
-                id={regionId}
-                label={LIST_LABEL}
-                selection={{ selected: standing, onChange: setSelected }}
-              >
+          {listed.length === 0 ? (
+            <NothingShown
+              // Note that a view the search and the filter leave empty while another holds their matches says so as the view, not as a search that missed.
+              narrowed={narrowed.length === 0 && (found.length > 0 || kept.size > 0)}
+              empty={MEMORY_VIEW_EMPTY[memories.length === 0 ? MEMORY_VIEW.ALL : view]}
+              onClear={clear}
+            />
+          ) : (
+            <div id={regionId}>
+              <SettingsSection>
                 {listed.map((each) => (
                   <MemoryRow
                     key={each.memory.id}
                     shown={each}
                     found={found}
+                    chosen={standing.has(each.memory.id)}
+                    onChoose={() => setSelected(toggled(standing, each.memory.id))}
                     menu={rowMenu(each)}
                     workspaceStep={workspaceStep}
                   />
                 ))}
-              </List>
-            )}
-          </Stack>
+              </SettingsSection>
+            </div>
+          )}
         </div>
       </Stack>
       <div className={SELECTION_FOOT}>

@@ -15,6 +15,7 @@ import {
   PROVIDER_MARK_SIZE,
   ProviderMark,
   RepositoryLines,
+  SETTINGS_ROW_ALIGN,
   SETTINGS_ROW_CONTROLS,
   SETTINGS_ROW_DENSITY,
   SETTINGS_ROW_INDENT,
@@ -57,7 +58,8 @@ import { CatalogSection } from "../section";
  * words, beside a row whose one press still fits; compact rows in a
  * popover narrower than 380px, whose controls stay beside their words; and
  * list rows, a reference list's lines in a card, each a command and its chord;
- * and the slots: a mark riding a label, a key's field grown under
+ * and the slots: a mark riding a label, a note's long words with its value
+ * and ⋯ on their first line, a key's field grown under
  * its row with a refusal under that, and accounts indented under their
  * provider's row; and accounts that fold their repositories open under
  * their words, one open from the start with a long name among them, one
@@ -269,6 +271,15 @@ function StateRows(): React.JSX.Element {
         end={() => <SettingsRowActSlot />}
       >
         {() => <SettingsRowValue>Admin</SettingsRowValue>}
+      </SettingsRow>
+      <SettingsRow
+        label="Migrations are generated with the schema tool and checked in beside the change that needs them, never written by hand, so every branch's database can be rebuilt from its own history."
+        description="Saved 2 days ago by Ada Lovelace"
+        align={SETTINGS_ROW_ALIGN.FIRST_LINE}
+        controls={SETTINGS_ROW_CONTROLS.BESIDE}
+        end={() => <MoreButton thing="Memory" />}
+      >
+        {() => <SettingsRowValue>12 recalls</SettingsRowValue>}
       </SettingsRow>
       <SettingsRow label="Install script">{() => <SettingsRowControlHold />}</SettingsRow>
     </SettingsSection>
