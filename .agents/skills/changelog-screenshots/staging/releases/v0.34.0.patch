@@ -24,10 +24,10 @@ index aa745e0c3..152a49812 100644
  }
  
 diff --git a/packages/host/src/app-state.ts b/packages/host/src/app-state.ts
-index 07233b60b..0aa7bf012 100644
+index 07233b60b..635d9113c 100644
 --- a/packages/host/src/app-state.ts
 +++ b/packages/host/src/app-state.ts
-@@ -159,6 +159,44 @@ export const RUN_PROFILE = {
+@@ -159,6 +159,45 @@ export const RUN_PROFILE = {
    AUTOMATIONS_EDITOR: "automations-editor",
    /** The same account on the automation whose run failed, that run marked among its runs. */
    AUTOMATIONS_RUNS: "automations-runs",
@@ -66,6 +66,7 @@ index 07233b60b..0aa7bf012 100644
 +  SHOT_CLOUD_SETUP: "shot-cloud-setup",
 +  SHOT_SOUNDS: "shot-sounds",
 +  SHOT_AUTOMATIONS: "shot-automations",
++  SHOT_AUTOMATION_ONCE: "shot-automation-once",
 +  SHOT_RUN_ACTIONS: "shot-run-actions",
 +  SHOT_GITHUB_MENTION: "shot-github-mention",
 +  SHOT_RAIL: "shot-rail",
@@ -691,12 +692,77 @@ index 000000000..f2cc7593b
 +    },
 +  };
 +}
+diff --git a/packages/panel/src/shots/automation-once.ts b/packages/panel/src/shots/automation-once.ts
+new file mode 100644
+index 000000000..b761a7bd1
+--- /dev/null
++++ b/packages/panel/src/shots/automation-once.ts
+@@ -0,0 +1,59 @@
++/**
++ * automation-once.ts -- 0.34.0 shot "Automations once, and on merges and releases": Dean's Check Postmark's domain verification open in the editor, its trigger reading Runs Once, on a date and time of its own.
++ *
++ * Throwaway (`README.md`). Shares `automations.ts`'s list. A step walks
++ * there as a member would: the sidebar's Automations row, then the
++ * automation's row, pressing whichever is next whenever the window stands
++ * short of the editor.
++ */
++
++import { standingPlan, standingPlans } from "./board";
++import { automationsLive } from "./automations";
++import { codingAgentAnswers } from "./coding-agent";
++import { shotTasksView } from "./plan-document";
++import type { ShotSpec, ShotStep } from "./shot-spec";
++import { acmeMembers, MEMBER, whoWorkspaces } from "./who";
++
++const NAME = "Check Postmark's domain verification";
++
++/** The first drawn element of `selector` whose words start with `words`. */
++function pressable(selector: string, words: string): HTMLElement | undefined {
++  return [...document.querySelectorAll<HTMLElement>(selector)].find((each) =>
++    (each.textContent ?? "").trim().startsWith(words),
++  );
++}
++
++/** Walks to the automation's editor. */
++const OPEN_EDITOR: ShotStep = {
++  key: "open-editor",
++  ready: () => true,
++  run: () => {
++    window.setTimeout(() => {
++      window.setInterval(() => {
++        const words = document.body.textContent ?? "";
++        if (words.includes("Date and time")) return;
++        if (words.includes("Morning Sentry triage")) {
++          pressable("button, a, [role='button']", NAME)?.click();
++          return;
++        }
++        pressable("a, button, [role='link'], [role='button']", "Automations")?.click();
++      }, 700);
++    }, 1500);
++  },
++};
++
++export function automationOnceShot(): ShotSpec {
++  const members = acmeMembers();
++  return {
++    planning: shotTasksView({
++      plan: standingPlan(),
++      plans: standingPlans(),
++      extra: { workspaces: whoWorkspaces(members.length) },
++    }),
++    readerId: MEMBER.DEAN.userId,
++    answers: codingAgentAnswers(),
++    live: automationsLive(),
++    layout: { sidebarCollapsed: false },
++    steps: [OPEN_EDITOR],
++  };
++}
 diff --git a/packages/panel/src/shots/automations.ts b/packages/panel/src/shots/automations.ts
 new file mode 100644
-index 000000000..8f9b1647c
+index 000000000..b82c24e80
 --- /dev/null
 +++ b/packages/panel/src/shots/automations.ts
-@@ -0,0 +1,183 @@
+@@ -0,0 +1,188 @@
 +/**
 + * automations.ts -- 0.34.0 shot "Automations once, and on merges and releases": acme's Automations list with a one-time reminder, one on a pull request merged, one on a release published, and the weekday Morning Sentry triage.
 + *
@@ -855,9 +921,23 @@ index 000000000..8f9b1647c
 +  },
 +};
 +
++/** The workspace's automations and their runs as the host holds them, which the editor shot shares. */
++export function automationsLive(): NonNullable<ShotSpec["live"]> {
++  const list = automations();
++  return {
++    [LIVE_READ.AUTOMATIONS]: { [SHOT_ID.WORKSPACE]: { rows: list } },
++    [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: {
++      [SHOT_ID.WORKSPACE]: {
++        rows: list.flatMap((each) =>
++          each.lastRun === null ? [] : [{ ...each.lastRun, automation: { id: each.id, name: each.name } }],
++        ),
++      },
++    },
++  };
++}
++
 +export function automationsShot(): ShotSpec {
 +  const members = acmeMembers();
-+  const list = automations();
 +  return {
 +    planning: shotTasksView({
 +      plan: standingPlan(),
@@ -866,16 +946,7 @@ index 000000000..8f9b1647c
 +    }),
 +    readerId: MEMBER.DEAN.userId,
 +    answers: codingAgentAnswers(),
-+    live: {
-+      [LIVE_READ.AUTOMATIONS]: { [SHOT_ID.WORKSPACE]: { rows: list } },
-+      [LIVE_READ.AUTOMATION_WORKSPACE_RUNS]: {
-+        [SHOT_ID.WORKSPACE]: {
-+          rows: list.flatMap((each) =>
-+            each.lastRun === null ? [] : [{ ...each.lastRun, automation: { id: each.id, name: each.name } }],
-+          ),
-+        },
-+      },
-+    },
++    live: automationsLive(),
 +    layout: { sidebarCollapsed: false },
 +    steps: [OPEN_AUTOMATIONS],
 +  };
@@ -3335,10 +3406,10 @@ index 000000000..e8783890b
 +}
 diff --git a/packages/panel/src/shots/shot-profiles.ts b/packages/panel/src/shots/shot-profiles.ts
 new file mode 100644
-index 000000000..980be88a0
+index 000000000..3e27a465f
 --- /dev/null
 +++ b/packages/panel/src/shots/shot-profiles.ts
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,99 @@
 +/**
 + * shot-profiles.ts -- the registry: which shot each `--profile shot-*` launch stages, built once on first use.
 + *
@@ -3361,6 +3432,7 @@ index 000000000..980be88a0
 +import { pageCommentsShot } from "./page-comments";
 +import { homeShot } from "./home";
 +import { automationsShot } from "./automations";
++import { automationOnceShot } from "./automation-once";
 +import { runActionsShot } from "./run-actions";
 +import { githubMentionShot } from "./github-mention";
 +import { railShot } from "./rail";
@@ -3370,6 +3442,7 @@ index 000000000..980be88a0
 +  [RUN_PROFILE.SHOT_PAGE_COMMENTS, pageCommentsShot],
 +  [RUN_PROFILE.SHOT_HOME, homeShot],
 +  [RUN_PROFILE.SHOT_AUTOMATIONS, automationsShot],
++  [RUN_PROFILE.SHOT_AUTOMATION_ONCE, automationOnceShot],
 +  [RUN_PROFILE.SHOT_RUN_ACTIONS, runActionsShot],
 +  [RUN_PROFILE.SHOT_GITHUB_MENTION, githubMentionShot],
 +  [RUN_PROFILE.SHOT_RAIL, railShot],

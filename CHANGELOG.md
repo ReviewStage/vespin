@@ -92,7 +92,7 @@ filtered by tag, with prereleases left out unless you include them.
 ([#8855](https://github.com/ReviewStage/vespin/pull/8855),
 [#8834](https://github.com/ReviewStage/vespin/pull/8834))
 
-![acme's Automations list: Write release notes, when a release by people is published in acme/relay or acme/web; Update docs after a merge, when a pull request by people is merged in acme/relay on the default branch; Morning Sentry triage, weekdays at 9:00 AM; and Check Postmark's domain verification, Once · Nov 20, 9:00 AM](apps/web/public/changelog/0.34.0/automations-once-and-on-merges-and-releases.png)
+![Dean's Check Postmark's domain verification in the automation editor: its trigger is a Schedule that Runs Once, Next: Nov 20, 9:00 AM, its Date and time Nov 20, 2026 at 9:00 AM in America/New York, over its prompt to check whether acme.dev is verified in Postmark](apps/web/public/changelog/0.34.0/automations-once-and-on-merges-and-releases.png)
 
 ### Mention Vespin on GitHub
 
@@ -102,15 +102,7 @@ working on that pull request. Vespin reacts with 👀 and posts the agent's firs
 answer back as a comment with a link to it.
 ([#8898](https://github.com/ReviewStage/vespin/pull/8898))
 
-![A GitHub issue on acme/relay, Expired invite link shows a 404: Dana asks the vespin-agent bot to take it, her comment wearing a 👀 reaction, and the vespin-agent bot answers that it opened #232, which shows an expired link as no longer valid with Ask for a new invite, ending in Open in Vespin](apps/web/public/changelog/0.34.0/mention-vespin-on-github.png)
-
-### Find any line sent to an agent
-
-A rail down an agent's transcript marks every line sent into it, by you,
-teammates, other agents, GitHub, or automations, with the lines in view held in
-a bubble. Hovering it lists each line with its sender, and pressing one jumps
-there; on a phone, the rail opens the same list as a sheet.
-([#8485](https://github.com/ReviewStage/vespin/pull/8485))
+![GitHub issue #231 on acme/relay, Expired invite link shows a 404, open in Chrome: Dana asks the vespin-agent bot to take it, her comment wearing a 👀 reaction, and the bot answers that it opened #232, which shows an expired link as no longer valid with Ask for a new invite, ending in Open in Vespin; the sidebar's Development section links #232](apps/web/public/changelog/0.34.0/mention-vespin-on-github.png)
 
 ### Copy and paste pictures and files
 
@@ -121,6 +113,8 @@ pictures, and a description's picture pastes into a message box too.
 
 ### Improvements
 
+- A rail down an agent's transcript marks every line sent into it, and lists
+  each with its sender to jump to ([#8485](https://github.com/ReviewStage/vespin/pull/8485))
 - The first time you open Automations, the Inbox, or an agent's Browser tab, a
   card says what the page is for, with Learn more and Got it
   ([#8875](https://github.com/ReviewStage/vespin/pull/8875),
