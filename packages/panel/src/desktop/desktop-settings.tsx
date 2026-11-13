@@ -480,10 +480,10 @@ export function DesktopSettings({
           }}
         />
         <LinkWorkspaceProvider value={listed?.slug ?? listed?.id}>
-          <Fill className="sidebar-section -m-ring-reach">
+          <Fill className="sidebar-section -my-ring-reach -ms-ring-reach -me-column-inset">
             <ScrollArea fade={SCROLL_FADE.BOTH}>
               <div
-                className="sidebar-section-body flex min-h-list-held flex-col p-ring-reach"
+                className="sidebar-section-body flex min-h-list-held flex-col p-ring-reach pe-column-inset"
                 {...roving}
               >
                 {/* Note that the pages' names and the search's results show in a screen recording, because they are the app's own, but for the workspace's name over its group. */}
