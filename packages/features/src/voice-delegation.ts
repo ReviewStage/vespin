@@ -4,12 +4,29 @@
  * GPT-Live runs with client delegation: it listens and speaks, and on each
  * request it decides is work it raises `session.delegation.created`, which
  * names the delegation and carries none of the words. The words are the
- * caller's own transcript (`session.input_transcript.delta`), so a
- * delegation takes everything heard since the one before it and hands it to
- * the agent as one message, under the delegation's id. While the agent
- * stands idle the message is sent and opens its turn; while a turn runs it
- * is queued, and the service's own queue holds it and hands it on once the
- * turn is over (`agent-queue-wire.ts`), so no second queue stands here.
+ * caller's own transcript (`session.input_transcript.delta`), and what the
+ * voice says is its own (`session.output_transcript.delta`).
+ *
+ * Both sides are kept as text, one line to each utterance, recorded under an
+ * id the loop mints, since GPT-Live's deltas carry no item id and no event
+ * ends an utterance: only a fragment and its interval on the session's
+ * timeline. An utterance is one speaker's run of fragments: it ends where
+ * the other speaker starts, where a delegation takes the caller's words, or
+ * after a silence of more than `SILENCE_SPLIT_MS`. A fragment that started
+ * before the other speaker's open utterance did is a late one, as the
+ * caller's transcript lags the audio, and grows its own speaker's last line
+ * instead. A line is recorded as it opens, so the rows stand in the order
+ * they were said, and again as it closes or a late fragment grows it, under
+ * the same id, which the service writes in place.
+ *
+ * A delegation hands the agent the caller's lines since the one before it,
+ * by their ids, so the service starts the turn on the rows already written
+ * rather than writing the words again. While the agent stands idle the
+ * message is sent and opens its turn; while a turn runs it is queued, and
+ * the service's own queue holds it and hands it on once the turn is over
+ * (`agent-queue-wire.ts`), so no second queue stands here. A line a
+ * delegation took grows no more: a late fragment of it opens a line of its
+ * own, which goes with the next delegation.
  *
  * What the agent does goes back as context appends, each within GPT-Live's
  * 500 tokens, held as 500 UTF-8 bytes: a tool's progress as quiet thinking,
@@ -28,10 +45,12 @@
 import { EXCESS_KEYS, unparsedWire } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Result, Schema, Stream } from "effect";
+import { VOICE_SPEAKER, type VoiceSpeaker } from "./agent-wire.js";
 
 /** GPT-Live's server events the loop reads; every other one passes it by. */
 export const LIVE_SERVER_EVENT = {
   INPUT_TRANSCRIPT_DELTA: "session.input_transcript.delta",
+  OUTPUT_TRANSCRIPT_DELTA: "session.output_transcript.delta",
   DELEGATION_CREATED: "session.delegation.created",
   CLOSED: "session.closed",
 } as const;
@@ -55,6 +74,9 @@ const LIVE_APPEND_MAX_BYTES = 500;
 
 /** How many commentary appends one reply is said in at most: its opening, about 250 words of English, never the whole of a long reply. */
 const REPLY_MAX_APPENDS = 4;
+
+/** The longest silence on the session's timeline inside one speaker's line; a longer one starts a new line, so a long monologue reads as paragraphs. */
+const SILENCE_SPLIT_MS = 3000;
 
 /** Where an input to the loop came from: GPT-Live's data channel, the agent's transcript, or the caller's composer. */
 export const VOICE_INPUT = {
@@ -90,8 +112,9 @@ export type VoiceInput =
   /** A line the caller typed and sent to the agent during the call. */
   | { readonly from: typeof VOICE_INPUT.TYPED; readonly text: string };
 
-/** What the loop asks of its caller: send a message to the agent, queue one behind its turn, or tell the voice. */
+/** What the loop asks of its caller: record a line of the call, send a message to the agent, queue one behind its turn, or tell the voice. */
 export const VOICE_OUTPUT = {
+  RECORD: "record",
   SEND: "send",
   QUEUE: "queue",
   TELL: "tell",
@@ -107,22 +130,44 @@ export interface LiveAppend {
 
 export type VoiceOutput =
   | {
+      /** A line of the call as it stands, written under its id once and grown in place after. */
+      readonly kind: typeof VOICE_OUTPUT.RECORD;
+      readonly speaker: VoiceSpeaker;
+      readonly id: string;
+      readonly text: string;
+    }
+  | {
       readonly kind: typeof VOICE_OUTPUT.SEND | typeof VOICE_OUTPUT.QUEUE;
-      /** What was said since the delegation before, as the agent's message. */
+      /** What was said since the delegation before, as the agent's message: the words of the lines it names. */
       readonly text: string;
       readonly delegationId: string;
+      /** The caller's lines the message is, by the ids they were recorded under, oldest first. */
+      readonly lines: readonly string[];
     }
   | { readonly kind: typeof VOICE_OUTPUT.TELL; readonly event: LiveAppend };
 
-/** Where the call stands at its start: whether the agent's turn runs already. */
+/** Where the call stands at its start: whether the agent's turn runs already; and how a new line's id is minted, since GPT-Live names none. */
 export interface VoiceCallStart {
   readonly agentWorking: boolean;
+  readonly mintId: () => string;
 }
+
+/** A transcript fragment's interval on the session's timeline, in milliseconds, where GPT-Live names it. */
+const fragmentSpan = {
+  start_ms: Schema.optionalKey(Schema.Finite),
+  end_ms: Schema.optionalKey(Schema.Finite),
+};
 
 const liveServerEventSchema = Schema.Union([
   Schema.Struct({
     type: Schema.Literal(LIVE_SERVER_EVENT.INPUT_TRANSCRIPT_DELTA),
     delta: Schema.String,
+    ...fragmentSpan,
+  }),
+  Schema.Struct({
+    type: Schema.Literal(LIVE_SERVER_EVENT.OUTPUT_TRANSCRIPT_DELTA),
+    delta: Schema.String,
+    ...fragmentSpan,
   }),
   Schema.Struct({
     type: Schema.Literal(LIVE_SERVER_EVENT.DELEGATION_CREATED),
@@ -137,10 +182,25 @@ const readLiveEvent = readEither(Schema.fromJsonString(liveServerEventSchema), {
   excess: EXCESS_KEYS.DROP,
 });
 
+/** One line of the call: its id, its words so far, the words last recorded, and its interval on the session's timeline. */
+interface Line {
+  readonly speaker: VoiceSpeaker;
+  readonly id: string;
+  readonly text: string;
+  readonly recorded: string;
+  readonly startMs: number | undefined;
+  readonly endMs: number | undefined;
+}
+
 /** What the loop keeps between inputs. */
 interface VoiceState {
-  /** The caller's words heard since the last delegation took them. */
-  readonly heard: string;
+  readonly mintId: () => string;
+  /** The caller's lines since the last delegation took them, oldest first; the last grows. */
+  readonly heard: readonly Line[];
+  /** The voice's latest line, which grows. */
+  readonly voiced: Line | undefined;
+  /** The speaker whose line is open, or null where none is. */
+  readonly open: VoiceSpeaker | null;
   /** Whether the agent's turn runs, so a delegation is queued rather than sent. */
   readonly working: boolean;
   /** The delegation the running turn answers, or null for a turn none opened. */
@@ -236,38 +296,164 @@ function tell(
 
 type Step = readonly [VoiceState, readonly VoiceOutput[]];
 
-/** A delegation takes what was heard since the one before: sent to an idle agent, which opens its turn, or queued behind a running one. */
+const SPEAKER_OF_DELTA = {
+  [LIVE_SERVER_EVENT.INPUT_TRANSCRIPT_DELTA]: VOICE_SPEAKER.CALLER,
+  [LIVE_SERVER_EVENT.OUTPUT_TRANSCRIPT_DELTA]: VOICE_SPEAKER.VOICE,
+} as const;
+
+type TranscriptDelta = Extract<
+  LiveServerEvent,
+  {
+    readonly type:
+      | typeof LIVE_SERVER_EVENT.INPUT_TRANSCRIPT_DELTA
+      | typeof LIVE_SERVER_EVENT.OUTPUT_TRANSCRIPT_DELTA;
+  }
+>;
+
+/** The line recorded as it stands, or nothing where its words are what was recorded last. */
+function recorded(line: Line): readonly [Line, readonly VoiceOutput[]] {
+  const text = line.text.trim();
+
+  if (text === "" || text === line.recorded) return [line, []];
+
+  return [
+    { ...line, recorded: text },
+    [{ kind: VOICE_OUTPUT.RECORD, speaker: line.speaker, id: line.id, text }],
+  ];
+}
+
+/** The speaker's line that grows: the caller's last one no delegation took, or the voice's latest. */
+function growingLine(state: VoiceState, speaker: VoiceSpeaker): Line | undefined {
+  return speaker === VOICE_SPEAKER.CALLER ? state.heard.at(-1) : state.voiced;
+}
+
+/** The state with the speaker's growing line put in place. */
+function withLine(state: VoiceState, line: Line, opened: boolean): VoiceState {
+  if (line.speaker === VOICE_SPEAKER.VOICE) return { ...state, voiced: line };
+
+  return { ...state, heard: opened ? [...state.heard, line] : [...state.heard.slice(0, -1), line] };
+}
+
+/** The state as it stands, answering nothing. */
+function stood(state: VoiceState): Step {
+  return [state, []];
+}
+
+/** The open line closed and recorded as it stands, where one is open. */
+function closedOpen(state: VoiceState): Step {
+  const line = state.open === null ? undefined : growingLine(state, state.open);
+
+  if (line === undefined) return [{ ...state, open: null }, []];
+  const [kept, outputs] = recorded(line);
+
+  return [{ ...withLine(state, kept, false), open: null }, outputs];
+}
+
+/**
+ * Where a fragment goes: onto its speaker's growing line, while that line
+ * is open and no long silence came before the fragment, or where the other
+ * speaker's line is open and began after the fragment did, as a late one;
+ * or a new line otherwise, which closes the other speaker's open line unless
+ * the fragment is late.
+ */
+function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
+  const speaker = SPEAKER_OF_DELTA[delta.type];
+  const own = growingLine(state, speaker);
+
+  const other =
+    state.open !== null && state.open !== speaker ? growingLine(state, state.open) : undefined;
+
+  const late =
+    other?.startMs !== undefined && delta.start_ms !== undefined && delta.start_ms < other.startMs;
+
+  const silent =
+    own?.endMs !== undefined &&
+    delta.start_ms !== undefined &&
+    delta.start_ms - own.endMs > SILENCE_SPLIT_MS;
+
+  const grows = own !== undefined && ((state.open === speaker && !silent) || late);
+  const endMs = delta.end_ms ?? delta.start_ms;
+
+  if (grows) {
+    const line: Line = {
+      ...own,
+      text: own.text + delta.delta,
+      endMs:
+        endMs === undefined || own.endMs === undefined
+          ? (own.endMs ?? endMs)
+          : Math.max(own.endMs, endMs),
+    };
+
+    // An open line is recorded as it closes; a late fragment grows a line already recorded, so it is recorded again.
+    if (!late) return [withLine(state, line, false), []];
+    const [kept, outputs] = recorded(line);
+
+    return [withLine(state, kept, false), outputs];
+  }
+
+  const [closed, closing] = late ? stood(state) : closedOpen(state);
+
+  const line: Line = {
+    speaker,
+    id: state.mintId(),
+    text: delta.delta,
+    recorded: "",
+    startMs: delta.start_ms,
+    endMs,
+  };
+
+  const [kept, opening] = recorded(line);
+  const opened = withLine(closed, kept, true);
+
+  return [late ? opened : { ...opened, open: speaker }, [...closing, ...opening]];
+}
+
+/**
+ * A delegation takes the caller's lines since the one before, their open
+ * one closed: sent to an idle agent by their ids and words, which opens its
+ * turn, or queued behind a running one.
+ */
 function delegated(state: VoiceState, delegationId: string): Step {
-  const text = state.heard.trim();
+  const [closed, closing] = state.open === VOICE_SPEAKER.CALLER ? closedOpen(state) : stood(state);
+
+  const lines = closed.heard.filter((line) => line.recorded !== "");
+  const text = lines.map((line) => line.recorded).join(" ");
 
   // Note that a delegation raised before any of its words were transcribed
   // hands nothing on, and its words go with the next one, because the
   // service refuses a message with no words.
   if (text === "") {
     return [
-      state,
-      tell(
-        LIVE_CLIENT_EVENT.THINKING_APPEND,
-        delegationId,
-        "Nothing was transcribed for this request yet, so it was not passed to the agent.",
-      ),
+      closed,
+      [
+        ...closing,
+        ...tell(
+          LIVE_CLIENT_EVENT.THINKING_APPEND,
+          delegationId,
+          "Nothing was transcribed for this request yet, so it was not passed to the agent.",
+        ),
+      ],
     ];
   }
 
+  const message = { text, delegationId, lines: lines.map((line) => line.id) };
+  const taken = { ...closed, heard: [] };
+
   if (state.working) {
-    return [{ ...state, heard: "" }, [{ kind: VOICE_OUTPUT.QUEUE, text, delegationId }]];
+    return [taken, [...closing, { kind: VOICE_OUTPUT.QUEUE, ...message }]];
   }
 
   return [
-    { ...state, heard: "", working: true, answering: delegationId },
-    [{ kind: VOICE_OUTPUT.SEND, text, delegationId }],
+    { ...taken, working: true, answering: delegationId },
+    [...closing, { kind: VOICE_OUTPUT.SEND, ...message }],
   ];
 }
 
 function heardLive(state: VoiceState, event: LiveServerEvent): Step {
   switch (event.type) {
     case LIVE_SERVER_EVENT.INPUT_TRANSCRIPT_DELTA:
-      return [{ ...state, heard: state.heard + event.delta }, []];
+    case LIVE_SERVER_EVENT.OUTPUT_TRANSCRIPT_DELTA:
+      return heardFragment(state, event);
     case LIVE_SERVER_EVENT.DELEGATION_CREATED:
       return delegated(state, event.delegation.id);
     case LIVE_SERVER_EVENT.CLOSED:
@@ -322,13 +508,21 @@ function stepped(state: VoiceState, input: ReadInput): Step {
 /**
  * The delegation loop over a call's inputs, merged into one stream by the
  * caller, answering what to send the agent and what to tell the voice, in
- * order; it ends once GPT-Live closes the session or the input ends.
+ * order; it ends once GPT-Live closes the session or the input ends, with
+ * the line open then recorded.
  */
 export function voiceDelegations<E, R>(
   inputs: Stream.Stream<VoiceInput, E, R>,
   start: VoiceCallStart,
 ): Stream.Stream<VoiceOutput, E, R> {
-  const initial: VoiceState = { heard: "", working: start.agentWorking, answering: null };
+  const initial: VoiceState = {
+    mintId: start.mintId,
+    heard: [],
+    voiced: undefined,
+    open: null,
+    working: start.agentWorking,
+    answering: null,
+  };
 
   return inputs.pipe(
     Stream.map(readInput),
@@ -337,6 +531,7 @@ export function voiceDelegations<E, R>(
       (input) => input.from === VOICE_INPUT.LIVE && input.event.type === LIVE_SERVER_EVENT.CLOSED,
       { excludeLast: true },
     ),
-    Stream.mapAccum(() => initial, stepped),
+    // The line open as the call ends is recorded as it stands.
+    Stream.mapAccum(() => initial, stepped, { onHalt: (state) => closedOpen(state)[1] }),
   );
 }

@@ -162,6 +162,8 @@ export interface SteerLine {
   readonly serverWords?: string | undefined;
   /** The words what the line mentions is read from where they are not all of `text`: a Start's own prompt, never a source agent's replay beside it, and none at all for a Start handed only the description; `text` otherwise. */
   readonly mentionWords?: string | undefined;
+  /** The caller's lines of a call the line is, by the keys they were recorded under, oldest first: a delegation's, which starts its turn on those rows, under the newest's key, rather than writing its words again. */
+  readonly adopts?: readonly string[] | undefined;
 }
 
 /** Another coding agent as the row of a line it sends keeps it: by its name, id, and model. */
@@ -442,6 +444,7 @@ const heldWhileBooting = Effect.fnUntraced(function* (
         ...(line.metadata === undefined ? undefined : { metadata: line.metadata }),
         ...(line.serverWords === undefined ? undefined : { serverWords: line.serverWords }),
         ...(line.mentionWords === undefined ? undefined : { mentionWords: line.mentionWords }),
+        ...(line.adopts === undefined ? undefined : { adopts: line.adopts }),
       },
     }),
   );
@@ -479,13 +482,17 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   writer: Effect.Effect<StoreWriter>,
   userId: string,
   agent: Agent,
-  line: SteerLine,
+  asked: SteerLine,
   delivery: SteerDelivery = STEER_DELIVERY.HELD_WHILE_BOOTING,
 ): Effect.fn.Return<
   SteerWritten,
   HostedRefusal,
   DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox
 > {
+  // Note that a delegation goes under its newest line's key, so the row it adopts is the line the harness names back as its turn takes it.
+  const newest = asked.adopts?.at(-1);
+  const line = newest === undefined ? asked : { ...asked, clientKey: newest };
+
   // An agent on its starter's own GitHub token, or on its starter's Mac, takes words from its starter alone.
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   // The line is written in the agent's conversation, which is its starter's whichever member sends it.

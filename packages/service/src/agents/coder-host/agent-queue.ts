@@ -196,6 +196,7 @@ export const sendQueued = Effect.fn("web/sendQueued")(function* (
       ...(message.line?.mentionWords === undefined
         ? undefined
         : { mentionWords: message.line.mentionWords }),
+      ...(message.line?.adopts === undefined ? undefined : { adopts: message.line.adopts }),
     },
     STEER_DELIVERY.NOW,
   );

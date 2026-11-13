@@ -125,6 +125,8 @@ export interface QueuedLine {
   readonly serverWords?: string | undefined;
   /** The words what it mentions is read from where they are not all of its text, as a Start's prompt beside a source's replay; empty where it mentions nothing. */
   readonly mentionWords?: string | undefined;
+  /** The caller's lines of a call it is, by the keys they were recorded under, oldest first, which it starts its turn on in place of writing its words again (`writer.ts`'s `AwaitingLineWrite`). */
+  readonly adopts?: readonly string[] | undefined;
 }
 
 /** One queued message: its id, which its window minted and it goes under, the member who queued it, its words and files, whether a member is editing it, when the hand-off claimed it to send, and, for a line a send diverted while the agent boots, the key it was sent under and what it named beside its words. */

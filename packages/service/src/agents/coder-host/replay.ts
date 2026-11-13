@@ -53,6 +53,7 @@ import {
   isSettledToolPartState,
   isStoredToolPart,
   isWireString,
+  MESSAGE_AUTHOR,
   MESSAGE_ROLE,
   type StoredToolPart,
   type StoredUIMessage,
@@ -408,7 +409,13 @@ export function lineWords(parts: StoredUIMessage["parts"]): string {
     .join("\n\n");
 }
 
-/** One row as its steps: a line's words and the names of its files, or a journal's words and calls in order, its reasoning left out. */
+/**
+ * One row as its steps: a line's words and the names of its files, or a
+ * journal's words and calls in order, its reasoning left out. Note that what
+ * the voice said on a call is no step, because it retells the agent's own
+ * replies, which the agent's model is never handed back; the caller's words
+ * on the call are its lines, as typed ones are.
+ */
 function rowSteps(record: StoredMessageRecord, sent: LineSent | undefined): readonly ReplayStep[] {
   const { parts, role } = record.message;
 
@@ -418,7 +425,12 @@ function rowSteps(record: StoredMessageRecord, sent: LineSent | undefined): read
     return words === "" ? [] : [lineStep(senderName(sent), senderOf(sent), words, record.placedAt)];
   }
 
-  if (role !== MESSAGE_ROLE.ASSISTANT) return [];
+  if (
+    role !== MESSAGE_ROLE.ASSISTANT ||
+    record.message.metadata.author === MESSAGE_AUTHOR.VOICE_MODEL
+  ) {
+    return [];
+  }
 
   return parts.flatMap((part): readonly ReplayStep[] => {
     if (isTextUIPart(part) && part.text.trim().length > 0) {

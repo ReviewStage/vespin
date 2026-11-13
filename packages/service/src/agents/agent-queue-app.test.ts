@@ -22,9 +22,10 @@ import {
   agentMessagesAnswerSchema,
   agentQueueAnswerSchema,
   QUEUE_CHANGE,
+  VOICE_SPEAKER,
 } from "@repo/features/agent-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { MESSAGE_CHANNEL, type WireBoundaryInput } from "@repo/wire";
+import { isRecord, MESSAGE_CHANNEL, type WireBoundaryInput } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { noNetwork } from "@repo/wire/testing";
 import { Effect, Layer, Option } from "effect";
@@ -255,15 +256,32 @@ it.layer(SUITE)("an agent's queue", (it) => {
   );
 
   it.effect(
-    "a message queued on the voice channel goes on as a spoken line, and a typed one beside it does not",
+    "a message queued on the voice channel goes on as a spoken line on the caller's line already kept, and a typed one beside it does not",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
         const { agent, ask, owner } = yield* messagedAgent(agentSessions, { running: true });
+        const line = randomUUID();
+
+        yield* ask(
+          request("/api/agents/voice-lines", owner, {
+            method: "POST",
+            id: agent.id,
+            body: {
+              id: line,
+              callId: randomUUID(),
+              speaker: VOICE_SPEAKER.CALLER,
+              text: "Is it done?",
+            },
+          }),
+        );
 
         const [typed, voice] =
           (yield* Effect.forEach(
-            [{}, { channel: MESSAGE_CHANNEL.VOICE, delegationId: "item_delegation_1" }],
+            [
+              {},
+              { channel: MESSAGE_CHANNEL.VOICE, delegationId: "item_delegation_1", lines: [line] },
+            ],
             (spoken) =>
               queueChanged(ask, owner, agent.id, {
                 change: QUEUE_CHANGE.ADD,
@@ -285,6 +303,22 @@ it.layer(SUITE)("an agent's queue", (it) => {
         assert.deepEqual(
           agentSessions.sent.slice(-2).map((each) => each.message.spoken ?? false),
           [false, true],
+        );
+
+        // The spoken line the queue handed on is the one kept as it was said, never a second row of its words.
+        const page = readAnswer(
+          agentMessagesAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
+        );
+
+        assert.deepEqual(
+          page.messages.flatMap((message) =>
+            isRecord(message.metadata) && message.metadata.channel === MESSAGE_CHANNEL.VOICE
+              ? [message.metadata.delegation_id]
+              : [],
+          ),
+          ["item_delegation_1"],
         );
       }),
   );

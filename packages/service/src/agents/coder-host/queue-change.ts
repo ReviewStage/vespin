@@ -49,13 +49,22 @@ const HANDS_ON: ReadonlySet<string> = new Set([
   QUEUE_CHANGE.HOLD,
 ]);
 
-/** What a queued message spoken on a call keeps beside its words, so it goes on as the developer's voice line; nothing for a typed one. */
-function spokenLine(userId: string, body: Parameters<typeof spokenLineMetadata>[0]) {
+/** What a queued message spoken on a call keeps beside its words, so it goes on as the developer's voice line on the caller's lines it names; nothing for a typed one. */
+function spokenLine(
+  userId: string,
+  body: Parameters<typeof spokenLineMetadata>[0] & {
+    readonly lines?: readonly string[] | undefined;
+  },
+) {
   const metadata = spokenLineMetadata(body);
 
-  return metadata === undefined
-    ? undefined
-    : { sender: { kind: MESSAGE_SENDER.MEMBER, userId }, metadata };
+  if (metadata === undefined) return undefined;
+
+  return {
+    sender: { kind: MESSAGE_SENDER.MEMBER, userId },
+    metadata,
+    ...(body.lines === undefined ? undefined : { adopts: body.lines }),
+  };
 }
 
 /** A store's answer for the account's agent, its absence answered as no such agent. */
