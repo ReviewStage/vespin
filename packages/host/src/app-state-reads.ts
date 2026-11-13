@@ -214,6 +214,11 @@ export const selectPullRequestPublished = (state: AppStateSnapshot) =>
   state[LIVE_READ.PULL_REQUEST_PUBLISHED];
 
 export const selectMachineCommands = (state: AppStateSnapshot) => state.machineCommands;
+
+/** The device this Mac claims commands as for the account signed in; none before it joined for it, or where the platform runs no commands. */
+export const selectMachineCommandDevice = (state: AppStateSnapshot) =>
+  state.machineCommands.deviceId;
+
 export const selectNotifications = (state: AppStateSnapshot) => state.notifications;
 export const selectNetwork = (state: AppStateSnapshot) => state.network;
 export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionReplay;
@@ -481,6 +486,24 @@ export function shareAppState<T>(held: T, next: T, depth = 0): T {
   return (
     array ? parts : Object.fromEntries(nextKeys?.map((key, at) => [key, parts[at]]) ?? [])
   ) as T;
+}
+
+/**
+ * A keeper of one reader's last answer: each answer laid over the one
+ * before it (`shareAppState`), so an answer equal to the last is the last
+ * itself, as a list handed the same array keeps its rows. Note that it holds
+ * its answer in its own closure, for a hook to keep in state, rather than in
+ * a ref written during render.
+ */
+export function answerKeeper<T>(): (next: T) => T {
+  let held: { readonly answer: T } | undefined;
+
+  return (next) => {
+    const answer = held === undefined ? next : shareAppState(held.answer, next);
+    held = { answer };
+
+    return answer;
+  };
 }
 
 /** No task's feed read: the feed before it first answers. */
