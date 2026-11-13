@@ -214,6 +214,8 @@ export const FAILURE_SURFACE = {
   THIS_MAC_SET: "this_mac.set",
   TRANSCRIPT_COPY: "transcript.copy",
   UPDATE_CHECK: "update.check",
+  /** A voice call into an agent that could not start, or dropped (`voice-call.tsx`). */
+  VOICE_CALL: "voice_call",
   WINDOW_ZOOM: "window.zoom",
   WORKSPACES_READ: "workspaces.read",
   WORKSPACE_CREATE: "workspace.create",
