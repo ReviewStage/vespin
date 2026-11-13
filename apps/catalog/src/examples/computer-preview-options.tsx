@@ -8,6 +8,7 @@ import {
   CARD_PADDING,
   CARD_SHADOW,
   Card,
+  CardPress,
   CHIP_LOOK,
   CHIP_SIZE,
   ChevronDownIcon,
@@ -1012,6 +1013,147 @@ function MultiApps(): React.JSX.Element {
   );
 }
 
+// A stacked: every app this turn a window in a stack, each one behind showing its title, a press bringing it forward.
+
+/** One app behind the top window: its title peeking out above the window in front of it, the whole strip a press. */
+function StackedTitle({
+  app,
+  inUse,
+  depth,
+}: {
+  app: App;
+  inUse: App;
+  depth: number;
+}): React.JSX.Element {
+  const using = app === inUse;
+
+  return (
+    <Card
+      look={CARD_LOOK.SURFACE}
+      corner={CARD_CORNER.CONTROL}
+      padding={CARD_PADDING.NONE}
+      shadow={CARD_SHADOW.SOFT}
+      className={`relative -mb-ui-8 ${depth === 1 ? "mx-ui-8" : "mx-ui-16"}`}
+    >
+      <CardPress label={`Show ${app.name}`} onPress={ignore}>
+        <span className="flex min-w-0 items-center gap-ui-6 pt-ui-4 pb-ui-12 ps-ui-8 pe-ui-8">
+          <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />
+          <Text variant={TEXT_VARIANT.LABEL} tone={using ? undefined : TEXT_TONE.MUTED} truncate>
+            {using ? usingWords(app, true) : app.name}
+          </Text>
+          {using ? <WorkingMark /> : null}
+          <span className="flex-1" />
+          <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} truncate>
+            {LAST_DONE.get(app) ?? ""}
+          </Text>
+        </span>
+      </CardPress>
+    </Card>
+  );
+}
+
+/** The stack: the apps behind, deepest first, each title peeking out, then the one shown in front. */
+function StackedWindows({
+  shown,
+  inUse,
+  seen,
+}: {
+  shown: App;
+  inUse: App;
+  seen: Seen;
+}): React.JSX.Element {
+  const behind = APPS.filter((app) => app !== shown);
+
+  return (
+    <div className={`flex flex-col ${seen.narrow ? "w-full" : "w-cpo-wide"}`}>
+      {behind.toReversed().map((app, at) => (
+        <StackedTitle key={app.name} app={app} inUse={inUse} depth={behind.length - at} />
+      ))}
+      <div className="relative">
+        <PreviewCard narrow={seen.narrow}>
+          <AppTitleBar
+            shown={shown}
+            inUse={inUse}
+            end={
+              <>
+                <ShowApp app={shown} seen={seen} />
+                <IconButton
+                  icon={<Minimize2Icon />}
+                  label="Minimize"
+                  size={BUTTON_SIZE.COMPACT}
+                  onClick={ignore}
+                />
+                <StopTurn seen={seen} />
+              </>
+            }
+          />
+          <Window app={shown} narrow={seen.narrow} />
+        </PreviewCard>
+      </div>
+    </div>
+  );
+}
+
+/** The stack minimized: the app in use, what it is doing, and how many others stand in the stack. */
+function StackPill({ working }: { working: boolean }): React.JSX.Element {
+  return (
+    <Chip look={CHIP_LOOK.PILL} aria-label="Show the apps" onClick={ignore}>
+      <AppIcon src={XCODE.icon} size={APP_ICON_SIZE.LINE} />
+      <ChipName>{working ? usingWords(XCODE, true) : `Used ${String(APPS.length)} apps`}</ChipName>
+      {working ? <WorkingMark /> : null}
+      {working ? <ChipName>{`+${String(APPS.length - 1)}`}</ChipName> : null}
+    </Chip>
+  );
+}
+
+function StackedOption(): React.JSX.Element {
+  return (
+    <div className="cpo-row" id="stack-a">
+      <div className="cpo-line">
+        <Scene
+          id="stack-xcode"
+          narrow={false}
+          caption="Stacked: each app behind shows its title; press one to bring it forward"
+          over={<StackedWindows shown={XCODE} inUse={XCODE} seen={WORKING_HERE} />}
+        />
+        <Scene
+          id="stack-picked"
+          narrow={false}
+          caption="Pressed Simulator: it comes forward, Xcode (still in use) goes behind"
+          over={<StackedWindows shown={SIMULATOR} inUse={XCODE} seen={WORKING_HERE} />}
+        />
+        <Scene
+          id="stack-min"
+          narrow={false}
+          caption="Minimized to a pill; press it to bring the stack back"
+          over={<StackPill working />}
+        />
+      </div>
+      <div className="cpo-line">
+        <Scene
+          id="stack-narrow"
+          narrow
+          caption="Narrow"
+          over={<StackedWindows shown={XCODE} inUse={XCODE} seen={NARROW_WORKING} />}
+        />
+        <Scene
+          id="stack-narrow-safari"
+          narrow
+          caption="Narrow, the agent moved on to Safari"
+          over={<StackedWindows shown={SAFARI} inUse={SAFARI} seen={NARROW_WORKING} />}
+        />
+        <Scene
+          working={false}
+          id="stack-done"
+          narrow
+          caption="Done: minimizes itself until the next turn"
+          over={<StackPill working={false} />}
+        />
+      </div>
+    </div>
+  );
+}
+
 function ComputerPreviewOptions(): React.JSX.Element {
   return (
     <div className="cpo-options">
@@ -1020,6 +1162,7 @@ function ComputerPreviewOptions(): React.JSX.Element {
       <OptionC />
       <OptionD />
       <MultiApps />
+      <StackedOption />
     </div>
   );
 }
