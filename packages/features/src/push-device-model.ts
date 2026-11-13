@@ -20,6 +20,20 @@ export const PUSH_NOTIFY_CHOICES: readonly { readonly id: PushNotify; readonly l
   { id: PUSH_NOTIFY.NEVER, label: "Never" },
 ];
 
+/** What the phone's notifications are called, as the row in Settings that opens them and that page's title. */
+export const PUSH_NOTIFICATIONS_TITLE = "Notifications";
+
+/** Whether the phone takes notifications at all, as Settings reads it before the service has said how its pushes fare, or once the phone has refused them. */
+export const PUSH_NOTIFICATIONS_STATE = { ON: "On", OFF: "Off" } as const;
+
+/** The heading the "Notify me" choices stand under. */
+export const PUSH_NOTIFY_TITLE = "Notify me";
+
+/** The words a "Notify me" choice is shown by, as its row names it. */
+export function pushNotifyLabel(notify: PushNotify): string {
+  return PUSH_NOTIFY_CHOICES.find((choice) => choice.id === notify)?.label ?? notify;
+}
+
 /** What the choices mean, under them. */
 export const PUSH_NOTIFY_FOOTER = `When I'm away holds a notification while you're using ${PRODUCT_NAME} on a computer, and sends it if you step away with it still waiting.`;
 
