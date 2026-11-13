@@ -136,9 +136,10 @@ function refused(words: string, agentId: string, cause: unknown): void {
 
 /**
  * The agent's default made the machine given, then the agent told to try
- * again there; answers whether the default moved, so a press refused there
- * is offered again. A message refused after the default moved is said in a
- * toast, and the press stands taken, since the member's own may say it.
+ * again there; answers whether both went, so a press refused at either is
+ * offered again, each refusal said in a toast. Note that pressing again
+ * after a message refused sets the same default once more, which changes
+ * nothing, and sends the message again.
  */
 async function moveDefault(
   agentId: string,
@@ -159,9 +160,10 @@ async function moveDefault(
   // Note that a send that never reached the host is said as unsent too, since the default already moved.
   const sent = await send(tryAgainLine(machine)).catch((cause: unknown) => ({ failure: cause }));
 
-  if ("failure" in sent) refused(MACHINE_REFUSAL_WORDS.UNSENT, agentId, sent.failure);
+  if (!("failure" in sent)) return true;
+  refused(MACHINE_REFUSAL_WORDS.UNSENT, agentId, sent.failure);
 
-  return true;
+  return false;
 }
 
 /** The card under a terminal command or an action on an app that routing refused; nothing for any other call. */
@@ -177,7 +179,7 @@ export function MachineRefusalCard({
   const { members, readerId, former } = useMemberDirectory();
   // Note that a press taken is kept in a ref as well as drawn, so a second press before the draw sends nothing.
   const taken = useRef(false);
-  // The machine pressed, and whether its default moved; none before a press, or after one refused.
+  // The machine pressed, and whether its default moved and the agent was told; none before a press, or after one refused.
   const [pressed, setPressed] = useState<{ id: string; moved: boolean } | undefined>(undefined);
   const press = useAsyncAction(rejectionWords);
 
@@ -200,9 +202,9 @@ export function MachineRefusalCard({
 
     void press.run(() =>
       moveDefault(agentId, machine, send).then(
-        (moved) => {
-          taken.current = moved;
-          setPressed(moved ? { id: machine.id, moved } : undefined);
+        (went) => {
+          taken.current = went;
+          setPressed(went ? { id: machine.id, moved: true } : undefined);
         },
         (cause: unknown) => {
           taken.current = false;
