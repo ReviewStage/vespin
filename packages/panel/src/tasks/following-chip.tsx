@@ -90,8 +90,8 @@ const MACHINES_ON_HEARD = "Agents here may use their machines";
 /** What the chip names someone the members read does not, while it is unread or failed. */
 const UNNAMED = "Someone";
 
-/** The reader's follower writes on one task, each refusal said in a toast; a fixture run's go nowhere. */
-function useFollowerWrites(taskId: string) {
+/** The reader's follower writes on one task, each refusal said in a toast; a fixture run's go nowhere. The task's menu follows and unfollows through it too. */
+export function useFollowerWrites(taskId: string) {
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
   const toast = useToast();
   const { mutateAsync: sendFollow } = useMutation(actMutation(ACT_KIND.TASKS_FOLLOW));
