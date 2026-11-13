@@ -505,15 +505,11 @@ function WideRail({
     if (opened.current) moveTo(inFront.current);
   }, [marks]);
 
-  // The stack opens and shuts where it stands, and follows the keys. Note that `moveTo` reads refs alone, so it is the same move on every draw.
+  // The stack opens and shuts where it stands. Note that `moveTo` reads refs alone, so it is the same move on every draw.
   useLayoutEffect(() => {
     opened.current = open;
     moveTo(inFront.current);
   }, [open]);
-
-  useLayoutEffect(() => {
-    if (active >= 0) moveTo(active);
-  }, [active]);
 
   const choose = useCallback(
     (index: number) => {
@@ -532,7 +528,11 @@ function WideRail({
     count: marks.length,
     controls: open ? listId : undefined,
     activeId: open && focused && active >= 0 ? comboboxOptionId(listId, active) : undefined,
-    onActiveChange: setActive,
+    // Note that the stack moves with the key that moved it, never as `active` changes, so a line held by the keys and kept among the lines still drawn moves no stack the pointer holds.
+    onActiveChange: (to) => {
+      moveTo(to);
+      setActive(to);
+    },
     onChoose: choose,
     onEnter: () => setShut(false),
     onEscape: () => setShut(true),
