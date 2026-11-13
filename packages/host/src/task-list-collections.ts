@@ -280,7 +280,14 @@ export function taskListCollections(
             (coldDrawnBy.get(row.id) ?? 0) <= mark.asked;
 
           const planRows = rows.plans.filter((row) => !plans.holds(row.id) && standing(row));
-          const agentRows = rows.agents.filter((row) => !agents.holds(row.id) && standing(row));
+
+          // Note that an agent stands only where its task's snapshot does, so an earlier read draws back no agent a later one of its task left out.
+          const agentRows = rows.agents.filter(
+            (row) =>
+              !agents.holds(row.id) &&
+              standing(row) &&
+              (row.planId === null || standing({ id: row.planId })),
+          );
 
           if (planRows.length + agentRows.length === 0) return;
 
