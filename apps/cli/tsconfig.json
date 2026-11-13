@@ -3,5 +3,22 @@
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts"],
+  "references": [
+    {
+      "path": "../../packages/agent-runner"
+    },
+    {
+      "path": "../../packages/credentials"
+    },
+    {
+      "path": "../../packages/features"
+    },
+    {
+      "path": "../../packages/runtime"
+    },
+    {
+      "path": "../../packages/wire"
+    }
+  ]
 }

@@ -26,7 +26,6 @@ import {
   isUnread,
   MARK_ALL_READ,
   READING_INBOX,
-  RETRY,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
@@ -47,6 +46,7 @@ import {
   BAR_TITLE,
   type BarAction,
   type BarMenu,
+  BUTTON_LOOK,
   EmptyState,
   GLYPH,
   GlassDock,
@@ -116,6 +116,9 @@ import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
 
 /** The Inbox's name, at its head and on its back button. */
 const INBOX_TITLE = "Inbox";
+
+/** The act under a read that failed, as the app's other failures say it, rather than the panel's Retry. */
+const TRY_AGAIN = "Try again";
 
 /** What a pushed thread's screen says where the feed, once read, holds no such thread, such as one a link names that was deleted. */
 const THREAD_NOT_FOUND = "This thread isn't in your inbox";
@@ -338,7 +341,7 @@ function InboxRow({
 
 /**
  * What the list stands where it lists nothing: that the account's feed is
- * still on its first read, or could not be read, with Retry, rather than an
+ * still on its first read, or could not be read, with Try again, rather than an
  * empty Inbox over threads not yet read; else nothing its search found, or
  * nothing its scope holds.
  */
@@ -361,7 +364,7 @@ function InboxEmpty({
       <EmptyState
         title={INBOX_NOT_READ}
         symbol={GLYPH.FAILED}
-        action={{ label: RETRY, onPress: onRetry }}
+        action={{ label: TRY_AGAIN, onPress: onRetry, look: BUTTON_LOOK.BORDERED }}
       />
     );
   }
@@ -810,7 +813,7 @@ function ThreadDetail({
   );
 }
 
-/** What stands where a thread named by its id is not drawn: that it is still read, that it could not be, with Retry, or that no such thread is the account's to read. */
+/** What stands where a thread named by its id is not drawn: that it is still read, that it could not be, with Try again, or that no such thread is the account's to read. */
 function ThreadNotDrawn({
   feed,
   onRetry,
@@ -826,7 +829,7 @@ function ThreadNotDrawn({
       <EmptyState
         title={INBOX_NOT_READ}
         symbol={GLYPH.FAILED}
-        action={{ label: RETRY, onPress: onRetry }}
+        action={{ label: TRY_AGAIN, onPress: onRetry, look: BUTTON_LOOK.BORDERED }}
       />
     );
   }
