@@ -7,8 +7,9 @@
  * control takes focus from the keyboard; once one has shown, the next is
  * shown at once for as long as the pointer keeps moving between controls,
  * the way a menu bar stays open across its titles. Pressing, any key,
- * Escape among them, scrolling, the pointer leaving, and the window losing
- * the keyboard all take it down; a modifier held alone does not. It hangs below its control and turns above it where the window ends,
+ * Escape among them, a scroll that moves its control, the pointer leaving,
+ * and the window losing the keyboard all take it down; a modifier held
+ * alone does not, nor does a box scrolling beside the control. It hangs below its control and turns above it where the window ends,
  * so it never covers what it names.
  *
  * A control with more to say than a pill holds hangs a card in its place:
@@ -45,7 +46,8 @@
  * tap is still its own press and a link's still goes where it leads, a long
  * press opens it instead, and its release presses nothing. A control whose
  * long press opens its context menu keeps that press for the menu. A tap
- * anywhere but on the hint or its control, Escape, and a scroll close it.
+ * anywhere but on the hint or its control, Escape, and a scroll that moves
+ * its control close it.
  *
  * The wait is this window's own, not the stylesheet's: nothing is drawn
  * until the pointer has rested out `--ui-hint-delay`, so a pointer sweeping
@@ -263,12 +265,23 @@ function letGoRest(): void {
 }
 
 /**
+ * Whether a scroll on `target` moved `anchor`, a hint's control: a scroll of
+ * the page or of a box holding it. A box scrolling beside the control, as a
+ * transcript's log scrolls beside its rail, leaves it where it stood, and so
+ * leaves its hint. A control not known moves with any scroll.
+ */
+function scrollMoved(target: EventTarget | null, anchor: HTMLElement | undefined): boolean {
+  return anchor === undefined || !(target instanceof Node) || target.contains(anchor);
+}
+
+/**
  * Hears, while a wait runs, the window's movements that take a hint down
  * once it stands, so they call off a hint still waiting the same way: a key
- * other than a modifier held alone, a scroll anywhere but on a standing card,
- * which is a card being read, and the window losing the keyboard. Answers the way to stop hearing them.
+ * other than a modifier held alone, a scroll that moves the hint's control,
+ * `anchor`, but on a standing card, which is a card being read, and the
+ * window losing the keyboard. Answers the way to stop hearing them.
  */
-function hearRestEnders(stop: () => void): () => void {
+function hearRestEnders(stop: () => void, anchor: HTMLElement | undefined): () => void {
   const key = (event: KeyboardEvent) => {
     if (!MODIFIER_KEYS.has(event.key)) stop();
   };
@@ -276,7 +289,9 @@ function hearRestEnders(stop: () => void): () => void {
   const scrolled = (event: Event) => {
     const { target } = event;
 
-    if (!(target instanceof Node && standing.some((each) => each.holds(target)))) stop();
+    if (target instanceof Node && standing.some((each) => each.holds(target))) return;
+
+    if (scrollMoved(target, anchor)) stop();
   };
 
   window.addEventListener("keydown", key, true);
@@ -346,7 +361,8 @@ interface Drawn {
 
 /** The window's wait for one hint: `rest` begins it, calling off whichever stood, and `stop` calls it off where it is still this one's. */
 interface HintRest {
-  readonly rest: (show: () => void) => void;
+  /** Waits to `show` the hint of `anchor`, its control, where the caller knows it. */
+  readonly rest: (show: () => void, anchor?: HTMLElement) => void;
   readonly stop: () => void;
 }
 
@@ -367,9 +383,9 @@ export function useHintRest(): HintRest {
   }, [id]);
 
   const rest = useCallback(
-    (show: () => void) => {
+    (show: () => void, anchor?: HTMLElement) => {
       letGoRest();
-      resting = { id, unhear: hearRestEnders(stop) };
+      resting = { id, unhear: hearRestEnders(stop, anchor) };
       hintRest.start(
         Effect.andThen(
           Effect.sleep(HINT_REST),
@@ -735,7 +751,7 @@ export function Tooltip({
       return;
     }
 
-    rest(() => stand(anchor, false));
+    rest(() => stand(anchor, false), anchor);
   };
 
   // Note that the door to the card reads the latest `show`, because it is offered once for as long as the card is.
@@ -872,7 +888,8 @@ export function Tooltip({
   // the pointer is on lets a key other than Escape pass, since that key is
   // most likely the copy of what was selected on it, and a list scrolling
   // within a standing card, this one or one stacked over it, leaves it
-  // standing, since that is the cards being read.
+  // standing, since that is the cards being read, as does a box scrolling
+  // beside the control rather than around it, which leaves it where it stood.
   const up = shown !== undefined;
   useEffect(() => {
     if (!up) return;
@@ -888,7 +905,7 @@ export function Tooltip({
       const { target } = event;
       const within = target instanceof Node && standing.some((each) => each.holds(target));
 
-      if (!within) hide();
+      if (!within && scrollMoved(target, latest()?.anchor)) hide();
     };
 
     window.addEventListener("keydown", key, true);

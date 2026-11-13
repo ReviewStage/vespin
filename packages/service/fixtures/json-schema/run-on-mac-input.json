@@ -13,8 +13,8 @@
     "machine": {
       "type": "string",
       "minLength": 1,
-      "maxLength": 200,
-      "description": "The machine to run on, by its name, where the conversation asks for one other than your default machine; a call refused for its machine names the ones that can take it. Leave it out for your default machine."
+      "maxLength": 64,
+      "description": "The id of the machine to run on, where the conversation asks for one other than your default machine; a call refused for its machine lists the ids of the ones that can take it. Leave it out for your default machine."
     },
     "timeout_seconds": {
       "type": "integer",

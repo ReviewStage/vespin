@@ -220,7 +220,8 @@ export const COMPUTER_TOOL = {
     "drove in an app, the iOS Simulator above all, record it: record starts a video of the " +
     "app's window, your cursor drawn over it while it records, " +
     `up to ${COMPUTER_RECORDING_BOUNDS.MAX_SECONDS} seconds and across calls, and ` +
-    "stop_recording, with a caption, stops it and keeps it in your transcript, where it plays; " +
+    "stop_recording, with a caption and the machine's id its record answered in machine, stops " +
+    "it on the machine it runs on and keeps it in your transcript, where it plays; " +
     "it stops by itself once its time runs out, and stop_recording still keeps it then. Its " +
     "answer names the path the video stays at in your sandbox until your next recording, by " +
     "which you can post it to a thread, or says why it has none.",
@@ -384,6 +385,20 @@ const COMPUTER_RECORDING_REFUSAL = {
   [RECORDING_FAILURE.TOO_LARGE]: recordingTooLarge(COMPUTER_RECORDING_BOUNDS.MAX_BYTES),
 } as const satisfies Record<RecordingFailure | "UNKEPT", string>;
 
+/** How the agent stops a recording that started on the machine given: by its id, which no other machine shares and a rename leaves as it is. */
+function stopOn(machine: { readonly id: string; readonly name: string }): string {
+  return `Stop it with stop_recording and machine "${machine.id}" (${machine.name}), where it runs.`;
+}
+
+/** What a machine with no recording of the conversation answers, naming it, so a stop that went to the wrong machine is sent again to the right one. */
+function noRecordingOn(machine: { readonly name: string }): string {
+  return (
+    `no recording of this conversation runs on ${machine.name}: if you started one on another ` +
+    "machine, call stop_recording again with the id its record answered in machine; otherwise " +
+    "start one with record"
+  );
+}
+
 /** A recording's refusal as the call answers it. */
 function recordingNotRun(words: string): MachineCommandAnswer {
   return machineCommandNotRun(`Not run: ${words}.`);
@@ -505,14 +520,30 @@ export function runComputerTool(
       answer.machine === undefined ? ran : { ...ran, machine: answer.machine };
 
     if ("unrecorded" in outcome) {
-      return named(recordingNotRun(COMPUTER_RECORDING_REFUSAL[outcome.unrecorded]));
+      const words =
+        outcome.unrecorded === RECORDING_FAILURE.NONE && answer.machine !== undefined
+          ? noRecordingOn(answer.machine)
+          : COMPUTER_RECORDING_REFUSAL[outcome.unrecorded];
+
+      return named(recordingNotRun(words));
     }
 
     if ("recorded" in outcome) {
       return named(yield* keptMacRecording(target, outcome.recorded, recording, caption, sandbox));
     }
 
-    return named(yield* answeredOutcome(target, outcome));
+    const ran = named(yield* answeredOutcome(target, outcome));
+
+    // Note that a recording names the machine it runs on for its stop, since the agent's default may move while it runs.
+    if (
+      "done" in outcome &&
+      outcome.done === COMPUTER_ACTION.RECORD &&
+      answer.machine !== undefined
+    ) {
+      return { ...ran, stop: stopOn(answer.machine) };
+    }
+
+    return ran;
   });
 }
 

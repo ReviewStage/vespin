@@ -656,6 +656,21 @@ export class HostedTaskClient {
     );
   }
 
+  /** Another follower of the task taken away, which its assignee may not be; answers as `follow` does. */
+  removeFollower(
+    taskId: string,
+    userId: string,
+  ): Effect.Effect<
+    TaskCallResult<FollowersWritten, FollowerCallFailure>,
+    never,
+    HttpClient.HttpClient
+  > {
+    return Effect.map(
+      hostedCall(this.#hosted.taskFollowers.remove, { id: taskId, userId }),
+      followersOf,
+    );
+  }
+
   /** A declared live read sealed for following, or polled where `poll` asks (`askLiveRead`). */
   liveRead<Read extends AnyLiveRead>(read: Read, params: LiveReadAsked<Read>, poll?: HostedPoll) {
     return askLiveRead(this.#hosted.live, read, params, poll);
