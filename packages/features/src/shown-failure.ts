@@ -108,6 +108,7 @@ export const FAILURE_SURFACE = {
   BROWSER_OPEN: "browser.open",
   BUNDLE_LOAD: "bundle.load",
   CLI_INSTALL: "cli.install",
+  COMPUTER_USE_READ: "computer_use.read",
   COPY: "copy",
   DICTATION: "dictation",
   DIFF_READ: "diff.read",

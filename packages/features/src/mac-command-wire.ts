@@ -390,11 +390,41 @@ const macShellResultSchema = EffectSchema.Struct({
 
 export type MacShellResult = typeof macShellResultSchema.Type;
 
-/** A command the Mac would not run, such as one of a kind it cannot run, and why, in words the agent can act on. */
+/** The two grants macOS holds against the app for computer use: capturing other apps' windows, and reading and posting input to them. */
+export const COMPUTER_PERMISSION = {
+  SCREEN_RECORDING: "screen_recording",
+  ACCESSIBILITY: "accessibility",
+} as const;
+
+export type ComputerPermission = (typeof COMPUTER_PERMISSION)[keyof typeof COMPUTER_PERMISSION];
+
+/** Each grant as macOS's Privacy & Security names it. */
+const COMPUTER_PERMISSION_NAME = {
+  [COMPUTER_PERMISSION.SCREEN_RECORDING]: "Screen Recording",
+  [COMPUTER_PERMISSION.ACCESSIBILITY]: "Accessibility",
+} as const satisfies Record<ComputerPermission, string>;
+
+/** Grants as words, as macOS names them: "Screen Recording", or "Screen Recording and Accessibility". */
+export function computerPermissionsNamed(permissions: readonly ComputerPermission[]): string {
+  return permissions.map((permission) => COMPUTER_PERMISSION_NAME[permission]).join(" and ");
+}
+
+/**
+ * A command the Mac would not run, such as one of a kind it cannot run, and
+ * why, in words the agent can act on; for an action refused because the Mac
+ * lacks a grant it needs, those grants too, so the transcript can offer the
+ * place they are turned on.
+ */
 const macCommandRefusalSchema = EffectSchema.Struct({
   refused: EffectSchema.String.check(
     EffectSchema.isMinLength(1),
     EffectSchema.isMaxLength(MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS),
+  ),
+  missingPermissions: EffectSchema.optionalKey(
+    EffectSchema.Array(EffectSchema.Literals(Object.values(COMPUTER_PERMISSION))).check(
+      EffectSchema.isMinLength(1),
+      EffectSchema.isMaxLength(Object.values(COMPUTER_PERMISSION).length),
+    ),
   ),
 });
 

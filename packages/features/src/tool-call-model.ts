@@ -36,6 +36,7 @@ import {
   integrationRemoteCallSchema,
 } from "./integration-wire.js";
 import { LINK_DESTINATION, type LinkDestination, linkOf } from "./link-grammar.js";
+import { COMPUTER_PERMISSION, type ComputerPermission } from "./mac-command-wire.js";
 import type { MentionHolder } from "./mention-holder.js";
 import type { ModelChoice } from "./models-wire.js";
 import { cardTitle } from "./plain-words.js";
@@ -201,6 +202,28 @@ export function computerAppName(
   return named ?? stringAt(input, "app");
 }
 
+const isComputerPermission = Schema.is(Schema.Literals(Object.values(COMPUTER_PERMISSION)));
+
+/** Whether a computer call answered that the Mac ran nothing, so it read no window and used no app. */
+export function computerCallRefused(output: WireValue | undefined): boolean {
+  return stringAt(output, "status") === MAC_COMMAND_NOT_RUN;
+}
+
+/** Why a computer call ran nothing because the Mac lacked a grant it needed, in the Mac's own words, with those grants; none for any other answer. */
+export function computerPermissionsMissing(
+  output: WireValue | undefined,
+): { readonly reason: string; readonly permissions: readonly ComputerPermission[] } | undefined {
+  if (!computerCallRefused(output) || !isRecord(output)) return undefined;
+  const listed = output.missingPermissions;
+
+  const permissions =
+    listed !== undefined && isWireArray(listed) ? listed.filter(isComputerPermission) : [];
+
+  const reason = stringAt(output, "reason");
+
+  return reason === undefined || permissions.length === 0 ? undefined : { reason, permissions };
+}
+
 /** The picture a computer call's answer kept its app's icon as, by id; none where it kept none. */
 export function computerAppIcon(output: WireValue | undefined): string | undefined {
   if (!isRecord(output) || !isRecord(output.app) || !isRecord(output.app.icon)) return undefined;
@@ -311,6 +334,13 @@ function macCommandOutput(output: WireValue): ToolBlock {
   if (!timedOut) return shown;
 
   return textBlock(shown.text === "" ? TIMED_OUT_NOTE : `${shown.text}\n${TIMED_OUT_NOTE}`);
+}
+
+/** A computer call's answer: why the Mac ran nothing where it ran nothing, and its JSON otherwise. */
+function computerOutput(output: WireValue): ToolBlock {
+  return computerCallRefused(output)
+    ? textBlock(stringAt(output, "reason") ?? "")
+    : jsonBlock(output);
 }
 
 /** A patch's answer: the files it changed, one a line, then every problem it reported. */
@@ -1260,7 +1290,7 @@ const AGENT_TOOL_VIEWS = {
       ...(description === undefined ? undefined : { description }),
       ...(icon === undefined ? undefined : { appIcon: icon }),
       input: jsonBlock(input ?? {}),
-      output: output === undefined ? undefined : jsonBlock(output),
+      output: output === undefined ? undefined : computerOutput(output),
     };
   },
   [AGENT_TOOL.BROWSER]: ({ input, output }) => {
