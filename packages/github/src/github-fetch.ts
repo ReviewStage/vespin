@@ -163,9 +163,16 @@ async function readUpTo(body: ReadableStream<Uint8Array>, bound: number): Promis
   return { whole: false, body: rest };
 }
 
-/** The request body as the client sends it: Octokit hands a string, or bytes for an upload. */
-function bodyOf(init: RequestInit): HttpBody.HttpBody {
-  return init.body === undefined || init.body === null ? HttpBody.empty : HttpBody.raw(init.body);
+/**
+ * The request body as the client sends it: Octokit hands a string, or bytes
+ * for an upload. Note that the body carries the content type Octokit named,
+ * because the client sets the header from the body and drops the one asked
+ * for; sent as `fetch`'s `text/plain`, GitHub's token endpoint answers 404.
+ */
+function bodyOf(init: RequestInit, headers: Headers): HttpBody.HttpBody {
+  return init.body === undefined || init.body === null
+    ? HttpBody.empty
+    : HttpBody.raw(init.body, { contentType: headers.get("content-type") ?? undefined });
 }
 
 /**
@@ -195,7 +202,7 @@ export function githubFetch(
 
     const request = HttpClientRequest.make(method)(url, {
       headers: Object.fromEntries(headers),
-      body: bodyOf(init),
+      body: bodyOf(init, headers),
     });
 
     const response = await run(

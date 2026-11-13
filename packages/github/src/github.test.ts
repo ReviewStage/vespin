@@ -175,6 +175,19 @@ describe("GitHub", () => {
     }).pipe(Effect.provide(layer));
   });
 
+  it.effect("sends a body under the content type Octokit names", () => {
+    const { sent, layer } = harness(() => json({ access_token: "ghu_fresh" }));
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+      const oauth = github.oauth({ clientId: "Iv1.client", clientSecret: Redacted.make("secret") });
+      yield* oauth.refreshToken(Redacted.make("ghr_refresh"));
+
+      // Note that GitHub answers a token request sent as anything but JSON or a form with a 404.
+      assert.strictEqual(sent[0]?.headers.get("content-type"), "application/json; charset=utf-8");
+    }).pipe(Effect.provide(layer));
+  });
+
   it.effect("holds only the installation whose quota ran out", () => {
     const { reads, layer } = harness((request) =>
       request.headers.get("authorization") === "token ghs_installation_1"
