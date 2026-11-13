@@ -15,7 +15,7 @@ import {
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
@@ -57,6 +57,22 @@ export function NewWorkspaceScreen() {
   const { choose } = useChosenWorkspace(workspaces);
   const [name, setName] = useState("");
   const create = useAsyncAction(() => ACT_UNREACHED_WORDS);
+  // Whether the sheet still stands, so a create answered after Cancel or a swipe down closes nothing else.
+  const open = useRef(true);
+
+  useEffect(() => {
+    open.current = true;
+
+    return () => {
+      open.current = false;
+    };
+  }, []);
+
+  const close = () => {
+    if (!open.current) return;
+    open.current = false;
+    router.back();
+  };
 
   const make = () => {
     // Note that a refusal says why in the sheet, under the name, in the host's own words rather than the error's.
@@ -67,7 +83,7 @@ export function NewWorkspaceScreen() {
         () =>
           acts[ACT_KIND.WORKSPACE_CREATE]({ name: name.trim() }).then((workspace) => {
             choose(workspace.id);
-            router.back();
+            close();
           }),
         {
           inPlace: (words) => {
@@ -92,7 +108,7 @@ export function NewWorkspaceScreen() {
         }}
       />
       <Stack.Toolbar placement="left">
-        <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
+        <Stack.Toolbar.Button onPress={close}>{WORDS.CANCEL}</Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button
