@@ -760,6 +760,9 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
             return yield* Effect.fail(shellRefusal(started.failure));
           }
 
+          // Note that the hold is written again once the shell stands, so a list that read before it started, and pruned it, never leaves it unheld.
+          yield* recordedTerminalOpened(sandboxName, terminalId);
+
           return { terminal: started.success };
         }),
       );

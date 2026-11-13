@@ -125,8 +125,8 @@ export const ranRunAction = Effect.fn("web/ranRunAction")(function* (
     return yield* Effect.fail(shellRefusal(ran.failure));
   }
 
-  // Note that an action still running answers the shell it runs in, held under its own id where that differs.
-  if (ran.success.id !== action.id) yield* recordedTerminalOpened(sandboxName, ran.success.id);
+  // Note that the hold is written again under the shell's own id once it stands, so a list that read before it started, and pruned it, never leaves it unheld.
+  yield* recordedTerminalOpened(sandboxName, ran.success.id);
 
   return { terminal: ran.success };
 });
