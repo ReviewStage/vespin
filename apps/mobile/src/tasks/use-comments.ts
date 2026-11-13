@@ -46,27 +46,44 @@ const NO_THREADS: readonly DescriptionCommentThread[] = [];
 const SOMEONE = "Someone";
 
 /**
- * The words typed toward a new thread and not yet sent, by the task, then
- * the block's start and end, so they outlive the screen that drew them, as
- * a rotation hands a new comment between a split view's detail and its
- * tab's stack, each drawing its own screen.
+ * A new thread's draft kept beside its block: the words typed, the start
+ * sent under them and not yet answered as posted, so the same words sent
+ * again after a lost answer go under the same key, and how often the words
+ * have changed, so a send answered late lets the draft go only while it
+ * still holds the words that send carried.
  */
-const startDrafts = new Map<string, Map<number, Map<number, string>>>();
+type StartDraft = {
+  readonly words: string;
+  readonly sent: SentStart | undefined;
+  readonly revision: number;
+};
 
-/** The words kept toward a new thread on one block of a task; none kept, or no block yet read, reads empty. */
-function startDraftOf(taskId: string, block: DescriptionBlock | undefined): string {
-  if (block === undefined) return "";
+/**
+ * Each new thread's draft, by the task, then the block's start and end, so
+ * it outlives the screen that drew it, as a rotation hands a new comment
+ * between a split view's detail and its tab's stack, each drawing its own
+ * screen.
+ */
+const startDrafts = new Map<string, Map<number, Map<number, StartDraft>>>();
 
-  return startDrafts.get(taskId)?.get(block.from)?.get(block.to) ?? "";
+/** The draft kept toward a new thread on one block of a task; none kept, or no block yet read. */
+function startDraftOf(taskId: string, block: DescriptionBlock | undefined): StartDraft | undefined {
+  if (block === undefined) return undefined;
+
+  return startDrafts.get(taskId)?.get(block.from)?.get(block.to);
 }
 
-/** Keeps the words typed toward a new thread on one block of a task, and lets them go once they are empty. */
-function keepStartDraft(taskId: string, block: DescriptionBlock, words: string): void {
-  const spans = startDrafts.get(taskId) ?? new Map<number, Map<number, string>>();
-  const ends = spans.get(block.from) ?? new Map<number, string>();
+/** Keeps a new thread's draft on one block of a task, or lets it go at none. */
+function keepStartDraft(
+  taskId: string,
+  block: DescriptionBlock,
+  draft: StartDraft | undefined,
+): void {
+  const spans = startDrafts.get(taskId) ?? new Map<number, Map<number, StartDraft>>();
+  const ends = spans.get(block.from) ?? new Map<number, StartDraft>();
 
-  if (words === "") ends.delete(block.to);
-  else ends.set(block.to, words);
+  if (draft === undefined) ends.delete(block.to);
+  else ends.set(block.to, draft);
 
   if (ends.size === 0) spans.delete(block.from);
   else spans.set(block.from, ends);
@@ -305,24 +322,37 @@ export function useCommentStart(
 ): CommentStart {
   const acts = useHostActs();
   const write = useWrite();
-  const [words, setLocal] = useState(() => startDraftOf(taskId, block));
-  const [sent, setSent] = useState<SentStart | undefined>(undefined);
+  const [words, setLocal] = useState(() => startDraftOf(taskId, block)?.words ?? "");
+  const [sent, setSentLocal] = useState(() => startDraftOf(taskId, block)?.sent);
   const [sending, setSending] = useState(false);
   const [note, setNote] = useState<string | undefined>(undefined);
   // Note that a second tap before the next render reads no `sending` yet, so the send in flight is held here too, or two taps would start two threads.
   const inFlight = useRef(false);
   const quote = block?.quote;
 
-  // Note that a block read after the first draw takes up the words kept for it, where nothing was typed meanwhile.
+  // Note that a block read after the first draw takes up the draft kept for it, where nothing was typed meanwhile.
   useEffect(() => {
-    setLocal((was) => (was === "" ? startDraftOf(taskId, block) : was));
+    const kept = startDraftOf(taskId, block);
+
+    if (kept === undefined) return;
+    setLocal((was) => (was === "" ? kept.words : was));
+    setSentLocal((was) => was ?? kept.sent);
   }, [taskId, block]);
 
   const setWords = useCallback(
     (next: string) => {
       setLocal(next);
 
-      if (block !== undefined) keepStartDraft(taskId, block, next);
+      if (block === undefined) return;
+      const was = startDraftOf(taskId, block);
+
+      keepStartDraft(
+        taskId,
+        block,
+        next === "" && was?.sent === undefined
+          ? undefined
+          : { words: next, sent: was?.sent, revision: (was?.revision ?? 0) + 1 },
+      );
     },
     [taskId, block],
   );
@@ -339,7 +369,12 @@ export function useCommentStart(
       const again = sent?.words === kept ? sent : undefined;
       const key = again?.key ?? randomUUID();
       const threadId = again?.threadId ?? randomUUID();
-      setSent({ words: kept, key, threadId });
+      const start = { words: kept, key, threadId };
+      setSentLocal(start);
+      // Note that the start is kept with the draft, so a screen drawn anew by a rotation sends the same words again under the same key.
+      const held = startDraftOf(taskId, block);
+      const revision = held?.revision ?? 0;
+      keepStartDraft(taskId, block, { words: held?.words ?? words, sent: start, revision });
       setSending(true);
       setNote(undefined);
 
@@ -375,8 +410,17 @@ export function useCommentStart(
       });
 
       if (!went) return undefined;
-      setSent(undefined);
-      setWords("");
+      setSentLocal(undefined);
+      const now = startDraftOf(taskId, block);
+
+      // Note that the draft goes only while it still holds the words this send carried, so words typed meanwhile, on this screen or one a rotation drew, stay in the field and kept.
+      if (now === undefined || now.revision === revision) {
+        setLocal("");
+        keepStartDraft(taskId, block, undefined);
+      } else {
+        setLocal(now.words);
+        keepStartDraft(taskId, block, { ...now, sent: undefined });
+      }
 
       return threadId;
     };
