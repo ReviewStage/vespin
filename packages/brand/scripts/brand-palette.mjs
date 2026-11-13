@@ -34,6 +34,25 @@ const COPPER = {
 // draws it from these where it shows how a commit reads on GitHub.
 const AVATAR = { TILE: "#171412", INK: COPPER.DARK.FILL };
 
+// Geist: Vercel's design system (https://vercel.com/geist/colors), its
+// neutral grays and backgrounds verbatim, and its blue as the one accent.
+// Each role takes the step Geist names for it: background-100 the ground
+// and background-200 the frame and the wells, gray-100 to 300 a control's
+// rest, hover, and press, gray-400 and 500 its edges, gray-900 the
+// secondary words and gray-1000 the primary. A status ink is its scale's
+// 900, Geist's accessible text step, and a fill is its 700 or 800. The
+// accent is blue, the focus color Geist rings a control in, and attention
+// shares it, as copper's did; work under way is amber, as a Vercel build is.
+//
+// Note that two blues sit a step off Geist's own: the dark fill is its
+// blue-800, since white words read on blue-700 at only 4.47:1, and the light
+// link is blue-800 a shade darker, since blue-900 drops under 4.5:1 on the
+// sidebar's current row, which is tinted with it.
+const GEIST_BLUE = {
+  LIGHT: { FILL: "#0070f7", INK: "#0059cc" },
+  DARK: { FILL: "#005fd8", INK: "#50a8ff" },
+};
+
 const BRAND_PALETTES = {
   COPPER: {
     LIGHT: {
@@ -109,9 +128,88 @@ const BRAND_PALETTES = {
       AVATAR_INK: AVATAR.INK,
     },
   },
+  GEIST: {
+    LIGHT: {
+      GROUND: "#ffffff",
+      SURFACE: "#ffffff",
+      OVERLAY: "#ffffff",
+      SIDEBAR: "#fafafa",
+      SIDEBAR_INK: "#4d4d4d",
+      WELL: "#fafafa",
+      CODE_GROUND: "#fafafa",
+      CHIP: "#ffffff",
+      CHIP_HOVER: "#f2f2f2",
+      CHIP_SELECTED: "#ebebeb",
+      CHIP_EDGE: "#ebebeb",
+      CHIP_EDGE_STRONG: "#c9c9c9",
+      INK: "#000000",
+      TEXT: "#171717",
+      TEXT_BODY: "#171717",
+      TEXT_MUTED: "#4d4d4d",
+      ACCENT: GEIST_BLUE.LIGHT.FILL,
+      ON_ACCENT: "#ffffff",
+      ON_ACCENT_MUTED: "#ffffff",
+      ACCENT_TEXT: GEIST_BLUE.LIGHT.INK,
+      FOCUS_RING: GEIST_BLUE.LIGHT.FILL,
+      SWITCH_ON: GEIST_BLUE.LIGHT.FILL,
+      DANGER: "#d60020",
+      DANGER_TEXT: "#d60020",
+      DANGER_FILL: "#d60020",
+      ATTENTION: GEIST_BLUE.LIGHT.INK,
+      ATTENTION_FILL: GEIST_BLUE.LIGHT.FILL,
+      WORKING: "#a64f00",
+      STARTING: "#a64f00",
+      COMPLETE: "#107d32",
+      MERGED: "#7c00c9",
+      AVATAR_TILE: AVATAR.TILE,
+      AVATAR_INK: AVATAR.INK,
+    },
+    DARK: {
+      GROUND: "#0a0a0a",
+      SURFACE: "#0a0a0a",
+      OVERLAY: "#1a1a1a",
+      SIDEBAR: "#000000",
+      SIDEBAR_INK: "#a1a1a1",
+      WELL: "#000000",
+      CODE_GROUND: "#000000",
+      CHIP: "#1a1a1a",
+      CHIP_HOVER: "#1f1f1f",
+      CHIP_SELECTED: "#292929",
+      CHIP_EDGE: "#2e2e2e",
+      CHIP_EDGE_STRONG: "#454545",
+      INK: "#ffffff",
+      TEXT: "#ededed",
+      TEXT_BODY: "#ededed",
+      TEXT_MUTED: "#a1a1a1",
+      ACCENT: GEIST_BLUE.DARK.FILL,
+      ON_ACCENT: "#ffffff",
+      ON_ACCENT_MUTED: "#ffffff",
+      ACCENT_TEXT: GEIST_BLUE.DARK.INK,
+      FOCUS_RING: GEIST_BLUE.DARK.INK,
+      SWITCH_ON: GEIST_BLUE.DARK.FILL,
+      DANGER: "#ff5e63",
+      DANGER_TEXT: "#ff5e63",
+      DANGER_FILL: "#e2162a",
+      ATTENTION: GEIST_BLUE.DARK.INK,
+      ATTENTION_FILL: GEIST_BLUE.DARK.FILL,
+      WORKING: "#ff9900",
+      STARTING: "#ff9900",
+      COMPLETE: "#00ca52",
+      MERGED: "#c472fb",
+      AVATAR_TILE: AVATAR.TILE,
+      AVATAR_INK: AVATAR.INK,
+    },
+  },
 };
 
-export const BRAND = BRAND_PALETTES.COPPER;
+// The brand the window, the site, and the iOS app wear.
+export const BRAND = BRAND_PALETTES.GEIST;
+
+// The brand the cut artwork wears: the icon, the mark, the cards, and the
+// DMG's ground, which generate-brand-assets.mjs draws. Note that it stays
+// copper while Geist is tried on the surfaces, so the trial redraws no
+// committed artwork.
+export const ARTWORK_BRAND = BRAND_PALETTES.COPPER;
 
 // A person's disc and a workspace's tile: six muted hues read off an id
 // (@repo/features/workspace-tile's identityHue, from 1), each holding its
