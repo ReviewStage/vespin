@@ -2,21 +2,27 @@
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
+# It runs apart from the flows beside it, as `scripts/simulator-screenshots.sh`
+# runs it: on the app installed afresh, then the simulator restarted, because
+# the simulator drops every Spotlight donation an app makes until it restarts
+# after the app's install ("Set existence required and no set exists").
 # Handoff has no part a simulator shows, so it waits for a device.
 appId: dev.vespin.ios
 ---
 # Launched on the host's Inbox fixture, whose workspace holds the account's
 # "Weekly digest email" (`@repo/host/fixture-inbox`); the app indexes it once
 # the lists are read (`src/system-activity/`).
+# Note that the app's state is not cleared, because Maestro's clear
+# reinstalls the app, which undoes the restart; the install before it is the
+# fresh start.
 - launchApp:
-    clearState: true
     arguments:
       fixture: inbox
 # Note that the Tasks list is read before the app is left, because the
 # index is written from it, so a search typed sooner can come back without
 # the app's row.
 - runFlow:
-    file: subflows/tab.yaml
+    file: ../subflows/tab.yaml
     env:
       TAB: Tasks
 - assertVisible: "Weekly digest email"

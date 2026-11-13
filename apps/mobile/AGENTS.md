@@ -25,7 +25,7 @@ the macOS run below. Every command here runs from `apps/mobile`.
 | `xcrun simctl launch booted dev.vespin.ios -fixture inbox -refuseWrites true` | Launch it on the Inbox fixture with a task's status and pin refused, as `maestro/failure-notice.yaml` does, to see the failure notice |
 | `xcrun simctl launch booted dev.vespin.ios -sentryTest js` | Send Sentry a test report from a live launch (`native` crashes the app instead, sent on the next launch), to check a build's reports arrive symbolicated (`src/crash-reports.ts`); `xcrun devicectl device process launch --device <iPhone> dev.vespin.ios -sentryTest js` does it on a connected iPhone |
 | `scripts/simulator-build.sh` | Generate `ios/` and build a Release app for the simulator, its bundle embedded, naming the `.app` on its last line |
-| `scripts/simulator-screenshots.sh [--flows inbox,tasks] <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it, or only those `--flows` names (`notification` for the notification flow), in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
+| `scripts/simulator-screenshots.sh [--flows inbox,tasks] <app> <output> <simulator>...` | Install that app on each named simulator, run every flow under `maestro/` on it, or only those `--flows` names (`spotlight` and `notification` for the Spotlight and notification flows), in the light appearance and the dark, with the screenshots under `<output>/<simulator slug>/<appearance>/`, and shut the simulator down |
 | `xcrun simctl io booted screenshot shot.png` | One screenshot of the booted simulator by hand |
 | `pnpm export:ios` | Bundle the app with Metro, as CI's Linux job does; it catches a module Hermes cannot resolve |
 | `pnpm typecheck`, `pnpm test:vitest` | The TypeScript and the logic tests |
@@ -74,8 +74,8 @@ started from the developer's Mac (`gh workflow run ios-simulators.yml --ref
 <branch>`). Each simulator takes about an hour, every flow in the light
 appearance and the dark, after a 20-minute build, so name fewer simulators or
 flows for a quicker look (`-f simulators="iPhone 18 Pro" -f flows=inbox,tasks`),
-each flow as its file under `maestro/` is named without `.yaml`, and the
-notification flow as `notification`.
+each flow as its file under `maestro/` is named without `.yaml`, the
+Spotlight flow as `spotlight`, and the notification flow as `notification`.
 Then read its screenshots:
 
 ```
@@ -94,7 +94,12 @@ send, runs apart: the script installs the app afresh, lets it notify through
 the applesimutils Maestro installs (Maestro's own `permissions` cannot grant
 notifications), runs `maestro/notification/background.yaml`, pushes
 `ask.apns` with `xcrun simctl push`, and runs `open.yaml`, its output under
-`<light|dark>/notification/`.
+`<light|dark>/notification/`. The Spotlight flow runs apart too: the script
+installs the app afresh and restarts the simulator, since a simulator drops
+every Spotlight donation an app makes until it restarts after the app's
+install, and runs `maestro/spotlight/spotlight.yaml` without clearing the
+app, since Maestro's clear reinstalls it, its output under
+`<light|dark>/spotlight/`.
 
 ## The host
 
@@ -199,7 +204,7 @@ route a continued activity or a tapped item opens, is
 `@repo/features/ios-system-activity`; the app's native module, autolinked
 from `modules/system-activity/`, sets the activity, writes the index, and
 hands a continued activity or a tapped item to JavaScript, which opens it
-through the routing a link takes. `maestro/spotlight.yaml` finds a task from
+through the routing a link takes. `maestro/spotlight/spotlight.yaml` finds a task from
 the Home Screen's search; Handoff shows only between real devices.
 
 ## The native interactions module
