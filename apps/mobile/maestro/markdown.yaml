@@ -15,17 +15,41 @@ appId: dev.vespin.ios
 - tapOn: "Tasks"
 - tapOn: "Teammate invitations"
 - waitForAnimationToEnd
-- scrollUntilVisible:
-    element: "Goal"
-    direction: DOWN
+# Note that the task's page is swiped at its right side rather than scrolled
+# from the screen's center, since a landscape iPad's center falls in the list
+# column beside the task, which never holds its description.
+- repeat:
+    while:
+      notVisible: "Goal"
+    times: 8
+    commands:
+      - swipe:
+          start: 85%, 70%
+          end: 85%, 35%
+      - waitForAnimationToEnd
+- assertVisible: "Goal"
 - takeScreenshot: markdown-top
-- scrollUntilVisible:
-    element: "Owner"
-    direction: DOWN
+- repeat:
+    while:
+      notVisible: "Owner"
+    times: 12
+    commands:
+      - swipe:
+          start: 85%, 70%
+          end: 85%, 35%
+      - waitForAnimationToEnd
+- assertVisible: "Owner"
 - takeScreenshot: markdown-table
-- scrollUntilVisible:
-    element: "The invite page"
-    direction: DOWN
+- repeat:
+    while:
+      notVisible: "The invite page"
+    times: 20
+    commands:
+      - swipe:
+          start: 85%, 70%
+          end: 85%, 35%
+      - waitForAnimationToEnd
+- assertVisible: "The invite page"
 - takeScreenshot: markdown-end
 - tapOn: "The invite page"
 - assertVisible:
