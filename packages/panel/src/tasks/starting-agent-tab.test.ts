@@ -107,7 +107,7 @@ test("an agent's tab while its first launch boots reads its empty transcript as 
   );
 });
 
-test("an agent's tab while its start waits on its workspace's drive says Building… in its centered line in place of Starting…", async () => {
+test("an agent's tab while its start waits on its workspace's drive says Building… in place of its sandbox starting", async () => {
   const words = await bootingTabWords({
     phase: BOOT_PHASE.STARTING,
     since: Date.now(),
@@ -115,7 +115,10 @@ test("an agent's tab while its start waits on its workspace's drive says Buildin
   });
 
   assert.ok(words.includes(BOOT_WORDS.BUILDING), "the empty transcript says it is building");
-  assert.ok(!words.includes(BOOT_WORDS.STARTING), "Building… stands in place of Starting…");
+  assert.ok(
+    !words.includes("Starting a cloud sandbox…"),
+    "Building… stands in place of the sandbox starting",
+  );
 });
 
 test("an agent's tab just made, before its first transcript page lands, says Starting… as the start's own tab did rather than a placeholder", async () => {
