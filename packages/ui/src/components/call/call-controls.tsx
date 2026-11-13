@@ -34,7 +34,6 @@ import { TEXT_ELEMENT, TEXT_VARIANT, Text } from "../text/text.js";
 import { TIME_LOOK, Time } from "../time/time.js";
 import { Tooltip } from "../tooltip/hint.js";
 import { VisuallyHidden } from "../visually-hidden/visually-hidden.js";
-import { WorkingMark } from "../working-mark/working-mark.js";
 
 /** What a reader is told while the agent works; the sighted read the mark and the line. */
 const AGENT_WORKING_LABEL = `${PRODUCT_NAME} is working on it`;
@@ -104,12 +103,13 @@ const MUTE = {
 } as const;
 
 /**
- * A call's two lines as its bar draws them: the voice's word ("Listening",
- * "Speaking"), and the agent's line while it works, with the command it runs
- * where it has one.
+ * A call's line as its bar draws it: the stage's word while the call comes
+ * up or goes down ("Connecting…", "Ending…"), and otherwise the agent's line
+ * while it works, with the command it runs where it has one.
  */
 export interface CallStatus {
-  readonly voiceWord: string;
+  /** The stage's word while the call is not up; none while it is. */
+  readonly stageWord: string | undefined;
   readonly agent: { readonly action: string | undefined } | undefined;
 }
 
@@ -360,35 +360,24 @@ export function CallComposerControls({
 
 /**
  * The call bar's own row, laid out as a composer's controls are: the call's
- * two lines at its left and its controls at its right. Its least height
- * holds both lines, so it never moves as the agent's line comes and goes,
- * but where it is too narrow for the call on one row. It answers its own
+ * line at its left and its controls at its right, which set its height, so
+ * it never moves as the agent's line comes and goes. It answers its own
  * width, as the sidebar's card, the floating card, and the floating window
  * draw it, each at a width of its own.
  */
 const BAR =
-  "ui-call-bar @container/ui-call-bar mx-auto my-0 flex min-h-call-row max-w-page-measure flex-wrap items-center gap-x-block-gap gap-y-control-gap";
+  "ui-call-bar @container/ui-call-bar mx-auto my-0 flex max-w-page-measure flex-wrap items-center gap-x-block-gap gap-y-control-gap";
 
 /**
- * The call's two lines, each cut short on one line, so a long command never
- * wraps the row or pushes the controls, and the mark is never cut. Too
- * narrow for the status beside the controls (the sidebar's card at its
- * narrowest, an off-scale 210px), the status takes a row of its own, the
- * voice's word whole, and the controls stand under it at the right.
+ * The call's line, in the caption's muted voice, cut short on one line, so a
+ * long command never wraps the row or pushes the controls. Too narrow for it
+ * beside the controls (the sidebar's card at its narrowest, an off-scale
+ * 210px), it takes a row of its own, and the controls stand under it at the
+ * right.
  */
 const STATUS =
-  "ui-call-bar-status flex min-w-0 flex-1 flex-col gap-ui-2 whitespace-nowrap @max-[210px]/ui-call-bar:basis-full";
+  "ui-call-bar-status flex min-w-0 flex-1 items-center text-caption whitespace-nowrap text-muted-foreground @max-[210px]/ui-call-bar:basis-full";
 
-/**
- * The agent's line, in the caption's muted voice. Narrower than an
- * off-scale 280px, a call card's controls at its head's step, the working
- * mark goes, the line's own words saying the agent works, so its command
- * keeps the mark's room.
- */
-const AGENT =
-  "ui-call-bar-agent flex min-w-0 items-center gap-control-gap text-caption text-muted-foreground";
-
-const AGENT_MARK = "ui-call-bar-agent-mark flex @max-[280px]/ui-call-bar:hidden";
 const AGENT_ACTION = "ui-call-bar-agent-action font-mono";
 
 /**
@@ -402,21 +391,33 @@ const CONTROLS =
 const MUTES = "ui-call-bar-mutes flex flex-none items-center gap-tight-gap";
 
 /**
- * The call's two lines: the voice's word, and the agent's while it works:
- * "Thinking", or "Working" and the command it runs. Where `titled`, the
- * command carries its whole words as the system's own hint, for the floating
- * window, which is too small to hold a tooltip.
+ * The call's line: "Connecting…" or "Ending…" while the call is not up, and
+ * while it is, the agent's line while it works, "Thinking", or "Working" and
+ * the command it runs, with nothing while the agent is idle. The agent's
+ * tile, beside the call's name, wears the working mark, so the line draws
+ * none of its own. Where `titled`, the command carries its whole words as
+ * the system's own hint, for the floating window, which is too small to
+ * hold a tooltip.
  */
-function CallStatusLines({
+function CallStatusLine({
   status,
-  muted,
   titled,
 }: {
   status: CallStatus | undefined;
-  muted: boolean;
   titled: boolean;
 }): React.JSX.Element {
   const agent = status?.agent;
+  const stageWord = status?.stageWord;
+
+  if (stageWord !== undefined || agent === undefined) {
+    return (
+      <span className={STATUS}>
+        <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.INHERIT} truncate>
+          {stageWord}
+        </Text>
+      </span>
+    );
+  }
 
   return (
     <span className={STATUS}>
@@ -424,44 +425,27 @@ function CallStatusLines({
         as={TEXT_ELEMENT.SPAN}
         variant={TEXT_VARIANT.INHERIT}
         truncate
-        className="ui-call-bar-voice data-[muted=true]:text-muted-foreground"
-        data-muted={String(muted)}
+        title={titled ? agent.action : undefined}
       >
-        {status?.voiceWord}
+        {agent.action === undefined ? (
+          AGENT_THINKING
+        ) : (
+          <>
+            {AGENT_WORKING} · <span className={AGENT_ACTION}>{agent.action}</span>
+          </>
+        )}
       </Text>
-      {agent === undefined ? null : (
-        <span className={AGENT}>
-          <span className={AGENT_MARK}>
-            <WorkingMark />
-          </span>
-          <Text
-            as={TEXT_ELEMENT.SPAN}
-            variant={TEXT_VARIANT.INHERIT}
-            truncate
-            title={titled ? agent.action : undefined}
-          >
-            {agent.action === undefined ? (
-              AGENT_THINKING
-            ) : (
-              <>
-                {AGENT_WORKING} · <span className={AGENT_ACTION}>{agent.action}</span>
-              </>
-            )}
-          </Text>
-          <VisuallyHidden role="status">{AGENT_WORKING_LABEL}</VisuallyHidden>
-        </span>
-      )}
+      <VisuallyHidden role="status">{AGENT_WORKING_LABEL}</VisuallyHidden>
     </span>
   );
 }
 
 /**
  * The strip of a call's controls, laid out the way a composer's own are:
- * the call's status at the left, and at the right Stop while the agent
- * works, then the speaker and microphone mutes, round, each struck through
- * and lit while on, and End call beside them, apart from both so muting
- * never hangs up. A narrow bar stacks its status over its controls rather
- * than cutting the voice's word (`STATUS`).
+ * the call's line at the left, and at the right Stop while the agent works,
+ * then the speaker and microphone mutes, round, each struck through and lit
+ * while on, and End call beside them, apart from both so muting never hangs
+ * up. A narrow bar stacks its line over its controls (`STATUS`).
  */
 export function CallBar({
   status,
@@ -471,7 +455,7 @@ export function CallBar({
   onEnd,
   titled = false,
 }: {
-  /** The call's status, absent while the voice names none, which draws the controls alone. */
+  /** The call's line, absent while the call names none, which draws the controls alone. */
   status: CallStatus | undefined;
   microphone: CallMuteState;
   speaker: CallMuteState;
@@ -483,7 +467,7 @@ export function CallBar({
 }): React.JSX.Element {
   return (
     <footer className={BAR}>
-      <CallStatusLines status={status} muted={microphone.muted} titled={titled} />
+      <CallStatusLine status={status} titled={titled} />
       <div className={CONTROLS}>
         {status?.agent === undefined ? null : <StopAgentButton onPress={onStop} />}
         <div className={MUTES}>

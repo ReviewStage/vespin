@@ -1,8 +1,12 @@
 /**
- * call-controls.tsx -- Talk at rest and with no OpenAI API key; each mute round and square, off and on, Stop, and the one red End call; a box's call status connecting, live, muted, and ending; a call bar at a card's width and at its narrowest, while the agent thinks and works, and muted; and the call card at the sidebar's foot and in the floating window.
+ * call-controls.tsx -- Talk at rest and with no OpenAI API key; each mute round and square, off and on, Stop, and the one red End call; a box's call status connecting, live, muted, and ending; a call bar at a card's width and at its narrowest, connecting, idle, while the agent thinks and works, and muted; and the call card at the sidebar's foot, narrow, and in the floating window, its agent's chip over its task.
  */
 
+import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import {
+  AVATAR_OUTLINE,
+  AVATAR_SIZE,
+  Avatar,
   BUTTON_CORNERS,
   type ButtonCorners,
   CALL_CARD_SURFACE,
@@ -16,10 +20,12 @@ import {
   type CallStatus,
   EndCallButton,
   GAP,
+  HarnessMark,
   Inline,
   Stack,
   StopAgentButton,
   TalkButton,
+  WorkingMark,
 } from "@repo/ui";
 import { useState } from "react";
 import type { Example } from "../example";
@@ -29,18 +35,21 @@ import { CatalogSection } from "../section";
 const CALL_STARTED_AT = Date.UTC(2026, 9, 24, 15, 0, 0);
 const CALL_NOW = CALL_STARTED_AT + 252_000;
 
-/** The task the catalog's card is about. */
+/** The task the catalog's card is about, and the agent it is with. */
 const TASK_NAME = "Voice mode for agents";
+const AGENT_NAME = "Redesign the call card";
 
 /** A press the catalog has nowhere to take. */
 function stay(): void {}
 
-const LISTENING: CallStatus = { voiceWord: "Listening", agent: undefined };
+const CONNECTING: CallStatus = { stageWord: "Connecting…", agent: undefined };
 
-const THINKING: CallStatus = { voiceWord: "Listening", agent: { action: undefined } };
+const IDLE: CallStatus = { stageWord: undefined, agent: undefined };
+
+const THINKING: CallStatus = { stageWord: undefined, agent: { action: undefined } };
 
 const WORKING: CallStatus = {
-  voiceWord: "Speaking",
+  stageWord: undefined,
   agent: { action: "pnpm exec vitest run packages/ui/src/components/call" },
 };
 
@@ -74,22 +83,39 @@ function OwnedBar({
   );
 }
 
-/** A card whose mutes toggle, at `width`, drawn where `surface` says. */
+/** The agent's tile as the panel draws it: its harness's mark on its square, the working mark in its place while it works. */
+function AgentTile({ working }: { working: boolean }): React.JSX.Element {
+  return (
+    <Avatar
+      name={AGENT_NAME}
+      glyph={working ? <WorkingMark /> : <HarnessMark provider={MODEL_PROVIDER.ANTHROPIC} />}
+      outline={AVATAR_OUTLINE.SQUARE}
+      size={AVATAR_SIZE.INLINE}
+      decorative
+    />
+  );
+}
+
+/** A card whose mutes toggle, at `width`, drawn where `surface` says, both mutes on where `muted`. */
 function OwnedCard({
   status,
   width,
   surface,
+  muted = false,
 }: {
   status: CallStatus;
   width: number;
   surface: (typeof CALL_CARD_SURFACE)[keyof typeof CALL_CARD_SURFACE];
+  muted?: boolean;
 }): React.JSX.Element {
-  const mutes = useMutes();
+  const mutes = useMutes(muted);
+  const working = status.stageWord === undefined && status.agent !== undefined;
 
   return (
     <div style={{ width }}>
       <CallCard
-        name={TASK_NAME}
+        agent={{ name: AGENT_NAME, tile: <AgentTile working={working} /> }}
+        taskName={TASK_NAME}
         status={status}
         {...mutes}
         surface={surface}
@@ -165,24 +191,27 @@ function CallControls(): React.JSX.Element {
       </CatalogSection>
       <CatalogSection
         id="call-bar"
-        title="The call bar listening, thinking, working, and muted, then at its narrowest"
+        title="The call bar connecting, idle, thinking, working, and muted, then at its narrowest"
       >
         <Stack gap={GAP.SECTION}>
-          <OwnedBar status={LISTENING} width={320} />
+          <OwnedBar status={CONNECTING} width={320} />
+          <OwnedBar status={IDLE} width={320} />
           <OwnedBar status={THINKING} width={320} />
           <OwnedBar status={WORKING} width={320} />
-          <OwnedBar status={LISTENING} width={320} muted />
+          <OwnedBar status={IDLE} width={320} muted />
           <OwnedBar status={WORKING} width={200} />
         </Stack>
       </CatalogSection>
       <CatalogSection
         id="call-card"
-        title="The call card at the sidebar's foot, narrow, and in the floating window"
+        title="The call card at the sidebar's foot working and muted, narrow, and in the floating window thinking and idle"
       >
         <Stack gap={GAP.SECTION}>
           <OwnedCard status={WORKING} width={280} surface={CALL_CARD_SURFACE.SIDEBAR} />
+          <OwnedCard status={IDLE} width={280} surface={CALL_CARD_SURFACE.SIDEBAR} muted />
           <OwnedCard status={THINKING} width={220} surface={CALL_CARD_SURFACE.SIDEBAR} />
-          <OwnedCard status={LISTENING} width={320} surface={CALL_CARD_SURFACE.WINDOW} />
+          <OwnedCard status={THINKING} width={320} surface={CALL_CARD_SURFACE.WINDOW} />
+          <OwnedCard status={IDLE} width={320} surface={CALL_CARD_SURFACE.WINDOW} />
         </Stack>
       </CatalogSection>
     </>
