@@ -2,7 +2,10 @@ import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { COMPUTER_PERMISSION, computerPermissionsNamed } from "@repo/features/machine-command-wire";
 import { THIS_MAC } from "@repo/features/machine-name";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { computerPermissionsMissing } from "@repo/features/tool-call-model";
+import {
+  computerPermissionsMissing,
+  machineCommandMachineId,
+} from "@repo/features/tool-call-model";
 import { ACT_KIND } from "@repo/host/acts";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { ErrorState } from "@repo/ui";
@@ -57,34 +60,43 @@ function noteWords(
   return `${PRODUCT_NAME} on ${whose} Mac needs ${names} to use apps. Turn ${them} on in Settings › ${THIS_MAC} on that Mac.`;
 }
 
-/**
- * Whether the window is the Mac an agent's calls run on: one that runs Mac
- * commands, and is the machine a call naming none would go to now
- * (`workspaceTools.runOnMac`), compared by the device this Mac claims
- * commands as. Where that names no machine, as for a call that goes to the
- * account's Macs from before machines claimed, or for an agent not given
- * (`agentId` none), it is the Mac of the person whose Mac it is: signed in as
- * its owner (`MacOwnerProvider`), or where the window cannot tell whose Mac
- * it is, which is then the reader's own.
- */
-export function useOnThatMac(agentId: string | undefined): boolean {
-  const owner = useMacOwner();
-
-  const runsCommands =
+/** Whether the window runs Mac commands, as only a Mac's does. */
+function useRunsCommands(): boolean {
+  return (
     useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.MACHINE_COMMANDS) })
-      .data === true;
+      .data === true
+  );
+}
 
+/**
+ * Whether the window is the Mac named by its id: one that runs Mac commands
+ * and claims them as that device. Where no machine is named, as for a call
+ * that went to the account's Macs from before machines claimed, it is the Mac
+ * of the person whose Mac it is: signed in as its owner (`MacOwnerProvider`),
+ * or where the window cannot tell whose Mac it is, which is then the reader's
+ * own.
+ */
+function useOnMachine(machineId: string | undefined): boolean {
+  const owner = useMacOwner();
+  const runsCommands = useRunsCommands();
   const thisDevice = useQuery({ ...appStateQuery, select: selectMachineCommandDevice }).data;
+
+  if (!runsCommands) return false;
+
+  if (machineId !== undefined) return machineId === thisDevice;
+
+  return owner === undefined || (owner.kind === ACTOR_KIND.PERSON && owner.you);
+}
+
+/** Whether the window is the Mac an agent's calls go to now: the machine a call naming none would go to (`workspaceTools.runOnMac`), as `useOnMachine` tells it; whose Mac it is where the standing names no machine, or no agent is given. */
+export function useOnThatMac(agentId: string | undefined): boolean {
+  const runsCommands = useRunsCommands();
 
   // Note that the agent's standing is read only where this window could be its Mac, so a window that runs no commands asks nothing.
   const machine = useQuery(workspaceToolsQuery(runsCommands ? agentId : undefined)).data?.runOnMac
     ?.machine;
 
-  if (!runsCommands) return false;
-
-  if (machine !== undefined) return machine.id === thisDevice;
-
-  return owner === undefined || (owner.kind === ACTOR_KIND.PERSON && owner.you);
+  return useOnMachine(machine?.id);
 }
 
 /** The note under a computer call the Mac refused for a grant it lacked; nothing for any other call. */
@@ -97,8 +109,8 @@ export function ComputerPermissionNote({
 }): ReactNode {
   const queries = useQueryClient();
   const owner = useMacOwner();
-  // Note that the call already ran on its Mac, which its answer does not name, so the note asks whose Mac the transcript's is rather than where a call would go now.
-  const thatMac = useOnThatMac(undefined);
+  // Note that the call already went to its Mac, which its answer names, so the note asks after that machine rather than where a call would go now.
+  const thatMac = useOnMachine(machineCommandMachineId(output));
 
   const asked = useMutation({
     mutationFn: () => askAct(ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS, {}),
