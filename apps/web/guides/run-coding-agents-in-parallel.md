@@ -33,7 +33,7 @@ Past three or four agents, it gets hard to tell which terminal is waiting on you
 
 These give each agent a worktree and show them all in one window.
 
-- [Conductor](https://conductor.build) runs Claude Code, Codex, Cursor, and OpenCode on a Mac, and is [free for now](https://www.conductor.build/docs/faq). It's [joining Meta](https://www.conductor.build/announcement). The Mac app gets [new models and critical fixes until early 2027](https://www.conductor.build/changelog/0.93.0-conductor-is-joining-meta), and its cloud workspaces shut down on November 20, 2026.
+- [Conductor](https://conductor.build) runs Claude Code, Codex, Cursor, and OpenCode on a Mac, and is [free for now](https://www.conductor.build/docs/faq). It's [joining Meta](https://www.conductor.build/announcement).
 - [Claude Squad](https://github.com/smtg-ai/claude-squad) runs each agent in its own tmux session, in the terminal.
 - [Paradev](https://paradev.com/), formerly Superset, runs most CLI agents. Its [Team plan](https://paradev.com/pricing) adds cloud workspaces.
 - [Emdash](https://github.com/generalaction/emdash) runs on Windows too, and can run agents on another machine over SSH.
@@ -53,14 +53,10 @@ You start a task in the browser, it runs on the vendor's servers, and you get a 
 - [Cursor's cloud agents](https://cursor.com/docs/cloud-agent) need a [paid Cursor plan](https://cursor.com/pricing).
 - [Devin](https://devin.ai/pricing) caps parallel sessions by plan.
 
-Google's Jules [is read-only and shuts down on December 31, 2026](https://jules.google/docs/changelog/).
-
 ## Agent-neutral cloud workspaces
 
 - [Warp](https://docs.warp.dev/agent-platform/cloud-agents/overview) runs its own agent, [Claude Code, and Codex](https://docs.warp.dev/agent-platform/cloud-agents/harnesses) in its cloud. You start them from Slack, Linear, GitHub, or Warp. [Its free plan](https://www.warp.dev/pricing) includes a few cloud agents.
 - [Vespin](https://vespin.dev) runs Claude Code and Codex in cloud sandboxes or on your own machine.
-
-[Terragon](https://github.com/terragon-labs/terragon-oss) shut down in January 2026, and [Ona](https://ona.com/docs), formerly Gitpod, has closed signups.
 
 ## Comparison table
 
