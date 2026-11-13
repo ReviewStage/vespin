@@ -642,7 +642,9 @@ test("a member's machines are listed by name, each saying what it is and, to a r
 
 test("machines read again that could not be read say so and offer Retry, their last answer still drawn", async () => {
   vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
-  onTestFinished(() => vi.useRealTimers());
+  onTestFinished(() => {
+    vi.useRealTimers();
+  });
   machinesOf = new Map([
     [
       "user-sam",
