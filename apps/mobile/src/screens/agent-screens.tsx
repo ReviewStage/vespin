@@ -108,6 +108,7 @@ import {
   useSuggestionSender,
 } from "../agents/use-suggestions.js";
 import { useTranscriptCopy } from "../agents/use-transcript-copy.js";
+import { useWarmAgent } from "../agents/use-warm-agent.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-pull-request.js";
@@ -621,6 +622,7 @@ export function AgentScreen() {
   };
 
   const runActions = useAgentRun(id);
+  useWarmAgent(id);
   const hasPorts = useAgentHasPorts(id);
   const openPorts = () => router.push({ pathname: "/agent-ports", params: { agent: id } });
   // Whether Rename's alert, or Archive's or Permanently delete's question, stands over the page.

@@ -266,7 +266,7 @@ export const AGENT_ACT_KIND = {
   AGENTS_CLEAR: "agents.clear",
   /** An agent's failed first launch booted again, from its Retry (`coder-host/boot.ts`). */
   AGENTS_BOOT: "agents.boot",
-  /** Answered and does nothing: the service's warm keeps nothing up any more. No client asks it; kept beside the service's for builds already shipped, to drop in a later release. */
+  /** An agent's chat said shown, at once and then every minute while it stays shown, which holds its sandbox and keeps it warm for the next message, or said hidden as it stops being, which lets go (`use-warm-agent.ts`). */
   AGENTS_WARM: "agents.warm",
   /** A message of the member's the service refused let go, from its Delete or its Edit, which took its words back into the box (`agent-queue-writes.ts`). */
   AGENTS_UNSEND: "agents.unsend",

@@ -139,6 +139,7 @@ export function scriptedHarness(
           retune: () => Effect.succeed(RUNNER_CHOICE.NOT_LIVE),
           halt: () => Effect.succeed(true),
           deliverTurn: () => Effect.succeed(TURN_HANDOVER.HANDED),
+          warm: () => Effect.void,
           boot: scripted.boot ?? bootedAtOnce,
         }),
       );

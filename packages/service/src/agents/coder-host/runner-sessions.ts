@@ -69,7 +69,12 @@
  * bearer and throws the place away. Nothing here streams: the runner posts its
  * events to the service itself.
  *
- * A sandbox is stopped, and its runner with it, the moment its agent's turn is
+ * `warm`, for an agent whose chat a client shows, which holds its sandbox
+ * meanwhile (`agent-lifecycle.ts`'s `warmedAgent`), touches its running sandbox,
+ * writes a runner that runs a `warm` line, which runs its warm window again
+ * from now, or launches the runner with no message where none runs, past its
+ * answer, so the next message goes into the running session as a line. A
+ * sandbox is stopped, and its runner with it, the moment its agent's turn is
  * over and nothing holds it (`sandboxStoppedIfUnheld`: at the launch's IDLE
  * or END, and as a member lets go of its last hold), or else `SANDBOX_IDLE`
  * after its last touch (`@repo/sandbox`); a Mac's runner ends itself past
@@ -237,7 +242,7 @@ import {
 import { deploymentLifecycle } from "../machine/agent-machines.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { LAUNCH_SWAP } from "../sandbox-firewall.js";
-import { recordedSandboxStopped } from "../sandbox-use.js";
+import { recordedSandboxStopped, touchAgentSandbox } from "../sandbox-use.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
   MACHINE_UP,
@@ -1727,8 +1732,8 @@ export const runnerSessions = <
       );
 
     /**
-     * The session a launch resumes, the one decision every launch and the
-     * line a send queues for one ask. On a machine that keeps the
+     * The session a launch resumes, the one decision every launch, the line
+     * a send queues for one, and a warm call ask. On a machine that keeps the
      * CLI's transcript (`MachineLayout`'s `transcriptsKept`), the harness
      * resumes from the store whenever it holds any entry of the session, and
      * from those alone, whatever the disk holds, so a session resumes from
@@ -2552,6 +2557,43 @@ export const runnerSessions = <
       });
 
     /**
+     * An agent whose chat is shown kept warm, under its runner lease, where none of its
+     * turns runs: its running sandbox touched (`@repo/sandbox`'s `touch`),
+     * as its chat's hold keeps it up between turns, a runner that runs is
+     * written a `warm` line, which runs its
+     * warm window again from now, and where none runs, the runner is launched
+     * with no message (`launchedWithoutMessage`), warm from its start, for the
+     * next message to go into its running session as a line. A turn that runs
+     * has a runner of its own, whose IDLE arms a window of its own.
+     */
+    const warmHolding = (sessionId: string, agent: Agent) =>
+      Effect.gen(function* () {
+        const { conversationId } = agent;
+        const turn = (yield* latestTurnsOfReached([conversationId])).get(conversationId);
+
+        if (turn?.status === TURN_STATUS.RUNNING) return;
+        const found = yield* machine.findPlace(userId, sessionId);
+
+        if (Option.isNone(found) || found.value.agentId !== agent.id) return;
+
+        // An agent on screen is its sandbox in use: a running one is touched, a stopped one resumed by the launch below.
+        if (found.value.machine === AGENT_MACHINE.VERCEL && found.value.running !== undefined) {
+          yield* touchAgentSandbox(found.value.name);
+        }
+
+        const live = found.value.runner;
+
+        if (live !== undefined) {
+          return yield* deliveredTo(machine, userId, agent.id, live, [{ type: INPUT_LINE.WARM }]);
+        }
+
+        // Note that a session no launch may resume is let go by the next message, whose line carries
+        // the agent's steps replayed, so none is launched warm with no line to hand them.
+        if ((yield* resumedSessionOf(agent, yield* machine.layout(agent), false)).replay) return;
+        yield* launchedWithoutMessage(sessionId, agent);
+      });
+
+    /**
      * A turn's delivery whose launch could not succeed: said once as an error
      * with the agent's ids and why, and reported where no named refusal
      * explains it (`agentFailureSaid`); then the turns it was for settled
@@ -3046,6 +3088,34 @@ export const runnerSessions = <
             Effect.annotateLogs(agentLogIds(agent.value, sessionId)),
           );
         }).pipe(
+          Effect.annotateLogs(agentLogIds({ conversationId }, sessionId)),
+          Effect.provideContext(context),
+        ),
+
+      // A warm call runs past the answer, and only where no other call holds the runner lease: a
+      // Start or a message holding it is launching or writing to the runner already, and the next
+      // warm call, a minute on, finds what it left. A launch that fails here is logged alone, and
+      // written as no failed turn, since no message of the developer's waits on it.
+      warm: (sessionId, conversationId) =>
+        Effect.gen(function* () {
+          const agent = yield* agentOf(conversationId);
+          yield* afterResponse(
+            `A ${harness.name} warm launch`,
+            holdingRunnerIfFree(agent.id, warmHolding(sessionId, agent)).pipe(
+              Effect.catch((failure) =>
+                Effect.logWarning(
+                  `A ${harness.name} warm launch failed: ${keptFailureWords(failureWords(failure))}`,
+                ),
+              ),
+              Effect.annotateLogs(agentLogIds(agent, sessionId)),
+            ),
+          );
+        }).pipe(
+          Effect.catch((failure) =>
+            Effect.logWarning(
+              `A ${harness.name} warm call failed: ${keptFailureWords(failureWords(failure))}`,
+            ),
+          ),
           Effect.annotateLogs(agentLogIds({ conversationId }, sessionId)),
           Effect.provideContext(context),
         ),

@@ -776,9 +776,9 @@ const RetireLineSchema = Schema.Struct({
 
 /**
  * Keep the launch warm: a warm launch's window (`RUNNER_WARM`) runs again from
- * now. The service no longer writes it, since an agent on screen keeps
- * nothing up; a launch at work skips it, since its next IDLE arms a window of
- * its own. It can leave in a later release.
+ * now. The service writes it while a client has the agent on screen
+ * (`coder-host/runner-sessions.ts`'s `warm`), and a launch at work skips it,
+ * since its next IDLE arms a window of its own.
  */
 const WarmLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.WARM),

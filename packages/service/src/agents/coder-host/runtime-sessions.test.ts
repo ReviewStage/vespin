@@ -169,6 +169,7 @@ function recording(sessionPrefix: string) {
 
         return answers.handover;
       }),
+    warm: () => Effect.void,
     // Note that a first launch's boot is the Start's open, written down as one, and its session's first
     // message, which its queue hands on as a send, is the message that open carried.
     boot: (conversationId) =>

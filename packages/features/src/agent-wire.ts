@@ -1411,11 +1411,37 @@ export const agentMessageAnswerSchema = EffectSchema.Struct({
   queued: EffectSchema.optionalKey(agentQueueSchema),
 });
 
+/** Whether a window or device shows an agent's chat now, as its warm call says: shown holds the sandbox up, and hidden lets go of that window's hold at once. */
+export const AGENT_CHAT = {
+  SHOWN: "shown",
+  HIDDEN: "hidden",
+} as const;
+
+export type AgentChat = (typeof AGENT_CHAT)[keyof typeof AGENT_CHAT];
+
+/** The most characters a chat holder's id is: one window's or one app launch's. */
+const AGENT_CHAT_HOLDER_MAX_CHARS = 64;
+
+/** What a warm call says of the chat that asks it: whether it is shown, and the window or device showing it. */
+export const agentChatHoldSchema = EffectSchema.Struct({
+  chat: EffectSchema.Literals(Object.values(AGENT_CHAT)),
+  holder: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(AGENT_CHAT_HOLDER_MAX_CHARS)),
+});
+
+export type AgentChatHold = typeof agentChatHoldSchema.Type;
+
 /**
- * A warm call taken (`POST /api/agents/{id}/warm`), which does nothing: an
- * agent on screen no longer keeps its sandbox up. Answered so a desktop or
- * iPhone build that still calls it each minute is not refused; drop it in
- * a later release.
+ * A warm call taken (`POST /api/agents/{id}/warm`): a client says the
+ * agent's chat is shown, at once and then every minute while it stays
+ * shown, and says once that it is hidden as it stops being. A shown chat
+ * holds the cloud agent's sandbox up as one beat of its window or device
+ * (`agentChatHoldSchema`), and the service wakes the sandbox and launches
+ * its runner with no message where none runs, so a message goes straight
+ * into the running session. A hidden chat lets go of its hold at once, and
+ * the sandbox stops where nothing else keeps it up. A call that names no
+ * chat, from a build older than the hold, wakes and holds nothing past
+ * the turn. A Mac's agent, an archived one, and one the caller may not
+ * message are answered the same and kept warm by nothing.
  */
 export const agentWarmAnswerSchema = EffectSchema.Struct({
   warm: EffectSchema.Literal(true),

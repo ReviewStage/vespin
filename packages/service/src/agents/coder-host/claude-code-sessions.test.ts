@@ -81,7 +81,13 @@ import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-voc
 import { DEVICE_LAYOUT, getTestDB, startTask } from "@repo/database/testing";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { BOOT_PHASE } from "@repo/features/agent-boot";
-import { AGENT_FAILURE, AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
+import {
+  AGENT_CHAT,
+  AGENT_FAILURE,
+  AGENT_MACHINE,
+  AGENT_PAYER,
+  type AgentChat,
+} from "@repo/features/agent-wire";
 import {
   DEVICE_AGENT_LINE_KIND,
   DEVICE_CAPABILITY,
@@ -161,6 +167,7 @@ import {
   runnerTook,
 } from "../../testing/runner-sandbox-fake.js";
 import { recordingSentry, sentOfType } from "../../testing/sentry-transport.js";
+import { warmedAgent } from "../agent-lifecycle.js";
 import {
   AGENT_TAG,
   agentSandboxName,
@@ -2378,6 +2385,49 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
   );
 
   it.effect(
+    "a shown chat holds its sandbox up past its turn's end, and hiding it stops the sandbox",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        const target = { userId, conversationId: agent.conversationId };
+        const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
+        yield* runnerTook(agent.id);
+        yield* settleRunnerLostTurns(writer, agent.conversationId, yield* Clock.currentTimeMillis);
+
+        const chat = (shown: AgentChat) =>
+          warmedAgent(userId, agent.id, { chat: shown, holder: "window-1" }).pipe(
+            Effect.provide(api.layer),
+          );
+
+        yield* chat(AGENT_CHAT.SHOWN);
+
+        const idled = yield* runnerIdled({
+          target,
+          sessionId: opened.sessionId,
+          sequence: 41,
+        }).pipe(Effect.provide(api.layer));
+
+        assert.equal(idled, false);
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+        yield* chat(AGENT_CHAT.HIDDEN);
+        assert.equal(sandboxOfAgent(api, agent)?.status, "stopped");
+      }),
+  );
+
+  it.effect(
     "a message to an agent whose stopped sandbox kept the CLI's session, which the store holds only a tail of, lets that session go and opens a fresh one with the agent's steps replayed, rather than resuming a session the CLI finds no conversation in",
     () =>
       Effect.gen(function* () {
@@ -2955,6 +3005,82 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
 
         assert.deepEqual(
           read.map((line) => developerContent(readInputLine(JSON.parse(line.text)))),
+          [[{ type: "text", text: "Now the emails." }]],
+        );
+      }),
+  );
+
+  it.effect(
+    "a warm call on an agent whose sandbox stopped resumes it and launches its runner warm with no message, the next writes that runner a warm line, and a message long past its turn's end reaches it as a line",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        const sequence = { next: 0 };
+        const sessions = yield* sessionsFor(userId, sequence).pipe(Effect.provide(services(api)));
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* recordHeldSession(userId, agent);
+        yield* runnerTook(agent.id);
+
+        const ended = yield* runnerEnded({
+          target: { userId, conversationId: agent.conversationId },
+          sessionId: opened.sessionId,
+          sequence: 8,
+          reason: RUNNER_END.IDLED,
+        }).pipe(Effect.provide(Layer.merge(api.layer, Layer.succeed(HostedEnvironment, NO_KEYS))));
+
+        assert.equal(ended, RUNNER_ENDED.LEFT);
+        api.idleStop();
+        const first = api.commands[0];
+        assert.ok(first !== undefined);
+        first.exitCode = 0;
+        sequence.next = 9;
+
+        yield* sessions.warm(opened.sessionId, agent.conversationId);
+
+        assert.equal(sandboxOfAgent(api, agent)?.status, "running");
+        assert.equal(api.commands.length, 2);
+        const { config } = yield* launchRead(api.commands[1], readClaudeCodeConfig);
+        assert.equal(config.resume, CLI_SESSION);
+        assert.equal(config.warm, true);
+        yield* sessions.warm(opened.sessionId, agent.conversationId);
+        assert.equal(api.commands.length, 2, "the second warm call launched nothing");
+        // The agent's turn ended past a Mac's warm window, which a sandbox's runner has none of.
+        yield* (yield* Database).insert(turns).values({
+          userId,
+          conversationId: agent.conversationId,
+          origin: TURN_ORIGIN.TYPED,
+          status: TURN_STATUS.SETTLED,
+          queuedAt: new Date(0),
+          settledAt: new Date(0),
+        });
+        yield* TestClock.adjust(Duration.sum(CODER.RUNNER_WARM, Duration.minutes(1)));
+        const sent = yield* sessions.send(opened.sessionId, message(agent, "Now the emails."));
+        assert.equal(sent.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        assert.equal(api.commands.length, 2, "the message relaunched nothing");
+
+        const read = yield* runnerLinesPast(userId, agent.id, {
+          launch: config.firstSequence,
+          after: 0,
+          limit: 10,
+        });
+
+        const lines = read.map((line) => readInputLine(JSON.parse(line.text)));
+        assert.deepEqual(
+          lines.filter((line) => line.type === INPUT_LINE.WARM),
+          [{ type: INPUT_LINE.WARM }],
+        );
+        assert.deepEqual(
+          lines.flatMap((line) =>
+            line.type === INPUT_LINE.MESSAGE ? [developerContent(line)] : [],
+          ),
           [[{ type: "text", text: "Now the emails." }]],
         );
       }),

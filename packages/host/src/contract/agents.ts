@@ -63,6 +63,7 @@ import {
   agentTurnChangesParamsSchema,
   agentUnsendParamsSchema,
   agentWarmAnswerViewSchema,
+  agentWarmParamsSchema,
   agentWorkspaceListParamsSchema,
   chaptersProviderAnswerViewSchema,
   chaptersProviderWriteParamsSchema,
@@ -356,7 +357,7 @@ export const AGENT_ACTS = declaredActs({
     unanswered: undefined,
   }),
   AGENTS_WARM: hostAct({
-    input: agentStopParamsSchema,
+    input: agentWarmParamsSchema,
     output: agentWarmAnswerViewSchema,
     refusal: "Could not keep the agent warm on this system.",
     panelOnly: true,

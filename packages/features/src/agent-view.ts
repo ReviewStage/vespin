@@ -13,6 +13,7 @@ import {
   agentArchiveRequestSchema,
   agentBeforeSchema,
   agentCallIdSchema,
+  agentChatHoldSchema,
   agentMessageRequestSchema,
   agentMessagesAnswerSchema,
   agentPinRequestSchema,
@@ -797,7 +798,7 @@ export const agentApprovalAnswerViewSchema = answerView(agentsContract.answerApp
 
 export type AgentApprovalAnswerView = typeof agentApprovalAnswerViewSchema.Type;
 
-/** The service's warm, which does nothing now, as the window hears it: that the service took the call, or why not. */
+/** An agent on screen kept warm, as the window hears it: that the service took the call, or why not. */
 export const agentWarmAnswerViewSchema = answerView(agentsContract.warm);
 
 export type AgentWarmAnswerView = typeof agentWarmAnswerViewSchema.Type;
@@ -1006,6 +1007,13 @@ export type AgentPinParams = typeof agentPinParamsSchema.Type;
 /** One agent, as the window names it to stop or to delete. */
 export const agentStopParamsSchema = EffectSchema.Struct({
   agentId: EffectSchema.NonEmptyString,
+});
+
+/** An agent's chat said shown or hidden by the window or device showing it (`agentChatHoldSchema`), or a bare warm as a build older than the hold asks. */
+export const agentWarmParamsSchema = EffectSchema.Struct({
+  ...agentStopParamsSchema.fields,
+  chat: EffectSchema.optionalKey(agentChatHoldSchema.fields.chat),
+  holder: EffectSchema.optionalKey(agentChatHoldSchema.fields.holder),
 });
 
 /** One agent taken back to just before one of the developer's lines, as the window names the line by its message id. */
