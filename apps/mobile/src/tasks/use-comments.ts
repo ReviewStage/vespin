@@ -168,24 +168,26 @@ interface SentReply {
  * once under a key kept for as long as they stand, so the same words sent
  * again after a lost answer are taken once, and other words go under a key
  * of their own; the field is emptied as they go and given them back where
- * the service refused them, with why.
+ * the service refused them, with why. Note that a reply out holds back no
+ * other, since each is a declared write the host draws at once under its own
+ * key, so a second reply goes while the first is still unanswered, as the
+ * panel's does.
  */
 export function useCommentReply(taskId: string, threadId: string): CommentReply {
   const acts = useHostActs();
   const write = useWrite();
   const [words, setWords] = useState("");
-  const [sent, setSent] = useState<SentReply | undefined>(undefined);
-  const [sending, setSending] = useState(false);
+  // Note that the last reply sent is held outside render, so a second tap before the next render reuses its key and the service takes the reply once.
+  const sent = useRef<SentReply | undefined>(undefined);
   const [note, setNote] = useState<string | undefined>(undefined);
 
   return useMemo(() => {
     const send = () => {
       const kept = words.trim();
 
-      if (kept === "" || sending) return;
-      const key = sent?.words === kept ? sent.key : randomUUID();
-      setSent({ words: kept, key });
-      setSending(true);
+      if (kept === "") return;
+      const key = sent.current?.words === kept ? sent.current.key : randomUUID();
+      sent.current = { words: kept, key };
       setNote(undefined);
       setWords("");
       // Note that a reply refused says why under the box, where its words go back, rather than in the notice.
@@ -206,21 +208,20 @@ export function useCommentReply(taskId: string, threadId: string): CommentReply 
           },
           went: BUZZ.SUCCESS,
         },
-      )
-        .then((went) => {
-          if (went) setSent(undefined);
-        })
-        .finally(() => setSending(false));
+      ).then((went) => {
+        // Note that a reply answered after a later one went lets go of its key only while it is still the one held.
+        if (went && sent.current?.key === key) sent.current = undefined;
+      });
     };
 
     return {
       words,
       onWords: setWords,
-      sendable: words.trim() !== "" && !sending,
+      sendable: words.trim() !== "",
       send,
       note,
     };
-  }, [acts, write, taskId, threadId, words, sent, sending, note]);
+  }, [acts, write, taskId, threadId, words, note]);
 }
 
 /** The open threads standing on each block of a description, by the block's start, the oldest started first. */
