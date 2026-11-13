@@ -80,8 +80,11 @@ const WORDS = {
   NO_REPOSITORIES: "The workspace's GitHub reaches no repository yet.",
   TRY_AGAIN: "Try again",
   /** The line over a suggestion's draft, naming the agent that suggested it where it is known, as the panel's chip over the box does. */
-  SUGGESTED_BY: (agent: string | undefined, label: string) =>
-    agent === undefined ? `Suggested: “${label}”` : `Suggested by ${agent}: “${label}”`,
+  SUGGESTED_BY: (agent: string | undefined, label: string) => {
+    const by = agent === undefined ? "Suggested" : `Suggested by ${agent}`;
+
+    return label === "" ? by : `${by}: “${label}”`;
+  },
 } as const;
 
 /** A suggestion's start refused, said as New agent's own Start says it. */

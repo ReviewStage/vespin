@@ -366,38 +366,6 @@ function agentAddMenu(
 }
 
 /**
- * One agent's page: the system's header naming the agent in the ink, as
- * Messages names a conversation, since the transcript opens at its newest
- * row and its head scrolls away, its back button leading to the task, with
- * a ⋯ menu, as the panel's agent menu offers it: Copy link and Open in
- * browser, Rename, typed in the system's alert, Pin or Unpin, Options, a
- * cloud agent's Ports, which opens the sheet of its listening ports, and
- * Run ›, its repository's run actions where its workspace offers them, each
- * run in its sandbox or stopped while it runs, as the panel's narrow ⋯
- * offers them, Archive, asked first, which goes back once the agent is
- * archived, and Permanently delete, red and last, which always asks in the
- * panel's words and goes back once the agent is deleted. Under
- * it, its transcript as one lazy list, its head where the agent stands and
- * the model it runs on, which opens the options sheet, as the menu's
- * Options and the composer's + do. The transcript
- * is held live while the page is in focus, so a turn under way draws as it
- * moves, and its older pages are read as the reader scrolls up to them; one
- * that could not be read offers Try again. Each call opens in place, and
- * one the agent holds for an answer says so under its line with Deny and
- * Allow, and one whose answer its page carried cut reads it whole as it
- * opens; a fold opens on what it holds, a page the agent showed opens
- * whole, and a pull request it opened opens its own screen, its card
- * offering Review, which opens it on GitHub, and Merge where it may merge
- * now, which asks first. Its composer floats over the transcript's foot:
- * while a call waits, a banner over its field answers the oldest, and says
- * that a message sent now denies it where Send would not queue it, and a
- * follow-up, with the photos the + attaches, steers the turn under way or
- * waits behind it as the member's Follow-up behavior says, and Stop stands
- * in Send's place while the agent works. The + is a menu (`agentAddMenu`):
- * Photos, Options, the permission mode, and Fast. A `/` typed offers the
- * task's skills over the field.
- */
-/**
  * The send a box opened on a message suggestion goes through: the
  * suggestion's words and the send through it, where the page is the running
  * agent it goes to; none for any other page, or once a send of it landed.
@@ -429,6 +397,38 @@ function suggestedSendOf(
   };
 }
 
+/**
+ * One agent's page: the system's header naming the agent in the ink, as
+ * Messages names a conversation, since the transcript opens at its newest
+ * row and its head scrolls away, its back button leading to the task, with
+ * a ⋯ menu, as the panel's agent menu offers it: Copy link and Open in
+ * browser, Rename, typed in the system's alert, Pin or Unpin, Options, a
+ * cloud agent's Ports, which opens the sheet of its listening ports, and
+ * Run ›, its repository's run actions where its workspace offers them, each
+ * run in its sandbox or stopped while it runs, as the panel's narrow ⋯
+ * offers them, Archive, asked first, which goes back once the agent is
+ * archived, and Permanently delete, red and last, which always asks in the
+ * panel's words and goes back once the agent is deleted. Under
+ * it, its transcript as one lazy list, its head where the agent stands and
+ * the model it runs on, which opens the options sheet, as the menu's
+ * Options and the composer's + do. The transcript
+ * is held live while the page is in focus, so a turn under way draws as it
+ * moves, and its older pages are read as the reader scrolls up to them; one
+ * that could not be read offers Try again. Each call opens in place, and
+ * one the agent holds for an answer says so under its line with Deny and
+ * Allow, and one whose answer its page carried cut reads it whole as it
+ * opens; a fold opens on what it holds, a page the agent showed opens
+ * whole, and a pull request it opened opens its own screen, its card
+ * offering Review, which opens it on GitHub, and Merge where it may merge
+ * now, which asks first. Its composer floats over the transcript's foot:
+ * while a call waits, a banner over its field answers the oldest, and says
+ * that a message sent now denies it where Send would not queue it, and a
+ * follow-up, with the photos the + attaches, steers the turn under way or
+ * waits behind it as the member's Follow-up behavior says, and Stop stands
+ * in Send's place while the agent works. The + is a menu (`agentAddMenu`):
+ * Photos, Options, the permission mode, and Fast. A `/` typed offers the
+ * task's skills over the field.
+ */
 export function AgentScreen() {
   const {
     id = "",

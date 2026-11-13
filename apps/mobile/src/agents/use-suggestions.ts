@@ -71,6 +71,16 @@ export interface OpenedSuggestion {
   readonly view: ReplyButtonView;
 }
 
+/** Each button once, across every message's words, so no read is asked twice. */
+function eachButtonOnce(links: readonly ReplyButtonLink[]): readonly ReplyButtonLink[] {
+  return links.filter(
+    (link, at) =>
+      links.findIndex(
+        (each) => each.agentId === link.agentId && each.buttonId === link.buttonId,
+      ) === at,
+  );
+}
+
 /** The button a read answered, or none where it was refused or is unread. */
 function viewOf(answer: ReplyButtonAnswerView | undefined): ReplyButtonView | undefined {
   return answer === undefined || "failure" in answer ? undefined : answer;
@@ -129,7 +139,7 @@ export function useSuggestionLooks(
       item.kind === TRANSCRIPT_ITEM.WORDS ? [item.words] : [],
     );
 
-    return words.flatMap((each) => markdownReplyButtons(each, LINK_READING));
+    return eachButtonOnce(words.flatMap((each) => markdownReplyButtons(each, LINK_READING)));
   }, [items, on]);
 
   const reads = useQueries({
@@ -191,8 +201,9 @@ export function useSuggestionLooks(
 /**
  * The suggestion a draft was opened on by its route's params, from the
  * button as the transcript read it: none where the params name none, the
- * button is unread, or a send of it already landed, so a draft lets the
- * suggestion go once it went.
+ * button is unread, or a send of it already reached an agent, as the pill
+ * stands offered until then, so a claim still out sends through it again
+ * and hears why where it can't.
  */
 export function useOpenedSuggestion({
   suggestedBy,
@@ -209,7 +220,7 @@ export function useOpenedSuggestion({
 
   const view = viewOf(data);
 
-  if (view === undefined || view.pressed !== null) return undefined;
+  if (view === undefined || (view.pressed?.agent ?? null) !== null) return undefined;
 
   return { suggestion: draftSuggestionOf(link, view.action, view.label), view };
 }
