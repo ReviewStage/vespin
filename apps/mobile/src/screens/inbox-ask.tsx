@@ -49,7 +49,6 @@ import {
 import { Predicate } from "effect";
 import type { ReactNode } from "react";
 import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
-import { REMIND_ME } from "./inbox-remind.js";
 
 /** The ⋯ menu a thread's bar holds. */
 const THREAD_MORE = { label: "More", symbol: GLYPH.MORE } as const;
@@ -333,19 +332,20 @@ export function ThreadComposer({
   return inColumn ? <ComposerFoot {...props} /> : <Composer {...props} />;
 }
 
-/** What the thread's ⋯ menu acts through: its read mark, its reminder's sheet, and its link copied. */
+/** What the thread's ⋯ menu acts through: its read mark, Remind me's times, and its link copied. */
 export interface ThreadMenuDoors {
   readonly onMark: (unread: boolean) => void;
-  readonly onRemind: () => void;
+  readonly remind: BarMenu;
   readonly onCopyLink: () => void;
 }
 
 /**
- * The thread's ⋯ menu, as the panel's row menu offers an item's acts in the
- * same order (`inbox-item-actions.tsx`): Copy link; Mark as read or unread,
- * whichever its mark is not, and Remind me, on any thread, open or settled;
- * and Resolve while it stands open. A new thread with the agent stays the
- * box's own, under its +.
+ * The thread's ⋯ menu, as the panel's row menu offers an item's acts
+ * (`inbox-item-actions.tsx`): Copy link; Mark as read or unread, whichever
+ * its mark is not; Resolve while it stands open; and Remind me's times, on
+ * any thread, open or settled, as a submenu last, since a bar's menu holds
+ * its submenus after its acts. A new thread with the agent stays the box's
+ * own, under its +.
  */
 export function threadMenu(item: InboxItem, answer: ThreadAnswer, doors: ThreadMenuDoors): BarMenu {
   const unread = isUnread(item);
@@ -369,8 +369,8 @@ export function threadMenu(item: InboxItem, answer: ThreadAnswer, doors: ThreadM
         symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
         onPress: () => doors.onMark(!unread),
       },
-      { ...REMIND_ME, onPress: doors.onRemind },
       ...resolve,
     ],
+    submenus: [doors.remind],
   };
 }

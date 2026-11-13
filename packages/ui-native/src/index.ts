@@ -168,7 +168,7 @@ export {
   WriteNoteRow,
 } from "./pull-request-page.js";
 
-export { RemindSheet } from "./remind-sheet.js";
+export { RemindPickSheet } from "./remind-sheet.js";
 
 export {
   LIST_LOOK,
@@ -218,10 +218,12 @@ export {
 
 export {
   type BarAction,
+  type BarFootItem,
   type BarMenu,
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  isBarMenu,
   KeptColumns,
   type KeptView,
   SplitOverTabs,

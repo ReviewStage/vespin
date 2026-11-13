@@ -45,12 +45,14 @@ import {
 import {
   BAR_TITLE,
   type BarAction,
+  type BarFootItem,
   type BarMenu,
   BUTTON_LOOK,
   EmptyState,
   GLYPH,
   GlassDock,
   glyphSymbol,
+  isBarMenu,
   LIST_LOOK,
   type ListLook,
   ListRow,
@@ -61,6 +63,7 @@ import {
   type RowChoosing,
   RowForEach,
   RowList,
+  type RowSubmenu,
   SCOPE_LOOK,
   type Scope,
   ScopePicker,
@@ -104,7 +107,7 @@ import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useListColumn, useListLook } from "./app-sidebar.js";
 import { OpenAskCard, openAskFiles, ThreadComposer, threadMenu } from "./inbox-ask.js";
-import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
+import { useRemind } from "./inbox-remind.js";
 
 /** The Inbox's name, at its head and on its back button. */
 const INBOX_TITLE = "Inbox";
@@ -155,7 +158,7 @@ type InboxRowsProps = {
   readonly onSelect: (id: string) => void;
   readonly onRefresh: () => Promise<void>;
   readonly onMark: (itemId: string, unread: boolean) => void;
-  readonly onRemind: (item: InboxItem) => void;
+  readonly remindMenu: (item: InboxItem) => RowSubmenu;
   readonly onResolve: (item: InboxItem) => void;
   /** The list's Select mode, while it stands in one. */
   readonly choosing?: RowChoosing | undefined;
@@ -166,7 +169,7 @@ type InboxRowsProps = {
  * thread's title, and the line of what it asks led by its glyph, with the
  * teammate it waits on before the time, or when its reminder comes back in
  * the time's place; a swipe from the leading edge marks it read or unread, a
- * swipe from the trailing edge resolves it or opens Remind me, and a long
+ * swipe from the trailing edge resolves it or opens Remind me's times, and a long
  * press lifts its preview over the same acts.
  */
 function InboxRows({
@@ -177,7 +180,7 @@ function InboxRows({
   onSelect,
   onRefresh,
   onMark,
-  onRemind,
+  remindMenu,
   onResolve,
   choosing,
 }: InboxRowsProps) {
@@ -197,7 +200,7 @@ function InboxRows({
         readerId={readerId}
         pictureOf={pictureOf}
         onMark={onMark}
-        onRemind={onRemind}
+        remindMenu={remindMenu}
         onResolve={onResolve}
       />
     </RowList>
@@ -209,8 +212,8 @@ type InboxRowActs = {
   /** Each member's picture by their id, read once by the list the row stands in. */
   readonly pictureOf: PictureOf;
   readonly onMark: (itemId: string, unread: boolean) => void;
-  /** Opens Remind me on the thread, which a swipe from the trailing edge offers. */
-  readonly onRemind: (item: InboxItem) => void;
+  /** Remind me's times on the thread, a menu a swipe from the trailing edge opens. */
+  readonly remindMenu: (item: InboxItem) => RowSubmenu;
   /** Resolves the open thread, which a full swipe from the trailing edge runs. */
   readonly onResolve: (item: InboxItem) => void;
 };
@@ -246,7 +249,7 @@ function InboxRow({
   readerId,
   pictureOf,
   onMark,
-  onRemind,
+  remindMenu,
   onResolve,
 }: InboxRowActs & { readonly listed: InboxListed }) {
   const { holder, item } = listed;
@@ -304,10 +307,7 @@ function InboxRow({
       }
       at={item.updatedAt}
       due={item.remindAt}
-      trailingActions={[
-        ...resolve,
-        { ...REMIND_ME, tone: ROW_ACTION_TONE.NEUTRAL, onPress: () => onRemind(item) },
-      ]}
+      trailingActions={[...resolve, remindMenu(item)]}
       leadingActions={[
         {
           label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
@@ -418,9 +418,9 @@ function moreMenu(
 function chosenActs(
   chosen: readonly InboxItem[],
   acts: ReturnType<typeof useInboxActs>,
-  remind: ReturnType<typeof useRemindSheet>,
+  remind: ReturnType<typeof useRemind>,
   stop: () => void,
-): readonly BarAction[] {
+): readonly BarFootItem[] {
   if (chosen.length === 0) return [];
   const unread = chosen.filter(isUnread);
   const open = chosen.filter((item) => item.status === INBOX_STATUS.OPEN);
@@ -452,9 +452,31 @@ function chosenActs(
         stop();
       },
     },
-    { ...REMIND_ME, onPress: () => remind.openMany(chosen, stop) },
+    remind.menu(chosen, stop),
     ...resolve,
   ];
+}
+
+/**
+ * A menu's acts as the stack bar's own menu items, each with what it says
+ * under its words, such as when a reminder's time comes due, dimmed or red
+ * as the act asks. Note that it's
+ * a function of elements rather than a component, because the bar's menu
+ * takes only its own items as children.
+ */
+function toolbarMenuActions(menu: BarMenu) {
+  return menu.actions.map((action) => (
+    <Stack.Toolbar.MenuAction
+      key={action.label}
+      {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
+      {...(action.detail === undefined ? {} : { subtitle: action.detail })}
+      disabled={action.disabled === true}
+      destructive={action.destructive === true}
+      onPress={action.onPress}
+    >
+      {action.label}
+    </Stack.Toolbar.MenuAction>
+  ));
 }
 
 /** Every agent's name the document holds, by the agent's id, as the panel names it. */
@@ -480,7 +502,8 @@ type ThreadPlace =
   | { readonly inStack: true }
   | {
       readonly inStack: false;
-      readonly onRemind: (item: InboxItem) => void;
+      /** Remind me's times on a thread, from its screen, which draws the picker sheet outside the split view. */
+      readonly remindMenu: (item: InboxItem) => BarMenu;
       /** Selects another thread in the split view, such as one the box just started. */
       readonly onOpen: (id: string) => void;
     };
@@ -493,7 +516,7 @@ type ThreadPlace =
  * foot, above the keyboard, and holds the menu in the stack's bar; a split
  * view's detail stands both in its own column.
  *
- * Note that a split view's detail draws no Remind me sheet of its own, and
+ * Note that a split view's detail draws no Remind me picker of its own, and
  * opens its screen's instead, because the column stacks whatever it is
  * handed one under the other, so a sheet beside the page would take half
  * the column's height.
@@ -604,15 +627,15 @@ function ThreadDetail({
   };
 
   const answer = useThreadAnswer(listed, openStarted);
-  const remind = useRemindSheet();
+  const remind = useRemind();
   const inboxActs = useInboxActs();
   const keeping = useKeeping();
   const inStack = place.inStack;
-  const openRemind = place.inStack ? remind.open : place.onRemind;
+  const remindMenu = place.inStack ? (on: InboxItem) => remind.menu([on]) : place.remindMenu;
 
   const menu = threadMenu(item, answer, {
     onMark: (unread) => inboxActs.mark(item.id, unread),
-    onRemind: () => openRemind(item),
+    remind: remindMenu(item),
     onCopyLink: () =>
       keeping.copyWords(
         linkOf(
@@ -781,14 +804,15 @@ function ThreadDetail({
               </Stack.Toolbar.MenuAction>
             ))}
           </Stack.Toolbar.Menu>
-          {menu.actions.map((action) => (
-            <Stack.Toolbar.MenuAction
-              key={action.label}
-              icon={glyphSymbol(action.symbol)}
-              onPress={action.onPress}
+          {toolbarMenuActions(menu)}
+          {(menu.submenus ?? []).map((submenu) => (
+            <Stack.Toolbar.Menu
+              key={submenu.label}
+              title={submenu.label}
+              icon={glyphSymbol(submenu.symbol)}
             >
-              {action.label}
-            </Stack.Toolbar.MenuAction>
+              {toolbarMenuActions(submenu)}
+            </Stack.Toolbar.Menu>
           ))}
         </Stack.Toolbar.Menu>
       </Stack.Toolbar>
@@ -831,11 +855,11 @@ function ThreadNotDrawn({
  */
 function ThreadColumn({
   id,
-  onRemind,
+  remindMenu,
   onOpen,
 }: {
   readonly id: string;
-  readonly onRemind: (item: InboxItem) => void;
+  readonly remindMenu: (item: InboxItem) => BarMenu;
   readonly onOpen: (id: string) => void;
 }) {
   const { listed, readerId, feed, retry } = useInboxThread(id);
@@ -846,7 +870,7 @@ function ThreadColumn({
     <ThreadDetail
       listed={listed}
       readerId={readerId}
-      place={{ inStack: false, onRemind, onOpen }}
+      place={{ inStack: false, remindMenu, onOpen }}
     />
   );
 }
@@ -860,7 +884,7 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
   const listing = useInboxListing({ show, search, chosen });
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
-  const remind = useRemindSheet();
+  const remind = useRemind();
   const selecting = useInboxChoosing();
 
   const menu = moreMenu(listing.unread, acts.markAll, {
@@ -929,16 +953,7 @@ function InboxStackList(words: InboxSearch) {
           </Stack.Toolbar.Button>
         ) : (
           <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
-            {menu.actions.map((action) => (
-              <Stack.Toolbar.MenuAction
-                key={action.label}
-                icon={glyphSymbol(action.symbol)}
-                disabled={action.disabled === true}
-                onPress={action.onPress}
-              >
-                {action.label}
-              </Stack.Toolbar.MenuAction>
-            ))}
+            {toolbarMenuActions(menu)}
           </Stack.Toolbar.Menu>
         )}
       </Stack.Toolbar>
@@ -947,15 +962,22 @@ function InboxStackList(words: InboxSearch) {
           {choosing.acts.flatMap((act, at) => [
             ...(at === 0 ? [] : [<Stack.Toolbar.Spacer key={at} />]),
             // Note that a glyph is named as an asset rather than a symbol, because the bottom bar loads `icon` as an SF Symbol alone, which drew our Lucide glyphs as empty glass.
-            <Stack.Toolbar.Button
-              key={act.label}
-              accessibilityLabel={act.label}
-              onPress={act.onPress}
-            >
-              {act.symbol === undefined ? null : (
+            isBarMenu(act) ? (
+              <Stack.Toolbar.Menu key={act.label} accessibilityLabel={act.label}>
                 <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
-              )}
-            </Stack.Toolbar.Button>,
+                {toolbarMenuActions(act)}
+              </Stack.Toolbar.Menu>
+            ) : (
+              <Stack.Toolbar.Button
+                key={act.label}
+                accessibilityLabel={act.label}
+                onPress={act.onPress}
+              >
+                {act.symbol === undefined ? null : (
+                  <Stack.Toolbar.Icon xcasset={act.symbol} renderingMode="template" />
+                )}
+              </Stack.Toolbar.Button>
+            ),
           ])}
         </Stack.Toolbar>
       )}
@@ -980,7 +1002,7 @@ function InboxStackList(words: InboxSearch) {
               }
               onRefresh={acts.refresh}
               onMark={acts.mark}
-              onRemind={remind.open}
+              remindMenu={(item) => remind.menu([item])}
               onResolve={acts.resolve}
               choosing={choosing?.rows}
             />
@@ -1038,7 +1060,7 @@ function InboxSplitScreen({
             onSelect={select}
             onRefresh={acts.refresh}
             onMark={acts.mark}
-            onRemind={remind.open}
+            remindMenu={(item) => remind.menu([item])}
             onResolve={acts.resolve}
             choosing={choosing?.rows}
           />
@@ -1060,7 +1082,12 @@ function InboxSplitScreen({
     selected === undefined ? (
       <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.INBOX} />
     ) : (
-      <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
+      <ThreadColumn
+        key={selected}
+        id={selected}
+        remindMenu={(item) => remind.menu([item])}
+        onOpen={select}
+      />
     );
 
   const first = useListColumn(list);

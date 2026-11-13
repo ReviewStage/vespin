@@ -2000,7 +2000,7 @@ export function TaskScreen() {
                 {submenu.actions.map((action) => (
                   <Stack.Toolbar.MenuAction
                     key={action.label}
-                    icon={glyphSymbol(action.symbol)}
+                    {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
                     destructive={action.destructive === true}
                     onPress={action.onPress}
                   >
@@ -2012,7 +2012,7 @@ export function TaskScreen() {
             {menu.actions.map((action) => (
               <Stack.Toolbar.MenuAction
                 key={action.label}
-                icon={glyphSymbol(action.symbol)}
+                {...(action.symbol === undefined ? {} : { icon: glyphSymbol(action.symbol) })}
                 destructive={action.destructive === true}
                 onPress={action.onPress}
               >

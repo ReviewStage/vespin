@@ -22,6 +22,7 @@ import {
   LIST_LOOK,
   ListSection,
   RowList,
+  type RowSubmenu,
   ScopePicker,
   Screen,
   UNDER_SPLIT_SCREEN,
@@ -40,7 +41,7 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
-import { useRemindSheet } from "./inbox-remind.js";
+import { useRemind } from "./inbox-remind.js";
 import { InboxItemRows } from "./inbox-screens.js";
 import { StatusQuestionAsk, TaskAgentRow, TaskRows, useAgentArchiveAsk } from "./task-screens.js";
 
@@ -94,7 +95,7 @@ function FoundList({
   scope,
   listing,
   onOpen,
-  onRemind,
+  remindMenu,
   onArchiveAgent,
 }: {
   readonly found: SearchFound;
@@ -102,8 +103,8 @@ function FoundList({
   /** The Tasks listing a task's row acts through, its status asking first where it stops agents. */
   readonly listing: TasksListing;
   readonly onOpen: (id: string) => void;
-  /** Opens Remind me on a thread found, as the Inbox's row does. */
-  readonly onRemind: (item: InboxItem) => void;
+  /** Remind me's times on a thread found, as the Inbox's row offers them. */
+  readonly remindMenu: (item: InboxItem) => RowSubmenu;
   /** Asks to archive an agent found, once it rests, as a task's Agents do. */
   readonly onArchiveAgent: (agentId: string) => void;
 }) {
@@ -139,7 +140,7 @@ function FoundList({
             readerId={found.readerId}
             pictureOf={pictureOf}
             onMark={mark}
-            onRemind={onRemind}
+            remindMenu={remindMenu}
             onResolve={resolve}
           />
         </ListSection>
@@ -170,7 +171,7 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
   const found = useSearchFound(query);
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
   const { listing, status, deletion } = useListingAsks(found.listing);
-  const remind = useRemindSheet();
+  const remind = useRemind();
   const archiveAsk = useAgentArchiveAsk();
   const routes = foundRoutes(found);
   const onTab = useOnTab();
@@ -204,7 +205,7 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
             scope={scope}
             listing={listing}
             onOpen={open}
-            onRemind={remind.open}
+            remindMenu={(item) => remind.menu([item])}
             onArchiveAgent={archiveAsk.archive}
           />
         )}

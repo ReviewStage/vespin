@@ -46,7 +46,7 @@ import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent, menuLabel } from "./glyph-label.js";
+import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { cellFocusRingOff, dragLink } from "./interactions.js";
 import {
@@ -119,7 +119,10 @@ export type RowActionTone = (typeof ROW_ACTION_TONE)[keyof typeof ROW_ACTION_TON
 export type RowAction = {
   /** The act's name, as the panel's menu names it: Mark done, Mark unread. */
   readonly label: string;
-  readonly symbol: Glyph;
+  /** Its glyph; none for an act that stands as words alone, such as a reminder's time. */
+  readonly symbol?: Glyph | undefined;
+  /** What a menu says under its words, such as when a reminder's time comes due. */
+  readonly detail?: string | undefined;
   readonly tone: RowActionTone;
   readonly onPress: () => void;
 };
@@ -223,7 +226,7 @@ export function actionButton(action: RowAction, colors: BrandColors) {
   return (
     <Button
       key={action.label}
-      {...actContent(action.label, action.symbol)}
+      {...menuActContent(action.label, action.symbol, action.detail)}
       role={destructive ? "destructive" : "default"}
       onPress={action.onPress}
       modifiers={destructive ? [] : [tint(colors.TEXT_MUTED)]}

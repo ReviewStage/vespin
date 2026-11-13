@@ -1,4 +1,4 @@
-// remind-sheet.tsx -- the sheet Remind me opens on an Inbox thread: the panel's times, each with when it comes due, a day and time of the reader's own in the system's date picker, and Clear reminder on a thread that holds one.
+// remind-sheet.tsx -- the sheet Remind me's "Pick a date and time…" opens on an Inbox thread: the system's calendar and clock under the sheet's title, with Cancel and Done in its bar, as Mail's Remind Me Later… stands.
 
 import {
   BottomSheet,
@@ -6,19 +6,17 @@ import {
   Form,
   Group,
   Host,
-  HStack,
-  Section,
-  Spacer,
+  NavigationStack,
   Button as SwiftUIButton,
-  Text,
+  Toolbar,
+  ToolbarItem,
 } from "@expo/ui/swift-ui";
 import {
   background,
   datePickerStyle,
-  font,
-  foregroundStyle,
   listRowBackground,
-  monospacedDigit,
+  navigationBarTitleDisplayMode,
+  navigationTitle,
   presentationBackground,
   presentationDetents,
   presentationDragIndicator,
@@ -26,115 +24,40 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
-import { useState } from "react";
-import { GLYPH } from "./glyph.js";
-import { actContent } from "./glyph-label.js";
+import { useEffect, useState } from "react";
 import { useColors } from "./tokens/colors.js";
-import { TYPE_ROLE } from "./tokens/type.js";
 
-/** Which of its two faces the sheet shows: the times, or the picker for a time of the reader's own. */
-const REMIND_STAGE = { TIMES: "times", PICK: "pick" } as const;
+/** What closes the sheet without setting a time, and what sets the one picked. */
+const PICK_WORDS = { CANCEL: "Cancel", DONE: "Done" } as const;
 
-type RemindStage = (typeof REMIND_STAGE)[keyof typeof REMIND_STAGE];
-
-/** One time the sheet offers: its words, when it comes due in a date chip's words, and what sets it. */
-type RemindChoice = {
-  readonly label: string;
-  readonly detail: string;
-  readonly onPress: () => void;
-};
-
-type RemindSheetProps = {
+type RemindPickSheetProps = {
   readonly presented: boolean;
-  /** The panel's times, in its order: In 1 hour, Tomorrow, Next week. */
-  readonly times: readonly RemindChoice[];
   /** The moment the picker opens on, tomorrow at 9 AM, and the earliest it lets the reader pick, now. */
   readonly pick: { readonly opensAt: number; readonly earliest: number };
-  /** Sets the reminder for the instant the picker confirmed. */
+  /** Sets the reminder for the instant picked, as Done is pressed. */
   readonly onPick: (at: number) => void;
-  /** Clears the thread's reminder; none where it holds none, which leaves Clear reminder out. */
-  readonly onClear?: (() => void) | undefined;
-  /** Called as the sheet goes, by a choice or by a drag down. */
+  /** Called as the sheet goes, by Done, Cancel, or a drag down. */
   readonly onDismiss: () => void;
 };
 
-/** A time's row: its words, and at its end when it comes due in the muted ink, the whole row pressed. */
-function TimeRow({ time }: { readonly time: RemindChoice }) {
-  const colors = useColors();
-
-  return (
-    <SwiftUIButton onPress={time.onPress} modifiers={[listRowBackground(colors.RAISED)]}>
-      <HStack>
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{time.label}</Text>
-        <Spacer />
-        <Text
-          modifiers={[
-            font({ textStyle: TYPE_ROLE.ROW_LINE }),
-            monospacedDigit(),
-            foregroundStyle(colors.TEXT_MUTED),
-          ]}
-        >
-          {time.detail}
-        </Text>
-      </HStack>
-    </SwiftUIButton>
-  );
-}
-
-/** The picker's face: the system's calendar and clock, from now on, and Remind me, which alone sets the time picked. */
-function PickFace({
-  pick,
-  onPick,
-}: {
-  readonly pick: RemindSheetProps["pick"];
-  readonly onPick: (at: number) => void;
-}) {
+/**
+ * A day and time of the reader's own for Remind me, as a sheet: titled as
+ * the menu that opened it, the system's calendar and clock from now on,
+ * Cancel at its leading edge and Done at its trailing edge, which alone sets
+ * the time, as the panel's picker sets it only from its own act. The menu's
+ * times set themselves where they stand (`useRemind`), so the sheet is only
+ * ever this one face. It stands on the sidebar's ground with the picker on
+ * the surface, as Settings' form does, and in a host of its own, the size
+ * of nothing, beside its screen rather than inside it, as every ask does.
+ */
+export function RemindPickSheet({ presented, pick, onPick, onDismiss }: RemindPickSheetProps) {
   const colors = useColors();
   const [picked, setPicked] = useState(() => new Date(pick.opensAt));
 
-  return (
-    <Section title={REMIND_WORDS.PICK}>
-      <DatePicker
-        selection={picked}
-        range={{ start: new Date(pick.earliest) }}
-        displayedComponents={["date", "hourAndMinute"]}
-        onDateChange={setPicked}
-        modifiers={[
-          datePickerStyle("graphical"),
-          tint(colors.ACCENT),
-          listRowBackground(colors.RAISED),
-        ]}
-      />
-      <SwiftUIButton
-        {...actContent(REMIND_WORDS.REMIND_ME, GLYPH.TIME)}
-        onPress={() => onPick(picked.getTime())}
-        modifiers={[tint(colors.ACCENT), listRowBackground(colors.RAISED)]}
-      />
-    </Section>
-  );
-}
-
-/**
- * Remind me as a sheet from the screen's foot, as Mail's Remind Me opens
- * from a swipe or a menu: the panel's times, each saying when it comes due,
- * then Pick a date and time…, which turns the sheet to the system's
- * calendar and clock, and Clear reminder on a thread that holds one. Each
- * choice closes it. It stands on the sidebar's ground with its rows on the
- * surface, as Settings' form does. Note that it stands in a host of its
- * own, the size of nothing, as `ConfirmAsk` does, so a screen draws it
- * beside whatever it shows, beside its `Screen` rather than inside it, and
- * opens it from a swipe, a long press, or a bar's menu.
- */
-export function RemindSheet({
-  presented,
-  times,
-  pick,
-  onPick,
-  onClear,
-  onDismiss,
-}: RemindSheetProps) {
-  const colors = useColors();
-  const [stage, setStage] = useState<RemindStage>(REMIND_STAGE.TIMES);
+  // Note that each opening starts again from its own opening moment, so an earlier pick that was canceled doesn't stand.
+  useEffect(() => {
+    if (presented) setPicked(new Date(pick.opensAt));
+  }, [presented, pick.opensAt]);
 
   return (
     <Host matchContents style={{ position: "absolute" }}>
@@ -143,50 +66,46 @@ export function RemindSheet({
         onIsPresentedChange={(shown) => {
           if (!shown) onDismiss();
         }}
-        onDismiss={() => setStage(REMIND_STAGE.TIMES)}
       >
         <Group
           modifiers={[
-            presentationDetents(stage === REMIND_STAGE.PICK ? ["large"] : ["medium", "large"]),
+            presentationDetents(["large"]),
             presentationDragIndicator("visible"),
-            // Note that the sheet stands on the form's own ground to its rounded edge and under its drag indicator, which the form's background can't reach.
             presentationBackground(colors.GROUPED),
           ]}
         >
-          <Form
-            modifiers={[
-              scrollContentBackground("hidden"),
-              background(colors.GROUPED),
-              tint(colors.TEXT),
-              font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-            ]}
-          >
-            {stage === REMIND_STAGE.PICK ? (
-              <PickFace pick={pick} onPick={onPick} />
-            ) : (
-              <>
-                <Section title={REMIND_WORDS.REMIND_ME}>
-                  {times.map((time) => (
-                    <TimeRow key={time.label} time={time} />
-                  ))}
-                  <SwiftUIButton
-                    {...actContent(REMIND_WORDS.PICK, GLYPH.TIME)}
-                    onPress={() => setStage(REMIND_STAGE.PICK)}
-                    modifiers={[listRowBackground(colors.RAISED)]}
-                  />
-                </Section>
-                {onClear === undefined ? null : (
-                  <Section>
-                    <SwiftUIButton
-                      {...actContent(REMIND_WORDS.CLEAR, GLYPH.INBOX)}
-                      onPress={onClear}
-                      modifiers={[listRowBackground(colors.RAISED)]}
-                    />
-                  </Section>
-                )}
-              </>
-            )}
-          </Form>
+          <NavigationStack modifiers={[tint(colors.TEXT)]}>
+            <Toolbar>
+              <Form
+                modifiers={[
+                  scrollContentBackground("hidden"),
+                  background(colors.GROUPED),
+                  navigationTitle(REMIND_WORDS.REMIND_ME),
+                  navigationBarTitleDisplayMode("inline"),
+                ]}
+              >
+                <DatePicker
+                  selection={picked}
+                  range={{ start: new Date(pick.earliest) }}
+                  displayedComponents={["date", "hourAndMinute"]}
+                  onDateChange={setPicked}
+                  modifiers={[
+                    datePickerStyle("graphical"),
+                    tint(colors.ACCENT),
+                    listRowBackground(colors.RAISED),
+                  ]}
+                />
+              </Form>
+              <Toolbar.Content>
+                <ToolbarItem placement="cancellationAction">
+                  <SwiftUIButton label={PICK_WORDS.CANCEL} onPress={onDismiss} />
+                </ToolbarItem>
+                <ToolbarItem placement="confirmationAction">
+                  <SwiftUIButton label={PICK_WORDS.DONE} onPress={() => onPick(picked.getTime())} />
+                </ToolbarItem>
+              </Toolbar.Content>
+            </Toolbar>
+          </NavigationStack>
         </Group>
       </BottomSheet>
     </Host>

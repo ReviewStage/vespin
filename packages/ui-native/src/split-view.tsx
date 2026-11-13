@@ -29,7 +29,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import type { Glyph } from "./glyph.js";
-import { actContent, menuLabel } from "./glyph-label.js";
+import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 import { useColors } from "./tokens/colors.js";
@@ -83,7 +83,10 @@ export type BarMenu = {
   readonly choices: readonly MenuChoice[];
   readonly actions: readonly {
     readonly label: string;
-    readonly symbol: Glyph;
+    /** Its glyph; none for an act that stands as words alone, such as a reminder's time. */
+    readonly symbol?: Glyph | undefined;
+    /** What the menu says under its words, such as when a reminder's time comes due. */
+    readonly detail?: string | undefined;
     readonly disabled?: boolean | undefined;
     /** Whether the act takes something away for good, such as Permanently delete, which the system draws red. */
     readonly destructive?: boolean | undefined;
@@ -122,8 +125,17 @@ export type ColumnBar = {
   readonly menu?: BarMenu | undefined;
   readonly action?: BarAction | undefined;
   readonly search?: BarSearch | undefined;
-  readonly foot?: readonly BarAction[] | undefined;
+  /** The acts at its foot, each a button or a menu, such as Select mode's Remind me. */
+  readonly foot?: readonly BarFootItem[] | undefined;
 };
+
+/** What a bar's foot holds: an act, or a menu that opens from its glyph, such as Remind me's times. */
+export type BarFootItem = BarAction | BarMenu;
+
+/** Whether a foot's item is a menu rather than one act. */
+export function isBarMenu(item: BarFootItem): item is BarMenu {
+  return "actions" in item;
+}
 
 type SplitViewProps = {
   /** The app's sidebar: its places, then Pinned and the member's sections, as a `RowList` in its sidebar look. */
@@ -168,7 +180,7 @@ export function BarMenuButton({
       {menu.actions.map((action) => (
         <SwiftUIButton
           key={action.label}
-          {...actContent(action.label, action.symbol)}
+          {...menuActContent(action.label, action.symbol, action.detail)}
           onPress={action.onPress}
           modifiers={[disabled(action.disabled === true)]}
           {...(action.destructive === true ? { role: "destructive" } : {})}
@@ -274,9 +286,9 @@ function Column({
             <BarActionButton action={bar.action} />
           </ToolbarItem>
         )}
-        {(bar.foot ?? []).map((action) => (
-          <ToolbarItem key={action.label} placement="bottomBar">
-            <BarActionButton action={action} />
+        {(bar.foot ?? []).map((item) => (
+          <ToolbarItem key={item.label} placement="bottomBar">
+            {isBarMenu(item) ? <BarMenuItem menu={item} /> : <BarActionButton action={item} />}
           </ToolbarItem>
         ))}
       </Toolbar.Content>
