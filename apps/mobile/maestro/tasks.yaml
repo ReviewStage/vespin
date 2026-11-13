@@ -326,22 +326,17 @@ onFlowComplete:
 - takeScreenshot: tasks-wide
 - setOrientation: PORTRAIT
 - waitForAnimationToEnd
-# Last, the search, a round glass button in the bar, finds the workspace's
-# tasks whatever their status, a done one among them, by every word typed. It
-# comes last, since its keyboard stands over the rows. A compact window's
-# search is the bar's round button, named as the Search tab is, so the one
-# above the tab bar is pressed, which the two's order in the tree does not
-# say once the window has turned; a split view's sidebar holds the field
-# itself.
+# Last, a split view's list column holds a search field, which finds the
+# workspace's tasks whatever their status, a done one among them, by every
+# word typed. It comes last, since its keyboard stands over the rows. A
+# compact window stands no search of its own, since its tab bar holds the
+# Search tab (search.yaml).
 - runFlow:
     when:
-      notVisible: "Search tasks"
+      visible: "Search tasks"
     commands:
-      - tapOn:
-          text: "Search"
-          above: "Tab Bar"
-- tapOn: "Search tasks"
-- inputText: "rounding"
-- assertVisible: "Ledger rounding"
-- assertNotVisible: "Weekly digest email"
-- takeScreenshot: tasks-search
+      - tapOn: "Search tasks"
+      - inputText: "rounding"
+      - assertVisible: "Ledger rounding"
+      - assertNotVisible: "Weekly digest email"
+      - takeScreenshot: tasks-search
