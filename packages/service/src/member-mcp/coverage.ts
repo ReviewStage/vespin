@@ -436,6 +436,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
   // A call's session is the panel's own, which holds the microphone and the WebRTC peer.
   voice: { open: SCREEN_ONLY },
   workspaceSlackBot: { connect: NEEDS_BROWSER },
+  workspaceEnvironment: { save: NOT_YET_BUILT, edit: NOT_YET_BUILT },
   workspaces: {
     setExperiment: INTERNAL,
     transfer: DESTRUCTIVE,

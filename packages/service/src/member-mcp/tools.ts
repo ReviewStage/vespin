@@ -5682,7 +5682,8 @@ const LIST_ENVIRONMENT_VARIABLES_TOOL = memberMcpTool({
   annotations: READ_ONLY,
   run: ({ workspace }) =>
     environmentAsMember(workspace, "run", (userId, workspaceId) =>
-      listWorkspaceEnvironment(userId, workspaceId),
+      // Note that no ring is handed, so a config's value never reaches the model through a tool.
+      listWorkspaceEnvironment(undefined, userId, workspaceId),
     ),
 });
 
@@ -5736,7 +5737,7 @@ const DELETE_ENVIRONMENT_VARIABLE_TOOL = memberMcpTool({
   annotations: DESTRUCTIVE,
   run: ({ workspace, name }) =>
     environmentAsMember(workspace, "deleted", (userId, workspaceId) =>
-      deleteWorkspaceVariable(userId, { workspaceId, name }),
+      deleteWorkspaceVariable(undefined, userId, { workspaceId, name }),
     ),
 });
 

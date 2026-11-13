@@ -845,6 +845,8 @@ export function fakeService(tasks: Task[]): FakeService {
       setTokenRepository: () => Effect.succeed(service.tokenRepositorySet ?? UNANSWERED_WORKSPACE),
       environment: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putVariable: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      saveVariables: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      editVariable: () => Effect.succeed(UNANSWERED_WORKSPACE),
       deleteVariable: () => Effect.succeed(UNANSWERED_WORKSPACE),
       sandboxSetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       mergeQueue: () => Effect.succeed(UNANSWERED_WORKSPACE),

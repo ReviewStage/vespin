@@ -461,10 +461,14 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_SENTRY_INSTALLATIONS: "/api/workspaces/sentry/installations",
   /** One of a workspace's Sentry installations disconnected by an owner or admin (POST), answering the installations as they then stand. */
   WORKSPACE_SENTRY_DISCONNECT: "/api/workspaces/sentry/disconnect",
-  /** A workspace's shared environment variables: their names to a member (GET, `WORKSPACE_ENVIRONMENT_QUERY`), or one set by an owner or admin (PUT), answering the names as they then stand (`workspace-environment-wire.ts`). */
+  /** A workspace's shared environment variables: listed to a member (GET, `WORKSPACE_ENVIRONMENT_QUERY`), or one set by an owner or admin (PUT), answering the variables as they then stand (`workspace-environment-wire.ts`). */
   WORKSPACE_ENVIRONMENT: "/api/workspaces/environment",
   /** One of a workspace's environment variables removed by an owner or admin (POST), answering the names as they then stand. */
   WORKSPACE_ENVIRONMENT_DELETE: "/api/workspaces/environment/delete",
+  /** Several of a workspace's environment variables set at once by an owner or admin (POST), all or none, answering the variables as they then stand. */
+  WORKSPACE_ENVIRONMENT_SAVE: "/api/workspaces/environment/save",
+  /** One of a workspace's environment variables renamed or changed by an owner or admin (POST), answering the variables as they then stand. */
+  WORKSPACE_ENVIRONMENT_EDIT: "/api/workspaces/environment/edit",
   /** Every pull request GitHub's merge queues hold across the repositories a workspace's tasks work in, to a member with the Merge queue experiment on (GET, `MERGE_QUEUE_QUERY`) (`merge-queue-wire.ts`). */
   WORKSPACE_MERGE_QUEUE: "/api/workspaces/merge-queue",
   /** A workspace's cloud sandbox setup, its install script and each repository's setup script, to a member (GET, `WORKSPACE_SANDBOX_SETUP_QUERY`) (`workspace-sandbox-setup-wire.ts`). */

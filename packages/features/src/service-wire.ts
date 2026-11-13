@@ -157,6 +157,8 @@ export const HOSTED_API_ERROR = {
   WORKSPACE_SLUG_RESERVED: "workspace-slug-reserved",
   /** A slug the owner chose is another workspace's, whatever its case. Nothing was written. */
   WORKSPACE_SLUG_TAKEN: "workspace-slug-taken",
+  /** A workspace environment variable was to be renamed to the name of another that stands. Nothing was written. */
+  VARIABLE_NAME_TAKEN: "variable-name-taken",
   /** A Start on This Mac was refused, for the reason it names (`LOCAL_AGENT_REFUSAL`). Nothing was written. */
   LOCAL_AGENT_REFUSED: "local-agent-refused",
   /** A host called with a daemon below the service's floor, or with no version at all (`host-wire.ts`); nothing was read or written, and the box's install script upgrades it in place. */
