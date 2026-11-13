@@ -1,8 +1,9 @@
-// glyph.ts -- every glyph the app draws, by what it marks: the panel's own Lucide glyph for each place from the app's asset catalog, and the few iOS draws its own way as SF Symbols.
+// glyph.ts -- every glyph the app draws, by what it marks: the panel's own Lucide glyph for each place and its own task status marks from the app's asset catalog, and the few iOS draws its own way as SF Symbols.
 
 import type { SfSymbol } from "./sf-symbol.js";
 import type { StatusTone } from "./tokens/colors.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
+import { TASK_STATUS_SYMBOL } from "./tokens/task-status-symbols.js";
 
 declare const GLYPH_NAME: unique symbol;
 
@@ -22,6 +23,11 @@ export type LucideSymbol = (typeof LUCIDE_SYMBOL)[keyof typeof LUCIDE_SYMBOL];
 // SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
 const lucide = (name: LucideSymbol): Glyph => name as Glyph;
 
+/** A task's status as the panel marks it, cut from `@repo/brand`'s one table into the asset catalog. */
+// SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
+const statusMark = (name: (typeof TASK_STATUS_SYMBOL)[keyof typeof TASK_STATUS_SYMBOL]): Glyph =>
+  name as Glyph;
+
 /** An SF Symbol, kept where iOS draws the thing its own way, or where the panel draws a mark of its own rather than a Lucide glyph. */
 // SAFETY: an SF Symbol's name is a glyph's name; this table is where glyphs are minted.
 const system = (name: SfSymbol): Glyph => name as Glyph;
@@ -33,8 +39,10 @@ const system = (name: SfSymbol): Glyph => name as Glyph;
  * symbol by `@repo/brand`, so it sizes with Dynamic Type and weighs with its
  * words as an SF Symbol does. An SF Symbol stays only where iOS draws the
  * thing its own way (Share) or where the panel draws a mark of its own rather
- * than a Lucide glyph (a task's status ring, a check box, a face, an MCP
- * server, and the panel's product mark), whose drawings are SF Symbols' nearest.
+ * than a Lucide glyph (a check box, a face, an MCP server, and the panel's
+ * product mark), whose drawings are SF Symbols' nearest. A task's status
+ * ring is the panel's own mark, written into the asset catalog from the
+ * table `@repo/ui`'s `TaskStatusMark` draws (the developer, Nov 13, 2026).
  */
 export const GLYPH = {
   // Places.
@@ -167,15 +175,15 @@ export const GLYPH = {
   // iOS's own: Share is the system's act, and the composer's Stop is the panel's filled square.
   SHARE: system("square.and.arrow.up"),
   STOP_TURN: system("stop.fill"),
-  // The panel's own marks, which no Lucide glyph draws: a task's status ring,
-  // a check box and a radio, a check still running, a face and the app's,
+  // A task's status ring, the panel's own mark.
+  STATUS_BACKLOG: statusMark(TASK_STATUS_SYMBOL.BACKLOG),
+  STATUS_TODO: statusMark(TASK_STATUS_SYMBOL.TODO),
+  STATUS_IN_PROGRESS: statusMark(TASK_STATUS_SYMBOL.IN_PROGRESS),
+  STATUS_DONE: statusMark(TASK_STATUS_SYMBOL.DONE),
+  STATUS_CANCELED: statusMark(TASK_STATUS_SYMBOL.CANCELED),
+  // The panel's own marks, which no Lucide glyph draws: a check box and a radio, a check still running, a face and the app's,
   // an MCP server and its tool, the apps that reach the service over MCP (the
   // panel's product mark), and an unassigned task.
-  STATUS_BACKLOG: system("circle.dashed"),
-  STATUS_TODO: system("circle"),
-  STATUS_IN_PROGRESS: system("circle.righthalf.filled"),
-  STATUS_DONE: system("checkmark.circle.fill"),
-  STATUS_CANCELED: system("xmark.circle.fill"),
   BOX: system("square"),
   BOX_TICKED: system("checkmark.square.fill"),
   ROUND_BOX: system("circle"),
@@ -190,19 +198,18 @@ export const GLYPH = {
   MCP_CLIENTS: system("app.connected.to.app.below.fill"),
 } as const;
 
-const LUCIDE_SYMBOLS: ReadonlySet<string> = new Set(Object.values(LUCIDE_SYMBOL));
-
-/** Whether the glyph is one of Lucide's, drawn from the asset catalog rather than the system's symbols. */
-export function isLucideSymbol(glyph: Glyph): boolean {
-  return LUCIDE_SYMBOLS.has(glyph);
-}
+/** The glyphs the asset catalog holds, Lucide's and the task status marks, rather than the system's symbols. */
+const CATALOG_SYMBOLS: ReadonlySet<string> = new Set([
+  ...Object.values(LUCIDE_SYMBOL),
+  ...Object.values(TASK_STATUS_SYMBOL),
+]);
 
 /** A glyph as `@expo/ui`'s `Image` draws it: a custom symbol by its asset's name, an SF Symbol by its own. */
 export function glyphImage(
   glyph: Glyph,
 ): { readonly assetName: string } | { readonly systemName: SfSymbol } {
-  // SAFETY: a glyph that is not one of Lucide's was minted by `system` from an SF Symbol's name.
-  return isLucideSymbol(glyph) ? { assetName: glyph } : { systemName: glyph as SfSymbol };
+  // SAFETY: a glyph the asset catalog doesn't hold was minted by `system` from an SF Symbol's name.
+  return CATALOG_SYMBOLS.has(glyph) ? { assetName: glyph } : { systemName: glyph as SfSymbol };
 }
 
 /**

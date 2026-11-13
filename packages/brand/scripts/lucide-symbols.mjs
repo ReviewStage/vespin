@@ -632,9 +632,7 @@ function pathData(commands, centerX) {
   return commands.map(({ command, points }) => [command, ...points.map(place)].join(" ")).join(" ");
 }
 
-function weightGroup(name, strokes, weight) {
-  const paths = strokes.map((stroke) => outlineOf(stroke, STROKE[weight] / 2));
-
+function weightGroup(name, paths, weight) {
   return {
     pathCommands: paths.map((commands) => commands.map(({ command }) => command).join("")),
     svg: `<g id="${name}-S">${paths
@@ -658,13 +656,12 @@ const WEIGHTS = [
   ["Black", "BLACK"],
 ];
 
-/**
- * A Lucide icon's node (`lucide-react`'s `__iconData.node`) as an SF Symbols
- * custom symbol template, version 3.0, whose three weights iOS interpolates.
- */
-export function symbolTemplate(node) {
-  const strokes = strokesOf(node);
-  const weights = WEIGHTS.map(([name, weight]) => weightGroup(name, strokes, weight));
+/** A template's three weights, each the outlines `outlinesAt` draws at that weight's half stroke, as an SF Symbols custom symbol template. */
+function templateOf(outlinesAt) {
+  const weights = WEIGHTS.map(([name, weight]) =>
+    weightGroup(name, outlinesAt(STROKE[weight] / 2, weight), weight),
+  );
+
   const [ultralight, regular, black] = weights.map(({ pathCommands }) => pathCommands.join("|"));
 
   if (ultralight !== regular || regular !== black)
@@ -689,4 +686,264 @@ export function symbolTemplate(node) {
     `<g id="Symbols">${weights.map(({ svg }) => svg).join("")}</g>`,
     `</svg>`,
   ].join("");
+}
+
+/**
+ * A Lucide icon's node (`lucide-react`'s `__iconData.node`) as an SF Symbols
+ * custom symbol template, version 3.0, whose three weights iOS interpolates.
+ */
+export function symbolTemplate(node) {
+  const strokes = strokesOf(node);
+
+  return templateOf((half) => strokes.map((stroke) => outlineOf(stroke, half)));
+}
+
+// ---------- A task's status mark ----------
+
+// A mark's parts are a ring, its dashes, discs, and cuts: strokes outlined as
+// Lucide's are, and fills, all in one path, so a cut wound against the fill
+// beneath it leaves a hole under the nonzero fill. Its 14-unit square stands
+// where Lucide's 24-unit square does, as the panel draws both in the same
+// glyph cell, and its line is weighed against Lucide's stroke: as much wider
+// at each weight as it is at Regular.
+
+/** Twice a closed outline's signed area, from its points and control points, whose sign is the way it winds. */
+function windingOf(commands) {
+  const points = commands.flatMap(({ points: at }) => at);
+
+  return points.reduce((area, a, index) => {
+    const b = points[(index + 1) % points.length];
+
+    return area + a.x * b.y - b.x * a.y;
+  }, 0);
+}
+
+/** A closed outline traced the other way round. */
+function reversedOutline(commands) {
+  const [move, ...rest] = commands.filter(({ command }) => command !== "Z");
+  let at = move.points[0];
+
+  const steps = rest.map(({ command, points }) => {
+    const from = at;
+    at = points.at(-1);
+
+    return { command, points, from };
+  });
+
+  const reversed = [{ command: "M", points: [at] }];
+
+  for (const { command, points, from } of steps.toReversed()) {
+    reversed.push(
+      command === "C"
+        ? { command: "C", points: [points[1], points[0], from] }
+        : { command: "L", points: [from] },
+    );
+  }
+
+  return [...reversed, { command: "Z", points: [] }];
+}
+
+/** An outline wound the way `like` winds, or against it where `against`. */
+function wound(commands, like, against = false) {
+  const same = Math.sign(windingOf(commands)) === Math.sign(windingOf(like));
+
+  return same === against ? reversedOutline(commands) : commands;
+}
+
+/** A disc of `radius` about `center`. */
+const discOutline = (center, radius) => [
+  { command: "M", points: [add(center, { x: radius, y: 0 })] },
+  ...arcCubics(center, radius, 0, 2 * Math.PI),
+  { command: "Z", points: [] },
+];
+
+/** One side of a polyline offset by `half` along each segment's normal, round at a corner it turns away from and mitred where it turns toward. */
+function polylineSide(points, half) {
+  const directions = points.slice(1).map((point, index) => unit(sub(point, points[index])));
+  const offset = (point, direction) => add(point, times(normalOf(direction), half));
+  const commands = [{ command: "L", points: [offset(points[0], directions[0])] }];
+
+  for (let index = 1; index < directions.length; index++) {
+    const [a, b] = [directions[index - 1], directions[index]];
+    const [na, nb] = [normalOf(a), normalOf(b)];
+    const turn = Math.atan2(a.x * b.y - a.y * b.x, dot(a, b));
+
+    if (turn > 0) {
+      commands.push({ command: "L", points: [offset(points[index], a)] });
+      commands.push(...arcCubics(points[index], half, Math.atan2(na.y, na.x), turn));
+    } else {
+      // Note that the two offset lines meet on the corner's bisector, half over the cosine of half the turn out.
+      const meet = add(points[index], times(add(na, nb), half / (1 + dot(na, nb))));
+      commands.push({ command: "L", points: [meet] });
+    }
+  }
+
+  commands.push({ command: "L", points: [offset(points.at(-1), directions.at(-1))] });
+
+  return commands;
+}
+
+/** A polyline stroked `half` each side, round-capped and round-joined, as one outline that never crosses itself. */
+function polylineOutline(points, half) {
+  const first = unit(sub(points[1], points[0]));
+  const last = unit(sub(points.at(-1), points.at(-2)));
+  const [move, ...forward] = polylineSide(points, half);
+
+  return [
+    { command: "M", points: move.points },
+    ...forward,
+    ...capCubics(points.at(-1), half, normalOf(last), last),
+    ...polylineSide(points.toReversed(), half),
+    ...capCubics(points[0], half, normalOf(times(first, -1)), times(first, -1)),
+    { command: "Z", points: [] },
+  ];
+}
+
+/** Where two straight cuts cross within both, the square of their two bands that both cut, which is wound back in so the crossing stays cut. */
+function crossingOutline([a0, a1], [b0, b1], half) {
+  const [da, db] = [unit(sub(a1, a0)), unit(sub(b1, b0))];
+  const across = da.x * db.y - da.y * db.x;
+
+  if (Math.abs(across) < NEAR) return undefined;
+
+  const t = ((b0.x - a0.x) * db.y - (b0.y - a0.y) * db.x) / across;
+  const s = ((b0.x - a0.x) * da.y - (b0.y - a0.y) * da.x) / across;
+
+  if (t <= 0 || t >= length(sub(a1, a0)) || s <= 0 || s >= length(sub(b1, b0))) return undefined;
+
+  const center = add(a0, times(da, t));
+  const [na, nb] = [normalOf(da), normalOf(db)];
+  const determinant = na.x * nb.y - na.y * nb.x;
+
+  const corner = (sa, sb) =>
+    add(center, {
+      x: (sa * half * nb.y - sb * half * na.y) / determinant,
+      y: (sb * half * na.x - sa * half * nb.x) / determinant,
+    });
+
+  return [
+    { command: "M", points: [corner(1, 1)] },
+    { command: "L", points: [corner(1, -1)] },
+    { command: "L", points: [corner(-1, -1)] },
+    { command: "L", points: [corner(-1, 1)] },
+    { command: "Z", points: [] },
+  ];
+}
+
+/** A dashed ring's dashes, as SVG lays a dash array along a circle from its rightmost point, a last dash cut short by the start joined to the first. */
+function dashOutlines({ center, radius, dash }, half) {
+  const [on, off] = dash;
+  const round = 2 * Math.PI * radius;
+  const starts = [];
+
+  for (let at = 0; at < round; at += on + off) starts.push(at);
+
+  const last = starts.at(-1);
+  const wrapped = last + on > round ? starts.pop() - round : undefined;
+
+  const runs = starts.map((start, index) => ({
+    from: index === 0 && wrapped !== undefined ? wrapped : start,
+    to: start + on,
+  }));
+
+  return runs.map(({ from, to }) => {
+    const [a, delta] = [from / radius, (to - from) / radius];
+    const outer = arcCubics(center, radius + half, a, delta);
+    const inner = arcCubics(center, radius - half, a + delta, -delta);
+
+    return [
+      { command: "M", points: [add(center, times(polar(a), radius + half))] },
+      ...outer,
+      { command: "L", points: [add(center, times(polar(a + delta), radius - half))] },
+      ...inner,
+      { command: "Z", points: [] },
+    ];
+  });
+}
+
+/** A fill path's own outline, its segments as lines and cubics. */
+function fillOutlines(data) {
+  return subpathsOf(data).map((segments) => [
+    { command: "M", points: [segments[0].from] },
+    ...segments.flatMap((segment) => {
+      if (segment.kind === "line") return [{ command: "L", points: [segment.to] }];
+
+      if (segment.kind === "cubic")
+        return [{ command: "C", points: [segment.c1, segment.c2, segment.to] }];
+
+      return arcCubics(segment.center, segment.radius, segment.start, segment.delta);
+    }),
+    { command: "Z", points: [] },
+  ]);
+}
+
+/** A cut path's polylines; a cut is drawn of straight lines only. */
+function cutPolylines(data) {
+  return subpathsOf(data).map((segments) => {
+    if (segments.some(({ kind }) => kind !== "line"))
+      throw new Error("lucide-symbols: a mark's cut is drawn of straight lines only");
+
+    return [segments[0].from, ...segments.map(({ to }) => to)];
+  });
+}
+
+/** A mark's parts as one outline at a line's `half`, its points on the mark's square. */
+function markOutline(parts, half, grow, { roles, elements }) {
+  const forward = discOutline({ x: 0, y: 0 }, 1);
+  const outline = [];
+  const cuts = [];
+
+  for (const part of parts) {
+    const center = { x: part.cx, y: part.cy };
+
+    if (part.role === roles.LINE && part.element === elements.CIRCLE) {
+      const stroke = { center, radius: part.r, dash: part.dash };
+      outline.push(
+        ...(part.dash === undefined ? [ringOutline(stroke, half)] : dashOutlines(stroke, half)),
+      );
+    } else if (part.role === roles.FILL && part.element === elements.CIRCLE) {
+      // Note that a disc's edge moves with the weight as a line's does, since it stands where a ring's outer edge would.
+      outline.push(discOutline(center, part.r + grow));
+    } else if (part.role === roles.FILL && part.element === elements.PATH) {
+      outline.push(...fillOutlines(part.d).map((commands) => wound(commands, forward)));
+    } else if (part.role === roles.CUT && part.element === elements.PATH) {
+      cuts.push(...cutPolylines(part.d));
+    } else {
+      throw new Error(`lucide-symbols: no outline for a mark's ${part.role} <${part.element}>`);
+    }
+  }
+
+  outline.push(...cuts.map((points) => wound(polylineOutline(points, half), forward, true)));
+
+  for (const [index, a] of cuts.entries())
+    for (const b of cuts.slice(index + 1)) {
+      const crossing = a.length === 2 && b.length === 2 ? crossingOutline(a, b, half) : undefined;
+
+      if (crossing !== undefined) outline.push(wound(crossing, forward));
+    }
+
+  return outline.flat();
+}
+
+/** An outline on a mark's square scaled onto Lucide's. */
+const scaledOutline = (commands, scale) =>
+  commands.map(({ command, points }) => ({
+    command,
+    points: points.map((point) => times(point, scale)),
+  }));
+
+/**
+ * A task's status mark (`task-status-marks.mjs`) as an SF Symbols custom
+ * symbol template, its parts one outline, so a cut leaves a hole, and its
+ * line weighed at each weight as Lucide's stroke is.
+ */
+export function markTemplate(parts, { box, lineWidth, roles, elements }) {
+  const scale = BOX / box;
+
+  return templateOf((_, weight) => {
+    const half = (lineWidth / 2) * (STROKE[weight] / STROKE.REGULAR);
+    const grow = half - lineWidth / 2;
+
+    return [scaledOutline(markOutline(parts, half, grow, { roles, elements }), scale)];
+  });
 }
