@@ -155,7 +155,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Inline titles, no large titles.** A tab's root shows its name small and
   inline. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
-  under it; a split view's detail column draws the same path in its bar. An
+  under it; a split view's detail column draws the same path in its bar. A
+  thread's path opens its task and its agent, as the panel's crumbs do: in a
+  split view's bar the path is a menu of them under a small chevron, as iOS's
+  title menus stand (`PathTitle`'s `actions`), and in a compact window, whose
+  stack's title holds no menu, they lead its ⋯ menu. An
   agent's page names the agent in the bar in the ink instead, as Messages
   names a conversation, since its transcript opens at its newest row.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own

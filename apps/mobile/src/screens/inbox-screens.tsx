@@ -30,7 +30,7 @@ import {
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
-import { iosAppRouteOf } from "@repo/features/ios-app-links";
+import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import type { ModelProvider } from "@repo/features/models-wire";
@@ -85,6 +85,7 @@ import {
   useThreadMedia,
 } from "../inbox/use-inbox.js";
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
+import { useKeeping } from "../keeping.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns, useInFront } from "../place-columns.js";
@@ -115,6 +116,9 @@ const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INB
 
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
 const MORE = { label: "More", symbol: GLYPH.MORE } as const;
+
+/** What a thread's path opens, as the panel's crumbs open its task and its agent. */
+const PATH_OPENS = { TASK: "Open task", AGENT: "Open agent" } as const;
 
 /** What a video the words draw in place is heard as, its file's name being the words' own alt. */
 const VIDEO_LABEL = "Video";
@@ -524,9 +528,37 @@ function ThreadDetail({
 
   const answer = useThreadAnswer(listed, openStarted);
   const remind = useRemindSheet();
+  const inboxActs = useInboxActs();
+  const keeping = useKeeping();
   const inStack = place.inStack;
   const openRemind = place.inStack ? remind.open : place.onRemind;
-  const menu = threadMenu(item, answer, () => openRemind(item));
+
+  const menu = threadMenu(item, answer, {
+    onMark: (unread) => inboxActs.mark(item.id, unread),
+    onRemind: () => openRemind(item),
+    onCopyLink: () =>
+      keeping.copyWords(
+        linkOf(
+          { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+          workspaceStep,
+        ),
+      ),
+  });
+
+  // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them; a compact window's stack names the path as its plain title, which can hold no menu, so there they lead the ⋯ menu instead.
+  const pathActions = [
+    {
+      label: PATH_OPENS.TASK,
+      symbol: GLYPH.TASK,
+      onPress: () =>
+        router.push(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: holder.task.id })),
+    },
+    {
+      label: PATH_OPENS.AGENT,
+      symbol: GLYPH.AGENT,
+      onPress: () => router.push(iosAgentRoute(item.agentId)),
+    },
+  ] as const;
 
   const messageWords = useMemo(() => messages.map((message) => message.words), [messages]);
 
@@ -609,6 +641,7 @@ function ThreadDetail({
     <ThreadPage
       path={path}
       status={holder.task.status}
+      pathActions={pathActions}
       title={cardTitle(item.title)}
       messages={drawn}
       repository={holder.task.repository}
@@ -660,6 +693,17 @@ function ThreadDetail({
       />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
+          <Stack.Toolbar.Menu inline>
+            {pathActions.map((action) => (
+              <Stack.Toolbar.MenuAction
+                key={action.label}
+                icon={glyphSymbol(action.symbol)}
+                onPress={action.onPress}
+              >
+                {action.label}
+              </Stack.Toolbar.MenuAction>
+            ))}
+          </Stack.Toolbar.Menu>
           {menu.actions.map((action) => (
             <Stack.Toolbar.MenuAction
               key={action.label}
