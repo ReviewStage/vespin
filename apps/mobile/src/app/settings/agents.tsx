@@ -124,7 +124,7 @@ export default function AgentsScreen() {
   // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was dropped or refused redraws its section, which reads the stored choice again.
   const [defaultRound, setDefaultRound] = useState(0);
   const [settingRound, setSettingRound] = useState(0);
-  // The setting last written, whose section says why a refusal was given.
+  // The setting last written, whose section says why a refusal was given; none once a model write came after it.
   const [written, setWritten] = useState<AppSettingField | undefined>(undefined);
   const standard = current === undefined ? undefined : standardModelIdOf(current.model);
   const speeds = standard === undefined ? [] : speedsOffered(catalog, standard);
@@ -146,6 +146,8 @@ export default function AgentsScreen() {
       return;
     }
 
+    // Note that a model write is now the last in the New agents group, so its refusal is the one the group's footer says.
+    setWritten(undefined);
     void write
       .run(() => acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined))
       .then((landed) => {
@@ -207,7 +209,7 @@ export default function AgentsScreen() {
           <ListSection
             key={defaultRound}
             title={DEFAULT_WORDS.SECTION}
-            footer={write.refusal ?? refusalOf(newAgentRows)}
+            footer={refusalOf(newAgentRows) ?? write.refusal}
           >
             {current === undefined || standard === undefined ? null : (
               <>
