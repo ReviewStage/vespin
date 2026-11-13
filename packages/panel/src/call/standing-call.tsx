@@ -17,6 +17,7 @@
 import { STOP_FAILED } from "@repo/features/agent-refusal-words";
 import { TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
+import { callAgentLine } from "@repo/features/call-agent-line";
 import { agentName, providerOf } from "@repo/features/model-label";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { type StandingCall, VOICE_BOUNDS, VOICE_CALL_PRESS } from "@repo/features/voice-wire";
@@ -40,7 +41,6 @@ import { transcriptQuery } from "../live-reads.js";
 import { showToast } from "../toast.js";
 import { appStateQuery, selectListedTasks } from "../use-app-state.js";
 import { useVoiceCall } from "../voice-call.js";
-import { callAgentLine } from "./call-agent-line.js";
 import { type CallCardOf, type CallCardPresses, callCardOf } from "./call-card-of.js";
 
 /** The agent's name while it is not listed. */
