@@ -1072,6 +1072,7 @@ export function ListRow({
         ) : (
           // Note that a row that opens nothing still hangs its hint, from its words, which take the focus so the keyboard reaches the hint too.
           <hint.Hint label={hint.label} row={rowElement}>
+            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the words take the focus so the keyboard reaches the hint, as the pointer does. */}
             <div ref={wordsRef} className={MAIN_CLASS} aria-current={current} tabIndex={0}>
               {face}
             </div>
