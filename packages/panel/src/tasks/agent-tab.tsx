@@ -1792,7 +1792,7 @@ function TurnFoot({
         align={MESSAGE_LINE_ALIGN.START}
         inset={MESSAGE_LINE_INSET.FLUSH}
         sender={
-          <span className="flex min-w-0 flex-wrap items-center gap-ui-2">
+          <span className="flex min-w-0 flex-wrap items-center">
             {workedFor}
             {files}
           </span>
