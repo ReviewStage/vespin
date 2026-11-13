@@ -1286,8 +1286,46 @@ it.effect.each([
       // Under full access nothing could call it.
       assert.equal(options.canUseTool !== undefined, asking);
 
-      for (const unasked of ["Read", "WebFetch", "mcp__workspace", "mcp__linear"]) {
+      for (const unasked of ["Read", "WebFetch"]) {
         assert.equal(options.allowedTools?.includes(unasked), asking, unasked);
+      }
+
+      // Our server is named in every mode, so the first turn waits on it; an integration is allowed by a hook
+      // in a mode that asks, since a rule naming it would hold the first turn while it connects.
+      assert.ok(options.allowedTools?.includes("mcp__workspace"));
+      assert.ok(!options.allowedTools?.includes("mcp__linear"));
+
+      const integrationHook = options.hooks?.PreToolUse?.find(
+        (matcher) =>
+          matcher.matcher !== undefined &&
+          new RegExp(matcher.matcher).test("mcp__linear__list_issues"),
+      );
+
+      assert.equal(integrationHook !== undefined, asking);
+
+      if (integrationHook !== undefined) {
+        const [allow] = integrationHook.hooks;
+        assert.ok(allow);
+
+        const answer = yield* Effect.promise(() =>
+          allow(
+            {
+              hook_event_name: "PreToolUse",
+              tool_name: "mcp__linear__list_issues",
+              tool_input: {},
+              tool_use_id: "toolu_1",
+              session_id: "session",
+              transcript_path: "",
+              cwd: "",
+            },
+            "toolu_1",
+            { signal: new AbortController().signal },
+          ),
+        );
+
+        assert.deepEqual(answer, {
+          hookSpecificOutput: { hookEventName: "PreToolUse", permissionDecision: "allow" },
+        });
       }
 
       for (const asked of ["Bash", "Edit", "Write", "NotebookEdit"]) {
@@ -1699,9 +1737,15 @@ it.effect(
         assert.ok(worker?.disallowedTools?.includes(tool), tool);
       }
 
-      const mcp = options.mcpServers?.workspace;
-      assert.equal(mcp?.type, "sdk");
-      assert.ok(!JSON.stringify(options).includes(BEARER));
+      // In the cloud's sandbox the CLI reaches our server over HTTP under the bearer, which no other option carries.
+      const { mcpServers, ...rest } = options;
+      assert.deepEqual(mcpServers?.workspace, {
+        type: "http",
+        url: CONFIG.mcpUrl,
+        headers: { authorization: `Bearer ${BEARER}` },
+        timeout: 600_000,
+      });
+      assert.ok(!JSON.stringify(rest).includes(BEARER));
       assert.equal(options.env?.[RUNNER_ENV.BEARER], undefined);
       assert.equal(options.env?.[RUNNER_ENV.CLAUDE_TOKEN], CLAUDE_TOKEN);
       // A command's Playwright looks for its browsers in its own package: the image's where it installed them, a repository's where the agent may install them.
@@ -1867,7 +1911,7 @@ function fakeCliTransport() {
   return { transport, sent, answered };
 }
 
-/** A launch whose fake service answers the MCP server's route as `mcp` does, and that SDK server the CLI was handed, connected to a fake channel; our own unless an integration's is named. */
+/** A host's launch whose fake service answers the MCP server's route as `mcp` does, and that SDK server the CLI was handed, connected to a fake channel; our own unless an integration's is named. */
 function launchWithMcp(
   mcp: ReturnType<typeof fakeMcpRoute>,
   named: { readonly name: string; readonly url: string } = {
@@ -1885,7 +1929,11 @@ function launchWithMcp(
       ),
     };
 
-    const launched = yield* launch(SHORT_TURN, routed);
+    const launched = yield* launch(SHORT_TURN, routed, {
+      ...ENV,
+      [RUNNER_ENV.PLACE]: RUNNER_PLACE.HOST,
+    });
+
     yield* launched.write(CONFIG);
 
     for (let step = 0; step < 500 && launched.cli.options === undefined; step += 1) {
@@ -1902,30 +1950,32 @@ function launchWithMcp(
   });
 }
 
-it.effect("relays the CLI's MCP messages to Vespin under the runner's bearer, over no socket", () =>
-  Effect.gen(function* () {
-    const mcp = fakeMcpRoute();
-    const { channel, write, run } = yield* launchWithMcp(mcp);
+it.effect(
+  "relays the CLI's MCP messages to Vespin under the runner's bearer on a host, over no socket",
+  () =>
+    Effect.gen(function* () {
+      const mcp = fakeMcpRoute();
+      const { channel, write, run } = yield* launchWithMcp(mcp);
 
-    channel.transport.onmessage?.({ jsonrpc: "2.0", method: "notifications/initialized" });
-    channel.transport.onmessage?.({ jsonrpc: "2.0", id: 1, method: "tools/list" });
-    yield* Deferred.await(channel.answered);
-    yield* write(FIRST_MESSAGE);
-    yield* Fiber.join(run);
+      channel.transport.onmessage?.({ jsonrpc: "2.0", method: "notifications/initialized" });
+      channel.transport.onmessage?.({ jsonrpc: "2.0", id: 1, method: "tools/list" });
+      yield* Deferred.await(channel.answered);
+      yield* write(FIRST_MESSAGE);
+      yield* Fiber.join(run);
 
-    assert.deepEqual(channel.sent, [{ jsonrpc: "2.0", id: 1, result: { tools: [] } }]);
-    assert.deepEqual(
-      mcp.calls.map(({ authorization }) => authorization),
-      [`Bearer ${BEARER}`, `Bearer ${BEARER}`],
-    );
-    assert.deepEqual(
-      mcp.calls.map(({ body }) => body),
-      [
-        { jsonrpc: "2.0", method: "notifications/initialized" },
-        { jsonrpc: "2.0", id: 1, method: "tools/list" },
-      ],
-    );
-  }),
+      assert.deepEqual(channel.sent, [{ jsonrpc: "2.0", id: 1, result: { tools: [] } }]);
+      assert.deepEqual(
+        mcp.calls.map(({ authorization }) => authorization),
+        [`Bearer ${BEARER}`, `Bearer ${BEARER}`],
+      );
+      assert.deepEqual(
+        mcp.calls.map(({ body }) => body),
+        [
+          { jsonrpc: "2.0", method: "notifications/initialized" },
+          { jsonrpc: "2.0", id: 1, method: "tools/list" },
+        ],
+      );
+    }),
 );
 
 it.effect(
@@ -1970,7 +2020,7 @@ it.effect("answers the CLI's MCP request with a JSON-RPC error where Vespin refu
 );
 
 it.effect(
-  "starts the claude process with no bearer or MCP address in its argv, listens on no port, and ends failed where it exits before it initializes",
+  "starts a host's claude process with no bearer or MCP address in its argv, listens on no port, and ends failed where it exits before it initializes",
   () =>
     Effect.gen(function* () {
       const directory = mkdtempSync(join(tmpdir(), "agent-runner-argv-"));
@@ -1983,7 +2033,10 @@ it.effect(
       const service = fakeService();
       const stdin = yield* Queue.unbounded<string, Cause.Done>();
 
-      const run = yield* runAgent({ lines: Stream.fromQueue(stdin), env: ENV }).pipe(
+      const run = yield* runAgent({
+        lines: Stream.fromQueue(stdin),
+        env: { ...ENV, [RUNNER_ENV.PLACE]: RUNNER_PLACE.HOST },
+      }).pipe(
         Effect.scoped,
         Effect.provide(
           Layer.mergeAll(
