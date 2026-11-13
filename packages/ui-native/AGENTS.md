@@ -35,8 +35,10 @@ builds a control of its own.
   alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
   rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a form's words,
   pictures and choices, `ComposeSheet` for a sheet that starts work (its
-  words filling the page, and the + and `MenuChip` capsule menus in glass
-  over the keyboard),
+  words filling the page, and the + and `MenuChip` capsule menus over the
+  keyboard, each the system's own glass button in a `DockRow` with no bar
+  around them, each capsule led by the panel's glyph or a model's harness
+  mark),
   `SwitchRow` and `HintPickRows` (a choice among a few, what each does under
   its name) for an agent's options, `RenameAsk` (the system's alert a name is
   typed in),
@@ -188,8 +190,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   list with the switcher, its tile and its name, and stands no Settings gear: Settings
   opens from the switcher's menu and ⌘,, as Notion's and Linear's iPad sidebars keep it, and
   the account's photo leads the sidebar's bar only until the switcher can draw. Nothing draws a
-  copy of glass, and glass is one layer: a bar's own, or one glass view
-  (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest). A
+  copy of glass, and glass is one layer: a bar's own, one glass view
+  (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest), or a
+  control's own glass button style in a `DockRow`, never inside a bar. A
   glass that holds buttons takes no press of its own (not `interactive`),
   so only the button under a finger or the pointer reacts, and no button
   is handed a hover effect: the system draws its own on each style, where

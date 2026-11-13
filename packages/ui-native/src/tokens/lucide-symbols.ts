@@ -38,6 +38,7 @@ export const LUCIDE_SYMBOL = {
   CIRCLE_SLASH: "CircleSlash",
   CIRCLE_STOP: "CircleStop",
   CLOCK: "Clock",
+  CLOUD: "Cloud",
   COPY: "Copy",
   CORNER_DOWN_RIGHT: "CornerDownRight",
   CORNER_LEFT_UP: "CornerLeftUp",

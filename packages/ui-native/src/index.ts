@@ -43,6 +43,7 @@ export {
   type ChipMenu,
   type ChipMenuGroup,
   ComposeSheet,
+  MENU_CHIP_LOOK,
   MenuChip,
 } from "./compose-sheet.js";
 

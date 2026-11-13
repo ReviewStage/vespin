@@ -240,6 +240,27 @@ const HARNESS_MARK_ASSET = {
 } as const satisfies Record<ModelProvider, string>;
 
 /**
+ * The mark of the harness an agent runs in (Claude Code's Clawd, Codex's
+ * picture) on its own, at a glyph's size, as the panel's model chip leads
+ * the model's name with it (`HarnessMark`). Its words say the model, so it is
+ * hidden from VoiceOver.
+ */
+export function HarnessMark({
+  harness,
+  size,
+}: {
+  readonly harness: ModelProvider;
+  readonly size: number;
+}) {
+  return (
+    <Image
+      assetName={HARNESS_MARK_ASSET[harness]}
+      modifiers={[resizable(), frame({ width: size, height: size }), accessibilityHidden()]}
+    />
+  );
+}
+
+/**
  * An agent's tile, as the panel's messages lead an agent's words with it: a
  * rounded square on the brand's well, the mark of the harness the agent runs
  * in on it (Claude Code's Clawd, Codex's picture), or the ink's sparkles where

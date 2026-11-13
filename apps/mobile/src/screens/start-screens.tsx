@@ -1,10 +1,12 @@
 // start-screens.tsx -- the two sheets that start work, each a compose sheet as Mail's stands: New agent on a task, its words and pictures, with its model and effort and where it runs as capsule menus above the keyboard; and New task, Home's composer: the task described and its pictures, its relation to another task picked from the +, and its repository, model and effort, and where its agent runs as capsules, or File for later, which files it with no agent.
 
 import { hasWordsOrFiles } from "@repo/features/agent-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
+import { devicePlatformOf } from "@repo/features/device-platform";
 import { FAILURE_REASON } from "@repo/features/failure-remedy";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
-import { agentName } from "@repo/features/model-label";
+import { agentName, providerOf } from "@repo/features/model-label";
 import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
@@ -28,10 +30,10 @@ import {
   type ChipMenuGroup,
   ComposeSheet,
   ConfirmAsk,
-  FieldChip,
   GLYPH,
   type Glyph,
   glyphSymbol,
+  MENU_CHIP_LOOK,
   MenuChip,
   type PickOption,
   useColors,
@@ -227,12 +229,25 @@ function ModelChip({ pick }: { readonly pick: ModelPick }) {
     });
   }
 
+  const harness = pick.shown === undefined ? undefined : providerOf(pick.shown.model);
+
   return (
     <MenuChip
+      look={MENU_CHIP_LOOK.DOCK}
       label={effort === undefined ? model : `${model}${JOINED}${effort}`}
+      {...(harness === undefined ? {} : { harness })}
       menu={{ groups }}
     />
   );
+}
+
+/** The panel's glyph for where an agent runs, as its Runs on chip leads with it: the cloud's, or a device's by its platform, a server's for Linux and a laptop's otherwise. */
+function placeGlyph(pick: ModelPick, runsOn: string): Glyph {
+  const device = pick.devices.find((each) => each.deviceId === runsOn);
+
+  if (runsOn === CLOUD || device === undefined) return GLYPH.CLOUD;
+
+  return devicePlatformOf(device) === DEVICE_PLATFORM.LINUX ? GLYPH.HOST : GLYPH.MAC;
 }
 
 /** Where the agent runs, Cloud or one of the account's devices, as a capsule; none where the account may run an agent on no device of its own. */
@@ -250,7 +265,9 @@ function RunsOnChip({
 
   return (
     <MenuChip
+      look={MENU_CHIP_LOOK.DOCK}
       label={labelOf(options, runsOn) ?? WORDS.RUNS_ON}
+      symbol={placeGlyph(pick, runsOn)}
       menu={{ groups: [{ title: WORDS.RUNS_ON, choices: choicesOf(options, runsOn, onRunsOn) }] }}
     />
   );
@@ -271,12 +288,19 @@ function RepositoryChip({
   readonly tree: TaskSummary | undefined;
 }) {
   if (tree !== undefined) {
-    return <FieldChip label={tree.repository ?? NO_REPOSITORY} symbol={GLYPH.REPOSITORY} />;
+    return (
+      <MenuChip
+        look={MENU_CHIP_LOOK.DOCK}
+        label={tree.repository ?? NO_REPOSITORY}
+        symbol={GLYPH.REPOSITORY}
+      />
+    );
   }
 
   if (repository.options.length > 0) {
     return (
       <MenuChip
+        look={MENU_CHIP_LOOK.DOCK}
         label={labelOf(repository.options, repository.picked) ?? WORDS.REPOSITORY}
         symbol={GLYPH.REPOSITORY}
         menu={{
@@ -295,7 +319,7 @@ function RepositoryChip({
   return (
     <>
       {repository.picked === undefined ? null : (
-        <FieldChip label={repository.picked} symbol={GLYPH.REPOSITORY} />
+        <MenuChip look={MENU_CHIP_LOOK.DOCK} label={repository.picked} symbol={GLYPH.REPOSITORY} />
       )}
       {repository.failed === undefined ? null : (
         <Chip label={WORDS.TRY_AGAIN} symbol={GLYPH.RETRY} onPress={repository.retry} />

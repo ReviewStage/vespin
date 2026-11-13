@@ -1,6 +1,6 @@
 // glass-bar.tsx -- the Liquid Glass bar a composer stands in at a screen's foot, and the dock that pins it there above the keyboard.
 
-import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
+import { GlassEffectContainer, Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import { frame, type ModifierConfig, onGeometryChange, padding } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
@@ -24,6 +24,9 @@ const DockRoom = createContext(0);
 
 /** Tells the dock how tall the bar inside it stands, with its gap; nothing outside a dock. */
 const DockMeasure = createContext<((room: number) => void) | undefined>(undefined);
+
+/** How far apart the controls of a row with no bar stand (`DockRow`), as the glass buttons over Notes' keyboard stand apart. */
+const DOCK_ROW_SPACING = SPACE.TIGHT * 2;
 
 /** How round the bar stands: a rounded field, as a composer's is. */
 export const BAR_RADIUS = 24;
@@ -59,6 +62,8 @@ const styles = StyleSheet.create({
   docked: { position: "absolute", left: 0, right: 0, bottom: 0, alignItems: "center" },
   // The bar's column, as wide as the dock and no wider than the reading width a wide window centers its content at.
   column: { width: "100%" },
+  // A row with no bar stands in from the screen's edges as far as a bar does.
+  row: { marginHorizontal: SPACE.ROW + 2 },
   bar: {
     marginHorizontal: SPACE.ROW + 2,
     padding: BAR_EDGE,
@@ -137,6 +142,33 @@ export function BarHead({ children }: { readonly children: ReactNode }) {
 }
 
 /**
+ * What a dock pins at its foot, standing in the screen's bottom safe area,
+ * and telling its dock how tall it stands, its gap with it, as it grows and
+ * shrinks, so the content under it scrolls clear of all of it. Note that the
+ * bottom safe area is let go while the keyboard stands, since the keyboard
+ * covers the tab bar it holds room for; the sides are kept, so it stops
+ * short of a tab rail beside it, as the folded iPhone Duo stands one.
+ */
+function DockedFoot({ children }: { readonly children: ReactNode }) {
+  const keyboard = useKeyboardHeight() > 0;
+  const measure = useContext(DockMeasure);
+
+  const onLayout =
+    measure === undefined
+      ? undefined
+      : (event: LayoutChangeEvent) => measure(event.nativeEvent.layout.height + SPACE.ROW);
+
+  return (
+    <SafeAreaView
+      edges={keyboard ? ["left", "right"] : ["bottom", "left", "right"]}
+      style={styles.gap}
+    >
+      <View onLayout={onLayout}>{children}</View>
+    </SafeAreaView>
+  );
+}
+
+/**
  * A bar of glass holding a composer's field and its buttons, floating over
  * the content it scrolls above, as the system's own bars do. Its children
  * are SwiftUI pieces, laid in a row on a host of its own, under its head
@@ -159,8 +191,6 @@ export function GlassBar({
   /** What the bar's SwiftUI takes over its whole glass, such as a drop of pictures. */
   readonly modifiers?: readonly ModifierConfig[];
 }) {
-  const keyboard = useKeyboardHeight() > 0;
-  const measure = useContext(DockMeasure);
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
 
   const row = (
@@ -190,20 +220,36 @@ export function GlassBar({
     </GlassView>
   );
 
-  // Note that a docked bar tells its dock how tall it stands, its gap with it, as its head grows and shrinks, so the content under it scrolls clear of all of it.
-  const onLayout =
-    measure === undefined
-      ? undefined
-      : (event: LayoutChangeEvent) => measure(event.nativeEvent.layout.height + SPACE.ROW);
+  return <DockedFoot>{bar}</DockedFoot>;
+}
 
-  // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one.
+/**
+ * A row of controls a dock pins at its foot with no bar around them, each
+ * control standing in the system's own glass, one layer, as the controls
+ * over the keyboard in Notes and Reminders stand: a compose sheet's + and
+ * its capsule menus. Its children are SwiftUI pieces drawn with a glass
+ * button style (`buttonStyle("glass")`), laid in a row inside the system's
+ * glass container, so neighbors draw as one family of glass rather than a
+ * glass inside a glass. Note that the system's glass styles stand solid on
+ * their own where the reader turned on Reduce Transparency, so the row needs
+ * no stand-in of its own.
+ */
+export function DockRow({
+  children,
+  modifiers = [],
+}: {
+  readonly children: ReactNode;
+  /** What the row's SwiftUI takes over its whole width, such as a drop of pictures. */
+  readonly modifiers?: readonly ModifierConfig[];
+}) {
   return (
-    <SafeAreaView
-      edges={keyboard ? ["left", "right"] : ["bottom", "left", "right"]}
-      style={styles.gap}
-    >
-      <View onLayout={onLayout}>{bar}</View>
-    </SafeAreaView>
+    <DockedFoot>
+      <Host matchContents={{ vertical: true }} style={[styles.content, styles.row]}>
+        <GlassEffectContainer spacing={DOCK_ROW_SPACING} modifiers={[...modifiers]}>
+          <HStack spacing={DOCK_ROW_SPACING}>{children}</HStack>
+        </GlassEffectContainer>
+      </Host>
+    </DockedFoot>
   );
 }
 
