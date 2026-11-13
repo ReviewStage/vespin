@@ -88,7 +88,7 @@ import {
   TURN_STATUS,
   type TurnStatus,
 } from "@repo/wire";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { Clock, Duration, Effect, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
@@ -487,6 +487,34 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         ]);
         assert.deepEqual(yield* pinsOf(owner), []);
         assert.deepEqual(yield* pinsOf(outsider), []);
+      }),
+  );
+
+  it.effect(
+    "follow a task the reader pinned, and the task of an agent it pinned, however long ago it was done",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openUser;
+        const outsider = yield* openUser;
+        yield* openWorkspace(outsider);
+        const pinned = yield* startTask(owner, { name: "Teammate invitations" });
+        const ofAgent = yield* startTask(owner, { name: "Billing export" });
+        const agent = yield* openAgent(owner, { taskId: ofAgent.id }, 60_000);
+        yield* updateTask(owner, pinned.id, { pinned: true });
+        yield* pinAgent(owner, agent.id, true);
+        // Both were finished a year before the list is read, well past any recent window.
+        const db = yield* Database;
+        const yearAgo = new Date(NOW - Duration.toMillis(Duration.days(365)));
+        yield* db
+          .update(task)
+          .set({ status: TASK_STATUS.DONE, completedAt: yearAgo, updatedAt: yearAgo })
+          .where(inArray(task.id, [pinned.id, ofAgent.id]));
+
+        const followedBy = (reader: string) =>
+          Effect.map(liveRowsOf(reader), (rows) => rows.plans.map((plan) => plan.id).toSorted());
+
+        assert.deepEqual(yield* followedBy(owner), [pinned.id, ofAgent.id].toSorted());
+        assert.deepEqual(yield* followedBy(outsider), [], "no other account's list holds them");
       }),
   );
 

@@ -212,6 +212,44 @@ function tasksStatement(userId: string, narrowed: SQL = sql`true`) {
 }
 
 /**
+ * The tasks of the account's own pins, whatever their status or age: each
+ * it pinned, and each with an agent it pinned. Note that a tab pinned to
+ * the sidebar is kept in the window's own storage, never here, so the
+ * window reads a pinned tab's task outside the list itself.
+ */
+function pinnedTaskOf(userId: string): SQL {
+  const pinnedAgentTasks = queryBuilder
+    .select({ taskId: agentTable.taskId })
+    .from(agentPin)
+    .innerJoin(agentTable, eq(agentTable.id, agentPin.agentId))
+    .where(eq(agentPin.userId, userId));
+
+  return (
+    or(
+      exists(
+        queryBuilder
+          .select({ one: sql`1` })
+          .from(taskPin)
+          .where(and(eq(taskPin.taskId, task.id), eq(taskPin.userId, userId))),
+      ),
+      sql`${task.id} in (${pinnedAgentTasks})`,
+    ) ?? sql`false`
+  );
+}
+
+/**
+ * Which tasks the account's list follows live (`tasksRead`), of those it
+ * reaches: the tasks of its own pins (`pinnedTaskOf`), which Pinned draws
+ * whatever their status or age, and the active and recent ones. Note that
+ * every task is still active and recent here, so the list follows every
+ * task it reaches; the narrowing to active and recent ones replaces that
+ * `true` alone, and the pins stay live beside it.
+ */
+function liveTaskOf(userId: string): SQL {
+  return or(pinnedTaskOf(userId), sql`true`) ?? sql`true`;
+}
+
+/**
  * The issues the plans linked: none, since a plan links none. A released
  * desktop still follows the statement and decodes its rows, so it stands,
  * answering no rows.
@@ -378,7 +416,7 @@ const PENDING_APPROVALS_OF_AGENT = sql<
 /**
  * The plans what moved could move: their own rows, the reader's pins and
  * read marks, a block either way, a follower, a plan a moved plan blocks,
- * and a plan naming a moved member.
+ * a plan whose agent's pin moved, and a plan naming a moved member.
  */
 function movedPlans(moved: SyncMoved): SQL {
   const plans = moved.keys(taskSync, task.id);
@@ -388,6 +426,12 @@ function movedPlans(moved: SyncMoved): SQL {
     .select({ id: taskBlock.blockedTaskId })
     .from(taskBlock)
     .where(liveKeysIn(taskBlock.blockerTaskId, plans))})`;
+
+  // A pin of an agent moves its task into the live set or out of it, so its task is read again.
+  const ofPinnedAgent = sql`(${queryBuilder
+    .select({ taskId: agentTable.taskId })
+    .from(agentTable)
+    .where(liveKeysIn(agentTable.id, moved.keys(agentPinSync, agentPin.agentId)))})`;
 
   return (
     or(
@@ -400,6 +444,7 @@ function movedPlans(moved: SyncMoved): SQL {
         ...moved.keys(taskFollowerSync, taskFollower.taskId),
       ]),
       sql`${task.id} in ${blockedByMoved}`,
+      sql`${task.id} in ${ofPinnedAgent}`,
       liveKeysIn(task.userId, members),
       liveKeysIn(task.assigneeId, members),
     ) ?? sql`false`
@@ -488,7 +533,7 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
   reads: TASK_LIST_TABLES,
   topics: ({ userId }) => readerAndWorkspaceTopics(userId),
   statements: ({ userId }) => ({
-    plans: tasksStatement(userId),
+    plans: tasksStatement(userId, liveTaskOf(userId)),
     agents: agentsStatement(userId),
     issues: issuesStatement(),
   }),
@@ -497,7 +542,7 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
     anyTopic: [messagesSync, conversationsSync],
     own: { plans: taskSync, agents: agentSync },
     statements: ({ userId }, moved) => ({
-      plans: tasksStatement(userId, movedPlans(moved)),
+      plans: tasksStatement(userId, and(liveTaskOf(userId), movedPlans(moved)) ?? sql`false`),
       agents: agentsStatement(userId, movedAgents(moved)),
       issues: issuesStatement(),
     }),
