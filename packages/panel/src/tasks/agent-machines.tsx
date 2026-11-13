@@ -6,13 +6,11 @@ import { ACT_KIND } from "@repo/host/acts";
 import {
   type MenuRow,
   STATUS_TONE,
-  StatusWords,
   SUBMENU_WIDTH,
   TEXT_ELEMENT,
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
-  VisuallyHidden,
 } from "@repo/ui";
 import { personActor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
@@ -34,10 +32,11 @@ import { DeviceStandingGlyph } from "./runs-on.js";
  * say where a call naming no machine would go now (`runOnMac.machine`), and
  * the machines its default may be set to: those of the people who let the
  * task's agents use theirs, online or not. The Default machine row names
- * the machine a call would go to, its dot green while it listened lately
- * and gray while it did not, so a default that went offline stays the
- * default and says so; a call to it is refused with the reason. Its submenu
- * lists each machine with the same dot and its owner's face, an offline one
+ * the machine a call would go to as its submenu draws it, its glyph's dot
+ * green while it listened lately and gray while it did not, so a default
+ * that went offline stays the default and says so; a call to it is refused
+ * with the reason. Its submenu, under the one heading that says what it is
+ * for, lists each machine with the same dot and its owner's face, an offline one
  * still picked, since it may come back, and a pick sets the agent's default
  * on the service, which answers the agent's tools as they then stand. An
  * agent offered no `run_on_mac`, one on a device, has no such row.
@@ -50,9 +49,7 @@ const DEFAULT_MACHINE_ROW = "default-machine";
 const DEFAULT_MACHINE_WORDS = {
   LABEL: "Default machine",
   HEADING: "Terminal commands and computer use go here",
-  NOTE: "Machines of followers who let agents use them",
   NONE: "None",
-  OFFLINE: "Offline",
   REFUSED: "The default machine could not be changed.",
 } as const;
 
@@ -97,27 +94,22 @@ function setDefaultMachine(agentId: string, machineId: string): void {
   );
 }
 
-/** The value the row ends in: the machine's name led by its dot, "Offline" told to a reader where it is gray, or None. */
-function DefaultValue({
-  name,
-  online,
-}: {
-  name: string | undefined;
-  online: boolean;
-}): React.JSX.Element {
-  if (name === undefined) {
-    return (
-      <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-        {DEFAULT_MACHINE_WORDS.NONE}
-      </Text>
-    );
-  }
-
+/** The value the row ends in, muted as the Agent runs in row's is: the machine's name, or None. */
+function DefaultValue({ name }: { name: string | undefined }): React.JSX.Element {
   return (
-    <ReplayWords masked>
-      <StatusWords tone={online ? STATUS_TONE.COMPLETE : STATUS_TONE.NEUTRAL}>{name}</StatusWords>
-      {online ? null : <VisuallyHidden>{`, ${DEFAULT_MACHINE_WORDS.OFFLINE}`}</VisuallyHidden>}
-    </ReplayWords>
+    <Text as={TEXT_ELEMENT.SPAN} variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
+      {name === undefined ? DEFAULT_MACHINE_WORDS.NONE : <ReplayWords masked>{name}</ReplayWords>}
+    </Text>
+  );
+}
+
+/** A machine's glyph wearing the dot of whether it listened lately, as its submenu row and the Default machine row draw it. */
+function MachineGlyph({ online }: { online: boolean }): React.JSX.Element {
+  return (
+    <DeviceStandingGlyph
+      device={undefined}
+      standing={online ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE}
+    />
   );
 }
 
@@ -146,8 +138,13 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
   return {
     id: DEFAULT_MACHINE_ROW,
     label: DEFAULT_MACHINE_WORDS.LABEL,
-    icon: <GLYPH.DESKTOP aria-hidden="true" />,
-    end: <DefaultValue name={chosen === undefined ? undefined : nameOf(chosen)} online={online} />,
+    icon:
+      chosen === undefined ? (
+        <GLYPH.DESKTOP aria-hidden="true" />
+      ) : (
+        <MachineGlyph online={online} />
+      ),
+    end: <DefaultValue name={chosen === undefined ? undefined : nameOf(chosen)} />,
     submenu:
       machines.length === 0
         ? undefined
@@ -158,12 +155,7 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
               (machine): MenuRow => ({
                 id: machine.id,
                 label: nameOf(machine),
-                icon: (
-                  <DeviceStandingGlyph
-                    device={undefined}
-                    standing={machine.online ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE}
-                  />
-                ),
+                icon: <MachineGlyph online={machine.online} />,
                 end: (
                   <ActorMark
                     actor={personActor(machine.owner, members, readerId, former)}
@@ -174,7 +166,6 @@ export function useDefaultMachineRow(agentId: string): MenuRow | undefined {
               }),
             ),
             value: chosen?.id,
-            note: DEFAULT_MACHINE_WORDS.NOTE,
             width: SUBMENU_WIDTH.WIDE,
             onPick: (machineId) => {
               if (machineId !== chosen?.id) setDefaultMachine(agentId, machineId);

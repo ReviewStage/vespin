@@ -125,6 +125,17 @@ function cloudChip(): HTMLButtonElement {
   );
 }
 
+/** The facts the open popover lists, each its label and its value. */
+function factsShown(): readonly (readonly [string, string])[] {
+  return [...document.querySelectorAll(".ui-fact")].map(
+    (fact) =>
+      [
+        fact.querySelector("dt")?.textContent ?? "",
+        fact.querySelector("dd")?.textContent ?? "",
+      ] as const,
+  );
+}
+
 /** The rows of the listbox a reader hears by the name given, as each reads. */
 function optionsOf(list: string): readonly string[] {
   return [
@@ -132,7 +143,7 @@ function optionsOf(list: string): readonly string[] {
   ].map((option) => option.textContent ?? "");
 }
 
-test("a cloud agent's chip reads Cloud alone, a reader hearing its sandbox's state, and its popover says where it runs", async () => {
+test("a cloud agent's chip reads Cloud alone, a reader hearing its sandbox's state, and its popover lists the state and the sandbox's size over where it runs", async () => {
   const running = {
     state: SANDBOX_STATE.RUNNING,
     stateAt: Date.now(),
@@ -144,6 +155,11 @@ test("a cloud agent's chip reads Cloud alone, a reader hearing its sandbox's sta
   assert.equal(cloudChip().getAttribute("aria-label"), "Runs on: Cloud, Running");
 
   act(() => cloudChip().click());
+  assert.deepEqual(factsShown(), [
+    ["Status", "Running"],
+    ["CPU", "4 vCPUs"],
+    ["Memory", "8 GB"],
+  ]);
   assert.deepEqual(optionsOf("Where this agent works"), ["Agent runs inCloud"]);
 
   await placeOf({}, undefined);
@@ -255,6 +271,12 @@ test("the Default machine row names the agent's default with its dot, offline as
   await settle();
   act(() => cloudChip().click());
   const rows = optionsOf("Where this agent works");
+
+  const standing = document
+    .querySelectorAll('[role="option"]')[1]
+    ?.querySelector('[role="img"]')
+    ?.getAttribute("aria-label");
+
   act(() => document.querySelectorAll<HTMLElement>('[role="option"]')[1]?.click());
   const machines = optionsOf("Terminal commands and computer use go here");
 
@@ -267,7 +289,8 @@ test("the Default machine row names the agent's default with its dot, offline as
   );
   await settle();
 
-  assert.deepEqual(rows, ["Agent runs inCloud", "Default machineLaptop, Offline"]);
+  assert.deepEqual(rows, ["Agent runs inCloud", "Default machineLaptop"]);
+  assert.equal(standing, "Offline");
   assert.equal(machines.length, 2);
   assert.deepEqual(sent, [{ agentId: AGENT_ID, machineId: "studio" }]);
 });

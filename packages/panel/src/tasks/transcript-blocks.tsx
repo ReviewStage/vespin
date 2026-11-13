@@ -1413,6 +1413,20 @@ export function useMacOwner(): Actor | undefined {
 /** The machine a terminal command or an action on an app made now would go to, as the agent's standing names it (`workspaceTools.runOnMac.machine`), which a call still unanswered names; none where it names none. */
 const RoutedMachineContext = createContext<Pick<CallMachine, "id" | "name"> | undefined>(undefined);
 
+/** Where a call ran, as its row says it: "On" the machine, by what every list of machines calls it, This Mac among them. */
+function OnMachine({ machine }: { machine: Pick<CallMachine, "id" | "name"> }): React.JSX.Element {
+  const thisMac = useThisMac();
+
+  return (
+    <ActorLine>
+      {"On "}
+      <ReplayWords masked>
+        {machineName({ deviceId: machine.id, name: machine.name }, [], thisMac)}
+      </ReplayWords>
+    </ActorLine>
+  );
+}
+
 /** Names whose Mac the transcript under it ran its Mac commands on (`MacOwnerProvider`), and the machine it would send a call to now, which a call still unanswered names. */
 export function CallPlaceProvider({
   owner,
@@ -1544,7 +1558,6 @@ export function TranscriptTool({
   const macOwner = useContext(MacOwnerContext);
   // Note that a call names the machine its answer names, and one still unanswered the machine the agent's calls go to now, so a row never names the starter's Mac for a call routed elsewhere.
   const routed = useContext(RoutedMachineContext);
-  const thisMac = useThisMac();
   const unanswered = state === TOOL_STATE.INPUT_STREAMING || state === TOOL_STATE.INPUT_AVAILABLE;
   const onMachine = machine ?? (unanswered ? routed : undefined);
   const opened = useHeldOpen(held?.waiting === true);
@@ -1570,12 +1583,7 @@ export function TranscriptTool({
         place={
           (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
           onMachine !== undefined ? (
-            <ActorLine>
-              {"On "}
-              <ReplayWords masked>
-                {machineName({ deviceId: onMachine.id, name: onMachine.name }, [], thisMac)}
-              </ReplayWords>
-            </ActorLine>
+            <OnMachine machine={onMachine} />
           ) : (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
             macOwner !== undefined ? (
             <ActorLine>
