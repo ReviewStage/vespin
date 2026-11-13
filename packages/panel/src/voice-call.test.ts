@@ -208,6 +208,20 @@ test("muting the microphone tells the session, and muting the speaker tells it n
   assert.equal(call.call?.speakerMuted, true);
 });
 
+test("a mute pressed while the call connects is told to the session once it starts", async () => {
+  await mounted();
+  const peer = await called();
+
+  act(() => call.setMicrophoneMuted(true));
+  assert.equal(call.call?.microphoneMuted, true);
+  assert.deepEqual(peer.channel.told(), []);
+
+  act(() => peer.channel.started());
+
+  assert.deepEqual(peer.channel.told(), [said("session.input_audio.mute")]);
+  assert.equal(call.call?.microphoneMuted, true);
+});
+
 test("a call refused for want of an OpenAI key says to add one and lets the microphone go", async () => {
   fakeActPort({
     [ACT_KIND.VOICE_OPEN]: () =>

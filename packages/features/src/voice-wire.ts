@@ -58,10 +58,11 @@ export const standingCallSchema = EffectSchema.Struct({
 
 export type StandingCall = typeof standingCallSchema.Type;
 
-/** A press on the floating call card: a mute set as it says, or End call, which the Mac hands to the window holding the call, or the way back to the call's agent, which the Mac opens itself. */
+/** A press on the floating call card: a mute set as it says, Stop, or End call, which the Mac hands to the window holding the call, or the way back to the call's agent, which the Mac opens itself. */
 export const VOICE_CALL_PRESS = {
   MICROPHONE: "microphone",
   SPEAKER: "speaker",
+  STOP: "stop",
   END: "end",
   OPEN: "open",
 } as const;
@@ -72,7 +73,11 @@ export const voiceCallPressSchema = EffectSchema.Union([
     muted: EffectSchema.Boolean,
   }),
   EffectSchema.Struct({
-    press: EffectSchema.Literals([VOICE_CALL_PRESS.END, VOICE_CALL_PRESS.OPEN]),
+    press: EffectSchema.Literals([
+      VOICE_CALL_PRESS.STOP,
+      VOICE_CALL_PRESS.END,
+      VOICE_CALL_PRESS.OPEN,
+    ]),
   }),
 ]);
 
