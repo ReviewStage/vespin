@@ -3,19 +3,9 @@
 import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import { frame, type ModifierConfig, onGeometryChange, padding } from "@expo/ui/swift-ui/modifiers";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
-import {
-  type ComponentRef,
-  createContext,
-  type ReactNode,
-  type RefObject,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
   Keyboard,
-  type KeyboardEvent,
   type LayoutChangeEvent,
   StyleSheet,
   useWindowDimensions,
@@ -91,47 +81,6 @@ function useKeyboardHeight(): number {
   }, []);
 
   return height;
-}
-
-/**
- * How far the keyboard stands over a dock's foot, in points, as it rises,
- * once it has risen, and as it falls: its height where the dock reaches the
- * window's foot, as a full screen's does, and less where the dock stops short
- * of it, as an iPad's form sheet stands over the keyboard, so the bar rises
- * only as far as the keyboard covers it. Note that it is measured again once
- * the keyboard stands, because a form sheet moves as the keyboard rises.
- */
-function useKeyboardLift(dock: RefObject<ComponentRef<typeof View> | null>): number {
-  const [lift, setLift] = useState(0);
-  useEffect(() => {
-    const over = ({ endCoordinates }: KeyboardEvent) => {
-      const view = dock.current;
-
-      if (view === null) {
-        setLift(endCoordinates.height);
-
-        return;
-      }
-
-      view.measureInWindow((_x, y, _width, height) => {
-        // Note that a dock not yet laid out measures no height, so it rises by the keyboard's whole height, as it did before it measured.
-        const covered = height === 0 ? endCoordinates.height : y + height - endCoordinates.screenY;
-        setLift(Math.min(endCoordinates.height, Math.max(0, covered)));
-      });
-    };
-
-    const listeners = [
-      Keyboard.addListener("keyboardWillShow", over),
-      Keyboard.addListener("keyboardDidShow", over),
-      Keyboard.addListener("keyboardWillHide", () => setLift(0)),
-    ];
-
-    return () => {
-      for (const listener of listeners) listener.remove();
-    };
-  }, [dock]);
-
-  return lift;
 }
 
 /**
@@ -259,8 +208,7 @@ export function GlassBar({
 /**
  * A screen with a bar pinned at its foot, such as a thread's composer: the
  * screen's content fills it, the bar floating over its foot as the system's
- * bars do, and rising with the keyboard as far as the keyboard covers it, so
- * the field stays above it. The
+ * bars do, and rising with the keyboard so the field stays above it. The
  * content leaves room at its own foot for the bar as tall as it stands
  * (`useDockRoom`): a composer's head, such as a call waiting on an answer
  * and the queue, grows it well past a bare field.
@@ -272,13 +220,12 @@ export function GlassDock({
   readonly children: ReactNode;
   readonly bar: ReactNode;
 }) {
-  // Note that the bar is lifted by the keyboard's own frame, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
-  const dock = useRef<ComponentRef<typeof View>>(null);
-  const keyboard = useKeyboardLift(dock);
+  // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
+  const keyboard = useKeyboardHeight();
   const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
 
   return (
-    <View ref={dock} style={styles.dock}>
+    <View style={styles.dock}>
       <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
       <View style={[styles.docked, { bottom: keyboard }]}>
         <DockMeasure.Provider value={setRoom}>{bar}</DockMeasure.Provider>
