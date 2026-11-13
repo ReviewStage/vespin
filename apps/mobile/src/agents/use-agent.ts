@@ -295,9 +295,8 @@ async function agentMediaSource(
  * the transcript moves; that one whose read failed is tried again on its
  * own a few times after a pause (`mediaReads`), since a transcript that
  * never moves, as the fixture's, would never ask again, and then on the
- * transcript's next change, a try that goes unanswered failing at its
- * deadline as one that is refused does; and that each failure is written
- * to the device's log.
+ * transcript's next change; and that each failure is written to the
+ * device's log.
  */
 export function useAgentMedia(
   agentId: string,

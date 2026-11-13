@@ -16,8 +16,8 @@ const VIDEO_EXTENSION: ReadonlyMap<string, string> = new Map([
   [CONVERSATION_MEDIA_TYPE.WEBM, "webm"],
 ]);
 
-/** How many writes this launch has begun, which names each one's partial file apart. */
-let begun = 0;
+/** Each write still under way, by the address of the file it writes, so a second read of one video or file waits on the first rather than writing over it. */
+const writing = new Map<string, Promise<string>>();
 
 /** What in a file's name would part a path, which an underscore stands in for. */
 const PATH_PARTS = /[/\\:]/gu;
@@ -31,38 +31,28 @@ const UNNAMED = "file";
 /** The extension a PDF is written under whatever it was named, since its viewer draws a file by its extension. */
 const PDF_EXTENSION = ".pdf";
 
-/** Bytes written under a name of their own beside `file`, apart from every other write's, and moved into place as it, answering its address once they are all on disk. */
+/** Bytes written under a name of their own beside `file` and moved into place as it, answering its address once they are all on disk. */
 async function written(file: File, base64: string): Promise<string> {
-  begun += 1;
-  const partial = new File(file.parentDirectory, `${file.name}.${begun}${WRITING_SUFFIX}`);
-  // Note that the folder is made first where it is missing, because nothing in Expo makes the app's caches folder, and a write into a folder that is not there fails.
-  file.parentDirectory.create({ intermediates: true, idempotent: true });
+  const partial = new File(file.parentDirectory, `${file.name}${WRITING_SUFFIX}`);
 
   // A write an earlier launch left unfinished is cleared rather than written over.
   if (partial.exists) partial.delete();
   await partial.write(base64, { encoding: "base64" });
-
-  // Note that the bytes move into place only where no other write has landed the file, and never over it, so a player already reading that file never finds it gone; the write that loses keeps the one that landed.
-  try {
-    await partial.move(file, { overwrite: false });
-  } catch (cause) {
-    if (!file.exists) throw cause;
-    partial.delete();
-  }
+  await partial.move(file, { overwrite: true });
 
   return file.uri;
 }
 
-/**
- * The file written once: the file already written, or a write begun now.
- * Note that a read of a file another read is still writing begins a write
- * of its own rather than waiting on that one, because a native write can
- * hang on a cold boot, and a read tried again after it must not wait on the
- * same write; each is written whole under its own partial name, and the
- * first to move into place stands while the rest are let go (`written`).
- */
+/** The file written once: the file already written, the write of it still under way, or a write begun now. */
 function once(file: File, base64: string): Promise<string> {
-  return file.exists ? Promise.resolve(file.uri) : written(file, base64);
+  if (file.exists) return Promise.resolve(file.uri);
+  const under = writing.get(file.uri);
+
+  if (under !== undefined) return under;
+  const write = written(file, base64).finally(() => writing.delete(file.uri));
+  writing.set(file.uri, write);
+
+  return write;
 }
 
 /**
@@ -72,7 +62,7 @@ function once(file: File, base64: string): Promise<string> {
  * once its bytes are all on disk. Note that the bytes are written under a
  * name of their own and moved into place, so a write cut short, as the app
  * is closed, never stands as the file a later read finds; that a read of a
- * video another read is still writing writes it anew (`once`); that an MP4 plays
+ * video another read is still writing waits on that write; that an MP4 plays
  * only under its extension; and that a WebM, which iOS's player cannot read,
  * says so in the player's place.
  */
