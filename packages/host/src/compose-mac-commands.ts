@@ -15,7 +15,9 @@ import {
   isMacShellCommand,
   MAC_COMMAND_BOUNDS,
   MAC_COMMAND_KIND,
+  MAC_COMMAND_MODE,
   type MacCommandKind,
+  type MacCommandMode,
   type MacCommandRead,
   type MacCommandRefusal,
   type MacCommandResult,
@@ -26,7 +28,6 @@ import {
 } from "@repo/features/mac-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
-import { MAC_COMMAND_MODE, type MacCommandMode } from "@repo/settings";
 import {
   Clock,
   Config,

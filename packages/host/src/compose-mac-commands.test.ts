@@ -8,14 +8,15 @@ import {
   COMPUTER_PERMISSION,
   type ComputerApp,
   MAC_COMMAND_KIND,
+  MAC_COMMAND_MODE,
   type MacCommand,
   type MacCommandKind,
+  type MacCommandMode,
   type MacCommandResult,
   macCommandKindsRead,
   storedMacCommandText,
 } from "@repo/features/mac-command-wire";
 import { GATEWAY_EVENT, type GatewayEventKind } from "@repo/gateway";
-import { MAC_COMMAND_MODE, type MacCommandMode } from "@repo/settings";
 import { isRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
 import { ConfigProvider, Duration, Effect, Layer, Predicate, PubSub, Stream } from "effect";
