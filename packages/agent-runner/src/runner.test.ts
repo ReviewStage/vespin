@@ -338,7 +338,7 @@ it.effect(
 );
 
 it.effect(
-  "a /goal clear sent mid-turn interrupts the turn a goal holds open, and the launch goes on until the CLI runs the clear as a turn of its own",
+  "a /goal line sent mid-turn, a clear or a new goal, interrupts the turn a goal holds open, and the launch goes on until the CLI runs it as a turn of its own",
   () =>
     Effect.gen(function* () {
       const service = fakeService([], "Working toward the goal.");

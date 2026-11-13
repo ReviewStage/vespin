@@ -517,11 +517,12 @@ function control<Answer>(step: string, call: () => Promise<Answer>) {
   );
 }
 
-/** Whether a message is a `/goal` line that clears the goal. */
-function clearsGoal(content: Extract<InputLine, { type: "message" }>["content"]): boolean {
+/** Whether a message is a `/goal` line that sets or clears the goal, rather than one that asks where it stands. */
+function movesGoal(content: Extract<InputLine, { type: "message" }>["content"]): boolean {
   const text = content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
+  const ask = goalAskOf(text);
 
-  return goalAskOf(text)?.kind === GOAL_ASK.CLEAR;
+  return ask !== undefined && ask.kind !== GOAL_ASK.NONE;
 }
 
 /** Hands one of the service's messages to the CLI, marking the launch in a turn. Called under the admission. */
@@ -584,8 +585,8 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
             return;
           }
 
-          // Note that Claude Code runs a command only as a turn of its own, and a goal holds its turn open, so a `/goal clear` sent mid-turn interrupts that turn first; held unanswered ahead of it, so the turn it cuts off leaves the launch up for the clear.
-          if (clearsGoal(content) && (yield* Ref.get(launch.turnRunning))) {
+          // Note that Claude Code runs a command only as a turn of its own, where a line taken mid-turn is words to the model, and a goal holds its turn open, so a `/goal` that sets or clears it interrupts the turn first; held unanswered ahead of it, so the turn it cuts off leaves the launch up for the command.
+          if (movesGoal(content) && (yield* Ref.get(launch.turnRunning))) {
             yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
             yield* control("interrupt", () => launch.session.interrupt());
           }

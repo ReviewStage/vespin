@@ -59,12 +59,12 @@ const GOAL_THING = "Goal";
 const NOTICE_WORDS = {
   [GOAL_EVENT.SET]: "Goal set.",
   [GOAL_EVENT.NOT_MET]: "Goal not met yet",
-  [GOAL_EVENT.MET]: "Goal met.",
+  [GOAL_EVENT.MET]: "Goal met",
   [GOAL_EVENT.IMPOSSIBLE]: "Goal blocked",
   [GOAL_EVENT.PAUSED]: "Goal paused. The agent stops after this turn.",
-  [GOAL_EVENT.RESUMED]: "Goal resumed.",
+  [GOAL_EVENT.RESUMED]: "Goal resumed",
   [GOAL_EVENT.BUDGET_LIMITED]: "Goal stopped at its token budget",
-  [GOAL_EVENT.CLEARED]: "Goal cleared.",
+  [GOAL_EVENT.CLEARED]: "Goal cleared",
 } as const satisfies Record<GoalNotice["event"], string>;
 
 /** A token count as the row says it: "184k", "1.2M". */
