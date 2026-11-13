@@ -72,6 +72,7 @@ export function MenuSurface({
   leaving?: boolean | undefined;
 }): React.JSX.Element {
   // Note that the surface is a floating card, so it wears the one edge every card does.
+  // SAFETY: the rest props are a div's, which the span form shares, and the frame takes them as an element's.
   return (
     <MenuCardFrame
       {...(rest as HTMLAttributes<HTMLElement>)}
