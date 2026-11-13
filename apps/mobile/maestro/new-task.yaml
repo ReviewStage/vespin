@@ -18,10 +18,9 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: new-task-sheet
 - inputText: "Let a workspace owner revoke a pending invite."
-# Note that iOS's hideKeyboard is a short drag at the screen's middle, which
-# lowers the keyboard because the sheet's page lowers it on a drag
-# (`ComposeSheet`); the words field's return key types a new line.
-- hideKeyboard
+# The keyboard is lowered by a drag on the sheet's page (`ComposeSheet`).
+- runFlow:
+    file: subflows/lower-keyboard.yaml
 # The repository's capsule, which says the one picked, opens a menu of what
 # the workspace's GitHub reaches.
 - tapOn: "ada/relay"
@@ -47,7 +46,8 @@ appId: dev.vespin.ios
 - tapOn: "New task"
 - assertVisible: "Describe the task"
 - inputText: "Audit the invite emails for broken links."
-- hideKeyboard
+- runFlow:
+    file: subflows/lower-keyboard.yaml
 # A relation is picked from the sheet's + menu: Task relation, its kind,
 # then the task it names; it then stands over the words as a capsule.
 - tapOn:
@@ -96,7 +96,8 @@ appId: dev.vespin.ios
 - assertVisible: "Inbox"
 - tapOn: "New task"
 - assertVisible: "Describe the task"
-- hideKeyboard
+- runFlow:
+    file: subflows/lower-keyboard.yaml
 - waitForAnimationToEnd
 - takeScreenshot: new-task-add
 - tapOn:

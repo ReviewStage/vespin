@@ -110,7 +110,11 @@ onFlowComplete:
 - assertVisible: "Mark as unread"
 - assertVisible: "Unpin"
 - assertVisible: "Open in browser"
-- assertVisible: "Permanently delete"
+# Note that the menu is scrolled to its last act, which a short window, the
+# iPhone Duo's, stands below its foot.
+- scrollUntilVisible:
+    element: "Permanently delete"
+    direction: DOWN
 - takeScreenshot: tasks-row-menu
 # Rename asks for the name in the system's alert, opened on the task's name,
 # and Cancel keeps it.
@@ -309,14 +313,9 @@ onFlowComplete:
 - tapOn: "New sub-task"
 - assertVisible: "Describe the task"
 - assertVisible: "Sub-task of · Teammate invitations"
-# Note that the keyboard is lowered by a short drag up the form, which
-# lowers it on a drag (`SettingsForm`), since Maestro's hideKeyboard fails
-# on this sheet when no keyboard stands, as with nothing typed.
-- swipe:
-    start: "50%, 50%"
-    end: "50%, 40%"
-    duration: 400
-- waitForAnimationToEnd
+# The keyboard is lowered by a drag on the sheet's page.
+- runFlow:
+    file: subflows/lower-keyboard.yaml
 - takeScreenshot: new-sub-task
 - tapOn: "Cancel"
 - waitForAnimationToEnd

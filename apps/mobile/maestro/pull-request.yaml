@@ -26,6 +26,21 @@ appId: dev.vespin.ios
     env:
       ELEMENT: Merge
       DIRECTION: UP
+# Note that the transcript is drawn up a quarter of the window where Merge
+# stands no higher than the dock's held approval, whose note heads the dock,
+# because a short window, the iPhone Duo's, centers the card under the dock,
+# where the tap lands on it instead.
+- runFlow:
+    when:
+      notVisible:
+        text: "Merge"
+        above: "Sending a message denies the waiting approval."
+    commands:
+      - swipe:
+          start: "50%, 60%"
+          end: "50%, 35%"
+          duration: 800
+      - waitForAnimationToEnd
 - takeScreenshot: pull-request-card
 - tapOn: "Merge"
 - assertVisible: "Merge this pull request?"

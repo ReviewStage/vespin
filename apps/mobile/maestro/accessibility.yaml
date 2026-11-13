@@ -112,6 +112,11 @@ appId: dev.vespin.ios
     timeout: 15000
 - tapOn:
     id: "workspace-switcher"
+# Note that the switcher's list is scrolled to the account's row, which at
+# this text size a short window, the iPhone Duo's, stands below its foot.
+- scrollUntilVisible:
+    element: ".*, Settings"
+    direction: DOWN
 - tapOn: ".*, Settings"
 - waitForAnimationToEnd:
     timeout: 5000

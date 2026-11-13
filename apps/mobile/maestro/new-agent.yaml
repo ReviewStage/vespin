@@ -28,10 +28,9 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd
 - takeScreenshot: new-agent-sheet
 - inputText: "Add a Resend button beside each pending invite."
-# Note that iOS's hideKeyboard is a short drag at the screen's middle, which
-# lowers the keyboard because the sheet's page lowers it on a drag
-# (`ComposeSheet`); the words field's return key types a new line.
-- hideKeyboard
+# The keyboard is lowered by a drag on the sheet's page (`ComposeSheet`).
+- runFlow:
+    file: subflows/lower-keyboard.yaml
 # The model's capsule says the model and its effort, "Opus 5.5 · High", the
 # fixture's first model; its menu offers the catalog, each model once, by the
 # panel's name for it ("Sonnet 5.5"), then the model's efforts; a pick keeps

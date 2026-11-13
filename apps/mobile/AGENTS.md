@@ -295,7 +295,8 @@ A flow is written one way throughout:
   `runFlow` and its `env`: `open-row.yaml` and `row-menu.yaml` scroll to a
   row, move it clear of the tab bar (`clear-of-tabs.yaml`), and let the list
   settle before its tap or long press, `full-sheet.yaml` draws a half-height
-  sheet up to its full height, `scroll-to.yaml`
+  sheet up to its full height, `lower-keyboard.yaml` lowers the keyboard by a
+  drag on a sheet's page, where Maestro's hideKeyboard fails, `scroll-to.yaml`
   centers an element on a page, so neither a bar nor the reply box covers
   it, or with `ABOVE` scrolls it above a control, for an element at a list's
   end, which no scroll can center, or with `BELOW` scrolls up in short slow

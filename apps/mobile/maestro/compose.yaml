@@ -81,6 +81,11 @@ appId: dev.vespin.ios
 - assertVisible:
     text: "Approve for me.*"
     selected: true
+# Note that the sheet is scrolled back to its head for Done, which drawing
+# it up on a short window, the iPhone Duo's, scrolled out of sight.
+- scrollUntilVisible:
+    element: "Done"
+    direction: UP
 - tapOn: "Done"
 # A `/` typed offers the task's skills over the field, narrowed as the name
 # is typed, and a press writes the skill's word into the message.
