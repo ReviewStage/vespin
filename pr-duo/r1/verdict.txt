@@ -1,0 +1,5 @@
+Folded iPhone Duo set (duo2.yaml) on R1 bundle 77ed6fd8c (main 32a4961f0 + round 1), iOS 27.2 Duo runtime, JS on Nov 12's app; 0 failed steps in light and dark.
+- Inbox: the tab rail at the right edge with the copper 9 badge and the round +, all four scopes fitting, three-line rows. Same in both schemes.
+- Thread and task: a pushed page puts Back and ⋯ in the rail under the clock (iOS 27's outer-display placement, settled at 10:30 UTC). The task page shows its chips, the Following faces, and Sub-tasks and Agents with their +.
+- Settings and pushed Settings: shot in light only. The dark run took four of its six shots and pushed no Settings frames, so dark Settings is unshot.
+No new layout findings since folded-r2.

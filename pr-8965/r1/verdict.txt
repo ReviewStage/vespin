@@ -1,2 +1,6 @@
 #8965 at fa150d802, R1 bundle 77ed6fd8c, iPhone 18 Pro light and dark, pull-request.yaml, 0 failed steps.
 PASS (owner read the shots, 16:54 UTC; armed). The pale dark ⋯ menu is the bar issue #9028 fixes. 26.5: not run (memory). iPad 27.2 lane still to come.
+
+Round 1 iPad lane, landscape 27.2, same bundle:
+- dark: pull-request.yaml PASS, 0 failed steps. The pull request page opens full screen with Back, Squash and merge in copper, five checks and two reviews (ready, card, card-merge, merged, from-agent-row).
+- light: the same screens draw (ready, merged, card, from-agent-row). The flow failed at step 39, a scroll for ".*#128 Invite a teammate by email" in the Tasks list column, which on the landscape iPad shows only task titles; the pull request is reached from the agent row's #128 chip in the detail. A stale iPad step in pull-request.yaml, not #8965.
