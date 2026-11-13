@@ -127,6 +127,7 @@ export {
   type Face,
   FailedMark,
   NeedsYouDot,
+  RepositoryPicture,
   TaskStatusMark,
   ToneGlyph,
   UnreadDot,

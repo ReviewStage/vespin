@@ -85,6 +85,7 @@ import {
   ListSection,
   PATH_PART,
   RelationRow,
+  RepositoryPicture,
   ROW_ACTION_TONE,
   type RowAction,
   RowForEach,
@@ -94,6 +95,7 @@ import {
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
+  STATUS_TONE,
   type StandingMenus,
   sectionGlyph,
   shareLink,
@@ -101,6 +103,8 @@ import {
   TaskHead,
   TaskPreview,
   TaskRow,
+  ToneGlyph,
+  TYPE_ROLE,
   UNDER_SPLIT_SCREEN,
   useColors,
   WordsRow,
@@ -284,6 +288,7 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
     symbol: GLYPH.MOVE,
     choices: placing.sections.map((section) => ({
       label: section.title,
+      symbol: sectionGlyph(section.icon),
       on: section.id === standing,
       onPress: () => {
         if (section.id !== standing) placing.moveToSection(task.id, section.id);
@@ -793,12 +798,33 @@ function GroupSection({
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
+      lead={group.title === undefined ? undefined : <GroupMark group={group} />}
       count={group.rows.length}
       foldable
       onDropLink={dropOnto(group, listing)}
     >
       <FoldedRows rows={group.rows} listing={listing} parents={parents} />
     </ListSection>
+  );
+}
+
+/**
+ * What a group's header leads with, as the panel's sidebar leads it: a
+ * repository's owner's picture, or the crossed folder for tasks naming no
+ * repository, and Pinned's, Following's and a section's own glyph.
+ */
+function GroupMark({ group }: { readonly group: TaskTreeGroup }) {
+  if (group.kind === TASK_TREE_GROUP.REPOSITORY) {
+    return <RepositoryPicture repository={group.key === "" ? undefined : group.key} />;
+  }
+
+  return (
+    <ToneGlyph
+      glyph={collectionGlyph(group)}
+      tone={STATUS_TONE.NEUTRAL}
+      textStyle={TYPE_ROLE.GROUP_HEADER}
+      hidden
+    />
   );
 }
 

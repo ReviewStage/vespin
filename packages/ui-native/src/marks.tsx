@@ -26,6 +26,7 @@ import { NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { MODEL_PROVIDER, type ModelProvider } from "@repo/features/models-wire";
 import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
+import { repositoryOwnerPictureUrl } from "@repo/features/tasks-model";
 import { useState } from "react";
 import { Image as Photo, PixelRatio, View } from "react-native";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -111,6 +112,60 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
       color={toneColor(colors, TASK_STATUS_TONE[status])}
       modifiers={[accessibilityLabel(TASK_STATUS_WORDS[status])]}
     />
+  );
+}
+
+/** How round a repository's picture stands, of its size: a tile's, as the panel draws a repository's owner, not a person's circle. */
+const REPOSITORY_CORNER = 0.25;
+
+/**
+ * A repository as the panel marks it (`@repo/ui`'s `RepositoryPicture`): its
+ * owner's GitHub picture, on a tile's rounded corners, with the repository
+ * glyph standing in until the picture draws and once it fails, and the
+ * crossed folder for tasks that name no repository. It is never heard,
+ * since the words beside it name the repository.
+ */
+export function RepositoryPicture({
+  repository,
+  size = MARK_SIZE.GLYPH,
+}: {
+  /** The repository, `owner/name`; none for tasks that name no repository. */
+  readonly repository: string | undefined;
+  readonly size?: number | undefined;
+}) {
+  const colors = useColors();
+  const [drawn, setDrawn] = useState<string | undefined>(undefined);
+  const [failed, setFailed] = useState<string | undefined>(undefined);
+
+  if (repository === undefined) {
+    return (
+      <Image
+        {...glyphImage(GLYPH.NO_REPOSITORY)}
+        size={size}
+        color={colors.TEXT_MUTED}
+        modifiers={[accessibilityHidden()]}
+      />
+    );
+  }
+
+  const address = repositoryOwnerPictureUrl(repository);
+  const shown = address === drawn && address !== failed;
+
+  return (
+    <ZStack modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}>
+      {shown ? null : (
+        <Image {...glyphImage(GLYPH.REPOSITORY)} size={size} color={colors.TEXT_MUTED} />
+      )}
+      {address === failed ? null : (
+        <AvatarPhoto
+          address={address}
+          size={size}
+          corner={size * REPOSITORY_CORNER}
+          onLoad={() => setDrawn(address)}
+          onFail={() => setFailed(address)}
+        />
+      )}
+    </ZStack>
   );
 }
 

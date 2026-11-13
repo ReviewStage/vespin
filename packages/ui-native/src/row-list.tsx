@@ -184,6 +184,8 @@ type ListSectionProps = {
   readonly title?: string | undefined;
   /** How many rows it holds, drawn after its title in a lighter ink. */
   readonly count?: number | undefined;
+  /** A mark before its title, as the panel leads a section with its icon and a repository with its owner's picture. */
+  readonly lead?: ReactNode;
   /** A glyph in its tone before the count, saying how what it counts went, such as checks failing. */
   readonly mark?: MarkLook | undefined;
   /** Whether a press on its header folds it in place, a chevron leading the header. */
@@ -224,12 +226,14 @@ type SectionAdd = {
 /** A section's header: its fold chevron where it folds, its title in 13 pt medium, and its count, all muted. */
 function GroupHeader({
   title,
+  lead,
   count,
   progress,
   mark,
   folded,
 }: {
   readonly title: string;
+  readonly lead: ReactNode;
   readonly count: number | undefined;
   readonly progress: SectionProgress | undefined;
   readonly mark: MarkLook | undefined;
@@ -256,6 +260,7 @@ function GroupHeader({
           modifiers={[frame({ width: CHEVRON_SIZE + 2 })]}
         />
       )}
+      {lead}
       <Text
         modifiers={[
           font({ textStyle: TYPE_ROLE.GROUP_HEADER, weight: "medium" }),
@@ -345,6 +350,7 @@ function SectionAddButton({ add }: { readonly add: SectionAdd }) {
  */
 export function ListSection({
   title,
+  lead,
   count,
   progress,
   mark,
@@ -360,6 +366,7 @@ export function ListSection({
     title === undefined ? undefined : (
       <GroupHeader
         title={title}
+        lead={lead}
         count={count}
         progress={progress}
         mark={mark}
