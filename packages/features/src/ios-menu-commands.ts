@@ -21,6 +21,7 @@ export const MENU_COMMAND = {
   TASKS: "tasks",
   SEARCH: "search",
   SIDEBAR: "sidebar",
+  DETAIL_ONLY: "detailOnly",
   MARK_DONE: "markDone",
   TOGGLE_READ: "toggleRead",
   PIN: "pin",

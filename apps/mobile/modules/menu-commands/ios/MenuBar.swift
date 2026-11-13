@@ -40,7 +40,7 @@ private struct Command {
 }
 
 /// A glyph by its name: the asset catalog's symbol of that name, as the app's Lucide glyphs are, else an SF Symbol's.
-/// Note that the catalog is asked first, because every name here is a Lucide one, and a system lookup should never stand in for it.
+/// Note that the catalog is asked first, because every name here but Expand Page's pair is a Lucide one, and a system lookup should never stand in for it; that pair is iOS's own, as Mail draws it.
 private func glyph(_ name: String?) -> UIImage? {
   guard let name else { return nil }
   return UIImage(named: name) ?? UIImage(systemName: name)
@@ -68,6 +68,10 @@ private let commands: [Command] = [
   Command(
     id: "sidebar", place: .sidebar, title: "Hide Sidebar", toggledTitle: "Show Sidebar",
     symbol: "PanelLeft", input: "s", modifiers: [.command, .control]),
+  Command(
+    id: "detailOnly", place: .sidebar, title: "Expand Page", toggledTitle: "Collapse Page",
+    symbol: "arrow.up.left.and.arrow.down.right", toggledSymbol: "arrow.down.right.and.arrow.up.left",
+    input: "f", modifiers: [.command, .control]),
   Command(
     id: "markDone", place: .subject, title: "Mark Done", symbol: "Check", input: "d",
     modifiers: [.command, .shift], nonRepeatable: true),
