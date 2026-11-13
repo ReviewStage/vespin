@@ -11,7 +11,7 @@ import { UNREPORTED } from "@repo/ui/reported-failure";
 import type { UnparsedWireValue } from "@repo/wire";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { ReactNode } from "react";
-import { askAct } from "../act.js";
+import { actFailureWords, askAct } from "../act.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { appStateQuery, selectCapability } from "../use-app-state.js";
 import { useMacOwner } from "./transcript-blocks.js";
@@ -92,9 +92,11 @@ export function ComputerPermissionNote({
   const names = computerPermissionsNamed(missing.permissions);
   const them = missing.permissions.length === 1 ? "it" : "them";
 
-  // Note that macOS applies Screen Recording only once the app is reopened, so a reader who went to turn it on is told so.
+  // Note that macOS applies Screen Recording only once the app is reopened, so a reader whose ask reached it is told so, and one whose ask did not is told why instead.
   const reopen =
-    thatMac && !asked.isIdle && missing.permissions.includes(COMPUTER_PERMISSION.SCREEN_RECORDING);
+    thatMac &&
+    asked.isSuccess &&
+    missing.permissions.includes(COMPUTER_PERMISSION.SCREEN_RECORDING);
 
   return (
     <div className="mt-list-gap mr-0 mb-item-gap ml-transcript-gutter">
@@ -106,6 +108,7 @@ export function ComputerPermissionNote({
       >
         {noteWords(names, them, thatMac, owner)}
         {reopen ? ` ${REOPEN}` : null}
+        {asked.isError ? ` ${actFailureWords(asked.error)}` : null}
       </ErrorState>
     </div>
   );

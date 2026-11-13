@@ -547,7 +547,15 @@ private func captureWindow(_ app: NSRunningApplication, frame numbered: CGRect?)
         $0.owningApplication?.processID == pid && $0.windowLayer == 0 && $0.frame.width > 1
     }
     if let numbered {
-        guard let paired = windows.first(where: { sameFrame($0.frame, numbered) }) else {
+        // Note that two windows at one frame are refused too, since either could be the one numbered.
+        let paired = windows.filter { sameFrame($0.frame, numbered) }
+        guard paired.count <= 1 else {
+            throw HelperError(
+                kind: ERROR_KIND.noWindow,
+                message:
+                    "\(appName(app)) has two windows at the same place, so it can't tell which to capture. Ask the developer to move one of them.")
+        }
+        guard let paired = paired.first else {
             throw HelperError(
                 kind: ERROR_KIND.noWindow,
                 message:

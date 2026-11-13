@@ -975,6 +975,58 @@ it.effect(
 );
 
 it.effect(
+  "an app allowed once for one agent and then always for another is asked about again for the first once it is removed",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+
+      const gate: Gate = {
+        mode: MAC_COMMAND_MODE.ALWAYS,
+        signedIn: true,
+        computer: { helper: scripted.helper, enabled: true, allowed: [] },
+      };
+
+      const service = scriptedService();
+      const first = computerCommand(COMMAND.id, AGENT, "Simulator");
+      service.queue(first, NOW);
+
+      const { composer, asks, answer } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        gate,
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* answer(first.id, MAC_COMMAND_DECISION.ALLOW_ONCE);
+          yield* settled;
+
+          const second = computerCommand(SECOND.id, OTHER_AGENT, "Simulator");
+          service.queue(second, NOW);
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+          yield* answer(second.id, MAC_COMMAND_DECISION.ALLOW_ALWAYS);
+          yield* settled;
+          assert.deepEqual(gate.computer?.allowed, ["com.apple.iphonesimulator"]);
+
+          gate.computer?.allowed.splice(0);
+          const third = computerCommand(THIRD_ID, AGENT, "Simulator");
+          service.queue(third, NOW);
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+          assert.deepEqual(
+            asks(),
+            [{ id: third.id, app: "Simulator" }],
+            "a Remove takes back the first agent's once grant too",
+          );
+        }),
+      );
+    }),
+);
+
+it.effect(
   "an action on an app not yet allowed is asked about by the app, Always allow adds the app and runs the action, another agent's action on it then asks nothing, and once it is removed the first agent is asked again; every read names computer too",
   () =>
     Effect.gen(function* () {
