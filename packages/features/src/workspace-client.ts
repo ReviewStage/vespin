@@ -40,8 +40,12 @@ import {
 } from "./workspace-call.js";
 import {
   type WorkspaceEnvironmentAnswer,
+  type WorkspaceVariableEditRequest,
+  type WorkspaceVariablesSaveRequest,
   workspaceVariableDeleteRequestSchema,
+  workspaceVariableEditRequestSchema,
   workspaceVariablePutRequestSchema,
+  workspaceVariablesSaveRequestSchema,
 } from "./workspace-environment-wire.js";
 import {
   type WorkspaceInvitation,
@@ -493,7 +497,7 @@ export class HostedWorkspaceClient {
     );
   }
 
-  /** The workspace's environment variables by name, never a value, as any member reads them. */
+  /** The workspace's environment variables, as any member reads them: never a secret's value. */
   environment(
     workspaceId: string,
   ): Effect.Effect<WorkspaceCallResult<WorkspaceEnvironmentAnswer>, never, HttpClient.HttpClient> {
@@ -503,14 +507,17 @@ export class HostedWorkspaceClient {
     );
   }
 
-  /** One environment variable set by an owner or admin, replacing a value of that name, answering the names as they then stand; a variable the service would refuse by shape never travels. */
+  /** One environment variable set by an owner or admin, replacing a value of that name, answering the variables as they then stand; a variable the service would refuse by shape never travels. */
   putVariable(
     workspaceId: string,
     name: string,
     value: string,
+    secret?: boolean,
   ): Effect.Effect<WorkspaceCallResult<WorkspaceEnvironmentAnswer>, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(
-      readEither(workspaceVariablePutRequestSchema)({ workspaceId, name, value }),
+      readEither(workspaceVariablePutRequestSchema)(
+        secret === undefined ? { workspaceId, name, value } : { workspaceId, name, value, secret },
+      ),
     );
 
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
@@ -612,7 +619,37 @@ export class HostedWorkspaceClient {
     );
   }
 
-  /** One environment variable deleted by an owner or admin, answering the names that remain. */
+  /** Several environment variables set at once by an owner or admin, all or none, answering the variables as they then stand; a save the service would refuse by shape never travels. */
+  saveVariables(
+    request: WorkspaceVariablesSaveRequest,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceEnvironmentAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(
+      readEither(workspaceVariablesSaveRequestSchema)(request),
+    );
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return resultOf(
+      hostedCall(this.#hosted.workspaceEnvironment.save, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** One environment variable renamed, given a new value, or turned secret by an owner or admin, answering the variables as they then stand; an edit the service would refuse by shape never travels. */
+  editVariable(
+    request: WorkspaceVariableEditRequest,
+  ): Effect.Effect<WorkspaceCallResult<WorkspaceEnvironmentAnswer>, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(workspaceVariableEditRequestSchema)(request));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return resultOf(
+      hostedCall(this.#hosted.workspaceEnvironment.edit, admitted),
+      (answer) => answer,
+    );
+  }
+
+  /** One environment variable deleted by an owner or admin, answering the variables that remain. */
   deleteVariable(
     workspaceId: string,
     name: string,
