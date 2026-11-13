@@ -206,17 +206,17 @@ test("an experiment is found by its name, what it brings, and what other apps ca
   }
 
   const experiments = [
-    "Voice",
-    "Following",
-    "Turn changes",
-    "Suggestions",
-    "Rewind restores files",
-    "Done and follow-ups",
-    "Run actions",
     "Computer use",
-    "Task descriptions",
-    "Skills",
+    "Done and follow-ups",
+    "Following",
     "Memory",
+    "Rewind restores files",
+    "Run actions",
+    "Skills",
+    "Suggestions",
+    "Task descriptions",
+    "Turn changes",
+    "Voice",
   ];
 
   for (const query of ["beta", "labs"]) {
