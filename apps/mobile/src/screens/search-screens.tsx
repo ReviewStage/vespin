@@ -1,4 +1,4 @@
-// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, each kind in its own section drawn by its own list's row, beside the app sidebar in a regular window.
+// search-screens.tsx -- the Search tab: the system's search field in its bar over the tasks, Inbox items, and agents it finds, each kind in its own section drawn by its own list's row, its results beside the app sidebar in a window wide enough for three columns.
 
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { iosAgentRoute, iosAppRouteOf } from "@repo/features/ios-app-links";
@@ -10,6 +10,7 @@ import {
   SEARCH_FOUND_KIND,
   SEARCH_FOUND_TITLE,
 } from "@repo/features/search-found-model";
+import { CHOOSE_AN_ITEM_WORDS } from "@repo/features/words";
 import {
   EmptyState,
   GLYPH,
@@ -17,28 +18,23 @@ import {
   ListSection,
   RowList,
   Screen,
-  SplitView,
+  UNDER_SPLIT_SCREEN,
 } from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
+import { useHandColumns } from "../place-columns.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { type TasksListing, useListingAsks } from "../tasks/use-tasks.js";
 import { useThreeColumns } from "../use-window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
+import { SIDEBAR_PLACE } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
 import { InboxItemRows } from "./inbox-screens.js";
-import {
-  StatusQuestionAsk,
-  TaskAgentRow,
-  TaskRows,
-  useAgentArchiveAsk,
-  useSidebarTasks,
-} from "./task-screens.js";
+import { StatusQuestionAsk, TaskAgentRow, TaskRows, useAgentArchiveAsk } from "./task-screens.js";
 
 /** The Search tab's name, at its head. */
 const SEARCH_TITLE = "Search";
@@ -212,31 +208,32 @@ function SearchStackScreen(words: SearchWords) {
 }
 
 /**
- * A wide window's Search: the app sidebar beside what the query finds,
- * under the system's field in the column's bar, as the iPad's Mail searches
- * beside its mailboxes. A row found opens in its own tab, beside its list.
+ * A wide window's Search: what the query finds, under the system's field in
+ * the list column's bar, handed to the tabs' one split view beside the app
+ * sidebar, as the iPad's Mail searches beside its mailboxes. A row found
+ * opens in its own tab, beside its list, so the detail beside the results
+ * only says to pick one. Note that the results stand in the list column, as
+ * every tab's list does, because a split view that loses its middle column
+ * as the tabs change is a different view and is drawn anew.
  */
 function SearchSplitScreen(words: SearchWords) {
   const { query, setQuery, results, status, deletion, remind, archiveAsk } = useSearchScreen(words);
-  const sidebar = useAppSidebar(SIDEBAR_PLACE.SEARCH, useSidebarTasks());
+
+  useHandColumns(SIDEBAR_PLACE.SEARCH, {
+    content: results,
+    contentBar: {
+      title: SEARCH_TITLE,
+      search: { placeholder: SEARCH_EVERYTHING, text: query, onChange: setQuery },
+    },
+    detail: <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.SEARCH} />,
+  });
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <Screen>
-        <SplitView
-          {...sidebar.columns()}
-          detail={results}
-          detailBar={{
-            title: SEARCH_TITLE,
-            search: { placeholder: SEARCH_EVERYTHING, text: query, onChange: setQuery },
-          }}
-        />
-      </Screen>
+      <Stack.Screen options={UNDER_SPLIT_SCREEN} />
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
       {archiveAsk.ask}
-      {sidebar.ask}
       {remind.sheet}
     </>
   );

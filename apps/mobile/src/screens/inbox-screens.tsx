@@ -73,6 +73,7 @@ import {
   type ThreadMessage,
   ThreadPage,
   ThreadPreview,
+  UNDER_SPLIT_SCREEN,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -90,19 +91,19 @@ import {
 import { useThreadAnswer } from "../inbox/use-thread-answer.js";
 import { type PictureOf, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
+import { useHandColumns } from "../place-columns.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, useAppSidebar } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, useListColumn, useListLook } from "./app-sidebar.js";
 import { OpenAskCard, openAskFiles, ThreadComposer, threadMenu } from "./inbox-ask.js";
 import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
-import { useSidebarTasks } from "./task-screens.js";
 
 /** The Inbox's name, at its head and on its back button. */
 const INBOX_TITLE = "Inbox";
@@ -811,10 +812,13 @@ function InboxStackList(words: InboxSearch) {
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the list
 // under its scopes' menu picker, since the column cuts segments short, with
-// its search and ⋯ menu in its bar and the selected thread beside it, and, where the window is wide enough for three
-// columns, the app sidebar before them, as Mail stands its mailboxes, a
-// mailbox's mail, and a message. The Stack's header steps aside, since the
-// split view draws each column's navigation bar itself.
+// its search and ⋯ menu in its bar and the selected thread beside it. Where
+// the window is wide enough for three columns, the two are handed to the
+// tabs' one split view, which stands them beside the app sidebar, as Mail
+// stands its mailboxes, a mailbox's mail, and a message, and this root draws
+// nothing of its own under it; otherwise the root stands its own split view.
+// The Stack's header steps aside, since the split view draws each column's
+// navigation bar itself.
 function InboxSplitScreen({
   selected,
   select,
@@ -829,55 +833,63 @@ function InboxSplitScreen({
     selected,
   );
 
-  const sidebar = useAppSidebar(SIDEBAR_PLACE.INBOX, useSidebarTasks());
+  const threeColumns = useThreeColumns();
+  const look = useListLook();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
+
+  const list = {
+    view: (
+      <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
+        {listing.listed.length === 0 ? (
+          <InboxEmpty
+            show={show}
+            search={search}
+            feed={listing.feed}
+            onRetry={() => void acts.refresh()}
+          />
+        ) : (
+          <InboxRows
+            look={look}
+            listed={listing.listed}
+            readerId={listing.readerId}
+            selected={selected}
+            onSelect={select}
+            onRefresh={acts.refresh}
+            onMark={acts.mark}
+            onRemind={remind.open}
+            onResolve={acts.resolve}
+          />
+        )}
+      </ScopePicker>
+    ),
+    bar: {
+      title: INBOX_TITLE,
+      menu,
+      search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
+    },
+  };
+
+  const detail =
+    selected === undefined ? (
+      <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.INBOX} />
+    ) : (
+      <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
+    );
+
+  const first = useListColumn(list);
+  useHandColumns(
+    SIDEBAR_PLACE.INBOX,
+    threeColumns ? { content: list.view, contentBar: list.bar, detail } : undefined,
+  );
 
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <Screen>
-        <SplitView
-          {...sidebar.columns({
-            view: (
-              <ScopePicker label={SCOPE_LABEL} scopes={scopes} look={SCOPE_LOOK.MENU}>
-                {listing.listed.length === 0 ? (
-                  <InboxEmpty
-                    show={show}
-                    search={search}
-                    feed={listing.feed}
-                    onRetry={() => void acts.refresh()}
-                  />
-                ) : (
-                  <InboxRows
-                    look={sidebar.listLook}
-                    listed={listing.listed}
-                    readerId={listing.readerId}
-                    selected={selected}
-                    onSelect={select}
-                    onRefresh={acts.refresh}
-                    onMark={acts.mark}
-                    onRemind={remind.open}
-                    onResolve={acts.resolve}
-                  />
-                )}
-              </ScopePicker>
-            ),
-            bar: {
-              title: INBOX_TITLE,
-              menu,
-              search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
-            },
-          })}
-          detail={
-            selected === undefined ? (
-              <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.INBOX} />
-            ) : (
-              <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
-            )
-          }
-        />
-      </Screen>
-      {sidebar.ask}
+      <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
+      {threeColumns ? null : (
+        <Screen>
+          <SplitView {...first} detail={detail} />
+        </Screen>
+      )}
       {remind.sheet}
     </>
   );

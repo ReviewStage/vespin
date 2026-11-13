@@ -21,6 +21,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
+import { StyleSheet, View } from "react-native";
 import type { Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
 import type { MenuChoice } from "./list-row.js";
@@ -29,6 +30,25 @@ import { useColors } from "./tokens/colors.js";
 
 /** What the first column holds, so it is drawn afresh as that changes. */
 const FIRST_COLUMN = { APP_SIDEBAR: "app-sidebar", LIST: "list" } as const;
+
+/** Where the split view stands against the tabs' screens: over a tab's root, or behind the page a tab pushed over it. */
+const LAYER = { FRONT: 1, BEHIND: 0 } as const;
+
+/**
+ * A tab root's stack options while the split view stands over it: no bar,
+ * and no ground of its own, so the split view behind shows through it while
+ * a pushed page slides in over it or is swiped back off it.
+ */
+export const UNDER_SPLIT_SCREEN = {
+  headerShown: false,
+  contentStyle: { backgroundColor: "transparent" },
+} as const;
+
+const layers = StyleSheet.create({
+  stand: { flex: 1 },
+  tabs: { flex: 1 },
+  split: { ...StyleSheet.absoluteFill },
+});
 
 /** An act a bar holds by its symbol alone, such as Settings. */
 export type BarAction = {
@@ -100,6 +120,8 @@ type SplitViewProps = {
   /** The selected row's page, or an `EmptyState` before one is picked. */
   readonly detail: ReactNode;
   readonly detailBar?: ColumnBar | undefined;
+  /** Names what the list and the detail show, such as the place the app sidebar picked, so both are drawn afresh, their search fields included, as it changes while the sidebar stands. */
+  readonly columnsKey?: string | undefined;
   /** Whether the sidebar stands beside the other columns; hidden, the system's own button in the next column's bar brings it back. */
   readonly sidebarShown: boolean;
   /** Called as a person shows or hides the sidebar, with the system's button, a swipe, or a drag. */
@@ -256,6 +278,7 @@ export function SplitView({
   contentBar,
   detail,
   detailBar,
+  columnsKey,
   sidebarShown,
   onSidebarShownChange,
 }: SplitViewProps) {
@@ -284,12 +307,45 @@ export function SplitView({
       </NavigationSplitView.Sidebar>
       {content === undefined ? null : (
         <NavigationSplitView.Content>
-          <Column view={content} bar={contentBar} />
+          <Column key={columnsKey} view={content} bar={contentBar} />
         </NavigationSplitView.Content>
       )}
       <NavigationSplitView.Detail>
-        <Column view={detail} bar={detailBar} />
+        <Column key={columnsKey} view={detail} bar={detailBar} />
       </NavigationSplitView.Detail>
     </NavigationSplitView>
+  );
+}
+
+/**
+ * The tabs' screens with one split view standing over them, as a window
+ * wide enough for three columns stands its app sidebar, so a tab's switch
+ * changes only the list and the detail beside a sidebar that stays where it
+ * is. The split view stands in front while a tab's root stands, and behind
+ * the tabs while a tab has pushed a page over its root, which slides in over
+ * the split view, since the root under it draws nothing of its own. With no
+ * split view, the tabs stand alone in the same place, so a rotation across
+ * the line keeps every tab's stack.
+ */
+export function SplitOverTabs({
+  tabs,
+  split,
+  front,
+}: {
+  readonly tabs: ReactNode;
+  readonly split?: ReactNode | undefined;
+  readonly front: boolean;
+}) {
+  const layer = front ? LAYER.FRONT : LAYER.BEHIND;
+
+  return (
+    <View style={layers.stand}>
+      <View style={[layers.tabs, { zIndex: LAYER.FRONT - layer }]}>{tabs}</View>
+      {split === undefined ? null : (
+        <View style={[layers.split, { zIndex: layer }]} pointerEvents={front ? "auto" : "none"}>
+          {split}
+        </View>
+      )}
+    </View>
   );
 }

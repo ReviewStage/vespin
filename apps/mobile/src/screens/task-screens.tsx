@@ -92,6 +92,7 @@ import {
   TaskHead,
   TaskPreview,
   TaskRow,
+  UNDER_SPLIT_SCREEN,
   useColors,
   WordsRow,
 } from "@repo/ui-native";
@@ -104,6 +105,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
+import { useHandColumns } from "../place-columns.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
@@ -135,10 +137,10 @@ import {
   useTasksRead,
   useTaskWrites,
 } from "../tasks/use-tasks.js";
-import { useWindowSizeClass } from "../use-window-size-class.js";
+import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, type SidebarTasks, useAppSidebar } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, type SidebarTasks, useListColumn, useListLook } from "./app-sidebar.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -1583,10 +1585,12 @@ function TasksStackList(words: TasksSearch) {
 }
 
 // A regular window, such as the unfolded iPhone Duo's or an iPad's: the tree
-// and the picked task side by side, and, where the window is wide enough for
-// three columns, the app sidebar before them, as Mail stands its mailboxes, a
-// mailbox's mail, and a message. The Stack's header steps aside,
-// since the split view draws each column's navigation bar itself.
+// and the picked task side by side. Where the window is wide enough for three
+// columns, the two are handed to the tabs' one split view, which stands them
+// beside the app sidebar, as Mail stands its mailboxes, a mailbox's mail, and
+// a message, and this root draws nothing of its own under it; otherwise the
+// root stands its own split view. The Stack's header steps aside, since the
+// split view draws each column's navigation bar itself.
 function TasksSplitScreen({
   selected,
   select,
@@ -1605,71 +1609,81 @@ function TasksSplitScreen({
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId);
   const read = useTasksRead();
-  const sidebar = useAppSidebar(SIDEBAR_PLACE.TASKS, useSidebarTasks(), selected);
   const archiveAsk = useAgentArchiveAsk();
+  const threeColumns = useThreeColumns();
+  const look = useListLook();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
 
+  const list = {
+    view: (
+      <TasksTree
+        listing={listing}
+        look={look}
+        search={search}
+        selected={selected}
+        onSelect={select}
+        onRefresh={refreshTasks}
+      />
+    ),
+    bar: {
+      title: TASKS_TITLE,
+      search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
+    },
+  };
+
+  const detail =
+    overview !== undefined ? (
+      <OverviewPage
+        key={overview.task.id}
+        overview={overview}
+        onRefresh={refreshTasks}
+        onArchiveAgent={archiveAsk.archive}
+      />
+    ) : selected === undefined ? (
+      <EmptyState title={SELECT_A_TASK} symbol={GLYPH.TASK} />
+    ) : read && !found.seeking ? (
+      <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
+    ) : (
+      <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
+    );
+
+  const detailBar =
+    overview === undefined
+      ? undefined
+      : {
+          menu: taskMenu(overview, {
+            askDelete: listing.askDelete,
+            newSubTask,
+            history,
+            openRelation,
+            moveDoor,
+          }),
+          path: {
+            path: taskPath(overview.task, overview.workspace),
+            status: overview.task.status,
+          },
+        };
+
+  const first = useListColumn(list);
+  useHandColumns(
+    SIDEBAR_PLACE.TASKS,
+    threeColumns
+      ? { content: list.view, contentBar: list.bar, detail, detailBar, openTask: selected }
+      : undefined,
+  );
+
   return (
     <>
-      <Stack.Screen options={{ headerShown: false }} />
-      <Screen>
-        <SplitView
-          {...sidebar.columns({
-            view: (
-              <TasksTree
-                listing={listing}
-                look={sidebar.listLook}
-                search={search}
-                selected={selected}
-                onSelect={select}
-                onRefresh={refreshTasks}
-              />
-            ),
-            bar: {
-              title: TASKS_TITLE,
-              search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
-            },
-          })}
-          detail={
-            overview !== undefined ? (
-              <OverviewPage
-                key={overview.task.id}
-                overview={overview}
-                onRefresh={refreshTasks}
-                onArchiveAgent={archiveAsk.archive}
-              />
-            ) : selected === undefined ? (
-              <EmptyState title={SELECT_A_TASK} symbol={GLYPH.TASK} />
-            ) : read && !found.seeking ? (
-              <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
-            ) : (
-              <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
-            )
-          }
-          detailBar={
-            overview === undefined
-              ? undefined
-              : {
-                  menu: taskMenu(overview, {
-                    askDelete: listing.askDelete,
-                    newSubTask,
-                    history,
-                    openRelation,
-                    moveDoor,
-                  }),
-                  path: {
-                    path: taskPath(overview.task, overview.workspace),
-                    status: overview.task.status,
-                  },
-                }
-          }
-        />
-      </Screen>
+      <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
+      {threeColumns ? null : (
+        <Screen>
+          <SplitView {...first} detail={detail} detailBar={detailBar} />
+        </Screen>
+      )}
       <StatusQuestionAsk question={status} />
       <StatusQuestionAsk question={deletion} />
       {archiveAsk.ask}
-      {sidebar.ask}
     </>
   );
 }
