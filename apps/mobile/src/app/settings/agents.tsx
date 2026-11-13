@@ -165,7 +165,8 @@ export default function AgentsScreen() {
   const atSpeed = (next: ModelSpeed) => {
     const now = latest();
 
-    if (now === undefined) return;
+    // Note that the speed is compared with the newest choice sent, not the one drawn, so a second speed picked before the first is drawn still goes.
+    if (now === undefined || modelSpeedOf(now.model) === next) return;
     choose(choiceAt(catalog, modelIdAtSpeed(standardModelIdOf(now.model), next), now));
   };
 
@@ -272,7 +273,7 @@ export default function AgentsScreen() {
                     onPick={(picked) => {
                       const next = speeds.find((each) => each === picked);
 
-                      if (next !== undefined && next !== speed) atSpeed(next);
+                      if (next !== undefined) atSpeed(next);
                     }}
                   />
                 ) : null}
