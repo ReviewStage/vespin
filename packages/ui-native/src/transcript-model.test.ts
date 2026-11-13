@@ -101,6 +101,39 @@ describe("transcriptItems", () => {
     ]);
   });
 
+  it("stands one sender's lines sent close together in a run, and the day and time only over talk that picks up again", () => {
+    const minute = 60 * 1000;
+    const ada = { name: "Ada", userId: "u1" };
+    const grace = { name: "Grace", userId: "u2" };
+
+    const line = (id: string, minutes: number, sentBy = ada) => ({
+      id,
+      role: MESSAGE_ROLE.USER,
+      parts: [{ type: "text" as const, text: id }],
+      sentAt: minutes * minute,
+      sentBy,
+    });
+
+    const items = transcriptItems(
+      [line("a", 0), line("b", 1), line("c", 2, grace), line("d", 3, grace), line("e", 40)],
+      { writing: false, readerId: "u1", toggles: NO_TOGGLES, now: 41 * minute, pullRequests: [] },
+    );
+
+    expect(
+      items.map((item) =>
+        item.kind === TRANSCRIPT_ITEM.SAID
+          ? [item.words, item.joinsAbove, item.joinsBelow, item.sender, item.stamp !== undefined]
+          : item.kind,
+      ),
+    ).toEqual([
+      ["a", false, true, undefined, true],
+      ["b", true, false, undefined, false],
+      ["c", false, true, "Grace", false],
+      ["d", true, false, "Grace", false],
+      ["e", false, false, undefined, true],
+    ]);
+  });
+
   it("heads a line sent from a suggestion by the agent that suggested it", () => {
     const suggestedBy = { agent_id: "a1", name: "Triage", button_id: "b1" };
     const lead = "Suggested by [@Triage](https://vespin.dev/acme/agent/a1):\n\n";
