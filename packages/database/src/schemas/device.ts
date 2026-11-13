@@ -7,7 +7,7 @@ import type {
 } from "@repo/features/device-agent-wire";
 import type { AllowedAppLook, MachineCommandMode } from "@repo/features/machine-command-wire";
 import { sql } from "drizzle-orm";
-import { index, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
+import { boolean, index, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { createdAt, timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 
@@ -118,6 +118,23 @@ export const device = pgTable(
     commandMode: text("command_mode").$type<MachineCommandMode>(),
     /** The apps on this machine the member answered Always allow for, by bundle id; null until the machine first carries its own list up. */
     alwaysAllowedApps: jsonb("always_allowed_apps").$type<readonly string[]>(),
+    /**
+     * Whether agents may use apps on this machine, its own "Let agents use
+     * apps on this Mac" switch, kept beside `command_mode` and never folded
+     * into it, so any device of the member's can change it. Null until the
+     * machine first carries its own switch up, as a desktop from before the
+     * column never does.
+     */
+    computerUse: boolean("computer_use"),
+    /**
+     * When the scheduled sweep found the machine's app no longer listening
+     * for its commands (`machine_command_device_listener`), or when it last
+     * joined, before it first listens again; null while it listens. Unlike
+     * when it last listened, which every read rewrites, it moves only as
+     * the app comes or goes, so a live read of the account's machines wakes
+     * on it (`markCommandsAwayDevices`).
+     */
+    commandsAwayAt: timestamptz("commands_away_at"),
     /**
      * How the machine names and draws the apps it always allows, as it last
      * posted them: each app by the bundle id it is allowed by, its display

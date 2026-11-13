@@ -1,5 +1,5 @@
 /**
- * device-store.ts -- an account's devices that can run its local agents or take its agents' commands: registered, beaten with where a host's update stands, read for the ones there now, joined with their own settings for commands, and listed to the workspace's members.
+ * device-store.ts -- an account's devices that can run its local agents or take its agents' commands: registered, beaten with where a host's update stands, read for the ones there now, joined with their own settings for commands, those settings changed from anywhere, marked away as their app stops listening, and listed to the workspace's members.
  *
  * Every function is an effect over the ambient `SqlClient`, keyed by the
  * account, so no account moves, beats, or reads another's Mac, bar a
@@ -32,12 +32,12 @@ import {
   type MachineDeviceJoinRequest,
   type MachineDeviceSettings,
   machineCommandModeSchema,
-  machineDeviceSettingsSchema,
 } from "@repo/features/machine-command-wire";
 import { and, asc, desc, eq, exists, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
+import { TXID_RETURNING, TxidRowSchema } from "../core/txid.js";
 import { member } from "../schemas/auth.js";
 import { device } from "../schemas/device.js";
 import { machineCommandDeviceListener } from "../schemas/machine-command.js";
@@ -46,6 +46,22 @@ import { workspaceReachableBy } from "./workspace-store.js";
 type DeviceEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
 const DeviceKeySchema = Schema.Struct({ userId: Schema.String, id: Schema.String });
+
+/** A machine's settings as its row keeps them, the apps switch null where it never carried one up. */
+const StoredSettingsSchema = Schema.Struct({
+  commandMode: machineCommandModeSchema,
+  alwaysAllowedApps: Schema.Array(Schema.String),
+  computerUse: Schema.NullOr(Schema.Boolean),
+});
+
+/** A machine's settings as the wire carries them, the apps switch left out where the row holds none. */
+function settingsOfStored(stored: typeof StoredSettingsSchema.Type): MachineDeviceSettings {
+  return {
+    commandMode: stored.commandMode,
+    alwaysAllowedApps: stored.alwaysAllowedApps,
+    ...(stored.computerUse === null ? undefined : { computerUse: stored.computerUse }),
+  };
+}
 
 /** One device as Start reads it: its id, the account it is, its name and platform, which machine it runs on and its model, none where its host never said, when it last beat, the Codex it checked, where it has one, and where its setup stands, none once it is ready. */
 const DeviceSchema = Schema.Struct({
@@ -356,9 +372,10 @@ const joinDevice = SqlSchema.findAll({
     ...MachineColumnsSchema.fields,
     commandMode: machineCommandModeSchema,
     alwaysAllowedApps: Schema.Array(Schema.String),
+    computerUse: Schema.NullOr(Schema.Boolean),
     now: Schema.Date,
   }),
-  Result: machineDeviceSettingsSchema,
+  Result: StoredSettingsSchema,
   execute: ({
     userId,
     id,
@@ -369,6 +386,7 @@ const joinDevice = SqlSchema.findAll({
     model,
     commandMode,
     alwaysAllowedApps,
+    computerUse,
     now,
   }) =>
     Database.use((db) =>
@@ -383,7 +401,9 @@ const joinDevice = SqlSchema.findAll({
           ...machineColumns({ machineId, model }),
           commandMode,
           alwaysAllowedApps,
+          computerUse,
           lastSeenAt: now,
+          commandsAwayAt: now,
         })
         .onConflictDoUpdate({
           target: device.id,
@@ -393,12 +413,16 @@ const joinDevice = SqlSchema.findAll({
             removedAt: null,
             commandMode: sql`coalesce(${device.commandMode}, excluded.command_mode)`,
             alwaysAllowedApps: sql`coalesce(${device.alwaysAllowedApps}, excluded.always_allowed_apps)`,
+            computerUse: sql`coalesce(${device.computerUse}, excluded.computer_use)`,
+            // Note that a machine joins before it listens, so it reads away until its first listen clears the mark, which wakes the machines read as a listen alone could not.
+            commandsAwayAt: now,
           },
           setWhere: sql`${device.userId} = ${userId}`,
         })
         .returning({
           commandMode: sql<MachineCommandMode>`${device.commandMode}`,
           alwaysAllowedApps: sql<readonly string[]>`${device.alwaysAllowedApps}`,
+          computerUse: device.computerUse,
         }),
     ),
 });
@@ -424,14 +448,109 @@ const writeSettings = SqlSchema.findAll({
     ...DeviceKeySchema.fields,
     commandMode: machineCommandModeSchema,
     alwaysAllowedApps: Schema.Array(Schema.String),
+    computerUse: Schema.UndefinedOr(Schema.Boolean),
   }),
   Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ userId, id, commandMode, alwaysAllowedApps }) =>
+  execute: ({ userId, id, commandMode, alwaysAllowedApps, computerUse }) =>
     Database.use((db) =>
       db
         .update(device)
-        .set({ commandMode, alwaysAllowedApps })
+        // Note that a desktop older than the apps switch writes none, which leaves the service's as it stands.
+        .set({
+          commandMode,
+          alwaysAllowedApps,
+          ...(computerUse === undefined ? undefined : { computerUse }),
+        })
         .where(and(eq(device.id, id), eq(device.userId, userId)))
+        .returning({ id: device.id }),
+    ),
+});
+
+/**
+ * One of the account's machines changed as a member asked from any of
+ * their devices: each setting named written, and an app taken back from
+ * those it always allows, answering the transaction it was written in.
+ * Note that a machine whose app never joined holds no settings to change,
+ * and a removed one is no longer the member's to change, so neither is
+ * written.
+ */
+const changeSettings = SqlSchema.findAll({
+  Request: Schema.Struct({
+    ...DeviceKeySchema.fields,
+    commandMode: Schema.UndefinedOr(machineCommandModeSchema),
+    computerUse: Schema.UndefinedOr(Schema.Boolean),
+    removeApp: Schema.UndefinedOr(Schema.String),
+  }),
+  Result: TxidRowSchema,
+  execute: ({ userId, id, commandMode, computerUse, removeApp }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({
+          // Note that the row is written even where nothing is named, so the answer still says it stands.
+          commandMode: commandMode ?? sql`${device.commandMode}`,
+          ...(computerUse === undefined ? undefined : { computerUse }),
+          // Note that jsonb's `-` takes every element equal to the string out of the array, and leaves an array without it as it was.
+          ...(removeApp === undefined
+            ? undefined
+            : { alwaysAllowedApps: sql`${device.alwaysAllowedApps} - ${removeApp}::text` }),
+        })
+        .where(
+          and(
+            eq(device.id, id),
+            eq(device.userId, userId),
+            isNull(device.removedAt),
+            isNotNull(device.commandMode),
+          ),
+        )
+        .returning(TXID_RETURNING),
+    ),
+});
+
+/** The account's machine of the id stamped removed and its secret cleared, answering the transaction it was removed in; none where the account holds no such machine standing. */
+const stampMachineRemoved = SqlSchema.findAll({
+  Request: Schema.Struct({ ...DeviceKeySchema.fields, now: Schema.Date }),
+  Result: TxidRowSchema,
+  execute: ({ userId, id, now }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ removedAt: now, secretHash: null })
+        .where(and(eq(device.id, id), eq(device.userId, userId), isNull(device.removedAt)))
+        .returning(TXID_RETURNING),
+    ),
+});
+
+/**
+ * Every standing machine whose app last listened for its commands before
+ * `staleBefore` and is not marked away yet, marked away at `now`; a listen
+ * clears the mark (`markMachineListening`).
+ */
+const markCommandsAway = SqlSchema.findAll({
+  Request: Schema.Struct({ now: Schema.Date, staleBefore: Schema.Date }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ now, staleBefore }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ commandsAwayAt: now })
+        .where(
+          and(
+            isNull(device.commandsAwayAt),
+            isNull(device.removedAt),
+            exists(
+              db
+                .select({ one: sql`1` })
+                .from(machineCommandDeviceListener)
+                .where(
+                  and(
+                    eq(machineCommandDeviceListener.deviceId, device.id),
+                    lt(machineCommandDeviceListener.seenAt, staleBefore),
+                  ),
+                ),
+            ),
+          ),
+        )
         .returning({ id: device.id }),
     ),
 });
@@ -655,10 +774,12 @@ export function joinCommandDevice(
         platform: joining.platform,
         arch: joining.arch,
         ...machineColumns(joining),
-        ...joining.settings,
+        commandMode: joining.settings.commandMode,
+        alwaysAllowedApps: joining.settings.alwaysAllowedApps,
+        computerUse: joining.settings.computerUse ?? null,
         now,
       }),
-      (rows) => Option.fromUndefinedOr(rows[0]),
+      (rows) => Option.map(Option.fromUndefinedOr(rows[0]), settingsOfStored),
     ),
   );
 }
@@ -706,13 +827,79 @@ export function saveDeviceAppLooks(
   return Effect.map(writeAppLooks({ userId, id, looks }), (rows) => rows.length > 0);
 }
 
-/** Keeps the settings the member gave the account's device; false where the account holds no such device. */
+/** Keeps the settings the member gave the account's device on it, the apps switch only where it named one; false where the account holds no such device. */
 export function saveCommandDeviceSettings(
   userId: string,
   id: string,
   settings: MachineDeviceSettings,
 ): DeviceEffect<boolean> {
-  return Effect.map(writeSettings({ userId, id, ...settings }), (rows) => rows.length > 0);
+  return Effect.map(
+    writeSettings({
+      userId,
+      id,
+      commandMode: settings.commandMode,
+      alwaysAllowedApps: settings.alwaysAllowedApps,
+      computerUse: settings.computerUse,
+    }),
+    (rows) => rows.length > 0,
+  );
+}
+
+/** What a member changed of one of their machines from anywhere: each setting named, and an app taken back from those it always allows. */
+export interface MachineChange {
+  readonly commandMode?: MachineCommandMode | undefined;
+  readonly computerUse?: boolean | undefined;
+  readonly removeApp?: string | undefined;
+}
+
+/**
+ * Changes the account's machine as a member asked, from any of their
+ * devices, answering the transaction it was written in; none where the
+ * account holds no such machine standing, or one whose app never joined,
+ * which holds no settings yet. The machine follows the change live, or
+ * takes it as it next joins.
+ */
+export function changeMachine(
+  userId: string,
+  id: string,
+  change: MachineChange,
+): DeviceEffect<string | undefined> {
+  return Effect.map(
+    changeSettings({
+      userId,
+      id,
+      commandMode: change.commandMode,
+      computerUse: change.computerUse,
+      removeApp: change.removeApp,
+    }),
+    ([changed]) => changed?.txid,
+  );
+}
+
+/**
+ * Removes the account's machine, as a wiped app state leaves one behind:
+ * stamped removed, so no call is routed to it and no list draws it, and its
+ * secret refused, answering the transaction it was removed in; none where
+ * the account holds no such machine standing. Note that a Mac still running
+ * the app stands it again as it next joins.
+ */
+export function removeMachine(userId: string, id: string): DeviceEffect<string | undefined> {
+  return Effect.flatMap(DateTime.nowAsDate, (now) =>
+    Effect.map(stampMachineRemoved({ userId, id, now }), ([removed]) => removed?.txid),
+  );
+}
+
+/**
+ * Marks away every standing machine whose app last listened for its
+ * commands longer than `freshMs` before `now`, and is not marked yet,
+ * answering how many it marked. The scheduled sweep runs it, so the
+ * machines read wakes as an app goes quiet; its next listen clears the mark.
+ */
+export function markCommandsAwayDevices(now: number, freshMs: number): DeviceEffect<number> {
+  return Effect.map(
+    markCommandsAway({ now: new Date(now), staleBefore: new Date(now - freshMs) }),
+    (rows) => rows.length,
+  );
 }
 
 /** A machine of a workspace's member as the workspace's members see it: its id, name, platform, whose it is, and whether it is there now. */

@@ -184,7 +184,8 @@ export const COMPUTER_RECORDING_BOUNDS = {
   MAX_BASE64_CHARS: 4 * Math.ceil(MAX_REQUEST_DATA_URL_BYTES / 3),
 } as const;
 
-const appName = EffectSchema.String.check(
+/** An app as agents and the settings name it: by its bundle id, or its name where it has none. */
+export const appName = EffectSchema.String.check(
   EffectSchema.isMinLength(1),
   EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_APP_CHARS),
 );
@@ -676,14 +677,19 @@ export const machineCommandListeningAnswerSchema = EffectSchema.Struct({
 /**
  * A machine's own say over agents' terminal commands and computer use, as
  * the service keeps it for the device: how commands run there, the same
- * three modes its own setting names, and the apps agents use there without
- * asking, by bundle id, or by name where an app has none.
+ * three modes its own setting names, the apps agents use there without
+ * asking, by bundle id, or by name where an app has none, and whether
+ * agents may use its apps at all, its own switch beside the mode. Note
+ * that the switch is absent from a desktop older than it, whose join and
+ * writes leave the service's as it stands, and from a service older than
+ * it, or one that holds none for the device yet.
  */
 export const machineDeviceSettingsSchema = EffectSchema.Struct({
   commandMode: machineCommandModeSchema,
   alwaysAllowedApps: EffectSchema.Array(appName).check(
     EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_APPS),
   ),
+  computerUse: EffectSchema.optionalKey(EffectSchema.Boolean),
 });
 
 export type MachineDeviceSettings = typeof machineDeviceSettingsSchema.Type;
