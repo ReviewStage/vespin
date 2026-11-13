@@ -140,7 +140,7 @@ export interface HostOperator {
   onTasksChanged(listener: (view: TasksView) => void): () => void;
   /** The commands agents asked to run on this Mac that wait on the developer, whole, each time one is asked or answered. */
   onMachineCommandAsksChanged(listener: (asks: readonly MachineCommandAsk[]) => void): () => void;
-  /** The device this Mac claims commands as for the account signed in, or none before it joined for it, each time it moves. */
+  /** The device this Mac claims commands as for the account signed in, or none before it joined for it, at every look the Mac takes at its device, moved or not. */
   onMachineCommandDeviceChanged(listener: (deviceId: string | undefined) => void): () => void;
   /** How many changes made offline the service refused as they were sent again, each time the count moves. */
   onOfflineRefusedChanged(listener: (count: number) => void): () => void;

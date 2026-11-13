@@ -606,7 +606,11 @@ it.effect(
       assert.deepEqual(service.savedSettings, [
         { commandMode: MACHINE_COMMAND_MODE.NEVER, alwaysAllowedApps: ["com.apple.Notes"] },
       ]);
-      assert.deepEqual(devices, [studio], "the windows are told the device once it joined");
+      assert.deepEqual(
+        [...new Set(devices)],
+        [studio],
+        "the windows are told the device once it joined",
+      );
     }),
 );
 

@@ -321,7 +321,7 @@ function AppsDock({
                 label={hidden ? WORDS.SHOW : WORDS.HIDE}
                 onClick={toggle}
               />
-              {onThatMac && top.bundleId !== undefined ? (
+              {onThatMac === true && top.bundleId !== undefined ? (
                 <IconButton
                   icon={<ArrowUpRightIcon />}
                   label={`${WORDS.SHOW_APP} ${top.app}`}

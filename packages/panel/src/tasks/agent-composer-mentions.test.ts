@@ -822,7 +822,7 @@ test("an @ in the box browses the account's connected MCP servers as one kind, a
   ]);
 });
 
-test("with Computer use on, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
+test("with Computer use on, on the Mac the agent's calls go to, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
   const sent: string[] = [];
 
   const sender: MessageSender = (_agentId, { text }) => {
@@ -831,8 +831,21 @@ test("with Computer use on, an @ in the box offers the apps on this Mac, a pick 
     return new Promise<AgentAgentAnswer>(ignore);
   };
 
+  // The reader's Studio, which the agent's calls go to.
   const state = stateWith(experimentsOn(EXPERIMENT.DESCRIPTIONS, EXPERIMENT.COMPUTER_USE), {
     tasks: tasksView(),
+    machineCommands: { asks: [], deviceId: STUDIO_ID },
+    [LIVE_READ.WORKSPACE_TOOLS]: {
+      [SELF_ID]: {
+        rows: {
+          runOnMac: {
+            on: true,
+            owner: { userId: "user-ada", name: "Ada Lovelace" },
+            machine: { id: STUDIO_ID, name: "Studio" },
+          },
+        },
+      },
+    },
   });
 
   fakeActs({ act: answer, requestAppState: () => Promise.resolve(state) });

@@ -1037,18 +1037,18 @@ export function composeMachineCommands(
     /** The device the Mac joined as, and the settings the service keeps for it; none before it has joined for the account signed in. */
     const joined = yield* SubscriptionRef.make<Joined | undefined>(undefined);
 
-    /** The device last told to the windows as the one the Mac claims as for the account signed in; none before any was. */
-    let toldDevice: string | undefined;
-
-    /** The device the Mac claims as for the account signed in, told to the windows where it moved since it was last told, so the panel can tell this Mac from the account's others. */
+    /**
+     * The device the Mac claims as for the account signed in, told to the
+     * windows at every look, so the panel can tell this Mac from the
+     * account's others. Note that it is told again though it did not move,
+     * because the event is not kept for a listener that attaches after it,
+     * and the client writes it only where it moved.
+     */
     const tellDevice = Effect.gen(function* () {
       const userId = dependencies.accountId();
 
       const now =
         userId === undefined ? undefined : joinedAs(yield* SubscriptionRef.get(joined), userId);
-
-      if (now === toldDevice) return;
-      toldDevice = now;
 
       kernel.emit(
         GATEWAY_EVENT.MACHINE_COMMAND_DEVICE_CHANGED,

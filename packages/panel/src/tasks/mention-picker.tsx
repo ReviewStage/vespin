@@ -2053,17 +2053,18 @@ export function useMentionPicker({
       ? undefined
       : taskKey(tasksWorkspace.name, planNumber);
 
-  // The apps offered are this Mac's where the window is the Mac the agent uses, else those the reader's own machines always allow, each read while the list stands open (`mac-apps.ts`).
+  // The apps offered are this Mac's where the window is the Mac the agent uses, else those the reader's own machines always allow, each read while the list stands open (`mac-apps.ts`), and none until it is known which.
   const onThatMac = useOnThatMac(open && macApps ? self : undefined);
-  const apps = useMacApps(open && macApps && onThatMac);
-  const allowedApps = useAllowedApps(open && macApps && !onThatMac);
+  const apps = useMacApps(open && macApps && onThatMac === true);
+  const allowedApps = useAllowedApps(open && macApps && onThatMac === false);
   const keptApps = useKeptApps();
 
-  const appRowsOffered = !open
-    ? []
-    : onThatMac
-      ? appRows(apps.apps)
-      : allowedAppRows(allowedApps.machines, keptApps);
+  const appRowsOffered =
+    !open || onThatMac === undefined
+      ? []
+      : onThatMac
+        ? appRows(apps.apps)
+        : allowedAppRows(allowedApps.machines, keptApps);
 
   // The list is narrowed to the kind a key opened or whose word was typed, and searched by the words after it.
   const kinds = open
