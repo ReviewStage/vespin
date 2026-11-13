@@ -288,6 +288,13 @@ const findBootPhase = SqlSchema.findAll({
 });
 
 /** A message written again as an edit saved it, its words and its files, its hold let go. */
+/**
+ * A queued line's `line` column with the caller's lines of a call it named
+ * taken off (`QueuedLine`'s `adopts`), for an edit of its words: what was
+ * said stands as recorded, and the edit is written as a line of its own.
+ */
+const withoutAdoptedLines = () => sql`${queuedMessage.line} - 'adopts'`;
+
 const updateEdit = SqlSchema.findAll({
   Request: Schema.Struct({
     agentId: Schema.String,
@@ -304,6 +311,8 @@ const updateEdit = SqlSchema.findAll({
         .set({
           text,
           attachments,
+          // An edit's words are no longer the caller's lines a call recorded, so it goes as a line of its own.
+          line: withoutAdoptedLines(),
           editing: false,
           updatedAt: now,
         })
@@ -373,6 +382,7 @@ const updateClaim = SqlSchema.findAll({
             : {
                 text: edit.text,
                 attachments: edit.attachments,
+                line: withoutAdoptedLines(),
               }),
         })
         .where(

@@ -324,6 +324,68 @@ it.layer(SUITE)("an agent's queue", (it) => {
   );
 
   it.effect(
+    "a spoken message edited in the queue goes as a line of its own, the caller's line standing as said",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { agent, ask, owner } = yield* messagedAgent(agentSessions, { running: true });
+        const line = randomUUID();
+
+        yield* ask(
+          request("/api/agents/voice-lines", owner, {
+            method: "POST",
+            id: agent.id,
+            body: {
+              id: line,
+              callId: randomUUID(),
+              speaker: VOICE_SPEAKER.CALLER,
+              text: "Is it done?",
+            },
+          }),
+        );
+
+        const [queued] = (yield* queueChanged(ask, owner, agent.id, {
+          change: QUEUE_CHANGE.ADD,
+          text: "Is it done?",
+          id: randomUUID(),
+          channel: MESSAGE_CHANNEL.VOICE,
+          delegationId: "item_delegation_1",
+          lines: [line],
+        })).messages;
+
+        assert.ok(queued !== undefined);
+        yield* queueChanged(ask, owner, agent.id, {
+          change: QUEUE_CHANGE.STEER,
+          messageId: queued.id,
+          text: "Is the export done?",
+        });
+
+        const page = readAnswer(
+          agentMessagesAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
+        );
+
+        assert.deepEqual(
+          page.messages.flatMap((message) =>
+            isRecord(message.metadata) && message.metadata.channel === MESSAGE_CHANNEL.VOICE
+              ? [
+                  [
+                    message.parts.map((part) => (isRecord(part) ? part.text : undefined)),
+                    message.metadata.delegation_id,
+                  ],
+                ]
+              : [],
+          ),
+          [
+            [["Is it done?"], undefined],
+            [["Is the export done?"], "item_delegation_1"],
+          ],
+        );
+      }),
+  );
+
+  it.effect(
     "an edit steered goes now with the edit's words and files in place of the message's",
     () =>
       Effect.gen(function* () {

@@ -350,9 +350,9 @@ function closedOpen(state: VoiceState): Step {
 }
 
 /**
- * Where a fragment goes: onto its speaker's growing line, while that line
- * is open and no long silence came before the fragment, or where the other
- * speaker's line is open and began after the fragment did, as a late one;
+ * Where a fragment goes: onto its speaker's growing line where no long
+ * silence came before the fragment, while that line is open or where the
+ * other speaker's line is open and began after the fragment did, as a late one;
  * or a new line otherwise, which closes the other speaker's open line unless
  * the fragment is late.
  */
@@ -371,7 +371,7 @@ function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
     delta.start_ms !== undefined &&
     delta.start_ms - own.endMs > SILENCE_SPLIT_MS;
 
-  const grows = own !== undefined && ((state.open === speaker && !silent) || late);
+  const grows = own !== undefined && !silent && (state.open === speaker || late);
   const endMs = delta.end_ms ?? delta.start_ms;
 
   if (grows) {

@@ -174,6 +174,22 @@ it.effect("a caller's fragment that started before the voice's line grows the ca
   }),
 );
 
+it.effect("a late fragment after a long silence opens a line of its own", () =>
+  Effect.gen(function* () {
+    const outputs = yield* outputsOf([
+      said("Hold on.", 0, 100),
+      voiced("Sure.", 10_000, 10_400),
+      said("Ship it.", 4_000, 4_600),
+    ]);
+
+    assert.deepEqual(outputs, [
+      record(VOICE_SPEAKER.CALLER, "line_1", "Hold on."),
+      record(VOICE_SPEAKER.VOICE, "line_2", "Sure."),
+      record(VOICE_SPEAKER.CALLER, "line_3", "Ship it."),
+    ]);
+  }),
+);
+
 it.effect(
   "a reply over 500 tokens goes to the voice as its opening sentences in four appends",
   () =>

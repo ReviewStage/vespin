@@ -1491,10 +1491,12 @@ it.layer(getTestDB())("the lines of a call into an agent", (it) => {
         const callId = randomUUID();
         const [question, answer, ask_] = [randomUUID(), randomUUID(), randomUUID()];
 
-        // The caller asks, a late word growing their line; the voice answers by itself; the caller asks for work, recorded twice.
+        // The caller asks, a late word growing their line and an older record of it arriving last; the voice answers
+        // by itself; the caller asks for work, recorded twice.
         const lines = [
           { id: question, speaker: VOICE_SPEAKER.CALLER, text: "What's left" },
           { id: question, speaker: VOICE_SPEAKER.CALLER, text: "What's left on the task?" },
+          { id: question, speaker: VOICE_SPEAKER.CALLER, text: "What's left" },
           { id: answer, speaker: VOICE_SPEAKER.VOICE, text: "Only the docs." },
           { id: ask_, speaker: VOICE_SPEAKER.CALLER, text: "Then write them." },
           { id: ask_, speaker: VOICE_SPEAKER.CALLER, text: "Then write them." },

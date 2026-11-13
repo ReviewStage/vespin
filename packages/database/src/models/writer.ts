@@ -2460,6 +2460,18 @@ function callLineMetadata(line: VoiceLineWrite): StoredMessageMetadata {
   };
 }
 
+/** Whether a line's standing words already run past the words given, which they begin with. */
+function grownPast(parts: Parts, text: string): boolean {
+  const [part] = parts;
+
+  return (
+    parts.length === 1 &&
+    part?.type === UI_PART_TYPE.TEXT &&
+    part.text.length > text.length &&
+    part.text.startsWith(text)
+  );
+}
+
 /** Whether a standing row is the same speaker's line of the same call. */
 function sameCallLine(
   standing: { readonly role: string; readonly metadata: StoredMessageMetadata | null },
@@ -2517,7 +2529,12 @@ const recordVoiceLine = /* @__PURE__ */ Effect.fn("web/recordVoiceLine")(functio
     return Result.succeed({ effect: STORE_WRITE_EFFECT.WRITTEN, txid });
   }
 
-  if (isDeepStrictEqual(standing.value.parts, read.success.parts)) {
+  // Note that words the line already holds, or a shorter start of them, are a repeat, because a record that
+  // arrives after a later one of the same line, out of order or retried, must never cut the line back.
+  if (
+    isDeepStrictEqual(standing.value.parts, read.success.parts) ||
+    grownPast(standing.value.parts, line.text)
+  ) {
     return Result.succeed({ effect: STORE_WRITE_EFFECT.REPEATED });
   }
 
