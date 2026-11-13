@@ -95,8 +95,7 @@ export default function TabsLayout() {
   const underSplit = appSidebar ? UNDER_SPLIT_SCREEN.contentStyle : undefined;
 
   // Note that the Inbox's Select mode hides the bar only while the Inbox's own list stands, so a link that opens another place never leaves the bar hidden over it.
-  const choosing =
-    useInboxChoosingOn() && atRoot && placeOfRoute(standing[0]) === SIDEBAR_PLACE.INBOX;
+  const choosing = useInboxChoosingOn() && atRoot && placeOfRoute(standing) === SIDEBAR_PLACE.INBOX;
 
   const tabs = (
     <NativeTabs
