@@ -24,6 +24,7 @@ import {
   frame,
   glassEffect,
   lineLimit,
+  opacity,
   padding,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
@@ -60,20 +61,34 @@ function roundMark(round: number) {
   return [frame({ width: round - ROUND_EDGE, height: round - ROUND_EDGE })];
 }
 
-/**
- * The round button's look: the system's prominent circle in the ink, its mark
- * in the ground, inside the composer's press frame. Note that a disabled
- * circle drops the tint for the system's faint fill, which in light mode
- * matched the composer's own ground, so a Send with nothing to send vanished:
- * it stands on a hairline-gray disc of ours instead, its mark muted.
- */
-function roundModifiers(colors: ReturnType<typeof useColors>, enabled = true) {
+/** How much of Send's look stands while there is nothing to send, as Messages' gray arrow stands before a word is typed. */
+const IDLE_OPACITY = 0.2;
+
+/** The round button's look: the system's prominent circle in the ink, its mark in the ground, inside the composer's press frame. */
+function roundModifiers(colors: ReturnType<typeof useColors>) {
   return [
     buttonStyle("borderedProminent"),
     SwiftModifiers.buttonBorderShape("circle"),
     tint(colors.TEXT),
-    foregroundStyle(enabled ? colors.GROUND : colors.TEXT_MUTED),
-    ...(enabled ? [] : [background(colors.CHIP_EDGE, SwiftModifiers.shapes.circle())]),
+    foregroundStyle(colors.GROUND),
+    ...PRESS_FRAME,
+  ];
+}
+
+/**
+ * Send with nothing to send: the same circle and mark, faint, so it reads as
+ * one button waiting in either scheme. Note that we draw the circle
+ * ourselves, because a disabled prominent button drops its tint for the
+ * system's own fill, which in light vanished into the composer's ground and
+ * in dark stood as a black disc that read as a live button.
+ */
+function idleRoundModifiers(colors: ReturnType<typeof useColors>, round: number) {
+  return [
+    buttonStyle("plain"),
+    foregroundStyle(colors.GROUND),
+    frame({ width: round, height: round }),
+    background(colors.TEXT, SwiftModifiers.shapes.circle()),
+    opacity(IDLE_OPACITY),
     ...PRESS_FRAME,
   ];
 }
@@ -201,7 +216,7 @@ function SendButton({
     <Button
       onPress={() => onSend?.()}
       modifiers={[
-        ...roundModifiers(colors, sendable),
+        ...(sendable ? roundModifiers(colors) : idleRoundModifiers(colors, round)),
         disabled(!sendable),
         accessibilityLabel("Send"),
       ]}
