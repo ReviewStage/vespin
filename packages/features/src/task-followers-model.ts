@@ -27,14 +27,14 @@ export const FOLLOWING_WORDS = {
   UNFOLLOW: "Unfollow",
   /** The reader's own row. */
   YOU: "You",
-  /** Adding someone else as a follower: the panel's offer to add a person mentioned, the popover's foot row, and the iPhone's member picker. */
+  /** Adding someone else as a follower: the panel's offer to add a person mentioned, and the iPhone's member picker. */
   ADD_FOLLOWER: "Add a follower",
-  /** Why Add a follower stands dimmed: every member already follows. */
-  EVERYONE_FOLLOWS: "Everyone here follows",
-  /** What a follower's row is, which names its ⋯ menu. */
-  FOLLOWER_THING: "Follower",
-  /** Taking another follower away, from their row's ⋯ menu. */
-  REMOVE: "Remove follower",
+  /** The popover's search field, which finds anyone to add. */
+  SEARCH: "Add or remove followers",
+  /** Said where a search finds no one. */
+  NO_MATCH: "No one matches",
+  /** Said where no one follows a task that takes no change. */
+  NO_FOLLOWERS: "No followers",
   /** A row's muted mark on the assignee, and their card's role. */
   ASSIGNEE: "Assignee",
   /** A card's role for a follower who is not the assignee. */
