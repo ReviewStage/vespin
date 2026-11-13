@@ -74,7 +74,7 @@ const LEAD = "ui-hover-card-lead flex items-center gap-control-gap";
 const LED_HEAD = "min-w-0 flex-1";
 
 const GLYPH =
-  "ui-hover-card-glyph inline-flex h-lh w-menu-glyph flex-none items-center justify-center self-start [&>:not(.ui-avatar,:has(.ui-avatar))]:size-hover-card-glyph";
+  "ui-hover-card-glyph inline-flex h-lh w-menu-glyph flex-none items-center justify-center self-start [&>:not(.ui-avatar,:has(.ui-avatar))]:size-hover-card-glyph [&>.ui-status-glyph>svg]:size-hover-card-glyph";
 
 const TITLE = "ui-hover-card-title flex min-w-0 flex-1 flex-col gap-0.5";
 

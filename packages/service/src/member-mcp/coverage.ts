@@ -311,6 +311,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     reviewOptions: SCREEN_ONLY,
     turnChanges: SCREEN_ONLY,
     workspaceTools: SCREEN_ONLY,
+    // Note that an agent names another machine per call; setting another agent's default from a tool waits on a member asking for one.
+    setDefaultMachine: NOT_YET_BUILT,
     // Note that a Terminal tab is interactive, so the CLI's `vespin agent shell` reaches it and no tool does.
     terminals: SCREEN_ONLY,
     openTerminal: SCREEN_ONLY,
@@ -424,6 +426,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     setMachines: MEMBER_ONLY,
     add: MEMBER_ONLY,
     remove: MEMBER_ONLY,
+    // Note that a follower's card reads their machines; an agent's own calls are refused naming the machines they could reach.
+    machines: SCREEN_ONLY,
   },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
