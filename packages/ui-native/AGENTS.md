@@ -120,8 +120,10 @@ builds a control of its own.
   items, which expo-router types as plain names, take `GLYPH.X` too
   (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
   where iOS draws the thing its own way (Share) or where the panel draws a
-  mark of its own rather than a Lucide glyph (a task's status ring, a check
-  box, a face, an MCP server, the panel's product mark). A SwiftUI button or menu
+  mark of its own rather than a Lucide glyph (a check box, a face, an MCP
+  server, the panel's product mark). A task's status ring is the panel's own
+  mark, cut into the asset catalog from `@repo/brand`'s table
+  (`task-status-marks.mjs`) that `@repo/ui`'s `TaskStatusMark` draws too. A SwiftUI button or menu
   holding a glyph takes it as its label's icon (`glyph-label.tsx`), since
   `systemImage` reads an SF Symbol alone, and a React Native view through
   `expo-symbols`' `SymbolView`, which the app's patch reads from the asset
