@@ -19,12 +19,18 @@
  * /api/mac-commands/device`, carrying its own settings up where the service
  * holds none for it yet and answered the ones it keeps, writes them as the
  * member changes them on it with `POST /api/mac-commands/device/settings`,
- * and names that device in its claims and presence. Every request resolves the
+ * posts how it names and draws the apps it always allows with `POST
+ * /api/mac-commands/device/app-looks`, for the account's `@` lists off the
+ * machine, and names that device in its claims and presence. Every request resolves the
  * bearer before it touches a row, and every row it touches is the
  * bearer's account's own.
  */
 
-import { joinCommandDevice, saveCommandDeviceSettings } from "@repo/database/models/device-store";
+import {
+  joinCommandDevice,
+  saveCommandDeviceSettings,
+  saveDeviceAppLooks,
+} from "@repo/database/models/device-store";
 import {
   markMachineListening,
   settleMachineCommand,
@@ -94,6 +100,15 @@ export function machineCommandsProcedures(seams: MachineCommandsProcedureSeams) 
     saveDeviceSettings: machineCommands.saveDeviceSettings.effect(function* ({ context, input }) {
       const saved = yield* hostedStoreOrUnavailable(
         saveCommandDeviceSettings(context.userId, input.deviceId, input.settings),
+      );
+
+      if (!saved) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+      return { saved: true } as const;
+    }),
+    saveDeviceAppLooks: machineCommands.saveDeviceAppLooks.effect(function* ({ context, input }) {
+      const saved = yield* hostedStoreOrUnavailable(
+        saveDeviceAppLooks(context.userId, input.deviceId, input.looks),
       );
 
       if (!saved) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);

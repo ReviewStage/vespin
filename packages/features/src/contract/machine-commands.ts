@@ -27,6 +27,7 @@ import {
   machineCommandSettledAnswerSchema,
   machineCommandSettleRequestSchema,
   machineCommandsAnswerSchema,
+  machineDeviceAppLooksRequestSchema,
   machineDeviceJoinAnswerSchema,
   machineDeviceJoinRequestSchema,
   machineDeviceSettingsAnswerSchema,
@@ -50,6 +51,9 @@ const CLAIM_BODY_BYTES = 1_024;
 
 /** A device's settings at their bound, and room for the rest of the body. */
 const DEVICE_BODY_BYTES = 64 * 1_024;
+
+/** A device's allowed apps' names and icons: at most every icon's characters, with the names and room to spare. */
+const APP_LOOKS_BODY_BYTES = MACHINE_COMMAND_BOUNDS.MAX_RESULT_BYTES;
 
 export const machineCommandsContract = {
   waiting: declaredProcedure
@@ -91,5 +95,16 @@ export const machineCommandsContract = {
       }),
     )
     .input(exactInput(machineDeviceSettingsRequestSchema))
+    .output(EffectSchema.flip(machineDeviceSettingsAnswerSchema)),
+  saveDeviceAppLooks: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(bodyCap(APP_LOOKS_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: HOSTED_SERVICE_PATH.MACHINE_COMMAND_DEVICE_APP_LOOKS,
+      }),
+    )
+    .input(exactInput(machineDeviceAppLooksRequestSchema))
     .output(EffectSchema.flip(machineDeviceSettingsAnswerSchema)),
 };

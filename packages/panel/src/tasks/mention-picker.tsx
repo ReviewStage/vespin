@@ -902,8 +902,8 @@ function allowedAppName(app: string): string {
  * The Mac's own row, then a row for each app the reader's own machines
  * always allow, by name, as the list offers them where it stands off the
  * Mac the agent uses; none where no machine allows one. An app is named as
- * a `computer` call in the conversation named it, or by its bundle id where
- * none did, and is found by either. Where the reader has more than one
+ * a machine that allows it posted it, else as a `computer` call in the
+ * conversation named it, else by its bundle id, and is found by either. Where the reader has more than one
  * machine that allows an app, each row names the machines it is allowed on.
  */
 function allowedAppRows(
@@ -911,10 +911,15 @@ function allowedAppRows(
   kept: ReadonlyMap<string, ComputerAppKept>,
 ): MentionRow[] {
   const allowedOn = new Map<string, string[]>();
+  const posted = new Map<string, string>();
 
   for (const machine of machines) {
     for (const app of machine.apps) {
       allowedOn.set(app, [...(allowedOn.get(app) ?? []), machine.name]);
+    }
+
+    for (const look of machine.looks ?? []) {
+      if (!posted.has(look.app)) posted.set(look.app, look.name);
     }
   }
 
@@ -922,7 +927,7 @@ function allowedAppRows(
   const named = machines.length > 1;
 
   const rows = [...allowedOn].map(([app, on]): MentionRow => {
-    const name = kept.get(app)?.name ?? allowedAppName(app);
+    const name = posted.get(app) ?? kept.get(app)?.name ?? allowedAppName(app);
 
     return {
       mention: { kind: MENTION_KIND.MAC_APP, app },

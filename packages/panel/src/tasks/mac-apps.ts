@@ -113,6 +113,23 @@ export function useMacAppIcon(app: string): string | undefined {
   return macAppIconAddress(useQuery(iconQuery(app, readable)).data?.iconPng);
 }
 
+/** The apps the reader's own machines always allow, each machine's, read from the service while `reads`. */
+function allowedAppsQuery(reads: boolean) {
+  return queryOptions({
+    queryKey: [QUERY_ROOT.MACHINE_ALLOWED_APPS],
+    queryFn: async () => {
+      const answer = await askAct(ACT_KIND.HOSTS_ALLOWED_APPS, {});
+
+      if ("failure" in answer) throw new Error("The apps your machines allow could not be read.");
+
+      return answer.machines;
+    },
+    enabled: reads,
+    staleTime: APPS_FRESH_MS,
+    retry: false,
+  });
+}
+
 /** The apps the reader's own machines always allow, as the `@` list reads them: each machine's, whether the read is out, and whether it failed, with the press that reads it again. */
 export interface AllowedAppsRead {
   readonly machines: readonly MachineAllowedApps[];
@@ -133,20 +150,7 @@ export function useAllowedApps(asked: boolean): AllowedAppsRead {
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.COMPUTER_USE) }).data === true;
 
   const reads = asked && computerUse;
-
-  const machines = useQuery({
-    queryKey: [QUERY_ROOT.MACHINE_ALLOWED_APPS],
-    queryFn: async () => {
-      const answer = await askAct(ACT_KIND.HOSTS_ALLOWED_APPS, {});
-
-      if ("failure" in answer) throw new Error("The apps your machines allow could not be read.");
-
-      return answer.machines;
-    },
-    enabled: reads,
-    staleTime: APPS_FRESH_MS,
-    retry: false,
-  });
+  const machines = useQuery(allowedAppsQuery(reads));
 
   return {
     machines: reads ? (machines.data ?? NO_MACHINES) : NO_MACHINES,
@@ -154,4 +158,27 @@ export function useAllowedApps(asked: boolean): AllowedAppsRead {
     failed: reads && machines.isError && !machines.isFetching,
     retry: () => void machines.refetch(),
   };
+}
+
+/**
+ * The address of an app's icon as one of the reader's machines that always
+ * allows it posted it, by its bundle id; none on a window that reads this
+ * Mac's own icons, where the reader has Computer use off, or where no
+ * machine posted one.
+ */
+export function useAllowedAppIcon(app: string): string | undefined {
+  const computerUse =
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.COMPUTER_USE) }).data === true;
+
+  const onMac = useMacAppsReadable();
+  const reads = computerUse && !onMac;
+
+  const icon = useQuery({
+    ...allowedAppsQuery(reads),
+    select: (machines) =>
+      machines.flatMap((machine) => machine.looks ?? []).find((look) => look.app === app)?.iconPng,
+  }).data;
+
+  // Note that a read let go keeps its answer in the cache, so it is drawn only while it may be read.
+  return reads ? macAppIconAddress(icon) : undefined;
 }

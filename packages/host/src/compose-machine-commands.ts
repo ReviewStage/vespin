@@ -6,7 +6,9 @@ import {
   machineCommandsOfLiveRows,
 } from "@repo/features/machine-command-live";
 import {
+  type AllowedAppLook,
   COMPUTER_ACTION,
+  COMPUTER_BOUNDS,
   COMPUTER_PERMISSION,
   type ComputerAction,
   type ComputerApp,
@@ -49,6 +51,7 @@ import type { ChildProcessSpawner } from "effect/process";
 import type { AccountComposer } from "./compose-account.js";
 import type { Composer } from "./composer.js";
 import {
+  COMPUTER_HELPER_FAILURE,
   COMPUTER_HELPER_OP,
   type ComputerAppPin,
   type ComputerHelperAnswer,
@@ -179,7 +182,13 @@ const DESCRIBE_WITHIN = Duration.seconds(10);
 /** The service's side of the commands, as this concern asks it. */
 export type MachineCommandClient = Pick<
   HostedMachineCommandClient,
-  "liveRead" | "claim" | "listening" | "settle" | "join" | "saveDeviceSettings"
+  | "liveRead"
+  | "claim"
+  | "listening"
+  | "settle"
+  | "join"
+  | "saveDeviceSettings"
+  | "saveDeviceAppLooks"
 >;
 
 /** This Mac as a device of the accounts signed in on it: the ids it joins as, the machine it names itself as, and its own say over commands and apps. */
@@ -221,22 +230,60 @@ export interface MachineCommandsDependencies {
   device?: MachineCommandsDevice;
 }
 
-/** The device this Mac joined as for an account, and the settings the service keeps for it as last read or written. */
+/** The device this Mac joined as for an account, the settings the service keeps for it as last read or written, and the apps whose looks it last posted for it; none before it posted any. */
 interface Joined {
   readonly userId: string;
   readonly deviceId: string;
   readonly settings: MachineDeviceSettings;
+  readonly looks?: readonly string[] | undefined;
 }
 
 /** The device the Mac joined as for the account given; none where it has not joined for it. */
 const joinedAs = (joined: Joined | undefined, userId: string) =>
   joined?.userId === userId ? joined.deviceId : undefined;
 
+/** Whether two lists of apps are the same, in order. */
+const sameApps = (one: readonly string[], other: readonly string[]) =>
+  one.length === other.length && one.every((app, index) => app === other[index]);
+
 /** Whether two says over commands and apps are the same, the apps in order. */
 const sameSettings = (one: MachineDeviceSettings, other: MachineDeviceSettings) =>
-  one.commandMode === other.commandMode &&
-  one.alwaysAllowedApps.length === other.alwaysAllowedApps.length &&
-  one.alwaysAllowedApps.every((app, index) => app === other.alwaysAllowedApps[index]);
+  one.commandMode === other.commandMode && sameApps(one.alwaysAllowedApps, other.alwaysAllowedApps);
+
+/** An app as the helper names and draws it: by the bundle id it was asked for, its name, and its icon where it drew one. */
+interface NamedApp {
+  readonly bundleId: string;
+  readonly name: string;
+  readonly iconPng?: string;
+}
+
+/** An app as the helper named it, and whether that answer stands or is asked again later. */
+interface AppNaming {
+  readonly app: NamedApp;
+  readonly stands: boolean;
+}
+
+/**
+ * The apps as a device posts their looks: each by its name, and its icon
+ * while every icon carried so far fits `MAX_LOOKS_ICON_CHARS`, so a post at
+ * every bound stays under what the service takes; an app past it, or whose
+ * icon is past an icon's own bound, is posted by its name alone.
+ */
+function postedLooks(named: readonly NamedApp[]): readonly AllowedAppLook[] {
+  let room = COMPUTER_BOUNDS.MAX_LOOKS_ICON_CHARS;
+
+  return named.map(({ bundleId, name, iconPng }) => {
+    const fits =
+      iconPng !== undefined &&
+      iconPng.length <= COMPUTER_BOUNDS.MAX_ICON_CHARS &&
+      iconPng.length <= room;
+
+    if (!fits) return { app: bundleId, name };
+    room -= iconPng.length;
+
+    return { app: bundleId, name, iconPng };
+  });
+}
 
 /** What actions on apps run through and under: the helper, and the settings that let them. */
 export interface MacComputerUse {
@@ -920,6 +967,36 @@ export function composeMachineCommands(
       );
 
     /**
+     * One app as the helper names and draws it, launching nothing, and
+     * whether that answer stands: one it finds none of by that bundle id is
+     * named by it alone and stands, while one it failed to answer, as while
+     * it is busy, is named by it alone for now and asked again later.
+     */
+    const appNamed = (use: MacComputerUse, bundleId: string) =>
+      Effect.map(
+        use.helper.ask({ op: COMPUTER_HELPER_OP.DESCRIBE_APP, app: bundleId }, DESCRIBE_WITHIN),
+        (named): AppNaming => {
+          if (!("described" in named)) {
+            return {
+              app: { bundleId, name: bundleId },
+              stands: !("failure" in named) || named.failure !== COMPUTER_HELPER_FAILURE.FAILED,
+            };
+          }
+
+          const { name, iconPng } = named.described;
+
+          return {
+            app: { bundleId, name, ...(iconPng === undefined ? undefined : { iconPng }) },
+            stands: true,
+          };
+        },
+      );
+
+    /** Each app given as the helper names and draws it (`appNamed`). */
+    const appsNamed = (use: MacComputerUse, apps: readonly string[]) =>
+      Effect.forEach(apps, (bundleId) => Effect.map(appNamed(use, bundleId), ({ app }) => app));
+
+    /**
      * The Mac joined as a device of the account signed in, where it has not
      * yet: under the id this install keeps for it, or a new one where the
      * service refused that as another account's, carrying this Mac's own
@@ -980,6 +1057,39 @@ export function composeMachineCommands(
         }
 
         yield* SubscriptionRef.set(joined, { userId, deviceId, settings: answer.settings });
+      });
+
+    /**
+     * How this Mac names and draws the apps it always allows, posted for the
+     * device it joined as where they moved since it last posted them, so the
+     * account's `@` lists off this Mac show each by its name and icon
+     * (`hosts.allowedApps`). Nothing is posted while the account has
+     * Computer use off. A post the service did not take, or one with an app
+     * the helper failed to name, is let be, for the next look to post again.
+     */
+    const looksPosted = (use: MacComputerUse) =>
+      Effect.gen(function* () {
+        const userId = dependencies.accountId();
+
+        if (userId === undefined || !kernel.runMode.sendsNetwork || !account.capabilitiesActive())
+          return;
+        const standing = yield* SubscriptionRef.get(joined);
+
+        if (standing?.userId !== userId || !(yield* use.offered)) return;
+        const apps = standing.settings.alwaysAllowedApps;
+
+        if (standing.looks !== undefined && sameApps(standing.looks, apps)) return;
+        const named = yield* Effect.forEach(apps, (bundleId) => appNamed(use, bundleId));
+        const looks = postedLooks(named.map(({ app }) => app));
+        const saved = yield* asked(client.saveDeviceAppLooks(standing.deviceId, looks));
+
+        // Note that an app the helper failed to name leaves the looks unheld, so the next look names it again once the helper answers.
+        if ("failure" in saved || !named.every(({ stands }) => stands)) return;
+
+        // Note that the looks are held only for the standing they were posted for, so a join or a write meanwhile posts them again.
+        yield* SubscriptionRef.update(joined, (now) =>
+          now === standing ? { ...standing, looks: apps } : now,
+        );
       });
 
     /**
@@ -1099,8 +1209,12 @@ export function composeMachineCommands(
 
         yield* Effect.forkScoped(
           Stream.runForEach(looks, () =>
-            Effect.catchDefect(reconciled(device), () =>
-              Effect.sync(() => report("this Mac could not join as a device")),
+            Effect.catchDefect(
+              Effect.andThen(
+                reconciled(device),
+                computer === undefined ? Effect.void : looksPosted(computer),
+              ),
+              () => Effect.sync(() => report("this Mac could not join as a device")),
             ),
           ),
         );
@@ -1182,19 +1296,7 @@ export function composeMachineCommands(
 
     /** Each app allowed without asking, named and drawn by the helper; one it no longer finds by its bundle id alone. */
     const allowedAppsNamed = (use: MacComputerUse) =>
-      Effect.flatMap(use.allowedApps, (allowed) =>
-        Effect.forEach(allowed, (bundleId) =>
-          Effect.map(
-            use.helper.ask({ op: COMPUTER_HELPER_OP.DESCRIBE_APP, app: bundleId }, DESCRIBE_WITHIN),
-            (named) => {
-              if (!("described" in named)) return { bundleId, name: bundleId };
-              const { name, iconPng } = named.described;
-
-              return { bundleId, name, ...(iconPng === undefined ? undefined : { iconPng }) };
-            },
-          ),
-        ),
-      );
+      Effect.flatMap(use.allowedApps, (allowed) => appsNamed(use, allowed));
 
     /**
      * The apps the composer's @ list offers on this Mac: those running
