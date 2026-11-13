@@ -6,6 +6,8 @@ import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
   Keyboard,
+  type KeyboardEvent,
+  LayoutAnimation,
   type LayoutChangeEvent,
   StyleSheet,
   useWindowDimensions,
@@ -66,15 +68,32 @@ const styles = StyleSheet.create({
   },
 });
 
+/**
+ * Moves the next layout with the keyboard, on its own duration and curve, as
+ * React Native's keyboard-avoiding view does, so what the keyboard lifts
+ * rises with it rather than snapping to where it ends.
+ */
+function moveWithKeyboard({ duration, easing }: KeyboardEvent) {
+  if (duration <= 0) return;
+  LayoutAnimation.configureNext({
+    duration,
+    update: { duration, type: LayoutAnimation.Types[easing] ?? LayoutAnimation.Types.keyboard },
+  });
+}
+
 /** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. */
 function useKeyboardHeight(): number {
   const [height, setHeight] = useState(0);
   useEffect(() => {
-    const rising = Keyboard.addListener("keyboardWillShow", ({ endCoordinates }) =>
-      setHeight(endCoordinates.height),
-    );
+    const rising = Keyboard.addListener("keyboardWillShow", (event) => {
+      moveWithKeyboard(event);
+      setHeight(event.endCoordinates.height);
+    });
 
-    const falling = Keyboard.addListener("keyboardWillHide", () => setHeight(0));
+    const falling = Keyboard.addListener("keyboardWillHide", (event) => {
+      moveWithKeyboard(event);
+      setHeight(0);
+    });
 
     return () => {
       rising.remove();

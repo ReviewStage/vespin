@@ -2,10 +2,11 @@
 
 import { useVideoPlayer, type VideoPlayerStatus, VideoView } from "expo-video";
 import { useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
+import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -101,7 +102,7 @@ export function Video({ source, label, onOpenElsewhere, tileAspect }: VideoProps
             </Text>
           ) : null}
           {offers ? (
-            <Pressable
+            <Press
               onPress={onOpenElsewhere}
               accessibilityRole="link"
               accessibilityHint={OPENS_IN_SAFARI}
@@ -112,7 +113,7 @@ export function Video({ source, label, onOpenElsewhere, tileAspect }: VideoProps
               >
                 {OPEN_IN_SAFARI}
               </Text>
-            </Pressable>
+            </Press>
           ) : null}
         </View>
       </HeldMenu>
