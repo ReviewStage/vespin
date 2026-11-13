@@ -45,7 +45,6 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { cachedVideo } from "../cached-media.js";
-import { deviceLogError } from "../device-log.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs, useHostFollow } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -251,7 +250,12 @@ function paused(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-/** Says a media read that failed in one line of words, the cause's own among them, on the device's log, where a release build keeps it and a flow's log capture shows it (`deviceLogError`). */
+/**
+ * Says a media read that failed in one line of words, the cause's own among
+ * them, since React Native writes a console error to the device's log
+ * (`com.facebook.react.log`, category `javascript`) in a release build too,
+ * and an error handed beside the words may reach it without its message.
+ */
 function mediaReadFailed(agentId: string, pictureId: string, cause: unknown, again: boolean): void {
   const why = cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause);
 
@@ -259,7 +263,7 @@ function mediaReadFailed(agentId: string, pictureId: string, cause: unknown, aga
     ? "it is tried again shortly"
     : "it is read again on the transcript's next change";
 
-  deviceLogError(
+  console.error(
     `A picture the agent showed did not land (agent ${agentId}, picture ${pictureId}); ${next}. ${why}`,
   );
 }
