@@ -683,7 +683,7 @@ export const disabledServersSchema = EffectSchema.Array(
 const agentStartFromSchema = EffectSchema.Struct({
   agentId: wireUuidSchema,
   messageId: EffectSchema.optionalKey(wireUuidSchema),
-  /** Where a desktop before this release cut a reply still being written as Fork was pressed, taken so its Start is not refused and read by nothing, so its fork keeps the message whole. */
+  /** Where a desktop before this release cut a reply still being written as Fork was pressed, taken so its Start is not refused and read by nothing, so its fork keeps the message whole; the key goes with the minimum supported desktop version. */
   messageSteps: EffectSchema.optionalKey(EffectSchema.Number),
   /** As `messageSteps`, the words and calls of the last of those steps. */
   messageStepParts: EffectSchema.optionalKey(EffectSchema.Number),

@@ -85,11 +85,7 @@ import { CURSOR_START } from "./transcript.js";
  * other, and its transcript under the member who started it, whose
  * conversation it is. A continue replays every step; a fork stops at the
  * assistant message named, its turn's journal included, and a message that
- * is none of the source's own journals is refused. A fork of a reply still
- * being written names where it was seen to end as Fork was pressed, by its
- * steps and the words and calls of the last of them, and keeps those alone,
- * as they stand when the Start reads them, so what the source wrote after
- * the press stays out of it. The source's first
+ * is none of the source's own journals is refused. The source's first
  * message is its brief and is not replayed: the new agent is handed the
  * description as it stands now, or the source's prompt with the text files
  * attached to it and the images kept beside its conversation (`filesOf`),
