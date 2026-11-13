@@ -58,7 +58,10 @@ import {
   terminalRenameRequestSchema,
   terminalsAnswerSchema,
 } from "../terminal-wire.js";
-import { workspaceToolsAnswerSchema } from "../workspace-tools-wire.js";
+import {
+  defaultMachineRequestSchema,
+  workspaceToolsAnswerSchema,
+} from "../workspace-tools-wire.js";
 import { bodyCap, declaredProcedure, exactBodyInput, refuses } from "./base.js";
 import { MESSAGE_REFUSALS } from "./messages.js";
 
@@ -453,6 +456,19 @@ export const agentsContract = {
     .meta(openapi({ method: HTTP_METHOD.GET, path: `${AGENT_PATH}/workspace-tools` }))
     .input(idParams)
     .output(EffectSchema.flip(workspaceToolsAnswerSchema)),
+  /** One agent's default machine set, where its terminal commands and computer use go when a call names none, answering its tools as they then stand; refused for a machine its task's agents may not use. */
+  setDefaultMachine: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
+    .meta(bodyCap(CHOICE_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.PUT,
+        path: `${AGENT_PATH}/default-machine`,
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(idParams, defaultMachineRequestSchema))
+    .output(EffectSchema.flip(workspaceToolsAnswerSchema)),
   /** One agent's stopped sandbox resumed, on the developer's click. */
   sandboxResume: sandboxProcedure
     .meta(openapi({ method: HTTP_METHOD.POST, path: `${AGENT_PATH}/sandbox/resume` }))
@@ -490,7 +506,7 @@ export const agentsContract = {
     .output(EffectSchema.flip(terminalsAnswerSchema)),
   /**
    * One of the agent's repository's run actions run in its running
-   * sandbox, behind the Run actions experiment, answering its shell: the one
+   * sandbox, answering its shell: the one
    * already running it, or one it was typed into or started in now. A
    * stopped sandbox is refused, never woken.
    */

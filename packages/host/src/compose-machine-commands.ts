@@ -30,6 +30,7 @@ import {
   machineCommandKindsQuery,
   machineCommandResultSchema,
 } from "@repo/features/machine-command-wire";
+import { MACHINES_READ, machinesOfLiveRows } from "@repo/features/machine-live";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
@@ -39,8 +40,10 @@ import {
   Deferred,
   Duration,
   Effect,
+  FiberHandle,
   FiberSet,
   Option,
+  Queue,
   Schedule,
   Schema,
   type Scope,
@@ -132,10 +135,13 @@ import type { ThisMachineDevice } from "./this-machine-device.js";
  * install keeps for it (`this-machine-device.ts`), and every read, claim, and
  * presence names that device, so the service hands it what was queued for
  * it or for no machine, and never what was meant for another of the
- * account's. The join carries this Mac's own settings for commands and apps
- * up where the service holds none for it yet, and the service's are written
- * over Settings where they differ; from then on each change to them here is
- * written to the service. Until it has joined, or where it cannot, the Mac
+ * account's. The join carries this Mac's own settings for commands and apps,
+ * its switch for apps among them, up where the service holds none for it
+ * yet, and the service's are written over Settings where they differ; from
+ * then on each change to them here is written to the service, and the
+ * service's own row for the device is followed live (`MACHINES_READ`), so a
+ * change made on another device or the web is written over Settings as it
+ * lands, without joining again. Until it has joined, or where it cannot, the Mac
  * claims as the account alone, as it did before devices claimed.
  *
  * A live read writes nothing, so the Mac says it listens for its kinds
@@ -178,8 +184,43 @@ const VARIABLE = { HOME: "HOME", SHELL: "SHELL" } as const;
 /** How often the Mac looks again at whether it has joined, and whether its settings here differ from the service's, beside each change that may move either: a join or a write the service did not answer is tried again so. */
 const DEVICE_LOOK_EVERY = Duration.seconds(15);
 
+/** What the device's looks run on: a look again at whether it joined and its settings moved, or the service's say over it heard live. */
+const DEVICE_LOOK = { AGAIN: "again", HEARD: "heard" } as const;
+
+/** The device this Mac joined as for an account, the settings the service keeps for it as last read or written, and the apps whose looks it last posted for it; none before it posted any. */
+interface Joined {
+  readonly userId: string;
+  readonly deviceId: string;
+  readonly settings: MachineDeviceSettings;
+  readonly looks?: readonly string[] | undefined;
+}
+
+/** One turn of the device's looks: a look again, or the service's say over the device it joined as (`from`), heard live. */
+type DeviceLook =
+  | { readonly kind: typeof DEVICE_LOOK.AGAIN }
+  | {
+      readonly kind: typeof DEVICE_LOOK.HEARD;
+      readonly from: Joined;
+      readonly service: MachineDeviceSettings;
+    };
+
+const LOOK_AGAIN: DeviceLook = { kind: DEVICE_LOOK.AGAIN };
+
 /** How long the helper has to name an app before it is asked about, apart from the action's own time. */
 const DESCRIBE_WITHIN = Duration.seconds(10);
+
+/** How long the helper has to put the agent's cursor away, behind any action it is still on. */
+const RELEASE_WITHIN = Duration.seconds(10);
+
+/** Why a release is let go as its turn comes: another agent's action took the cursor meanwhile. */
+const CURSOR_TAKEN_WORDS = "another agent took the cursor.";
+
+/** The actions that never move the agent's cursor, so never hand it to the agent asking. Note that an app's read is not among them, because it brings the cursor in where it shows nowhere yet. */
+const STILL_CURSOR: ReadonlySet<string> = new Set([
+  COMPUTER_ACTION.LIST_APPS,
+  COMPUTER_ACTION.RECORD,
+  COMPUTER_ACTION.STOP_RECORDING,
+]);
 
 /** The service's side of the commands, as this concern asks it. */
 export type MachineCommandClient = Pick<
@@ -229,16 +270,14 @@ export interface MachineCommandsDependencies {
   client: MachineCommandClient;
   /** The computer-use helper and its settings, where this Mac ships one; none takes no action on an app. */
   computer?: MacComputerUse;
+  /**
+   * Finishes once the agent given is no longer at work, its turn ended,
+   * failed, or stopped, as the account's task list says, which puts the
+   * agent's cursor away; none leaves the cursor to the helper's own clock.
+   */
+  turnEnded?: (agentId: string) => Effect.Effect<void>;
   /** This Mac as a device of the account, where this process can say which machine it runs on; none claims as the account alone. */
   device?: MachineCommandsDevice;
-}
-
-/** The device this Mac joined as for an account, the settings the service keeps for it as last read or written, and the apps whose looks it last posted for it; none before it posted any. */
-interface Joined {
-  readonly userId: string;
-  readonly deviceId: string;
-  readonly settings: MachineDeviceSettings;
-  readonly looks?: readonly string[] | undefined;
 }
 
 /** The device the Mac joined as for the account given; none where it has not joined for it. */
@@ -249,9 +288,19 @@ const joinedAs = (joined: Joined | undefined, userId: string) =>
 const sameApps = (one: readonly string[], other: readonly string[]) =>
   one.length === other.length && one.every((app, index) => app === other[index]);
 
-/** Whether two says over commands and apps are the same, the apps in order. */
+/** Whether two says over commands and apps are the same, the apps in order, and a switch for apps only one names told apart, so a Mac carries its own up where the service holds none. */
 const sameSettings = (one: MachineDeviceSettings, other: MachineDeviceSettings) =>
-  one.commandMode === other.commandMode && sameApps(one.alwaysAllowedApps, other.alwaysAllowedApps);
+  one.commandMode === other.commandMode &&
+  one.computerUse === other.computerUse &&
+  sameApps(one.alwaysAllowedApps, other.alwaysAllowedApps);
+
+/** The service's say over this Mac as the account's machines read names it, by the device it joined as; none where the read names no such machine, or one whose app never joined. */
+function heardSettings(
+  rows: typeof MACHINES_READ.rows.Type,
+  deviceId: string,
+): MachineDeviceSettings | undefined {
+  return machinesOfLiveRows(rows.machines).find((machine) => machine.id === deviceId)?.settings;
+}
 
 /** An app as the helper names and draws it: by the bundle id it was asked for, its name, and its icon where it drew one. */
 interface NamedApp {
@@ -522,6 +571,12 @@ interface RecordingOwner {
   readonly conversationId: string;
 }
 
+/** Whom the agent's cursor stands for: the account and the agent whose action moved it last, none for a conversation that is no agent's. */
+interface CursorHolder {
+  readonly userId: string;
+  readonly agentId: string | undefined;
+}
+
 /** The bytes a base64 text spells: three for every four characters, less its padding. */
 function base64Bytes(base64: string): number {
   const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
@@ -581,6 +636,13 @@ export function composeMachineCommands(
      * it is forgotten as the gate moves, so another account never receives it.
      */
     let recordingOwner: RecordingOwner | undefined;
+    /**
+     * Whom the agent's cursor stands for, which the helper keeps one of for
+     * the whole Mac, and the watch on that agent's turn, which puts the
+     * cursor away as the turn ends; another agent's action takes both over.
+     */
+    let cursorHolder: CursorHolder | undefined;
+    let cursorWatch: FiberHandle.FiberHandle<void> | undefined;
     /** The asks waiting on the developer, by the command's id, the earliest asked first, each with the account it was claimed for. */
 
     const asks = new Map<
@@ -876,6 +938,9 @@ export function composeMachineCommands(
           return stops && !owns() ? NOT_OWNER_WORDS : undefined;
         });
 
+        // Note that the cursor is the agent's from the moment its action is handed to the helper, since the action may move it though it then fails.
+        if (!STILL_CURSOR.has(action.op)) yield* heldBy({ userId, agentId: command.agentId });
+
         const answer = yield* computer.helper.ask(request, Duration.millis(left), stillLet);
 
         if ("recording" in answer)
@@ -890,6 +955,49 @@ export function composeMachineCommands(
         }
 
         yield* settled(command.id, sendable(computerResult(answer, app)));
+      });
+
+    /**
+     * The agent's cursor held for the agent whose action just ran: its turn
+     * watched, and the cursor put away as the turn ends, unless another
+     * agent's action took the cursor over first. An agent that already holds
+     * it keeps its watch.
+     */
+    const heldBy = (holder: CursorHolder) =>
+      Effect.gen(function* () {
+        // Note that an agent already holding the cursor keeps its holder, whose watch puts the cursor away by that very holder.
+        if (cursorHolder?.userId === holder.userId && cursorHolder.agentId === holder.agentId)
+          return;
+        cursorHolder = holder;
+
+        if (cursorWatch === undefined) return;
+        const { turnEnded } = dependencies;
+
+        // Note that a conversation that is no agent's, or a Mac that cannot watch turns, leaves the cursor to the helper's own clock.
+        if (holder.agentId === undefined || turnEnded === undefined) {
+          return yield* FiberHandle.clear(cursorWatch);
+        }
+
+        yield* FiberHandle.run(
+          cursorWatch,
+          Effect.andThen(turnEnded(holder.agentId), released(holder)),
+        );
+      });
+
+    /** The agent's cursor put away, where the holder given still holds it. */
+    const released = (holder: CursorHolder) =>
+      Effect.gen(function* () {
+        if (cursorHolder !== holder || computer === undefined) return;
+        cursorHolder = undefined;
+
+        // Note that another agent's action may take the cursor while the release waits its turn at the helper, so it is refused then rather than hiding that agent's cursor.
+        const free = Effect.sync(() =>
+          cursorHolder === undefined ? undefined : CURSOR_TAKEN_WORDS,
+        );
+
+        yield* Effect.ignore(
+          computer.helper.ask({ op: COMPUTER_HELPER_OP.RELEASE_CURSOR }, RELEASE_WITHIN, free),
+        );
       });
 
     /**
@@ -1037,6 +1145,25 @@ export function composeMachineCommands(
     /** The device the Mac joined as, and the settings the service keeps for it; none before it has joined for the account signed in. */
     const joined = yield* SubscriptionRef.make<Joined | undefined>(undefined);
 
+    /**
+     * The device the Mac claims as for the account signed in, told to the
+     * windows at every look, so the panel can tell this Mac from the
+     * account's others. Note that it is told again though it did not move,
+     * because the event is not kept for a listener that attaches after it,
+     * and the client writes it only where it moved.
+     */
+    const tellDevice = Effect.gen(function* () {
+      const userId = dependencies.accountId();
+
+      const now =
+        userId === undefined ? undefined : joinedAs(yield* SubscriptionRef.get(joined), userId);
+
+      kernel.emit(
+        GATEWAY_EVENT.MACHINE_COMMAND_DEVICE_CHANGED,
+        carried(now === undefined ? {} : { deviceId: now }),
+      );
+    });
+
     /** Waits until the device the Mac claims as for `userId` is no longer `device`: it joined, or joined again under another id. */
     const rejoined = (userId: string, device: string | undefined) =>
       SubscriptionRef.changes(joined).pipe(
@@ -1136,6 +1263,94 @@ export function composeMachineCommands(
 
         yield* SubscriptionRef.set(joined, { userId, deviceId, settings: answer.settings });
       });
+
+    /**
+     * The service's say over this Mac as its live read carried it, taken
+     * where it moved since it was last read or written: held as the
+     * device's, then written over Settings where they differ, so a change
+     * made on another device or the web reaches this Mac without joining
+     * again. It runs in turn with the looks (`reconciled`), never beside
+     * one, so a look never carries this Mac's say up over the service's
+     * between the two. Note that a write Settings refused leaves this Mac's
+     * own say to differ from the one held, which the next look carries up,
+     * so the two end the same either way.
+     */
+    const heard = (device: MachineCommandsDevice, from: Joined, service: MachineDeviceSettings) =>
+      Effect.gen(function* () {
+        const standing = yield* SubscriptionRef.get(joined);
+
+        if (
+          standing?.userId !== from.userId ||
+          standing.deviceId !== from.deviceId ||
+          sameSettings(standing.settings, service)
+        )
+          return;
+        yield* SubscriptionRef.set(joined, { ...standing, settings: service });
+
+        if (!sameSettings(yield* device.settings, service)) yield* device.applySettings(service);
+      });
+
+    /** Waits until the Mac no longer stands joined as the device it joined as for `from`'s account. */
+    const unjoined = (from: Joined) =>
+      SubscriptionRef.changes(joined).pipe(
+        Stream.filter((now) => now?.userId !== from.userId || now.deviceId !== from.deviceId),
+        Stream.runHead,
+      );
+
+    /**
+     * The account's machines followed (`MACHINES_READ`, which polls the
+     * service, held) for as long as the Mac stands joined as one device,
+     * each change to its own row's say handed to `take`; the read asked
+     * again after a pause where the service did not answer it or broke it
+     * off, and followed again as the Mac joins as another device or for
+     * another account. Note that it waits, reading nothing, while the Mac
+     * has not joined.
+     */
+    const settingsFollowed = (
+      take: (from: Joined, service: MachineDeviceSettings) => Effect.Effect<void>,
+    ) =>
+      Effect.forever(
+        Effect.gen(function* () {
+          const from = yield* SubscriptionRef.get(joined);
+
+          if (from === undefined) {
+            return yield* Effect.asVoid(
+              SubscriptionRef.changes(joined).pipe(
+                Stream.filter((now) => now !== undefined),
+                Stream.runHead,
+              ),
+            );
+          }
+
+          const read = (after?: string) =>
+            asked(
+              client.liveRead(
+                MACHINES_READ,
+                { userId: from.userId },
+                after === undefined ? undefined : { after },
+              ),
+            );
+
+          const sealed = yield* asked(client.liveRead(MACHINES_READ, { userId: from.userId }));
+
+          if ("failure" in sealed) {
+            return yield* Effect.raceFirst(
+              waitOrRegained(LIVE_RESTART),
+              Effect.asVoid(unjoined(from)),
+            );
+          }
+
+          const rows = decodedLiveRows({ poll: read }, sealed, MACHINES_READ.rows);
+
+          const following = Stream.runForEach(rows, (now) => {
+            const service = heardSettings(now, from.deviceId);
+
+            return service === undefined ? Effect.void : take(from, service);
+          }).pipe(Effect.catch(() => waitOrRegained(LIVE_RESTART)));
+
+          yield* Effect.raceFirst(following, Effect.asVoid(unjoined(from)));
+        }),
+      );
 
     /**
      * How this Mac names and draws the apps it always allows, posted for the
@@ -1247,6 +1462,13 @@ export function composeMachineCommands(
           clearedAt = moves;
           allowedOnce.clear();
           recordingOwner = undefined;
+
+          // Note that the cursor of an account the gate left is put away at once, rather than by its turn's watch.
+          if (cursorHolder !== undefined) {
+            if (cursorWatch !== undefined) yield* FiberHandle.clear(cursorWatch);
+            yield* released(cursorHolder);
+          }
+
           yield* FiberSet.clear(running);
 
           // Note that the clear waits out any claim under way, during which the gate may have moved again, so the next turn starts from where it stands now.
@@ -1273,6 +1495,7 @@ export function composeMachineCommands(
     const lifetime = Effect.gen(function* () {
       const running = yield* FiberSet.make();
       const claims = yield* FiberSet.make();
+      cursorWatch = yield* FiberHandle.make<void>();
       // Note that the changes are subscribed to before the gate is first worked out, so one that lands meanwhile is heard rather than lost.
       const changes = yield* dependencies.changed;
       yield* gateMoved;
@@ -1282,23 +1505,40 @@ export function composeMachineCommands(
       if (dependencies.device !== undefined) {
         const device = dependencies.device;
 
+        // Note that what the service says of this Mac is heard on the same stream the looks run off, so the two never run beside each other.
+        const said = yield* Queue.unbounded<DeviceLook>();
+        const again = () => LOOK_AGAIN;
+
         const looks = Stream.merge(
-          Stream.succeed(undefined),
+          Stream.succeed(LOOK_AGAIN),
           Stream.merge(
-            yield* dependencies.changed,
-            Stream.fromSchedule(Schedule.spaced(DEVICE_LOOK_EVERY)),
+            Stream.merge(Stream.map(yield* dependencies.changed, again), Stream.fromQueue(said)),
+            Stream.map(Stream.fromSchedule(Schedule.spaced(DEVICE_LOOK_EVERY)), again),
+          ),
+        );
+
+        const look = (event: DeviceLook) =>
+          event.kind === DEVICE_LOOK.HEARD
+            ? heard(device, event.from, event.service)
+            : Effect.andThen(
+                Effect.andThen(reconciled(device), tellDevice),
+                computer === undefined ? Effect.void : looksPosted(computer),
+              );
+
+        yield* Effect.forkScoped(
+          Stream.runForEach(looks, (event) =>
+            Effect.catchDefect(look(event), () =>
+              Effect.sync(() => report("this Mac could not join as a device")),
+            ),
           ),
         );
 
         yield* Effect.forkScoped(
-          Stream.runForEach(looks, () =>
-            Effect.catchDefect(
-              Effect.andThen(
-                reconciled(device),
-                computer === undefined ? Effect.void : looksPosted(computer),
-              ),
-              () => Effect.sync(() => report("this Mac could not join as a device")),
+          Effect.catchDefect(
+            settingsFollowed((from, service) =>
+              Effect.asVoid(Queue.offer(said, { kind: DEVICE_LOOK.HEARD, from, service })),
             ),
+            () => Effect.sync(() => report("this Mac could not follow its settings")),
           ),
         );
       }

@@ -31,7 +31,12 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
 import { useAppKeymap } from "../app-commands.js";
 import { type AnyAct, FAKE_ANSWER, type FakeActAnswer, fakeActs } from "../testing/app-bridge.js";
-import { readExperiments, writeExperiments } from "../testing/app-state.js";
+import {
+  handState,
+  readExperiments,
+  writeExperiments,
+  writeListedTasks,
+} from "../testing/app-state.js";
 import { attachmentChipName } from "../testing/attachment-chip.js";
 import {
   composerEditor,
@@ -48,6 +53,7 @@ import { AGENT } from "../testing/desktop-inbox.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
 import { restOn } from "../testing/hint-rest.js";
 import { relayout } from "../testing/resize-observer.js";
+import { listedAgent } from "../testing/tasks-control.js";
 import { DescriptionBody } from "./description-body.js";
 import { COMMENTS_FILTER, CommentFocusScope, PageComments } from "./description-comments.js";
 import { descriptionEditMutation } from "./description-edit-mutation.js";
@@ -81,7 +87,7 @@ const TEXT = [
   "",
 ].join("\n\n");
 
-const PLAN: Task = { ...DOCUMENT_TASK, document: { body: TEXT, assumptions: [] } };
+const PLAN: Task = { ...DOCUMENT_TASK, description: { body: TEXT, assumptions: [] } };
 
 const ID = {
   OPEN: "0f9b5f6e-6a8e-4c51-9a0e-2c1f2f0b7a11",
@@ -680,7 +686,7 @@ test("the button beside a list comments on the bullet under the pointer, a paren
     "\n\n",
   );
 
-  const listed: Task = { ...DOCUMENT_TASK, document: { body: text, assumptions: [] } };
+  const listed: Task = { ...DOCUMENT_TASK, description: { body: text, assumptions: [] } };
   const { container, started } = wide(() => drawn("page", [], () => true, listed));
 
   const second = [...container.querySelectorAll("li")].find((li) =>
@@ -1294,7 +1300,7 @@ test("a thread being started gives its card's place to the thread as its words a
   );
 });
 
-test("a thread's resolve reads as its writer's own line, drawn as a comment's head, an agent of another task named as the workspace's list names it, and an empty tab says how a thread starts", () => {
+test("a thread's resolve reads as its writer's own line, drawn as a comment's head, an agent of another task named as the workspace's list names it, and an empty tab says how a thread starts", async () => {
   const resolvedBy = (id: string, writer: DescriptionCommentThread["entries"][number]["writer"]) =>
     threadOn(id, "teammate", "A guest, too?", {
       status: DESCRIPTION_COMMENT_STATUS.RESOLVED,
@@ -1315,11 +1321,13 @@ test("a thread's resolve reads as its writer's own line, drawn as a comment's he
   });
 
   // The agent works on another task, so only the window's list across the workspace holds it.
+  handState(experimentsOn(EXPERIMENT.DESCRIPTIONS));
+  writeListedTasks({ taskAgents: [listedAgent(AGENT)] });
+
   const agents: EditAgents = {
     control: {
       agents: [],
       archived: [],
-      listed: [AGENT],
       models: [],
       me: "u-dean",
       pullRequests: new Map(),
@@ -1339,6 +1347,10 @@ test("a thread's resolve reads as its writer's own line, drawn as a comment's he
     agents,
   );
 
+  // The list is read from the bridge once the tree is drawn.
+  await act(async () => {
+    for (let tick = 0; tick < 10; tick += 1) await Promise.resolve();
+  });
   assert.ok(container.querySelector(".ui-empty-state")?.textContent?.includes("No comments"));
   act(() => resolvedChoice(container)?.click());
 

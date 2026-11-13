@@ -1,4 +1,5 @@
 import type { WorkspaceMember } from "@repo/features/workspace-wire";
+import type { HistoryRows } from "./places/history-rows.js";
 import type { RoutedPlace } from "./places/routed-places.js";
 import type { StepTitle } from "./places/window-steps.js";
 import { agentName } from "./tasks/agent-model.js";
@@ -26,7 +27,8 @@ import type { RoutedViews } from "./workspace-routes.js";
  * A step listed later is named again as what it names stands now
  * (`liveStepTitle`), by the ids it stood on: a task by the name the task
  * list gives it, an agent's tab by its agent's name as the open task's
- * agents or the task's row's agent line give it, and a person's page by
+ * agents or the task's row's agent line give it, each read by its id
+ * (`places/history-rows.ts`), and a person's page by
  * the name the workspace's members give them. So a task, agent, or person
  * renamed since is listed under the new name, and the name kept as the step
  * stood is only what a step falls back to where nothing the window reads
@@ -45,21 +47,20 @@ export const MERGE_QUEUE_WORDS = "Merge queue";
 /** What Home is called, as its step and its page name it. */
 export const HOME_WORDS = "Home";
 
-/** The parts of the Tasks tab a step's name is read again from: the task list, the open task's agents and pages. */
-type StepNameTasks = Pick<
-  TasksControl,
-  "tasks" | "activeTaskId" | "agents" | "liveAgents" | "pages"
->;
+/** What a step's name is read again from: the task list's rows by id, the names being typed for tasks, and the open task's agents and pages. */
+type StepNameTasks = Pick<TasksControl, "typedNames" | "activeTaskId" | "agents" | "pages"> & {
+  readonly rows: HistoryRows;
+};
 
-/** The name an agent of a task goes by now: as the open task's agents say, else as the list followed live does; none where neither names it. */
+/** The name an agent of a task goes by now: as the open task's agents say, else as the list followed live does, where it lists the agent on that task; none where neither names it. */
 function agentNameNow(tasks: StepNameTasks, taskId: string, agentId: string): string | undefined {
   const open =
     taskId === tasks.activeTaskId
       ? tasks.agents.agents?.find((agent) => agent.id === agentId)
       : undefined;
 
-  const line =
-    open ?? tasks.liveAgents?.find((agent) => agent.id === agentId && agent.planId === taskId);
+  const listed = tasks.rows.agent(agentId);
+  const line = open ?? (listed?.planId === taskId ? listed : undefined);
 
   return line === undefined ? undefined : agentName(line, tasks.agents.models);
 }
@@ -97,13 +98,12 @@ function shownSideTabLabel(tab: SidePanelTab, taskId: string, tasks: StepNameTas
 }
 
 /** The parts of the Tasks tab a step's name reads. */
-export type StepTitleTasks = Pick<
+type TitleTasksControl = Pick<
   TasksControl,
-  | "tasks"
+  | "typedNames"
   | "boundFor"
   | "activeTaskId"
   | "agents"
-  | "liveAgents"
   | "pages"
   | "mainTabs"
   | "sidePanel"
@@ -112,19 +112,25 @@ export type StepTitleTasks = Pick<
   | "history"
 >;
 
-/** The name of a task the account lists, where it is listed. */
+/** What a step's name reads: the parts of the Tasks tab it reads, and the task list's rows by id. */
+export type StepTitleTasks = TitleTasksControl & { readonly rows: HistoryRows };
+
+/** The name of a task the account lists, where it is listed, as it is being typed where it is. */
 export function taskName(tasks: StepNameTasks, taskId: string | undefined): string | undefined {
   if (taskId === undefined) return undefined;
+  const listed = tasks.rows.task(taskId);
 
-  return tasks.tasks.find((task) => task.id === taskId)?.name;
+  return listed === undefined ? undefined : (tasks.typedNames.get(taskId) ?? listed.name);
 }
 
 /** What the step the window stands on is called; none while nothing names it, as a task not yet listed. A routed place names its step by its declaration (`places/routed-places.ts`), the place under it by the window's state. */
 export function stepTitle(
   routed: RoutedPlace | undefined,
-  tasks: StepTitleTasks,
+  control: TitleTasksControl,
+  rows: HistoryRows,
   views: RoutedViews,
 ): StepTitle | undefined {
+  const tasks: StepTitleTasks = { ...control, rows };
   const under = () => stateStepTitle(tasks);
 
   return routed === undefined ? under() : routed.title(tasks, under, views);

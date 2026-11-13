@@ -118,7 +118,7 @@ export function readRepositoryFileWindow(
   if (isSecretFile(request.path)) return Effect.succeed(refused(TASK_FILE_REFUSAL.SECRET));
 
   return readWindow(workspaceId, repository, member, request).pipe(
-    Effect.catchTag("GitHubUnavailable", (failure) =>
+    Effect.catch((failure) =>
       Effect.as(logGitHubReadFailure(failure), refused(TASK_FILE_REFUSAL.UNAVAILABLE)),
     ),
   );
@@ -182,7 +182,7 @@ const readWindow = /* @__PURE__ */ Effect.fn("web/taskFileWindow")(function* (
   const reach = yield* reachTaskRepository(organizationId, repository, member);
 
   if ("refused" in reach) return reach.refused;
-  const { token, repository: confirmed, access } = reach.reached;
+  const { bearer, repository: confirmed, access } = reach.reached;
   const branch = request.ref ?? confirmed.defaultBranch;
 
   // Note that a read of the default branch reads at the commit its head
@@ -191,13 +191,13 @@ const readWindow = /* @__PURE__ */ Effect.fn("web/taskFileWindow")(function* (
   // the branch, naming none, since the file is still worth showing.
   const commit =
     request.ref ??
-    (yield* readBranchHead(token, confirmed, confirmed.defaultBranch).pipe(
+    (yield* readBranchHead(bearer, confirmed, confirmed.defaultBranch).pipe(
       Effect.catch(() => Effect.succeed(undefined)),
     ));
 
   const at = commit ?? branch;
 
-  const file = yield* readRepositoryFile(token, confirmed, at, request.path).pipe(
+  const file = yield* readRepositoryFile(bearer, confirmed, at, request.path).pipe(
     markRefusedToken(access),
   );
 

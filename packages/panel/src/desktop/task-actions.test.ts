@@ -67,7 +67,7 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: null,
-  document: { body: "# Teammate invitations", assumptions: [] },
+  description: { body: "# Teammate invitations", assumptions: [] },
 };
 
 const OTHER: TaskSummary = {
@@ -341,7 +341,7 @@ test("a question asked of one task does not outlive it: the delete the Plan tab'
   choose("Permanently delete");
   assert.equal(asking(), true);
 
-  const other: Task = { ...TASK, ...OTHER, document: TASK.document };
+  const other: Task = { ...TASK, ...OTHER, description: TASK.description };
   draw({
     ...tasks,
     activeTaskId: OTHER.id,

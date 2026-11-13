@@ -52,6 +52,7 @@ import { DISCLOSURES_EXAMPLE } from "./examples/disclosures";
 import { DRAFT_CARDS_EXAMPLE } from "./examples/draft-cards";
 import { DRAWER_SWIPES_EXAMPLE } from "./examples/drawer-swipes";
 import { DROP_SLOTS_EXAMPLE } from "./examples/drop-slots";
+import { EDGE_CLIPS_EXAMPLE } from "./examples/edge-clips";
 import { EDITABLE_DOCUMENT_EXAMPLE } from "./examples/editable-document";
 import { EMAIL_CHIPS_EXAMPLE } from "./examples/email-chips";
 import { EMPTY_STATES_EXAMPLE } from "./examples/empty-states";
@@ -157,6 +158,7 @@ import { TIMES_EXAMPLE } from "./examples/times";
 import { TOASTS_EXAMPLE } from "./examples/toasts";
 import { TOOLBARS_EXAMPLE } from "./examples/toolbars";
 import { TOOLTIPS_EXAMPLE } from "./examples/tooltips";
+import { TRANSCRIPT_RAILS_EXAMPLE } from "./examples/transcript-rails";
 import { TURN_ENDS_EXAMPLE } from "./examples/turn-ends";
 import { TYPOGRAPHY_EXAMPLE } from "./examples/typography";
 import { UPLOAD_COVERS_EXAMPLE } from "./examples/upload-covers";
@@ -232,6 +234,7 @@ export const EXAMPLES: readonly Example[] = [
   DRAFT_CARDS_EXAMPLE,
   DRAWER_SWIPES_EXAMPLE,
   DROP_SLOTS_EXAMPLE,
+  EDGE_CLIPS_EXAMPLE,
   EMAIL_CHIPS_EXAMPLE,
   EMPTY_STATES_EXAMPLE,
   ERROR_LINES_EXAMPLE,
@@ -258,6 +261,7 @@ export const EXAMPLES: readonly Example[] = [
   TOASTS_EXAMPLE,
   TOOLBARS_EXAMPLE,
   TOOLTIPS_EXAMPLE,
+  TRANSCRIPT_RAILS_EXAMPLE,
   TIMES_EXAMPLE,
   SHORTCUTS_EXAMPLE,
   CHECKBOXES_EXAMPLE,

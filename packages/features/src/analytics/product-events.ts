@@ -321,6 +321,7 @@ export const PRODUCT_EXPERIMENT = {
   PLANS: "plans",
   /** Removed with Chat on the right, so no build sends it now; kept because an older build's batch still may, and one unread value refuses the batch. */
   CHAT_ON_THE_RIGHT: "chat-on-the-right",
+  /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   RUN_ACTIONS: "run-actions",
   MERGE_QUEUE: "merge-queue",
   TURN_CHANGES: "turn-changes",
@@ -329,6 +330,7 @@ export const PRODUCT_EXPERIMENT = {
   COMPUTER_USE: "computer-use",
   VOICE: "voice",
   GOALS: "goals",
+  MOVE_AGENTS: "move-agents",
 } as const;
 
 export type ProductExperiment = (typeof PRODUCT_EXPERIMENT)[keyof typeof PRODUCT_EXPERIMENT];

@@ -7,19 +7,21 @@
  * its commands have always run on (`machineOwnerOf`), the task's assignee
  * or its agent's starter. Of those machines, one is reachable for a call
  * where it listened for commands lately and, for a shell command, its
- * command mode is not Never. A Mac's switch for apps stays on the Mac
- * itself, so an action on an app may go to a machine that then refuses it.
+ * command mode is not Never, or, for an action on an app, its switch for
+ * apps is not off. A Mac whose app never carried that switch up keeps it on
+ * the Mac itself, so an action on an app may go to it and be refused there.
  *
- * The machine a call goes to is the one it names, by name or id; else the
+ * The machine a call goes to is the one it names by id; else the
  * agent's default machine (`agent.target_device_id`); else the machine the
  * agent itself runs on, where it is reachable; else the owner's machine
  * that listened last. A default that cannot take the call, or is gone,
  * refuses it, rather than moving it to another machine without a word, and
- * the refusal names the machines that could; so does a name two machines
- * share. A Mac from before machines
- * claimed commands listens as its account alone, so where none of the
- * owner's machines listens as a device but the account does, the call is
- * queued for the account, as it was before.
+ * the refusal lists the machines that could, each by its id: in words for
+ * the model, and as data (`why`, `others`) for the transcript, which says
+ * why in its own words and offers each to make the default. A Mac from
+ * before machines claimed commands listens as its account alone, so where
+ * none of the owner's machines listens as a device but the account does,
+ * the call is queued for the account, as it was before.
  */
 
 import {
@@ -34,7 +36,9 @@ import type { ConversationTarget } from "@repo/database/models/writer";
 import {
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
+  MACHINE_UNREACHED,
   type MachineCommandKind,
+  type MachineUnreached,
 } from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { EXPERIMENT } from "@repo/settings";
@@ -42,7 +46,7 @@ import { Clock, Duration, Effect, Option } from "effect";
 import { experimentOnIn } from "./workspace-experiment-on.js";
 
 /** How lately a machine must have listened to count as online: one held read, and room for the next to arrive, as `machine-command.ts` counts an account. */
-const ONLINE_WITHIN = Duration.seconds(45);
+export const ONLINE_WITHIN = Duration.seconds(45);
 
 export const MACHINE_ROUTE = {
   /** The call goes to one machine, queued for it alone. */
@@ -67,14 +71,22 @@ export type MachineRoute =
   | {
       readonly kind: typeof MACHINE_ROUTE.REFUSED;
       readonly reason: string;
+      /** Why, as data the transcript says in its own words; `reason` is the model's. */
+      readonly why: MachineUnreached;
+      /** The machines that could take the call now, which the transcript offers to make the default. */
+      readonly others: readonly RoutedMachine[];
       /** The machine refused, where the call was meant for one. */
       readonly machine?: RoutedMachine;
     };
 
-/** A machine a call may reach, with whether its owner lets the task's agents use it. */
+/** A machine a call may reach, with whether its owner lets the task's agents use it and whether it listened lately. */
 interface Candidate extends CommandMachine {
   readonly lets: boolean;
+  readonly online: boolean;
 }
+
+/** A machine as the panel lists it to be an agent's default: as an answer names it, with whether its owner lets the task's agents use it and whether it listened lately. */
+export type ListedMachine = RoutedMachine & { readonly lets: boolean; readonly online: boolean };
 
 /** The people whose machines the call may reach, each with whether they let the task's agents use them. */
 function peopleOf(routing: MachineRouting) {
@@ -97,6 +109,28 @@ function peopleOf(routing: MachineRouting) {
   });
 }
 
+/** The machines of the people given, each with whether its owner lets the task's agents use it and whether it listened lately, and who lets them. */
+function machinesOfPeople(people: readonly { readonly userId: string; readonly lets: boolean }[]) {
+  return Effect.gen(function* () {
+    const lets = new Map(people.map((person) => [person.userId, person.lets]));
+    const machines = yield* commandMachinesOf(people.map((person) => person.userId));
+    const since = (yield* Clock.currentTimeMillis) - Duration.toMillis(ONLINE_WITHIN);
+
+    const candidates: readonly Candidate[] = machines.map((machine) => ({
+      ...machine,
+      lets: lets.get(machine.userId) === true,
+      online: machine.seenAt !== null && machine.seenAt.getTime() >= since,
+    }));
+
+    return { lets, candidates };
+  });
+}
+
+/** The machines a call made under the routing given may reach, as `machinesOfPeople` reads them. */
+function candidatesOf(routing: MachineRouting) {
+  return Effect.flatMap(peopleOf(routing), machinesOfPeople);
+}
+
 function routed(machine: CommandMachine): RoutedMachine {
   return {
     id: machine.id,
@@ -105,54 +139,81 @@ function routed(machine: CommandMachine): RoutedMachine {
   };
 }
 
-/** A machine as a refusal lists it: its name, and its owner's where it is not the caller's own. */
+/** A machine as a refusal lists it: its name, its owner's, and the id a call names it by. */
 function listed(machine: CommandMachine): string {
-  return `${machine.name} (${machine.ownerName})`;
+  return `${machine.name} (${machine.ownerName}), id "${machine.id}"`;
+}
+
+/** The machines that could take the call, but the one refused. */
+function othersThan(reachable: readonly CommandMachine[], refused?: CommandMachine) {
+  return reachable.filter((machine) => machine.id !== refused?.id);
 }
 
 /** The machines that could take the call, as a refusal ends: named, with how to choose one; a note that there are none otherwise. */
-function others(reachable: readonly CommandMachine[], refused?: CommandMachine): string {
-  const rest = reachable.filter((machine) => machine.id !== refused?.id);
-
+function othersWords(rest: readonly CommandMachine[]): string {
   if (rest.length === 0) return " No other machine can take it now.";
 
-  return ` It can go to ${rest.map(listed).join(", ")}: name one in \`machine\`.`;
+  return ` It can go to ${rest.map(listed).join("; ")}: pass one's id in \`machine\`.`;
 }
 
-/** Why the machine given cannot take a call of the kind given; none where it can. */
+/** A call refused for the reason given, in the model's words and as data, naming the machines that could take it but the one refused. */
+function refusal(
+  why: { readonly code: MachineUnreached; readonly words: string },
+  reachable: readonly CommandMachine[],
+  refused?: CommandMachine,
+): MachineRoute {
+  const rest = othersThan(reachable, refused);
+
+  return {
+    kind: MACHINE_ROUTE.REFUSED,
+    reason: `${why.words}${othersWords(rest)}`,
+    why: why.code,
+    others: rest.map(routed),
+    ...(refused === undefined ? undefined : { machine: routed(refused) }),
+  };
+}
+
+/** Why the machine given cannot take a call of the kind given, as data and in the model's words; none where it can. */
 function whyNot(
   machine: Candidate,
   kind: MachineCommandKind,
-  online: (machine: CommandMachine) => boolean,
-): string | undefined {
+): { readonly code: MachineUnreached; readonly words: string } | undefined {
   if (!machine.lets) {
-    return `${machine.ownerName} doesn't let this task's agents use their machines.`;
+    return {
+      code: MACHINE_UNREACHED.NOT_LET,
+      words: `Not run: ${machine.ownerName} doesn't let this task's agents use their machines.`,
+    };
   }
 
-  if (!online(machine))
-    return `${machine.name} is offline, or ${PRODUCT_NAME} isn't running on it.`;
+  if (!machine.online) {
+    return {
+      code: MACHINE_UNREACHED.OFFLINE,
+      words: `Not run: ${machine.name} is offline, or ${PRODUCT_NAME} isn't running on it.`,
+    };
+  }
 
   if (kind === MACHINE_COMMAND_KIND.SHELL && machine.commandMode === MACHINE_COMMAND_MODE.NEVER) {
-    return `${machine.name} doesn't let agents run commands (its Settings › This Mac is set to Never).`;
+    return {
+      code: MACHINE_UNREACHED.COMMANDS_NEVER,
+      words: `Not run: ${machine.name} doesn't let agents run commands (its Settings › This Mac is set to Never).`,
+    };
+  }
+
+  // Note that a machine whose app never carried its switch up decides on the Mac itself, as before the switch was kept here.
+  if (kind === MACHINE_COMMAND_KIND.COMPUTER && machine.computerUse === false) {
+    return {
+      code: MACHINE_UNREACHED.APPS_OFF,
+      words: `Not run: ${machine.name} doesn't let agents use its apps (Let agents use its apps is off for it in Settings › Machines).`,
+    };
   }
 
   return undefined;
 }
 
-/** The machines a call names: the one with its id, or else every one so named, whatever its case. */
-function named(candidates: readonly Candidate[], name: string): readonly Candidate[] {
-  const wanted = name.trim();
-  const byId = candidates.filter((machine) => machine.id === wanted);
-
-  if (byId.length > 0) return byId;
-
-  return candidates.filter((machine) => machine.name.toLowerCase() === wanted.toLowerCase());
-}
-
 /** How a call is routed: its kind, the machine it names, whether a Mac of an account listens as its account alone, as one from before machines claimed does, and why it went nowhere where none of the owner's machines could take it. */
 export interface RouteAsk {
   readonly kind: MachineCommandKind;
-  readonly name?: string | undefined;
+  readonly machineId?: string | undefined;
   readonly accountListening: (userId: string) => TaskStoreEffect<boolean>;
   readonly noMachine: string;
 }
@@ -163,56 +224,32 @@ export interface RouteAsk {
  */
 export function routeOf(
   target: ConversationTarget,
-  { kind, name, accountListening, noMachine }: RouteAsk,
+  { kind, machineId, accountListening, noMachine }: RouteAsk,
 ): TaskStoreEffect<MachineRoute> {
   return Effect.gen(function* () {
     const routing = yield* machineRoutingOf(target);
-    const people = yield* peopleOf(routing);
-    const lets = new Map(people.map((person) => [person.userId, person.lets]));
-    const machines = yield* commandMachinesOf(people.map((person) => person.userId));
-
-    const candidates = machines.map((machine) => ({
-      ...machine,
-      lets: lets.get(machine.userId) === true,
-    }));
-
-    const since = (yield* Clock.currentTimeMillis) - Duration.toMillis(ONLINE_WITHIN);
-
-    const online = (machine: CommandMachine) =>
-      machine.seenAt !== null && machine.seenAt.getTime() >= since;
-
-    const reachable = candidates.filter((machine) => whyNot(machine, kind, online) === undefined);
+    const { lets, candidates } = yield* candidatesOf(routing);
+    const reachable = candidates.filter((machine) => whyNot(machine, kind) === undefined);
 
     const to = (machine: Candidate): MachineRoute => {
-      const why = whyNot(machine, kind, online);
+      const why = whyNot(machine, kind);
 
       return why === undefined
         ? { kind: MACHINE_ROUTE.MACHINE, machine: routed(machine) }
-        : {
-            kind: MACHINE_ROUTE.REFUSED,
-            reason: `Not run: ${why}${others(reachable, machine)}`,
-            machine: routed(machine),
-          };
+        : refusal(why, reachable, machine);
     };
 
-    if (name !== undefined) {
-      const [machine, ...more] = named(candidates, name);
+    if (machineId !== undefined) {
+      const machine = candidates.find((each) => each.id === machineId);
 
       if (machine === undefined) {
-        return {
-          kind: MACHINE_ROUTE.REFUSED,
-          reason: `Not run: no machine this task's agents may use is named ${JSON.stringify(name)}.${others(reachable)}`,
-        };
-      }
-
-      // Note that a name two machines share refuses, since either could take one call and the next could go to the other.
-      if (more.length > 0) {
-        const ids = [machine, ...more].map((each) => `${listed(each)}: ${each.id}`);
-
-        return {
-          kind: MACHINE_ROUTE.REFUSED,
-          reason: `Not run: more than one machine is named ${JSON.stringify(name)}; name one in \`machine\` by its id (${ids.join(", ")}).`,
-        };
+        return refusal(
+          {
+            code: MACHINE_UNREACHED.UNKNOWN_MACHINE,
+            words: `Not run: no machine this task's agents may use has the id ${JSON.stringify(machineId)}.`,
+          },
+          reachable,
+        );
       }
 
       return to(machine);
@@ -224,10 +261,14 @@ export function routeOf(
 
       if (fallback !== undefined) return to(fallback);
 
-      return {
-        kind: MACHINE_ROUTE.REFUSED,
-        reason: `Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it.${others(reachable)}`,
-      };
+      return refusal(
+        {
+          code: MACHINE_UNREACHED.DEFAULT_GONE,
+          words:
+            "Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it.",
+        },
+        reachable,
+      );
     }
 
     const own = reachable.find((machine) => machine.id === routing.deviceId);
@@ -240,7 +281,7 @@ export function routeOf(
 
     // A Mac from before machines claimed commands listens as its account alone, and takes what is queued for none.
     const ownersOnline = candidates.some(
-      (machine) => machine.userId === routing.userId && online(machine),
+      (machine) => machine.userId === routing.userId && machine.online,
     );
 
     if (
@@ -251,6 +292,51 @@ export function routeOf(
       return { kind: MACHINE_ROUTE.ACCOUNT, userId: routing.userId };
     }
 
-    return { kind: MACHINE_ROUTE.REFUSED, reason: `${noMachine}${others(reachable)}` };
+    return refusal({ code: MACHINE_UNREACHED.NO_MACHINE, words: noMachine }, reachable);
+  });
+}
+
+/** A machine as a list names it (`ListedMachine`). */
+function listedOf(machine: Candidate): ListedMachine {
+  return { ...routed(machine), lets: machine.lets, online: machine.online };
+}
+
+/**
+ * The machines a call made in the conversation given may reach by policy,
+ * those whose owners let the task's agents use them, online or not, the
+ * one that listened last first: what an agent's default machine may be set
+ * to, and what the panel lists to pick one from.
+ */
+export function defaultMachinesOf(
+  target: ConversationTarget,
+): TaskStoreEffect<readonly ListedMachine[]> {
+  return Effect.gen(function* () {
+    const { candidates } = yield* candidatesOf(yield* machineRoutingOf(target));
+
+    return candidates.filter((machine) => machine.lets).map(listedOf);
+  });
+}
+
+/**
+ * The machines of a task's followers, each with whether its owner lets the
+ * task's agents use it and whether it listened lately, as a follower's card
+ * lists them, read for the account given; none where the account does not
+ * reach the task. Note that the caller decides the workspace has Following on.
+ */
+export function followerMachinesOf(
+  userId: string,
+  taskId: string,
+): TaskStoreEffect<readonly ListedMachine[]> {
+  return Effect.gen(function* () {
+    const followers = yield* listTaskFollowers(userId, taskId);
+
+    if (Option.isNone(followers)) return [];
+
+    const people = followers.value.map((follower) => ({
+      userId: follower.userId,
+      lets: follower.machines,
+    }));
+
+    return (yield* machinesOfPeople(people)).candidates.map(listedOf);
   });
 }

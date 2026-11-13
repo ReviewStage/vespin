@@ -107,12 +107,6 @@ const FLIP_WORDS = {
     off: (workspace: string) =>
       `Stops agents in ${workspace} from making suggestions, draws the ones already in replies as plain links, and stops any from being sent.`,
   },
-  [EXPERIMENT.RUN_ACTIONS]: {
-    on: (workspace: string) =>
-      `Lets owners and admins of ${workspace} keep each repository's run actions in Cloud environment, and shows a Run button over an agent's tabs, with Run rows in ⌘K and a phone's ⋯ menu, that runs one when pressed: in a cloud agent's sandbox, or on the Mac a local agent runs on.`,
-    off: (workspace: string) =>
-      `Hides the Run button, its rows in ⌘K and the ⋯ menu, and the run actions in Cloud environment for everyone in ${workspace}, and stops any from being run.`,
-  },
   [EXPERIMENT.DESCRIPTIONS]: {
     on: (workspace: string) =>
       `Shows each task's description, its comments and version history to everyone in ${workspace}, and has agents keep descriptions current as they work.`,

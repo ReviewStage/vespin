@@ -7,7 +7,6 @@ import { recordRepositoryReads } from "@repo/database/models/github-repository-r
 import { readGitHubTokenRow } from "@repo/database/models/github-token-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask } from "@repo/database/models/task-store";
-import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import {
   readRunActions,
   setRunActions,
@@ -24,7 +23,6 @@ import {
 import { RUN_ACTION_AVAILABILITY } from "@repo/features/workspace-sandbox-setup-wire";
 import { SandboxUnavailable, SnapshotGone } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { EXPERIMENT } from "@repo/settings";
 import { noNetwork } from "@repo/wire/testing";
 import { Clock, type Context, Effect, Layer, Option, Result } from "effect";
 import { SqlClient } from "effect/sql";
@@ -424,13 +422,6 @@ it.layer(SUITE)("the agent terminals procedures", (it) => {
     Effect.gen(function* () {
       const { userId, agent } = yield* openAgent;
       const workspaceId = agent.organizationId;
-
-      yield* setWorkspaceExperiment({
-        organizationId: workspaceId,
-        experiment: EXPERIMENT.RUN_ACTIONS,
-        on: true,
-        by: userId,
-      });
 
       yield* setRunActions(
         workspaceId,

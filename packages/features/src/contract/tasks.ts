@@ -64,16 +64,12 @@ const REVISIONS = `${DESCRIPTION}/revisions` as const;
 const REVISION = `${REVISIONS}/{seq}` as const;
 
 /**
- * The paths the task's description was edited and read back at before it
- * was named the description, under the task's own path rather than its
- * description's, which a released desktop or the published CLI still asks:
+ * Every path a task was served at before it was named the task, all under
+ * `/api/plans`, which a released desktop or the published CLI still asks:
  * each is answered as needing an update (`HOSTED_API_ERROR.HOST_UPGRADE_NEEDED`)
  * rather than as a path the service never served.
  */
-export const RETIRED_TASK_PATHS: readonly RegExp[] = [
-  /^\/api\/plans\/[^/]+\/edit\/?$/u,
-  /^\/api\/plans\/[^/]+\/revisions(?:\/[^/]+(?:\/restore)?)?\/?$/u,
-];
+export const RETIRED_TASK_PATHS: readonly RegExp[] = [/^\/api\/plans(?:\/.*)?$/u];
 
 /** The plan a path names, as text: the handler reads it as a UUID, so one that is none answers as no plan rather than as a request that does not read. */
 const taskParams = { id: EffectSchema.String };

@@ -71,6 +71,7 @@ import {
   type AgentRowState,
   askForName,
   BAR_TITLE,
+  type BarAction,
   type BarMenu,
   ConfirmAsk,
   EmptyState,
@@ -83,6 +84,8 @@ import {
   LinkRow,
   type ListLook,
   ListSection,
+  menuWithout,
+  NoSelection,
   PATH_PART,
   RelationRow,
   ROW_ACTION_TONE,
@@ -152,7 +155,7 @@ import {
 import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
-import { SIDEBAR_PLACE, type SidebarTasks, useListColumn, useListLook } from "./app-sidebar.js";
+import { SIDEBAR_PLACE, type SidebarTasks, useListColumn } from "./app-sidebar.js";
 import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
@@ -641,7 +644,7 @@ function countDrop(taskId: string): (landed: boolean) => boolean {
  * What a task dropped on a group's header does there, keeping it in one
  * place as the panel's drag does: onto Pinned it leaves the section the
  * member keeps it in, a pinned task's stored entry among them, and is
- * pinned once that is taken; onto a section it is put in it, and onto a
+ * pinned at the same moment, both drawn at once; onto a section it is put in it, and onto a
  * repository group it leaves its section, each unpinning it once the move
  * is taken. A refused move leaves the task where it stood, and a drop's
  * pin or unpin is skipped where a newer drop of the same task has landed
@@ -657,17 +660,12 @@ function placeIn(
 
   if (group.kind === TASK_TREE_GROUP.PINNED) {
     return (task) => {
-      const newest = countDrop(task.id);
+      // Note that the drop is counted and taken at once, so an older drop's pending unpin yields to it.
+      countDrop(task.id)(true);
 
-      if (listing.sectionOf(task.id) === undefined) {
-        if (newest(true)) listing.pin(task.id, true);
-
-        return;
-      }
-
-      void listing.place(task.id, null).then((landed) => {
-        if (newest(landed)) listing.pin(task.id, true);
-      });
+      // Note that both writes go at once rather than the pin waiting on the move, so the row leaves its section and stands under Pinned in the same frame; each refused one rolls back with its own notice.
+      if (listing.sectionOf(task.id) !== undefined) void listing.place(task.id, null);
+      listing.pin(task.id, true);
     };
   }
 
@@ -1020,6 +1018,43 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
       ...placingSubmenus(task, overview.placing),
     ].map(barSubmenu),
   };
+}
+
+/**
+ * A task's main acts as a wide window's detail bar stands them, as Mail's
+ * stands Reply: New agent and New sub-task, each its glyph; the rest stay in
+ * ⋯ (`menuWithout`), and its status is the page's chip. With no task picked
+ * they stand dimmed rather than gone, as Mail's bar does over No Message
+ * Selected.
+ */
+function taskActs(
+  task: TaskSummary | undefined,
+  doors: {
+    readonly newAgent: (task: TaskSummary) => void;
+    readonly newSubTask: (task: TaskSummary) => void;
+  },
+): readonly BarAction[] {
+  return [
+    {
+      label: WORDS.NEW_AGENT,
+      symbol: GLYPH.AGENT,
+      disabled: task === undefined,
+      onPress: () => (task === undefined ? undefined : doors.newAgent(task)),
+    },
+    {
+      label: WORDS.NEW_SUB_TASK,
+      symbol: GLYPH.SUB_TASK,
+      disabled: task === undefined,
+      onPress: () => (task === undefined ? undefined : doors.newSubTask(task)),
+    },
+  ];
+}
+
+/** Opens New agent on a task, as its Agents header's + does. */
+function useNewAgent(): (task: TaskSummary) => void {
+  const router = useRouter();
+
+  return (task) => router.push({ pathname: "/start-agent", params: { task: task.id } });
 }
 
 /** Opens a task's version history where its workspace's descriptions stand on, as the panel's Version history opens it; none where they stand off. */
@@ -1723,8 +1758,8 @@ function OverviewPage({
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
-      ) : document === undefined || document.document.body.trim() === "" ? null : (
-        <OverviewDescription overview={overview} body={document.document.body} />
+      ) : document === undefined || document.description.body.trim() === "" ? null : (
+        <OverviewDescription overview={overview} body={document.description.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
     </RowList>
@@ -1805,6 +1840,7 @@ function TasksSplitScreen({
 }) {
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const newSubTask = useNewSubTask();
+  const newAgent = useNewAgent();
   const openRelation = useOpenRelation();
   const moveDoor = useMoveTaskDoor();
   const found = useFoundTask(selected, undefined);
@@ -1814,7 +1850,6 @@ function TasksSplitScreen({
   const read = useTasksRead();
   const archiveAsk = useAgentArchiveAsk();
   const threeColumns = useThreeColumns();
-  const look = useListLook();
   const picked = useTasksCollection();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
@@ -1827,7 +1862,7 @@ function TasksSplitScreen({
     view: (
       <TasksTree
         listing={listing}
-        look={look}
+        look={LIST_LOOK.PLAIN}
         search={search}
         collection={collection}
         selected={selected}
@@ -1850,24 +1885,30 @@ function TasksSplitScreen({
         onArchiveAgent={archiveAsk.archive}
       />
     ) : selected === undefined ? (
-      <EmptyState title={SELECT_A_TASK} symbol={GLYPH.TASK} />
+      <NoSelection title={SELECT_A_TASK} />
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (
       <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
     );
 
+  const acts = taskActs(overview?.task, { newAgent, newSubTask });
+
   const detailBar =
     overview === undefined
-      ? undefined
+      ? { acts }
       : {
-          menu: taskMenu(overview, {
-            askDelete: listing.askDelete,
-            newSubTask,
-            history,
-            openRelation,
-            moveDoor,
-          }),
+          acts,
+          menu: menuWithout(
+            taskMenu(overview, {
+              askDelete: listing.askDelete,
+              newSubTask,
+              history,
+              openRelation,
+              moveDoor,
+            }),
+            acts,
+          ),
           path: {
             path: taskPath(overview.task, overview.workspace),
             status: overview.task.status,

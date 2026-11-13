@@ -5,10 +5,7 @@ import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { BAR_TITLE, FailureNoticeProvider, KeepingProvider, useColors } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Option } from "effect";
 import { Stack } from "expo-router";
-import { hide as hideSplash } from "expo-splash-screen";
-import { useEffect } from "react";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -19,14 +16,17 @@ import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
-import { decodeRelationParams, relationSheetTitle } from "../screens/relation-screens.js";
 import { useShareSheet } from "../share-sheet.js";
+import { holdSplash } from "../splash.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
 import { useNoticeForAccount, useOfflineNotice } from "../use-write.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
+
+// The splash stands until the host's first screen has drawn (`HostProvider`), rather than going with expo-router's own hide over a blank screen.
+holdSplash();
 
 /** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
 const SHORT_SHEET_DETENTS = [0.5, 1];
@@ -123,21 +123,9 @@ function GuardedScreens() {
           />
           <Stack.Screen name="agent-model" options={{ ...shortSheet, title: "Options" }} />
           <Stack.Screen name="agent-ports" options={{ ...shortSheet, title: "Ports" }} />
-          {/* Note that the Task relation sheet is titled for the kind its route names, as the panel heads its search, its kinds standing as a card on the form's ground and its tasks as a list on the sheet's. */}
           <Stack.Screen
             name="task-relation"
-            options={({ route }) => {
-              const kind = Option.getOrUndefined(decodeRelationParams(route.params))?.kind;
-
-              return {
-                presentation: sheetPresentation,
-                headerShown: true,
-                title: relationSheetTitle(kind),
-                contentStyle: {
-                  backgroundColor: kind === undefined ? colors.GROUPED : colors.SIDEBAR,
-                },
-              };
-            }}
+            options={{ presentation: sheetPresentation, title: "Task relation" }}
           />
           <Stack.Screen name="move-task" options={{ ...shortSheet, title: "Move to workspace" }} />
           <Stack.Screen name="task-following" options={{ ...shortSheet, title: "Followers" }} />
@@ -170,17 +158,8 @@ function KeptScreens() {
   );
 }
 
-/**
- * The root, with the splash taken down once it first draws. Note that
- * expo-router takes the splash down once a launch, a frame after its
- * navigation is ready, and that one try can be lost (its frame canceled, or
- * the native splash not standing yet), which leaves the splash over every
- * screen for the whole launch while the app answers under it. So the root
- * takes it down as well; a hide with no splash standing does nothing.
- */
+/** The root: the host, the one notice of a write that did not go, and the screens under both. */
 export default function RootLayout() {
-  useEffect(() => hideSplash(), []);
-
   return (
     <HostProvider>
       <FailureNoticeProvider>

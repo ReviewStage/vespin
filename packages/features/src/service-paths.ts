@@ -111,12 +111,11 @@ export const HOSTED_SERVICE_PATH = {
   DICTATION: "/api/dictation",
   /**
    * A voice call into an agent, opened on the caller's own OpenAI key (POST):
-   * the panel's SDP offer in, GPT-Live's SDP answer out, and never the key.
+   * the panel's SDP offer in, the call's id and GPT-Live's SDP answer out,
+   * and never the key.
    * `voice-wire.ts` declares both bodies.
    */
   VOICE_SESSION: "/api/voice/session",
-  /** A finished voice call's seconds, kept on the member's day (POST). `voice-wire.ts` declares both bodies. */
-  VOICE_CALLS: "/api/voice/calls",
   /**
    * The member's grant of support access, under which a maintainer may sign
    * in as the account from the web for an hour at a time: grant it for seven
@@ -191,6 +190,10 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_AGENT_INBOX: "/api/live/agent-inbox",
   /** The task list sealed for following over Neon Realtime (GET): its tasks and every agent of them, or `unavailable`. `task-list-live.ts` declares the answer. */
   LIVE_TASKS: "/api/live/tasks",
+  /** One task and every agent of it, by the task or the agent under `?id=`, as the task list answers them, with `?poll=true` their rows inline: none for one the account does not reach. `task-list-live.ts` declares the answer. */
+  LIVE_TASK_ROWS: "/api/live/task-rows",
+  /** The tasks a search finds by their name, number, or key under `?query=`, the latest changed first and few, with every agent of them, as the task list answers them, with `?poll=true` their rows inline. `task-list-live.ts` declares the answer. */
+  LIVE_TASK_SEARCH: "/api/live/task-search",
   /** A workspace's automations under `?workspaceId=`, sealed for following over Neon Realtime (GET), or `unavailable`. `automation-live.ts` declares the answer. */
   LIVE_AUTOMATIONS: "/api/live/automations",
   /** One automation's runs under `?id=`, sealed for following over Neon Realtime (GET), or `not-found` or `unavailable`. */
@@ -211,6 +214,8 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_WORKSPACE_INTEGRATIONS: "/api/live/workspace-integrations",
   /** The account's hosts, sealed for following over Neon Realtime (GET), with the install script's address on the service's own origin, or their rows inline where polled. `host-live.ts` declares the answer. */
   LIVE_HOSTS: "/api/live/hosts",
+  /** The account's machines with their settings for agents' commands and apps, sealed for following over Neon Realtime (GET), or their rows inline where polled. `machine-live.ts` declares the answer. */
+  LIVE_MACHINES: "/api/live/machines",
   /** One coding agent's pull request's newest chapters, the agent under `?id=` and the pull request under `&number=`, sealed for following over Neon Realtime (GET), with whether the reader can generate them, or `not-found`. `pull-request-chapters-live.ts` declares the answer. */
   LIVE_PULL_REQUEST_CHAPTERS: "/api/live/pull-request-chapters",
   /** The skills the account sees in one workspace under `?workspaceId=`, the workspace's and its own, sealed for following over Neon Realtime (GET), each with whether the account may manage it, or `not-found`, or their rows inline where polled. `installed-skill-live.ts` declares the answer. */
@@ -261,6 +266,10 @@ export const HOSTED_SERVICE_PATH = {
   HOST_ALLOWED_APPS: "/api/hosts/allowed-apps",
   /** One of the account's hosts removed, its secret refused at once (POST). */
   HOST_REMOVE: "/api/hosts/remove",
+  /** One of the account's machines changed: how agents' commands run there, whether agents may use its apps, or an app it always allows taken back (POST). `host-wire.ts` declares the body. */
+  MACHINE_CHANGE: "/api/hosts/machine",
+  /** One of the account's machines removed, which a host's Remove does for one that runs agents (POST). */
+  MACHINE_REMOVE: "/api/hosts/machine/remove",
   /** A pending pairing read by its code, as the approve screen shows it (POST, so the code rides in the body). `host-wire.ts` declares the bodies. */
   HOST_PAIRING: "/api/hosts/pairing",
   /** A pending pairing approved by its code, which makes the account's host (POST). */
@@ -314,7 +323,7 @@ export const HOSTED_SERVICE_PATH = {
    * (GET), or start one (POST) with its name and, where one is chosen, the
    * GitHub repository it is about. `task-wire.ts` declares both.
    */
-  TASKS: "/api/plans",
+  TASKS: "/api/tasks",
   /**
    * The repositories the account pinned in the sidebar: read them, newest
    * pinned first (GET), or pin or unpin one (PUT), answered with them all as
@@ -508,6 +517,8 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACES_EXPERIMENT_SET: "/api/workspaces/experiment/set",
   /** One workspace's members, to a member of it (GET), the workspace named in `workspace-wire.ts`'s `WORKSPACE_MEMBERS_QUERY`. */
   WORKSPACES_MEMBERS: "/api/workspaces/members",
+  /** The machines of a workspace's members, to a member of it (GET), the workspace, and a member where it is theirs alone, named in its query (`workspace-wire.ts`'s `workspaceMachinesRequestSchema`). */
+  WORKSPACES_MACHINES: "/api/workspaces/machines",
   /** The owner removes an admin or a member, and an admin a member (POST), answered with those who remain. */
   WORKSPACES_MEMBERS_REMOVE: "/api/workspaces/members/remove",
   /** The owner makes another member an admin or an admin a member (POST), answered with the members as they then stand. */

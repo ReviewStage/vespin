@@ -1,3 +1,12 @@
+import {
+  CARD_CORNER,
+  CARD_ELEMENT,
+  CARD_LOOK,
+  CARD_PADDING,
+  CARD_SHADOW,
+  Card,
+} from "../card/card.js";
+
 /**
  * file-text.tsx -- a file's words as they are written: monospaced, kept line for line, on the code's ground, a peek of its head or the whole of it scrolling in place.
  *
@@ -36,14 +45,19 @@ export function FileText({
   const scrolls = extent !== FILE_TEXT_EXTENT.PEEK;
 
   return (
-    <section
-      className="ui-file-text"
+    <Card
+      as={CARD_ELEMENT.SECTION}
+      look={CARD_LOOK.CODE}
+      corner={CARD_CORNER.CONTROL}
+      padding={CARD_PADDING.NONE}
+      shadow={CARD_SHADOW.NONE}
+      className="ui-file-text py-row-inset px-list-inset"
       data-extent={extent}
       aria-label={label}
       // Note that only a peek does not scroll, so every other extent takes a place in the Tab order.
       tabIndex={scrolls ? 0 : undefined}
     >
       <pre className="ui-file-text-words">{text}</pre>
-    </section>
+    </Card>
   );
 }

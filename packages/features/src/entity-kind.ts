@@ -89,6 +89,8 @@ export const ENTITY_KIND = {
   MAC_APP: MENTION_KIND.MAC_APP,
   /** The developer's Mac as a whole. */
   COMPUTER: MENTION_KIND.COMPUTER,
+  /** A machine of the workspace, a member's Mac or host. */
+  MACHINE: MENTION_KIND.MACHINE,
 } as const satisfies Record<string, Entity["kind"]>;
 
 export type EntityKind = (typeof ENTITY_KIND)[keyof typeof ENTITY_KIND];
@@ -296,6 +298,7 @@ const ENTITY_NAME: EntityNames = {
   [ENTITY_KIND.DATE]: NO_LIVE_NAME,
   [ENTITY_KIND.MAC_APP]: NO_LIVE_NAME,
   [ENTITY_KIND.COMPUTER]: NO_LIVE_NAME,
+  [ENTITY_KIND.MACHINE]: NO_LIVE_NAME,
 };
 
 /**
@@ -340,6 +343,7 @@ export const ENTITY_WORD: Readonly<Record<EntityKind, string>> = {
   [ENTITY_KIND.DATE]: "date",
   [ENTITY_KIND.MAC_APP]: "app",
   [ENTITY_KIND.COMPUTER]: "computer",
+  [ENTITY_KIND.MACHINE]: "machine",
 };
 
 /**

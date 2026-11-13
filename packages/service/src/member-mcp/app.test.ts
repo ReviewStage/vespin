@@ -803,12 +803,6 @@ it.effect(
         // The member's own workspace has its experiments on, so their tools are listed to be refused elsewhere.
         yield* memoryIn(own, member.userId);
         yield* descriptionsIn(own, member.userId, true);
-        yield* setWorkspaceExperiment({
-          organizationId: own,
-          experiment: EXPERIMENT.RUN_ACTIONS,
-          on: true,
-          by: member.userId,
-        });
         const elsewhere = yield* openWorkspace(stranger.userId);
 
         const task = yield* createTask(stranger.userId, {
@@ -1342,7 +1336,7 @@ it.effect(
           ["markPullRequestReadyForReview", { id }, `Bearer ${MEMBER_GITHUB_TOKEN}`],
           [
             "mergePullRequest",
-            { id, method: "SQUASH", head: PUBLISHED.headSha },
+            { id, mergeMethod: "SQUASH", head: PUBLISHED.headSha },
             `Bearer ${MEMBER_GITHUB_TOKEN}`,
           ],
         ],

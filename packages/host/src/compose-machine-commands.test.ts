@@ -21,10 +21,20 @@ import {
   machineCommandKindsRead,
   storedMachineCommandText,
 } from "@repo/features/machine-command-wire";
+import { MACHINES_READ, type MachinesLiveAnswer } from "@repo/features/machine-live";
 import { GATEWAY_EVENT, type GatewayEventKind } from "@repo/gateway";
 import { isRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
-import { ConfigProvider, Duration, Effect, Layer, Predicate, PubSub, Stream } from "effect";
+import {
+  ConfigProvider,
+  Deferred,
+  Duration,
+  Effect,
+  Layer,
+  Predicate,
+  PubSub,
+  Stream,
+} from "effect";
 import { TestClock } from "effect/testing";
 import {
   composeMachineCommands,
@@ -102,13 +112,22 @@ const TERMINAL: ComputerApp = { name: "Terminal", bundleId: "com.apple.Terminal"
 /** A third command's id, for a case that queues one past `COMMAND` and `SECOND`. */
 const THIRD_ID = "4b8e2d61-3c7a-4f95-9e0d-1a6b5c8f7e24";
 
-const computerCommand = (id: string, conversationId: string, app: string): MachineCommand => ({
-  id,
-  kind: MACHINE_COMMAND_KIND.COMPUTER,
-  conversationId,
-  action: { op: COMPUTER_ACTION.CLICK, app, element_index: 3 },
-  timeoutSeconds: 60,
-});
+const computerCommand = (
+  id: string,
+  conversationId: string,
+  app: string,
+  agentId?: string,
+): MachineCommand => {
+  const command = {
+    id,
+    kind: MACHINE_COMMAND_KIND.COMPUTER,
+    conversationId,
+    action: { op: COMPUTER_ACTION.CLICK, app, element_index: 3 },
+    timeoutSeconds: 60,
+  };
+
+  return agentId === undefined ? command : { ...command, agentId };
+};
 
 /** A recording the helper stopped: ten seconds of a phone's screen, its MP4 six bytes in base64. */
 const RECORDED = { seconds: 10, width: 603, height: 1311, mp4: "AAECAwQF" };
@@ -188,6 +207,44 @@ function scriptedService(
   /** Each recording's video posted up, by its command's id, as base64. */
   const postedRecordings = new Map<string, string>();
 
+  /** The settings the service keeps for each device that joined, by its id, as joins, writes, and changes made elsewhere leave them. */
+  const kept = new Map<string, MachineDeviceSettings>();
+  let machinesVersion = 0;
+
+  const keep = (deviceId: string, settings: MachineDeviceSettings) => {
+    kept.set(deviceId, settings);
+    machinesVersion += 1;
+  };
+
+  /** The account's machines as the service answers them, each device that joined with the settings kept for it. */
+  const machines = (rows: boolean): MachinesLiveAnswer => ({
+    url: LIVE_POLL_URL,
+    queries: {
+      machines: {
+        capability: "",
+        queryFingerprint: "",
+        expiresAt: NOW,
+        digest: String(machinesVersion),
+        ...(rows
+          ? {
+              rows: [...kept].map(([id, settings]) => ({
+                id,
+                name: "Studio",
+                platform: DEVICE_PLATFORM.DARWIN,
+                machineId: null,
+                model: null,
+                host: false,
+                listening: true,
+                commandMode: settings.commandMode,
+                computerUse: settings.computerUse ?? null,
+                alwaysAllowedApps: settings.alwaysAllowedApps,
+              })),
+            }
+          : undefined),
+      },
+    },
+  });
+
   const answer = (rows: boolean): MachineCommandsLiveAnswer => ({
     url: LIVE_POLL_URL,
     queries: {
@@ -214,7 +271,7 @@ function scriptedService(
   });
 
   const client: MachineCommandClient = {
-    // SAFETY: the Mac's commands are the one live read the client is asked for, answering the script's rows.
+    // SAFETY: the Mac's commands and the account's machines are the live reads the client is asked for, each answering the script's rows.
     liveRead: (<Read>(
       _read: Read,
       {
@@ -226,6 +283,16 @@ function scriptedService(
     ) =>
       Effect.gen(function* () {
         const after = poll?.after;
+
+        // The account's machines are followed beside the commands, held as the service holds them.
+        if (_read === MACHINES_READ) {
+          for (let held = 0; after === String(machinesVersion) && held < 25; held += 1) {
+            yield* Effect.sleep(HOLD_LOOK);
+          }
+
+          return machines(after !== String(machinesVersion));
+        }
+
         reads.push({ userId, kinds: machineCommandKindsRead(kinds) });
         named.push({ by: "read", device });
 
@@ -273,12 +340,15 @@ function scriptedService(
     join: (request) =>
       Effect.sync(() => {
         joins.push(request);
+        const settings = options.deviceSettings ?? request.settings;
+        keep(request.deviceId, settings);
 
-        return { settings: options.deviceSettings ?? request.settings };
+        return { settings };
       }),
-    saveDeviceSettings: (_deviceId, settings) =>
+    saveDeviceSettings: (deviceId, settings) =>
       Effect.sync(() => {
         savedSettings.push(settings);
+        keep(deviceId, settings);
 
         return { saved: true } as const;
       }),
@@ -317,6 +387,9 @@ function scriptedService(
     postedLooks,
     settledResults,
     postedRecordings,
+    /** The device's settings changed on another device or the web, as Settings › Machines changes them. */
+    changeElsewhere: (deviceId: string, settings: MachineDeviceSettings) =>
+      Effect.sync(() => keep(deviceId, settings)),
     /** A command queued for the account, as an agent's call queues it. */
     queue: (command: MachineCommand, queuedAt: number) => {
       waiting.push({ ...command, queuedAt });
@@ -354,6 +427,8 @@ interface Gate {
   };
   /** The device this Mac joins as, and the apps Settings allows without asking; none claims as the account alone. */
   device?: { id: string; apps: string[]; applyFails?: number };
+  /** What finishes as an agent's turn ends, as the task list would say; none watches no turn. */
+  turnEnded?: (agentId: string) => Effect.Effect<void>;
 }
 
 /**
@@ -375,8 +450,13 @@ const subject = (
   const told: ToldAsk[][] = [];
   const written: MachineCommandMode[] = [];
   const reported: string[] = [];
+  const devices: (string | undefined)[] = [];
 
   const emit = (kind: GatewayEventKind, payload: WireValue) => {
+    if (kind === GATEWAY_EVENT.MACHINE_COMMAND_DEVICE_CHANGED && isRecord(payload)) {
+      devices.push(Predicate.isString(payload.deviceId) ? payload.deviceId : undefined);
+    }
+
     if (kind !== GATEWAY_EVENT.MACHINE_COMMAND_ASKS_CHANGED || !isRecord(payload)) return;
     const asks = Array.isArray(payload.asks) ? payload.asks : [];
     told.push(
@@ -410,6 +490,8 @@ const subject = (
       }),
       client: service.client,
     };
+
+    if (gate.turnEnded !== undefined) dependencies.turnEnded = gate.turnEnded;
 
     if (gate.computer !== undefined) {
       dependencies.computer = {
@@ -466,6 +548,8 @@ const subject = (
       told,
       written,
       reported,
+      /** The devices told to the windows as the one the Mac claims as, in order. */
+      devices,
       moved: Effect.asVoid(PubSub.publish(moves, undefined)),
       /** The asks waiting as last told. */
       asks: () => told.at(-1) ?? [],
@@ -562,7 +646,7 @@ it.effect(
         device: { id: studio, apps: [] },
       };
 
-      const { composer, moved } = yield* subject(service, spawner, gate);
+      const { composer, moved, devices } = yield* subject(service, spawner, gate);
 
       yield* Effect.scoped(
         Effect.gen(function* () {
@@ -599,6 +683,50 @@ it.effect(
       assert.deepEqual(service.savedSettings, [
         { commandMode: MACHINE_COMMAND_MODE.NEVER, alwaysAllowedApps: ["com.apple.Notes"] },
       ]);
+      assert.deepEqual(
+        [...new Set(devices)],
+        [studio],
+        "the windows are told the device once it joined",
+      );
+    }),
+);
+
+it.effect(
+  "a change made to a joined Mac's settings elsewhere is written over its own as it lands, and not written back",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+      const studio = "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13";
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        device: { id: studio, apps: ["com.apple.Notes"] },
+      };
+
+      const { composer } = yield* subject(service, spawner, gate);
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+
+          yield* service.changeElsewhere(studio, {
+            commandMode: MACHINE_COMMAND_MODE.NEVER,
+            alwaysAllowedApps: [],
+          });
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+        }),
+      );
+
+      assert.equal(service.joins.length, 1, "the change reaches the Mac without joining again");
+      assert.equal(gate.mode, MACHINE_COMMAND_MODE.NEVER);
+      assert.deepEqual(gate.device?.apps, []);
+      assert.deepEqual(service.savedSettings, [], "a change heard is not written back");
     }),
 );
 
@@ -1683,5 +1811,112 @@ it.effect(
             : [],
         );
       }
+    }),
+);
+
+it.effect(
+  "an app's read brings the agent's cursor in, so a turn that only read the app puts the cursor away as it ends",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+      const service = scriptedService();
+      const ended = yield* Deferred.make<void>();
+
+      const read: MachineCommand = {
+        id: COMMAND.id,
+        kind: MACHINE_COMMAND_KIND.COMPUTER,
+        conversationId: AGENT,
+        agentId: AGENT,
+        timeoutSeconds: 60,
+        action: {
+          op: COMPUTER_ACTION.GET_APP_STATE,
+          app: "Simulator",
+          shots: [{ edge: 1280, quality: 0.7 }],
+        },
+      };
+
+      service.queue(read, NOW);
+
+      const { composer } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        {
+          mode: MACHINE_COMMAND_MODE.ALWAYS,
+          signedIn: true,
+          computer: {
+            helper: scripted.helper,
+            enabled: true,
+            allowed: ["com.apple.iphonesimulator"],
+          },
+          turnEnded: () => Deferred.await(ended),
+        },
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          assert.equal(service.settledResults.size, 1, "the read ran");
+
+          yield* Deferred.succeed(ended, undefined);
+          yield* settled;
+
+          assert.equal(
+            scripted.asked.filter((request) => request.op === COMPUTER_HELPER_OP.RELEASE_CURSOR)
+              .length,
+            1,
+          );
+        }),
+      );
+    }),
+);
+
+it.effect(
+  "the agent's cursor is put away as the turn of the agent whose actions moved it last ends, and never as the turn of an agent it was taken from ends",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+      const service = scriptedService();
+      service.queue(computerCommand(COMMAND.id, AGENT, "Simulator", AGENT), NOW);
+      service.queue(computerCommand(SECOND.id, OTHER_AGENT, "Simulator", OTHER_AGENT), NOW);
+      // The second agent acts twice, so its watch outlives an action of its own.
+      service.queue(computerCommand(THIRD_ID, OTHER_AGENT, "Simulator", OTHER_AGENT), NOW);
+      const firstEnded = yield* Deferred.make<void>();
+      const secondEnded = yield* Deferred.make<void>();
+
+      const releases = () =>
+        scripted.asked.filter((request) => request.op === COMPUTER_HELPER_OP.RELEASE_CURSOR).length;
+
+      const { composer } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        {
+          mode: MACHINE_COMMAND_MODE.ALWAYS,
+          signedIn: true,
+          computer: {
+            helper: scripted.helper,
+            enabled: true,
+            allowed: ["com.apple.iphonesimulator"],
+          },
+          turnEnded: (agentId) => Deferred.await(agentId === AGENT ? firstEnded : secondEnded),
+        },
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          assert.equal(service.settledResults.size, 3, "every action ran");
+
+          // The first agent's turn ends after the second took the cursor over.
+          yield* Deferred.succeed(firstEnded, undefined);
+          yield* settled;
+          assert.equal(releases(), 0, "the cursor stands for the second agent");
+
+          yield* Deferred.succeed(secondEnded, undefined);
+          yield* settled;
+          assert.equal(releases(), 1, "the cursor is put away as its holder's turn ends");
+        }),
+      );
     }),
 );
