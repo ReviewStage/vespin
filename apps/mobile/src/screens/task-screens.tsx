@@ -643,7 +643,7 @@ function countDrop(taskId: string): (landed: boolean) => boolean {
  * What a task dropped on a group's header does there, keeping it in one
  * place as the panel's drag does: onto Pinned it leaves the section the
  * member keeps it in, a pinned task's stored entry among them, and is
- * pinned once that is taken; onto a section it is put in it, and onto a
+ * pinned at the same moment, both drawn at once; onto a section it is put in it, and onto a
  * repository group it leaves its section, each unpinning it once the move
  * is taken. A refused move leaves the task where it stood, and a drop's
  * pin or unpin is skipped where a newer drop of the same task has landed
@@ -659,17 +659,12 @@ function placeIn(
 
   if (group.kind === TASK_TREE_GROUP.PINNED) {
     return (task) => {
-      const newest = countDrop(task.id);
+      // Note that the drop is counted and taken at once, so an older drop's pending unpin yields to it.
+      countDrop(task.id)(true);
 
-      if (listing.sectionOf(task.id) === undefined) {
-        if (newest(true)) listing.pin(task.id, true);
-
-        return;
-      }
-
-      void listing.place(task.id, null).then((landed) => {
-        if (newest(landed)) listing.pin(task.id, true);
-      });
+      // Note that both writes go at once rather than the pin waiting on the move, so the row leaves its section and stands under Pinned in the same frame; each refused one rolls back with its own notice.
+      if (listing.sectionOf(task.id) !== undefined) void listing.place(task.id, null);
+      listing.pin(task.id, true);
     };
   }
 
