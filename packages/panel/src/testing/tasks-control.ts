@@ -409,6 +409,7 @@ export const VIEWS_AWAY: RoutedViews = {
   board: false,
   person: { userId: undefined, name: undefined, workspace: undefined },
   automations: undefined,
+  mergeQueue: false,
   inbox: { open: false, chosen: undefined, narrowed: undefined },
 };
 

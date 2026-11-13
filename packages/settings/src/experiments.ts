@@ -107,7 +107,7 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.MERGE_QUEUE,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
-    listed: false,
+    listed: true,
     name: "Merge queue",
     detail:
       "See every pull request waiting in GitHub's merge queues across your workspace's repositories, with the task each belongs to.",

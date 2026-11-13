@@ -58,7 +58,9 @@ import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppWorkspaceMembers } from "@repo/host/app-state";
+import { EXPERIMENT } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
+import { appSettingsWire, experimentsOn, settingsView } from "@repo/settings/testing";
 import { serveEffectsOn } from "@repo/ui/testing/effect-services";
 import type { Editor, TiptapEditorHTMLElement } from "@tiptap/core";
 import { TextSelection } from "@tiptap/pm/state";
@@ -108,6 +110,7 @@ import { landedBundles, onSideBundles } from "../testing/side-bundles.js";
 import { agentsControl } from "../testing/tasks-control.js";
 import { newestToastAction, newestToastSays } from "../testing/toast.js";
 import { viewerPlace } from "../testing/viewer-place.js";
+import { windowRouter } from "../testing/window-router.js";
 import { ToastHost } from "../toast.js";
 import { AgentPullRequestTab } from "./agent-pull-request-tab.js";
 import { RepositoryRemedyProvider } from "./repository-remedy.js";
@@ -4883,6 +4886,55 @@ test("an open pull request GitHub holds in its merge queue says Queued and its p
     assert.equal(standing(open), "Open", "out of the queue the pill says where it stands"),
   );
   assert.deepEqual(offered(open), ["Convert to draft", "Close pull request"]);
+});
+
+test("with the Merge queue experiment on, a queued pull request's pill offers View merge queue first, which opens the listed workspace's Merge queue page on that pull request", async () => {
+  const earlier = fakeAppBridgeCalls().requestAppState ?? assert.fail("the document is handed");
+
+  const acme = {
+    id: "workspace-acme",
+    name: "Acme",
+    slug: "acme",
+    role: WORKSPACE_ROLE.MEMBER,
+    github: null,
+  };
+
+  fakeAppBridge({
+    ...fakeAppBridgeCalls(),
+    requestAppState: async () => {
+      const state = await earlier();
+
+      return {
+        ...state,
+        settings: appSettingsWire(
+          settingsView({ experiments: experimentsOn(EXPERIMENT.MERGE_QUEUE) }),
+        ),
+        tasks: { ...state.tasks, workspaces: [acme] },
+      };
+    },
+  });
+  const router = windowRouter();
+
+  const control = merging(MERGE_STATE.CLEAN, {
+    queue: true,
+    queued: { position: 2 },
+    autoMerge: { method: null },
+  });
+
+  drawnParts = partsOf.get(control) ?? drawnParts;
+  drawnChanges = changesOf.get(control) ?? drawnChanges;
+
+  const tab = await drawn(
+    router.provide(createElement(Switching, { control, first: PULL_REQUEST_VIEW.CONVERSATION })),
+  );
+
+  await vi.waitFor(() =>
+    assert.deepEqual(offered(tab), ["View merge queue", "Close pull request"]),
+  );
+  await pressAction(tab, "View merge queue");
+
+  const { pathname, search } = router.history.location;
+  assert.deepEqual([pathname, new URLSearchParams(search).get("pr")], ["/acme/merge-queue", PAGE]);
 });
 
 test("a pull request published as queued says Queued in the pill while its own read is out, and its place once it lands", async () => {

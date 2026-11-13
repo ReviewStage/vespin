@@ -117,6 +117,7 @@ const IOS = {
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
   MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
+  MERGE_QUEUE: notYet("iOS leaves the Merge queue page to the desktop and the web for now"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
   NOTIFICATIONS: byDesign("iOS's Settings screen opens the system's settings itself"),
   ONE_SCREEN: byDesign("The app is one screen, with no panel to bring forward or preview"),
@@ -491,4 +492,5 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.WORKSPACE_INSTALL_SCRIPT_PUT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_REPOSITORY_SETUP_PUT]: panel(IOS.SETTINGS),
   [PORT_ACT_KIND.WORKSPACE_RUN_ACTIONS_PUT]: panel(IOS.SETTINGS),
+  [PORT_ACT_KIND.WORKSPACE_MERGE_QUEUE_READ]: panel(IOS.MERGE_QUEUE),
 } as const satisfies Record<PortActKind, ClientParityRow>;

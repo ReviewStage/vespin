@@ -108,6 +108,7 @@ import { PROGRESS_RINGS_EXAMPLE } from "./examples/progress-rings";
 import { PROSE_EXAMPLE } from "./examples/prose";
 import { PROVIDER_BUTTONS_EXAMPLE } from "./examples/provider-buttons";
 import { PUBLIC_PAGE_EXAMPLE } from "./examples/public-page";
+import { QUEUE_LINES_EXAMPLE } from "./examples/queue-lines";
 import { READABLE_CONTROLS_EXAMPLE } from "./examples/readable-controls";
 import { RECT_FLOAT_EXAMPLE } from "./examples/rect-float";
 import { REMOTE_SURFACE_EXAMPLE } from "./examples/remote-surface";
@@ -299,6 +300,7 @@ export const EXAMPLES: readonly Example[] = [
   ROLLING_NUMBER_EXAMPLE,
   PUBLIC_PAGE_EXAMPLE,
   LANDING_EXAMPLE,
+  QUEUE_LINES_EXAMPLE,
   SCROLL_AREA_EXAMPLE,
   SAVED_TICKS_EXAMPLE,
   SEARCH_FIELDS_EXAMPLE,

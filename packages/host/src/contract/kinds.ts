@@ -839,6 +839,8 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_INSTALL_SCRIPT_PUT: "workspace.installScriptPut",
   WORKSPACE_REPOSITORY_SETUP_PUT: "workspace.repositorySetupPut",
   WORKSPACE_RUN_ACTIONS_PUT: "workspace.runActionsPut",
+  /** Every pull request GitHub's merge queues hold across a workspace's repositories, read as the Merge queue page opens and again while it stands; refused while the account's Merge queue experiment is off. */
+  WORKSPACE_MERGE_QUEUE_READ: "workspace.mergeQueueRead",
 } as const;
 
 /**
@@ -1263,6 +1265,7 @@ export const PORT_ACT_USE = {
   WORKSPACE_INSTALL_SCRIPT_PUT: ACT_USE.WRITE,
   WORKSPACE_REPOSITORY_SETUP_PUT: ACT_USE.WRITE,
   WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
+  WORKSPACE_MERGE_QUEUE_READ: ACT_USE.FETCH,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
 
 /**

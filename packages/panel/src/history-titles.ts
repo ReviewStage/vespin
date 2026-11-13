@@ -39,6 +39,9 @@ export const VERSION_HISTORY_WORDS = "Version history";
 /** What the Inbox's step is called. */
 export const INBOX_WORDS = "Inbox";
 
+/** What the Merge queue page is called, its step's name and its row's. */
+export const MERGE_QUEUE_WORDS = "Merge queue";
+
 /** What Home is called, as its step and its page name it. */
 export const HOME_WORDS = "Home";
 
