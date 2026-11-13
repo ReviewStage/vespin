@@ -19,6 +19,7 @@ import {
   MACHINE_COMMAND_BOUNDS,
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
+  MACHINE_REFUSAL,
   type MacComputerCommand,
   type MachineCommandKind,
   type MachineCommandMode,
@@ -400,12 +401,14 @@ const SWITCHED_OFF: MacShellResult = {
 /** What a command the developer declined answers. */
 const DECLINED: MachineCommandRefusal = {
   refused: "Not run: the developer declined this command.",
+  outcome: MACHINE_REFUSAL.DECLINED,
 };
 
 /** What a command the developer did not answer for answers: not run, since its timeout had passed before it could start. */
 const UNANSWERED: MachineCommandRefusal = {
   refused:
     "Not run: the developer did not answer in time whether to allow this command on their Mac.",
+  outcome: MACHINE_REFUSAL.UNANSWERED,
 };
 
 /** What a command asked under an account that signed out before it was answered answers. */
@@ -426,11 +429,13 @@ const APPS_SWITCHED_OFF: MachineCommandRefusal = { refused: `Not run: ${APPS_OFF
 /** What an action on an app the developer declined answers. */
 const APP_DECLINED: MachineCommandRefusal = {
   refused: "Not run: the developer declined to let agents use this app.",
+  outcome: MACHINE_REFUSAL.DECLINED,
 };
 
 /** What an action on an app the developer did not answer for in time answers. */
 const APP_UNANSWERED: MachineCommandRefusal = {
   refused: "Not run: the developer did not answer in time whether agents may use this app.",
+  outcome: MACHINE_REFUSAL.UNANSWERED,
 };
 
 /** What an action on an app agents are never offered answers, by the app's name. */

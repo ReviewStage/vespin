@@ -39,8 +39,11 @@ import { LINK_DESTINATION, type LinkDestination, linkOf } from "./link-grammar.j
 import {
   COMPUTER_PERMISSION,
   type ComputerPermission,
+  computerPermissionsNamed,
+  MACHINE_REFUSAL,
   MACHINE_UNREACHED,
   type MachineUnreached,
+  machineRefusalSchema,
 } from "./machine-command-wire.js";
 import type { MentionHolder } from "./mention-holder.js";
 import type { ModelChoice } from "./models-wire.js";
@@ -53,6 +56,8 @@ import {
   type CallKind,
   commandDescription,
   computerCallWords,
+  computerNotRunWords,
+  MACHINE_NOT_RUN_WORDS,
   pageName,
 } from "./turn-rows.js";
 
@@ -106,6 +111,8 @@ export interface ToolCallView {
   readonly server?: string;
   /** For the same calls, the connection they ran on, which the window names by the account's own name where it holds more than one (`connection-names.tsx`); `server` stands where it does not know it. */
   readonly connection?: string;
+  /** For a terminal command or an action on an app that ran nothing on its machine, how it came to run nothing, which its row says quietly in place of a failure; absent for the rest. */
+  readonly notRun?: MachineNotRun;
 }
 
 /** The escape every terminal color and cursor sequence starts with. */
@@ -214,6 +221,105 @@ const isComputerPermission = Schema.is(Schema.Literals(Object.values(COMPUTER_PE
 /** Whether a computer call answered that the Mac ran nothing, so it read no window and used no app. */
 export function computerCallRefused(output: WireValue | undefined): boolean {
   return stringAt(output, "status") === MACHINE_COMMAND_NOT_RUN;
+}
+
+/** How a terminal command or an action on an app came to run nothing on its machine, as data its answer carries, never read off the words the model read. */
+export const NOT_RUN_OUTCOME = {
+  /** The developer denied the ask. */
+  DECLINED: MACHINE_REFUSAL.DECLINED,
+  /** No one answered the ask in time. */
+  UNANSWERED: MACHINE_REFUSAL.UNANSWERED,
+  /** The machine never said what the call came to. */
+  NO_ANSWER: MACHINE_REFUSAL.NO_ANSWER,
+  /** The Mac lacked a grant the action needs. */
+  MISSING_PERMISSIONS: "missing-permissions",
+  /** Routing found no machine that could take it (`why`). */
+  UNREACHED: "unreached",
+  /** Any other refusal, as an app agents are never offered. */
+  OTHER: "other",
+} as const;
+
+/** A machine call that ran nothing: how, and the words the model read of why. */
+export type MachineNotRun =
+  | {
+      readonly outcome:
+        | typeof NOT_RUN_OUTCOME.DECLINED
+        | typeof NOT_RUN_OUTCOME.UNANSWERED
+        | typeof NOT_RUN_OUTCOME.NO_ANSWER
+        | typeof NOT_RUN_OUTCOME.OTHER;
+      readonly reason: string;
+    }
+  | {
+      readonly outcome: typeof NOT_RUN_OUTCOME.MISSING_PERMISSIONS;
+      readonly reason: string;
+      readonly permissions: readonly ComputerPermission[];
+    }
+  | {
+      readonly outcome: typeof NOT_RUN_OUTCOME.UNREACHED;
+      readonly reason: string;
+      readonly why: MachineUnreached;
+    };
+
+const isMachineRefusal = Schema.is(machineRefusalSchema);
+
+/**
+ * How a `run_on_mac` or `computer` call's answer says it ran nothing: a
+ * route that reached no machine by its `why`, a Mac that lacked a grant by
+ * the grants it names, and an ask declined or unanswered, or no word back,
+ * by its `outcome`; none for an answer that ran.
+ */
+export function machineNotRunOf(output: WireValue | undefined): MachineNotRun | undefined {
+  if (stringAt(output, "status") !== MACHINE_COMMAND_NOT_RUN || !isRecord(output)) return undefined;
+  const reason = stringAt(output, "reason") ?? "";
+  const { why, outcome } = output;
+
+  if (isMachineUnreached(why)) return { outcome: NOT_RUN_OUTCOME.UNREACHED, reason, why };
+  const missing = computerPermissionsMissing(output);
+
+  if (missing !== undefined) {
+    return {
+      outcome: NOT_RUN_OUTCOME.MISSING_PERMISSIONS,
+      reason,
+      permissions: missing.permissions,
+    };
+  }
+
+  return { outcome: isMachineRefusal(outcome) ? outcome : NOT_RUN_OUTCOME.OTHER, reason };
+}
+
+/** What a call that reached no machine says at its line's end, by why, after the chip of the machine it was meant for. */
+const UNREACHED_LABEL = {
+  [MACHINE_UNREACHED.OFFLINE]: "Offline",
+  [MACHINE_UNREACHED.NOT_LET]: "Not allowed",
+  [MACHINE_UNREACHED.COMMANDS_NEVER]: "Commands off",
+  [MACHINE_UNREACHED.APPS_OFF]: "Apps off",
+  [MACHINE_UNREACHED.DEFAULT_GONE]: "No default machine",
+  [MACHINE_UNREACHED.UNKNOWN_MACHINE]: "Unknown machine",
+  [MACHINE_UNREACHED.NO_MACHINE]: "No machine",
+} as const satisfies Record<MachineUnreached, string>;
+
+/** What a call that ran nothing says at its line's end, by how. */
+const NOT_RUN_LABEL = {
+  [NOT_RUN_OUTCOME.DECLINED]: "Declined",
+  [NOT_RUN_OUTCOME.UNANSWERED]: "Not answered",
+  [NOT_RUN_OUTCOME.NO_ANSWER]: "No answer back",
+  [NOT_RUN_OUTCOME.OTHER]: "Not run",
+} as const;
+
+/**
+ * The one quiet label a call that ran nothing wears at its line's end,
+ * after the chip of the machine it was meant for: "Not answered",
+ * "Declined", "Offline", or "Needs Screen Recording".
+ */
+export function machineNotRunLabel(notRun: MachineNotRun): string {
+  switch (notRun.outcome) {
+    case NOT_RUN_OUTCOME.MISSING_PERMISSIONS:
+      return `Needs ${computerPermissionsNamed(notRun.permissions)}`;
+    case NOT_RUN_OUTCOME.UNREACHED:
+      return UNREACHED_LABEL[notRun.why];
+    default:
+      return NOT_RUN_LABEL[notRun.outcome];
+  }
 }
 
 /** Why a computer call ran nothing because the Mac lacked a grant it needed, in the Mac's own words, with those grants; none for any other answer. */
@@ -1338,7 +1444,14 @@ const AGENT_TOOL_VIEWS = {
   }),
   [AGENT_TOOL.RUN_ON_MAC]: ({ input, output }) => {
     const command = stringAt(input, "command") ?? "";
-    const description = commandDescription(stringAt(input, "description"));
+    const notRun = machineNotRunOf(output);
+
+    // Note that a command that never ran says so in its verb's place, over what the model said it was for.
+    const description =
+      notRun === undefined
+        ? commandDescription(stringAt(input, "description"))
+        : MACHINE_NOT_RUN_WORDS.COMMAND;
+
     const machine = callMachineOf(output);
 
     return {
@@ -1346,12 +1459,18 @@ const AGENT_TOOL_VIEWS = {
       subject: command,
       ...(description === undefined ? undefined : { description }),
       ...(machine === undefined ? undefined : { machine }),
+      ...(notRun === undefined ? undefined : { notRun }),
       input: { kind: TOOL_BLOCK.COMMAND, text: command },
       output: output === undefined ? undefined : machineCommandOutput(output),
     };
   },
   [AGENT_TOOL.COMPUTER]: ({ input, output }) => {
-    const description = computerCallWords(stringAt(input, "action"));
+    const action = stringAt(input, "action");
+    const notRun = machineNotRunOf(output);
+
+    const description =
+      notRun === undefined ? computerCallWords(action) : computerNotRunWords(action);
+
     const icon = computerAppIcon(output);
     const machine = callMachineOf(output);
 
@@ -1360,6 +1479,7 @@ const AGENT_TOOL_VIEWS = {
       subject: computerAppName(input, output) ?? "",
       ...(description === undefined ? undefined : { description }),
       ...(machine === undefined ? undefined : { machine }),
+      ...(notRun === undefined ? undefined : { notRun }),
       ...(icon === undefined ? undefined : { appIcon: icon }),
       input: jsonBlock(input ?? {}),
       output: output === undefined ? undefined : computerOutput(output),
