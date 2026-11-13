@@ -233,6 +233,7 @@ function NoticeBanner({
     place.setValue(0);
     AccessibilityInfo.announceForAccessibility(notice.words);
     let live = true;
+    let stay: Animated.CompositeAnimation | undefined;
 
     const arrive = (reading: boolean) => {
       if (!live) return;
@@ -244,19 +245,22 @@ function NoticeBanner({
           : STANDS_FOR.WITH_PRESS;
 
       // Note that the notice's stay is a pause between its slide in and its slide out, so a swipe or a newer notice stops all three as one.
-      Animated.sequence([
+      stay = Animated.sequence([
         Animated.timing(place, { toValue: 1, duration: SLIDE_MS, useNativeDriver: true }),
         Animated.delay(stands),
         Animated.timing(place, { toValue: 0, duration: SLIDE_MS, useNativeDriver: true }),
-      ]).start(({ finished }) => {
-        if (finished) onGone(notice.serial);
+      ]);
+      stay.start(({ finished }) => {
+        if (finished && live) onGone(notice.serial);
       });
     };
 
     AccessibilityInfo.isScreenReaderEnabled().then(arrive, () => arrive(false));
 
+    // Note that the whole sequence stops, its delay included, which runs on a value of its own; else a banner that handed its notice to a sheet would still let it go when its own stay ran out.
     return () => {
       live = false;
+      stay?.stop();
       place.stopAnimation();
     };
   }, [notice, place, onGone]);
