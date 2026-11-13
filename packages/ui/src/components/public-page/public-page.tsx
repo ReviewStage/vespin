@@ -1,5 +1,6 @@
 import { type ReactNode, useId } from "react";
 import { said } from "../../said.js";
+import { CARD_LOOK, CARD_PADDING, Card } from "../card/card.js";
 import { SiteFrame, SiteRule } from "../landing/site-frame.js";
 import { TEXT_VARIANT } from "../text/text.js";
 import { TextLink } from "../text-link/text-link.js";
@@ -130,9 +131,13 @@ export function PublicSection({
  */
 export function PublicMedia({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <div className="ui-public-media mx-public-media-reach [*+&]:mt-ui-48 overflow-hidden border border-border rounded-public-media shadow-public-media">
+    <Card
+      look={CARD_LOOK.OUTLINE}
+      padding={CARD_PADDING.FLUSH}
+      className="ui-public-media mx-public-media-reach [*+&]:mt-ui-48"
+    >
       {children}
-    </div>
+    </Card>
   );
 }
 

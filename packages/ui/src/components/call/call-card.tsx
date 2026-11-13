@@ -11,6 +11,14 @@
 
 import { ReturnIcon } from "../../icons/lucide-glyphs.js";
 import { IconButton } from "../button/button.js";
+import {
+  CARD_CORNER,
+  CARD_ELEMENT,
+  CARD_LOOK,
+  CARD_PADDING,
+  CARD_SHADOW,
+  Card,
+} from "../card/card.js";
 import { KeepFocus } from "../keep-focus/keep-focus.js";
 import { OneLine } from "../one-line/one-line.js";
 import { TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
@@ -37,8 +45,9 @@ function returnLabel(name: string): string {
   return `Open ${name}`;
 }
 
+/** The card's own layout; its ground, edge, corner, and shadow are a raised `Card`'s, at a dialog's corner on a menu's shadow. */
 const CARD =
-  "ui-call-card flex flex-col gap-ui-4 rounded-ui-14 border border-border-strong bg-popover px-ui-12 py-ui-8 text-label text-foreground shadow-menu data-[surface=sidebar]:mb-ui-8";
+  "ui-call-card flex flex-col gap-ui-4 px-ui-12 py-ui-8 text-label text-foreground data-[surface=sidebar]:mb-ui-8";
 
 /**
  * The card's head: what the call is about by name, its task's or its
@@ -123,9 +132,18 @@ export function CallCard({
   );
 
   return (
-    <section className={CARD} aria-label={CALL_CARD_LABEL} data-surface={surface}>
+    <Card
+      as={CARD_ELEMENT.SECTION}
+      look={CARD_LOOK.RAISED}
+      corner={CARD_CORNER.DIALOG}
+      padding={CARD_PADDING.NONE}
+      shadow={CARD_SHADOW.MENU}
+      className={CARD}
+      aria-label={CALL_CARD_LABEL}
+      data-surface={surface}
+    >
       {/* Note that the box is drawn as its children alone, so the card lays them out either way. */}
       {inWindow ? <KeepFocus className="contents">{body}</KeepFocus> : body}
-    </section>
+    </Card>
   );
 }
