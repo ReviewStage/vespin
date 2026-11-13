@@ -48,13 +48,13 @@ import {
   type Glyph,
   glyphSymbol,
   HeldCallBanner,
-  HintPickRows,
   ListSection,
   MenuPickRow,
   MenuRow,
   type MenuRowAct,
   NO_TOGGLES,
   openCuts,
+  PickRows,
   QueuedLines,
   Screen,
   SettingsForm,
@@ -70,6 +70,8 @@ import {
   transcriptOriginOf,
   useAnnounced,
   useColors,
+  useWindowSizeClass,
+  WINDOW_SIZE_CLASS,
   WORDS_ASK_KIND,
   WordsAsk,
   withSending,
@@ -640,6 +642,17 @@ export function AgentScreen() {
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
 
+  // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
+  const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
+
+  // Archive asks first. Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
+  const askArchive = () => {
+    setArchiving(false);
+    void actions.archiveAsk.ask(id).then((stands) => {
+      if (stands) setArchiving(true);
+    });
+  };
+
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) =>
     router.push({
       pathname: onOwnTab("/tasks/agent/[id]/page"),
@@ -693,12 +706,14 @@ export function AgentScreen() {
               >
                 {MENU_WORDS.RENAME}
               </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
-                onPress={actions.pin}
-              >
-                {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
-              </Stack.Toolbar.MenuAction>
+              {barActs ? null : (
+                <Stack.Toolbar.MenuAction
+                  icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
+                  onPress={actions.pin}
+                >
+                  {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+                </Stack.Toolbar.MenuAction>
+              )}
             </Stack.Toolbar.Menu>
           )}
           {openOptions === undefined ? null : (
@@ -727,18 +742,12 @@ export function AgentScreen() {
               )}
             </Stack.Toolbar.Menu>
           )}
-          {agent === undefined ? null : (
+          {agent === undefined || barActs ? null : (
             <Stack.Toolbar.Menu inline>
               <Stack.Toolbar.MenuAction
                 icon={glyphSymbol(GLYPH.ARCHIVE)}
                 destructive
-                onPress={() => {
-                  // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
-                  setArchiving(false);
-                  void actions.archiveAsk.ask(id).then((stands) => {
-                    if (stands) setArchiving(true);
-                  });
-                }}
+                onPress={askArchive}
               >
                 {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
@@ -756,6 +765,21 @@ export function AgentScreen() {
             </Stack.Toolbar.Menu>
           )}
         </Stack.Toolbar.Menu>
+        {/* Note that a right bar's first item stands at its edge, so the ⋯ leads the list and Archive then Pin stand before it, as Mail stands its acts before More. Each glyph is named as the ⋯'s is, since a top bar loads an `xcasset` icon through React Native's image loader, which reads no symbol set, and drew an empty capsule. */}
+        {barActs ? (
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(GLYPH.ARCHIVE)}
+            accessibilityLabel={MENU_WORDS.ARCHIVE}
+            onPress={askArchive}
+          />
+        ) : null}
+        {barActs ? (
+          <Stack.Toolbar.Button
+            icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
+            accessibilityLabel={actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+            onPress={actions.pin}
+          />
+        ) : null}
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
       <GlassDock
@@ -961,8 +985,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
               title={PERMISSION_MODE_WORDS.GROUP}
               footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
             >
-              <HintPickRows
-                label={PERMISSION_MODE_WORDS.QUESTION}
+              <PickRows
                 options={mode.modes}
                 picked={mode.mode}
                 onPick={(picked) => {

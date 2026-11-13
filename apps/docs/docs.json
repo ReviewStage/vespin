@@ -4,9 +4,9 @@
   "name": "Vespin",
   "description": "Vespin runs Claude Code and Codex agents in parallel in the cloud, each on its own branch, and gives you one inbox to answer them all.",
   "colors": {
-    "primary": "#cf7b26",
-    "light": "#cf7b26",
-    "dark": "#a7611b"
+    "primary": "#ff9900",
+    "light": "#ff9900",
+    "dark": "#a64f00"
   },
   "appearance": {
     "default": "dark",
@@ -14,8 +14,8 @@
   },
   "background": {
     "color": {
-      "light": "#fffcfa",
-      "dark": "#0f0d0b"
+      "light": "#ffffff",
+      "dark": "#0a0a0a"
     }
   },
   "fonts": {

@@ -65,8 +65,60 @@ export { TASK_FILE_QUERY_FLAG } from "./task-files.js";
 
 export { RETIRED_TASK_PATHS, TASK_START_STATUS } from "./tasks.js";
 
-/** Every resource's procedures, one line each, in alphabetical order. */
-export const hostedContract = {
+/**
+ * Every resource's procedures, one line each, in alphabetical order. Note
+ * that the type is named rather than inferred, because the inferred one is
+ * past the length the compiler will write into this package's declarations,
+ * and is an alias, not an interface, so it stays a `RouterContract`.
+ */
+export type HostedContract = {
+  account: typeof accountContract;
+  admin: typeof adminContract;
+  agentBrowserTabs: typeof agentBrowserTabsContract;
+  agentPages: typeof agentPagesContract;
+  agentPorts: typeof agentPortsContract;
+  agentPullRequests: typeof agentPullRequestsContract;
+  agents: typeof agentsContract;
+  automations: typeof automationsContract;
+  dictation: typeof dictationContract;
+  events: typeof eventsContract;
+  github: typeof githubContract;
+  githubToken: typeof githubTokenContract;
+  hosts: typeof hostsContract;
+  inbox: typeof inboxContract;
+  installedSkills: typeof installedSkillsContract;
+  integrations: typeof integrationsContract;
+  linkPreviews: typeof linkPreviewsContract;
+  live: typeof liveContract;
+  liveActivities: typeof liveActivitiesContract;
+  deviceAgents: typeof deviceAgentsContract;
+  machineCommands: typeof machineCommandsContract;
+  mcpClients: typeof mcpClientsContract;
+  messages: typeof messagesContract;
+  models: typeof modelsContract;
+  descriptionComments: typeof descriptionCommentsContract;
+  plans: typeof tasksContract;
+  pullRequestChapters: typeof pullRequestChaptersContract;
+  pullRequests: typeof pullRequestsContract;
+  pushDevices: typeof pushDevicesContract;
+  repositoryPins: typeof repositoryPinsContract;
+  supportAccess: typeof supportAccessContract;
+  taskFiles: typeof taskFilesContract;
+  taskFollowers: typeof taskFollowersContract;
+  taskSections: typeof taskSectionsContract;
+  voice: typeof voiceContract;
+  workspaceEnvironment: typeof workspaceEnvironmentContract;
+  workspaceSandboxSetup: typeof workspaceSandboxSetupContract;
+  workspaceGithub: typeof workspaceGithubContract;
+  workspaceInvitations: typeof workspaceInvitationsContract;
+  workspaceMergeQueue: typeof workspaceMergeQueueContract;
+  workspaceSentry: typeof workspaceSentryContract;
+  workspaceSlackBot: typeof workspaceSlackBotContract;
+  workspaces: typeof workspacesContract;
+};
+
+/** Every resource's procedures, as `HostedContract` names them. */
+export const hostedContract: HostedContract = {
   account: accountContract,
   admin: adminContract,
   agentBrowserTabs: agentBrowserTabsContract,
