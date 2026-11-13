@@ -7,8 +7,9 @@
  * its commands have always run on (`machineOwnerOf`), the task's assignee
  * or its agent's starter. Of those machines, one is reachable for a call
  * where it listened for commands lately and, for a shell command, its
- * command mode is not Never. A Mac's switch for apps stays on the Mac
- * itself, so an action on an app may go to a machine that then refuses it.
+ * command mode is not Never, or, for an action on an app, its switch for
+ * apps is not off. A Mac whose app never carried that switch up keeps it on
+ * the Mac itself, so an action on an app may go to it and be refused there.
  *
  * The machine a call goes to is the one it names by id; else the
  * agent's default machine (`agent.target_device_id`); else the machine the
@@ -195,6 +196,14 @@ function whyNot(
     return {
       code: MACHINE_UNREACHED.COMMANDS_NEVER,
       words: `Not run: ${machine.name} doesn't let agents run commands (its Settings › This Mac is set to Never).`,
+    };
+  }
+
+  // Note that a machine whose app never carried its switch up decides on the Mac itself, as before the switch was kept here.
+  if (kind === MACHINE_COMMAND_KIND.COMPUTER && machine.computerUse === false) {
+    return {
+      code: MACHINE_UNREACHED.APPS_OFF,
+      words: `Not run: ${machine.name} doesn't let agents use its apps (Let agents use its apps is off for it in Settings › Machines).`,
     };
   }
 

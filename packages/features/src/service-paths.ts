@@ -212,6 +212,8 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_WORKSPACE_INTEGRATIONS: "/api/live/workspace-integrations",
   /** The account's hosts, sealed for following over Neon Realtime (GET), with the install script's address on the service's own origin, or their rows inline where polled. `host-live.ts` declares the answer. */
   LIVE_HOSTS: "/api/live/hosts",
+  /** The account's machines with their settings for agents' commands and apps, sealed for following over Neon Realtime (GET), or their rows inline where polled. `machine-live.ts` declares the answer. */
+  LIVE_MACHINES: "/api/live/machines",
   /** One coding agent's pull request's newest chapters, the agent under `?id=` and the pull request under `&number=`, sealed for following over Neon Realtime (GET), with whether the reader can generate them, or `not-found`. `pull-request-chapters-live.ts` declares the answer. */
   LIVE_PULL_REQUEST_CHAPTERS: "/api/live/pull-request-chapters",
   /** The skills the account sees in one workspace under `?workspaceId=`, the workspace's and its own, sealed for following over Neon Realtime (GET), each with whether the account may manage it, or `not-found`, or their rows inline where polled. `installed-skill-live.ts` declares the answer. */
@@ -262,6 +264,10 @@ export const HOSTED_SERVICE_PATH = {
   HOST_ALLOWED_APPS: "/api/hosts/allowed-apps",
   /** One of the account's hosts removed, its secret refused at once (POST). */
   HOST_REMOVE: "/api/hosts/remove",
+  /** One of the account's machines changed: how agents' commands run there, whether agents may use its apps, or an app it always allows taken back (POST). `host-wire.ts` declares the body. */
+  MACHINE_CHANGE: "/api/hosts/machine",
+  /** One of the account's machines removed, which a host's Remove does for one that runs agents (POST). */
+  MACHINE_REMOVE: "/api/hosts/machine/remove",
   /** A pending pairing read by its code, as the approve screen shows it (POST, so the code rides in the body). `host-wire.ts` declares the bodies. */
   HOST_PAIRING: "/api/hosts/pairing",
   /** A pending pairing approved by its code, which makes the account's host (POST). */

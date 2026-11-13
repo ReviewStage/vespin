@@ -75,6 +75,10 @@
  * script's address on the origin the request reached; woken by a host
  * enrolled, approved, renamed, removed, or moving through an update
  * (`hostsRead`).
+ * `GET /api/live/machines` answers the account's machines as one, each with
+ * its own settings for agents' commands and apps; woken by a machine
+ * joining, removed, its settings changed, or its app coming or going
+ * (`machinesRead`).
  * `GET /api/live/installed-skills?workspaceId=` answers the skills the
  * account sees there, the workspace's and its own, each with whether it may
  * manage it, on the same membership check; woken by one of them installed,
@@ -209,6 +213,7 @@ import { inboxItemsRead } from "./reads/inbox-items.js";
 import { installedSkillsRead } from "./reads/installed-skills.js";
 import { integrationStatusesRead } from "./reads/integration-statuses.js";
 import { machineCommandsRead } from "./reads/machine-commands.js";
+import { machinesRead } from "./reads/machines.js";
 import { agentPagesRead, taskPagesRead } from "./reads/pages.js";
 import { pullRequestChaptersRead } from "./reads/pull-request-chapters.js";
 import { agentInboxRead, taskInboxRead } from "./reads/scope-inbox.js";
@@ -945,6 +950,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     ),
 
     hosts: signedIn.hosts.effect(answerBoundRead(hostsRead)),
+    machines: signedIn.machines.effect(answerBoundRead(machinesRead)),
     workspaceMemories: signedIn.workspaceMemories.effect(answerBoundRead(workspaceMemoriesRead)),
     installedSkills: signedIn.installedSkills.effect(answerBoundRead(installedSkillsRead)),
 
