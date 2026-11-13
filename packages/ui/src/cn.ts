@@ -43,9 +43,9 @@ const PANEL_PLACES = {
  */
 const PANEL_WORK_COLUMN = {
   "font-weight": ["ui-medium", "ui-regular", "ui-semibold"],
-  spacing: ["attention-mark", "column-inset", "find-field", "ring-reach"],
+  spacing: ["attention-mark", "call-window-card", "column-inset", "find-field", "ring-reach"],
   radius: ["disc"],
-  animate: ["edit-composer-in", "edit-composer-out"],
+  animate: ["edit-composer-in", "edit-composer-out", "call-card-in", "call-card-out"],
 } as const;
 
 /**

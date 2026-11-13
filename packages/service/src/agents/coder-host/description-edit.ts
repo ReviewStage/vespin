@@ -76,7 +76,7 @@ import { type InboxSandboxDoor, readSandboxBodyFile } from "./inbox-image.js";
  * the description under the developer.
  *
  * Beside its notes the agent may add pictures, which the notetaker cannot,
- * having none: a screenshot it took, or a WebM it recorded of a flow, named
+ * having none: a screenshot it took, or a recording it made of a flow, named
  * by its file in its sandbox, read as an inbox post's is (`inbox-image.ts`),
  * a recording as it is and up to a video's bound, kept as one of the description's
  * pictures as the member the turn runs for, and written as the picture's
@@ -112,7 +112,7 @@ const pictureSchema = Schema.Struct({
     trimmedText(DESCRIPTION_EDIT.MAX_PATH_CHARS),
     "The picture's file in your sandbox, such as a screenshot you took or a recording you made of " +
       `a flow, relative to your working folder or absolute: a PNG, JPEG, or WebP of at most ${PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB, ` +
-      `a WebM video of at most ${PICTURE_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB, which the description plays, ` +
+      `a WebM or MP4 video of at most ${PICTURE_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB, which the description plays, ` +
       `or a PDF of at most ${MAX_PDF_MB} MB, which it keeps as a file under the file's own name.`,
   ),
   alt: describeWire(
@@ -198,7 +198,7 @@ const MISSED_FIND_CHARS = 200;
 export const TASK_PICTURE_FILE_REFUSAL = {
   NO_FILE: "Not saved: a picture names no file in your sandbox:",
   NOT_IMAGE:
-    "Not saved: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM video that states its size, or a PDF:",
+    "Not saved: a picture names a file that is not a PNG, JPEG, or WebP image, a WebM or H.264 MP4 video that states its size, or a PDF:",
   TOO_LARGE: `Not saved: a picture names an image larger than ${PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB, a video larger than ${PICTURE_BOUNDS.MAX_VIDEO_BYTES / 1_000_000} MB, or a PDF larger than ${MAX_PDF_MB} MB; take it smaller, or at one screen scale, or record a shorter flow:`,
   UNREADABLE: "Not saved: a picture's file could not be read from your sandbox:",
 } as const;
