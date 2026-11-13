@@ -95,6 +95,7 @@ import {
   SplitView,
   STATUS_MARK_SYMBOL,
   type StandingMenus,
+  sectionGlyph,
   shareLink,
   type TaskFold,
   TaskHead,
@@ -897,11 +898,11 @@ function TasksTree({
   );
 }
 
-/** The glyph a collection's sidebar row leads with: Pinned's pin, Following's eye, and a section's folder. */
+/** The glyph a collection's sidebar row leads with: Pinned's pin, Following's eye, and a section's own icon, as the panel's sidebar draws it (`sectionGlyph`). */
 function collectionGlyph(group: TaskTreeGroup): Glyph {
   if (group.kind === TASK_TREE_GROUP.PINNED) return GLYPH.PIN;
 
-  return group.kind === TASK_TREE_GROUP.FOLLOWING ? GLYPH.FOLLOW : GLYPH.FOLDER;
+  return group.kind === TASK_TREE_GROUP.FOLLOWING ? GLYPH.FOLLOW : sectionGlyph(group.icon);
 }
 
 /**
