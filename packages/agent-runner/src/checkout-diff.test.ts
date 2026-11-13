@@ -132,9 +132,10 @@ test("the script's variables carry the two commits, the second empty for the wor
   });
 });
 
-test("a turn's counts name each file where it stands, a rename where it moved to and a binary file counting no lines, and total every file past the bound", () => {
+test("a turn's counts name each file where it stands, a tab in its name kept, a rename where it moved to and a binary file counting no lines, and total every file past the bound", () => {
   const counts = [
     "3\t1\tsrc/kept.ts",
+    "2\t0\tdocs/a\tb.md",
     "0\t0\t",
     "src/old.ts",
     "src/new.ts",
@@ -145,14 +146,15 @@ test("a turn's counts name each file where it stands, a rename where it moved to
 
   const summary = turnFilesSummary(counts);
 
-  assert.deepEqual(summary?.files.slice(0, 3), [
+  assert.deepEqual(summary?.files.slice(0, 4), [
     { path: "src/kept.ts", additions: 3, deletions: 1 },
+    { path: "docs/a\tb.md", additions: 2, deletions: 0 },
     { path: "src/new.ts", additions: 0, deletions: 0 },
     { path: "logo.png", additions: 0, deletions: 0 },
   ]);
   assert.deepEqual(
     [summary?.files.length, summary?.total, summary?.additions, summary?.deletions],
-    [50, 63, 63, 1],
+    [50, 64, 65, 1],
   );
   assert.equal(turnFilesSummary(""), undefined);
 });
