@@ -13,8 +13,8 @@ import {
   SWITCHER_LOOK,
   WorkspaceSwitcherItem,
 } from "@repo/ui-native";
-import { useRouter } from "expo-router";
-import type { ReactNode } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { type ReactNode, useCallback, useState } from "react";
 import { useInboxBadge } from "../inbox/use-inbox.js";
 import { useOpenSettings, useSettingsAccount } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
@@ -87,6 +87,9 @@ type SidebarColumns = {
   readonly onSidebarShownChange: (shown: boolean) => void;
 };
 
+/** A sidebar row just tapped, and the selection the route held when it was. */
+type TappedRow = { readonly id: string; readonly over: string };
+
 /** Whether a picked row's id names one of the places rather than a task. */
 function placeOf(id: string): (typeof PLACES)[number] | undefined {
   return PLACES.find((place) => place.id === id);
@@ -128,10 +131,16 @@ export function useAppSidebar(
   const threeColumns = useThreeColumns();
   const { shown, setShown } = useSidebarShown();
   const header = switcher === undefined ? undefined : <WorkspaceSwitcherItem {...switcher} />;
-  const selected = openTask !== undefined && tasks.ids.has(openTask) ? openTask : place;
+  const routed = openTask !== undefined && tasks.ids.has(openTask) ? openTask : place;
+  // Note that a pick stands selected at once, until the route moves or this screen next gains focus, because each tab draws its own sidebar, and the tab left behind drew its own place again for the frames before the window swapped.
+  const [tapped, setTapped] = useState<TappedRow | undefined>(undefined);
+  useFocusEffect(useCallback(() => setTapped(undefined), []));
+  const selected = tapped !== undefined && tapped.over === routed ? tapped.id : routed;
 
   const pick = (id: string) => {
     const picked = placeOf(id);
+
+    setTapped({ id, over: routed });
 
     if (picked !== undefined) router.navigate(picked.route);
     else router.navigate({ pathname: "/tasks", params: { selected: id } });
