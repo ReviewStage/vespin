@@ -264,13 +264,13 @@ export function barActItems(acts: readonly BarAction[]): ReactElement[] {
 /**
  * A list's scopes as Mail's filter menu: each scope a choice, checked where
  * it stands, with its count only where it has one worth reading, so an empty
- * scope reads as its name alone. Note that the glyph fills while any scope
- * but the first stands, as Mail's does while a filter is on, since the bar
- * keeps no other word of which scope is shown.
+ * scope reads as its name alone. Note that the glyph is Mail's outline until
+ * the list stands narrowed from its own default, then fills, as Mail's does
+ * while a filter is on, since the bar keeps no other word of which scope is
+ * shown; the caller says which, because a list's default need not be its
+ * first scope, as the Inbox's Open is not.
  */
-export function scopeMenu(label: string, scopes: readonly Scope[]): BarMenu {
-  const narrowed = scopes.findIndex((scope) => scope.selected) > 0;
-
+export function scopeMenu(label: string, scopes: readonly Scope[], narrowed: boolean): BarMenu {
   return {
     label,
     symbol: narrowed ? GLYPH.FILTERED : GLYPH.FILTER,
