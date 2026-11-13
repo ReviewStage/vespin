@@ -121,7 +121,8 @@ const exported = getSentryExpoConfig(__dirname, {
   injectReleaseForWeb: false,
   optionsFile: false,
 });
-// MEASUREMENT ONLY (chore/probe-tap-timing): React DevTools' hook set before any module.
+// MEASUREMENT ONLY (chore/probe-tap-timing): with PERF_PROFILE=1, React DevTools' hook set before any module and the profiling renderer, to find causes; without it, the production renderer, for timings.
+if (process.env.PERF_PROFILE === "1") {
 const basePolyfills = exported.serializer.getPolyfills ?? (() => []);
 exported.serializer.getPolyfills = (context) => [
   ...basePolyfills(context),
@@ -138,4 +139,5 @@ exported.resolver.resolveRequest = (context, moduleName, platform) => {
     ? baseResolve(context, name, platform)
     : context.resolveRequest(context, name, platform);
 };
+}
 module.exports = exported;

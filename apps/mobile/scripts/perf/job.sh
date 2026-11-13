@@ -1,7 +1,7 @@
 #!/bin/zsh -l
 # job.sh TAG [REF...] -- MEASUREMENT ONLY: the probe branch with each REF merged over it, bundled (--no-minify, so components keep their names) into a copy of Nov 12's app, then tap-timing.sh on the iPhone 18 Pro and the landscape iOS 26.5 iPad. Results under ~/vespin-perf/TAG/.
 # It uses the rig's own checkout (R, default $W/repo) between the rig's jobs, so no second node_modules is made.
-# Env: W (the iPad agent's rig, default ~/vespin-ipad-agent), BASE (its Vmain.app), IPH and IPAD (UDIDs), DEVICES ("iphone ipad").
+# Env: PROFILE (1, the default: the profiling renderer and per-commit component walk, to find causes; 0: the production renderer, for a PR's before and after timings), W (the iPad agent's rig, default ~/vespin-ipad-agent), BASE (its Vmain.app), IPH and IPAD (UDIDs), DEVICES ("iphone ipad").
 set -u
 T=$1; shift
 W=${W:-$HOME/vespin-ipad-agent}; BASE=${BASE:-$W/Vmain.app}
@@ -10,9 +10,9 @@ P=$HOME/vespin-perf; R=${R:-$W/repo}; O=$P/$T; mkdir -p $P; rm -rf $O; mkdir -p 
 cd $R && git checkout -q -- . && git fetch -q origin main "+refs/heads/chore/probe-tap-timing:refs/remotes/origin/chore/probe-tap-timing" && for ref in "$@"; do git fetch -q origin "+refs/heads/$ref:refs/remotes/origin/$ref" 2>/dev/null; done
 git checkout -q --detach origin/chore/probe-tap-timing || { echo "CHECKOUT FAILED" >> $L; exit 1; }
 for ref in "$@"; do git -c user.name=perf -c user.email=perf@localhost merge -q --no-edit origin/$ref >> $L 2>&1 || git -c user.name=perf -c user.email=perf@localhost merge -q --no-edit $ref >> $L 2>&1 || { echo "MERGE FAILED $ref" >> $L; exit 1; }; done
-echo "built $(git rev-parse --short HEAD) = probe + $*" >> $L
+echo "built $(git rev-parse --short HEAD) = probe + $* (PROFILE=${PROFILE:-1})" >> $L
 pnpm install --frozen-lockfile > $O/install.log 2>&1; echo "install $?" >> $L
-cd apps/mobile && rm -rf dist && env -u LC_ALL LANG=en_US.UTF-8 EXPO_NO_TELEMETRY=1 pnpm exec expo export --platform ios --no-minify --output-dir dist > $O/export.log 2>&1; echo "export $?" >> $L
+cd apps/mobile && rm -rf dist && env -u LC_ALL LANG=en_US.UTF-8 EXPO_NO_TELEMETRY=1 PERF_PROFILE=${PROFILE:-1} pnpm exec expo export --platform ios $([[ ${PROFILE:-1} == 1 ]] && echo --no-minify) --output-dir dist > $O/export.log 2>&1; echo "export $?" >> $L
 A=$P/V$T.app; rm -rf $A && cp -R $BASE $A && cp dist/_expo/static/js/ios/*.hbc $A/main.jsbundle && rm -rf dist
 codesign --force --sign - --preserve-metadata=entitlements,identifier,flags $A >/dev/null 2>&1; echo "signed $?" >> $L
 H=$R/apps/mobile/scripts/perf
