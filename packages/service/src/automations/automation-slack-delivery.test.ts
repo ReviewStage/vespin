@@ -239,7 +239,7 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
           {
             name: AGENT_TOOL.SEND_SLACK_MESSAGE,
             input: { text: "Yes, it counts." },
-            output: { status: ACTION_RESULT_STATUS.ACCEPTED },
+            output: sent[0] ?? {},
           },
         ]).pipe(Effect.provide(posting));
 

@@ -93,7 +93,13 @@ export function runSendSlackMessage(
       });
 
       if (Option.isNone(posted)) return agentToolRejected(SLACK_MESSAGE_REFUSAL.NOT_POSTED);
-      const answer: WireRecord = { status: ACTION_RESULT_STATUS.ACCEPTED };
+
+      // Note that the answer names the thread it went to, so the turn's end skips its final message only in that thread.
+      const answer: WireRecord = {
+        status: ACTION_RESULT_STATUS.ACCEPTED,
+        channelId: thread.value.channelId,
+        threadTs: thread.value.threadTs,
+      };
 
       return answer;
     }),

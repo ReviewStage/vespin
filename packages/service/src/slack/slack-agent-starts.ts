@@ -1137,20 +1137,25 @@ function turnOutcome(turn: SettledAgentTurn, words: string | undefined): SlackMe
   return { text: slackClipped(words, NOTIFICATION_CHARS), blocks: [slackMarkdownBlock(words)] };
 }
 
-/** Whether a call's answer took it. */
-function isAccepted(output: UnparsedWireValue): boolean {
-  return isRecord(output) && output.status === ACTION_RESULT_STATUS.ACCEPTED;
+/** Whether a call's answer took it and names the thread given as the one it went to. */
+function sentIn(output: UnparsedWireValue, thread: SlackThread): boolean {
+  return (
+    isRecord(output) &&
+    output.status === ACTION_RESULT_STATUS.ACCEPTED &&
+    output.channelId === thread.channelId &&
+    output.threadTs === thread.threadTs
+  );
 }
 
-/** Whether the turn sent a message in its Slack thread itself (`send_slack_message`), which then stands for its final message there. */
-function sentSlackMessage(journal: StoredUIMessage): boolean {
+/** Whether the turn sent a message in this thread itself (`send_slack_message`), which then stands for its final message there; one sent in a thread it has since left does not. */
+function sentSlackMessage(journal: StoredUIMessage, thread: SlackThread): boolean {
   return journal.parts.some(
     (part) =>
       isStoredToolPart(part) &&
       storedToolName(part) === AGENT_TOOL.SEND_SLACK_MESSAGE &&
       part.state === TOOL_PART_STATE.OUTPUT_AVAILABLE &&
       // SAFETY: a stored part's output is the JSON the row carried.
-      isAccepted(part.output as UnparsedWireValue),
+      sentIn(part.output as UnparsedWireValue, thread),
   );
 }
 
@@ -1302,7 +1307,7 @@ export function postTurnToSlack(
     const said =
       turn.status === TURN_STATUS.SETTLED &&
       newest !== undefined &&
-      sentSlackMessage(newest.message);
+      sentSlackMessage(newest.message, place.value.thread);
 
     if (!said) {
       yield* bot.reply(channelId, threadTs, {
