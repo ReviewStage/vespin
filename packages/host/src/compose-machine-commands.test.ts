@@ -1721,6 +1721,63 @@ it.effect(
 );
 
 it.effect(
+  "an app's read brings the agent's cursor in, so a turn that only read the app puts the cursor away as it ends",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+      const service = scriptedService();
+      const ended = yield* Deferred.make<void>();
+
+      const read: MachineCommand = {
+        id: COMMAND.id,
+        kind: MACHINE_COMMAND_KIND.COMPUTER,
+        conversationId: AGENT,
+        agentId: AGENT,
+        timeoutSeconds: 60,
+        action: {
+          op: COMPUTER_ACTION.GET_APP_STATE,
+          app: "Simulator",
+          shots: [{ edge: 1280, quality: 0.7 }],
+        },
+      };
+
+      service.queue(read, NOW);
+
+      const { composer } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        {
+          mode: MACHINE_COMMAND_MODE.ALWAYS,
+          signedIn: true,
+          computer: {
+            helper: scripted.helper,
+            enabled: true,
+            allowed: ["com.apple.iphonesimulator"],
+          },
+          turnEnded: () => Deferred.await(ended),
+        },
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          assert.equal(service.settledResults.size, 1, "the read ran");
+
+          yield* Deferred.succeed(ended, undefined);
+          yield* settled;
+
+          assert.equal(
+            scripted.asked.filter((request) => request.op === COMPUTER_HELPER_OP.RELEASE_CURSOR)
+              .length,
+            1,
+          );
+        }),
+      );
+    }),
+);
+
+it.effect(
   "the agent's cursor is put away as the turn of the agent whose actions moved it last ends, and never as the turn of an agent it was taken from ends",
   () =>
     Effect.gen(function* () {
