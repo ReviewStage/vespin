@@ -1,4 +1,4 @@
-// move-task.tsx -- the Move to workspace sheet over the task the route's `task` names.
+// index.tsx -- the Move to workspace sheet over the task the route's `task` names.
 
 import { useLocalSearchParams } from "expo-router";
 import { MoveTaskScreen } from "../../screens/move-screens.js";

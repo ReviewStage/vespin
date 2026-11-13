@@ -1,4 +1,4 @@
-// agent-ports.tsx -- the listening ports of the agent the route's `agent` names, each shared by a public link, opened in Safari, or no longer shared, as a sheet over its page.
+// index.tsx -- the listening ports of the agent the route's `agent` names, each shared by a public link, opened in Safari, or no longer shared, as a sheet over its page.
 
 import { useLocalSearchParams } from "expo-router";
 import { AgentPortsScreen } from "../../screens/agent-screens.js";

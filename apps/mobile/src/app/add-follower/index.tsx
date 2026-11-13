@@ -1,4 +1,4 @@
-// add-follower.tsx -- the Add a follower sheet over the task the route's `task` names.
+// index.tsx -- the Add a follower sheet over the task the route's `task` names.
 
 import { useLocalSearchParams } from "expo-router";
 import { AddFollowerScreen } from "../../screens/follower-screens.js";

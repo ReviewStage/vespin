@@ -5,7 +5,7 @@ import { HOST_CONNECT_WORDS } from "@repo/features/host-connect-words";
 import { MCP_CLIENTS_WORDS } from "@repo/features/mcp-clients-words";
 import { PUSH_NOTIFICATIONS_TITLE } from "@repo/features/push-device-model";
 import { SETTINGS_PAGE_TITLE, SETTINGS_VIEW } from "@repo/settings/settings-views";
-import { BAR_TITLE, useColors } from "@repo/ui-native";
+import { BAR_TITLE, useBarScheme, useColors } from "@repo/ui-native";
 import { Stack } from "expo-router";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
@@ -21,10 +21,12 @@ export const unstable_settings = { anchor: "index" };
  */
 export default function SettingsLayout() {
   const colors = useColors();
+  const scheme = useBarScheme();
 
   return (
     <Stack
       screenOptions={{
+        headerUserInterfaceStyle: scheme,
         headerTintColor: colors.TEXT,
         headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
         headerBackButtonDisplayMode: "minimal",

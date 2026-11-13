@@ -259,10 +259,12 @@ export {
 export { BRAND_COLOR } from "./tokens/brand-colors.js";
 
 export {
+  type BarScheme,
   type BrandColors,
   STATUS_TONE,
   type StatusTone,
   toneColor,
+  useBarScheme,
   useColors,
 } from "./tokens/colors.js";
 

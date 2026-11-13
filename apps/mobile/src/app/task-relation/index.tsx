@@ -1,4 +1,4 @@
-// task-relation.tsx -- the Task relation sheet over the task the route's `task` names, opened on the kind its `kind` names, or on the four kinds where it names none.
+// index.tsx -- the Task relation sheet over the task the route's `task` names, opened on the kind its `kind` names, or on the four kinds where it names none.
 
 import { useLocalSearchParams } from "expo-router";
 import { isRelationKind, TaskRelationScreen } from "../../screens/relation-screens.js";
