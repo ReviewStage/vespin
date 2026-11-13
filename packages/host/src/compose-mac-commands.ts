@@ -194,8 +194,8 @@ export interface MacCommandsDevice extends ThisMacDevice {
   >;
   /** This Mac's own say over commands and apps, as Settings holds it now. */
   readonly settings: Effect.Effect<MacDeviceSettings>;
-  /** The service's say written over Settings, where it differs. */
-  readonly applySettings: (settings: MacDeviceSettings) => Effect.Effect<void>;
+  /** The service's say written over Settings, where it differs, answering whether every write landed. */
+  readonly applySettings: (settings: MacDeviceSettings) => Effect.Effect<boolean>;
 }
 
 export interface MacCommandsDependencies {
@@ -906,9 +906,10 @@ export function composeMacCommands(
      * yet: under the id this install keeps for it, or a new one where the
      * service refused that as another account's, carrying this Mac's own
      * settings up, and the service's written over Settings where they
-     * differ. Once joined, its settings here written to the service where
-     * they moved since. A join or a write the service did not answer is let
-     * be, for the next look to try again.
+     * differ, the device held only once they were. Once joined, its settings
+     * here written to the service where they moved since. A join, or a write
+     * the service or Settings did not take, is let be, for the next look to
+     * try again.
      */
     const reconciled = (device: MacCommandsDevice) =>
       Effect.gen(function* () {
@@ -950,10 +951,16 @@ export function composeMacCommands(
 
         // Note that a join answered after the account changed is let go, for the next look to join the account signed in now.
         if ("failure" in answer || dependencies.accountId() !== userId) return;
-        // Note that the device is held before Settings is written, so the change the write tells finds the two the same and writes nothing back.
-        yield* SubscriptionRef.set(joined, { userId, deviceId, settings: answer.settings });
 
-        if (!sameSettings(here, answer.settings)) yield* device.applySettings(answer.settings);
+        // Note that the device is held only once Settings took the service's say, so a write it refused is no edit of this Mac's to carry up over the service's: the next look joins again and writes it again. The looks run one after another, so the change a write tells is looked at once the device is held, and finds the two the same.
+        if (
+          !sameSettings(here, answer.settings) &&
+          !(yield* device.applySettings(answer.settings))
+        ) {
+          return;
+        }
+
+        yield* SubscriptionRef.set(joined, { userId, deviceId, settings: answer.settings });
       });
 
     /**
