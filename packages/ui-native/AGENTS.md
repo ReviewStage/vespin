@@ -98,10 +98,11 @@ builds a control of its own.
   `scripts/repository-checks.sh` fails when it drifts. `useColors()` picks the
   theme by the window's color scheme, since SwiftUI is handed plain values.
   The app reads as Vespin beside the desktop, not as iOS's defaults: a
-  screen, a list, and a sidebar stand on the brand's `GROUND` and `SIDEBAR`,
-  never the system's grays, and so does each split view column itself
-  (`containerBackground`) and a sheet or popover to its edge
-  (`presentationBackground`); lists stand plain, as the panel's do, never as
+  screen and a list stand on the brand's `GROUND` and `SIDEBAR`, never the
+  system's grays, and so do a split view's list and detail columns
+  themselves (`containerBackground`) and a sheet or popover to its edge
+  (`presentationBackground`); a split view's sidebar paints nothing, so it
+  stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
   inset cards; and the tint is the brand's copper, never the system's blue.
   Only a control's states and a label's hierarchy are the system's.
 - **Rows carry the panel's facts.** `ListRow` is an Inbox thread (the task's
