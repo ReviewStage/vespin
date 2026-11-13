@@ -9,8 +9,8 @@ import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import {
   APP_SETTING_SCHEMA,
   describedSettings,
-  EXPERIMENTS,
   HOST_CAPABILITY,
+  LISTED_EXPERIMENTS,
   type SettingsRowsInput,
   settingFieldForId,
   settingIdVisible,
@@ -222,7 +222,7 @@ function fixedEntries(input: SettingsSearchInput): readonly SettingsSearchEntry[
         }
       : undefined,
     // Each experiment's row on Experimental, drawn once an account is signed in: found by its name, what it brings, and the pages it holds.
-    ...EXPERIMENTS.map((entry) =>
+    ...LISTED_EXPERIMENTS.map((entry) =>
       input.accountDrawn
         ? {
             id: EXPERIMENT_ANCHOR[entry.key],
