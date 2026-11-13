@@ -5,6 +5,7 @@ import {
   Image,
   Menu,
   RNHostView,
+  RoundedRectangle,
   ScrollView,
   Spacer,
   Button as SwiftUIButton,
@@ -26,6 +27,7 @@ import {
   monospacedDigit,
   padding,
   scrollDismissesKeyboard,
+  strikethrough,
 } from "@expo/ui/swift-ui/modifiers";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
@@ -114,6 +116,16 @@ export type ThreadMessage = {
   readonly stamp?: { readonly words: string; readonly ahead: boolean } | undefined;
 };
 
+/** The words a comment's thread stands on, and whether they have since been taken out of the description. */
+type ThreadQuote = { readonly words: string; readonly gone: boolean };
+
+/** What a quote whose words have left the description says over them, as the panel's card does. */
+const QUOTE_GONE = "Original content deleted";
+
+/** The quote's bar, as wide as the panel's blockquote rule, and the lines its words are clamped to. */
+const QUOTE_BAR_WIDTH = 3;
+const QUOTE_LINES = 2;
+
 type ThreadPageProps = {
   /** Where the thread stands, its task and then its agent, as the panel's crumbs name them. */
   readonly path: readonly string[];
@@ -121,8 +133,10 @@ type ThreadPageProps = {
   readonly status?: TaskStatus | undefined;
   /** What the path opens, such as its task and its agent, as the panel's crumbs open them, which a press on the path offers as a menu; none leaves it words alone. */
   readonly pathActions?: BarMenu["actions"] | undefined;
-  /** The thread's title, which heads the page. */
-  readonly title: string;
+  /** The thread's title, which heads the page; a comment's thread is headed by its quote instead. */
+  readonly title?: string | undefined;
+  /** The words a comment's thread stands on, which head its page in the title's place, muted behind a bar as the panel's comment cards quote them; none for an Inbox thread. */
+  readonly quote?: ThreadQuote | undefined;
   readonly messages: readonly ThreadMessage[];
   /** The task's repository, `owner/name`, whose GitHub pages are its files' chips. */
   readonly repository?: string | null | undefined;
@@ -146,8 +160,67 @@ type ThreadPageProps = {
   readonly foot?: ReactNode | undefined;
 };
 
-/** A thread's heading under its bar: its title in 20 pt semibold, and how it ended under it, 13 pt muted, once it is settled. */
-function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standing">) {
+/**
+ * A comment's quote, as the panel's `QuoteLine` stands over a thread: the
+ * words in the muted ink behind a bar, clamped to two lines, and, where they
+ * have left the description, struck through under the trash glyph and what
+ * that means.
+ */
+function QuoteHead({ quote }: { readonly quote: ThreadQuote }) {
+  const colors = useColors();
+
+  return (
+    <VStack alignment="leading" spacing={SPACE.TIGHT}>
+      {quote.gone ? (
+        <HStack spacing={SPACE.TIGHT} modifiers={[accessibilityElement("combine")]}>
+          <Image
+            {...glyphImage(GLYPH.DELETE)}
+            color={colors.TEXT_MUTED}
+            modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), accessibilityHidden()]}
+          />
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
+              foregroundStyle(colors.TEXT_MUTED),
+            ]}
+          >
+            {QUOTE_GONE}
+          </Text>
+        </HStack>
+      ) : null}
+      {quote.words === "" ? null : (
+        <HStack spacing={SPACE.ROW} alignment="top" modifiers={[accessibilityElement("combine")]}>
+          <RoundedRectangle
+            cornerRadius={QUOTE_BAR_WIDTH / 2}
+            modifiers={[
+              foregroundStyle(colors.CHIP_EDGE),
+              frame({ width: QUOTE_BAR_WIDTH }),
+              accessibilityHidden(),
+            ]}
+          />
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_TITLE }),
+              foregroundStyle(colors.TEXT_MUTED),
+              lineLimit(QUOTE_LINES),
+              strikethrough({ isActive: quote.gone, pattern: "solid" }),
+              accessibilityAddTraits(["isHeader"]),
+            ]}
+          >
+            {quote.words}
+          </Text>
+        </HStack>
+      )}
+    </VStack>
+  );
+}
+
+/** A thread's heading under its bar: its title in 20 pt semibold, or a comment's quote in its place, and how it ended under it, 13 pt muted, once it is settled. */
+function ThreadHead({
+  title,
+  quote,
+  standing,
+}: Pick<ThreadPageProps, "title" | "quote" | "standing">) {
   const colors = useColors();
 
   return (
@@ -156,15 +229,19 @@ function ThreadHead({ title, standing }: Pick<ThreadPageProps, "title" | "standi
       spacing={SPACE.TIGHT}
       modifiers={[padding({ horizontal: SPACE.EDGE, top: SPACE.TIGHT })]}
     >
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
-          foregroundStyle(colors.TEXT),
-          accessibilityAddTraits(["isHeader"]),
-        ]}
-      >
-        {title}
-      </Text>
+      {quote === undefined ? (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.PAGE_HEADING, weight: "semibold" }),
+            foregroundStyle(colors.TEXT),
+            accessibilityAddTraits(["isHeader"]),
+          ]}
+        >
+          {title}
+        </Text>
+      ) : (
+        <QuoteHead quote={quote} />
+      )}
       {standing === undefined ? null : (
         <Text
           modifiers={[
@@ -299,7 +376,7 @@ function MessageView({
   now,
 }: Omit<
   ThreadPageProps,
-  "path" | "status" | "pathActions" | "title" | "messages" | "ask" | "menu" | "foot"
+  "path" | "status" | "pathActions" | "title" | "quote" | "messages" | "ask" | "menu" | "foot"
 > & {
   readonly message: ThreadMessage;
 }) {
@@ -381,8 +458,19 @@ function MessageView({
  * thread's document moves, and the open ask's card stands under the last.
  */
 export function ThreadPage(props: ThreadPageProps) {
-  const { path, status, pathActions, title, messages, ask, menu, foot, standing, ...drawing } =
-    props;
+  const {
+    path,
+    status,
+    pathActions,
+    title,
+    quote,
+    messages,
+    ask,
+    menu,
+    foot,
+    standing,
+    ...drawing
+  } = props;
 
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
@@ -401,7 +489,7 @@ export function ThreadPage(props: ThreadPageProps) {
               padding({ bottom: SPACE.PAGE + footRoom }),
             ]}
           >
-            <ThreadHead title={title} standing={standing} />
+            <ThreadHead title={title} quote={quote} standing={standing} />
             {messages.map((message) => (
               <MessageView key={message.id} message={message} {...drawing} />
             ))}
