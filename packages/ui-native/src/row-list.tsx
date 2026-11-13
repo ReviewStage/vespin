@@ -22,6 +22,7 @@ import {
   refreshable,
   scrollContentBackground,
   scrollDismissesKeyboard,
+  tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useState } from "react";
@@ -138,7 +139,8 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
         scrollDismissesKeyboard("immediately"),
         ...(onRefresh === undefined || choosing !== undefined ? [] : [refreshable(onRefresh)]),
-        ...(choosing === undefined ? [] : [environment("editMode", "active")]),
+        // Note that a ticked check is what the reader chose, so Select mode tints it copper, as Mail's checks take its accent, where the screen's ink drew a pale disc in dark.
+        ...(choosing === undefined ? [] : [environment("editMode", "active"), tint(colors.ACCENT)]),
       ]}
     >
       <RowOpenContext value={onSelect}>
