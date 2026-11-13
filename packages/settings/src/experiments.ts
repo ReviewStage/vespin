@@ -34,6 +34,8 @@ export const EXPERIMENT = {
   FOLLOWING: "following",
   /** Voice: talk to an agent out loud through GPT-Live on your own OpenAI API key: Talk in an agent's box, the call card, and Settings › Voice. */
   VOICE: "voice",
+  /** Goals: `/goal` in a box written to an agent, which runs its harness's own goal (Claude Code's `/goal`, Codex's thread goal), the goal's row over the box, and its moves in the transcript. */
+  GOALS: "goals",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -104,6 +106,16 @@ export interface ExperimentEntry {
  * Settings sets it, and every other read treats it as any experiment.
  */
 export const EXPERIMENTS = [
+  {
+    key: EXPERIMENT.GOALS,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: true,
+    name: "Goals",
+    detail:
+      "Type /goal and a condition, and the agent keeps working until it holds, with the goal shown over its box.",
+    owner: "Dean",
+    since: "2026-11-12",
+  },
   {
     key: EXPERIMENT.MERGE_QUEUE,
     scope: EXPERIMENT_SCOPE.ACCOUNT,

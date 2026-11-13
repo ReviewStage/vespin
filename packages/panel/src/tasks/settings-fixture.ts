@@ -129,11 +129,12 @@ const ACCOUNT: AccountSnapshot = {
 /** An admin of the service, read, so Admin stands rather than waiting on the read. */
 const ADMIN_ACCESS = { admin: true } as const;
 
-/** The account's own experiments the staged pages stand behind: Skills', Rewind restores files', and Turn changes'. Memory's is its workspaces' (`tasks-fixture.ts`). */
+/** The account's own experiments the staged pages stand behind: Skills', Rewind restores files', Turn changes', and Goals'. Memory's is its workspaces' (`tasks-fixture.ts`). */
 const STAGED_EXPERIMENTS = {
   [EXPERIMENT.SKILLS]: true,
   [EXPERIMENT.REWIND_FILES]: true,
   [EXPERIMENT.TURN_CHANGES]: true,
+  [EXPERIMENT.GOALS]: true,
 } as const;
 
 /** The staged hosts, by id. */

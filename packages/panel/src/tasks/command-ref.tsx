@@ -36,6 +36,7 @@ export const LISTED_COMMANDS = [
   SLASH_COMMAND.MODEL,
   SLASH_COMMAND.COMPACT,
   SLASH_COMMAND.CLEAR,
+  SLASH_COMMAND.GOAL,
 ] as const satisfies readonly SlashCommand[];
 
 const COMMANDS = {
@@ -50,30 +51,44 @@ const COMMANDS = {
     alias: SLASH_COMMAND.NEW,
   },
   [SLASH_COMMAND.NEW]: { glyph: () => <GLYPH.NEW_SESSION />, detail: "Start a fresh session" },
+  [SLASH_COMMAND.GOAL]: {
+    glyph: () => <GLYPH.GOAL />,
+    detail: "Keep working until a condition holds",
+  },
 } as const satisfies Record<SlashCommand, CommandEntry>;
 
-/** Every name a command chip stands for in the box, its alias among them, each acting on the agent's session; `/model` opens its menu as it is chosen, so it never stands there as a chip. */
-export const COMMAND_NAMES: ReadonlySet<string> = new Set([
-  SLASH_COMMAND.COMPACT,
-  SLASH_COMMAND.CLEAR,
-  SLASH_COMMAND.NEW,
-]);
-
 /** The commands a sent message carries as its first word, which its bubble draws as their chip: the others run in the box and never go. */
-export const SENT_COMMANDS: ReadonlySet<string> = new Set([SLASH_COMMAND.COMPACT]);
+const SENT_COMMANDS = [SLASH_COMMAND.COMPACT, SLASH_COMMAND.GOAL] as const;
 
 /** What the card says under a command's name. */
 const COMMAND_KIND = "Command";
 
-/** Which of the commands a box runs: `/model` where it stands beside a model chip, and the ones that act on a session where its agent has one to compact or clear. */
+/** Which of the commands a box runs: `/model` where it stands beside a model chip, the ones that act on a session where its agent has one to compact or clear, and `/goal` there or where the box starts an agent on its words. */
 export interface CommandReach {
   readonly model: boolean;
   readonly session: boolean;
+  readonly goal: boolean;
 }
 
-/** Whether a box runs a command, by name or by alias: `/model` beside its chip, the rest on a session. */
+/** Whether a box runs a command, by name or by alias: `/model` beside its chip, `/goal` where a goal may be set, the rest on a session. */
 export function runsCommand(name: SlashCommand, reach: CommandReach): boolean {
-  return name === SLASH_COMMAND.MODEL ? reach.model : reach.session;
+  if (name === SLASH_COMMAND.MODEL) return reach.model;
+
+  return name === SLASH_COMMAND.GOAL ? reach.goal : reach.session;
+}
+
+/** The names a box draws as chips, aliases among them: each command it runs but `/model`, which opens its menu as it is chosen. */
+export function chippedCommands(reach: CommandReach): ReadonlySet<string> {
+  return new Set(
+    Object.values(SLASH_COMMAND).filter(
+      (name) => name !== SLASH_COMMAND.MODEL && runsCommand(name, reach),
+    ),
+  );
+}
+
+/** The commands a sent message's bubble draws as their chip, `/goal` only while the Goals experiment is on. */
+export function sentCommands(goalsOn: boolean): ReadonlySet<string> {
+  return new Set(SENT_COMMANDS.filter((name) => goalsOn || name !== SLASH_COMMAND.GOAL));
 }
 
 /** The listed commands the box reaches that the `/` word's query finds, by name or by alias. */
