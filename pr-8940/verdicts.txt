@@ -7,3 +7,11 @@ PASS - Tasks with nothing picked (12-14): expand and compose leading; New agent 
 NOT SHOWN - a picked task's bar: 13-task-picked and 14-task-more-menu still show "Select a task", so the flow never opened a task.
 
 FAIL - agent page (16-18), all four runs: the bar's new Pin and Archive buttons (agent-screens.tsx barActs, Stack.Toolbar.Button with Stack.Toolbar.Icon xcasset) draw as two wide, empty glass capsules spanning the bar right of the title, with no glyph in either. Only the ⋯ draws. ⋯ itself is right: Pin and Archive are gone from it (17). The page is the pushed agent page, not the split detail.
+
+RETAKE at e37185503 (built e37185503; Pin and Archive via glyphSymbol), flow det8940c.yaml, landscape.
+PASS on the 27.2 iPad, light and dark, 0 failed steps (pr-8940/retake/):
+- c1: a picked task (Launch checklist) shows its bar: expand and compose, the relay › AL-46 path chip, and New agent, sub-task, ⋯ and Search in one trailing glass group.
+- c3: the agent page's bar is one glass group of ⋯, Archive and Pin, each drawn as its glyph, with no empty capsules.
+- c4: Pin turns to Unpin's glyph after a tap.
+- c5: Archive raises "Archive agent?" with Cancel and Stop agents.
+NOT RUN on the 26.5 iPad: booting its simulator took swap from ~4 GB to 11-12 GB and the disk to 11 GB, under the 12 GB floor, twice (16:10 and 16:16 UTC, with the developer's own apps open during work hours), so the guard stopped it before any shot. 1c2c29a9f's 26.5 runs (light and dark) showed the same bar as 27.2, the empty capsules included, so 26.5 is expected to match.
