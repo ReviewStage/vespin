@@ -30,6 +30,7 @@ import {
   buzz,
   NO_WRITES,
   NOTICE_KIND,
+  newestValue,
   useFailureNotices,
   type WritesBook,
   writeSent,
@@ -284,7 +285,7 @@ export function refusalOf<Answer>(
 }
 
 /** Writes a screen sends one after another, on rows of their own, and the refusals it says for them. */
-export interface LatestWrites<Refusal> {
+export interface LatestWrites<Refusal, Value> {
   /** Why each row's newest write was refused, by the row it changes, until that row's next write is sent. */
   readonly refusals: ReadonlyMap<string, Refusal>;
   /** The refusals said, in the order they were said, for a group's one footer. */
@@ -293,7 +294,13 @@ export interface LatestWrites<Refusal> {
    * Sends `act` at once for the row `row` names, such as a member's id or a
    * setting's field, even while an earlier one is out, and answers whether it went.
    */
-  readonly run: (row: string, act: () => PromiseLike<Refusal | undefined>) => Promise<boolean>;
+  readonly run: (
+    row: string,
+    value: Value,
+    act: () => PromiseLike<Refusal | undefined>,
+  ) => Promise<boolean>;
+  /** What a new pick on `row` is compared with: the value its newest write carries while out, else `drawn` (`newestValue`). */
+  readonly newest: (row: string, drawn: Value) => Value;
 }
 
 /**
@@ -306,13 +313,15 @@ export interface LatestWrites<Refusal> {
  * earlier one's refusal landing after a later one began is not said, as an
  * agent's model picks keep only the latest's (`use-agent-model.ts`), though
  * its caller still hears it refused. Writes to two rows are each their own, so
- * a refused one is said whatever another row's write did.
+ * a refused one is said whatever another row's write did. A row's pick is
+ * compared with `newest`, the value its write still out carries, so a pick
+ * back to the drawn value before that write is drawn still goes.
  */
-export function useLatestWrites<Refusal>(
+export function useLatestWrites<Refusal, Value = undefined>(
   unanswered: (cause: unknown) => Refusal,
-): LatestWrites<Refusal> {
+): LatestWrites<Refusal, Value> {
   // Note that the book is held in a ref as well as drawn, because two writes in one frame both read the state the last draw left, and only the ref is written before the second lands.
-  const book = useRef<WritesBook<Refusal>>(NO_WRITES);
+  const book = useRef<WritesBook<Refusal, Value>>(NO_WRITES);
   const [refusals, setRefusals] = useState<ReadonlyMap<string, Refusal>>(NO_WRITES.refusals);
   const newestUnanswered = useRef(unanswered);
   useEffect(() => {
@@ -320,8 +329,8 @@ export function useLatestWrites<Refusal>(
   }, [unanswered]);
 
   const run = useCallback(
-    (row: string, act: () => PromiseLike<Refusal | undefined>): Promise<boolean> => {
-      const sent = writeSent(book.current, row);
+    (row: string, value: Value, act: () => PromiseLike<Refusal | undefined>): Promise<boolean> => {
+      const sent = writeSent(book.current, row, value);
       book.current = sent.book;
       setRefusals(sent.book.refusals);
 
@@ -349,5 +358,13 @@ export function useLatestWrites<Refusal>(
     [],
   );
 
-  return useMemo(() => ({ refusals, said: [...refusals.values()], run }), [refusals, run]);
+  const newest = useCallback(
+    (row: string, drawn: Value): Value => newestValue(book.current, row, drawn),
+    [],
+  );
+
+  return useMemo(
+    () => ({ refusals, said: [...refusals.values()], run, newest }),
+    [refusals, run, newest],
+  );
 }

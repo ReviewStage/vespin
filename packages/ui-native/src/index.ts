@@ -106,6 +106,7 @@ export {
 
 export {
   NO_WRITES,
+  newestValue,
   type WriteSent,
   type WritesBook,
   writeSent,

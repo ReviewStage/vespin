@@ -183,7 +183,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
     const may = memberActs(workspace, member, member.userId === readerId);
 
     const role = (next: typeof ASSIGNABLE_ROLE.ADMIN | typeof ASSIGNABLE_ROLE.MEMBER) => () =>
-      void people.run(member.userId, () =>
+      void people.run(member.userId, undefined, () =>
         refusalOf(write, () =>
           acts[ACT_KIND.WORKSPACE_MEMBER_ROLE]({
             workspaceId,
@@ -222,7 +222,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
 
   const sendInvite = (role: (typeof INVITATION_ROLES)[number]) => (email: string) => {
     dismiss();
-    void invite.run(email, () =>
+    void invite.run(email, undefined, () =>
       refusalOf(write, () => acts[ACT_KIND.WORKSPACE_INVITE]({ workspaceId, email, role })),
     );
   };
@@ -397,7 +397,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           if (asking?.kind !== ASKING.REMOVE) return;
           const { userId } = asking.member;
           dismiss();
-          void people.run(userId, () =>
+          void people.run(userId, undefined, () =>
             refusalOf(write, () => acts[ACT_KIND.WORKSPACE_MEMBER_REMOVE]({ workspaceId, userId })),
           );
         }}
@@ -416,7 +416,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           if (asking?.kind !== ASKING.CANCEL) return;
           const invitationId = asking.invitation.id;
           dismiss();
-          void invite.run(invitationId, () =>
+          void invite.run(invitationId, undefined, () =>
             refusalOf(write, () =>
               acts[ACT_KIND.WORKSPACE_INVITATION_CANCEL]({ workspaceId, invitationId }),
             ),

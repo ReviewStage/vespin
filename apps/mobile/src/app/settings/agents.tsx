@@ -45,7 +45,7 @@ import {
   ToggleRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Fragment, useRef, useState } from "react";
+import { Fragment, useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { effortOptions, modelOptions, useModelCatalog } from "../../tasks/use-start.js";
@@ -120,16 +120,11 @@ export default function AgentsScreen() {
   const { data: capabilities = [] } = useQuery({ ...appStateQuery, select: selectCapabilities });
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
   // Note that each pick goes at once, even while an earlier one is out, such as an effort right after a model, since the host draws the default and a setting as they are sent.
-  const write = useLatestWrites(rejectionWords);
-  const setting = useLatestWrites(rejectionWords);
+  const write = useLatestWrites<string, ModelChoice | undefined>(rejectionWords);
+  const setting = useLatestWrites<string, string>(rejectionWords);
   // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was refused redraws its section, which reads the stored choice again.
   const [defaultRound, setDefaultRound] = useState(0);
   const [settingRound, setSettingRound] = useState(0);
-  // Note that the newest choice sent stands until it is answered, so a pick made before the host's draw of an earlier one reaches the screen, such as an effort right after a model, builds on it rather than on the default drawn.
-  const pending = useRef<ModelChoice | undefined>(undefined);
-  const latest = (): ModelChoice | undefined => pending.current ?? current;
-  // Note that each setting's newest pick sent stands the same way, so a pick back to the drawn value before the first is drawn still goes.
-  const pendingSettings = useRef(new Map<AppSettingField, string>());
   const standard = current === undefined ? undefined : standardModelIdOf(current.model);
   const speeds = standard === undefined ? [] : speedsOffered(catalog, standard);
   const speed = current === undefined ? MODEL_SPEED.STANDARD : modelSpeedOf(current.model);
@@ -143,6 +138,10 @@ export default function AgentsScreen() {
           capabilities,
         };
 
+  // Note that the newest choice sent stands until it is answered, so a pick made before the host's draw of an earlier one reaches the screen, such as an effort right after a model, builds on it rather than on the default drawn.
+  const latest = (): ModelChoice | undefined =>
+    write.newest(ACT_KIND.AGENTS_DEFAULT_WRITE, current);
+
   const choose = (choice: ModelChoice | undefined) => {
     if (choice === undefined) {
       setDefaultRound((round) => round + 1);
@@ -151,15 +150,11 @@ export default function AgentsScreen() {
     }
 
     // Note that the model, effort and speed write the one default, so they follow each other as one row's writes.
-    pending.current = choice;
     void write
-      .run(ACT_KIND.AGENTS_DEFAULT_WRITE, () =>
+      .run(ACT_KIND.AGENTS_DEFAULT_WRITE, choice, () =>
         acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined),
       )
       .then((landed) => {
-        // Note that an answered choice hands back to the drawn default, which holds it once it landed and the stored one once it was refused.
-        if (pending.current === choice) pending.current = undefined;
-
         if (!landed) setDefaultRound((round) => round + 1);
       });
   };
@@ -175,12 +170,11 @@ export default function AgentsScreen() {
   const store = (field: AppSettingField, token: string) => {
     if (view === undefined) return;
     const value = settingFromOption(field, token, view);
-    pendingSettings.current.set(field, token);
     void setting
-      .run(field, () => acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(() => undefined))
+      .run(field, token, () =>
+        acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(() => undefined),
+      )
       .then((landed) => {
-        if (pendingSettings.current.get(field) === token) pendingSettings.current.delete(field);
-
         if (!landed) setSettingRound((round) => round + 1);
       });
   };
@@ -211,8 +205,7 @@ export default function AgentsScreen() {
           options={control.options.map((option) => ({ id: option.value, label: option.label }))}
           picked={control.value}
           onPick={(token) => {
-            if (token !== (pendingSettings.current.get(field) ?? control.value))
-              store(field, token);
+            if (token !== setting.newest(field, control.value)) store(field, token);
           }}
         />
       </Fragment>
