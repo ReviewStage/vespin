@@ -25,8 +25,9 @@ import {
   TaskStatusMark,
   TooltipCard,
   UserIcon,
+  VisuallyHidden,
 } from "@repo/ui";
-import { GLYPH } from "@repo/ui/icons";
+import { CornerLeftUpIcon, GLYPH } from "@repo/ui/icons";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
@@ -252,10 +253,10 @@ function HoverCards(): React.JSX.Element {
                 />
                 <HoverCardRule />
                 <HoverCardRow
-                  glyph={<TaskStatusMark status={TASK_STATUS.TODO} />}
+                  glyph={<CornerLeftUpIcon aria-hidden="true" />}
                   label={
                     <>
-                      <span className="text-muted-foreground">Part of </span>Ship invitations
+                      <VisuallyHidden>Parent: </VisuallyHidden>Ship invitations
                     </>
                   }
                   end="ACME-1"
