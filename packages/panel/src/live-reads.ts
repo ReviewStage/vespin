@@ -204,6 +204,7 @@ const LIVE_FOLLOWS: Readonly<Partial<Record<LiveReadName, LiveFollow>>> = {
   [LIVE_READ.ALLOWED_COMMANDS]: () => askAct(ACT_KIND.ALLOWED_COMMANDS_FOLLOW),
   [LIVE_READ.DEVICE_PRESENCE]: () => askAct(ACT_KIND.HOSTS_PRESENCE_FOLLOW),
   [LIVE_READ.HOSTS]: () => askAct(ACT_KIND.HOSTS_FOLLOW),
+  [LIVE_READ.MACHINES]: () => askAct(ACT_KIND.MACHINES_FOLLOW),
   [LIVE_READ.AGENT_ORIGINS]: ([agentId = ""]) =>
     askAct(ACT_KIND.AGENTS_ORIGIN_FOLLOW, { agentId: String(agentId) }),
   [LIVE_READ.HOLDER_INBOX]: ([kind, id]) =>
@@ -305,6 +306,7 @@ const LIVE_QUERY_READS = [
   LIVE_READ.ALLOWED_COMMANDS,
   LIVE_READ.DEVICE_PRESENCE,
   LIVE_READ.HOSTS,
+  LIVE_READ.MACHINES,
   LIVE_READ.THIS_MAC_HOST,
   LIVE_READ.AGENT_ORIGINS,
   LIVE_READ.INBOX_ITEMS,
@@ -521,6 +523,10 @@ export const allowedCommandsQuery = (accountId: string | undefined) =>
 export const hostsQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.HOSTS, accountIds(accountId));
 
+/** The account's machines with their own settings for agents, by the account. */
+export const machinesQuery = (accountId: string | undefined) =>
+  liveReadQuery(LIVE_READ.MACHINES, accountIds(accountId));
+
 /** This Mac's host, by the account, which the host reads on its own every few seconds and holds for the session. */
 export const thisMacHostQuery = (accountId: string | undefined) =>
   liveReadQuery(LIVE_READ.THIS_MAC_HOST, accountIds(accountId));
@@ -715,6 +721,9 @@ export const allowedCommandsRetryMutation = () => actMutation(ACT_KIND.ALLOWED_C
 
 /** Try again on the hosts. */
 export const hostsRetryMutation = () => actMutation(ACT_KIND.HOSTS_RETRY);
+
+/** Try again on the account's machines. */
+export const machinesRetryMutation = () => actMutation(ACT_KIND.MACHINES_RETRY);
 
 /** Try again on the feed of every item the account reaches. */
 export const inboxItemsRetryMutation = () => actMutation(ACT_KIND.AGENTS_INBOX_ITEMS_RETRY);

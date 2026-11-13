@@ -187,11 +187,12 @@ const DEVICE_LOOK_EVERY = Duration.seconds(15);
 /** What the device's looks run on: a look again at whether it joined and its settings moved, or the service's say over it heard live. */
 const DEVICE_LOOK = { AGAIN: "again", HEARD: "heard" } as const;
 
-/** The device this Mac joined as for an account, the settings the service keeps for it as last read or written, and the apps whose looks it last posted for it; none before it posted any. */
+/** The device this Mac joined as for an account, the settings the service keeps for it as last read or written, the service's say Settings has not yet taken, and the apps whose looks it last posted for it; none before it posted any. */
 interface Joined {
   readonly userId: string;
   readonly deviceId: string;
   readonly settings: MachineDeviceSettings;
+  readonly pending?: MachineDeviceSettings | undefined;
   readonly looks?: readonly string[] | undefined;
 }
 
@@ -1221,6 +1222,18 @@ export function composeMachineCommands(
         const here = yield* device.settings;
 
         if (standing?.userId === userId) {
+          // Note that a say heard from the service that Settings refused is written again before anything goes up, since this Mac's own then is no edit of the developer's but the one the service's replaced.
+          if (standing.pending !== undefined) {
+            if (
+              sameSettings(here, standing.pending) ||
+              (yield* device.applySettings(standing.pending))
+            ) {
+              return yield* SubscriptionRef.set(joined, { ...standing, pending: undefined });
+            }
+
+            return yield* Effect.sleep(DEVICE_LOOK_EVERY);
+          }
+
           if (sameSettings(here, standing.settings)) return;
           const saved = yield* asked(client.saveDeviceSettings(standing.deviceId, here));
 
@@ -1271,23 +1284,31 @@ export function composeMachineCommands(
      * made on another device or the web reaches this Mac without joining
      * again. It runs in turn with the looks (`reconciled`), never beside
      * one, so a look never carries this Mac's say up over the service's
-     * between the two. Note that a write Settings refused leaves this Mac's
-     * own say to differ from the one held, which the next look carries up,
-     * so the two end the same either way.
+     * between the two. Note that a write Settings refused is held as
+     * pending, which the next look writes again rather than carrying this
+     * Mac's old say up over it, and that a say heard for an account no longer
+     * signed in is let go.
      */
     const heard = (device: MachineCommandsDevice, from: Joined, service: MachineDeviceSettings) =>
       Effect.gen(function* () {
         const standing = yield* SubscriptionRef.get(joined);
 
         if (
+          dependencies.accountId() !== from.userId ||
           standing?.userId !== from.userId ||
           standing.deviceId !== from.deviceId ||
-          sameSettings(standing.settings, service)
+          (sameSettings(standing.settings, service) && standing.pending === undefined)
         )
           return;
-        yield* SubscriptionRef.set(joined, { ...standing, settings: service });
 
-        if (!sameSettings(yield* device.settings, service)) yield* device.applySettings(service);
+        const taken =
+          sameSettings(yield* device.settings, service) || (yield* device.applySettings(service));
+
+        yield* SubscriptionRef.set(joined, {
+          ...standing,
+          settings: service,
+          pending: taken ? undefined : service,
+        });
       });
 
     /** Waits until the Mac no longer stands joined as the device it joined as for `from`'s account. */

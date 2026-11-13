@@ -770,6 +770,16 @@ export const tasksFindAnswerSchema = EffectSchema.Union([
 /** The most characters a task search sends the service. */
 export const TASK_SEARCH_QUERY_MAX_CHARS = 200;
 
+/** How long typing pauses before a task search's words are asked of the host, so a word typed out reads once rather than once a letter. */
+export const TASK_SEARCH_PAUSE_MILLIS = 250;
+
+/** The words a task search typed as `typed` asks of the service (`TASKS_SEARCH`): trimmed and cut to what it sends, or none where nothing is typed. */
+export function serviceTaskSearchQuery(typed: string): string | undefined {
+  const words = typed.trim().slice(0, TASK_SEARCH_QUERY_MAX_CHARS);
+
+  return words.length === 0 ? undefined : words;
+}
+
 /** A search of the account's tasks the window asks the host to read past the list it holds: the words typed. */
 export const tasksSearchParamsSchema = EffectSchema.Struct({
   query: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(TASK_SEARCH_QUERY_MAX_CHARS)),
