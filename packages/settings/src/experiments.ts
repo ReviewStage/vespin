@@ -28,8 +28,6 @@ export const EXPERIMENT = {
   MERGE_QUEUE: "merge-queue",
   /** Reply buttons: a button an agent puts in its reply, beside the line it is about, that starts a new agent on a brief it wrote, or sends one to a running agent, once a member presses it. */
   REPLY_BUTTONS: "reply-buttons",
-  /** Following: the members who follow each task, who starts, is assigned, or messages its agents, and each follower's switch letting the task's agents use their machines. */
-  FOLLOWING: "following",
   /** Voice: talk to an agent out loud through GPT-Live on your own OpenAI API key: Talk in an agent's box, the call card, and Settings › Voice. */
   VOICE: "voice",
   /** Goals: `/goal` in a box written to an agent, which runs its harness's own goal (Claude Code's `/goal`, Codex's thread goal), the goal's row over the box, and its moves in the transcript. */
@@ -143,16 +141,6 @@ export const EXPERIMENTS = [
     name: "Voice",
     detail:
       "Talk to an agent out loud through GPT-Live on your own OpenAI API key, from Talk in an agent's box.",
-    owner: "Dean",
-    since: "2026-11-12",
-  },
-  {
-    key: EXPERIMENT.FOLLOWING,
-    scope: EXPERIMENT_SCOPE.WORKSPACE,
-    listed: true,
-    name: "Following",
-    detail:
-      "Follow the tasks you care about, and choose on each whether its agents may use your machines.",
     owner: "Dean",
     since: "2026-11-12",
   },

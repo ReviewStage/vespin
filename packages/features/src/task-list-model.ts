@@ -21,7 +21,7 @@ import { isTaskSettled, TASK_STATUS, type TaskStatus, type TaskSummary } from ".
  * statuses has no status to leave it out by and always stands. The Tasks page lays the same tasks out its own way
  * (`tasks-page-model.ts`).
  *
- * Where the workspace has Following on, the reader may narrow the list to
+ * The reader may narrow the list to
  * the tasks they follow (`ASSIGNED_TO.FOLLOWING`), and the tasks they follow
  * that no other list holds stand in a Following group of their own
  * (`followingTasks`), so a teammate's task they keep up with stays in reach.
@@ -234,7 +234,7 @@ export function createdByOnly(
   return createdBy === undefined ? tasks : tasks.filter((task) => creatorIdOf(task) === createdBy);
 }
 
-/** Whether the reader follows a task: one of its followers, which a task of a workspace with Following off names none of. */
+/** Whether the reader follows a task: one of its followers. */
 export function followedBy(task: TaskSummary, readerId: string | undefined): boolean {
   return (
     readerId !== undefined &&

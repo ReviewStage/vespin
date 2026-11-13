@@ -631,7 +631,7 @@ interface ReaderStamp {
   readonly readerId: string | undefined;
 }
 
-/** A row's followers, the earliest first; none while its workspace has Following off. */
+/** A row's followers, the earliest first; none where the service answered none. */
 function rowFollowersOf(row: PlanRow): readonly RowFollower[] | undefined {
   const ids = row.followerIds;
 
@@ -2284,8 +2284,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    * A follower write, the reader's own follow, unfollow, or switch, or
    * another member added, drawn on the task's row at once over the
    * followers the row holds, and the followers the service answered taken in
-   * its place. A row whose workspace has Following off holds no followers,
-   * so nothing is drawn on it.
+   * its place. A row the service answered no followers for holds none, so
+   * nothing is drawn on it.
    */
   const followersChanged = <Input extends { readonly taskId: string }>(declared: {
     readonly drawn: (input: Input) => (followers: readonly RowFollower[]) => readonly RowFollower[];

@@ -65,8 +65,7 @@ import { TaskRelationAsked, type TaskRelationsDoor } from "./task-relation-menu.
  * window's own menu (`picker-row.tsx`): the status, each of the five with
  * its mark, the priority, each with its bars, and the assignee, each member
  * of the workspace by face and name, the reader first, and No assignee on
- * the dashed unassigned mark; then, while the workspace has Following on,
- * the task's followers (`following-chip.tsx`); then, where the page hands their door, the
+ * the dashed unassigned mark; then the task's followers (`following-chip.tsx`); then, where the page hands their door, the
  * box the add menu hangs from when the task's menus or ⌘K ask for it
  * (`task-relation-menu.tsx`). The task's sub-tasks and relations stand as
  * groups of their own under the byline (`plan-relations.tsx`). A pick

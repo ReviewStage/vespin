@@ -11,7 +11,6 @@ import {
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_CALL_FAILURE, type TasksFollowersAnswer } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT } from "@repo/settings";
 import {
   ChipPopover,
   type FootRow,
@@ -42,14 +41,12 @@ import { memberRows } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
-import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { DeviceStandingGlyph, STANDING_WORDS } from "./runs-on.js";
 
 /**
  * following-chip.tsx -- the task page's Following chip: the faces of the task's followers, and the popover listing them, where the reader follows or stops and lets the task's agents use their machines or not.
  *
- * The chip stands after the assignee's while the task's workspace has
- * Following on, its faces the app's face pile (`ActorStack`), four and then
+ * The chip stands after the assignee's, its faces the app's face pile (`ActorStack`), four and then
  * a count whose card names the rest, its words Following while the reader
  * follows the task and Follow while they do not. Its popover is the
  * followers' checklist, as the reviewer picker is a pull request's: a
@@ -258,8 +255,8 @@ function listedIds(followers: readonly string[], visit: readonly string[] | unde
 }
 
 /**
- * The Following chip for a task, while its workspace has Following on and
- * the task carries its followers; nothing otherwise. Where the task takes no
+ * The Following chip for a task, while the task carries its followers;
+ * nothing otherwise. Where the task takes no
  * change (`editable` false) its popover lists the followers alone.
  */
 export function FollowingChip({
@@ -269,13 +266,13 @@ export function FollowingChip({
   task: Pick<TaskSummary, "id" | "workspaceId" | "assignee" | "followers">;
   editable: boolean;
 }): React.JSX.Element | null {
-  // Note that a task carries no followers while its workspace has Following off, so nothing is read for one.
+  // Note that a task read before its followers carries none, so nothing is read for one.
   if (task.followers === undefined) return null;
 
   return <FollowingShown task={task} followers={task.followers} editable={editable} />;
 }
 
-/** The chip for a task that carries its followers, while the workspace has Following on. */
+/** The chip for a task that carries its followers. */
 function FollowingShown({
   task,
   followers,
@@ -285,15 +282,12 @@ function FollowingShown({
   followers: readonly TaskFollowerWire[];
   editable: boolean;
 }): React.JSX.Element | null {
-  const on = useWorkspaceExperiment(task.workspaceId, EXPERIMENT.FOLLOWING);
   const { members, readerId } = useMemberDirectory();
   const view = followersView(followers, readerId);
   const actors = useFollowerActors(view.followers, task.assignee);
   const writes = useFollowerWrites(task.id);
   // The list as the visit's first press found it, which holds its rows in place until the popover closes.
   const [visit, setVisit] = useState<readonly string[] | undefined>(undefined);
-
-  if (!on) return null;
 
   const followerRows = new Map<string, MenuRow>(
     view.followers.map((follower, index) => {

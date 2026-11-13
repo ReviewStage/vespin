@@ -139,8 +139,9 @@ const taskLiveRowSchema = EffectSchema.Struct({
   madeByRun: EffectSchema.optionalKey(EffectSchema.Boolean),
   /**
    * The followers' account ids, the earliest to follow first, and each one's
-   * machines switch in the same order; null while the task's workspace has
-   * Following off, and absent from a service before it.
+   * machines switch in the same order; null from a service that gated them
+   * on the Following experiment while it was off, and absent from a service
+   * before it.
    */
   followerIds: EffectSchema.optionalKey(
     EffectSchema.NullOr(EffectSchema.Array(EffectSchema.String)),
@@ -516,7 +517,7 @@ function originOf(row: TaskLiveRow): Origin {
   };
 }
 
-/** The task's followers as its row names them, each the assignee where the row's assignee is them; none while its workspace has Following off. */
+/** The task's followers as its row names them, each the assignee where the row's assignee is them; none from a service that does not answer them. */
 function followersOf(row: TaskLiveRow): Pick<TaskSummary, "followers"> | undefined {
   const ids = row.followerIds;
 
