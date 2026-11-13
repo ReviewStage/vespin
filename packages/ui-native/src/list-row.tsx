@@ -95,9 +95,6 @@ function heardValue(value: RowHeard["value"]): string {
     .join(HEARD_PART);
 }
 
-/** What parts a row's line from the task it names. */
-const LINE_PART = " · ";
-
 /** The words VoiceOver hears for a row's marks, each said where the mark is drawn. */
 const UNREAD_WORDS = "Unread";
 const PULL_REQUEST_HEARD = "Pull request";
@@ -163,7 +160,7 @@ type ListRowProps = RowActs & {
   readonly id: string;
   /** The thread's title, the row's first line. */
   readonly title: string;
-  /** What holds the thread: its task, whose status ring leads the row and whose name ends its line, or an agent's own by its name alone. */
+  /** What holds the thread: its task, whose status ring and name stand on the row's first line, over its title, or an agent's own by its name alone. */
   readonly task?: { readonly name: string; readonly status?: TaskStatus | undefined } | undefined;
   /** What the thread's last line is, which picks the glyph leading it. */
   readonly line?: InboxLineKind | undefined;
@@ -502,18 +499,51 @@ function LineGlyph({ line }: { readonly line: InboxLineKind | undefined }) {
 }
 
 /**
- * An Inbox row's second line, under the title: an ask's glyph, where the
- * row's lead is the task's ring rather than it, the thread's last words, and
- * the task's name after them, all 13 pt in the muted ink, as the panel's row
- * reads: only the ask's glyph stands in the attention ink.
+ * An Inbox row's first line, over the title: the task's status ring in the
+ * lead column and the task's name, 13 pt in the muted ink, as the panel's row
+ * heads its title with the task. The unread dot's column stands empty, so
+ * the dot keeps its place beside the title.
+ */
+function TaskLine({ task }: { readonly task: NonNullable<ListRowProps["task"]> }) {
+  const colors = useColors();
+  const lines = useRowLines();
+  const leadWidth = useScaledSize(MARK_SIZE.LEAD);
+
+  return (
+    <HStack spacing={SPACE.TIGHT} alignment="center">
+      <UnreadDot unread={false} />
+      <HStack spacing={SPACE.ROW} alignment="center">
+        <HStack modifiers={[frame({ width: leadWidth })]}>
+          {task.status === undefined ? null : <TaskStatusMark status={task.status} />}
+        </HStack>
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            lineLimit(lines.line),
+          ]}
+        >
+          {task.name}
+        </Text>
+        <Spacer />
+      </HStack>
+    </HStack>
+  );
+}
+
+/**
+ * An Inbox row's last line, under the title: an ask's glyph, where the task's
+ * line leads the row rather than it, and the thread's last words, 13 pt in
+ * the muted ink, as the panel's row reads: only the ask's glyph stands in the
+ * attention ink.
  */
 function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
-  const { line, summary, task, glyph } = props;
+  const { line, summary, glyph } = props;
   const colors = useColors();
   const lines = useRowLines();
   const words = summary?.trim() === "" ? undefined : summary;
 
-  if (words === undefined && task === undefined) return null;
+  if (words === undefined) return null;
 
   return (
     <HStack
@@ -529,10 +559,7 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
           lineLimit(lines.line),
         ]}
       >
-        {words === undefined ? null : <Text>{words}</Text>}
-        {task === undefined ? null : (
-          <Text>{words === undefined ? task.name : `${LINE_PART}${task.name}`}</Text>
-        )}
+        {words}
       </Text>
       <Spacer />
     </HStack>
@@ -540,11 +567,12 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
 }
 
 /**
- * One Inbox thread: the copper dot in the margin while it is unread, its
- * task's status ring leading it (or, on an agent's own thread, the glyph of
- * what it asks), its title in 15 pt with the time at the line's end, and
- * under it the glyph and words of what it asks, then the task's name, in a
- * 13 pt muted line. A teammate's face stands before the time on a thread
+ * One Inbox thread, in the panel's three lines: its task, the task's status
+ * ring and name in a 13 pt muted line; its title in 15 pt with the time at
+ * the line's end and the copper dot in the margin while it is unread; and
+ * the glyph and words of what it asks, in a 13 pt muted line. An agent's own
+ * thread, which has no task, stands in two, the glyph of what it asks
+ * leading its title. A teammate's face stands before the time on a thread
  * that waits on them, and a thread put away until a reminder says when it
  * comes back in its time's place, as the panel's row does. It stands
  * roomier than a task's row, with Mail's breathing room above, below, and
@@ -553,14 +581,14 @@ function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
 export function ListRow(props: ListRowProps) {
   const { id, title, task, line, unread = false, done = false, face, at, now, due } = props;
   const colors = useColors();
-  const ring = task?.status === undefined ? undefined : <TaskStatusMark status={task.status} />;
 
   const row: ReactElement = (
     <VStack alignment="leading" spacing={ROW_INSET.THREAD_LINE_GAP}>
+      {task === undefined ? null : <TaskLine task={task} />}
       <RowHead
         unread={unread}
         faded={done}
-        lead={ring ?? <LineGlyph line={line} />}
+        lead={task === undefined ? <LineGlyph line={line} /> : null}
         title={title}
         ink={titleInk(colors, unread, done)}
         end={
@@ -576,7 +604,7 @@ export function ListRow(props: ListRowProps) {
           </HStack>
         }
       />
-      <ThreadLine {...props} glyph={ring !== undefined} />
+      <ThreadLine {...props} glyph={task !== undefined} />
     </VStack>
   );
 

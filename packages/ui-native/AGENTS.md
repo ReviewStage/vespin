@@ -102,9 +102,10 @@ builds a control of its own.
   never the system's grays; lists stand plain, as the panel's do, never as
   inset cards; and the tint is the brand's copper, never the system's blue.
   Only a control's states and a label's hierarchy are the system's.
-- **Rows carry the panel's facts.** `ListRow` is an Inbox thread (the task's
-  status ring, the thread's title and time, and the glyph and words of what
-  it asks, then the task's name), `TaskRow` a task on one line (its status
+- **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
+  panel's three lines (the task's status ring and name, then the thread's
+  title and time, then the glyph and words of what it asks; an agent's own
+  thread, with no task, in two), `TaskRow` a task on one line (its status
   ring, its name, and at its end a thread that needs you, a failed agent,
   one at work, or its pull request, then its key), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
