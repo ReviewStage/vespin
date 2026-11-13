@@ -12,6 +12,7 @@ import {
   Toggle,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityElement,
   accessibilityHidden,
@@ -27,6 +28,7 @@ import {
   lineLimit,
   listRowBackground,
   listRowInsets,
+  listRowSeparator,
   listRowSeparatorTint,
   monospacedDigit,
   padding,
@@ -67,7 +69,7 @@ import {
   toneColor,
   useColors,
 } from "./tokens/colors.js";
-import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, RADIUS, ROW_INSET, SIDEBAR_ROW, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** How many lines a row's title and its line take: one each at the standard sizes, and more at an accessibility size, so they still read. */
@@ -278,12 +280,13 @@ export function RowTime({ at, now }: { readonly at: number; readonly now: number
 function RowDue({ due, now }: { readonly due: number; readonly now: number | undefined }) {
   const colors = useColors();
   const words = dueText(due, now ?? Date.now());
+  const clock = useScaledSize(MARK_SIZE.GLYPH - 4);
 
   return (
     <HStack spacing={SPACE.TIGHT}>
       <Image
         {...glyphImage(GLYPH.TIME)}
-        size={MARK_SIZE.GLYPH - 4}
+        size={clock}
         color={colors.ACCENT_TEXT}
         modifiers={[accessibilityHidden(true)]}
       />
@@ -329,6 +332,36 @@ export function rowPlacement(
   ];
 }
 
+/**
+ * Where a sidebar's row stands, as Mail's mailboxes do: no hairline, its
+ * glyph and words padded inside a rounded fill set in from the sidebar's
+ * edges, the fill drawn only while it is selected. Note that the fill is
+ * the row's own rather than the system's selection, because the system's
+ * takes the list's tint, the ink, and would draw a near-black capsule.
+ */
+export function sidebarRowPlacement(colors: BrandColors, selected = false) {
+  return [
+    listRowBackground("clear"),
+    listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
+    listRowSeparator("hidden"),
+    padding({ horizontal: SIDEBAR_ROW.SIDE, vertical: SIDEBAR_ROW.VERTICAL }),
+    ...(selected
+      ? [
+          background(
+            colors.SELECTED,
+            SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
+          ),
+        ]
+      : []),
+    padding({ horizontal: SIDEBAR_ROW.EDGE }),
+  ];
+}
+
+/** How a row stands in its list: a list's row, edge to edge over its hairline, or a sidebar's, in its rounded fill. */
+export const ROW_PLACE = { LIST: "list", SIDEBAR: "sidebar" } as const;
+
+export type RowPlace = (typeof ROW_PLACE)[keyof typeof ROW_PLACE];
+
 /** Whether a full swipe from an edge runs its first act: never where that act is destructive, such as Archive, which then waits for its button's tap, nor where it is a menu. */
 function fullSwipes(swipes: readonly RowSwipe[]): boolean {
   const first = swipes[0];
@@ -370,11 +403,14 @@ export function RowFrame({
   preview,
   link,
   vertical,
+  place = ROW_PLACE.LIST,
 }: RowActs & {
   readonly id: string;
   readonly row: ReactElement;
   /** The row's top and bottom inset, where it stands roomier than the list's own, as an Inbox thread does. */
   readonly vertical?: number | undefined;
+  /** Whether it stands as a list's row or a sidebar's. */
+  readonly place?: RowPlace | undefined;
 }) {
   const colors = useColors();
   const open = useContext(RowOpenContext);
@@ -384,7 +420,9 @@ export function RowFrame({
   // Note that a heard row is one element, its children's acts kept as its own, so VoiceOver offers a swipe's acts in its Actions rotor and its menu by a long press, as it does the system's rows.
   const frameModifiers = [
     tag(id),
-    ...rowPlacement(colors, selected, vertical),
+    ...(place === ROW_PLACE.SIDEBAR
+      ? sidebarRowPlacement(colors, selected)
+      : rowPlacement(colors, selected, vertical)),
     ...(heard === undefined
       ? []
       : [
@@ -559,36 +597,41 @@ function TaskLine({ task }: { readonly task: NonNullable<ListRowProps["task"]> }
 }
 
 /**
- * An Inbox row's last line, under the title: an ask's glyph, where the task's
- * line leads the row rather than it, and the thread's last words, 13 pt in
- * the muted ink, as the panel's row reads: only the ask's glyph stands in the
- * attention ink.
+ * An Inbox row's last line, under the title: an ask's glyph in the lead
+ * column, where the task's line leads the row rather than it, and the
+ * thread's last words in the title's column, 13 pt in the muted ink, as the
+ * panel's row reads and as Mail's preview stands under its subject: only the
+ * ask's glyph stands in the attention ink. Note that it stands on the same
+ * columns as the title's line, the unread dot's left empty, so the words
+ * hang under the title at every size, a glyph or none before them.
  */
 function ThreadLine(props: ListRowProps & { readonly glyph: boolean }) {
   const { line, summary, glyph } = props;
   const colors = useColors();
   const lines = useRowLines();
+  const leadWidth = useScaledSize(MARK_SIZE.LEAD);
   const words = summary?.trim() === "" ? undefined : summary;
 
   if (words === undefined) return null;
 
   return (
-    <HStack
-      spacing={SPACE.TIGHT + 1}
-      alignment="center"
-      modifiers={[padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING })]}
-    >
-      {glyph ? <LineGlyph line={line} /> : null}
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.ROW_LINE }),
-          foregroundStyle(colors.TEXT_MUTED),
-          lineLimit(lines.line),
-        ]}
-      >
-        {words}
-      </Text>
-      <Spacer />
+    <HStack spacing={SPACE.TIGHT} alignment="center">
+      <UnreadDot unread={false} />
+      <HStack spacing={SPACE.ROW} alignment="center">
+        <HStack modifiers={[frame({ width: leadWidth })]}>
+          {glyph ? <LineGlyph line={line} /> : null}
+        </HStack>
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.ROW_LINE }),
+            foregroundStyle(colors.TEXT_MUTED),
+            lineLimit(lines.line),
+          ]}
+        >
+          {words}
+        </Text>
+        <Spacer />
+      </HStack>
     </HStack>
   );
 }

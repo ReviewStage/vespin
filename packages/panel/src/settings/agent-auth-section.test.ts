@@ -363,7 +363,6 @@ const metersOf = (within: Element) =>
   );
 
 const plain = (words: string) => ({ words, state: SETTINGS_ROW_STATE.PLAIN });
-const readyLine = plain("Ready");
 
 /** The name a key with none of its own is shown by. */
 const KEY_NAME = "API key · sk-ant-…wxyz";
@@ -484,9 +483,9 @@ test("each card opens on its harness and its Add; each credential says how it st
   const connected = await mount();
   const claudePlan = () => credential(connected, "Claude plan");
   await vi.waitFor(() => assert.deepEqual(metersOf(claudePlan()), ["5-hour42%", "Weekly18%"]));
-  assert.equal(lineOf(claudePlan()), undefined, "no Ready line stands over the meters");
+  assert.equal(lineOf(claudePlan()), undefined, "no line stands over the meters");
   assert.equal(meterOf(claudePlan()), "working");
-  assert.deepEqual(lineOf(credential(connected, KEY_NAME)), readyLine);
+  assert.equal(lineOf(credential(connected, KEY_NAME)), undefined, "a standing key says nothing");
   assert.equal(meterOf(credential(connected, KEY_NAME)), undefined, "a key draws no bar");
   assert.doesNotMatch(connected.textContent ?? "", /In use/u);
   leave();
@@ -697,7 +696,7 @@ test("an API key added from Add opens a masked field under the header, sent once
   ]);
   const name = "API key · sk-ant-…key1";
   const row = () => credential(page, name);
-  await vi.waitFor(() => assert.deepEqual(lineOf(row()), readyLine));
+  await vi.waitFor(() => assert.equal(lineOf(row()), undefined));
   assert.equal(header().querySelector("form") === null, true, "the field goes");
   await vi.waitFor(() => assert.ok(document.activeElement === button(header(), "Add to Claude")));
   assert.ok(!document.body.innerHTML.includes(KEY), "the key stands nowhere once kept");
@@ -720,7 +719,7 @@ test("an API key added from Add opens a masked field under the header, sent once
 test("a saved key's row is drawn from the keys the host holds, the window asking for none of its own", async () => {
   held = { keys: [ANTHROPIC_KEY], subscriptions: [] };
   const page = await mount();
-  await vi.waitFor(() => assert.deepEqual(lineOf(credential(page, KEY_NAME)), readyLine));
+  await vi.waitFor(() => assert.equal(lineOf(credential(page, KEY_NAME)), undefined));
   assert.equal(
     showsInReplay(credential(page, KEY_NAME)),
     false,
@@ -783,7 +782,7 @@ test("a Claude setup-token is saved by its kind, refused with why, and disconnec
     add: true,
   });
   const row = () => credential(page, "Claude plan");
-  await vi.waitFor(() => assert.deepEqual(lineOf(row()), readyLine));
+  await vi.waitFor(() => assert.equal(lineOf(row()), undefined));
   assert.equal(meterOf(row()), undefined, "a plan no turn has measured draws no bar");
   assert.ok(!document.body.innerHTML.includes(TOKEN));
 
@@ -838,7 +837,7 @@ test("a Codex plan connects in place through Codex's code, which goes once conne
   waitOpen = undefined;
   await settle();
   const plan = () => credential(page, "ana@work.test");
-  await vi.waitFor(() => assert.deepEqual(lineOf(plan()), readyLine));
+  await vi.waitFor(() => assert.equal(lineOf(plan()), undefined));
   assert.doesNotMatch(page.textContent ?? "", /225Q-1343X/u, "the code goes");
   assert.deepEqual(sentOf(ACT_KIND.CHATGPT_DEVICE_CANCEL), []);
 
