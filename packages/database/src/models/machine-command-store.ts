@@ -298,6 +298,45 @@ const writeResult = SqlSchema.findAll({
     ),
 });
 
+const writeRecording = SqlSchema.findAll({
+  Request: Schema.Struct({ ...CommandKeySchema.fields, recording: Schema.Uint8Array }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, id, recording }) =>
+    Database.use((db) =>
+      db
+        .update(machineCommand)
+        .set({ recording })
+        .where(
+          and(
+            eq(machineCommand.id, id),
+            eq(machineCommand.userId, userId),
+            eq(machineCommand.kind, MACHINE_COMMAND_KIND.COMPUTER),
+            isNotNull(machineCommand.claimedAt),
+            isNull(machineCommand.result),
+          ),
+        )
+        .returning({ id: machineCommand.id }),
+    ),
+});
+
+const findRecording = SqlSchema.findOneOption({
+  Request: CommandKeySchema,
+  Result: Schema.Struct({ recording: Schema.Uint8Array }),
+  execute: ({ userId, id }) =>
+    Database.use((db) =>
+      db
+        .select({ recording: machineCommand.recording })
+        .from(machineCommand)
+        .where(
+          and(
+            eq(machineCommand.id, id),
+            eq(machineCommand.userId, userId),
+            isNotNull(machineCommand.recording),
+          ),
+        ),
+    ),
+});
+
 const findResult = SqlSchema.findOneOption({
   Request: CommandKeySchema,
   Result: Schema.Struct({ result: machineCommandResultSchema }),
@@ -690,6 +729,30 @@ export function settleMachineCommand(
   result: MachineCommandResult,
 ): TaskStoreEffect<boolean> {
   return Effect.map(writeResult({ userId, id, result }), (rows) => rows.length > 0);
+}
+
+/**
+ * Keeps a stopped recording's video beside a claimed, unsettled computer
+ * command, over any it kept before; false where the account holds no such
+ * command.
+ */
+export function keepMachineCommandRecording(
+  userId: string,
+  id: string,
+  recording: Uint8Array,
+): TaskStoreEffect<boolean> {
+  return Effect.map(writeRecording({ userId, id, recording }), (rows) => rows.length > 0);
+}
+
+/** The video a Mac posted for a command it stopped a recording for; nothing where it posted none. */
+export function machineCommandRecording(
+  userId: string,
+  id: string,
+): TaskStoreEffect<Option.Option<Uint8Array>> {
+  return Effect.map(
+    findRecording({ userId, id }),
+    Option.map(({ recording }) => recording),
+  );
 }
 
 /** A command's result once a Mac settled it; nothing while it waits or runs. */

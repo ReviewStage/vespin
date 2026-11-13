@@ -284,6 +284,8 @@ export const HOSTED_SERVICE_PATH = {
   MACHINE_COMMAND_DEVICE_SETTINGS: "/api/mac-commands/device/settings",
   /** How a device names and draws the apps it always allows, as it holds them now (POST), for the account's `@` lists off the machine. `machine-command-wire.ts` declares the body. */
   MACHINE_COMMAND_DEVICE_APP_LOOKS: "/api/mac-commands/device/app-looks",
+  /** A stopped recording's video, posted by the Mac that claimed its command before its result (POST). `machine-command-wire.ts` declares the bodies. */
+  MACHINE_COMMAND_RECORDING: "/api/mac-commands/recording",
   /**
    * The commands of the kinds named that no Mac of the account has claimed,
    * sealed for following (GET), or with `?poll=true` their rows inline.

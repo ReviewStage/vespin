@@ -33,6 +33,7 @@
  */
 
 import { PLAYWRIGHT_PIN } from "@repo/agent-runner/pins";
+import { RECORDING_FAILURE, type RecordingFailure } from "@repo/features/recording-wire";
 import type { CommandAsk, CommandRun } from "@repo/sandbox";
 import { Option, Schema } from "effect";
 import { LINK_SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
@@ -247,24 +248,6 @@ fetch("http://127.0.0.1:" + port + "/json/version").then((answer) => answer.json
   socket.onerror = () => undefined;
 }, () => end({ ok: false, reason: "unreachable" }));
 `;
-
-/** Why a recording came to no video, as `done.json` and the stop say. */
-export const RECORDING_FAILURE = {
-  /** No recording runs or waits to be read. */
-  NONE: "none",
-  /** The browser drew nothing while it ran. */
-  EMPTY: "empty",
-  /** The encoder failed. */
-  ENCODER: "encoder",
-  /** No size the recorder tried fit the byte bound. */
-  TOO_LARGE: "too-large",
-  /** The recorder never reached the browser. */
-  UNREACHABLE: "unreachable",
-  /** The encoding did not finish within the stop's wait. */
-  SLOW: "slow",
-} as const;
-
-export type RecordingFailure = (typeof RECORDING_FAILURE)[keyof typeof RECORDING_FAILURE];
 
 /**
  * Whether the recorder the pid file names still runs: checked by the

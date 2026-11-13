@@ -1,0 +1,2 @@
+ALTER TABLE "machine_command" ADD COLUMN "recording" bytea;--> statement-breakpoint
+ALTER TABLE "machine_command" ADD CONSTRAINT "machine_command_recording_bound" CHECK ("recording" is null or octet_length("recording") <= 3300000);

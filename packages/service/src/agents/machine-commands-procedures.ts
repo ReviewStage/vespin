@@ -7,7 +7,10 @@
  * kinds waiting for the account, claimed for this Mac, as soon as one
  * waits, or none once the hold ends (`agents/machine-command.ts`). `POST` keeps one claimed command's result,
  * which the agent's call is looking for; a command the account does not
- * hold claimed and unsettled is not found.
+ * hold claimed and unsettled is not found. A Mac that stopped a recording
+ * posts its video to `POST /api/mac-commands/recording` first, an H.264 MP4
+ * every player streams or it is refused, kept beside the claimed computer
+ * command until its call reads it with the result.
  *
  * A Mac that follows its commands live (`../live/live-procedures.ts`)
  * reads nothing here: it claims each command it hears of with
@@ -32,11 +35,17 @@ import {
   saveDeviceAppLooks,
 } from "@repo/database/models/device-store";
 import {
+  keepMachineCommandRecording,
   markMachineListening,
   settleMachineCommand,
 } from "@repo/database/models/machine-command-store";
-import { machineCommandKindsRead } from "@repo/features/machine-command-wire";
-import { Effect, Option } from "effect";
+import {
+  COMPUTER_RECORDING_BOUNDS,
+  machineCommandKindsRead,
+} from "@repo/features/machine-command-wire";
+import { mp4Dimensions } from "@repo/features/video-signature";
+import { Effect, Option, Result } from "effect";
+import { Base64 } from "effect/encoding";
 import {
   HOSTED_REFUSAL,
   hostedStoreOrUnavailable,
@@ -74,6 +83,26 @@ export function machineCommandsProcedures(seams: MachineCommandsProcedureSeams) 
       if (!settled) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
       return { settled: true } as const;
+    }),
+    recording: machineCommands.recording.effect(function* ({ context, input }) {
+      const bytes = Base64.decode(input.mp4);
+
+      // Note that the bytes are held to an MP4 every player streams, at its bound, before any is kept, since the transcript plays them as they are.
+      if (
+        Result.isFailure(bytes) ||
+        bytes.success.byteLength > COMPUTER_RECORDING_BOUNDS.MAX_BYTES ||
+        mp4Dimensions(bytes.success) === undefined
+      ) {
+        return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+      }
+
+      const kept = yield* hostedStoreOrUnavailable(
+        keepMachineCommandRecording(context.userId, input.id, bytes.success),
+      );
+
+      if (!kept) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
+
+      return { kept: true } as const;
     }),
     claim: machineCommands.claim.effect(function* ({ context, input }) {
       const claimed = yield* hostedStoreOrUnavailable(
