@@ -202,7 +202,7 @@ function SendButton({
 }
 
 /** The + as a menu, as SwiftUI draws one from a press: its acts, a rule, then its choices within and its switches. */
-function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
+function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testId: string }) {
   const colors = useColors();
   const submenus = menu.submenus ?? [];
   const switches = menu.switches ?? [];
@@ -212,11 +212,7 @@ function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
       label={
         <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
       }
-      modifiers={[
-        ...PRESS_FRAME,
-        accessibilityLabel(ADD_LABEL),
-        accessibilityIdentifier("composer-add"),
-      ]}
+      modifiers={[...PRESS_FRAME, accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
     >
       {menu.actions.map((action) => (
         <Button
@@ -243,6 +239,45 @@ function AddMenu({ menu }: { readonly menu: ComposerMenu }) {
   );
 }
 
+/** The name a flow finds a composer's + by, where its holder names none. */
+const ADD_TEST_ID = "composer-add";
+
+/**
+ * The + that leads a bar of glass: a menu of what it adds where it offers
+ * more than one thing, else its one act, such as a picture; nothing where it
+ * is given neither.
+ */
+export function AddPress({
+  menu,
+  onAdd,
+  testId = ADD_TEST_ID,
+}: {
+  readonly menu?: ComposerMenu | undefined;
+  readonly onAdd?: (() => void) | undefined;
+  /** The name a flow finds the + by. */
+  readonly testId?: string | undefined;
+}) {
+  const colors = useColors();
+
+  if (menu !== undefined) return <AddMenu menu={menu} testId={testId} />;
+
+  if (onAdd === undefined) return null;
+
+  return (
+    <Button
+      onPress={onAdd}
+      modifiers={[
+        buttonStyle("borderless"),
+        ...PRESS_FRAME,
+        accessibilityLabel(ADD_LABEL),
+        accessibilityIdentifier(testId),
+      ]}
+    >
+      <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+    </Button>
+  );
+}
+
 /** The composer's pieces in a row's order: the +, the field, and Send or the mic, which a bar of glass holds. */
 function ComposerPieces(props: ComposerProps) {
   const {
@@ -258,7 +293,6 @@ function ComposerPieces(props: ComposerProps) {
     stopping = false,
   } = props;
 
-  const colors = useColors();
   const text = useNativeState(held ?? "");
   const [typed, setTyped] = useState(held ?? "");
   const words = held ?? typed;
@@ -291,16 +325,7 @@ function ComposerPieces(props: ComposerProps) {
 
   return (
     <>
-      {addMenu !== undefined ? (
-        <AddMenu menu={addMenu} />
-      ) : onAdd === undefined ? null : (
-        <Button
-          onPress={onAdd}
-          modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel(ADD_LABEL)]}
-        >
-          <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
-        </Button>
-      )}
+      <AddPress menu={addMenu} onAdd={onAdd} />
       <TextField
         text={text}
         placeholder={placeholder}

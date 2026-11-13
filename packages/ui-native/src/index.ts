@@ -37,6 +37,13 @@ export { type Choice, ChoiceList, type NoneChoice } from "./choice-list.js";
 
 export { CHOICE_MEDIA, type ChoiceMedia, type ChoiceMediaKind } from "./choice-media.js";
 
+export {
+  type ChipMenu,
+  type ChipMenuGroup,
+  ComposeSheet,
+  MenuChip,
+} from "./compose-sheet.js";
+
 export { Composer, ComposerFoot, type ComposerMenu } from "./composer.js";
 
 export {
@@ -58,7 +65,7 @@ export {
 
 export { NOTICE_KIND, type NoticeAsk, type NoticeKind } from "./failure-notice-model.js";
 
-export { AttachRow, MenuPickRow, SkillRow, WordsField } from "./form-rows.js";
+export { AttachRow, MenuPickRow, WordsField } from "./form-rows.js";
 
 export { GlassBar, GlassDock } from "./glass-bar.js";
 

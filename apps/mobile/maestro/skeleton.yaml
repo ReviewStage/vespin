@@ -71,5 +71,5 @@ appId: dev.vespin.ios
 # The tab bar's round + opens New task as a sheet over the tabs.
 - tapOn: "New task"
 - assertVisible: "Describe the task"
-- assertVisible: "Repository"
+- assertVisible: "ada/relay"
 - takeScreenshot: new-task
