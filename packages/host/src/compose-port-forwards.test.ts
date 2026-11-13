@@ -9,7 +9,7 @@ import type {
 } from "@repo/features/relay-socket";
 import { TUNNEL_CLOSE, TUNNEL_FRAME } from "@repo/features/sandbox-tunnel-wire";
 import { noNetwork } from "@repo/wire/testing";
-import { type Cause, Effect, Queue, Stream } from "effect";
+import { type Cause, Deferred, Effect, Fiber, Queue, Stream } from "effect";
 import { Base64 } from "effect/encoding";
 import { TestClock } from "effect/testing";
 import { composePortForwards, PORT_FORWARD } from "./compose-port-forwards.js";
@@ -57,6 +57,9 @@ const scriptedConnection = Effect.gen(function* () {
 
 type Told = { last?: unknown };
 
+/** A one-shot hold on the next read of the ports, where one is set. */
+type Hold = { next?: Deferred.Deferred<void> | undefined };
+
 /** The composer over the scripted service, loopback, and relay. */
 function subject(options: { taken?: number[] } = {}) {
   return Effect.gen(function* () {
@@ -67,6 +70,8 @@ function subject(options: { taken?: number[] } = {}) {
     /** The port the service reads as shared, by agent, with its link. */
     const shares = new Map<string, { port: number; url: string }>();
     const taken = new Set(options.taken);
+    /** A one-shot hold on the next read of the ports, its answer taken before it waits. */
+    const hold: Hold = {};
     /** Each listener standing, by the local port it holds: what it accepts. */
     const listeners = new Map<number, Queue.Queue<LoopbackConnection, Cause.Done>>();
 
@@ -98,11 +103,20 @@ function subject(options: { taken?: number[] } = {}) {
       },
       client: {
         list: (agentId) =>
-          Effect.sync(() => ({
-            running: !stopped.has(agentId),
-            ports: stopped.has(agentId) ? [] : (ports.get(agentId) ?? []),
-            labels: stopped.has(agentId) ? [] : (labels.get(agentId) ?? []),
-          })),
+          Effect.gen(function* () {
+            const answer = {
+              running: !stopped.has(agentId),
+              ports: stopped.has(agentId) ? [] : (ports.get(agentId) ?? []),
+              labels: stopped.has(agentId) ? [] : (labels.get(agentId) ?? []),
+            };
+
+            const held = hold.next;
+            hold.next = undefined;
+
+            if (held !== undefined) yield* Deferred.await(held);
+
+            return answer;
+          }),
         share: (agentId, port) =>
           Effect.sync(() => {
             const url = `https://sb-${port}.share.test`;
@@ -157,6 +171,16 @@ function subject(options: { taken?: number[] } = {}) {
       share: composer.acts.PORT_SHARE_SET,
       /** The service closed the agent's link, as it closes one no one visited. */
       expire: (agentId: string) => void shares.delete(agentId),
+      /** A port shared by link through the service alone, as the popover's Share does before forwarding begins. */
+      shareElsewhere: (agentId: string, port: number) =>
+        void shares.set(agentId, { port, url: `https://sb-${port}.share.test` }),
+      /** The next read of the ports answers, then waits until the hold this returns is let go. */
+      holdNextRead: Effect.gen(function* () {
+        const held = yield* Deferred.make<void>();
+        hold.next = held;
+
+        return Deferred.succeed(held, undefined);
+      }),
       /** The port the service reads as shared for the agent, with its link. */
       shared: (agentId: string) => shares.get(agentId),
       /** How forwarding stands, as the windows were last told. */
@@ -218,7 +242,7 @@ it.effect("a port taken on this Mac is listened on at the next free one", () =>
 
 it.effect("a shared port's link is told beside the ports until the service closes it", () =>
   Effect.gen(function* () {
-    const { set, share, expire, serve, told } = yield* subject();
+    const { set, share, expire, shareElsewhere, serve, told } = yield* subject();
     serve(AGENT_ID, [3000]);
     yield* set({ agentId: AGENT_ID, port: 3000, on: true });
     yield* settle;
@@ -240,6 +264,18 @@ it.effect("a shared port's link is told beside the ports until the service close
       agentId: AGENT_ID,
       on: true,
       running: true,
+      ports: [{ port: 3000, localPort: 3000, state: PORT_FORWARD_STATE.LISTENING }],
+    });
+
+    // A link made through the service alone, as a Share begun before forwarding was, is read at the next look.
+    shareElsewhere(AGENT_ID, 3000);
+    yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
+    yield* settle;
+    assert.deepEqual(told(), {
+      agentId: AGENT_ID,
+      on: true,
+      running: true,
+      shared: { port: 3000, url: "https://sb-3000.share.test" },
       ports: [{ port: 3000, localPort: 3000, state: PORT_FORWARD_STATE.LISTENING }],
     });
   }),
@@ -320,6 +356,34 @@ it.effect(
       assert.deepEqual([...listeners.keys()], []);
       assert.equal(told(), null);
     }),
+);
+
+it.effect("an Open that slips in before a read's release keeps the port it forwarded", () =>
+  Effect.gen(function* () {
+    const { set, serve, listeners, told, holdNextRead } = yield* subject();
+    serve(AGENT_ID, [3000]);
+    yield* set({ agentId: AGENT_ID, port: 3000, on: true });
+
+    // The server stops, and the next look reads that and waits while holding the turn.
+    serve(AGENT_ID, []);
+    const letGo = yield* holdNextRead;
+    yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
+    yield* settle;
+
+    // The server is back and Open asks for it before the look's release can run.
+    serve(AGENT_ID, [3000]);
+    const opened = yield* Effect.forkChild(set({ agentId: AGENT_ID, port: 3000, on: true }));
+    yield* settle;
+    yield* letGo;
+    yield* settle;
+
+    const answer = yield* Fiber.join(opened);
+    assert.deepEqual(answer.ports, [
+      { port: 3000, localPort: 3000, state: PORT_FORWARD_STATE.LISTENING },
+    ]);
+    assert.deepEqual([...listeners.keys()], [3000]);
+    assert.deepEqual(told(), { agentId: AGENT_ID, ...answer });
+  }),
 );
 
 it.effect("forwarding is let go once a sandbox seen running stops", () =>

@@ -25,9 +25,10 @@
  * one at a time, so two never forward one port twice.
  *
  * The forwarded agent's port shared by public link is read from the service
- * at the first look its sandbox runs, and again at each look while one is
- * shared, so a link gone with its stopped sandbox leaves the menu with it;
- * sharing a port or closing its link sets it at once.
+ * at each look while its sandbox runs, so a link shared from elsewhere (the
+ * popover's own Share before forwarding began, or another window) shows, and
+ * one gone with its stopped sandbox leaves the menu with it; sharing a port
+ * or closing its link sets it at once.
  */
 
 import { type HostedAgentPortsClient, webSocketOrigin } from "@repo/features";
@@ -117,6 +118,11 @@ interface Forwarding {
 /** What an agent forwarding is off for answers. */
 const OFF: PortForwardingAnswer = { on: false, running: false, ports: [] };
 
+/** Whether the agent's forwarding should end: its sandbox stopped, or no chosen port is left. */
+function ends(current: Forwarding): boolean {
+  return !current.running || current.chosen.size === 0;
+}
+
 /** The link as read or set: the port shared, or none. */
 function shareRead(shared: SharedLink | null): ShareStanding {
   return shared === null ? { read: SHARE_READ.READ } : { read: SHARE_READ.READ, shared };
@@ -188,7 +194,12 @@ export function composePortForwards(
         if ("failure" in answer) return false;
 
         // Note that a sandbox seen running and now stopped ends the forward, so the next agent may take the ports.
-        if (current.running && !answer.running) return true;
+        if (current.running && !answer.running) {
+          current.running = false;
+
+          return true;
+        }
+
         current.running = answer.running;
         current.listed = answer.ports;
         current.labels = new Map((answer.labels ?? []).map(({ port, label }) => [port, label]));
@@ -207,10 +218,7 @@ export function composePortForwards(
             current.forwards.set(port, yield* forwarded(current, port));
         }
 
-        if (
-          answer.running &&
-          (current.share.read === SHARE_READ.UNREAD || sharedLink(current) !== undefined)
-        ) {
+        if (answer.running) {
           const moves = current.shareMoves;
           const read = yield* withHttp(client.shared(current.agentId));
 
@@ -220,7 +228,7 @@ export function composePortForwards(
 
         yield* tell;
 
-        return current.chosen.size === 0;
+        return ends(current);
       });
 
     /** One port's forward closed, its connections with it. */
@@ -265,9 +273,16 @@ export function composePortForwards(
 
     const turnOff = letGo(false);
 
-    /** Forwarding let go for the agent it was on, unless another agent has taken it since. */
+    /**
+     * Forwarding let go for the agent it was on, unless another agent has
+     * taken it since. Note that it asks again whether the forward ends,
+     * because an Open that took the permit first may have forwarded a port
+     * of a running sandbox since the read that asked for the release.
+     */
     const released = (current: Forwarding) =>
-      oneAtATime(Effect.suspend(() => (forwarding === current ? turnOff : Effect.void)));
+      oneAtATime(
+        Effect.suspend(() => (forwarding === current && ends(current) ? turnOff : Effect.void)),
+      );
 
     /**
      * The agent's forwarding, started where it was not, whichever agent was
