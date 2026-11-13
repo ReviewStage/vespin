@@ -256,7 +256,10 @@ export type TypedAskMetadata = EffectSchema.Schema.Type<typeof TYPED_ASK_METADAT
 /**
  * A spoken ask is the developer's own words, or the voice model's delegation
  * of them, cut from the session and delegation it names over a span of that
- * session's clock whose two ends come together or not at all and run forward.
+ * session's clock whose two ends come together or not at all and run forward,
+ * the id of the session's event whose words it took last, which the next
+ * holder of the call resumes after, and the key the line was recorded under,
+ * which that holder grows it under.
  */
 const SPOKEN_ASK_STRUCT = EffectSchema.Struct({
   author: EffectSchema.Literals([MESSAGE_AUTHOR.DEVELOPER, MESSAGE_AUTHOR.VOICE_MODEL]),
@@ -265,6 +268,8 @@ const SPOKEN_ASK_STRUCT = EffectSchema.Struct({
   delegation_id: EffectSchema.optional(identifier),
   from_ms: EffectSchema.optional(spanInstant),
   to_ms: EffectSchema.optional(spanInstant),
+  event_id: EffectSchema.optional(identifier),
+  line_key: EffectSchema.optional(identifier),
 });
 
 export type SpokenAskMetadata = EffectSchema.Schema.Type<typeof SPOKEN_ASK_STRUCT>;
@@ -588,8 +593,9 @@ export type CompactionMetadata = EffectSchema.Schema.Type<typeof COMPACTION_META
  * where the developer's line before it was handed to the brain, and the
  * message it was read aloud from where it was one: the brain's briefing, or
  * the journal of the turn that delegation ran. A view folds that message's
- * words behind the words actually said. Only the voice model's row carries
- * any of those, and its span runs forward or comes together.
+ * words behind the words actually said; and the id of the session's event
+ * whose words it took last and the key it was recorded under. Only the voice model's row carries any of those,
+ * and its span runs forward or comes together.
  */
 const ASSISTANT_MESSAGE_STRUCT = EffectSchema.Struct({
   author: EffectSchema.Literals([MESSAGE_AUTHOR.MODEL, MESSAGE_AUTHOR.VOICE_MODEL]),
@@ -600,6 +606,8 @@ const ASSISTANT_MESSAGE_STRUCT = EffectSchema.Struct({
   from_ms: EffectSchema.optional(spanInstant),
   to_ms: EffectSchema.optional(spanInstant),
   read_from: EffectSchema.optional(identifier),
+  event_id: EffectSchema.optional(identifier),
+  line_key: EffectSchema.optional(identifier),
 });
 
 type AssistantMessageStruct = EffectSchema.Schema.Type<typeof ASSISTANT_MESSAGE_STRUCT>;
@@ -612,7 +620,9 @@ function spokenByVoiceModel(metadata: AssistantMessageStruct): boolean {
     metadata.delegation_id !== undefined ||
     metadata.from_ms !== undefined ||
     metadata.to_ms !== undefined ||
-    metadata.read_from !== undefined;
+    metadata.read_from !== undefined ||
+    metadata.event_id !== undefined ||
+    metadata.line_key !== undefined;
 
   if (spoken && metadata.author !== MESSAGE_AUTHOR.VOICE_MODEL) return false;
 
