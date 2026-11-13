@@ -29,10 +29,10 @@ const GITHUB_MODULE_FILE = Schema.decodeUnknownSync(Schema.fromJsonString(GitHub
 })(readFileSync(path.join(PLUGIN_DIRECTORY, "github-through-module.json"), "utf8"));
 
 /** GitHub's REST API host, which only the module sends to. */
-export const GITHUB_API_HOST = "api.github.com";
+const GITHUB_API_HOST = "api.github.com";
 
 /** The header naming GitHub's REST API version, which only the module sets. */
-export const GITHUB_API_VERSION_HEADER = "x-github-api-version";
+const GITHUB_API_VERSION_HEADER = "x-github-api-version";
 
 /** The packages the module's Octokit comes from, by their scope. */
 export const OCTOKIT_SCOPE = "@octokit/";
@@ -68,14 +68,28 @@ export function mayOpenToken(file: string): boolean {
   return isListed(GITHUB_MODULE_FILE.tokenOpeners, file) || isTestFile(file);
 }
 
+/** A text's words as a hostname or a header is spelled: runs of letters, digits, dots, and hyphens, lower-cased, a sentence's closing dot left off. */
+function hostWordsOf(text: string): ReadonlySet<string> {
+  return new Set(
+    text
+      .toLowerCase()
+      .split(/[^a-z0-9.-]+/u)
+      .map((word) => word.replace(/\.+$/u, "")),
+  );
+}
+
+/** What of GitHub's API a text names, the host or the version header, if either. */
+export function apiNameIn(text: string): string | undefined {
+  const words = hostWordsOf(text);
+  return [GITHUB_API_HOST, GITHUB_API_VERSION_HEADER].find((name) => words.has(name));
+}
+
 /** Whether a file's text names what the rule refuses, as far as the text says: the only file that has anything to silence. */
 export function namesGitHubBypass(text: string): boolean {
-  const lowered = text.toLowerCase();
   return (
-    lowered.includes(GITHUB_API_HOST) ||
-    lowered.includes(GITHUB_API_VERSION_HEADER) ||
+    apiNameIn(text) !== undefined ||
     text.includes(OCTOKIT_SCOPE) ||
     text.includes(TOKEN_OPENER.NAME) ||
-    text.includes("github-token.js")
+    text.includes("github-token")
   );
 }

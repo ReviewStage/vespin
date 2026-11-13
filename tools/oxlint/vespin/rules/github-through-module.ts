@@ -4,8 +4,7 @@ import type { ESTree } from "@oxlint/plugins";
 import { defineRule } from "@oxlint/plugins";
 
 import {
-  GITHUB_API_HOST,
-  GITHUB_API_VERSION_HEADER,
+  apiNameIn,
   MEMBER_TOKENS_FILE,
   MEMBER_TOKENS_SUBPATH,
   mayCallApi,
@@ -42,14 +41,6 @@ function isMemberTokensModule(file: string, source: string): boolean {
 /** The name a specifier takes from its module, as written. */
 function nameOf(name: ESTree.ModuleExportName): string {
   return name.type === "Identifier" ? name.name : String(name.value);
-}
-
-/** What a string names that only the module may, if anything. */
-function apiNameIn(text: string): string | undefined {
-  const lowered = text.toLowerCase();
-  if (lowered.includes(GITHUB_API_HOST)) return GITHUB_API_HOST;
-  if (lowered.includes(GITHUB_API_VERSION_HEADER)) return GITHUB_API_VERSION_HEADER;
-  return undefined;
 }
 
 export const githubThroughModuleRule = defineRule({
