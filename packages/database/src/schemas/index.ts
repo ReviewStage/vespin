@@ -128,6 +128,8 @@ export * from "./task-section.js";
 
 export * from "./usage.js";
 
+export * from "./voice-call.js";
+
 export * from "./workspace-environment-variable.js";
 
 export * from "./workspace-experiment.js";
