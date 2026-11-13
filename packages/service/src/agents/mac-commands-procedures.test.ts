@@ -8,7 +8,8 @@
  * listening Mac can run is answered not run at once, and one the Mac
  * refuses is answered not run with the Mac's reason. Only the Mac's bearer
  * is read, never a cookie,
- * and before anything the body says. Each refusal answers what the old
+ * and before anything the body says. A command queued for one Mac the
+ * member joined as a device is claimed by that Mac alone. Each refusal answers what the old
  * group answered. Over the sync hub, the held read answers within a coalesce
  * window of a command queued, and a call within one of the Mac settling it.
  *
@@ -33,13 +34,16 @@ import { user } from "@repo/database/schemas/auth";
 import { conversations } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
 import { getTestDB } from "@repo/database/testing";
+import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import {
   COMPUTER_ACTION,
   COMPUTER_BOUNDS,
   MAC_COMMAND_BOUNDS,
   MAC_COMMAND_KIND,
+  MAC_COMMAND_MODE,
   type MacCommand,
   type MacCommandResult,
+  type MacDeviceJoinRequest,
 } from "@repo/features/mac-command-wire";
 import { unparsedWire } from "@repo/wire";
 import { pngBytes } from "@repo/wire/testing";
@@ -58,6 +62,7 @@ const ORIGIN = "https://app.test";
 const MAC_COMMANDS = "/api/mac-commands";
 const CLAIM = "/api/mac-commands/claim";
 const LISTENING = "/api/mac-commands/listening";
+const DEVICE = "/api/mac-commands/device";
 const JSON_TYPE = "application/json";
 
 const COMMAND: MacCommand = {
@@ -419,6 +424,54 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           yield* bytes(request({ method: "POST", path: CLAIM, cookie: true, body: asked })),
           refused(HOSTED_HTTP_STATUS.UNAUTHORIZED, "invalid-token"),
           "never on a cookie",
+        );
+      }),
+  );
+
+  it.effect(
+    "a command queued for one of the member's Macs is claimed by that Mac alone, not another of theirs",
+    () =>
+      Effect.gen(function* () {
+        yield* account("user-two-macs");
+
+        const post = (
+          path: string,
+          body: MacDeviceJoinRequest | { readonly id: string; readonly deviceId?: string },
+        ) =>
+          bytes(
+            request({ method: "POST", path, userId: "user-two-macs", body: JSON.stringify(body) }),
+          );
+
+        const [laptop, studio] = [randomUUID(), randomUUID()];
+
+        for (const [deviceId, name] of [
+          [laptop, "Laptop"],
+          [studio, "Studio"],
+        ] as const) {
+          const joined = yield* post(DEVICE, {
+            deviceId,
+            name,
+            platform: DEVICE_PLATFORM.DARWIN,
+            arch: DEVICE_ARCH.ARM64,
+            settings: { commandMode: MAC_COMMAND_MODE.ASK, alwaysAllowedApps: [] },
+          });
+
+          assert.equal(joined.status, HOSTED_HTTP_STATUS.OK);
+        }
+
+        const queued = { ...COMMAND, id: randomUUID() };
+        yield* queueMacCommand("user-two-macs", queued, studio);
+        const notFound = refused(HOSTED_HTTP_STATUS.NOT_FOUND, "not-found");
+
+        assert.deepEqual(yield* post(CLAIM, { id: queued.id, deviceId: laptop }), notFound);
+        assert.deepEqual(
+          yield* post(CLAIM, { id: queued.id }),
+          notFound,
+          "a Mac naming no device takes none meant for one",
+        );
+        assert.deepEqual(
+          JSON.parse((yield* post(CLAIM, { id: queued.id, deviceId: studio })).text),
+          { command: queued },
         );
       }),
   );

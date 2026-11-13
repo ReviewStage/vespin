@@ -335,11 +335,14 @@ export function runOnMacTool(
  * withdrew it, or it waited too long. The window is kept here, on the
  * service's clock, because the live statement can measure nothing from
  * one. Note that any kind is claimed, because the Mac hears only of the
- * kinds it named.
+ * kinds it named. A Mac that joined as a device claims as it, so a command
+ * meant for another machine is never its; one that names none claims only
+ * what was queued for no device.
  */
 export function claimedMacCommand(
   userId: string,
   id: string,
+  deviceId?: string,
 ): TaskStoreEffect<Option.Option<MacCommand>> {
   return Effect.flatMap(Clock.currentTimeMillis, (now) =>
     claimMacCommand(
@@ -347,6 +350,7 @@ export function claimedMacCommand(
       id,
       new Date(now - Duration.toMillis(MAC_COMMAND_SERVICE.CLAIM_WINDOW)),
       Object.values(MAC_COMMAND_KIND),
+      deviceId,
     ),
   );
 }

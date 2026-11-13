@@ -206,6 +206,8 @@ export interface ThisMacHostDependencies {
   keepAwake: Effect.Effect<KeepAwake>;
   /** A pulse each time the settings are told again, which a sign-in, a sign-out, and a setting changed each do, subscribed as it is yielded. */
   settingsTold: Effect.Effect<Stream.Stream<void>, never, Scope.Scope>;
+  /** The id this install is to the account given (`this-mac-device.ts`), which a Mac enrolled for the first time enrolls under, so its commands and its host are one device; none mints one. */
+  deviceIdFor?: (userId: string) => Effect.Effect<string>;
   /** Whether the service lists the device given among the account's hosts; none where it could not answer. */
   hostListed: (
     deviceId: string,
@@ -313,14 +315,21 @@ export function composeThisMacHost(
       });
 
     /**
-     * The Mac enrolled under the device id given, or one minted, on the
+     * The Mac enrolled under the device id given, or else the one this
+     * install is to the account (`deviceIdFor`), or one minted, on the
      * version of the release the script installs, and its record written;
      * whether it was, false where the id is another account's. Note that it
      * runs whole once begun, since the service answers the secret once.
      */
     const enrolled = (kept: Option.Option<string>, version: string) =>
       Effect.gen(function* () {
-        const deviceId = Option.getOrElse(kept, kernel.createId);
+        const userId = dependencies.accountId();
+
+        const deviceId = Option.isSome(kept)
+          ? kept.value
+          : dependencies.deviceIdFor === undefined || userId === undefined
+            ? kernel.createId()
+            : yield* dependencies.deviceIdFor(userId);
 
         const outcome = yield* client
           .enrollOwn(deviceId, yield* host.machine)

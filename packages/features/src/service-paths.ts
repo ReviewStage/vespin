@@ -276,6 +276,10 @@ export const HOSTED_SERVICE_PATH = {
   MAC_COMMAND_CLAIM: "/api/mac-commands/claim",
   /** That a Mac of the account listens now for the kinds it names (POST), which a Mac following its commands live says on a timer, since its read writes nothing. */
   MAC_COMMANDS_LISTENING: "/api/mac-commands/listening",
+  /** This Mac joining as the device its commands are claimed by, carrying its own settings up the first time (POST). `mac-command-wire.ts` declares the bodies. */
+  MAC_COMMAND_DEVICE: "/api/mac-commands/device",
+  /** A device's own settings for agents' commands and computer use, as the member changed them on it (POST). `mac-command-wire.ts` declares the bodies. */
+  MAC_COMMAND_DEVICE_SETTINGS: "/api/mac-commands/device/settings",
   /**
    * The commands of the kinds named that no Mac of the account has claimed,
    * sealed for following (GET), or with `?poll=true` their rows inline.

@@ -2,7 +2,7 @@
  * mac-commands.ts -- the account's unclaimed Mac commands' live read bound: its one statement, the table it reads, the topic that wakes it, and how often a held poll looks.
  *
  * The account's commands of the kinds the Mac's query names that no Mac has
- * claimed yet, read as its held read always read them
+ * claimed yet, of those the device it names may claim, read as its held read always read them
  * (`macCommandKindsRead`), each with the instant it was queued in epoch
  * milliseconds (`MAC_COMMANDS_READ`). Note that it names no claim window,
  * because a live read measures nothing from the clock: the claim
@@ -19,13 +19,13 @@ import { TOPIC } from "@repo/database/sync/notification";
 import { macCommandSync } from "@repo/database/sync/tables";
 import { MAC_COMMANDS_READ } from "@repo/features/mac-command-live";
 import { macCommandKindsRead } from "@repo/features/mac-command-wire";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, eq, inArray, isNull, or } from "drizzle-orm";
 import { bindLiveRead, columnAs, liveRowsStatement, WATCHED_LOOK } from "../live-read-binding.js";
 
 export const macCommandsRead = bindLiveRead(MAC_COMMANDS_READ, {
   reads: [macCommandSync],
   topics: ({ userId }) => [[TOPIC.ACCOUNT, userId]],
-  statements: ({ userId, kinds }) => ({
+  statements: ({ userId, kinds, device }) => ({
     commands: liveRowsStatement(
       MAC_COMMANDS_READ.parts.commands,
       {
@@ -46,6 +46,10 @@ export const macCommandsRead = bindLiveRead(MAC_COMMANDS_READ, {
           .where(
             and(
               eq(macCommand.userId, userId),
+              // Note that a Mac that joined as a device hears what was queued for it or for none, and one naming none only the latter, as its claim takes them.
+              device === ""
+                ? isNull(macCommand.deviceId)
+                : or(isNull(macCommand.deviceId), eq(macCommand.deviceId, device)),
               inArray(macCommand.kind, macCommandKindsRead(kinds)),
               isNull(macCommand.claimedAt),
             ),

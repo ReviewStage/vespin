@@ -24,7 +24,8 @@ import { countedNumber } from "./service-wire.js";
 
 /**
  * The commands of the kinds a Mac runs that no Mac of the account has
- * claimed yet: one part, each the command of its kind, and when it was
+ * claimed yet, of those the device it joined as may claim (`device`), or
+ * those queued for no device where it names none: one part, each the command of its kind, and when it was
  * queued in epoch milliseconds, the earliest queued first, so the Mac
  * claims them in the order they were asked for. The kinds are the read's
  * query as the Mac spells them (`macCommandKindsQuery`). Note that a column
@@ -33,7 +34,11 @@ import { countedNumber } from "./service-wire.js";
 export const MAC_COMMANDS_READ = liveRead({
   name: "macCommands",
   path: HOSTED_SERVICE_PATH.LIVE_MAC_COMMANDS,
-  params: { [LIVE_USER_QUERY]: LIVE_PARAM.USER, kinds: LIVE_PARAM.OPTIONAL_TEXT },
+  params: {
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+    kinds: LIVE_PARAM.OPTIONAL_TEXT,
+    device: LIVE_PARAM.OPTIONAL_ID,
+  },
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
     commands: liveRows({
