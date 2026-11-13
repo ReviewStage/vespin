@@ -20,10 +20,12 @@
  * error buzz with it, and lets the microphone go. While a call stands the
  * agent's transcript is held followed, so the way back to it says what the
  * agent does from any screen. Nothing here starts while the Voice
- * experiment is off, and turning it off ends a call under way. No audio
+ * experiment is off, signed out, or behind the update screen, and any of
+ * them ends a call under way, since no End call stands then. No audio
  * leaves the phone but to the session, and none is stored or counted.
  */
 
+import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { AGENT_CALL_FAILURE, TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import { type CallAgentLine, callAgentLine } from "@repo/features/call-agent-line";
 import { agentName, providerOf } from "@repo/features/model-label";
@@ -245,6 +247,15 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
     select: selectExperiment(EXPERIMENT.VOICE),
   });
 
+  // Note that a call is offered only where its presses can stand: signed in, and with no update screen in front of every other.
+  const { data: screensStand = false } = useQuery({
+    ...appStateQuery,
+    select: (state) =>
+      state.account.status === ACCOUNT_STATUS.SIGNED_IN && state.network.updateNeeded !== true,
+  });
+
+  const callable = offered && screensStand;
+
   const [call, setCall] = useState<VoiceCallState | undefined>(undefined);
 
   const [session] = useState<VoiceCallSession>(() =>
@@ -278,10 +289,10 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
     }),
   );
 
-  // Note that the Voice experiment turned off ends a call under way, because no screen draws its End call once the feature stands nowhere; the provider going away hangs up too.
+  // Note that the Voice experiment turned off, a sign-out, or the update screen ends a call under way, because no screen draws its End call then; the provider going away hangs up too.
   useEffect(() => {
-    if (!offered) session.hangUp();
-  }, [offered, session]);
+    if (!callable) session.hangUp();
+  }, [callable, session]);
   useEffect(() => () => session.hangUp(), [session]);
 
   // The call's agent's transcript is held followed while the call stands, so its way back says what the agent does from any screen.
@@ -299,10 +310,10 @@ export function VoiceCallProvider({ children }: { readonly children: ReactNode }
   const facts = useStandingFacts(call);
 
   const value: PhoneVoiceCall = {
-    offered,
+    offered: callable,
     call: call === undefined ? undefined : { ...call, ...facts },
     start: (into) => {
-      if (offered) session.start(into);
+      if (callable) session.start(into);
     },
     end: session.end,
     setMicrophoneMuted: session.setMicrophoneMuted,

@@ -30,6 +30,7 @@ function harness() {
   let events: VoiceCallPeerEvents | undefined;
   let channelOpen = false;
   let released = 0;
+  let speakerSilenced = false;
   let call: VoiceCallState | undefined;
 
   const session = voiceCallSession({
@@ -48,7 +49,9 @@ function harness() {
             channelOpen = false;
           },
           silenceMicrophone: () => undefined,
-          silenceSpeaker: () => undefined,
+          silenceSpeaker: (muted) => {
+            speakerSilenced = muted;
+          },
           release: () => {
             released += 1;
           },
@@ -77,6 +80,7 @@ function harness() {
     events: () => events,
     call: () => call,
     released: () => released,
+    speakerSilenced: () => speakerSilenced,
   };
 }
 
@@ -97,6 +101,16 @@ describe("a voice call session", () => {
       startedAt: 1_000,
       microphoneMuted: true,
     });
+  });
+
+  it("keeps a speaker muted while the microphone opened, and silences the voice once the peer stands", async () => {
+    const test = harness();
+    test.session.start(INTO);
+    test.session.setSpeakerMuted(true);
+    await test.settled();
+
+    expect(test.call()?.speakerMuted).toBe(true);
+    expect(test.speakerSilenced()).toBe(true);
   });
 
   it("ends by telling the session to close, and lets the call go once its channel closes", async () => {

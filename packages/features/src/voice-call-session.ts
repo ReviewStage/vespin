@@ -247,8 +247,13 @@ export function voiceCallSession(seams: VoiceCallSessionSeams): VoiceCallSession
 
     if (generation !== asked) return made.release();
     peer = made;
+    // Note that a mute pressed while the microphone opened is kept on the call, and set on its peer here.
     made.silenceMicrophone(call?.microphoneMuted === true);
+    made.silenceSpeaker(call?.speakerMuted === true);
     const sdp = await made.offer();
+
+    // Note that a call ended while its offer was made asks the service for nothing, since no session should open for it.
+    if (generation !== asked) return;
     const answer = await seams.open({ agentId, sdp });
 
     if (generation !== asked) return;
@@ -272,6 +277,8 @@ export function voiceCallSession(seams: VoiceCallSessionSeams): VoiceCallSession
 
   const start = (into: VoiceCallInto) => {
     if (call !== undefined) end();
+    // Note that the last call's peer is let go by its own channel closing, so no press on the new call reaches it meanwhile.
+    peer = undefined;
     generation += 1;
     const asked = generation;
     sessionStarted = false;
@@ -304,9 +311,10 @@ export function voiceCallSession(seams: VoiceCallSessionSeams): VoiceCallSession
     change({ ...call, microphoneMuted: muted });
   };
 
+  // A speaker muted before the peer stands is kept, and set on the peer as it does.
   const setSpeakerMuted = (muted: boolean) => {
-    if (call === undefined || peer === undefined) return;
-    peer.silenceSpeaker(muted);
+    if (call === undefined) return;
+    peer?.silenceSpeaker(muted);
     change({ ...call, speakerMuted: muted });
   };
 
