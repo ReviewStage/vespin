@@ -103,8 +103,6 @@ export const LAYOUT_ELEMENT = {
   UL: "ul",
   OL: "ol",
   FORM: "form",
-  /** An arrangement inside a line or a press, where only phrasing content may stand: a row's metadata. */
-  SPAN: "span",
 } as const;
 
 export type LayoutElement = (typeof LAYOUT_ELEMENT)[keyof typeof LAYOUT_ELEMENT];

@@ -320,8 +320,6 @@ export * from "./components/searchable-menu/searchable-menu.js";
 
 export * from "./components/secret-field/secret-field.js";
 
-export * from "./components/segment-bar/segment-bar.js";
-
 export * from "./components/selection/selection-bar.js";
 
 export * from "./components/selection/selection-menu.js";

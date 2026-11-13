@@ -4,8 +4,8 @@ import {
   Badge,
   Button,
   GAP,
+  LIST_ROW_CURRENT,
   ListMotion,
-  SegmentBar,
   STATUS_TONE,
   Stack,
   type StatusTone,
@@ -19,9 +19,8 @@ import { CatalogSection } from "../section";
 
 /**
  * queue-lines.tsx -- a line of things waiting their turn, as a merge queue
- * stands it: the segment bar over it, one segment per thing in its stage's
- * tone, the one a page was opened for ringed; and the track under it, a rail
- * with one node per row, a waiting row's hollow and a checking row's pulsing.
+ * stands it: a track, a rail with one node per row, a waiting row's hollow
+ * and a checking row's pulsing.
  * Merge front takes the front off, and the line glides up under `ListMotion`.
  * Synthetic pull requests throughout.
  */
@@ -72,7 +71,7 @@ const LINE: readonly Waiting[] = [
   },
 ];
 
-/** The marked pull request, which the bar rings and the track marks. */
+/** The marked pull request, which the track marks. */
 const MARKED = "819";
 
 function QueueLines(): React.JSX.Element {
@@ -80,48 +79,41 @@ function QueueLines(): React.JSX.Element {
   const root = useRef<HTMLDivElement>(null);
 
   return (
-    <>
-      <CatalogSection id="segment-bar" title="A segment bar, one segment per thing in the line">
-        <SegmentBar
-          segments={line.map((each) => ({ tone: each.tone, marked: each.key === MARKED }))}
-        />
-      </CatalogSection>
-      <CatalogSection id="track-list" title="A track, its rows on a rail">
-        <Stack gap={GAP.CONTROL}>
-          <div ref={root}>
-            <ListMotion root={root}>
-              <TrackList label="acme/relay" moves>
-                {line.map((each) => (
-                  <TrackRow
-                    key={each.key}
-                    motionKey={each.key}
-                    node={{
-                      tone: each.tone,
-                      look:
-                        each.tone === undefined ? TRACK_NODE_LOOK.HOLLOW : TRACK_NODE_LOOK.FILLED,
-                      pulse: each.tone === STATUS_TONE.WORKING,
-                    }}
-                    leading={<Avatar name={each.author} size={AVATAR_SIZE.ROW} decorative />}
-                    title={each.title}
-                    description={`#${each.key}`}
-                    meta={<Badge tone={each.tone ?? STATUS_TONE.NEUTRAL}>{each.stage}</Badge>}
-                    onPress={() => undefined}
-                  />
-                ))}
-              </TrackList>
-            </ListMotion>
-          </div>
-          <div>
-            <Button
-              disabled={line.length === 0}
-              onClick={() => setLine((now) => (now.length === 0 ? LINE : now.slice(1)))}
-            >
-              Merge front
-            </Button>
-          </div>
-        </Stack>
-      </CatalogSection>
-    </>
+    <CatalogSection id="track-list" title="A track, its rows on a rail">
+      <Stack gap={GAP.CONTROL}>
+        <div ref={root}>
+          <ListMotion root={root}>
+            <TrackList label="acme/relay" moves>
+              {line.map((each) => (
+                <TrackRow
+                  key={each.key}
+                  motionKey={each.key}
+                  node={{
+                    tone: each.tone,
+                    look: each.tone === undefined ? TRACK_NODE_LOOK.HOLLOW : TRACK_NODE_LOOK.FILLED,
+                    pulse: each.tone === STATUS_TONE.WORKING,
+                  }}
+                  leading={<Avatar name={each.author} size={AVATAR_SIZE.ROW} decorative />}
+                  title={each.title}
+                  description={`#${each.key}`}
+                  meta={<Badge tone={each.tone ?? STATUS_TONE.NEUTRAL}>{each.stage}</Badge>}
+                  current={each.key === MARKED ? LIST_ROW_CURRENT.ITEM : undefined}
+                  onPress={() => undefined}
+                />
+              ))}
+            </TrackList>
+          </ListMotion>
+        </div>
+        <div>
+          <Button
+            disabled={line.length === 0}
+            onClick={() => setLine((now) => (now.length === 0 ? LINE : now.slice(1)))}
+          >
+            Merge front
+          </Button>
+        </div>
+      </Stack>
+    </CatalogSection>
   );
 }
 

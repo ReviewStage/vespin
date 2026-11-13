@@ -1,18 +1,17 @@
 /**
  * merge-queue-page.tsx -- the Merge queue page: every pull request GitHub's merge queues hold across the listed workspace's repositories, each repository's line drawn front first.
  *
- * Each repository stands under a head with GitHub's mark, its name, how
- * many it holds, and a way to its queue on GitHub, over a bar that draws its
- * line at a glance, one segment per pull request in its stage's tone
- * (`SegmentBar`). The front of the line stands raised on a card of its
- * own; the rest stand behind it on a track (`TrackList`), each node in its
- * stage's tone, a waiting one's hollow and a checking one's pulsing. Every
- * row says who opened the pull request, its title, its number and its task's
- * name, how long it has been queued, and its stage (`mergeQueueStage`). A
+ * Each repository stands on a card of its own, headed by GitHub's mark, its
+ * name, how many it holds, and a way to its queue on GitHub, over its line
+ * on a track (`TrackList`), front first, each node in its stage's tone, a
+ * waiting one's hollow and a checking one's pulsing. Every row says who
+ * opened the pull request, its title, its number, its task's name, and how
+ * long it has been queued, and its stage at its end as words led by a dot
+ * in its tone (`mergeQueueStage`). A
  * row opens its pull request as the window opens a GitHub address
  * (`useOpenLink`): in its agent's Pull request tab where a listed task's
  * agent opened it, else on GitHub. The pull request the page was opened for,
- * from its Queued, is the row marked and the segment ringed.
+ * from its Queued, is the row marked.
  *
  * The queues are read through the host as the page opens and again every
  * half minute while it stands, since GitHub tells the app nothing as a queue
@@ -40,7 +39,6 @@ import {
   AVATAR_SIZE,
   Avatar,
   type AvatarSize,
-  Badge,
   CARD_LOOK,
   CARD_PADDING,
   Card,
@@ -52,20 +50,15 @@ import {
   GROUP_LOOK,
   GroupHeader,
   IconButtonLink,
-  Inline,
-  LAYOUT_ELEMENT,
   LIST_ROW_CURRENT,
-  List,
   ListMotion,
-  ListRow,
   MARK_PROVIDER,
   PAGE_FRAME,
   ProviderMark,
-  SegmentBar,
-  Shimmer,
   STATUS_TONE,
   Stack,
   type StatusTone,
+  StatusWords,
   TIME_LOOK,
   Time,
   Tooltip,
@@ -74,11 +67,11 @@ import {
   type TrackNode,
   TrackRow,
 } from "@repo/ui";
-import { CircleXIcon, ClockIcon, GitMergeIcon, GLYPH, LoaderCircleIcon } from "@repo/ui/icons";
+import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { queryOptions, type UseQueryResult, useQuery } from "@tanstack/react-query";
 import { Duration } from "effect";
-import { type ReactNode, useRef } from "react";
+import { useRef } from "react";
 import { askAct } from "../act.js";
 import { appPlatform } from "../app-platform.js";
 import { failureShown } from "../failure-report.js";
@@ -93,7 +86,6 @@ const WORDS = {
   UNREAD: "The merge queues could not be read.",
   QUEUED: "queued",
   OPEN_ON_GITHUB: "Open on GitHub",
-  FRONT: "Front of the queue",
 } as const;
 
 /** Who GitHub names a deleted account's pull request as, whose disc keeps the row's title in line with the rest. */
@@ -110,14 +102,6 @@ const STAGE_TONE = {
   [MERGE_QUEUE_STAGE.FAILING]: STATUS_TONE.DANGER,
 } as const satisfies Record<MergeQueueStage, StatusTone | undefined>;
 
-/** The glyph each stage's badge leads its words with, saying the stage again. */
-const STAGE_GLYPH = {
-  [MERGE_QUEUE_STAGE.WAITING]: <ClockIcon aria-hidden="true" />,
-  [MERGE_QUEUE_STAGE.CHECKING]: <LoaderCircleIcon aria-hidden="true" />,
-  [MERGE_QUEUE_STAGE.MERGING]: <GitMergeIcon aria-hidden="true" />,
-  [MERGE_QUEUE_STAGE.FAILING]: <CircleXIcon aria-hidden="true" />,
-} as const satisfies Record<MergeQueueStage, ReactNode>;
-
 /** The workspace's queues, read as the page opens and every half minute while it stands. */
 function mergeQueueQuery(workspaceId: string | undefined) {
   return queryOptions({
@@ -133,14 +117,12 @@ function mergeQueueQuery(workspaceId: string | undefined) {
   });
 }
 
-/** A stage's badge: its glyph and its word, a checking one's words shimmering as its work goes on. */
-function StageBadge({ stage }: { stage: MergeQueueStage }): React.JSX.Element {
-  const words = MERGE_QUEUE_STAGE_LABEL[stage];
-
+/** A stage, as its words led by a dot in its tone. */
+function StageWords({ stage }: { stage: MergeQueueStage }): React.JSX.Element {
   return (
-    <Badge tone={STAGE_TONE[stage] ?? STATUS_TONE.NEUTRAL} icon={STAGE_GLYPH[stage]}>
-      {stage === MERGE_QUEUE_STAGE.CHECKING ? <Shimmer>{words}</Shimmer> : words}
-    </Badge>
+    <StatusWords tone={STAGE_TONE[stage] ?? STATUS_TONE.NEUTRAL}>
+      {MERGE_QUEUE_STAGE_LABEL[stage]}
+    </StatusWords>
   );
 }
 
@@ -159,20 +141,16 @@ function AuthorFace({
   );
 }
 
-/** What a row says under its title: its number, and its task's name where it has one. */
-function numberAndTask(entry: MergeQueueEntry): string {
+/** What a row says under its title: its number, its task's name where it has one, and how long it has been queued. */
+function RowFacts({ entry }: { entry: MergeQueueEntry }): React.JSX.Element {
   const number = `#${entry.pullRequest.number}`;
 
-  return entry.task === null ? number : `${number} · ${entry.task.name}`;
-}
-
-/** How long it has stood in the queue, and its stage. */
-function QueuedFor({ entry }: { entry: MergeQueueEntry }): React.JSX.Element {
   return (
-    <Inline gap={GAP.CONTROL} as={LAYOUT_ELEMENT.SPAN}>
+    <>
+      {entry.task === null ? number : `${number} · ${entry.task.name}`}
+      {" · "}
       <Time at={entry.enqueuedAt} look={TIME_LOOK.SINCE} />
-      <StageBadge stage={mergeQueueStage(entry.state)} />
-    </Inline>
+    </>
   );
 }
 
@@ -185,38 +163,6 @@ function nodeOf(stage: MergeQueueStage): TrackNode {
   };
 }
 
-/** The pull request at the front of a line, raised on a card of its own. */
-function FrontEntry({
-  queue,
-  entry,
-  marked,
-  onOpen,
-}: {
-  queue: MergeQueueRepository;
-  entry: MergeQueueEntry;
-  marked: boolean;
-  onOpen: (url: string) => void;
-}): React.JSX.Element {
-  return (
-    <Card look={CARD_LOOK.RAISED} padding={CARD_PADDING.FLUSH}>
-      <List label={`${WORDS.FRONT}: ${queue.repository}`} moves>
-        <ListRow
-          motionKey={entry.pullRequest.url}
-          leading={<AuthorFace entry={entry} size={AVATAR_SIZE.CARD} />}
-          title={entry.pullRequest.title}
-          titleReplayMasked
-          description={numberAndTask(entry)}
-          descriptionReplayMasked
-          meta={<QueuedFor entry={entry} />}
-          current={marked ? LIST_ROW_CURRENT.ITEM : undefined}
-          linkHref={entry.pullRequest.url}
-          onPress={() => onOpen(entry.pullRequest.url)}
-        />
-      </List>
-    </Card>
-  );
-}
-
 /** One repository's line: its head, the bar over it, its front on a card, and the rest on the track. */
 function RepositoryQueue({
   queue,
@@ -227,10 +173,8 @@ function RepositoryQueue({
   marked: string | undefined;
   onOpen: (url: string) => void;
 }): React.JSX.Element {
-  const [front, ...behind] = queue.entries;
-
   return (
-    <Stack gap={GAP.CONTROL}>
+    <Card look={CARD_LOOK.OUTLINE} padding={CARD_PADDING.FLUSH}>
       <GroupHeader
         look={GROUP_LOOK.SECTION}
         glyph={<ProviderMark provider={MARK_PROVIDER.GITHUB} />}
@@ -249,41 +193,25 @@ function RepositoryQueue({
           </Tooltip>
         }
       />
-      <SegmentBar
-        segments={queue.entries.map((entry) => ({
-          tone: STAGE_TONE[mergeQueueStage(entry.state)],
-          marked: entry.pullRequest.url === marked,
-        }))}
-      />
-      {front === undefined ? null : (
-        <FrontEntry
-          queue={queue}
-          entry={front}
-          marked={front.pullRequest.url === marked}
-          onOpen={onOpen}
-        />
-      )}
-      {behind.length === 0 ? null : (
-        <TrackList label={queue.repository} moves>
-          {behind.map((entry) => (
-            <TrackRow
-              key={entry.pullRequest.url}
-              motionKey={entry.pullRequest.url}
-              node={nodeOf(mergeQueueStage(entry.state))}
-              leading={<AuthorFace entry={entry} size={AVATAR_SIZE.ROW} />}
-              title={entry.pullRequest.title}
-              titleReplayMasked
-              description={numberAndTask(entry)}
-              descriptionReplayMasked
-              meta={<QueuedFor entry={entry} />}
-              current={entry.pullRequest.url === marked ? LIST_ROW_CURRENT.ITEM : undefined}
-              linkHref={entry.pullRequest.url}
-              onPress={() => onOpen(entry.pullRequest.url)}
-            />
-          ))}
-        </TrackList>
-      )}
-    </Stack>
+      <TrackList label={queue.repository} moves>
+        {queue.entries.map((entry) => (
+          <TrackRow
+            key={entry.pullRequest.url}
+            motionKey={entry.pullRequest.url}
+            node={nodeOf(mergeQueueStage(entry.state))}
+            leading={<AuthorFace entry={entry} size={AVATAR_SIZE.ROW} />}
+            title={entry.pullRequest.title}
+            titleReplayMasked
+            description={<RowFacts entry={entry} />}
+            descriptionReplayMasked
+            meta={<StageWords stage={mergeQueueStage(entry.state)} />}
+            current={entry.pullRequest.url === marked ? LIST_ROW_CURRENT.ITEM : undefined}
+            linkHref={entry.pullRequest.url}
+            onPress={() => onOpen(entry.pullRequest.url)}
+          />
+        ))}
+      </TrackList>
+    </Card>
   );
 }
 
