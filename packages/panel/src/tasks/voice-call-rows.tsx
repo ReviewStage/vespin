@@ -48,13 +48,8 @@ const CALL_MARK_WORDS = {
   TEAMMATE_ENDED: "ended a call",
 } as const;
 
-/** No call begins or ends among the rows, and no turn is folded under one. */
-export const NO_CALL_MARKS: CallMarks = {
-  opens: new Map(),
-  closes: new Map(),
-  opening: [],
-  folded: new Set(),
-};
+/** No call begins or ends among the rows. */
+export const NO_CALL_MARKS: CallMarks = { opens: new Map(), closes: new Map(), opening: [] };
 
 /** Whether a call's lines are drawn as a call's: while the account has the Voice experiment on. */
 export function useVoiceShown(): boolean {

@@ -114,16 +114,11 @@ export const CALL_ITEM = {
   END: "end",
 } as const;
 
-/** One thing a tab draws: a call's start or end, or a row, folded where it is a turn the voice retells. */
+/** One thing a tab draws: a call's start or end, or a row. */
 export type CallItem =
   | { readonly kind: typeof CALL_ITEM.START; readonly span: CallSpan }
   | { readonly kind: typeof CALL_ITEM.END; readonly span: CallSpan }
-  | {
-      readonly kind: typeof CALL_ITEM.ROW;
-      readonly message: AgentTranscriptMessage;
-      /** Whether it is a finished turn a spoken ask opened, drawn folded closed, since the voice retells it. */
-      readonly folded: boolean;
-    };
+  | { readonly kind: typeof CALL_ITEM.ROW; readonly message: AgentTranscriptMessage };
 
 /** What a call's rows have said of it so far. */
 interface HeldSpan {
@@ -227,29 +222,6 @@ export function opensTurn(message: AgentTranscriptMessage): boolean {
 }
 
 /**
- * Whether the turn at `index` among the rows is one to fold: finished, and
- * opened by a spoken ask, the newest line before it that opens a turn
- * (`opensTurn`) being a line of a call. Note that it reads only the turn's
- * own opening line, never what follows it, so small talk said while it ran
- * leaves it folded all the same.
- */
-function retold(rows: readonly PlacedRow[], index: number): boolean {
-  const turn = rows[index]?.message;
-
-  if (turn === undefined || !isAgentTurn(turn) || turn.finishedAt === undefined) return false;
-
-  for (let at = index - 1; at >= 0; at -= 1) {
-    const before = rows[at]?.message;
-
-    if (before === undefined || isAgentTurn(before)) return false;
-
-    if (opensTurn(before)) return spokenLineOf(before) !== undefined;
-  }
-
-  return false;
-}
-
-/**
  * How a tab draws a transcript's rows with the calls among them.
  *
  * The rules, settled with Dean (Nov 13, 2026), each because the transcript
@@ -258,16 +230,13 @@ function retold(rows: readonly PlacedRow[], index: number): boolean {
  * 1. The rows stand in the conversation's order (`seq`) and in no other: no
  *    row is moved, so a line of a call never moves into a turn, up to the
  *    turn it answers, or past another by its time. A call only adds what
- *    stands between rows (its start and its end) and folds a row in place.
+ *    stands between rows (its start and its end).
  * 2. When into a call a line was said (`from_ms`, `to_ms`) gives the
  *    call's length alone, and orders nothing.
  * 3. A turn is one row, its journal, written as it starts and grown in place
  *    (`writer.ts`), so a line said while it runs stands after all of it.
- * 4. A spoken turn's work reads once: a finished turn a spoken ask opened is
- *    folded closed, one press opening it, since the voice retells it,
- *    wherever that retelling stands. A running turn and a typed one stay
- *    open. Folding never moves a row.
- *
+ * 4. A spoken turn draws as a typed one does: its words, its runs of calls
+ *    folded as any turn's are, and its foot.
  * 5. A call is marked by its start and end alone: its lines are drawn as
  *    any line of the member's and any reply of the agent's are, so two calls
  *    into the agent at once interleave by `seq` between their own starts
@@ -291,11 +260,11 @@ export function callItemsOf(
   const lined = spansOf(rows, stands);
   const spans = [...lined.values()];
 
-  const drawn = rows.flatMap(({ message }, index): CallItem[] => [
+  const drawn = rows.flatMap(({ message }): CallItem[] => [
     ...spans.flatMap((span) =>
       span.opensIn === message.id ? [{ kind: CALL_ITEM.START, span }] : [],
     ),
-    { kind: CALL_ITEM.ROW, message, folded: retold(rows, index) },
+    { kind: CALL_ITEM.ROW, message },
     ...spans.flatMap((span) =>
       span.closesIn === message.id && !stands.has(span.callId)
         ? [{ kind: CALL_ITEM.END, span }]
@@ -310,13 +279,12 @@ export function callItemsOf(
   return [...drawn, ...opening];
 }
 
-/** Where calls begin and end among a tab's rows, by the id of the row each stands at, the calls that opened with no line yet, and the turns drawn folded. */
+/** Where calls begin and end among a tab's rows, by the id of the row each stands at, and the calls that opened with no line yet. */
 export interface CallMarks {
   readonly opens: ReadonlyMap<string, readonly CallSpan[]>;
   readonly closes: ReadonlyMap<string, readonly CallSpan[]>;
   /** The calls that stand with no line among the rows yet, whose starts are drawn after every row. */
   readonly opening: readonly CallSpan[];
-  readonly folded: ReadonlySet<string>;
 }
 
 /** The calls' marks among the rows as the tab hangs them on its rows, read off what it draws (`callItemsOf`). */
@@ -327,13 +295,9 @@ export function callMarksOf(
   const opens = new Map<string, CallSpan[]>();
   const closes = new Map<string, CallSpan[]>();
   const opening: CallSpan[] = [];
-  const folded = new Set<string>();
 
   for (const item of callItemsOf(rows, standing)) {
-    if (item.kind === CALL_ITEM.ROW) {
-      if (item.folded) folded.add(item.message.id);
-      continue;
-    }
+    if (item.kind === CALL_ITEM.ROW) continue;
 
     const marks = item.kind === CALL_ITEM.START ? opens : closes;
     const at = item.kind === CALL_ITEM.START ? item.span.opensIn : item.span.closesIn;
@@ -342,5 +306,5 @@ export function callMarksOf(
     else marks.set(at, [...(marks.get(at) ?? []), item.span]);
   }
 
-  return { opens, closes, opening, folded };
+  return { opens, closes, opening };
 }
