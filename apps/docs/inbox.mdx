@@ -3,13 +3,13 @@ title: "How the Inbox works"
 description: "Answer your agents' decisions, to-dos, and questions"
 ---
 
-The Inbox lists the threads agents post when they need something from you. A thread has a title, messages, and usually one ask. Open the Inbox from the sidebar or with <kbd>⇧⌘I</kbd>.
+The Inbox lists the threads agents post when they need something from you. Each thread has a title, its messages, and usually one ask. Open it from the sidebar or with <kbd>⇧⌘I</kbd>.
 
 ## Asks
 
 ### Decide
 
-Pick an option, or press its number, then click **Send**. Some decisions take more than one option.
+Pick an option, or press its number, then click **Send**. Some decisions let you pick more than one.
 
 <Frame>
   <img src="/images/inbox-decide.png" alt="An open decision in the Inbox: Who can withdraw an invite?, with three options, the third marked Recommended" />
@@ -17,7 +17,7 @@ Pick an option, or press its number, then click **Send**. Some decisions take mo
 
 ### To-do
 
-Do the steps, click **Mark done**, then **Send**. If you can't, click **Couldn't do it**, add a note saying why, then **Send**.
+Do the steps, click **Mark done**, then click **Send**. If you couldn't do them, click **Couldn't do it**, add a note saying why, and click **Send**.
 
 <Frame>
   <img src="/images/inbox-todo.png" alt="A to-do with three steps to verify a mail domain, and Mark done and Couldn't do it buttons" />
@@ -25,40 +25,40 @@ Do the steps, click **Mark done**, then **Send**. If you can't, click **Couldn't
 
 ### Answer
 
-Write your answer, or fill in the fields, then click **Send**.
+Write your answer or fill in the fields, then click **Send**.
 
 <Frame>
   <img src="/images/inbox-fill-in.png" alt="A form in the Inbox asking for a daily invite limit, who sees pending invites, whether to email the sender, and a reply-to address" />
 </Frame>
 
-A thread with no ask is a notice. Opening a notice addressed to you settles it. Otherwise, click **Got it**.
+A thread with no ask is a notice. If it's addressed to you, opening it settles it. Otherwise, click **Got it**.
 
 ## Reply
 
-Write in the box and click **Send** without picking anything. The ask stays open and the agent replies. On an answer ask without fields, your words are the answer.
+To reply without answering, write in the box and click **Send** without picking anything. The ask stays open and the agent replies. The one exception is an answer ask with no fields, where whatever you write is your answer.
 
 ## Who a thread waits on
 
-The member the agent addressed it to, else the task's assignee, else whoever started the agent. Anyone in the workspace can answer.
+A thread waits on the member the agent addressed it to. If there isn't one, it waits on the task's assignee, and failing that, on whoever started the agent. Anyone in the workspace can still answer it.
 
 ## Filter
 
-**View options** above the list:
+**View options** above the list changes what you see.
 
-- **Questions**: open asks waiting on you.
-- **Open**: threads not settled, and settled threads you haven't read. The default.
-- **All**: everything except threads with a reminder.
-- **Reminders**: threads you set a reminder on.
-- **Addressed to**: you, anyone, or one teammate.
-- **Pinned tasks first**
+| Option | Shows |
+| --- | --- |
+| **Questions** | Open asks waiting on you |
+| **Open** | Threads that aren't settled, plus settled threads you haven't read. This is the default. |
+| **All** | Everything except threads with a reminder |
+| **Reminders** | Threads you set a reminder on |
+| **Addressed to** | Threads for you, anyone, or one teammate |
+| **Pinned tasks first** | Threads from your pinned tasks at the top |
 
 ## Resolve and remind
 
-**Resolve** (<kbd>E</kbd>) settles a thread without answering it. You can undo it until the agent is told.
+**Resolve** (<kbd>E</kbd>) settles a thread without answering it. You can undo it until the agent has been told. **Remind me** (<kbd>H</kbd>) hides a thread until the time you pick.
 
-**Remind me** (<kbd>H</kbd>) hides a thread until the time you pick.
-
-A new post from the agent reopens a settled thread.
+If the agent posts again on a settled thread, it opens back up.
 
 ## Keyboard
 
@@ -75,6 +75,4 @@ A new post from the agent reopens a settled thread.
 
 ## Notifications
 
-- **Mac and web**: turn on **Show a notification** or **Play a sound** in **Settings › Preferences › Notifications**.
-- **iPhone**: threads waiting on you arrive as notifications you can answer.
-- **Slack**: see [Slack](/slack).
+On the Mac and the web, turn on **Show a notification** or **Play a sound** in **Settings › Preferences › Notifications**. On iPhone, threads waiting on you arrive as notifications you can answer from. For Slack, see [Slack](/slack).

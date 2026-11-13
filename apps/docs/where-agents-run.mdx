@@ -3,7 +3,7 @@ title: "Where Vespin agents run: cloud or your Mac"
 description: "Run an agent in a cloud sandbox or on your own machine"
 ---
 
-An agent runs either in the cloud, in a sandbox of its own, or on a machine of yours: **This Mac** or a Linux server or Mac you add. Pick with the **Runs on** chip under the message box when you start a task.
+An agent runs either in the cloud, in a sandbox of its own, or on a machine of yours. That can be **This Mac**, or a Linux server or another Mac you add. You choose with the **Runs on** chip under the message box when you start a task.
 
 ## Differences
 
@@ -18,17 +18,17 @@ An agent runs either in the cloud, in a sandbox of its own, or on a machine of y
 | Browser, shared ports, `run_on_mac` | Yes | No |
 | Automations | Yes | No |
 
-Use your machine for work that needs something only it has, such as Xcode, a simulator, or a local database.
+Run an agent on your machine when the work needs something only that machine has, like Xcode, a simulator, or a local database.
 
 ## Move an agent
 
-Choose **Move to** in the agent's menu. Vespin stops the agent and continues it in the new place. Moving from the cloud brings uncommitted work. Moving from your machine brings only pushed work.
+Choose **Move to** in the agent's menu. We stop the agent and continue it in the new place. Moving from the cloud brings uncommitted work along, but moving from your machine brings only what the agent pushed.
 
 ## Run agents on this Mac
 
 Turn on **Run agents on this Mac** in **Settings › Machines**. If macOS asks, allow Vespin in **System Settings › General › Login Items**.
 
-To stop the Mac sleeping while agents work, set **Keep this Mac awake** in **Settings › This Mac**. Closing the lid still sleeps it.
+To keep the Mac from sleeping while agents work, set **Keep this Mac awake** in **Settings › This Mac**. Closing the lid still puts it to sleep.
 
 ## Add a machine
 
@@ -36,4 +36,4 @@ To stop the Mac sleeping while agents work, set **Keep this Mac awake** in **Set
 2. Run the install command on the machine.
 3. Open the link it prints and approve the code.
 
-Before starting an agent there, sign in to Claude Code or Codex, and to GitHub with `gh auth login` or SSH, on that machine. A machine runs only its owner's agents.
+Before you start an agent there, sign in on that machine to Claude Code or Codex, and to GitHub with `gh auth login` or SSH. A machine only runs its owner's agents.
