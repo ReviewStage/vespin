@@ -1136,9 +1136,18 @@ Set `GMAIL_ALLOWED_ACCOUNTS`, `GOOGLE_CALENDAR_ALLOWED_ACCOUNTS`, and
 until the app is verified, so no other account is offered a sign-in Google
 would refuse or count against the unverified cap.
 
-**Granola's, PostHog's, Supabase's, and Y Combinator's connectors.** Each
-is created as above and then corrected in place, its UID unchanged, because
-the client Connect registers for it fails at the provider:
+**Granola's, Mercury's, PostHog's, Supabase's, and Y Combinator's
+connectors.** Each is created as above and then corrected in place, its UID
+unchanged, because the client Connect registers for it fails at the
+provider or names us wrongly there:
+
+- Mercury's consent page names a client "Mercury MCP for" its
+  `client_name`, and Connect's registration names it after the connector,
+  so it read "Mercury MCP for vespin-mercury". A public client named
+  `Vespin` is registered by hand at `https://mcp.mercury.com/register`
+  (`"token_endpoint_auth_method":"none"`, with the connector's scopes as
+  its `scope`), and the connector is PATCHed to it as Granola's is below.
+  Mercury drops its `logo_uri`.
 
 - Granola and PostHog publish client ID metadata documents and
   `private_key_jwt`, and Connect signs a client assertion whose audience
@@ -1176,8 +1185,8 @@ a connector without a `redirectUri` of its own replays, and
 `"client_uri":"https://vespin.dev"`, the logo the client metadata documents
 Connect publishes for its own clients carry, so a consent page that draws a
 client's logo draws ours rather than a placeholder. PostHog's and Executor's
-registrations keep it; Granola's, Neon's, and Supabase's drop it, and
-Supabase's consent page draws its own mark instead. No provider here lets a registered client be changed, so
+registrations keep it; Granola's, Mercury's, Neon's, and Supabase's drop
+it, and Supabase's consent page draws its own mark instead. No provider here lets a registered client be changed, so
 giving one a logo means a new client and the connector PATCHed to it, and
 every member who connected it signs in again, since a refresh token answers
 only the client it was issued to. Each registration is written under
