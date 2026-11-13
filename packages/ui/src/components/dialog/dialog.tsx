@@ -21,6 +21,13 @@ import { DialogContent, Dialog as ShadcnDialog } from "../../shadcn/dialog.js";
 import { trappedTab } from "../../trapped-tab.js";
 import { ANNOUNCE, announce, type Retire } from "../announcer/announcer.js";
 import { IconButton } from "../button/button.js";
+import {
+  CARD_CORNER,
+  CARD_PADDING,
+  CARD_SHADOW,
+  Card,
+  CARD_LOOK as FRAME_LOOK,
+} from "../card/card.js";
 import { EdgeClip } from "../edge-clip/edge-clip.js";
 import { TEXT_ELEMENT, TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
 import { closesCard } from "./close-chord.js";
@@ -250,12 +257,16 @@ export function DialogCard({
   children: ReactNode;
 }): React.JSX.Element {
   return (
-    <div
-      className={`ui-dialog-card flex min-h-0 min-w-0 flex-col rounded-dialog border border-border-strong bg-popover text-popover-foreground shadow-dialog ${hug ? "max-h-full max-w-full min-w-dialog-media-min" : "size-full"}`}
+    <Card
+      look={FRAME_LOOK.RAISED}
+      corner={CARD_CORNER.DIALOG}
+      shadow={CARD_SHADOW.DIALOG}
+      padding={CARD_PADDING.FLUSH}
+      className={`ui-dialog-card flex min-h-0 min-w-0 flex-col text-popover-foreground ${hug ? "max-h-full max-w-full min-w-dialog-media-min" : "size-full"}`}
       data-hug={hug}
     >
       <EdgeClip>{children}</EdgeClip>
-    </div>
+    </Card>
   );
 }
 
