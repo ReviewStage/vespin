@@ -1,7 +1,36 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../tsconfig.package.json",
   "compilerOptions": {
     "types": ["node"]
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts"],
+  "references": [
+    {
+      "path": "../agent-runner"
+    },
+    {
+      "path": "../brand"
+    },
+    {
+      "path": "../database"
+    },
+    {
+      "path": "../features"
+    },
+    {
+      "path": "../github"
+    },
+    {
+      "path": "../runtime"
+    },
+    {
+      "path": "../sandbox"
+    },
+    {
+      "path": "../settings"
+    },
+    {
+      "path": "../wire"
+    }
+  ]
 }

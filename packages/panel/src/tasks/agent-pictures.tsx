@@ -514,6 +514,11 @@ export function useKeptPicture(id: string | undefined): PictureState {
   return usePicture(pictureQuery(door?.owner ?? "", id ?? "", read), pictureUnread);
 }
 
+/** Several pictures calls kept, read through the transcript's door, each standing as it is read: an app's icons, say; none is read for no id. */
+export function useKeptPictures(ids: readonly (string | undefined)[]): readonly PictureState[] {
+  return usePictureStates(useContext(AgentPicturesContext), ids);
+}
+
 /** The viewer over pictures the calls kept, opened from one of them, and the viewer while it stands; nothing opens outside the transcript's door. */
 export function useKeptPictureViewer(): PictureViewer {
   return useViewer(useContext(AgentPicturesContext));
@@ -695,8 +700,8 @@ function useKeptChips(files: readonly MessageFileChip[]): FileChip[] {
  * (`SentWords`), and to its files' row, which leaves those out; a press opens
  * a file over the window, walking the files in the order the words name
  * them. A line whose words name none of its files, as every line sent before
- * markers, draws as it did. While the line is on its way, its files wear the
- * upload's cover.
+ * markers, draws as it did. While the line is on its way, its files' row
+ * wears the upload's cover, and the chips in its words open nothing.
  */
 export function MessageFiles({
   message,

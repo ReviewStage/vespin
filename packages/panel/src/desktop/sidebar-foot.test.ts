@@ -142,6 +142,7 @@ function mount(
               },
               shown: true,
               settingsOpen: options.settingsOpen ?? false,
+              callDocked: true,
               onSettings: options.onSettings ?? (() => undefined),
               onSignOut: options.onSignOut ?? (() => Promise.resolve()),
             }),

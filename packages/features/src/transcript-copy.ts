@@ -319,17 +319,27 @@ export function drawnRowsWords(rows: readonly TurnRow<AgentPart>[], which: Drawn
  * who sent it, without the lines that are the agent's alone.
  */
 function developerTurn(message: AgentTranscriptMessage): CopiedTurn {
-  const words = messageWords(message);
+  const blocks = [{ kind: COPIED_BLOCK.WORDS, text: sentMessageWords(message) }] as const;
 
   if (agentMessageOf(message) !== undefined) {
-    const blocks = [{ kind: COPIED_BLOCK.WORDS, text: agentMessageWords(words) ?? words }] as const;
-
     return { speaker: SPEAKER.MESSAGE, from: message.sentBy?.name, blocks };
   }
 
-  const blocks = [{ kind: COPIED_BLOCK.WORDS, text: sentLineWords(message) ?? words }] as const;
-
   return { speaker: SPEAKER.DEVELOPER, blocks };
+}
+
+/**
+ * The words of a line sent into the agent as its row draws them: another
+ * agent's message without the lines that are the agent's alone, a line
+ * steered in from a thread, a comment, Slack, or GitHub as its metadata
+ * reads (`sentLineWords`), and any other line's own words.
+ */
+export function sentMessageWords(message: AgentTranscriptMessage): string {
+  const words = messageWords(message);
+
+  if (agentMessageOf(message) !== undefined) return agentMessageWords(words) ?? words;
+
+  return sentLineWords(message) ?? words;
 }
 
 /** What a thread line's copy names where its words carry no title. */

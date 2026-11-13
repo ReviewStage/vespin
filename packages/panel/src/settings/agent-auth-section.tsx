@@ -117,7 +117,7 @@ import { ReadFailed } from "./marks.js";
  * plan, whose token names no account; else by the ChatGPT account it signed
  * in as; else by its harness's plan name, numbered where there are several.
  * Under its name it says how much of its usage window it has used, with a
- * bar, or Ready before a turn has said, or that it is at its limit until
+ * bar, nothing before a turn has said, or that it is at its limit until
  * when, its bar full in the attention ink, or what is wrong with it in the
  * attention tint; and ends in a ⋯ holding Rename, Move up and down, Replace
  * token, and Disconnect, the fix its state asks for standing beside it:
@@ -128,7 +128,7 @@ import { ReadFailed } from "./marks.js";
  * holding rate-limit reset credits offers one under its meters
  * (`reset-credit.tsx`). A key is named by the name the
  * account gave it, else API key and its hint, renamed in place as a Claude
- * plan is; says Ready, or what is wrong with it; and ends in a ⋯ holding
+ * plan is; says what is wrong with it, if anything; and ends in a ⋯ holding
  * Rename, Move up and down, Replace key, and Remove key. With neither a plan nor a key, no agent
  * starts on that provider's models, since our key pays for no coding agent.
  * Calls and dictation run on the OpenAI API key alone, so every answer here
@@ -235,7 +235,6 @@ const WORDS = {
   READ_FAILED: "Your keys could not be read.",
   SIGNED_OUT: SIGNED_OUT_WORDS,
   ADD: "Add",
-  READY: "Ready",
   AT_LIMIT: "At its limit",
   BACK_AT: "back at",
   RENAME: "Rename",
@@ -405,7 +404,7 @@ function signInFix(plan: SubscriptionKeySummary): string {
  * A plan's line under its name: its words, whether they need a hand, and
  * under them its usage, each window's meter where its usage is known
  * (`usage`), else one full bar at its limit (`meter`). A plan with room
- * whose usage is known says no words, since its meters say it.
+ * says no words, since only a state that needs a hand is worded.
  */
 interface PlanLine {
   readonly words?: string;
@@ -432,21 +431,20 @@ function planLine(
     };
   }
 
-  if (standing(plan))
-    return usage === undefined ? { words: WORDS.READY, ok: true } : { ok: true, usage };
+  if (standing(plan)) return usage === undefined ? { ok: true } : { ok: true, usage };
   const words = provider === PROVIDER_KEY_PROVIDER.ANTHROPIC ? tokenWords(plan) : signInWords(plan);
 
   return { words, ok: false };
 }
 
-/** What an API key's line says, by the provider it names: Ready, its hint where its name hides it, or what is wrong with it. */
-function keyLineWords(provider: ProviderKeyProvider, key: ProviderKeySummary): string {
+/** What an API key's line says, by the provider it names: nothing where it stands, but its hint where its name hides it, or what is wrong with it. */
+function keyLineWords(provider: ProviderKeyProvider, key: ProviderKeySummary): string | undefined {
   const name = HARNESS[provider].keyName;
 
   switch (key.status) {
     case PROVIDER_KEY_STATUS.VERIFIED:
     case PROVIDER_KEY_STATUS.UNVERIFIED:
-      return key.label === undefined ? WORDS.READY : `${WORDS.API_KEY} · ${key.hint}`;
+      return key.label === undefined ? undefined : `${WORDS.API_KEY} · ${key.hint}`;
     case PROVIDER_KEY_STATUS.INVALID:
       return `${name} rejected this key.`;
     case PROVIDER_KEY_STATUS.QUOTA_EXCEEDED:
@@ -1252,8 +1250,8 @@ function PlanRow({
 
 /**
  * One of the harness's API keys' rows in the same order: its provider's
- * logo, its name, renamed by pressing it as a Claude plan's is, and Ready,
- * or what is wrong with it; Replace key beside a ⋯ where its provider refused it,
+ * logo, its name, renamed by pressing it as a Claude plan's is, and what is
+ * wrong with it, if anything; Replace key beside a ⋯ where its provider refused it,
  * and a ⋯ holding Rename, Move up and down, Replace key, and Remove key.
  * Its replace's steps open under it.
  */
@@ -1283,6 +1281,7 @@ function KeyRow({
   const removal = useKeyRemoval(provider, apiKey);
   const door = useRef<HTMLButtonElement | null>(null);
   const name = apiKeyName(apiKey);
+  const words = keyLineWords(provider, apiKey);
   // Note that a key from a service that names no id has nothing to rename it or replace it by.
   const named = apiKey.id !== undefined;
   const rename = useInlineRename(apiKey.id, renames);
@@ -1313,7 +1312,7 @@ function KeyRow({
           />
         }
         description={
-          <State ok={keyStanding(apiKey.status)}>{keyLineWords(provider, apiKey)}</State>
+          words === undefined ? undefined : <State ok={keyStanding(apiKey.status)}>{words}</State>
         }
         controls={SETTINGS_ROW_CONTROLS.BESIDE_UNTIL_NARROW}
         end={() => (

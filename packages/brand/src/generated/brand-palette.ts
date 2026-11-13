@@ -53,7 +53,7 @@ export const BRAND_PALETTE = {
     CHIP: "#1a1a1a",
     CHIP_HOVER: "#1f1f1f",
     CHIP_SELECTED: "#292929",
-    CHIP_EDGE: "#2e2e2e",
+    CHIP_EDGE: "#292929",
     CHIP_EDGE_STRONG: "#454545",
     FILL_STRONG: "#ffffff17",
     INK: "#ffffff",

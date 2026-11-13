@@ -34,7 +34,7 @@ const DOCUMENT_TEXT = EffectSchema.String.check(
 );
 
 /**
- * The developer's edit of the description's whole text (POST `/api/plans/{id}/description`):
+ * The developer's edit of the description's whole text (POST `/api/tasks/{id}/description`):
  * the text the editor opened on, or their own last save since, and the text
  * they wrote; and where the editor's comment anchors stand in that text,
  * from an editor that carries them (`description-comment-wire.ts`).

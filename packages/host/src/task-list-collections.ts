@@ -4,14 +4,25 @@
  * A plan and an agent are kinds of the pool (`@repo/sync`), one row however
  * many reads hold it, and the list stands on the rows its follow answers for
  * the signed-in session. The list is built from them as the held read built
- * it (`@repo/features/task-list-live`), at the host's own instant, because
- * an agent's status moves with the clock alone and a live query reads no
- * clock. So it is drawn again each time either moves, and at the nearest
- * instant the clock alone moves it (the drawing's `edge`): the one clock
- * left here, armed only while such an agent stands. One drawer stands for
+ * it (`@repo/features/task-list-live`). The one fact of it the clock alone
+ * moves, an agent with no turn yet whose starting grace ends, is held as
+ * data beside the rows rather than read off a clock, since a live query
+ * reads none: a local-only collection of the agents past their grace
+ * (`pastGrace`), keyed by agent id, never a field written onto a synced
+ * row. The one clock left here writes it, armed for the nearest grace still
+ * to end while such an agent stands, and draws the list again as it does.
+ * The follow's answers past a sync id are drawn once a tick
+ * (`drawnPerTick`), since every draw
+ * builds the whole list and pushes it to every window; a write, a whole
+ * answer, and an edge draw at once. One drawer stands for
  * the scope (`taskListDrawer`), so each drawing builds again only the plans
  * and agents a moved row or that instant reaches, and every other is the
  * object drawn before.
+ *
+ * The agents' pull requests are TanStack DB live queries instead
+ * (`task-list-pull-requests.ts`), standing on the agents as the list draws
+ * them (`drawn-rows.ts`), which take only the keys the pool names as moved:
+ * those an answer moved, took up, or let go, and those a write drew again.
  *
  * A write to one row, a plan's or an agent's, is a write the pool draws over
  * it at once (`compose-tasks.ts` and `compose-agents.ts` declare them),
@@ -25,17 +36,31 @@
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
-import { type TaskListLiveRows, taskListDrawer } from "@repo/features/task-list-live";
+import {
+  agentGraceEnd,
+  type TaskListLiveRows,
+  taskListDrawer,
+} from "@repo/features/task-list-live";
 import type {
   ListedPullRequest,
   TaskAgentPin,
   TaskListAnswer,
   TaskPullRequests,
 } from "@repo/features/task-wire";
-import { type Confirmation, type EntityPool, fieldKind, type HeldRows } from "@repo/sync";
+import {
+  type Confirmation,
+  type EntityPool,
+  fieldKind,
+  type HeldRows,
+  type PoolRead,
+  scopedCollection,
+} from "@repo/sync";
+import { createCollection, localOnlyCollectionOptions } from "@tanstack/db";
 import { Effect, type Scope } from "effect";
-import { drawnAtEdges } from "./live-collection.js";
+import { drawnRows } from "./drawn-rows.js";
+import { drawnAtEdges, drawnPerTick } from "./live-collection.js";
 import { confirmWrite, type SyncStanding, syncIdOf, type TxWait } from "./live-follow.js";
+import { taskListPullRequests } from "./task-list-pull-requests.js";
 
 /** A plan's row as the list's statement answers it. */
 export type PlanRow = TaskListLiveRows["plans"][number];
@@ -49,7 +74,12 @@ export const PLAN = fieldKind((row: PlanRow) => row.id);
 /** An agent as the pool holds it, by its id. */
 export const AGENT = fieldKind((row: AgentRow) => row.id);
 
-/** The list as the rows make it at one instant, every agent on a plan beside it, and the plans a write stands over. */
+/** An agent whose starting grace has ended, by its id, as the list holds it beside the agents' rows. */
+interface PastGrace {
+  readonly agentId: string;
+}
+
+/** The list as the rows make it, every agent on a plan beside it, and the plans a write stands over. */
 export interface LiveTaskList {
   readonly list: TaskListAnswer;
   readonly taskAgents: readonly ListedAgent[];
@@ -121,7 +151,8 @@ export function taskListCollections(
       return wait === undefined ? undefined : (txid) => confirmWrite(wait, txid);
     };
 
-    const redraw = () => Effect.suspend(() => drawn);
+    // Note that only the list's own follow stands on these kinds, so the pool redraws them for a write the member made, or its answer taken in the list's place: at once, so a press never waits a tick.
+    const redraw = () => Effect.suspend(() => ticks.drawn);
 
     // Note that every plan made is the list's, since it holds every task the account reaches.
     const plans: HeldRows<PlanRow> = yield* pool.stand(PLAN, {
@@ -130,18 +161,79 @@ export function taskListCollections(
       adopts: () => true,
     });
 
-    const agents: HeldRows<AgentRow> = yield* pool.stand(AGENT, { redraw, confirmation });
+    // The agents as the list draws them, for its live queries to stand on, written only for the keys that moved.
+    const drawnAgents = yield* drawnRows<AgentRow>(AGENT.key);
+    const pullRequests = yield* taskListPullRequests(drawnAgents.collection);
+
+    const agentsDrawn = (keys: readonly string[]) =>
+      drawnAgents.drawn(keys, (key) => agents.row(key));
+
+    const agentsRedraw: PoolRead<AgentRow>["redraw"] = (keys) =>
+      Effect.suspend(() => {
+        agentsDrawn(keys);
+
+        return ticks.drawn;
+      });
+
+    const agents: HeldRows<AgentRow> = yield* pool.stand(AGENT, {
+      redraw: agentsRedraw,
+      confirmation,
+    });
+
+    const pastGrace = yield* scopedCollection(() =>
+      createCollection(
+        localOnlyCollectionOptions<PastGrace, string>({ getKey: (row) => row.agentId }),
+      ),
+    );
+
+    /**
+     * Marks past its grace every agent whose grace ended by `at`, lets go of
+     * those the list no longer holds waiting on one, and answers the nearest
+     * grace still to end; none where no agent waits on one.
+     */
+    const gracesAt = (rows: readonly AgentRow[], at: number): number | undefined => {
+      const waiting = new Set<string>();
+      const ended: PastGrace[] = [];
+      let next: number | undefined;
+
+      for (const row of rows) {
+        const end = agentGraceEnd(row);
+
+        if (end === undefined) continue;
+        waiting.add(row.id);
+
+        if (at < end) next = next === undefined ? end : Math.min(next, end);
+        else if (!pastGrace.has(row.id)) ended.push({ agentId: row.id });
+      }
+
+      const gone = [...pastGrace.keys()].filter((id) => !waiting.has(id));
+
+      if (ended.length > 0) pastGrace.insert(ended);
+
+      if (gone.length > 0) pastGrace.delete(gone);
+
+      return next;
+    };
 
     const drawing = taskListDrawer();
 
-    /** Draws the list as it stands now, what every standing write drew among it, and arms its next edge. */
+    /** Draws the list as it stands now, what every standing write drew among it, the graces ended by `at` written first, and arms the next grace's end. */
     const drawn: Effect.Effect<void> = yield* drawnAtEdges((at) => {
       if (!open) return undefined;
-      const { edge, ...list } = drawing({ plans: plans.rows(), agents: agents.rows() }, at);
-      dependencies.draw({ ...list, pendingTasks: plans.pending() });
+      const rows = { plans: plans.rows(), agents: agents.rows() };
+      const edge = gracesAt(rows.agents, at);
+
+      dependencies.draw({
+        ...drawing(rows, pastGrace, pullRequests.linesOf),
+        taskPullRequests: pullRequests.taskPullRequests(),
+        agentPullRequests: pullRequests.agentPullRequests(),
+        pendingTasks: plans.pending(),
+      });
 
       return edge;
     });
+
+    const ticks = yield* drawnPerTick(drawn);
 
     return {
       answer: (rows, standing) =>
@@ -169,7 +261,9 @@ export function taskListCollections(
           return Effect.gen(function* () {
             const plansMoved = yield* plans.answer(rows.plans, answered(planKeys));
             const agentsMoved = yield* agents.answer(rows.agents, answered(agentKeys));
-            yield* drawn;
+            agentsDrawn(agentsMoved);
+            // Note that a whole answer, the list's first or one read again, draws at once, and one past a sync id rides the tick, since a busy account's agents answer many a second.
+            yield* standing?.past === undefined ? ticks.drawn : ticks.soon;
 
             return plansMoved.length + agentsMoved.length > 0;
           });
