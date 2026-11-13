@@ -7,6 +7,7 @@ import {
   MARKDOWN_RUN,
   markdownBlocks,
   markdownGithubPages,
+  markdownReplyButtons,
 } from "./markdown-model.js";
 
 const READING = {
@@ -62,6 +63,28 @@ describe("markdownBlocks", () => {
         },
       ],
     });
+  });
+
+  it("reads a suggestion's link as its button, whose plain link opens the agent whose reply holds it", () => {
+    const agentId = "0f6c2a1e-3b4d-4c5e-8f90-1a2b3c4d5e6f";
+    const buttonId = "9a8b7c6d-5e4f-4a3b-8c2d-1e0f9a8b7c6d";
+    const href = `https://vespin.dev/acme/agent/${agentId}/button/${buttonId}`;
+    const text = `[Fix the flaky test](${href}), then [again](${href})`;
+    const [paragraph] = markdownBlocks(text, READING);
+
+    const suggestion = (written: string) => ({
+      kind: MARKDOWN_RUN.SUGGESTION,
+      suggestion: {
+        link: { workspace: "acme", agentId, buttonId },
+        words: written,
+        target: { kind: LINK_TARGET.PLACE, href: `https://vespin.dev/acme/agent/${agentId}` },
+      },
+    });
+
+    expect(paragraph).toMatchObject({
+      runs: [suggestion("Fix the flaky test"), words(", then "), suggestion("again")],
+    });
+    expect(markdownReplyButtons(text, READING)).toEqual([{ workspace: "acme", agentId, buttonId }]);
   });
 
   it("draws a link the panel would not open, one past 2,048 characters, as a link to nowhere", () => {

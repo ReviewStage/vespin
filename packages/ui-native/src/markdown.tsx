@@ -6,6 +6,7 @@ import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind, entityWordHeard } from "@repo/features/entity-kind";
 import type { LinkStanding } from "@repo/features/link-standing-model";
 import { pullRequestMarkState } from "@repo/features/pull-request-model";
+import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import { SymbolView } from "expo-symbols";
 import { type ReactNode, useMemo, useState } from "react";
 import {
@@ -39,8 +40,15 @@ import {
   type MarkdownBlock,
   type MarkdownChip,
   type MarkdownRun,
+  type MarkdownSuggestion,
   markdownBlocks,
 } from "./markdown-model.js";
+import {
+  SUGGESTION_LOOK,
+  SUGGESTION_SENT_WORDS,
+  type SuggestionLook,
+  suggestionHeard,
+} from "./suggestion-look.js";
 import { type BrandColors, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 import { SPACE } from "./tokens/space.js";
@@ -170,6 +178,8 @@ interface Drawing {
   readonly headings: boolean;
   /** What GitHub holds of the pull request or issue a chip's page names, as the host read it; none while unread or unanswered. */
   readonly linkStanding: (page: string) => LinkStanding | undefined;
+  /** How a suggestion's link stands, by its button and the words it was written with; none where it is drawn as the plain link it is. */
+  readonly suggestion: (link: ReplyButtonLink, words: string) => SuggestionLook | undefined;
 }
 
 /** A chip of a GitHub page as its standing draws it: its mark, its name, and its state's words after it. */
@@ -320,6 +330,90 @@ function MentionChip({
   );
 }
 
+/** The steer arrow a suggestion leads with, as the panel's pill and its Started or Sent do. */
+const SUGGESTION_SYMBOL = "arrow.turn.down.right";
+
+/**
+ * A suggestion as its chip, standing in the line of words in the mention
+ * chip's shape: offered, the steer arrow and its label, which a press opens
+ * filled in; or reached, the agent's chip with Started or Sent after it,
+ * which a press opens.
+ */
+function SuggestionChip({
+  look,
+  drawing,
+}: {
+  readonly look: SuggestionLook;
+  readonly drawing: Drawing;
+}) {
+  const { colors, fontScale } = drawing;
+  const size = TEXT_SIZE.FOOTNOTE;
+  const offered = look.look === SUGGESTION_LOOK.OFFERED;
+
+  return (
+    <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
+      <Pressable
+        onPress={look.onPress}
+        accessibilityRole="button"
+        accessibilityLabel={suggestionHeard(look)}
+        style={[
+          styles.chip,
+          {
+            maxWidth: drawing.lineWidth,
+            backgroundColor: colors.WELL,
+            borderColor: colors.CHIP_EDGE,
+          },
+        ]}
+      >
+        <ChipGlyph
+          glyph={offered ? SUGGESTION_SYMBOL : ENTITY_SYMBOL[ENTITY_KIND.AGENT]}
+          size={size * fontScale}
+          color={colors.TEXT_MUTED}
+        />
+        <Text
+          numberOfLines={1}
+          style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
+        >
+          {offered ? look.label : look.name}
+        </Text>
+        {offered ? null : (
+          <>
+            <ChipGlyph
+              glyph={SUGGESTION_SYMBOL}
+              size={size * fontScale}
+              color={colors.TEXT_MUTED}
+            />
+            <Text numberOfLines={1} style={{ fontSize: size, color: colors.TEXT_MUTED }}>
+              {SUGGESTION_SENT_WORDS[look.suggests]}
+            </Text>
+          </>
+        )}
+      </Pressable>
+    </View>
+  );
+}
+
+/** A suggestion's link where no suggestion stands, as the plain link to the agent whose reply holds it. */
+function SuggestionLink({
+  suggestion,
+  drawing,
+}: {
+  readonly suggestion: MarkdownSuggestion;
+  readonly drawing: Drawing;
+}) {
+  const onPress = open(suggestion.target, drawing);
+
+  return (
+    <Text
+      onPress={onPress}
+      accessibilityRole={onPress === undefined ? "text" : "link"}
+      style={{ color: drawing.colors.TEXT_BODY, textDecorationLine: "underline" }}
+    >
+      {suggestion.words}
+    </Text>
+  );
+}
+
 function wordStyle(run: Extract<MarkdownRun, { kind: typeof MARKDOWN_RUN.WORDS }>): TextStyle {
   return {
     ...(run.strong && { fontWeight: "600" }),
@@ -372,6 +466,16 @@ function RunView({ run, drawing }: { readonly run: MarkdownRun; readonly drawing
 
     case MARKDOWN_RUN.CHIP:
       return <MentionChip chip={run.chip} drawing={drawing} />;
+    case MARKDOWN_RUN.SUGGESTION: {
+      const look = drawing.suggestion(run.suggestion.link, run.suggestion.words);
+
+      return look === undefined ? (
+        <SuggestionLink suggestion={run.suggestion} drawing={drawing} />
+      ) : (
+        <SuggestionChip look={look} drawing={drawing} />
+      );
+    }
+
     case MARKDOWN_RUN.BREAK:
       return <Text>{"\n"}</Text>;
   }
@@ -413,6 +517,15 @@ function collectOpenings(
           onOpen,
         });
       }
+    } else if (run.kind === MARKDOWN_RUN.SUGGESTION) {
+      const { link, words, target } = run.suggestion;
+      const look = drawing.suggestion(link, words);
+      const onOpen = look === undefined ? open(target, drawing) : look.onPress;
+      const label = look === undefined ? words : suggestionHeard(look);
+
+      if (onOpen !== undefined && label !== "") {
+        openings.push({ name: `open-${openings.length}`, label: `${OPEN_WORD} ${label}`, onOpen });
+      }
     } else if (run.kind === MARKDOWN_RUN.LINK) {
       const onOpen = open(run.target, drawing);
       const heard = heardLine(run.runs, (chip) => chipHeard(chip, drawing));
@@ -437,6 +550,12 @@ function runText(run: MarkdownRun, drawing: Drawing): string {
       return runsText(run.runs, drawing);
     case MARKDOWN_RUN.CHIP:
       return chipHeard(run.chip, drawing);
+    case MARKDOWN_RUN.SUGGESTION: {
+      const look = drawing.suggestion(run.suggestion.link, run.suggestion.words);
+
+      return look === undefined ? run.suggestion.words : suggestionHeard(look);
+    }
+
     case MARKDOWN_RUN.BREAK:
       return " ";
     default: {
@@ -912,6 +1031,10 @@ type MarkdownProps = {
   readonly headings?: boolean | undefined;
   /** What GitHub holds of a pull request or issue a chip names, by its page (`markdownGithubPages`), which the chip says where it stands; every chip says what its link says where none is given. */
   readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
+  /** How a suggestion an agent wrote into its reply stands, by its button (`markdownReplyButtons`) and its words; every suggestion is drawn as its plain link where none is given. */
+  readonly suggestion?:
+    | ((link: ReplyButtonLink, words: string) => SuggestionLook | undefined)
+    | undefined;
 };
 
 /** A video the words name as a picture, played in its place: the file it plays from, none while it is on its way, its name, and where it opens where the player cannot read it. */
@@ -928,6 +1051,11 @@ function namedSource(written: string): string {
 
 /** No standing read for any page. */
 function noStanding(): undefined {
+  return undefined;
+}
+
+/** No suggestion standing for any link. */
+function noSuggestion(): undefined {
   return undefined;
 }
 
@@ -952,6 +1080,7 @@ export function Markdown({
   videoAt = noVideo,
   headings = false,
   linkStanding = noStanding,
+  suggestion = noSuggestion,
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
@@ -970,6 +1099,7 @@ export function Markdown({
     videoAt,
     headings,
     linkStanding,
+    suggestion,
   };
 
   return (
