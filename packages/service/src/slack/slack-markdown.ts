@@ -11,6 +11,15 @@ const SLACK_MARKDOWN_CHARS = 12_000;
 /** What the cut end of words too long for Slack says; the message's link reads the rest. */
 const CUT_MARK = "…";
 
+/** The line an agent's final message parts its Slack messages with: `---` alone, outside a code fence. */
+const MESSAGE_BREAK = /^\s*---\s*$/u;
+
+/** A line that opens or closes a Markdown code fence. */
+const CODE_FENCE = /^\s*(?:```|~~~)/u;
+
+/** The most messages one final message is posted as; what runs past the last is posted in it. */
+const SLACK_MESSAGES = 6;
+
 /** A target Slack opens as a link; an app-only one, a date's among them, leads nowhere there. */
 const WEB_LINK = /^https?:\/\//iu;
 
@@ -40,6 +49,36 @@ function withPlainMentions(markdown: string): string {
   }
 
   return out + markdown.slice(at);
+}
+
+/**
+ * An agent's final message as the Slack messages it is posted as, in order:
+ * its parts between lines of `---` alone outside a code fence, as a person
+ * sends a few short messages rather than one long one, each trimmed and an
+ * empty one dropped, the parts past the bound joined into the last; the
+ * whole as one where it holds no such line.
+ */
+export function slackMessagesOf(markdown: string): readonly string[] {
+  const parts: string[][] = [[]];
+  let fenced = false;
+
+  for (const line of markdown.split("\n")) {
+    if (CODE_FENCE.test(line)) fenced = !fenced;
+
+    if (!fenced && MESSAGE_BREAK.test(line)) parts.push([]);
+    else parts.at(-1)?.push(line);
+  }
+
+  const messages = parts.flatMap((lines) => {
+    const part = lines.join("\n").trim();
+
+    return part === "" ? [] : [part];
+  });
+
+  const kept = messages.slice(0, SLACK_MESSAGES - 1);
+  const rest = messages.slice(SLACK_MESSAGES - 1);
+
+  return rest.length === 0 ? kept : [...kept, rest.join("\n\n")];
 }
 
 /** An agent's Markdown as one `markdown` block, which Slack draws as standard Markdown, clipped to the bound given, else Slack's own. */

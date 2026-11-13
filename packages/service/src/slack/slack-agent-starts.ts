@@ -70,8 +70,10 @@
  * agent's current thread, and any other turn of an agent a thread speaks
  * for in its current thread, the one kept, moved, or written in latest
  * (`claimSlackThreadTurn`), never in every thread it was ever kept for. A
- * thread's post is its final message in a `markdown` block, which
- * Slack draws as standard Markdown, or that it failed
+ * thread's post is its final message, one Slack message to each of its
+ * parts between lines of `---` (`slackMessagesOf`), as the prompt asks the
+ * agent to write it, each in a `markdown` block, which Slack draws as
+ * standard Markdown, the agent's link under the last; or that it failed
  * or was stopped, each with the agent's link, and after either the pictures and
  * recordings the agent showed with `show_image` in that turn, shared as
  * files under the thread (`SlackBot.upload`). A turn of an agent started
@@ -183,7 +185,12 @@ import {
   type SlackMessageContent,
   type SlackUpload,
 } from "./slack-bot.js";
-import { slackClipped, slackEscaped, slackMarkdownBlock } from "./slack-markdown.js";
+import {
+  slackClipped,
+  slackEscaped,
+  slackMarkdownBlock,
+  slackMessagesOf,
+} from "./slack-markdown.js";
 import { threadDmAt } from "./thread-dms.js";
 
 /** The events read: a mention of the bot in a channel, and a message in a conversation with it. */
@@ -206,6 +213,10 @@ const SHARED_FILE_NAME = { IMAGE: "image", PDF: "document.pdf" } as const;
 
 /** What the prompt says in the member's words' place where they shared files alone. */
 const FILES_ALONE = "(The member sent the attached files without words.)";
+
+/** What the agent is told of its final message, which is posted back in the Slack thread. */
+const SLACK_REPLY_WORDS =
+  "Your final message is posted back in that thread, so make it stand on its own, and write it as a person writes in Slack: a few short messages of a sentence or two each, rather than one long one, with a line holding only `---` between them. Each part is posted as its own Slack message, in order.";
 
 /** The conversation type a direct message to the bot arrives in. */
 const SLACK_IM = "im";
@@ -622,7 +633,7 @@ function startPrompt(
   const lines = [
     words,
     "---",
-    `A member wrote this to ${PRODUCT_NAME}'s Slack bot ${where}. Your final message is posted back in that thread, so make it stand on its own.`,
+    `A member wrote this to ${PRODUCT_NAME}'s Slack bot ${where}. ${SLACK_REPLY_WORDS}`,
   ];
 
   if (earlier.length === 0) return lines.join("\n\n");
@@ -681,7 +692,7 @@ function followUpPrompt(addressed: SlackAddressed, permalink: Option.Option<stri
   return [
     addressed.text === "" ? FILES_ALONE : addressed.text.slice(0, PROMPT_BOUND / 2),
     "---",
-    `A member wrote this in ${where} you were started from. Your final message is posted back in that thread, so make it stand on its own.`,
+    `A member wrote this in ${where} you were started from. ${SLACK_REPLY_WORDS}`,
   ].join("\n\n");
 }
 
@@ -1113,22 +1124,40 @@ export function actOnSlackEvent(
   );
 }
 
-/** What the post says of the turn: its final message where it finished, that it failed and why, or that it was stopped. */
-function turnOutcome(turn: SettledAgentTurn, words: string | undefined): SlackMessageContent {
+/** An agent's Markdown as one reply in the thread, its plain text clipped for the notification. */
+function markdownReply(markdown: string): SlackMessageContent {
+  return {
+    text: slackClipped(markdown, NOTIFICATION_CHARS),
+    blocks: [slackMarkdownBlock(markdown)],
+  };
+}
+
+/**
+ * What the posts say of the turn, in order: its final message where it
+ * finished, one post to each of its parts (`slackMessagesOf`), that it
+ * failed and why, or that it was stopped.
+ */
+function turnOutcomes(
+  turn: SettledAgentTurn,
+  words: string | undefined,
+): readonly [SlackMessageContent, ...SlackMessageContent[]] {
   // A turn its plan's usage limit stopped is said so, not that the agent failed.
-  if (turn.failure === TURN_FAILURE.PLAN_LIMIT) return plainReply(LIMIT_REACHED_WORDS);
+  if (turn.failure === TURN_FAILURE.PLAN_LIMIT) return [plainReply(LIMIT_REACHED_WORDS)];
 
   if (turn.status === TURN_STATUS.FAILED) {
-    return plainReply(
-      turn.failure === null ? "The agent failed." : `The agent failed: ${turn.failure}.`,
-    );
+    return [
+      plainReply(
+        turn.failure === null ? "The agent failed." : `The agent failed: ${turn.failure}.`,
+      ),
+    ];
   }
 
-  if (turn.status === TURN_STATUS.CANCELED) return plainReply("The agent was stopped.");
+  if (turn.status === TURN_STATUS.CANCELED) return [plainReply("The agent was stopped.")];
+  const [first, ...rest] = words === undefined ? [] : slackMessagesOf(words);
 
-  if (words === undefined) return plainReply("The agent finished.");
+  if (first === undefined) return [plainReply("The agent finished.")];
 
-  return { text: slackClipped(words, NOTIFICATION_CHARS), blocks: [slackMarkdownBlock(words)] };
+  return [markdownReply(first), ...rest.map(markdownReply)];
 }
 
 /** The pictures and recordings the turn's `show_image` calls kept beside the transcript, in the order shown, each under its caption; one not kept is left out. */
@@ -1273,17 +1302,26 @@ export function postTurnToSlack(
     }
 
     const { channelId, threadTs } = place.value.thread;
-    const outcome = turnOutcome(turn, words);
-    yield* bot.reply(channelId, threadTs, {
-      text: outcome.text,
-      blocks: [
-        ...outcome.blocks,
-        {
-          type: "context",
-          elements: [{ type: "mrkdwn", text: `<${link}|Open in ${PRODUCT_NAME}>` }],
-        },
-      ],
-    });
+    const outcomes = turnOutcomes(turn, words);
+    const last = outcomes.length - 1;
+
+    // Note that we post one part at a time, in order, and only the last carries the agent's link.
+    for (const [index, outcome] of outcomes.entries()) {
+      yield* bot.reply(channelId, threadTs, {
+        text: outcome.text,
+        blocks:
+          index < last
+            ? outcome.blocks
+            : [
+                ...outcome.blocks,
+                {
+                  type: "context",
+                  elements: [{ type: "mrkdwn", text: `<${link}|Open in ${PRODUCT_NAME}>` }],
+                },
+              ],
+      });
+    }
+
     yield* bot.upload(channelId, threadTs, uploads);
 
     if (turn.status === TURN_STATUS.SETTLED && (yield* isSlackStartedAgent(agent.value.id))) {
