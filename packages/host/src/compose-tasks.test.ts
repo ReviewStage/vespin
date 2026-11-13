@@ -942,6 +942,20 @@ it.effect(
     }),
 );
 
+it.effect("a rename of an open task draws the description the service answered with", () =>
+  Effect.gen(function* () {
+    const invites = task(INVITES, "Teammate invitations", "# Teammate invitations", 10);
+    const { call, settled, description, openTask } = yield* subject(fakeService([invites]));
+    yield* openTask(INVITES);
+    yield* settled;
+
+    yield* call("TASKS_RENAME", { taskId: INVITES, name: "Invitations" });
+    yield* settled;
+
+    assert.equal(description(INVITES)?.description.body, "# Invitations");
+  }),
+);
+
 it.effect(
   "a pin answered while a description's first read is out stands over the pin the read took, and the read's description still lands",
   () =>

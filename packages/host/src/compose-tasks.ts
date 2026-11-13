@@ -1755,7 +1755,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
               documentTook(taskId, answered, (held) => ({
                 ...held,
                 name: answered.name,
-                document: answered.description,
+                description: answered.description,
               }));
 
               return {
