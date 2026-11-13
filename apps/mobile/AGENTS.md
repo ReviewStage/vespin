@@ -227,6 +227,20 @@ shared picture, so a HEIC from the library is read and no metadata goes with
 it (`src/workspace-photo.ts`). A build without the module says the photo
 could not be read rather than sending one at full size.
 
+## The keyboard follower
+
+A composer's dock (`GlassDock`) rides the keyboard on every frame, as
+Messages' field does, its interactive dismissal included: a drag down the
+transcript pulls the keyboard and the bar together. iOS posts no keyboard
+event during that drag, so the dock stands in the app's own native view,
+autolinked from `modules/keyboard-follow/`, which pins a probe to the
+keyboard's layout guide and lifts its content by as far as the keyboard
+stands over the dock's foot each time the guide moves. A build without the
+module lifts the dock by the keyboard's height as it starts to rise and fall,
+so the bar stays put through a drag. The drag is checked by hand, or in a
+recording, since Maestro's swipes are too quick to hold the keyboard
+half-way.
+
 ## The rich copy module
 
 A draft's Copy message puts one pasteboard item holding the body's HTML, the

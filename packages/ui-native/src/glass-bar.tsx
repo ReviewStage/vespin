@@ -2,6 +2,7 @@
 
 import { Host, HStack, ScrollView, VStack } from "@expo/ui/swift-ui";
 import { frame, type ModifierConfig, onGeometryChange, padding } from "@expo/ui/swift-ui/modifiers";
+import { requireNativeView, requireOptionalNativeModule } from "expo";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import {
@@ -12,6 +13,7 @@ import {
   StyleSheet,
   useWindowDimensions,
   View,
+  type ViewProps,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReduceTransparency } from "./accessibility.js";
@@ -26,6 +28,26 @@ const DockRoom = createContext(0);
 
 /** Tells the dock how tall the bar inside it stands, with its gap; nothing outside a dock. */
 const DockMeasure = createContext<((room: number) => void) | undefined>(undefined);
+
+/** Whether the dock a bar stands in lifts it over the keyboard itself, so the bar keeps its foot's safe area whatever the keyboard does; not outside a dock. */
+const DockFollows = createContext(false);
+
+type KeyboardFollowProps = ViewProps & {
+  /** The bottom safe area the bar pads at its foot, in points, which the lift gives up under the keyboard. */
+  readonly inset: number;
+};
+
+/**
+ * The app's keyboard follower (`apps/mobile/modules/keyboard-follow`): a
+ * view that lifts what it holds above the keyboard on every frame the
+ * keyboard moves, its interactive dismissal included, which no keyboard
+ * event reports. None in a build without the module, where the dock lifts
+ * by the keyboard's height as it starts to rise and fall.
+ */
+const KeyboardFollow =
+  requireOptionalNativeModule("KeyboardFollow") === null
+    ? undefined
+    : requireNativeView<KeyboardFollowProps>("KeyboardFollow");
 
 /** How round the bar stands: a rounded field, as a composer's is. */
 export const BAR_RADIUS = 24;
@@ -81,10 +103,12 @@ function moveWithKeyboard({ duration, easing }: KeyboardEvent) {
   });
 }
 
-/** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down. */
-function useKeyboardHeight(): number {
+/** How tall the system's keyboard stands, in points, as it begins to rise and to fall; none while it is down, or where nothing heeds it (`heeded` false). */
+function useKeyboardHeight(heeded: boolean): number {
   const [height, setHeight] = useState(0);
   useEffect(() => {
+    if (!heeded) return;
+
     const rising = Keyboard.addListener("keyboardWillShow", (event) => {
       moveWithKeyboard(event);
       setHeight(event.endCoordinates.height);
@@ -99,9 +123,9 @@ function useKeyboardHeight(): number {
       rising.remove();
       falling.remove();
     };
-  }, []);
+  }, [heeded]);
 
-  return height;
+  return heeded ? height : 0;
 }
 
 /**
@@ -178,7 +202,8 @@ export function GlassBar({
   /** What the bar's SwiftUI takes over its whole glass, such as a drop of pictures. */
   readonly modifiers?: readonly ModifierConfig[];
 }) {
-  const keyboard = useKeyboardHeight() > 0;
+  const follows = useContext(DockFollows);
+  const keyboard = useKeyboardHeight(!follows) > 0;
   const measure = useContext(DockMeasure);
   const solid = useReduceTransparency() || !isLiquidGlassAvailable();
 
@@ -215,7 +240,7 @@ export function GlassBar({
       ? undefined
       : (event: LayoutChangeEvent) => measure(event.nativeEvent.layout.height + SPACE.ROW);
 
-  // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one.
+  // Note that the bottom safe area is let go while the keyboard stands, since the keyboard covers the tab bar it holds room for, but for a dock that lifts the bar itself, which gives that room up under the keyboard; the sides are kept, so the bar stops short of a tab rail beside it, as the folded iPhone Duo stands one.
   return (
     <SafeAreaView
       edges={keyboard ? ["left", "right"] : ["bottom", "left", "right"]}
@@ -244,20 +269,31 @@ export function GlassDock({
   readonly children: ReactNode;
   readonly bar: ReactNode;
 }) {
-  // Note that the bar is lifted by the keyboard's own height, read from the system, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
-  const keyboard = useKeyboardHeight();
+  // Note that where the app's follower is built, it lifts the bar with the keyboard on every frame, as Messages' field rides it down an interactive dismissal; elsewhere the bar is lifted by the keyboard's height, read from the system as it starts to move, rather than by a view that pads for it, since the field that raised it stands in SwiftUI.
+  const follows = KeyboardFollow !== undefined;
+  const keyboard = useKeyboardHeight(!follows);
   const [room, setRoom] = useState(DOCK_ROOM_UNMEASURED);
   // Note that the column holds the window's side safe areas too, which the bar's own safe area view pads inside it, so its glass spans the reading width.
-  const { left, right } = useSafeAreaInsets();
+  const { bottom, left, right } = useSafeAreaInsets();
+
+  const column = (
+    <View style={[styles.column, { maxWidth: READING_WIDTH + left + right }]}>
+      <DockFollows.Provider value={follows}>
+        <DockMeasure.Provider value={setRoom}>{bar}</DockMeasure.Provider>
+      </DockFollows.Provider>
+    </View>
+  );
 
   return (
     <View style={styles.dock}>
       <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
-      <View style={[styles.docked, { bottom: keyboard }]}>
-        <View style={[styles.column, { maxWidth: READING_WIDTH + left + right }]}>
-          <DockMeasure.Provider value={setRoom}>{bar}</DockMeasure.Provider>
-        </View>
-      </View>
+      {KeyboardFollow === undefined ? (
+        <View style={[styles.docked, { bottom: keyboard }]}>{column}</View>
+      ) : (
+        <KeyboardFollow inset={bottom} style={styles.docked}>
+          {column}
+        </KeyboardFollow>
+      )}
     </View>
   );
 }

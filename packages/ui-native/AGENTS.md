@@ -51,7 +51,8 @@ builds a control of its own.
   or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
   asset catalog holds). `GlassBar` is a bar of Liquid
   Glass through `expo-glass-effect`, `GlassDock` the screen that pins one
-  over its foot above the keyboard, and `Composer` the rounded field a
+  over its foot above the keyboard, riding it frame by frame through the
+  app's follower (`apps/mobile/modules/keyboard-follow`) where it's built, and `Composer` the rounded field a
   thread or a transcript ends with, in one, or `ComposerFoot`, the same
   field at a SwiftUI column's foot in the system's own glass, where no React
   Native bar can stand, such as a split view's detail. Its round button is
