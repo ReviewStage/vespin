@@ -29,6 +29,7 @@ import {
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
+import { useKeeping } from "../keeping.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useHandColumns } from "../place-columns.js";
 import { type SearchFound, useSearchFound } from "../search/use-search.js";
@@ -42,7 +43,13 @@ import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useComposeAction } from "./app-sidebar.js";
 import { useRemindSheet } from "./inbox-remind.js";
 import { InboxItemRows } from "./inbox-screens.js";
-import { StatusQuestionAsk, TaskAgentRow, TaskRows, useAgentArchiveAsk } from "./task-screens.js";
+import {
+  StatusQuestionAsk,
+  TaskAgentRow,
+  TaskRows,
+  useAgentArchiveAsk,
+  useTaskRowDoors,
+} from "./task-screens.js";
 
 /** The Search tab's name, at its head. */
 const SEARCH_TITLE = "Search";
@@ -109,6 +116,7 @@ function FoundList({
 }) {
   const { mark, resolve, refresh, refreshTasks } = useInboxActs();
   const pictureOf = useMemberPictures();
+  const keeping = useKeeping();
   const shown = scopedFound(found, scope);
   // Note that a heading names a kind only among the others, so a kind's own scope lists its rows under none.
   const titled = scope === SEARCH_SCOPE.ALL;
@@ -141,6 +149,7 @@ function FoundList({
             onMark={mark}
             onRemind={onRemind}
             onResolve={resolve}
+            onCopyLink={keeping.copyWords}
           />
         </ListSection>
       )}
@@ -169,7 +178,8 @@ function useSearchScreen({ query, setQuery, scope, setScope }: SearchWords) {
   const router = useRouter();
   const found = useSearchFound(query);
   // Note that a task found acts as on the Tasks tab: Done or Canceled asks first where it stops agents, and a delete always asks.
-  const { listing, status, deletion } = useListingAsks(found.listing);
+  const doors = useTaskRowDoors(found.listing.workspace?.id);
+  const { listing, status, deletion } = useListingAsks(found.listing, doors);
   const remind = useRemindSheet();
   const archiveAsk = useAgentArchiveAsk();
   const routes = foundRoutes(found);
