@@ -504,11 +504,25 @@ const MEMORY_AGENTS: readonly ListedAgent[] = [
 
 /**
  * The workspace's memories, the most recently kept first, as the service
- * lists them: some used by agents often, two kept in the last week, and two
- * no agent has been handed in thirty days, so the page draws each of its
- * lines.
+ * lists them: some used by agents often, some kept in the last week, and
+ * some no agent has been handed in thirty days, so each of the page's views
+ * holds a few; and some run to several sentences, as agents' often do, so a
+ * row cuts its words short.
  */
 const MEMORIES: readonly MemorySummary[] = [
+  memory(
+    7,
+    "Usage alerts fire once per threshold per billing period: the 80% alert sets `alerted_80_at` on the subscription row, and the job skips any row where it is already set, so a retried job never mails a customer twice. Reset both columns when the period rolls over.",
+    THEO,
+    0.5,
+    {
+      source: {
+        ...USAGE_ALERTS,
+        agentId: MEMORY_AGENT.CLAUDE,
+        messageId: "7f1b5d9e-4a6c-4b8d-8e2f-5a7c9b1d3e4f",
+      },
+    },
+  ),
   memory(1, "Migrations are generated with `pnpm db:generate`, never written by hand.", MAYA, 1, {
     source: {
       ...USAGE_ALERTS,
@@ -529,15 +543,40 @@ const MEMORIES: readonly MemorySummary[] = [
       lastRecalledAt: NOW - DAY,
     },
   ),
+  memory(
+    8,
+    "Every request to the payments provider goes through `billing/client.ts`, which retries a 409 or a 5xx three times with jittered backoff and adds an idempotency key derived from the export row's id. Never call the provider's SDK directly from a job or a route.",
+    MAYA,
+    6,
+    {
+      source: { ...USAGE_ALERTS, agentId: MEMORY_AGENT.CODEX, messageId: null },
+      recalls30d: 4,
+      lastRecalledAt: NOW - 5 * HOUR,
+    },
+  ),
   memory(4, "The billing export runs nightly at 02:00 UTC and must finish by 04:00.", THEO, 9, {
     source: { ...USAGE_ALERTS, agentId: MEMORY_AGENT.CODEX, messageId: null },
     recalls30d: 12,
     lastRecalledAt: NOW - 3 * DAY,
   }),
+  memory(
+    9,
+    "The web app's end-to-end suite runs against a seeded Postgres in Docker (`pnpm e2e:db`), never the shared staging database; a test that needs a customer makes one through the factories in `tests/support/` and deletes nothing it did not create.",
+    MAYA,
+    21,
+    { recalls30d: 22, lastRecalledAt: NOW - 6 * HOUR },
+  ),
   memory(5, "Staging deploys pause on Fridays after 3 PM Pacific.", ADA, 40, {
     lastRecalledAt: NOW - 36 * DAY,
   }),
   memory(6, "Feature flags live in `src/flags.ts`, one constant per flag.", null, 45),
+  memory(
+    10,
+    'Release notes are written in the present tense from the customer\'s side ("Exports finish faster"), one line per change, grouped under New, Improved, and Fixed, and never name an internal ticket or a teammate.',
+    ADA,
+    62,
+    { lastRecalledAt: NOW - 48 * DAY },
+  ),
 ];
 
 /* ----- Admin ----- */
@@ -1195,8 +1234,25 @@ const STAGED_TOKEN_REPOSITORIES: AppTokenRepositories = {
   [WORKSPACE.PERSONAL]: { rows: [] },
 };
 
-/** The staged workspace's memories, as the host holds them for Settings › Memory; one object across deliveries. */
-const STAGED_MEMORIES: AppMemories = { [WORKSPACE.ACME]: { rows: MEMORIES } };
+/** The staged workspace's memories, as the host holds them for Settings › Memory, aged on the window's clock as staging begins; one object across deliveries. */
+let stagedMemories: AppMemories | undefined;
+
+function memoriesStaged(): AppMemories {
+  if (stagedMemories !== undefined) return stagedMemories;
+  // Note that New and Unused are read against the window's own clock, which no staged instant stands still for, so every instant moves by how far it stands past the fixture's, as the hosts' beats are aged.
+  const shift = Date.now() - NOW;
+
+  const rows = MEMORIES.map((each) => ({
+    ...each,
+    createdAt: each.createdAt + shift,
+    updatedAt: each.updatedAt + shift,
+    lastRecalledAt: each.lastRecalledAt === null ? null : each.lastRecalledAt + shift,
+  }));
+
+  stagedMemories = { [WORKSPACE.ACME]: { rows } };
+
+  return stagedMemories;
+}
 
 /** The staged workspace's skills and the account's own, as the host holds them for Settings › Skills; one object across deliveries. */
 const STAGED_SKILLS: AppInstalledSkills = { [WORKSPACE.ACME]: { rows: skills(WORKSPACE.ACME) } };
@@ -1306,7 +1362,7 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
     [LIVE_READ.INTEGRATIONS]: STAGED_INTEGRATIONS,
     [LIVE_READ.WORKSPACE_INVITATIONS]: HELD_INVITATIONS,
     [LIVE_READ.INTEGRATION_TOOLS]: STAGED_TOOLS,
-    [LIVE_READ.MEMORIES]: STAGED_MEMORIES,
+    [LIVE_READ.MEMORIES]: memoriesStaged(),
     [LIVE_READ.MODELS]: STAGED_MODELS,
     [LIVE_READ.WORKSPACE_INTEGRATIONS]: STAGED_WORKSPACE_INTEGRATIONS,
     [LIVE_READ.SLACK_CHANNELS]: STAGED_SLACK_CHANNELS,
