@@ -12,6 +12,7 @@ import {
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
+  containerBackground,
   disabled,
   navigationBarTitleDisplayMode,
   navigationSplitViewStyle,
@@ -22,6 +23,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
 import type { SfSymbol } from "./sf-symbol.js";
 import { PathTitle } from "./thread-page.js";
+import { useColors } from "./tokens/colors.js";
 
 /** What the first column holds, so it is drawn afresh as that changes. */
 const FIRST_COLUMN = { APP_SIDEBAR: "app-sidebar", LIST: "list" } as const;
@@ -159,7 +161,10 @@ function barHolds(bar: ColumnBar): boolean {
  * its search where it has one. Note that the view stands in a `ZStack`,
  * because a column lays several children out one above another, so a sheet
  * or an alert a screen draws beside a column's page would otherwise take
- * half its height.
+ * half its height. The column itself stands on the brand's ground, the
+ * sidebar's on `SIDEBAR` and the others' on `GROUND`, as their lists do, so
+ * what isn't a list (a page, an empty state, a scope picker over its list)
+ * never shows the system's own column color or sidebar material.
  */
 function Column({
   view,
@@ -171,15 +176,17 @@ function Column({
   /** Whether it is the sidebar, whose search the system stands in the sidebar's own place. */
   readonly sidebar?: boolean | undefined;
 }) {
+  const colors = useColors();
   const text = useNativeState(bar.search?.text ?? "");
 
   const stacked = (
     <ZStack
-      modifiers={
-        bar.title === undefined
+      modifiers={[
+        containerBackground(sidebar ? colors.SIDEBAR : colors.GROUND, "navigationSplitView"),
+        ...(bar.title === undefined
           ? []
-          : [navigationTitle(bar.title), navigationBarTitleDisplayMode("inline")]
-      }
+          : [navigationTitle(bar.title), navigationBarTitleDisplayMode("inline")]),
+      ]}
     >
       {view}
     </ZStack>

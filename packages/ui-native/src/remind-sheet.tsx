@@ -19,6 +19,7 @@ import {
   foregroundStyle,
   listRowBackground,
   monospacedDigit,
+  presentationBackground,
   presentationDetents,
   presentationDragIndicator,
   scrollContentBackground,
@@ -147,6 +148,8 @@ export function RemindSheet({
           modifiers={[
             presentationDetents(stage === REMIND_STAGE.PICK ? ["large"] : ["medium", "large"]),
             presentationDragIndicator("visible"),
+            // Note that the sheet stands on the form's own ground to its rounded edge and under its drag indicator, which the form's background can't reach.
+            presentationBackground(colors.SIDEBAR),
           ]}
         >
           <Form
