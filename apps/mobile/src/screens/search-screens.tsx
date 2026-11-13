@@ -28,7 +28,14 @@ import {
   UNDER_SPLIT_SCREEN,
 } from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  type Dispatch,
+  type SetStateAction,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useStackRoot } from "../detail-stack.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
@@ -99,8 +106,8 @@ type SearchPick = {
 /** The row a wide window's Search stands beside its results, and how a press picks another. */
 type SearchPicking = {
   readonly picked: SearchPick | undefined;
-  /** Picks a row, or none, as an agent picked and then archived leaves nothing beside the results. */
-  readonly choose: (picked: SearchPick | undefined) => void;
+  /** Picks a row, or none, as an agent picked and then archived leaves nothing beside the results; or reads the pick standing and answers the next. */
+  readonly choose: Dispatch<SetStateAction<SearchPick | undefined>>;
 };
 
 /** The pick a row found makes, by its id: a task, a thread, or an agent; none for an id the query no longer finds. */
@@ -348,7 +355,7 @@ function useSearchDetail(
   picked: SearchPick | undefined,
   listing: TasksListing,
   onRemind: (item: InboxItem) => void,
-  choose: (picked: SearchPick | undefined) => void,
+  choose: Dispatch<SetStateAction<SearchPick | undefined>>,
 ) {
   const task = useTaskDetail(picked?.kind === SEARCH_PICK.TASK ? picked.id : undefined, listing);
 
@@ -377,7 +384,12 @@ function useSearchDetail(
             key={picked.id}
             id={picked.id}
             inColumn
-            onLeave={() => choose(undefined)}
+            // Note that a leave lands once its archive or delete is answered, so it clears the pick only while it still names this agent, never a row picked meanwhile.
+            onLeave={() =>
+              choose((was) =>
+                was?.kind === SEARCH_PICK.AGENT && was.id === picked.id ? undefined : was,
+              )
+            }
           />
         ),
         asks: null,

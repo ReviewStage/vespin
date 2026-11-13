@@ -188,6 +188,11 @@ function popDetail(place: SidebarPlace, key: string): void {
   if (at >= 0) set(place, { over: was.over, pages: was.pages.slice(0, at) });
 }
 
+/** Whether the page `key` names stands on top of a place's stack, with nothing pushed over it. */
+function onTopOf(place: SidebarPlace, key: string): boolean {
+  return stackOf(place).pages.at(-1)?.key === key;
+}
+
 /** Puts a page in the place of the page `key` names, as a new comment gives way to the thread it started. */
 function replaceDetail(place: SidebarPlace, key: string, page: PushedPage): void {
   const was = stackOf(place);
@@ -335,12 +340,17 @@ export function useDetailPush(): (page: PushedPage) => boolean {
 
 /**
  * How the pushed page the calling view stands in leaves its stack, as an
- * archived agent or a restored version goes back, and gives way to another
- * page in its place; none outside a pushed page, where the caller moves its
- * route as it always has.
+ * archived agent or a restored version goes back, gives way to another
+ * page in its place, and whether it stands on top, with nothing the reader
+ * pushed over it since; none outside a pushed page, where the caller moves
+ * its route as it always has.
  */
 export function useDetailLeave():
-  | { readonly leave: () => void; readonly replace: (page: PushedPage) => void }
+  | {
+      readonly leave: () => void;
+      readonly replace: (page: PushedPage) => void;
+      readonly onTop: () => boolean;
+    }
   | undefined {
   const place = useContext(DetailPlace);
   const key = useContext(PageKey);
@@ -350,6 +360,7 @@ export function useDetailLeave():
   return {
     leave: () => popDetail(place, key),
     replace: (page) => replaceDetail(place, key, page),
+    onTop: () => onTopOf(place, key),
   };
 }
 
