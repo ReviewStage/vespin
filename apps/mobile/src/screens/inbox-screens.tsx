@@ -26,7 +26,6 @@ import {
   isUnread,
   MARK_ALL_READ,
   READING_INBOX,
-  RETRY,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
 import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
@@ -47,6 +46,7 @@ import {
   BAR_TITLE,
   type BarAction,
   type BarMenu,
+  BUTTON_LOOK,
   EmptyState,
   GLYPH,
   GlassDock,
@@ -55,6 +55,7 @@ import {
   type ListLook,
   ListRow,
   type MarkdownVideo,
+  menuWithout,
   PATH_PART,
   previewMessages,
   ROW_ACTION_TONE,
@@ -103,11 +104,21 @@ import { useThreeColumns, useWindowSizeClass } from "../use-window-size-class.js
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useListColumn, useListLook } from "./app-sidebar.js";
-import { OpenAskCard, openAskFiles, ThreadComposer, threadMenu } from "./inbox-ask.js";
+import {
+  NO_THREAD_ACTS,
+  OpenAskCard,
+  openAskFiles,
+  ThreadComposer,
+  threadActs,
+  threadMenu,
+} from "./inbox-ask.js";
 import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
 
 /** The Inbox's name, at its head and on its back button. */
 const INBOX_TITLE = "Inbox";
+
+/** The act under a read that failed, as the app's other failures say it, rather than the panel's Retry. */
+const TRY_AGAIN = "Try again";
 
 /** What a pushed thread's screen says where the feed, once read, holds no such thread, such as one a link names that was deleted. */
 const THREAD_NOT_FOUND = "This thread isn't in your inbox";
@@ -330,7 +341,7 @@ function InboxRow({
 
 /**
  * What the list stands where it lists nothing: that the account's feed is
- * still on its first read, or could not be read, with Retry, rather than an
+ * still on its first read, or could not be read, with Try again, rather than an
  * empty Inbox over threads not yet read; else nothing its search found, or
  * nothing its scope holds.
  */
@@ -353,7 +364,7 @@ function InboxEmpty({
       <EmptyState
         title={INBOX_NOT_READ}
         symbol={GLYPH.FAILED}
-        action={{ label: RETRY, onPress: onRetry }}
+        action={{ label: TRY_AGAIN, onPress: onRetry, look: BUTTON_LOOK.BORDERED }}
       />
     );
   }
@@ -607,8 +618,8 @@ function ThreadDetail({
   const inStack = place.inStack;
   const openRemind = place.inStack ? remind.open : place.onRemind;
 
-  const menu = threadMenu(item, answer, {
-    onMark: (unread) => inboxActs.mark(item.id, unread),
+  const doors = {
+    onMark: (unread: boolean) => inboxActs.mark(item.id, unread),
     onRemind: () => openRemind(item),
     onCopyLink: () =>
       keeping.copyWords(
@@ -617,7 +628,11 @@ function ThreadDetail({
           workspaceStep,
         ),
       ),
-  });
+  };
+
+  const menu = threadMenu(item, answer, doors);
+  // Note that a split view's detail bar stands the thread's main acts as glyphs, as Mail's stands Reply and Trash, and ⋯ keeps the rest; a compact window's stack keeps them all in ⋯.
+  const acts = threadActs(item, answer, doors);
 
   // Note that the path opens its task and its agent as pages pushed over the thread, as the panel's crumbs open them; a compact window's stack names the path as its plain title, which can hold no menu, so there they lead the ⋯ menu instead.
   const pathActions = [
@@ -749,7 +764,8 @@ function ThreadDetail({
       {...(inStack
         ? {}
         : {
-            menu,
+            acts,
+            menu: menuWithout(menu, acts),
             foot: <ThreadComposer item={item} answer={answer} agentName={agentName} inColumn />,
           })}
     />
@@ -797,7 +813,7 @@ function ThreadDetail({
   );
 }
 
-/** What stands where a thread named by its id is not drawn: that it is still read, that it could not be, with Retry, or that no such thread is the account's to read. */
+/** What stands where a thread named by its id is not drawn: that it is still read, that it could not be, with Try again, or that no such thread is the account's to read. */
 function ThreadNotDrawn({
   feed,
   onRetry,
@@ -813,7 +829,7 @@ function ThreadNotDrawn({
       <EmptyState
         title={INBOX_NOT_READ}
         symbol={GLYPH.FAILED}
-        action={{ label: RETRY, onPress: onRetry }}
+        action={{ label: TRY_AGAIN, onPress: onRetry, look: BUTTON_LOOK.BORDERED }}
       />
     );
   }
@@ -1060,10 +1076,13 @@ function InboxSplitScreen({
       <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
     );
 
+  // Note that with no thread picked the detail's bar keeps the thread's acts, dimmed, as Mail's bar stands over No Message Selected; a picked thread's page stands its own.
+  const detailBar = selected === undefined ? { acts: NO_THREAD_ACTS } : undefined;
+
   const first = useListColumn(list);
   useHandColumns(
     SIDEBAR_PLACE.INBOX,
-    threeColumns ? { content: list.view, contentBar: list.bar, detail } : undefined,
+    threeColumns ? { content: list.view, contentBar: list.bar, detail, detailBar } : undefined,
   );
 
   return (
@@ -1071,7 +1090,7 @@ function InboxSplitScreen({
       <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
       {threeColumns ? null : (
         <Screen>
-          <SplitView {...first} detail={detail} />
+          <SplitView {...first} detail={detail} detailBar={detailBar} />
         </Screen>
       )}
       {remind.sheet}
