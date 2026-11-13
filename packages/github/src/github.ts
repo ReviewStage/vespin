@@ -213,6 +213,31 @@ export interface GitHubClient {
     variables: Readonly<Record<string, GraphqlVariable>>,
     schema: Schema.Decoder<A>,
   ) => Effect.Effect<A, GitHubFailure>;
+  /**
+   * A GraphQL document's `data` where GitHub answered any, decoded by
+   * `schema`, beside the errors it answered with: what a document of
+   * several parts reads, one of which may fail alone, as Octokit's
+   * `GraphqlResponseError` carries the partial `data`
+   * (https://github.com/octokit/graphql.js#partial-responses). A rate limit
+   * still fails, as `graphql` fails it.
+   */
+  readonly graphqlPartial: <A>(
+    document: string,
+    variables: Readonly<Record<string, GraphqlVariable>>,
+    schema: Schema.Decoder<A>,
+  ) => Effect.Effect<GraphqlPartial<A>, GitHubFailure>;
+}
+
+/** One error of a GraphQL answer: GitHub's type for it, where it named one, and its words. */
+export interface GraphqlError {
+  readonly type?: string;
+  readonly message: string;
+}
+
+/** A GraphQL answer read as far as it went: its data, none where GitHub answered none, and its errors. */
+export interface GraphqlPartial<A> {
+  readonly data: A | undefined;
+  readonly errors: ReadonlyArray<GraphqlError>;
 }
 
 const HeaderValue = Schema.Union([Schema.String, Schema.Number, Schema.Undefined]);
@@ -258,6 +283,12 @@ const TypedError = Schema.Struct({ type: Schema.String });
 
 /** A GraphQL error, or a REST refusal's body, as far as GitHub's own words. */
 const SaidError = Schema.Struct({ message: Schema.String });
+
+/** A GraphQL error as a partial answer carries it. */
+const PartialError = Schema.Struct({
+  type: Schema.optionalKey(Schema.String),
+  message: Schema.String,
+});
 
 /** An answer's data that names errors, as GraphQL answers do. */
 const ErroredData = Schema.Struct({ errors: Schema.Array(Schema.Unknown) });
@@ -703,6 +734,35 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
         (data) =>
           Effect.mapError(
             Schema.decodeUnknownEffect(schema)(data),
+            (error) => new GitHubUnreadable({ message: error.message }),
+          ),
+      ),
+    graphqlPartial: (document, variables, schema) =>
+      Effect.flatMap(
+        called(state, (request) =>
+          octokit.graphql<unknown>(document, { ...variables, request }).then(
+            (data) => ({ data, errors: [] as ReadonlyArray<unknown> }),
+            (error: unknown) => {
+              const rejection = Option.getOrElse(decodeRejection(error), () => UNREAD_REJECTION);
+              const errors = graphqlErrors(rejection);
+              const limited = graphqlErrorTypes(rejection).includes(GRAPHQL_ERROR.RATE_LIMITED);
+
+              // Note that only an answer GitHub gave with errors is partial; a refusal or a limit fails as `graphql` fails.
+              if (errors.length === 0 || limited || rejection.status !== undefined) throw error;
+
+              return { data: rejection.data, errors };
+            },
+          ),
+        ),
+        ({ data, errors }) =>
+          Effect.mapError(
+            Effect.all({
+              data:
+                data === undefined || data === null
+                  ? Effect.succeed(undefined)
+                  : Schema.decodeUnknownEffect(schema)(data),
+              errors: Schema.decodeUnknownEffect(Schema.Array(PartialError))(errors),
+            }),
             (error) => new GitHubUnreadable({ message: error.message }),
           ),
       ),

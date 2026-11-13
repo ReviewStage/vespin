@@ -359,4 +359,30 @@ describe("GitHub", () => {
       );
     }).pipe(Effect.provide(layer));
   });
+
+  it.effect("answers a GraphQL read's partial data beside the errors GitHub gave", () => {
+    const { layer } = harness(() =>
+      Response.json({
+        data: { r0: { name: "hello" }, r1: null },
+        errors: [{ type: "NOT_FOUND", message: "Could not resolve to a Repository." }],
+      }),
+    );
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+
+      const answer = yield* github
+        .asMember(Redacted.make("gho_member"))
+        .graphqlPartial(
+          'query { r0: repository(owner: "octo", name: "hello") { name } r1: repository(owner: "octo", name: "gone") { name } }',
+          {},
+          Schema.Record(Schema.String, Schema.NullOr(Schema.Struct({ name: Schema.String }))),
+        );
+
+      assert.deepStrictEqual(answer, {
+        data: { r0: { name: "hello" }, r1: null },
+        errors: [{ type: "NOT_FOUND", message: "Could not resolve to a Repository." }],
+      });
+    }).pipe(Effect.provide(layer));
+  });
 });
