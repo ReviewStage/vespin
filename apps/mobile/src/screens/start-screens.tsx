@@ -48,6 +48,7 @@ import { useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useOnTab } from "../tab-route.js";
 import {
+  awaitStart,
   CLOUD,
   forgetRefusedStart,
   heldRefusedStart,
@@ -359,6 +360,7 @@ function useSheetStart(
     const started: Started = {};
     setNote(undefined);
     kept.release();
+    awaitStart(taskId);
     router.dismiss();
     router.navigate(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: taskId })));
 

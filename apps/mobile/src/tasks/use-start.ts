@@ -336,15 +336,30 @@ export type StartLanded =
 /** The page of each task that stands, by its task, which hears what its start came to. */
 const hearing = new Map<string, (landed: StartLanded) => void>();
 
+/** The tasks whose page a start opened and whose answer is awaited, until that page hears it or leaves. */
+const awaiting = new Set<string>();
+
 /** What a start came to before its task's page stood to hear it, by its task, kept until the page mounts. */
 const unheard = new Map<string, StartLanded>();
 
-/** Tells the page of the task a New task start opened what the start came to, or keeps it for the page about to mount. */
+/** Marks the task a start just opened as awaiting what the start comes to. */
+export function awaitStart(taskId: string): void {
+  awaiting.add(taskId);
+}
+
+/**
+ * Tells the page of the task a New task start opened what the start came
+ * to, or keeps it for the page about to mount. Note that an answer landing
+ * after its page has left is let go, so a later visit to the task never
+ * opens its agent or steps back.
+ */
 export function startLanded(taskId: string, landed: StartLanded): void {
   const hear = hearing.get(taskId);
 
-  if (hear === undefined) unheard.set(taskId, landed);
-  else hear(landed);
+  if (hear !== undefined) {
+    awaiting.delete(taskId);
+    hear(landed);
+  } else if (awaiting.has(taskId)) unheard.set(taskId, landed);
 }
 
 /**
@@ -366,11 +381,15 @@ export function useStartLanded(
 
     if (waiting !== undefined) {
       unheard.delete(taskId);
+      awaiting.delete(taskId);
       listener(waiting);
     }
 
     return () => {
-      if (hearing.get(taskId) === listener) hearing.delete(taskId);
+      if (hearing.get(taskId) !== listener) return;
+      hearing.delete(taskId);
+      awaiting.delete(taskId);
+      unheard.delete(taskId);
     };
   }, [taskId]);
 }
