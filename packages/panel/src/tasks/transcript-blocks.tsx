@@ -1365,7 +1365,7 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     kind: CallKind;
     /** For a call of an integration's own tool, the integration, whose mark the row wears in its kind's icon's place. */
     provider?: IntegrationProvider | undefined;
-    /** For a call on an app on the developer's Mac, the picture its icon was kept as, which the row wears in its kind's icon's place. */
+    /** For a call on an app on the developer's Mac, the picture its icon was kept as, which the row wears in its kind's icon's place; a computer call with none wears the app icon's placeholder. */
     appIcon?: string | undefined;
     /** For a call of an MCP server's tool, the server's name, which the row says it ran on beside its line. */
     server?: string | undefined;
@@ -1389,6 +1389,8 @@ export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> 
     cut?: CutBody | undefined;
     /** For a call the agent holds for an answer: where the ask stands in words, on the line; what the body says of who asks and why, over the input; and the answers' presses, under the row while it waits. None for the rest. */
     held?: HeldCall | undefined;
+    /** What the body holds under the call's answer, seen once the row is opened, such as the window a computer call read. */
+    answered?: ReactNode;
   };
 
 /** A call held for an answer, as its row draws it (`TranscriptTool`'s `held`). */
@@ -1452,6 +1454,7 @@ export function TranscriptTool({
   errorText,
   cut,
   held,
+  answered,
   ...props
 }: TranscriptToolProps): ReactNode {
   const Icon = CALL_ICON[kind];
@@ -1475,7 +1478,7 @@ export function TranscriptTool({
         icon={
           provider !== undefined ? (
             <ProviderMark provider={provider} />
-          ) : appIcon !== undefined ? (
+          ) : appIcon !== undefined || kind === CALL_KIND.COMPUTER ? (
             <KeptAppIcon id={appIcon} />
           ) : (
             <Icon aria-hidden="true" />
@@ -1533,6 +1536,7 @@ export function TranscriptTool({
             )}
           </>
         )}
+        {answered}
       </ToolContent>
     </Tool>
   );

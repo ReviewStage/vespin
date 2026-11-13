@@ -18,6 +18,7 @@ import {
   runnerMoments,
   toolAnswerSettlement,
   usageLimitSettlement,
+  workspaceAnswerText,
 } from "./runner-moments.js";
 
 /**
@@ -297,16 +298,19 @@ interface Answered extends Call {
 }
 
 /**
- * An MCP result's text blocks joined. A picture in our own tool's answer is
- * left out, so the JSON the tool answered reads whole; in any other server's
- * a stand-in takes the place of its bytes.
+ * An MCP result's text: our own tool's first text block alone
+ * (`workspaceAnswerText`), so the JSON the tool answered reads whole; any
+ * other server's text blocks joined, a stand-in taking the place of a
+ * picture's bytes.
  */
 function mcpAnswerText(content: readonly WireValue[], workspaceTool: boolean): string {
+  if (workspaceTool) return workspaceAnswerText(content);
+
   return content
     .flatMap((block) =>
       Option.match(readTextBlock(block), {
         onSome: ({ text }) => [text],
-        onNone: () => (workspaceTool ? [] : [PICTURE_STAND_IN]),
+        onNone: () => [PICTURE_STAND_IN],
       }),
     )
     .join("\n");
