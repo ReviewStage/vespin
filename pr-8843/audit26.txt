@@ -1,0 +1,14 @@
+PlugIns/NotificationService.appex/NotificationService: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+PlugIns/ShareExtension.appex/ShareExtension: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+PlugIns/AgentsLiveActivity.appex/AgentsLiveActivity: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+Frameworks/ExpoModulesJSI.framework/ExpoModulesJSI: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+Frameworks/hermesvm.framework/hermesvm: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+Frameworks/ExpoFont.framework/ExpoFont: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+Frameworks/ExpoVideo.framework/ExpoVideo: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+Frameworks/ExpoModulesCore.framework/ExpoModulesCore: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+Frameworks/React.framework/React: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+Frameworks/ExpoMediaLibrary.framework/ExpoMediaLibrary: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+Frameworks/ReactNativeDependencies.framework/ReactNativeDependencies: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+Frameworks/ExpoModulesWorklets.framework/ExpoModulesWorklets: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+Frameworks/ExpoFileSystem.framework/ExpoFileSystem: weak missing 0; strong SwiftUI missing 0, UIKit missing 0
+Vespin: weak missing 53; strong SwiftUI missing 0, UIKit missing 0
