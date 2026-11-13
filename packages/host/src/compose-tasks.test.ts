@@ -1471,33 +1471,43 @@ it.effect(
     }),
 );
 
-it.effect("a block the service answered stands on the open task through the list's next draw", () =>
-  Effect.gen(function* () {
-    const service = fakeService([
-      task(INVITES, "Teammate invitations", "# Draft", 10),
-      task(BILLING, "Billing", "# Draft", 11),
-    ]);
+it.effect(
+  "a block the service answered stands on the open task through the list's next draw, and one the list takes away leaves it",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService([
+        task(INVITES, "Teammate invitations", "# Draft", 10),
+        task(BILLING, "Billing", "# Draft", 11),
+      ]);
 
-    const { call, listed, openTask, description } = yield* subject(service);
-    yield* call("TASKS_REFRESH", undefined);
-    yield* listed();
-    yield* openTask(INVITES);
-    const blockedBy = () => description(INVITES)?.blockedBy;
+      const { call, listed, settled, openTask, description } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listed();
+      yield* openTask(INVITES);
+      const blockedBy = () => description(INVITES)?.blockedBy;
 
-    const answered = yield* call("TASKS_BLOCK", {
-      taskId: INVITES,
-      block: {
-        change: TASK_BLOCK_CHANGE.ADD,
-        relation: TASK_BLOCK_RELATION.BLOCKED_BY,
-        taskId: BILLING,
-      },
-    });
+      const answered = yield* call("TASKS_BLOCK", {
+        taskId: INVITES,
+        block: {
+          change: TASK_BLOCK_CHANGE.ADD,
+          relation: TASK_BLOCK_RELATION.BLOCKED_BY,
+          taskId: BILLING,
+        },
+      });
 
-    yield* listed();
+      yield* listed();
 
-    assert.deepEqual(answered, { blockedBy: [BILLING], blocks: [] });
-    assert.deepEqual(blockedBy(), [BILLING]);
-  }),
+      assert.deepEqual(answered, { blockedBy: [BILLING], blocks: [] });
+      assert.deepEqual(blockedBy(), [BILLING]);
+
+      // A teammate takes the block away, which the list's next draw carries.
+      service.live.list.set({
+        plans: service.tasks.map((each) => ({ ...rowOfTask(each), blockedBy: [], blocks: [] })),
+      });
+      yield* nextPoll(settled);
+
+      assert.deepEqual(blockedBy(), []);
+    }),
 );
 
 it.effect(

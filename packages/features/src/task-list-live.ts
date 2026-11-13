@@ -508,10 +508,8 @@ function taskSummaryOf(row: TaskLiveRow, agents: AgentGroup | undefined, now: nu
       : { parentTaskId: row.parentTaskId }),
     ...(row.mode === undefined ? undefined : { mode: row.mode }),
     ...(row.blocked === true ? { blocked: true } : undefined),
-    ...(row.blockedBy === undefined || row.blockedBy.length === 0
-      ? undefined
-      : { blockedBy: row.blockedBy }),
-    ...(row.blocks === undefined || row.blocks.length === 0 ? undefined : { blocks: row.blocks }),
+    ...(row.blockedBy === undefined ? undefined : { blockedBy: row.blockedBy }),
+    ...(row.blocks === undefined ? undefined : { blocks: row.blocks }),
     ...(row.madeByRun === true ? { madeByRun: true } : undefined),
     ...followersOf(row),
     ...(agents === undefined ? undefined : { agents: agentsSummaryOf(agents, now) }),

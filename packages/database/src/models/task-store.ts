@@ -1462,8 +1462,8 @@ export function listTasks(userId: string): TaskStoreEffect<readonly TaskSummary[
         devices,
       ),
       ...(row.blocked ? { blocked: true } : undefined),
-      ...(row.blockedBy.length === 0 ? undefined : { blockedBy: row.blockedBy }),
-      ...(row.blocks.length === 0 ? undefined : { blocks: row.blocks }),
+      blockedBy: row.blockedBy,
+      blocks: row.blocks,
       ...(row.madeByRun ? { madeByRun: true } : undefined),
     }));
   });

@@ -776,8 +776,8 @@ const taskSummaryFields = {
   blocked: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   /**
    * The tasks this one waits on, by id, the earliest added first, each one
-   * the reader reaches; a list's row leaves it out where there are none, and
-   * a service before blocks leaves it out always.
+   * the reader reaches, empty where there are none; absent from a service
+   * before blocks, and from a list's row before rows carried them.
    */
   blockedBy: EffectSchema.optionalKey(EffectSchema.Array(wireUuidSchema)),
   /** The tasks that wait on this one, on the same terms as `blockedBy`. */

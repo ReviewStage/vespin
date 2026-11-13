@@ -1417,7 +1417,9 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
    * where the list holds no row of it. Note that the row is the whole of
    * what the task carries but its description, so a field the row leaves out is one
    * the task no longer has, and that the last save is the description's own, kept
-   * with its body, as are its blocks, which a row of the list never carries.
+   * with its body. Its blocks are the row's where the row carries them, an
+   * empty list among them, and the description's from a service whose rows
+   * carry none.
    */
   function asListed(task: Task): Task {
     const listed = view.tasks.find((row) => row.id === task.id);
@@ -1433,8 +1435,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       ...(agentEdits === undefined ? undefined : { agentEdits }),
       ...(lastEdit === undefined ? undefined : { lastEdit }),
       ...(sectionEdits === undefined ? undefined : { sectionEdits }),
-      ...(blockedBy === undefined ? undefined : { blockedBy }),
-      ...(blocks === undefined ? undefined : { blocks }),
+      ...(row.blockedBy === undefined && blockedBy !== undefined ? { blockedBy } : undefined),
+      ...(row.blocks === undefined && blocks !== undefined ? { blocks } : undefined),
     };
   }
 

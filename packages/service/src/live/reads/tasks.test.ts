@@ -670,9 +670,9 @@ it.layer(getTestDB())("the plan list's live statements", (it) => {
         assert.deepEqual(
           blocksOf(live.plans),
           [
-            { blockedBy: [shipped.id, cut.id], blocks: undefined },
-            { blockedBy: undefined, blocks: [waiting.id] },
-            { blockedBy: undefined, blocks: [waiting.id] },
+            { blockedBy: [shipped.id, cut.id], blocks: [] },
+            { blockedBy: [], blocks: [waiting.id] },
+            { blockedBy: [], blocks: [waiting.id] },
           ],
           "each row names its blockers, the earliest first, and what it blocks",
         );
