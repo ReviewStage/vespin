@@ -915,6 +915,14 @@ export const WINDOW_SURFACE_ACT_KIND = {
    * member's iPhone as the phone's own screen for it would.
    */
   WINDOW_HANDOFF: "window.handoff",
+  /**
+   * The voice call the asking panel holds, told whenever its card would
+   * change, or none once it ends, so the floating call window draws it while
+   * no window of the app is in front.
+   */
+  WINDOW_VOICE_CALL: "window.voiceCall",
+  /** A press on the floating call window's card, which the Mac hands to the panel holding the call, or answers itself for the way back to the call's agent. */
+  VOICE_CALL_PRESS: "window.voiceCallPress",
   FEEDBACK_SEND: "feedback.send",
 } as const;
 
@@ -1253,6 +1261,8 @@ export const PORT_ACT_USE = {
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,
   WINDOW_MENU_OFFERS: ACT_USE.WRITE,
   WINDOW_HANDOFF: ACT_USE.WRITE,
+  WINDOW_VOICE_CALL: ACT_USE.WRITE,
+  VOICE_CALL_PRESS: ACT_USE.WRITE,
   FEEDBACK_SEND: ACT_USE.WRITE,
 
   WORKSPACE_CREATE: ACT_USE.WRITE,

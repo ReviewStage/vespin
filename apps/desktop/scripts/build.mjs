@@ -214,10 +214,12 @@ await fs.mkdir(path.join(outputRoot, "renderer"), { recursive: true });
 
 await fs.mkdir(path.join(outputRoot, "icon"), { recursive: true });
 
-// The window's entry, by the bundle it is built into: its source, and the
-// document that loads it, copied beside it below.
+// One entry per window, by the bundle it is built into: its source, and the
+// document that loads it, copied beside it below. The floating call window's
+// policy reaches no host, and it never records.
 const WINDOW_ENTRIES = {
   panel: { source: "src/renderer/index.tsx", document: "index.html" },
+  call: { source: "src/renderer/call/index.tsx", document: "call.html" },
 };
 
 // The bundles too large for any window's entry, each reached through a

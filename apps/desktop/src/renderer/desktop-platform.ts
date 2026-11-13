@@ -39,6 +39,7 @@ export const DESKTOP_PLATFORM: AppPlatform = {
   focusPanel: () => tellAct(ACT_KIND.WINDOW_FOCUS_PANEL),
   menuOffers: (commands) => tellAct(ACT_KIND.WINDOW_MENU_OFFERS, { commands }),
   handoff: (activity) => tellAct(ACT_KIND.WINDOW_HANDOFF, { activity }),
+  voiceCall: (call) => tellAct(ACT_KIND.WINDOW_VOICE_CALL, { call }),
   pageFrameUrl,
   assetBase: () => new URL(".", document.baseURI).href,
   onMenuCommand: (listener) => appBridge().onMenuCommand(listener),

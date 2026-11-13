@@ -58,6 +58,9 @@ const WEB = {
   COMPUTER_USE: byDesign(
     "Agents use apps on the Mac through its own helper, which a tab cannot run",
   ),
+  CALL_WINDOW: byDesign(
+    "A tab cannot float a window over other apps; its call card docks inside the tab",
+  ),
   CLI: byDesign(
     "A tab cannot run the install script; the MCP & CLI page shows the command to paste",
   ),
@@ -465,6 +468,8 @@ export const CLIENT_PARITY = {
   ),
   [PORT_ACT_KIND.WINDOW_MENU_OFFERS]: desktopOnly(WEB.MENU_BAR, IOS.MENU_BAR),
   [PORT_ACT_KIND.WINDOW_HANDOFF]: desktopOnly(WEB.HANDOFF, IOS.HANDOFF),
+  [PORT_ACT_KIND.WINDOW_VOICE_CALL]: desktopOnly(WEB.CALL_WINDOW, IOS.VOICE),
+  [PORT_ACT_KIND.VOICE_CALL_PRESS]: desktopOnly(WEB.CALL_WINDOW, IOS.VOICE),
   [PORT_ACT_KIND.FEEDBACK_SEND]: EVERYWHERE,
 
   [PORT_ACT_KIND.WORKSPACE_CREATE]: EVERYWHERE,

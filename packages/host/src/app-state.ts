@@ -60,6 +60,7 @@ import {
   type HeldDescriptionDocument,
   type TasksView,
 } from "@repo/features/tasks-view";
+import type { StandingCall } from "@repo/features/voice-wire";
 import type { WorkspaceIntegrations } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
@@ -944,6 +945,8 @@ export interface AppState {
   portForwarding: PortForwarding;
   /** How each cloud agent's mirror on this Mac stands until its worktree does, by the agent, as the host tells it: what a Local tab says while it connects. */
   mirrors: MirrorStandings;
+  /** The voice call a panel window holds, as that window tells the Mac, which the floating call window draws; none while no window holds one, and in a host with no such window. */
+  voiceCall: StandingCall | null;
 }
 
 /**

@@ -2626,6 +2626,7 @@ function SidebarColumn({
             updates={updates}
             shown={overlay.inSight}
             settingsOpen={tab === PANEL_TAB.SETTINGS}
+            callDocked={!sidebar.collapsed}
             onSettings={chosen(() => onTabChange(PANEL_TAB.SETTINGS))}
             onSignOut={onSignOut}
           />

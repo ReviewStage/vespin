@@ -220,6 +220,8 @@ export function registerDesktopIpc(services: DesktopServices): void {
       tellUnsavedWork: services.unsavedWork.tell,
       tellMenuOffers: services.menuOffers.tell,
       tellHandoff: services.handoff.tell,
+      tellVoiceCall: windows.tellVoiceCall,
+      pressVoiceCall: windows.pressVoiceCall,
       saveFile: async (sender, name, text) => {
         const window = BrowserWindow.fromWebContents(sender);
         const options = { defaultPath: name };

@@ -1097,6 +1097,20 @@ body,
   margin-top: 1.6em;
 }
 
+/* The call card (`call/standing-call.tsx`) --------------------------------- */
+
+/* Folded, the sidebar's call card stands in the corner it would have stood
+   over, as far in as the toasts are from theirs, over the work rather than
+   moving it, at the sidebar's own width less its rows' inset. */
+.desktop-shell .ui-call-card[data-surface="floating"] {
+  position: fixed;
+  z-index: var(--ui-z-toast);
+  /* Above the on-screen keyboard, while it is up. */
+  bottom: calc(var(--ui-space-16) + var(--ui-keyboard-inset));
+  left: var(--ui-space-16);
+  width: calc(var(--sidebar-width) - 2 * var(--row-inset));
+}
+
 /* The repository chip ------------------------------------------------------ */
 
 /* An integration whose brand publishes its one-color mark in named inks
