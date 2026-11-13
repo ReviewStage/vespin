@@ -377,6 +377,14 @@ export const tasksAddFollowerParamsSchema = EffectSchema.Struct({
 
 export type TasksAddFollowerParams = typeof tasksAddFollowerParamsSchema.Type;
 
+/** A follower taken away from a task, as the window asks it: the task, and the follower by their account's id. */
+export const tasksRemoveFollowerParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+  userId: taskAssigneeIdSchema,
+});
+
+export type TasksRemoveFollowerParams = typeof tasksRemoveFollowerParamsSchema.Type;
+
 /** A task's parent set or cleared, as the window asks it: the task, and the parent the service takes, null for none. */
 export const tasksSetParentParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,
@@ -562,7 +570,7 @@ const FOLLOWER_CALL_FAILURES = Object.values(FOLLOWER_CALL_FAILURE);
 
 export type FollowerCallFailure = (typeof FOLLOWER_CALL_FAILURES)[number];
 
-/** A follow, an unfollow, a switch, or an add, as the window hears it: the task's followers as they then stand, the earliest to follow first, or why they are unchanged. */
+/** A follow, an unfollow, a switch, an add, or a removal, as the window hears it: the task's followers as they then stand, the earliest to follow first, or why they are unchanged. */
 export const tasksFollowersAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ followers: EffectSchema.Array(taskFollowerSchema) }),
   EffectSchema.Struct({ failure: EffectSchema.Literals(FOLLOWER_CALL_FAILURES) }),

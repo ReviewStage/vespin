@@ -22,8 +22,6 @@ export const EXPERIMENT = {
   REWIND_FILES: "rewind-files",
   /** Done and follow-ups: an agent ends a turn with a short summary, and the bar over its box says what it needs from you, or that it is done, with what is still open and the follow-ups it offers. */
   TURN_END: "turn-end",
-  /** Run actions: each repository's commands, kept in Settings › Cloud environment, that a member runs from the Run button over an agent's tabs, ⌘K, or a phone's ⋯: in a cloud agent's sandbox, or on the Mac a local agent runs on, as each action allows. */
-  RUN_ACTIONS: "run-actions",
   /** Turn changes: the files a turn changed, drawn under its words, and the Turn changes tab a file there opens, the diff of the checkouts the runner records before each turn. */
   TURN_CHANGES: "turn-changes",
   /** Merge queue: every pull request GitHub's merge queues hold across the repositories the workspace's tasks work in, on a page of its own. */
@@ -184,17 +182,6 @@ export const EXPERIMENTS = [
     name: "Done and follow-ups",
     detail:
       "When an agent you started finishes, it says what it needs from you, or that it's done, with follow-ups to send.",
-    owner: "Dean",
-    since: "2026-11-10",
-  },
-  {
-    key: EXPERIMENT.RUN_ACTIONS,
-    scope: EXPERIMENT_SCOPE.WORKSPACE,
-    listed: true,
-    name: "Run actions",
-    detail:
-      "Keep each repository's commands, such as its dev server, in Cloud environment, " +
-      "and run one in a cloud agent's sandbox from the Run button over its tabs or ⌘K.",
     owner: "Dean",
     since: "2026-11-10",
   },

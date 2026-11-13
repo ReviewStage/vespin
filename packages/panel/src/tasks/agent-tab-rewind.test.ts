@@ -66,17 +66,10 @@ function line(
 }
 
 /** The agent's reply that edited a file, as the transcript carries the edit. */
-/** The turn's reply as the service hands it once its runner diffed the turn: five files, the first a path in the checkout the chip opens by. */
+/** The turn's reply as the service hands it once its runner diffed the turn: five files. */
 const EDITED: AgentTranscriptMessage = {
   ...line("reply-2", MESSAGE_ROLE.ASSISTANT, "Dark variant done."),
   changedFiles: {
-    files: [
-      { path: "src/tile.css", additions: 2, deletions: 1 },
-      { path: "src/tile.ts", additions: 4, deletions: 0 },
-      { path: "src/theme.ts", additions: 1, deletions: 1 },
-      { path: "src/dark.css", additions: 9, deletions: 0 },
-      { path: "README.md", additions: 1, deletions: 0 },
-    ],
     total: 5,
     additions: 17,
     deletions: 2,
@@ -137,7 +130,7 @@ async function drawnTab(
   experiments: ExperimentChoices = {},
 ) {
   const opened: string[] = [];
-  const turns: [string, string, string][] = [];
+  const turns: [string, string][] = [];
 
   const page: TaskMentionsValue = {
     holder: { taskId: TASK },
@@ -153,8 +146,8 @@ async function drawnTab(
       onOpenFile: (path) => {
         opened.push(path);
       },
-      onOpenTurnChanges: (agentId, messageId, path) => {
-        turns.push([agentId, messageId, path]);
+      onOpenTurnChanges: (agentId, messageId) => {
+        turns.push([agentId, messageId]);
       },
     },
   };
@@ -373,7 +366,7 @@ test("an edited message whose turn recorded the files offers them back in its bo
   ]);
 });
 
-test("a turn that changed files says how many and its lines added and removed, then names its first three by chip with their own, on its Worked for line while the reader has Turn changes on, and says nothing of them while it is off", async () => {
+test("a turn that changed files says how many and its lines added and removed on its Worked for line, naming no file, while the reader has Turn changes on, and says nothing of them while it is off", async () => {
   const edited = MESSAGES.map((each) => (each.id === "reply-2" ? EDITED : each));
   const off = await drawnTab(false, edited);
   assert.equal(off.message("reply-2").querySelector("[data-turn-files]"), null);
@@ -384,20 +377,11 @@ test("a turn that changed files says how many and its lines added and removed, t
   const on = await drawnTab(false, edited, { [EXPERIMENT.TURN_CHANGES]: true });
   const row = on.message("reply-2").querySelector<HTMLElement>("[data-turn-files]");
   assert.ok(row, "the row stands");
-
-  const chips = [...row.querySelectorAll<HTMLElement>("[data-mention-ref]")];
-
-  assert.deepEqual(
-    chips.map((chip) => chip.textContent),
-    ["file tile.css+2 −1", "file tile.ts+4", "file theme.ts+1 −1"],
-  );
+  assert.equal(row.querySelector("[data-mention-ref]"), null, "no file is named by chip");
   assert.ok(
     on.message("reply-2").querySelector("[data-turn-foot]")?.textContent?.includes("Worked for"),
-    "the chips stand on the Worked for line",
+    "the count stands on the Worked for line",
   );
-  const [first] = chips;
-  assert.ok(first);
-  await act(async () => first.click());
 
   const totals = [...row.querySelectorAll("button")].find(
     (each) => each.textContent === "5 files+17 −2",
@@ -407,14 +391,8 @@ test("a turn that changed files says how many and its lines added and removed, t
   await act(async () => totals.click());
   assert.deepEqual(
     [on.turns, on.opened],
-    [
-      [
-        [AGENT, "middle", "src/tile.css"],
-        [AGENT, "middle", "src/tile.css"],
-      ],
-      [],
-    ],
-    "a chip opens the turn's changes on its file, and the totals on its first, by the line that opened the turn",
+    [[[AGENT, "middle"]], []],
+    "the count opens the turn's changes, by the line that opened the turn",
   );
   assert.equal(
     on.message("reply-1").querySelector("[data-turn-files]"),
