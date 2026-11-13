@@ -1906,6 +1906,13 @@ li:is(:hover, [data-dragging]) .agent-queue-lead[data-queue-handle] > :last-chil
   padding-block: var(--ui-space-4);
 }
 
+/* A goal's card (agent-goal.tsx) previews the checker's reason on its head
+   while folded, and lets it go once opened, where the reason stands whole,
+   so its head reads as a check's card's does. */
+[data-goal-card]:has([open]) .agent-goal-preview {
+  display: none;
+}
+
 /* A message's Forked to trail (fork-action.tsx) stands a list's gap under
    its foot. */
 [data-forked-to] {

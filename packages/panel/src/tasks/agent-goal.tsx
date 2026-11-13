@@ -14,9 +14,11 @@
  * a blocked one in the danger tone. The notices are what the goal
  * did, where it did it: each verdict of the checker, and an end other than
  * met, as a card a check's line is drawn as (`line-cards.tsx`), the
- * checker's reason in its fold, and its setting, its end once met, and a
- * pause, a resume, or a clear as a trail across the transcript, as a new
- * session's is, a little room around each. The goal is read from those notices
+ * checker's reason in its fold, the reason's first line on its head while it
+ * is folded, and its end once met, and a pause, a resume, or a clear as a
+ * trail across the transcript, as a new session's is, a little room around
+ * each. Its setting draws nothing, since the developer's `/goal` message says
+ * it just above. The goal is read from those notices
  * (`@repo/features/agent-goal-model`). While the Goals experiment is off,
  * neither stands anywhere.
  */
@@ -64,6 +66,7 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { PLAN_BODY_LAYOUT, Plan, PlanContent, PlanHeader, PlanIcon } from "../ai-elements/plan.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
+import { TranscriptWords } from "./transcript-blocks.js";
 
 /** The words the goal is named by where a menu or a list says what it acts on. */
 const GOAL_THING = "Goal";
@@ -83,9 +86,8 @@ const NOTICE_WORDS = {
 /** A token count as the row says it: "184k", "1.2M". */
 const TOKENS = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 
-/** The moves said as a trail rather than a card, since they carry nothing to read: the goal's setting, whose condition the developer's own `/goal` message and the row say, its end once met, and each move of its standing. */
+/** The moves said as a trail rather than a card, since they carry nothing to read: the goal's end once met, and each move of its standing. */
 const TRAILS: ReadonlySet<GoalNotice["event"]> = new Set([
-  GOAL_EVENT.SET,
   GOAL_EVENT.MET,
   GOAL_EVENT.PAUSED,
   GOAL_EVENT.RESUMED,
@@ -322,11 +324,12 @@ function trailGlyph(event: GoalNotice["event"]): ReactNode {
   }
 }
 
-/** One move of the goal where it happened in the transcript: a trail for its setting, its end once met, and each move of its standing; a card for each verdict and any other end, the reason in its fold. */
+/** One move of the goal where it happened in the transcript: nothing for its setting, a trail for its end once met and each move of its standing, and a card for each verdict and any other end, the reason in its fold. */
 export function GoalNoticeView({ notice }: { notice: GoalNotice }): ReactNode {
   const goalsOn = useGoalsOn();
 
-  if (!goalsOn) return null;
+  // Note that the goal's setting draws nothing, because the developer's own `/goal` message says it just above, and the row says it took.
+  if (!goalsOn || notice.event === GOAL_EVENT.SET) return null;
 
   if (TRAILS.has(notice.event)) {
     return (
@@ -343,14 +346,16 @@ export function GoalNoticeView({ notice }: { notice: GoalNotice }): ReactNode {
 
   // Note that a notice stands at a received line's measure, as a check's card does, rather than across the column.
   return (
-    <div className="max-w-bubble">
+    <div className="max-w-bubble" data-goal-card="">
       <Plan
         open={folds ? undefined : false}
         fill={DISCLOSURE_FILL.ACTIONS}
         actions={
           <span className="flex min-w-0 flex-1 items-baseline gap-tight-gap py-row-inset">
             <OneLine className="flex-none text-muted-foreground">{said}</OneLine>
-            {body === null ? null : <OneLine className="min-w-0 flex-1">{body}</OneLine>}
+            {body === null ? null : (
+              <OneLine className="agent-goal-preview min-w-0 flex-1">{body}</OneLine>
+            )}
             {turn === undefined ? null : (
               <OneLine className="ms-auto flex-none ps-tight-gap text-muted-foreground">
                 {turn}
@@ -366,7 +371,7 @@ export function GoalNoticeView({ notice }: { notice: GoalNotice }): ReactNode {
         </PlanHeader>
         {folds ? (
           <PlanContent layout={PLAN_BODY_LAYOUT.STACK}>
-            <p>{body}</p>
+            <TranscriptWords text={body} />
           </PlanContent>
         ) : null}
       </Plan>
