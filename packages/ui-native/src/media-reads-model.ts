@@ -1,10 +1,10 @@
 // media-reads-model.ts -- the pictures and recordings a page shows, each read once into what it is drawn from, a failed read tried again on its own a few times, then let go until it is asked for again.
 
 /** How many times one read is tried, the first among them, before it is let go until it is asked for again. */
-export const MEDIA_READ_TRIES = 4;
+const MEDIA_READ_TRIES = 4;
 
 /** How long a failed read waits before it is tried again, in milliseconds. */
-export const MEDIA_READ_PAUSE_MS = 2_000;
+const MEDIA_READ_PAUSE_MS = 2_000;
 
 /** What a page's media reads through, and where each answer goes. */
 export interface MediaReadSeams {
