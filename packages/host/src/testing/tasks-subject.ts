@@ -38,7 +38,7 @@ import type { WorkspaceSentry } from "@repo/features/sentry-install-wire";
 import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
-import { TASK_LIST_READ, TASK_ROWS_READ } from "@repo/features/task-list-live";
+import { TASK_LIST_READ, TASK_ROWS_READ, TASK_SEARCH_READ } from "@repo/features/task-list-live";
 import { AGENT_PAGES_READ, TASK_PAGES_READ } from "@repo/features/task-pages-live";
 import { TASK_RECORD_READ } from "@repo/features/task-record-live";
 import type {
@@ -1252,6 +1252,7 @@ export function fakeService(tasks: Task[]): FakeService {
       params: {
         readonly id: string;
         readonly page?: string;
+        readonly query?: string;
         readonly userId?: string;
         readonly sync?: string;
       },
@@ -1266,6 +1267,20 @@ export function fakeService(tasks: Task[]): FakeService {
           const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
           rows.set({
             plans: service.tasks.filter((each) => each.id === params.id).map(rowOfTask),
+            agents: [],
+          });
+
+          return Effect.succeed(rows.first());
+        }
+
+        // A search, finding each of the fake's tasks whose name holds the query, none with agents.
+        if (read.name === TASK_SEARCH_READ.name) {
+          const query = params.query?.toLowerCase() ?? "";
+          const rows = polledLive<"plans" | "agents">(["plans", "agents"]);
+          rows.set({
+            plans: service.tasks
+              .filter((each) => each.name.toLowerCase().includes(query))
+              .map(rowOfTask),
             agents: [],
           });
 

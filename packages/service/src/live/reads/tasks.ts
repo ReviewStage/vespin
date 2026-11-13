@@ -51,11 +51,17 @@ import {
 import { BOOT_PHASE, type WireBootPhase } from "@repo/features/agent-boot";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-wire";
 import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
-import { NO_TASK_OWNER, TASK_LIST_READ, TASK_ROWS_READ } from "@repo/features/task-list-live";
+import {
+  NO_TASK_OWNER,
+  TASK_LIST_READ,
+  TASK_ROWS_READ,
+  TASK_SEARCH_LIMIT,
+  TASK_SEARCH_READ,
+} from "@repo/features/task-list-live";
 import { TASK_BLOCK_RELATION } from "@repo/features/task-wire";
 import { SANDBOX_IDLE } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
-import { and, asc, eq, exists, isNotNull, or, type SQL, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, ilike, isNotNull, or, type SQL, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { Duration } from "effect";
 import type { SyncMoved } from "../../sync/live-query.js";
@@ -542,6 +548,67 @@ export const taskRowsRead = bindLiveRead(TASK_ROWS_READ, {
         userId,
         or(eq(agentTable.id, id), sql`${agentTable.taskId} in (${ofTask})`) ?? sql`false`,
       ),
+    };
+  },
+});
+
+/** A query that is a task's key (`ACME-42`), its number taken; the prefix is read off the workspace's name, so the number alone is matched and the key's prefix ranked by the window. */
+const KEY_QUERY = /^[\p{L}\p{N}]{1,4}-(\d+)$/u;
+
+/** The largest number a task's key may name, Postgres's `integer`. */
+const MAX_TASK_NUMBER = 2_147_483_647;
+
+/** An `ILIKE` pattern holding `word` anywhere, its own `%`, `_`, and `\` taken as themselves. */
+function containing(word: string): string {
+  return `%${word.replace(/[\\%_]/gu, (special) => `\\${special}`)}%`;
+}
+
+/**
+ * The tasks `query` finds: each whose name holds every word of it, whatever
+ * its case, or whose number the query names as a key (`ACME-42`) or alone;
+ * none for a query of no words. Note that the words are split as the
+ * window's search splits them, on white space.
+ */
+function taskFoundBy(query: string): SQL {
+  const words = query.trim().split(/\s+/u).filter(Boolean);
+
+  if (words.length === 0) return sql`false`;
+
+  const named = and(...words.map((word) => ilike(task.name, containing(word))));
+  const keyed = words.length === 1 ? (KEY_QUERY.exec(words[0] ?? "")?.[1] ?? words[0]) : undefined;
+  const number = keyed !== undefined && /^\d+$/u.test(keyed) ? Number(keyed) : undefined;
+
+  return (
+    (number === undefined || number > MAX_TASK_NUMBER
+      ? named
+      : or(named, eq(task.number, number))) ?? sql`false`
+  );
+}
+
+/**
+ * A task search (`taskSearch`): the list's own statements narrowed to the
+ * tasks its `query` finds among those the account reaches, the latest
+ * changed first and at most `TASK_SEARCH_LIMIT`, and every agent of them, on
+ * the list's rule of who reads them, so a task the account does not reach is
+ * never found. It is read once, as a window searches, and never followed, so
+ * it wakes as the list does. Note that a name is matched by a scan of the
+ * account's tasks with no index of its own, as the list itself reads them
+ * all.
+ */
+export const taskSearchRead = bindLiveRead(TASK_SEARCH_READ, {
+  reads: TASK_LIST_TABLES,
+  topics: ({ userId }) => readerAndWorkspaceTopics(userId),
+  statements: ({ userId, query }) => {
+    const found = queryBuilder
+      .select({ id: task.id })
+      .from(task)
+      .where(and(taskReachableBy(userId), taskFoundBy(query)))
+      .orderBy(desc(task.updatedAt), desc(task.id))
+      .limit(TASK_SEARCH_LIMIT);
+
+    return {
+      plans: tasksStatement(userId, sql`${task.id} in (${found})`),
+      agents: agentsStatement(userId, sql`${agentTable.taskId} in (${found})`),
     };
   },
 });

@@ -767,6 +767,14 @@ export const tasksFindAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
 ]);
 
+/** The most characters a task search sends the service. */
+export const TASK_SEARCH_QUERY_MAX_CHARS = 200;
+
+/** A search of the account's tasks the window asks the host to read past the list it holds: the words typed. */
+export const tasksSearchParamsSchema = EffectSchema.Struct({
+  query: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(TASK_SEARCH_QUERY_MAX_CHARS)),
+});
+
 /** A page of a description's history, as the version history asks the host for it: the task, and the revision the page is read before where it is an older page. */
 export const tasksRevisionsParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,

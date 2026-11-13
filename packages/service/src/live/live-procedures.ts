@@ -29,6 +29,10 @@
  * the task or the agent `id` names, as the task list's statements narrowed
  * to it (`taskRowsRead`), for a window that opens one the list does not
  * hold; one the account does not reach answers no rows.
+ * `GET /api/live/task-search?query=` answers the few tasks the query finds
+ * by their name or key, the latest changed first, and every agent of them,
+ * the same way (`taskSearchRead`), for a window searching tasks the list may
+ * not hold.
  *
  * `GET /api/live/task-record?id=` answers one task's description, pages, and calls
  * the same way, one statement a part that marks where it stands
@@ -216,7 +220,7 @@ import { sidebarRead } from "./reads/sidebar.js";
 import { taskCommentsRead } from "./reads/task-comments.js";
 import { taskHistoryRead } from "./reads/task-history.js";
 import { taskRecordRead } from "./reads/task-record.js";
-import { taskRowsRead, tasksRead } from "./reads/tasks.js";
+import { taskRowsRead, taskSearchRead, tasksRead } from "./reads/tasks.js";
 import { workspaceIntegrationsRead } from "./reads/workspace-integrations.js";
 import { workspaceInvitationsRead } from "./reads/workspace-invitations.js";
 import { workspaceMembersRead } from "./reads/workspace-members.js";
@@ -909,6 +913,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     inboxItems: signedIn.inboxItems.effect(answerBoundRead(inboxItemsRead)),
     tasks: signedIn.tasks.effect(answerBoundRead(tasksRead)),
     taskRows: signedIn.taskRows.effect(answerBoundRead(taskRowsRead)),
+    taskSearch: signedIn.taskSearch.effect(answerBoundRead(taskSearchRead)),
     automations: signedIn.automations.effect(answerBoundRead(automationsRead)),
     automationWorkspaceRuns: signedIn.automationWorkspaceRuns.effect(
       answerBoundRead(automationWorkspaceRunsRead),

@@ -229,6 +229,7 @@ import { choiceOf } from "../tasks/use-inbox-listing.js";
 import { type InboxSearch, useInboxSearch } from "../tasks/use-inbox-search.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { type PinWrites, usePinWrites } from "../tasks/use-pin-writes.js";
+import { useServiceTaskSearch } from "../tasks/use-service-task-search.js";
 import { SIDE_PANEL_TAB_KIND, type SidePanelControl } from "../tasks/use-side-panel.js";
 import { type StandingWrites, useStandingWrites } from "../tasks/use-standing-writes.js";
 import { type ReadMarks, useReadMarks } from "../tasks/use-task-looks.js";
@@ -2170,6 +2171,9 @@ export function CommandPalette({
   // moving ranks or lights them again but changes none of them, and an account may hold thousands.
   const tasksShown =
     open && tasks.signedIn && (filter === PALETTE_FILTER.ALL || filter === PALETTE_FILTER.TASKS);
+
+  // Note that the tasks the list holds not are asked of the service as typing pauses, and join the list the rows below are built from.
+  useServiceTaskSearch(sought, tasksShown);
 
   const taskList = useMemo(
     () =>
