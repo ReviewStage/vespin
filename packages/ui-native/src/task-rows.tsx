@@ -37,6 +37,7 @@ import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
+import { useAccessibilitySize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dropLink } from "./interactions.js";
@@ -87,6 +88,8 @@ function linkInk(colors: BrandColors, tone: LinkRowTone): string {
 /** A row's 12 pt words at the line's end, in the muted ink or the one given, with tabular figures. */
 function EndWords({ words, ink }: { readonly words: string; readonly ink?: string | undefined }) {
   const colors = useColors();
+  // Note that at the accessibility sizes the words stand under the title, where a long device's name wraps to a second line rather than cut.
+  const lines = useAccessibilitySize() ? 2 : 1;
 
   return (
     <Text
@@ -94,7 +97,7 @@ function EndWords({ words, ink }: { readonly words: string; readonly ink?: strin
         font({ textStyle: TYPE_ROLE.TIME }),
         monospacedDigit(),
         foregroundStyle(ink ?? colors.TEXT_MUTED),
-        lineLimit(1),
+        lineLimit(lines),
       ]}
     >
       {words}
@@ -115,8 +118,20 @@ function LeadGlyph({
   return <Image {...glyphImage(symbol)} color={ink} modifiers={[font({ textStyle })]} />;
 }
 
-/** A row's 13 pt line under its title, set in to the title's words. */
+/** A row's 13 pt line under its title, set in to the title's words; its parts one under another at the accessibility sizes, where side by side they would squeeze a word to a line. */
 function RowLine({ children }: { readonly children: ReactNode }) {
+  if (useAccessibilitySize()) {
+    return (
+      <VStack
+        alignment="leading"
+        spacing={2}
+        modifiers={[padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING })]}
+      >
+        {children}
+      </VStack>
+    );
+  }
+
   return (
     <HStack
       spacing={SPACE.TIGHT + 1}
@@ -275,6 +290,7 @@ function AgentStateWords({ working }: { readonly working: boolean }) {
 export function AgentRow(props: AgentRowProps) {
   const { id, name, harness, state, runsOn, waiting, pullRequest } = props;
   const colors = useColors();
+  const large = useAccessibilitySize();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
 
@@ -299,7 +315,7 @@ export function AgentRow(props: AgentRowProps) {
                 foregroundStyle(colors.ACCENT_TEXT),
               ]}
             >
-              {`${told ? LINE_PART : ""}${needsYouWords(waiting)}`}
+              {`${told && !large ? LINE_PART : ""}${needsYouWords(waiting)}`}
             </Text>
           )}
         </RowLine>

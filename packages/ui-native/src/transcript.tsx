@@ -753,6 +753,7 @@ const CHANGE_MODEL = "Change model";
  */
 export function AgentHead({ model, status, onModel }: AgentHeadProps) {
   const colors = useColors();
+  const large = useAccessibilitySize();
   const state = status === undefined ? undefined : agentGlyphState(status);
   const words = status === undefined ? undefined : agentStateWords(status);
   const pressed = onModel !== undefined && model !== undefined && model !== "";
@@ -765,10 +766,11 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
   useAnnounced(words);
 
   if (said === "" && !pressed) return null;
-  const ink = { fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED };
+  const ink = { fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED, flexShrink: 1 };
 
+  // Note that at the accessibility sizes the model wraps under the state rather than running off the line's end, as a call's words do.
   return (
-    <View style={[styles.head, styles.headLine]}>
+    <View style={[styles.head, styles.headLine, large ? styles.wrapped : null]}>
       {state === GLYPH_STATE.WORKING ? (
         <ActivityIndicator size="small" color={colors.WORKING} accessibilityElementsHidden />
       ) : state === GLYPH_STATE.FAILED ? (

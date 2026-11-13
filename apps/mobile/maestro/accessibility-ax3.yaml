@@ -1,0 +1,87 @@
+# accessibility-ax3.yaml -- the iPhone's main reading screens at the third accessibility text size (AX3, Accessibility Large), where a row's parts are wide enough to crowd but not yet the AX5 that `accessibility.yaml` shoots: the Inbox's rows, a do ask's Mark done and Couldn't do it one to a line, a task page's agent rows with their state and pull request one under another, an agent's page with its head line wrapping and a `/`'s skills grown with the text, and Settings' rows, each shot to check that words wrap and parts stack rather than cut or overlap, as Mail and Settings stand large text.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+# Note that each screen is reached by a launch of its own, as in
+# `accessibility.yaml`, and that each wait for the screen to settle is capped
+# at five seconds, since an agent's page draws its turn still running.
+---
+# The Inbox on the host's Inbox fixture, so no server is reached.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityLarge
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: ax3-inbox
+# A do ask: its steps, then Mark done and Couldn't do it, one to a line.
+- scrollUntilVisible:
+    element: "Verify the digest's sender domain"
+    direction: DOWN
+    centerElement: true
+- tapOn: "Verify the digest's sender domain"
+- scrollUntilVisible:
+    element: "Mark done"
+    direction: DOWN
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: ax3-thread-do
+# A task's page and its agents, each agent's state and pull request under
+# its name rather than squeezed beside each other.
+- launchApp:
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityLarge
+- tapOn: "Tasks"
+- scrollUntilVisible:
+    element: "Teammate invitations"
+    direction: DOWN
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+- scrollUntilVisible:
+    element: "Agents"
+    direction: DOWN
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: ax3-task-agents
+# An agent's page: its head line under the bar, where the state and the
+# model wrap rather than run off the line's end, and its dock.
+- launchApp:
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityLarge
+- extendedWaitUntil:
+    visible: "Steer"
+    timeout: 15000
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: ax3-agent
+# A `/` typed: each skill's line wraps, and the list shows as many rows as
+# at the default size rather than half of one.
+- tapOn:
+    id: "composer-field"
+- inputText: "/"
+- assertVisible: "/release-notes"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: ax3-agent-skills
+# Settings, from the switcher's account row.
+- launchApp:
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityLarge
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 15000
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: ax3-settings
