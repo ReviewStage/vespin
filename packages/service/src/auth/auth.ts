@@ -1,5 +1,7 @@
 import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
+// biome-ignore lint/correctness/noUnusedImports: the declaration this file emits for `auth` names this type, which the compiler reaches only through a package's re-export, by an import this file makes itself.
+import type { SchemaCheck as _AuthContextSchemaCheck } from "@better-auth/core/db/internal";
 import { electron } from "@better-auth/electron";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { PRODUCT_NAME } from "@repo/features/product-name";

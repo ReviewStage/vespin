@@ -43,6 +43,9 @@ catalogs:
     '@orpc/server':
       specifier: 2.0.0-beta.44
       version: 2.0.0-beta.44
+    '@orpc/shared':
+      specifier: 2.0.0-beta.44
+      version: 2.0.0-beta.44
     '@tanstack/react-router':
       specifier: 1.170.46
       version: 1.170.46
@@ -1316,6 +1319,9 @@ importers:
       '@better-auth/cimd':
         specifier: 1.7.7
         version: 1.7.7(@better-auth/core@1.7.7)(@better-auth/oauth-provider@1.7.7)(better-auth@1.7.7)(better-call@1.4.0)
+      '@better-auth/core':
+        specifier: 1.7.7
+        version: 1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(@opentelemetry/api@1.9.1)(better-call@1.4.0)(jose@6.2.9)(kysely@0.29.5)(nanostores@1.5.0)
       '@better-auth/drizzle-adapter':
         specifier: 1.7.7
         version: 1.7.7(@better-auth/core@1.7.7)(@better-auth/utils@0.4.2)(drizzle-orm@1.0.0-rc.4)
@@ -1343,6 +1349,9 @@ importers:
       '@orpc/server':
         specifier: 'catalog:'
         version: 2.0.0-beta.44(crossws@0.4.12)
+      '@orpc/shared':
+        specifier: 'catalog:'
+        version: 2.0.0-beta.44
       '@repo/agent-runner':
         specifier: workspace:*
         version: link:../agent-runner
