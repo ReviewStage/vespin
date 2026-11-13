@@ -855,8 +855,10 @@ export function MainTabContent({
     case STRIP_TAB_KIND.AGENT: {
       const agentId = tab.agent;
 
-      // A Start still making its agent stands in the tab's placeholder, its key being no agent's to read.
-      if (agents.start.pending?.key === agentId) return <AgentTabSkeleton key={agentId} />;
+      // A Start still making its agent stands in the tab's placeholder, its log saying it starts, its key being no agent's to read.
+      if (agents.start.pending?.key === agentId) {
+        return <AgentTabSkeleton key={agentId} starting />;
+      }
 
       // The tab follows its agent's transcript by the id alone, so a task opened
       // on an agent reads it beside the task's list of agents rather than after
