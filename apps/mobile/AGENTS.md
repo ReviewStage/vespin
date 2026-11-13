@@ -90,7 +90,9 @@ Each simulator's pictures, in each appearance, are under
 named as the flow's `takeScreenshot` steps name them; a failed step's own
 screenshot is under `debug/<flow>/screenshots/` beside them, with the screen's
 tree at that step under `debug/<flow>/screen-hierarchy/` and Maestro's log
-under `debug/<flow>/logs/`. A failed flow is not run again, so a pass is a
+under `debug/<flow>/logs/`, beside the simulator's own logs for a flow that
+failed; a passed flow's are deleted, since they made the artifact too large
+to upload in time. A failed flow is not run again, so a pass is a
 pass. The notification flow, whose push Maestro cannot
 send, runs apart: the script installs the app afresh, lets it notify through
 the applesimutils Maestro installs (Maestro's own `permissions` cannot grant

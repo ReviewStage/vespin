@@ -210,6 +210,21 @@ run_notification_flow() {
     run_maestro "$1" "$2" "$directory/open.yaml"
 }
 
+# Deletes the simulator's own logs under `$1` of every flow that passed,
+# keeping a failed flow's. Note that each flow's device log runs to some
+# 60 MB, nine tenths of a simulator's artifact, whose upload then ran a job
+# past its limit before it could finish; a failure's log is what a reader
+# needs, and Maestro's own log and the screenshots stay for every flow.
+prune_device_logs() {
+    local commands
+    while IFS= read -r -d '' commands; do
+        if ! grep -q '"FAILED"' "$commands"; then
+            rm -f "$(dirname "$commands")/logs/device-simulator.log" \
+                "$(dirname "$commands")/logs/device-xctest.log"
+        fi
+    done < <(find "$1" -name commands.json -print0)
+}
+
 # Runs the flows under test on the booted simulator `$1`, from a clean app,
 # their output under `$2`, which a run before it is cleared from, then the
 # notification flow where it is under test, and fails where either failed.
@@ -223,6 +238,7 @@ run_flows() {
     if ((notification)); then
         run_notification_flow "$1" "$2/notification" || failed=1
     fi
+    prune_device_logs "$2"
     return "$failed"
 }
 
