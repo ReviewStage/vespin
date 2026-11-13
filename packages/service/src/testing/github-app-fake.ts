@@ -427,12 +427,12 @@ export function githubReaching(
 
   return fakeGitHub(async (sent) => {
     if (sent.url === TOKEN_ENDPOINT) {
-      const asked: { readonly code?: string } = JSON.parse(sent.body);
+      const asked = new URLSearchParams(sent.body);
 
       // Note that only the web flow's exchange is answered: a refresh finds GitHub unavailable.
-      if (asked.code === undefined) return new Response(null, { status: 503 });
+      if (!asked.has("code")) return new Response(null, { status: 503 });
 
-      return asked.code === GITHUB_FIXTURE_REFUSED_CODE
+      return asked.get("code") === GITHUB_FIXTURE_REFUSED_CODE
         ? Response.json({ error: "bad_verification_code" })
         : Response.json({
             access_token: GITHUB_FIXTURE_AUTHORIZED_TOKEN,

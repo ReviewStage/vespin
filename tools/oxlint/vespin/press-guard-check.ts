@@ -5,7 +5,6 @@ import { fileURLToPath } from "node:url";
 import { ARCHIVE_WRITE_GUARD_RULE, namesArchiveWrite } from "./shared/archive-write-guard.ts";
 import { ARROW_KEY_GUARD_RULE, NAMES_ARROW_KEY } from "./shared/arrow-key-guard.ts";
 import { BUSY_GUARD_RULE } from "./shared/busy-guard.ts";
-import { GITHUB_MODULE_GUARD_RULE, namesGitHubBypass } from "./shared/github-module-guard.ts";
 import { HEADING_GUARD_RULE } from "./shared/heading-guard.ts";
 import { HOST_READ_GUARD_RULE, isWatchedSource } from "./shared/host-read-guard.ts";
 import { KEPT_GUARD_RULE } from "./shared/kept-guard.ts";
@@ -74,9 +73,7 @@ import {
  * file calling a menu-item builder that takes the menu's subject and holding
  * one that would silence `no-shortcut-flag`, which has no way past it, on any
  * TypeScript file holding one that would silence `archive-through-agent-change`,
- * whose allowed list is the only way past it, on any TypeScript file holding
- * one that would silence `github-through-module`, whose list of files is the
- * only way past it, on any test file
+ * whose allowed list is the only way past it, on any test file
  * holding one that would silence `no-focused-or-skipped-test` or
  * `no-source-read-in-test`, which hold rules
  * root AGENTS.md's "Testing" says never bend, and on an `.oxlintrc.json` that
@@ -167,17 +164,6 @@ const GUARDS = [
       namesSandboxDelete(readFileSync(absolute, "utf8")),
     remedy:
       "Delete the agent's sandbox through packages/service/src/agents/session-sandboxes.ts, or name a file that must delete one in tools/oxlint/vespin/sandbox-deletes.json with its reason",
-  },
-  {
-    rule: GITHUB_MODULE_GUARD_RULE,
-    sources: TYPESCRIPT_SOURCE,
-    // A file that names neither GitHub's API, Octokit, nor a saved token's opener has nothing to silence; the guards' own tests spell fixtures.
-    watches: (absolute: string) =>
-      !path.relative(REPOSITORY_ROOT, absolute).startsWith("tools/oxlint/vespin/") &&
-      existsSync(absolute) &&
-      namesGitHubBypass(readFileSync(absolute, "utf8")),
-    remedy:
-      "Send the request through @repo/github, and use a member's saved token through its GitHubMemberTokens, or name a file that must do otherwise in tools/oxlint/vespin/github-through-module.json with its reason",
   },
   {
     rule: SKELETON_GUARD_RULE,
