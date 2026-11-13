@@ -369,9 +369,10 @@ data, and post them to our team's Slack.
 ### Information stored on your Mac
 
 The Mac app keeps its window layout and the drafts of messages you have not
-sent. While you are signed in, it also keeps a copy of your workspaces' lists
-and changes you made offline in one file, `entities.sealed`, encrypted under a
-key in the macOS Keychain and deleted when you sign out. Your sign-in
+sent. While you are signed in, it also keeps a copy of your workspaces' lists,
+changes you made offline, and the words of messages to agents that were not
+delivered, with the names of their files, in one file, `entities.sealed`,
+encrypted under a key in the macOS Keychain and deleted when you sign out. Your sign-in
 tokens are kept encrypted the same way. Transcripts and pictures you
 open are held in memory only.
 

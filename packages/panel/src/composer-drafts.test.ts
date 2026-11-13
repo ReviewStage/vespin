@@ -55,9 +55,13 @@ import {
 } from "./testing/composer.js";
 import { withQueryClient } from "./testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "./testing/desktop-sidebar.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "./testing/outbox.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
 import { agentsControl, listedAgent, tasksControl } from "./testing/tasks-control.js";
 import { windowRouter } from "./testing/window-router.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * A draft as the developer meets it: words typed in one task's agent's box
@@ -201,8 +205,7 @@ function openWindow() {
       agents: agentsControl({
         agents: [open.agent],
         agentIds: [open.agent.id],
-        onMessage: (agentId, text, clientKey, attachments) =>
-          send(agentId, text, clientKey, attachments),
+        onMessage: (agentId, message) => send(agentId, message),
       }),
     });
 
@@ -501,7 +504,7 @@ test("a window that read kept lines before another let them go never writes them
 test("a message sent takes its words out of the draft, so the box comes back empty and nothing is marked", async () => {
   const sent: string[] = [];
 
-  const send: MessageSender = (_agentId, text) => {
+  const send: MessageSender = (_agentId, { text }) => {
     sent.push(text);
 
     return new Promise(() => undefined);
@@ -1247,10 +1250,12 @@ test("files attached in this window stay as its draft when another window lets t
   function Box(): null {
     useDraftsOwner(DEAN);
     composer = useAgentComposer({
+      sending: useOutbox(INVITES.agent.id),
+      unsend: unsendOutbox,
       agentId: INVITES.agent.id,
       taskId: INVITES.plan.id,
       messages: [],
-      send: NEVER_ANSWERED,
+      send: outboxed(NEVER_ANSWERED),
     });
 
     return null;

@@ -16,7 +16,6 @@ import { Effect } from "effect";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, test, vi } from "vitest";
-import { useDraftsOwner } from "../composer-drafts.js";
 import { fakeAppBridge } from "../testing/app-bridge.js";
 import {
   composerEditor,
@@ -152,7 +151,7 @@ async function drawnTab(
 
   const control = agentsControl({
     agents: [agent],
-    onMessage: (_agentId, text, clientKey) => {
+    onMessage: (_agentId, { text, clientKey }) => {
       sent.push({ text, clientKey });
 
       return new Promise((resolve) => answers.push(resolve));
@@ -290,30 +289,6 @@ test("a message sent stands in the transcript at once with its time, the box emp
 
   await tab.answer(0, TAKEN);
   assert.equal(tab.lines("Now the dark variant.").length, 1);
-});
-
-test("a line whose row landed before its send answered offers Edit only once the service took it, since it may yet withdraw the row", async () => {
-  vi.spyOn(crypto, "randomUUID").mockReturnValue(KEY);
-
-  const row: AgentTranscriptMessage = {
-    id: "row-1",
-    role: MESSAGE_ROLE.USER,
-    parts: [{ type: "text", text: "Now the dark variant." }],
-    clientId: sentLineId(KEY),
-    sentAt: 90_000,
-  };
-
-  const tab = await drawnTab([row]);
-
-  const edit = () =>
-    tab.container.querySelector('[data-message-id="row-1"] button[aria-label="Edit"]');
-
-  await tab.send("Now the dark variant.");
-  await tab.landRow();
-
-  assert.ok(edit() === null, "no Edit while the send is out");
-  await tab.answer(0, TAKEN);
-  assert.ok(edit(), "Edit once the service took it");
 });
 
 test("a message sent to an agent at rest draws the working line at once, before the service takes it, counting from the press rather than the turn before it", async () => {
@@ -514,44 +489,6 @@ test("a refusal that lands while the tab is closed is drawn where the line went 
 
   assert.equal(statusOf(tab.lines("Rebase on main")[0]), "Not delivered");
   assert.equal(composerEditor(tab.container).textContent, "");
-});
-
-/** Signs an account in to the window, as the panel's root hands it the drafts and the lines beside them, once the test's first tree stands, which signs no one in. */
-function signIn(): void {
-  const SignedIn = () => {
-    useDraftsOwner({ id: "user-ada", email: "ada@example.com" });
-
-    return null;
-  };
-
-  const root = createRoot(document.body.appendChild(document.createElement("div")));
-  roots.push(root);
-  act(() => root.render(createElement(SignedIn)));
-}
-
-/** Ends the window's document and draws it afresh, as a reload or a relaunch does. */
-function reload(): void {
-  act(() => {
-    window.dispatchEvent(new Event("pagehide"));
-  });
-
-  for (const root of roots.splice(0)) act(() => root.unmount());
-  document.body.innerHTML = "";
-  signIn();
-}
-
-test("a message not delivered still stands where it went once the window reloads, its Retry sending it under the key it went under", async () => {
-  const before = await drawnTab([]);
-  signIn();
-  await before.send("Rebase on main");
-  await before.answer(0, { failure: AGENT_CALL_FAILURE.UNANSWERED });
-
-  reload();
-  const tab = await drawnTab([]);
-  assert.equal(statusOf(tab.lines("Rebase on main")[0]), "Not delivered");
-
-  await tab.pick("Rebase on main", "Retry");
-  assert.deepEqual(tab.sent, [{ text: "Rebase on main", clientKey: before.sent[0]?.clientKey }]);
 });
 
 test("a line another hand sent after a stopped turn puts the tab to work once the list names the turn it queued: no Stopped under it, and ⌘ turns Send into Queue", async () => {

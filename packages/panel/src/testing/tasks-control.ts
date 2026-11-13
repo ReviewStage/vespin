@@ -50,6 +50,7 @@ import {
   type TranscriptsHeld,
 } from "./app-state.js";
 import { writeAppState } from "./copy-feedback.js";
+import { outboxed, unsendOutbox } from "./outbox.js";
 
 const ignore = () => undefined;
 
@@ -325,7 +326,6 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     onStop: () => Promise.resolve(false),
     onRewind: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onClear: () => Promise.resolve(true),
-    onMessage: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onRetry: () => Promise.resolve(false),
     onChoose: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onSwitchServers: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
@@ -372,6 +372,11 @@ export function agentsControl(overrides: Partial<AgentsControl> = {}): AgentsCon
     startInboxThread: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     readInboxImage: () => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     ...overrides,
+    // The host's record draws each message sent, keeps one refused, and lets one go, over whatever the test answers.
+    onMessage: outboxed(
+      overrides.onMessage ?? (() => Promise.resolve({ failure: AGENT_CALL_FAILURE.UNANSWERED })),
+    ),
+    onUnsend: overrides.onUnsend ?? unsendOutbox,
   };
 }
 

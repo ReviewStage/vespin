@@ -69,6 +69,7 @@ import {
 import { settleQueries, withQueryClient, writeAppState } from "../testing/copy-feedback.js";
 import { restOn } from "../testing/hint-rest.js";
 import { markdownHtmlParserLanded } from "../testing/markdown.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { peopleRead, withPeopleRead } from "../testing/people-read.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { AgentComposer } from "./agent-composer.js";
@@ -83,6 +84,9 @@ import {
 import { TranscriptWords } from "./transcript-blocks.js";
 import { type MessageSender, useAgentComposer } from "./use-agent-composer.js";
 import { OpenLinkProvider } from "./use-open-link.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * `@` in an agent's message box and its transcript, on a task's page and
@@ -415,10 +419,12 @@ function taskPage(opened: Mention[] = []): TaskMentionsValue {
 /** The box on the composer's own control, its sends answered by `sender`. */
 function Box({ sender, skills }: { sender: MessageSender; skills: SkillSource }): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox(SELF_ID),
+    unsend: unsendOutbox,
     agentId: SELF_ID,
     taskId: TASK_ID,
     messages: [],
-    send: sender,
+    send: outboxed(sender),
   });
 
   return createElement(AgentComposer, { ...QUIET_COMPOSER, agentId: SELF_ID, composer, skills });
@@ -461,7 +467,7 @@ function drawn(node: ReactNode, page: TaskMentionsValue | undefined): HTMLElemen
 async function box(page: TaskMentionsValue | undefined, skills: SkillSource = noSkills) {
   const sent: string[] = [];
 
-  const sender: MessageSender = (_agentId, text) => {
+  const sender: MessageSender = (_agentId, { text }) => {
     sent.push(text);
 
     return new Promise<AgentAgentAnswer>(ignore);
@@ -1072,7 +1078,7 @@ const rest = Effect.gen(function* () {
 async function workspaceBox() {
   const sent: string[] = [];
 
-  const sender: MessageSender = (_agentId, text) => {
+  const sender: MessageSender = (_agentId, { text }) => {
     sent.push(text);
 
     return new Promise<AgentAgentAnswer>(ignore);
@@ -1958,7 +1964,7 @@ function amongMembers(node: ReactElement): ReactElement {
 async function memberBox() {
   const sent: string[] = [];
 
-  const sender: MessageSender = (_agentId, text) => {
+  const sender: MessageSender = (_agentId, { text }) => {
     sent.push(text);
 
     return new Promise<AgentAgentAnswer>(ignore);

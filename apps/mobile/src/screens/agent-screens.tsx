@@ -68,6 +68,7 @@ import {
   transcriptItems,
   transcriptOriginOf,
   useColors,
+  withSending,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
@@ -468,6 +469,7 @@ export function AgentScreen() {
   const transcript = held?.rows;
   const status = agent?.status ?? transcript?.word?.status ?? shown?.status;
   const messages = transcript?.messages;
+  const sending = transcript?.sending;
   const whole = useWholeParts(id);
   // Note that an agent the list doesn't hold still opens on its run's card, from its own read.
   const automated = shown?.automationId !== undefined || shown?.automationName !== undefined;
@@ -496,9 +498,10 @@ export function AgentScreen() {
     ],
   );
 
+  // The member's messages on their way stand as their own lines at the end, as the host draws them.
   const items = useMemo(
     () =>
-      transcriptItems(messages ?? [], {
+      transcriptItems(withSending(messages ?? [], sending ?? []), {
         writing: status !== undefined && agentStillWriting(status),
         readerId,
         toggles,
@@ -508,7 +511,17 @@ export function AgentScreen() {
         origin,
         suggestionAddress,
       }),
-    [messages, status, readerId, toggles, pullRequests, whole.read, origin, suggestionAddress],
+    [
+      messages,
+      sending,
+      status,
+      readerId,
+      toggles,
+      pullRequests,
+      whole.read,
+      origin,
+      suggestionAddress,
+    ],
   );
 
   // A call opened on an answer its page carried cut reads it whole.
