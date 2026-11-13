@@ -21,8 +21,8 @@ export const LLMS_TEXT_FILE = "llms.txt";
 /** How many guides a page links to as related when its own front matter names none. */
 const RELATED_FALLBACK_COUNT = 3;
 
-/** What every guide closes on: what the product is, in a sentence or two. */
-export const GUIDE_PRODUCT_BLURB = `${PRODUCT_NAME} is an inbox for all your coding agents. It runs Claude Code and Codex in parallel, each agent in its own cloud sandbox on its own branch, and they open pull requests and post to your Inbox only when they need you. It is free and open source.`;
+/** What `llms.txt` says the product is: the home page's own description (`index.html`). */
+const LLMS_SUMMARY = `${PRODUCT_NAME} is an inbox for all your coding agents. They post to it when they need you, and you answer them there.`;
 
 /** The heading a guide's FAQ stands under, on its page and in its Markdown copy. */
 export const GUIDE_FAQ_HEADING = "Frequently asked questions";
@@ -30,7 +30,7 @@ export const GUIDE_FAQ_HEADING = "Frequently asked questions";
 const INDEX_TITLE = "Guides";
 
 /** What the index says the guides are for, under its title and in its head. */
-export const INDEX_DESCRIPTION = `How to run, supervise, and review coding agents in parallel, from the team behind ${PRODUCT_NAME}.`;
+export const INDEX_DESCRIPTION = "Guides to running coding agents in parallel.";
 
 const GUIDE_PATH = /^\/guides\/([a-z0-9]+(?:-[a-z0-9]+)*)$/;
 
@@ -261,7 +261,7 @@ export function llmsText(guides: readonly Guide[]): string {
   return [
     `# ${PRODUCT_NAME}`,
     "",
-    `> ${GUIDE_PRODUCT_BLURB}`,
+    `> ${LLMS_SUMMARY}`,
     "",
     "## Guides",
     "",

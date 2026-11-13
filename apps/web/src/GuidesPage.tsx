@@ -1,5 +1,4 @@
 import guides from "virtual:site/guides";
-import { PRODUCT_NAME } from "@repo/features/product-name";
 import { formatDayHeading } from "@repo/features/time-format";
 import {
   Prose,
@@ -15,7 +14,6 @@ import {
 } from "@repo/ui";
 import {
   GUIDE_FAQ_HEADING,
-  GUIDE_PRODUCT_BLURB,
   GUIDE_VIEW,
   GUIDES_PATH,
   type Guide,
@@ -131,11 +129,8 @@ function GuideArticle({
           ))}
         </div>
       </PublicSection>
-      <PublicSection title={`About ${PRODUCT_NAME}`}>
-        <div className="flex flex-col items-start gap-6">
-          <Text as={TEXT_ELEMENT.P}>{GUIDE_PRODUCT_BLURB}</Text>
-          <SiteDownload />
-        </div>
+      <PublicSection>
+        <SiteDownload />
       </PublicSection>
       {related.length > 0 ? (
         <PublicSection title="Related guides">

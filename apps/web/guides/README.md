@@ -50,8 +50,8 @@ root, `apps/web/public/…`, as the changelog's are, and served from the
 site's.
 
 The body has no `#` heading, since the page sets the title, and no FAQ of its
-own, since the front matter's is drawn for it. Every page closes on the same
-short paragraph about Vespin (`GUIDE_PRODUCT_BLURB` in `src/guides.ts`).
+own, since the front matter's is drawn for it. Every page closes on the FAQ, the
+download button, and related guides.
 
 The build refuses a guide that breaks this format, naming the file and the
 key: a missing or misspelled key, a day that is not `YYYY-MM-DD`, an
