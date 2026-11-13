@@ -38,7 +38,6 @@ const WORDS = {
   REPLY: "Reply",
   ADD_COMMENT: "Add a comment",
   RESOLVED: "Resolved",
-  GONE: "Original content deleted",
   NOT_FOUND: "Comment not found",
   RESOLVE: "Resolve",
   REOPEN: "Reopen",
@@ -57,11 +56,6 @@ function commentPath(overview: TaskOverview | undefined): readonly string[] {
       : taskKey(overview.workspace.name, task.number);
 
   return [task?.name, key].filter((step): step is string => step !== undefined);
-}
-
-/** The words a thread stands on, as its heading quotes them, or that they are gone where every one was deleted. */
-function quoteOf(quote: string, anchored: boolean): string {
-  return anchored && quote.trim() !== "" ? `“${quote.trim()}”` : WORDS.GONE;
 }
 
 /**
@@ -131,7 +125,10 @@ export function CommentThreadScreen() {
             <ThreadPage
               path={path}
               status={task?.status}
-              title={quoteOf(thread.quote, thread.anchor !== undefined)}
+              quote={{
+                words: thread.quote.trim(),
+                gone: thread.anchor === undefined || thread.quote.trim() === "",
+              }}
               messages={threadMessages(thread, agentNames, pictureOf)}
               repository={task?.repository}
               onOpenLink={openLink}
@@ -232,7 +229,7 @@ export function NewCommentScreen() {
             <ThreadPage
               path={path}
               status={overview?.task.status}
-              title={quoteOf(block.quote ?? "", true)}
+              quote={{ words: (block.quote ?? "").trim(), gone: false }}
               messages={[]}
               repository={overview?.task.repository}
               onOpenLink={openLink}
