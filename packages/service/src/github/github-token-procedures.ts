@@ -42,7 +42,7 @@ import {
   type GitHubTokenRejection,
   type GitHubTokenSummary,
 } from "@repo/features/github-token-wire";
-import { CLASSIC_TOKEN_PREFIX } from "@repo/github";
+import { CLASSIC_TOKEN_PREFIX, formatRefusal } from "@repo/github";
 import { DateTime, Duration, Effect, Redacted, Result } from "effect";
 import { recordServerEvent, SERVER_EVENT } from "../events/server-events.js";
 import { hostedStoreOrUnavailable, type UserIdResolver } from "../http/http-effect.js";
@@ -80,8 +80,13 @@ function tokenHint(token: Redacted.Redacted<string>): string {
  * that did not answer within `CHECK_TIMEOUT`, is unreachable. Nothing of
  * the exchange is logged.
  */
-const checkGitHubToken = (token: Redacted.Redacted<string>) =>
-  Effect.flatMap(GitHubApp, (app) =>
+const checkGitHubToken = (token: Redacted.Redacted<string>) => {
+  const unkept = formatRefusal(token);
+
+  // Note that a token refused by its form is answered before the App is needed, so a deployment without one still says why.
+  if (unkept !== undefined) return Effect.succeed(Result.fail<GitHubTokenRejection>(unkept));
+
+  return Effect.flatMap(GitHubApp, (app) =>
     app.checkMemberToken(token).pipe(
       Effect.timeout(CHECK_TIMEOUT),
       Effect.orElseSucceed(() =>
@@ -89,6 +94,7 @@ const checkGitHubToken = (token: Redacted.Redacted<string>) =>
       ),
     ),
   );
+};
 
 /** The token as the member is shown it, answered unreadable where the ring cannot open it. */
 function summaryOf(userId: string, ring: KeyRing, row: GitHubTokenRow): GitHubTokenSummary {

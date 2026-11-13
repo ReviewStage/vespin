@@ -407,6 +407,13 @@ export const memberRepositoryReadable = (member: string, fullName: string) =>
 export const memberToken = (member: string) =>
   Effect.map(heldToken(member), (held) => Result.getSuccess(held));
 
+/** Why a token offered for saving is refused by its form alone, before anything is sent: a fine-grained token, which is not taken. */
+export function formatRefusal(token: Redacted.Redacted<string>): MemberTokenRefusal | undefined {
+  return Redacted.value(token).startsWith(TOKEN_PREFIX.FINE_GRAINED)
+    ? MEMBER_TOKEN_REFUSAL.FINE_GRAINED
+    : undefined;
+}
+
 /**
  * Asks GitHub whose a token offered for saving is, with one
  * `GET /user` on it (https://docs.github.com/en/rest/users/users#get-the-authenticated-user):
@@ -417,9 +424,9 @@ export const memberToken = (member: string) =>
  */
 export const checkMemberToken = (token: Redacted.Redacted<string>) =>
   Effect.gen(function* () {
-    if (Redacted.value(token).startsWith(TOKEN_PREFIX.FINE_GRAINED)) {
-      return Result.fail<MemberTokenRefusal>(MEMBER_TOKEN_REFUSAL.FINE_GRAINED);
-    }
+    const unkept = formatRefusal(token);
+
+    if (unkept !== undefined) return Result.fail<MemberTokenRefusal>(unkept);
 
     const github = yield* GitHub;
     const answered = yield* Effect.result(github.asMember(token).request("GET /user"));
