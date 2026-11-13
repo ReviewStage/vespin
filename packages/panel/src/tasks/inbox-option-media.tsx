@@ -1,6 +1,6 @@
+import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import {
-  INBOX_FILE_TYPE,
   INBOX_OPTION_MEDIA,
   type InboxOption,
   type InboxOptionFile,
@@ -41,7 +41,7 @@ import { useOpenLink, useOpenPlace } from "./use-open-link.js";
 
 /** Whether an option's file is a recording, which the viewer plays, rather than a still. */
 function isRecording(file: InboxOptionFile): boolean {
-  return file.mediaType === INBOX_FILE_TYPE.WEBM;
+  return isVideoType(file.mediaType);
 }
 
 /** What a file is called in the viewer and read aloud: its option's label and its caption, or its place among the option's files. */
