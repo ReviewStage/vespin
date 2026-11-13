@@ -2316,15 +2316,19 @@ A GitHub trigger fires on the Vespin App's own webhook
 pull request opened or labeled, a pull request ready for review opened,
 reopened, marked ready, or pushed to (`pull-request-updated`; a draft fires
 nothing until it is marked ready, and an opened pull request is both this and
-`pull-request-opened`), an issue opened or labeled, a check suite that
-completed as `failure` or `timed_out`, and a push to a branch, each in any of
+`pull-request-opened`), a pull request merged (`pull-request-merged`: a
+`pull_request` delivery closed with `merged` true), an issue opened or
+labeled, a check suite that completed as `failure` or `timed_out`, a push to
+a branch, and a release published (`release-published`, which the App must
+subscribe to `release` deliveries for), each in any of
 the automation's repositories (matched the way GitHub folds a name's case),
 of an owner still a member of
 the automation's workspace, filtered by the trigger's labels (the label just applied, or
 any label of what was opened) and branches (a pull request's base, a check
-suite's or a push's branch). Only the repository, the number, title, and
-address of the issue or pull request, the branch, and a failed check's
-commit by its address are read; never a body. The run's agent starts in the
+suite's or a push's branch), and a release by its tags, exactly as named.
+Only the repository, the number, title, and
+address of the issue or pull request, the branch, a release's tag, name, and
+address, and a failed check's commit by its address are read; never a body. The run's agent starts in the
 repository the event named, as the automation spells it among its
 repositories; a run whose automation no longer lists that repository by the
 time the sweep acts on it is skipped as `repository-changed`. A run is queued under the delivery's `X-GitHub-Delivery`, which a
@@ -2334,18 +2338,21 @@ inside GitHub's ten seconds. Each event is read with who sent it: Vespin's
 agents where the sender is the App's own bot (`<slug>[bot]`), another bot,
 or a person; and, for a pull request, its moment (opened or reopened, marked
 ready, pushed to), whether it is a draft, and whether it comes from a fork
-(its head in another repository, or in none). The trigger's settings choose
-among them (`senders`, `moments`, `drafts`, `forks` in
+(its head in another repository, or in none); and, for a release, whether it
+is a prerelease. A merged pull request is read by whose pull request it is,
+by the same rules, never by who merged it, which is most often the merge
+queue's bot. The trigger's settings choose
+among them (`senders`, `moments`, `drafts`, `forks`, `prereleases` in
 `@repo/features/automation-wire`): people's events alone, every moment, and
-no draft or fork where it names none. An automation cannot fire itself
+no draft, fork, or prerelease where it names none. An automation cannot fire itself
 whatever its settings say: a push by Vespin's agents, to a branch or to a pull
 request, fires nothing, and neither does a failed check on an agent's branch (`agent/`, or `luke/` before it),
 where an agent works and already watches its checks.
 The agent is handed the event by number, address, and branch, its title
 fenced as the event's own text to read as data, its angle brackets spelled
-as entities so it cannot close the fence, and reads the rest with `gh`. The App must subscribe to the Issues and Push events beside the pull
+as entities so it cannot close the fence, and reads the rest with `gh`. The App must subscribe to the Issues, Push, and Release events beside the pull
 request and check events it already reads, a setting of the App on GitHub
-rather than of this repository; until it does, those two triggers never
+rather than of this repository; until it does, those triggers never
 fire.
 
 ## The tasks group
