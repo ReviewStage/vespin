@@ -28,3 +28,23 @@ index 12f2272070030a771ca521140d99a3cfc854bf5f..a9f93619ba3eefe8ba3ef4049b1b794e
      [subview updateShadowStateInContextOfAncestorView:navigationBar];
    }
  }
+diff --git a/ios/tabs/RNSTabBarAppearanceCoordinator.mm b/ios/tabs/RNSTabBarAppearanceCoordinator.mm
+index b3bc98d..6034de2 100644
+--- a/ios/tabs/RNSTabBarAppearanceCoordinator.mm
++++ b/ios/tabs/RNSTabBarAppearanceCoordinator.mm
+@@ -46,6 +46,15 @@ static UIImage *_Nullable RNSImageWithSymbolRenderingMode(UIImage *_Nullable ima
+     return;
+   }
+ 
++  // Vespin: the iPad's floating tab bar draws no tab's own appearance, so its badge stood system red while the
++  // iPhone drew it in the appearance's color. Hand the first tab's appearance, its badge color with it, to the bar
++  // itself as well; a tab's own appearance still wins wherever it is drawn. Drop this once a release colors it.
++  RNSTabsScreenComponentView *firstScreenView = tabScreenCtrls.firstObject.tabScreenComponentView;
++  if (firstScreenView.standardAppearance != nil) {
++    tabBar.standardAppearance = firstScreenView.standardAppearance;
++    tabBar.scrollEdgeAppearance = firstScreenView.scrollEdgeAppearance;
++  }
++
+   // Step 2 - configure screen-specific appearance
+   for (RNSTabsScreenViewController *tabScreenCtrl in tabScreenCtrls) {
+     if (tabScreenCtrl == nil) {

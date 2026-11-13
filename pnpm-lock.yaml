@@ -150,7 +150,7 @@ patchedDependencies:
     hash: 3e021b5b48de4d77b2c561684810f503c93394e081747073961e42e036be882c
     path: patches/expo-symbols@58.0.4.patch
   react-native-screens@4.30.1:
-    hash: 713575c3a02c0180c74b066f1b7162fdd19c0c37b2872f9254fb41cde0dd2e32
+    hash: b8ee83a26440d397cdc74572fb5d13aed42a23f6fcca1a27e2665240d95632a3
     path: patches/react-native-screens@4.30.1.patch
 
 importers:
@@ -569,7 +569,7 @@ importers:
         version: 5.11.1(react-native@0.88.1)(react@19.3.0)
       react-native-screens:
         specifier: 4.30.1
-        version: 4.30.1(patch_hash=713575c3a02c0180c74b066f1b7162fdd19c0c37b2872f9254fb41cde0dd2e32)(react-native@0.88.1)(react@19.3.0)
+        version: 4.30.1(patch_hash=b8ee83a26440d397cdc74572fb5d13aed42a23f6fcca1a27e2665240d95632a3)(react-native@0.88.1)(react@19.3.0)
       react-native-webview:
         specifier: 14.0.1
         version: 14.0.1(react-native@0.88.1)(react@19.3.0)
@@ -1619,7 +1619,7 @@ importers:
         version: 5.11.1(react-native@0.88.1)(react@19.3.0)
       react-native-screens:
         specifier: 4.30.1
-        version: 4.30.1(patch_hash=713575c3a02c0180c74b066f1b7162fdd19c0c37b2872f9254fb41cde0dd2e32)(react-native@0.88.1)(react@19.3.0)
+        version: 4.30.1(patch_hash=b8ee83a26440d397cdc74572fb5d13aed42a23f6fcca1a27e2665240d95632a3)(react-native@0.88.1)(react@19.3.0)
       react-native-webview:
         specifier: 14.0.1
         version: 14.0.1(react-native@0.88.1)(react@19.3.0)
@@ -16103,7 +16103,7 @@ snapshots:
       react-native: 0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
       react-native-drawer-layout: 4.2.12(react-native-gesture-handler@3.5.0)(react-native-reanimated@4.7.1)(react-native@0.88.1)(react@19.3.0)
       react-native-safe-area-context: 5.11.1(react-native@0.88.1)(react@19.3.0)
-      react-native-screens: 4.30.1(patch_hash=713575c3a02c0180c74b066f1b7162fdd19c0c37b2872f9254fb41cde0dd2e32)(react-native@0.88.1)(react@19.3.0)
+      react-native-screens: 4.30.1(patch_hash=b8ee83a26440d397cdc74572fb5d13aed42a23f6fcca1a27e2665240d95632a3)(react-native@0.88.1)(react@19.3.0)
       server-only: 0.0.1
       sf-symbols-typescript: 2.2.0
       standard-navigation: 0.0.5
@@ -18605,7 +18605,7 @@ snapshots:
       react: 19.3.0
       react-native: 0.88.1(@babel/core@7.29.7)(@react-native/metro-config@0.88.1)(@types/react@19.3.0)(react@19.3.0)
 
-  react-native-screens@4.30.1(patch_hash=713575c3a02c0180c74b066f1b7162fdd19c0c37b2872f9254fb41cde0dd2e32)(react-native@0.88.1)(react@19.3.0):
+  react-native-screens@4.30.1(patch_hash=b8ee83a26440d397cdc74572fb5d13aed42a23f6fcca1a27e2665240d95632a3)(react-native@0.88.1)(react@19.3.0):
     dependencies:
       react: 19.3.0
       react-freeze: 1.0.4(react@19.3.0)
