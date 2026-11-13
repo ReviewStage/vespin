@@ -227,6 +227,7 @@ const LISTED = {
   BILLING: "c526e869-a1d2-4efb-96bd-d2e3f405162c",
   EXPORT: "d637f97a-b2e3-4f0c-87ce-e3f405162737",
   DIGEST_V1: "e748a08b-c3f4-4a1d-98df-f405162738f4",
+  LANDING: "f859b19c-d405-4b2e-a9e0-0516273849a5",
 } as const;
 
 /** The agents that posted the items, one at work on each task. */
@@ -904,7 +905,8 @@ function listedTask(
 /**
  * The account's tasks that hold no item, which fill out its Tasks list as
  * the sidebar stands it: a sub-task under the reference journey's, which
- * the launch's checklist waits on, a task
+ * the launch's checklist waits on, and a done one, which the journey waited
+ * on, so its page draws a finished related task beside open ones, a task
  * in a second repository, so the list draws its repositories' headings,
  * one the account keeps in a section of its own, a teammate's it
  * follows, which the list draws under Following, and one filed for later
@@ -918,6 +920,15 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     updatedAt: LANDED - 3 * HOUR,
     parentTaskId: TASK.INVITES,
     blocks: [LISTED.LAUNCH],
+  }),
+  listedTask(LISTED.LANDING, "Invite landing page", {
+    repository: "ada/relay",
+    status: TASK_STATUS.DONE,
+    number: 50,
+    updatedAt: LANDED - 1 * DAY,
+    completedAt: LANDED - 1 * DAY,
+    parentTaskId: TASK.INVITES,
+    blocks: [TASK.INVITES],
   }),
   listedTask(LISTED.ALERTS, "Usage alerts", {
     repository: "ada/ledger",
@@ -1500,7 +1511,7 @@ function invitesDocument(listed: TaskSummary): Task {
   return {
     ...task,
     document: { body: INVITES_DESCRIPTION, assumptions: [] },
-    blockedBy: [LISTED.ALERTS],
+    blockedBy: [LISTED.ALERTS, LISTED.LANDING],
     blocks: [],
   };
 }
