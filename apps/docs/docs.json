@@ -75,7 +75,23 @@
       },
       {
         "group": "Reference",
-        "pages": ["shortcuts"]
+        "pages": [
+          "shortcuts",
+          "mcp-tools",
+          {
+            "group": "CLI reference",
+            "pages": [
+              "cli/account",
+              "cli/tasks",
+              "cli/agents",
+              "cli/pull-requests",
+              "cli/inbox",
+              "cli/workspace",
+              "cli/automations",
+              "cli/mcp-and-api"
+            ]
+          }
+        ]
       }
     ]
   },
