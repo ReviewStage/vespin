@@ -109,6 +109,9 @@ const computerCommand = (id: string, conversationId: string, app: string): Machi
   timeoutSeconds: 60,
 });
 
+/** A recording the helper stopped: ten seconds of a phone's screen, its MP4 six bytes in base64. */
+const RECORDED = { seconds: 10, width: 603, height: 1311, mp4: "AAECAwQF" };
+
 /** Both of the Mac's grants, as a Mac set up for computer use holds them. */
 const GRANTED: ComputerPermissions = { screenRecording: true, accessibility: true };
 
@@ -130,6 +133,8 @@ function scriptedHelper(apps: readonly ComputerApp[], permissions = GRANTED) {
         if (request.op === COMPUTER_HELPER_OP.PERMISSIONS) {
           return { permissions };
         }
+
+        if (request.op === COMPUTER_ACTION.STOP_RECORDING) return { recording: RECORDED };
 
         if (request.op !== COMPUTER_HELPER_OP.DESCRIBE_APP) return { outcome: { done: "pressed" } };
         const app = apps.find((each) => each.name === request.app || each.bundleId === request.app);
@@ -163,6 +168,8 @@ function scriptedService(
     readonly duringClaim?: Effect.Effect<void>;
     /** The settings the service keeps for a device that joins, where it keeps any; none keeps what the join carries. */
     readonly deviceSettings?: MachineDeviceSettings;
+    /** Whether a recording's video never reaches the service, as a network fault loses one. */
+    readonly recordingUnsent?: boolean;
   } = {},
 ) {
   let unanswered = options.unansweredClaims ?? 0;
@@ -177,6 +184,8 @@ function scriptedService(
   const savedSettings: MachineDeviceSettings[] = [];
   const postedLooks: (readonly AllowedAppLook[])[] = [];
   const settledResults = new Map<string, MachineCommandResult>();
+  /** Each recording's video posted up, by its command's id, as base64. */
+  const postedRecordings = new Map<string, string>();
 
   const answer = (rows: boolean): MachineCommandsLiveAnswer => ({
     url: LIVE_POLL_URL,
@@ -284,6 +293,16 @@ function scriptedService(
 
         return { settled: true } as const;
       }),
+    postRecording: (id, mp4) =>
+      Effect.sync(() => {
+        if (options.recordingUnsent === true)
+          return { failure: MACHINE_COMMAND_CALL_FAILURE.UNANSWERED };
+        // A video posted after its result is one no call reads, so it is held to come first.
+        assert.equal(settledResults.has(id), false, "the video goes up before the result");
+        postedRecordings.set(id, mp4);
+
+        return { kept: true } as const;
+      }),
   };
 
   return {
@@ -296,6 +315,7 @@ function scriptedService(
     savedSettings,
     postedLooks,
     settledResults,
+    postedRecordings,
     /** A command queued for the account, as an agent's call queues it. */
     queue: (command: MachineCommand, queuedAt: number) => {
       waiting.push({ ...command, queuedAt });
@@ -1283,6 +1303,55 @@ it.effect(
           "no action reached the helper",
         );
       }
+    }),
+);
+
+it.effect.each([false, true])(
+  "a stopped recording's video goes up before its result, which names its length and size, asking about no app (unsent: %s)",
+  (unsent) =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+      const service = scriptedService({ recordingUnsent: unsent });
+
+      const stop: MachineCommand = {
+        id: SECOND.id,
+        kind: MACHINE_COMMAND_KIND.COMPUTER,
+        conversationId: AGENT,
+        action: { op: COMPUTER_ACTION.STOP_RECORDING },
+        timeoutSeconds: 60,
+      };
+
+      service.queue(stop, NOW);
+
+      const { composer, told } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        {
+          mode: MACHINE_COMMAND_MODE.ASK,
+          signedIn: true,
+          computer: { helper: scripted.helper, enabled: true, allowed: [] },
+        },
+      );
+
+      yield* Effect.scoped(Effect.andThen(composer.lifetime, settled));
+
+      const result = service.settledResults.get(stop.id);
+      assert.deepEqual(told, [], "a stop names no app, so nothing is asked");
+
+      if (unsent) {
+        assert.ok(
+          result !== undefined && "refused" in result,
+          "a video never sent is no recording",
+        );
+        assert.match(result.refused, /stop_recording again/u);
+
+        return;
+      }
+
+      assert.equal(service.postedRecordings.get(stop.id), RECORDED.mp4);
+      assert.deepEqual(result, {
+        computer: { recorded: { seconds: 10, width: 603, height: 1311, byteCount: 6 } },
+      });
     }),
 );
 

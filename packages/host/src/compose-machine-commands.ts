@@ -55,6 +55,7 @@ import {
   COMPUTER_HELPER_OP,
   type ComputerAppPin,
   type ComputerHelperAnswer,
+  type ComputerHelperRecording,
   type ComputerHelperRequest,
   type ComputerPermissions,
   type ComputerUseHelperSeam,
@@ -186,6 +187,7 @@ export type MachineCommandClient = Pick<
   | "claim"
   | "listening"
   | "settle"
+  | "postRecording"
   | "join"
   | "saveDeviceSettings"
   | "saveDeviceAppLooks"
@@ -391,8 +393,9 @@ function neverOffered(app: string): MachineCommandRefusal {
 /**
  * The grants each action needs before the helper is asked to take it:
  * reading a window needs both, since it walks the app's elements and
- * captures its window; every other action on an app needs Accessibility to
- * press, type, and post input; listing the apps needs neither.
+ * captures its window; recording one needs Screen Recording alone; every
+ * other action on an app needs Accessibility to press, type, and post
+ * input; listing the apps and stopping a recording need neither.
  */
 const ACTION_NEEDS = {
   [COMPUTER_ACTION.LIST_APPS]: [],
@@ -407,6 +410,8 @@ const ACTION_NEEDS = {
   [COMPUTER_ACTION.DRAG]: [COMPUTER_PERMISSION.ACCESSIBILITY],
   [COMPUTER_ACTION.SET_VALUE]: [COMPUTER_PERMISSION.ACCESSIBILITY],
   [COMPUTER_ACTION.PERFORM_SECONDARY_ACTION]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.RECORD]: [COMPUTER_PERMISSION.SCREEN_RECORDING],
+  [COMPUTER_ACTION.STOP_RECORDING]: [],
 } as const satisfies Record<ComputerAction, readonly ComputerPermission[]>;
 
 /** Whether the Mac holds one grant, as the helper read them. */
@@ -495,6 +500,20 @@ function computerResult(answer: ComputerHelperAnswer, app?: ComputerApp): Machin
   if ("failure" in answer) return { refused: `Not run: ${answer.message}` };
 
   return UNEXPECTED_ANSWER;
+}
+
+/** What a stop answers where its video could not be posted up, which the helper keeps until the next recording, so a stop asked again posts it again. */
+const RECORDING_UNSENT: MachineCommandRefusal = {
+  refused:
+    "Not run: the recording could not be sent up from the developer's Mac just now; call " +
+    "stop_recording again.",
+};
+
+/** The bytes a base64 text spells: three for every four characters, less its padding. */
+function base64Bytes(base64: string): number {
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+
+  return (base64.length / 4) * 3 - padding;
 }
 
 /** What a command of a kind this Mac cannot run answers, such as one a newer service queued. */
@@ -803,7 +822,8 @@ export function composeMachineCommands(
         let app: ComputerApp | undefined;
         let request: ComputerHelperRequest = action;
 
-        if (action.op !== COMPUTER_ACTION.LIST_APPS) {
+        // Note that only an action that names an app asks about it, since listing the apps and stopping a recording act on none.
+        if ("app" in action) {
           const allowed = yield* appAllowed(computer, { ...command, action }, userId, deadline);
 
           if ("refused" in allowed) return yield* settled(command.id, allowed);
@@ -826,7 +846,25 @@ export function composeMachineCommands(
           Effect.map(computer.enabled, (on) => (on ? undefined : APPS_OFF_WORDS)),
         );
 
+        if ("recording" in answer)
+          return yield* settled(command.id, yield* posted(command.id, answer.recording));
+
         yield* settled(command.id, sendable(computerResult(answer, app)));
+      });
+
+    /**
+     * A stopped recording's video posted up for its command, and what the
+     * command came to once it was: the recording, named by its length and
+     * size, or that it could not be sent, which a stop asked again sends.
+     */
+    const posted = (id: string, recording: ComputerHelperRecording) =>
+      Effect.map(asked(client.postRecording(id, recording.mp4)), (answer): MachineCommandResult => {
+        if ("failure" in answer) return RECORDING_UNSENT;
+        const { seconds, width, height } = recording;
+
+        return {
+          computer: { recorded: { seconds, width, height, byteCount: base64Bytes(recording.mp4) } },
+        };
       });
 
     /**

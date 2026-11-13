@@ -81,14 +81,16 @@ import {
   type PictureOmission,
 } from "@repo/features/conversation-picture-wire";
 import { imageDimensions, sniffImageType } from "@repo/features/image-signature";
+import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { webmDimensions } from "@repo/features/video-signature";
 import { isRecord, type UnparsedWireValue, unparsedWire } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { DateTime, Duration, Effect, Option, Predicate, Result, Schema } from "effect";
 import { logStoreFailure } from "../../http/store-failure.js";
+import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "../recording-keep.js";
 import { AgentBrowser, type BrowserUnreachable } from "./agent-browser.js";
 import { connectRestoring } from "./restore-tabs.js";
-import { RECORDING_FAILURE, RECORDING_START_EXIT } from "./sandbox-recorder.js";
+import { RECORDING_START_EXIT } from "./sandbox-recorder.js";
 
 const BROWSER_INPUT = Schema.Struct({
   actions: describeWire(
@@ -480,24 +482,21 @@ function storedCursor(conversationId: string): BrowserCursor<DatabaseServices> {
   };
 }
 
-/** Why a recording did not start or stop, in words the model can act on. */
+/** Why a recording did not start or stop, in words the model can act on: the words both tools share, and the browser's own. */
 const RECORDING_REFUSAL = {
-  RUNNING: "a recording already runs: stop it with stop_recording first",
+  ...RECORDING_WORDS,
   NO_ENCODER: "your sandbox carries no video encoder, so the browser cannot be recorded",
   NOT_STARTED: "the recorder could not reach the browser; try record again",
-  [RECORDING_FAILURE.NONE]: "no recording runs: start one with record",
   [RECORDING_FAILURE.EMPTY]: "the browser drew nothing while it was recorded",
-  [RECORDING_FAILURE.ENCODER]: "the recording could not be encoded",
   [RECORDING_FAILURE.UNREACHABLE]: "the recorder could not reach the browser",
-  [RECORDING_FAILURE.TOO_LARGE]: `the recording would not fit in ${CONVERSATION_PICTURE_BOUNDS.MAX_BYTES / 1_000_000} MB even made small; record a shorter flow`,
-  [RECORDING_FAILURE.SLOW]: "the recording is still being encoded; call stop_recording again",
-  UNKEPT: "the recording could not be kept just now; call stop_recording again",
+  [RECORDING_FAILURE.TOO_LARGE]: recordingTooLarge(CONVERSATION_PICTURE_BOUNDS.MAX_BYTES),
 } as const;
 
 /**
  * The run's recorder: a recording of the browser in the agent's sandbox
  * (`sandbox-recorder.ts`), kept as a video beside the transcript the call is
- * written to, as its screenshots are, under a picture's bounds.
+ * written to, as its screenshots are, under a picture's bounds
+ * (`../recording-keep.ts`).
  */
 function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | DatabaseServices> {
   const unreachable = (failure: BrowserUnreachable) => failure.message;
@@ -522,7 +521,7 @@ function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | Data
         );
       }
 
-      if (started.running) return yield* Effect.fail(RECORDING_REFUSAL.RUNNING);
+      if (started.running) return yield* Effect.fail(RECORDING_REFUSAL[RECORDING_FAILURE.RUNNING]);
 
       return BROWSER_AGENT_LIMITS.RECORDING_MAX_SECONDS;
     }),
@@ -535,38 +534,21 @@ function sandboxRecorder(call: BrowserCall): BrowserRecorder<AgentBrowser | Data
           .pipe(Effect.mapError(unreachable));
 
         if (!read.ok) return yield* Effect.fail(RECORDING_REFUSAL[read.reason]);
-        const captioned = caption === undefined ? {} : { caption };
         const dimensions = webmDimensions(read.bytes);
 
         if (dimensions === undefined)
           return yield* Effect.fail(RECORDING_REFUSAL[RECORDING_FAILURE.ENCODER]);
 
-        const kept = yield* keepConversationPicture(call.transcript, {
-          bytes: read.bytes,
-          contentType: CONVERSATION_MEDIA_TYPE.WEBM,
-          ...dimensions,
-          mp4Bytes: read.mp4Bytes,
-        }).pipe(
-          Effect.tapError(logStoreFailure),
-          Effect.mapError(() => RECORDING_REFUSAL.UNKEPT),
+        return yield* keepRecording(
+          call.transcript,
+          {
+            bytes: read.bytes,
+            contentType: CONVERSATION_MEDIA_TYPE.WEBM,
+            ...dimensions,
+            mp4Bytes: read.mp4Bytes,
+          },
+          { seconds: read.seconds, caption, path: read.path },
         );
-
-        if (Option.isNone(kept)) {
-          return {
-            seconds: read.seconds,
-            ...captioned,
-            path: read.path,
-            omitted: PICTURE_OMISSION.LIMIT,
-            byteCount: read.bytes.byteLength,
-          };
-        }
-
-        return {
-          seconds: read.seconds,
-          ...captioned,
-          path: read.path,
-          picture: { ...kept.value, mediaType: CONVERSATION_MEDIA_TYPE.WEBM },
-        };
       }),
   };
 }

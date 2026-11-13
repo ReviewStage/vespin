@@ -266,6 +266,8 @@ const COMPUTER_ACTION_WORDS = {
   [COMPUTER_ACTION.DRAG]: "Dragged in",
   [COMPUTER_ACTION.SET_VALUE]: "Set a value in",
   [COMPUTER_ACTION.PERFORM_SECONDARY_ACTION]: "Acted in",
+  [COMPUTER_ACTION.RECORD]: "Started recording",
+  [COMPUTER_ACTION.STOP_RECORDING]: "Stopped recording",
 } as const satisfies { readonly [Action in ComputerAction]: string };
 
 const COMPUTER_ACTIONS: ReadonlySet<string> = new Set(Object.values(COMPUTER_ACTION));

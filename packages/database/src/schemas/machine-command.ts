@@ -1,10 +1,12 @@
 import {
+  COMPUTER_RECORDING_BOUNDS,
   MACHINE_COMMAND_KIND,
   type MachineCommandKind,
   type MachineCommandResult,
 } from "@repo/features/machine-command-wire";
-import { index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
-import { timestamptz } from "./_helpers.js";
+import { sql } from "drizzle-orm";
+import { check, index, integer, jsonb, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import { bound, bytea, timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 import { device } from "./device.js";
 
@@ -12,7 +14,8 @@ import { device } from "./device.js";
  * machine-command.ts -- a command an agent asked to run on the developer's Mac, queued until a Mac of the account runs it.
  *
  * The agent's call inserts the row and waits on it; a signed-in Mac holding
- * the account's read claims it, runs it, and writes its result; the call
+ * the account's read claims it, runs it, and writes its result, a stopped
+ * recording's video first where it made one; the call
  * reads the result and deletes the row, so a row stands only while its call
  * does. A Mac claims only rows of the kinds its read named. A row naming a
  * device is claimed by that device alone; a row naming none, as every row
@@ -43,8 +46,21 @@ export const machineCommand = pgTable(
     claimedAt: timestamptz("claimed_at"),
     /** What it came to, once the Mac that took it said; null until then. */
     result: jsonb("result").$type<MachineCommandResult>(),
+    /**
+     * A stopped recording's video, an H.264 MP4 the Mac that took the
+     * command posted before its result, since the result has no room for
+     * it; null for every other command. It goes with the row, once its call
+     * has kept it beside the transcript or stopped waiting.
+     */
+    recording: bytea("recording"),
   },
-  (table) => [index("machine_command_waiting").on(table.userId, table.claimedAt)],
+  (table) => [
+    index("machine_command_waiting").on(table.userId, table.claimedAt),
+    check(
+      "machine_command_recording_bound",
+      sql`${table.recording} is null or octet_length(${table.recording}) <= ${bound(COMPUTER_RECORDING_BOUNDS.MAX_BYTES)}`,
+    ),
+  ],
 );
 
 /**

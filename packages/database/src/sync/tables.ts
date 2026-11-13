@@ -423,10 +423,13 @@ export const taskReadSync = defineSyncTable(taskRead, {
  * which the Mac's read of the commands it may claim is woken on. Note that
  * the account's and each device's listener rows (`machine_command_listener`,
  * `machine_command_device_listener`), which every such read rewrites, are not
- * captured: no read waits on them.
+ * captured: no read waits on them. A stopped recording's video is ignored
+ * too, since its call reads it only once the result it comes before
+ * notifies, and an update comparing it would weigh its bytes.
  */
 export const machineCommandSync = defineSyncTable(machineCommand, {
   topics: [{ kind: TOPIC.ACCOUNT, column: machineCommand.userId }],
+  ignore: [machineCommand.recording],
 });
 
 /**
