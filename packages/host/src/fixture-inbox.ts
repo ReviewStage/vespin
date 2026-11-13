@@ -107,6 +107,7 @@ import {
 import { PAGE_OWNER, PAGE_SHOWER, type PageLine } from "@repo/features/page-wire";
 import { PULL_REQUEST_WRITE_OUTCOME } from "@repo/features/pull-request-write-wire";
 import { PUSH_NOTIFY } from "@repo/features/push-device-wire";
+import { TASK_SECTION_GLYPH, TASK_SECTION_ICON_KIND } from "@repo/features/task-section-wire";
 import {
   DESCRIPTION_ACTOR,
   type DescriptionRevisionsAnswer,
@@ -221,6 +222,8 @@ const LISTED = {
   ALERTS: "92f3b536-7eaf-4bc8-a3ea-afb0c1d2e3f9",
   LAUNCH: "a304c647-8fb0-4cd9-b4fb-b0c1d2e3f40a",
   SECTION: "b415d758-90c1-4dea-85ac-c1d2e3f4051b",
+  SECTION_GLYPH: "4bc0607b-116b-47ec-9673-db097d8ed0c9",
+  SECTION_EMOJI: "8e8769a9-694d-44b3-abaf-2b0a13bb8804",
   BILLING: "c526e869-a1d2-4efb-96bd-d2e3f405162c",
   EXPORT: "d637f97a-b2e3-4f0c-87ce-e3f405162737",
   DIGEST_V1: "e748a08b-c3f4-4a1d-98df-f405162738f4",
@@ -967,7 +970,11 @@ const STAGED_TASK_IDS: ReadonlySet<string> = new Set(
   [...OWN_TASKS, ...LISTED_TASKS].map((task) => task.id),
 );
 
-/** The account's one section, holding the launch's checklist. */
+/**
+ * The account's sections: Launch, with no icon, holding the launch's
+ * checklist, then two empty ones wearing an icon from the panel's picker,
+ * one of its suggested glyphs and one emoji, so a sidebar draws each kind.
+ */
 const LISTED_SECTIONS: NonNullable<TasksView["taskSections"]> = {
   sections: [
     {
@@ -975,6 +982,20 @@ const LISTED_SECTIONS: NonNullable<TasksView["taskSections"]> = {
       workspaceId: FIXTURE_IDS.WORKSPACE,
       title: "Launch",
       createdAt: LANDED - 8 * DAY,
+    },
+    {
+      id: LISTED.SECTION_GLYPH,
+      workspaceId: FIXTURE_IDS.WORKSPACE,
+      title: "Experiments",
+      icon: { kind: TASK_SECTION_ICON_KIND.GLYPH, glyph: TASK_SECTION_GLYPH.ROCKET },
+      createdAt: LANDED - 7 * DAY,
+    },
+    {
+      id: LISTED.SECTION_EMOJI,
+      workspaceId: FIXTURE_IDS.WORKSPACE,
+      title: "Ideas",
+      icon: { kind: TASK_SECTION_ICON_KIND.EMOJI, emoji: "💡" },
+      createdAt: LANDED - 6 * DAY,
     },
   ],
   entries: [{ taskId: LISTED.LAUNCH, sectionId: LISTED.SECTION, addedAt: LANDED - 8 * DAY }],

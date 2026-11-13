@@ -46,6 +46,8 @@ import {
   TASK_TREE_GROUP,
   type TaskTree,
   type TaskTreeGroup,
+  taskTreeCollection,
+  taskTreeCollections,
 } from "@repo/features/task-tree-model";
 import {
   TASK_RELATION_KIND,
@@ -71,6 +73,8 @@ import {
   ConfirmAsk,
   EmptyState,
   GLYPH,
+  type Glyph,
+  GroupRow,
   glyphSymbol,
   LINK_ROW_TONE,
   LIST_LOOK,
@@ -109,6 +113,7 @@ import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
+import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
@@ -124,6 +129,7 @@ import { useFoundTask } from "../tasks/use-found-task.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
+  type ReadListing,
   type StatusQuestion,
   type TaskAgentLine,
   type TaskOverview,
@@ -525,8 +531,8 @@ function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly
  * One task's row, set in by how deep it stands and led by its sub-tasks' fold
  * where it has any: the one row every list of tasks draws, the Search tab's
  * among them. Its key ends the line only where `keyed` asks, as a search's
- * finds do; a regular window's sidebar and list column leave it out, as the
- * panel's sidebar does, since it took the title's room and wrapped there.
+ * finds do; a regular window's list column leaves it out, as the panel's
+ * sidebar does, since it took the title's room and wrapped there.
  */
 export function TaskListRow({
   task,
@@ -637,7 +643,7 @@ function countDrop(taskId: string): (landed: boolean) => boolean {
  */
 function placeIn(
   group: TaskTreeGroup,
-  listing: TasksListing,
+  listing: ReadListing,
 ): ((task: TaskSummary) => void) | undefined {
   if (group.kind === TASK_TREE_GROUP.FOLLOWING) return undefined;
 
@@ -667,6 +673,65 @@ function placeIn(
   };
 }
 
+/** What a link dropped on a group, its header or its sidebar row, does: puts the task it names there (`placeIn`); none where nothing is dropped there. */
+function dropOnto(group: TaskTreeGroup, listing: ReadListing): ((url: string) => void) | undefined {
+  const place = placeIn(group, listing);
+
+  if (place === undefined) return undefined;
+
+  return (url) => {
+    const task = droppedTask(listing.tree, url);
+
+    if (task !== undefined) place(task);
+  };
+}
+
+/** A group's rows, a task's sub-tasks folded under it, each parent opened and shut by its chevron. */
+function FoldedRows({
+  rows,
+  listing,
+}: {
+  readonly rows: TaskTreeGroup["rows"];
+  readonly listing: TasksListing;
+}) {
+  const keyed = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
+
+  // Note that the rows' owner holds which parents stand open, rather than each row, since a recycled row draws another task once scrolled past.
+  const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
+
+  const folded = useMemo(
+    () => foldedTaskRows(rows, (taskId) => opened.has(taskId)),
+    [rows, opened],
+  );
+
+  const toggle = (taskId: string) =>
+    setOpened((was) => {
+      const next = new Set(was);
+
+      if (!next.delete(taskId)) next.add(taskId);
+
+      return next;
+    });
+
+  return (
+    <RowForEach data={folded} keyOf={(row) => row.task.id}>
+      {(row) => (
+        <TaskListRow
+          task={row.task}
+          listing={listing}
+          depth={row.depth}
+          keyed={keyed}
+          fold={
+            row.open === undefined
+              ? undefined
+              : { open: row.open, onToggle: () => toggle(row.task.id) }
+          }
+        />
+      )}
+    </RowForEach>
+  );
+}
+
 /**
  * One group of the tree as its section: Pinned, Following, a section of the
  * member's, or a repository, folding under its header and count; My tasks
@@ -680,56 +745,14 @@ function GroupSection({
   readonly group: TaskTreeGroup;
   readonly listing: TasksListing;
 }) {
-  const place = placeIn(group, listing);
-  const keyed = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
-
-  // Note that the section holds which parents stand open, rather than each row, since a recycled row draws another task once scrolled past.
-  const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
-
-  const rows = useMemo(
-    () => foldedTaskRows(group.rows, (taskId) => opened.has(taskId)),
-    [group.rows, opened],
-  );
-
-  const toggle = (taskId: string) =>
-    setOpened((was) => {
-      const next = new Set(was);
-
-      if (!next.delete(taskId)) next.add(taskId);
-
-      return next;
-    });
-
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
       count={group.rows.length}
       foldable
-      onDropLink={
-        place === undefined
-          ? undefined
-          : (url) => {
-              const task = droppedTask(listing.tree, url);
-
-              if (task !== undefined) place(task);
-            }
-      }
+      onDropLink={dropOnto(group, listing)}
     >
-      <RowForEach data={rows} keyOf={(row) => row.task.id}>
-        {(row) => (
-          <TaskListRow
-            task={row.task}
-            listing={listing}
-            depth={row.depth}
-            keyed={keyed}
-            fold={
-              row.open === undefined
-                ? undefined
-                : { open: row.open, onToggle: () => toggle(row.task.id) }
-            }
-          />
-        )}
-      </RowForEach>
+      <FoldedRows rows={group.rows} listing={listing} />
     </ListSection>
   );
 }
@@ -748,6 +771,8 @@ type TasksTreeProps = {
   readonly listing: TasksListing;
   readonly look: ListLook;
   readonly search: string;
+  /** The collection the app sidebar picked, Pinned, Following, or a section, whose rows alone the list draws; every group where none is. */
+  readonly collection?: TaskTreeGroup | undefined;
   readonly selected?: string | undefined;
   readonly onSelect: (id: string) => void;
   /** Reads the list again, on a pull. */
@@ -757,10 +782,19 @@ type TasksTreeProps = {
 /**
  * The Tasks list as the panel's phone Tasks draws it: Pinned, Following,
  * the member's sections, and the repository groups, each folding under its
- * header and count, a task's sub-tasks folded under it; or, while a search is typed,
- * every task of the workspace it finds. A pull reads it again.
+ * header and count, a task's sub-tasks folded under it; or one collection's
+ * rows alone, under no header, where the app sidebar picked it; or, while a
+ * search is typed, every task of the workspace it finds. A pull reads it again.
  */
-function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
+function TasksTree({
+  listing,
+  look,
+  search,
+  collection,
+  selected,
+  onSelect,
+  onRefresh,
+}: TasksTreeProps) {
   const { tree, found } = listing;
 
   if (search.trim() !== "") {
@@ -772,6 +806,20 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
       <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
         <ListSection>
           <TaskRows tasks={found} listing={listing} />
+        </ListSection>
+      </RowList>
+    );
+  }
+
+  if (collection !== undefined) {
+    if (collection.rows.length === 0) {
+      return <EmptyState title={WORDS.NO_TASKS} symbol={collectionGlyph(collection)} />;
+    }
+
+    return (
+      <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
+        <ListSection>
+          <FoldedRows rows={collection.rows} listing={listing} />
         </ListSection>
       </RowList>
     );
@@ -796,32 +844,35 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
   );
 }
 
+/** The glyph a collection's sidebar row leads with: Pinned's pin, Following's eye, and a section's folder. */
+function collectionGlyph(group: TaskTreeGroup): Glyph {
+  if (group.kind === TASK_TREE_GROUP.PINNED) return GLYPH.PIN;
+
+  return group.kind === TASK_TREE_GROUP.FOLLOWING ? GLYPH.FOLLOW : GLYPH.FOLDER;
+}
+
 /**
- * The member's tasks a regular window's app sidebar lists under its places:
- * Pinned, Following, and each of their sections, each folding under its
- * header and count, every row acting as the Tasks tab's does.
+ * The collections a window's app sidebar lists under its places, as Mail
+ * lists its mailboxes: Pinned, Following, and each of the member's
+ * sections, one row each with its count, which a task dragged onto Pinned
+ * or a section is put in, as onto the Tasks list's headers.
  */
 export function useSidebarTasks(): SidebarTasks {
-  const { listing, status, deletion } = useListingAsks(useTasksListing(""));
-  const { tree } = listing;
-
-  const groups = [
-    ...(tree.pinned === undefined ? [] : [tree.pinned]),
-    ...(tree.following === undefined ? [] : [tree.following]),
-    ...tree.sections,
-  ];
+  const listing = useTasksListing("");
+  const collections = taskTreeCollections(listing.tree);
 
   return {
-    sections: groups.map((group) => (
-      <GroupSection key={group.key} group={group} listing={listing} />
+    rows: collections.map((group) => (
+      <GroupRow
+        key={group.key}
+        id={group.key}
+        title={group.title ?? listing.tree.tasksHead}
+        symbol={collectionGlyph(group)}
+        count={group.rows.length}
+        onDropLink={dropOnto(group, listing)}
+      />
     )),
-    ids: new Set(groups.flatMap((group) => group.rows.map(({ task }) => task.id))),
-    ask: (
-      <>
-        <StatusQuestionAsk question={status} />
-        <StatusQuestionAsk question={deletion} />
-      </>
-    ),
+    keys: new Set(collections.map((group) => group.key)),
   };
 }
 
@@ -1614,8 +1665,13 @@ function TasksSplitScreen({
   const archiveAsk = useAgentArchiveAsk();
   const threeColumns = useThreeColumns();
   const look = useListLook();
+  const picked = useTasksCollection();
   useTaskReadOnOpen(overview?.task.id);
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.TASK, selected);
+
+  // Note that a collection the sidebar picked fills the list only where the sidebar stands, and a portrait window's list keeps every group.
+  const collection =
+    threeColumns && picked !== undefined ? taskTreeCollection(listing.tree, picked) : undefined;
 
   const list = {
     view: (
@@ -1623,13 +1679,14 @@ function TasksSplitScreen({
         listing={listing}
         look={look}
         search={search}
+        collection={collection}
         selected={selected}
         onSelect={select}
         onRefresh={refreshTasks}
       />
     ),
     bar: {
-      title: TASKS_TITLE,
+      title: collection?.title ?? TASKS_TITLE,
       search: { placeholder: SEARCH_TASKS, text: search, onChange: setSearch },
     },
   };
@@ -1670,9 +1727,7 @@ function TasksSplitScreen({
   const first = useListColumn(list);
   useHandColumns(
     SIDEBAR_PLACE.TASKS,
-    threeColumns
-      ? { content: list.view, contentBar: list.bar, detail, detailBar, openTask: selected }
-      : undefined,
+    threeColumns ? { content: list.view, contentBar: list.bar, detail, detailBar } : undefined,
   );
 
   return (

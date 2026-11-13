@@ -39,6 +39,7 @@ import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
+import { dropLink } from "./interactions.js";
 import {
   actionButton,
   type RowAction,
@@ -101,15 +102,17 @@ function EndWords({ words, ink }: { readonly words: string; readonly ink?: strin
   );
 }
 
-/** A row's lead glyph in an ink, at the title's size, so it grows with Dynamic Type beside it. */
-function LeadGlyph({ symbol, ink }: { readonly symbol: Glyph; readonly ink: string }) {
-  return (
-    <Image
-      {...glyphImage(symbol)}
-      color={ink}
-      modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE })]}
-    />
-  );
+/** A row's lead glyph in an ink, at a text style's size, so it grows with Dynamic Type beside the row's words: the muted line's unless the row asks for its title's. */
+function LeadGlyph({
+  symbol,
+  ink,
+  textStyle = TYPE_ROLE.ROW_LINE,
+}: {
+  readonly symbol: Glyph;
+  readonly ink: string;
+  readonly textStyle?: (typeof TYPE_ROLE)[keyof typeof TYPE_ROLE];
+}) {
+  return <Image {...glyphImage(symbol)} color={ink} modifiers={[font({ textStyle })]} />;
 }
 
 /** A row's 13 pt line under its title, set in to the title's words. */
@@ -422,17 +425,20 @@ type GroupRowProps = {
   readonly count?: number | undefined;
   /** What a flow finds the row by, such as the Search tab's id where the sidebar stands for the tab bar. */
   readonly testId?: string | undefined;
+  /** Takes a row dragged onto it, on an iPad, and hands on the row's link, as a `ListSection`'s header does. */
+  readonly onDropLink?: ((url: string) => void) | undefined;
 };
 
-/** A place a wide window's sidebar picks, such as the Inbox or Tasks: its glyph, its name, and how many it holds. */
-export function GroupRow({ id, title, symbol, count, testId }: GroupRowProps) {
+/** A place a wide window's sidebar picks, such as the Inbox, Tasks, or a section of tasks: its glyph, its name, and how many it holds. */
+export function GroupRow({ id, title, symbol, count, testId, onDropLink }: GroupRowProps) {
   const colors = useColors();
 
   const row: ReactElement = (
     <RowHead
       unread={false}
       faded={false}
-      lead={<LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} />}
+      // Note that the glyph takes the title's size, as Mail's mailbox glyphs do, since a sidebar row is a place named by both.
+      lead={<LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.ROW_TITLE} />}
       title={title}
       ink={colors.TEXT_BODY}
       end={count === undefined ? undefined : <EndWords words={String(count)} />}
@@ -441,15 +447,14 @@ export function GroupRow({ id, title, symbol, count, testId }: GroupRowProps) {
 
   const heard = { label: title, value: count === undefined ? [] : [String(count)] };
 
-  if (testId === undefined) return <RowFrame id={id} row={row} heard={heard} />;
+  const modifiers = [
+    ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
+    ...(onDropLink === undefined ? [] : [dropLink(onDropLink)]),
+  ];
 
-  return (
-    <RowFrame
-      id={id}
-      row={<HStack modifiers={[accessibilityIdentifier(testId)]}>{row}</HStack>}
-      heard={heard}
-    />
-  );
+  if (modifiers.length === 0) return <RowFrame id={id} row={row} heard={heard} />;
+
+  return <RowFrame id={id} row={<HStack modifiers={modifiers}>{row}</HStack>} heard={heard} />;
 }
 
 /** How many comment threads stand open on a block, and what opens them. */

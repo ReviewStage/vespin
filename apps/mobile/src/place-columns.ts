@@ -16,8 +16,6 @@ export type PlaceColumns = {
   readonly contentBar?: ColumnBar | undefined;
   readonly detail: ReactNode;
   readonly detailBar?: ColumnBar | undefined;
-  /** The task the place has open, which the sidebar draws selected where it lists it. */
-  readonly openTask?: string | undefined;
 };
 
 /**

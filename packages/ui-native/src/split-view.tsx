@@ -111,9 +111,9 @@ export type BarPath = {
  * What a column's bar holds: its title, small and inline as every screen's
  * stands, which the back button and the reader name it by; what leads it
  * (a SwiftUI view such as the workspace switcher), a page's path in its
- * middle, its menu and its act at its trailing edge, a search field
- * over its list, and the acts at its foot, as an iPad's sidebar stands
- * Settings in its bottom bar.
+ * middle, its menu and its act at its trailing edge, such as a list's
+ * New task, a search field over its list, and the acts at its foot, in its
+ * bottom bar.
  */
 export type ColumnBar = {
   readonly title?: string | undefined;
@@ -230,10 +230,12 @@ function Column({
   const text = useNativeState(bar.search?.text ?? "");
   const query = bar.search?.text ?? "";
 
-  // Note that the field is handed a query only as its search changes hands, so typing never fights its own echo.
+  const searching = bar.search !== undefined;
+
+  // Note that the field is handed a query only as its search changes hands or first arrives, so typing never fights its own echo.
   useEffect(() => {
     text.set(query);
-  }, [searchKey]);
+  }, [searchKey, searching]);
 
   const stacked = (
     <ZStack
