@@ -253,7 +253,7 @@ const agentLiveRowSchema = EffectSchema.Struct({
  * plans and its agents, each by id, newest started first as the held read
  * orders them, and the issues plans linked, which answer no rows and stand
  * for a released desktop that follows them, and which this build keeps
- * none of. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
+ * none of; beside them, the workspaces holding any task it reaches. Past a sync id it answers what moved alone (`LIVE_MODE.DELTA`).
  * The service answers `unavailable` where its deployment's Realtime is
  * misconfigured.
  */
@@ -285,6 +285,15 @@ export const TASK_LIST_READ = liveRead({
       order: [["id", ORDER.ASC]],
       optional: true,
     }),
+  },
+  beside: {
+    /**
+     * The workspaces in which the account reaches any task, whatever the
+     * list holds of them: whether it has ever had a task there, which the
+     * first-run welcome and a workspace's "No tasks yet." read. Absent from a
+     * service before it was answered.
+     */
+    taskWorkspaces: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   },
 });
 

@@ -208,6 +208,13 @@ export const tasksViewSchema = EffectSchema.Struct({
    */
   pendingTasks: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   listStatus: tasksReadSchema,
+  /**
+   * The workspaces in which the account reaches any task, as the list's
+   * last answer said, whatever the list holds of them: whether it has ever
+   * had a task there. Absent before an answer says, as one drawn from disk
+   * or from a service before it was answered.
+   */
+  taskWorkspaces: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   /** Whether what the host follows live is current (`HOST_LIVE`); absent before the list's follow first says, which reads as live. */
   live: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(HOST_LIVE))),
   /** The workspaces the account is a member of, its first one first, as the last list read answered; none before the first lands. */

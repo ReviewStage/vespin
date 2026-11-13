@@ -4,7 +4,11 @@ import { sandboxNamedFor } from "@repo/database/models/agent-sandboxes";
 import { PULL_REQUEST_OF_AGENT_BRANCH } from "@repo/database/models/agent-store";
 import { taskMadeByRun } from "@repo/database/models/run-tasks";
 import { taskBlockedFor, taskBlockIdsFor } from "@repo/database/models/task-block-store";
-import { agentVisibleTo, taskReachableBy } from "@repo/database/models/workspace-store";
+import {
+  agentVisibleTo,
+  taskReachableBy,
+  workspacesWithTasks,
+} from "@repo/database/models/workspace-store";
 import {
   agentPin,
   agentPullRequest,
@@ -74,7 +78,8 @@ import {
   sql,
 } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { Duration } from "effect";
+import { Duration, Effect } from "effect";
+import { hostedStoreOrUnavailable } from "../../http/http-effect.js";
 import type { SyncMoved } from "../../sync/live-query.js";
 import { readerAndWorkspaceTopics } from "../../sync/reader-topics.js";
 import { failureWordOf, lastSettledAtIn, latestTurnOf, sessionEndedOf } from "../agent-standing.js";
@@ -528,6 +533,11 @@ const TASK_LIST_TABLES = [
  * they name, and narrow the agents to the one of that conversation the
  * reader reaches. Its plans and its agents are each part's own rows, and a
  * write to its account's membership or GitHub access answers it whole.
+ *
+ * Beside them, every answer carries the workspaces in which the account
+ * reaches any task (`workspacesWithTasks`), on the plans' own rule, so a
+ * window tells a workspace that never had a task from one whose tasks the
+ * list does not hold.
  */
 export const tasksRead = bindLiveRead(TASK_LIST_READ, {
   reads: TASK_LIST_TABLES,
@@ -547,6 +557,10 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
       issues: issuesStatement(),
     }),
   },
+  beside: ({ params }) =>
+    Effect.map(hostedStoreOrUnavailable(workspacesWithTasks(params.userId)), (taskWorkspaces) => ({
+      taskWorkspaces,
+    })),
 });
 
 /**

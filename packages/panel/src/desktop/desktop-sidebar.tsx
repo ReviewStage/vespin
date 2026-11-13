@@ -184,6 +184,7 @@ import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { runningRuns } from "./automation-runs-tab.js";
+import { hadTasks } from "./desktop-welcome.js";
 import { useFailedRunsMark } from "./failed-runs.js";
 import { withoutFinishedRunTasks } from "./finished-runs.js";
 import { type FoldedGroups, useFoldedGroups } from "./folded-groups.js";
@@ -2337,6 +2338,8 @@ function SidebarColumn({
 
   // Note that an archived task, which the list does not show, counts for nothing here.
   const unlisted = listedTasks.pinned.length === 0 && listedTasks.unpinned.length === 0;
+  // Note that a workspace listing none may still have had tasks the list does not hold, old and finished ones, so it says none match rather than that there are none yet.
+  const neverHadTasks = unlisted && !hadTasks(tasks, tasks.workspace?.id);
   // A row names its repository as its group's header would, its owner's picture and its name, owner and all where two share a name.
   const named = repositoriesOf(unpinnedTasks);
 
@@ -2758,19 +2761,25 @@ function SidebarColumn({
                       data-row-drop={sectionsShown ? TASKS_DROP_ZONE : undefined}
                       {...motionRows()}
                     >
-                      {assignedTo.kind !== ASSIGNED_TO.ANYONE &&
-                      assigned.length === 0 &&
-                      shownSections.every((drawn) => drawn.tasks.length === 0) &&
-                      !unlisted &&
+                      {((assignedTo.kind !== ASSIGNED_TO.ANYONE &&
+                        assigned.length === 0 &&
+                        shownSections.every((drawn) => drawn.tasks.length === 0)) ||
+                        unlisted) &&
+                      !neverHadTasks &&
                       tasks.listRead &&
                       !tasks.listFailed ? (
                         <NoteLine look={NOTE_LINE_LOOK.ROWS}>
-                          {NONE_MATCH}{" "}
-                          <Button
-                            onClick={() => taskView.onAssignedTo({ kind: ASSIGNED_TO.ANYONE })}
-                          >
-                            Show all
-                          </Button>
+                          {NONE_MATCH}
+                          {assignedTo.kind === ASSIGNED_TO.ANYONE ? null : (
+                            <>
+                              {" "}
+                              <Button
+                                onClick={() => taskView.onAssignedTo({ kind: ASSIGNED_TO.ANYONE })}
+                              >
+                                Show all
+                              </Button>
+                            </>
+                          )}
                         </NoteLine>
                       ) : null}
                       {/* Note that rows the list still holds stand with no line over them while the app is offline, since the Offline mark says why; a list with none still says it. */}
@@ -2788,7 +2797,7 @@ function SidebarColumn({
                       {tasks.signedIn && unlisted && !tasks.listRead && !tasks.listFailed ? (
                         <TaskRowsSkeleton widths={LIST_SKELETON} />
                       ) : null}
-                      {tasks.signedIn && unlisted && tasks.listRead && !tasks.listFailed ? (
+                      {tasks.signedIn && neverHadTasks && tasks.listRead && !tasks.listFailed ? (
                         <NoteLine look={NOTE_LINE_LOOK.ROWS}>No tasks yet.</NoteLine>
                       ) : null}
                       {tasks.signedIn ? null : (

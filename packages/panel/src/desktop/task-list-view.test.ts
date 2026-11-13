@@ -10,6 +10,7 @@ import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { appCommandOffered, runAppCommand } from "../app-commands.js";
+import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { handHostReads, handMembers } from "../testing/app-state.js";
@@ -128,7 +129,11 @@ function keepAnyone(workspace: Workspace = ACME): void {
 }
 
 /** The sidebar listing `plans` in `workspace`, each task standing in it, read by Dean. */
-function mountSidebar(workspace: Workspace, tasks: readonly TaskSummary[] = TASKS): HTMLElement {
+function mountSidebar(
+  workspace: Workspace,
+  tasks: readonly TaskSummary[] = TASKS,
+  said?: Pick<TasksControl, "taskWorkspaces">,
+): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
   const root = createRoot(container);
@@ -140,6 +145,7 @@ function mountSidebar(workspace: Workspace, tasks: readonly TaskSummary[] = TASK
     workspace,
     workspaces: [workspace],
     me: DEAN,
+    ...said,
   });
 
   act(() =>
@@ -273,8 +279,9 @@ function lastMenuItems(): string[] {
 async function mountRead(
   workspace: Workspace,
   tasks?: readonly TaskSummary[],
+  said?: Pick<TasksControl, "taskWorkspaces">,
 ): Promise<HTMLElement> {
-  const sidebar = mountSidebar(workspace, tasks);
+  const sidebar = mountSidebar(workspace, tasks, said);
   await act(async () => undefined);
 
   return sidebar;
@@ -483,15 +490,23 @@ test("in one run, a task with no repository says so on its row", async () => {
   });
 });
 
-test("an empty workspace says only that it holds no tasks", async () => {
-  const sidebar = await mountRead(ACME, []);
-
-  // Note that the pinned section's own "Drag tasks here to pin them" is a line of the sidebar too.
-  const notes = [...sidebar.querySelectorAll(".ui-note-line")].flatMap(({ textContent: note }) =>
+/** The lines the sidebar says, the pinned section's own "Drag tasks here to pin them" left out. */
+function noteLines(sidebar: HTMLElement): readonly (string | null)[] {
+  return [...sidebar.querySelectorAll(".ui-note-line")].flatMap(({ textContent: note }) =>
     note?.startsWith("Drag tasks here") === true ? [] : [note],
   );
+}
 
-  assert.deepEqual(notes, ["No tasks yet."]);
+test("an empty workspace says only that it holds no tasks", async () => {
+  const sidebar = await mountRead(ACME, [], { taskWorkspaces: [] });
+
+  assert.deepEqual(noteLines(sidebar), ["No tasks yet."]);
+});
+
+test("a workspace whose tasks the list does not hold, old and finished ones, says none match its view rather than none yet", async () => {
+  const sidebar = await mountRead(ACME, [], { taskWorkspaces: [ACME.id] });
+
+  assert.deepEqual(noteLines(sidebar), ["No tasks match this view. Show all"]);
 });
 
 test("⌘K offers each view choice only while it would change the list, and running one changes it as the menu would", async () => {
