@@ -11,6 +11,7 @@ import {
   LINK_DESTINATION,
   type LinkDestination,
   linkOf,
+  linkWorkspaceStep,
   readLink,
   taskLinkStep,
   taskNumberOf,
@@ -112,6 +113,7 @@ import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
+import { useKeeping } from "../keeping.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
@@ -1329,6 +1331,51 @@ function agentSwipes(
   ];
 }
 
+/**
+ * What an agent row's long press holds past its swipes, in the panel's
+ * agent menu's order (`agentMenuGroups`): Copy link and Open in browser
+ * once its workspace is known, then Archive, asked first, where the list
+ * offers it. Rename, Copy transcript and Permanently delete stay on the
+ * agent's page, which holds the questions and the transcript they need.
+ */
+function agentMenuActs(
+  link: string | undefined,
+  onCopyLink: (link: string) => void,
+  onArchive: (() => void) | undefined,
+): readonly RowAction[] {
+  const links: readonly RowAction[] =
+    link === undefined
+      ? []
+      : [
+          {
+            label: WORDS.COPY_LINK,
+            symbol: GLYPH.LINK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => onCopyLink(link),
+          },
+          {
+            label: VERB.OPEN_IN_BROWSER,
+            symbol: GLYPH.OPEN_EXTERNALLY,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => openInSafari(link),
+          },
+        ];
+
+  const archive: readonly RowAction[] =
+    onArchive === undefined
+      ? []
+      : [
+          {
+            label: WORDS.ARCHIVE,
+            symbol: GLYPH.ARCHIVE,
+            tone: ROW_ACTION_TONE.DESTRUCTIVE,
+            onPress: onArchive,
+          },
+        ];
+
+  return [...links, ...archive];
+}
+
 type UseAgentArchiveAskResult = {
   readonly archive: (agentId: string) => void;
   readonly ask: ReactElement;
@@ -1405,6 +1452,14 @@ export function TaskAgentRow({
   const name = agentName(agent);
   const harness = providerOf(agent.model);
   const runsOn = agentRunsOnWords(agent);
+  const keeping = useKeeping();
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const linkStep = linkWorkspaceStep(agent.workspaceId, workspaces);
+
+  const link =
+    linkStep === undefined
+      ? undefined
+      : linkOf({ kind: LINK_DESTINATION.AGENT, planId: agent.planId, agentId: agent.id }, linkStep);
 
   return (
     <AgentRow
@@ -1425,6 +1480,11 @@ export function TaskAgentRow({
             }
       }
       trailingActions={agentSwipes(agent, acts, onArchive)}
+      menuActions={agentMenuActs(
+        link,
+        keeping.copyWords,
+        onArchive === undefined ? undefined : () => onArchive(agent.id),
+      )}
       preview={
         <AgentPreview
           name={name}
