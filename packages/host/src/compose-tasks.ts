@@ -2564,6 +2564,8 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       }),
     // A search past the list is read into it, answered to the window once drawn.
     TASKS_SEARCH: ({ query }) => searched(query),
+    // A tab pinned in a window on a task the list holds not reads its task into it, as an open does, without opening it.
+    TASKS_LOAD: ({ taskId }) => openedOutside(taskId),
     // A page of a workspace's settled tasks is read into the list as cold
     // tasks, as a task opened outside it is, so a list that shows finished
     // work draws them where the list holds them not; the cursor the next page

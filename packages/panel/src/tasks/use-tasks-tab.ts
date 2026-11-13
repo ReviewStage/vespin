@@ -169,6 +169,7 @@ import { useInboxTaskAgents } from "./use-inbox-task-agents.js";
 import { isOverviewTab, type MainTab, type MainTabsControl, useMainTabs } from "./use-main-tabs.js";
 import { type NewTask, useNewTask } from "./use-new-task.js";
 import { usePinWrites } from "./use-pin-writes.js";
+import { usePinnedTabTasks } from "./use-pinned-tab-tasks.js";
 import {
   DRAWN_KINDS,
   type SidebarPin,
@@ -1298,6 +1299,9 @@ export function useTasksTab(input: {
     inboxView !== undefined ? inboxTaskAgents.heldIds : agents.heldIds,
     cloudBrowserAgents,
   );
+
+  // A tab pinned on a task the list holds not reads its task into the list, so the sidebar draws its pin.
+  usePinnedTabTasks(sidePanel.pins, listCollections.tasks);
 
   const { keys: tabKeys, onKeys, onKeysTaken } = useColumnKeys();
 
