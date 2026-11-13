@@ -37,7 +37,7 @@ import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
 import type { PictureOf } from "../member-pictures.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 
 /** No threads read yet. */
 const NO_THREADS: readonly DescriptionCommentThread[] = [];
@@ -255,6 +255,8 @@ export function useCommentSettle(taskId: string): (thread: DescriptionCommentThr
         unanswered: COMMENT_NOTE.NOT_CHANGED,
         // Note that a resolve or reopen sent again lands the thread where it was asked to stand, so the notice offers Try again.
         retry: true,
+        // Note that the thread is the write's subject, so a newer resolve or reopen voids an older one's Try again.
+        subject: { kind: WRITE_SUBJECT.TASK_COMMENT, id: thread.id },
         went: BUZZ.SUCCESS,
       },
     );
