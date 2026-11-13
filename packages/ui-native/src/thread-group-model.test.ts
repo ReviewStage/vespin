@@ -4,8 +4,8 @@ import { threadRuns } from "./thread-group-model.js";
 const MINUTE = 60 * 1000;
 
 /** A message by `name`, the agent where `agent`, `minutes` into the thread, named by `id`. */
-function message(id: string, name: string, minutes: number, agent = false) {
-  return { id, writer: { name, agent }, at: minutes * MINUTE };
+function message(id: string, name: string, minutes: number, agent = false, writerId?: string) {
+  return { id, writer: { name, agent, id: writerId }, at: minutes * MINUTE };
 }
 
 describe("threadRuns", () => {
@@ -28,6 +28,11 @@ describe("threadRuns", () => {
       "the same writer back after more than five minutes starts a run",
       [message("a", "Ada", 0), message("b", "Ada", 5), message("c", "Ada", 11)],
       [["a", "b"], ["c"]],
+    ],
+    [
+      "two members of one name are two writers where their ids differ",
+      [message("a", "Alex", 0, false, "u1"), message("b", "Alex", 1, false, "u2")],
+      [["a"], ["b"]],
     ],
     [
       "a member named as the agent is still another writer",

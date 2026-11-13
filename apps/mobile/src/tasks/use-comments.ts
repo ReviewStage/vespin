@@ -126,10 +126,15 @@ function writerOf(
   if (writer.actor === DESCRIPTION_COMMENT_ACTOR.AGENT) {
     const named = writer.agentId === undefined ? undefined : agentNames.get(writer.agentId);
 
-    return { name: named ?? PRODUCT_NAME, agent: true };
+    return { name: named ?? PRODUCT_NAME, agent: true, id: writer.agentId };
   }
 
-  return { name: writer.by?.name ?? SOMEONE, agent: false, picture: pictureOf(writer.by?.userId) };
+  return {
+    name: writer.by?.name ?? SOMEONE,
+    agent: false,
+    id: writer.by?.userId,
+    picture: pictureOf(writer.by?.userId),
+  };
 }
 
 /** A thread's comments as its page draws them, each by its writer, its words typed line by line; the files a comment carries are left to the desktop and the web. */

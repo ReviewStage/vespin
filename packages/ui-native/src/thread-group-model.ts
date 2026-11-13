@@ -5,16 +5,28 @@ const RUN_REACH_MS = 5 * 60 * 1000;
 
 /** What a message is grouped by: who wrote it, and when. */
 type Grouped = {
-  readonly writer: { readonly name: string; readonly agent: boolean };
+  readonly writer: {
+    readonly name: string;
+    readonly agent: boolean;
+    readonly id?: string | undefined;
+  };
   readonly at: number;
 };
 
-/** Whether `next` joins the run `last` ends: the same writer, the agent or the same member, within `RUN_REACH_MS` of it. */
-function joins(last: Grouped, next: Grouped): boolean {
-  const sameWriter =
-    last.writer.agent === next.writer.agent && last.writer.name === next.writer.name;
+/** Whether two messages share a writer: by their ids where both are known, so two members of one name stand apart, and by their names where one isn't. */
+function sameWriter(last: Grouped["writer"], next: Grouped["writer"]): boolean {
+  if (last.agent !== next.agent) return false;
 
-  return sameWriter && next.at >= last.at && next.at - last.at <= RUN_REACH_MS;
+  if (last.id !== undefined && next.id !== undefined) return last.id === next.id;
+
+  return last.name === next.name;
+}
+
+/** Whether `next` joins the run `last` ends: the same writer within `RUN_REACH_MS` of it. */
+function joins(last: Grouped, next: Grouped): boolean {
+  return (
+    sameWriter(last.writer, next.writer) && next.at >= last.at && next.at - last.at <= RUN_REACH_MS
+  );
 }
 
 /**

@@ -18,6 +18,7 @@ import {
   accessibilityElement,
   accessibilityHidden,
   accessibilityLabel,
+  clipped,
   disabled,
   font,
   foregroundStyle,
@@ -55,8 +56,8 @@ export const PATH_PART = " › ";
 /** Between a writer's face and their name. */
 const WRITER_GAP = SPACE.TIGHT * 2;
 
-/** Between one message and the next of the same run, closer than between runs, as Messages draws a speaker's bubbles. */
-const RUN_GAP = SPACE.TIGHT * 2;
+/** Between one message and the next of the same run, closer than between runs, as Messages draws a speaker's bubbles; with the unseen writer line and its spacing, about 9 pt. */
+const RUN_GAP = SPACE.TIGHT;
 
 /** How far a message's words stand in from the page's edge: past the writer's face, under the name, where a row's words start. */
 const WORDS_INSET = SPACE.EDGE + MARK_SIZE.WRITER + WRITER_GAP;
@@ -106,6 +107,8 @@ export type ThreadMessage = {
   /** Who wrote it: a member's face, or the agent, whose tile wears its harness's mark where it is known. */
   readonly writer: Face & {
     readonly agent: boolean;
+    /** The member's account or the agent, which a run of messages is grouped by; the name alone where none is known. */
+    readonly id?: string | undefined;
     readonly harness?: ModelProvider | undefined;
   };
   /** When it was written, in epoch milliseconds. */
@@ -315,7 +318,7 @@ function MessageView({
   const { writer } = message;
   const moment = now ?? Date.now();
 
-  // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from run to run, and that a long press on the message offers Copy message, a picture's, a recording's, or a file's own menu standing over it.
+  // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from run to run, that a message after its run's head still says who and when to VoiceOver through an unseen line of its own, as Messages reads the sender on every bubble, and that a long press on the message offers Copy message, a picture's, a recording's, or a file's own menu standing over it.
   return (
     <CopyWordsSwiftMenu words={message.words}>
       <VStack alignment="leading" spacing={SPACE.TIGHT}>
@@ -354,7 +357,19 @@ function MessageView({
             </Text>
             <Spacer />
           </HStack>
-        ) : null}
+        ) : (
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.TIME }),
+              foregroundStyle("clear"),
+              frame({ height: 1 }),
+              clipped(),
+              accessibilityLabel(`${writer.name}, ${sinceHeard(message.at, moment)}`),
+            ]}
+          >
+            {writer.name}
+          </Text>
+        )}
         {message.stamp === undefined ? null : <AnswerStamp stamp={message.stamp} />}
         <RNHostView matchContents={{ vertical: true }}>
           <View style={styles.words}>
