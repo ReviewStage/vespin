@@ -276,8 +276,12 @@ export function computerUseHelperProcess(
         if (current === undefined) return failed("The computer-use helper could not be started.");
         asked += 1;
         const id = asked;
-        yield* Queue.offer(current.requests, `${JSON.stringify({ ...request, id })}\n`);
         const left = Math.max(0, deadline - (yield* Clock.currentTimeMillis));
+
+        // Note that a request whose time ran out while it waited its turn is never handed over, since the helper could act on it while its caller is told it failed.
+        if (left === 0)
+          return failed("The computer-use helper was busy until the request's time ran out.");
+        yield* Queue.offer(current.requests, `${JSON.stringify({ ...request, id })}\n`);
         const answer = yield* Effect.timeoutOption(answerFor(current, id), Duration.millis(left));
 
         if (Option.isSome(answer) && Option.isSome(answer.value)) return answer.value.value;
