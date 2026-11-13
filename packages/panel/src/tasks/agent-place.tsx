@@ -34,9 +34,7 @@ import {
   useSecond,
   VisuallyHidden,
 } from "@repo/ui";
-import { actorName } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
-import { ReplayWords } from "@repo/ui/session-replay-marks";
 import type { ReactNode } from "react";
 import { ACTOR_SIZE, ActorMark } from "../actor-ref.js";
 import { presenceStanding, useDevicePresence } from "../device-presence.js";
@@ -399,10 +397,10 @@ function PlaceChip({
 }: {
   here: string | undefined;
   glyph: ReactNode;
-  /** A teammate's face beside the chip's glyph, where the machine is theirs; none on the card, whose head names the machine alone. */
+  /** A teammate's face before the machine's name, on the chip and the card's head alike, where the machine is theirs. */
   face?: ReactNode;
   words: string;
-  /** The card's line under its head: whose machine it is where it is a teammate's, else whether it is online. */
+  /** The card's line under its head: whether the machine is online. */
   sub: ReactNode;
   note: string;
   quiet?: boolean;
@@ -411,7 +409,20 @@ function PlaceChip({
 }): React.JSX.Element {
   const card = (
     <HoverCard>
-      <HoverCardHead glyph={glyph} name={words} sub={sub} />
+      <HoverCardHead
+        glyph={glyph}
+        name={
+          face === undefined ? (
+            words
+          ) : (
+            <Inline gap={GAP.ICON} wrap={false}>
+              {face}
+              {words}
+            </Inline>
+          )
+        }
+        sub={sub}
+      />
       <HoverCardNote>{note}</HoverCardNote>
     </HoverCard>
   );
@@ -498,16 +509,7 @@ function MacChip({
       glyph={glyph}
       face={teammate ? <ActorMark actor={ownerActor} size={ACTOR_SIZE.INLINE} /> : undefined}
       words={macWords(name, standing)}
-      sub={
-        teammate ? (
-          <Inline gap={GAP.ICON} wrap={false}>
-            <ActorMark actor={ownerActor} size={ACTOR_SIZE.MARK} />
-            <ReplayWords masked>{actorName(ownerActor)}</ReplayWords>
-          </Inline>
-        ) : standing === DEVICE_STANDING.ONLINE ? (
-          RUNS_ON_WORDS.ONLINE
-        ) : undefined
-      }
+      sub={standing === DEVICE_STANDING.ONLINE ? RUNS_ON_WORDS.ONLINE : undefined}
       note={DEVICE_NOTE}
       quiet={quiet}
       narrow={narrow}
