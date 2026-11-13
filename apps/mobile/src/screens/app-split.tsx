@@ -8,12 +8,11 @@ import { useSidebarTasks } from "./task-screens.js";
 /** The places, in the order their columns stand kept. */
 const PLACES = [SIDEBAR_PLACE.INBOX, SIDEBAR_PLACE.TASKS, SIDEBAR_PLACE.SEARCH] as const;
 
-/** Each handed place's view of one column, standing in front only where it is the place shown and the split view is. */
+/** Each handed place's list, standing in front only where it is the place shown and the split view is. */
 function keptViews(
   held: ReadonlyMap<SidebarPlace, PlaceColumns>,
   shown: SidebarPlace,
   front: boolean,
-  of: (columns: PlaceColumns) => KeptView["view"],
 ): readonly KeptView[] {
   return PLACES.flatMap((place) => {
     const columns = held.get(place);
@@ -23,7 +22,7 @@ function keptViews(
     return [
       {
         key: place,
-        view: <InFrontProvider value={front && place === shown}>{of(columns)}</InFrontProvider>,
+        view: <InFrontProvider value={front && place === shown}>{columns.content}</InFrontProvider>,
       },
     ];
   });
@@ -33,9 +32,12 @@ function keptViews(
  * The tabs' one split view: the app sidebar, with the place `place` names
  * selected, beside the list and the detail that place's root hands over
  * (`useHandColumns`), and the question a sidebar row's Mark done asks
- * first. Note that every place handed so far keeps its list and detail drawn,
- * hidden behind the one shown, so a tab comes back scrolled where it was
- * left, as Mail keeps each mailbox, while the sidebar stays where it is.
+ * first. Note that every place handed so far keeps its list drawn, hidden
+ * behind the one shown, so a tab comes back scrolled where it was left, as
+ * Mail keeps each mailbox, while the sidebar stays where it is. Note that
+ * the detail column draws the shown place's page alone, because a page such
+ * as a thread's publishes its own bar items, which SwiftUI takes from a
+ * hidden view as readily as from a shown one.
  * Note that a place whose root has handed nothing yet, as a tab opened for
  * the first time, stands its columns empty for that frame rather than taking
  * them away, since a split view that loses its middle column is a different
@@ -74,19 +76,9 @@ export function AppSplit({
       <Screen>
         <SplitView
           {...sidebar}
-          content={
-            <KeptColumns
-              shown={standing}
-              views={keptViews(held, standing, front, (each) => each.content)}
-            />
-          }
+          content={<KeptColumns shown={standing} views={keptViews(held, standing, front)} />}
           contentBar={columns?.contentBar}
-          detail={
-            <KeptColumns
-              shown={standing}
-              views={keptViews(held, standing, front, (each) => each.detail)}
-            />
-          }
+          detail={<InFrontProvider value={front}>{columns?.detail}</InFrontProvider>}
           detailBar={columns?.detailBar}
           searchKey={standing}
         />

@@ -23,8 +23,9 @@ builds a control of its own.
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says, and `SplitOverTabs`, the one split view a window wide enough
   for three columns stands over the hidden tabs, in front of a tab's root and
-  behind a page the tab pushed, with `KeptColumns` keeping each tab's list and
-  detail drawn behind the one shown), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
+  behind a page the tab pushed, with `KeptColumns` keeping each tab's list
+  drawn behind the one shown; a detail is drawn alone, since a page such as
+  `ThreadPage` sets bar items SwiftUI reads from a hidden view too), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePicker` (a list's scopes as the system's segmented control, or its menu picker in a split view's narrow list column), `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),

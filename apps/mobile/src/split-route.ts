@@ -18,6 +18,9 @@ function itemRoute(tab: SplitTab, id: string): string {
   return `${tab}/${encodeURIComponent(id)}`;
 }
 
+/** Each tab's item as its root last selected it, beside its list. */
+const picked = new Map<SplitTab, string>();
+
 type UseSplitSelectionResult = {
   readonly selected: string | undefined;
   readonly select: (id: string) => void;
@@ -28,19 +31,33 @@ type UseSplitSelectionResult = {
  * param rather than in the screen's state, so a route that names an item can
  * hand it over. Note that a compact window pushes a selection a regular one
  * left, because folding the iPhone Duo with a thread open beside the list
- * should keep that thread open, now over the list.
+ * should keep that thread open, now over the list. Note that a regular
+ * window falls back on the item the tab last selected while the route names
+ * none, because a page pushed over the tabs' split view and gone back from
+ * (Back or a swipe) can hand the root back without its param, and the tab
+ * should stand as it was left, as it does after a tab switch.
  */
 export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   const router = useRouter();
   const { selected } = useLocalSearchParams<{ selected?: string }>();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   useEffect(() => {
+    if (selected !== undefined && regular) picked.set(tab, selected);
+
     if (regular || selected === undefined) return;
+    // Note that the item now stands pushed over the list, so the tab no longer holds it beside the list.
+    picked.delete(tab);
     router.setParams({ selected: undefined });
     router.push(itemRoute(tab, selected));
   }, [regular, selected, router, tab]);
 
-  return { selected, select: (id) => router.setParams({ selected: id }) };
+  return {
+    selected: selected ?? (regular ? picked.get(tab) : undefined),
+    select: (id) => {
+      picked.set(tab, id);
+      router.setParams({ selected: id });
+    },
+  };
 }
 
 /**

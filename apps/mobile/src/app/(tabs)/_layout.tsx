@@ -1,7 +1,7 @@
 // _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and the prominent round + that opens New task; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation.
 
 import { iosRouteHidesTabs } from "@repo/features/ios-app-links";
-import { GLYPH, SplitOverTabs, useColors } from "@repo/ui-native";
+import { GLYPH, SplitOverTabs, UNDER_SPLIT_SCREEN, useColors } from "@repo/ui-native";
 import { usePathname, useRouter } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
@@ -77,6 +77,8 @@ export default function TabsLayout() {
   const standing = useTabRoute(pathname);
   // Note that a tab's item route stands at its root too, since a wide window hands it straight back to the split view (`useHandToSplit`).
   const atRoot = standing.length <= 2 && placeOfRoute(standing[0]) !== undefined;
+  // Note that a tab under the split view leaves its content clear, because NativeTabs paints each tab in the navigation theme's light ground, which flashed over the split as a page pushed.
+  const underSplit = appSidebar ? UNDER_SPLIT_SCREEN.contentStyle : undefined;
 
   const tabs = (
     <NativeTabs
@@ -87,7 +89,7 @@ export default function TabsLayout() {
       badgeBackgroundColor={colors.ATTENTION_FILL}
       badgeTextColor={colors.ON_ACCENT}
     >
-      <NativeTabs.Trigger name="inbox" accessibilityLabel="Inbox">
+      <NativeTabs.Trigger name="inbox" accessibilityLabel="Inbox" contentStyle={underSplit}>
         <NativeTabs.Trigger.Icon xcasset={GLYPH.INBOX} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Inbox</NativeTabs.Trigger.Label>
         {/* Note that the badge is left out at none rather than marked hidden, since NativeTabs draws a badge that holds a value whatever its hidden says. */}
@@ -95,7 +97,7 @@ export default function TabsLayout() {
           <NativeTabs.Trigger.Badge>{String(waiting)}</NativeTabs.Trigger.Badge>
         )}
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="tasks" accessibilityLabel="Tasks">
+      <NativeTabs.Trigger name="tasks" accessibilityLabel="Tasks" contentStyle={underSplit}>
         <NativeTabs.Trigger.Icon xcasset={GLYPH.TASK} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Tasks</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
@@ -103,6 +105,7 @@ export default function TabsLayout() {
       <NativeTabs.Trigger
         name="search"
         role="search"
+        contentStyle={underSplit}
         accessibilityLabel="Search"
         testID="search-tab"
       >
