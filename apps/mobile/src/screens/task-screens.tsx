@@ -579,6 +579,7 @@ export function TaskListRow({
       finished={taskFinished(task)}
       needsYou={look.needsYou}
       agents={look.agents}
+      blocked={task.blocked === true}
       taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
       depth={depth}
       {...rowActs(task, look.unread, listing, openRelation)}

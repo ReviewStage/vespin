@@ -209,6 +209,8 @@ type TaskRowProps = RowActs & {
   readonly needsYou?: boolean | undefined;
   /** What its agents say at the line's end, as the panel's row end says it: failed, at work, or its pull request. */
   readonly agents?: TaskAgentsStatus | undefined;
+  /** Whether a task it waits on is still open, which its end marks with a stop sign in the muted ink and says as Blocked, as the panel's rows do. */
+  readonly blocked?: boolean | undefined;
   /** Its key, `ACME-42`, which ends the line. */
   readonly taskKey?: string | undefined;
   /** Its sub-tasks' fold, where it has sub-tasks: whether they stand open under it, and what its chevron's press does. Its caller holds it, since a recycled row holds no state (`RowForEach`). */
@@ -694,13 +696,23 @@ function agentsHeard(agents: TaskAgentsStatus | undefined): string | undefined {
 
 /** What a task row is heard as: its name, then unread, its status, a thread that needs you, its agents, its key, and whether its sub-tasks are open. */
 function taskHeard(props: TaskRowProps): RowHeard {
-  const { name, status, unread = false, needsYou = false, agents, taskKey, fold } = props;
+  const {
+    name,
+    status,
+    unread = false,
+    needsYou = false,
+    blocked = false,
+    agents,
+    taskKey,
+    fold,
+  } = props;
 
   return {
     label: name,
     value: [
       unread && UNREAD_WORDS,
       TASK_STATUS_WORDS[status],
+      blocked && BLOCKED_WORDS,
       needsYou && NEEDS_YOU.LABEL,
       agentsHeard(agents),
       taskKey,
@@ -708,6 +720,9 @@ function taskHeard(props: TaskRowProps): RowHeard {
     ],
   };
 }
+
+/** What a blocked task's row says, the panel's word for its mark (`@repo/ui`'s `BLOCKED_WORDS`). */
+const BLOCKED_WORDS = "Blocked";
 
 /** What a task row's end says first: a thread that needs the reader, then a failed agent, one at work, or its pull request's state. */
 function TaskEndMark({ needsYou = false, agents }: Pick<TaskRowProps, "needsYou" | "agents">) {
@@ -810,6 +825,9 @@ export function TaskRow(props: TaskRowProps) {
         ink={titleInk(colors, unread, finished)}
         end={
           <HStack spacing={SPACE.TIGHT + 2}>
+            {props.blocked === true ? (
+              <ToneGlyph glyph={GLYPH.BLOCKED_BY} tone={STATUS_TONE.NEUTRAL} hidden />
+            ) : null}
             <TaskEndMark needsYou={props.needsYou} agents={props.agents} />
             {taskKey === undefined ? null : (
               <Text
