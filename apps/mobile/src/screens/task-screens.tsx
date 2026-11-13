@@ -513,17 +513,25 @@ function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly
   );
 }
 
-/** One task's row, set in by how deep it stands and led by its sub-tasks' fold where it has any: the one row every list of tasks draws, the Search tab's among them. */
+/**
+ * One task's row, set in by how deep it stands and led by its sub-tasks' fold
+ * where it has any: the one row every list of tasks draws, the Search tab's
+ * among them. Its key ends the line only where `keyed` asks, as a search's
+ * finds do; a regular window's sidebar and list column leave it out, as the
+ * panel's sidebar does, since it took the title's room and wrapped there.
+ */
 export function TaskListRow({
   task,
   listing,
   depth = 0,
   fold,
+  keyed,
 }: {
   readonly task: TaskSummary;
   readonly listing: TasksListing;
   readonly depth?: number;
   readonly fold?: TaskFold | undefined;
+  readonly keyed: boolean;
 }) {
   const look = listing.lookOf(task);
   const openRelation = useOpenRelation();
@@ -537,7 +545,7 @@ export function TaskListRow({
       finished={taskFinished(task)}
       needsYou={look.needsYou}
       agents={look.agents}
-      taskKey={keyOf(task, listing.workspace)}
+      taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
       depth={depth}
       {...rowActs(task, look.unread, listing, openRelation)}
       preview={taskPreview(task, listing)}
@@ -564,7 +572,7 @@ export function TaskRows({
 }) {
   return (
     <RowForEach data={tasks} keyOf={(task) => task.id}>
-      {(task) => <TaskListRow task={task} listing={listing} />}
+      {(task) => <TaskListRow task={task} listing={listing} keyed />}
     </RowForEach>
   );
 }
@@ -665,6 +673,7 @@ function GroupSection({
   readonly listing: TasksListing;
 }) {
   const place = placeIn(group, listing);
+  const keyed = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
 
   // Note that the section holds which parents stand open, rather than each row, since a recycled row draws another task once scrolled past.
   const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
@@ -704,6 +713,7 @@ function GroupSection({
             task={row.task}
             listing={listing}
             depth={row.depth}
+            keyed={keyed}
             fold={
               row.open === undefined
                 ? undefined

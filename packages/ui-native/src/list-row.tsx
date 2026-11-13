@@ -728,6 +728,7 @@ export function TaskRow(props: TaskRowProps) {
                   font({ textStyle: TYPE_ROLE.TIME }),
                   monospacedDigit(),
                   foregroundStyle(colors.TEXT_MUTED),
+                  lineLimit(1),
                 ]}
               >
                 {taskKey}
