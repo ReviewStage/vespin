@@ -219,6 +219,9 @@ export function useAgentComposer(
 
     if (text === "" && pictures.files === undefined) return;
 
+    // Note that a picture still being fitted would go missing from this send, so the send waits for it.
+    if (pictures.reading) return;
+
     if (suggested !== undefined && suggestionOut) return;
 
     if (pictures.refusal !== undefined) {

@@ -686,9 +686,10 @@ export function NewTaskScreen({
   const fileTask = useFileTask(workspaceId);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote, draft?.pictures);
-  // Note that a share draft's pictures are read as the sheet opens, and nothing starts or files until they are in, so its words never go without them.
-  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && !pictures.opening;
-  const filed = pictures.files === undefined && !pictures.opening ? filedTaskOf(prompt) : undefined;
+  // Note that a share draft's pictures are read as the sheet opens, and a picked or dropped picture as it is fitted, and nothing starts or files until they are in, so its words never go without them.
+  const settled = !pictures.opening && !pictures.reading;
+  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && settled;
+  const filed = pictures.files === undefined && settled ? filedTaskOf(prompt) : undefined;
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
   const place = { repository: repository.picked, relation: relation.relation };

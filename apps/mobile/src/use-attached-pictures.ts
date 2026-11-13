@@ -113,7 +113,7 @@ export interface AttachedPictures {
   readonly drop: (uris: readonly string[], unreadable: number) => void;
   /** Whether the pictures the holder opened with are still being read, while nothing it sends would carry them. */
   readonly opening: boolean;
-  /** Whether pictures dropped on the holder are still being read, while a send would go without them. */
+  /** Whether pictures picked or dropped on the holder are still being read, while a send would go without them. */
   readonly reading: boolean;
   readonly detach: (id: string) => void;
   /** Takes every picture off, as a send does, answering what was held so a refusal can put it back. */
@@ -165,6 +165,9 @@ export function useAttachedPictures(
     onNote(unread ?? pictureRefusal(next, bounds));
   };
 
+  // How many picks and drops are still being read.
+  const [reads, setReads] = useState(0);
+
   // Note that the system's photo picker reads only what the member picks, so no permission is asked for first.
   const attach = () => {
     launchImageLibraryAsync({
@@ -177,19 +180,23 @@ export function useAttachedPictures(
     })
       .then(async (picked) => {
         if (picked.canceled) return;
-        add(
-          await Promise.all(
-            picked.assets.map((asset) =>
-              fitted(asset.uri, bounds.pictureBytes, () => Promise.resolve(asset.base64)),
+        // Note that the pictures picked count as read until they are fitted, so a send in between waits for them rather than going without them.
+        setReads((count) => count + 1);
+
+        try {
+          add(
+            await Promise.all(
+              picked.assets.map((asset) =>
+                fitted(asset.uri, bounds.pictureBytes, () => Promise.resolve(asset.base64)),
+              ),
             ),
-          ),
-        );
+          );
+        } finally {
+          setReads((count) => count - 1);
+        }
       })
       .catch((cause: unknown) => console.error("The photo picker did not open.", cause));
   };
-
-  // How many drops are still being read.
-  const [reads, setReads] = useState(0);
 
   // Each dropped JPEG is fitted under the bound and deleted, since the drop kept it under the app's temporary folder for this alone; a picture the drop could not keep at all is said as unreadable.
   const dropped = (uris: readonly string[], unreadable: number) =>
