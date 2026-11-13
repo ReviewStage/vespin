@@ -12,7 +12,7 @@ import {
   lineLimit,
 } from "@expo/ui/swift-ui/modifiers";
 import { Chip } from "./button.js";
-import type { SfSymbol } from "./sf-symbol.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -49,7 +49,7 @@ function LineAct({
   onPress,
 }: {
   readonly label: string;
-  readonly symbol?: SfSymbol | undefined;
+  readonly symbol?: Glyph | undefined;
   readonly onPress: () => void;
 }) {
   const colors = useColors();
@@ -74,7 +74,7 @@ function LineAct({
           {label}
         </Text>
       ) : (
-        <Image systemName={symbol} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
+        <Image {...glyphImage(symbol)} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
       )}
     </Button>
   );
@@ -82,7 +82,7 @@ function LineAct({
 
 /**
  * The messages queued behind the agent's turn, oldest first, as the panel's
- * queue dock lists them over its box: each on one line led by a clock, with
+ * queue dock lists them over its box: each on one line led by the panel's queued glyph, with
  * Steer, which sends it into the turn now, and Delete; a message on its way
  * reads Sending in their place. Why the queue stands paused heads them.
  */
@@ -103,7 +103,7 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
       {lines.map((line) => (
         <HStack key={line.id} spacing={SPACE.ROW} modifiers={[frame({ minHeight: PRESS_SIZE })]}>
           <Image
-            systemName={line.sending ? "arrow.up.circle" : "clock"}
+            {...glyphImage(line.sending ? GLYPH.SEND : GLYPH.QUEUED)}
             size={MARK_SIZE.GLYPH}
             color={colors.TEXT_MUTED}
             modifiers={[accessibilityHidden()]}
@@ -130,7 +130,11 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
                 <LineAct label={WORDS.STEER} onPress={() => onSteer(line.id)} />
               )}
               {onDelete === undefined ? null : (
-                <LineAct label={WORDS.DELETE} symbol="trash" onPress={() => onDelete(line.id)} />
+                <LineAct
+                  label={WORDS.DELETE}
+                  symbol={GLYPH.DELETE}
+                  onPress={() => onDelete(line.id)}
+                />
               )}
             </>
           )}
@@ -163,7 +167,7 @@ export function AttachedPictures({
           <Chip
             key={picture.id}
             label={picture.name}
-            symbol="xmark"
+            symbol={GLYPH.REMOVE}
             hint={DETACH_HINT}
             onPress={() => onDetach(picture.id)}
           />
@@ -240,7 +244,7 @@ export function SkillSuggestions({
               }),
             ]}
           >
-            <Image systemName="book.closed" size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
+            <Image {...glyphImage(GLYPH.SKILL)} size={MARK_SIZE.GLYPH} color={colors.TEXT_MUTED} />
             <VStack alignment="leading" spacing={1}>
               <Text
                 modifiers={[

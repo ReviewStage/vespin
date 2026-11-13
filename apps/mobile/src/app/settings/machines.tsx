@@ -22,6 +22,7 @@ import { selectAccount } from "@repo/host/app-state-reads";
 import {
   ConfirmAsk,
   EmptyState,
+  GLYPH,
   ListSection,
   NoteRow,
   Screen,
@@ -120,7 +121,7 @@ function MachinesPage({ accountId }: { readonly accountId: string }) {
       held?.failed === true ? (
         <EmptyState
           title={READ_WORDS.FAILED}
-          symbol="exclamationmark.triangle"
+          symbol={GLYPH.FAILED}
           action={{
             label: VERB.RETRY,
             onPress: () =>
@@ -130,10 +131,10 @@ function MachinesPage({ accountId }: { readonly accountId: string }) {
           }}
         />
       ) : (
-        <EmptyState title={READ_WORDS.READING} symbol="desktopcomputer" loading />
+        <EmptyState title={READ_WORDS.READING} symbol={GLYPH.HOST} loading />
       )
     ) : hosts.length === 0 ? (
-      <EmptyState title={MACHINES_WORDS.NONE} symbol="desktopcomputer" />
+      <EmptyState title={MACHINES_WORDS.NONE} symbol={GLYPH.HOST} />
     ) : (
       <SettingsForm>
         <ListSection title={MACHINES_WORDS.TITLE} count={hosts.length}>

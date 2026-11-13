@@ -37,8 +37,8 @@ import {
   type ShownNotice,
 } from "./failure-notice-model.js";
 import { BAR_RADIUS } from "./glass-bar.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { BUZZ, buzz } from "./haptics.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -65,10 +65,10 @@ const SWIPE_AWAY = 24;
 
 /** The glyph each notice leads with. */
 const NOTICE_SYMBOL = {
-  [NOTICE_KIND.REFUSED]: "exclamationmark.triangle.fill",
-  [NOTICE_KIND.OFFLINE]: "wifi.slash",
-  [NOTICE_KIND.DONE]: "checkmark.circle.fill",
-} as const satisfies Record<ShownNotice["kind"], SfSymbol>;
+  [NOTICE_KIND.REFUSED]: GLYPH.FAILED,
+  [NOTICE_KIND.OFFLINE]: GLYPH.OFFLINE,
+  [NOTICE_KIND.DONE]: GLYPH.RESOLVED,
+} as const satisfies Record<ShownNotice["kind"], Glyph>;
 
 const styles = StyleSheet.create({
   // The banner's column, over the whole window and taking no touch outside the banner itself.
@@ -140,7 +140,7 @@ function NoticeBody({
           accessibilityIdentifier("failure-notice"),
         ]}
       >
-        <Image systemName={NOTICE_SYMBOL[notice.kind]} size={MARK_SIZE.LEAD} color={ink} />
+        <Image {...glyphImage(NOTICE_SYMBOL[notice.kind])} size={MARK_SIZE.LEAD} color={ink} />
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.ROW_TITLE }),

@@ -30,17 +30,16 @@ import {
 import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { useDockRoom } from "./glass-bar.js";
-import { isLucideSymbol } from "./glyph.js";
+import { GLYPH, glyphSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
-import { ToneGlyph } from "./marks.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
-import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
+import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
-import { MONOSPACE_FONT, TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
+import { MONOSPACE_FONT, TEXT_SIZE } from "./tokens/type.js";
 import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
@@ -155,7 +154,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACE.EDGE - 4,
     paddingVertical: SPACE.ROW,
   },
-  callGlyph: { width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH },
   head: {
     paddingHorizontal: SPACE.EDGE,
     paddingTop: SPACE.TIGHT,
@@ -215,7 +213,7 @@ function StandingMark({
 
   return (
     <SymbolView
-      name="xmark.circle.fill"
+      name={glyphSymbol(GLYPH.FAILED)}
       size={size}
       tintColor={colors.DANGER}
       accessibilityElementsHidden
@@ -253,32 +251,18 @@ function BodyBlock({
   );
 }
 
-/**
- * A call's glyph at a row mark's size: an SF Symbol through the system's
- * symbol view, or one of Lucide's, such as a pull request's, through
- * SwiftUI's own image in a host of that square, since React Native's image
- * draws a symbol set blank.
- */
+/** A call's glyph at a row mark's size, the panel's own for its kind, through the system's symbol view (`patches/expo-symbols@58.0.4.patch`), so a call's row costs no SwiftUI host. */
 function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
   const colors = useColors();
   const size = useScaledSize(MARK_SIZE.GLYPH);
-  const glyph = CALL_SYMBOL[callKind];
-
-  if (!isLucideSymbol(glyph)) {
-    return (
-      <SymbolView
-        name={glyph}
-        size={size}
-        tintColor={colors.TEXT_MUTED}
-        accessibilityElementsHidden
-      />
-    );
-  }
 
   return (
-    <InlineHost style={styles.callGlyph}>
-      <ToneGlyph glyph={glyph} tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} hidden />
-    </InlineHost>
+    <SymbolView
+      name={glyphSymbol(CALL_SYMBOL[callKind])}
+      size={size}
+      tintColor={colors.TEXT_MUTED}
+      accessibilityElementsHidden
+    />
   );
 }
 
@@ -517,7 +501,7 @@ function FoldRow({
         style={styles.callLine}
       >
         <SymbolView
-          name={item.open ? "chevron.down" : "chevron.right"}
+          name={glyphSymbol(item.open ? GLYPH.UNFOLDED : GLYPH.FOLDED)}
           size={MARK_SIZE.GLYPH - 3}
           tintColor={colors.TEXT_MUTED}
           style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
@@ -685,7 +669,7 @@ function TranscriptRow({
             ]}
           >
             <SymbolView
-              name="macwindow"
+              name={glyphSymbol(GLYPH.PAGE)}
               size={MARK_SIZE.WRITER}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
@@ -702,7 +686,7 @@ function TranscriptRow({
               </Text>
             </View>
             <SymbolView
-              name="chevron.right"
+              name={glyphSymbol(GLYPH.FOLDED)}
               size={MARK_SIZE.GLYPH - 3}
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
@@ -781,7 +765,7 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
         <ActivityIndicator size="small" color={colors.WORKING} accessibilityElementsHidden />
       ) : state === GLYPH_STATE.FAILED ? (
         <SymbolView
-          name="xmark.circle.fill"
+          name={glyphSymbol(GLYPH.FAILED)}
           size={MARK_SIZE.GLYPH}
           tintColor={colors.DANGER}
           accessibilityElementsHidden
@@ -801,7 +785,7 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
         >
           <Text style={ink}>{model}</Text>
           <SymbolView
-            name="chevron.down"
+            name={glyphSymbol(GLYPH.UNFOLDED)}
             size={MARK_SIZE.GLYPH - 4}
             weight="semibold"
             tintColor={colors.TEXT_MUTED}
@@ -833,7 +817,7 @@ function JumpToLatest({
 
   const arrow = (
     <SymbolView
-      name="arrow.down"
+      name={glyphSymbol(GLYPH.JUMP_DOWN)}
       size={MARK_SIZE.GLYPH + 2}
       weight="semibold"
       tintColor={colors.TEXT}

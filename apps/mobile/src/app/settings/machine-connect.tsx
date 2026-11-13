@@ -26,6 +26,7 @@ import {
   buzz,
   CodeRow,
   EmptyState,
+  GLYPH,
   ListSection,
   NoteRow,
   Screen,
@@ -56,7 +57,7 @@ const SETTLED_OPTIONS = {
 const HOST_PAIRING_QUERY = "host-pairing";
 
 /** The glyph the page stands under while it reads, and where it ends. */
-const PAIRING_SYMBOL = "desktopcomputer";
+const PAIRING_SYMBOL = GLYPH.MAC;
 
 /** What a flow finds the page's parts by. */
 const TEST_IDS = {
@@ -145,11 +146,7 @@ function Refused({ refusal }: { readonly refusal: HostPairingFailed }) {
     <>
       <Stack.Screen options={SETTLED_OPTIONS} />
       <Screen>
-        <EmptyState
-          title={words.title}
-          description={words.body}
-          symbol="exclamationmark.triangle"
-        />
+        <EmptyState title={words.title} description={words.body} symbol={GLYPH.FAILED} />
       </Screen>
     </>
   );
@@ -261,7 +258,7 @@ function Pairing({ code }: { readonly code: string }) {
             {now.kind === STANDING.UNREAD ? (
               <EmptyState
                 title={HOST_CONNECT_WORDS.UNREAD}
-                symbol="exclamationmark.triangle"
+                symbol={GLYPH.FAILED}
                 action={{ label: VERB.RETRY, onPress: () => void pairing.refetch() }}
               />
             ) : (

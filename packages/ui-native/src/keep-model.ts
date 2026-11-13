@@ -10,7 +10,7 @@
  * decodes or a text file's words; anything may be shared.
  */
 
-import type { SfSymbol } from "./sf-symbol.js";
+import { GLYPH, type Glyph } from "./glyph.js";
 
 /** What is kept: a picture, a recording, or any other file a message carried. */
 export const KEPT_KIND = {
@@ -90,12 +90,12 @@ export const KEEP_WORDS = {
   [KEEP_ACT.SHARE]: "Share…",
 } as const satisfies Record<KeepAct, string>;
 
-/** The SF Symbol each act leads with in a menu, as iOS's own menus draw them. */
+/** The glyph each act leads with in a menu: the panel's own for Copy and Save, and iOS's own Share. */
 export const KEEP_SYMBOL = {
-  [KEEP_ACT.COPY]: "doc.on.doc",
-  [KEEP_ACT.SAVE_TO_PHOTOS]: "square.and.arrow.down",
-  [KEEP_ACT.SHARE]: "square.and.arrow.up",
-} as const satisfies Record<KeepAct, SfSymbol>;
+  [KEEP_ACT.COPY]: GLYPH.COPY,
+  [KEEP_ACT.SAVE_TO_PHOTOS]: GLYPH.SAVE,
+  [KEEP_ACT.SHARE]: GLYPH.SHARE,
+} as const satisfies Record<KeepAct, Glyph>;
 
 /** A picture's bytes from its `data:` address; none for a web address, or a type no file can be named for. */
 export function heldPicture(source: string): HeldPicture | undefined {

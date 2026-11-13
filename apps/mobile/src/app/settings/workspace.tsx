@@ -31,6 +31,7 @@ import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   ActionRow,
   ConfirmAsk,
+  GLYPH,
   ListSection,
   MemberRow,
   type MemberRowAct,
@@ -247,7 +248,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             {manages ? (
               <ActionRow
                 label={hasPhoto ? PHOTO_WORDS.CHANGE : PHOTO_WORDS.ADD}
-                symbol="photo"
+                symbol={GLYPH.IMAGE}
                 disabled={photo.running}
                 onPress={pickPhoto}
               />
@@ -291,7 +292,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             >
               <ActionRow
                 label={INVITATION_WORDS.INVITE}
-                symbol="person.badge.plus"
+                symbol={GLYPH.INVITE}
                 onPress={() => setAsking({ kind: ASKING.INVITE })}
               />
               {(invitations ?? []).map((invitation) => (
@@ -319,7 +320,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
               {heir === undefined ? null : (
                 <ActionRow
                   label={TRANSFER_WORDS.VERB}
-                  symbol="crown"
+                  symbol={GLYPH.MAKE_OWNER}
                   onPress={() => setAsking({ kind: ASKING.TRANSFER, member: heir })}
                 />
               )}

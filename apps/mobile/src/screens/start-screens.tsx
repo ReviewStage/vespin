@@ -25,6 +25,8 @@ import {
   BUZZ,
   buzz,
   ConfirmAsk,
+  GLYPH,
+  glyphSymbol,
   ListSection,
   MenuPickRow,
   type PickOption,
@@ -143,14 +145,14 @@ function SheetBar({
       <Stack.Toolbar placement="right">
         {file === undefined ? null : (
           <Stack.Toolbar.Button
-            icon="tray.and.arrow.down"
+            icon={glyphSymbol(GLYPH.FILE_FOR_LATER)}
             accessibilityLabel={WORDS.FILE_FOR_LATER}
             disabled={!file.ready}
             onPress={file.onFile}
           />
         )}
         <Stack.Toolbar.Button
-          icon="arrow.up"
+          icon={glyphSymbol(GLYPH.SEND)}
           variant="prominent"
           tintColor={colors.ACCENT}
           accessibilityLabel={WORDS.START}
@@ -192,7 +194,7 @@ function AgentSection({
         onPick={pick.pickModel}
       />
       {pick.failed === undefined ? null : (
-        <ActionRow label={WORDS.TRY_AGAIN} symbol="arrow.clockwise" onPress={pick.retry} />
+        <ActionRow label={WORDS.TRY_AGAIN} symbol={GLYPH.RETRY} onPress={pick.retry} />
       )}
       {pick.efforts.length <= 1 ? null : (
         <MenuPickRow
@@ -667,7 +669,7 @@ export function NewTaskScreen({
                 {repository.failed === undefined ? null : (
                   <ActionRow
                     label={WORDS.TRY_AGAIN}
-                    symbol="arrow.clockwise"
+                    symbol={GLYPH.RETRY}
                     onPress={repository.retry}
                   />
                 )}

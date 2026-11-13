@@ -1,7 +1,5 @@
 // markdown.tsx -- a message's Markdown drawn in React Native views, since SwiftUI has no piece for the panel's: headings, lists, task lists, quotes, tables, code, drafts to send elsewhere, links, mention chips, and pictures that open full screen and zoom.
 
-import { Image as SwiftUIImage } from "@expo/ui/swift-ui";
-import { accessibilityHidden, frame } from "@expo/ui/swift-ui/modifiers";
 import { readerZone } from "@repo/features/date-mention";
 import { ENTITY_KIND, type EntityKind, entityWordHeard } from "@repo/features/entity-kind";
 import type { LinkStanding } from "@repo/features/link-standing-model";
@@ -24,10 +22,9 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { DraftCard } from "./draft-card.js";
-import { type Glyph, isLucideSymbol } from "./glyph.js";
+import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
 import { ISSUE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { InlineHost } from "./inline-host.js";
 import { KEPT_KIND } from "./keep-model.js";
 import {
   COLUMN_ALIGN,
@@ -50,59 +47,50 @@ import {
   suggestionHeard,
 } from "./suggestion-look.js";
 import { type BrandColors, type StatusTone, toneColor, useColors } from "./tokens/colors.js";
-import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
 import { SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, PROSE_SIZE, TEXT_SIZE } from "./tokens/type.js";
 import { Video } from "./video.js";
 
 /**
  * The glyph each kind of entity leads its chip with, as the panel's
- * `entity-mark.tsx` gives each kind its own: a pull request's is Lucide's
- * own, as the panel's chip draws it before GitHub has said where the pull
- * request stands, and the rest the SF Symbol closest to the panel's.
+ * `entity-mark.tsx` gives each kind its own Lucide glyph; a person, the app,
+ * and an MCP server or tool, which the panel marks with a face or a mark of
+ * its own, lead with SF Symbols' nearest.
  */
 const ENTITY_SYMBOL: Readonly<Record<EntityKind, Glyph>> = {
-  [ENTITY_KIND.PLAN]: "checklist",
-  [ENTITY_KIND.SECTION]: "number",
-  [ENTITY_KIND.VERSION]: "clock.arrow.circlepath",
-  [ENTITY_KIND.COMMENT]: "text.bubble",
-  [ENTITY_KIND.PAGE]: "doc.richtext",
-  [ENTITY_KIND.AGENT]: "sparkles",
-  [ENTITY_KIND.WORKER]: "gearshape.2",
-  [ENTITY_KIND.APP]: "app",
-  [ENTITY_KIND.CHANGES]: "plusminus",
-  [ENTITY_KIND.PULL_REQUEST]: LUCIDE_SYMBOL.GIT_PULL_REQUEST,
-  [ENTITY_KIND.PULL_REQUEST_THREAD]: "text.bubble",
-  [ENTITY_KIND.ISSUE]: "smallcircle.filled.circle",
-  [ENTITY_KIND.LINK]: "link",
-  [ENTITY_KIND.MESSAGE]: "message",
-  [ENTITY_KIND.HOME]: "house",
-  [ENTITY_KIND.BOARD]: "checklist",
-  [ENTITY_KIND.INBOX]: "tray",
-  [ENTITY_KIND.INBOX_ITEM]: "tray.full",
-  [ENTITY_KIND.AUTOMATIONS]: "bolt",
-  [ENTITY_KIND.AUTOMATION]: "bolt",
-  [ENTITY_KIND.AUTOMATION_RUN]: "bolt.circle",
-  [ENTITY_KIND.SETTINGS]: "gearshape",
-  [ENTITY_KIND.PERSON]: "person.crop.circle",
-  [ENTITY_KIND.ADMIN]: "person.badge.shield.checkmark",
-  [ENTITY_KIND.FILE]: "doc",
-  [ENTITY_KIND.FOLDER]: "folder",
-  [ENTITY_KIND.SERVER]: "server.rack",
-  [ENTITY_KIND.TOOL]: "wrench.and.screwdriver",
-  [ENTITY_KIND.SKILL]: "wand.and.stars",
-  [ENTITY_KIND.REPOSITORY]: "book.closed",
-  [ENTITY_KIND.WORKSPACE]: "building.2",
-  [ENTITY_KIND.DATE]: "calendar",
+  [ENTITY_KIND.PLAN]: GLYPH.TASK,
+  [ENTITY_KIND.SECTION]: GLYPH.HEADING,
+  [ENTITY_KIND.VERSION]: GLYPH.TASK,
+  [ENTITY_KIND.COMMENT]: GLYPH.COMMENT,
+  [ENTITY_KIND.PAGE]: GLYPH.PAGE,
+  [ENTITY_KIND.AGENT]: GLYPH.AGENT,
+  [ENTITY_KIND.WORKER]: GLYPH.AGENT,
+  [ENTITY_KIND.APP]: GLYPH.APP,
+  [ENTITY_KIND.CHANGES]: GLYPH.CHANGES,
+  [ENTITY_KIND.PULL_REQUEST]: GLYPH.PULL_REQUEST,
+  [ENTITY_KIND.PULL_REQUEST_THREAD]: GLYPH.COMMENT,
+  [ENTITY_KIND.ISSUE]: GLYPH.ISSUE,
+  [ENTITY_KIND.LINK]: GLYPH.GLOBE,
+  [ENTITY_KIND.MESSAGE]: GLYPH.COMMENT,
+  [ENTITY_KIND.HOME]: GLYPH.HOME,
+  [ENTITY_KIND.BOARD]: GLYPH.TASK,
+  [ENTITY_KIND.INBOX]: GLYPH.INBOX,
+  [ENTITY_KIND.INBOX_ITEM]: GLYPH.THREAD,
+  [ENTITY_KIND.AUTOMATIONS]: GLYPH.AUTOMATION,
+  [ENTITY_KIND.AUTOMATION]: GLYPH.AUTOMATION,
+  [ENTITY_KIND.AUTOMATION_RUN]: GLYPH.AUTOMATION,
+  [ENTITY_KIND.SETTINGS]: GLYPH.SETTINGS,
+  [ENTITY_KIND.PERSON]: GLYPH.FACE,
+  [ENTITY_KIND.ADMIN]: GLYPH.ADMIN,
+  [ENTITY_KIND.FILE]: GLYPH.FILE,
+  [ENTITY_KIND.FOLDER]: GLYPH.FOLDER,
+  [ENTITY_KIND.SERVER]: GLYPH.MCP_SERVER,
+  [ENTITY_KIND.TOOL]: GLYPH.MCP_TOOL,
+  [ENTITY_KIND.SKILL]: GLYPH.SKILL,
+  [ENTITY_KIND.REPOSITORY]: GLYPH.REPOSITORY,
+  [ENTITY_KIND.WORKSPACE]: GLYPH.WORKSPACE,
+  [ENTITY_KIND.DATE]: GLYPH.DATE,
 };
-
-/**
- * The font size a chip's custom symbol is set at, as a share of its square.
- * Note that a symbol set at the square's own size overflows it, since its
- * template stands at one and a half cap heights, so it is set smaller and
- * centered in the square rather than hung from its baseline.
- */
-const CHIP_SYMBOL_SCALE = 0.85;
 
 /** Each heading level's size and weight, a step above the 15 pt words as the denser scale reads, never past a page's own heading. */
 const HEADING_LOOK: Readonly<Record<1 | 2 | 3 | 4 | 5 | 6, TextStyle>> = {
@@ -249,10 +237,10 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
 }
 
 /**
- * A chip's glyph in a `size`-point square in `color`: an SF Symbol through
- * the system's symbol view, or one of Lucide's custom symbols through
- * SwiftUI's own image in a host of that square. Note that React Native's
- * image draws a symbol set blank, since it reads only image sets by name.
+ * A chip's glyph in a `size`-point square in `color`, through the system's
+ * symbol view, which the app's patch (`patches/expo-symbols@58.0.4.patch`)
+ * lets read Lucide's custom symbols from the asset catalog as well as SF
+ * Symbols, so a chip costs no SwiftUI host of its own.
  */
 function ChipGlyph({
   glyph,
@@ -263,19 +251,13 @@ function ChipGlyph({
   readonly size: number;
   readonly color: string;
 }) {
-  if (!isLucideSymbol(glyph)) {
-    return <SymbolView name={glyph} size={size} tintColor={color} accessibilityElementsHidden />;
-  }
-
   return (
-    <InlineHost style={{ width: size, height: size }}>
-      <SwiftUIImage
-        assetName={glyph}
-        size={size * CHIP_SYMBOL_SCALE}
-        color={color}
-        modifiers={[frame({ width: size, height: size }), accessibilityHidden()]}
-      />
-    </InlineHost>
+    <SymbolView
+      name={glyphSymbol(glyph)}
+      size={size}
+      tintColor={color}
+      accessibilityElementsHidden
+    />
   );
 }
 
@@ -331,7 +313,7 @@ function MentionChip({
 }
 
 /** The steer arrow a suggestion leads with, as the panel's pill and its Started or Sent do. */
-const SUGGESTION_SYMBOL = "arrow.turn.down.right";
+const SUGGESTION_SYMBOL = GLYPH.SUGGEST;
 
 /**
  * A suggestion as its chip, standing in the line of words in the mention
@@ -643,7 +625,7 @@ function Marker({
         accessibilityState={{ checked }}
       >
         <SymbolView
-          name={checked ? "checkmark.square.fill" : "square"}
+          name={glyphSymbol(checked ? GLYPH.BOX_TICKED : GLYPH.BOX)}
           size={PROSE_SIZE * fontScale}
           tintColor={checked ? colors.ACCENT : colors.TEXT_MUTED}
         />
