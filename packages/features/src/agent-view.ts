@@ -87,7 +87,7 @@ import {
   soundRenameRequestSchema,
 } from "./sound-clip-wire.js";
 import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
-import { voiceSessionRequestSchema } from "./voice-wire.js";
+import { voiceReconnectRequestSchema, voiceSessionRequestSchema } from "./voice-wire.js";
 
 /**
  * agent-view.ts -- a task's coding agents as one Mac's window hears them: each call's answer whole, or why there is none.
@@ -1178,6 +1178,16 @@ export type VoiceSessionParams = typeof voiceSessionParamsSchema.Type;
 export const voiceSessionAnswerViewSchema = answerView(voiceContract.open);
 
 export type VoiceSessionAnswerView = typeof voiceSessionAnswerViewSchema.Type;
+
+/** A standing call to carry on over a new peer, as the window asks for it: the call's id and the new peer's SDP offer. */
+export const voiceReconnectParamsSchema = voiceReconnectRequestSchema;
+
+export type VoiceReconnectParams = typeof voiceReconnectParamsSchema.Type;
+
+/** The reconnected call, as the window hears it: the SDP answer, or why there is none. */
+export const voiceReconnectAnswerViewSchema = answerView(voiceContract.reconnect);
+
+export type VoiceReconnectAnswerView = typeof voiceReconnectAnswerViewSchema.Type;
 
 /** The phone the app runs on, as it registers itself for pushes: its APNs token, its build's gateway, and its app. */
 export const pushDeviceRegisterParamsSchema = pushDeviceRegisterRequestSchema;

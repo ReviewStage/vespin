@@ -109,6 +109,8 @@ import {
   type SoundStateView,
   type SubscriptionLabelParams,
   type SubscriptionOrderParams,
+  type VoiceReconnectAnswerView,
+  type VoiceReconnectParams,
   type VoiceSessionAnswerView,
   type VoiceSessionParams,
 } from "./agent-view.js";
@@ -238,7 +240,7 @@ import {
 } from "./sound-clip-wire.js";
 import type { TaskAgentRefusal } from "./task-wire.js";
 import { MP4_TYPE, PLAYABLE_VIDEO_TYPE, type PlayableVideoType } from "./video-signature.js";
-import { voiceSessionRequestSchema } from "./voice-wire.js";
+import { voiceReconnectRequestSchema, voiceSessionRequestSchema } from "./voice-wire.js";
 
 /**
  * agent-client.ts -- the window's side of a task's coding agents, as the host asks the service for them.
@@ -926,6 +928,21 @@ export class HostedAgentClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 
     return hostedCall(this.#hosted.voice.open, admitted, { deadline: HOSTED_DEADLINE.HELD });
+  }
+
+  /**
+   * A standing call carried on over a new peer after the network changed
+   * (`voice-wire.ts`): the new SDP offer out under the call's id, GPT-Live's
+   * SDP answer back, under the held deadline, as an open is.
+   */
+  reconnectVoiceSession(
+    params: VoiceReconnectParams,
+  ): Effect.Effect<VoiceReconnectAnswerView, never, HttpClient.HttpClient> {
+    const admitted = Result.getOrUndefined(readEither(voiceReconnectRequestSchema)(params));
+
+    if (admitted === undefined) return Effect.succeed(UNANSWERED);
+
+    return hostedCall(this.#hosted.voice.reconnect, admitted, { deadline: HOSTED_DEADLINE.HELD });
   }
 
   /** The member's own GitHub token, as what tells it apart; never the token. */

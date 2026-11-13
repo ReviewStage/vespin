@@ -1,0 +1,1 @@
+ALTER TABLE "voice_call" ADD COLUMN "clock_base_ms" integer DEFAULT 0 NOT NULL;

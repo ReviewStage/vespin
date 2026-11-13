@@ -96,6 +96,7 @@ const outputsOf = (
 
   return Stream.runCollect(
     voiceDelegations(Stream.fromIterable(inputs), {
+      sessionStartMs: 0,
       agentWorking: false,
       answering: null,
       lines: [],
@@ -368,6 +369,39 @@ it.effect(
           fromMs: 2000,
           toMs: 2300,
           eventId: "v2",
+        },
+      ]);
+    }),
+);
+
+it.effect(
+  "a call moved to a new session after its network changed keeps counting its lines from the call's start",
+  () =>
+    Effect.gen(function* () {
+      const lines: readonly StoredVoiceLine[] = [
+        {
+          speaker: VOICE_SPEAKER.CALLER,
+          id: "before",
+          text: "Run the",
+          fromMs: 1100,
+          toMs: 1500,
+          eventId: "e3",
+          delegated: false,
+        },
+      ];
+
+      // The new session's timeline starts again at zero, a minute into the call, and its event ids are its own.
+      const outputs = yield* outputsOf([said("Where was I?", 0, 400, "n1")], {
+        lines,
+        sessionStartMs: 60_000,
+      });
+
+      assert.deepEqual(outputs, [
+        {
+          ...record(VOICE_SPEAKER.CALLER, "line_1", "Where was I?"),
+          fromMs: 60_000,
+          toMs: 60_400,
+          eventId: "n1",
         },
       ]);
     }),

@@ -83,13 +83,19 @@ class FakePeer {
   close() {
     this.closed = true;
   }
+  /** The peer's connection moving to the state given, as the browser tells it. */
+  moved(state: RTCPeerConnectionState) {
+    this.connectionState = state;
+    this.onconnectionstatechange?.();
+  }
 }
 
 /** The microphone's one track, whose light a stop puts out. */
 const microphone = { stopped: false };
 
-/** What the call asked the service to open. */
+/** What the call asked the service to open, and to reconnect. */
 let opened: unknown[];
+let reconnected: unknown[];
 
 let root: Root | undefined;
 let call: VoiceCall;
@@ -135,6 +141,7 @@ async function called(): Promise<FakePeer> {
 beforeEach(() => {
   FakePeer.made = [];
   opened = [];
+  reconnected = [];
   microphone.stopped = false;
 
   const track = {
@@ -156,6 +163,11 @@ beforeEach(() => {
       opened.push(payload);
 
       return Promise.resolve({ callId: CALL_ID, sdp: "v=0 answer" });
+    },
+    [ACT_KIND.VOICE_RECONNECT]: (payload) => {
+      reconnected.push(payload);
+
+      return Promise.resolve({ sdp: "v=0 answer again" });
     },
   });
 });
@@ -267,4 +279,43 @@ test("nothing calls while the Voice experiment is off", async () => {
 
   assert.equal(FakePeer.made.length, 0);
   assert.equal(call.call, undefined);
+});
+
+test("a peer that fails after it connected is carried on over a new one under the call's id, the microphone kept, its mute told again, and its timer kept", async () => {
+  await mounted();
+  const peer = await called();
+  act(() => peer.moved("connected"));
+  act(() => peer.channel.started());
+  act(() => call.setMicrophoneMuted(true));
+  const startedAt = call.call?.startedAt;
+
+  act(() => peer.moved("failed"));
+  await settleQueries();
+  const again = FakePeer.made.at(-1);
+  assert.ok(again && again !== peer, "a new peer was made");
+
+  assert.ok(peer.closed, "the failed peer is dropped");
+  assert.equal(microphone.stopped, false, "the microphone is kept");
+  assert.deepEqual(reconnected, [{ callId: CALL_ID, sdp: "v=0 offer" }]);
+  assert.deepEqual(again.remote, { type: "answer", sdp: "v=0 answer again" });
+  assert.equal(call.call?.stage, "connecting");
+
+  act(() => again.channel.started());
+  assert.equal(call.call?.stage, "live");
+  assert.equal(call.call?.callId, CALL_ID);
+  assert.equal(call.call?.startedAt, startedAt);
+  assert.deepEqual(again.channel.told(), [said("session.input_audio.mute")]);
+});
+
+test("a peer that fails before it ever connected drops the call rather than trying again", async () => {
+  await mounted();
+  const peer = await called();
+
+  act(() => peer.moved("failed"));
+  await settleQueries();
+
+  assert.equal(call.call, undefined);
+  assert.deepEqual(reconnected, []);
+  assert.equal(FakePeer.made.length, 1);
+  assert.ok(microphone.stopped, "the microphone is let go");
 });

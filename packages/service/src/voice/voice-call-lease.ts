@@ -41,6 +41,18 @@
  * delivery the same way; one that will not attach for now fails it before
  * it claims anything.
  *
+ * A reconnect moves the call to a new session when the caller's peer
+ * failed (`voice-procedures.ts`), taking the next epoch, so every lease on
+ * the old session is stale, and publishes a lease that names the session it
+ * left. That lease attaches to the new session and claims the call as any
+ * lease does, then attaches to the old one, closes it, and keeps its seconds
+ * on the caller's day before it holds the new one, since no other holder
+ * will: a call's row is deleted only by naming the session it stands on, so
+ * a stale holder that hears the old session close ends nothing and keeps
+ * nothing. The call's seconds are so kept
+ * session by session, and the call is counted once, at its last session's
+ * close, by its length on the call's clock.
+ *
  * The driver (`holdVoiceCall`) names nothing of Functions: it takes a lease
  * and runs until it hands over or the call ends, so a longer-lived host can
  * run it. The queue is Vercel Queues on production and on a Preview;
@@ -123,11 +135,12 @@ export const VOICE_CALL_HELD = {
 
 export type VoiceCallHeld = (typeof VOICE_CALL_HELD)[keyof typeof VOICE_CALL_HELD];
 
-/** One lease as its message names it: the call, its caller, and the epoch to claim from. */
+/** One lease as its message names it: the call, its caller, the epoch to claim from, and, for a reconnect's, the session the call left, which it closes. */
 const VoiceCallLeaseMessageSchema = Schema.Struct({
   callId: Schema.String,
   callerId: Schema.String,
   epoch: Schema.Int,
+  closes: Schema.optionalKey(Schema.String),
 });
 
 export type VoiceCallLeaseMessage = typeof VoiceCallLeaseMessageSchema.Type;
@@ -190,16 +203,18 @@ export const observeNothing: VoiceCallObserver<never> = () =>
   Effect.succeed({ observe: () => Effect.void, beside: Effect.never });
 
 /**
- * The call's row deleted, and, where this delete is the one that took it,
- * its seconds kept on the caller's day and the call counted once, by its
- * length and the agent's harness, in the agent's workspace. A meter the
- * store refused is logged and the call still counted, as dictation's is.
+ * The call's row deleted where it still stands on the session this lease
+ * holds, and, where this delete is the one that took it, its seconds kept
+ * on the caller's day and the call counted once, by its length on the
+ * call's clock and the agent's harness, in the agent's workspace. A meter
+ * the store refused is logged and the call still counted, as dictation's
+ * is.
  */
 const endCall = Effect.fnUntraced(function* (
   call: VoiceCallRow,
   seconds: Option.Option<number>,
 ): Effect.fn.Return<void, StoreFailure, DatabaseServices> {
-  const deleted = yield* deleteVoiceCall(call.callerId, call.id);
+  const deleted = yield* deleteVoiceCall(call.callerId, call.id, call.liveSessionId);
 
   if (!deleted || Option.isNone(seconds)) return;
   const now = yield* Clock.currentTimeMillis;
@@ -221,9 +236,47 @@ const endCall = Effect.fnUntraced(function* (
     SERVER_EVENT.VOICE_CALL,
     call.callerId,
     readVisibleAgentWorkspace(call.callerId, call.agentId),
-    { duration: voiceCallDurationOf(seconds.value * MS_PER_SECOND), harness: harness.value },
+    {
+      duration: voiceCallDurationOf(call.clockBaseMs + seconds.value * MS_PER_SECOND),
+      harness: harness.value,
+    },
   );
 });
+
+/**
+ * The session a reconnect moved the call off, closed, and its seconds kept
+ * on the caller's day: attached on the caller's key, asked to close, and its
+ * close waited on for `CLOSE_WAIT`. A session already gone, or one that
+ * never confirms its close, keeps no seconds, as a call whose close no lease
+ * heard keeps none.
+ */
+const closedLeft = Effect.fnUntraced(function* (
+  call: VoiceCallRow,
+  sessionId: string,
+  key: Redacted.Redacted,
+) {
+  const sidebands = yield* LiveSidebands;
+  const attached = yield* Effect.result(sidebands.attach(sessionId, key));
+
+  if (Result.isFailure(attached)) return;
+  const sideband = attached.success;
+  yield* sideband.send({ type: LIVE_SIDEBAND_EVENT.CLOSE });
+
+  const closed = yield* sideband.events.pipe(
+    Stream.filter((event) => event.type === LIVE_SIDEBAND_EVENT.CLOSED),
+    Stream.runHead,
+    Effect.timeoutOption(VOICE_CALL_LEASE.CLOSE_WAIT),
+  );
+
+  const seconds = Option.flatMap(Option.flatten(closed), closedSeconds);
+
+  if (Option.isNone(seconds)) return;
+  const now = yield* Clock.currentTimeMillis;
+
+  yield* spendVoiceMeter({ userId: call.callerId, seconds: seconds.value, now }).pipe(
+    Effect.catch(logStoreFailure),
+  );
+}, Effect.scoped);
 
 /** The caller's own OpenAI key the session was opened on; none where they no longer have one this deployment can open. */
 const callerKey = Effect.fnUntraced(function* (callerId: string) {
@@ -315,6 +368,9 @@ export const holdVoiceCall = Effect.fn("voice/holdVoiceCall")(function* <R>(
 
       const sideband = attached.success;
       let lost = false;
+
+      // A reconnect's lease closes the session the call left before it holds the new one, whose events wait on the sideband meanwhile.
+      if (lease.closes !== undefined) yield* closedLeft(call, lease.closes, key.value);
 
       // Whether this lease still holds the call, read now; a lease told no has lost it.
       const stillHolds = Effect.gen(function* () {

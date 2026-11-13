@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
-import { claimVoiceCallLease, readVoiceCall } from "@repo/database/models/voice-calls";
+import {
+  claimVoiceCallLease,
+  moveVoiceCall,
+  readVoiceCall,
+} from "@repo/database/models/voice-calls";
 import { hostedUsage } from "@repo/database/schemas/usage";
 import { getTestDB } from "@repo/database/testing";
 import { memorySandbox } from "@repo/sandbox/testing";
@@ -18,6 +22,7 @@ import {
 import { githubReaching } from "../testing/github-app-fake.js";
 import {
   fakeLiveSession,
+  fakeLiveSessions,
   LIVE_REPLAYED,
   openVoiceCall,
   VOICE_CALLER_ENVIRONMENT,
@@ -39,8 +44,10 @@ import {
  * holder, the two overlapping rather than leaving a gap; a holder whose
  * epoch was taken says nothing more and lets go; a lease that cannot hand
  * over closes the session; a crashed holder's lease, delivered again, takes
- * the call back; and the call's close deletes its row and keeps its seconds
- * once, however many holders heard it.
+ * the call back; the call's close deletes its row and keeps its seconds
+ * once, however many holders heard it; and a reconnect's lease closes the
+ * session the call left, keeping its seconds, while the holder left on it
+ * ends nothing.
  *
  * Synthetic accounts and sessions throughout.
  */
@@ -104,9 +111,9 @@ const countedCalls = (callerId: string) =>
     .filter((event) => event.userId === callerId && event.name === SERVER_EVENT.VOICE_CALL)
     .map((event) => ({ workspaceId: event.workspaceId, ...event.properties }));
 
-/** A test's world: the caller's key opened, the fake session attached, the queue recording, analytics counted. */
+/** A test's world: the caller's key opened, the fake session or sessions attached, the queue recording, analytics counted. */
 const world = (
-  session: ReturnType<typeof fakeLiveSession>,
+  session: { readonly layer: Layer.Layer<never> },
   leases: { readonly layer: Layer.Layer<never> },
 ) =>
   Layer.mergeAll(
@@ -335,6 +342,86 @@ it.layer(SUITE)("a voice call held lease by lease", (it) => {
 
         const row = Option.getOrThrow(yield* readVoiceCall(callerId, call.id));
         assert.equal(row.leaseEpoch, 4);
+      }),
+  );
+
+  it.effect(
+    "a reconnect's lease closes the session the call left and keeps its seconds, the holder left on it ends nothing, and the call is counted once by its length from its start",
+    () =>
+      Effect.gen(function* () {
+        const { call, callerId, workspaceId } = yield* openVoiceCall;
+        const left = fakeLiveSession(30);
+        const moved = fakeLiveSession(undefined);
+
+        const sessions = {
+          layer: fakeLiveSessions(
+            new Map([
+              [call.liveSessionId, left],
+              ["live_reconnected", moved],
+            ]),
+          ),
+        };
+
+        const leases = yield* recordingLeases(true);
+        const { heard, observe } = yield* hearing;
+
+        const [stale, kept] = yield* Effect.gen(function* () {
+          const before = yield* Effect.forkChild(
+            holdVoiceCall({ callId: call.id, callerId, epoch: 1, redelivered: false }, observe),
+          );
+
+          yield* left.say(SPOKEN);
+          yield* nextHeard(heard, 1);
+
+          // The peer failed, and the panel's reconnect moved the call a minute in.
+          const reconnected = Option.getOrThrow(
+            yield* moveVoiceCall(callerId, call.id, call.liveSessionId, {
+              liveSessionId: "live_reconnected",
+              clockBaseMs: 60_000,
+              leaseUntil: new Date(0),
+            }),
+          );
+
+          const after = yield* Effect.forkChild(
+            holdVoiceCall(
+              {
+                callId: call.id,
+                callerId,
+                epoch: reconnected.leaseEpoch,
+                closes: call.liveSessionId,
+                redelivered: false,
+              },
+              observe,
+            ),
+          );
+
+          // The left session's close, which both hear, ends nothing; the new session goes on being heard.
+          const leftHeld = yield* Fiber.join(before);
+          yield* moved.say(SPOKEN);
+          yield* nextHeard(heard, 1);
+          const standing = yield* readVoiceCall(callerId, call.id);
+          const meteredMid = yield* metered(callerId);
+
+          yield* moved.say(LIVE_SIDEBAND_EVENT.CLOSED, { usage: { seconds: 20 } });
+          assert.equal(yield* Fiber.join(after), VOICE_CALL_HELD.ENDED);
+
+          return [leftHeld, { standing, meteredMid }] as const;
+        }).pipe(Effect.provide(world(sessions, leases)));
+
+        assert.equal(stale, VOICE_CALL_HELD.ENDED);
+        assert.deepEqual(left.sent, [LIVE_SIDEBAND_EVENT.CLOSE]);
+        assert.equal(Option.getOrThrow(kept.standing).liveSessionId, "live_reconnected");
+        assert.deepEqual(kept.meteredMid, [{ voiceSeconds: 30 }]);
+
+        assert.equal(Option.isNone(yield* readVoiceCall(callerId, call.id)), true);
+        assert.deepEqual(yield* metered(callerId), [{ voiceSeconds: 50 }]);
+        assert.deepEqual(countedCalls(callerId), [
+          {
+            workspaceId,
+            duration: SERVER_VOICE_CALL_DURATION.UNDER_5M,
+            harness: SERVER_AGENT_HARNESS.CLAUDE_CODE,
+          },
+        ]);
       }),
   );
 });

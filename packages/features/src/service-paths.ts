@@ -117,6 +117,12 @@ export const HOSTED_SERVICE_PATH = {
    */
   VOICE_SESSION: "/api/voice/session",
   /**
+   * A standing call carried on over a new peer after its network changed
+   * (POST): the call's id and the new SDP offer in, GPT-Live's SDP answer
+   * out. `voice-wire.ts` declares both bodies.
+   */
+  VOICE_RECONNECT: "/api/voice/reconnect",
+  /**
    * The member's grant of support access, under which a maintainer may sign
    * in as the account from the web for an hour at a time: grant it for seven
    * days (POST), or revoke it, ending any such sign-in under way (DELETE).

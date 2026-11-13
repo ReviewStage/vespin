@@ -8,7 +8,8 @@
  *
  * - A line of the call is recorded through the write a line of a call takes
  *   (`recordVoiceLine`), under its key, as the caller's words or the voice's,
- *   with its span on the session's clock and the event it took last.
+ *   with its span on the call's clock, the session's moved on by how far
+ *   into the call it started (`clock_base_ms`), and the event it took last.
  * - A delegation goes the way the caller's typed line goes: sent on the
  *   caller's lines it names, which opens the agent's turn on those rows
  *   rather than writing their words again (`steerMemberWords`), or queued
@@ -256,6 +257,7 @@ const callStart = Effect.fnUntraced(function* (call: VoiceCallRow, target: Agent
   const working = yield* agentWorking(target);
 
   const start: VoiceCallStart = {
+    sessionStartMs: call.clockBaseMs,
     agentWorking: working,
     answering: working ? (handedOn.at(-1) ?? null) : null,
     lineId: (eventId) => callLineKey(call.id, eventId),

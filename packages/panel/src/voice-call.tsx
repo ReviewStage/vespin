@@ -19,11 +19,25 @@
  * speaker silences the voice on this device alone. End sends
  * `session.close` and closes the channel, which sends what it holds first,
  * and the peer is dropped once the channel has closed; a `session.closed`
- * from the service, a peer that failed, or the window going away drops it
- * at once. Whatever fails says why in a toast and lets the microphone go.
- * A call runs on the account's own OpenAI key, so with none saved a start
- * opens Settings › Agents instead. Nothing here starts while the Voice
- * experiment is off, and turning it off ends a call under way.
+ * from the service, a peer that failed before it ever connected, or the
+ * window going away drops it at once.
+ *
+ * A peer that failed after it had connected, as when the network changes
+ * from Wi-Fi to cellular, is carried on over a new one: WebRTC rides out a
+ * short blip by itself (the peer goes `disconnected` and comes back), but a
+ * new address fails it, and GPT-Live documents no way to renegotiate a
+ * session's audio. So once the peer's state goes to `failed` the call makes
+ * a new peer on the same microphone and speaker and sends its offer under
+ * the call's id (`voice.reconnect`), and the service moves the call to a
+ * new session. The call connects again, keeps its timer, and mutes the new
+ * session where the microphone was muted. A peer that never connected is
+ * not tried again, so a network that cannot carry a call at all does not
+ * open session after session.
+ *
+ * Whatever fails says why in a toast and lets the microphone go. A call
+ * runs on the account's own OpenAI key, so with none saved a start opens
+ * Settings › Agents instead. Nothing here starts while the Voice experiment
+ * is off, and turning it off ends a call under way.
  */
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
@@ -148,11 +162,17 @@ function release(standing: Standing): void {
   standing.speaker.srcObject = null;
 }
 
-/** The peer a call speaks over: the microphone's track out, the voice into the speaker, and the events channel. */
-function connect(microphone: MediaStream): Standing {
-  const peer = new RTCPeerConnection();
+/** The element the voice plays through, one to a call, which a reconnect's peer plays into as well. */
+function newSpeaker(): HTMLAudioElement {
   const speaker = new Audio();
   speaker.autoplay = true;
+
+  return speaker;
+}
+
+/** The peer a call speaks over: the microphone's track out, the voice into the speaker, and the events channel. */
+function connect(microphone: MediaStream, speaker: HTMLAudioElement): Standing {
+  const peer = new RTCPeerConnection();
   peer.ontrack = (event) => {
     speaker.srcObject = event.streams[0] ?? new MediaStream([event.track]);
   };
@@ -180,6 +200,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
   // an answer arriving after the call was ended must find it gone.
   const generation = useRef(0);
   const standing = useRef<Standing | undefined>(undefined);
+  // Note that the call's id and its mute are read by the peer's handlers, which outlive the render that made them.
+  const callId = useRef<string | undefined>(undefined);
+  const microphoneMuted = useRef(false);
 
   /** Lets the call go, where it is still the one standing. */
   const drop = (asked: number) => {
@@ -200,16 +223,21 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
 
   /** Hears the call's channel and peer: the session's start and close, the channel closing, and a peer that failed. */
   const listen = (asked: number, held: Standing) => {
+    let connected = false;
+
     held.channel.onmessage = (message) => {
       const type = eventType(String(message.data));
 
       if (type === LIVE_EVENT.CLOSED) return drop(asked);
 
       if (type !== LIVE_EVENT.STARTED || generation.current !== asked) return;
+
+      // A reconnect's new session starts unmuted, so a muted microphone is muted on it again.
+      if (microphoneMuted.current) tell(held, LIVE_EVENT.MUTE);
       setCall((last) =>
         last === undefined || last.stage !== VOICE_CALL_STAGE.CONNECTING
           ? last
-          : { ...last, stage: VOICE_CALL_STAGE.LIVE, startedAt: Date.now() },
+          : { ...last, stage: VOICE_CALL_STAGE.LIVE, startedAt: last.startedAt ?? Date.now() },
       );
     };
 
@@ -220,8 +248,38 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     };
 
     held.peer.onconnectionstatechange = () => {
-      if (held.peer.connectionState === "failed") fail(asked, VOICE_CALL_NOTE.DROPPED, "failed");
+      const state = held.peer.connectionState;
+
+      if (state === "connected") connected = true;
+
+      if (state !== "failed") return;
+
+      if (!connected) return fail(asked, VOICE_CALL_NOTE.DROPPED, state);
+      reconnect(asked, held).catch((cause: unknown) => fail(asked, VOICE_CALL_NOTE.DROPPED, cause));
     };
+  };
+
+  /** Carries the call on over a new peer once the one it had failed: the failed peer let go, the microphone and the speaker kept, and the new offer sent under the call's id. */
+  const reconnect = async (asked: number, failed: Standing) => {
+    const id = callId.current;
+
+    if (generation.current !== asked || standing.current !== failed || id === undefined) return;
+    failed.channel.onmessage = null;
+    failed.channel.onclose = null;
+    failed.peer.onconnectionstatechange = null;
+    failed.peer.close();
+    const held = connect(failed.microphone, failed.speaker);
+    standing.current = held;
+    listen(asked, held);
+    setCall((last) => last && { ...last, stage: VOICE_CALL_STAGE.CONNECTING });
+    const offer = await held.peer.createOffer();
+    await held.peer.setLocalDescription(offer);
+    const answer = await sendAct(ACT_KIND.VOICE_RECONNECT, { callId: id, sdp: offer.sdp ?? "" });
+
+    if (generation.current !== asked || standing.current !== held) return;
+
+    if ("failure" in answer) return fail(asked, VOICE_CALL_NOTE.DROPPED, answer.failure);
+    await held.peer.setRemoteDescription({ type: "answer", sdp: answer.sdp });
   };
 
   /** Opens the call the start asked for: the microphone, the peer, and the session. */
@@ -244,7 +302,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
       return;
     }
 
-    const held = connect(opened.stream);
+    const held = connect(opened.stream, newSpeaker());
     standing.current = held;
     listen(asked, held);
     const offer = await held.peer.createOffer();
@@ -268,6 +326,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
       );
     }
 
+    callId.current = answer.callId;
     setCall((last) => last && { ...last, callId: answer.callId });
     await held.peer.setRemoteDescription({ type: "answer", sdp: answer.sdp });
   };
@@ -289,6 +348,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     end();
     generation.current += 1;
     const asked = generation.current;
+    callId.current = undefined;
+    microphoneMuted.current = false;
     setCall({
       stage: VOICE_CALL_STAGE.CONNECTING,
       agentId: into.agentId,
@@ -308,6 +369,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
 
     if (held === undefined || held.channel.readyState !== "open") return;
     tell(held, muted ? LIVE_EVENT.MUTE : LIVE_EVENT.UNMUTE);
+    microphoneMuted.current = muted;
     setCall((last) => last && { ...last, microphoneMuted: muted });
   };
 

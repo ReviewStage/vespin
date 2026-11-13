@@ -11,6 +11,7 @@ import {
   claimVoiceCallLease,
   deleteVoiceCall,
   insertVoiceCall,
+  moveVoiceCall,
   readVoiceCall,
   saveVoiceCallState,
 } from "../voice-calls.js";
@@ -71,14 +72,15 @@ it.layer(getTestDB())("the row a voice call keeps", (it) => {
       const other = yield* openAccount;
 
       assert.equal(Option.isNone(yield* readVoiceCall(other, call.id)), true);
-      assert.equal(yield* deleteVoiceCall(other, call.id), false);
+      assert.equal(yield* deleteVoiceCall(other, call.id, call.liveSessionId), false);
 
       const read = Option.getOrThrow(yield* readVoiceCall(callerId, call.id));
       assert.equal(read.agentId, call.agentId);
       assert.equal(read.leaseEpoch, 1);
       assert.equal(read.toldSeq, null);
+      assert.equal(read.clockBaseMs, 0);
 
-      assert.equal(yield* deleteVoiceCall(callerId, call.id), true);
+      assert.equal(yield* deleteVoiceCall(callerId, call.id, call.liveSessionId), true);
       assert.equal(Option.isNone(yield* readVoiceCall(callerId, call.id)), true);
     }),
   );
@@ -102,6 +104,40 @@ it.layer(getTestDB())("the row a voice call keeps", (it) => {
 
         const read = Option.getOrThrow(yield* readVoiceCall(callerId, call.id));
         assert.equal(read.toldSeq, 42);
+      }),
+  );
+
+  it.effect(
+    "a reconnect moves the call to a new session under the next epoch, once, and the close of the session it left deletes nothing",
+    () =>
+      Effect.gen(function* () {
+        const { callerId, call } = yield* openCall;
+        const other = yield* openAccount;
+        const to = { liveSessionId: "live-new", clockBaseMs: 61_000, leaseUntil: NEXT_LEASE_UNTIL };
+
+        assert.equal(
+          Option.isNone(yield* moveVoiceCall(other, call.id, call.liveSessionId, to)),
+          true,
+        );
+
+        const moved = Option.getOrThrow(
+          yield* moveVoiceCall(callerId, call.id, call.liveSessionId, to),
+        );
+
+        assert.equal(moved.id, call.id);
+        assert.equal(moved.liveSessionId, "live-new");
+        assert.equal(moved.clockBaseMs, 61_000);
+        assert.equal(moved.leaseEpoch, 2);
+
+        // A second reconnect that read the old session moves nothing, and every lease on the old session is stale.
+        assert.equal(
+          Option.isNone(yield* moveVoiceCall(callerId, call.id, call.liveSessionId, to)),
+          true,
+        );
+        assert.equal(Option.isNone(yield* claimVoiceCallLease(call.id, 1, NEXT_LEASE_UNTIL)), true);
+
+        assert.equal(yield* deleteVoiceCall(callerId, call.id, call.liveSessionId), false);
+        assert.equal(Option.isSome(yield* readVoiceCall(callerId, call.id)), true);
       }),
   );
 });

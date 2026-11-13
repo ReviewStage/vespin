@@ -7,7 +7,11 @@
  * one compare-and-set, so of two claims on one epoch exactly one holds the
  * lease, and the loser reads the call's row it lost to. The holder writes the
  * told-through cursor under the epoch it claimed, so a holder whose lease
- * was taken writes nothing (`../schemas/voice-call.ts`).
+ * was taken writes nothing (`../schemas/voice-call.ts`). A reconnect moves
+ * the call to a new session in one compare-and-set from the session it read,
+ * taking the next epoch with it, so every lease on the old session is stale;
+ * and a call is deleted only by naming the session it stands on, so the
+ * close of a session the call left ends nothing.
  */
 
 import { and, eq, sql } from "drizzle-orm";
@@ -27,6 +31,7 @@ const VoiceCallRowSchema = Schema.Struct({
   agentId: Schema.String,
   voice: Schema.String,
   startedAt: InstantColumnSchema,
+  clockBaseMs: Schema.Number,
   leaseEpoch: Schema.Number,
   leaseUntil: InstantColumnSchema,
   toldSeq: Schema.NullOr(EpochMillisColumnSchema),
@@ -51,6 +56,7 @@ const voiceCallColumns = {
   agentId: voiceCallTable.agentId,
   voice: voiceCallTable.voice,
   startedAt: voiceCallTable.startedAt,
+  clockBaseMs: voiceCallTable.clockBaseMs,
   leaseEpoch: voiceCallTable.leaseEpoch,
   leaseUntil: voiceCallTable.leaseUntil,
   toldSeq: voiceCallTable.toldSeq,
@@ -100,6 +106,38 @@ const claimOne = SqlSchema.findOneOption({
     ),
 });
 
+const moveOne = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    callerId: Schema.String,
+    id: Schema.String,
+    fromSessionId: Schema.String,
+    liveSessionId: Schema.String,
+    clockBaseMs: Schema.Number,
+    leaseUntil: Schema.Date,
+  }),
+  Result: VoiceCallRowSchema,
+  execute: ({ callerId, id, fromSessionId, liveSessionId, clockBaseMs, leaseUntil }) =>
+    Database.use((db) =>
+      db
+        .update(voiceCallTable)
+        .set({
+          liveSessionId,
+          clockBaseMs,
+          leaseEpoch: sql`${voiceCallTable.leaseEpoch} + 1`,
+          leaseUntil,
+        })
+        // Moved only by a reconnect that read the session still standing.
+        .where(
+          and(
+            eq(voiceCallTable.id, id),
+            eq(voiceCallTable.callerId, callerId),
+            eq(voiceCallTable.liveSessionId, fromSessionId),
+          ),
+        )
+        .returning(voiceCallColumns),
+    ),
+});
+
 const saveOne = SqlSchema.findAll({
   Request: Schema.Struct({
     id: Schema.String,
@@ -119,13 +157,23 @@ const saveOne = SqlSchema.findAll({
 });
 
 const deleteOfCaller = SqlSchema.findAll({
-  Request: Schema.Struct({ callerId: Schema.String, id: Schema.String }),
+  Request: Schema.Struct({
+    callerId: Schema.String,
+    id: Schema.String,
+    liveSessionId: Schema.String,
+  }),
   Result: Schema.Struct({ id: Schema.String }),
-  execute: ({ callerId, id }) =>
+  execute: ({ callerId, id, liveSessionId }) =>
     Database.use((db) =>
       db
         .delete(voiceCallTable)
-        .where(and(eq(voiceCallTable.id, id), eq(voiceCallTable.callerId, callerId)))
+        .where(
+          and(
+            eq(voiceCallTable.id, id),
+            eq(voiceCallTable.callerId, callerId),
+            eq(voiceCallTable.liveSessionId, liveSessionId),
+          ),
+        )
         .returning({ id: voiceCallTable.id }),
     ),
 });
@@ -156,6 +204,21 @@ export function claimVoiceCallLease(
   return claimOne({ id, epoch, leaseUntil });
 }
 
+/**
+ * The call moved by a reconnect from the session `fromSessionId` to a new
+ * one whose timeline starts `clockBaseMs` into the call, under the next
+ * epoch, held until `leaseUntil`: none where the call no longer stands on
+ * `fromSessionId`, or is not `callerId`'s, or is gone.
+ */
+export function moveVoiceCall(
+  callerId: string,
+  id: string,
+  fromSessionId: string,
+  to: { readonly liveSessionId: string; readonly clockBaseMs: number; readonly leaseUntil: Date },
+): VoiceCallEffect<Option.Option<VoiceCallRow>> {
+  return moveOne({ callerId, id, fromSessionId, ...to });
+}
+
 /** The last conversation `seq` the voice was told saved, whether the call still stood at `epoch` to take it. */
 export function saveVoiceCallState(
   id: string,
@@ -165,7 +228,11 @@ export function saveVoiceCallState(
   return Effect.map(saveOne({ id, epoch, ...state }), (rows) => rows.length > 0);
 }
 
-/** The call's row deleted, whether `callerId` was the member on it. */
-export function deleteVoiceCall(callerId: string, id: string): VoiceCallEffect<boolean> {
-  return Effect.map(deleteOfCaller({ callerId, id }), (rows) => rows.length > 0);
+/** The call's row deleted, whether `callerId` was the member on it and it still stood on the session `liveSessionId`. */
+export function deleteVoiceCall(
+  callerId: string,
+  id: string,
+  liveSessionId: string,
+): VoiceCallEffect<boolean> {
+  return Effect.map(deleteOfCaller({ callerId, id, liveSessionId }), (rows) => rows.length > 0);
 }

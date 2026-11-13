@@ -9,7 +9,10 @@
  * call's audio from there over WebRTC, and may send GPT-Live only mute,
  * unmute, and `session.close`, which is how the caller ends the call; the
  * service holds the rest of the call over its own connection to the session,
- * and keeps the call's seconds once it closes. A caller with no OpenAI API
+ * and keeps the call's seconds once it closes. A peer that failed after it
+ * had connected, as on a change of network, sends a new offer to
+ * `POST /api/voice/reconnect` under the call's id, and the service moves the
+ * call to a new session on the same terms, answering its SDP answer alone. A caller with no OpenAI API
  * key of their own is refused as missing one, as a dictated clip is, and one
  * who may not message the agent is refused as a typed message to it would be.
  */
@@ -97,3 +100,19 @@ export const voiceSessionAnswerSchema = EffectSchema.Struct({
 });
 
 export type VoiceSessionAnswer = typeof voiceSessionAnswerSchema.Type;
+
+/** A call to carry on over a new peer (POST): the call's id, and the new peer's SDP offer. */
+export const voiceReconnectRequestSchema = EffectSchema.Struct({
+  callId: wireUuidSchema,
+  sdp: EffectSchema.String.check(
+    EffectSchema.isNonEmpty(),
+    EffectSchema.isMaxLength(VOICE_BOUNDS.MAX_SDP_CHARS),
+  ),
+});
+
+export type VoiceReconnectRequest = typeof voiceReconnectRequestSchema.Type;
+
+/** The reconnected call: the SDP answer the new peer sets as its remote description. */
+export const voiceReconnectAnswerSchema = EffectSchema.Struct({ sdp: EffectSchema.String });
+
+export type VoiceReconnectAnswer = typeof voiceReconnectAnswerSchema.Type;

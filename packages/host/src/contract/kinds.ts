@@ -126,6 +126,12 @@ export const ACCOUNT_ASK_ACT_KIND = {
    */
   VOICE_OPEN: "voice.open",
   /**
+   * A standing call carried on over a new peer once the one it had failed,
+   * as on a change of network: the new SDP offer out under the call's id,
+   * GPT-Live's SDP answer back. Nothing on the way keeps either.
+   */
+  VOICE_RECONNECT: "voice.reconnect",
+  /**
    * The member used this window just now: a key, a press, or a move of the
    * pointer, told at most once every `PRESENCE.BEAT_EVERY_MS`, which the
    * service stamps so their phone holds its pushes (`presence-wire.ts`).
@@ -1025,6 +1031,7 @@ export const PORT_ACT_USE = {
   SOUND_CHOOSE: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
   VOICE_OPEN: ACT_USE.WRITE,
+  VOICE_RECONNECT: ACT_USE.WRITE,
   ACCOUNT_ACTIVE: ACT_USE.WRITE,
   PUSH_DEVICE_REGISTER: ACT_USE.WRITE,
   PUSH_DEVICE_UNREGISTER: ACT_USE.WRITE,

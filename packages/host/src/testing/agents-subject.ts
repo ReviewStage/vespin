@@ -887,6 +887,7 @@ function fakeService() {
         return { text: "Run the tests" };
       }),
     openVoiceSession: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    reconnectVoiceSession: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     inboxAttachment: (itemId, attachmentId) =>
       Effect.sync(() => {
         asked.push(`attachment:${itemId}:${attachmentId}`);

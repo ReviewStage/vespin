@@ -1,5 +1,5 @@
 /**
- * voice-callers.ts -- a signed-in account with its own OpenAI key sealed under a fixed ring, as a voice call's caller is, and the environment that opens it; a call that caller opened on an agent, and a fake GPT-Live session for the lease holding it to attach to.
+ * voice-callers.ts -- a signed-in account with its own OpenAI key sealed under a fixed ring, as a voice call's caller is, and the environment that opens it; a call that caller opened on an agent, and fake GPT-Live sessions for the lease holding it to attach to.
  */
 
 import assert from "node:assert/strict";
@@ -19,7 +19,12 @@ import type { WireValue } from "@repo/wire";
 import { eq } from "drizzle-orm";
 import { type Cause, Deferred, Effect, Layer, Queue, Redacted, Result, Stream } from "effect";
 import type { HostedEnvironmentValues } from "../environment.js";
-import { LIVE_SIDEBAND_EVENT, type LiveEvent, LiveSidebands } from "../voice/live-sideband.js";
+import {
+  LIVE_SIDEBAND_EVENT,
+  type LiveEvent,
+  LiveSidebands,
+  SidebandRefused,
+} from "../voice/live-sideband.js";
 
 /** How many of its last events the fake session replays to a new connection, as GPT-Live replays its last few seconds. */
 export const LIVE_REPLAYED = 2;
@@ -109,36 +114,46 @@ export function fakeLiveSession(
       return eventId;
     });
 
-  const layer = Layer.succeed(LiveSidebands, {
-    attach: () =>
-      Effect.gen(function* () {
-        const connection = yield* Queue.make<LiveEvent, Cause.Done>();
+  const attach = () =>
+    Effect.gen(function* () {
+      const connection = yield* Queue.make<LiveEvent, Cause.Done>();
 
-        for (const event of said.slice(-LIVE_REPLAYED)) Queue.offerUnsafe(connection, event);
-        connections.add(connection);
-        yield* Effect.addFinalizer(() => Effect.sync(() => connections.delete(connection)));
+      for (const event of said.slice(-LIVE_REPLAYED)) Queue.offerUnsafe(connection, event);
+      connections.add(connection);
+      yield* Effect.addFinalizer(() => Effect.sync(() => connections.delete(connection)));
 
-        return {
-          events: Stream.fromQueue(connection),
-          send: (event: { readonly type: string }) =>
-            Effect.gen(function* () {
-              sent.push(event.type);
+      return {
+        events: Stream.fromQueue(connection),
+        send: (event: { readonly type: string }) =>
+          Effect.gen(function* () {
+            sent.push(event.type);
 
-              if (told !== undefined) Queue.offerUnsafe(told, event);
+            if (told !== undefined) Queue.offerUnsafe(told, event);
 
-              if (event.type === LIVE_SIDEBAND_EVENT.CLOSE)
-                Deferred.doneUnsafe(askedToClose, Effect.void);
+            if (event.type === LIVE_SIDEBAND_EVENT.CLOSE)
+              Deferred.doneUnsafe(askedToClose, Effect.void);
 
-              // A session given no seconds to close with never confirms the close.
-              if (event.type === LIVE_SIDEBAND_EVENT.CLOSE && closingSeconds !== undefined) {
-                yield* say(LIVE_SIDEBAND_EVENT.CLOSED, { usage: { seconds: closingSeconds } });
-              }
-            }),
-        };
-      }),
+            // A session given no seconds to close with never confirms the close.
+            if (event.type === LIVE_SIDEBAND_EVENT.CLOSE && closingSeconds !== undefined) {
+              yield* say(LIVE_SIDEBAND_EVENT.CLOSED, { usage: { seconds: closingSeconds } });
+            }
+          }),
+      };
+    });
+
+  const layer = Layer.succeed(LiveSidebands, { attach });
+
+  return { say, sent, askedToClose, attach, layer };
+}
+
+/** Several fake sessions, each attached by its own id, as a call a reconnect moved has; any other id is refused as gone. */
+export function fakeLiveSessions(
+  sessions: ReadonlyMap<string, ReturnType<typeof fakeLiveSession>>,
+) {
+  return Layer.succeed(LiveSidebands, {
+    attach: (sessionId) =>
+      sessions.get(sessionId)?.attach() ?? Effect.fail(new SidebandRefused({ status: 404 })),
   });
-
-  return { say, sent, askedToClose, layer };
 }
 
 /** A call opened by the route on a Claude Code agent, its row at epoch 1. */

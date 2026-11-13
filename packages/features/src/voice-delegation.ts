@@ -47,6 +47,12 @@
  * replays its last few seconds to it: a replayed fragment its speaker's
  * stored line took already, and a delegation handed on already, are passed
  * by. It ends with the session (`session.closed`) or with its input.
+ *
+ * A call may move to a new session when its network changes, whose
+ * timeline starts again at zero, so every fragment's span is read on the
+ * call's own clock: the session's, moved on by how far into the call the
+ * session started (`sessionStartMs`), and the lines of every session keep
+ * counting from the call's start.
  */
 
 import { EXCESS_KEYS, unparsedWire, type WireValue } from "@repo/wire";
@@ -139,7 +145,7 @@ export type VoiceOutput =
       readonly speaker: VoiceSpeaker;
       readonly id: string;
       readonly text: string;
-      /** The span of the session's timeline it was said over, where GPT-Live named it. */
+      /** The span of the call's clock it was said over, where GPT-Live named it. */
       readonly fromMs: number | undefined;
       readonly toMs: number | undefined;
       /** The event whose fragment it took last. */
@@ -171,11 +177,14 @@ export interface StoredVoiceLine {
 /**
  * Where the call stands at its start: whether the agent's turn runs already,
  * and the delegation it answers; how a line's id is derived from the event
- * its first fragment came in, since GPT-Live names none; and, for a holder
- * taking the call over, its lines as stored, oldest first, and the
- * delegations already handed on.
+ * its first fragment came in, since GPT-Live names none; how far into the
+ * call the session's own timeline starts; and, for a holder taking the call
+ * over, its lines as stored, oldest first, and the delegations already
+ * handed on.
  */
 export interface VoiceCallStart {
+  /** Where the session's timeline starts on the call's clock, in milliseconds: 0 for the call's first session. */
+  readonly sessionStartMs: number;
   readonly agentWorking: boolean;
   readonly answering: string | null;
   readonly lineId: (eventId: string) => string;
@@ -213,7 +222,7 @@ type LiveServerEvent = typeof liveServerEventSchema.Type;
 
 const readLiveEvent = readEither(liveServerEventSchema, { excess: EXCESS_KEYS.DROP });
 
-/** One line of the call: its id, its words so far, the words last recorded, its interval on the session's timeline, and the event it took last. */
+/** One line of the call: its id, its words so far, the words last recorded, its interval on the call's clock, and the event it took last. */
 interface Line {
   readonly speaker: VoiceSpeaker;
   readonly id: string;
@@ -233,6 +242,8 @@ interface Resume {
 /** What the loop keeps between inputs. */
 interface VoiceState {
   readonly lineId: (eventId: string) => string;
+  /** Where the session's timeline starts on the call's clock. */
+  readonly sessionStartMs: number;
   /** Each speaker's stored line, whose replayed fragments are passed by until its event goes by; none once it has, or where none was stored. */
   readonly resuming: { readonly [speaker in VoiceSpeaker]: Resume | undefined };
   /** The delegations handed on before this holder took the call, which a replay raises again. */
@@ -433,7 +444,8 @@ function laterEnd(standing: number | undefined, given: number | undefined): numb
  */
 function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
   const speaker = SPEAKER_OF_DELTA[delta.type];
-  const endMs = delta.end_ms ?? delta.start_ms;
+  const startMs = onCallClock(state, delta.start_ms);
+  const endMs = onCallClock(state, delta.end_ms) ?? startMs;
   const resume = state.resuming[speaker];
 
   if (resume !== undefined) {
@@ -455,13 +467,10 @@ function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
   const other =
     state.open !== null && state.open !== speaker ? growingLine(state, state.open) : undefined;
 
-  const late =
-    other?.startMs !== undefined && delta.start_ms !== undefined && delta.start_ms < other.startMs;
+  const late = other?.startMs !== undefined && startMs !== undefined && startMs < other.startMs;
 
   const silent =
-    own?.endMs !== undefined &&
-    delta.start_ms !== undefined &&
-    delta.start_ms - own.endMs > SILENCE_SPLIT_MS;
+    own?.endMs !== undefined && startMs !== undefined && startMs - own.endMs > SILENCE_SPLIT_MS;
 
   const grows = own !== undefined && !silent && (state.open === speaker || late);
 
@@ -469,7 +478,7 @@ function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
     const [kept, outputs] = recorded({
       ...own,
       text: own.text + delta.delta,
-      startMs: own.startMs ?? delta.start_ms,
+      startMs: own.startMs ?? startMs,
       endMs: laterEnd(own.endMs, endMs),
       eventId: delta.event_id,
     });
@@ -484,7 +493,7 @@ function heardFragment(state: VoiceState, delta: TranscriptDelta): Step {
     id: state.lineId(delta.event_id),
     text: delta.delta,
     recorded: "",
-    startMs: delta.start_ms,
+    startMs,
     endMs,
     eventId: delta.event_id,
   });
@@ -535,6 +544,11 @@ function delegated(state: VoiceState, delegationId: string): Step {
     { ...taken, working: true, answering: delegationId },
     [...closing, { kind: VOICE_OUTPUT.SEND, ...message }],
   ];
+}
+
+/** A time on the session's timeline read on the call's clock. */
+function onCallClock(state: VoiceState, ms: number | undefined): number | undefined {
+  return ms === undefined ? undefined : ms + state.sessionStartMs;
 }
 
 function heardLive(state: VoiceState, event: LiveServerEvent): Step {
@@ -622,6 +636,7 @@ function startedVoiceLoop(start: VoiceCallStart): VoiceState {
 
   return {
     lineId: start.lineId,
+    sessionStartMs: start.sessionStartMs,
     resuming: {
       [VOICE_SPEAKER.CALLER]: resumeOf(start.lines, VOICE_SPEAKER.CALLER),
       [VOICE_SPEAKER.VOICE]: resumeOf(start.lines, VOICE_SPEAKER.VOICE),

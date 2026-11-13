@@ -18,7 +18,7 @@ import { user } from "./auth.js";
 export const voiceCallTable = pgTable("voice_call", {
   /** The call's id, which the panel and the lease name it by. */
   id: uuid("id").primaryKey().defaultRandom(),
-  /** The id of the GPT-Live session the call's audio and sideband share. */
+  /** The id of the GPT-Live session the call's audio and sideband share now: a reconnect after the network changed moves the call to a new one. */
   liveSessionId: text("live_session_id").notNull(),
   /** The member on the call, whose own OpenAI key opened the session. */
   callerId: text("caller_id")
@@ -31,6 +31,8 @@ export const voiceCallTable = pgTable("voice_call", {
   /** The voice the session speaks in. */
   voice: text("voice").notNull(),
   startedAt: timestamptz("started_at").notNull(),
+  /** Where the current session's own timeline starts on the call's, in milliseconds from `started_at`: 0 for the first session, and how far into the call a reconnect opened its new one, so the lines of every session keep one clock. */
+  clockBaseMs: integer("clock_base_ms").notNull().default(0),
   /** The lease's generation: a claim takes it by naming the one it read, so of two claims on one generation exactly one holds the next. */
   leaseEpoch: integer("lease_epoch").notNull().default(1),
   /** The instant the standing lease lapses, so a holder killed before it let go holds the call no longer. */

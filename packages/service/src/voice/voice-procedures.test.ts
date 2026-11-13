@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { listCallLines } from "@repo/database/models/message-reads";
 import { readVoiceCall } from "@repo/database/models/voice-calls";
 import { agentTable } from "@repo/database/schemas/agent";
 import { conversations, messages } from "@repo/database/schemas/storage";
@@ -18,7 +19,9 @@ import { LIVE_VOICE } from "@repo/features/voices";
 import { MESSAGE_AUTHOR, MESSAGE_CHANNEL, MESSAGE_ROLE, type WireBoundaryInput } from "@repo/wire";
 import { HTTP_STATUS, jsonResponse, recordingHttpClient } from "@repo/wire/testing";
 import { eq } from "drizzle-orm";
-import { Cause, type Context, Effect, Layer, Logger, Option } from "effect";
+import { Cause, type Context, Duration, Effect, Layer, Logger, Option } from "effect";
+import { TestClock } from "effect/testing";
+import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 import { HostedEnvironment } from "../environment.js";
 import { HOSTED_API_ERROR, HOSTED_HTTP_STATUS } from "../http/http.js";
 import { hostedFetch } from "../orpc/handler.js";
@@ -44,7 +47,9 @@ import { voiceProcedures } from "./voice-procedures.js";
  * first lease published. A caller with no key of their own, one outside the
  * agent's workspace, and a teammate on an agent only its starter drives are
  * each refused before OpenAI is called; a call whose lease the queue did not
- * take is refused and leaves no row.
+ * take is refused and leaves no row. A reconnect carries the same call on
+ * over a new session, its row, id, and lines kept, and its clock going on
+ * from the call's start.
  *
  * Synthetic accounts, bearers, offers, and keys throughout.
  */
@@ -52,6 +57,7 @@ import { voiceProcedures } from "./voice-procedures.js";
 const ORIGIN = "https://app.test";
 const SESSIONS_URL = "https://api.openai.com/v1/live/sessions";
 const LIVE_SESSION_ID = "live_test";
+const RECONNECTED_SESSION_ID = "live_test_reconnected";
 
 const OFFER = "v=0\r\no=- 1 2 IN IP4 127.0.0.1\r\ns=offer\r\n";
 const ANSWER = "v=0\r\no=- 3 4 IN IP4 127.0.0.1\r\ns=answer\r\n";
@@ -62,13 +68,13 @@ const CREATED = 201;
 /** How the fake GPT-Live answers: a created session with its SDP answer, or a status of its own. */
 type LiveAnswer = { readonly created: true } | { readonly status: number };
 
-function liveResponse(answer: LiveAnswer): Response {
+function liveResponse(answer: LiveAnswer, sessionId: string): Response {
   if ("status" in answer) {
     return jsonResponse({ error: { message: VOICE_CALLER_KEY } }, answer.status);
   }
 
   return jsonResponse(
-    { session: { id: LIVE_SESSION_ID }, transport: { type: "webrtc", sdp: ANSWER } },
+    { session: { id: sessionId }, transport: { type: "webrtc", sdp: ANSWER } },
     CREATED,
   );
 }
@@ -132,7 +138,15 @@ const openAgent = (ownerId: string, workspaceId: string, onMac = false) =>
 
 /** The router with GPT-Live answering as given and the queue taking leases unless told otherwise, and every request it sent, lease it published, and line it logged kept for the test to read. */
 const openRouter = (live: LiveAnswer = { created: true }, queue = { takes: true }) => {
-  const model = recordingHttpClient(() => liveResponse(live));
+  // The first session made is the call's, and the next one a reconnect's.
+  let made = 0;
+
+  const model = recordingHttpClient(() => {
+    made += 1;
+
+    return liveResponse(live, made === 1 ? LIVE_SESSION_ID : RECONNECTED_SESSION_ID);
+  });
+
   const logged: string[] = [];
   const published: VoiceCallLeaseMessage[] = [];
 
@@ -190,8 +204,60 @@ const openRouter = (live: LiveAnswer = { created: true }, queue = { takes: true 
   const open = (userId: string, agentId: string) =>
     ask(userId, "/api/voice/session", { agentId, voice: LIVE_VOICE.CEDAR, sdp: OFFER });
 
-  return { open, calls: model.requests, published, logged };
+  const reconnect = (userId: string, callId: string) =>
+    ask(userId, "/api/voice/reconnect", { callId, sdp: OFFER });
+
+  return { open, reconnect, calls: model.requests, published, logged };
 };
+
+/** The JSON body a recorded request to GPT-Live sent. */
+function sentBody(request: { readonly init: { readonly body?: unknown } } | undefined) {
+  const raw = request?.init.body;
+  assert.ok(raw instanceof Uint8Array, "the session goes as a JSON body");
+
+  return JSON.parse(new TextDecoder().decode(raw));
+}
+
+/** Two lines said on the call, the developer's and the voice's, as the call's holder records them. */
+const saidOnCall = (ownerId: string, agentId: string, callId: string) =>
+  Effect.gen(function* () {
+    const db = yield* Database;
+
+    const [row] = yield* db
+      .select({ conversationId: agentTable.conversationId })
+      .from(agentTable)
+      .where(eq(agentTable.id, agentId));
+
+    assert.ok(row);
+
+    const lines = [
+      [MESSAGE_ROLE.USER, "Can you hear me?", MESSAGE_AUTHOR.DEVELOPER, "line_1"],
+      [MESSAGE_ROLE.ASSISTANT, "Yes, go on.", MESSAGE_AUTHOR.VOICE_MODEL, "line_2"],
+    ] as const;
+
+    yield* db.insert(messages).values(
+      lines.map(([role, text, author, key], index) => ({
+        userId: ownerId,
+        conversationId: row.conversationId,
+        seq: 10 + index,
+        clientId: randomUUID(),
+        role,
+        parts: [{ type: "text" as const, text }],
+        metadata: {
+          author,
+          channel: MESSAGE_CHANNEL.VOICE,
+          voice_session_id: callId,
+          line_key: key,
+          from_ms: 1_000 * index,
+          to_ms: 1_000 * index + 800,
+        },
+        placedAt: new Date(10 + index),
+        finishedAt: new Date(10 + index),
+      })),
+    );
+
+    return row.conversationId;
+  });
 
 const refusal = (status: number, error: string) => ({ status, body: { error } });
 
@@ -224,9 +290,7 @@ it.layer(getTestDB())("the voice routes", (it) => {
         assert.ok(request);
         assert.equal(request.url, SESSIONS_URL);
         assert.equal(request.authorization, `Bearer ${VOICE_CALLER_KEY}`);
-        const raw = request.init.body;
-        assert.ok(raw instanceof Uint8Array, "the session goes as a JSON body");
-        const sent = JSON.parse(new TextDecoder().decode(raw));
+        const sent = sentBody(request);
         assert.deepEqual(sent.transport, { type: "webrtc", sdp: OFFER });
         assert.equal(sent.session.model, "gpt-live-1");
         assert.deepEqual(sent.session.delegation, { type: "client" });
@@ -333,6 +397,54 @@ it.layer(getTestDB())("the voice routes", (it) => {
           .where(eq(voiceCallTable.callerId, ownerId));
 
         assert.deepEqual(standing, []);
+      }),
+  );
+
+  it.effect(
+    "a reconnect carries the same call on over a new session in its voice, told that it dropped and what was said, the call's id, row, and lines kept and its clock going on from the call's start, and the lease it publishes closes the session it left",
+    () =>
+      Effect.gen(function* () {
+        const ownerId = yield* openVoiceCaller();
+        const workspaceId = yield* openWorkspace(ownerId);
+        const agentId = yield* openAgent(ownerId, workspaceId);
+        const stranger = yield* openVoiceCaller();
+        const router = openRouter();
+
+        // SAFETY: an answered open is the call's id and its SDP answer.
+        const { callId } = (yield* router.open(ownerId, agentId)).body as { callId: string };
+        const conversationId = yield* saidOnCall(ownerId, agentId, callId);
+        yield* TestClock.adjust(Duration.seconds(61));
+
+        assert.deepEqual(
+          yield* router.reconnect(stranger, callId),
+          refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND),
+        );
+
+        const answered = yield* router.reconnect(ownerId, callId);
+
+        assert.deepEqual(answered, { status: HOSTED_HTTP_STATUS.OK, body: { sdp: ANSWER } });
+        const call = Option.getOrThrow(yield* readVoiceCall(ownerId, callId));
+        assert.equal(call.liveSessionId, RECONNECTED_SESSION_ID);
+        assert.equal(call.clockBaseMs, 61_000);
+        assert.equal(call.leaseEpoch, 2);
+        assert.deepEqual(router.published.at(-1), {
+          callId,
+          callerId: ownerId,
+          epoch: 2,
+          closes: LIVE_SESSION_ID,
+        });
+
+        const sent = sentBody(router.calls[1]);
+        assert.deepEqual(sent.transport, { type: "webrtc", sdp: OFFER });
+        assert.deepEqual(sent.session.audio, { output: { voice: LIVE_VOICE.CEDAR } });
+        assert.ok(sent.session.instructions.includes("This call dropped a moment ago"));
+        assert.ok(
+          sent.session.instructions.includes("Developer: Can you hear me?\nYou: Yes, go on."),
+        );
+
+        const lines = yield* listCallLines(ownerId, conversationId, callId, CODER_TOOL_SET);
+        assert.ok(lines.ok);
+        assert.equal(lines.value.length, 2);
       }),
   );
 });

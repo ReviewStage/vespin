@@ -41,6 +41,8 @@ import {
   soundStateViewSchema,
   subscriptionLabelParamsSchema,
   subscriptionOrderParamsSchema,
+  voiceReconnectAnswerViewSchema,
+  voiceReconnectParamsSchema,
   voiceSessionAnswerViewSchema,
   voiceSessionParamsSchema,
 } from "@repo/features/agent-view";
@@ -231,6 +233,14 @@ export const ACCOUNT_ASK_ACTS = declaredActs({
     input: voiceSessionParamsSchema,
     output: voiceSessionAnswerViewSchema,
     refusal: "Could not start the call on this system.",
+    panelOnly: true,
+    door: ACT.REMOTE_WORK,
+    unanswered: UNANSWERED,
+  }),
+  VOICE_RECONNECT: hostAct({
+    input: voiceReconnectParamsSchema,
+    output: voiceReconnectAnswerViewSchema,
+    refusal: "Could not reconnect the call on this system.",
     panelOnly: true,
     door: ACT.REMOTE_WORK,
     unanswered: UNANSWERED,

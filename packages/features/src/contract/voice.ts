@@ -4,7 +4,8 @@
  * Beyond what any procedure may refuse, a call is refused where the account
  * saved no OpenAI key to speak on, where the agent is none the caller
  * reaches, where the caller may not message it, and where its session
- * ended for good.
+ * ended for good. A reconnect is refused the same ways, and as not found
+ * where the call is no longer standing.
  */
 
 import { openapi } from "@orpc/openapi";
@@ -14,6 +15,8 @@ import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR } from "../service-wire.js";
 import {
   VOICE_BOUNDS,
+  voiceReconnectAnswerSchema,
+  voiceReconnectRequestSchema,
   voiceSessionAnswerSchema,
   voiceSessionRequestSchema,
 } from "../voice-wire.js";
@@ -36,4 +39,17 @@ export const voiceContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.VOICE_SESSION }))
     .input(exactInput(voiceSessionRequestSchema))
     .output(EffectSchema.flip(voiceSessionAnswerSchema)),
+  reconnect: declaredProcedure
+    .errors(
+      refuses(
+        HOSTED_API_ERROR.OPENAI_KEY_MISSING,
+        HOSTED_API_ERROR.NOT_FOUND,
+        HOSTED_API_ERROR.NOT_PERMITTED,
+        HOSTED_API_ERROR.AGENT_RETIRED,
+      ),
+    )
+    .meta(bodyCap(SESSION_BODY_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.VOICE_RECONNECT }))
+    .input(exactInput(voiceReconnectRequestSchema))
+    .output(EffectSchema.flip(voiceReconnectAnswerSchema)),
 };
