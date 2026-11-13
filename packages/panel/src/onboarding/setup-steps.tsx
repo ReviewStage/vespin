@@ -436,7 +436,7 @@ function SetupStep({ tasks, accountId, onFinish }: SetupStepsProps): React.JSX.E
         mark={<ProductMark />}
         exit={exit}
         title="Connect an agent"
-        description="Set up a plan or an API key. Pick which one new agents use."
+        description="Set up a plan or an API key."
         foot={foot(agent, last ? "Finish" : "Continue")}
       >
         <AgentConnectSection onConnected={onConnected} />
