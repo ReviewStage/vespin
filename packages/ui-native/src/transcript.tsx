@@ -13,7 +13,6 @@ import {
   FlatList,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -35,6 +34,7 @@ import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
+import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -115,6 +115,9 @@ const OLDER_WORDS = {
 const styles = StyleSheet.create({
   list: { flex: 1 },
   content: { paddingVertical: SPACE.ROW },
+  // Note that while there are no rows the content fills the list, so the empty state has room to center in.
+  emptyContent: { flexGrow: 1 },
+  emptyHost: { flex: 1 },
   row: { paddingHorizontal: SPACE.EDGE, paddingVertical: SPACE.TIGHT },
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
@@ -287,7 +290,7 @@ function CallRow({
 
   return (
     <View style={[styles.row, inset(item.depth)]}>
-      <Pressable
+      <Press
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
@@ -351,7 +354,7 @@ function CallRow({
           running={item.standing === CALL_STANDING.RUNNING && held?.waiting !== true}
           failed={item.standing === CALL_STANDING.FAILED}
         />
-      </Pressable>
+      </Press>
       {held === undefined ? null : (
         <View style={styles.body}>
           {/* Note that the presses are SwiftUI's, hosted in the row at the height they draw. */}
@@ -448,7 +451,7 @@ function OriginBody({ body }: { readonly body: string }) {
 
   return (
     <View style={styles.originBody}>
-      <Pressable
+      <Press
         onPress={() => setOpen((was) => !was)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -466,7 +469,7 @@ function OriginBody({ body }: { readonly body: string }) {
         <Text style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
           {WEBHOOK_BODY.LABEL}
         </Text>
-      </Pressable>
+      </Press>
       {open ? <BodyBlock title={WEBHOOK_BODY.KIND} text={body} colors={colors} /> : null}
     </View>
   );
@@ -490,7 +493,7 @@ function FoldRow({
 
   return (
     <View style={[styles.row, inset(item.depth)]}>
-      <Pressable
+      <Press
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
@@ -514,7 +517,7 @@ function FoldRow({
           {item.summary}
         </Text>
         <StandingMark running={item.running} failed={false} />
-      </Pressable>
+      </Press>
     </View>
   );
 }
@@ -666,7 +669,7 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.PAGE:
       return (
         <View style={[styles.row, inset(item.depth)]}>
-          <Pressable
+          <Press
             onPress={() => drawing.onOpenPage(item)}
             accessibilityRole="button"
             accessibilityLabel={`${item.title}, ${PAGE_WORD}`}
@@ -699,7 +702,7 @@ function TranscriptRow({
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
-          </Pressable>
+          </Press>
         </View>
       );
     case TRANSCRIPT_ITEM.PULL_REQUEST:
@@ -783,7 +786,7 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
         <Text style={ink}>{pressed && words !== undefined ? `${said} ·` : said}</Text>
       )}
       {pressed ? (
-        <Pressable
+        <Press
           onPress={onModel}
           accessibilityRole="button"
           accessibilityLabel={`${CHANGE_MODEL}, ${model}`}
@@ -799,7 +802,7 @@ export function AgentHead({ model, status, onModel }: AgentHeadProps) {
             tintColor={colors.TEXT_MUTED}
             accessibilityElementsHidden
           />
-        </Pressable>
+        </Press>
       ) : null}
     </View>
   );
@@ -834,7 +837,7 @@ function JumpToLatest({
   );
 
   return (
-    <Pressable
+    <Press
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={JUMP_TO_LATEST}
@@ -859,7 +862,7 @@ function JumpToLatest({
           {arrow}
         </GlassView>
       )}
-    </Pressable>
+    </Press>
   );
 }
 
@@ -1043,10 +1046,10 @@ export function AgentTranscript({
             {older === undefined ? null : <OlderRow older={older} />}
           </>
         }
-        // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app.
+        // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app. The host fills the room the list leaves rather than matching its content, since the state asks for all the height it is offered, so a host sized to its content stood at no height and a brand-new agent's page was blank.
         ListEmptyComponent={
           empty === undefined ? undefined : (
-            <InlineHost matchContents={{ vertical: true }}>
+            <InlineHost style={styles.emptyHost}>
               <EmptyState {...empty} />
             </InlineHost>
           )
@@ -1055,6 +1058,7 @@ export function AgentTranscript({
         // Note that the rows stand inside the window's safe area at its sides too, clear of a rail the system draws there, as the folded iPhone Duo's.
         contentContainerStyle={[
           styles.content,
+          items.length === 0 ? styles.emptyContent : undefined,
           { paddingLeft: left + sides, paddingRight: right + sides },
         ]}
         contentInsetAdjustmentBehavior="automatic"
