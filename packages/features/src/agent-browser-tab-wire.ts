@@ -12,7 +12,7 @@
  * the Browser tab cuts them (`browser-acts.ts`), since they are only drawn.
  *
  * `GET /api/agents/{id}/browser-tabs` lists one agent's tabs, and `GET
- * /api/plans/{id}/browser-tabs` a task's, every one of its agents' tabs
+ * /api/tasks/{id}/browser-tabs` a task's, every one of its agents' tabs
  * together; `POST` on either opens one. `POST
  * /api/agents/{id}/browser-tabs/{tab}/driver`, or the same under the task,
  * takes one over or renews the

@@ -1,4 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
+import { readAgentHeaderOfConversation } from "@repo/database/models/agent-store";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
@@ -206,14 +207,10 @@ export const COMPUTER_TOOL = {
     "working: its window as numbered elements and a screenshot, and clicks, typing, keys, " +
     "scrolls, and drags on it. Start with list_apps or get_app_state; act on an element by the " +
     "number the app's last get_app_state gave it, or on a point in its screenshot's pixels, " +
-    "and read the app again after you act, since its numbers change with it. A press of an " +
-    "element by its number, or of a web page's button or link at a point, answers pressed " +
-    "once the window's elements changed after it, and pressed_unconfirmed where they did not, " +
-    "which may still have acted, so read the app again before pressing again. A ⌘ shortcut " +
-    "the app's menus hold is pressed through that menu item and answers the same way; any " +
-    "other key answers sent. A click at any " +
-    "other point answers only that it was sent, and an app in the background, a browser above " +
-    "all, may drop it, so press an element by its number where one serves. An app not " +
+    "and read the app again after you act, since its numbers change with it. A click answers " +
+    "that it was sent, not that the app took it: an app in the background, a browser above " +
+    "all, may drop a click at a point, so press an element by its number where one serves, " +
+    "and read the app again to see what a click did. An app not " +
     "running is opened behind the developer's windows. The developer's Mac asks them the " +
     "first time an agent uses each app, and they may decline, in which case the call answers " +
     "`not-run`; agents are never offered terminals, password managers, System Settings, or " +
@@ -510,12 +507,24 @@ export function runComputerTool(
     // Note that a read that fails refuses, because an action on a guess could land on the wrong Mac.
     if (Result.isFailure(route)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
 
-    const { answer, recording } = yield* askMachine(route.success, {
+    // Note that the agent rides along so the Mac puts its cursor away once that agent's turn ends; a read that fails leaves it to the helper's own clock.
+    const agent = yield* Effect.option(
+      readAgentHeaderOfConversation(target.userId, target.conversationId),
+    );
+
+    const agentId = Option.getOrUndefined(Option.flatten(agent))?.id;
+
+    const ask = {
       kind: MACHINE_COMMAND_KIND.COMPUTER,
       conversationId: target.conversationId,
       action,
       timeoutSeconds: COMPUTER_TOOL_TIMEOUT_SECONDS,
-    });
+    };
+
+    const { answer, recording } = yield* askMachine(
+      route.success,
+      agentId === undefined ? ask : { ...ask, agentId },
+    );
 
     if (!("computer" in answer)) return answer;
     const outcome = answer.computer;

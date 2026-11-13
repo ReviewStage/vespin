@@ -1263,7 +1263,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
     "an SVG of the agent's own repository that its pull request's overview names is served as its bytes, sandboxed so it never runs as a page of the service",
     () =>
       Effect.gen(function* () {
-        const contents = `/repos/${RELAY_FULL_NAME}/contents/docs/diagram.svg`;
+        const contents = `/repos/${RELAY_FULL_NAME}/contents/docs%2Fdiagram.svg`;
 
         const { owner, task, ask, fetch } = yield* openTask({
           github: (sent) =>

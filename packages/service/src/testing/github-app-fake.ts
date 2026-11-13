@@ -21,11 +21,19 @@ import { saveGitHubToken } from "@repo/database/models/github-token-store";
 import { parseKeyRing, sealGitHubToken } from "@repo/database/models/provider-key-seal";
 import { account, user } from "@repo/database/schemas/auth";
 import { GITHUB_REPOSITORY_SELECTION } from "@repo/features/github-repositories-wire";
-import { fakeHttpClientLayer } from "@repo/wire/testing";
+import { type GitHubHold, GitHubHoldStore, type GitHubRateScope } from "@repo/github";
+import { fakeHttpClient, fakeHttpClientLayer } from "@repo/wire/testing";
 import { symmetricEncrypt } from "better-auth/crypto";
+import Bottleneck from "bottleneck";
 import { Clock, Effect, Layer, Redacted, Result } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
-import { GITHUB_PROVIDER_ID, GitHubApp, type GitHubAppSettings } from "../github/github-app.js";
+import * as HttpClient from "effect/http/HttpClient";
+import {
+  GITHUB_PROVIDER_ID,
+  GitHubApp,
+  type GitHubAppSettings,
+  GitHubAppThrottle,
+  type GitHubBearer,
+} from "../github/github-app.js";
 import { linkInstallation } from "../github/github-installations.js";
 
 export const GITHUB_FIXTURE = {
@@ -51,6 +59,9 @@ export const GITHUB_APP_SETTINGS: GitHubAppSettings = {
   sessionSecret: Redacted.make(GITHUB_FIXTURE.SESSION_SECRET),
 };
 
+/** The schemes GitHub takes a token under, in any case (https://docs.github.com/en/rest/authentication/authenticating-to-the-rest-api). */
+const TOKEN_SCHEME = /^(?:token|bearer) /iu;
+
 /** One request as GitHub saw it. */
 export interface SentToGitHub {
   readonly url: string;
@@ -59,6 +70,8 @@ export interface SentToGitHub {
   readonly body: string;
   /** The caller's own, which a fake holding the request answers on giving up. */
   readonly signal?: AbortSignal;
+  /** When it was sent, by the test's clock where the fake was stood in a test's layer. */
+  readonly at: number;
 }
 
 export interface FakeGitHub {
@@ -69,14 +82,69 @@ export interface FakeGitHub {
   readonly respond: (url: string, init: RequestInit) => Promise<Response>;
 }
 
+/**
+ * The holds a test's App shares, kept in memory for the test alone, on the
+ * terms the deployment's table keeps them (`../github/github-hold-store.ts`).
+ */
+const FIXTURE_HOLDS = Layer.sync(GitHubHoldStore, () => {
+  const holds = new Map<string, GitHubHold>();
+  const keyOf = (scope: GitHubRateScope) => JSON.stringify(scope);
+
+  return GitHubHoldStore.of({
+    read: (scope) => Effect.sync(() => holds.get(keyOf(scope))),
+    hold: (scope, now, waits, forgottenBefore) =>
+      Effect.sync(() => {
+        const standing = holds.get(keyOf(scope));
+        const holding = standing !== undefined && standing.heldUntil > now;
+        const forgotten = standing === undefined || standing.heldUntil < forgottenBefore;
+        const strikes = holding ? standing.strikes : forgotten ? 1 : standing.strikes + 1;
+        const wait = waits[Math.min(strikes, waits.length) - 1] ?? waits[0];
+        const until = Math.max(standing?.heldUntil.getTime() ?? 0, now.getTime() + wait);
+        const hold = { heldUntil: new Date(until), strikes };
+        holds.set(keyOf(scope), hold);
+
+        return hold;
+      }),
+    lift: (scope, now) =>
+      Effect.sync(() => {
+        const standing = holds.get(keyOf(scope));
+
+        if (standing !== undefined && standing.heldUntil <= now) holds.delete(keyOf(scope));
+      }),
+  });
+});
+
+/**
+ * The throttle a test's App spaces its writes with: one at a time, as the
+ * plugin's own, but on no real time, since a test never waits on the clock.
+ */
+const FIXTURE_THROTTLE = Layer.sync(GitHubAppThrottle, () => ({
+  write: new Bottleneck.Group({ maxConcurrent: 1 }),
+  search: new Bottleneck.Group({ maxConcurrent: 1 }),
+  notifications: new Bottleneck.Group({ maxConcurrent: 1 }),
+}));
+
+/** The App as `GitHubApp.layer` stands it, over the test's own holds and a throttle on no real time; GitHub itself is the caller's `HttpClient`. */
+export function fixtureGitHubApp(
+  ...app: Parameters<typeof GitHubApp.layer>
+): Layer.Layer<GitHubApp, never, HttpClient.HttpClient> {
+  return GitHubApp.layer(...app).pipe(Layer.provide(Layer.merge(FIXTURE_HOLDS, FIXTURE_THROTTLE)));
+}
+
+/** A token as a test reads on it: the App's `@repo/github` client for it, over the fake GitHub the test stands. */
+export const fixtureBearer = (
+  token: Redacted.Redacted,
+): Effect.Effect<GitHubBearer, never, GitHubApp> =>
+  Effect.flatMap(GitHubApp, (app) => Effect.orDie(app.memberBearer(token)));
+
 /** The App over the fixture settings, which is what every fake stands unless a test hands another. */
-const GITHUB_APP_LAYER: Layer.Layer<GitHubApp> = GitHubApp.layer(GITHUB_APP_SETTINGS);
+const GITHUB_APP_LAYER = fixtureGitHubApp(GITHUB_APP_SETTINGS);
 
 /** The ring members' own tokens are sealed under here: fixed bytes written for the fixtures. */
 const GITHUB_FIXTURE_TOKEN_RING = Redacted.make(`1:${Buffer.alloc(32, 7).toString("base64")}`);
 
 /** The App over the fixture settings that opens a member's own token, sealed under the fixture ring. */
-export const GITHUB_APP_WITH_TOKENS: Layer.Layer<GitHubApp> = GitHubApp.layer(
+export const GITHUB_APP_WITH_TOKENS = fixtureGitHubApp(
   GITHUB_APP_SETTINGS,
   [],
   GITHUB_FIXTURE_TOKEN_RING,
@@ -130,20 +198,44 @@ export const NO_GITHUB: Layer.Layer<GitHubApp | HttpClient.HttpClient> = Layer.s
     }).layer,
 );
 
+/** The App given over a GitHub nobody reaches, for a test that stands the App where its calls read no repository. */
+export function overNoGitHub(
+  app: Layer.Layer<GitHubApp, never, HttpClient.HttpClient>,
+): Layer.Layer<GitHubApp> {
+  return Layer.provide(
+    app,
+    fakeHttpClientLayer(() => {
+      throw new Error("this test reaches no GitHub");
+    }),
+  );
+}
+
 /** GitHub's token endpoint and API answering from the script given, every request written down, under the App given. */
 export function fakeGitHub(
   answer: (sent: SentToGitHub) => Response | Promise<Response>,
-  app: Layer.Layer<GitHubApp> = GITHUB_APP_LAYER,
+  app: Layer.Layer<GitHubApp, never, HttpClient.HttpClient> = GITHUB_APP_LAYER,
 ): FakeGitHub {
   const sent: SentToGitHub[] = [];
+  let clock: Clock.Clock | undefined;
 
   const respond = async (url: string, init: RequestInit) => {
+    const headers = new Headers(init.headers);
+    const authorization = headers.get("authorization");
+
+    // Note that GitHub takes a token under `token` and `Bearer` alike, in any case, and Octokit sends `token`, or `bearer` for the App's JWT, so the fake records it under the one scheme its scripts read.
+    const scheme = authorization === null ? null : TOKEN_SCHEME.exec(authorization);
+
+    if (authorization !== null && scheme !== null) {
+      headers.set("authorization", `Bearer ${authorization.slice(scheme[0].length)}`);
+    }
+
     const request: SentToGitHub = {
       url,
       method: init.method ?? "GET",
-      headers: new Headers(init.headers),
+      headers,
       body: init.body === undefined ? "" : await new Response(init.body).text(),
       ...(init.signal && { signal: init.signal }),
+      at: clock?.currentTimeMillisUnsafe() ?? Date.now(),
     };
 
     sent.push(request);
@@ -151,7 +243,20 @@ export function fakeGitHub(
     return answer(request);
   };
 
-  return { layer: Layer.mergeAll(fakeHttpClientLayer(respond), app), sent, respond };
+  // Note that the clock is the test's, read as the layer is built, so GitHub dates what it mints by the clock the test moves.
+  const http = Layer.effect(
+    HttpClient.HttpClient,
+    Effect.clockWith((testClock) =>
+      Effect.sync(() => {
+        clock = testClock;
+
+        return fakeHttpClient(respond);
+      }),
+    ),
+  );
+
+  // Note that the App is built fresh, because a test may stand the same App over no GitHub outside, and a memoized one would send there.
+  return { layer: Layer.provideMerge(Layer.fresh(app), http), sent, respond };
 }
 
 /** One repository as a test names it; GitHub's record is built from it. */
@@ -235,6 +340,32 @@ function sliceOf<A>(items: readonly A[], url: string): readonly A[] {
   return items.slice((page - 1) * perPage, page * perPage);
 }
 
+/** The answer's init for a page of a listing that has a next one, as GitHub links it from the page asked at `url`. */
+export function nextPageOf(url: string): ResponseInit {
+  const next = new URL(url);
+  next.searchParams.set("page", String(pageOf(url).page + 1));
+
+  return { headers: { link: `<${next.toString()}>; rel="next"` } };
+}
+
+/** A page of a listing that wraps its items, as far as how many the listing holds. */
+interface ListingPage {
+  readonly total_count: number;
+}
+
+/**
+ * A page of a listing as GitHub answers it: the body, with a `link` header
+ * naming the next page where one follows
+ * (https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api).
+ */
+function pagedJson<Page extends ListingPage>(body: Page, url: string): Response {
+  const { page, perPage } = pageOf(url);
+
+  return page * perPage >= body.total_count
+    ? Response.json(body)
+    : Response.json(body, nextPageOf(url));
+}
+
 const INSTALLATION = /^\/app\/installations\/(\d+)$/u;
 const INSTALLATION_ACCESS_TOKENS = /^\/app\/installations\/(\d+)\/access_tokens$/u;
 const APP_TOKEN = /^\/applications\/[^/]+\/token$/u;
@@ -287,7 +418,7 @@ function installationJson(installation: InstallationFixture) {
  */
 export function githubReaching(
   installations: readonly InstallationFixture[],
-  app: Layer.Layer<GitHubApp> = GITHUB_APP_LAYER,
+  app: Layer.Layer<GitHubApp, never, HttpClient.HttpClient> = GITHUB_APP_LAYER,
   people: GitHubPeople = {},
   repository: RepositoryScript = () => undefined,
 ): FakeGitHub {
@@ -372,7 +503,7 @@ export function githubReaching(
           token: forRepositories
             ? GITHUB_FIXTURE_INSTALLATION_TOKEN
             : listingTokenOf(installation.id),
-          expires_at: "2026-10-01T01:00:00Z",
+          expires_at: new Date(sent.at + GITHUB_FIXTURE.HOUR_MS).toISOString(),
           repository_selection: GITHUB_REPOSITORY_SELECTION.SELECTED,
         },
         { status: 201 },
@@ -389,10 +520,13 @@ export function githubReaching(
     }
 
     if (pathname === "/user/installations") {
-      return Response.json({
-        total_count: installations.length,
-        installations: sliceOf(installations, sent.url).map(installationJson),
-      });
+      return pagedJson(
+        {
+          total_count: installations.length,
+          installations: sliceOf(installations, sent.url).map(installationJson),
+        },
+        sent.url,
+      );
     }
 
     if (pathname === "/installation/repositories") {
@@ -406,11 +540,14 @@ export function githubReaching(
         return Response.json({ message: "Bad credentials" }, { status: 401 });
       }
 
-      return Response.json({
-        total_count: installation.repositories.length,
-        repository_selection: GITHUB_REPOSITORY_SELECTION.SELECTED,
-        repositories: sliceOf(installation.repositories, sent.url).map(repositoryJson),
-      });
+      return pagedJson(
+        {
+          total_count: installation.repositories.length,
+          repository_selection: GITHUB_REPOSITORY_SELECTION.SELECTED,
+          repositories: sliceOf(installation.repositories, sent.url).map(repositoryJson),
+        },
+        sent.url,
+      );
     }
 
     return notFound();

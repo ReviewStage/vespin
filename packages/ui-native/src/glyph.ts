@@ -185,6 +185,9 @@ export const GLYPH = {
   // A split view's expand, which stands the page alone across the window and back, is the system's own, as Mail draws it.
   EXPAND: system("arrow.up.left.and.arrow.down.right"),
   COLLAPSE: system("arrow.down.right.and.arrow.up.left"),
+  // A list's filter, Mail's own button over its list, filled while the list stands narrowed from its default.
+  FILTER: system("line.3.horizontal.decrease.circle"),
+  FILTERED: system("line.3.horizontal.decrease.circle.fill"),
   DISCLOSURE: system("chevron.forward"),
   STOP_TURN: system("stop.fill"),
   // A task's status ring, the panel's own mark.

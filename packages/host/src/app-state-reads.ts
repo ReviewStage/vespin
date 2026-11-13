@@ -224,6 +224,7 @@ export const selectNetwork = (state: AppStateSnapshot) => state.network;
 export const selectSessionReplay = (state: AppStateSnapshot) => state.sessionReplay;
 export const selectPortForwarding = (state: AppStateSnapshot) => state.portForwarding;
 export const selectMirrors = (state: AppStateSnapshot) => state.mirrors;
+export const selectVoiceCall = (state: AppStateSnapshot) => state.voiceCall;
 
 /** What a window shows may be behind for: this machine offline, the service not answering, or live updates catching up, the machine's own network first, since nothing else can be read without it. */
 export const LIVE_MARK = {

@@ -84,6 +84,17 @@ function keptDoor(kept: KeptPlace | undefined, handed: (...args: never[]) => voi
   return { handed, steady: door.call, door, within: undefined };
 }
 
+/**
+ * The places kept beneath one, or none where none was kept: a part that is
+ * no object (a string, a number) holds no door and nothing beneath, and is
+ * handed back as it is, so it keeps no place of its own. Note that with the
+ * window's tasks and agents handed over whole, a place for every field of
+ * every row held over a million places, a quarter of the renderer's heap.
+ */
+function placesKept<Key>(within: Map<Key, KeptPlace>): ReadonlyMap<Key, KeptPlace> | undefined {
+  return within.size === 0 ? undefined : within;
+}
+
 function keptPlace<Handed>(
   kept: KeptPlace | undefined,
   handed: Handed,
@@ -103,6 +114,7 @@ function keptPlace<Handed>(
     const items: readonly unknown[] = handed;
 
     const steady = items.map((item, index) => {
+      if (!Predicate.isObjectKeyword(item)) return item;
       const place = keptPlace(kept?.within?.get(index), item, false, isDoor);
       within.set(index, place);
 
@@ -116,14 +128,16 @@ function keptPlace<Handed>(
       last.length === steady.length &&
       steady.every((item, index) => item === last[index]);
 
-    return { handed, steady: same ? last : steady, door: undefined, within };
+    return { handed, steady: same ? last : steady, door: undefined, within: placesKept(within) };
   }
 
   if (Predicate.isObject(handed) && isPlainRecord(handed)) {
     const within = new Map<string, KeptPlace>();
+    const entries = Object.entries(handed);
 
     const steady = Object.fromEntries(
-      Object.entries(handed).map(([key, item]) => {
+      entries.map(([key, item]) => {
+        if (!Predicate.isObjectKeyword(item)) return [key, item];
         const place = keptPlace(kept?.within?.get(key), item, isDoor(key), isDoor);
         within.set(key, place);
 
@@ -136,10 +150,10 @@ function keptPlace<Handed>(
     const same =
       Predicate.isObject(last) &&
       isPlainRecord(last) &&
-      Object.keys(last).length === within.size &&
+      Object.keys(last).length === entries.length &&
       Object.entries(steady).every(([key, item]) => key in last && last[key] === item);
 
-    return { handed, steady: same ? last : steady, door: undefined, within };
+    return { handed, steady: same ? last : steady, door: undefined, within: placesKept(within) };
   }
 
   return { handed, steady: handed, door: undefined, within: undefined };

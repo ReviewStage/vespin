@@ -249,6 +249,7 @@ export type AgentClient = Pick<
   | "overviewPullRequest"
   | "reviewOptions"
   | "workspaceTools"
+  | "setDefaultMachine"
   | "overviewChecks"
   | "overviewConversation"
   | "githubImage"
@@ -1086,6 +1087,11 @@ function composed(
         dependencies.accountId,
       ),
     ),
+    // The agent's tools as the write answers them are laid on their slice at once, so its chip reads the new default.
+    AGENTS_SET_DEFAULT_MACHINE: ({ agentId, machineId }) =>
+      Effect.tap(asked(client.setDefaultMachine(agentId, machineId)), (answer) =>
+        "failure" in answer ? Effect.void : tools.answered(agentId, answer),
+      ),
     AGENTS_LIST: ({ taskId, includeArchived }) => asked(client.list(taskId, includeArchived)),
     AGENTS_WORKSPACE_LIST: (listed) => asked(client.listWorkspace(listed)),
     AGENTS_START: (start) =>

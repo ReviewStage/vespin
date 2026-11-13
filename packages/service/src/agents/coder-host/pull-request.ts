@@ -20,20 +20,17 @@ import {
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { ACTION_RESULT_STATUS, EXCESS_KEYS, type UnparsedWireValue } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
-import { Effect, type Redacted, Result, Schema } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientResponse from "effect/http/HttpClientResponse";
+import { Effect, Result, Schema } from "effect";
 import {
   recordServerEvent,
   SERVER_EVENT,
   SERVER_PULL_REQUEST_OPENER,
 } from "../../events/server-events.js";
 import {
-  GITHUB_HTTP_STATUS,
   GitHubApp,
-  githubPost,
-  readBody,
-  send,
+  type GitHubBearer,
+  githubRead,
+  repositoryParts,
 } from "../../github/github-app.js";
 import { agentRepositoryToken, type CheckoutServices } from "./checkout.js";
 import { agentPublished } from "./published.js";
@@ -162,12 +159,6 @@ function repositoryRefusal(repositories: readonly AgentRepositoryEntry[]): strin
     : `Not opened: you work in ${listed} alone; name it as repository, or leave repository out.`;
 }
 
-/** The headers GitHub marks a rate limit with, which it may answer 403 rather than 429. */
-const RATE_LIMIT_HEADER = {
-  REMAINING: "x-ratelimit-remaining",
-  RETRY_AFTER: "retry-after",
-} as const;
-
 /** Why a call opened nothing where the service could not reach GitHub or its store. */
 export const PULL_REQUEST_UNAVAILABLE = PULL_REQUEST_REFUSAL.UNAVAILABLE;
 
@@ -209,19 +200,8 @@ const readInput = readEither(openPullRequestInputSchema, { excess: EXCESS_KEYS.D
 /** GitHub's answer to an opened pull request, read for its address and number. */
 const OpenedSchema = Schema.Struct({ number: Schema.Int, html_url: Schema.String });
 
-/** GitHub's words on a request it refused, as far as the agent is told them. */
-const RefusalSchema = Schema.Struct({
-  message: Schema.String,
-  errors: Schema.optional(
-    Schema.Array(
-      Schema.Struct({
-        message: Schema.optional(Schema.String),
-        field: Schema.optional(Schema.String),
-        code: Schema.optional(Schema.String),
-      }),
-    ),
-  ),
-});
+/** What GitHub answers a pull request it refuses, with its reason. */
+const UNPROCESSABLE = 422;
 
 /** How one attempt to open the pull request ended. */
 const ATTEMPT = {
@@ -240,80 +220,56 @@ type Attempt =
 /** An attempt that ended other than with its token refused. */
 type Settled = Exclude<Attempt, { readonly kind: typeof ATTEMPT.TOKEN_REFUSED }>;
 
-/**
- * GitHub's refusal of the pull request in its own words, cut to the bound.
- * An error GitHub gives no message for, such as a base it does not know,
- * is said by the field it names and its code (`base invalid`).
- */
-function refusalWords(refusal: typeof RefusalSchema.Type): string {
-  const details = (refusal.errors ?? []).flatMap((error) => {
-    if (error.message !== undefined) return [error.message];
-    const named = [error.field, error.code].filter((word) => word !== undefined).join(" ");
-
-    return named === "" ? [] : [named];
-  });
-
-  const words = [refusal.message, ...details].join(" ");
-
+/** GitHub's refusal of the pull request in its own words (`@repo/github` names an error's field and code where it says none), cut to the bound. */
+function refusalWords(words: string): string {
   return `Not opened: GitHub said: ${words.slice(0, PULL_REQUEST_BOUNDS.MAX_REFUSAL_CHARS)}`;
 }
 
 /**
- * Whether GitHub's 403 is a rate limit rather than a refusal of the
- * account's access: GitHub marks a primary limit with no requests
- * remaining, and a secondary one with a wait to retry after.
- */
-function rateLimited(headers: Readonly<Record<string, string | undefined>>): boolean {
-  return (
-    headers[RATE_LIMIT_HEADER.REMAINING] === "0" ||
-    headers[RATE_LIMIT_HEADER.RETRY_AFTER] !== undefined
-  );
-}
-
-/**
- * One attempt to open the pull request on the token given. A token GitHub
- * will not take (401), or whose account may not write the repository (403,
- * or 404 for a repository it cannot see), is told apart from a refusal of
- * the pull request itself, which GitHub answers 422 with its reason, and
- * from a rate limit, which GitHub may answer 403 too and which passes.
+ * One attempt to open the pull request on the bearer given. A token GitHub
+ * will not take (`GitHubUnauthorized`), or whose account may not write the
+ * repository (`GitHubForbidden`, or `GitHubNotFound` for a repository it
+ * cannot see), is told apart from a refusal of the pull request itself,
+ * which GitHub answers 422 with its reason, and from a rate limit, which
+ * `@repo/github` tells apart from a 403 itself and which passes.
  */
 const attempt = /* @__PURE__ */ Effect.fn("web/openPullRequestAttempt")(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   fullName: string,
   pullRequest: PullRequestAsked,
-): Effect.fn.Return<Attempt, never, HttpClient.HttpClient> {
-  const [owner = "", name = ""] = fullName.split("/");
-  const path = `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(name)}/pulls`;
+): Effect.fn.Return<Attempt> {
+  const opened = bearer.client.request("POST /repos/{owner}/{repo}/pulls", {
+    ...repositoryParts(fullName),
+    ...pullRequest,
+  });
 
-  return yield* Effect.scoped(
-    Effect.gen(function* (): Effect.fn.Return<Attempt, unknown, HttpClient.HttpClient> {
-      const response = yield* send(githubPost(path, token, pullRequest));
-
-      switch (response.status) {
-        case GITHUB_HTTP_STATUS.UNAUTHORIZED:
-          return { kind: ATTEMPT.TOKEN_REFUSED, reason: AGENT_AUTHOR.APP_UNLINKED };
-        case GITHUB_HTTP_STATUS.FORBIDDEN:
-          return rateLimited(response.headers)
-            ? { kind: ATTEMPT.REFUSED, reason: PULL_REQUEST_REFUSAL.RATE_LIMITED }
-            : { kind: ATTEMPT.TOKEN_REFUSED, reason: AGENT_AUTHOR.APP_NO_PUSH };
-        case GITHUB_HTTP_STATUS.NOT_FOUND:
-          return { kind: ATTEMPT.TOKEN_REFUSED, reason: AGENT_AUTHOR.APP_NO_PUSH };
-        case GITHUB_HTTP_STATUS.UNPROCESSABLE: {
-          const refusal = yield* HttpClientResponse.schemaBodyJson(RefusalSchema)(response);
-
-          return { kind: ATTEMPT.REFUSED, reason: refusalWords(refusal) };
-        }
-
-        default: {
-          const opened = yield* readBody(response, OpenedSchema);
-
-          return { kind: ATTEMPT.OPENED, url: opened.html_url, number: opened.number };
-        }
-      }
+  return yield* githubRead(opened, OpenedSchema).pipe(
+    Effect.map(
+      (answer): Attempt => ({ kind: ATTEMPT.OPENED, url: answer.html_url, number: answer.number }),
+    ),
+    Effect.catchTags({
+      GitHubUnauthorized: () =>
+        Effect.succeed<Attempt>({ kind: ATTEMPT.TOKEN_REFUSED, reason: AGENT_AUTHOR.APP_UNLINKED }),
+      GitHubForbidden: () =>
+        Effect.succeed<Attempt>({ kind: ATTEMPT.TOKEN_REFUSED, reason: AGENT_AUTHOR.APP_NO_PUSH }),
+      GitHubNotFound: () =>
+        Effect.succeed<Attempt>({ kind: ATTEMPT.TOKEN_REFUSED, reason: AGENT_AUTHOR.APP_NO_PUSH }),
+      GitHubRateLimited: () =>
+        Effect.succeed<Attempt>({
+          kind: ATTEMPT.REFUSED,
+          reason: PULL_REQUEST_REFUSAL.RATE_LIMITED,
+        }),
+      GitHubRejected: (rejected) =>
+        Effect.succeed<Attempt>({
+          kind: ATTEMPT.REFUSED,
+          reason:
+            rejected.status === UNPROCESSABLE
+              ? refusalWords(rejected.message)
+              : PULL_REQUEST_REFUSAL.UNAVAILABLE,
+        }),
     }),
-  ).pipe(
-    Effect.catch(() =>
-      Effect.succeed<Attempt>({ kind: ATTEMPT.REFUSED, reason: PULL_REQUEST_REFUSAL.UNAVAILABLE }),
+    Effect.orElseSucceed(
+      (): Attempt => ({ kind: ATTEMPT.REFUSED, reason: PULL_REQUEST_REFUSAL.UNAVAILABLE }),
     ),
   );
 });
@@ -339,7 +295,7 @@ const attemptAsDeveloper = /* @__PURE__ */ Effect.fn("web/openPullRequestAsDevel
   const app = yield* GitHubApp;
 
   return yield* app.userToken(target.userId).pipe(
-    Effect.flatMap((token) => attempt(token, fullName, pullRequest)),
+    Effect.flatMap((bearer) => attempt(bearer, fullName, pullRequest)),
     Effect.catchTag("GitHubSignInRequired", () =>
       Effect.succeed<Attempt>({
         kind: ATTEMPT.TOKEN_REFUSED,
@@ -398,13 +354,13 @@ const attemptOpening = /* @__PURE__ */ Effect.fn("web/attemptPullRequestOpening"
   const minted = yield* Effect.result(agentRepositoryToken(target, agent, extra?.repository));
 
   if (Result.isFailure(minted)) return pullRequestRejected(`Not opened: ${minted.failure.reason}`);
-  const { token, fullName, defaultBranch, access } = minted.success;
+  const { bearer, fullName, defaultBranch, access } = minted.success;
   // Note that an extra's pull request opens against the branch its checkout was cloned at, as it was named at the Start.
   const pullRequest = pullRequestOf(input, extra?.baseBranch ?? defaultBranch);
 
   // Note that an agent on its starter's own token opens on it alone, since no installation reaches the repository.
   if (access.kind === GITHUB_ACCESS.TOKEN) {
-    const asMember = yield* attempt(token, fullName, pullRequest);
+    const asMember = yield* attempt(bearer, fullName, pullRequest);
 
     return asMember.kind === ATTEMPT.TOKEN_REFUSED
       ? pullRequestRejected(PULL_REQUEST_REFUSAL.TOKEN_REFUSED)
@@ -417,7 +373,7 @@ const attemptOpening = /* @__PURE__ */ Effect.fn("web/attemptPullRequestOpening"
     return answerOf(asDeveloper, OPENED_AS.DEVELOPER);
   }
 
-  const asApp = yield* attempt(token, fullName, pullRequest);
+  const asApp = yield* attempt(bearer, fullName, pullRequest);
 
   if (asApp.kind === ATTEMPT.TOKEN_REFUSED) {
     return pullRequestRejected(PULL_REQUEST_REFUSAL.UNAVAILABLE);

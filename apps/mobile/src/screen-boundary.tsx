@@ -2,7 +2,9 @@
 
 import { ScreenFailure } from "@repo/ui-native";
 import { type ErrorBoundaryProps, Stack } from "expo-router";
+import { useEffect } from "react";
 import { useScreenFailureReport } from "./crash-reports.js";
+import { releaseSplash } from "./splash.js";
 
 /**
  * A screen route's `ErrorBoundary`, which expo-router stands around the
@@ -24,9 +26,10 @@ export function ScreenBoundary({ error, retry }: ErrorBoundaryProps) {
   );
 }
 
-/** The root layout's `ErrorBoundary`: a throw no screen's boundary caught, said and reported as a screen's is, with no stack to name. */
+/** The root layout's `ErrorBoundary`: a throw no screen's boundary caught, said and reported as a screen's is, with no stack to name, and the launch splash let go so it shows. */
 export function RootBoundary({ error, retry }: ErrorBoundaryProps) {
   useScreenFailureReport(error);
+  useEffect(releaseSplash, []);
 
   return <ScreenFailure error={error} retry={retry} />;
 }

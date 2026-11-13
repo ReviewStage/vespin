@@ -294,16 +294,20 @@ function TaskTabsRow({
  * side panel at its width where it is open. The column's tab draws the very
  * same placeholder until it lands, so a task opens through one placeholder
  * rather than a chain of them, and nothing moves as the page arrives but
- * what fills it.
+ * what fills it. A task New task is still starting has no transcript yet,
+ * so its column's log says the agent is starting instead (`starting`).
  */
 function TaskPageSkeleton({
   drawing,
   head,
+  starting = false,
 }: {
   /** The side panel as it will be drawn, its panel none where it is shut. */
   drawing: SidePanelDrawing;
   /** A phone's head over the page, as the page will be headed once it lands (`TaskWaitHead`); none elsewhere. */
   head?: React.ReactNode;
+  /** Whether the task's agent is still being started, before anything of it can be read. */
+  starting?: boolean;
 }): React.JSX.Element {
   const { panel, ...frame } = drawing;
 
@@ -327,7 +331,7 @@ function TaskPageSkeleton({
           <TaskBody>
             <Fill className="desktop-task-column">
               <AgentColumn>
-                <AgentTabSkeleton label={TASK_LOADING_LABEL} />
+                <AgentTabSkeleton label={TASK_LOADING_LABEL} starting={starting} />
               </AgentColumn>
             </Fill>
           </TaskBody>
@@ -1726,8 +1730,9 @@ function DescriptionDocument({
  * The page of a task New task is still starting with its agent, before the
  * service has made either: the task's page in the shape it lands in, with
  * no side panel beside it, since the task lands on its agent alone
- * (`useTasksTab`'s `openAgent`), so Start opens the page at once and the
- * start's answer fills it in, its agent's tab saying Starting… from then.
+ * (`useTasksTab`'s `openAgent`), so Start opens the page at once, its log
+ * saying Starting… with no transcript, and the start's answer fills it in,
+ * its agent's tab saying how its machine boots from then.
  */
 function StartingTaskPage({
   tasks,
@@ -1743,6 +1748,7 @@ function StartingTaskPage({
     <TaskPageSkeleton
       drawing={drawing}
       head={phoneAway === undefined ? undefined : <TaskWaitHead away={phoneAway} reading />}
+      starting
     />
   );
 }

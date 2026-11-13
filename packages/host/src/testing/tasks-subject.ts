@@ -848,6 +848,7 @@ export function fakeService(tasks: Task[]): FakeService {
       deleteVariable: () => Effect.succeed(UNANSWERED_WORKSPACE),
       sandboxSetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       mergeQueue: () => Effect.succeed(UNANSWERED_WORKSPACE),
+      machines: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putInstallScript: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRepositorySetup: () => Effect.succeed(UNANSWERED_WORKSPACE),
       putRunActions: () => Effect.succeed(UNANSWERED_WORKSPACE),
@@ -1378,6 +1379,7 @@ export function fakeService(tasks: Task[]): FakeService {
       ),
     unfollow: (taskId) =>
       followersWrite(taskId, (followers) => followers.filter((each) => each.userId !== READER_ID)),
+    followerMachines: () => Effect.die("no follower's machines read in this suite"),
     setFollowerMachines: (taskId, machines) =>
       followersWrite(taskId, (followers) =>
         followers.map((each) => (each.userId === READER_ID ? { ...each, machines } : each)),

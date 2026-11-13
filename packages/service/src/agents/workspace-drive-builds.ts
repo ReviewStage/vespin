@@ -27,13 +27,23 @@
  * process to the same consumer, on a fiber of its own over the publisher's
  * services, and delivered again after the wait it asks for, as the queue
  * would.
+ *
+ * The same queue carries the daily cleanup (`workspace-drive-cleanup.ts`):
+ * a message whose `kind` is `WORKSPACE_DRIVE_MESSAGE.CLEANUP` prunes its
+ * workspace's drive of the repositories no agent of it started in lately
+ * (`consumeWorkspaceDriveCleanup`), and comes again after
+ * `WORKSPACE_DRIVE_BUILD.FILLING_AGAIN` where a fill holds the drive. A
+ * message with no `kind` is a build.
  */
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import { buildingAgentBootsOf } from "@repo/database/models/agent-boot-store";
 import { readAgent } from "@repo/database/models/agent-store";
 import { workspaceDriveOwner } from "@repo/database/models/base-drive-repositories";
-import { workspaceDriveRepositories } from "@repo/database/models/workspace-drive-repositories";
+import {
+  unusedWorkspaceDriveRepositories,
+  workspaceDriveRepositories,
+} from "@repo/database/models/workspace-drive-repositories";
 import { causeKind, failureKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { send } from "@vercel/queue";
@@ -59,6 +69,7 @@ import { routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   DRIVE_BROKEN,
   fillWorkspaceDrive,
+  pruneWorkspaceDriveTo,
   reportedBroken,
   WorkspaceDriveFills,
   workspaceFolderOf,
@@ -72,15 +83,23 @@ export type WorkspaceDriveBuildServices =
   | GitHubApp
   | Sandbox;
 
-/** A build's message: the workspace it names, and nothing of its repositories or agents. */
-const buildMessageSchema = Schema.Struct({ workspaceId: Schema.String });
+/** What a message on the queue asks of its workspace's drive: a build, or the daily cleanup. */
+const WORKSPACE_DRIVE_MESSAGE = { BUILD: "build", CLEANUP: "cleanup" } as const;
+
+/** A message: the workspace it names, what it asks, a build where it says nothing, and nothing of its repositories or agents. */
+const buildMessageSchema = Schema.Struct({
+  workspaceId: Schema.String,
+  kind: Schema.optionalKey(Schema.Literals(Object.values(WORKSPACE_DRIVE_MESSAGE))),
+});
+
+type WorkspaceDriveMessage = typeof buildMessageSchema.Type;
 
 const decodeBuildMessage = Schema.decodeUnknownEffect(buildMessageSchema);
 
 interface WorkspaceDriveBuildsService {
-  /** The workspace's build published; a publish that fails is said in the log, and the boots it was for are failed by the sweep at their building deadline. */
+  /** The message published; a publish that fails is said in the log, and the boots a build was for are failed by the sweep at their building deadline. */
   readonly publish: (
-    workspaceId: string,
+    message: WorkspaceDriveMessage,
   ) => Effect.Effect<void, never, WorkspaceDriveBuildServices>;
 }
 
@@ -163,18 +182,64 @@ export const consumeWorkspaceDriveBuild = (
     return QUEUE_ACKNOWLEDGED;
   }).pipe(Effect.withSpan("web/consumeWorkspaceDriveBuild"), Effect.annotateLogs({ workspaceId }));
 
+/** How long a repository stands on its workspace's drive with no agent of the workspace started in it, before the daily cleanup drops it. */
+const UNUSED_AFTER = Duration.days(30);
+
+/** The instant before which an agent's start no longer keeps its repository on the drive. */
+export const unusedSince = Effect.map(
+  Clock.currentTimeMillis,
+  (now) => new Date(now - Duration.toMillis(UNUSED_AFTER)),
+);
+
 /**
- * On Vercel: the build sent to the topic, pinned to this deployment, as the
+ * One delivery of a workspace's cleanup: its drive pruned to every
+ * repository it holds but those no agent of the workspace started in since
+ * `UNUSED_AFTER` ago, which loses their folders and rows; delivered again
+ * shortly where a fill holds the drive. A function that fills no drives, or
+ * a workspace with no owner or nothing unused, prunes nothing.
+ */
+export const consumeWorkspaceDriveCleanup = (
+  workspaceId: string,
+): Effect.Effect<QueueAnswer, unknown, WorkspaceDriveBuildServices> =>
+  Effect.gen(function* () {
+    const fills = yield* Effect.serviceOption(WorkspaceDriveFills);
+    const owner = yield* workspaceDriveOwner(workspaceId);
+
+    if (Option.isNone(fills) || Option.isNone(owner)) return QUEUE_ACKNOWLEDGED;
+    const unused = yield* unusedWorkspaceDriveRepositories(yield* unusedSince, workspaceId);
+    const dropped = new Set(unused.flatMap((each) => each.repositories));
+
+    if (dropped.size === 0) return QUEUE_ACKNOWLEDGED;
+    const recorded = yield* workspaceDriveRepositories(workspaceId);
+    const keep = recorded.filter((repository) => !dropped.has(repository));
+    const { run, image } = fills.value;
+    const pruned = yield* pruneWorkspaceDriveTo(run, yield* image, owner.value, keep);
+
+    if (!pruned) return { acknowledged: false, again: WORKSPACE_DRIVE_BUILD.FILLING_AGAIN };
+    yield* Effect.logInfo(`a workspace's drive cleanup dropped ${dropped.size} repositories`);
+
+    return QUEUE_ACKNOWLEDGED;
+  }).pipe(
+    Effect.withSpan("web/consumeWorkspaceDriveCleanup"),
+    Effect.annotateLogs({ workspaceId }),
+  );
+
+/** One delivery of a message, as its kind asks: a cleanup, or a build. */
+const consumeWorkspaceDriveMessage = (message: WorkspaceDriveMessage) =>
+  message.kind === WORKSPACE_DRIVE_MESSAGE.CLEANUP
+    ? consumeWorkspaceDriveCleanup(message.workspaceId)
+    : consumeWorkspaceDriveBuild(message.workspaceId);
+
+/**
+ * On Vercel: the message sent to the topic, pinned to this deployment, as the
  * SDK pins every send, waited on at most `WORKSPACE_DRIVE_BUILD.PUBLISH_WAIT`;
  * a send that failed or was given up is said in the log.
  */
-const vercelPublish = (workspaceId: string) =>
+const vercelPublish = (message: WorkspaceDriveMessage) =>
   Effect.tryPromise(() =>
-    send(
-      WORKSPACE_DRIVE_BUILD.TOPIC,
-      { workspaceId },
-      { retentionSeconds: Math.ceil(Duration.toSeconds(WORKSPACE_DRIVE_BUILD.RETENTION)) },
-    ),
+    send(WORKSPACE_DRIVE_BUILD.TOPIC, message, {
+      retentionSeconds: Math.ceil(Duration.toSeconds(WORKSPACE_DRIVE_BUILD.RETENTION)),
+    }),
   ).pipe(
     Effect.timeoutOption(WORKSPACE_DRIVE_BUILD.PUBLISH_WAIT),
     Effect.flatMap((sent) =>
@@ -185,21 +250,21 @@ const vercelPublish = (workspaceId: string) =>
     Effect.catch((failure) =>
       Effect.logWarning(`a workspace's drive build was not published: ${failureKind(failure)}`),
     ),
-    Effect.annotateLogs({ workspaceId }),
+    Effect.annotateLogs({ workspaceId: message.workspaceId }),
   );
 
 /**
- * A build's deliveries in this process, as the queue would make them: each
+ * A message's deliveries in this process, as the queue would make them: each
  * handed to the consumer, and delivered again after the wait it asks for,
  * or a failure's, until it is acknowledged or its retention has passed.
  */
-const deliveredInProcess = (workspaceId: string) =>
+const deliveredInProcess = (message: WorkspaceDriveMessage) =>
   Effect.gen(function* () {
     const until =
       (yield* Clock.currentTimeMillis) + Duration.toMillis(WORKSPACE_DRIVE_BUILD.RETENTION);
 
     while (true) {
-      const answer = yield* consumeWorkspaceDriveBuild(workspaceId).pipe(
+      const answer = yield* consumeWorkspaceDriveMessage(message).pipe(
         Effect.catchCause((cause) =>
           Cause.hasInterruptsOnly(cause)
             ? Effect.failCause(cause)
@@ -219,13 +284,13 @@ const deliveredInProcess = (workspaceId: string) =>
     }
   });
 
-/** Off Vercel: the build delivered in this process, on a fiber of its own over the publisher's services. */
+/** Off Vercel: the message delivered in this process, on a fiber of its own over the publisher's services. */
 const inProcessPublish = (
-  workspaceId: string,
+  message: WorkspaceDriveMessage,
 ): Effect.Effect<void, never, WorkspaceDriveBuildServices> =>
   Effect.gen(function* () {
     const services = yield* Effect.context<WorkspaceDriveBuildServices>();
-    yield* Effect.forkDetach(deliveredInProcess(workspaceId).pipe(Effect.provideContext(services)));
+    yield* Effect.forkDetach(deliveredInProcess(message).pipe(Effect.provideContext(services)));
   });
 
 /** The builds one runtime publishes: delivered in this process by default, as a test or a local run has them. */
@@ -262,7 +327,13 @@ export const workspaceDriveBuildsFromEnvironment = Layer.effect(
  * What a start that holds its boot for the drive calls.
  */
 export const workspaceDriveBuildPublished = (workspaceId: string) =>
-  Effect.flatMap(WorkspaceDriveBuilds, (builds) => builds.publish(workspaceId));
+  Effect.flatMap(WorkspaceDriveBuilds, (builds) => builds.publish({ workspaceId }));
+
+/** The workspace's drive cleanup published on the same queue, through the runtime's `WorkspaceDriveBuilds`. What the daily cron calls. */
+export const workspaceDriveCleanupPublished = (workspaceId: string) =>
+  Effect.flatMap(WorkspaceDriveBuilds, (builds) =>
+    builds.publish({ workspaceId, kind: WORKSPACE_DRIVE_MESSAGE.CLEANUP }),
+  );
 
 /**
  * The consumer's route handler over the services the function's runtime
@@ -285,7 +356,7 @@ export function workspaceDriveBuildsHandler(
           return QUEUE_ACKNOWLEDGED;
         }
 
-        return yield* consumeWorkspaceDriveBuild(decoded.value.workspaceId).pipe(
+        return yield* consumeWorkspaceDriveMessage(decoded.value).pipe(
           Effect.tapCause((cause) =>
             Effect.logWarning(
               `a workspace's drive build will be delivered again: ${causeKind(cause)}`,

@@ -13,7 +13,7 @@ import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { fakeActPort } from "./testing/app-bridge.js";
-import { handState, withExperiments } from "./testing/app-state.js";
+import { handState, withExperiments, writeExperiments } from "./testing/app-state.js";
 import { settleQueries } from "./testing/copy-feedback.js";
 import { ToastHost } from "./toast.js";
 import { useVoiceCall, type VoiceCall, VoiceCallProvider } from "./voice-call.js";
@@ -85,8 +85,8 @@ class FakePeer {
   }
 }
 
-/** The microphone's one track, whose light a stop puts out. */
-const microphone = { stopped: false };
+/** The microphone's one track, whose light a stop puts out, and whether it sounds. */
+const microphone = { stopped: false, enabled: true };
 
 /** What the call asked the service to open. */
 let opened: unknown[];
@@ -136,10 +136,14 @@ beforeEach(() => {
   FakePeer.made = [];
   opened = [];
   microphone.stopped = false;
+  microphone.enabled = true;
 
   const track = {
     stop: () => {
       microphone.stopped = true;
+    },
+    set enabled(on: boolean) {
+      microphone.enabled = on;
     },
   };
 
@@ -208,6 +212,25 @@ test("muting the microphone tells the session, and muting the speaker tells it n
   assert.equal(call.call?.speakerMuted, true);
 });
 
+test("a mute pressed while the call connects is told to the session once it starts", async () => {
+  await mounted();
+  const peer = await called();
+
+  act(() => call.setMicrophoneMuted(true));
+  assert.equal(call.call?.microphoneMuted, true);
+  assert.deepEqual(peer.channel.told(), []);
+  assert.equal(
+    microphone.enabled,
+    false,
+    "the track sends nothing before the session hears the mute",
+  );
+
+  act(() => peer.channel.started());
+
+  assert.deepEqual(peer.channel.told(), [said("session.input_audio.mute")]);
+  assert.equal(call.call?.microphoneMuted, true);
+});
+
 test("a call refused for want of an OpenAI key says to add one and lets the microphone go", async () => {
   fakeActPort({
     [ACT_KIND.VOICE_OPEN]: () =>
@@ -244,6 +267,20 @@ test("a second call ends the first", async () => {
   assert.ok(first.closed, "the first call's peer is dropped");
   assert.notEqual(first, second);
   assert.equal(call.call?.stage, "connecting");
+});
+
+test("turning the Voice experiment off ends a call under way, its session closed and the microphone let go", async () => {
+  await mounted();
+  const peer = await called();
+  act(() => peer.channel.started());
+
+  writeExperiments({});
+  await settleQueries();
+
+  assert.deepEqual(peer.channel.told(), [said("session.close")]);
+  assert.equal(call.call, undefined);
+  assert.ok(peer.closed, "the peer is dropped");
+  assert.ok(microphone.stopped, "the microphone is let go");
 });
 
 test("nothing calls while the Voice experiment is off", async () => {

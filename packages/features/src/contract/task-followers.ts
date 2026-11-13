@@ -22,6 +22,7 @@ import {
   taskFollowerMachinesRequestSchema,
   taskFollowersAnswerSchema,
 } from "../task-wire.js";
+import { taskMachinesAnswerSchema } from "../workspace-tools-wire.js";
 import { bodyCap, declaredProcedure, exactBodyInput, refuses } from "./base.js";
 
 /** A body is one id or one switch, so one past this is neither. */
@@ -74,6 +75,12 @@ export const taskFollowersContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: FOLLOWERS, inputStructure: "detailed" }))
     .input(exactBodyInput(taskParams, taskFollowerAddRequestSchema))
     .output(answer),
+  /** The followers' machines, each with whose it is, whether its owner lets the task's agents use it, and whether it listened lately, as a follower's card lists them. */
+  machines: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(openapi({ method: HTTP_METHOD.GET, path: `${FOLLOWERS}/machines` }))
+    .input(taskParams)
+    .output(EffectSchema.flip(taskMachinesAnswerSchema)),
   /** Another follower taken away, their machines with them; one not following stays so, and the assignee is refused. */
   remove: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))

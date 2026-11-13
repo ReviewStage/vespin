@@ -746,6 +746,7 @@ function fakeService() {
         return REVIEW_OPTIONS;
       }),
     workspaceTools: () => Effect.die("no Vespin tools read in this suite"),
+    setDefaultMachine: () => Effect.die("no default machine set in this suite"),
     overviewChecks: (agentId) =>
       Effect.sync(() => {
         asked.push(`overview-checks:${agentId}`);
