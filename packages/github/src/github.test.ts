@@ -244,6 +244,23 @@ describe("GitHub", () => {
     }).pipe(Effect.provide(layer));
   });
 
+  it.effect("mints a fresh installation token when the kept one has too little time left", () => {
+    const { sent, layer } = harness(() => json({ full_name: "octo/hello" }));
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+      yield* github.installationToken(installation(4));
+      // Five minutes before the fake's expiry: too little for ten minutes, enough for four.
+      yield* TestClock.setTime(
+        Date.parse("2099-01-01T00:00:00Z") - Duration.toMillis(Duration.minutes(5)),
+      );
+      yield* github.installationToken(installation(4), { minimumLifetime: Duration.minutes(4) });
+      yield* github.installationToken(installation(4), { minimumLifetime: Duration.minutes(10) });
+
+      assert.strictEqual(sent.length, 2);
+    }).pipe(Effect.provide(layer));
+  });
+
   it.effect("asks again conditionally, and answers a 304 from the kept body", () => {
     const { reads, layer } = harness((request) =>
       request.headers.get("if-none-match") === '"v1"'

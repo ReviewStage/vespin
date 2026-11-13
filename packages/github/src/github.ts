@@ -37,7 +37,7 @@ import { type PaginatingEndpoints, paginateRest } from "@octokit/plugin-paginate
 import { type ThrottlingOptions, throttling } from "@octokit/plugin-throttling";
 import type { EndpointOptions, Endpoints, RequestInterface } from "@octokit/types";
 import Bottleneck from "bottleneck";
-import { Context, Duration, Effect, Layer, Option, Redacted, Schema } from "effect";
+import { Clock, Context, Duration, Effect, Layer, Option, Redacted, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
 import {
   type GitHubFailure,
@@ -462,8 +462,8 @@ function mintingFor(grant: InstallationGrant): InstallationAuthOptions {
 }
 
 /** A token for the grant from the App's `auth-app`: its cached one while it has time left, else one minted as the App. */
-async function minted(app: GitHubOctokitInstance, grant: InstallationGrant) {
-  return Schema.decodeUnknownSync(MintedToken)(await app.auth(mintingFor(grant)));
+async function minted(app: GitHubOctokitInstance, grant: InstallationGrant, refresh = false) {
+  return Schema.decodeUnknownSync(MintedToken)(await app.auth({ ...mintingFor(grant), refresh }));
 }
 
 /**
@@ -636,11 +636,20 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
         octokitFor(state, { authStrategy: installationAuth(appOctokit, grant) }),
       );
     },
-    installationToken: (grant) =>
-      Effect.map(
-        called(identities.app, () => minted(appOctokit, grant)),
-        ({ token, expiresAt }) => ({ token: Redacted.make(token), expiresAt: new Date(expiresAt) }),
-      ),
+    installationToken: (grant, { minimumLifetime } = {}) =>
+      Effect.gen(function* () {
+        const cached = yield* called(identities.app, () => minted(appOctokit, grant));
+        const now = yield* Clock.currentTimeMillis;
+        const least = minimumLifetime === undefined ? 0 : Duration.toMillis(minimumLifetime);
+
+        // Note that a token with too little time left is minted afresh, which replaces it in the cache `asInstallation` signs from.
+        const token =
+          Date.parse(cached.expiresAt) - now >= least
+            ? cached
+            : yield* called(identities.app, () => minted(appOctokit, grant, true));
+
+        return { token: Redacted.make(token.token), expiresAt: new Date(token.expiresAt) };
+      }),
     asMember: (token) => {
       const digest = createHash("sha256").update(Redacted.value(token)).digest("hex");
       const state = memberIdentity(identities, digest);
@@ -663,10 +672,12 @@ export class GitHub extends Context.Service<
     /**
      * A token for the grant to hand outside the module: the one `asInstallation`
      * signs with, reused while it has time left, else minted as the App under
-     * the App's hold and throttle.
+     * the App's hold and throttle; one with less than `minimumLifetime` left
+     * is minted afresh.
      */
     readonly installationToken: (
       grant: InstallationGrant,
+      options?: { readonly minimumLifetime?: Duration.Duration },
     ) => Effect.Effect<InstallationToken, GitHubFailure>;
   }
 >()("@repo/github/GitHub") {
