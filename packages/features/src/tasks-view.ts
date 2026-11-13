@@ -775,6 +775,11 @@ export const tasksSearchParamsSchema = EffectSchema.Struct({
   query: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(TASK_SEARCH_QUERY_MAX_CHARS)),
 });
 
+/** A task the window names that its list holds not, which it asks the host to read into the list: the task's id. */
+export const tasksReadOutsideParamsSchema = EffectSchema.Struct({
+  taskId: EffectSchema.NonEmptyString,
+});
+
 /** Where a page of a workspace's settled tasks ends, which the next page reads past (`SettledPageCursor`). */
 const settledPageCursorSchema = EffectSchema.Struct({
   finishedAt: EffectSchema.Finite,

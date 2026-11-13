@@ -585,6 +585,8 @@ export const TASKS_ACT_KIND = {
   TASKS_FIND: "tasks.find",
   /** The tasks a search's words find on the service, read into the task list as cold tasks where it holds them not, so the window's own search finds them; answered once asked, never on the document. */
   TASKS_SEARCH: "tasks.search",
+  /** A task a chip or a picker names that the task list holds not, read from the service into it as a cold task (`TasksComposer.openedOutside`); answered once asked, never on the document. */
+  TASKS_READ_OUTSIDE: "tasks.readOutside",
   /** A page of a workspace's settled tasks, the newest finished first, read from the service into the task list as cold tasks (`task-list-collections.ts`); the cursor the next page reads past is answered to the list that asked, never on the document. */
   TASKS_SETTLED_PAGE: "tasks.settledPage",
   /** A page of a description's history, read from the service and answered to the view; an older page is laid on the task's held history too (`LIVE_READ.HISTORY`) where it is held. */
@@ -1229,6 +1231,7 @@ export const PORT_ACT_USE = {
   TASKS_COLOR_CODE: ACT_USE.FETCH,
   TASKS_FIND: ACT_USE.FETCH,
   TASKS_SEARCH: ACT_USE.FETCH,
+  TASKS_READ_OUTSIDE: ACT_USE.FETCH,
   TASKS_SETTLED_PAGE: ACT_USE.FETCH,
   TASKS_REVISIONS: ACT_USE.FETCH,
   TASKS_REVISION: ACT_USE.FETCH,

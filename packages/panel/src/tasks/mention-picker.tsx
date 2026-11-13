@@ -100,8 +100,8 @@ import {
 import { useCreateStore, useSelector } from "@tanstack/react-store";
 import { Duration, Effect, Predicate } from "effect";
 import { UsersIcon } from "lucide-react";
-import { type RefObject, useEffect, useId, useMemo, useState } from "react";
-import { askAct } from "../act.js";
+import { type RefObject, useEffect, useId, useMemo, useRef, useState } from "react";
+import { askAct, tellAct } from "../act.js";
 import { ACTOR_SIZE, ActorMark, AutomationCard, actorCard, automationActor } from "../actor-ref.js";
 import {
   type ComposerTrigger,
@@ -147,6 +147,7 @@ import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
 import { TaskKey } from "./task-standing.js";
 import { useKnownNames } from "./use-known-names.js";
+import { useServiceTaskSearch } from "./use-service-task-search.js";
 import { MachineGlyph, MachineOwnerFace, useWorkspaceMachines } from "./workspace-machines.js";
 
 /**
@@ -793,6 +794,17 @@ function threadRow(place: InboxItemPlace, item: InboxItem, holder: string): Ment
     terms: `${item.title} ${holder}`,
     card: <InboxItemChipCard place={place} fallback={null} />,
   };
+}
+
+/** The ids of the tasks the feed holds threads of that the window lists not. */
+function unlistedThreadTasks(
+  feed: AppInboxItems | undefined,
+  tasks: readonly TaskSummary[],
+): readonly string[] {
+  if (feed === undefined) return [];
+  const listed = new Set(tasks.map((task) => task.id));
+
+  return Object.keys(feed[INBOX_SCOPE_KIND.PLAN]).filter((planId) => !listed.has(planId));
 }
 
 /**
@@ -2108,6 +2120,17 @@ export function useMentionPicker({
     ? threadRows(feed.data, taskId, tasksWorkspace, listed.tasks)
     : [];
 
+  // Note that a thread of a task the window lists not is offered once the task is read into its list, each asked once while the list stands open.
+  const threadTasksOutside = threadsAsked ? unlistedThreadTasks(feed.data, listed.tasks) : [];
+  const threadTasksAsked = useRef(new Set<string>());
+  useEffect(() => {
+    for (const outside of threadTasksOutside) {
+      if (threadTasksAsked.current.has(outside)) continue;
+      threadTasksAsked.current.add(outside);
+      tellAct(ACT_KIND.TASKS_READ_OUTSIDE, { taskId: outside });
+    }
+  });
+
   // The automations offered are the workspace's, followed only while the list stands open.
   const automationsAsked = open && tasksWorkspace !== undefined;
   const automations = useAutomations(automationsAsked ? tasksWorkspace.id : undefined);
@@ -2174,6 +2197,14 @@ export function useMentionPicker({
 
   const scope = open ? scopeOf(trigger, narrowing, kinds) : undefined;
   const term = scope?.term ?? "";
+
+  // Note that the workspace's tasks the window lists not are asked of the service as the typing pauses, as ⌘K asks them, and join the list the task rows above are built from, one row each.
+  const tasksSought =
+    open &&
+    tasksWorkspace !== undefined &&
+    (scope?.kind === undefined || scope.kind.narrow.from === MENTION_FROM.TASKS);
+
+  useServiceTaskSearch(term, tasksSought);
 
   // The workspace's newest agents are read as each `@` word opens the list, and once a word is
   // typed and the typing rests the service finds those it names, archived ones among them, however many the workspace

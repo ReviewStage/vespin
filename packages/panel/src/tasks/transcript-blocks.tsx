@@ -204,8 +204,8 @@ import {
   TRANSCRIPT_CODE_AND_TABLE_COMPONENTS,
   TranscriptMarkdownSource,
 } from "./transcript-markdown.js";
-import { useWordTargets } from "./use-known-names.js";
 import { opensAsLink, useOpenLink } from "./use-open-link.js";
+import { useKeyTarget } from "./use-task-outside.js";
 import type { CutBody } from "./whole-parts.js";
 import { WorkingTime } from "./working-time.js";
 
@@ -710,8 +710,9 @@ function MentionElement({
 
 /**
  * A task's key written in a transcript's words: its task's chip where the
- * window lists a task by it (`useWordTargets`), as a link to the task is
- * drawn (`MentionElement`), and the key as written where it lists none. It
+ * window lists a task by it, or once the service found one it lists not
+ * (`useKeyTarget`), as a link to the task is drawn (`MentionElement`), and
+ * the key as written where it lists none. It
  * is read as it is drawn, so the chip follows the tasks as they are listed
  * while the words around it stand.
  */
@@ -721,7 +722,7 @@ function TaskKeyElement({
 }: MarkdownNodeProps & { children?: ReactNode }): ReactNode {
   const doors = useMentionDoors();
   const key = String(node?.properties[TASK_KEY_ELEMENT.KEY] ?? "");
-  const target = useWordTargets().get(key);
+  const target = useKeyTarget(key);
 
   return (target === undefined ? undefined : linkChip(target, key, doors)) ?? children;
 }
