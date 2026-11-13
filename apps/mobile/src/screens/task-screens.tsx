@@ -51,6 +51,7 @@ import {
   taskTreeCollections,
 } from "@repo/features/task-tree-model";
 import {
+  TASK_PRIORITY,
   TASK_PRIORITY_ORDER,
   TASK_RELATION_KIND,
   TASK_STATUS,
@@ -566,6 +567,7 @@ export function TaskListRow({
       id={task.id}
       name={task.name}
       status={task.status ?? TASK_STATUS.TODO}
+      priority={task.priority ?? TASK_PRIORITY.NONE}
       unread={look.unread}
       finished={taskFinished(task)}
       needsYou={look.needsYou}
