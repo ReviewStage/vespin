@@ -23,14 +23,16 @@ import { GLYPH } from "@repo/ui/icons";
 import { ReplayWords } from "@repo/ui/session-replay-marks";
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import type { UnparsedWireValue } from "@repo/wire";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { type ReactNode, useContext, useRef, useState } from "react";
 import { type ActResult, askAct, toastActFailure } from "../act.js";
 import { sendMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorMark, ActorRef } from "../actor-ref.js";
+import { workspaceToolsQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { showToast } from "../toast.js";
+import { MachineGlyph } from "./agent-machines.js";
 import { TranscriptAgent } from "./line-cards.js";
 
 /**
@@ -42,7 +44,9 @@ import { TranscriptAgent } from "./line-cards.js";
  * (`others`), beside the words the model reads (`machineRefusalOf`). The
  * card says why in its own words, as a failure note does (`Banner`'s
  * card, its mark in the danger ink), and offers each other machine by name,
- * a teammate's wearing its owner's face. A press makes that machine the
+ * wearing its glyph and the dot of whether it listens now, as the Default
+ * machine row draws it, and a teammate's its owner's face; a machine the
+ * agent's tools no longer list keeps the dot it had when it was offered. A press makes that machine the
  * agent's default, through the same request the Default machine row sends
  * (`agent-machines.tsx`), then tells the agent to try again there, as a
  * member's own message does, naming the machine's id so the agent may name
@@ -182,6 +186,8 @@ export function MachineRefusalCard({
   // The machine pressed, and whether its default moved and the agent was told; none before a press, or after one refused.
   const [pressed, setPressed] = useState<{ id: string; moved: boolean } | undefined>(undefined);
   const press = useAsyncAction(rejectionWords);
+  // Note that a machine's dot is read live, since a card may be read long after the refusal that offered it.
+  const listing = useQuery(workspaceToolsQuery(agentId)).data?.machines;
 
   const { mutateAsync: sendMessage } = useMutation(
     sendMutation(ACT_KIND.AGENTS_MESSAGE, () => SENTRY_SEND_SPAN.AGENT_SEND),
@@ -228,14 +234,9 @@ export function MachineRefusalCard({
             key={machine.id}
             variant={BUTTON_VARIANT.OUTLINE}
             icon={
-              machine.owner.userId === readerId ? (
-                <GLYPH.DESKTOP aria-hidden="true" />
-              ) : (
-                <ActorMark
-                  actor={personActor(machine.owner, members, readerId, former)}
-                  size={ACTOR_SIZE.INLINE}
-                />
-              )
+              <MachineGlyph
+                online={listing?.find((listed) => listed.id === machine.id)?.online ?? true}
+              />
             }
             {...(pressed?.id === machine.id && !pressed.moved
               ? { busy: true, busyLabel: MACHINE_REFUSAL_WORDS.USING }
@@ -244,6 +245,14 @@ export function MachineRefusalCard({
             onClick={() => use(machine)}
           >
             {MACHINE_REFUSAL_WORDS.USE}{" "}
+            {machine.owner.userId === readerId ? null : (
+              <>
+                <ActorMark
+                  actor={personActor(machine.owner, members, readerId, former)}
+                  size={ACTOR_SIZE.INLINE}
+                />{" "}
+              </>
+            )}
             <ReplayWords masked>
               {machineName({ deviceId: machine.id, name: machine.name }, listed, thisMac)}
             </ReplayWords>
