@@ -1,2 +1,5 @@
 #9022 at 49f1b3840, R1 bundle 77ed6fd8c (main 32a4961f0 + R1), iPhone 18 Pro, JS on Nov 12's app; 26.5 not run (memory); iPad 27.2 lane to follow where listed, r9022.yaml light and dark, 0 failed steps.
 PASS (iPhone): the long thread "Recorded the invite flow" opens at its foot (the test plan PDF and Got it in view, Reply below); Reply's keyboard keeps the last message in view; the short thread "Invite limits" opens at its heading with its answer card. iPad 27.2 lane follows.
+
+Landscape 27.2 iPad, light and dark, r9022.yaml on the round 1 bundle, 0 failed steps:
+PASS. The long thread "Recorded the invite flow" opens in the detail column at its foot, with the test plan PDF and Got it in view over Reply. Reply's keyboard keeps the last message in view. The short thread "Invite limits" opens at its heading with its answer card under it.
