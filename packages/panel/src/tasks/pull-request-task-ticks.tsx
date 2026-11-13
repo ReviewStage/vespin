@@ -14,7 +14,7 @@
  * words to, so a tick on words changed since never lands on another item.
  * Outside a tab, where the read named no id for what they are on, or where
  * GitHub says the member may not edit the words, the boxes stand read-only,
- * as GitHub greys them out.
+ * as GitHub grays them out.
  */
 
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
@@ -66,7 +66,7 @@ export interface TaskTicks {
  * How the words on what `subject` names draw their task items' boxes, and
  * what the last tick left to say under them; boxes the member cannot tick
  * outside a tab, without a subject, or where GitHub says they may not edit
- * the words (`editable` false), as GitHub greys a box out for them. Where
+ * the words (`editable` false), as GitHub grays a box out for them. Where
  * that is not known the boxes stand tickable, and GitHub's refusal, if
  * any, says why under the words.
  */
