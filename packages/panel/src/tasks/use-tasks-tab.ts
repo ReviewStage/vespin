@@ -106,6 +106,7 @@ import { ROUTED_PLACE, type RoutedPlace } from "../places/routed-places.js";
 import { type LinkStep, type TaskAt, taskAtOf, taskOfAt } from "../places/task-step.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { useSteadyDoor, useSteadyDoors } from "../steady-door.js";
+import { useTaskListCollections, useTaskListRow } from "../task-list-collections.js";
 import type { TaskRoute } from "../task-route.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
@@ -1125,14 +1126,16 @@ export function useTasksTab(input: {
   );
 
   // A fixture's task lists its agents at the act door: none, but where an agent profile stages one (`tasks-fixture.ts`).
+  // The open task as the list carries it, looked up by its id alone; its agents are followed only where the list carries it.
+  const listCollections = useTaskListCollections();
+  const openListed = useTaskListRow(listCollections.tasks, viewed.activeTaskId);
+
   const agents = useAgents({
     taskId: viewed.activeTaskId,
     repository:
       openDocument?.id === viewed.activeTaskId ? (openDocument?.repository ?? null) : null,
-    listedAgents: tasks.tasks.some((task) => task.id === viewed.activeTaskId)
-      ? liveAgents
-      : undefined,
-    listedPullRequests: tasks.agentPullRequests,
+    agentsFollowed: liveAgents !== undefined && openListed !== undefined,
+    staged: fixture,
     onOpenIntegrations: input.onOpenIntegrations,
     onOpenApiKeys: input.onOpenApiKeys,
     me: input.accountId,
@@ -1460,7 +1463,9 @@ export function useTasksTab(input: {
     tellShown({ agentId: shownAgent });
   }, [shownAgent, tellShown]);
   // The agent on screen is kept warm for the next message while the page is visible.
-  useWarmAgent((liveAgents ?? agents.agents)?.find((agent) => agent.id === shownAgent));
+  // Note that it is looked up by its id alone, so a delivery that moves another agent walks no list here.
+  const shownListed = useTaskListRow(listCollections.agents, shownAgent ?? undefined);
+  useWarmAgent(shownListed ?? agents.agents?.find((agent) => agent.id === shownAgent));
 
   // The host answers a press a round trip later, so where the tab is bound
   // is said at once, and a select that did not open the task takes its ask
@@ -3450,7 +3455,7 @@ export function useTasksTab(input: {
   };
 
   // Note that the tab is handed back steady, so a part that holds while its share of the tab does (`memo`) holds for every draw that moved nothing it reads.
-  return useSteadyDoors({
+  const steady = useSteadyDoors<Omit<TasksControl, "liveAgents" | "listedPullRequests">>({
     page,
     shown,
     signedIn,
@@ -3649,9 +3654,18 @@ export function useTasksTab(input: {
     taskPlaceStands: input.place === undefined || input.place.binding === PLACE_BINDING.TASK,
     drawnTasks: drawnNow,
     onDraftName: draftName,
-    liveAgents,
-    listedPullRequests: tasks.agentPullRequests,
     back: escapeTask,
     placeLeave,
   });
+
+  const listedPullRequests = tasks.agentPullRequests;
+
+  // Note that the list's own rows are handed on past the steadying, as the
+  // document keeps them, since it already keeps a list's identity while no
+  // row of it moves, and a steady copy of every row is a place kept for each
+  // of thousands.
+  return useMemo(
+    () => ({ ...steady, liveAgents, listedPullRequests }),
+    [steady, liveAgents, listedPullRequests],
+  );
 }
