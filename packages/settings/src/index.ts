@@ -50,6 +50,7 @@ export {
   experimentsIn,
   isExperiment,
   isWorkspaceExperiment,
+  LISTED_EXPERIMENTS,
   NO_EXPERIMENTS,
   NO_WORKSPACE_EXPERIMENTS,
   WORKSPACE_EXPERIMENT_LIST,
