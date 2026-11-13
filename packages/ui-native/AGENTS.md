@@ -33,7 +33,10 @@ builds a control of its own.
   for its checks and reviewers, `WriteNoteRow`, `MergeActRow` for its
   merge under the checks in a regular window), `ConfirmAsk` (the system's
   alert an act asks first in), `AuthPage` and `ProviderButton`, `SettingsForm` and its
-  rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a sheet that starts work,
+  rows, with `WordsField`, `AttachRow`, and `MenuPickRow` for a form's words,
+  pictures and choices, `ComposeSheet` for a sheet that starts work (its
+  words filling the page, and the + and `MenuChip` capsule menus in glass
+  over the keyboard),
   `SwitchRow` and `HintPickRows` (a choice among a few, what each does under
   its name) for an agent's options, `RenameAsk` (the system's alert a name is
   typed in),
