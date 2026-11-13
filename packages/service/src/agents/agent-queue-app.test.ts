@@ -11,6 +11,7 @@ import {
 } from "@repo/database/models/agent-queue-store";
 import { readAgent } from "@repo/database/models/agent-store";
 import { sentLineStands } from "@repo/database/models/message-reads";
+import { listTaskFollowers, unfollowTask } from "@repo/database/models/task-follower-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { getTestDB, joinWorkspace } from "@repo/database/testing";
@@ -1226,6 +1227,38 @@ it.layer(SUITE)("an agent's queue", (it) => {
         });
 
         assert.equal(refused.status, HOSTED_HTTP_STATUS.FORBIDDEN);
+      }),
+  );
+
+  it.effect(
+    "a teammate who unfollows the task after queueing a message stays unfollowed when that message is queued again under its id",
+    () =>
+      Effect.gen(function* () {
+        const opened = yield* messagedAgent(fakeAgentSessions(), { running: true });
+        yield* joinWorkspace(opened.task.workspaceId, opened.other);
+        const { agent, ask, owner, other, task } = opened;
+        const add = { change: QUEUE_CHANGE.ADD, text: "Also the docs.", id: randomUUID() };
+
+        /** The teammate's add, as their browser sends it and sends it again. */
+        const teammateAdds = () =>
+          ask(
+            request(AGENT_QUEUE, undefined, {
+              method: "POST",
+              id: agent.id,
+              cookie: sessionCookieOf(other),
+              body: add,
+            }),
+          );
+
+        assert.equal((yield* teammateAdds()).status, HOSTED_HTTP_STATUS.OK);
+        yield* unfollowTask(other, task.id);
+        assert.equal((yield* teammateAdds()).status, HOSTED_HTTP_STATUS.OK);
+        const followers = Option.getOrThrow(yield* listTaskFollowers(owner, task.id));
+
+        assert.deepEqual(
+          followers.map((follower) => follower.userId),
+          [owner],
+        );
       }),
   );
 
