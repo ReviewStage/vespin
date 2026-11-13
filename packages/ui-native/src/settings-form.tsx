@@ -21,6 +21,7 @@ import {
   accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
+  alignmentGuide,
   background,
   disabled,
   font,
@@ -512,7 +513,8 @@ export function ActionRow({
       <HStack spacing={SPACE.ROW} alignment="firstTextBaseline">
         {symbol === undefined ? null : <GlyphImage glyph={symbol} />}
         <VStack alignment="leading" spacing={1}>
-          <Text>{label}</Text>
+          {/* Note that the separator starts at the words, not the glyph, as a `Label`'s does. */}
+          <Text modifiers={[alignmentGuide("listRowSeparatorLeading", 0)]}>{label}</Text>
           {detail === undefined ? null : (
             <Text
               modifiers={[
