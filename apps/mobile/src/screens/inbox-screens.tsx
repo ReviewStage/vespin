@@ -108,14 +108,7 @@ import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, useListColumn } from "./app-sidebar.js";
 import { useDetailStackColumn } from "./detail-stack-column.js";
-import {
-  NO_THREAD_ACTS,
-  OpenAskCard,
-  openAskFiles,
-  ThreadComposer,
-  threadActs,
-  threadMenu,
-} from "./inbox-ask.js";
+import { OpenAskCard, openAskFiles, ThreadComposer, threadActs, threadMenu } from "./inbox-ask.js";
 import { REMIND_ME, useRemindSheet } from "./inbox-remind.js";
 
 /** The Inbox's name, at its head and on its back button. */
@@ -1092,18 +1085,13 @@ function InboxSplitScreen({
       <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
     );
 
-  // Note that with no thread picked the detail's bar keeps the thread's acts, dimmed, as Mail's bar stands over No Message Selected; a picked thread's page stands its own.
-  const detailBar = selected === undefined ? { acts: NO_THREAD_ACTS } : undefined;
-
   const first = useListColumn(list);
   useStackRoot(SIDEBAR_PLACE.INBOX, selected);
   // Note that a two-column window stands the detail's own stack too, as Mail opens a message's related pages beside its list in portrait.
   const stack = useDetailStackColumn(SIDEBAR_PLACE.INBOX, { id: selected }, true);
   useHandColumns(
     SIDEBAR_PLACE.INBOX,
-    threeColumns
-      ? { content: list.view, contentBar: list.bar, detail, detailBar, root: selected }
-      : undefined,
+    threeColumns ? { content: list.view, contentBar: list.bar, detail, root: selected } : undefined,
   );
 
   return (
@@ -1111,12 +1099,7 @@ function InboxSplitScreen({
       <Stack.Screen options={threeColumns ? UNDER_SPLIT_SCREEN : { headerShown: false }} />
       {threeColumns ? null : (
         <Screen>
-          <SplitView
-            {...first}
-            detail={stack.wrap(detail)}
-            detailBar={detailBar}
-            detailStack={stack.detailStack}
-          />
+          <SplitView {...first} detail={stack.wrap(detail)} detailStack={stack.detailStack} />
         </Screen>
       )}
       {remind.sheet}
