@@ -1176,8 +1176,8 @@ a connector without a `redirectUri` of its own replays, and
 `"client_uri":"https://vespin.dev"`, the logo the client metadata documents
 Connect publishes for its own clients carry, so a consent page that draws a
 client's logo draws ours rather than a placeholder. PostHog's and Executor's
-registrations keep it; Granola's and Neon's drop it, and Supabase's answers
-without saying. No provider here lets a registered client be changed, so
+registrations keep it; Granola's, Neon's, and Supabase's drop it, and
+Supabase's consent page draws its own mark instead. No provider here lets a registered client be changed, so
 giving one a logo means a new client and the connector PATCHed to it, and
 every member who connected it signs in again, since a refresh token answers
 only the client it was issued to. Each registration is written under
