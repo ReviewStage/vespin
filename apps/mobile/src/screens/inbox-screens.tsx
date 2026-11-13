@@ -906,7 +906,7 @@ function InboxStackList(words: InboxSearch) {
 
   const field = useRefilledSearchField(search);
 
-  // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does.
+  // Note that Select mode names how many are chosen in the title's place, stands Done where ⋯ stood, and its acts in a bar at the foot, the tab bar stepping aside for it (`useInboxChoosingOn`), as Photos does. Done is the bar's plain word, as Mail's is, since ending a selection commits nothing.
   return (
     <>
       <Stack.Screen options={{ title: choosing?.title ?? INBOX_TITLE }}>
@@ -924,7 +924,7 @@ function InboxStackList(words: InboxSearch) {
       {choosing !== undefined ? null : <SettingsBarButton switcher={switcher} />}
       <Stack.Toolbar placement="right">
         {choosing !== undefined ? (
-          <Stack.Toolbar.Button variant="done" onPress={choosing.done.onPress}>
+          <Stack.Toolbar.Button variant="plain" onPress={choosing.done.onPress}>
             {choosing.done.label}
           </Stack.Toolbar.Button>
         ) : (
