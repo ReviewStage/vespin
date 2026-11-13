@@ -192,8 +192,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   words. An Inbox thread stands roomier, as Mail's message rows do
   (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
   its lines), while a task's row keeps the list's tighter inset.
-- **Group headers** (`ListSection`) are small and muted with a count; a
-  `foldable` one folds in place on a press, its chevron on the left.
+- **Group headers** (`ListSection`) are small and muted with a count, or
+  finished of all as `2/5` (`progress`); a `foldable` one folds in place on
+  a press, its chevron on the left; and one given `add` ends in a muted +,
+  one act or the system's menu of several, as Reminders' groups add, so an
+  empty section stands as its header alone rather than a list of add rows.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
   you and what you chose, as the panel draws it: the unread dot, an ask's
   glyph, a count of what needs you, a reminder's time, the selected tab and
