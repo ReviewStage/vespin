@@ -151,7 +151,10 @@ export default function AgentsScreen() {
     void write
       .run(() => acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined))
       .then((landed) => {
-        if (!landed) setDefaultRound((round) => round + 1);
+        if (landed) return;
+        // Note that the refusal that lands last owns the group's footer, whichever write began last.
+        setWritten(undefined);
+        setDefaultRound((round) => round + 1);
       });
   };
 
@@ -167,7 +170,9 @@ export default function AgentsScreen() {
     void setting
       .run(() => acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(() => undefined))
       .then((landed) => {
-        if (!landed) setSettingRound((round) => round + 1);
+        if (landed) return;
+        setWritten(field);
+        setSettingRound((round) => round + 1);
       });
   };
 
