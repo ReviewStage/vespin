@@ -21,6 +21,7 @@ import {
   accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
+  alignmentGuide,
   background,
   disabled,
   font,
@@ -36,7 +37,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent } from "./glyph-label.js";
+import { actContent, GlyphImage } from "./glyph-label.js";
 import { Avatar } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -492,13 +493,16 @@ export function ActionRow({
   const colors = useColors();
   const role = destructive ? "destructive" : "default";
 
+  const modifiers = [
+    listRowBackground(colors.RAISED),
+    disabled(off),
+    accessibilityLabel(heard),
+    ...(detail === undefined ? [] : [accessibilityValue(detail)]),
+  ];
+
   if (centered) {
     return (
-      <SwiftUIButton
-        role={role}
-        onPress={onPress}
-        modifiers={[accessibilityLabel(heard), listRowBackground(colors.RAISED), disabled(off)]}
-      >
+      <SwiftUIButton role={role} onPress={onPress} modifiers={modifiers}>
         <Text modifiers={[frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "center" })]}>
           {label}
         </Text>
@@ -506,40 +510,28 @@ export function ActionRow({
     );
   }
 
-  if (detail === undefined) {
-    return (
-      <SwiftUIButton
-        {...actContent(label, symbol)}
-        role={role}
-        onPress={onPress}
-        modifiers={[accessibilityLabel(heard), listRowBackground(colors.RAISED), disabled(off)]}
-      />
-    );
+  if (symbol === undefined && detail === undefined) {
+    return <SwiftUIButton label={label} role={role} onPress={onPress} modifiers={modifiers} />;
   }
 
+  // Note that the glyph and the words stand in a stack of our own rather than SwiftUI's `Label`, because a form's button draws a `Label` as one run of text, so its words, wrapped at a large text size, ran on under the glyph.
   return (
-    <SwiftUIButton
-      role={role}
-      onPress={onPress}
-      modifiers={[
-        listRowBackground(colors.RAISED),
-        disabled(off),
-        accessibilityLabel(heard),
-        accessibilityValue(detail),
-      ]}
-    >
-      <HStack spacing={SPACE.ROW}>
-        {symbol === undefined ? null : <Image {...glyphImage(symbol)} />}
+    <SwiftUIButton role={role} onPress={onPress} modifiers={modifiers}>
+      <HStack spacing={SPACE.ROW} alignment="firstTextBaseline">
+        {symbol === undefined ? null : <GlyphImage glyph={symbol} />}
         <VStack alignment="leading" spacing={1}>
-          <Text>{label}</Text>
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE }),
-              foregroundStyle(colors.TEXT_MUTED),
-            ]}
-          >
-            {detail}
-          </Text>
+          {/* Note that the separator starts at the words, not the glyph, as a `Label`'s does. */}
+          <Text modifiers={[alignmentGuide("listRowSeparatorLeading", 0)]}>{label}</Text>
+          {detail === undefined ? null : (
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+              ]}
+            >
+              {detail}
+            </Text>
+          )}
         </VStack>
       </HStack>
     </SwiftUIButton>
