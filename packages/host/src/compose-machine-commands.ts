@@ -185,6 +185,17 @@ const DESCRIBE_WITHIN = Duration.seconds(10);
 /** How long the helper has to put the agent's cursor away, behind any action it is still on. */
 const RELEASE_WITHIN = Duration.seconds(10);
 
+/** Why a release is let go as its turn comes: another agent's action took the cursor meanwhile. */
+const CURSOR_TAKEN_WORDS = "another agent took the cursor.";
+
+/** The actions that never move the agent's cursor, so never hand it to the agent asking. */
+const STILL_CURSOR: ReadonlySet<string> = new Set([
+  COMPUTER_ACTION.GET_APP_STATE,
+  COMPUTER_ACTION.LIST_APPS,
+  COMPUTER_ACTION.RECORD,
+  COMPUTER_ACTION.STOP_RECORDING,
+]);
+
 /** The service's side of the commands, as this concern asks it. */
 export type MachineCommandClient = Pick<
   HostedMachineCommandClient,
@@ -899,6 +910,9 @@ export function composeMachineCommands(
           return stops && !owns() ? NOT_OWNER_WORDS : undefined;
         });
 
+        // Note that the cursor is the agent's from the moment its action is handed to the helper, since the action may move it though it then fails.
+        if (!STILL_CURSOR.has(action.op)) yield* heldBy({ userId, agentId: command.agentId });
+
         const answer = yield* computer.helper.ask(request, Duration.millis(left), stillLet);
 
         if ("recording" in answer)
@@ -913,8 +927,6 @@ export function composeMachineCommands(
         }
 
         yield* settled(command.id, sendable(computerResult(answer, app)));
-
-        if ("outcome" in answer) yield* heldBy({ userId, agentId: command.agentId });
       });
 
     /**
@@ -925,12 +937,12 @@ export function composeMachineCommands(
      */
     const heldBy = (holder: CursorHolder) =>
       Effect.gen(function* () {
-        const kept =
-          cursorHolder?.userId === holder.userId && cursorHolder.agentId === holder.agentId;
-
+        // Note that an agent already holding the cursor keeps its holder, whose watch puts the cursor away by that very holder.
+        if (cursorHolder?.userId === holder.userId && cursorHolder.agentId === holder.agentId)
+          return;
         cursorHolder = holder;
 
-        if (kept || cursorWatch === undefined) return;
+        if (cursorWatch === undefined) return;
         const { turnEnded } = dependencies;
 
         // Note that a conversation that is no agent's, or a Mac that cannot watch turns, leaves the cursor to the helper's own clock.
@@ -950,8 +962,13 @@ export function composeMachineCommands(
         if (cursorHolder !== holder || computer === undefined) return;
         cursorHolder = undefined;
 
+        // Note that another agent's action may take the cursor while the release waits its turn at the helper, so it is refused then rather than hiding that agent's cursor.
+        const free = Effect.sync(() =>
+          cursorHolder === undefined ? undefined : CURSOR_TAKEN_WORDS,
+        );
+
         yield* Effect.ignore(
-          computer.helper.ask({ op: COMPUTER_HELPER_OP.RELEASE_CURSOR }, RELEASE_WITHIN),
+          computer.helper.ask({ op: COMPUTER_HELPER_OP.RELEASE_CURSOR }, RELEASE_WITHIN, free),
         );
       });
 

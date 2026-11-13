@@ -1721,13 +1721,15 @@ it.effect(
 );
 
 it.effect(
-  "the agent's cursor is put away as the turn of the agent whose action moved it last ends, and never as the turn of an agent it was taken from ends",
+  "the agent's cursor is put away as the turn of the agent whose actions moved it last ends, and never as the turn of an agent it was taken from ends",
   () =>
     Effect.gen(function* () {
       const scripted = scriptedHelper([SIMULATOR]);
       const service = scriptedService();
       service.queue(computerCommand(COMMAND.id, AGENT, "Simulator", AGENT), NOW);
       service.queue(computerCommand(SECOND.id, OTHER_AGENT, "Simulator", OTHER_AGENT), NOW);
+      // The second agent acts twice, so its watch outlives an action of its own.
+      service.queue(computerCommand(THIRD_ID, OTHER_AGENT, "Simulator", OTHER_AGENT), NOW);
       const firstEnded = yield* Deferred.make<void>();
       const secondEnded = yield* Deferred.make<void>();
 
@@ -1753,7 +1755,7 @@ it.effect(
         Effect.gen(function* () {
           yield* composer.lifetime;
           yield* settled;
-          assert.equal(service.settledResults.size, 2, "both actions ran");
+          assert.equal(service.settledResults.size, 3, "every action ran");
 
           // The first agent's turn ends after the second took the cursor over.
           yield* Deferred.succeed(firstEnded, undefined);
