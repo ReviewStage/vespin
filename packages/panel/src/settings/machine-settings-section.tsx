@@ -17,7 +17,16 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { ACT_UNREACHED_WORDS } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT, MACHINE_COMMAND_MODE_LABEL } from "@repo/settings";
-import { CONFIRM_LOSS, ConfirmDialog, SETTINGS_ROW_INDENT, useConfirmDialog } from "@repo/ui";
+import {
+  CONFIRM_LOSS,
+  ComputerUseIcon,
+  ConfirmDialog,
+  SETTINGS_ROW_INDENT,
+  SettingsRowMark,
+  SettingsRowsFold,
+  TerminalIcon,
+  useConfirmDialog,
+} from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -167,6 +176,11 @@ export function MachineAgentRows({
     <>
       <SelectRow
         indent={SETTINGS_ROW_INDENT.MARK}
+        leading={
+          <SettingsRowMark>
+            <TerminalIcon />
+          </SettingsRowMark>
+        }
         label={MACHINE_SETTINGS_WORDS.COMMANDS}
         labelReplayUnmasked
         value={settings.commandMode}
@@ -179,28 +193,45 @@ export function MachineAgentRows({
         })}
       />
       {apps === undefined ? null : (
-        <>
-          <SwitchRow
-            indent={SETTINGS_ROW_INDENT.MARK}
-            label={MACHINE_SETTINGS_WORDS.APPS}
-            labelReplayUnmasked
-            checked={appsOn}
-            write={rowWrite(appsSwitch, {
-              ask: (computerUse: boolean): MachineChangeParams => ({ id, computerUse }),
-              refused: changeRefused,
-              drawn: (asked) => asked.computerUse ?? appsOn,
-            })}
-          />
-          {appsOn ? (
-            <AllowedAppList
+        <SettingsRowsFold
+          room={false}
+          label={MACHINE_SETTINGS_WORDS.ALLOWED_APPS}
+          rows={
+            appsOn && settings.alwaysAllowedApps.length > 0 ? (
+              <AllowedAppList
+                indent={SETTINGS_ROW_INDENT.MARK_TWICE}
+                apps={settings.alwaysAllowedApps.map(
+                  (bundleId) => apps.get(bundleId) ?? { bundleId, name: bundleId },
+                )}
+                onRemove={removeApp}
+              />
+            ) : undefined
+          }
+          head={(chevron) => (
+            <SwitchRow
               indent={SETTINGS_ROW_INDENT.MARK}
-              apps={settings.alwaysAllowedApps.map(
-                (bundleId) => apps.get(bundleId) ?? { bundleId, name: bundleId },
-              )}
-              onRemove={removeApp}
+              leading={
+                <SettingsRowMark>
+                  <ComputerUseIcon />
+                </SettingsRowMark>
+              }
+              label={MACHINE_SETTINGS_WORDS.APPS}
+              labelReplayUnmasked
+              detail={
+                appsOn && settings.alwaysAllowedApps.length > 0
+                  ? MACHINE_SETTINGS_WORDS.appsAllowed(settings.alwaysAllowedApps.length)
+                  : undefined
+              }
+              checked={appsOn}
+              after={chevron}
+              write={rowWrite(appsSwitch, {
+                ask: (computerUse: boolean): MachineChangeParams => ({ id, computerUse }),
+                refused: changeRefused,
+                drawn: (asked) => asked.computerUse ?? appsOn,
+              })}
             />
-          ) : null}
-        </>
+          )}
+        />
       )}
     </>
   );

@@ -32,6 +32,8 @@ export function SwitchRow({
   locked,
   density,
   indent,
+  leading,
+  after,
   write,
   onChange,
 }: RowChange<boolean> & {
@@ -51,6 +53,10 @@ export function SwitchRow({
   density?: SettingsRowDensity | undefined;
   /** Whether the row stands inset under the row above, one of its things. */
   indent?: SettingsRowIndent | undefined;
+  /** The glyph the row leads with, where what it sets has one. */
+  leading?: React.ReactNode;
+  /** What stands after the switch: the chevron of the rows it folds open. */
+  after?: React.ReactNode;
 }): React.JSX.Element {
   const ahead = write?.ahead;
   const agreed = write !== undefined && !write.busy && ahead?.value === checked;
@@ -67,20 +73,24 @@ export function SwitchRow({
       description={detail}
       density={density}
       indent={indent}
+      leading={leading}
       labelsControl
     >
       {(control) => (
-        <Switch
-          id={control.controlId}
-          {...(anchor === undefined ? undefined : searchAnchorProps(anchor))}
-          checked={ahead === undefined ? checked : ahead.value}
-          label={label}
-          describedBy={control["aria-describedby"]}
-          aria-invalid={control["aria-invalid"]}
-          disabled={disabled}
-          locked={locked}
-          onChange={(next) => run(next)}
-        />
+        <>
+          <Switch
+            id={control.controlId}
+            {...(anchor === undefined ? undefined : searchAnchorProps(anchor))}
+            checked={ahead === undefined ? checked : ahead.value}
+            label={label}
+            describedBy={control["aria-describedby"]}
+            aria-invalid={control["aria-invalid"]}
+            disabled={disabled}
+            locked={locked}
+            onChange={(next) => run(next)}
+          />
+          {after}
+        </>
       )}
     </SettingsRow>
   );

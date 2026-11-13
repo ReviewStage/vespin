@@ -37,6 +37,8 @@ export const MACHINE_SETTINGS_WORDS = {
   NONE: `No machine has joined yet. Sign in to ${PRODUCT_NAME} on a Mac to add it here.`,
   COMMANDS: "Terminal commands",
   APPS: "Computer use",
+  /** What the chevron that folds a machine's always-allowed apps open is called. */
+  ALLOWED_APPS: "Always-allowed apps",
   /** Computer use as a machine's folded row says it where it is off. */
   APPS_OFF: "Computer use off",
   /** Computer use as a machine's folded row says it where it is on and no app is always allowed. */

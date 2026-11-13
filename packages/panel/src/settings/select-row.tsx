@@ -34,6 +34,7 @@ export function SelectRow<Value extends string | number>({
   busy: restBusy,
   density,
   indent,
+  leading,
   width,
   error,
   action,
@@ -78,6 +79,8 @@ export function SelectRow<Value extends string | number>({
   density?: SettingsRowDensity | undefined;
   /** Whether the row stands inset under the row above, one of its things. */
   indent?: SettingsRowIndent | undefined;
+  /** The glyph the row leads with, where what it sets has one. */
+  leading?: React.ReactNode;
   /** How wide its chip stands; the settings column where none is named. */
   width?: ChipWidth | undefined;
   /** What stops the caller's own save at this row, said where no write of the row's was refused. */
@@ -101,6 +104,7 @@ export function SelectRow<Value extends string | number>({
       error={refusalShown(write?.refusal, FAILURE_SURFACE.SETTING_WRITE) ?? error}
       density={density}
       indent={indent}
+      leading={leading}
       width={width}
       action={action}
       value={String(value)}
