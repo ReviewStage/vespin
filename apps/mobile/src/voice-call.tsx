@@ -165,6 +165,7 @@ async function connect(events: VoiceCallPeerEvents): Promise<VoiceCallConnected>
   for (const track of microphone.getTracks()) peer.addTrack(track, microphone);
   const channel = peer.createDataChannel(VOICE_EVENTS_CHANNEL);
   channel.addEventListener("message", (message) => events.onMessage(String(message.data)));
+  channel.addEventListener("open", () => events.onChannelOpen());
   channel.addEventListener("close", () => events.onChannelClosed());
 
   const peerOf: VoiceCallPeer = {

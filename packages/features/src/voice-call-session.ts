@@ -13,8 +13,10 @@
  * session takes no command before, while the silenced track sends nothing
  * meanwhile; End telling the session `session.close` and closing the
  * channel, which sends what it holds first, the call dropped once the
- * channel has closed; and a `session.closed`, a failed peer, or a refusal
- * dropping it at once and saying why. The platform's half, the microphone,
+ * channel has closed, and an End pressed before the channel opened closing
+ * whatever session the service still answers with once it does; and a
+ * `session.closed`, a failed peer, or a refusal dropping it at once and
+ * saying why. The platform's half, the microphone,
  * the peer, and the speaker, is the `VoiceCallPeer` its client makes.
  *
  * Each start is a generation of its own, because a microphone or an answer
@@ -79,9 +81,10 @@ export interface VoiceCallInto {
   readonly taskId: string;
 }
 
-/** What the platform's peer hears and tells the session about: a server event's text, its channel closing, and the peer failing. */
+/** What the platform's peer hears and tells the session about: a server event's text, its channel opening and closing, and the peer failing. */
 export interface VoiceCallPeerEvents {
   readonly onMessage: (text: string) => void;
+  readonly onChannelOpen: () => void;
   readonly onChannelClosed: () => void;
   readonly onFailed: () => void;
 }
@@ -176,14 +179,32 @@ export function liveClientEvent(type: LiveClientEvent): string {
 }
 
 /**
+ * One start's machinery: the peer once it stands, and whether the call was
+ * ended before its channel opened, which leaves the session it may already
+ * hold for this attempt to close.
+ */
+interface Attempt {
+  readonly asked: number;
+  made: VoiceCallPeer | undefined;
+  abandoned: boolean;
+}
+
+/**
  * A call session over `seams`, holding one call at a time. Note that what a
  * surface draws is handed out through `onChange` while the machinery stays
  * here, because the peer's handlers outlive whatever drew the call: each
  * checks that the call it was made for still stands before it acts.
+ *
+ * A call ended before its channel opened is let go at once, but its peer is
+ * kept until whatever session the service opened for it is closed: an
+ * answer that lands after End is set all the same, and the channel it opens
+ * is told `session.close` at once and closed, so no session outlives the
+ * press that ended it. One ended before its offer reached the service asks
+ * for none.
  */
 export function voiceCallSession(seams: VoiceCallSessionSeams): VoiceCallSession {
   let call: VoiceCallState | undefined;
-  let peer: VoiceCallPeer | undefined;
+  let attempt: Attempt | undefined;
   let generation = 0;
   let sessionStarted = false;
 
@@ -196,13 +217,22 @@ export function voiceCallSession(seams: VoiceCallSessionSeams): VoiceCallSession
     if (held.channelOpen()) held.send(liveClientEvent(type));
   };
 
-  /** Lets the call go, where it is still the one standing. */
-  const drop = (asked: number) => {
+  /** The peer of the call standing; none while its microphone opens or none stands. */
+  const peerNow = () => attempt?.made;
+
+  /**
+   * Lets the call go, where it is still the one standing: its peer released,
+   * or, where its channel is not open yet, kept to close the session it may
+   * hold once it is (`abandon`).
+   */
+  const drop = (asked: number, abandon = false) => {
     if (generation !== asked) return;
     generation += 1;
-    const held = peer;
-    peer = undefined;
-    held?.release();
+    const held = attempt;
+    attempt = undefined;
+
+    if (held !== undefined && abandon) held.abandoned = true;
+    else held?.made?.release();
     change(undefined);
   };
 
@@ -212,63 +242,81 @@ export function voiceCallSession(seams: VoiceCallSessionSeams): VoiceCallSession
     seams.onFailure(failure, cause);
   };
 
-  /** Hears the session's start and close, the channel closing, and a peer that failed. */
-  const eventsOf = (asked: number, held: () => VoiceCallPeer | undefined): VoiceCallPeerEvents => ({
+  /** Lets an attempt's peer go, where its call was ended before its channel opened. */
+  const releaseAbandoned = (held: Attempt) => {
+    if (held.abandoned) held.made?.release();
+  };
+
+  /** Hears the session's start and close, the channel opening and closing, and a peer that failed. */
+  const eventsOf = (held: Attempt): VoiceCallPeerEvents => ({
     onMessage: (text) => {
       const type = liveEventType(text);
 
-      if (type === LIVE_EVENT.CLOSED) return drop(asked);
+      if (type === LIVE_EVENT.CLOSED) {
+        releaseAbandoned(held);
 
-      if (type !== LIVE_EVENT.STARTED || generation !== asked || call === undefined) return;
+        return drop(held.asked);
+      }
+
+      if (type !== LIVE_EVENT.STARTED || generation !== held.asked || call === undefined) return;
       sessionStarted = true;
-      const standing = held();
 
-      if (standing !== undefined && call.microphoneMuted) tell(standing, LIVE_EVENT.MUTE);
+      if (held.made !== undefined && call.microphoneMuted) tell(held.made, LIVE_EVENT.MUTE);
 
       if (call.stage === VOICE_CALL_STAGE.CONNECTING) {
         change({ ...call, stage: VOICE_CALL_STAGE.LIVE, startedAt: seams.now() });
       }
     },
+    // Note that a call ended before its channel opened closes the session the channel reaches, the moment it does.
+    onChannelOpen: () => {
+      if (!held.abandoned || held.made === undefined) return;
+      tell(held.made, LIVE_EVENT.CLOSE);
+      held.made.closeChannel();
+    },
     // Note that a call ended by a second start is no longer the one standing, so its channel closing lets go of its own machinery alone.
     onChannelClosed: () => {
-      held()?.release();
-      drop(asked);
+      held.made?.release();
+      drop(held.asked);
     },
-    onFailed: () => fail(asked, VOICE_CALL_FAILURE.DROPPED, "failed"),
+    onFailed: () => {
+      releaseAbandoned(held);
+      fail(held.asked, VOICE_CALL_FAILURE.DROPPED, "failed");
+    },
   });
 
   /** Opens the call the start asked for: the microphone and the peer, then the session. */
-  const open = async (asked: number, agentId: string) => {
-    let made: VoiceCallPeer | undefined;
-    const connected = await seams.connect(eventsOf(asked, () => made));
+  const open = async (held: Attempt, agentId: string) => {
+    const connected = await seams.connect(eventsOf(held));
 
-    if ("refused" in connected) return fail(asked, connected.refused, connected.refused);
-    made = connected.peer;
+    if ("refused" in connected) return fail(held.asked, connected.refused, connected.refused);
+    const made = connected.peer;
+    held.made = made;
 
-    if (generation !== asked) return made.release();
-    peer = made;
+    if (generation !== held.asked) return made.release();
     // Note that a mute pressed while the microphone opened is kept on the call, and set on its peer here.
     made.silenceMicrophone(call?.microphoneMuted === true);
     made.silenceSpeaker(call?.speakerMuted === true);
     const sdp = await made.offer();
 
     // Note that a call ended while its offer was made asks the service for nothing, since no session should open for it.
-    if (generation !== asked) return;
+    if (generation !== held.asked) return made.release();
     const answer = await seams.open({ agentId, sdp });
 
-    if (generation !== asked) return;
+    if ("failure" in answer) {
+      releaseAbandoned(held);
 
-    if ("failure" in answer) return fail(asked, answer.failure, answer.failure);
+      return fail(held.asked, answer.failure, answer.failure);
+    }
 
-    if (call !== undefined) change({ ...call, callId: answer.callId });
+    if (generation === held.asked && call !== undefined) change({ ...call, callId: answer.callId });
     await made.answer(answer.sdp);
   };
 
   const end = () => {
-    const held = peer;
+    const held = peerNow();
 
-    // Note that a call still opening its microphone has no channel to close, so it is let go at once.
-    if (held === undefined || !held.channelOpen()) return drop(generation);
+    // Note that a call whose channel is not open yet is let go at once, its peer kept to close what the service opened for it.
+    if (held === undefined || !held.channelOpen()) return drop(generation, true);
     tell(held, LIVE_EVENT.CLOSE);
     held.closeChannel();
 
@@ -277,10 +325,10 @@ export function voiceCallSession(seams: VoiceCallSessionSeams): VoiceCallSession
 
   const start = (into: VoiceCallInto) => {
     if (call !== undefined) end();
-    // Note that the last call's peer is let go by its own channel closing, so no press on the new call reaches it meanwhile.
-    peer = undefined;
     generation += 1;
-    const asked = generation;
+    const held: Attempt = { asked: generation, made: undefined, abandoned: false };
+    // Note that the last call's peer is let go by its own channel, so no press on the new call reaches it meanwhile.
+    attempt = held;
     sessionStarted = false;
     change({
       stage: VOICE_CALL_STAGE.CONNECTING,
@@ -291,30 +339,39 @@ export function voiceCallSession(seams: VoiceCallSessionSeams): VoiceCallSession
       microphoneMuted: false,
       speakerMuted: false,
     });
-    open(asked, into.agentId).catch((cause: unknown) =>
-      fail(asked, VOICE_CALL_FAILURE.NOT_STARTED, cause),
-    );
+    open(held, into.agentId).catch((cause: unknown) => {
+      releaseAbandoned(held);
+      fail(held.asked, VOICE_CALL_FAILURE.NOT_STARTED, cause);
+    });
   };
 
   const hangUp = () => {
-    if (peer !== undefined) tell(peer, LIVE_EVENT.CLOSE);
-    drop(generation);
+    const held = peerNow();
+
+    if (held !== undefined && held.channelOpen()) {
+      tell(held, LIVE_EVENT.CLOSE);
+
+      return drop(generation);
+    }
+
+    drop(generation, true);
   };
 
   // A mute pressed before the session started is kept, and told as it starts.
   const setMicrophoneMuted = (muted: boolean) => {
     if (call === undefined) return;
-    peer?.silenceMicrophone(muted);
+    const held = peerNow();
+    held?.silenceMicrophone(muted);
 
-    if (peer !== undefined && sessionStarted)
-      tell(peer, muted ? LIVE_EVENT.MUTE : LIVE_EVENT.UNMUTE);
+    if (held !== undefined && sessionStarted)
+      tell(held, muted ? LIVE_EVENT.MUTE : LIVE_EVENT.UNMUTE);
     change({ ...call, microphoneMuted: muted });
   };
 
   // A speaker muted before the peer stands is kept, and set on the peer as it does.
   const setSpeakerMuted = (muted: boolean) => {
     if (call === undefined) return;
-    peer?.silenceSpeaker(muted);
+    peerNow()?.silenceSpeaker(muted);
     change({ ...call, speakerMuted: muted });
   };
 

@@ -40,9 +40,7 @@ function harness() {
       return {
         peer: {
           offer: async () => "offer",
-          answer: async () => {
-            channelOpen = true;
-          },
+          answer: async () => undefined,
           channelOpen: () => channelOpen,
           send: (text) => sent.push(JSON.parse(text).type),
           closeChannel: () => {
@@ -71,8 +69,15 @@ function harness() {
     for (let step = 0; step < 10; step += 1) await Promise.resolve();
   };
 
+  /** The channel the answer reaches opening, as the peer tells it. */
+  const openChannel = () => {
+    channelOpen = true;
+    events?.onChannelOpen();
+  };
+
   return {
     session,
+    openChannel,
     sent,
     failures,
     answer,
@@ -92,6 +97,7 @@ describe("a voice call session", () => {
     await test.settled();
     test.answer.settle({ callId: "call-1", sdp: "answer" });
     await test.settled();
+    test.openChannel();
     test.events()?.onMessage(JSON.stringify({ type: "session.started" }));
 
     expect(test.sent).toEqual(["session.input_audio.mute"]);
@@ -119,6 +125,7 @@ describe("a voice call session", () => {
     await test.settled();
     test.answer.settle({ callId: "call-1", sdp: "answer" });
     await test.settled();
+    test.openChannel();
     test.session.end();
 
     expect(test.sent).toEqual(["session.close"]);
@@ -128,15 +135,19 @@ describe("a voice call session", () => {
     expect(test.released()).toBeGreaterThan(0);
   });
 
-  it("lets a call ended while the service answered go, its answer finding it gone", async () => {
+  it("closes the session a call ended while the service answered opened, once its channel opens", async () => {
     const test = harness();
     test.session.start(INTO);
     await test.settled();
     test.session.end();
-    test.answer.settle({ callId: "call-1", sdp: "answer" });
-    await test.settled();
 
     expect(test.call()).toBeUndefined();
+    test.answer.settle({ callId: "call-1", sdp: "answer" });
+    await test.settled();
+    test.openChannel();
+
+    expect(test.sent).toEqual(["session.close"]);
+    test.events()?.onChannelClosed();
     expect(test.released()).toBe(1);
     expect(test.failures).toEqual([]);
   });
