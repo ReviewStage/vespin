@@ -56,7 +56,9 @@ function pagesUnder(directory) {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     if (entry.name === "node_modules" || entry.name.startsWith(".")) return [];
     const path = join(directory, entry.name);
+
     if (entry.isDirectory()) return pagesUnder(path);
+
     return entry.name.endsWith(".mdx") ? [path] : [];
   });
 }
@@ -69,28 +71,34 @@ function findingsIn(path) {
     .forEach((line, index) => {
       if (FENCE.test(line)) {
         inFence = !inFence;
+
         return;
       }
+
       if (inFence) return;
       const prose = blank(blank(line, INLINE_CODE), LINK_TARGET);
+
       for (const { pattern, why } of NEVER_WRITE) {
         for (const match of prose.matchAll(pattern)) {
           findings.push({ line: index + 1, column: match.index + 1, text: match[0], why });
         }
       }
     });
+
   return findings;
 }
 
 function main() {
   const files = argv.length > 2 ? argv.slice(2) : pagesUnder(DOCS_ROOT);
   let count = 0;
+
   for (const file of files) {
     for (const { line, column, text, why } of findingsIn(file)) {
       count += 1;
       console.error(`${relative(cwd(), file)}:${line}:${column} "${text.trim()}": ${why}`);
     }
   }
+
   if (count > 0) {
     console.error(`\n${count} docs style finding(s); see apps/docs/README.md, "Never write".`);
     exit(1);
