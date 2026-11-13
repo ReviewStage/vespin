@@ -77,6 +77,14 @@ it.layer(getTestDB())("what a member holds open in an agent's sandbox", (it) => 
         yield* keepAgentSandboxTerminals(held, [first], MINUTE_LATER);
         assert.equal(yield* agentSandboxHeld(held, MINUTES_LATER), true, "the newer tab stands");
         yield* recordAgentSandboxTerminalEnded(held, opening);
+
+        // A shell started at first and again under its id later, as a run action reruns, while a list read.
+        const rerun = randomUUID();
+        yield* recordAgentSandboxTerminalOpened(held, rerun, OPENED);
+        yield* recordAgentSandboxTerminalOpened(held, rerun, MINUTES_LATER);
+        yield* keepAgentSandboxTerminals(held, [], MINUTE_LATER);
+        assert.equal(yield* agentSandboxHeld(held, MINUTES_LATER), true, "the rerun shell stands");
+        yield* recordAgentSandboxTerminalEnded(held, rerun);
         assert.equal(yield* agentSandboxHeld(held, MINUTES_LATER), false);
 
         yield* recordAgentSandboxTerminalOpened(held, first, MINUTES_LATER);

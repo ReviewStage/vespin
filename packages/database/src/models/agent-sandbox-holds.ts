@@ -124,7 +124,11 @@ const insertTerminal = SqlSchema.void({
             .from(agentSandboxTable)
             .where(eq(agentSandboxTable.sandboxName, sandboxName)),
         )
-        .onConflictDoNothing(),
+        // Note that a shell started again under its id, as a run action reruns, holds from its restart, so a list begun before it never prunes it.
+        .onConflictDoUpdate({
+          target: [agentSandboxTerminalTable.sandboxName, agentSandboxTerminalTable.terminalId],
+          set: { openedAt: at },
+        }),
     ),
 });
 
