@@ -51,7 +51,9 @@ import {
   BAR_TITLE,
   type BarMenu,
   EmptyState,
+  GLYPH,
   GlassDock,
+  glyphSymbol,
   LIST_LOOK,
   type ListLook,
   ListRow,
@@ -115,7 +117,7 @@ const SCOPE_LABEL = "Filter";
 const COUNTED_SCOPES: ReadonlySet<InboxShow> = new Set([INBOX_SHOW.NEEDS_ME, INBOX_SHOW.OPEN]);
 
 /** The bar's menu of the Inbox's other acts, a round glass ⋯ as iOS draws a toolbar's menu. */
-const MORE = { label: "More", symbol: "ellipsis" } as const;
+const MORE = { label: "More", symbol: GLYPH.MORE } as const;
 
 /** What a video the words draw in place is heard as, its file's name being the words' own alt. */
 const VIDEO_LABEL = "Video";
@@ -256,7 +258,7 @@ function InboxRow({
       ? [
           {
             label: RESOLVE,
-            symbol: "checkmark.circle",
+            symbol: GLYPH.RESOLVED,
             tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: () => onResolve(item),
           } as const,
@@ -289,7 +291,7 @@ function InboxRow({
       leadingActions={[
         {
           label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-          symbol: unread ? "envelope.open" : "envelope.badge",
+          symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
           tone: ROW_ACTION_TONE.NEUTRAL,
           onPress: () => onMark(item.id, !unread),
         },
@@ -327,23 +329,23 @@ function InboxEmpty({
   readonly onRetry: () => void;
 }) {
   if (feed === INBOX_FEED.READING)
-    return <EmptyState title={READING_INBOX} symbol="tray" loading />;
+    return <EmptyState title={READING_INBOX} symbol={GLYPH.INBOX} loading />;
 
   if (feed === INBOX_FEED.FAILED) {
     return (
       <EmptyState
         title={INBOX_NOT_READ}
-        symbol="exclamationmark.triangle"
+        symbol={GLYPH.FAILED}
         action={{ label: RETRY, onPress: onRetry }}
       />
     );
   }
 
   if (search.trim() !== "") {
-    return <EmptyState title={noMatchWords(search.trim())} symbol="magnifyingglass" />;
+    return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
   }
 
-  return <EmptyState title={INBOX_SHOW_EMPTY[INBOX_WHOSE.MINE][show]} symbol="tray" />;
+  return <EmptyState title={INBOX_SHOW_EMPTY[INBOX_WHOSE.MINE][show]} symbol={GLYPH.INBOX} />;
 }
 
 /** The Inbox's scopes as its pills, the one shown filled, Questions and Open with their counts. */
@@ -371,7 +373,7 @@ function moreMenu(
     actions: [
       {
         label: MARK_ALL_READ,
-        symbol: "envelope.open",
+        symbol: GLYPH.MARK_ALL_READ,
         disabled: unread.length === 0,
         onPress: () => markAll(unread),
       },
@@ -653,11 +655,11 @@ function ThreadDetail({
         }}
       />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon={menu.symbol} accessibilityLabel={menu.label}>
+        <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
           {menu.actions.map((action) => (
             <Stack.Toolbar.MenuAction
               key={action.label}
-              icon={action.symbol}
+              icon={glyphSymbol(action.symbol)}
               onPress={action.onPress}
             >
               {action.label}
@@ -682,19 +684,19 @@ function ThreadNotDrawn({
   readonly onRetry: () => void;
 }) {
   if (feed === INBOX_FEED.READING)
-    return <EmptyState title={READING_INBOX} symbol="tray" loading />;
+    return <EmptyState title={READING_INBOX} symbol={GLYPH.INBOX} loading />;
 
   if (feed === INBOX_FEED.FAILED) {
     return (
       <EmptyState
         title={INBOX_NOT_READ}
-        symbol="exclamationmark.triangle"
+        symbol={GLYPH.FAILED}
         action={{ label: RETRY, onPress: onRetry }}
       />
     );
   }
 
-  return <EmptyState title={THREAD_NOT_FOUND} symbol="tray" />;
+  return <EmptyState title={THREAD_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />;
 }
 
 /**
@@ -764,11 +766,11 @@ function InboxStackList(words: InboxSearch) {
       </Stack.Screen>
       <SettingsBarButton switcher={switcher} />
       <Stack.Toolbar placement="right">
-        <Stack.Toolbar.Menu icon={menu.symbol} accessibilityLabel={menu.label}>
+        <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
           {menu.actions.map((action) => (
             <Stack.Toolbar.MenuAction
               key={action.label}
-              icon={action.symbol}
+              icon={glyphSymbol(action.symbol)}
               disabled={action.disabled === true}
               onPress={action.onPress}
             >
@@ -868,7 +870,7 @@ function InboxSplitScreen({
           })}
           detail={
             selected === undefined ? (
-              <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol="tray" />
+              <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.INBOX} />
             ) : (
               <ThreadColumn key={selected} id={selected} onRemind={remind.open} onOpen={select} />
             )

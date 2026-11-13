@@ -42,6 +42,7 @@ import {
   type ConnectionLine,
   ConnectionRow,
   EmptyState,
+  GLYPH,
   ListSection,
   type MemberRowAct,
   Screen,
@@ -66,7 +67,7 @@ export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 const READING = readingWords("the integrations");
 
 /** The glyph a page of integrations stands under. */
-const INTEGRATIONS_SYMBOL = "puzzlepiece.extension";
+const INTEGRATIONS_SYMBOL = GLYPH.PLUG;
 
 /** The health of a server whose name this build can't read, which no tools read stands under. */
 const UNREAD_HEALTH: ConnectionHealth = { kind: CONNECTION_HEALTH.CHECKING };
@@ -173,7 +174,7 @@ export default function IntegrationsScreen() {
       statuses.readFailed ? (
         <EmptyState
           title={INTEGRATIONS_PAGE_WORDS.READ_FAILED}
-          symbol="exclamationmark.triangle"
+          symbol={GLYPH.FAILED}
           action={{ label: VERB.RETRY, onPress: page.retry }}
         />
       ) : (
@@ -182,7 +183,7 @@ export default function IntegrationsScreen() {
     ) : rows.length === 0 ? (
       <EmptyState title={INTEGRATIONS_PAGE_WORDS.NONE_OFFERED} symbol={INTEGRATIONS_SYMBOL} />
     ) : found.length === 0 ? (
-      <EmptyState title={INTEGRATIONS_PAGE_WORDS.NO_MATCH(query)} symbol="magnifyingglass" />
+      <EmptyState title={INTEGRATIONS_PAGE_WORDS.NO_MATCH(query)} symbol={GLYPH.SEARCH} />
     ) : (
       <SettingsForm>
         {serverGroups(found).map((group) => (

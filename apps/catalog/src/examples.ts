@@ -100,6 +100,7 @@ import { PANE_PINS_EXAMPLE } from "./examples/pane-pins";
 import { PICTURE_SETS_EXAMPLE } from "./examples/picture-sets";
 import { PICTURE_TILES_EXAMPLE } from "./examples/picture-tiles";
 import { POPOVER_PANELS_EXAMPLE } from "./examples/popover-panels";
+import { PORT_TABLES_EXAMPLE } from "./examples/port-tables";
 import { PORTAL_FENCE_EXAMPLE } from "./examples/portal-fence";
 import { PRESS_SHORTCUTS_EXAMPLE } from "./examples/press-shortcuts";
 import { PROGRESS_EXAMPLE } from "./examples/progress";
@@ -107,6 +108,7 @@ import { PROGRESS_RINGS_EXAMPLE } from "./examples/progress-rings";
 import { PROSE_EXAMPLE } from "./examples/prose";
 import { PROVIDER_BUTTONS_EXAMPLE } from "./examples/provider-buttons";
 import { PUBLIC_PAGE_EXAMPLE } from "./examples/public-page";
+import { QUEUE_LINES_EXAMPLE } from "./examples/queue-lines";
 import { READABLE_CONTROLS_EXAMPLE } from "./examples/readable-controls";
 import { RECT_FLOAT_EXAMPLE } from "./examples/rect-float";
 import { REMOTE_SURFACE_EXAMPLE } from "./examples/remote-surface";
@@ -289,6 +291,7 @@ export const EXAMPLES: readonly Example[] = [
   PICTURE_SETS_EXAMPLE,
   PICTURE_TILES_EXAMPLE,
   POPOVER_PANELS_EXAMPLE,
+  PORT_TABLES_EXAMPLE,
   PRESS_SHORTCUTS_EXAMPLE,
   PROGRESS_EXAMPLE,
   PROGRESS_RINGS_EXAMPLE,
@@ -297,6 +300,7 @@ export const EXAMPLES: readonly Example[] = [
   ROLLING_NUMBER_EXAMPLE,
   PUBLIC_PAGE_EXAMPLE,
   LANDING_EXAMPLE,
+  QUEUE_LINES_EXAMPLE,
   SCROLL_AREA_EXAMPLE,
   SAVED_TICKS_EXAMPLE,
   SEARCH_FIELDS_EXAMPLE,

@@ -21,6 +21,8 @@ import {
   BUZZ,
   buzz,
   ConfirmAsk,
+  GLYPH,
+  glyphSymbol,
   ListSection,
   ScopePicker,
   Screen,
@@ -221,7 +223,7 @@ export default function FeedbackScreen() {
       <Stack.Screen options={{ title: FEEDBACK_WORDS.TITLE }} />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button
-          icon="arrow.up"
+          icon={glyphSymbol(GLYPH.SEND)}
           variant="prominent"
           tintColor={colors.ACCENT}
           accessibilityLabel={sending ? FEEDBACK_WORDS.SENDING : FEEDBACK_WORDS.SEND}

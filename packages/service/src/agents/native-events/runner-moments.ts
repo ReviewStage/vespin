@@ -75,6 +75,28 @@ export function withoutNul(value: WireValue): WireValue {
 /** What a picture in a tool's answer is kept as: the bytes went to the model once, and a transcript carries every byte it holds into each read. */
 export const PICTURE_STAND_IN = "[image]";
 
+const readTextBlock = Schema.decodeUnknownOption(
+  Schema.Struct({ type: Schema.Literal("text"), text: Schema.String }),
+);
+
+/**
+ * Our own tool's answer as the text it answered: its first text block,
+ * which holds its whole JSON (`../tool-catalog/catalog.ts`'s `content`),
+ * its pictures left out. Note that no block after it is read, because a
+ * harness may add words of its own beside a picture, as Claude Code adds
+ * where it saved one (`[Image: source: …]`), and those joined to the JSON
+ * would leave no JSON to read.
+ */
+export function workspaceAnswerText(content: readonly WireValue[]): string {
+  for (const block of content) {
+    const read = readTextBlock(block);
+
+    if (Option.isSome(read)) return read.value.text;
+  }
+
+  return "";
+}
+
 const readType = Schema.decodeUnknownOption(Schema.Struct({ type: Schema.String }));
 
 const readAccepted = Schema.decodeUnknownOption(

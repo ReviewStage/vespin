@@ -66,6 +66,7 @@ import {
   ChoiceBar,
   type ChoiceItem,
   Comment,
+  CornerDot,
   type CountPart,
   CountParts,
   DETAIL_PAGE_INSET,
@@ -78,6 +79,7 @@ import {
   ErrorState,
   Fill,
   GAP,
+  IconButton,
   LAYOUT_ELEMENT,
   LINE_BUTTON_LOOK,
   LIST_DENSITY,
@@ -87,6 +89,7 @@ import {
   ListRow,
   linesCount,
   MENU_DETAIL,
+  MENU_ITEM_MARK,
   MoreButton,
   moreLabel,
   OneLine,
@@ -128,6 +131,7 @@ import {
   MessagesSquareIcon,
   RotateCwIcon,
   ScanSearchIcon,
+  SlidersHorizontalIcon,
   TriangleAlertIcon,
   XIcon,
 } from "@repo/ui/icons";
@@ -178,6 +182,7 @@ import {
   pullRequestPublishedQuery,
   pullRequestQuery,
 } from "../live-reads.js";
+import { useMergeQueueOpener } from "../merge-queue-route.js";
 import { pictureQuery } from "../picture-query.js";
 import { scrollerOf } from "../scroll-within.js";
 import { SHELL_ROOM } from "../shell-room.js";
@@ -213,7 +218,6 @@ import { CHAPTERS_SHOWN, chapterPaths, chaptersShown, chapterViewed } from "./ch
 import { type ChaptersRead, useChaptersRead } from "./chapters-read.js";
 import { CommentTools } from "./comment-menu.js";
 import {
-  type ConversationFilters,
   type ConversationFiltersControl,
   type ConversationHidden,
   conversationHidden,
@@ -379,8 +383,8 @@ import {
  * through the window's route for the thread's link, which brings it into
  * view there (`thread-reveal.tsx`). The Description and the Conversation
  * each fold under a heading that sticks to the view's top while it is in
- * view, the Conversation's ending in stage-cli's two filters, Hide resolved
- * and Hide bots, each counting what it leaves out; the filters and the folds
+ * view, the Conversation's ending in View options holding stage-cli's two
+ * filters, Hide resolved and Hide bots, each counting what it leaves out; the filters and the folds
  * are kept across launches (`conversation-filters.ts`). Every name and word here is
  * the repository's, which the screen recording masks, and a diff's lines
  * are left out of it whole (`file-diff.tsx`).
@@ -436,19 +440,10 @@ const PULL_REQUEST_WORDS = {
   NO_MATCHING: "No matching comments.",
   HIDE_BOTS: "Hide bots",
   HIDE_RESOLVED: "Hide resolved",
-  /** What a phone's one filter chip and its menu are called. */
-  FILTERS: "Conversation filters",
-  /** What a phone's filter chip says while neither filter is on. */
-  SHOWING_ALL: "Showing all",
-  HIDING_RESOLVED: "Hiding resolved",
-  HIDING_BOTS: "Hiding bots",
-  HIDING_BOTH: "Hiding resolved and bots",
-  /** What Hide bots says it leaves out, by how many. */
-  hiddenBots: (count: number) =>
-    `Hides ${count} ${count === 1 ? "comment or review" : "comments and reviews"} by bots`,
-  /** What Hide resolved says it leaves out, by how many. */
-  hiddenResolved: (count: number) =>
-    `Hides ${count} resolved review ${count === 1 ? "thread" : "threads"}`,
+  /** What the Conversation's button and its menu of filters are called, as the Tasks page's are. */
+  VIEW_OPTIONS: "View options",
+  /** What the button says to a reader while a filter leaves something out. */
+  FILTERED: "Filtered",
   /** What the conversation says of the earlier entries a read left on GitHub, by how many. */
   earlier: (count: number) => `${count} earlier ${count === 1 ? "comment" : "comments"} on GitHub`,
   /** What a review thread says of the replies a read left on GitHub, by how many. */
@@ -2356,7 +2351,7 @@ function ConversationPart({
   parts: OverviewParts;
   /** The entries the filters leave, what was last brought into view among them. */
   shown: readonly ConversationEntry[];
-  /** Hide resolved and Hide bots, at the end of the section's heading. */
+  /** The View options holding Hide resolved and Hide bots, at the end of the section's heading. */
   filterControls: ReactNode;
   fold: SectionFold;
   /** The pull request's page, which the earlier entries left on GitHub open. */
@@ -2736,65 +2731,15 @@ function tabsOf(
   ];
 }
 
-/** One of the conversation's filters, drawn as the tasks board's view filter in its toolbar is (`tasks-board.tsx`): a filter chip pressed while it is on, its word and how many it would leave out once the conversation is read. */
-function ConversationFilter({
-  label,
-  count,
-  describe,
-  on,
-  onChange,
-}: {
-  label: string;
-  /** How many it would leave out; none until the conversation is read. */
-  count: number | undefined;
-  describe: (count: number) => string;
-  on: boolean;
-  onChange: (on: boolean) => void;
-}): React.JSX.Element {
-  const noteId = useId();
-  const note = count === undefined ? undefined : describe(count);
-
-  const filter = (
-    <span className="pull-request-filter inline-flex">
-      <Chip
-        look={CHIP_LOOK.FILTER}
-        aria-label={label}
-        aria-pressed={on}
-        aria-describedby={note === undefined ? undefined : noteId}
-        onClick={() => onChange(!on)}
-      >
-        <ChipName>{label}</ChipName>
-        {count === undefined ? null : <ChipCount>{formatCount(count)}</ChipCount>}
-      </Chip>
-      {note === undefined ? null : (
-        <span id={noteId} hidden>
-          {note}
-        </span>
-      )}
-    </span>
-  );
-
-  return note === undefined ? filter : <Tooltip label={note}>{filter}</Tooltip>;
-}
-
-/** What a phone's filter chip says is left out: what each filter on hides, by the filter's own word, or that everything shows. */
-function hidingWords({ hideResolved, hideBots }: ConversationFilters): string {
-  if (hideResolved && hideBots) return PULL_REQUEST_WORDS.HIDING_BOTH;
-
-  if (hideResolved) return PULL_REQUEST_WORDS.HIDING_RESOLVED;
-
-  if (hideBots) return PULL_REQUEST_WORDS.HIDING_BOTS;
-
-  return PULL_REQUEST_WORDS.SHOWING_ALL;
-}
-
 /**
- * The two filters as a phone draws them: one chip saying what is left out,
- * whose menu holds Hide resolved and Hide bots as settings, each counting
- * what it leaves out once read, the menu standing while they are changed,
- * so the Conversation's heading keeps the row rather than two pills.
+ * The Conversation's View options, as the Tasks page keeps its own
+ * (`desktop/tasks-page-options.tsx`): one button at the end of the
+ * Conversation's heading, marked while a filter leaves something out, whose
+ * menu holds Hide resolved and Hide bots, as stage-cli orders them, as
+ * switches, each counting what it leaves out once read and the menu standing
+ * while they are turned.
  */
-function ConversationFilterMenu({
+function ConversationViewOptions({
   control,
   hidden,
 }: {
@@ -2803,7 +2748,7 @@ function ConversationFilterMenu({
 }): React.JSX.Element {
   const { filters, change } = control;
   const menu = useMenu(true);
-  const words = hidingWords(filters);
+  const filtered = filters.hideResolved || filters.hideBots;
   const count = (each: number | undefined) => (each === undefined ? undefined : formatCount(each));
 
   // Note that each counts beside its label rather than at its end, because a phone's sheet prints no item's hint, a chord being a keyboard's.
@@ -2813,6 +2758,7 @@ function ConversationFilterMenu({
       detail: count(hidden?.resolved),
       detailPlace: MENU_DETAIL.BESIDE,
       checked: filters.hideResolved,
+      mark: MENU_ITEM_MARK.SWITCH,
       stays: true,
       onSelect: () => change({ hideResolved: !filters.hideResolved }),
     },
@@ -2821,62 +2767,33 @@ function ConversationFilterMenu({
       detail: count(hidden?.bots),
       detailPlace: MENU_DETAIL.BESIDE,
       checked: filters.hideBots,
+      mark: MENU_ITEM_MARK.SWITCH,
       stays: true,
       onSelect: () => change({ hideBots: !filters.hideBots }),
     },
   ];
 
   return (
-    <span className="pull-request-filter-menu flex min-w-0">
-      <Chip
-        look={CHIP_LOOK.FILTER}
-        chevron
-        aria-label={`${PULL_REQUEST_WORDS.FILTERS}: ${words}`}
-        {...menu.trigger()}
-      >
-        <ChipName>{words}</ChipName>
-      </Chip>
+    <>
+      <CornerDot shown={filtered}>
+        <Tooltip label={PULL_REQUEST_WORDS.VIEW_OPTIONS}>
+          <IconButton
+            icon={<SlidersHorizontalIcon />}
+            label={PULL_REQUEST_WORDS.VIEW_OPTIONS}
+            aria-description={filtered ? PULL_REQUEST_WORDS.FILTERED : undefined}
+            {...menu.trigger()}
+          />
+        </Tooltip>
+      </CornerDot>
       {menu.drawn === undefined ? null : (
         <ActionMenu
           replayUnmasked
-          label={PULL_REQUEST_WORDS.FILTERS}
+          label={PULL_REQUEST_WORDS.VIEW_OPTIONS}
           menu={menu.drawn}
           groups={[items]}
           onClose={menu.close}
         />
       )}
-    </span>
-  );
-}
-
-/** Hide resolved and Hide bots, as stage-cli orders them, at the end of the Conversation's heading, each counting what it leaves out once read; one chip opening a menu of them in a phone's narrow room. */
-function ConversationFilterChips({
-  control,
-  hidden,
-}: {
-  control: ConversationFiltersControl;
-  hidden: ConversationHidden | undefined;
-}): React.JSX.Element {
-  const { filters, change } = control;
-
-  if (usePhoneRoom()) return <ConversationFilterMenu control={control} hidden={hidden} />;
-
-  return (
-    <>
-      <ConversationFilter
-        label={PULL_REQUEST_WORDS.HIDE_RESOLVED}
-        count={hidden?.resolved}
-        describe={PULL_REQUEST_WORDS.hiddenResolved}
-        on={filters.hideResolved}
-        onChange={(hideResolved) => change({ hideResolved })}
-      />
-      <ConversationFilter
-        label={PULL_REQUEST_WORDS.HIDE_BOTS}
-        count={hidden?.bots}
-        describe={PULL_REQUEST_WORDS.hiddenBots}
-        on={filters.hideBots}
-        onChange={(hideBots) => change({ hideBots })}
-      />
     </>
   );
 }
@@ -2979,7 +2896,7 @@ function ConversationView({
             parts={parts}
             shown={shown}
             filterControls={
-              <ConversationFilterChips
+              <ConversationViewOptions
                 control={choices}
                 hidden={conversation === undefined ? undefined : conversationHidden(conversation)}
               />
@@ -3587,6 +3504,8 @@ function PullRequestTabBody({
       : source.published;
 
   const held = headerPullRequestOf(landed(parts.pullRequest), landed(parts.checks), published);
+  // The pill offers the Merge queue page while the account has it on.
+  const openMergeQueue = useMergeQueueOpener();
 
   const none = [parts.pullRequest, parts.checks, parts.conversation].some(
     (part) => part.kind === PART.NONE,
@@ -3790,6 +3709,11 @@ function PullRequestTabBody({
                           queued={headerQueuedOf(overview, published, held.number)}
                           shown={shown}
                           writes={writes}
+                          onViewQueue={
+                            openMergeQueue === undefined
+                              ? undefined
+                              : () => openMergeQueue(held.url)
+                          }
                         />
                       </div>
                     )}

@@ -9,7 +9,7 @@ import type {
 } from "@repo/features/relay-socket";
 import { TUNNEL_CLOSE, TUNNEL_FRAME } from "@repo/features/sandbox-tunnel-wire";
 import { noNetwork } from "@repo/wire/testing";
-import { type Cause, Effect, Queue, Stream } from "effect";
+import { type Cause, Deferred, Effect, Fiber, Queue, Stream } from "effect";
 import { Base64 } from "effect/encoding";
 import { TestClock } from "effect/testing";
 import { composePortForwards, PORT_FORWARD } from "./compose-port-forwards.js";
@@ -18,8 +18,9 @@ import { composePortForwards, PORT_FORWARD } from "./compose-port-forwards.js";
  * A coding agent's cloud ports forwarded to the Mac's loopback, over a
  * service whose port reads answer from a script, a loopback whose taken
  * ports the test names, and a relay whose sockets the test drives, on the
- * test clock: a port taken locally is listened on at the next free one; the
- * forwarded ports follow each read, for one agent at a time; and each
+ * test clock: a port taken locally is listened on at the next free one;
+ * only the ports opened are forwarded, each following the reads, for one
+ * agent at a time; and each
  * accepted connection is a channel on its port's tunnel, a closed tunnel
  * opened again by the next connection. Synthetic ids and bytes throughout.
  */
@@ -56,6 +57,9 @@ const scriptedConnection = Effect.gen(function* () {
 
 type Told = { last?: unknown };
 
+/** A one-shot hold on the next read of the ports, where one is set. */
+type Hold = { next?: Deferred.Deferred<void> | undefined };
+
 /** The composer over the scripted service, loopback, and relay. */
 function subject(options: { taken?: number[] } = {}) {
   return Effect.gen(function* () {
@@ -66,6 +70,8 @@ function subject(options: { taken?: number[] } = {}) {
     /** The port the service reads as shared, by agent, with its link. */
     const shares = new Map<string, { port: number; url: string }>();
     const taken = new Set(options.taken);
+    /** A one-shot hold on the next read of the ports, its answer taken before it waits. */
+    const hold: Hold = {};
     /** Each listener standing, by the local port it holds: what it accepts. */
     const listeners = new Map<number, Queue.Queue<LoopbackConnection, Cause.Done>>();
 
@@ -97,11 +103,20 @@ function subject(options: { taken?: number[] } = {}) {
       },
       client: {
         list: (agentId) =>
-          Effect.sync(() => ({
-            running: !stopped.has(agentId),
-            ports: stopped.has(agentId) ? [] : (ports.get(agentId) ?? []),
-            labels: stopped.has(agentId) ? [] : (labels.get(agentId) ?? []),
-          })),
+          Effect.gen(function* () {
+            const answer = {
+              running: !stopped.has(agentId),
+              ports: stopped.has(agentId) ? [] : (ports.get(agentId) ?? []),
+              labels: stopped.has(agentId) ? [] : (labels.get(agentId) ?? []),
+            };
+
+            const held = hold.next;
+            hold.next = undefined;
+
+            if (held !== undefined) yield* Deferred.await(held);
+
+            return answer;
+          }),
         share: (agentId, port) =>
           Effect.sync(() => {
             const url = `https://sb-${port}.share.test`;
@@ -150,12 +165,22 @@ function subject(options: { taken?: number[] } = {}) {
     }).pipe(Effect.provide(noNetwork));
 
     return {
-      /** Forwarding turned on or off, as the panel's Forward to localhost asks it. */
+      /** One port forwarded or let go, as the panel's Open and its × ask it. */
       set: composer.acts.PORT_FORWARD_SET,
-      /** A port shared by public link, or its link closed, as the panel's Forward menu asks it. */
+      /** A port shared by link, or its link closed, as the panel's Share and its × ask it. */
       share: composer.acts.PORT_SHARE_SET,
       /** The service closed the agent's link, as it closes one no one visited. */
       expire: (agentId: string) => void shares.delete(agentId),
+      /** A port shared by link through the service alone, as the popover's Share does before forwarding begins. */
+      shareElsewhere: (agentId: string, port: number) =>
+        void shares.set(agentId, { port, url: `https://sb-${port}.share.test` }),
+      /** The next read of the ports answers, then waits until the hold this returns is let go. */
+      holdNextRead: Effect.gen(function* () {
+        const held = yield* Deferred.make<void>();
+        hold.next = held;
+
+        return Deferred.succeed(held, undefined);
+      }),
       /** The port the service reads as shared for the agent, with its link. */
       shared: (agentId: string) => shares.get(agentId),
       /** How forwarding stands, as the windows were last told. */
@@ -199,7 +224,8 @@ it.effect("a port taken on this Mac is listened on at the next free one", () =>
     const { set, serve, told } = yield* subject({ taken: [3000] });
     serve(AGENT_ID, [3000, 5173]);
 
-    yield* set({ agentId: AGENT_ID, on: true });
+    yield* set({ agentId: AGENT_ID, port: 3000, on: true });
+    yield* set({ agentId: AGENT_ID, port: 5173, on: true });
     yield* settle;
 
     assert.deepEqual(told(), {
@@ -216,9 +242,9 @@ it.effect("a port taken on this Mac is listened on at the next free one", () =>
 
 it.effect("a shared port's link is told beside the ports until the service closes it", () =>
   Effect.gen(function* () {
-    const { set, share, expire, serve, told } = yield* subject();
+    const { set, share, expire, shareElsewhere, serve, told } = yield* subject();
     serve(AGENT_ID, [3000]);
-    yield* set({ agentId: AGENT_ID, on: true });
+    yield* set({ agentId: AGENT_ID, port: 3000, on: true });
     yield* settle;
 
     yield* share({ agentId: AGENT_ID, port: 3000 });
@@ -240,33 +266,52 @@ it.effect("a shared port's link is told beside the ports until the service close
       running: true,
       ports: [{ port: 3000, localPort: 3000, state: PORT_FORWARD_STATE.LISTENING }],
     });
+
+    // A link made through the service alone, as a Share begun before forwarding was, is read at the next look.
+    shareElsewhere(AGENT_ID, 3000);
+    yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
+    yield* settle;
+    assert.deepEqual(told(), {
+      agentId: AGENT_ID,
+      on: true,
+      running: true,
+      shared: { port: 3000, url: "https://sb-3000.share.test" },
+      ports: [{ port: 3000, localPort: 3000, state: PORT_FORWARD_STATE.LISTENING }],
+    });
   }),
 );
 
 it.effect(
-  "the forwarded ports follow each read, each with what serves it, for one agent at a time",
+  "only the ports opened are forwarded, each following the reads, for one agent at a time",
   () =>
     Effect.gen(function* () {
       const { set, serve, listeners, told } = yield* subject();
       serve(AGENT_ID, [3000, 5173]);
       serve(OTHER_AGENT_ID, [8080], { 8080: "storybook dev" });
 
-      yield* set({ agentId: AGENT_ID, on: true });
-      yield* settle;
+      // Opening 3000 forwards it alone, and the act answers with its local address at once.
+      const opened = yield* set({ agentId: AGENT_ID, port: 3000, on: true });
+      assert.deepEqual(opened, {
+        on: true,
+        running: true,
+        ports: [
+          { port: 3000, localPort: 3000, state: PORT_FORWARD_STATE.LISTENING },
+          { port: 5173, state: PORT_FORWARD_STATE.OFF },
+        ],
+      });
+      assert.deepEqual([...listeners.keys()], [3000]);
+
+      yield* set({ agentId: AGENT_ID, port: 5173, on: true });
       assert.deepEqual([...listeners.keys()].sort(), [3000, 5173]);
 
-      // The server on 3000 stopped and one on 4000 started: the next read lets one go and listens on the other.
+      // The server on 3000 stopped and one on 4000 started: the next read lets 3000 go and leaves 4000 unopened.
       serve(AGENT_ID, [4000, 5173]);
       yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
       yield* settle;
-      assert.deepEqual([...listeners.keys()].sort(), [4000, 5173]);
+      assert.deepEqual([...listeners.keys()], [5173]);
 
-      // Forwarding another agent lets every port of the first go.
-      const other = yield* set({
-        agentId: OTHER_AGENT_ID,
-        on: true,
-      });
-
+      // Opening another agent's port lets every port of the first go.
+      yield* set({ agentId: OTHER_AGENT_ID, port: 8080, on: true });
       yield* settle;
       assert.deepEqual([...listeners.keys()], [8080]);
       assert.deepEqual(told(), {
@@ -282,19 +327,70 @@ it.effect(
           },
         ],
       });
-      assert.deepEqual(other, { on: true, running: false, ports: [] });
 
-      yield* set({ agentId: OTHER_AGENT_ID, on: false });
+      // Letting its one port go turns the agent's forwarding off.
+      yield* set({ agentId: OTHER_AGENT_ID, port: 8080, on: false });
       assert.deepEqual([...listeners.keys()], []);
       assert.equal(told(), null);
     }),
+);
+
+it.effect(
+  "a port that is not listening leaves nothing forwarded, at once or once its server stops",
+  () =>
+    Effect.gen(function* () {
+      const { set, serve, listeners, told } = yield* subject();
+
+      // Nothing listens on 3000 yet: opening it forwards nothing and leaves the agent's forwarding off.
+      const opened = yield* set({ agentId: AGENT_ID, port: 3000, on: true });
+      assert.deepEqual(opened, { on: false, running: false, ports: [] });
+      assert.equal(told(), null);
+
+      // Its server starts and it is opened, then the server stops: the next read lets it go and turns forwarding off.
+      serve(AGENT_ID, [3000]);
+      yield* set({ agentId: AGENT_ID, port: 3000, on: true });
+      assert.deepEqual([...listeners.keys()], [3000]);
+      serve(AGENT_ID, []);
+      yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
+      yield* settle;
+      assert.deepEqual([...listeners.keys()], []);
+      assert.equal(told(), null);
+    }),
+);
+
+it.effect("an Open that slips in before a read's release keeps the port it forwarded", () =>
+  Effect.gen(function* () {
+    const { set, serve, listeners, told, holdNextRead } = yield* subject();
+    serve(AGENT_ID, [3000]);
+    yield* set({ agentId: AGENT_ID, port: 3000, on: true });
+
+    // The server stops, and the next look reads that and waits while holding the turn.
+    serve(AGENT_ID, []);
+    const letGo = yield* holdNextRead;
+    yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
+    yield* settle;
+
+    // The server is back and Open asks for it before the look's release can run.
+    serve(AGENT_ID, [3000]);
+    const opened = yield* Effect.forkChild(set({ agentId: AGENT_ID, port: 3000, on: true }));
+    yield* settle;
+    yield* letGo;
+    yield* settle;
+
+    const answer = yield* Fiber.join(opened);
+    assert.deepEqual(answer.ports, [
+      { port: 3000, localPort: 3000, state: PORT_FORWARD_STATE.LISTENING },
+    ]);
+    assert.deepEqual([...listeners.keys()], [3000]);
+    assert.deepEqual(told(), { agentId: AGENT_ID, ...answer });
+  }),
 );
 
 it.effect("forwarding is let go once a sandbox seen running stops", () =>
   Effect.gen(function* () {
     const { set, serve, stop, listeners, told } = yield* subject();
     serve(AGENT_ID, [3000]);
-    yield* set({ agentId: AGENT_ID, on: true });
+    yield* set({ agentId: AGENT_ID, port: 3000, on: true });
     yield* settle;
     assert.deepEqual([...listeners.keys()], [3000]);
 
@@ -302,6 +398,18 @@ it.effect("forwarding is let go once a sandbox seen running stops", () =>
     yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);
     yield* settle;
 
+    assert.deepEqual([...listeners.keys()], []);
+    assert.equal(told(), null);
+
+    // Another agent's port is opened, its sandbox stops, and Open is pressed again before the next look: that Open's own read lets it go.
+    serve(OTHER_AGENT_ID, [4000]);
+    yield* set({ agentId: OTHER_AGENT_ID, port: 4000, on: true });
+    assert.deepEqual([...listeners.keys()], [4000]);
+    stop(OTHER_AGENT_ID);
+    const reopened = yield* set({ agentId: OTHER_AGENT_ID, port: 4000, on: true });
+    yield* settle;
+
+    assert.deepEqual(reopened, { on: false, running: false, ports: [] });
     assert.deepEqual([...listeners.keys()], []);
     assert.equal(told(), null);
   }),
@@ -313,7 +421,7 @@ it.effect(
     Effect.gen(function* () {
       const { set, serve, connect, tunnels, told } = yield* subject();
       serve(AGENT_ID, [3000]);
-      yield* set({ agentId: AGENT_ID, on: true });
+      yield* set({ agentId: AGENT_ID, port: 3000, on: true });
       yield* settle;
 
       const browser = yield* scriptedConnection;
@@ -363,29 +471,32 @@ it.effect("turning forwarding off keeps the agent's public link", () =>
   Effect.gen(function* () {
     const { set, share, serve, shared } = yield* subject();
     serve(AGENT_ID, [3000]);
-    yield* set({ agentId: AGENT_ID, on: true });
+    yield* set({ agentId: AGENT_ID, port: 3000, on: true });
     yield* settle;
     yield* share({ agentId: AGENT_ID, port: 3000 });
 
-    yield* set({ agentId: AGENT_ID, on: false });
+    yield* set({ agentId: AGENT_ID, port: 3000, on: false });
 
     assert.deepEqual(shared(AGENT_ID), { port: 3000, url: "https://sb-3000.share.test" });
   }),
 );
 
-it.effect("two turn-ons that interleave leave one agent's ports forwarded", () =>
+it.effect("two opens that interleave leave one agent's ports forwarded", () =>
   Effect.gen(function* () {
     const { set, serve, listeners, told } = yield* subject();
     const THIRD_AGENT_ID = "5e7b9c1d-2a3f-4e8b-9c0d-1f2e3a4b5c6d";
     serve(AGENT_ID, [3000]);
     serve(OTHER_AGENT_ID, [4000]);
     serve(THIRD_AGENT_ID, [5000]);
-    yield* set({ agentId: AGENT_ID, on: true });
+    yield* set({ agentId: AGENT_ID, port: 3000, on: true });
     yield* settle;
 
     // Two windows ask at once: the second must not slip in while the first lets the agent before go.
     yield* Effect.all(
-      [set({ agentId: OTHER_AGENT_ID, on: true }), set({ agentId: THIRD_AGENT_ID, on: true })],
+      [
+        set({ agentId: OTHER_AGENT_ID, port: 4000, on: true }),
+        set({ agentId: THIRD_AGENT_ID, port: 5000, on: true }),
+      ],
       { concurrency: "unbounded" },
     );
     yield* TestClock.adjust(PORT_FORWARD.LOOK_EVERY);

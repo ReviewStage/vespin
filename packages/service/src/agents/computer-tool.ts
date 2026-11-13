@@ -185,8 +185,10 @@ export const COMPUTER_TOOL = {
     "running is opened behind the developer's windows. The developer's Mac asks them the " +
     "first time an agent uses each app, and they may decline, in which case the call answers " +
     "`not-run`; agents are never offered terminals, password managers, System Settings, or " +
-    `${PRODUCT_NAME}. Use run_on_mac for what a shell can do; use this for what only an app's ` +
-    "window shows or takes.",
+    `${PRODUCT_NAME}. Reach for it last: an integration's tools where one serves the app, ` +
+    "run_on_mac where a shell can do it, and browser for localhost and public pages. Use this " +
+    "for what only an app's window shows or takes, a browser on the developer's Mac among them, " +
+    "such as a page that needs their own signed-in session.",
   inputSchema: COMPUTER_INPUT,
 } as const;
 
@@ -282,7 +284,10 @@ function answeredOutcome(
     return Effect.succeed({ ...ran, apps });
   }
 
-  const [shown, full]: readonly (ComputerShot | undefined)[] = outcome.shots;
+  // Note that each shot keeps its own place, the model's first and the kept one second, and one with no bytes is absent there alone, so neither the model nor the transcript is handed an empty picture or the other's.
+  const [first, second]: readonly (ComputerShot | undefined)[] = outcome.shots;
+  const shown = first?.jpeg === "" ? undefined : first;
+  const full = second?.jpeg === "" ? undefined : second;
 
   return Effect.gen(function* () {
     const app = yield* namedApp(transcript, outcome.app);
@@ -345,14 +350,16 @@ export function runComputerTool(
   });
 }
 
-/** The model's copy of a read window in a call's result, where it carries one. */
+/** The model's copy of a read window in a call's result, where it carries one; none for an empty one, which would fail the model's turn. */
 export function computerScreenshot(
   output: UnparsedWireValue,
 ): { readonly mime: string; readonly data: string } | undefined {
   if (!isRecord(output) || !isRecord(output.screenshot)) return undefined;
   const { mime, data } = output.screenshot;
 
-  return Predicate.isString(mime) && Predicate.isString(data) ? { mime, data } : undefined;
+  return Predicate.isString(mime) && Predicate.isString(data) && data !== ""
+    ? { mime, data }
+    : undefined;
 }
 
 /** A call's result as the conversation keeps it: the model's copy of the window without its base64, the kept copy named by id. */

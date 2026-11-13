@@ -12,6 +12,8 @@ import { ACT_KIND } from "@repo/host/acts";
 import {
   BUZZ,
   EmptyState,
+  GLYPH,
+  glyphSymbol,
   LIST_LOOK,
   LinkRow,
   ListSection,
@@ -42,10 +44,10 @@ export const VERSION_ROUTE = "/tasks/version/[id]";
 export const HISTORY_ROUTE = "/tasks/history/[id]";
 
 /** The glyph each version's row leads with, the panel's restore arrow round a clock. */
-const VERSION_SYMBOL = "clock.arrow.circlepath";
+const VERSION_SYMBOL = GLYPH.HISTORY;
 
 /** The glyph the history stands under while it says nothing else. */
-const HISTORY_SYMBOL = "clock";
+const HISTORY_SYMBOL = GLYPH.HISTORY;
 
 /** A version's number as its route's query carries it, none for anything that is not one. */
 function versionNumber(spelled: string | undefined): number | undefined {
@@ -81,7 +83,7 @@ export function HistoryScreen() {
     history.read === HISTORY_READ.FAILED ? (
       <EmptyState
         title={VERSION_HISTORY_WORDS.UNREAD}
-        symbol="exclamationmark.triangle"
+        symbol={GLYPH.FAILED}
         action={{ label: VERB.RETRY, onPress: history.retry }}
       />
     ) : history.read === HISTORY_READ.READING ? (
@@ -116,7 +118,7 @@ export function HistoryScreen() {
           ))}
           {earlier === undefined ? null : (
             <LinkRow
-              symbol="ellipsis"
+              symbol={GLYPH.MORE}
               label={
                 history.older === HISTORY_READ.READING
                   ? readingWords("older versions")
@@ -250,7 +252,7 @@ function Version({
   ) : read === undefined ? (
     <EmptyState
       title={VERSION_HISTORY_WORDS.VERSION_UNREAD}
-      symbol="exclamationmark.triangle"
+      symbol={GLYPH.FAILED}
       action={{ label: VERB.RETRY, onPress: () => void version.refetch() }}
     />
   ) : (
@@ -274,7 +276,7 @@ function Version({
       {current ? null : (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button
-            icon="arrow.counterclockwise"
+            icon={glyphSymbol(GLYPH.RESTORE)}
             tintColor={colors.TEXT}
             accessibilityLabel={VERSION_HISTORY_WORDS.RESTORE}
             disabled={read === undefined || restoring}

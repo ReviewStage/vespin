@@ -29,6 +29,7 @@ import { TestClock } from "effect/testing";
 import type { AppThisMacHost, AppThisMacHosts } from "./app-state.js";
 import { composeThisMacHost } from "./compose-this-mac-host.js";
 import {
+  type ReportAttributes,
   reporterLayer,
   THIS_MAC_AGENT_STATUS,
   type ThisMacAgentStatus,
@@ -134,6 +135,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
   Effect.gen(function* () {
     const asked: string[] = [];
     const reported: string[] = [];
+    const attributed: ({ line: string } & ReportAttributes)[] = [];
     const enrolled: { deviceId: string; version: string | null }[] = [];
     let failedRegisters = options.failedRegisters ?? 0;
     let status = options.status ?? THIS_MAC_AGENT_STATUS.NOT_REGISTERED;
@@ -219,8 +221,10 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
               ? new Response("{}", { status: 503 })
               : Response.json({ done: true });
           }),
-          reporterLayer((message) => {
+          reporterLayer((message, attributes) => {
             reported.push(message);
+
+            if (attributes !== undefined) attributed.push({ line: message, ...attributes });
           }),
           Layer.succeed(ThisMacHost, {
             stateRoot,
@@ -312,6 +316,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
     return {
       asked,
       reported,
+      attributed,
       enrolled,
       scripts,
       held,
@@ -596,7 +601,7 @@ it.effect(
 );
 
 it.effect(
-  "a register that failed after the enroll is tried again after a backoff, never by enrolling again",
+  "a register that failed after the enroll is reported with why, and tried again after a backoff, never by enrolling again",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -617,6 +622,18 @@ it.effect(
         yield* until(() => mac.asked.length >= 3);
         assert.deepEqual(mac.asked, ["enroll", "register", "register"]);
         assert.equal(Option.getOrUndefined(yield* readHostDevice(stateRoot))?.deviceId, MINTED_ID);
+
+        assert.deepEqual(
+          mac.attributed,
+          [
+            {
+              line: "this Mac's host: could not register it, so it is tried again",
+              reason: "macOS did not register it: not-registered",
+              attempt: 1,
+            },
+          ],
+          "the line names the step alone, and why it failed and which try it was are reported beside it",
+        );
       }).pipe(Effect.provide(FILES)),
     ),
 );

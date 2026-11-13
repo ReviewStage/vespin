@@ -47,6 +47,7 @@ import {
   type Scope,
   Stream,
 } from "effect";
+import type { ReadonlyRecord } from "effect/Record";
 import {
   type AppHostRead,
   type AppHostReads,
@@ -58,7 +59,6 @@ import {
   UNREAD,
 } from "./app-state.js";
 import { TX_WAIT_TIMEOUT } from "./live-follow.js";
-import type { ReadonlyRecord } from "effect/Record";
 
 /** Every row a collection, or a live query, shows now, what a standing write drew among them. */
 export function rowsOf<Row extends object>(collection: {

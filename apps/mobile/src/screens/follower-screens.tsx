@@ -5,6 +5,7 @@ import { readFailedWords, readingWords } from "@repo/features/words";
 import {
   BAR_TITLE,
   EmptyState,
+  GLYPH,
   ListSection,
   PersonPickRows,
   Screen,
@@ -106,13 +107,13 @@ export function AddFollowerScreen({ taskId }: { readonly taskId: string }) {
 
   const body =
     task === undefined ? (
-      <EmptyState title={WORDS.TASK_NOT_FOUND} symbol="questionmark.folder" />
+      <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : failed ? (
-      <EmptyState title={WORDS.READ_FAILED} symbol="person.2" />
+      <EmptyState title={WORDS.READ_FAILED} symbol={GLYPH.PEOPLE} />
     ) : people === undefined ? (
-      <EmptyState title={WORDS.READING} symbol="person.2" loading />
+      <EmptyState title={WORDS.READING} symbol={GLYPH.PEOPLE} loading />
     ) : people.length === 0 ? (
-      <EmptyState title={WORDS.NO_ONE} symbol="person.2" />
+      <EmptyState title={WORDS.NO_ONE} symbol={GLYPH.PEOPLE} />
     ) : (
       <SettingsForm>
         <ListSection title={WORDS.MEMBERS}>

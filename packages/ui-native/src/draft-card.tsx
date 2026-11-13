@@ -37,6 +37,7 @@ import {
   type TextStyle,
   View,
 } from "react-native";
+import { glyphSymbol } from "./glyph.js";
 import { useKeeping } from "./held-menu.js";
 import { KEEP_ACT, KEEP_SYMBOL } from "./keep-model.js";
 import type { SfSymbol } from "./sf-symbol.js";
@@ -127,7 +128,7 @@ function CopyPress({
       hitSlop={PRESS_REACH}
     >
       <SymbolView
-        name={KEEP_SYMBOL[KEEP_ACT.COPY]}
+        name={glyphSymbol(KEEP_SYMBOL[KEEP_ACT.COPY])}
         size={MARK_SIZE.GLYPH}
         tintColor={colors.TEXT_MUTED}
       />

@@ -89,3 +89,30 @@ test("the app used last is no longer in use once another tool is called, and not
   assert.equal(appsInUse(movedOn, true)?.using, false);
   assert.equal(appsInUse(using, false), undefined);
 });
+
+test("a call the Mac refused, as for a grant it lacks, adds no app, so no blank window floats as in use", () => {
+  const refused = call(
+    "r1",
+    "computer",
+    { action: "get_app_state", app: "Notes" },
+    {
+      status: "not-run",
+      reason: "Not run: Vespin on the developer's Mac doesn't have Screen Recording.",
+      missingPermissions: ["screen_recording"],
+    },
+  );
+
+  assert.equal(appsInUse([asked("ask-1"), turn("turn-1", [refused])], true), undefined);
+});
+
+test("a line sent while the turn runs steers it and keeps the apps used before it, while one sent after the turn closed opens the next", () => {
+  const running = turn("turn-1", [read("r1", "Simulator", WINDOW)]);
+  const steered = [asked("ask-1"), running, asked("steer-1")];
+  const closed = [asked("ask-1"), { ...running, finishedAt: 1_000 }, asked("ask-2")];
+
+  assert.deepEqual(
+    appsInUse(steered, true)?.apps.map((each) => each.app),
+    ["Simulator"],
+  );
+  assert.equal(appsInUse(closed, true), undefined);
+});

@@ -26,7 +26,11 @@ import {
   typeInComposer,
 } from "./testing/composer.js";
 import { testQueryClientNow, withQueryClient } from "./testing/copy-feedback.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "./testing/outbox.js";
 import { installScrollIntoView } from "./testing/scroll-into-view.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * The agent's box takes files: a picture dropped on the card is held under
@@ -44,10 +48,12 @@ const ignore = () => undefined;
 /** The agent's box on its own control, whose sends never answer. */
 function AgentBox({ agentId = "agent-1" }: { agentId?: string }): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox(agentId),
+    unsend: unsendOutbox,
     agentId,
     taskId: "plan-1",
     messages: [],
-    send: () => new Promise<AgentAgentAnswer>(ignore),
+    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
   });
 
   return createElement(AgentComposer, { ...QUIET_COMPOSER, composer, skills: undefined });
@@ -56,10 +62,12 @@ function AgentBox({ agentId = "agent-1" }: { agentId?: string }): ReactNode {
 /** The agent's box while a turn runs, its Enter queueing, the queue taking its message as the queue does: out of the box. */
 function QueueingBox(): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
-    send: () => new Promise<AgentAgentAnswer>(ignore),
+    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
   });
 
   const queued = () => {
@@ -86,10 +94,12 @@ function QueueingBox(): ReactNode {
 /** The agent's box editing a queued message, whose Save the queue refuses, so its words stay standing. */
 function RefusedEditBox(): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
-    send: () => new Promise<AgentAgentAnswer>(ignore),
+    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
   });
 
   return createElement(AgentComposer, {
@@ -111,10 +121,12 @@ function RefusedEditBox(): ReactNode {
 /** The agent's box opening on a draft kept with a picture its words name, as a draft kept from before, or a message opened for editing. */
 function KeptDraftBox(): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
-    send: () => new Promise<AgentAgentAnswer>(ignore),
+    send: outboxed(() => new Promise<AgentAgentAnswer>(ignore)),
   });
 
   const [kept, setKept] = useState(false);
@@ -430,41 +442,66 @@ test("a copy naming one picture twice pasted into the agent's box attaches it on
   assert.equal(editor.getText(), "[Picture 1] and [Picture 1]");
 });
 
-test("a description's picture pasted into the agent's box is read and attached as the box's next picture, where it was pasted", async () => {
-  const address = descriptionAttachmentAddress(
-    {
-      taskId: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d",
-      attachmentId: "3c9e1a77-58b2-4d0f-8e6a-1b2c3d4e5f02",
-    },
-    "acme",
-  );
+test.each([
+  {
+    case: "is read and attached as the box's next picture, where it was pasted",
+    pasted: (picture: string) => `<p>Like ${picture} here</p>`,
+    alt: "The mock",
+    words: "Like [Picture 1] here",
+    pictures: ["Open Picture 1"],
+  },
+  {
+    case: "twice is attached once, both chips naming it",
+    pasted: (picture: string) => `<p>Like ${picture} and ${picture} here</p>`,
+    alt: "The mock",
+    words: "Like [Picture 1] and [Picture 1] here",
+    pictures: ["Open Picture 1", "Open Picture 1"],
+  },
+  {
+    case: "whose alt names it a PDF, though it reads as a picture, is not kept as a PDF",
+    pasted: (picture: string) => `<p>Like ${picture} here</p>`,
+    alt: "chart.pdf",
+    words: "Like here",
+    pictures: [],
+  },
+])(
+  "a description's picture pasted into the agent's box $case",
+  async ({ pasted, alt, words, pictures }) => {
+    const address = descriptionAttachmentAddress(
+      {
+        taskId: "9a1b2c3d-4e5f-4a6b-8c7d-0e1f2a3b4c5d",
+        attachmentId: "3c9e1a77-58b2-4d0f-8e6a-1b2c3d4e5f02",
+      },
+      "acme",
+    );
 
-  fakeActPort({
-    ...fakeActPortCalls(),
-    [ACT_KIND.TASKS_PICTURE_READ]: () =>
-      Promise.resolve({ contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: "iVBORw0KGgo=" }),
-  });
+    fakeActPort({
+      ...fakeActPortCalls(),
+      [ACT_KIND.TASKS_PICTURE_READ]: () =>
+        Promise.resolve({ contentType: AGENT_ATTACHMENT_TYPE.PNG, base64: "iVBORw0KGgo=" }),
+    });
 
-  const container = await mounted("agent");
-  const html = `<p>Like <img src="${address}" alt="The mock"> here</p>`;
+    const container = await mounted("agent");
+    const html = pasted(`<img src="${address}" alt="${alt}">`);
 
-  const event = new Event("paste", { bubbles: true, cancelable: true });
-  Object.defineProperty(event, "clipboardData", {
-    value: {
-      files: [],
-      types: ["text/html"],
-      getData: (type: string) => (type === "text/html" ? html : ""),
-    },
-  });
-  act(() => {
-    composerEditor(container).dispatchEvent(event);
-  });
-  await read();
+    const event = new Event("paste", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "clipboardData", {
+      value: {
+        files: [],
+        types: ["text/html"],
+        getData: (type: string) => (type === "text/html" ? html : ""),
+      },
+    });
+    act(() => {
+      composerEditor(container).dispatchEvent(event);
+    });
+    await read();
 
-  const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
-  assert.equal(editor.getText(), "Like [Picture 1] here");
-  assert.deepEqual(held(container), { chips: [], pictures: ["Open Picture 1"], note: null });
-});
+    const editor = composerEditor(container).editor ?? assert.fail("the box's editor is running");
+    assert.equal(editor.getText(), words);
+    assert.deepEqual(held(container).pictures, pictures);
+  },
+);
 
 /** The chip a file was just laid in with taken out as two Backspaces would: the first the space laid in after it, which the browser deletes itself, the second the chip whole. */
 function takeOutLastChip(container: HTMLElement): void {

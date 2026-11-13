@@ -322,6 +322,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
     pressButton: SCREEN_ONLY,
   },
   dictation: { transcribe: SCREEN_ONLY },
+  // A call's lines are recorded by the window holding the call, as GPT-Live hears them; a member's agent messages an agent with its own tools.
+  messages: { recordVoiceLine: SCREEN_ONLY },
   events: { record: INTERNAL },
   github: {
     connect: NEEDS_BROWSER,
@@ -413,7 +415,10 @@ export const MEMBER_MCP_EXCLUSIONS = {
   },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },
+  workspaceMergeQueue: { read: NOT_YET_BUILT },
   workspaceSentry: { install: NEEDS_BROWSER },
+  // A call's session and its seconds are the panel's own, which holds the microphone and the WebRTC peer.
+  voice: { open: SCREEN_ONLY, ended: SCREEN_ONLY },
   workspaceSlackBot: { connect: NEEDS_BROWSER },
   workspaces: {
     setExperiment: INTERNAL,

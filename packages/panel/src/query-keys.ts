@@ -29,6 +29,8 @@ export const QUERY_ROOT = {
   WORKSPACE_ENVIRONMENT: "workspace-environment",
   /** Settings › Cloud environment's scripts: a workspace's install script and each repository's setup script (`settings/cloud-setup-sections.tsx`). */
   WORKSPACE_SANDBOX_SETUP: "workspace-sandbox-setup",
+  /** The Merge queue page: every pull request a workspace's merge queues hold (`desktop/merge-queue-page.tsx`). */
+  MERGE_QUEUE: "merge-queue",
   /** Settings › This Mac's computer use: the Mac's grants and the apps agents use without asking, as the host reads them through the helper. */
   COMPUTER_USE_STATUS: "computer-use-status",
   INSTALLED_SKILL: "installed-skill",
@@ -94,6 +96,7 @@ const ACCOUNT_SCOPED_ROOTS: ReadonlySet<unknown> = new Set<string>([
   QUERY_ROOT.HOST_PAIRING,
   QUERY_ROOT.WORKSPACE_ENVIRONMENT,
   QUERY_ROOT.WORKSPACE_SANDBOX_SETUP,
+  QUERY_ROOT.MERGE_QUEUE,
 ]);
 
 /**

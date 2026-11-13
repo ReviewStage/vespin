@@ -71,6 +71,10 @@ import {
   githubTokenProcedures,
 } from "../github/github-token-procedures.js";
 import {
+  type MergeQueueProcedureSeams,
+  mergeQueueProcedures,
+} from "../github/merge-queue-procedures.js";
+import {
   type RepositoryPinsProcedureSeams,
   repositoryPinsProcedures,
 } from "../github/repository-pins-procedures.js";
@@ -126,6 +130,7 @@ import {
   type SentryInstallProcedureSeams,
   sentryInstallProcedures,
 } from "../triggers/sentry/sentry-install-procedures.js";
+import { type VoiceProcedureSeams, voiceProcedures } from "../voice/voice-procedures.js";
 import {
   type WorkspaceEnvironmentProcedureSeams,
   workspaceEnvironmentProcedures,
@@ -146,6 +151,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   AgentsProcedureSeams &
   AutomationsProcedureSeams &
   DictationProcedureSeams &
+  VoiceProcedureSeams &
   EventsProcedureSeams &
   GitHubProcedureSeams &
   GitHubTokenProcedureSeams &
@@ -158,6 +164,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   DeviceAgentsProcedureSeams &
   MacCommandsProcedureSeams &
   McpClientsProcedureSeams &
+  MergeQueueProcedureSeams &
   MessagesProcedureSeams &
   ModelsProcedureSeams &
   DescriptionCommentsProcedureSeams &
@@ -219,10 +226,12 @@ export function hostedRouter(seams: HostedRouterSeams) {
     taskFiles: taskFilesProcedures(seams),
     taskFollowers: taskFollowersProcedures(seams),
     taskSections: taskSectionsProcedures(seams),
+    voice: voiceProcedures(seams),
     workspaceEnvironment: workspaceEnvironmentProcedures(seams),
     workspaceSandboxSetup: workspaceSandboxSetupProcedures(seams),
     workspaceGithub: workspaceGithubProcedures(seams),
     workspaceInvitations: workspaceInvitationsProcedures(seams),
+    workspaceMergeQueue: mergeQueueProcedures(seams),
     workspaceSentry: sentryInstallProcedures(seams),
     workspaceSlackBot: slackBotProcedures(seams),
     workspaces: workspacesProcedures(seams),

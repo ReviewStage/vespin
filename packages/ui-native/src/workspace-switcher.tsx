@@ -32,9 +32,9 @@ import {
 import { WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
 import { type ReactNode, useState } from "react";
 import { useScaledSize } from "./accessibility.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar } from "./marks.js";
 import { ActionRow, SettingsForm } from "./settings-form.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
@@ -109,7 +109,7 @@ const POPOVER_TALLEST = 560;
 /** An act under the list's workspaces, such as New workspace. */
 export type SwitcherAction = {
   readonly label: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly onPress: () => void;
 };
 
@@ -214,7 +214,7 @@ function SwitcherRow({
         <Spacer />
         {checked ? (
           <Image
-            systemName="checkmark"
+            {...glyphImage(GLYPH.CHECK)}
             size={checkSize}
             color={colors.ACCENT}
             modifiers={[accessibilityHidden()]}
@@ -282,7 +282,7 @@ function SwitcherList({
         <Section title={chosen.name}>
           <ActionRow
             label={WORKSPACE_SETTINGS}
-            symbol="building.2"
+            symbol={GLYPH.SETTINGS}
             heard={WORKSPACE_SWITCHER_WORDS.WORKSPACE_SETTINGS}
             onPress={() => closed(onWorkspaceSettings, true)}
           />
@@ -334,7 +334,7 @@ function SwitcherFace({
             {chosen.name}
           </Text>
           <Image
-            systemName="chevron.down"
+            {...glyphImage(GLYPH.UNFOLDED)}
             size={CHEVRON_SIZE}
             color={colors.TEXT_BODY}
             modifiers={[accessibilityHidden()]}
@@ -453,5 +453,5 @@ export function WorkspaceSwitcher(props: WorkspaceSwitcherProps) {
 
 /** The list's act that makes a workspace, as the panel words it. */
 export function newWorkspaceAction(onPress: () => void): SwitcherAction {
-  return { label: WORKSPACE_SWITCHER_WORDS.NEW_WORKSPACE, symbol: "plus", onPress };
+  return { label: WORKSPACE_SWITCHER_WORDS.NEW_WORKSPACE, symbol: GLYPH.ADD, onPress };
 }

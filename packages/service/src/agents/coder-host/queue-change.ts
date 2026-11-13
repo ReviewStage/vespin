@@ -49,13 +49,22 @@ const HANDS_ON: ReadonlySet<string> = new Set([
   QUEUE_CHANGE.HOLD,
 ]);
 
-/** What a queued message spoken on a call keeps beside its words, so it goes on as the developer's voice line; nothing for a typed one. */
-function spokenLine(userId: string, body: Parameters<typeof spokenLineMetadata>[0]) {
+/** What a queued message spoken on a call keeps beside its words, so it goes on as the developer's voice line on the caller's lines it names; nothing for a typed one. */
+function spokenLine(
+  userId: string,
+  body: Parameters<typeof spokenLineMetadata>[0] & {
+    readonly lines?: readonly string[] | undefined;
+  },
+) {
   const metadata = spokenLineMetadata(body);
 
-  return metadata === undefined
-    ? undefined
-    : { sender: { kind: MESSAGE_SENDER.MEMBER, userId }, metadata };
+  if (metadata === undefined) return undefined;
+
+  return {
+    sender: { kind: MESSAGE_SENDER.MEMBER, userId },
+    metadata,
+    ...(body.lines === undefined ? undefined : { adopts: body.lines }),
+  };
 }
 
 /** A store's answer for the account's agent, its absence answered as no such agent. */
@@ -64,7 +73,13 @@ const found = <A>(effect: Effect.Effect<Option.Option<A>, StoreFailure, Database
     Option.isSome(answer) ? Effect.succeed(answer.value) : Effect.fail(HOSTED_REFUSAL.NOT_FOUND),
   );
 
-/** The change made, or refused as the procedure answers it: a full queue or a bad order as invalid, a message no longer queued as not found. */
+/**
+ * The change made, or refused as the procedure answers it: a full queue or a
+ * bad order as invalid, a message no longer queued as not found. A message
+ * queued anew makes the member follow the task, as one sent does; one
+ * queued again under its id, a retry, wrote nothing new and makes no one
+ * follow, so a member who unfollowed since stays unfollowed.
+ */
 const applyChange = Effect.fn("web/applyQueueChange")(function* (
   userId: string,
   agent: Agent,
@@ -82,6 +97,8 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
       );
 
       if (outcome === QUEUE_OUTCOME.FULL) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
+      if (outcome === QUEUE_OUTCOME.QUEUED) yield* followAsMessaged(userId, agent.taskId);
 
       return;
     }
@@ -164,9 +181,6 @@ export const changeAgentQueue = Effect.fn("web/changeAgentQueue")(function* (
 ) {
   if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
   yield* applyChange(userId, agent, body);
-
-  // A member who queues a message for one of the task's agents follows the task, as one who sends it does.
-  if (body.change === QUEUE_CHANGE.ADD) yield* followAsMessaged(userId, agent.taskId);
 
   const claimed = HANDS_ON.has(body.change)
     ? yield* claimNext(agent)

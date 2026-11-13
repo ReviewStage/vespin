@@ -8,10 +8,14 @@ import { afterEach, beforeEach, test } from "vitest";
 import { descriptionEditor } from "../description-editor/index.js";
 import { installEditorLayout, QUIET_COMPOSER } from "../testing/composer.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { installScrollIntoView } from "../testing/scroll-into-view.js";
 import { onSideBundles, standInBundles } from "../testing/side-bundles.js";
 import { AgentComposer } from "./agent-composer.js";
 import { useAgentComposer } from "./use-agent-composer.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * A box whose editor bundle could not be loaded says so under the card and
@@ -34,10 +38,12 @@ afterEach(() => {
 
 function Box(): ReactNode {
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
-    send: () => new Promise(() => undefined),
+    send: outboxed(() => new Promise(() => undefined)),
   });
 
   return createElement(AgentComposer, { ...QUIET_COMPOSER, composer });

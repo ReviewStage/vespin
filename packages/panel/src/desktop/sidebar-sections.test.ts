@@ -501,6 +501,14 @@ test("a section whose only task is done still says Drag tasks here", async () =>
   );
 });
 
+test("a section draws no Drag tasks here before the tasks are read", async () => {
+  const sidebar = await mountSidebar([], SECTIONS, { tasks: [], listRead: false });
+  const sections = sidebar.querySelector('nav[aria-label="Sections"]');
+
+  assert.ok(sections);
+  assert.equal(sections.textContent?.includes("Drag tasks here"), false);
+});
+
 test("a task's Move to puts it on top of the section chosen", async () => {
   const writes: TaskSectionWrite[] = [];
   const sidebar = await mountSidebar(writes);

@@ -289,7 +289,7 @@ async function drawnTab(input: {
       return Promise.resolve(true);
     },
     onOpenApiKeys: (provider) => input.onOpenApiKeys?.(provider),
-    onMessage: (_agentId, text) =>
+    onMessage: (_agentId, { text }) =>
       input.onMessage?.(text) ??
       Promise.resolve(input.message ?? { failure: AGENT_CALL_FAILURE.UNANSWERED }),
     onRetry: (_agentId, words) => input.onRetry?.(words) ?? Promise.resolve(false),

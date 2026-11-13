@@ -23,7 +23,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useState } from "react";
-import type { MarkLook } from "./glyph.js";
+import { GLYPH, glyphImage, type MarkLook } from "./glyph.js";
 import { dropLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
 import { RowOpenContext, RowSelectedContext } from "./row-open.js";
@@ -183,7 +183,7 @@ function GroupHeader({
     >
       {folded === undefined ? null : (
         <Image
-          systemName={folded ? "chevron.right" : "chevron.down"}
+          {...glyphImage(folded ? GLYPH.FOLDED : GLYPH.UNFOLDED)}
           size={CHEVRON_SIZE}
           color={colors.TEXT_MUTED}
           modifiers={[frame({ width: CHEVRON_SIZE + 2 })]}
