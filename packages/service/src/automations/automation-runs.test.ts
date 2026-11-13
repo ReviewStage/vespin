@@ -1124,6 +1124,32 @@ it.layer(SUITE)("an automation's runs", (it) => {
   );
 
   it.effect(
+    "a one-time schedule's delivery starts its run, then pauses the automation with nothing due, keeping the run",
+    () =>
+      Effect.gen(function* () {
+        const { owner, automation, now, workspaceId } = yield* openAutomation({
+          trigger: { kind: AUTOMATION_TRIGGER.SCHEDULE, at: "1970-01-01T00:00", timezone: "UTC" },
+        });
+
+        const agentSessions = fakeAgentSessions();
+
+        yield* consumeAutomationRunMessage(
+          agentSessions.sessionsFor,
+          scheduleMessage(automation, workspaceId, now),
+        ).pipe(Effect.provide(services));
+
+        const runs = yield* listAutomationRuns(owner, automation.id);
+        assert.deepEqual(
+          runs.map((run) => run.status),
+          [AUTOMATION_RUN_STATUS.STARTED],
+          "the pause comes after the run, which it does not skip",
+        );
+        const after = Option.getOrThrow(yield* readAutomationToRun(automation.id));
+        assert.deepEqual([after.enabled, after.nextRunAt], [false, null]);
+      }),
+  );
+
+  it.effect(
     "one automation's firings delivered together are decided one after another, so the concurrency guard holds across them",
     () =>
       Effect.gen(function* () {

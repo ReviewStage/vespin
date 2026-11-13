@@ -16,7 +16,7 @@ import {
 } from "@repo/database/models/automation-store";
 import { isWorkspaceMember, personalWorkspaceOf } from "@repo/database/models/workspace-store";
 import { AGENT_STATUS } from "@repo/features/agent-wire";
-import { nextScheduledRun, readSchedule } from "@repo/features/automation-schedule";
+import { readSchedule, SCHEDULE_REFUSAL } from "@repo/features/automation-schedule";
 import {
   AUTOMATION_DEFAULT_GUARDS,
   AUTOMATION_FIRING,
@@ -66,7 +66,8 @@ import { executeAutomationRun, type SessionsForAccount } from "./automation-runs
  * `create_automation`, `update_automation`, and `delete_automation`
  * (`../agents/automation-tools.ts`) write through these alike, so what a
  * write checks is checked once: a schedule must read (five-field cron in a
- * known zone, no more often than every fifteen minutes), a model choice
+ * known zone, no more often than every fifteen minutes, or one date and
+ * time still to come where it is set to run), a model choice
  * must be one the catalog offers the account, an automation stands on a
  * workspace with the repositories its runs work in, each one its
  * installation reaches, or none, and a GitHub trigger has at least one
@@ -95,18 +96,27 @@ function mintWebhookSecret(): WebhookSecret {
   return { secret, hash: createHash("sha256").update(secret).digest("hex") };
 }
 
-/** When a trigger is first due from `now`: a schedule's next instant, nothing for any other, and the refusal for a schedule that does not read. */
+/**
+ * When a trigger is first due from `now`: a schedule's next instant,
+ * nothing for any other, and the refusal for a schedule that does not
+ * read. A one-time schedule already past is due never rather than refused
+ * where `settingToRun` is false, the automation kept or left paused as it
+ * stands, so a spent one still takes a rename; one being set to run is
+ * refused, since it would never run.
+ */
 const firstDue = /* @__PURE__ */ Effect.fnUntraced(function* (
   trigger: AutomationTrigger,
   now: number,
+  settingToRun: boolean,
 ): Effect.fn.Return<Date | null, HostedRefusal> {
   if (trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE) return null;
+  const read = readSchedule(trigger, new Date(now));
 
-  if (Result.isFailure(readSchedule(trigger, new Date(now)))) {
-    return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-  }
+  if (Result.isSuccess(read)) return read.success;
 
-  return nextScheduledRun(trigger, new Date(now)) ?? null;
+  if (read.failure === SCHEDULE_REFUSAL.PAST && !settingToRun) return null;
+
+  return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
 });
 
 /** The action as the catalog takes it: a named model must be one offered the account, refused as an invalid request otherwise. */
@@ -369,7 +379,12 @@ const changesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 
   const trigger = newTrigger ?? standing.trigger;
   const enabled = asked.enabled ?? standing.enabled;
-  const due = yield* firstDue(trigger, now);
+
+  // Note that only a resume or a pause moves the due instant, so a form that sends `enabled` as it stands skips no firing.
+  const reschedules =
+    newTrigger !== undefined || (asked.enabled !== undefined && asked.enabled !== standing.enabled);
+
+  const due = yield* firstDue(trigger, now, reschedules && enabled);
 
   // Note that an action sent without its servers keeps the ones saved, because a desktop from before
   // them sends the whole action back on a prompt's edit, and would otherwise switch every one back on.
@@ -412,10 +427,6 @@ const changesOf = /* @__PURE__ */ Effect.fnUntraced(function* (
     asked.repositories === undefined
       ? undefined
       : yield* reachedRepositories(standing.organizationId, asked.repositories);
-
-  // Note that only a resume or a pause moves the due instant, so a form that sends `enabled` as it stands skips no firing.
-  const reschedules =
-    newTrigger !== undefined || (asked.enabled !== undefined && asked.enabled !== standing.enabled);
 
   const changes: AutomationChanges = {
     ...(asked.name === undefined ? undefined : { name: asked.name }),
@@ -464,7 +475,7 @@ export const createAutomationAs = /* @__PURE__ */ Effect.fnUntraced(function* (
   DatabaseServices | ModelCatalog | GitHubApp | HttpClient.HttpClient | Sandbox
 > {
   const now = yield* Clock.currentTimeMillis;
-  const nextRunAt = yield* firstDue(made.trigger, now);
+  const nextRunAt = yield* firstDue(made.trigger, now, true);
   const action = yield* checkedAction(userId, made.action);
   const standing = yield* standingOf(userId, made);
   yield* checkTriggerRepositories(made.trigger, standing.repositories);

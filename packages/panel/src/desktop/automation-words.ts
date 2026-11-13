@@ -42,6 +42,8 @@ export function automationNextText(automation: AutomationSummary, now: number): 
   switch (next.kind) {
     case AUTOMATION_NEXT.OFF:
       return "Off";
+    case AUTOMATION_NEXT.RAN:
+      return "Ran once";
     case AUTOMATION_NEXT.EVENT:
       return undefined;
     case AUTOMATION_NEXT.UNSCHEDULED:
