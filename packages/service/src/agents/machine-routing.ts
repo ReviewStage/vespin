@@ -13,9 +13,10 @@
  * The machine a call goes to is the one it names, by name or id; else the
  * agent's default machine (`agent.target_device_id`); else the machine the
  * agent itself runs on, where it is reachable; else the owner's machine
- * that listened last. A default that cannot take the call refuses it,
- * rather than moving it to another machine without a word, and the
- * refusal names the machines that could. A Mac from before machines
+ * that listened last. A default that cannot take the call, or is gone,
+ * refuses it, rather than moving it to another machine without a word, and
+ * the refusal names the machines that could; so does a name two machines
+ * share. A Mac from before machines
  * claimed commands listens as its account alone, so where none of the
  * owner's machines listens as a device but the account does, the call is
  * queued for the account, as it was before.
@@ -138,14 +139,14 @@ function whyNot(
   return undefined;
 }
 
-/** The machine a call names, by its id or its name, whatever its case; none where no machine of the call's people is so named. */
-function named(candidates: readonly Candidate[], name: string): Candidate | undefined {
-  const wanted = name.trim().toLowerCase();
+/** The machines a call names: the one with its id, or else every one so named, whatever its case. */
+function named(candidates: readonly Candidate[], name: string): readonly Candidate[] {
+  const wanted = name.trim();
+  const byId = candidates.filter((machine) => machine.id === wanted);
 
-  return (
-    candidates.find((machine) => machine.id === name.trim()) ??
-    candidates.find((machine) => machine.name.toLowerCase() === wanted)
-  );
+  if (byId.length > 0) return byId;
+
+  return candidates.filter((machine) => machine.name.toLowerCase() === wanted.toLowerCase());
 }
 
 /** How a call is routed: its kind, the machine it names, whether a Mac of an account listens as its account alone, as one from before machines claimed does, and why it went nowhere where none of the owner's machines could take it. */
@@ -195,7 +196,7 @@ export function routeOf(
     };
 
     if (name !== undefined) {
-      const machine = named(candidates, name);
+      const [machine, ...more] = named(candidates, name);
 
       if (machine === undefined) {
         return {
@@ -204,13 +205,30 @@ export function routeOf(
         };
       }
 
+      // Note that a name two machines share refuses, since either could take one call and the next could go to the other.
+      if (more.length > 0) {
+        const ids = [machine, ...more].map((each) => `${listed(each)}: ${each.id}`);
+
+        return {
+          kind: MACHINE_ROUTE.REFUSED,
+          reason: `Not run: more than one machine is named ${JSON.stringify(name)}; name one in \`machine\` by its id (${ids.join(", ")}).`,
+        };
+      }
+
       return to(machine);
     }
 
-    const fallback = candidates.find((machine) => machine.id === routing.targetDeviceId);
-
     // Note that a default that cannot take the call refuses it, since moving it to another machine without a word could run it where the developer didn't mean.
-    if (fallback !== undefined) return to(fallback);
+    if (routing.targetDeviceId !== null) {
+      const fallback = candidates.find((machine) => machine.id === routing.targetDeviceId);
+
+      if (fallback !== undefined) return to(fallback);
+
+      return {
+        kind: MACHINE_ROUTE.REFUSED,
+        reason: `Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it.${others(reachable)}`,
+      };
+    }
 
     const own = reachable.find((machine) => machine.id === routing.deviceId);
 

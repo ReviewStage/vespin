@@ -103,7 +103,7 @@ const route = (
 
 it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
   it.effect(
-    "a call goes to the machine it names, else the agent's default, else the owner's that listened; one that cannot take it is refused naming the ones that can",
+    "a call goes to the machine it names, else the agent's default, else the owner's that listened; one that cannot take it, a default that is gone, or a name two share is refused naming the ones that can",
     () =>
       Effect.gen(function* () {
         const { owner, agentId, target } = yield* openPeople;
@@ -133,6 +133,30 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
           kind: MACHINE_ROUTE.REFUSED,
           reason:
             'Not run: no machine this task\'s agents may use is named "Mini". It can go to Laptop (Ana): name one in `machine`.',
+        });
+
+        yield* Database.use((db) =>
+          db
+            .update(device)
+            .set({ removedAt: new Date(0) })
+            .where(eq(device.id, studio)),
+        );
+
+        assert.deepEqual(yield* route(target, {}), {
+          kind: MACHINE_ROUTE.REFUSED,
+          reason:
+            "Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it. It can go to Laptop (Ana): name one in `machine`.",
+        });
+
+        const twin = yield* openMachine(owner, "LAPTOP", true);
+        const shared = yield* route(target, { name: "Laptop" });
+
+        assert.equal(shared.kind, MACHINE_ROUTE.REFUSED, "a name two machines share");
+        assert.ok(shared.kind === MACHINE_ROUTE.REFUSED && shared.reason.includes(laptop));
+        assert.ok(shared.kind === MACHINE_ROUTE.REFUSED && shared.reason.includes(twin));
+        assert.deepEqual(yield* route(target, { name: twin }), {
+          kind: MACHINE_ROUTE.MACHINE,
+          machine: { id: twin, name: "LAPTOP", owner: ana },
         });
       }),
   );
