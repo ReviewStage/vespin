@@ -15,7 +15,7 @@ import { noNetwork } from "@repo/wire/testing";
 import { Effect, Layer } from "effect";
 import { SignInRevocation } from "../auth/sign-in-revocation.js";
 import { HostedEnvironment } from "../environment.js";
-import { GitHubApp } from "../github/github-app.js";
+import { fixtureGitHubApp, overNoGitHub } from "./github-app-fake.js";
 import { CONNECTOR_ASKED_NOTHING, integrationConnectOf } from "./integration-connect.js";
 
 /** The deletion hooks' services bar the database, which the test's own layer provides. */
@@ -33,7 +33,7 @@ export const accountDeletionTestServices = Layer.mergeAll(
     previewApiKeys: {},
   }),
   integrationConnectOf(() => ({ ...CONNECTOR_ASKED_NOTHING, revoke: () => Effect.void })),
-  SignInRevocation.layer(undefined).pipe(Layer.provide(GitHubApp.layer(undefined))),
+  SignInRevocation.layer(undefined).pipe(Layer.provide(overNoGitHub(fixtureGitHubApp(undefined)))),
   memorySandbox().layer,
   noNetwork,
 );

@@ -22,6 +22,7 @@ import {
   GITHUB_APP_WITH_TOKENS,
   memberRepositoryJson,
   openTokenMember,
+  overNoGitHub,
   type SentToGitHub,
 } from "../testing/github-app-fake.js";
 import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
@@ -147,7 +148,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
           githubAccess: GITHUB_ACCESS.TOKEN,
           repository: "octo-member/side",
         });
-      }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+      }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 
   it.effect(
@@ -204,7 +205,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
           body: { error: HOSTED_API_ERROR.CHILD_REPOSITORY_LOCKED },
         });
         assert.equal((yield* listTasks(owner)).length, 2);
-      }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+      }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 
   it.effect("a child plan's repository cannot be changed to another", () =>
@@ -237,7 +238,7 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
       });
       const read = Option.getOrThrow(yield* readTask(owner, child.id));
       assert.equal(read.task.repository, "octo-member/other");
-    }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+    }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 
   it.effect("a member cannot make a child of a plan they do not reach, and nothing is made", () =>
@@ -282,6 +283,6 @@ it.layer(getTestDB())("a plan's repository on a member's own GitHub token", (it)
         [parent.id],
       );
       assert.deepEqual(yield* listTasks(stranger), []);
-    }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+    }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 });

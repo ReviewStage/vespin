@@ -294,7 +294,7 @@ function services(
   return Layer.mergeAll(
     http,
     machineOver(http),
-    GITHUB_APP_WITH_TOKENS,
+    GITHUB_APP_WITH_TOKENS.pipe(Layer.provide(http)),
     Layer.succeed(HostedEnvironment, environment),
     FIXTURE_IMAGE,
   );

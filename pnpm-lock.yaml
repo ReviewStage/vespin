@@ -7,21 +7,101 @@ settings:
 
 catalogs:
   default:
+    '@effect/platform-node':
+      specifier: 4.0.4
+      version: 4.0.4
+    '@effect/sql-pg':
+      specifier: 4.0.4
+      version: 4.0.4
+    '@effect/sql-pglite':
+      specifier: 4.0.4
+      version: 4.0.4
     '@effect/vitest':
       specifier: 4.0.4
       version: 4.0.4
+    '@modelcontextprotocol/client':
+      specifier: 2.4.0
+      version: 2.4.0
+    '@modelcontextprotocol/server':
+      specifier: 2.4.0
+      version: 2.4.0
+    '@orpc/client':
+      specifier: 2.0.0-beta.44
+      version: 2.0.0-beta.44
+    '@orpc/contract':
+      specifier: 2.0.0-beta.44
+      version: 2.0.0-beta.44
+    '@orpc/experimental-effect':
+      specifier: 2.0.0-beta.44
+      version: 2.0.0-beta.44
+    '@orpc/openapi':
+      specifier: 2.0.0-beta.44
+      version: 2.0.0-beta.44
+    '@orpc/publisher':
+      specifier: 2.0.0-beta.44
+      version: 2.0.0-beta.44
+    '@orpc/server':
+      specifier: 2.0.0-beta.44
+      version: 2.0.0-beta.44
+    '@orpc/shared':
+      specifier: 2.0.0-beta.44
+      version: 2.0.0-beta.44
+    '@tanstack/react-router':
+      specifier: 1.170.46
+      version: 1.170.46
+    '@tanstack/react-store':
+      specifier: 0.11.2
+      version: 0.11.2
     '@types/node':
       specifier: 26.6.6
       version: 26.6.6
+    '@vercel/oidc':
+      specifier: 4.0.9
+      version: 4.0.9
+    '@vercel/sandbox':
+      specifier: 3.9.1
+      version: 3.9.1
+    ai:
+      specifier: 7.0.172
+      version: 7.0.172
+    drizzle-kit:
+      specifier: 1.0.0-rc.4
+      version: 1.0.0-rc.4
+    drizzle-orm:
+      specifier: 1.0.0-rc.4
+      version: 1.0.0-rc.4
     effect:
       specifier: 4.0.4
       version: 4.0.4
+    react:
+      specifier: 19.2.8
+      version: 19.2.8
+    react-dom:
+      specifier: 19.2.8
+      version: 19.2.8
+    tsx:
+      specifier: 4.23.15
+      version: 4.23.15
     typescript:
       specifier: 7.0.2
       version: 7.0.2
     vitest:
       specifier: 5.1.0
       version: 5.1.0
+    ws:
+      specifier: 8.21.3
+      version: 8.21.3
+  mobile:
+    '@types/react':
+      specifier: 19.3.0
+      version: 19.3.0
+    react:
+      specifier: 19.3.0
+      version: 19.3.0
+  web:
+    typescript:
+      specifier: 6.0.3
+      version: 6.0.3
 
 overrides:
   dompurify@>=3.0.0 <3.4.17: 3.4.17
@@ -1324,6 +1404,9 @@ importers:
       '@repo/features':
         specifier: workspace:*
         version: link:../features
+      '@repo/github':
+        specifier: workspace:*
+        version: link:../github
       '@repo/runtime':
         specifier: workspace:*
         version: link:../runtime
@@ -1394,6 +1477,9 @@ importers:
       '@types/ws':
         specifier: 8.18.2
         version: 8.18.2
+      bottleneck:
+        specifier: 2.19.5
+        version: 2.19.5
       jsdom:
         specifier: ^30.0.1
         version: 30.0.1(@noble/hashes@2.4.0)
@@ -3580,6 +3666,7 @@ packages:
 
   '@orpc/experimental-effect@2.0.0-beta.44':
     resolution: {integrity: sha512-iqVsyksS3IQ79xOqnmIJPmKEUbHXcr0LjrT4NYf2Qo5ukJz6JcQqiT1zRsmEh0v5LdzGxrEzyhRK42UPe20Q0Q==}
+    deprecated: Renamed to @orpc/effect
     peerDependencies:
       effect: '>=4.0.0'
 
