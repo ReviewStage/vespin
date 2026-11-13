@@ -236,19 +236,19 @@ onFlowComplete:
 - scrollUntilVisible:
     element: "Created by .*"
     direction: UP
-- tapOn: "Status"
+- tapOn: "Status, .*"
 - takeScreenshot: task-status-menu
 - tapOn: "Todo"
 - waitForAnimationToEnd
-- assertVisible: "Todo"
+- assertVisible: "Status, Todo"
 - takeScreenshot: task-status-set
-- tapOn: "Priority"
+- tapOn: "Priority, .*"
 - assertVisible: "Urgent"
 - takeScreenshot: task-priority-menu
 - tapOn:
     point: "50%, 90%"
 - waitForAnimationToEnd
-- tapOn: "Assignee"
+- tapOn: "Assignee, .*"
 - assertVisible: "No assignee"
 - takeScreenshot: task-assignee-menu
 - tapOn:

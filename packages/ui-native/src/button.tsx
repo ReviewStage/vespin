@@ -337,7 +337,8 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
  * its mark saying the same. Where it carries a menu, a press opens the
  * system's pull-down menu of the field's values over it, the one it holds
  * checked, as Reminders' and Linear's fields open theirs, and VoiceOver
- * hears the field's name, then its value; with none it takes no press.
+ * hears the field's name and its value as one label; with none it takes no
+ * press.
  */
 export function FieldChip(props: FieldChipProps) {
   const colors = useColors();
@@ -366,13 +367,14 @@ export function FieldChip(props: FieldChipProps) {
       modifiers={[
         // Note that a borderless menu takes only its own press, since a list row holding the system's buttons hands any press on it to all of them.
         buttonStyle("borderless"),
-        accessibilityLabel(menu.label),
-        accessibilityValue(props.label),
+        // Note that the field's name and its value are one label, "Status, Todo", because Maestro and Voice Control match a label and never a value.
+        accessibilityLabel(`${menu.label}, ${props.label}`),
       ]}
     >
-      {menu.choices.map((choice) => (
+      {menu.choices.map((choice, at) => (
         <Toggle
-          key={choice.label}
+          // Note that a choice is keyed by its place, since two members may share a name.
+          key={at}
           {...actContent(choice.label, choice.symbol)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}

@@ -25,7 +25,6 @@ export {
   type ButtonSize,
   Chip,
   FieldChip,
-  type FieldMenu,
   FollowingChip,
   SCOPE_LOOK,
   type Scope,
