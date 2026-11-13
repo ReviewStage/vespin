@@ -55,7 +55,7 @@ import {
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { actMutation, pressMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { copyThroughShell } from "../copy-feedback.js";
@@ -66,7 +66,13 @@ import { useThisMac } from "../machine-name.js";
 import { showToast } from "../toast.js";
 import { appStateQuery, selectAccount } from "../use-app-state.js";
 import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
-import { MachineSettingsSection } from "./machine-settings-section.js";
+import {
+  CommandMachineRow,
+  MachineAgentRows,
+  machineListedOf,
+  useMachineRemove,
+  useMachineSettings,
+} from "./machine-settings-section.js";
 import { MachineMark, MachineStandingLine } from "./machine-standing.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
@@ -593,6 +599,8 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   };
 
   const listed = hosts?.map(machineOf) ?? [];
+  const machineSettings = useMachineSettings(signedIn);
+  const machineRemove = useMachineRemove();
   // Note that This Mac's host stands on its switch's row only while it is on; one the service still lists while it is off, as an uninstall that could not reach the service leaves it, stands as any host does, by its own name, with its Remove.
   const naming = thisMac?.enrolled === true ? thisMac : undefined;
 
@@ -609,7 +617,37 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   const loaded = signedIn && hosts !== undefined && installScriptUrl !== undefined;
   const others = hosts?.filter((host) => host !== listedMac) ?? [];
   const lastJoined = others.findLast(joinedNow);
-  const empty = others.length === 0 && thisMac === undefined;
+  const machines = machineSettings.machines ?? [];
+
+  // Note that This Mac's settings are its own device's, which its host's record names where it has one, and otherwise the machine it is.
+  const thisMacMachine =
+    thisMac === undefined
+      ? undefined
+      : machines.find((machine) =>
+          thisMac.deviceId === undefined
+            ? isThisMac(machineListedOf(machine), thisMac)
+            : machine.id === thisMac.deviceId,
+        );
+
+  const hostIds = new Set(hosts?.map((host) => host.id) ?? []);
+
+  // Note that a Mac that only runs the app, and so no host, stands after the hosts, with its own row.
+  const commandOnly = machines.filter(
+    (machine) =>
+      machine.settings !== undefined && machine !== thisMacMachine && !hostIds.has(machine.id),
+  );
+
+  const named = [...listed, ...commandOnly.map(machineListedOf)];
+  const empty = others.length === 0 && thisMac === undefined && commandOnly.length === 0;
+
+  /** A machine's own settings for agents, inset under its row, where its app joined. */
+  const agentRows = (id: string | undefined) => {
+    const machine = id === undefined ? undefined : machines.find((each) => each.id === id);
+
+    return machine === undefined ? null : (
+      <MachineAgentRows machine={machine} apps={machineSettings.appsOf(machine.id)} />
+    );
+  };
 
   const list = (
     <SettingsSection {...settingsSectionHead(SECTION.HOSTS)}>
@@ -620,30 +658,57 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
       ) : loaded ? (
         <>
           {thisMac === undefined ? null : (
-            <ThisMacRow
-              host={listedMac}
-              book={book}
-              on={thisMacOn}
-              needsApproval={thisMac.needsApproval === true}
-              setupFailed={thisMac.setupFailed === true}
-              onChange={switchThisMac}
-            />
+            <>
+              <ThisMacRow
+                host={listedMac}
+                book={book}
+                on={thisMacOn}
+                needsApproval={thisMac.needsApproval === true}
+                setupFailed={thisMac.setupFailed === true}
+                onChange={switchThisMac}
+              />
+              {agentRows(thisMacMachine?.id)}
+            </>
           )}
           {others.map((host) => {
-            const label = machineName(machineOf(host), listed, naming);
+            const label = machineName(machineOf(host), named, naming);
 
             return (
-              <HostRow
-                key={host.id}
-                host={host}
-                label={label}
-                book={book}
-                joined={joinedNow(host)}
-                onRemove={() => askRemove(host, label)}
-                locked={removing.busy}
-              />
+              <Fragment key={host.id}>
+                <HostRow
+                  host={host}
+                  label={label}
+                  book={book}
+                  joined={joinedNow(host)}
+                  onRemove={() => askRemove(host, label)}
+                  locked={removing.busy}
+                />
+                {agentRows(host.id)}
+              </Fragment>
             );
           })}
+          {commandOnly.map((machine) => {
+            const label = machineName(machineListedOf(machine), named, naming);
+
+            return (
+              <Fragment key={machine.id}>
+                <CommandMachineRow
+                  machine={machine}
+                  label={label}
+                  onRemove={() => machineRemove.ask(machine, label)}
+                  locked={machineRemove.busy}
+                />
+                {agentRows(machine.id)}
+              </Fragment>
+            );
+          })}
+          {machineSettings.failed ? (
+            <ReadFailed
+              line={readFailedWords("each machine's settings")}
+              surface={FAILURE_SURFACE.MACHINES_READ}
+              onRetry={machineSettings.retry}
+            />
+          ) : null}
         </>
       ) : read.isError ? (
         <ReadFailed
@@ -662,7 +727,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
     <AddHostSection
       installScriptUrl={installScriptUrl}
       joined={
-        lastJoined === undefined ? undefined : machineName(machineOf(lastJoined), listed, naming)
+        lastJoined === undefined ? undefined : machineName(machineOf(lastJoined), named, naming)
       }
     />
   ) : null;
@@ -674,16 +739,15 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         <>
           {add}
           {list}
-          <MachineSettingsSection signedIn={signedIn} />
         </>
       ) : (
         <>
           {list}
-          <MachineSettingsSection signedIn={signedIn} />
           {add}
         </>
       )}
       <RemoveHostDialog asked={asked} confirm={removing} />
+      {machineRemove.dialog}
       <ConfirmDialog
         open
         confirm={turningOff}

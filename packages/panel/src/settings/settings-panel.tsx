@@ -191,7 +191,6 @@ export function SettingsPanel({
         <>
           <MachineCommandsSection
             view={panelView}
-            writes={writes}
             notifications={notifications}
             microphone={capabilities.includes(HOST_CAPABILITY.MICROPHONE) ? microphone : undefined}
           />

@@ -7,32 +7,17 @@ import {
   type MachineCommandMode,
 } from "@repo/features/machine-command-wire";
 import type { MachineLine } from "@repo/features/machine-live";
-import {
-  isThisMac,
-  type ListedMachine,
-  machineName,
-  type ThisMac,
-} from "@repo/features/machine-name";
+import type { ListedMachine } from "@repo/features/machine-name";
 import {
   MACHINE_SETTINGS_WORDS,
   MACHINES_WORDS,
   removeCommandMachineQuestion,
 } from "@repo/features/machines-settings-words";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
-import { ACT_UNREACHED_WORDS, readFailedWords, readingWords } from "@repo/features/words";
+import { ACT_UNREACHED_WORDS } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT, MACHINE_COMMAND_MODE_LABEL } from "@repo/settings";
-import {
-  CONFIRM_LOSS,
-  ConfirmDialog,
-  SETTINGS_ROW_INDENT,
-  SETTINGS_SKELETON_CONTROL,
-  SettingsLine,
-  type SettingsRowSkeletonLayout,
-  SettingsRowsSkeleton,
-  SettingsSection,
-  useConfirmDialog,
-} from "@repo/ui";
+import { CONFIRM_LOSS, ConfirmDialog, SETTINGS_ROW_INDENT, useConfirmDialog } from "@repo/ui";
 import { ReplayMask } from "@repo/ui/session-replay-marks";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -41,47 +26,33 @@ import { actMutation } from "../act-mutations.js";
 import { useConfirmAct } from "../confirm-act.js";
 import { confirmFailure } from "../failure-report.js";
 import { machinesQuery, machinesRetryMutation } from "../live-reads.js";
-import { useThisMac } from "../machine-name.js";
 import { useAllowedApps } from "../tasks/mac-apps.js";
 import { appStateQuery, selectAccount, selectExperiment } from "../use-app-state.js";
 import { type AllowedApp, AllowedAppList } from "./allowed-app-row.js";
 import { MachineMark, MachineStandingLine } from "./machine-standing.js";
-import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { refusalToast, rowWrite, type SettingRefusal } from "./row-write.js";
 import { SelectRow } from "./select-row.js";
-import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import { SwitchRow } from "./switch-row.js";
 
 /**
- * machine-settings-section.tsx -- Settings › Machines' What agents may do: each of the member's machines with its own say over agents' terminal commands and apps, changed from any device or the web.
+ * machine-settings-section.tsx -- each of the member's machines' own say over agents, as Settings › Machines draws it under that machine's row: its terminal commands, whether agents may use its apps, and the apps they use unasked; and Remove for a machine that runs no agents.
  *
- * Every machine whose app joined is listed (`LIVE_READ.MACHINES`), each
- * named as every list of machines names it (`machine-name.ts`), This Mac
- * among them, and led by its platform's glyph and whether its app listens
- * now, Online or Offline, after the dot Runs on draws. Under it stand its
- * settings, inset as its parts: how agents' terminal commands run there,
- * and, where the reader has Computer use on, whether agents may use its
- * apps and the apps they use unasked, each by its icon where the machine
- * drew one, with a Remove. Each row is the one Settings draws the same
- * thing with elsewhere: the machine's mark and line as Your machines draws
- * them (`machine-standing.tsx`), the mode's picker and the switch as every
- * setting's (`SelectRow`, `SwitchRow`), and each app as This Mac lists it
- * (`allowed-app-row.tsx`). Each change is the machine's own, kept by the
+ * Every machine whose app joined holds these (`LIVE_READ.MACHINES`), changed
+ * from any device or the web: each change is the machine's own, kept by the
  * service, drawn at once, and taken by the machine as it lands, or as it
- * next joins where it is offline; This Mac's own page edits the same values.
+ * next joins where it is offline. Each row is the one Settings draws the
+ * same thing with elsewhere: the mode's picker and the switch as every
+ * setting's (`SelectRow`, `SwitchRow`), and the apps as Always allowed
+ * commands are listed (`allowed-app-row.tsx`). The apps are drawn only where
+ * the reader has Computer use on.
  *
- * A machine that runs no agents can be removed here, after asking, as a
- * wiped app state leaves one behind; a host is removed from Your machines
- * above, which also takes it off its box, and This Mac is never offered
- * one, since it would join again at once.
+ * A machine that runs no agents is listed by its own row here
+ * (`CommandMachineRow`), led by whether its app listens now, and can be
+ * removed after asking, as a wiped app state leaves one behind; a host is
+ * removed as a host is, which also takes it off its box, and This Mac is
+ * never offered one, since it would join again at once.
  */
-
-/** The rows that stand while the machines are read: a machine, then its commands. */
-const MACHINES_SKELETON: readonly SettingsRowSkeletonLayout[] = [
-  { described: true, controls: [], end: [SETTINGS_SKELETON_CONTROL.MORE] },
-  { described: false, controls: [SETTINGS_SKELETON_CONTROL.SELECT] },
-];
 
 const ACCEPTED: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 
@@ -114,7 +85,7 @@ function changeRefused(answer: HostDoneAnswerView): string | undefined {
 }
 
 /** A machine as the list of machines names it (`machineName`). */
-function listedOf(machine: MachineLine): ListedMachine {
+export function machineListedOf(machine: MachineLine): ListedMachine {
   return {
     deviceId: machine.id,
     name: machine.name,
@@ -130,24 +101,19 @@ interface RemoveAsked {
   readonly label: string;
 }
 
-/** One machine: its row, with Remove where it may be removed here, and its settings inset under it, each written as its row writes a setting. */
-function MachineRows({
+/**
+ * One machine's own settings for agents, inset under its row: how agents'
+ * terminal commands run there, and, where the reader has Computer use on,
+ * whether agents may use its apps and the apps they use unasked. Nothing
+ * for a machine whose app never joined, which holds none.
+ */
+export function MachineAgentRows({
   machine,
-  label,
   apps,
-  removable,
-  onRemove,
-  locked,
 }: {
   machine: MachineLine;
-  /** What the list calls the machine (`machineName`). */
-  label: string;
   /** How the machine names and draws its apps, by the app they are allowed by; none where Computer use is off, which draws no apps. */
   apps: ReadonlyMap<string, AllowedApp> | undefined;
-  removable: boolean;
-  onRemove: () => void;
-  /** Whether a removal is out, which every Remove waits out. */
-  locked: boolean;
 }): React.JSX.Element | null {
   const commands = useMutation(actMutation(ACT_KIND.MACHINES_CHANGE));
 
@@ -174,31 +140,6 @@ function MachineRows({
 
   return (
     <>
-      <MenuRow
-        thing={label}
-        actions={
-          removable
-            ? [
-                {
-                  label: MACHINES_WORDS.REMOVE,
-                  danger: true,
-                  disabled: locked,
-                  onSelect: onRemove,
-                },
-              ]
-            : []
-        }
-        row={{
-          leading: <MachineMark platform={machine.platform ?? DEVICE_PLATFORM.DARWIN} />,
-          label: <ReplayMask>{label}</ReplayMask>,
-          description: (
-            <MachineStandingLine
-              standing={machine.listening ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE}
-              platform={machine.platform ?? DEVICE_PLATFORM.DARWIN}
-            />
-          ),
-        }}
-      />
       <SelectRow
         indent={SETTINGS_ROW_INDENT.MARK}
         label={MACHINE_SETTINGS_WORDS.COMMANDS}
@@ -241,27 +182,104 @@ function MachineRows({
   );
 }
 
-/** Each machine's own settings for agents, as the account's machines read holds them, or why they cannot be drawn. */
-export function MachineSettingsSection({
-  signedIn,
+/** A machine that runs no agents, on the list of machines: its mark, what the list calls it, whether its app listens now, and its ⋯ holding Remove. */
+export function CommandMachineRow({
+  machine,
+  label,
+  onRemove,
+  locked,
 }: {
-  signedIn: boolean;
-}): React.JSX.Element | null {
+  machine: MachineLine;
+  /** What the list calls the machine (`machineName`). */
+  label: string;
+  onRemove: () => void;
+  /** Whether a removal is out, which every Remove waits out. */
+  locked: boolean;
+}): React.JSX.Element {
+  return (
+    <MenuRow
+      thing={label}
+      actions={[
+        { label: MACHINES_WORDS.REMOVE, danger: true, disabled: locked, onSelect: onRemove },
+      ]}
+      row={{
+        leading: <MachineMark platform={machine.platform ?? DEVICE_PLATFORM.DARWIN} />,
+        label: <ReplayMask>{label}</ReplayMask>,
+        description: (
+          <MachineStandingLine
+            standing={machine.listening ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE}
+            platform={machine.platform ?? DEVICE_PLATFORM.DARWIN}
+          />
+        ),
+      }}
+    />
+  );
+}
+
+/** The account's machines with their own settings, as the machines read holds them, and how each draws the apps it allows. */
+export interface MachineSettingsRead {
+  /** Every machine of the account's not removed; none before the read answers or where it failed. */
+  readonly machines: readonly MachineLine[] | undefined;
+  /** How the machine of the id names and draws its apps; none where Computer use is off, which draws no apps. */
+  readonly appsOf: (id: string) => ReadonlyMap<string, AllowedApp> | undefined;
+  /** Whether the read failed, which the list says under its rows. */
+  readonly failed: boolean;
+  /** Reads the machines again after a failure. */
+  readonly retry: () => void;
+}
+
+/** The account's machines with their own settings for agents, read while `signedIn`. */
+export function useMachineSettings(signedIn: boolean): MachineSettingsRead {
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
   const read = useQuery(machinesQuery(signedIn ? accountId : undefined));
   const retry = useMutation(machinesRetryMutation());
-  const thisMac = useThisMac();
 
   const computerUse =
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.COMPUTER_USE) }).data === true;
 
   const allowed = useAllowedApps(signedIn);
 
+  /** How each machine names and draws the apps it allows, by machine and then app. */
+  const looks = new Map(
+    allowed.machines.map((each) => [
+      each.deviceId,
+      new Map<string, AllowedApp>(
+        (each.looks ?? []).map((look) => [
+          look.app,
+          { bundleId: look.app, name: look.name, iconPng: look.iconPng },
+        ]),
+      ),
+    ]),
+  );
+
+  return {
+    machines: read.data,
+    appsOf: (id) => (computerUse ? (looks.get(id) ?? new Map()) : undefined),
+    failed: read.isError,
+    retry: () => retry.mutate(),
+  };
+}
+
+/** Remove for a machine that runs no agents: the question it asks first, and what pressing Remove asks. */
+export interface MachineRemove {
+  readonly ask: (machine: MachineLine, label: string) => void;
+  /** Whether a removal is out, which every Remove waits out. */
+  readonly busy: boolean;
+  readonly dialog: React.JSX.Element;
+}
+
+/**
+ * Remove for a machine that runs no agents, asked first over the section
+ * rather than its row, because the host draws a removal gone the moment it
+ * is asked, so the row is gone before a refusal comes back to be said.
+ */
+export function useMachineRemove(): MachineRemove {
+  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+
   const { mutateAsync: sendRemove, ...removingWrite } = useMutation(
     actMutation(ACT_KIND.MACHINES_REMOVE),
   );
 
-  // Note that Remove asks over the section rather than its row, because the host draws a removal gone the moment it is asked, so the row is gone before a refusal comes back to be said.
   const [asked, setAsked] = useState<RemoveAsked | undefined>(undefined);
 
   const removingAct = useConfirmAct(removingWrite, {
@@ -277,75 +295,13 @@ export function MachineSettingsSection({
     confirmFailure(FAILURE_SURFACE.MACHINE_REMOVE),
   );
 
-  const machines = read.data?.filter((machine) => machine.settings !== undefined);
-  const naming: ThisMac = thisMac;
-  const listed = machines?.map(listedOf) ?? [];
-
-  /** How each machine names and draws the apps it allows, by machine and then app; none while Computer use is off. */
-  const looks = new Map(
-    allowed.machines.map((each) => [
-      each.deviceId,
-      new Map<string, AllowedApp>(
-        (each.looks ?? []).map((look) => [
-          look.app,
-          { bundleId: look.app, name: look.name, iconPng: look.iconPng },
-        ]),
-      ),
-    ]),
-  );
-
-  // Note that This Mac stands first, as Your machines draws it.
-  const ordered = [...(machines ?? [])].sort(
-    (one, other) =>
-      Number(isThisMac(listedOf(other), naming)) - Number(isThisMac(listedOf(one), naming)),
-  );
-
-  // Note that signed out Your machines says so, and this section stands down.
-  if (!signedIn) return null;
-
-  return (
-    <>
-      <SettingsSection
-        {...settingsSectionHead(SECTION.MACHINE_SETTINGS)}
-        caption={MACHINE_SETTINGS_WORDS.CAPTION}
-      >
-        {machines !== undefined ? (
-          ordered.length === 0 ? (
-            <SettingsLine>{MACHINE_SETTINGS_WORDS.NONE}</SettingsLine>
-          ) : (
-            ordered.map((machine) => {
-              const label = machineName(listedOf(machine), listed, naming);
-              const own = isThisMac(listedOf(machine), naming);
-
-              return (
-                <MachineRows
-                  key={machine.id}
-                  machine={machine}
-                  label={label}
-                  apps={computerUse ? (looks.get(machine.id) ?? new Map()) : undefined}
-                  removable={!machine.host && !own}
-                  onRemove={() => {
-                    setAsked({ accountId, machine, label });
-                    removing.ask();
-                  }}
-                  locked={removing.busy}
-                />
-              );
-            })
-          )
-        ) : read.isError ? (
-          <ReadFailed
-            line={readFailedWords("each machine's settings")}
-            surface={FAILURE_SURFACE.MACHINES_READ}
-            onRetry={() => retry.mutate()}
-          />
-        ) : (
-          <SettingsRowsSkeleton
-            label={readingWords("each machine's settings")}
-            rows={MACHINES_SKELETON}
-          />
-        )}
-      </SettingsSection>
+  return {
+    ask: (machine, label) => {
+      setAsked({ accountId, machine, label });
+      removing.ask();
+    },
+    busy: removing.busy,
+    dialog: (
       <ConfirmDialog
         open
         confirm={removing}
@@ -356,6 +312,6 @@ export function MachineSettingsSection({
           titleReplayMasked: true,
         }}
       />
-    </>
-  );
+    ),
+  };
 }

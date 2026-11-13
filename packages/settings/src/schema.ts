@@ -249,6 +249,8 @@ export const APP_SETTING_SCHEMA = {
     default: MACHINE_COMMAND_MODE.ASK,
     page: SETTINGS_PAGE.THIS_MAC,
     order: 2,
+    // Note that the setting is edited under its machine on Settings › Machines, which writes the service's copy this Mac follows, so This Mac draws no row of its own.
+    visible: () => false,
     // Nothing to run per write: the host reads the setting before each read for commands and as each command is about to run.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
@@ -260,8 +262,8 @@ export const APP_SETTING_SCHEMA = {
     default: true,
     page: SETTINGS_PAGE.THIS_MAC,
     order: 3,
-    // Note that the switch stands only where Computer use is on, as every gated feature's row does.
-    visible: (view) => experimentOn(view.settings.experiments, EXPERIMENT.COMPUTER_USE),
+    // Note that the switch is edited under its machine on Settings › Machines, which writes the service's copy this Mac follows, so This Mac draws no row of its own.
+    visible: () => false,
     // Nothing to run per write: the host reads the switch as each action on an app arrives.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),

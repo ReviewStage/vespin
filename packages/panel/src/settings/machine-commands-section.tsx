@@ -7,36 +7,34 @@ import {
   settingRowsForPage,
 } from "@repo/settings";
 import type { MicrophoneControl, NotificationsControl } from "@repo/settings/settings-controls";
-import { SettingsSection } from "@repo/ui";
-import { ComputerUseSection } from "./computer-use-section.js";
+import { SETTINGS_VIEW } from "@repo/settings/settings-views";
+import { SettingsLine, SettingsSection } from "@repo/ui";
+import { SettingsPageLink } from "../open-settings.js";
 import { PermissionsSection } from "./permissions-section.js";
 import { SchemaSettingRows } from "./schema-rows.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
-import type { SettingsWrites } from "./writes.js";
 
 /**
- * machine-commands-section.tsx -- the This Mac page's groups: whether the app and coding agents may run shell commands and use apps here, what macOS lets the app do, the apps agents use unasked, then Startup.
+ * machine-commands-section.tsx -- the This Mac page's groups: what only this Mac itself holds, what macOS lets the app do here, then Startup.
  *
- * One choice, Ask every time by default: each command is put to the
- * developer before it runs, or every command runs unasked, or none at all
- * (`compose-machine-commands.ts` in the host stops reading for commands under
- * Never). Under the choices stands everything macOS lets the app do here,
- * each drawn the same way (`permissions-section.tsx`): notifications, which
- * a command waiting while the app is behind is posted as, the microphone,
- * and, where Computer use is on, its two grants. Then, where Computer use
- * is on, the apps agents use without asking (`computer-use-section.tsx`).
- * Startup holds whether the app opens at login, since it is the Mac
- * that starts it; it stands only where the installed app does, so a page
- * with none of its rows draws no empty heading.
+ * What agents may do here, its terminal commands, its apps, and the apps
+ * they use unasked, is this Mac's row on Settings › Machines, as every
+ * machine's is, so the page says where rather than drawing a second copy.
+ * Beside that line stand the Mac's own rows, such as keeping it awake.
+ * Under them stands everything macOS lets the app do here, each drawn the
+ * same way (`permissions-section.tsx`): notifications, which a command
+ * waiting while the app is behind is posted as, the microphone, and, where
+ * Computer use is on, its two grants. Startup holds whether the app opens
+ * at login, since it is the Mac that starts it; it stands only where the
+ * installed app does, so a page with none of its rows draws no empty
+ * heading.
  */
 export function MachineCommandsSection({
   view,
-  writes,
   notifications,
   microphone,
 }: {
   view: SettingsRowsInput;
-  writes: SettingsWrites;
   notifications: NotificationsControl;
   /** The microphone, on a platform whose microphone the app asks for itself; none elsewhere. */
   microphone?: MicrophoneControl | undefined;
@@ -49,6 +47,13 @@ export function MachineCommandsSection({
   return (
     <>
       <SettingsSection>
+        <SettingsLine>
+          {/* Note that the sentence stands in one span, because the line lays its children apart. */}
+          <span>
+            Terminal commands and apps for agents on this Mac are set under it on{" "}
+            <SettingsPageLink page={SETTINGS_VIEW.HOSTS} />.
+          </span>
+        </SettingsLine>
         <SchemaSettingRows page={SCHEMA_SETTINGS_PAGE.THIS_MAC} view={view} />
       </SettingsSection>
       <PermissionsSection
@@ -56,7 +61,6 @@ export function MachineCommandsSection({
         microphone={microphone}
         computerUse={computerUse}
       />
-      {computerUse ? <ComputerUseSection view={view} writes={writes} /> : null}
       {startup ? (
         <SettingsSection {...settingsSectionHead(SECTION.STARTUP)}>
           <SchemaSettingRows
