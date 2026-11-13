@@ -80,6 +80,7 @@ function PictureOverLetters({
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const shown = address !== undefined && address !== failed;
   const box = { width: size, height: size, borderRadius: corner, overflow: "hidden" } as const;
+  // Note that the letters take no text scale of their own, since `size` already carries the reader's.
 
   return (
     <View
@@ -90,7 +91,10 @@ function PictureOverLetters({
       {shown && address === drawn ? null : (
         <>
           <View style={[box, { position: "absolute", backgroundColor: ground }]} />
-          <Text style={{ fontSize: size * letterScale, fontWeight: "600", color: ink }}>
+          <Text
+            allowFontScaling={false}
+            style={{ fontSize: size * letterScale, fontWeight: "600", color: ink }}
+          >
             {letters}
           </Text>
         </>
