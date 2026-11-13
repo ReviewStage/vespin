@@ -25,6 +25,7 @@ import {
 } from "@repo/wire";
 import { eq, sql } from "drizzle-orm";
 import { Clock, Effect, Option } from "effect";
+import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
@@ -267,7 +268,7 @@ it.layer(getTestDB())("the Mac command store", (it) => {
   );
 
   it.effect(
-    "a conversation's recording is pinned to the machine it last started on, read and unpinned by its own account alone",
+    "a conversation's recording is pinned to the machine it last started on, unpinned only as the pin read, and read and unpinned by its own account alone",
     () =>
       Effect.gen(function* () {
         const { owner, other } = yield* openAccounts;
@@ -286,14 +287,24 @@ it.layer(getTestDB())("the Mac command store", (it) => {
 
         const target = { userId: owner, conversationId };
         const asOther = { userId: other, conversationId };
-        const before = yield* machineRecordingOf(target);
+
+        const deviceOf = Effect.map(
+          machineRecordingOf(target),
+          Option.map((pin) => pin.deviceId),
+        );
+
+        const before = yield* deviceOf;
         yield* pinMachineRecording(target, laptop);
+        const first = yield* machineRecordingOf(target);
+        yield* TestClock.adjust("1 second");
         yield* pinMachineRecording(target, studio);
         yield* pinMachineRecording(asOther, laptop);
-        const pinned = yield* machineRecordingOf(target);
+        const pinned = yield* deviceOf;
         const readByOther = yield* machineRecordingOf(asOther);
         yield* unpinMachineRecording(asOther);
-        const afterOthersUnpin = yield* machineRecordingOf(target);
+        assert.ok(Option.isSome(first));
+        yield* unpinMachineRecording(target, first.value.startedAt);
+        const afterStaleUnpin = yield* deviceOf;
         yield* unpinMachineRecording(target);
 
         assert.deepEqual(before, Option.none());
@@ -303,8 +314,12 @@ it.layer(getTestDB())("the Mac command store", (it) => {
           "a new recording's machine replaces the last",
         );
         assert.deepEqual(readByOther, Option.none(), "another account reads none");
-        assert.deepEqual(afterOthersUnpin, Option.some(studio), "nor pins or unpins it");
-        assert.deepEqual(yield* machineRecordingOf(target), Option.none());
+        assert.deepEqual(
+          afterStaleUnpin,
+          Option.some(studio),
+          "nor does an older pin's unpin, or another account's, take it",
+        );
+        assert.deepEqual(yield* deviceOf, Option.none());
       }),
   );
 

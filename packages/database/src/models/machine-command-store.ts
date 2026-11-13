@@ -651,11 +651,11 @@ const upsertPinnedRecording = SqlSchema.void({
 
 const findPinnedRecording = SqlSchema.findOneOption({
   Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
-  Result: Schema.Struct({ deviceId: Schema.String }),
+  Result: Schema.Struct({ deviceId: Schema.String, startedAt: InstantColumnSchema }),
   execute: ({ userId, conversationId }) =>
     Database.use((db) =>
       db
-        .select({ deviceId: machineRecording.deviceId })
+        .select({ deviceId: machineRecording.deviceId, startedAt: machineRecording.startedAt })
         .from(machineRecording)
         .where(
           and(
@@ -667,8 +667,12 @@ const findPinnedRecording = SqlSchema.findOneOption({
 });
 
 const deletePinnedRecording = SqlSchema.void({
-  Request: Schema.Struct({ userId: Schema.String, conversationId: Schema.String }),
-  execute: ({ userId, conversationId }) =>
+  Request: Schema.Struct({
+    userId: Schema.String,
+    conversationId: Schema.String,
+    startedAt: Schema.optionalKey(Schema.Date),
+  }),
+  execute: ({ userId, conversationId, startedAt }) =>
     Database.use((db) =>
       db
         .delete(machineRecording)
@@ -676,6 +680,7 @@ const deletePinnedRecording = SqlSchema.void({
           and(
             eq(machineRecording.conversationId, conversationId),
             eq(machineRecording.userId, userId),
+            startedAt === undefined ? undefined : eq(machineRecording.startedAt, startedAt),
           ),
         ),
     ),
@@ -931,17 +936,28 @@ export function pinMachineRecording(
   );
 }
 
-/** The machine the conversation's recording was started on, where one is pinned; none for another account's conversation. */
-export function machineRecordingOf(
-  target: ConversationTarget,
-): TaskStoreEffect<Option.Option<string>> {
-  return Effect.map(
-    findPinnedRecording(target),
-    Option.map((row) => row.deviceId),
-  );
+/** A conversation's recording as its pin holds it: the machine it started on, and when, which tells it from a later recording on that machine. */
+export interface PinnedRecording {
+  readonly deviceId: string;
+  readonly startedAt: Date;
 }
 
-/** Unpins the conversation's recording, where the account's conversation has one. */
-export function unpinMachineRecording(target: ConversationTarget): TaskStoreEffect<void> {
-  return deletePinnedRecording(target);
+/** The conversation's recording pin, where one stands; none for another account's conversation. */
+export function machineRecordingOf(
+  target: ConversationTarget,
+): TaskStoreEffect<Option.Option<PinnedRecording>> {
+  return findPinnedRecording(target);
+}
+
+/**
+ * Unpins the conversation's recording, where the account's conversation has
+ * one: the pin started at the instant given alone, where one is given, so a
+ * stop that read one pin never takes a newer recording's, on the same
+ * machine or another; whichever pin stands otherwise.
+ */
+export function unpinMachineRecording(
+  target: ConversationTarget,
+  startedAt?: Date,
+): TaskStoreEffect<void> {
+  return deletePinnedRecording(startedAt === undefined ? target : { ...target, startedAt });
 }

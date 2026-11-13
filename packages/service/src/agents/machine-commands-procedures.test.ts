@@ -781,7 +781,10 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
             { unrecorded: RECORDING_FAILURE.NONE },
           );
 
-          assert.deepEqual(pinned, Option.some(laptop));
+          assert.deepEqual(
+            Option.map(pinned, (pin) => pin.deviceId),
+            Option.some(laptop),
+          );
           assert.deepEqual(
             yield* machineRecordingOf(target),
             Option.none(),

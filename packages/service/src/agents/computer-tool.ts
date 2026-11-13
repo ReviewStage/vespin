@@ -2,6 +2,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
 import {
   machineRecordingOf,
+  type PinnedRecording,
   pinMachineRecording,
   unpinMachineRecording,
 } from "@repo/database/models/machine-command-store";
@@ -475,26 +476,38 @@ function keptMacRecording(
  * The conversation's recording pin as an answer leaves it: a recording
  * started on a machine pins it there, over the pin before; one started on
  * an account's Macs from before machines claimed unpins it, since no one
- * machine holds it; and a machine answering a stop with no recording to
- * read unpins it, so a pin that outlived its video never holds a stop.
- * Note that a stop that read a video keeps the pin, because the Mac keeps
- * that video for a stop called again.
+ * machine holds it; and the pinned machine answering a stop with no
+ * recording to read unpins the pin the stop read, so a pin that outlived
+ * its video never holds a stop, and a newer recording's pin, written while
+ * the stop waited, stands. Note that a stop that read a video keeps the
+ * pin, because the Mac keeps that video for a stop called again.
  */
 function repinned(
   target: ConversationTarget,
   route: MachineRoute,
   outcome: ComputerOutcome,
+  read: PinnedRecording | undefined,
 ): Effect.Effect<void, never, DatabaseServices> {
   if ("done" in outcome && outcome.done === COMPUTER_ACTION.RECORD) {
-    return Effect.ignore(
+    // Note that a pin that could not be written takes the one before with it, so the stop never goes to a machine that is not recording.
+    const pinned =
       route.kind === MACHINE_ROUTE.MACHINE
-        ? pinMachineRecording(target, route.machine.id)
-        : unpinMachineRecording(target),
-    );
+        ? Effect.catch(pinMachineRecording(target, route.machine.id), (failure) =>
+            Effect.andThen(logStoreFailure(failure), unpinMachineRecording(target)),
+          )
+        : unpinMachineRecording(target);
+
+    return Effect.ignore(Effect.tapError(pinned, logStoreFailure));
   }
 
-  if ("unrecorded" in outcome && outcome.unrecorded === RECORDING_FAILURE.NONE) {
-    return Effect.ignore(unpinMachineRecording(target));
+  if (
+    read !== undefined &&
+    "unrecorded" in outcome &&
+    outcome.unrecorded === RECORDING_FAILURE.NONE
+  ) {
+    return Effect.ignore(
+      Effect.tapError(unpinMachineRecording(target, read.startedAt), logStoreFailure),
+    );
   }
 
   return Effect.void;
@@ -523,23 +536,20 @@ export function runComputerTool(
   const stops = read.success.action === COMPUTER_ACTION.STOP_RECORDING;
 
   return Effect.gen(function* () {
-    const route = yield* Effect.result(
-      Effect.flatMap(
-        stops ? machineRecordingOf(target) : Effect.succeed(Option.none<string>()),
-        (recordingOn) =>
-          routedCall(
-            target,
-            MACHINE_COMMAND_KIND.COMPUTER,
-            machine,
-            Option.getOrUndefined(recordingOn),
-          ),
-      ),
+    const routed = yield* Effect.result(
+      Effect.gen(function* () {
+        const pin = stops ? Option.getOrUndefined(yield* machineRecordingOf(target)) : undefined;
+        const kind = MACHINE_COMMAND_KIND.COMPUTER;
+
+        return { pin, route: yield* routedCall(target, kind, machine, pin?.deviceId) };
+      }),
     );
 
     // Note that a read that fails refuses, because an action on a guess could land on the wrong Mac.
-    if (Result.isFailure(route)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
+    if (Result.isFailure(routed)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
+    const { pin, route } = routed.success;
 
-    const { answer, recording } = yield* askMachine(route.success, {
+    const { answer, recording } = yield* askMachine(route, {
       kind: MACHINE_COMMAND_KIND.COMPUTER,
       conversationId: target.conversationId,
       action,
@@ -548,7 +558,7 @@ export function runComputerTool(
 
     if (!("computer" in answer)) return answer;
     const outcome = answer.computer;
-    yield* repinned(target, route.success, outcome);
+    yield* repinned(target, route, outcome, pin);
 
     const named = <T extends object>(ran: T) =>
       answer.machine === undefined ? ran : { ...ran, machine: answer.machine };
