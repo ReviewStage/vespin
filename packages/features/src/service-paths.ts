@@ -313,7 +313,7 @@ export const HOSTED_SERVICE_PATH = {
    * (GET), or start one (POST) with its name and, where one is chosen, the
    * GitHub repository it is about. `task-wire.ts` declares both.
    */
-  TASKS: "/api/plans",
+  TASKS: "/api/tasks",
   /**
    * The repositories the account pinned in the sidebar: read them, newest
    * pinned first (GET), or pin or unpin one (PUT), answered with them all as

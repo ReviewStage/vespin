@@ -168,11 +168,11 @@ A description's pictures are its own rows, `description_attachment`, with their 
 `bytea` column held to `PICTURE_BOUNDS.MAX_BYTES` (`@repo/features/picture-wire`),
 or to `MAX_VIDEO_BYTES` for a WebM an agent recorded
 (`packages/database/src/models/description-attachments.ts`), gated by the same
-`taskReachableBy`. `POST /api/plans/<id>/attachments { picture }` keeps one, a
+`taskReachableBy`. `POST /api/tasks/<id>/attachments { picture }` keeps one, a
 `data:` URL of a PNG, JPEG, WebP, or WebM whose bytes sniff as its label, on a task
 that is not archived and whose description holds fewer than `MAX_PER_DESCRIPTION`, and, for a WebM,
 fewer than `MAX_VIDEOS_PER_DESCRIPTION` videos, answering `{ id }`
-or `{ refused: "too-many" }` or `{ refused: "too-many-videos" }`; `GET /api/plans/<id>/attachments/<picture>`
+or `{ refused: "too-many" }` or `{ refused: "too-many-videos" }`; `GET /api/tasks/<id>/attachments/<picture>`
 serves the bytes under their sniffed type, `nosniff` and `private, no-store`,
 to a member alone, anyone else reading `not-found`. The description's text names a
 picture by its address (`@repo/features/description-attachment-link`); a picture

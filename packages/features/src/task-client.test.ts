@@ -53,7 +53,7 @@ function client(): HostedTaskClient {
 
 it.effect("opens one plan with its saved document", () =>
   Effect.gen(function* () {
-    const api = fakeCloudApi({ [`GET /api/plans/${TASK_ID}`]: { answer: () => ({ plan: TASK }) } });
+    const api = fakeCloudApi({ [`GET /api/tasks/${TASK_ID}`]: { answer: () => ({ plan: TASK }) } });
 
     const opened = yield* Effect.provide(client().open(TASK_ID), api.layer);
 
@@ -70,7 +70,7 @@ it.effect(
       let sent = 0;
 
       const api = fakeCloudApi({
-        [`POST /api/plans/${TASK_ID}/description`]: {
+        [`POST /api/tasks/${TASK_ID}/description`]: {
           answer: () => {
             sent += 1;
 
@@ -142,7 +142,7 @@ it.effect(
       let sent = 0;
 
       const api = fakeCloudApi({
-        "POST /api/plans": {
+        "POST /api/tasks": {
           answer: () => {
             sent += 1;
 
@@ -209,7 +209,7 @@ it.effect(
 it.effect("a start the service never answers carries what failed beneath it, by its kind", () =>
   Effect.gen(function* () {
     const api = fakeCloudApi({
-      "POST /api/plans": {
+      "POST /api/tasks": {
         answer: () => {
           throw new TypeError("Load failed");
         },
@@ -245,10 +245,10 @@ it.effect(
       const thread = "0f9b5f6e-6a8e-4c51-9a0e-2c1f2f0b7a11";
 
       const api = fakeCloudApi({
-        [`POST /api/plans/${TASK_ID}/comments/${thread}`]: {
+        [`POST /api/tasks/${TASK_ID}/comments/${thread}`]: {
           answer: () => ({ refused: "not-yours" }),
         },
-        [`POST /api/plans/${OTHER_TASK}/comments/${thread}`]: {
+        [`POST /api/tasks/${OTHER_TASK}/comments/${thread}`]: {
           status: 404,
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
         },
@@ -283,12 +283,12 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const api = fakeCloudApi({
-        [`PATCH /api/plans/${TASK_ID}`]: { status: 503, answer: () => ({}) },
-        [`PATCH /api/plans/${OTHER_TASK}`]: {
+        [`PATCH /api/tasks/${TASK_ID}`]: { status: 503, answer: () => ({}) },
+        [`PATCH /api/tasks/${OTHER_TASK}`]: {
           status: 409,
           answer: () => ({ error: HOSTED_API_ERROR.ALREADY_WRITTEN }),
         },
-        "POST /api/plans": { status: 503, answer: () => ({}) },
+        "POST /api/tasks": { status: 503, answer: () => ({}) },
       });
 
       const unanswered = yield* Effect.provide(
@@ -334,15 +334,15 @@ it.effect(
       };
 
       const api = fakeCloudApi({
-        [`PATCH /api/plans/${TASK_ID}`]: {
+        [`PATCH /api/tasks/${TASK_ID}`]: {
           status: 403,
           answer: () => ({ error: HOSTED_API_ERROR.REPOSITORY_NOT_REACHABLE, unreached }),
         },
-        [`PATCH /api/plans/${OTHER_TASK}`]: {
+        [`PATCH /api/tasks/${OTHER_TASK}`]: {
           status: 404,
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
         },
-        [`DELETE /api/plans/${OTHER_TASK}`]: {
+        [`DELETE /api/tasks/${OTHER_TASK}`]: {
           status: 404,
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
         },
@@ -386,8 +386,8 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const api = fakeCloudApi({
-        "GET /api/plans": { answer: () => ({ plans: [{ ...SUMMARY, archivedAt: 5 }] }) },
-        [`GET /api/plans/${TASK_ID}/description/revisions/3`]: {
+        "GET /api/tasks": { answer: () => ({ plans: [{ ...SUMMARY, archivedAt: 5 }] }) },
+        [`GET /api/tasks/${TASK_ID}/description/revisions/3`]: {
           status: 404,
           answer: () => ({ error: HOSTED_API_ERROR.NOT_FOUND }),
         },
@@ -399,8 +399,8 @@ it.effect(
       assert.deepEqual(listed, { ok: true, answer: { plans: [SUMMARY] } });
       assert.equal(revision, undefined);
       assert.deepEqual(recordedRoutes(api.requests()), [
-        "GET /api/plans?archived=include",
-        `GET /api/plans/${TASK_ID}/description/revisions/3`,
+        "GET /api/tasks?archived=include",
+        `GET /api/tasks/${TASK_ID}/description/revisions/3`,
       ]);
     }),
 );
@@ -421,8 +421,8 @@ it.effect(
       };
 
       const api = fakeCloudApi({
-        [`GET /api/plans/${TASK_ID}/file`]: { answer: () => file },
-        [`GET /api/plans/${TASK_ID}/tree`]: {
+        [`GET /api/tasks/${TASK_ID}/file`]: { answer: () => file },
+        [`GET /api/tasks/${TASK_ID}/tree`]: {
           answer: () => ({ refusal: TASK_FILE_REFUSAL.NO_REPOSITORY }),
         },
       });
@@ -461,10 +461,10 @@ it.effect(
       assert.deepEqual(folder, { refusal: TASK_FILE_REFUSAL.NO_REPOSITORY });
       assert.equal(failed, undefined);
       assert.deepEqual(recordedRoutes(api.requests()), [
-        `GET /api/plans/${TASK_ID}/file?first=2&last=3&path=src/a b+c.ts`,
-        `GET /api/plans/${TASK_ID}/file?first=1&last=1&path=src/a b+c.ts&raw=1&ref=${sha}`,
-        `GET /api/plans/${TASK_ID}/tree?recursive=1`,
-        `GET /api/plans/${TASK_ID}/file?first=2&last=3&path=src/a b+c.ts`,
+        `GET /api/tasks/${TASK_ID}/file?first=2&last=3&path=src/a b+c.ts`,
+        `GET /api/tasks/${TASK_ID}/file?first=1&last=1&path=src/a b+c.ts&raw=1&ref=${sha}`,
+        `GET /api/tasks/${TASK_ID}/tree?recursive=1`,
+        `GET /api/tasks/${TASK_ID}/file?first=2&last=3&path=src/a b+c.ts`,
       ]);
     }),
 );
@@ -479,11 +479,11 @@ it.effect(
       const keep = (status: number, answer: () => JsonValue) =>
         Effect.provide(
           client().keepPicture(TASK_ID, picture),
-          fakeCloudApi({ [`POST /api/plans/${TASK_ID}/attachments`]: { answer, status } }).layer,
+          fakeCloudApi({ [`POST /api/tasks/${TASK_ID}/attachments`]: { answer, status } }).layer,
         );
 
       const api = fakeCloudApi({
-        [`POST /api/plans/${TASK_ID}/attachments`]: { answer: () => ({ id: keptId }), status: 201 },
+        [`POST /api/tasks/${TASK_ID}/attachments`]: { answer: () => ({ id: keptId }), status: 201 },
       });
 
       assert.deepEqual(yield* Effect.provide(client().keepPicture(TASK_ID, picture), api.layer), {

@@ -1128,9 +1128,9 @@ export const requestedChoice = /* @__PURE__ */ Effect.fnUntraced(function* (
 /**
  * The account's agent started on the task, or in the workspace with no
  * task, as a request asks it, through `startAgent`: the agent's own
- * Start (`POST /api/plans/{id}/agents`), a Start from an agent in its own
+ * Start (`POST /api/tasks/{id}/agents`), a Start from an agent in its own
  * place (`POST /api/agents/{id}/agents`), and a task's start that names an
- * agent (`POST /api/plans`) all take it, so they refuse and answer alike.
+ * agent (`POST /api/tasks`) all take it, so they refuse and answer alike.
  * A choice the catalog refuses is refused as invalid; an empty note is none,
  * its files carrying it alone. The agent's summary is read as it stands once
  * the Start is done, with the first turn its opening queued, a new agent and
