@@ -1,4 +1,4 @@
-import { type ComponentProps, type CSSProperties, createElement } from "react";
+import { type ComponentProps, type CSSProperties, createElement, type ReactElement } from "react";
 import { cn } from "../cn.js";
 
 /**
@@ -20,7 +20,7 @@ function AspectRatio({
   className,
   style,
   ...props
-}: ComponentProps<"div"> & { as?: AspectRatioElement | undefined; ratio: number }) {
+}: ComponentProps<"div"> & { as?: AspectRatioElement | undefined; ratio: number }): ReactElement {
   return createElement(as, {
     "data-slot": "aspect-ratio",
     style: {
