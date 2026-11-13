@@ -249,6 +249,7 @@ export type AgentClient = Pick<
   | "overviewPullRequest"
   | "reviewOptions"
   | "workspaceTools"
+  | "setDefaultMachine"
   | "overviewChecks"
   | "overviewConversation"
   | "githubImage"
@@ -297,6 +298,8 @@ export interface AgentsDependencies extends AccountGateDependencies {
   pool: EntityPool;
   /** The agent as the task list shows it now, which a rename or a pin waiting for the service answers its caller with; none where the list shows no such agent. */
   agentListed?: (agentId: string) => AgentSummary | undefined;
+  /** Reads an agent a window opens into the task list with its task where the list holds neither (`TasksComposer.openedOutside`); none reads nothing. */
+  openedOutside?: (agentId: string) => Effect.Effect<void>;
 }
 
 /** The acts this composer answers: the Inbox's, every agent act but This Mac's and the hosts', which their own concerns answer, and a pull request's chapters generated; and every agent's live follow but the hosts' and their beats', the Inbox's, and a pull request's chapters. */
@@ -1086,6 +1089,11 @@ function composed(
         dependencies.accountId,
       ),
     ),
+    // The agent's tools as the write answers them are laid on their slice at once, so its chip reads the new default.
+    AGENTS_SET_DEFAULT_MACHINE: ({ agentId, machineId }) =>
+      Effect.tap(asked(client.setDefaultMachine(agentId, machineId)), (answer) =>
+        "failure" in answer ? Effect.void : tools.answered(agentId, answer),
+      ),
     AGENTS_LIST: ({ taskId, includeArchived }) => asked(client.list(taskId, includeArchived)),
     AGENTS_WORKSPACE_LIST: (listed) => asked(client.listWorkspace(listed)),
     AGENTS_START: (start) =>
@@ -1220,7 +1228,12 @@ function composed(
     },
     // A transcript is held for a window while its tab shows it.
     AGENTS_TRANSCRIPT: {
-      hold: (transcript) => transcriptSlice.hold(transcriptKeyOf(transcript)),
+      // An agent a window opens that the task list does not hold is read into it beside its transcript.
+      hold: (transcript) =>
+        Effect.andThen(
+          dependencies.openedOutside?.(transcript.agentId) ?? Effect.void,
+          transcriptSlice.hold(transcriptKeyOf(transcript)),
+        ),
       retry: (transcript) => transcriptSlice.retry(transcriptKeyOf(transcript)),
     },
     // A Pull request tab's parts are held for the windows while the tab shows.

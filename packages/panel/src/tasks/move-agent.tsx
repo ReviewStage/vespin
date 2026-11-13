@@ -7,11 +7,14 @@ import {
 import { machineName } from "@repo/features/machine-name";
 import type { MacOffer } from "@repo/features/models-wire";
 import { agentStillWriting, RUNS_ON_WORDS } from "@repo/features/task-agents-model";
+import { EXPERIMENT } from "@repo/settings";
 import { GLYPH } from "@repo/ui/icons";
+import { useQuery } from "@tanstack/react-query";
 import { commandHead, PANEL_COMMAND } from "../command-items.js";
 import type { MenuAction, MenuSubmenu } from "../desktop/action-menu.js";
 import { useDevicePresence } from "../device-presence.js";
 import { useThisMac } from "../machine-name.js";
+import { appStateQuery, selectExperiment } from "../use-app-state.js";
 import { deviceMark } from "./runs-on.js";
 import type { AgentsControl } from "./use-agents.js";
 
@@ -41,6 +44,18 @@ import type { AgentsControl } from "./use-agents.js";
  * because a surface drawing agents of other tasks, such as a person's page,
  * hands the open task's control, whose continue would start on that task.
  */
+
+/**
+ * Whether the member has Move agents on (`EXPERIMENT.MOVE_AGENTS`), which
+ * Move to › and the place chip's menu stand behind. Note that Move to cloud
+ * (`useMoveToCloud`) stands without it, because it is how an agent whose Mac
+ * went offline or could not start it goes on at all.
+ */
+function useMoveAgentsOn(): boolean {
+  return (
+    useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.MOVE_AGENTS) }).data === true
+  );
+}
 
 /** What Move to says beyond the places' names. */
 export const MOVE_WORDS = {
@@ -156,7 +171,7 @@ export interface PlaceMove {
  * The move an agent's place chip offers, on the terms Move to › offers one
  * (`useMoveOffered`): the member's devices and the continue that carries
  * the agent to a place picked, or none where no move is offered or the
- * agent is not read yet. Note that it stands though the member has no
+ * agent is not read yet, and none while Move agents is off. Note that it stands though the member has no
  * device, since the chip then says where one is added, rather than taking
  * no press.
  */
@@ -165,7 +180,8 @@ export function useMovePlace(
   agents: MoveDoors,
 ): PlaceMove | undefined {
   const { continueAgent } = agents;
-  const offered = useMoveOffered(agent, agents);
+  const on = useMoveAgentsOn();
+  const offered = useMoveOffered(agent, agents) && on;
 
   if (agent === undefined || !offered || continueAgent === undefined) return undefined;
   const move = movedBy(agent, { continueAgent, onStop: agents.onStop });
@@ -178,10 +194,11 @@ export function useMovePlace(
   };
 }
 
-/** The agent's Move to ›, the places it may move to, or none where it offers no move or has nowhere to go. */
+/** The agent's Move to ›, the places it may move to, or none where it offers no move, Move agents is off, or it has nowhere to go. */
 export function useMoveToEntry(agent: MovedAgent, agents: MoveDoors): MenuSubmenu | undefined {
   const { continueAgent } = agents;
-  const offered = useMoveOffered(agent, agents);
+  const on = useMoveAgentsOn();
+  const offered = useMoveOffered(agent, agents) && on;
   const devices = (offered ? agents.macs : undefined) ?? NO_DEVICES;
   // Note that the beats are read only while a device is listed, so a member with none reads nothing.
   const book = useDevicePresence(devices.length > 0);

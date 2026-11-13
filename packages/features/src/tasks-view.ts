@@ -578,6 +578,11 @@ export const tasksFollowersAnswerSchema = EffectSchema.Union([
 
 export type TasksFollowersAnswer = typeof tasksFollowersAnswerSchema.Type;
 
+/** A task's followers' machines, as the window hears them: each with whose it is, whether its owner lets the task's agents use it, and whether it listened lately, or why there is no answer. */
+export const tasksMachinesAnswerSchema = answerView(taskFollowersContract.machines);
+
+export type TasksMachinesAnswer = typeof tasksMachinesAnswerSchema.Type;
+
 /** Why a relation's move wrote nothing: a block's reasons, or a parent's. */
 const RELATION_CALL_FAILURES = Object.values(
   failureSetOf(tasksContract.relation, { as: TASK_BLOCK_RENAMES }),

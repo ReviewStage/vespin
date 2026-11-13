@@ -57,7 +57,7 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: "acme/relay",
-  document: { body: "", assumptions: [] },
+  description: { body: "", assumptions: [] },
 };
 
 const SUMMARY: TaskSummary = {
@@ -165,7 +165,10 @@ function taskDrawn(shown: Shown) {
     activeTaskId: TASK.id,
     region: {
       kind: DOCUMENT_REGION.READY,
-      task: { ...TASK, document: { ...TASK.document, body: shown.body ?? TASK.document.body } },
+      task: {
+        ...TASK,
+        description: { ...TASK.description, body: shown.body ?? TASK.description.body },
+      },
     },
     mainTabs: {
       ...base.mainTabs,

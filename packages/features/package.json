@@ -194,7 +194,7 @@
     "./description-comment-notes": "./src/description-comment-notes.js",
     "./description-comment-live": "./src/description-comment-live.js",
     "./description-comment-wire": "./src/description-comment-wire.js",
-    "./description-document": "./src/description-document.js",
+    "./description-sections": "./src/description-sections.js",
     "./description-edit": "./src/description-edit.js",
     "./description-history-words": "./src/description-history-words.js",
     "./description-markdown": "./src/description-markdown.js",

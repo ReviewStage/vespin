@@ -36,7 +36,7 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: null,
-  document: { body: "", assumptions: [] },
+  description: { body: "", assumptions: [] },
 };
 
 const AGENT: AgentSummary = {

@@ -196,6 +196,7 @@ export interface WorkspacesClient {
     | "deleteVariable"
     | "sandboxSetup"
     | "mergeQueue"
+    | "machines"
     | "putInstallScript"
     | "putRepositorySetup"
     | "putRunActions"
@@ -1520,6 +1521,19 @@ function workspaceMergeQueueActs(
   };
 }
 
+/** A workspace's machines' act: its members' machines read, or one member's. */
+function workspaceMachinesActs(
+  reach: WorkspacesReach,
+): Pick<HostActTable<typeof WORKSPACE_ACTS>, "WORKSPACE_MACHINES_READ"> {
+  const { client } = reach.dependencies;
+
+  // Note that the machines are asked of the service on each act and held nowhere here, since a place drawing them reads them again as it opens.
+  return {
+    WORKSPACE_MACHINES_READ: ({ workspaceId, userId }) =>
+      workspaceAsked(reach, client.workspaces.machines(workspaceId, userId)),
+  };
+}
+
 /** A workspace's cloud sandbox setup's acts: read, and its install script, a repository's setup script, or a repository's run actions saved. */
 function workspaceSandboxSetupActs(
   reach: WorkspacesReach,
@@ -1637,6 +1651,7 @@ export const composeWorkspaces = /* @__PURE__ */ Effect.fn("host/composeWorkspac
       ...workspaceEnvironmentActs(reach),
       ...workspaceSandboxSetupActs(reach),
       ...workspaceMergeQueueActs(reach),
+      ...workspaceMachinesActs(reach),
       ...github.acts,
       ...adminActs(reach),
       ...workspaceFollowActs(parts),

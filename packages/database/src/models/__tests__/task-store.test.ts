@@ -449,7 +449,10 @@ it.layer(getTestDB())("a description's starting text", (it) => {
       const started = yield* createTask(owner, { organizationId });
 
       const read = yield* readTask(owner, started.id);
-      assert.deepEqual(Option.getOrUndefined(read)?.task.document, { body: "", assumptions: [] });
+      assert.deepEqual(Option.getOrUndefined(read)?.task.description, {
+        body: "",
+        assumptions: [],
+      });
     }),
   );
 });

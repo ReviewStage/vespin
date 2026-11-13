@@ -21,6 +21,10 @@ import {
 } from "@repo/panel/panel-spans";
 import { QueryProvider, queryClient } from "@repo/panel/query-client";
 import { installSendTracer } from "@repo/panel/send-traces";
+import {
+  type TaskListCollections,
+  TaskListCollectionsProvider,
+} from "@repo/panel/task-list-collections";
 import { followAppState } from "@repo/panel/use-app-state";
 import { RELOAD_ROOM, ReloadState } from "@repo/ui/error-boundary";
 import type { ReactNode } from "react";
@@ -102,12 +106,16 @@ export function mountWindow(
   // What stops the window's following of its document, which stands for the window's life once its first read is written.
   let stopFollowing = (): void => undefined;
   void (async () => {
+    // The task list's collections the window's follow feeds, handed to the panel once its first read is written.
+    let taskList: TaskListCollections;
+
     try {
       // Main listens on the push stream before the document is read, so a
       // document pushed while the read is in flight is heard, not lost.
       await pushes.opened;
       const following = followAppState(queryClient);
       stopFollowing = following.stop;
+      taskList = following.taskList;
       // The document is followed into the window's Query client, subscribed before it is read,
       // and drawn over only once that read is written, so the first frame holds what moved meanwhile.
       await following.written;
@@ -136,8 +144,10 @@ export function mountWindow(
     endWindowSpanOnFirstDraw(rootElement, PANEL_SPAN.WINDOW_FIRST_PAINT);
     draw(
       <QueryProvider>
-        <LiveReadSubscription />
-        {surface}
+        <TaskListCollectionsProvider collections={taskList}>
+          <LiveReadSubscription />
+          {surface}
+        </TaskListCollectionsProvider>
       </QueryProvider>,
     );
   })();

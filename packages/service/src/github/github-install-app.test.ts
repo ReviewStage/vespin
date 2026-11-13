@@ -105,7 +105,7 @@ test("an install GitHub confirms as this App's lands as installed, asked for as 
   // The App's JWT, never its client secret, is what asks.
   assert.match(
     read?.authorization ?? "",
-    /^Bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u,
+    /^bearer [A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/u,
   );
   assert.equal(read?.authorization?.includes("fixture-client-secret"), false);
 });

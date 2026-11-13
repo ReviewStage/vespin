@@ -23,6 +23,7 @@ import { motionHeld } from "../../motion-timing.js";
 import { notePictureOrigin } from "../../picture-expand.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, IconButton } from "../button/button.js";
 import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, Card } from "../card/card.js";
+import { EDGE_CLIP_ELEMENT, EDGE_CLIP_LAYOUT, EdgeClip } from "../edge-clip/edge-clip.js";
 import { SLIDER_LENGTH, Slider } from "../slider/slider.js";
 import { SPINNER_INK, SPINNER_SIZE, Spinner } from "../spinner/spinner.js";
 import { Tooltip } from "../tooltip/hint.js";
@@ -937,7 +938,10 @@ export function VideoPlayer({
       className={PLAYER}
       data-place={place}
     >
-      {player}
+      {/* Note that the video is clipped inside the card's edge, because a playing video and its bar drawn to the card's corners paint over its edge there. */}
+      <EdgeClip as={EDGE_CLIP_ELEMENT.SPAN} layout={EDGE_CLIP_LAYOUT.BLOCK}>
+        {player}
+      </EdgeClip>
     </Card>
   );
 }
