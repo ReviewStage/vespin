@@ -1505,6 +1505,7 @@ const MENTION_READ = {
   SKILLS: "skills",
   THREADS: "Inbox threads",
   AUTOMATIONS: "automations",
+  APPS: "the apps on this Mac",
 } as const;
 
 type MentionRead = (typeof MENTION_READ)[keyof typeof MENTION_READ];
@@ -1982,7 +1983,7 @@ export function useMentionPicker({
 
   // The apps on this Mac are read while the list stands open, where it may read them (`mac-apps.ts`).
   const apps = useMacApps(open && macApps);
-  const appRowsOffered = open ? appRows(apps) : [];
+  const appRowsOffered = open ? appRows(apps.apps) : [];
 
   // The list is narrowed to the kind a key opened or whose word was typed, and searched by the words after it.
   const kinds = open
@@ -2118,7 +2119,8 @@ export function useMentionPicker({
         treeKey(taskId, workspaceId, repository) !== undefined) ||
       (skills !== undefined && skills.known === undefined && !skills.unread) ||
       (threadsAsked && feed.isPending) ||
-      (automationsAsked && automationsRead === undefined));
+      (automationsAsked && automationsRead === undefined) ||
+      apps.reading);
 
   // The list says a read could not be read, never that nothing matches, and Retry reads it again.
   const failures: readonly MentionReadFailure[] = open
@@ -2135,6 +2137,7 @@ export function useMentionPicker({
         ...(automationsRead !== undefined && "failure" in automationsRead
           ? [{ read: MENTION_READ.AUTOMATIONS, retry: automations.reload }]
           : []),
+        ...(apps.failed ? [{ read: MENTION_READ.APPS, retry: apps.retry }] : []),
       ]
     : [];
 

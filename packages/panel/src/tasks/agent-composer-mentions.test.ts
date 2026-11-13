@@ -816,11 +816,13 @@ test("with Computer use on, an @ in the box offers the apps on this Mac, a pick 
   });
 
   fakeActs({ act: answer, requestAppState: () => Promise.resolve(state) });
+
   const { container } = drawing(
     createElement(Box, { sender, skills: noSkills }),
     planPage([]),
     state,
   );
+
   await settle();
 
   typeInComposer(container, "Check @sim");

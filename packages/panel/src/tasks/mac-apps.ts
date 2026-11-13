@@ -50,15 +50,25 @@ export function useMacAppsReadable(): boolean {
   return onMac && computerUse;
 }
 
+/** The apps on this Mac as the `@` list reads them: the rows, whether the read is out, and whether it failed, with the press that reads it again. */
+export interface MacAppsRead {
+  readonly apps: readonly MacApp[];
+  readonly reading: boolean;
+  readonly failed: boolean;
+  readonly retry: () => void;
+}
+
 /**
  * The apps on this Mac, those running first, read while `asked` and the
  * window may read them; none otherwise. Each running app's icon, which the
  * list carries, is kept as its icon's read, so its mark draws without
- * asking the helper again.
+ * asking the helper again. Note that a read that failed says so rather than
+ * answering no apps, so the list can offer to read it again.
  */
-export function useMacApps(asked: boolean): readonly MacApp[] {
+export function useMacApps(asked: boolean): MacAppsRead {
   const readable = useMacAppsReadable();
   const queryClient = useQueryClient();
+  const reads = asked && readable;
 
   const apps = useQuery({
     queryKey: [QUERY_ROOT.COMPUTER_USE_APPS],
@@ -74,12 +84,17 @@ export function useMacApps(asked: boolean): readonly MacApp[] {
 
       return answer.apps;
     },
-    enabled: asked && readable,
+    enabled: reads,
     staleTime: APPS_FRESH_MS,
     retry: false,
   });
 
-  return asked && readable ? (apps.data ?? NO_APPS) : NO_APPS;
+  return {
+    apps: reads ? (apps.data ?? NO_APPS) : NO_APPS,
+    reading: reads && apps.isPending && !apps.isError,
+    failed: reads && apps.isError && !apps.isFetching,
+    retry: () => void apps.refetch(),
+  };
 }
 
 /** The address of an app's icon on this Mac, by its bundle id or its name; none where the window reads none or the Mac drew none. */
