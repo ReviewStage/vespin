@@ -144,20 +144,26 @@ export function useHoverPane(
   // stands is the last element it came over, none once it left the window.
   useEffect(() => {
     const held = ref.current;
+
     if (state !== PANE_FLOAT.PEEK || held === null) return;
     let over = false;
     let raised = raisesPopup(held);
+
     const came = (event: PointerEvent) => {
       over = event.target instanceof Node && held.contains(event.target);
     };
+
     const left = (event: PointerEvent) => {
       if (event.relatedTarget === null) over = false;
     };
+
     const settle = () => {
       const was = raised;
       raised = raisesPopup(held);
+
       if (was && !raised && !over) onState(PANE_FLOAT.CLOSED);
     };
+
     const watch = new MutationObserver(settle);
     watch.observe(held, {
       subtree: true,
@@ -167,6 +173,7 @@ export function useHoverPane(
     });
     document.addEventListener("pointerover", came);
     document.addEventListener("pointerout", left);
+
     return () => {
       watch.disconnect();
       document.removeEventListener("pointerover", came);
@@ -245,6 +252,7 @@ export function useHoverPane(
       if (to instanceof Element && (to.closest(stays) ?? to.closest(KEY_LAYERS)) !== null) return;
       // A popup raised from it holds it, until that popup goes.
       const held = ref.current;
+
       if (held !== null && raisesPopup(held)) return;
       onState(PANE_FLOAT.CLOSED);
     },
