@@ -4,14 +4,14 @@ import {
   FIRING_HANDS_OUTSIDE_WORDS,
 } from "@repo/features/automation-wire";
 import {
-  MAC_COMMAND_KIND,
-  type MacCommand,
-  type MacCommandKind,
-  type MacCommandResult,
-  macCommandOfStored,
-  macCommandResultSchema,
-  storedMacCommandText,
-} from "@repo/features/mac-command-wire";
+  MACHINE_COMMAND_KIND,
+  type MachineCommand,
+  type MachineCommandKind,
+  type MachineCommandResult,
+  machineCommandOfStored,
+  machineCommandResultSchema,
+  storedMachineCommandText,
+} from "@repo/features/machine-command-wire";
 import { MESSAGE_CHANNEL, MESSAGE_ROLE } from "@repo/wire";
 import {
   and,
@@ -38,10 +38,10 @@ import { member } from "../schemas/auth.js";
 import { automationRun } from "../schemas/automation.js";
 import { device } from "../schemas/device.js";
 import {
-  macCommand,
-  macCommandDeviceListener,
-  macCommandListener,
-} from "../schemas/mac-command.js";
+  machineCommand,
+  machineCommandDeviceListener,
+  machineCommandListener,
+} from "../schemas/machine-command.js";
 import { conversations, messages, standingLine } from "../schemas/storage.js";
 import { task } from "../schemas/task.js";
 import { MESSAGE_SENDER, messageSenderSchema } from "../storage-vocabulary.js";
@@ -50,7 +50,7 @@ import type { TaskStoreEffect } from "./task-store.js";
 import type { ConversationTarget } from "./writer.js";
 
 /**
- * mac-command-store.ts -- the commands an account's agents queued for its Mac, and when a Mac last listened for them.
+ * machine-command-store.ts -- the commands an account's agents queued for its Mac, and when a Mac last listened for them.
  *
  * Every function is an effect over the ambient `SqlClient`, keyed by the
  * account, so no account claims, settles, or reads another's commands. A
@@ -61,12 +61,12 @@ import type { ConversationTarget } from "./writer.js";
  * the account, whether it claims as a device or, on a build from before
  * devices claimed, as the account alone, which claims no device's command. A Mac that follows its
  * account's commands live subscribes to the unclaimed ones of its kinds
- * (`packages/service/src/live/reads/mac-commands.ts`) and claims each by its id.
+ * (`packages/service/src/live/reads/machine-commands.ts`) and claims each by its id.
  */
 
 const CommandKeySchema = Schema.Struct({ userId: Schema.String, id: Schema.String });
 
-const KindSchema = Schema.Literals(Object.values(MAC_COMMAND_KIND));
+const KindSchema = Schema.Literals(Object.values(MACHINE_COMMAND_KIND));
 
 const KindsSchema = Schema.Array(KindSchema);
 
@@ -86,9 +86,9 @@ const upsertListener = SqlSchema.void({
   execute: ({ userId, now }) =>
     Database.use((db) =>
       db
-        .insert(macCommandListener)
+        .insert(machineCommandListener)
         .values({ userId, seenAt: now })
-        .onConflictDoUpdate({ target: macCommandListener.userId, set: { seenAt: now } }),
+        .onConflictDoUpdate({ target: machineCommandListener.userId, set: { seenAt: now } }),
     ),
 });
 
@@ -98,7 +98,7 @@ const upsertDeviceListener = SqlSchema.void({
   execute: ({ userId, deviceId, now }) =>
     Database.use((db) =>
       db
-        .insert(macCommandDeviceListener)
+        .insert(machineCommandDeviceListener)
         .select((qb) =>
           qb
             .select({
@@ -108,7 +108,10 @@ const upsertDeviceListener = SqlSchema.void({
             .from(device)
             .where(and(eq(device.id, deviceId), eq(device.userId, userId))),
         )
-        .onConflictDoUpdate({ target: macCommandDeviceListener.deviceId, set: { seenAt: now } }),
+        .onConflictDoUpdate({
+          target: machineCommandDeviceListener.deviceId,
+          set: { seenAt: now },
+        }),
     ),
 });
 
@@ -118,9 +121,11 @@ const findListener = SqlSchema.findOneOption({
   execute: ({ userId, since }) =>
     Database.use((db) =>
       db
-        .select({ userId: macCommandListener.userId })
-        .from(macCommandListener)
-        .where(and(eq(macCommandListener.userId, userId), gte(macCommandListener.seenAt, since))),
+        .select({ userId: machineCommandListener.userId })
+        .from(machineCommandListener)
+        .where(
+          and(eq(machineCommandListener.userId, userId), gte(machineCommandListener.seenAt, since)),
+        ),
     ),
 });
 
@@ -139,7 +144,7 @@ const insertCommand = SqlSchema.void({
   Request: QueuedRowSchema,
   execute: (row) =>
     Database.use((db) =>
-      db.insert(macCommand).values({
+      db.insert(machineCommand).values({
         id: row.id,
         userId: row.userId,
         kind: row.kind,
@@ -157,14 +162,14 @@ const insertDeviceCommand = SqlSchema.findAll({
   execute: (row) =>
     Database.use((db) =>
       db
-        .insert(macCommand)
+        .insert(machineCommand)
         .select((qb) =>
           qb
             .select({
               id: sql<string>`${row.id}::uuid`.as("id"),
               userId: sql<string>`${device.userId}`.as("user_id"),
               deviceId: sql<string>`${device.id}`.as("device_id"),
-              kind: sql<MacCommandKind>`${row.kind}`.as("kind"),
+              kind: sql<MachineCommandKind>`${row.kind}`.as("kind"),
               command: sql<string>`${row.command}::text`.as("command"),
               timeoutSeconds: sql<number>`${row.timeoutSeconds}::integer`.as("timeout_seconds"),
               queuedAt: sql<Date>`${row.now}::timestamptz`.as("queued_at"),
@@ -178,7 +183,7 @@ const insertDeviceCommand = SqlSchema.findAll({
               ),
             ),
         )
-        .returning({ id: macCommand.id }),
+        .returning({ id: machineCommand.id }),
     ),
 });
 
@@ -194,16 +199,16 @@ function waiting(
   userId: string,
   deviceId: string | null,
   queuedSince: Date,
-  kinds: readonly MacCommandKind[],
+  kinds: readonly MachineCommandKind[],
 ): SQL | undefined {
   return and(
-    eq(macCommand.userId, userId),
+    eq(machineCommand.userId, userId),
     deviceId === null
-      ? isNull(macCommand.deviceId)
-      : or(isNull(macCommand.deviceId), eq(macCommand.deviceId, deviceId)),
-    inArray(macCommand.kind, kinds),
-    isNull(macCommand.claimedAt),
-    gte(macCommand.queuedAt, queuedSince),
+      ? isNull(machineCommand.deviceId)
+      : or(isNull(machineCommand.deviceId), eq(machineCommand.deviceId, deviceId)),
+    inArray(machineCommand.kind, kinds),
+    isNull(machineCommand.claimedAt),
+    gte(machineCommand.queuedAt, queuedSince),
   );
 }
 
@@ -219,14 +224,14 @@ const claimWaiting = SqlSchema.findAll({
   execute: ({ userId, deviceId, queuedSince, kinds, now }) =>
     Database.use((db) =>
       db
-        .update(macCommand)
+        .update(machineCommand)
         .set({ claimedAt: now })
         .where(waiting(userId, deviceId, queuedSince, kinds))
         .returning({
-          id: macCommand.id,
-          kind: macCommand.kind,
-          command: macCommand.command,
-          timeoutSeconds: macCommand.timeoutSeconds,
+          id: machineCommand.id,
+          kind: machineCommand.kind,
+          command: machineCommand.command,
+          timeoutSeconds: machineCommand.timeoutSeconds,
         }),
     ),
 });
@@ -243,14 +248,14 @@ const claimOne = SqlSchema.findOneOption({
   execute: ({ userId, id, deviceId, queuedSince, kinds, now }) =>
     Database.use((db) =>
       db
-        .update(macCommand)
+        .update(machineCommand)
         .set({ claimedAt: now })
-        .where(and(eq(macCommand.id, id), waiting(userId, deviceId, queuedSince, kinds)))
+        .where(and(eq(machineCommand.id, id), waiting(userId, deviceId, queuedSince, kinds)))
         .returning({
-          id: macCommand.id,
-          kind: macCommand.kind,
-          command: macCommand.command,
-          timeoutSeconds: macCommand.timeoutSeconds,
+          id: machineCommand.id,
+          kind: machineCommand.kind,
+          command: machineCommand.command,
+          timeoutSeconds: machineCommand.timeoutSeconds,
         }),
     ),
 });
@@ -266,43 +271,47 @@ const findWaiting = SqlSchema.findAll({
   execute: ({ userId, deviceId, queuedSince, kinds }) =>
     Database.use((db) =>
       db
-        .select({ id: macCommand.id })
-        .from(macCommand)
+        .select({ id: machineCommand.id })
+        .from(machineCommand)
         .where(waiting(userId, deviceId, queuedSince, kinds))
-        .orderBy(asc(macCommand.queuedAt)),
+        .orderBy(asc(machineCommand.queuedAt)),
     ),
 });
 
 const writeResult = SqlSchema.findAll({
-  Request: Schema.Struct({ ...CommandKeySchema.fields, result: macCommandResultSchema }),
+  Request: Schema.Struct({ ...CommandKeySchema.fields, result: machineCommandResultSchema }),
   Result: Schema.Struct({ id: Schema.String }),
   execute: ({ userId, id, result }) =>
     Database.use((db) =>
       db
-        .update(macCommand)
+        .update(machineCommand)
         .set({ result })
         .where(
           and(
-            eq(macCommand.id, id),
-            eq(macCommand.userId, userId),
-            isNotNull(macCommand.claimedAt),
-            isNull(macCommand.result),
+            eq(machineCommand.id, id),
+            eq(machineCommand.userId, userId),
+            isNotNull(machineCommand.claimedAt),
+            isNull(machineCommand.result),
           ),
         )
-        .returning({ id: macCommand.id }),
+        .returning({ id: machineCommand.id }),
     ),
 });
 
 const findResult = SqlSchema.findOneOption({
   Request: CommandKeySchema,
-  Result: Schema.Struct({ result: macCommandResultSchema }),
+  Result: Schema.Struct({ result: machineCommandResultSchema }),
   execute: ({ userId, id }) =>
     Database.use((db) =>
       db
-        .select({ result: macCommand.result })
-        .from(macCommand)
+        .select({ result: machineCommand.result })
+        .from(machineCommand)
         .where(
-          and(eq(macCommand.id, id), eq(macCommand.userId, userId), isNotNull(macCommand.result)),
+          and(
+            eq(machineCommand.id, id),
+            eq(machineCommand.userId, userId),
+            isNotNull(machineCommand.result),
+          ),
         ),
     ),
 });
@@ -528,7 +537,9 @@ const deleteCommand = SqlSchema.void({
   Request: CommandKeySchema,
   execute: ({ userId, id }) =>
     Database.use((db) =>
-      db.delete(macCommand).where(and(eq(macCommand.id, id), eq(macCommand.userId, userId))),
+      db
+        .delete(machineCommand)
+        .where(and(eq(machineCommand.id, id), eq(machineCommand.userId, userId))),
     ),
 });
 
@@ -537,7 +548,7 @@ const deleteCommand = SqlSchema.void({
  * which every Mac runs, and, where it listens as a device of the account,
  * that the device is.
  */
-export function markMacListening(userId: string, deviceId?: string): TaskStoreEffect<void> {
+export function markMachineListening(userId: string, deviceId?: string): TaskStoreEffect<void> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     Effect.andThen(
       upsertListener({ userId, now }),
@@ -572,7 +583,7 @@ export function heardFromAnotherAccount(target: ConversationTarget): TaskStoreEf
  * conversation's own account where its task is assigned to no one or to a
  * member who left, or it is no agent's.
  */
-export function macOwnerOf(target: ConversationTarget): TaskStoreEffect<string> {
+export function machineOwnerOf(target: ConversationTarget): TaskStoreEffect<string> {
   return Effect.map(
     findMacOwner(target),
     Option.match({ onNone: () => target.userId, onSome: (row) => row.userId }),
@@ -586,9 +597,9 @@ export function macOwnerOf(target: ConversationTarget): TaskStoreEffect<string> 
  * was removed, queues nothing, since no Mac could ever claim it, and its caller says so at once
  * rather than waiting out its result.
  */
-export function queueMacCommand(
+export function queueMachineCommand(
   userId: string,
-  queued: MacCommand,
+  queued: MachineCommand,
   deviceId?: string,
 ): TaskStoreEffect<boolean> {
   return Effect.flatMap(DateTime.nowAsDate, (now) => {
@@ -596,7 +607,7 @@ export function queueMacCommand(
       id: queued.id,
       userId,
       kind: queued.kind,
-      command: storedMacCommandText(queued),
+      command: storedMachineCommandText(queued),
       timeoutSeconds: queued.timeoutSeconds,
       now,
     };
@@ -613,10 +624,10 @@ export function queueMacCommand(
  * that claims as the account alone where none is, which is what a held
  * read looks at.
  */
-export function macCommandsWaiting(
+export function machineCommandsWaiting(
   userId: string,
   queuedSince: Date,
-  kinds: readonly MacCommandKind[],
+  kinds: readonly MachineCommandKind[],
   deviceId?: string,
 ): TaskStoreEffect<boolean> {
   return Effect.map(
@@ -630,18 +641,18 @@ export function macCommandsWaiting(
  * after `queuedSince` that waits, for the Mac whose read this is: as the
  * device given, or as the account alone where none is.
  */
-export function claimMacCommands(
+export function claimMachineCommands(
   userId: string,
   queuedSince: Date,
-  kinds: readonly MacCommandKind[],
+  kinds: readonly MachineCommandKind[],
   deviceId?: string,
-): TaskStoreEffect<readonly MacCommand[]> {
+): TaskStoreEffect<readonly MachineCommand[]> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     Effect.map(
       claimWaiting({ userId, deviceId: deviceId ?? null, queuedSince, kinds, now }),
       (rows) =>
         rows.flatMap((row) => {
-          const command = macCommandOfStored(row);
+          const command = machineCommandOfStored(row);
 
           return command === undefined ? [] : [command];
         }),
@@ -657,35 +668,35 @@ export function claimMacCommands(
  * it was meant for another machine, its call withdrew it, or it waited too
  * long.
  */
-export function claimMacCommand(
+export function claimMachineCommand(
   userId: string,
   id: string,
   queuedSince: Date,
-  kinds: readonly MacCommandKind[],
+  kinds: readonly MachineCommandKind[],
   deviceId?: string,
-): TaskStoreEffect<Option.Option<MacCommand>> {
+): TaskStoreEffect<Option.Option<MachineCommand>> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     Effect.map(
       claimOne({ userId, id, deviceId: deviceId ?? null, queuedSince, kinds, now }),
-      Option.flatMap((row) => Option.fromUndefinedOr(macCommandOfStored(row))),
+      Option.flatMap((row) => Option.fromUndefinedOr(machineCommandOfStored(row))),
     ),
   );
 }
 
 /** Keeps a claimed command's result; false where the account holds no such command claimed and unsettled. */
-export function settleMacCommand(
+export function settleMachineCommand(
   userId: string,
   id: string,
-  result: MacCommandResult,
+  result: MachineCommandResult,
 ): TaskStoreEffect<boolean> {
   return Effect.map(writeResult({ userId, id, result }), (rows) => rows.length > 0);
 }
 
 /** A command's result once a Mac settled it; nothing while it waits or runs. */
-export function macCommandResult(
+export function machineCommandResult(
   userId: string,
   id: string,
-): TaskStoreEffect<Option.Option<MacCommandResult>> {
+): TaskStoreEffect<Option.Option<MachineCommandResult>> {
   return Effect.map(
     findResult({ userId, id }),
     Option.map(({ result }) => result),
@@ -693,6 +704,6 @@ export function macCommandResult(
 }
 
 /** Withdraws a command, settled or not, once its call stops waiting on it. */
-export function withdrawMacCommand(userId: string, id: string): TaskStoreEffect<void> {
+export function withdrawMachineCommand(userId: string, id: string): TaskStoreEffect<void> {
   return deleteCommand({ userId, id });
 }

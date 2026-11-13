@@ -22,11 +22,11 @@ const NOTIFICATIONS_OFF_WORDS = {
 } as const;
 
 /**
- * mac-commands-section.tsx -- the This Mac page's groups: whether the app and coding agents may run shell commands here, then Startup.
+ * machine-commands-section.tsx -- the This Mac page's groups: whether the app and coding agents may run shell commands here, then Startup.
  *
  * One choice, Ask every time by default: each command is put to the
  * developer before it runs, or every command runs unasked, or none at all
- * (`compose-mac-commands.ts` in the host stops reading for commands under
+ * (`compose-machine-commands.ts` in the host stops reading for commands under
  * Never). A command waiting while the app is behind is always posted as a
  * notification, so where macOS refused the app's last one a line under the choice
  * says so and opens System Settings, where they are turned back on; a
@@ -37,7 +37,7 @@ const NOTIFICATIONS_OFF_WORDS = {
  * that starts it; it stands only where the installed app does, so a page
  * with none of its rows draws no empty heading.
  */
-export function MacCommandsSection({
+export function MachineCommandsSection({
   view,
   writes,
   notifications,

@@ -3,11 +3,11 @@ import { DEVICE_ARCH, DEVICE_PLATFORM, deviceMachineFields } from "./device-agen
 import { wireUuidSchema } from "./service-wire.js";
 
 /**
- * mac-command-wire.ts -- a command an agent asked to run on the developer's Mac, as the Mac takes it from the service and hands back what it came to.
+ * machine-command-wire.ts -- a command an agent asked to run on the developer's Mac, as the Mac takes it from the service and hands back what it came to.
  *
- * A command is of a kind (`MAC_COMMAND_KIND`): a shell command, or an
+ * A command is of a kind (`MACHINE_COMMAND_KIND`): a shell command, or an
  * action on one app through the Mac's computer-use helper. An agent's `run_on_mac` call is queued on the service under the account
- * (`packages/service/src/agents/mac-command.ts`). A signed-in Mac with the
+ * (`packages/service/src/agents/machine-command.ts`). A signed-in Mac with the
  * setting on holds `GET /api/mac-commands` open, naming in its `kinds`
  * query the kinds it runs beyond `shell`, and is answered with every
  * command of those kinds waiting for the account, each claimed for that
@@ -18,7 +18,7 @@ import { wireUuidSchema } from "./service-wire.js";
  * refuses a key it does not name, as every request frame on this wire does.
  */
 
-export const MAC_COMMAND_BOUNDS = {
+export const MACHINE_COMMAND_BOUNDS = {
   /** How long a command runs before it is killed, when the agent names no time. */
   DEFAULT_TIMEOUT_SECONDS: 60,
   /**
@@ -44,26 +44,26 @@ export const MAC_COMMAND_BOUNDS = {
  * older one that names no kinds among them; a newer one names the others
  * it runs in its read, and is handed only commands of the kinds it named.
  */
-export const MAC_COMMAND_KIND = {
+export const MACHINE_COMMAND_KIND = {
   /** A shell command, run in the login shell from the home folder (`run_on_mac`). */
   SHELL: "shell",
   /** One action on one app, run through the Mac's computer-use helper, after the developer allows the app. */
   COMPUTER: "computer",
 } as const;
 
-export type MacCommandKind = (typeof MAC_COMMAND_KIND)[keyof typeof MAC_COMMAND_KIND];
+export type MachineCommandKind = (typeof MACHINE_COMMAND_KIND)[keyof typeof MACHINE_COMMAND_KIND];
 
-const MAC_COMMAND_KINDS: ReadonlySet<string> = new Set(Object.values(MAC_COMMAND_KIND));
+const MACHINE_COMMAND_KINDS: ReadonlySet<string> = new Set(Object.values(MACHINE_COMMAND_KIND));
 
-function isMacCommandKind(kind: string): kind is MacCommandKind {
-  return MAC_COMMAND_KINDS.has(kind);
+function isMachineCommandKind(kind: string): kind is MachineCommandKind {
+  return MACHINE_COMMAND_KINDS.has(kind);
 }
 
 /** The separator between the kinds a read names in its `kinds` query. */
 const KIND_SEPARATOR = ",";
 
 /** The kinds a Mac's read names, as its `kinds` query carries them; `shell` goes without saying. */
-export function macCommandKindsQuery(kinds: readonly MacCommandKind[]): string {
+export function machineCommandKindsQuery(kinds: readonly MachineCommandKind[]): string {
   return kinds.join(KIND_SEPARATOR);
 }
 
@@ -73,23 +73,23 @@ export function macCommandKindsQuery(kinds: readonly MacCommandKind[]): string {
  * it does not know is passed over rather than refused, so a newer Mac's
  * read is answered with what this service can queue.
  */
-export function macCommandKindsRead(query: string | undefined): readonly MacCommandKind[] {
+export function machineCommandKindsRead(query: string | undefined): readonly MachineCommandKind[] {
   const named = (query ?? "").split(KIND_SEPARATOR).map((kind) => kind.trim());
 
-  return [...new Set([MAC_COMMAND_KIND.SHELL, ...named.filter(isMacCommandKind)])];
+  return [...new Set([MACHINE_COMMAND_KIND.SHELL, ...named.filter(isMachineCommandKind)])];
 }
 
 const commandTimeout = EffectSchema.Int.check(
-  EffectSchema.isBetween({ minimum: 1, maximum: MAC_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS }),
+  EffectSchema.isBetween({ minimum: 1, maximum: MACHINE_COMMAND_BOUNDS.MAX_TIMEOUT_SECONDS }),
 );
 
 /** One shell command waiting for the Mac: its id, the shell text, and how long it may run. */
 const macShellCommandSchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  kind: EffectSchema.Literal(MAC_COMMAND_KIND.SHELL),
+  kind: EffectSchema.Literal(MACHINE_COMMAND_KIND.SHELL),
   command: EffectSchema.String.check(
     EffectSchema.isMinLength(1),
-    EffectSchema.isMaxLength(MAC_COMMAND_BOUNDS.MAX_COMMAND_CHARS),
+    EffectSchema.isMaxLength(MACHINE_COMMAND_BOUNDS.MAX_COMMAND_CHARS),
   ),
   timeoutSeconds: commandTimeout,
 });
@@ -148,7 +148,7 @@ export const COMPUTER_BOUNDS = {
    * Note that two at this bound, with the elements, the window's title, and
    * the icon at theirs, three bytes to a character where they are not
    * base64, come to under 3.9 MB, so a read at every bound posts under
-   * `MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES`.
+   * `MACHINE_COMMAND_BOUNDS.MAX_RESULT_BYTES`.
    */
   MAX_SHOT_CHARS: 1_600_000,
   /** The most base64 characters of an app's icon: a 64px PNG. */
@@ -278,7 +278,7 @@ export type MacComputerAction = typeof macComputerActionSchema.Type;
  */
 const macComputerCommandSchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  kind: EffectSchema.Literal(MAC_COMMAND_KIND.COMPUTER),
+  kind: EffectSchema.Literal(MACHINE_COMMAND_KIND.COMPUTER),
   conversationId: wireUuidSchema,
   action: macComputerActionSchema,
   timeoutSeconds: commandTimeout,
@@ -287,7 +287,7 @@ const macComputerCommandSchema = EffectSchema.Struct({
 export type MacComputerCommand = typeof macComputerCommandSchema.Type;
 
 /** One command waiting for the Mac, of a kind the service queues. */
-export const macCommandSchema = EffectSchema.Union([
+export const machineCommandSchema = EffectSchema.Union([
   macShellCommandSchema,
   macComputerCommandSchema,
 ]);
@@ -304,16 +304,16 @@ const decodeStoredComputerRequest = EffectSchema.decodeUnknownOption(storedCompu
 const encodeStoredComputerRequest = EffectSchema.encodeSync(storedComputerRequestSchema);
 
 /** A command as the queue keeps it: its kind, and what it asks as one text, a shell command's own or a computer request's JSON. */
-export interface StoredMacCommand {
+export interface StoredMachineCommand {
   readonly id: string;
-  readonly kind: MacCommandKind;
+  readonly kind: MachineCommandKind;
   readonly command: string;
   readonly timeoutSeconds: number;
 }
 
 /** What a command asks, as the queue keeps it. */
-export function storedMacCommandText(command: MacCommand): string {
-  return command.kind === MAC_COMMAND_KIND.SHELL
+export function storedMachineCommandText(command: MachineCommand): string {
+  return command.kind === MACHINE_COMMAND_KIND.SHELL
     ? command.command
     : encodeStoredComputerRequest({
         conversationId: command.conversationId,
@@ -322,10 +322,10 @@ export function storedMacCommandText(command: MacCommand): string {
 }
 
 /** A command the queue kept, read back; none where a computer request no longer reads, which no Mac could run. */
-export function macCommandOfStored(stored: StoredMacCommand): MacCommand | undefined {
+export function machineCommandOfStored(stored: StoredMachineCommand): MachineCommand | undefined {
   const { id, kind, command, timeoutSeconds } = stored;
 
-  if (kind === MAC_COMMAND_KIND.SHELL) return { id, kind, command, timeoutSeconds };
+  if (kind === MACHINE_COMMAND_KIND.SHELL) return { id, kind, command, timeoutSeconds };
 
   return Option.match(decodeStoredComputerRequest(command), {
     onNone: () => undefined,
@@ -333,7 +333,7 @@ export function macCommandOfStored(stored: StoredMacCommand): MacCommand | undef
   });
 }
 
-export type MacCommand = typeof macCommandSchema.Type;
+export type MachineCommand = typeof machineCommandSchema.Type;
 
 /**
  * A kind this build does not know, as a newer service wrote one: read as
@@ -341,9 +341,9 @@ export type MacCommand = typeof macCommandSchema.Type;
  * whole read. A kind this build knows is refused here, because a known one
  * that fails its own shape is a broken read and not a newer one.
  */
-const unknownMacCommandKindSchema = EffectSchema.String.check(
-  EffectSchema.makeFilter((kind) => !isMacCommandKind(kind)),
-).pipe(EffectSchema.brand("UnknownMacCommandKind"));
+const unknownMachineCommandKindSchema = EffectSchema.String.check(
+  EffectSchema.makeFilter((kind) => !isMachineCommandKind(kind)),
+).pipe(EffectSchema.brand("UnknownMachineCommandKind"));
 
 /**
  * A shell command as the Mac reads one: with its kind, or without one, as
@@ -353,40 +353,40 @@ const unknownMacCommandKindSchema = EffectSchema.String.check(
 const macShellCommandReadSchema = macShellCommandSchema.mapFields((fields) => ({
   ...fields,
   kind: fields.kind.pipe(
-    EffectSchema.withDecodingDefaultKey(Effect.succeed(MAC_COMMAND_KIND.SHELL)),
+    EffectSchema.withDecodingDefaultKey(Effect.succeed(MACHINE_COMMAND_KIND.SHELL)),
   ),
 }));
 
 /** A command as the Mac reads one: one of a kind this build knows, or the id and kind alone of one it does not. */
-const macCommandReadSchema = EffectSchema.Union([
+const machineCommandReadSchema = EffectSchema.Union([
   macShellCommandReadSchema,
   macComputerCommandSchema,
-  EffectSchema.Struct({ id: wireUuidSchema, kind: unknownMacCommandKindSchema }),
+  EffectSchema.Struct({ id: wireUuidSchema, kind: unknownMachineCommandKindSchema }),
 ]);
 
-export type MacCommandRead = typeof macCommandReadSchema.Type;
+export type MachineCommandRead = typeof machineCommandReadSchema.Type;
 
 /**
  * Whether a command the Mac read is a shell command. Note that this is
  * read off the kind alone, which TypeScript cannot narrow on by itself,
  * because an unknown kind is any text but a known one.
  */
-export function isMacShellCommand(command: MacCommandRead): command is MacShellCommand {
-  return command.kind === MAC_COMMAND_KIND.SHELL;
+export function isMacShellCommand(command: MachineCommandRead): command is MacShellCommand {
+  return command.kind === MACHINE_COMMAND_KIND.SHELL;
 }
 
 /** Whether a command the Mac read is an action on an app, read off its kind as `isMacShellCommand` reads its. */
-export function isMacComputerCommand(command: MacCommandRead): command is MacComputerCommand {
-  return command.kind === MAC_COMMAND_KIND.COMPUTER;
+export function isMacComputerCommand(command: MachineCommandRead): command is MacComputerCommand {
+  return command.kind === MACHINE_COMMAND_KIND.COMPUTER;
 }
 
 /** The commands claimed for this Mac (GET), none where nothing came while the read was held. */
-export const macCommandsAnswerSchema = EffectSchema.Struct({
-  commands: EffectSchema.Array(macCommandReadSchema),
+export const machineCommandsAnswerSchema = EffectSchema.Struct({
+  commands: EffectSchema.Array(machineCommandReadSchema),
 });
 
 const output = EffectSchema.String.check(
-  EffectSchema.isMaxLength(MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS),
+  EffectSchema.isMaxLength(MACHINE_COMMAND_BOUNDS.MAX_OUTPUT_CHARS),
 );
 
 /**
@@ -429,10 +429,10 @@ export function computerPermissionsNamed(permissions: readonly ComputerPermissio
  * lacks a grant it needs, those grants too, so the transcript can offer the
  * place they are turned on.
  */
-const macCommandRefusalSchema = EffectSchema.Struct({
+const machineCommandRefusalSchema = EffectSchema.Struct({
   refused: EffectSchema.String.check(
     EffectSchema.isMinLength(1),
-    EffectSchema.isMaxLength(MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS),
+    EffectSchema.isMaxLength(MACHINE_COMMAND_BOUNDS.MAX_OUTPUT_CHARS),
   ),
   missingPermissions: EffectSchema.optionalKey(
     EffectSchema.Array(EffectSchema.Literals(Object.values(COMPUTER_PERMISSION))).check(
@@ -442,7 +442,7 @@ const macCommandRefusalSchema = EffectSchema.Struct({
   ),
 });
 
-export type MacCommandRefusal = typeof macCommandRefusalSchema.Type;
+export type MachineCommandRefusal = typeof machineCommandRefusalSchema.Type;
 
 /** One app as the helper names it: its name, its bundle id, its icon as a 64px PNG, and whether agents are refused it. */
 const computerAppSchema = EffectSchema.Struct({
@@ -505,22 +505,22 @@ const macComputerResultSchema = EffectSchema.Struct({ computer: computerOutcomeS
 export type MacComputerResult = typeof macComputerResultSchema.Type;
 
 /** What a command came to: what a shell command or an action did, or why the Mac ran nothing. */
-export const macCommandResultSchema = EffectSchema.Union([
+export const machineCommandResultSchema = EffectSchema.Union([
   macShellResultSchema,
   macComputerResultSchema,
-  macCommandRefusalSchema,
+  machineCommandRefusalSchema,
 ]);
 
-export type MacCommandResult = typeof macCommandResultSchema.Type;
+export type MachineCommandResult = typeof machineCommandResultSchema.Type;
 
 /** One command's result, posted by the Mac that claimed it (POST). */
-export const macCommandSettleRequestSchema = EffectSchema.Struct({
+export const machineCommandSettleRequestSchema = EffectSchema.Struct({
   id: wireUuidSchema,
-  result: macCommandResultSchema,
+  result: machineCommandResultSchema,
 });
 
 /** A result the service kept (POST). */
-export const macCommandSettledAnswerSchema = EffectSchema.Struct({
+export const machineCommandSettledAnswerSchema = EffectSchema.Struct({
   settled: EffectSchema.Literal(true),
 });
 
@@ -530,7 +530,7 @@ export const macCommandSettledAnswerSchema = EffectSchema.Struct({
  * its device name the same three. Note that the order is the menu's, from
  * least freedom to most.
  */
-export const MAC_COMMAND_MODE = {
+export const MACHINE_COMMAND_MODE = {
   /** The Mac takes no commands. */
   NEVER: "never",
   /** Each command is shown to the developer first, and runs only once they allow it. */
@@ -539,29 +539,30 @@ export const MAC_COMMAND_MODE = {
   ALWAYS: "always",
 } as const;
 
-export type MacCommandMode = (typeof MAC_COMMAND_MODE)[keyof typeof MAC_COMMAND_MODE];
+export type MachineCommandMode = (typeof MACHINE_COMMAND_MODE)[keyof typeof MACHINE_COMMAND_MODE];
 
-export const MAC_COMMAND_MODE_LIST: readonly MacCommandMode[] = Object.values(MAC_COMMAND_MODE);
+export const MACHINE_COMMAND_MODE_LIST: readonly MachineCommandMode[] =
+  Object.values(MACHINE_COMMAND_MODE);
 
-export const macCommandModeSchema = EffectSchema.Literals(MAC_COMMAND_MODE_LIST);
+export const machineCommandModeSchema = EffectSchema.Literals(MACHINE_COMMAND_MODE_LIST);
 
 /**
  * One command the Mac heard of over Realtime, claimed by its id (POST), as
  * the device it joined as, where it did: a device claims what was queued
  * for it or for none, a Mac naming none only what was queued for none.
  */
-export const macCommandClaimRequestSchema = EffectSchema.Struct({
+export const machineCommandClaimRequestSchema = EffectSchema.Struct({
   id: wireUuidSchema,
   deviceId: EffectSchema.optionalKey(wireUuidSchema),
 });
 
 /** The command claimed for this Mac, to run; `not-found` where another Mac took it, its call withdrew it, or it waited too long. */
-export const macCommandClaimAnswerSchema = EffectSchema.Struct({
-  command: macCommandSchema,
+export const machineCommandClaimAnswerSchema = EffectSchema.Struct({
+  command: machineCommandSchema,
 });
 
 /** That the service counts this Mac listening now, for the kinds it named (POST). */
-export const macCommandListeningAnswerSchema = EffectSchema.Struct({
+export const machineCommandListeningAnswerSchema = EffectSchema.Struct({
   listening: EffectSchema.Literal(true),
 });
 
@@ -571,14 +572,14 @@ export const macCommandListeningAnswerSchema = EffectSchema.Struct({
  * three modes its own setting names, and the apps agents use there without
  * asking, by bundle id, or by name where an app has none.
  */
-export const macDeviceSettingsSchema = EffectSchema.Struct({
-  commandMode: macCommandModeSchema,
+export const machineDeviceSettingsSchema = EffectSchema.Struct({
+  commandMode: machineCommandModeSchema,
   alwaysAllowedApps: EffectSchema.Array(appName).check(
     EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_APPS),
   ),
 });
 
-export type MacDeviceSettings = typeof macDeviceSettingsSchema.Type;
+export type MachineDeviceSettings = typeof machineDeviceSettingsSchema.Type;
 
 /**
  * This Mac joining as the device its commands are claimed by (POST): the
@@ -590,29 +591,29 @@ export type MacDeviceSettings = typeof macDeviceSettingsSchema.Type;
  * only where it holds none for the device yet, so a machine carries them up
  * once and reads the service's from then on.
  */
-export const macDeviceJoinRequestSchema = EffectSchema.Struct({
+export const machineDeviceJoinRequestSchema = EffectSchema.Struct({
   deviceId: wireUuidSchema,
   name: EffectSchema.String.check(EffectSchema.isMinLength(1), EffectSchema.isMaxLength(200)),
   platform: EffectSchema.Literals(Object.values(DEVICE_PLATFORM)),
   arch: EffectSchema.Literals(Object.values(DEVICE_ARCH)),
   ...deviceMachineFields,
-  settings: macDeviceSettingsSchema,
+  settings: machineDeviceSettingsSchema,
 });
 
-export type MacDeviceJoinRequest = typeof macDeviceJoinRequestSchema.Type;
+export type MachineDeviceJoinRequest = typeof machineDeviceJoinRequestSchema.Type;
 
 /** The device's settings as the service keeps them once it joined; `not-found` where another account holds the id. */
-export const macDeviceJoinAnswerSchema = EffectSchema.Struct({
-  settings: macDeviceSettingsSchema,
+export const machineDeviceJoinAnswerSchema = EffectSchema.Struct({
+  settings: machineDeviceSettingsSchema,
 });
 
 /** The device's settings as the member changed them on it (POST); `not-found` where the account holds no such device. */
-export const macDeviceSettingsRequestSchema = EffectSchema.Struct({
+export const machineDeviceSettingsRequestSchema = EffectSchema.Struct({
   deviceId: wireUuidSchema,
-  settings: macDeviceSettingsSchema,
+  settings: machineDeviceSettingsSchema,
 });
 
 /** That the service keeps the device's settings as written (POST). */
-export const macDeviceSettingsAnswerSchema = EffectSchema.Struct({
+export const machineDeviceSettingsAnswerSchema = EffectSchema.Struct({
   saved: EffectSchema.Literal(true),
 });

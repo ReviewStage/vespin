@@ -1,13 +1,13 @@
 import {
-  MAC_COMMAND_BOUNDS,
+  MACHINE_COMMAND_BOUNDS,
   type MacShellCommand,
   type MacShellResult,
-} from "@repo/features/mac-command-wire";
+} from "@repo/features/machine-command-wire";
 import { Duration, Effect, Fiber, Option, Ref, Stream } from "effect";
 import { ChildProcess, type ChildProcessSpawner } from "effect/process";
 
 /**
- * mac-command-runner.ts -- one shell command an agent asked of this Mac, run in the developer's login shell from their home folder, and what it printed.
+ * machine-command-runner.ts -- one shell command an agent asked of this Mac, run in the developer's login shell from their home folder, and what it printed.
  *
  * The command is handed to the shell whole as its `-c` argument, never
  * spliced into shell text, under the app's own environment with no pager
@@ -21,7 +21,7 @@ import { ChildProcess, type ChildProcessSpawner } from "effect/process";
  * kept. A command that could not be started answers why on its stderr.
  */
 
-const MAC_COMMAND_RUN = {
+const MACHINE_COMMAND_RUN = {
   /** How long the group has to end after SIGTERM before it is sent SIGKILL. */
   KILL_GRACE: Duration.seconds(3),
   /** How long the streams are read once the command exited or timed out, for what it wrote just before. */
@@ -42,7 +42,7 @@ const COMMAND_ENVIRONMENT = {
 } as const;
 
 /** The most bytes a stream keeps: every character of the bound at its widest UTF-8 spelling. */
-const MAX_OUTPUT_BYTES = MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS * 4;
+const MAX_OUTPUT_BYTES = MACHINE_COMMAND_BOUNDS.MAX_OUTPUT_CHARS * 4;
 
 interface Captured {
   readonly chunks: readonly Uint8Array[];
@@ -80,9 +80,9 @@ function capturedText(captured: Captured): CapturedText {
     captured.chunks.map((chunk) => decoder.decode(chunk, { stream: true })).join("") +
     decoder.decode();
 
-  const cut = captured.dropped || text.length > MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS;
+  const cut = captured.dropped || text.length > MACHINE_COMMAND_BOUNDS.MAX_OUTPUT_CHARS;
 
-  return { text: text.slice(0, MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS), cut };
+  return { text: text.slice(0, MACHINE_COMMAND_BOUNDS.MAX_OUTPUT_CHARS), cut };
 }
 
 function drainInto<E>(stream: Stream.Stream<Uint8Array, E>, into: Ref.Ref<Captured>) {
@@ -103,7 +103,7 @@ function runned(
         env: COMMAND_ENVIRONMENT,
         extendEnv: true,
         stdin: "ignore",
-        forceKillAfter: MAC_COMMAND_RUN.KILL_GRACE,
+        forceKillAfter: MACHINE_COMMAND_RUN.KILL_GRACE,
       });
 
       const stdout = yield* Ref.make(NOTHING_CAPTURED);
@@ -121,7 +121,9 @@ function runned(
       );
 
       // Note that the streams are waited on only briefly, because a child the command left running, or the command itself past its timeout, holds them open; what it wrote just before the end is read either way.
-      yield* Effect.ignore(Effect.timeoutOption(Fiber.join(drains), MAC_COMMAND_RUN.DRAIN_GRACE));
+      yield* Effect.ignore(
+        Effect.timeoutOption(Fiber.join(drains), MACHINE_COMMAND_RUN.DRAIN_GRACE),
+      );
       const out = capturedText(yield* Ref.get(stdout));
       const err = capturedText(yield* Ref.get(stderr));
 
@@ -137,7 +139,7 @@ function runned(
 }
 
 /** One command run on this Mac, answering what it did; one that could not be started answers why. */
-export function runMacCommand(
+export function runMachineCommand(
   command: MacShellCommand,
   shell: MacShell,
 ): Effect.Effect<MacShellResult, never, ChildProcessSpawner.ChildProcessSpawner> {
@@ -148,7 +150,7 @@ export function runMacCommand(
       stderr:
         `Could not start the command: ${error instanceof Error ? error.message : String(error)}`.slice(
           0,
-          MAC_COMMAND_BOUNDS.MAX_OUTPUT_CHARS,
+          MACHINE_COMMAND_BOUNDS.MAX_OUTPUT_CHARS,
         ),
       truncated: false,
       timedOut: false,

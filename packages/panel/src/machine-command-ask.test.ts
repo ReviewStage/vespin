@@ -2,14 +2,14 @@
 
 import assert from "node:assert/strict";
 import { ACT_KIND } from "@repo/host/acts";
-import type { AppStateDelivery, MacCommandAsk } from "@repo/host/app-state";
-import { MAC_COMMAND_DECISION, type MacCommandAnswer } from "@repo/host/contract";
+import type { AppStateDelivery, MachineCommandAsk } from "@repo/host/app-state";
+import { MACHINE_COMMAND_DECISION, type MachineCommandAnswer } from "@repo/host/contract";
 import { holdExits } from "@repo/ui/testing/held-exits";
 import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, test, vi } from "vitest";
 import { tellAct } from "./act.js";
-import { MacCommandAskDialog } from "./mac-command-ask.js";
+import { MachineCommandAskDialog } from "./machine-command-ask.js";
 import {
   fakeActPort,
   fakeAppBridge,
@@ -29,13 +29,13 @@ import { ToastHost } from "./toast.js";
  * Synthetic commands.
  */
 
-const FIRST: MacCommandAsk = {
+const FIRST: MachineCommandAsk = {
   id: "2f6a1c7e-9b3d-4e8f-a5c1-7d2e9b4f6a03",
   command: "node --version",
   askedAt: 1_800_000_000_000,
 };
 
-const SECOND: MacCommandAsk = {
+const SECOND: MachineCommandAsk = {
   id: "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
   command: "pnpm --version",
   askedAt: 1_800_000_001_000,
@@ -51,11 +51,11 @@ afterEach(() => {
 });
 
 /** The dialog drawn over main's document holding `asks`, with what it answered main. */
-async function mount(asks: readonly MacCommandAsk[]): Promise<MacCommandAnswer[]> {
-  handState({}, { macCommands: { asks } });
-  const answered: MacCommandAnswer[] = [];
+async function mount(asks: readonly MachineCommandAsk[]): Promise<MachineCommandAnswer[]> {
+  handState({}, { machineCommands: { asks } });
+  const answered: MachineCommandAnswer[] = [];
   fakeActPort({
-    [ACT_KIND.MAC_COMMAND_ANSWER]: (payload) => {
+    [ACT_KIND.MACHINE_COMMAND_ANSWER]: (payload) => {
       answered.push(payload);
 
       return Promise.resolve();
@@ -64,7 +64,7 @@ async function mount(asks: readonly MacCommandAsk[]): Promise<MacCommandAnswer[]
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(withQueryClient(createElement(MacCommandAskDialog))));
+  await act(async () => root.render(withQueryClient(createElement(MachineCommandAskDialog))));
 
   if (asks.length > 0) await vi.waitFor(() => assert.equal(promptStands(), true));
 
@@ -77,9 +77,9 @@ async function mount(asks: readonly MacCommandAsk[]): Promise<MacCommandAnswer[]
  * on.
  */
 async function mountRefusing(sentence: string): Promise<void> {
-  handState({}, { macCommands: { asks: [FIRST] } });
+  handState({}, { machineCommands: { asks: [FIRST] } });
   fakeActPort({
-    [ACT_KIND.MAC_COMMAND_ANSWER]: () => Promise.reject(refusedOnPort(sentence)),
+    [ACT_KIND.MACHINE_COMMAND_ANSWER]: () => Promise.reject(refusedOnPort(sentence)),
   });
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
@@ -89,7 +89,7 @@ async function mountRefusing(sentence: string): Promise<void> {
       createElement(
         Fragment,
         null,
-        withQueryClient(createElement(MacCommandAskDialog)),
+        withQueryClient(createElement(MachineCommandAskDialog)),
         withQueryClient(createElement(ToastHost)),
       ),
     ),
@@ -137,9 +137,9 @@ test("the earliest ask is drawn with its command, and each answer goes back by t
   await act(async () => button("Run").click());
   await act(async () => button("Deny").click());
   assert.deepEqual(answered, [
-    { id: FIRST.id, decision: MAC_COMMAND_DECISION.ALLOW_ALWAYS },
-    { id: FIRST.id, decision: MAC_COMMAND_DECISION.ALLOW_ONCE },
-    { id: FIRST.id, decision: MAC_COMMAND_DECISION.DENY },
+    { id: FIRST.id, decision: MACHINE_COMMAND_DECISION.ALLOW_ALWAYS },
+    { id: FIRST.id, decision: MACHINE_COMMAND_DECISION.ALLOW_ONCE },
+    { id: FIRST.id, decision: MACHINE_COMMAND_DECISION.DENY },
   ]);
 });
 
@@ -157,7 +157,10 @@ test("an answer main refuses as a report nobody pressed for raises no toast", as
   await mountRefusing(refusal);
 
   await act(async () => {
-    tellAct(ACT_KIND.MAC_COMMAND_ANSWER, { id: FIRST.id, decision: MAC_COMMAND_DECISION.DENY });
+    tellAct(ACT_KIND.MACHINE_COMMAND_ANSWER, {
+      id: FIRST.id,
+      decision: MACHINE_COMMAND_DECISION.DENY,
+    });
   });
 
   assert.ok(!toasts().includes(refusal), `toasts stood: ${toasts().join(" | ")}`);
@@ -167,7 +170,7 @@ test("an ask main drops fades its card out in place, its words as they were, bef
   vi.useFakeTimers({ toFake: ["requestAnimationFrame", "cancelAnimationFrame"] });
   const exits = holdExits();
   let push: ((delivery: AppStateDelivery) => void) | undefined;
-  const snapshot = stateWith({}, { macCommands: { asks: [FIRST] } });
+  const snapshot = stateWith({}, { machineCommands: { asks: [FIRST] } });
   fakeAppBridge({
     ...fakeAppBridgeCalls(),
     onAppState: (heard: (delivery: AppStateDelivery) => void) => {
@@ -181,14 +184,14 @@ test("an ask main drops fades its card out in place, its words as they were, bef
   const container = document.body.appendChild(document.createElement("div"));
   const root = createRoot(container);
   roots.push(root);
-  await act(async () => root.render(withQueryClient(createElement(MacCommandAskDialog))));
+  await act(async () => root.render(withQueryClient(createElement(MachineCommandAskDialog))));
   await vi.waitFor(() => assert.equal(promptStands(), true));
   await act(async () => vi.advanceTimersToNextFrame());
   const card = document.querySelector('[role="alertdialog"]') ?? assert.fail("the prompt stands");
 
   await act(async () =>
     push?.({
-      ...deliveryOf(stateWith({}, { macCommands: { asks: [] } })),
+      ...deliveryOf(stateWith({}, { machineCommands: { asks: [] } })),
       version: snapshot.version + 1,
     }),
   );

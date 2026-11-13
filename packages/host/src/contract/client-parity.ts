@@ -68,7 +68,7 @@ const WEB = {
     "The tab opens a Browser tab's live view socket itself (web-browser-live.ts)",
   ),
   MAC: byDesign("Reaches the Mac's own shells, loopback, or Terminal, which a tab cannot"),
-  MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
+  MACHINE_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
   MAC_PHOTO: byDesign(
     "A tab cannot run sips; Safari decodes a HEIC itself, and another browser says to export it as JPEG",
   ),
@@ -116,7 +116,7 @@ const IOS = {
   ),
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
-  MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
+  MACHINE_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
   MENTION_APPS: notYet(
     "iOS's composers offer skills after a `/` and no `@` list yet, so no app is offered to mention",
   ),
@@ -335,7 +335,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.MCP_CLIENTS_RETRY]: EVERYWHERE,
   [PORT_ACT_KIND.MCP_CLIENTS_REVOKE]: EVERYWHERE,
 
-  [PORT_ACT_KIND.MAC_COMMAND_ANSWER]: desktopOnly(WEB.MAC_COMMAND, IOS.MAC_COMMAND),
+  [PORT_ACT_KIND.MACHINE_COMMAND_ANSWER]: desktopOnly(WEB.MACHINE_COMMAND, IOS.MACHINE_COMMAND),
   [PORT_ACT_KIND.COMPUTER_USE_STATUS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.COMPUTER_USE_APPS]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),
   [PORT_ACT_KIND.COMPUTER_USE_APP_ICON]: desktopOnly(WEB.COMPUTER_USE, IOS.DESKTOP_ONLY),

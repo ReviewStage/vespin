@@ -1,10 +1,10 @@
-import { type HostedMacCommandClient, MAC_COMMAND_CALL_FAILURE } from "@repo/features";
+import { type HostedMachineCommandClient, MACHINE_COMMAND_CALL_FAILURE } from "@repo/features";
 import type { DeviceArch, DeviceMachine, DevicePlatform } from "@repo/features/device-agent-wire";
 import {
-  MAC_COMMANDS_READ,
-  type MacCommandsLiveAnswer,
-  macCommandsOfLiveRows,
-} from "@repo/features/mac-command-live";
+  MACHINE_COMMANDS_READ,
+  type MachineCommandsLiveAnswer,
+  machineCommandsOfLiveRows,
+} from "@repo/features/machine-command-live";
 import {
   COMPUTER_ACTION,
   COMPUTER_PERMISSION,
@@ -14,20 +14,20 @@ import {
   computerPermissionsNamed,
   isMacComputerCommand,
   isMacShellCommand,
-  MAC_COMMAND_BOUNDS,
-  MAC_COMMAND_KIND,
-  MAC_COMMAND_MODE,
-  type MacCommandKind,
-  type MacCommandMode,
-  type MacCommandRead,
-  type MacCommandRefusal,
-  type MacCommandResult,
+  MACHINE_COMMAND_BOUNDS,
+  MACHINE_COMMAND_KIND,
+  MACHINE_COMMAND_MODE,
   type MacComputerCommand,
-  type MacDeviceSettings,
+  type MachineCommandKind,
+  type MachineCommandMode,
+  type MachineCommandRead,
+  type MachineCommandRefusal,
+  type MachineCommandResult,
+  type MachineDeviceSettings,
   type MacShellResult,
-  macCommandKindsQuery,
-  macCommandResultSchema,
-} from "@repo/features/mac-command-wire";
+  machineCommandKindsQuery,
+  machineCommandResultSchema,
+} from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
 import {
@@ -56,26 +56,26 @@ import {
   type ComputerPermissions,
   type ComputerUseHelperSeam,
 } from "./computer-use-helper.js";
-import type { MAC_COMMAND_ACTS, MacApp } from "./contract/index.js";
+import type { MACHINE_COMMAND_ACTS, MacApp } from "./contract/index.js";
 import { Environment, Reporter } from "./effect/seams.js";
 import { ActRefused, type HostActTable } from "./host-acts.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
 import type { HostKernel } from "./host-kernel.js";
 import { decodedLiveRows, LIVE_RESTART, waitOrRegained } from "./live-follow.js";
 import {
-  MAC_COMMAND_DECISION,
+  MACHINE_COMMAND_DECISION,
   type MacAppAsk,
-  type MacCommandAsk,
-  type MacCommandDecision,
-} from "./mac-command-ask.js";
-import { type MacShell, runMacCommand } from "./mac-command-runner.js";
+  type MachineCommandAsk,
+  type MachineCommandDecision,
+} from "./machine-command-ask.js";
+import { type MacShell, runMachineCommand } from "./machine-command-runner.js";
 import type { RunMode } from "./run-mode.js";
-import type { ThisMacDevice } from "./this-mac-device.js";
+import type { ThisMachineDevice } from "./this-machine-device.js";
 
 /**
- * compose-mac-commands.ts -- runs on this Mac the commands the account's agents queue for it, for as long as an account is signed in and Settings lets agents run commands or use apps here, asking the developer first where Settings says to.
+ * compose-machine-commands.ts -- runs on this Mac the commands the account's agents queue for it, for as long as an account is signed in and Settings lets agents run commands or use apps here, asking the developer first where Settings says to.
  *
- * Settings › This Mac decides (`@repo/settings`'s `MAC_COMMAND_MODE`): Ask
+ * Settings › This Mac decides (`@repo/settings`'s `MACHINE_COMMAND_MODE`): Ask
  * every time, the default, shows the developer each shell command before
  * it runs; Always allow runs any command of the account's agents without
  * asking; Never is the brake, under which no shell command runs. Settings ›
@@ -91,22 +91,22 @@ import type { ThisMacDevice } from "./this-mac-device.js";
  * two Macs of one account follow, only the one it granted runs it. Each
  * claimed command runs on a fiber of its own in the concern's scope, by its
  * kind: a shell command in the login shell from the home folder
- * (`mac-command-runner.ts`), and a command of a kind this Mac cannot run
+ * (`machine-command-runner.ts`), and a command of a kind this Mac cannot run
  * answered with a refusal. Its result is posted back, so a long command
  * holds up neither the follow nor the others.
  *
  * Under Ask every time, a claimed shell command is held as an ask
- * (`mac-command-ask.ts`) on the same fiber, so one waiting holds up neither
+ * (`machine-command-ask.ts`) on the same fiber, so one waiting holds up neither
  * the follow nor another ask: the asks waiting are told as
- * `MAC_COMMAND_ASKS_CHANGED` each time one is asked or answered, the panel
- * draws them, and its answer comes back as `MAC_COMMAND_ANSWER` by the
+ * `MACHINE_COMMAND_ASKS_CHANGED` each time one is asked or answered, the panel
+ * draws them, and its answer comes back as `MACHINE_COMMAND_ANSWER` by the
  * ask's id. Allow once runs the command; Allow all commands writes the setting to
  * Always allow and runs it; Deny, or no answer before the command's own
  * timeout has passed since it was asked, answers the call as not run, in
  * words the agent can act on, through the same refusal a command of a kind
  * this Mac cannot run is answered with.
  *
- * An action on an app (`MAC_COMMAND_KIND.COMPUTER`) is taken only where the
+ * An action on an app (`MACHINE_COMMAND_KIND.COMPUTER`) is taken only where the
  * desktop ships the computer-use helper (`computer-use-helper.ts`), and runs
  * through it under Settings › Let agents use apps on this Mac, whatever the
  * shell commands' setting says. The helper names the app first, launching
@@ -120,11 +120,11 @@ import type { ThisMacDevice } from "./this-mac-device.js";
  * it has none, so the helper acts on no other app that answers to the
  * agent's words by the time it runs, and the switch is read again just
  * before the helper takes it. What the helper answers is posted only where
- * the wire takes it (`macCommandResultSchema`), and refused otherwise.
+ * the wire takes it (`machineCommandResultSchema`), and refused otherwise.
  *
- * Where this process can say which machine it runs on (`MacCommandsDevice`),
+ * Where this process can say which machine it runs on (`MachineCommandsDevice`),
  * the Mac joins as a device of the account signed in, under the id this
- * install keeps for it (`this-mac-device.ts`), and every read, claim, and
+ * install keeps for it (`this-machine-device.ts`), and every read, claim, and
  * presence names that device, so the service hands it what was queued for
  * it or for no machine, and never what was meant for another of the
  * account's. The join carries this Mac's own settings for commands and apps
@@ -141,7 +141,7 @@ import type { ThisMacDevice } from "./this-mac-device.js";
  * The gate is a value that changes rather than one read again on a timer:
  * the account it stands open for and the kinds it takes, worked out afresh
  * each time a setting or the account changes
- * (`MacCommandsDependencies.changed`). Both switches off, a sign-out, or
+ * (`MachineCommandsDependencies.changed`). Both switches off, a sign-out, or
  * another account signing in ends the follow and the beats at once, the
  * agents' calls are told no Mac listens, and every command still running
  * is stopped, its process group killed, as commands set to Never stops them
@@ -177,13 +177,13 @@ const DEVICE_LOOK_EVERY = Duration.seconds(15);
 const DESCRIBE_WITHIN = Duration.seconds(10);
 
 /** The service's side of the commands, as this concern asks it. */
-export type MacCommandClient = Pick<
-  HostedMacCommandClient,
+export type MachineCommandClient = Pick<
+  HostedMachineCommandClient,
   "liveRead" | "claim" | "listening" | "settle" | "join" | "saveDeviceSettings"
 >;
 
 /** This Mac as a device of the accounts signed in on it: the ids it joins as, the machine it names itself as, and its own say over commands and apps. */
-export interface MacCommandsDevice extends ThisMacDevice {
+export interface MachineCommandsDevice extends ThisMachineDevice {
   /** The machine as it names itself to the service. */
   readonly machine: Effect.Effect<
     {
@@ -193,18 +193,18 @@ export interface MacCommandsDevice extends ThisMacDevice {
     } & DeviceMachine
   >;
   /** This Mac's own say over commands and apps, as Settings holds it now. */
-  readonly settings: Effect.Effect<MacDeviceSettings>;
+  readonly settings: Effect.Effect<MachineDeviceSettings>;
   /** The service's say written over Settings, where it differs, answering whether every write landed. */
-  readonly applySettings: (settings: MacDeviceSettings) => Effect.Effect<boolean>;
+  readonly applySettings: (settings: MachineDeviceSettings) => Effect.Effect<boolean>;
 }
 
-export interface MacCommandsDependencies {
+export interface MachineCommandsDependencies {
   kernel: Pick<HostKernel, "emit" | "now"> & { runMode: Pick<RunMode, "sendsNetwork"> };
   account: Pick<AccountComposer, "capabilitiesActive">;
   /** The account signed in now, by its id, which every live read names; none where nobody is. */
   accountId: () => string | undefined;
   /** How Settings lets agents run commands on this Mac, read as the gate is worked out and as each claimed command is about to run. */
-  mode: Effect.Effect<MacCommandMode>;
+  mode: Effect.Effect<MachineCommandMode>;
   /**
    * Subscribes, for as long as the subscriber's scope stands, to every
    * change that may move the gate: a setting written, or the account
@@ -214,18 +214,18 @@ export interface MacCommandsDependencies {
   changed: Effect.Effect<Stream.Stream<unknown>, never, Scope.Scope>;
   /** Writes the setting to Always allow, answering whether the write landed: the prompt's Allow all commands, which also runs the command asked. */
   allowAlways: Effect.Effect<boolean>;
-  client: MacCommandClient;
+  client: MachineCommandClient;
   /** The computer-use helper and its settings, where this Mac ships one; none takes no action on an app. */
   computer?: MacComputerUse;
   /** This Mac as a device of the account, where this process can say which machine it runs on; none claims as the account alone. */
-  device?: MacCommandsDevice;
+  device?: MachineCommandsDevice;
 }
 
 /** The device this Mac joined as for an account, and the settings the service keeps for it as last read or written. */
 interface Joined {
   readonly userId: string;
   readonly deviceId: string;
-  readonly settings: MacDeviceSettings;
+  readonly settings: MachineDeviceSettings;
 }
 
 /** The device the Mac joined as for the account given; none where it has not joined for it. */
@@ -233,7 +233,7 @@ const joinedAs = (joined: Joined | undefined, userId: string) =>
   joined?.userId === userId ? joined.deviceId : undefined;
 
 /** Whether two says over commands and apps are the same, the apps in order. */
-const sameSettings = (one: MacDeviceSettings, other: MacDeviceSettings) =>
+const sameSettings = (one: MachineDeviceSettings, other: MachineDeviceSettings) =>
   one.commandMode === other.commandMode &&
   one.alwaysAllowedApps.length === other.alwaysAllowedApps.length &&
   one.alwaysAllowedApps.every((app, index) => app === other.alwaysAllowedApps[index]);
@@ -251,8 +251,8 @@ export interface MacComputerUse {
   readonly allowApp: (app: string) => Effect.Effect<boolean>;
 }
 
-export interface MacCommandsComposer extends Composer {
-  readonly acts: HostActTable<typeof MAC_COMMAND_ACTS>;
+export interface MachineCommandsComposer extends Composer {
+  readonly acts: HostActTable<typeof MACHINE_COMMAND_ACTS>;
 }
 
 /**
@@ -274,17 +274,17 @@ function sameGate(now: GateStanding | undefined, was: GateStanding): boolean {
 /**
  * The kinds a gate standing open reads, claims, and listens for: actions on
  * apps where they are let, and shell always, since every read is handed
- * shell commands whatever it names (`macCommandKindsRead`), so one taken
+ * shell commands whatever it names (`machineCommandKindsRead`), so one taken
  * under Never is answered not run rather than left for its call to wait out.
  */
-function kindsOf(standing: GateStanding): readonly MacCommandKind[] {
+function kindsOf(standing: GateStanding): readonly MachineCommandKind[] {
   return standing.apps
-    ? [MAC_COMMAND_KIND.SHELL, MAC_COMMAND_KIND.COMPUTER]
-    : [MAC_COMMAND_KIND.SHELL];
+    ? [MACHINE_COMMAND_KIND.SHELL, MACHINE_COMMAND_KIND.COMPUTER]
+    : [MACHINE_COMMAND_KIND.SHELL];
 }
 
 /** What a shell command answers where Settings lets agents run no commands on this Mac, while it stands open for their actions on apps. */
-const COMMANDS_NEVER: MacCommandRefusal = {
+const COMMANDS_NEVER: MachineCommandRefusal = {
   refused:
     "Not run: the developer doesn't let agents run commands on their Mac (Settings › This Mac is set to Never).",
 };
@@ -299,18 +299,18 @@ const SWITCHED_OFF: MacShellResult = {
 };
 
 /** What a command the developer declined answers. */
-const DECLINED: MacCommandRefusal = {
+const DECLINED: MachineCommandRefusal = {
   refused: "Not run: the developer declined this command.",
 };
 
 /** What a command the developer did not answer for answers: not run, since its timeout had passed before it could start. */
-const UNANSWERED: MacCommandRefusal = {
+const UNANSWERED: MachineCommandRefusal = {
   refused:
     "Not run: the developer did not answer in time whether to allow this command on their Mac.",
 };
 
 /** What a command asked under an account that signed out before it was answered answers. */
-const ACCOUNT_CHANGED: MacCommandRefusal = {
+const ACCOUNT_CHANGED: MachineCommandRefusal = {
   refused: "Not run: the account signed in on the developer's Mac changed before it was allowed.",
 };
 
@@ -322,20 +322,20 @@ const APPS_OFF_WORDS =
   "the developer switched off Settings › Let agents use apps on this Mac, so no app can be used.";
 
 /** What an action answers where Settings has agents use no apps on this Mac. */
-const APPS_SWITCHED_OFF: MacCommandRefusal = { refused: `Not run: ${APPS_OFF_WORDS}` };
+const APPS_SWITCHED_OFF: MachineCommandRefusal = { refused: `Not run: ${APPS_OFF_WORDS}` };
 
 /** What an action on an app the developer declined answers. */
-const APP_DECLINED: MacCommandRefusal = {
+const APP_DECLINED: MachineCommandRefusal = {
   refused: "Not run: the developer declined to let agents use this app.",
 };
 
 /** What an action on an app the developer did not answer for in time answers. */
-const APP_UNANSWERED: MacCommandRefusal = {
+const APP_UNANSWERED: MachineCommandRefusal = {
   refused: "Not run: the developer did not answer in time whether agents may use this app.",
 };
 
 /** What an action on an app agents are never offered answers, by the app's name. */
-function neverOffered(app: string): MacCommandRefusal {
+function neverOffered(app: string): MachineCommandRefusal {
   return {
     refused: `Not run: agents are never offered ${app}, as with terminals, password managers, System Settings, and ${PRODUCT_NAME}.`,
   };
@@ -377,7 +377,7 @@ function granted(permissions: ComputerPermissions, permission: ComputerPermissio
  */
 function permissionsMissing(
   missing: readonly [ComputerPermission, ...ComputerPermission[]],
-): MacCommandRefusal {
+): MachineCommandRefusal {
   const names = computerPermissionsNamed(missing);
   const them = missing.length === 1 ? "it" : "them";
 
@@ -390,14 +390,14 @@ function permissionsMissing(
 }
 
 /** What a read of a window answers where the helper captured no picture of it, so no empty picture goes on to the model or the transcript. */
-function nothingCaptured(app: string): MacCommandRefusal {
+function nothingCaptured(app: string): MachineCommandRefusal {
   return {
     refused: `Not run: ${app}'s window could not be captured. Read it again with get_app_state.`,
   };
 }
 
 /** What an action answers where the helper answered a request with an answer of another kind. */
-const UNEXPECTED_ANSWER: MacCommandRefusal = {
+const UNEXPECTED_ANSWER: MachineCommandRefusal = {
   refused: "Not run: the computer-use helper answered something else.",
 };
 
@@ -415,7 +415,7 @@ function pinOf(app: ComputerApp, pid: number | undefined): PinnedApp {
   return pid === undefined ? {} : { pin_pid: pid };
 }
 
-const isSendable = Schema.is(macCommandResultSchema);
+const isSendable = Schema.is(machineCommandResultSchema);
 
 /** Room in a posted body for what stands beside the result: its key and the command's id. */
 const SETTLE_ENVELOPE_BYTES = 128;
@@ -423,15 +423,15 @@ const SETTLE_ENVELOPE_BYTES = 128;
 const encoder = new TextEncoder();
 
 /** A result as the service takes it, or the helper's other-answer refusal where it would not, as a window larger than the wire or the body's cap carries, so the call is never left waiting on a result it refuses. */
-function sendable(result: MacCommandResult): MacCommandResult {
+function sendable(result: MachineCommandResult): MachineCommandResult {
   if (!isSendable(result)) return UNEXPECTED_ANSWER;
   const bytes = encoder.encode(JSON.stringify(result)).byteLength + SETTLE_ENVELOPE_BYTES;
 
-  return bytes <= MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES ? result : UNEXPECTED_ANSWER;
+  return bytes <= MACHINE_COMMAND_BOUNDS.MAX_RESULT_BYTES ? result : UNEXPECTED_ANSWER;
 }
 
 /** What an action came to, as the helper answered it. */
-function computerResult(answer: ComputerHelperAnswer, app?: ComputerApp): MacCommandResult {
+function computerResult(answer: ComputerHelperAnswer, app?: ComputerApp): MachineCommandResult {
   if ("outcome" in answer) {
     // Note that a read with no picture of its window is refused, because an empty picture handed on breaks the model's turn and draws a blank window.
     if ("shots" in answer.outcome && !answer.outcome.shots.some((shot) => shot.jpeg !== "")) {
@@ -451,7 +451,7 @@ function computerResult(answer: ComputerHelperAnswer, app?: ComputerApp): MacCom
 }
 
 /** What a command of a kind this Mac cannot run answers, such as one a newer service queued. */
-const CANNOT_RUN: MacCommandRefusal = {
+const CANNOT_RUN: MachineCommandRefusal = {
   refused:
     `Not run: ${PRODUCT_NAME} on the developer's Mac cannot run this kind of command; updating ${PRODUCT_NAME} there ` +
     "may let it.",
@@ -478,10 +478,10 @@ const macShell = Effect.gen(function* () {
   return Option.map(home, (folder): MacShell => ({ path: shell, home: folder }));
 });
 
-export function composeMacCommands(
-  dependencies: MacCommandsDependencies,
+export function composeMachineCommands(
+  dependencies: MachineCommandsDependencies,
 ): Effect.Effect<
-  MacCommandsComposer,
+  MachineCommandsComposer,
   never,
   Environment | Reporter | ChildProcessSpawner.ChildProcessSpawner | HttpClient.HttpClient
 > {
@@ -499,12 +499,12 @@ export function composeMacCommands(
 
     const asks = new Map<
       string,
-      { ask: MacCommandAsk; userId: string; decided: Deferred.Deferred<MacCommandDecision> }
+      { ask: MachineCommandAsk; userId: string; decided: Deferred.Deferred<MachineCommandDecision> }
     >();
 
     const tellAsks = () =>
       kernel.emit(
-        GATEWAY_EVENT.MAC_COMMAND_ASKS_CHANGED,
+        GATEWAY_EVENT.MACHINE_COMMAND_ASKS_CHANGED,
         carried({ asks: [...asks.values()].map((held) => held.ask) }),
       );
 
@@ -516,12 +516,12 @@ export function composeMacCommands(
      * a prompt never outlives its command.
      */
     const consent = (
-      ask: MacCommandAsk,
+      ask: MachineCommandAsk,
       userId: string,
       deadline: number,
-    ): Effect.Effect<MacCommandDecision | undefined> =>
+    ): Effect.Effect<MachineCommandDecision | undefined> =>
       Effect.gen(function* () {
-        const decided = yield* Deferred.make<MacCommandDecision>();
+        const decided = yield* Deferred.make<MachineCommandDecision>();
         asks.set(ask.id, { ask, userId, decided });
         tellAsks();
         const now = yield* Clock.currentTimeMillis;
@@ -551,21 +551,21 @@ export function composeMacCommands(
       Effect.provideService(call, HttpClient.HttpClient, http);
 
     /** What one command comes to, by its kind: a shell command run, and any other kind refused. */
-    const ran = (command: MacCommandRead): Effect.Effect<MacCommandResult> => {
+    const ran = (command: MachineCommandRead): Effect.Effect<MachineCommandResult> => {
       if (!isMacShellCommand(command)) return Effect.succeed(CANNOT_RUN);
 
       return Option.match(shell, {
         onNone: () => Effect.succeed(NO_HOME),
-        onSome: (where) => runMacCommand(command, where),
+        onSome: (where) => runMachineCommand(command, where),
       }).pipe(Effect.provideContext(services));
     };
 
     /** One result posted back; one the service did not take is let go, its call already given up. */
-    const settled = (id: string, result: MacCommandResult) =>
+    const settled = (id: string, result: MachineCommandResult) =>
       Effect.asVoid(asked(client.settle(id, result)));
 
     /** One command run and its result posted back. */
-    const run = (command: MacCommandRead) =>
+    const run = (command: MachineCommandRead) =>
       Effect.flatMap(ran(command), (result) => settled(command.id, result));
 
     /**
@@ -583,17 +583,17 @@ export function composeMacCommands(
      * command, which the developer allowed, and is reported, since the next
      * command asks again.
      */
-    const decided = (command: MacCommandRead, userId: string) =>
+    const decided = (command: MachineCommandRead, userId: string) =>
       Effect.gen(function* () {
         if (isMacComputerCommand(command)) return yield* used(command, userId);
         const how = yield* mode;
 
-        if (how === MAC_COMMAND_MODE.NEVER && isMacShellCommand(command)) {
+        if (how === MACHINE_COMMAND_MODE.NEVER && isMacShellCommand(command)) {
           return yield* settled(command.id, COMMANDS_NEVER);
         }
 
         // Note that a kind this Mac cannot run is refused without asking, since nothing would run.
-        if (how !== MAC_COMMAND_MODE.ASK || !isMacShellCommand(command)) {
+        if (how !== MACHINE_COMMAND_MODE.ASK || !isMacShellCommand(command)) {
           return yield* run(command);
         }
 
@@ -611,11 +611,11 @@ export function composeMacCommands(
 
         if (decision === undefined) return yield* settled(command.id, UNANSWERED);
 
-        if (decision === MAC_COMMAND_DECISION.DENY) return yield* settled(command.id, DECLINED);
+        if (decision === MACHINE_COMMAND_DECISION.DENY) return yield* settled(command.id, DECLINED);
 
         if (dependencies.accountId() !== userId) return yield* settled(command.id, ACCOUNT_CHANGED);
 
-        if (decision === MAC_COMMAND_DECISION.ALLOW_ALWAYS && !(yield* allowAlways)) {
+        if (decision === MACHINE_COMMAND_DECISION.ALLOW_ALWAYS && !(yield* allowAlways)) {
           report("the Always allow setting could not be saved; the next command asks again");
         }
 
@@ -636,7 +636,9 @@ export function composeMacCommands(
       command: MacComputerCommand & { readonly action: { readonly app: string } },
       userId: string,
       deadline: number,
-    ): Effect.Effect<MacCommandRefusal | { readonly app: ComputerApp; readonly pin: PinnedApp }> =>
+    ): Effect.Effect<
+      MachineCommandRefusal | { readonly app: ComputerApp; readonly pin: PinnedApp }
+    > =>
       Effect.gen(function* () {
         const named = yield* use.helper.ask(
           { op: COMPUTER_HELPER_OP.DESCRIBE_APP, app: command.action.app },
@@ -680,11 +682,11 @@ export function composeMacCommands(
 
         if (decision === undefined) return APP_UNANSWERED;
 
-        if (decision === MAC_COMMAND_DECISION.DENY) return APP_DECLINED;
+        if (decision === MACHINE_COMMAND_DECISION.DENY) return APP_DECLINED;
 
         if (dependencies.accountId() !== userId) return ACCOUNT_CHANGED;
         // Note that an Always allow the settings kept is held by them alone, so a Remove in Settings takes it back; one they could not keep holds for this conversation, as Allow once does.
-        const always = decision === MAC_COMMAND_DECISION.ALLOW_ALWAYS;
+        const always = decision === MACHINE_COMMAND_DECISION.ALLOW_ALWAYS;
 
         // Note that the app is held as allowed without asking at once, so a Remove before the next read still takes back every once grant beside it.
         if (always && (yield* use.allowApp(key))) {
@@ -710,7 +712,7 @@ export function composeMacCommands(
     const lacking = (
       use: MacComputerUse,
       op: ComputerAction,
-    ): Effect.Effect<MacCommandRefusal | undefined> => {
+    ): Effect.Effect<MachineCommandRefusal | undefined> => {
       const needs: readonly ComputerPermission[] = ACTION_NEEDS[op];
 
       if (needs.length === 0) return Effect.succeed(undefined);
@@ -793,7 +795,7 @@ export function composeMacCommands(
         return undefined;
       }
 
-      const shell = (yield* mode) !== MAC_COMMAND_MODE.NEVER;
+      const shell = (yield* mode) !== MACHINE_COMMAND_MODE.NEVER;
       const apps = computer !== undefined && (yield* computer.enabled);
 
       return shell || apps ? { userId, shell, apps } : undefined;
@@ -849,7 +851,7 @@ export function composeMacCommands(
       running: FiberSet.FiberSet,
       userId: string,
       device: string | undefined,
-      command: MacCommandRead,
+      command: MachineCommandRead,
     ) =>
       Effect.gen(function* () {
         const answer = yield* asked(client.claim(command.id, device)).pipe(
@@ -857,7 +859,8 @@ export function composeMacCommands(
             schedule: Schedule.spaced(CLAIM_RETRY.every),
             times: CLAIM_RETRY.times,
             until: (granted) =>
-              !("failure" in granted) || granted.failure !== MAC_COMMAND_CALL_FAILURE.UNANSWERED,
+              !("failure" in granted) ||
+              granted.failure !== MACHINE_COMMAND_CALL_FAILURE.UNANSWERED,
           }),
         );
 
@@ -883,10 +886,10 @@ export function composeMacCommands(
     ) =>
       asked(
         client.liveRead(
-          MAC_COMMANDS_READ,
+          MACHINE_COMMANDS_READ,
           {
             userId: standing.userId,
-            kinds: macCommandKindsQuery(kindsOf(standing)),
+            kinds: machineCommandKindsQuery(kindsOf(standing)),
             ...(device === undefined ? undefined : { device }),
           },
           poll ? { after } : undefined,
@@ -926,7 +929,7 @@ export function composeMacCommands(
      * the service or Settings did not take, is let be, for the next look to
      * try again.
      */
-    const reconciled = (device: MacCommandsDevice) =>
+    const reconciled = (device: MachineCommandsDevice) =>
       Effect.gen(function* () {
         const userId = dependencies.accountId();
 
@@ -957,7 +960,7 @@ export function composeMacCommands(
 
         if (
           "failure" in attempt.answer &&
-          attempt.answer.failure === MAC_COMMAND_CALL_FAILURE.NOT_FOUND
+          attempt.answer.failure === MACHINE_COMMAND_CALL_FAILURE.NOT_FOUND
         ) {
           attempt = yield* joinAs(yield* device.renewFor(userId));
         }
@@ -993,13 +996,13 @@ export function composeMacCommands(
       claims: FiberSet.FiberSet,
       standing: GateStanding,
       device: string | undefined,
-      first: MacCommandsLiveAnswer,
+      first: MachineCommandsLiveAnswer,
     ) =>
       Effect.suspend(() => {
         const { userId } = standing;
         let tried = new Set<string>();
 
-        const claimNew = (commands: readonly MacCommandRead[]) =>
+        const claimNew = (commands: readonly MachineCommandRead[]) =>
           Effect.gen(function* () {
             const fresh = commands.filter((command) => !tried.has(command.id));
             tried = new Set(commands.map((command) => command.id));
@@ -1012,10 +1015,12 @@ export function composeMacCommands(
         const rows = decodedLiveRows(
           { poll: (after) => seal(standing, device, true, after) },
           first,
-          MAC_COMMANDS_READ.rows,
+          MACHINE_COMMANDS_READ.rows,
         );
 
-        const following = Stream.runForEach(rows, (read) => claimNew(macCommandsOfLiveRows(read)));
+        const following = Stream.runForEach(rows, (read) =>
+          claimNew(machineCommandsOfLiveRows(read)),
+        );
 
         const follow = Effect.raceFirst(following, presence(standing, device)).pipe(
           Effect.catch(() => waitOrRegained(LIVE_RESTART)),
@@ -1247,11 +1252,11 @@ export function composeMacCommands(
             : {},
       );
 
-    const methods: PlatformConcernMethods<typeof HOST_PLATFORM_CONCERN.MAC_COMMANDS> = {};
+    const methods: PlatformConcernMethods<typeof HOST_PLATFORM_CONCERN.MACHINE_COMMANDS> = {};
 
-    const acts: HostActTable<typeof MAC_COMMAND_ACTS> = {
+    const acts: HostActTable<typeof MACHINE_COMMAND_ACTS> = {
       /** The developer's answer to one ask, by its id; one no longer waiting, answered or timed out, is answered all the same, since the prompt goes with it. */
-      MAC_COMMAND_ANSWER: ({ id, decision }) =>
+      MACHINE_COMMAND_ANSWER: ({ id, decision }) =>
         Effect.gen(function* () {
           const held = asks.get(id);
 
@@ -1274,6 +1279,6 @@ export function composeMacCommands(
       COMPUTER_USE_ASK_PERMISSIONS: permissionsAsked,
     };
 
-    return { methods, acts, lifetime } satisfies MacCommandsComposer;
+    return { methods, acts, lifetime } satisfies MachineCommandsComposer;
   });
 }

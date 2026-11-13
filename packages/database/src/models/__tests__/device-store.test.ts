@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { DEVICE_ARCH, DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
-import { MAC_COMMAND_MODE } from "@repo/features/mac-command-wire";
+import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
 import { eq } from "drizzle-orm";
 import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
@@ -90,11 +90,11 @@ it.layer(getTestDB())("the device store", (it) => {
         };
 
         const carried = {
-          commandMode: MAC_COMMAND_MODE.NEVER,
+          commandMode: MACHINE_COMMAND_MODE.NEVER,
           alwaysAllowedApps: ["com.apple.Notes"],
         };
 
-        const changed = { commandMode: MAC_COMMAND_MODE.ALWAYS, alwaysAllowedApps: [] };
+        const changed = { commandMode: MACHINE_COMMAND_MODE.ALWAYS, alwaysAllowedApps: [] };
 
         const first = yield* joinCommandDevice(owner, { ...machine, settings: carried });
         const again = yield* joinCommandDevice(owner, { ...machine, settings: changed });
@@ -116,7 +116,7 @@ it.layer(getTestDB())("the device store", (it) => {
     Effect.gen(function* () {
       const { owner, other } = yield* openAccounts;
       const machine = { platform: DEVICE_PLATFORM.DARWIN, arch: DEVICE_ARCH.ARM64 };
-      const ask = MAC_COMMAND_MODE.ASK;
+      const ask = MACHINE_COMMAND_MODE.ASK;
       const studio = randomUUID();
 
       yield* joinCommandDevice(owner, {
@@ -172,7 +172,7 @@ it.layer(getTestDB())("the device store", (it) => {
           arch: DEVICE_ARCH.ARM64,
           machineId,
           model: "Mac mini (M4, 2024)",
-          settings: { commandMode: MAC_COMMAND_MODE.ASK, alwaysAllowedApps: [] },
+          settings: { commandMode: MACHINE_COMMAND_MODE.ASK, alwaysAllowedApps: [] },
         });
 
         const [row] = yield* Database.use((db) =>

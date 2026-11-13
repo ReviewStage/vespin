@@ -82,7 +82,7 @@ export * from "./integration-installation.js";
 
 export * from "./live-activity.js";
 
-export * from "./mac-command.js";
+export * from "./machine-command.js";
 
 export * from "./memory.js";
 

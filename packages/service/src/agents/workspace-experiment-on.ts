@@ -14,7 +14,7 @@
 
 import type { DatabaseServices } from "@repo/database/core/query";
 import { accountExperimentOn } from "@repo/database/models/account-store";
-import { macOwnerOf } from "@repo/database/models/mac-command-store";
+import { machineOwnerOf } from "@repo/database/models/machine-command-store";
 import {
   workspaceExperimentOn,
   workspaceExperimentsOf,
@@ -62,7 +62,7 @@ export function experimentOnSinceIn(
  * built by: its workspace's Task descriptions, Memory, and Reply buttons,
  * Done and follow-ups as the account that started the agent chose it, on or
  * off, and Computer use, which is no workspace's but the account's whose Mac
- * the agent reaches (`macOwnerOf`), since that member alone is who it acts
+ * the agent reaches (`machineOwnerOf`), since that member alone is who it acts
  * for. An agent is told nothing of one that is off, so every word that names
  * one is chosen by this.
  */
@@ -114,7 +114,7 @@ export function experimentsReadIn(
     [
       workspaceExperimentsOf(agent.organizationId),
       accountExperimentOn(agent.userId, EXPERIMENT.TURN_END),
-      Effect.flatMap(macOwnerOf(target), (owner) =>
+      Effect.flatMap(machineOwnerOf(target), (owner) =>
         accountExperimentOn(owner, EXPERIMENT.COMPUTER_USE),
       ),
     ],

@@ -1,9 +1,9 @@
 /**
- * mac-commands.ts -- the commands an account's agents queued for its Mac (`mac-command-wire.ts`): the held read that takes them, and each result posted back.
+ * machine-commands.ts -- the commands an account's agents queued for its Mac (`machine-command-wire.ts`): the held read that takes them, and each result posted back.
  *
  * Both procedures share the one public path, told apart by method. The
  * held read names the kinds its Mac runs beyond `shell` in its `kinds`
- * query, as text (`macCommandKindsQuery`); an older Mac's read names none,
+ * query, as text (`machineCommandKindsQuery`); an older Mac's read names none,
  * which is `shell` alone. A Mac that follows its commands live
  * (`contract/live.ts`) claims each it hears of by its id, and says it
  * listens, naming its kinds as the held read does. A Mac joins as the
@@ -20,18 +20,18 @@ import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import {
-  MAC_COMMAND_BOUNDS,
-  macCommandClaimAnswerSchema,
-  macCommandClaimRequestSchema,
-  macCommandListeningAnswerSchema,
-  macCommandSettledAnswerSchema,
-  macCommandSettleRequestSchema,
-  macCommandsAnswerSchema,
-  macDeviceJoinAnswerSchema,
-  macDeviceJoinRequestSchema,
-  macDeviceSettingsAnswerSchema,
-  macDeviceSettingsRequestSchema,
-} from "../mac-command-wire.js";
+  MACHINE_COMMAND_BOUNDS,
+  machineCommandClaimAnswerSchema,
+  machineCommandClaimRequestSchema,
+  machineCommandListeningAnswerSchema,
+  machineCommandSettledAnswerSchema,
+  machineCommandSettleRequestSchema,
+  machineCommandsAnswerSchema,
+  machineDeviceJoinAnswerSchema,
+  machineDeviceJoinRequestSchema,
+  machineDeviceSettingsAnswerSchema,
+  machineDeviceSettingsRequestSchema,
+} from "../machine-command-wire.js";
 import { HOSTED_SERVICE_PATH } from "../service-paths.js";
 import { HOSTED_API_ERROR, wireUuidSchema } from "../service-wire.js";
 import { bodyCap, declaredProcedure, exactInput, refuses } from "./base.js";
@@ -51,40 +51,45 @@ const CLAIM_BODY_BYTES = 1_024;
 /** A device's settings at their bound, and room for the rest of the body. */
 const DEVICE_BODY_BYTES = 64 * 1_024;
 
-export const macCommandsContract = {
+export const machineCommandsContract = {
   waiting: declaredProcedure
-    .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.MAC_COMMANDS }))
+    .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.MACHINE_COMMANDS }))
     .input(waitingInput)
-    .output(EffectSchema.flip(macCommandsAnswerSchema)),
+    .output(EffectSchema.flip(machineCommandsAnswerSchema)),
   settle: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
-    .meta(bodyCap(MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES))
-    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MAC_COMMANDS }))
-    .input(exactInput(macCommandSettleRequestSchema))
-    .output(EffectSchema.flip(macCommandSettledAnswerSchema)),
+    .meta(bodyCap(MACHINE_COMMAND_BOUNDS.MAX_RESULT_BYTES))
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_COMMANDS }))
+    .input(exactInput(machineCommandSettleRequestSchema))
+    .output(EffectSchema.flip(machineCommandSettledAnswerSchema)),
   claim: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(bodyCap(CLAIM_BODY_BYTES))
-    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MAC_COMMAND_CLAIM }))
-    .input(exactInput(macCommandClaimRequestSchema))
-    .output(EffectSchema.flip(macCommandClaimAnswerSchema)),
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_COMMAND_CLAIM }))
+    .input(exactInput(machineCommandClaimRequestSchema))
+    .output(EffectSchema.flip(machineCommandClaimAnswerSchema)),
   listening: declaredProcedure
     .meta(bodyCap(CLAIM_BODY_BYTES))
-    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MAC_COMMANDS_LISTENING }))
+    .meta(
+      openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_COMMANDS_LISTENING }),
+    )
     .input(exactInput(listeningInput))
-    .output(EffectSchema.flip(macCommandListeningAnswerSchema)),
+    .output(EffectSchema.flip(machineCommandListeningAnswerSchema)),
   join: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(bodyCap(DEVICE_BODY_BYTES))
-    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MAC_COMMAND_DEVICE }))
-    .input(exactInput(macDeviceJoinRequestSchema))
-    .output(EffectSchema.flip(macDeviceJoinAnswerSchema)),
+    .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_COMMAND_DEVICE }))
+    .input(exactInput(machineDeviceJoinRequestSchema))
+    .output(EffectSchema.flip(machineDeviceJoinAnswerSchema)),
   saveDeviceSettings: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(bodyCap(DEVICE_BODY_BYTES))
     .meta(
-      openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MAC_COMMAND_DEVICE_SETTINGS }),
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: HOSTED_SERVICE_PATH.MACHINE_COMMAND_DEVICE_SETTINGS,
+      }),
     )
-    .input(exactInput(macDeviceSettingsRequestSchema))
-    .output(EffectSchema.flip(macDeviceSettingsAnswerSchema)),
+    .input(exactInput(machineDeviceSettingsRequestSchema))
+    .output(EffectSchema.flip(machineDeviceSettingsAnswerSchema)),
 };

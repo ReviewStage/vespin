@@ -1,5 +1,8 @@
 import { isLinkOpen, LINK_OPEN, LINK_OPEN_LABEL, LINK_OPEN_LIST } from "@repo/features/link-open";
-import { MAC_COMMAND_MODE, MAC_COMMAND_MODE_LIST } from "@repo/features/mac-command-wire";
+import {
+  MACHINE_COMMAND_MODE,
+  MACHINE_COMMAND_MODE_LIST,
+} from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { DEFAULT_LIVE_VOICE } from "@repo/features/voices";
 import type { UnparsedWireValue } from "@repo/wire";
@@ -52,7 +55,11 @@ import {
   KEEP_AWAKE_LIST,
   KEEP_AWAKE_OPTION_LABEL,
 } from "./keep-awake.js";
-import { isMacCommandMode, MAC_COMMAND_MODE_LABEL, MAC_COMMANDS_LABEL } from "./mac-commands.js";
+import {
+  isMachineCommandMode,
+  MACHINE_COMMAND_MODE_LABEL,
+  MACHINE_COMMANDS_LABEL,
+} from "./machine-commands.js";
 import { isOnboardingSurveyJson } from "./onboarding-survey.js";
 import {
   isPermissionMode,
@@ -163,12 +170,12 @@ function themeLabel(themes: readonly { readonly id: string; readonly label: stri
  * stored is read as a mode: on, which ran every command without asking,
  * as Ask, and off as Never.
  */
-function macCommandModeGuard(value: UnparsedWireValue) {
-  if (value === true) return optional(MAC_COMMAND_MODE.ASK, isMacCommandMode);
+function machineCommandModeGuard(value: UnparsedWireValue) {
+  if (value === true) return optional(MACHINE_COMMAND_MODE.ASK, isMachineCommandMode);
 
-  if (value === false) return optional(MAC_COMMAND_MODE.NEVER, isMacCommandMode);
+  if (value === false) return optional(MACHINE_COMMAND_MODE.NEVER, isMachineCommandMode);
 
-  return optional(value, isMacCommandMode);
+  return optional(value, isMachineCommandMode);
 }
 
 /** A platform that asks for the microphone and routes it itself, as dictation listens on it. */
@@ -233,13 +240,13 @@ export const APP_SETTING_SCHEMA = {
   }),
   macCommands: choiceSetting({
     field: "macCommands",
-    id: APP_SETTING_ID.MAC_COMMANDS,
-    label: MAC_COMMANDS_LABEL,
-    values: MAC_COMMAND_MODE_LIST,
+    id: APP_SETTING_ID.MACHINE_COMMANDS,
+    label: MACHINE_COMMANDS_LABEL,
+    values: MACHINE_COMMAND_MODE_LIST,
     token: (mode) => mode,
-    optionLabel: (mode) => MAC_COMMAND_MODE_LABEL[mode],
-    guard: macCommandModeGuard,
-    default: MAC_COMMAND_MODE.ASK,
+    optionLabel: (mode) => MACHINE_COMMAND_MODE_LABEL[mode],
+    guard: machineCommandModeGuard,
+    default: MACHINE_COMMAND_MODE.ASK,
     page: SETTINGS_PAGE.THIS_MAC,
     order: 2,
     // Nothing to run per write: the host reads the setting before each read for commands and as each command is about to run.

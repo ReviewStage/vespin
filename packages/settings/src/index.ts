@@ -81,10 +81,10 @@ export {
 } from "./keep-awake.js";
 
 export {
-  isMacCommandMode,
-  MAC_COMMAND_MODE_LABEL,
-  MAC_COMMANDS_LABEL,
-} from "./mac-commands.js";
+  isMachineCommandMode,
+  MACHINE_COMMAND_MODE_LABEL,
+  MACHINE_COMMANDS_LABEL,
+} from "./machine-commands.js";
 
 export {
   isOlderOnboardingSurveyJson,

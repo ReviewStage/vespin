@@ -1,12 +1,12 @@
 import { ACT } from "@repo/sync";
 import { Schema as EffectSchema } from "effect";
-import { macCommandAnswerSchema } from "../mac-command-ask.js";
+import { machineCommandAnswerSchema } from "../machine-command-ask.js";
 import { contractOf, declaredActs, hostAct } from "./declared-act.js";
 
 /**
- * mac-commands.ts -- the developer's answer to a command an agent asked to run on this Mac, and what Settings shows of computer use here, declared.
+ * machine-commands.ts -- the developer's answer to a command an agent asked to run on this Mac, and what Settings shows of computer use here, declared.
  *
- * The host's Mac commands concern answers each (`compose-mac-commands.ts`):
+ * The host's Mac commands concern answers each (`compose-machine-commands.ts`):
  * an answer's ask goes from the document as the host hears it, so that act
  * answers nothing of its own; computer use's status is the Mac's two
  * grants as the helper reads them and the apps agents use without asking,
@@ -55,9 +55,9 @@ export type MacApp = typeof macAppSchema.Type;
 export const macAppsSchema = EffectSchema.Struct({ apps: EffectSchema.Array(macAppSchema) });
 
 /** The Mac commands' acts, answered by the Mac commands composer. */
-export const MAC_COMMAND_ACTS = declaredActs({
-  MAC_COMMAND_ANSWER: hostAct({
-    input: macCommandAnswerSchema,
+export const MACHINE_COMMAND_ACTS = declaredActs({
+  MACHINE_COMMAND_ANSWER: hostAct({
+    input: machineCommandAnswerSchema,
     output: EffectSchema.Void,
     refusal: "Could not answer for that command on this Mac.",
     panelOnly: true,
@@ -93,4 +93,4 @@ export const MAC_COMMAND_ACTS = declaredActs({
   }),
 });
 
-export const macCommandActsContract = contractOf(MAC_COMMAND_ACTS);
+export const machineCommandActsContract = contractOf(MACHINE_COMMAND_ACTS);

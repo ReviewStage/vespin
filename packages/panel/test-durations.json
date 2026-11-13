@@ -110,7 +110,7 @@
   "src/hover-card.test.ts": 621,
   "src/kept-keys.test.ts": 87,
   "src/link-menu.test.ts": 830,
-  "src/mac-command-ask.test.ts": 432,
+  "src/machine-command-ask.test.ts": 432,
   "src/markdown-html-parser.test.ts": 88,
   "src/modals.test.ts": 1480,
   "src/places/window-history-narrow.test.ts": 338,

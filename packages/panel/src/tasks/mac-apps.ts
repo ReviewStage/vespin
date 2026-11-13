@@ -10,7 +10,7 @@ import { appStateQuery, selectCapability, selectExperiment } from "../use-app-st
 /**
  * mac-apps.ts -- the apps on this Mac an agent may be pointed at, as the composer's `@` list offers them, and an app's icon, as a mention of one draws it.
  *
- * Both are read from this Mac's own host (`compose-mac-commands.ts`), and
+ * Both are read from this Mac's own host (`compose-machine-commands.ts`), and
  * only where the window runs on a Mac whose host takes commands and the
  * account has Computer use on; the host answers none while Settings has
  * agents use no apps here. Note that the list is read into this window's
@@ -50,8 +50,8 @@ export function macAppIconAddress(iconPng: string | undefined): string | undefin
 /** Whether this window may read the apps on its Mac: a host that takes commands, and Computer use on. */
 export function useMacAppsReadable(): boolean {
   const onMac =
-    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.MAC_COMMANDS) }).data ===
-    true;
+    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.MACHINE_COMMANDS) })
+      .data === true;
 
   const computerUse =
     useQuery({ ...appStateQuery, select: selectExperiment(EXPERIMENT.COMPUTER_USE) }).data === true;

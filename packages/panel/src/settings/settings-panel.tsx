@@ -24,7 +24,7 @@ import { CloudEnvironmentPage } from "./cloud-environment-page.js";
 import { ExperimentalPage } from "./experimental-page.js";
 import { HostsSection } from "./hosts-section.js";
 import { type IntegrationsFilter, IntegrationsSection } from "./integrations-page.js";
-import { MacCommandsSection } from "./mac-commands-section.js";
+import { MachineCommandsSection } from "./machine-commands-section.js";
 import { McpSection } from "./mcp-clients-section.js";
 import { MemorySection } from "./memory-page.js";
 import { MicrophoneSection } from "./microphone-section.js";
@@ -189,7 +189,7 @@ export function SettingsPanel({
 
       {view === SETTINGS_VIEW.THIS_MAC && panelView ? (
         <>
-          <MacCommandsSection view={panelView} writes={writes} notifications={notifications} />
+          <MachineCommandsSection view={panelView} writes={writes} notifications={notifications} />
           {/* Dictation's microphone, on a platform whose microphone the app asks for itself. */}
           {capabilities.includes(HOST_CAPABILITY.MICROPHONE) ? (
             <MicrophoneSection view={panelView} writes={writes} microphone={microphone} />

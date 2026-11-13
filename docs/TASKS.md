@@ -676,13 +676,13 @@ heading.
 
 ### Commands on the developer's Mac
 
-`run_on_mac` (`packages/service/src/agents/mac-command.ts`) runs one shell
+`run_on_mac` (`packages/service/src/agents/machine-command.ts`) runs one shell
 command on the developer's own Mac and answers its exit code and output, for
 agents and their workers alike. The call is queued under the account; a
 signed-in Mac whose Settings › This Mac mode is not Never holds
 `GET /api/mac-commands` open, takes it, and, by default (Ask every time),
 asks the developer before running it in the login shell from the home folder
-(`packages/host/src/mac-command-runner.ts`), then posts the result back. A
+(`packages/host/src/machine-command-runner.ts`), then posts the result back. A
 call where no Mac read lately answers `not-run` at once, in one line the
 agent repeats. The output is not redacted (`PRIVACY.md`, "Commands agents run on
 your Mac").

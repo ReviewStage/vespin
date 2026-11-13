@@ -1,34 +1,34 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { MAC_COMMAND_CALL_FAILURE, MAC_COMMAND_NOT_CLAIMED } from "@repo/features";
+import { MACHINE_COMMAND_CALL_FAILURE, MACHINE_COMMAND_NOT_CLAIMED } from "@repo/features";
 import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { LIVE_POLL_URL, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
-import type { MacCommandsLiveAnswer } from "@repo/features/mac-command-live";
+import type { MachineCommandsLiveAnswer } from "@repo/features/machine-command-live";
 import {
   COMPUTER_ACTION,
   COMPUTER_PERMISSION,
   type ComputerApp,
-  MAC_COMMAND_KIND,
-  MAC_COMMAND_MODE,
-  type MacCommand,
-  type MacCommandKind,
-  type MacCommandMode,
-  type MacCommandResult,
-  type MacDeviceJoinRequest,
-  type MacDeviceSettings,
-  macCommandKindsRead,
-  storedMacCommandText,
-} from "@repo/features/mac-command-wire";
+  MACHINE_COMMAND_KIND,
+  MACHINE_COMMAND_MODE,
+  type MachineCommand,
+  type MachineCommandKind,
+  type MachineCommandMode,
+  type MachineCommandResult,
+  type MachineDeviceJoinRequest,
+  type MachineDeviceSettings,
+  machineCommandKindsRead,
+  storedMachineCommandText,
+} from "@repo/features/machine-command-wire";
 import { GATEWAY_EVENT, type GatewayEventKind } from "@repo/gateway";
 import { isRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
 import { ConfigProvider, Duration, Effect, Layer, Predicate, PubSub, Stream } from "effect";
 import { TestClock } from "effect/testing";
 import {
-  composeMacCommands,
-  type MacCommandClient,
-  type MacCommandsDependencies,
-} from "./compose-mac-commands.js";
+  composeMachineCommands,
+  type MachineCommandClient,
+  type MachineCommandsDependencies,
+} from "./compose-machine-commands.js";
 import {
   COMPUTER_HELPER_FAILURE,
   COMPUTER_HELPER_OP,
@@ -38,7 +38,7 @@ import {
 } from "./computer-use-helper.js";
 import { Environment, reporterLayer } from "./effect/seams.js";
 import { ActRefused } from "./host-acts.js";
-import { MAC_COMMAND_DECISION, type MacCommandDecision } from "./mac-command-ask.js";
+import { MACHINE_COMMAND_DECISION, type MachineCommandDecision } from "./machine-command-ask.js";
 import { scriptedSpawner } from "./testing/scripted-spawner.js";
 
 /**
@@ -63,23 +63,23 @@ const ACCOUNT = "user-mac";
 
 const NOW = 1_800_000_000_000;
 
-const COMMAND: MacCommand = {
+const COMMAND: MachineCommand = {
   id: "2f6a1c7e-9b3d-4e8f-a5c1-7d2e9b4f6a03",
-  kind: MAC_COMMAND_KIND.SHELL,
+  kind: MACHINE_COMMAND_KIND.SHELL,
   command: "node --version",
   timeoutSeconds: 60,
 };
 
-const SECOND: MacCommand = {
+const SECOND: MachineCommand = {
   id: "7c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f",
-  kind: MAC_COMMAND_KIND.SHELL,
+  kind: MACHINE_COMMAND_KIND.SHELL,
   command: "pnpm --version",
   timeoutSeconds: 30,
 };
 
-const LATER: MacCommand = {
+const LATER: MachineCommand = {
   id: "0e9d8c7b-6a5f-4e3d-9c2b-1a0f9e8d7c6b",
-  kind: MAC_COMMAND_KIND.SHELL,
+  kind: MACHINE_COMMAND_KIND.SHELL,
   command: "git status",
   timeoutSeconds: 30,
 };
@@ -100,9 +100,9 @@ const TERMINAL: ComputerApp = { name: "Terminal", bundleId: "com.apple.Terminal"
 /** A third command's id, for a case that queues one past `COMMAND` and `SECOND`. */
 const THIRD_ID = "4b8e2d61-3c7a-4f95-9e0d-1a6b5c8f7e24";
 
-const computerCommand = (id: string, conversationId: string, app: string): MacCommand => ({
+const computerCommand = (id: string, conversationId: string, app: string): MachineCommand => ({
   id,
-  kind: MAC_COMMAND_KIND.COMPUTER,
+  kind: MACHINE_COMMAND_KIND.COMPUTER,
   conversationId,
   action: { op: COMPUTER_ACTION.CLICK, app, element_index: 3 },
   timeoutSeconds: 60,
@@ -161,22 +161,22 @@ function scriptedService(
     /** What happens as a claim is made, before the service grants it, such as the setting being switched off. */
     readonly duringClaim?: Effect.Effect<void>;
     /** The settings the service keeps for a device that joins, where it keeps any; none keeps what the join carries. */
-    readonly deviceSettings?: MacDeviceSettings;
+    readonly deviceSettings?: MachineDeviceSettings;
   } = {},
 ) {
   let unanswered = options.unansweredClaims ?? 0;
-  const waiting: (MacCommand & { readonly queuedAt: number })[] = [];
+  const waiting: (MachineCommand & { readonly queuedAt: number })[] = [];
   let version = 0;
-  const reads: { readonly userId: string; readonly kinds: readonly MacCommandKind[] }[] = [];
+  const reads: { readonly userId: string; readonly kinds: readonly MachineCommandKind[] }[] = [];
   const claims: string[] = [];
-  const beats: (readonly MacCommandKind[])[] = [];
+  const beats: (readonly MachineCommandKind[])[] = [];
   /** The device each read, claim, and presence named, in order; none for one naming none. */
   const named: { readonly by: string; readonly device: string | undefined }[] = [];
-  const joins: MacDeviceJoinRequest[] = [];
-  const savedSettings: MacDeviceSettings[] = [];
-  const settledResults = new Map<string, MacCommandResult>();
+  const joins: MachineDeviceJoinRequest[] = [];
+  const savedSettings: MachineDeviceSettings[] = [];
+  const settledResults = new Map<string, MachineCommandResult>();
 
-  const answer = (rows: boolean): MacCommandsLiveAnswer => ({
+  const answer = (rows: boolean): MachineCommandsLiveAnswer => ({
     url: LIVE_POLL_URL,
     queries: {
       commands: {
@@ -191,7 +191,7 @@ function scriptedService(
               rows: waiting.map((command) => ({
                 id: command.id,
                 kind: command.kind,
-                command: storedMacCommandText(command),
+                command: storedMachineCommandText(command),
                 timeoutSeconds: command.timeoutSeconds,
                 queuedAt: command.queuedAt,
               })),
@@ -201,7 +201,7 @@ function scriptedService(
     },
   });
 
-  const client: MacCommandClient = {
+  const client: MachineCommandClient = {
     // SAFETY: the Mac's commands are the one live read the client is asked for, answering the script's rows.
     liveRead: (<Read>(
       _read: Read,
@@ -214,7 +214,7 @@ function scriptedService(
     ) =>
       Effect.gen(function* () {
         const after = poll?.after;
-        reads.push({ userId, kinds: macCommandKindsRead(kinds) });
+        reads.push({ userId, kinds: machineCommandKindsRead(kinds) });
         named.push({ by: "read", device });
 
         if (options.signedOut === true) return LIVE_SIGNED_OUT;
@@ -224,7 +224,7 @@ function scriptedService(
         }
 
         return answer(after !== String(version));
-      })) as MacCommandClient["liveRead"],
+      })) as MachineCommandClient["liveRead"],
     claim: (id, device) =>
       Effect.andThen(
         options.duringClaim ?? Effect.void,
@@ -236,16 +236,16 @@ function scriptedService(
           if (unanswered > 0) {
             unanswered -= 1;
 
-            return { failure: MAC_COMMAND_CALL_FAILURE.UNANSWERED };
+            return { failure: MACHINE_COMMAND_CALL_FAILURE.UNANSWERED };
           }
 
           const at = waiting.findIndex((command) => command.id === id);
 
-          if (at < 0) return MAC_COMMAND_NOT_CLAIMED;
+          if (at < 0) return MACHINE_COMMAND_NOT_CLAIMED;
           const [claimed] = waiting.splice(at, 1);
           version += 1;
 
-          if (claimed === undefined) return MAC_COMMAND_NOT_CLAIMED;
+          if (claimed === undefined) return MACHINE_COMMAND_NOT_CLAIMED;
           const { queuedAt: _queuedAt, ...command } = claimed;
 
           return { command };
@@ -288,7 +288,7 @@ function scriptedService(
     savedSettings,
     settledResults,
     /** A command queued for the account, as an agent's call queues it. */
-    queue: (command: MacCommand, queuedAt: number) => {
+    queue: (command: MachineCommand, queuedAt: number) => {
       waiting.push({ ...command, queuedAt });
       version += 1;
     },
@@ -310,7 +310,7 @@ const machine = (spawner: ReturnType<typeof scriptedSpawner>, reported: string[]
 
 /** The gate as a test holds it: the setting, whether an account is signed in, and which. */
 interface Gate {
-  mode: MacCommandMode;
+  mode: MachineCommandMode;
   signedIn: boolean;
   account?: string;
   /** Whether the prompt's Allow all commands fails to keep the setting, as a file that cannot be written does. */
@@ -343,11 +343,11 @@ const subject = (
     | { readonly id: string; readonly app: string };
 
   const told: ToldAsk[][] = [];
-  const written: MacCommandMode[] = [];
+  const written: MachineCommandMode[] = [];
   const reported: string[] = [];
 
   const emit = (kind: GatewayEventKind, payload: WireValue) => {
-    if (kind !== GATEWAY_EVENT.MAC_COMMAND_ASKS_CHANGED || !isRecord(payload)) return;
+    if (kind !== GATEWAY_EVENT.MACHINE_COMMAND_ASKS_CHANGED || !isRecord(payload)) return;
     const asks = Array.isArray(payload.asks) ? payload.asks : [];
     told.push(
       asks.flatMap((ask): ToldAsk[] => {
@@ -365,7 +365,7 @@ const subject = (
   return Effect.gen(function* () {
     const moves = yield* PubSub.unbounded<void>();
 
-    const dependencies: MacCommandsDependencies = {
+    const dependencies: MachineCommandsDependencies = {
       kernel: { runMode: { sendsNetwork: true }, now: () => NOW, emit },
       account: { capabilitiesActive: () => gate.signedIn },
       accountId: () => gate.account ?? ACCOUNT,
@@ -373,8 +373,8 @@ const subject = (
       changed: Effect.map(PubSub.subscribe(moves), Stream.fromSubscription),
       allowAlways: Effect.sync(() => {
         if (gate.saveFails === true) return false;
-        written.push(MAC_COMMAND_MODE.ALWAYS);
-        gate.mode = MAC_COMMAND_MODE.ALWAYS;
+        written.push(MACHINE_COMMAND_MODE.ALWAYS);
+        gate.mode = MACHINE_COMMAND_MODE.ALWAYS;
 
         return true;
       }),
@@ -409,7 +409,7 @@ const subject = (
           commandMode: gate.mode,
           alwaysAllowedApps: [...(gate.device?.apps ?? [])],
         })),
-        applySettings: (settings: MacDeviceSettings) =>
+        applySettings: (settings: MachineDeviceSettings) =>
           Effect.sync(() => {
             // A write Settings refuses, as a file that cannot be written refuses it, changes nothing here.
             if ((gate.device?.applyFails ?? 0) > 0) {
@@ -427,7 +427,7 @@ const subject = (
       };
     }
 
-    const composer = yield* composeMacCommands(dependencies).pipe(
+    const composer = yield* composeMachineCommands(dependencies).pipe(
       Effect.provide(machine(spawner, reported)),
     );
 
@@ -439,8 +439,8 @@ const subject = (
       moved: Effect.asVoid(PubSub.publish(moves, undefined)),
       /** The asks waiting as last told. */
       asks: () => told.at(-1) ?? [],
-      answer: (id: string, decision: MacCommandDecision) =>
-        composer.acts.MAC_COMMAND_ANSWER({ id, decision }),
+      answer: (id: string, decision: MachineCommandDecision) =>
+        composer.acts.MACHINE_COMMAND_ANSWER({ id, decision }),
     };
   });
 };
@@ -448,8 +448,8 @@ const subject = (
 it.effect("with the setting on Never, or no account signed in, the service is never read", () =>
   Effect.gen(function* () {
     for (const gate of [
-      { mode: MAC_COMMAND_MODE.NEVER, signedIn: true },
-      { mode: MAC_COMMAND_MODE.ALWAYS, signedIn: false },
+      { mode: MACHINE_COMMAND_MODE.NEVER, signedIn: true },
+      { mode: MACHINE_COMMAND_MODE.ALWAYS, signedIn: false },
     ]) {
       const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
       const service = scriptedService();
@@ -475,7 +475,7 @@ it.effect(
       service.queue(COMMAND, NOW - 2_000);
 
       const { composer } = yield* subject(service, spawner, {
-        mode: MAC_COMMAND_MODE.ALWAYS,
+        mode: MACHINE_COMMAND_MODE.ALWAYS,
         signedIn: true,
       });
 
@@ -495,7 +495,7 @@ it.effect(
       assert.ok(service.reads.length > 0);
 
       for (const read of service.reads) {
-        assert.deepEqual(read, { userId: ACCOUNT, kinds: [MAC_COMMAND_KIND.SHELL] });
+        assert.deepEqual(read, { userId: ACCOUNT, kinds: [MACHINE_COMMAND_KIND.SHELL] });
       }
 
       assert.deepEqual(service.settledResults.get(COMMAND.id), {
@@ -518,7 +518,7 @@ it.effect(
 
       const service = scriptedService({
         deviceSettings: {
-          commandMode: MAC_COMMAND_MODE.ALWAYS,
+          commandMode: MACHINE_COMMAND_MODE.ALWAYS,
           alwaysAllowedApps: ["com.apple.Notes"],
         },
       });
@@ -527,7 +527,7 @@ it.effect(
       const studio = "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13";
 
       const gate: Gate = {
-        mode: MAC_COMMAND_MODE.ALWAYS,
+        mode: MACHINE_COMMAND_MODE.ALWAYS,
         signedIn: true,
         device: { id: studio, apps: [] },
       };
@@ -541,7 +541,7 @@ it.effect(
           yield* TestClock.adjust("2 seconds");
           yield* settled;
 
-          gate.mode = MAC_COMMAND_MODE.NEVER;
+          gate.mode = MACHINE_COMMAND_MODE.NEVER;
           yield* moved;
           yield* settled;
         }),
@@ -553,7 +553,7 @@ it.effect(
           name: "Studio",
           platform: DEVICE_PLATFORM.DARWIN,
           arch: DEVICE_ARCH.ARM64,
-          settings: { commandMode: MAC_COMMAND_MODE.ALWAYS, alwaysAllowedApps: [] },
+          settings: { commandMode: MACHINE_COMMAND_MODE.ALWAYS, alwaysAllowedApps: [] },
         },
       ]);
       assert.deepEqual(gate.device?.apps, ["com.apple.Notes"], "the service's apps are kept here");
@@ -567,7 +567,7 @@ it.effect(
         "the follow names the device it joined as",
       );
       assert.deepEqual(service.savedSettings, [
-        { commandMode: MAC_COMMAND_MODE.NEVER, alwaysAllowedApps: ["com.apple.Notes"] },
+        { commandMode: MACHINE_COMMAND_MODE.NEVER, alwaysAllowedApps: ["com.apple.Notes"] },
       ]);
     }),
 );
@@ -579,11 +579,11 @@ it.effect(
       const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
 
       const service = scriptedService({
-        deviceSettings: { commandMode: MAC_COMMAND_MODE.NEVER, alwaysAllowedApps: [] },
+        deviceSettings: { commandMode: MACHINE_COMMAND_MODE.NEVER, alwaysAllowedApps: [] },
       });
 
       const gate: Gate = {
-        mode: MAC_COMMAND_MODE.ALWAYS,
+        mode: MACHINE_COMMAND_MODE.ALWAYS,
         signedIn: true,
         device: { id: "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13", apps: [], applyFails: 1 },
       };
@@ -603,7 +603,11 @@ it.effect(
         }),
       );
 
-      assert.equal(gate.mode, MAC_COMMAND_MODE.NEVER, "the service's mode is kept here at last");
+      assert.equal(
+        gate.mode,
+        MACHINE_COMMAND_MODE.NEVER,
+        "the service's mode is kept here at last",
+      );
       assert.deepEqual(service.savedSettings, [], "the Mac's own mode never goes up over it");
     }),
 );
@@ -614,7 +618,7 @@ it.effect(
     Effect.gen(function* () {
       const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
       const service = scriptedService();
-      const gate: Gate = { mode: MAC_COMMAND_MODE.ALWAYS, signedIn: true };
+      const gate: Gate = { mode: MACHINE_COMMAND_MODE.ALWAYS, signedIn: true };
       const { composer, moved } = yield* subject(service, spawner, gate);
 
       yield* Effect.scoped(
@@ -626,9 +630,9 @@ it.effect(
           yield* settled;
           assert.equal(service.beats.length, 4);
 
-          for (const kinds of service.beats) assert.deepEqual(kinds, [MAC_COMMAND_KIND.SHELL]);
+          for (const kinds of service.beats) assert.deepEqual(kinds, [MACHINE_COMMAND_KIND.SHELL]);
 
-          gate.mode = MAC_COMMAND_MODE.NEVER;
+          gate.mode = MACHINE_COMMAND_MODE.NEVER;
           yield* moved;
           yield* settled;
           const reads = service.reads.length;
@@ -648,7 +652,7 @@ it.effect("a read the service signs out follows nothing, and is asked again afte
     service.queue(COMMAND, NOW);
 
     const { composer } = yield* subject(service, spawner, {
-      mode: MAC_COMMAND_MODE.ALWAYS,
+      mode: MACHINE_COMMAND_MODE.ALWAYS,
       signedIn: true,
     });
 
@@ -675,7 +679,7 @@ it.effect("a claim the service never heard is asked again, and the command runs"
     service.queue(COMMAND, NOW);
 
     const { composer } = yield* subject(service, spawner, {
-      mode: MAC_COMMAND_MODE.ALWAYS,
+      mode: MACHINE_COMMAND_MODE.ALWAYS,
       signedIn: true,
     });
 
@@ -698,13 +702,13 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
-      const gate: Gate = { mode: MAC_COMMAND_MODE.ALWAYS, signedIn: true };
+      const gate: Gate = { mode: MACHINE_COMMAND_MODE.ALWAYS, signedIn: true };
 
       const service = scriptedService({
         // The setting goes off as the claim leaves, and the service is slow to grant it, so a beat sees the gate shut first.
         duringClaim: Effect.andThen(
           Effect.sync(() => {
-            gate.mode = MAC_COMMAND_MODE.NEVER;
+            gate.mode = MACHINE_COMMAND_MODE.NEVER;
           }),
           Effect.sleep("20 seconds"),
         ),
@@ -736,7 +740,7 @@ it.effect(
       const spawner = scriptedSpawner(() => ({ exitCode: 0, after: "1 minute" }));
       const service = scriptedService();
       service.queue(COMMAND, NOW);
-      const gate: Gate = { mode: MAC_COMMAND_MODE.ALWAYS, signedIn: true, account: ACCOUNT };
+      const gate: Gate = { mode: MACHINE_COMMAND_MODE.ALWAYS, signedIn: true, account: ACCOUNT };
       const { composer, moved } = yield* subject(service, spawner, gate);
 
       yield* Effect.scoped(
@@ -764,7 +768,7 @@ it.effect(
       // The service is slow to grant the first account's claim.
       const service = scriptedService({ duringClaim: Effect.sleep("20 seconds") });
       service.queue(COMMAND, NOW);
-      const gate: Gate = { mode: MAC_COMMAND_MODE.ALWAYS, signedIn: true, account: ACCOUNT };
+      const gate: Gate = { mode: MACHINE_COMMAND_MODE.ALWAYS, signedIn: true, account: ACCOUNT };
       const { composer, moved } = yield* subject(service, spawner, gate);
 
       yield* Effect.scoped(
@@ -797,8 +801,8 @@ it.effect(
 const askedFor = (
   service: ReturnType<typeof scriptedService>,
   spawner: ReturnType<typeof scriptedSpawner>,
-  commands: readonly MacCommand[],
-  gate: Gate = { mode: MAC_COMMAND_MODE.ASK, signedIn: true },
+  commands: readonly MachineCommand[],
+  gate: Gate = { mode: MACHINE_COMMAND_MODE.ASK, signedIn: true },
 ) =>
   Effect.gen(function* () {
     for (const command of commands) service.queue(command, NOW);
@@ -824,7 +828,7 @@ it.effect(
           yield* settled;
           assert.deepEqual(spawner.spawned, [], "nor while the ask waits inside the timeout");
 
-          yield* built.answer(COMMAND.id, MAC_COMMAND_DECISION.ALLOW_ONCE);
+          yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
           yield* settled;
           assert.deepEqual(built.asks(), [], "the ask goes as it is answered");
           assert.deepEqual(built.written, [], "allowing once writes no setting");
@@ -848,9 +852,9 @@ it.effect("Always allow writes the setting, runs the command, and the next runs 
     yield* Effect.scoped(
       Effect.gen(function* () {
         const built = yield* askedFor(service, spawner, [COMMAND]);
-        yield* built.answer(COMMAND.id, MAC_COMMAND_DECISION.ALLOW_ALWAYS);
+        yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ALWAYS);
         yield* settled;
-        assert.deepEqual(built.written, [MAC_COMMAND_MODE.ALWAYS]);
+        assert.deepEqual(built.written, [MACHINE_COMMAND_MODE.ALWAYS]);
         assert.ok(service.settledResults.has(COMMAND.id), "the command asked for ran");
 
         service.queue(SECOND, NOW);
@@ -871,11 +875,11 @@ it.effect("Deny answers the call as not run, declined, and runs nothing", () =>
     yield* Effect.scoped(
       Effect.gen(function* () {
         const built = yield* askedFor(service, spawner, [COMMAND]);
-        yield* built.answer(COMMAND.id, MAC_COMMAND_DECISION.DENY);
+        yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.DENY);
         yield* settled;
         assert.deepEqual(built.asks(), []);
         // An answer after the ask went runs nothing (below).
-        yield* built.answer(COMMAND.id, MAC_COMMAND_DECISION.ALLOW_ONCE);
+        yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
         yield* settled;
       }),
     );
@@ -933,7 +937,7 @@ it.effect(
             "a command queued later is claimed and asked for while the first still waits",
           );
 
-          yield* built.answer(SECOND.id, MAC_COMMAND_DECISION.ALLOW_ONCE);
+          yield* built.answer(SECOND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
           yield* settled;
           assert.deepEqual(
             built.asks().map((ask) => ask.id),
@@ -958,7 +962,7 @@ it.effect(
           const built = yield* askedFor(service, spawner, [COMMAND]);
           yield* TestClock.adjust("50 seconds");
           yield* settled;
-          yield* built.answer(COMMAND.id, MAC_COMMAND_DECISION.ALLOW_ONCE);
+          yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
           yield* settled;
           assert.equal(spawner.spawned.length, 1, "it runs");
           yield* TestClock.adjust("15 seconds");
@@ -981,12 +985,12 @@ it.effect(
       yield* Effect.scoped(
         Effect.gen(function* () {
           const built = yield* askedFor(service, spawner, [COMMAND], {
-            mode: MAC_COMMAND_MODE.ASK,
+            mode: MACHINE_COMMAND_MODE.ASK,
             signedIn: true,
             saveFails: true,
           });
 
-          yield* built.answer(COMMAND.id, MAC_COMMAND_DECISION.ALLOW_ALWAYS);
+          yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ALWAYS);
           yield* settled;
           assert.deepEqual(built.written, []);
           assert.ok(service.settledResults.has(COMMAND.id), "the command allowed ran");
@@ -1002,7 +1006,7 @@ it.effect(
     Effect.gen(function* () {
       const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
       const service = scriptedService();
-      const gate: Gate = { mode: MAC_COMMAND_MODE.ASK, signedIn: true, account: ACCOUNT };
+      const gate: Gate = { mode: MACHINE_COMMAND_MODE.ASK, signedIn: true, account: ACCOUNT };
       yield* Effect.scoped(
         Effect.gen(function* () {
           const built = yield* askedFor(service, spawner, [COMMAND], gate);
@@ -1012,7 +1016,7 @@ it.effect(
           yield* built.moved;
           yield* settled;
           assert.deepEqual(built.asks(), []);
-          yield* built.answer(COMMAND.id, MAC_COMMAND_DECISION.ALLOW_ONCE);
+          yield* built.answer(COMMAND.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
           yield* settled;
         }),
       );
@@ -1028,7 +1032,7 @@ it.effect(
       const scripted = scriptedHelper([SIMULATOR]);
 
       const gate: Gate = {
-        mode: MAC_COMMAND_MODE.ALWAYS,
+        mode: MACHINE_COMMAND_MODE.ALWAYS,
         signedIn: true,
         computer: { helper: scripted.helper, enabled: true, allowed: [] },
       };
@@ -1047,14 +1051,14 @@ it.effect(
         Effect.gen(function* () {
           yield* composer.lifetime;
           yield* settled;
-          yield* answer(first.id, MAC_COMMAND_DECISION.ALLOW_ONCE);
+          yield* answer(first.id, MACHINE_COMMAND_DECISION.ALLOW_ONCE);
           yield* settled;
 
           const second = computerCommand(SECOND.id, OTHER_AGENT, "Simulator");
           service.queue(second, NOW);
           yield* TestClock.adjust("2 seconds");
           yield* settled;
-          yield* answer(second.id, MAC_COMMAND_DECISION.ALLOW_ALWAYS);
+          yield* answer(second.id, MACHINE_COMMAND_DECISION.ALLOW_ALWAYS);
           yield* settled;
           assert.deepEqual(gate.computer?.allowed, ["com.apple.iphonesimulator"]);
 
@@ -1081,7 +1085,7 @@ it.effect(
 
       const gate: Gate = {
         // Note that shell commands' Always allow lets no app go unasked.
-        mode: MAC_COMMAND_MODE.ALWAYS,
+        mode: MACHINE_COMMAND_MODE.ALWAYS,
         signedIn: true,
         computer: { helper: scripted.helper, enabled: true, allowed: [] },
       };
@@ -1107,7 +1111,7 @@ it.effect(
             "nothing runs before an answer",
           );
 
-          yield* answer(first.id, MAC_COMMAND_DECISION.ALLOW_ALWAYS);
+          yield* answer(first.id, MACHINE_COMMAND_DECISION.ALLOW_ALWAYS);
           yield* settled;
           assert.deepEqual(gate.computer?.allowed, ["com.apple.iphonesimulator"]);
           assert.deepEqual(service.settledResults.get(first.id), {
@@ -1137,7 +1141,7 @@ it.effect(
       );
 
       for (const read of service.reads) {
-        assert.deepEqual(read.kinds, [MAC_COMMAND_KIND.SHELL, MAC_COMMAND_KIND.COMPUTER]);
+        assert.deepEqual(read.kinds, [MACHINE_COMMAND_KIND.SHELL, MACHINE_COMMAND_KIND.COMPUTER]);
       }
     }),
 );
@@ -1156,7 +1160,7 @@ it.effect(
           service,
           scriptedSpawner(() => ({ exitCode: 0 })),
           {
-            mode: MAC_COMMAND_MODE.ALWAYS,
+            mode: MACHINE_COMMAND_MODE.ALWAYS,
             signedIn: true,
             computer: { helper: scripted.helper, enabled, allowed: [] },
           },
@@ -1187,7 +1191,7 @@ it.effect(
       service.queue(action, NOW);
 
       const { composer, told } = yield* subject(service, spawner, {
-        mode: MAC_COMMAND_MODE.NEVER,
+        mode: MACHINE_COMMAND_MODE.NEVER,
         signedIn: true,
         computer: {
           helper: scripted.helper,
@@ -1227,7 +1231,7 @@ it.effect(
       const { composer, moved } = yield* subject(
         scriptedService(),
         scriptedSpawner(() => ({ exitCode: 0 })),
-        { mode: MAC_COMMAND_MODE.ASK, signedIn: true, computer },
+        { mode: MACHINE_COMMAND_MODE.ASK, signedIn: true, computer },
       );
 
       const requested = () =>
@@ -1260,9 +1264,9 @@ it.effect(
       const scripted = scriptedHelper([SIMULATOR], { screenRecording: false, accessibility: true });
       const service = scriptedService();
 
-      const command: MacCommand = {
+      const command: MachineCommand = {
         id: COMMAND.id,
-        kind: MAC_COMMAND_KIND.COMPUTER,
+        kind: MACHINE_COMMAND_KIND.COMPUTER,
         conversationId: AGENT,
         timeoutSeconds: 60,
         action: {
@@ -1278,7 +1282,7 @@ it.effect(
         service,
         scriptedSpawner(() => ({ exitCode: 0 })),
         {
-          mode: MAC_COMMAND_MODE.ASK,
+          mode: MACHINE_COMMAND_MODE.ASK,
           signedIn: true,
           computer: { helper: scripted.helper, enabled: true, allowed: [] },
         },
@@ -1312,7 +1316,7 @@ it.effect(
         scriptedService(),
         scriptedSpawner(() => ({ exitCode: 0 })),
         {
-          mode: MAC_COMMAND_MODE.ASK,
+          mode: MACHINE_COMMAND_MODE.ASK,
           signedIn: true,
           computer: {
             helper: scripted.helper,
@@ -1351,7 +1355,7 @@ it.effect(
         scriptedService(),
         scriptedSpawner(() => ({ exitCode: 0 })),
         {
-          mode: MAC_COMMAND_MODE.ASK,
+          mode: MACHINE_COMMAND_MODE.ASK,
           signedIn: true,
           computer: { helper, enabled: true, allowed: [] },
         },
@@ -1394,7 +1398,7 @@ it.effect(
           scriptedService(),
           scriptedSpawner(() => ({ exitCode: 0 })),
           {
-            mode: MAC_COMMAND_MODE.ASK,
+            mode: MACHINE_COMMAND_MODE.ASK,
             signedIn: true,
             computer: { helper, enabled, allowed: ["com.apple.Notes"] },
           },

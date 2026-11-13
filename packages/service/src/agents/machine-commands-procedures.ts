@@ -1,11 +1,11 @@
 /**
- * mac-commands-procedures.ts -- the developer's Mac takes the shell commands the account's agents queued for it, and says what each did.
+ * machine-commands-procedures.ts -- the developer's Mac takes the shell commands the account's agents queued for it, and says what each did.
  *
  * `GET /api/mac-commands` is the Mac's held read, naming in its `kinds`
  * query the kinds the Mac runs beyond shell (none from an older Mac): it
  * counts the Mac listening for them, and answers every command of those
  * kinds waiting for the account, claimed for this Mac, as soon as one
- * waits, or none once the hold ends (`agents/mac-command.ts`). `POST` keeps one claimed command's result,
+ * waits, or none once the hold ends (`agents/machine-command.ts`). `POST` keeps one claimed command's result,
  * which the agent's call is looking for; a command the account does not
  * hold claimed and unsettled is not found.
  *
@@ -25,8 +25,11 @@
  */
 
 import { joinCommandDevice, saveCommandDeviceSettings } from "@repo/database/models/device-store";
-import { markMacListening, settleMacCommand } from "@repo/database/models/mac-command-store";
-import { macCommandKindsRead } from "@repo/features/mac-command-wire";
+import {
+  markMachineListening,
+  settleMachineCommand,
+} from "@repo/database/models/machine-command-store";
+import { machineCommandKindsRead } from "@repo/features/machine-command-wire";
 import { Effect, Option } from "effect";
 import {
   HOSTED_REFUSAL,
@@ -34,9 +37,9 @@ import {
   type UserIdResolver,
 } from "../http/http-effect.js";
 import { bearerOnlyMiddleware, hosted } from "../orpc/base.js";
-import { claimedMacCommand, macCommandsFor } from "./mac-command.js";
+import { claimedMachineCommand, machineCommandsFor } from "./machine-command.js";
 
-export interface MacCommandsProcedureSeams {
+export interface MachineCommandsProcedureSeams {
   /**
    * The account behind a request. The Mac's bearer alone is read, never a
    * browser's session cookie (`bearerOnlyMiddleware`): a held read claims
@@ -46,29 +49,29 @@ export interface MacCommandsProcedureSeams {
   resolveUserId: UserIdResolver;
 }
 
-/** The mac-commands resource: the held read and the result posted back, on the Mac's bearer. */
-export function macCommandsProcedures(seams: MacCommandsProcedureSeams) {
-  const macCommands = hosted.macCommands.use(bearerOnlyMiddleware(seams.resolveUserId));
+/** The machine-commands resource: the held read and the result posted back, on the Mac's bearer. */
+export function machineCommandsProcedures(seams: MachineCommandsProcedureSeams) {
+  const machineCommands = hosted.machineCommands.use(bearerOnlyMiddleware(seams.resolveUserId));
 
   return {
-    waiting: macCommands.waiting.effect(function* ({ context, input }) {
-      const kinds = macCommandKindsRead(input.kinds);
-      const commands = yield* hostedStoreOrUnavailable(macCommandsFor(context.userId, kinds));
+    waiting: machineCommands.waiting.effect(function* ({ context, input }) {
+      const kinds = machineCommandKindsRead(input.kinds);
+      const commands = yield* hostedStoreOrUnavailable(machineCommandsFor(context.userId, kinds));
 
       return { commands };
     }),
-    settle: macCommands.settle.effect(function* ({ context, input }) {
+    settle: machineCommands.settle.effect(function* ({ context, input }) {
       const settled = yield* hostedStoreOrUnavailable(
-        settleMacCommand(context.userId, input.id, input.result),
+        settleMachineCommand(context.userId, input.id, input.result),
       );
 
       if (!settled) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
       return { settled: true } as const;
     }),
-    claim: macCommands.claim.effect(function* ({ context, input }) {
+    claim: machineCommands.claim.effect(function* ({ context, input }) {
       const claimed = yield* hostedStoreOrUnavailable(
-        claimedMacCommand(context.userId, input.id, input.deviceId),
+        claimedMachineCommand(context.userId, input.id, input.deviceId),
       );
 
       if (Option.isNone(claimed)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
@@ -76,19 +79,19 @@ export function macCommandsProcedures(seams: MacCommandsProcedureSeams) {
       return { command: claimed.value };
     }),
     // Note that the kinds a presence names are read past, since every Mac that listens runs shell.
-    listening: macCommands.listening.effect(function* ({ context, input }) {
-      yield* hostedStoreOrUnavailable(markMacListening(context.userId, input.deviceId));
+    listening: machineCommands.listening.effect(function* ({ context, input }) {
+      yield* hostedStoreOrUnavailable(markMachineListening(context.userId, input.deviceId));
 
       return { listening: true } as const;
     }),
-    join: macCommands.join.effect(function* ({ context, input }) {
+    join: machineCommands.join.effect(function* ({ context, input }) {
       const joined = yield* hostedStoreOrUnavailable(joinCommandDevice(context.userId, input));
 
       if (Option.isNone(joined)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
       return { settings: joined.value };
     }),
-    saveDeviceSettings: macCommands.saveDeviceSettings.effect(function* ({ context, input }) {
+    saveDeviceSettings: machineCommands.saveDeviceSettings.effect(function* ({ context, input }) {
       const saved = yield* hostedStoreOrUnavailable(
         saveCommandDeviceSettings(context.userId, input.deviceId, input.settings),
       );

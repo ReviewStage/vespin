@@ -1,5 +1,5 @@
 /**
- * mac-commands-procedures.test.ts -- the Mac's held read and its posted results, byte for byte through the route, over a real dialect.
+ * machine-commands-procedures.test.ts -- the Mac's held read and its posted results, byte for byte through the route, over a real dialect.
  *
  * The Mac's held read is answered with the command queued for its account
  * as soon as one waits, and with none once the hold ends; the result it
@@ -22,14 +22,14 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
 import {
-  claimMacCommands,
-  macCommandResult,
-  macCommandsWaiting,
+  claimMachineCommands,
+  machineCommandResult,
+  machineCommandsWaiting,
   macListeningSince,
-  markMacListening,
-  queueMacCommand,
-  settleMacCommand,
-} from "@repo/database/models/mac-command-store";
+  markMachineListening,
+  queueMachineCommand,
+  settleMachineCommand,
+} from "@repo/database/models/machine-command-store";
 import { user } from "@repo/database/schemas/auth";
 import { conversations } from "@repo/database/schemas/storage";
 import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
@@ -38,13 +38,13 @@ import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import {
   COMPUTER_ACTION,
   COMPUTER_BOUNDS,
-  MAC_COMMAND_BOUNDS,
-  MAC_COMMAND_KIND,
-  MAC_COMMAND_MODE,
-  type MacCommand,
-  type MacCommandResult,
-  type MacDeviceJoinRequest,
-} from "@repo/features/mac-command-wire";
+  MACHINE_COMMAND_BOUNDS,
+  MACHINE_COMMAND_KIND,
+  MACHINE_COMMAND_MODE,
+  type MachineCommand,
+  type MachineCommandResult,
+  type MachineDeviceJoinRequest,
+} from "@repo/features/machine-command-wire";
 import { unparsedWire } from "@repo/wire";
 import { pngBytes } from "@repo/wire/testing";
 import { Clock, type Context, Effect, Fiber, Layer, Option, Schema } from "effect";
@@ -55,19 +55,19 @@ import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
 import { wokenOnHub } from "../testing/sync-woken.js";
 import { computerScreenshot, runComputerTool, storedComputerOutput } from "./computer-tool.js";
-import { askMac, MAC_COMMAND_STATUS, macCommandsFor } from "./mac-command.js";
-import { macCommandsProcedures } from "./mac-commands-procedures.js";
+import { askMac, MACHINE_COMMAND_STATUS, machineCommandsFor } from "./machine-command.js";
+import { machineCommandsProcedures } from "./machine-commands-procedures.js";
 
 const ORIGIN = "https://app.test";
-const MAC_COMMANDS = "/api/mac-commands";
+const MACHINE_COMMANDS = "/api/mac-commands";
 const CLAIM = "/api/mac-commands/claim";
 const LISTENING = "/api/mac-commands/listening";
 const DEVICE = "/api/mac-commands/device";
 const JSON_TYPE = "application/json";
 
-const COMMAND: MacCommand = {
+const COMMAND: MachineCommand = {
   id: "11111111-1111-4111-8111-111111111111",
-  kind: MAC_COMMAND_KIND.SHELL,
+  kind: MACHINE_COMMAND_KIND.SHELL,
   command: "git status",
   timeoutSeconds: 60,
 };
@@ -75,7 +75,7 @@ const COMMAND: MacCommand = {
 /** What a Mac from before agents lost the Mac's Browser tabs names in its query: shell, and a kind this service no longer queues. */
 const STALE_KINDS = "shell,browser";
 
-const RESULT: MacCommandResult = {
+const RESULT: MachineCommandResult = {
   exitCode: 0,
   stdout: "nothing to commit\n",
   stderr: "",
@@ -121,7 +121,7 @@ function request(
   if (init.body !== undefined) headers["content-type"] = JSON_TYPE;
 
   if (init.length !== undefined) headers["content-length"] = String(init.length);
-  const url = new URL(init.path ?? MAC_COMMANDS, ORIGIN);
+  const url = new URL(init.path ?? MACHINE_COMMANDS, ORIGIN);
 
   if (init.kinds !== undefined) url.searchParams.set("kinds", init.kinds);
 
@@ -149,7 +149,7 @@ const bytes = (incoming: Request) =>
     const context = yield* Effect.context<SqlClient.SqlClient>().pipe(Effect.provide(services));
 
     const handle = hostedFetch({
-      macCommands: macCommandsProcedures({
+      machineCommands: machineCommandsProcedures({
         resolveUserId: (asked) =>
           Effect.succeed(
             Option.fromNullishOr(
@@ -179,7 +179,7 @@ const account = (userId: string) =>
   });
 
 /** The commands a read was answered with, as the Mac reads its bytes. */
-const commandsOf = (answer: Bytes): readonly MacCommand[] => JSON.parse(answer.text).commands;
+const commandsOf = (answer: Bytes): readonly MachineCommand[] => JSON.parse(answer.text).commands;
 
 /** A held read that finds nothing waiting, answered once its hold of twenty seconds ends on the test's clock. */
 const emptyRead = (incoming: Request) =>
@@ -194,16 +194,16 @@ const emptyRead = (incoming: Request) =>
 const untilQueued = (userId: string) =>
   Effect.gen(function* () {
     const since = new Date(yield* Clock.currentTimeMillis);
-    const kinds = [MAC_COMMAND_KIND.SHELL];
+    const kinds = [MACHINE_COMMAND_KIND.SHELL];
 
-    while (!(yield* macCommandsWaiting(userId, since, kinds))) yield* Effect.yieldNow;
+    while (!(yield* machineCommandsWaiting(userId, since, kinds))) yield* Effect.yieldNow;
   });
 
 it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
   it.effect("the held read answers the queued command, and the result posted is kept", () =>
     Effect.gen(function* () {
       yield* account("user-mac");
-      yield* queueMacCommand("user-mac", COMMAND);
+      yield* queueMachineCommand("user-mac", COMMAND);
 
       assert.deepEqual(yield* bytes(request({ userId: "user-mac" })), {
         status: HOSTED_HTTP_STATUS.OK,
@@ -221,7 +221,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           text: '{"settled":true}',
         },
       );
-      assert.deepEqual(yield* macCommandResult("user-mac", COMMAND.id), Option.some(RESULT));
+      assert.deepEqual(yield* machineCommandResult("user-mac", COMMAND.id), Option.some(RESULT));
     }),
   );
 
@@ -232,10 +232,10 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
         yield* account("user-older");
         const shell = { ...COMMAND, id: "44444444-4444-4444-8444-444444444444" };
         const later = { ...COMMAND, id: "33333333-3333-4333-8333-333333333333" };
-        yield* queueMacCommand("user-older", shell);
+        yield* queueMachineCommand("user-older", shell);
 
         const older = yield* bytes(request({ userId: "user-older" }));
-        yield* queueMacCommand("user-older", later);
+        yield* queueMachineCommand("user-older", later);
         const stale = yield* bytes(request({ userId: "user-older", kinds: STALE_KINDS }));
 
         assert.deepEqual(commandsOf(older), [shell]);
@@ -250,13 +250,13 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
         yield* account("user-no-mac");
 
         const answer = yield* askMac("user-no-mac", {
-          kind: MAC_COMMAND_KIND.SHELL,
+          kind: MACHINE_COMMAND_KIND.SHELL,
           command: COMMAND.command,
         });
 
         const read = yield* emptyRead(request({ userId: "user-no-mac" }));
 
-        assert.equal(answer.status, MAC_COMMAND_STATUS.NOT_RUN);
+        assert.equal(answer.status, MACHINE_COMMAND_STATUS.NOT_RUN);
         assert.match(
           "reason" in answer ? answer.reason : "",
           /not running on the developer's Mac/u,
@@ -271,7 +271,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
       yield* emptyRead(request({ userId: "user-refuses" }));
 
       const call = yield* Effect.forkChild(
-        askMac("user-refuses", { kind: MAC_COMMAND_KIND.SHELL, command: COMMAND.command }),
+        askMac("user-refuses", { kind: MACHINE_COMMAND_KIND.SHELL, command: COMMAND.command }),
       );
 
       yield* untilQueued("user-refuses");
@@ -281,9 +281,9 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
       yield* bytes(request({ method: "POST", userId: "user-refuses", body: posted }));
       yield* TestClock.adjust("1 second");
 
-      assert.equal(taken?.kind, MAC_COMMAND_KIND.SHELL);
+      assert.equal(taken?.kind, MACHINE_COMMAND_KIND.SHELL);
       assert.deepEqual(yield* Fiber.join(call), {
-        status: MAC_COMMAND_STATUS.NOT_RUN,
+        status: MACHINE_COMMAND_STATUS.NOT_RUN,
         reason: refused,
       });
     }),
@@ -328,7 +328,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
         refused(HOSTED_HTTP_STATUS.BAD_REQUEST, "invalid-request"),
       );
       assert.deepEqual(
-        yield* post(JSON.stringify(settle), MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES + 1),
+        yield* post(JSON.stringify(settle), MACHINE_COMMAND_BOUNDS.MAX_RESULT_BYTES + 1),
         refused(HOSTED_HTTP_STATUS.PAYLOAD_TOO_LARGE, "request-too-large"),
       );
       assert.deepEqual(
@@ -342,9 +342,9 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
     Effect.gen(function* () {
       yield* account("user-largest");
 
-      const read: MacCommand = {
+      const read: MachineCommand = {
         id: randomUUID(),
-        kind: MAC_COMMAND_KIND.COMPUTER,
+        kind: MACHINE_COMMAND_KIND.COMPUTER,
         conversationId: randomUUID(),
         action: {
           op: COMPUTER_ACTION.GET_APP_STATE,
@@ -354,8 +354,8 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
         timeoutSeconds: 60,
       };
 
-      yield* queueMacCommand("user-largest", read);
-      yield* claimMacCommands("user-largest", new Date(0), [MAC_COMMAND_KIND.COMPUTER]);
+      yield* queueMachineCommand("user-largest", read);
+      yield* claimMachineCommands("user-largest", new Date(0), [MACHINE_COMMAND_KIND.COMPUTER]);
       // Note that every word but base64 is a character UTF-8 spells in three bytes, the most a character the helper writes takes.
       const wide = (chars: number) => "…".repeat(chars);
 
@@ -365,7 +365,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
         jpeg: "A".repeat(COMPUTER_BOUNDS.MAX_SHOT_CHARS),
       };
 
-      const largest: MacCommandResult = {
+      const largest: MachineCommandResult = {
         computer: {
           app: {
             name: wide(COMPUTER_BOUNDS.MAX_APP_CHARS),
@@ -389,7 +389,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
       );
 
       assert.equal(posted.text, '{"settled":true}');
-      assert.deepEqual(yield* macCommandResult("user-largest", read.id), Option.some(largest));
+      assert.deepEqual(yield* machineCommandResult("user-largest", read.id), Option.some(largest));
     }),
   );
 
@@ -400,7 +400,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
         yield* account("user-claims");
         yield* account("user-claims-other");
         const queued = { ...COMMAND, id: randomUUID() };
-        yield* queueMacCommand("user-claims", queued);
+        yield* queueMachineCommand("user-claims", queued);
 
         const claim = (userId: string, body: string) =>
           bytes(request({ method: "POST", path: CLAIM, userId, body }));
@@ -436,7 +436,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
 
         const post = (
           path: string,
-          body: MacDeviceJoinRequest | { readonly id: string; readonly deviceId?: string },
+          body: MachineDeviceJoinRequest | { readonly id: string; readonly deviceId?: string },
         ) =>
           bytes(
             request({ method: "POST", path, userId: "user-two-macs", body: JSON.stringify(body) }),
@@ -453,14 +453,14 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
             name,
             platform: DEVICE_PLATFORM.DARWIN,
             arch: DEVICE_ARCH.ARM64,
-            settings: { commandMode: MAC_COMMAND_MODE.ASK, alwaysAllowedApps: [] },
+            settings: { commandMode: MACHINE_COMMAND_MODE.ASK, alwaysAllowedApps: [] },
           });
 
           assert.equal(joined.status, HOSTED_HTTP_STATUS.OK);
         }
 
         const queued = { ...COMMAND, id: randomUUID() };
-        yield* queueMacCommand("user-two-macs", queued, studio);
+        yield* queueMachineCommand("user-two-macs", queued, studio);
         const notFound = refused(HOSTED_HTTP_STATUS.NOT_FOUND, "not-found");
 
         assert.deepEqual(yield* post(CLAIM, { id: queued.id, deviceId: laptop }), notFound);
@@ -511,25 +511,25 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
       Effect.scoped(
         Effect.gen(function* () {
           yield* account("user-sync");
-          const kinds = [MAC_COMMAND_KIND.SHELL];
+          const kinds = [MACHINE_COMMAND_KIND.SHELL];
           const queued = { ...COMMAND, id: randomUUID() };
 
           const read = yield* wokenOnHub(
-            macCommandsFor("user-sync", kinds),
-            queueMacCommand("user-sync", queued),
+            machineCommandsFor("user-sync", kinds),
+            queueMachineCommand("user-sync", queued),
           );
 
           const call = yield* wokenOnHub(
-            askMac("user-sync", { kind: MAC_COMMAND_KIND.SHELL, command: COMMAND.command }),
+            askMac("user-sync", { kind: MACHINE_COMMAND_KIND.SHELL, command: COMMAND.command }),
             Effect.gen(function* () {
-              const [claimed] = yield* claimMacCommands("user-sync", new Date(0), kinds);
+              const [claimed] = yield* claimMachineCommands("user-sync", new Date(0), kinds);
               assert.ok(claimed !== undefined, "the call queued its command");
-              yield* settleMacCommand("user-sync", claimed.id, RESULT);
+              yield* settleMachineCommand("user-sync", claimed.id, RESULT);
             }),
           );
 
           assert.deepEqual(read.answered, [queued]);
-          assert.deepEqual(call.answered, { status: MAC_COMMAND_STATUS.RAN, ...RESULT });
+          assert.deepEqual(call.answered, { status: MACHINE_COMMAND_STATUS.RAN, ...RESULT });
         }),
       ),
   );
@@ -548,7 +548,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
 
           assert.ok(row);
           const target = { userId: "user-computer", conversationId: row.id };
-          yield* markMacListening("user-computer");
+          yield* markMachineListening("user-computer");
           const shown = Buffer.from(pngBytes(640, 400, 1)).toString("base64");
           const full = Buffer.from(pngBytes(1280, 800, 2)).toString("base64");
           const icon = Buffer.from(pngBytes(64, 64, 3)).toString("base64");
@@ -556,17 +556,17 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
           const call = yield* wokenOnHub(
             runComputerTool(target, { action: "get_app_state", app: "Simulator" }),
             Effect.gen(function* () {
-              const [claimed] = yield* claimMacCommands("user-computer", new Date(0), [
-                MAC_COMMAND_KIND.COMPUTER,
+              const [claimed] = yield* claimMachineCommands("user-computer", new Date(0), [
+                MACHINE_COMMAND_KIND.COMPUTER,
               ]);
 
-              assert.ok(claimed !== undefined && claimed.kind === MAC_COMMAND_KIND.COMPUTER);
+              assert.ok(claimed !== undefined && claimed.kind === MACHINE_COMMAND_KIND.COMPUTER);
               assert.equal(
                 claimed.conversationId,
                 row.id,
                 "the command names the conversation that asked",
               );
-              yield* settleMacCommand("user-computer", claimed.id, {
+              yield* settleMachineCommand("user-computer", claimed.id, {
                 computer: {
                   app: {
                     name: "Simulator",

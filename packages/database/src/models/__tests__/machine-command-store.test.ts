@@ -11,10 +11,10 @@ import {
   type AutomationFiring,
 } from "@repo/features/automation-wire";
 import {
-  MAC_COMMAND_KIND,
-  type MacCommand,
-  type MacCommandResult,
-} from "@repo/features/mac-command-wire";
+  MACHINE_COMMAND_KIND,
+  type MachineCommand,
+  type MachineCommandResult,
+} from "@repo/features/machine-command-wire";
 import {
   GITHUB_LINE_EVENT,
   type GitHubLineMetadata,
@@ -29,7 +29,7 @@ import { Database } from "../../core/query.js";
 import { agentTable } from "../../schemas/agent.js";
 import { user } from "../../schemas/auth.js";
 import { device } from "../../schemas/device.js";
-import { macCommand } from "../../schemas/mac-command.js";
+import { machineCommand } from "../../schemas/machine-command.js";
 import { conversations, messages } from "../../schemas/storage.js";
 import { CONVERSATION_KIND, MESSAGE_SENDER, type MessageSender } from "../../storage-vocabulary.js";
 import {
@@ -47,17 +47,17 @@ import {
 } from "../automation-store.js";
 import { registerDevice } from "../device-store.js";
 import {
-  claimMacCommand,
-  claimMacCommands,
+  claimMachineCommand,
+  claimMachineCommands,
   heardFromAnotherAccount,
-  macCommandResult,
-  macCommandsWaiting,
+  machineCommandResult,
+  machineCommandsWaiting,
+  machineOwnerOf,
   macListeningSince,
-  macOwnerOf,
-  markMacListening,
-  queueMacCommand,
-  settleMacCommand,
-} from "../mac-command-store.js";
+  markMachineListening,
+  queueMachineCommand,
+  settleMachineCommand,
+} from "../machine-command-store.js";
 import { createTask } from "../task-store.js";
 
 /**
@@ -77,7 +77,7 @@ import { createTask } from "../task-store.js";
 /** The instant the clock reads now, which every command these tests queue is at or after. */
 const now = Effect.map(Clock.currentTimeMillis, (millis) => new Date(millis));
 
-const RESULT: MacCommandResult = {
+const RESULT: MachineCommandResult = {
   exitCode: 0,
   stdout: "main\n",
   stderr: "",
@@ -96,9 +96,9 @@ const openAccounts = Effect.gen(function* () {
   return { owner, other };
 });
 
-const command = (timeoutSeconds = 60): MacCommand => ({
+const command = (timeoutSeconds = 60): MachineCommand => ({
   id: randomUUID(),
-  kind: MAC_COMMAND_KIND.SHELL,
+  kind: MACHINE_COMMAND_KIND.SHELL,
   command: "git branch --show-current",
   timeoutSeconds,
 });
@@ -113,7 +113,7 @@ const queueOtherKind = (userId: string) =>
     const id = randomUUID();
     const queuedAt = (yield* now).toISOString();
     yield* db.execute(
-      sql`INSERT INTO mac_command (id, user_id, kind, timeout_seconds, queued_at)
+      sql`INSERT INTO machine_command (id, user_id, kind, timeout_seconds, queued_at)
           VALUES (${id}, ${userId}, 'browser', 30, ${queuedAt})`,
     );
 
@@ -130,7 +130,7 @@ const openDevice = (userId: string, name: string) =>
   });
 
 /** What every Mac's read names: shell alone. */
-const SHELL_ONLY = [MAC_COMMAND_KIND.SHELL];
+const SHELL_ONLY = [MACHINE_COMMAND_KIND.SHELL];
 
 it.layer(getTestDB())("the Mac command store", (it) => {
   it.effect(
@@ -140,15 +140,19 @@ it.layer(getTestDB())("the Mac command store", (it) => {
         const { owner, other } = yield* openAccounts;
         const since = yield* now;
         const queued = command();
-        yield* queueMacCommand(owner, queued);
+        yield* queueMachineCommand(owner, queued);
 
-        const claimedByOther = yield* claimMacCommands(other, since, SHELL_ONLY);
-        const settledByOther = yield* settleMacCommand(other, queued.id, RESULT);
-        const settledUnclaimed = yield* settleMacCommand(owner, queued.id, RESULT);
-        const claimed = yield* claimMacCommands(owner, since, SHELL_ONLY);
-        const claimedAgain = yield* claimMacCommands(owner, since, SHELL_ONLY);
-        const settled = yield* settleMacCommand(owner, queued.id, RESULT);
-        const settledAgain = yield* settleMacCommand(owner, queued.id, { ...RESULT, exitCode: 1 });
+        const claimedByOther = yield* claimMachineCommands(other, since, SHELL_ONLY);
+        const settledByOther = yield* settleMachineCommand(other, queued.id, RESULT);
+        const settledUnclaimed = yield* settleMachineCommand(owner, queued.id, RESULT);
+        const claimed = yield* claimMachineCommands(owner, since, SHELL_ONLY);
+        const claimedAgain = yield* claimMachineCommands(owner, since, SHELL_ONLY);
+        const settled = yield* settleMachineCommand(owner, queued.id, RESULT);
+
+        const settledAgain = yield* settleMachineCommand(owner, queued.id, {
+          ...RESULT,
+          exitCode: 1,
+        });
 
         assert.deepEqual(claimedByOther, []);
         assert.equal(settledByOther, false, "another account settles nothing");
@@ -157,8 +161,8 @@ it.layer(getTestDB())("the Mac command store", (it) => {
         assert.deepEqual(claimedAgain, [], "a claimed command is not handed out twice");
         assert.equal(settled, true);
         assert.equal(settledAgain, false, "the first result stands");
-        assert.deepEqual(yield* macCommandResult(owner, queued.id), Option.some(RESULT));
-        assert.deepEqual(yield* macCommandResult(other, queued.id), Option.none());
+        assert.deepEqual(yield* machineCommandResult(owner, queued.id), Option.some(RESULT));
+        assert.deepEqual(yield* machineCommandResult(other, queued.id), Option.none());
       }),
   );
 
@@ -176,8 +180,8 @@ it.layer(getTestDB())("the Mac command store", (it) => {
         ];
 
         const queued = command();
-        const queuedForStudio = yield* queueMacCommand(owner, queued, studio);
-        const queuedForOthersMac = yield* queueMacCommand(owner, command(), othersMac);
+        const queuedForStudio = yield* queueMachineCommand(owner, queued, studio);
+        const queuedForOthersMac = yield* queueMachineCommand(owner, command(), othersMac);
         const retired = yield* openDevice(owner, "Retired");
 
         yield* Database.use((db) =>
@@ -187,13 +191,20 @@ it.layer(getTestDB())("the Mac command store", (it) => {
             .where(eq(device.id, retired)),
         );
 
-        const queuedForRemoved = yield* queueMacCommand(owner, command(), retired);
+        const queuedForRemoved = yield* queueMachineCommand(owner, command(), retired);
 
-        const byOtherNamingIt = yield* claimMacCommand(other, queued.id, since, SHELL_ONLY, studio);
-        const byOtherDevice = yield* claimMacCommands(other, since, SHELL_ONLY, othersMac);
-        const byAccountAlone = yield* claimMacCommands(owner, since, SHELL_ONLY);
+        const byOtherNamingIt = yield* claimMachineCommand(
+          other,
+          queued.id,
+          since,
+          SHELL_ONLY,
+          studio,
+        );
 
-        const byAnotherOfTheirs = yield* claimMacCommand(
+        const byOtherDevice = yield* claimMachineCommands(other, since, SHELL_ONLY, othersMac);
+        const byAccountAlone = yield* claimMachineCommands(owner, since, SHELL_ONLY);
+
+        const byAnotherOfTheirs = yield* claimMachineCommand(
           owner,
           queued.id,
           since,
@@ -201,8 +212,8 @@ it.layer(getTestDB())("the Mac command store", (it) => {
           laptop,
         );
 
-        const waitsForStudio = yield* macCommandsWaiting(owner, since, SHELL_ONLY, studio);
-        const byStudio = yield* claimMacCommands(owner, since, SHELL_ONLY, studio);
+        const waitsForStudio = yield* machineCommandsWaiting(owner, since, SHELL_ONLY, studio);
+        const byStudio = yield* claimMachineCommands(owner, since, SHELL_ONLY, studio);
 
         assert.equal(queuedForStudio, true);
         assert.equal(queuedForOthersMac, false, "nothing is queued for another account's Mac");
@@ -223,10 +234,10 @@ it.layer(getTestDB())("the Mac command store", (it) => {
       const shell = command();
       const other = yield* queueOtherKind(owner);
 
-      const waits = yield* macCommandsWaiting(owner, since, SHELL_ONLY);
-      yield* queueMacCommand(owner, shell);
-      const claimed = yield* claimMacCommands(owner, since, SHELL_ONLY);
-      const claimedById = yield* claimMacCommand(owner, other, since, SHELL_ONLY);
+      const waits = yield* machineCommandsWaiting(owner, since, SHELL_ONLY);
+      yield* queueMachineCommand(owner, shell);
+      const claimed = yield* claimMachineCommands(owner, since, SHELL_ONLY);
+      const claimedById = yield* claimMachineCommand(owner, other, since, SHELL_ONLY);
 
       assert.equal(waits, false, "a row of another kind does not wake the read");
       assert.deepEqual(claimed, [shell]);
@@ -242,20 +253,20 @@ it.layer(getTestDB())("the Mac command store", (it) => {
       const id = randomUUID();
       // Note that the row is written as a build before kinds wrote one, naming no kind.
       yield* db.execute(
-        sql`INSERT INTO mac_command (id, user_id, command, timeout_seconds, queued_at)
+        sql`INSERT INTO machine_command (id, user_id, command, timeout_seconds, queued_at)
             VALUES (${id}, ${owner}, 'uptime', 60, ${since.toISOString()})`,
       );
 
       const [row] = yield* db
-        .select({ kind: macCommand.kind })
-        .from(macCommand)
-        .where(eq(macCommand.id, id));
+        .select({ kind: machineCommand.kind })
+        .from(machineCommand)
+        .where(eq(machineCommand.id, id));
 
-      const claimed = yield* claimMacCommands(owner, since, SHELL_ONLY);
+      const claimed = yield* claimMachineCommands(owner, since, SHELL_ONLY);
 
-      assert.equal(row?.kind, MAC_COMMAND_KIND.SHELL);
+      assert.equal(row?.kind, MACHINE_COMMAND_KIND.SHELL);
       assert.deepEqual(claimed, [
-        { id, kind: MAC_COMMAND_KIND.SHELL, command: "uptime", timeoutSeconds: 60 },
+        { id, kind: MACHINE_COMMAND_KIND.SHELL, command: "uptime", timeoutSeconds: 60 },
       ]);
     }),
   );
@@ -266,7 +277,7 @@ it.layer(getTestDB())("the Mac command store", (it) => {
       const since = yield* now;
 
       const before = yield* macListeningSince(owner, since);
-      yield* markMacListening(owner);
+      yield* markMachineListening(owner);
       const after = yield* macListeningSince(owner, since);
       const forOther = yield* macListeningSince(other, since);
 
@@ -411,7 +422,7 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
         const db = yield* Database;
         const agent = yield* openAgent(starter, workspace);
         const target = { userId: starter, conversationId: agent.conversationId };
-        assert.equal(yield* macOwnerOf(target), starter, "no one assigned");
+        assert.equal(yield* machineOwnerOf(target), starter, "no one assigned");
 
         const handed = yield* createTask(starter, {
           organizationId: workspace,
@@ -424,14 +435,14 @@ it.layer(getTestDB())("who has put words into an agent's conversation", (it) => 
           userId: starter,
         });
         const worker = yield* openWorker(starter, agent.conversationId);
-        assert.equal(yield* macOwnerOf(target), teammate, "handed to a teammate");
+        assert.equal(yield* machineOwnerOf(target), teammate, "handed to a teammate");
         assert.equal(
-          yield* macOwnerOf({ userId: starter, conversationId: worker }),
+          yield* machineOwnerOf({ userId: starter, conversationId: worker }),
           teammate,
           "its worker's too",
         );
         yield* leaveWorkspace(workspace, teammate);
-        assert.equal(yield* macOwnerOf(target), starter, "an assignee who left hands it back");
+        assert.equal(yield* machineOwnerOf(target), starter, "an assignee who left hands it back");
       }),
   );
 

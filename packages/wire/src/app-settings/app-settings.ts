@@ -25,7 +25,7 @@ export const APP_SETTING_ID = {
   SHOW_IN_DOCK: "show_in_dock",
   OPEN_AT_LOGIN: "open_at_login",
   AGENT_NOTIFICATIONS: "agent_notifications",
-  MAC_COMMANDS: "mac_commands",
+  MACHINE_COMMANDS: "mac_commands",
   KEEP_AWAKE: "keep_awake",
   COMPUTER_USE: "computer_use",
   COMPUTER_USE_APPS: "computer_use_apps",
