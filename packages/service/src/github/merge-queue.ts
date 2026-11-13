@@ -134,8 +134,8 @@ const QueueEntrySchema = Schema.Struct({
         Schema.Struct({
           contexts: Schema.Struct({
             totalCount: Schema.Number,
-            checkRunCountsByState: Schema.Array(StateCountSchema),
-            statusContextCountsByState: Schema.Array(StateCountSchema),
+            checkRunCountsByState: Schema.NullOr(Schema.Array(StateCountSchema)),
+            statusContextCountsByState: Schema.NullOr(Schema.Array(StateCountSchema)),
             nodes: Schema.Array(Schema.NullOr(CheckContextSchema)),
           }),
         }),
@@ -233,14 +233,21 @@ function countIn(
 
 /**
  * How the checks stand on an entry's merge group; none before the queue
- * builds one or reports any check on it. Note that the counts are GitHub's
- * tallies of every check, because the checks named are only the first
- * `MAX_CHECKS`, so a failure past them is counted though it is not named.
+ * builds one or reports any check on it, or where GitHub withholds a tally.
+ * Note that the counts are GitHub's tallies of every check, because the
+ * checks named are only the first `MAX_CHECKS`, so a failure past them is
+ * counted though it is not named; and that a tally GitHub answers null says
+ * nothing, so the row shows no checks rather than none failed.
  */
 function checksOf(read: QueueEntryRead): MergeQueueChecks | null {
   const contexts = read.headCommit?.statusCheckRollup?.contexts;
 
   if (contexts === undefined || contexts.totalCount === 0) return null;
+
+  const runs = contexts.checkRunCountsByState;
+  const statuses = contexts.statusContextCountsByState;
+
+  if (runs === null || statuses === null) return null;
 
   const failed = contexts.nodes.flatMap((check) => {
     if (check === null) return [];
@@ -256,12 +263,8 @@ function checksOf(read: QueueEntryRead): MergeQueueChecks | null {
 
   return {
     total: contexts.totalCount,
-    passed:
-      countIn(contexts.checkRunCountsByState, CHECK_RUN_PASSED) +
-      countIn(contexts.statusContextCountsByState, STATUS_PASSED),
-    failedCount:
-      countIn(contexts.checkRunCountsByState, CHECK_RUN_FAILED) +
-      countIn(contexts.statusContextCountsByState, STATUS_FAILED),
+    passed: countIn(runs, CHECK_RUN_PASSED) + countIn(statuses, STATUS_PASSED),
+    failedCount: countIn(runs, CHECK_RUN_FAILED) + countIn(statuses, STATUS_FAILED),
     failed,
   };
 }
