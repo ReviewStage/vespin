@@ -51,7 +51,7 @@ export type HeldCall = {
  * side by side under a call's indented line at AX5 Deny broke into "Den"
  * and "y".
  */
-function ApprovalPresses({ answering, onAnswer }: Pick<HeldCall, "answering" | "onAnswer">) {
+export function ApprovalPresses({ answering, onAnswer }: Pick<HeldCall, "answering" | "onAnswer">) {
   const large = useAccessibilitySize();
   const out = answering !== undefined;
 
@@ -212,5 +212,23 @@ export function HeldCallBanner({ waiting, asks, answering, note, onAnswer }: Hel
       {note === undefined ? null : <AskNote words={note} />}
       <ApprovalPresses answering={answering} onAnswer={onAnswer} />
     </VStack>
+  );
+}
+
+/** PROBE, never merged: one part of a held call's body alone, so its host measures that part by itself. */
+export function HeldProbePart({ held, part }: { readonly held: HeldCall; readonly part: "words" | "presses" }) {
+  const colors = useColors();
+
+  return part === "words" ? (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "medium" }),
+        foregroundStyle(colors.TEXT_MUTED),
+      ]}
+    >
+      {held.words}
+    </Text>
+  ) : (
+    <ApprovalPresses answering={held.answering} onAnswer={held.onAnswer} />
   );
 }

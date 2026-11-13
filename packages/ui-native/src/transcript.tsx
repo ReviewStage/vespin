@@ -13,6 +13,7 @@ import {
   FlatList,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  PixelRatio,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -31,7 +32,7 @@ import { BUTTON_LOOK, Button } from "./button.js";
 import { EmptyState, type EmptyStateProps } from "./empty-state.js";
 import { useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphSymbol } from "./glyph.js";
-import { type HeldCall, HeldCallBody } from "./held-call.js";
+import { type HeldCall, HeldCallBody, HeldProbePart } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
@@ -353,11 +354,49 @@ function CallRow({
         />
       </Pressable>
       {held === undefined ? null : (
-        <View style={styles.body}>
-          {/* Note that the presses are SwiftUI's, hosted in the row at the height they draw. */}
-          <InlineHost matchContents={{ vertical: true }}>
+        <View
+          style={[styles.body, { backgroundColor: "rgba(255,0,0,0.15)" }]}
+          onLayout={(event) =>
+            console.log(
+              `PROBE held view w=${event.nativeEvent.layout.width} h=${event.nativeEvent.layout.height} fontScale=${PixelRatio.getFontScale()}`,
+            )
+          }
+        >
+          {/* PROBE, never merged: the body's host, then each part in a host of its own, each logging what SwiftUI measured. */}
+          <InlineHost
+            matchContents={{ vertical: true }}
+            onLayoutContent={(event) =>
+              console.log(
+                `PROBE held body content w=${event.nativeEvent.width} h=${event.nativeEvent.height}`,
+              )
+            }
+          >
             <HeldCallBody held={held} />
           </InlineHost>
+          <View style={{ backgroundColor: "rgba(0,0,255,0.15)", marginTop: 8 }}>
+            <InlineHost
+              matchContents={{ vertical: true }}
+              onLayoutContent={(event) =>
+                console.log(
+                  `PROBE held words content w=${event.nativeEvent.width} h=${event.nativeEvent.height}`,
+                )
+              }
+            >
+              <HeldProbePart held={held} part="words" />
+            </InlineHost>
+          </View>
+          <View style={{ backgroundColor: "rgba(0,160,0,0.15)", marginTop: 8 }}>
+            <InlineHost
+              matchContents={{ vertical: true }}
+              onLayoutContent={(event) =>
+                console.log(
+                  `PROBE held presses content w=${event.nativeEvent.width} h=${event.nativeEvent.height}`,
+                )
+              }
+            >
+              <HeldProbePart held={held} part="presses" />
+            </InlineHost>
+          </View>
         </View>
       )}
       {item.open ? (
