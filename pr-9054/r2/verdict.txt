@@ -1,0 +1,5 @@
+#9054 round 2 (iPhone 18 Pro, light and dark; #9054 at 1f1488b61). PARTIAL.
+- Typed: with "Thanks" in the thread's reply box, Send is a solid circle (ink in light, white in dark). Pass.
+- Agent page while working: Stop is the filled ink circle, unchanged. Pass.
+- Empty: the shot caught the thread mid-push in both looks, with the reply bar's Send past the frame's right edge, so the faint empty Send isn't judged.
+- Retake in round 3: r9054.yaml now waits for the thread to settle before that shot.

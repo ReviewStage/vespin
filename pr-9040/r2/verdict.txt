@@ -1,0 +1,4 @@
+#9040 round 2 (iPhone 18 Pro, light and dark; #9040 at 975936513 among round 2's heads). PARTIAL: the capsule passes, the agent page's model line wasn't in frame.
+- New task's model capsule: "Opus 5.5 · High" leads with the copper Clawd mark, and after picking GPT-6.1 Sol it leads with the blue Codex mark, at the glyph's size beside the folder glyph of "ada/relay". Same in both looks. The model menu (Opus 5.5 ✓, Sonnet 5.5, GPT-6.1 Sol, Effort) is unchanged, with no marks on its rows as the PR intends.
+- Agent page: the transcript opens at its end, so the head with the model line stood above the frame in both looks. Not judged.
+- Retake in round 3: r9040.yaml now scrolls the transcript to its head before shot 1.

@@ -1,0 +1,4 @@
+#8986 round 2, iPhone lane (iPhone 18 Pro, light; #8986 at 5b16720f7). NOT YET JUDGED at accessibility sizes.
+- wrap-accessibility.yaml failed at its 2nd step: `Assert that ".*walked the invite flow.*" is visible`. At AX5 the Inbox's three-line rows (#8864) push that preview below the first screen, so the flow stopped on the Inbox before reaching Settings. A stale flow on main, not #8986.
+- wrap-settings.yaml at the default size passed (0 fails): Settings, Account, Agents, Notifications and Workspace are unchanged from main, with each row's value at the trailing edge, members' roles on their row, and the invite alert as before.
+- The AX5 verdict comes from the iPad lane's wrap-settings.yaml at AX5, which runs next in this round.

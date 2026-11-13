@@ -1,0 +1,4 @@
+#9027 round 2 (iPhone 18 Pro at AX3 accessibility-extra-large, light and dark; #9027 at 77b46cac1). PASS. r9027.yaml ran clean in both (0 fails).
+- The task page's agent row stacks its facts one per line at AX3: "Build teammate / invitations", "Cloud", the working spinner with "Working", the pull request glyph with "#128", and "7 need you" in the attention tone. Nothing clips or overlaps, and the hairline under the row starts under the words.
+- The agent tile (Clawd) scales with the text and stays aligned to the name's first line.
+- Sub-tasks 0/1, Task relations 1 and Pages 1 rows read whole at AX3 as well.

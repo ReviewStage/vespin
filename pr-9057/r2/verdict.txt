@@ -1,0 +1,4 @@
+#9057 round 2 (iPhone 18 Pro, light; #9057 at 8139956d3). NOT VERIFIED: tasks.yaml stopped before "Sub-task of".
+- It ran 65 steps clean: the rows, the row menu (Open, Mark done, Status, Pin/Unpin, Task relation, Move to section, Change repository, Copy link, Rename, Mark as unread, Open in browser, Permanently delete), Rename's alert and Permanently delete's ask.
+- It failed at line ~146, the long press after Copy link. Copy link opened the share sheet (Vespin vespin.dev, with Copy and Open in Safari), and the flow's optional "Close|dismiss popup" tap didn't close it. The sheet still covered the list, so the next long press on "Weekly digest email" found nothing to press.
+- So the step #9057 fixes, New sub-task's "Sub-task of" capsule at line 283, never ran. The flow needs a dismissal that closes the share sheet (a swipe down on its grabber, or tapping Copy).
