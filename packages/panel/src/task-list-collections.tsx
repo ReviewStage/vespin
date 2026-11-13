@@ -309,6 +309,7 @@ export function taskListFollowing(): TaskListFollowing {
     write: (version, view) => feed.write({ version, view }),
     trouble: feed.trouble,
     stop: () => {
+      // Note that the live queries reading the collections are cleaned up with them, since the follow stops only as the window or its account goes, and `cleanup()` alone rejects while one reads a collection (`@tanstack/db` 1.0's `Collection.cleanup` documents `dependents` for this).
       for (const collection of Object.values(collections))
         void collection.cleanup({ dependents: true });
     },
