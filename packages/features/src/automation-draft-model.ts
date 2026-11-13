@@ -199,8 +199,8 @@ const SCHEDULE_REFUSAL_WORDS = {
   [SCHEDULE_REFUSAL.CRON]: `That isn't a schedule ${PRODUCT_NAME} can read.`,
   [SCHEDULE_REFUSAL.TIMEZONE]: "Pick a time zone.",
   [SCHEDULE_REFUSAL.TOO_FREQUENT]: "It can run at most every 15 minutes.",
-  [SCHEDULE_REFUSAL.AT]: "Pick the date it runs on.",
-  [SCHEDULE_REFUSAL.PAST]: "That time has passed. Pick one still to come.",
+  [SCHEDULE_REFUSAL.AT]: "Pick a date.",
+  [SCHEDULE_REFUSAL.PAST]: "Pick a time in the future.",
 } as const satisfies Record<ScheduleRefusal, string>;
 
 /** A one-time schedule's date and time as it is read: `YYYY-MM-DDTHH:mm`. */

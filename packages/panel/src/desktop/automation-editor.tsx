@@ -454,7 +454,7 @@ export function AutomationSwitch({
 /** What a time of day that cannot be read is told to be, under the time's row. */
 const UNREADABLE_TIME = "Write the time as 2:00 AM.";
 
-/** What a date that cannot be read is told to be, under the date's row; its example a fixed day, so the words never read the clock. */
+/** What a date that cannot be read is told to be, under the date's row, as the time's is; its example a fixed day, so the words never read the clock. */
 const UNREADABLE_DATE = "Write the date as Nov 27.";
 
 /**
@@ -942,7 +942,7 @@ function ScheduleRows({
     <>
       <SelectRow
         width={CHIP_WIDTH.MIN_FIELD}
-        label="Repeats"
+        label="Runs"
         labelReplayUnmasked
         detail={nextRunsText(draft)}
         value={schedule.kind}
@@ -1081,7 +1081,7 @@ const PROMPT_ROWS = 5;
 /**
  * The rows a saved automation's groups stand before it is read, as a
  * scheduled one, the kind most are, runs on a new agent each time: Sharing's
- * Owner and Created by; Trigger's Type, Repeats, Time, and Time zone; and Where it runs'
+ * Owner and Created by; Trigger's Type, Runs, Time, and Time zone; and Where it runs'
  * Repository, Runs land in, Model on the account's default, MCP servers, and Archive
  * finished runs, each with the words under its name where it says them.
  */

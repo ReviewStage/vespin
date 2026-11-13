@@ -138,8 +138,8 @@ export const AUTOMATION_TOOL_REFUSAL = {
   TIMEZONE:
     "Not run: the schedule's time zone is not one the IANA database names, such as Europe/London.",
   TOO_FREQUENT: "Not run: a schedule may fire at most once every fifteen minutes.",
-  AT: "Not run: a one-time schedule's at is not a real date and time as YYYY-MM-DDTHH:mm, such as 2026-11-27T09:00.",
-  PAST: "Not run: a one-time schedule's at has already passed in its time zone; give one still to come.",
+  AT: "Not run: a one-time schedule's at is not a date and time as YYYY-MM-DDTHH:mm, such as 2026-11-27T09:00.",
+  PAST: "Not run: a one-time schedule's at is in the past; give a time in the future.",
   SENTRY_UNCONFIGURED:
     `Not run: this deployment of ${PRODUCT_NAME} has no Sentry integration configured, so no automation ` +
     "here may fire on Sentry's events; use a schedule or a GitHub event instead.",

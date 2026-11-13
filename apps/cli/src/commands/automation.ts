@@ -4,7 +4,7 @@
  * Each goes through the procedures the app's automations page sends
  * (`automations.*`), so who may change, run, or delete which, whether a
  * schedule reads, and whether a repository is reached are the service's to
- * refuse. A trigger is named by `--cron`, `--github`, or `--sentry`, or
+ * refuse. A trigger is named by `--cron`, `--at`, `--github`, or `--sentry`, or
  * whole as JSON with `--trigger`, decoded by the wire's own schema. A
  * webhook trigger is never made or set here, as the member MCP server
  * makes none: its secret is shown once, in the window that minted it
@@ -13,6 +13,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { readSchedule, SCHEDULE_REFUSAL } from "@repo/features/automation-schedule";
 import {
   AUTOMATION_ACTION,
   AUTOMATION_SCOPE,
@@ -26,7 +27,7 @@ import {
 } from "@repo/features/automation-wire";
 import { CLI_EXIT } from "@repo/features/cli-exit";
 import { SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
-import { Effect, Option, Schema } from "effect";
+import { Effect, Option, Result, Schema } from "effect";
 import { Argument, Command, Flag } from "effect/cli";
 import { answer, CommandFailed, columns, readInput } from "../output.js";
 import { askService, session } from "../session.js";
@@ -47,9 +48,15 @@ const TRIGGER_FLAGS = {
     Flag.optional,
     Flag.withDescription("Fire on a five-field cron schedule, such as '0 9 * * 1'"),
   ),
+  at: Flag.String("at").pipe(
+    Flag.optional,
+    Flag.withDescription(
+      "Fire once at a date and time, as YYYY-MM-DDTHH:mm, such as 2026-11-27T09:00",
+    ),
+  ),
   timezone: Flag.String("timezone").pipe(
     Flag.optional,
-    Flag.withDescription("The IANA time zone --cron is read in (default: this machine's)"),
+    Flag.withDescription("The IANA time zone --cron or --at is read in (default: this machine's)"),
   ),
   github: Flag.Literals("github", Object.values(GITHUB_TRIGGER_EVENT)).pipe(
     Flag.optional,
@@ -101,6 +108,7 @@ const ACTION_FLAGS = {
 /** What the trigger flags parsed to. */
 interface TriggerFlags {
   readonly cron: Option.Option<string>;
+  readonly at: Option.Option<string>;
   readonly timezone: Option.Option<string>;
   readonly github: Option.Option<(typeof GITHUB_TRIGGER_EVENT)[keyof typeof GITHUB_TRIGGER_EVENT]>;
   readonly label: readonly string[];
@@ -116,14 +124,39 @@ function usage(message: string): CommandFailed {
 
 /** The trigger the flags name, none where they name none, or why they do not read. */
 const triggerOf = Effect.fnUntraced(function* (flags: TriggerFlags) {
-  const named = [flags.cron, flags.github, flags.sentry, flags.trigger].filter(Option.isSome);
+  const named = [flags.cron, flags.at, flags.github, flags.sentry, flags.trigger].filter(
+    Option.isSome,
+  );
 
   if (named.length > 1) {
-    return yield* usage("Name one trigger: --cron, --github, --sentry, or --trigger.");
+    return yield* usage("Name one trigger: --cron, --at, --github, --sentry, or --trigger.");
   }
 
-  if (Option.isSome(flags.timezone) && Option.isNone(flags.cron)) {
-    return yield* usage("--timezone goes with --cron.");
+  if (Option.isSome(flags.timezone) && Option.isNone(flags.cron) && Option.isNone(flags.at)) {
+    return yield* usage("--timezone goes with --cron or --at.");
+  }
+
+  const timezone = Option.getOrElse(
+    flags.timezone,
+    () => Intl.DateTimeFormat().resolvedOptions().timeZone,
+  );
+
+  if (Option.isSome(flags.at)) {
+    const read = readSchedule({ at: flags.at.value, timezone }, new Date());
+
+    if (Result.isFailure(read) && read.failure === SCHEDULE_REFUSAL.AT) {
+      return yield* usage("Write --at as YYYY-MM-DDTHH:mm, such as 2026-11-27T09:00.");
+    }
+
+    if (Result.isFailure(read) && read.failure === SCHEDULE_REFUSAL.PAST) {
+      return yield* usage("Pick a time in the future for --at.");
+    }
+
+    return Option.some<AutomationTrigger>({
+      kind: AUTOMATION_TRIGGER.SCHEDULE,
+      at: flags.at.value,
+      timezone,
+    });
   }
 
   if ((flags.label.length > 0 || flags.branch.length > 0) && Option.isNone(flags.github)) {
@@ -131,11 +164,6 @@ const triggerOf = Effect.fnUntraced(function* (flags: TriggerFlags) {
   }
 
   if (Option.isSome(flags.cron)) {
-    const timezone = Option.getOrElse(
-      flags.timezone,
-      () => Intl.DateTimeFormat().resolvedOptions().timeZone,
-    );
-
     return Option.some<AutomationTrigger>({
       kind: AUTOMATION_TRIGGER.SCHEDULE,
       cron: flags.cron.value,
@@ -324,7 +352,7 @@ const createCommand = Command.make(
       const trigger = yield* triggerOf(flags);
 
       if (Option.isNone(trigger)) {
-        return yield* usage("Name a trigger: --cron, --github, --sentry, or --trigger.");
+        return yield* usage("Name a trigger: --cron, --at, --github, --sentry, or --trigger.");
       }
 
       if (Option.isNone(prompt)) return yield* usage("Give each run's prompt with --prompt.");
@@ -360,6 +388,11 @@ const createCommand = Command.make(
       command:
         "echo 'Triage the new issues.' | vespin automation create Triage --cron '0 9 * * 1-5' -R acme/app --prompt -",
       description: "Every weekday at nine",
+    },
+    {
+      command:
+        "vespin automation create 'Check adoption' --at 2026-11-27T09:00 -R acme/app --prompt check.md",
+      description: "Once, on Nov 27 at nine, then paused",
     },
     {
       command:

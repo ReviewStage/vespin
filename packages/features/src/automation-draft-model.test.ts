@@ -121,10 +121,7 @@ test("a Once draft writes its date and time on its zone's clock as the trigger's
   assert.deepEqual(draftNextRuns(once, NOW, 2), [Date.parse("2026-01-27T14:05:00Z")]);
 
   const past = { ...once, schedule: { ...once.schedule, date: "2026-01-02" } };
-  assert.equal(
-    draftProblems(past, false, NOW)[DRAFT_FIELD.SCHEDULE],
-    "That time has passed. Pick one still to come.",
-  );
+  assert.equal(draftProblems(past, false, NOW)[DRAFT_FIELD.SCHEDULE], "Pick a time in the future.");
   assert.deepEqual(draftProblems(past, false, NOW, past), {}, "a spent one may still be renamed");
   assert.equal(onceDateOf("Jan 27", NOW, DEFAULTS.timezone), "2026-01-27");
   assert.equal(
