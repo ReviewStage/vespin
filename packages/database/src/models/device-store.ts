@@ -345,12 +345,24 @@ const joinDevice = SqlSchema.findAll({
     name: Schema.String,
     platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     arch: Schema.Literals(Object.values(DEVICE_ARCH)),
+    ...MachineColumnsSchema.fields,
     commandMode: macCommandModeSchema,
     alwaysAllowedApps: Schema.Array(Schema.String),
     now: Schema.Date,
   }),
   Result: macDeviceSettingsSchema,
-  execute: ({ userId, id, name, platform, arch, commandMode, alwaysAllowedApps, now }) =>
+  execute: ({
+    userId,
+    id,
+    name,
+    platform,
+    arch,
+    machineId,
+    model,
+    commandMode,
+    alwaysAllowedApps,
+    now,
+  }) =>
     Database.use((db) =>
       db
         .insert(device)
@@ -360,6 +372,7 @@ const joinDevice = SqlSchema.findAll({
           name,
           platform,
           arch,
+          ...machineColumns({ machineId, model }),
           commandMode,
           alwaysAllowedApps,
           lastSeenAt: now,
@@ -367,6 +380,9 @@ const joinDevice = SqlSchema.findAll({
         .onConflictDoUpdate({
           target: device.id,
           set: {
+            ...machineColumns({ machineId, model }),
+            // Note that a Mac whose host was removed still takes commands as the app, so its join stands the row again, as an enroll does; it is listed as a host only once a host keys it again.
+            removedAt: null,
             commandMode: sql`coalesce(${device.commandMode}, excluded.command_mode)`,
             alwaysAllowedApps: sql`coalesce(${device.alwaysAllowedApps}, excluded.always_allowed_apps)`,
           },
@@ -524,6 +540,7 @@ export function joinCommandDevice(
         name: joining.name,
         platform: joining.platform,
         arch: joining.arch,
+        ...machineColumns(joining),
         ...joining.settings,
         now,
       }),

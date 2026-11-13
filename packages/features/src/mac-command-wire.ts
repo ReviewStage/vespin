@@ -1,5 +1,5 @@
 import { Effect, Schema as EffectSchema, Option } from "effect";
-import { DEVICE_ARCH, DEVICE_PLATFORM } from "./device-agent-wire.js";
+import { DEVICE_ARCH, DEVICE_PLATFORM, deviceMachineFields } from "./device-agent-wire.js";
 import { wireUuidSchema } from "./service-wire.js";
 
 /**
@@ -584,7 +584,9 @@ export type MacDeviceSettings = typeof macDeviceSettingsSchema.Type;
  * This Mac joining as the device its commands are claimed by (POST): the
  * id it keeps for the account, and its name, platform and architecture,
  * which create the device under the account where the account never had
- * the id, and its own settings as it holds them, which the service keeps
+ * the id, which machine it runs on as its host names one
+ * (`deviceMachineFields`), so two installs on one Mac can be told for one,
+ * and its own settings as it holds them, which the service keeps
  * only where it holds none for the device yet, so a machine carries them up
  * once and reads the service's from then on.
  */
@@ -593,6 +595,7 @@ export const macDeviceJoinRequestSchema = EffectSchema.Struct({
   name: EffectSchema.String.check(EffectSchema.isMinLength(1), EffectSchema.isMaxLength(200)),
   platform: EffectSchema.Literals(Object.values(DEVICE_PLATFORM)),
   arch: EffectSchema.Literals(Object.values(DEVICE_ARCH)),
+  ...deviceMachineFields,
   settings: macDeviceSettingsSchema,
 });
 

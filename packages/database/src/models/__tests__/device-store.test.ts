@@ -19,7 +19,7 @@ import {
   registerDevice,
   saveCommandDeviceSettings,
 } from "../device-store.js";
-import { enrollOwnDevice, hostsOf } from "../host-store.js";
+import { enrollOwnDevice, hostsOf, removeHost } from "../host-store.js";
 
 /**
  * An account's Macs, over a real dialect: a Mac is registered, beaten, and
@@ -107,6 +107,49 @@ it.layer(getTestDB())("the device store", (it) => {
         assert.equal(savedByOther, false);
         assert.equal(saved, true);
         assert.deepEqual(afterSave, Option.some(changed));
+      }),
+  );
+
+  it.effect(
+    "a Mac whose host was removed stands again as its app joins, records its machine, and is not listed as a host",
+    () =>
+      Effect.gen(function* () {
+        const { owner } = yield* openAccounts;
+        const id = randomUUID();
+        const machineId = "a".repeat(64);
+
+        yield* enrollOwnDevice(owner, {
+          id,
+          version: "0.2.1",
+          secretHash: `secret-${randomUUID()}`,
+          machine: { name: "Studio", platform: DEVICE_PLATFORM.DARWIN, arch: DEVICE_ARCH.ARM64 },
+        });
+        yield* removeHost(owner, id);
+
+        const joined = yield* joinCommandDevice(owner, {
+          deviceId: id,
+          name: "Studio",
+          platform: DEVICE_PLATFORM.DARWIN,
+          arch: DEVICE_ARCH.ARM64,
+          machineId,
+          model: "Mac mini (M4, 2024)",
+          settings: { commandMode: MAC_COMMAND_MODE.ASK, alwaysAllowedApps: [] },
+        });
+
+        const [row] = yield* Database.use((db) =>
+          db
+            .select({
+              removedAt: device.removedAt,
+              machineId: device.machineId,
+              model: device.model,
+            })
+            .from(device)
+            .where(eq(device.id, id)),
+        );
+
+        assert.ok(Option.isSome(joined));
+        assert.deepEqual(row, { removedAt: null, machineId, model: "Mac mini (M4, 2024)" });
+        assert.deepEqual(yield* hostsOf(owner), [], "a row with no secret is no host");
       }),
   );
 

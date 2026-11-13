@@ -1,5 +1,5 @@
 import { type HostedMacCommandClient, MAC_COMMAND_CALL_FAILURE } from "@repo/features";
-import type { DeviceArch, DevicePlatform } from "@repo/features/device-agent-wire";
+import type { DeviceArch, DeviceMachine, DevicePlatform } from "@repo/features/device-agent-wire";
 import {
   MAC_COMMANDS_READ,
   type MacCommandsLiveAnswer,
@@ -185,11 +185,13 @@ export type MacCommandClient = Pick<
 /** This Mac as a device of the accounts signed in on it: the ids it joins as, the machine it names itself as, and its own say over commands and apps. */
 export interface MacCommandsDevice extends ThisMacDevice {
   /** The machine as it names itself to the service. */
-  readonly machine: Effect.Effect<{
-    readonly name: string;
-    readonly platform: DevicePlatform;
-    readonly arch: DeviceArch;
-  }>;
+  readonly machine: Effect.Effect<
+    {
+      readonly name: string;
+      readonly platform: DevicePlatform;
+      readonly arch: DeviceArch;
+    } & DeviceMachine
+  >;
   /** This Mac's own say over commands and apps, as Settings holds it now. */
   readonly settings: Effect.Effect<MacDeviceSettings>;
   /** The service's say written over Settings, where it differs. */

@@ -185,7 +185,7 @@ function macCommandsDevice(
 
   return {
     ...ids,
-    machine: Effect.map(host.machine, ({ name, platform, arch }) => ({ name, platform, arch })),
+    machine: host.machine,
     settings: Effect.map(stored, (values) => ({
       commandMode: values.macCommands ?? APP_SETTING_SCHEMA.macCommands.default,
       alwaysAllowedApps: computerUseAppsOf(values.computerUseApps),
