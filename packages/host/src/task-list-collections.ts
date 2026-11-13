@@ -284,9 +284,24 @@ export function taskListCollections(
 
           if (planRows.length + agentRows.length === 0) return;
 
-          for (const row of [...planRows, ...agentRows]) coldDrawnBy.set(row.id, mark.asked);
-          coldPlanKeys = [...new Set([...coldPlanKeys, ...planRows.map((row) => row.id)])];
-          coldAgentKeys = [...new Set([...coldAgentKeys, ...agentRows.map((row) => row.id)])];
+          // Note that a task's snapshot answers every agent of it, so a cold agent of a task drawn here that it leaves out is gone, and marked so an earlier read draws it not back.
+          const tasksDrawn = new Set(planRows.map((row) => row.id));
+          const answered = new Set(agentRows.map((row) => row.id));
+          const inSnapshot = new Set(rows.agents.map((row) => row.id));
+
+          const omitted = coldAgentKeys.filter(
+            (id) => !inSnapshot.has(id) && tasksDrawn.has(coldAgents.row(id)?.planId ?? ""),
+          );
+
+          for (const id of [...tasksDrawn, ...answered, ...omitted]) {
+            coldDrawnBy.set(id, mark.asked);
+          }
+
+          const gone = new Set(omitted);
+          coldPlanKeys = [...new Set([...coldPlanKeys, ...tasksDrawn])];
+          coldAgentKeys = [...new Set([...coldAgentKeys, ...answered])].filter(
+            (id) => !gone.has(id),
+          );
           yield* coldPlans.answer(planRows, { held: coldPlanKeys });
           yield* coldAgents.answer(agentRows, { held: coldAgentKeys });
           yield* redraw();
