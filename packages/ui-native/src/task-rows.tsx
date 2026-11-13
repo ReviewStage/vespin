@@ -10,6 +10,7 @@ import {
   Text,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHint,
   accessibilityIdentifier,
@@ -37,11 +38,13 @@ import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dropLink } from "./interactions.js";
 import {
   actionButton,
+  ROW_PLACE,
   type RowAction,
   RowFrame,
   RowHead,
@@ -60,7 +63,7 @@ import {
 } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What parts the pieces of an agent's line. */
@@ -115,8 +118,27 @@ function LeadGlyph({
   return <Image {...glyphImage(symbol)} color={ink} modifiers={[font({ textStyle })]} />;
 }
 
-/** A row's 13 pt line under its title, set in to the title's words. */
+/**
+ * A row's 13 pt line under its title, set in to the title's words: its facts
+ * side by side, or at the accessibility sizes one under another, as Settings
+ * and Mail stack a row's details, since side by side each fact broke
+ * mid-word ("Work / ing", "#1 / 28").
+ */
 function RowLine({ children }: { readonly children: ReactNode }) {
+  const stacked = useAccessibilitySize();
+
+  if (stacked) {
+    return (
+      <VStack
+        alignment="leading"
+        spacing={2}
+        modifiers={[padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING })]}
+      >
+        {children}
+      </VStack>
+    );
+  }
+
   return (
     <HStack
       spacing={SPACE.TIGHT + 1}
@@ -277,6 +299,8 @@ export function AgentRow(props: AgentRowProps) {
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
+  // Note that the facts stand one to a line at the accessibility sizes (`RowLine`), where the needs-you count leads its own line with no separator.
+  const stacked = useAccessibilitySize();
 
   const row: ReactElement = (
     <VStack alignment="leading" spacing={2}>
@@ -299,7 +323,7 @@ export function AgentRow(props: AgentRowProps) {
                 foregroundStyle(colors.ACCENT_TEXT),
               ]}
             >
-              {`${told ? LINE_PART : ""}${needsYouWords(waiting)}`}
+              {`${told && !stacked ? LINE_PART : ""}${needsYouWords(waiting)}`}
             </Text>
           )}
         </RowLine>
@@ -452,20 +476,61 @@ type GroupRowProps = {
   readonly onDropLink?: ((url: string) => void) | undefined;
 };
 
-/** A place a wide window's sidebar picks, such as the Inbox, Tasks, or a section of tasks: its glyph, its name, and how many it holds. */
+/**
+ * A place a wide window's sidebar picks, such as the Inbox, Tasks, or a
+ * section of tasks, as Mail draws a mailbox: its glyph a step over its name
+ * in a column of its own, so every name starts at one edge, its name at the
+ * body's size, and how many it holds at the trailing edge in the muted ink,
+ * the whole row in a rounded fill while it is picked.
+ */
 export function GroupRow({ id, title, symbol, count, testId, onDropLink }: GroupRowProps) {
   const colors = useColors();
+  const stacked = useAccessibilitySize();
+  const leadWidth = useScaledSize(MARK_SIZE.SIDEBAR_LEAD);
 
+  const name = (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE }),
+        foregroundStyle(colors.TEXT),
+        lineLimit(stacked ? 2 : 1),
+      ]}
+    >
+      {title}
+    </Text>
+  );
+
+  const counted =
+    count === undefined ? null : (
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.SIDEBAR_COUNT }),
+          monospacedDigit(),
+          foregroundStyle(colors.TEXT_MUTED),
+          lineLimit(1),
+        ]}
+      >
+        {String(count)}
+      </Text>
+    );
+
+  // Note that at an accessibility size the count stands under the name rather than beside it, as the list's rows stack their end, so a long name keeps the row's width.
   const row: ReactElement = (
-    <RowHead
-      unread={false}
-      faded={false}
-      // Note that the glyph takes the title's size, as Mail's mailbox glyphs do, since a sidebar row is a place named by both.
-      lead={<LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.ROW_TITLE} />}
-      title={title}
-      ink={colors.TEXT_BODY}
-      end={count === undefined ? undefined : <EndWords words={String(count)} />}
-    />
+    <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
+      <HStack modifiers={[frame({ width: leadWidth })]}>
+        <LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.SIDEBAR_GLYPH} />
+      </HStack>
+      {stacked ? (
+        <VStack alignment="leading" spacing={2}>
+          {name}
+          {counted}
+        </VStack>
+      ) : (
+        name
+      )}
+      <Spacer />
+      {stacked ? null : counted}
+    </HStack>
   );
 
   const heard = { label: title, value: count === undefined ? [] : [String(count)] };
@@ -475,9 +540,14 @@ export function GroupRow({ id, title, symbol, count, testId, onDropLink }: Group
     ...(onDropLink === undefined ? [] : [dropLink(onDropLink)]),
   ];
 
-  if (modifiers.length === 0) return <RowFrame id={id} row={row} heard={heard} />;
-
-  return <RowFrame id={id} row={<HStack modifiers={modifiers}>{row}</HStack>} heard={heard} />;
+  return (
+    <RowFrame
+      id={id}
+      row={modifiers.length === 0 ? row : <HStack modifiers={modifiers}>{row}</HStack>}
+      heard={heard}
+      place={ROW_PLACE.SIDEBAR}
+    />
+  );
 }
 
 /** How many comment threads stand open on a block, and what opens them. */
@@ -517,7 +587,14 @@ function CommentCount({ comments }: { readonly comments: WordsComments }) {
       onPress={comments.onOpen}
       modifiers={[buttonStyle("borderless"), accessibilityLabel(comments.heard)]}
     >
-      <HStack spacing={SPACE.TIGHT}>
+      {/* Note that the count stands in Apple's least target, the shape on that frame rather than on the button, since a borderless button takes a press only where its label is hit. */}
+      <HStack
+        spacing={SPACE.TIGHT}
+        modifiers={[
+          frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
+      >
         <Image
           {...glyphImage(GLYPH.COMMENT)}
           size={MARK_SIZE.GLYPH - 2}

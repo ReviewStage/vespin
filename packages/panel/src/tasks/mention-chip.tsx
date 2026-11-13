@@ -208,10 +208,8 @@ export interface MentionDoors {
   readonly onOpenTask: (mention: DescriptionMention) => void;
   /** Shows a file's tab, at its lines where a mention names them; none where no file can be opened from here. */
   readonly onOpenFile: ((path: string, lines: OpenFileLines | undefined) => void) | undefined;
-  /** Shows the changes of one of an agent's turns, the turn the developer's line opened, standing on the file; none where no such tab opens from here. */
-  readonly onOpenTurnChanges?:
-    | ((agentId: string, messageId: string, path: string) => void)
-    | undefined;
+  /** Shows the changes of one of an agent's turns, the turn the developer's line opened; none where no such tab opens from here. */
+  readonly onOpenTurnChanges?: ((agentId: string, messageId: string) => void) | undefined;
   /** Opens an agent's chip somewhere other than its tab's top, as a memory's opens its transcript at the line that kept it; none opens its tab as its link does. */
   readonly onOpenAgent?: ((agentId: string) => void) | undefined;
   /** One of the plan's agents as its chip wears it, none for an agent not of the plan; the door is none where the place knows the plan's agents not. */

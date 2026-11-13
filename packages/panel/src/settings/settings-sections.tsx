@@ -1,7 +1,6 @@
 import { MACHINES_WORDS } from "@repo/features/machines-settings-words";
 import { SKILLS_LINE, workspaceGroupTitle } from "@repo/features/skills-settings-words";
 import type { Workspace } from "@repo/features/workspace-wire";
-import { EXPERIMENT, experimentOn } from "@repo/settings";
 import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import { SETTINGS_SECTION, SETTINGS_VIEW, type SettingsView } from "@repo/settings/settings-views";
 import {
@@ -228,8 +227,7 @@ const SETTINGS_SECTIONS = {
     page: SETTINGS_VIEW.ENVIRONMENT,
     head: "Run actions",
     words: `run action command run menu run button terminal ${CLOUD_WORDS}`,
-    drawn: (input) =>
-      workspaceShown(input) && experimentOn(input.settings.experiments, EXPERIMENT.RUN_ACTIONS),
+    drawn: workspaceShown,
   },
   [SECTION.NEW_AGENTS]: {
     found: SECTION_FOUND.ROWS,

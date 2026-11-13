@@ -71,6 +71,7 @@ import {
   type AgentRowState,
   askForName,
   BAR_TITLE,
+  type BarAction,
   type BarMenu,
   ConfirmAsk,
   EmptyState,
@@ -83,6 +84,7 @@ import {
   LinkRow,
   type ListLook,
   ListSection,
+  menuWithout,
   PATH_PART,
   RelationRow,
   ROW_ACTION_TONE,
@@ -1035,6 +1037,43 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   };
 }
 
+/**
+ * A task's main acts as a wide window's detail bar stands them, as Mail's
+ * stands Reply: New agent and New sub-task, each its glyph; the rest stay in
+ * ⋯ (`menuWithout`), and its status is the page's chip. With no task picked
+ * they stand dimmed rather than gone, as Mail's bar does over No Message
+ * Selected.
+ */
+function taskActs(
+  task: TaskSummary | undefined,
+  doors: {
+    readonly newAgent: (task: TaskSummary) => void;
+    readonly newSubTask: (task: TaskSummary) => void;
+  },
+): readonly BarAction[] {
+  return [
+    {
+      label: WORDS.NEW_AGENT,
+      symbol: GLYPH.AGENT,
+      disabled: task === undefined,
+      onPress: () => (task === undefined ? undefined : doors.newAgent(task)),
+    },
+    {
+      label: WORDS.NEW_SUB_TASK,
+      symbol: GLYPH.SUB_TASK,
+      disabled: task === undefined,
+      onPress: () => (task === undefined ? undefined : doors.newSubTask(task)),
+    },
+  ];
+}
+
+/** Opens New agent on a task, as its Agents header's + does. */
+function useNewAgent(): (task: TaskSummary) => void {
+  const router = useRouter();
+
+  return (task) => router.push({ pathname: "/start-agent", params: { task: task.id } });
+}
+
 /** Opens a task's version history where its workspace's descriptions stand on, as the panel's Version history opens it; none where they stand off. */
 function useHistoryDoor(
   workspaceId: string | undefined,
@@ -1826,6 +1865,7 @@ function TasksSplitScreen({
 }) {
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const newSubTask = useNewSubTask();
+  const newAgent = useNewAgent();
   const openRelation = useOpenRelation();
   const moveDoor = useMoveTaskDoor();
   const found = useFoundTask(selected, undefined);
@@ -1878,17 +1918,23 @@ function TasksSplitScreen({
       <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
     );
 
+  const acts = taskActs(overview?.task, { newAgent, newSubTask });
+
   const detailBar =
     overview === undefined
-      ? undefined
+      ? { acts }
       : {
-          menu: taskMenu(overview, {
-            askDelete: listing.askDelete,
-            newSubTask,
-            history,
-            openRelation,
-            moveDoor,
-          }),
+          acts,
+          menu: menuWithout(
+            taskMenu(overview, {
+              askDelete: listing.askDelete,
+              newSubTask,
+              history,
+              openRelation,
+              moveDoor,
+            }),
+            acts,
+          ),
           path: {
             path: taskPath(overview.task, overview.workspace),
             status: overview.task.status,

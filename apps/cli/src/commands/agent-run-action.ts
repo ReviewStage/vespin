@@ -3,8 +3,7 @@
  *
  * A door over the hosted procedures the Run menu calls (`agents.runAction`
  * and `agents.stopRunAction`), which hold every rule of who may and when:
- * run actions are behind the workspace's Run actions experiment, only a
- * cloud agent with a repository has them, and a stopped sandbox is refused,
+ * only a cloud agent with a repository has run actions, and a stopped sandbox is refused,
  * never woken (`vespin agent wake` wakes it). The action is named by its id,
  * as `vespin setup actions` lists it.
  */

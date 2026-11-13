@@ -10,5 +10,46 @@
     "tests/**/*.ts",
     "scripts/**/*.ts",
     "vite.config.ts"
+  ],
+  "references": [
+    {
+      "path": "../../packages/agent-runner"
+    },
+    {
+      "path": "../../packages/brand"
+    },
+    {
+      "path": "../../packages/credentials"
+    },
+    {
+      "path": "../../packages/database"
+    },
+    {
+      "path": "../../packages/features"
+    },
+    {
+      "path": "../../packages/host"
+    },
+    {
+      "path": "../../packages/panel"
+    },
+    {
+      "path": "../../packages/runtime"
+    },
+    {
+      "path": "../../packages/sandbox"
+    },
+    {
+      "path": "../../packages/service"
+    },
+    {
+      "path": "../../packages/settings"
+    },
+    {
+      "path": "../../packages/ui"
+    },
+    {
+      "path": "../../packages/wire"
+    }
   ]
 }
