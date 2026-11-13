@@ -4,9 +4,13 @@ import { useColorScheme } from "react-native";
 import { useIncreaseContrast } from "../accessibility.js";
 import { BRAND_COLOR } from "./brand-colors.js";
 
-/** One theme's colors, by the role each names, and the selected row's fill (`SELECTED`). */
+/**
+ * One theme's colors, by the role each names, and the roles derived from
+ * them: the selected row's fill (`SELECTED`), and a grouped form's ground
+ * (`GROUPED`) and the raised fill its rows stand in (`RAISED`).
+ */
 export type BrandColors = {
-  readonly [Role in keyof typeof BRAND_COLOR.LIGHT | "SELECTED"]: string;
+  readonly [Role in keyof typeof BRAND_COLOR.LIGHT | "SELECTED" | "GROUPED" | "RAISED"]: string;
 };
 
 /**
@@ -59,17 +63,25 @@ function strongerContrast(colors: BrandColors): BrandColors {
 }
 
 /**
- * A theme with the roles derived from the brand's own: a selected row's fill
+ * A theme with the roles derived from the brand's own. A selected row's fill
  * is the hairline's color, which Increase Contrast leaves as it is, since it
  * stands under words that must keep 4.5:1 rather than the 3:1 of a boundary.
+ * A grouped form's rows stand in the panel's raised fill (`OVERLAY`, its
+ * menus' and popovers') on `grouped`, so they read as cards, as iOS
+ * Settings' do: white on the light theme's soft gray, and a lifted gray on
+ * the dark theme's black.
  */
-function theme(colors: (typeof BRAND_COLOR)[keyof typeof BRAND_COLOR]): BrandColors {
-  return { ...colors, SELECTED: colors.CHIP_EDGE };
+function theme(
+  colors: (typeof BRAND_COLOR)[keyof typeof BRAND_COLOR],
+  grouped: string,
+): BrandColors {
+  return { ...colors, SELECTED: colors.CHIP_EDGE, GROUPED: grouped, RAISED: colors.OVERLAY };
 }
 
+// Note that the light theme's form ground is the chip's hover gray rather than the sidebar's, because the sidebar's #fafafa sits too near the cards' white to tell them apart.
 const THEME = {
-  LIGHT: theme(BRAND_COLOR.LIGHT),
-  DARK: theme(BRAND_COLOR.DARK),
+  LIGHT: theme(BRAND_COLOR.LIGHT, BRAND_COLOR.LIGHT.CHIP_HOVER),
+  DARK: theme(BRAND_COLOR.DARK, BRAND_COLOR.DARK.SIDEBAR),
 } as const;
 
 const STRONGER = {

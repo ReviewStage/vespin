@@ -103,15 +103,18 @@ const MOTION_PANE = "cubic-bezier(0.2, 0, 0, 1)";
 // reads too; this script writes them onto @repo/ui's roles and as values.
 
 // The roles the iOS app draws with: the accent, the grounds a screen, a list,
-// and a sidebar stand on, the inks, and the status inks. The rest (a chip's
-// hover, a focus ring) are the desktop's and the site's, which SwiftUI's own
-// control states stand in for on iOS.
+// and a sidebar stand on, the raised fill a grouped form's rows stand in
+// (OVERLAY) and the light ground under them (CHIP_HOVER), the inks, and the
+// status inks. The rest (a focus ring, a chip's selection) are the desktop's
+// and the site's, which SwiftUI's own control states stand in for on iOS.
 const NATIVE_ROLES = [
   "ACCENT",
   "ON_ACCENT",
   "ACCENT_TEXT",
   "GROUND",
   "SURFACE",
+  "OVERLAY",
+  "CHIP_HOVER",
   "SIDEBAR",
   "SIDEBAR_INK",
   "WELL",

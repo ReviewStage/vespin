@@ -191,7 +191,7 @@ function SwitcherRow({
         buttonStyle("plain"),
         accessibilityLabel(rowHeard(name, line)),
         ...(checked ? [accessibilityAddTraits(["isSelected"])] : []),
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
       ]}
     >
       <HStack
@@ -416,7 +416,7 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
           modifiers={[
             presentationDetents(["medium", "large"]),
             presentationDragIndicator("visible"),
-            presentationBackground(colors.SIDEBAR),
+            presentationBackground(colors.GROUPED),
           ]}
         >
           <SwitcherList props={props} closed={closed} />
@@ -436,7 +436,7 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
               height: Math.min(measured ?? popoverHeight(props), POPOVER_TALLEST),
             }),
             // Note that the popover stands on the list's own ground, its arrow and rim too, rather than the system's glass around a solid list.
-            presentationBackground(colors.SIDEBAR),
+            presentationBackground(colors.GROUPED),
             onDisappear(gone),
           ]}
         >
