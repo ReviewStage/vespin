@@ -230,17 +230,30 @@ onFlowComplete:
 - scrollUntilVisible:
     element: "Goal"
     direction: DOWN
-# Its ⋯ sets its status, which its chip says at once.
-- tapOn: "More"
+# Its status chip opens the menu of statuses, the one it stands at checked,
+# and a pick says at once on the chip. Its priority and assignee chips open
+# theirs the same way; a tap off a menu closes it.
+- scrollUntilVisible:
+    element: "Created by .*"
+    direction: UP
 - tapOn: "Status"
 - takeScreenshot: task-status-menu
 - tapOn: "Todo"
 - waitForAnimationToEnd
-- scrollUntilVisible:
-    element: "Created by .*"
-    direction: UP
 - assertVisible: "Todo"
 - takeScreenshot: task-status-set
+- tapOn: "Priority"
+- assertVisible: "Urgent"
+- takeScreenshot: task-priority-menu
+- tapOn:
+    point: "50%, 90%"
+- waitForAnimationToEnd
+- tapOn: "Assignee"
+- assertVisible: "No assignee"
+- takeScreenshot: task-assignee-menu
+- tapOn:
+    point: "50%, 90%"
+- waitForAnimationToEnd
 # Its ⋯ holds the panel's acts: Copy link, Rename, New sub-task, Open in
 # browser, and Permanently delete, red and last, which asks first.
 - tapOn: "More"

@@ -44,6 +44,7 @@
     "./skill-install-model": "./src/skill-install-model.js",
     "./memory-settings-words": "./src/memory-settings-words.js",
     "./member-mcp-tool": "./src/member-mcp-tool.js",
+    "./member-order": "./src/member-order.js",
     "./memory-wire": "./src/memory-wire.js",
     "./model-effort": "./src/model-effort.js",
     "./reply-button-wire": "./src/reply-button-wire.js",

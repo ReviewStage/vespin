@@ -47,6 +47,7 @@ import {
   type TaskTreeGroup,
 } from "@repo/features/task-tree-model";
 import {
+  TASK_PRIORITY_ORDER,
   TASK_RELATION_KIND,
   TASK_STATUS,
   type TaskRelationKind,
@@ -87,6 +88,7 @@ import {
   Screen,
   SplitView,
   STATUS_MARK_SYMBOL,
+  type StandingMenus,
   shareLink,
   type TaskFold,
   TaskHead,
@@ -102,7 +104,7 @@ import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
-import { useMemberPictures } from "../member-pictures.js";
+import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useRefilledSearchField } from "../search-field.js";
 import { SettingsBarButton } from "../settings-button.js";
@@ -172,6 +174,8 @@ const WORDS = {
   SUB_TASKS: "Sub-tasks",
   TASK_RELATIONS: "Task relations",
   STATUS: "Status",
+  PRIORITY: "Priority",
+  ASSIGNEE: "Assignee",
   MORE: { label: "More", symbol: GLYPH.MORE },
   COPY_LINK: "Copy link",
   RENAME: "Rename",
@@ -187,7 +191,7 @@ const WORDS = {
   ARCHIVE: "Archive",
 } as const;
 
-/** The statuses the ⋯ menu's Status offers, in the panel's order. */
+/** The statuses a row's Status and the page's status chip offer, in the panel's order. */
 const STATUS_ORDER: readonly TaskStatus[] = [
   TASK_STATUS.BACKLOG,
   TASK_STATUS.TODO,
@@ -395,7 +399,8 @@ type RowActsResult = {
  * parent, where it has one, and the panel's order: Copy link, which raises the share sheet, Rename, in
  * the system's name alert, Mark as read or unread, whichever the task is
  * not, Open in browser, and Permanently delete last, which asks first.
- * Priority and assignee are left to the desktop and the web.
+ * Priority and assignee are set from the chips on the task's page
+ * (`standingMenus`).
  */
 function rowActs(
   task: TaskSummary,
@@ -860,8 +865,8 @@ function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
  * history where the workspace's descriptions stand on, New sub-task, Move
  * to workspace where the reader may move it, Remove parent where it has
  * one, Open in browser, and Permanently delete, red, which asks first; then
- * its Status, each status checked where it stands, Task relation, Move to
- * section, and its repository.
+ * Task relation, Move to section, and its repository. Its status is the
+ * page's status chip's menu (`standingMenus`), so ⋯ holds no Status.
  */
 function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
   const { task } = overview;
@@ -906,12 +911,9 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
       },
     ],
     submenus: [
-      { ...statusSubmenu(task, overview.setStatus), actions: [] },
-      ...[
-        relationSubmenu(task, doors.openRelation),
-        ...placingSubmenus(task, overview.placing),
-      ].map(barSubmenu),
-    ],
+      relationSubmenu(task, doors.openRelation),
+      ...placingSubmenus(task, overview.placing),
+    ].map(barSubmenu),
   };
 }
 
@@ -945,11 +947,52 @@ function agentState(status: AgentStatus): AgentRowState {
   return status === AGENT_STATUS.FAILED ? AGENT_ROW_STATE.FAILED : AGENT_ROW_STATE.REST;
 }
 
-/** The task's head: its name, its chips, who follows it, and who created it and when. */
+/**
+ * What a press on each of a task's chips offers, as the panel's chips drop
+ * theirs (`task-standing.tsx`): its status, each of the five by its mark,
+ * asking first where Done or Canceled stops its agents; its priority, the
+ * most pressing first; and its assignee, the workspace's members, the reader
+ * first, then No assignee; each with the one it holds checked.
+ */
+function standingMenus(overview: TaskOverview, members: readonly ListedMember[]): StandingMenus {
+  const { task } = overview;
+  const assigneeId = task.assignee?.userId;
+
+  return {
+    status: { label: WORDS.STATUS, choices: statusSubmenu(task, overview.setStatus).choices },
+    priority: {
+      label: WORDS.PRIORITY,
+      choices: TASK_PRIORITY_ORDER.map((priority) => ({
+        label: TASK_PRIORITY_WORDS[priority],
+        on: task.priority === priority,
+        onPress: () => overview.setPriority(task.id, priority),
+      })),
+    },
+    assignee: {
+      label: WORDS.ASSIGNEE,
+      choices: [
+        ...members.map((member) => ({
+          label: member.name,
+          on: member.userId === assigneeId,
+          onPress: () => overview.setAssignee(task.id, member),
+        })),
+        {
+          label: NO_ASSIGNEE_WORDS,
+          symbol: GLYPH.UNASSIGNED,
+          on: assigneeId === undefined,
+          onPress: () => overview.setAssignee(task.id, null),
+        },
+      ],
+    },
+  };
+}
+
+/** The task's head: its name, its chips, each opening its menu, who follows it, and who created it and when. */
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const { task } = overview;
   const pictureOf = useMemberPictures();
   const following = useFollowingChip(task.id);
+  const members = useListedMembers(task.workspaceId);
 
   return (
     <TaskHead
@@ -966,6 +1009,7 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
             }
       }
       following={following}
+      menus={standingMenus(overview, members)}
       createdBy={
         task.createdBy === undefined
           ? undefined

@@ -197,7 +197,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   segments' words short, the system's menu picker naming the scope chosen
   (`SCOPE_LOOK.MENU`). `Chip` is a capsule an act or a choice stands in, such as a
   pull request card's acts; `FieldChip` and `StatusChip` read a task's
-  status, priority and assignee. Each stands
+  status, priority and assignee, and where handed a `FieldMenu`, open the
+  system's pull-down menu of the field's values, as Reminders' fields do. Each stands
   on `SURFACE` inside a hairline.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
   rows, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,

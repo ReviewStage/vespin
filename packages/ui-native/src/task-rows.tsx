@@ -57,7 +57,7 @@ import {
   ToneGlyph,
   WorkingMark,
 } from "./marks.js";
-import { type PageFollowing, PageHeader } from "./page-header.js";
+import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -137,16 +137,19 @@ type TaskHeadProps = {
   readonly createdBy?: string | undefined;
   /** Who follows it, as a chip under its fields; none while its workspace has Following off. */
   readonly following?: PageFollowing | undefined;
+  /** What a press on each of its chips offers, where the reader may change that field. */
+  readonly menus?: StandingMenus | undefined;
 };
 
 /**
  * A task's head as the first row of its page: its name as the page's
- * heading, its status, priority and assignee as small chips, who follows
+ * heading, its status, priority and assignee as small chips, each opening
+ * the menu of its field's values where it carries one, who follows
  * it as a chip that opens them, and who created it. Its path stands in the
  * bar above.
  */
 export function TaskHead(props: TaskHeadProps) {
-  const { name, status, priority, assignee, createdBy, following } = props;
+  const { name, status, priority, assignee, createdBy, following, menus } = props;
 
   return (
     <VStack
@@ -165,6 +168,7 @@ export function TaskHead(props: TaskHeadProps) {
         assignee={assignee}
         following={following}
         summary={createdBy}
+        menus={menus}
       />
     </VStack>
   );

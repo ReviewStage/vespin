@@ -253,6 +253,12 @@ export const RENAME_FAILED_NOTE = "The task could not be renamed. Try again.";
 /** What a task's delete says, where it was asked, when the service refused it. */
 export const DELETE_FAILED_NOTE = "The task could not be deleted. Try again.";
 
+/** What a task's priority chip says, where it was changed, when the service refused the change. */
+export const PRIORITY_FAILED_NOTE = "The priority could not be changed. Try again.";
+
+/** What a task's assignee chip says, where it was changed, when the service refused the change. */
+export const ASSIGNEE_FAILED_NOTE = "The task could not be assigned. Try again.";
+
 /** Names drawn over the ones a view carries, by task id: a name being typed. */
 export type TaskNames = ReadonlyMap<string, string>;
 
