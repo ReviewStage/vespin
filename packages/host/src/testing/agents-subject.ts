@@ -1426,6 +1426,7 @@ export function subject(
       acts: { ...composer.acts, ...accountAsks.acts },
       /** The composer's row writes that may wait, as a relaunch lays its queue back by. */
       queueable: composer.queueable,
+      refused: composer.refused,
       transcripts,
       /** Each of `transcript`'s rows the host laid, in order. */
       held: (transcript?: { readonly agentId: string; readonly callId?: string }) =>

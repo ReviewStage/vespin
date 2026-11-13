@@ -598,11 +598,14 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         accountId: signedInId,
         queued: pool.queued,
         queueMoves: pool.queueMoves,
+        refused: agents.refused.kept,
+        refusedMoves: agents.refused.moves,
       }).pipe(Scope.provide(scope), Effect.provideContext(fileSystemContext));
 
       entities = { store, scope };
-      // Note that the writes kept waiting are laid back before any read draws, so the first answer draws under them.
+      // Note that the writes kept waiting, and the messages refused, are laid back before any read draws, so the first answer draws under them.
       yield* pool.requeue(store.queue, [...tasks.queueable, ...agents.queueable]);
+      yield* agents.refused.restored(signedInId, store.refused);
     });
 
     /** The store forgotten, its file deleted, as a sign-out does; a file no store stands over is deleted too. */
@@ -610,6 +613,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
       const standing = entities;
       entities = undefined;
       yield* pool.letGoQueued;
+      yield* agents.refused.forgotten;
       offlineRefused.clear();
 
       if (standing !== undefined) {

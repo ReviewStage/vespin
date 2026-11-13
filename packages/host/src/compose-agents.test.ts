@@ -979,6 +979,33 @@ it.effect(
 );
 
 it.effect(
+  "a message the service refused is drawn where it went again after a relaunch, from what the account's store kept, its key the one it went under",
+  () =>
+    Effect.gen(function* () {
+      const before = yield* queueFollowed();
+      before.answerMessage({ failure: AGENT_CALL_FAILURE.UNANSWERED });
+      yield* before.acts.AGENTS_MESSAGE(SENT);
+      yield* settled;
+      // Note that what the store keeps goes through JSON, as the sealed file does.
+      const kept = JSON.parse(JSON.stringify(before.refused.kept()));
+
+      const after = yield* queueFollowed();
+      yield* after.refused.restored("user-dana", kept);
+      yield* settled;
+
+      const drawn = after.held().at(-1)?.sending ?? [];
+      assert.deepEqual(
+        drawn.map(({ text, clientKey, refused }) => ({
+          text,
+          clientKey,
+          failure: refused?.failure,
+        })),
+        [{ text: SENT.text, clientKey: SENT.clientKey, failure: AGENT_CALL_FAILURE.UNANSWERED }],
+      );
+    }),
+);
+
+it.effect(
   "a message one account sent, on its way or refused, is never drawn for another account signed in to the same host",
   () =>
     Effect.gen(function* () {

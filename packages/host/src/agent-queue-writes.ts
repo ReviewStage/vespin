@@ -10,6 +10,7 @@ import {
   type AgentQueueParams,
   type AgentRewindParams,
   type AgentUnsendParams,
+  agentAgentAnswerSchema,
   type SendingMessage,
 } from "@repo/features/agent-view";
 import {
@@ -24,7 +25,17 @@ import {
 import type { EntityPool, Refused, RowKind, WriteDeclaration, Written } from "@repo/sync";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
-import { Effect, Equal, MutableHashMap, Option, type Scope } from "effect";
+import {
+  Effect,
+  Equal,
+  MutableHashMap,
+  Option,
+  PubSub,
+  Result,
+  Schema,
+  type Scope,
+  Stream,
+} from "effect";
 import type { AppTranscript } from "./app-state.js";
 import { type CarriedWaits, carriedWaits, type HeldAnswers } from "./live-collection.js";
 import type { HeldTranscript } from "./transcript-follow.js";
@@ -68,7 +79,14 @@ import type { HeldTranscript } from "./transcript-follow.js";
  * Note that the refusals are kept by the account that sent them, and drawn
  * only while that account is signed in, because a host one member signs out
  * of may next be signed in to by another, who may reach the same agent but
- * never another member's words that did not go.
+ * never another member's words that did not go. The signed-in account's are
+ * also kept on disk, sealed, beside the writes waiting for the service
+ * (`entity-store.ts`), so a relaunch draws them where they went: all of each
+ * but its files' bytes, which stay with the window that attached them, and
+ * the facts of its failure, which no window draws. A message read back so
+ * whose row the transcript holds went after all, so it is let go; one refused
+ * since the host started is not, because its row may still be on its way out.
+ * A sign-out lets every refusal go with the file.
  */
 
 /** Where an agent's messages on their way stand: its queue and the messages sending. */
@@ -446,6 +464,14 @@ export interface AgentQueues {
   ) => WriteDeclaration<OutboxRow, OutboxChange, MessageWrite, AgentAgentAnswer>;
   /** A message the service refused let go, its line drawn no more. */
   readonly unsend: (params: AgentUnsendParams) => Effect.Effect<void>;
+  /** The messages the service refused that the account signed in now sent, as the sealed store keeps them (`entity-store.ts`). */
+  readonly refusedKept: () => readonly unknown[];
+  /** Each moving of the messages refused, which has the store keep them again. */
+  readonly refusedMoves: Stream.Stream<void>;
+  /** The messages refused that `account` sent, as the store kept them, laid back as a launch opens it, beside any refused since. */
+  readonly refusedRestored: (account: string, kept: readonly unknown[]) => Effect.Effect<void>;
+  /** Every message refused let go, as a sign-out lets the store's file go. */
+  readonly refusedForgotten: Effect.Effect<void>;
   /** A write of the agent's that draws nothing but goes after every write asked of it before, as a suggestion sent to it from a reply does. */
   readonly inTurn: <Input extends { readonly agentId: string }, Answer extends object>(
     send: (input: Input) => Effect.Effect<Answer>,
@@ -454,6 +480,60 @@ export interface AgentQueues {
   readonly rewind: (
     sends: OutboxSends,
   ) => WriteDeclaration<OutboxRow, OutboxChange, AgentRewindParams, AgentAgentAnswer>;
+}
+
+/** A refused message as the sealed store keeps it: all of it but its files' bytes and its sender, who is the store's account, and the facts of its failure. */
+const keptRefusedSchema = Schema.Struct({
+  agentId: Schema.String,
+  id: Schema.String,
+  clientKey: Schema.String,
+  text: Schema.String,
+  files: Schema.optionalKey(
+    Schema.Array(Schema.Struct({ name: Schema.String, mediaType: Schema.String })),
+  ),
+  sentAt: Schema.Number,
+  steers: Schema.Boolean,
+  rewinds: Schema.optionalKey(Schema.String),
+  restoresFiles: Schema.optionalKey(Schema.Boolean),
+  taskId: Schema.optionalKey(Schema.String),
+  refused: agentAgentAnswerSchema,
+});
+
+type KeptRefused = typeof keptRefusedSchema.Type;
+
+const decodeKeptRefused = Schema.decodeUnknownResult(keptRefusedSchema);
+const encodeKeptRefused = Schema.encodeSync(keptRefusedSchema);
+
+/** A refused message of the agent's as the store keeps it. */
+function keptOf(
+  agentId: string,
+  message: SendingMessage,
+  refused: AgentMessageRefusal,
+): KeptRefused {
+  const { cause: _cause, ...why } = refused;
+
+  return {
+    agentId,
+    id: message.id,
+    clientKey: message.clientKey,
+    text: message.text,
+    ...(message.files === undefined
+      ? undefined
+      : { files: message.files.map(({ name, mediaType }) => ({ name, mediaType })) }),
+    sentAt: message.sentAt,
+    steers: message.steers,
+    ...(message.rewinds === undefined ? undefined : { rewinds: message.rewinds }),
+    ...(message.restoresFiles === undefined ? undefined : { restoresFiles: message.restoresFiles }),
+    ...(message.taskId === undefined ? undefined : { taskId: message.taskId }),
+    refused: why,
+  };
+}
+
+/** The refused message the store kept, sent by `sentBy`, by its agent; none where what it kept is no refusal. */
+function refusedOfKept(kept: KeptRefused, sentBy: string): [string, SendingMessage] | undefined {
+  const { agentId, refused, ...message } = kept;
+
+  return "failure" in refused ? [agentId, { ...message, sentBy, refused }] : undefined;
 }
 
 /** Leaves the outbox as it is: a write that draws nothing but goes in turn. */
@@ -465,419 +545,523 @@ export function agentQueues(
   accountId: () => string | undefined,
   agentListed: (agentId: string) => AgentSummary | undefined = () => undefined,
 ): Effect.Effect<AgentQueues, never, Scope.Scope> {
-  return Effect.sync(() => {
-    /** Each followed agent's waits on what its pages carry, while its follow stands. */
-    const standing = MutableHashMap.empty<string, Standing>();
-    /** Whether each followed agent's first launch holds its lines while its machine boots, as its newest page said. */
-    const booting = MutableHashMap.empty<string, boolean>();
-    /** The id the service stored each message sent while a machine booted under, by its send key, as its answers and pages said. */
-    const stored = MutableHashMap.empty<string, string>();
+  return Effect.flatMap(PubSub.unbounded<void>(), (moves) =>
+    Effect.sync(() => {
+      /** Each followed agent's waits on what its pages carry, while its follow stands. */
+      const standing = MutableHashMap.empty<string, Standing>();
+      /** Whether each followed agent's first launch holds its lines while its machine boots, as its newest page said. */
+      const booting = MutableHashMap.empty<string, boolean>();
+      /** The id the service stored each message sent while a machine booted under, by its send key, as its answers and pages said. */
+      const stored = MutableHashMap.empty<string, string>();
 
-    /** Notes the ids a queue the service said stores its boot-held messages under. */
-    const storedIn = (queue: AgentQueue) => {
-      for (const { id, sendKey } of queue.messages) {
-        if (sendKey !== undefined && sendKey !== id) MutableHashMap.set(stored, sendKey, id);
-      }
-    };
-
-    /** The id the service stores the message `id` names under; `id` itself where it said no other. */
-    const storedId = (id: string) => Option.getOrElse(MutableHashMap.get(stored, id), () => id);
-
-    /**
-     * Whether the agent's first launch holds the lines sent to it now, so the
-     * service queues them: as its newest page said, or, before any page
-     * said, as the task list shows an agent just made, starting with no turn
-     * yet, whose first launch boots.
-     */
-    const holdsLines = (agentId: string) =>
-      Option.getOrElse(MutableHashMap.get(booting, agentId), () => {
-        const listed = agentListed(agentId);
-
-        return listed?.status === AGENT_STATUS.STARTING && listed.turnId === null;
-      });
-    /** The messages the service refused, by the account that sent them and then the agent's id, in the order sent, kept for as long as the host runs. */
-
-    const refused = MutableHashMap.empty<
-      string,
-      MutableHashMap.MutableHashMap<string, readonly SendingMessage[]>
-    >();
-
-    /** The refusals of `account`'s, by the agent's id; none for no account. */
-    const refusedBy = (account: string | undefined) =>
-      account === undefined
-        ? undefined
-        : Option.getOrUndefined(MutableHashMap.get(refused, account));
-
-    /** The agent's refused messages the account signed in now sent; none while nobody is signed in. */
-    const refusedOf = (agentId: string): readonly SendingMessage[] =>
-      Option.getOrElse(
-        Option.flatMap(Option.fromUndefinedOr(refusedBy(accountId())), (byAgent) =>
-          MutableHashMap.get(byAgent, agentId),
-        ),
-        () => [],
-      );
-
-    /**
-     * The agent's refused messages of `account`'s as `change` leaves them, its
-     * transcript drawn again where a follow stands for it. Note that the
-     * account is the one that sent the message, read as it was sent, so a
-     * refusal landing after a sign-out is kept for its sender alone.
-     */
-    const refusedChanged = (
-      account: string | undefined,
-      agentId: string,
-      change: (was: readonly SendingMessage[]) => readonly SendingMessage[],
-    ) =>
-      Effect.suspend(() => {
-        if (account === undefined) return Effect.void;
-
-        const byAgent =
-          refusedBy(account) ?? MutableHashMap.empty<string, readonly SendingMessage[]>();
-
-        MutableHashMap.set(refused, account, byAgent);
-        const now = change(Option.getOrElse(MutableHashMap.get(byAgent, agentId), () => []));
-
-        if (now.length === 0) MutableHashMap.remove(byAgent, agentId);
-        else MutableHashMap.set(byAgent, agentId, now);
-
-        return Option.match(MutableHashMap.get(standing, agentId), {
-          onNone: () => Effect.void,
-          onSome: (waits) => waits.redraw,
-        });
-      });
-
-    /** The agent's refused messages without the one drawn under `id`. */
-    const without = (id: string) => (was: readonly SendingMessage[]) =>
-      was.filter((message) => message.id !== id);
-
-    const stand = (agentId: string, waits: Standing) =>
-      Effect.acquireRelease(
-        Effect.sync(() => MutableHashMap.set(standing, agentId, waits)),
-        () =>
-          Effect.sync(() => {
-            if (Option.getOrUndefined(MutableHashMap.get(standing, agentId)) === waits) {
-              MutableHashMap.remove(standing, agentId);
-            }
-          }),
-      );
-
-    const held = (agentId: string, answers: HeldAnswers<AppTranscript>) =>
-      Effect.gen(function* () {
-        const redraw = Effect.sync(() => {
-          const rows = answers.rows();
-
-          if (rows !== undefined) {
-            answers.answered(laid(rows, outboxes.row(agentId), refusedOf(agentId), accountId()));
-          }
-        });
-
-        // Note that no write of the row answers a transaction, so the read hands no wait and each write waits on its rows (`carried`).
-        const outboxes = yield* pool.stand(AGENT_OUTBOX, {
-          redraw: () => redraw,
-          confirmation: () => undefined,
-        });
-
-        const waits: Standing = {
-          queue: yield* carriedWaits(() => outboxes.synced()),
-          lines: yield* carriedWaits(() => answers.rows()?.messages ?? []),
-          redraw,
-        };
-
-        yield* stand(agentId, waits);
-
-        /** A page's queue taken as the agent's, at its revision, and every change it carries let stand down. */
-        const taken = (queue: AgentQueue) =>
-          Effect.andThen(
-            Effect.sync(() => storedIn(queue)),
-            Effect.andThen(
-              outboxes.answer([{ agentId, queue, sending: [] }], { at: BigInt(queue.revision) }),
-              waits.queue.answered,
-            ),
-          );
-
-        // Note that a transcript held again takes the queue and the boot it was left with, so a change still standing is drawn over it before the next page lands.
-        const keptWord = answers.rows()?.word;
-
-        if (keptWord !== undefined) {
-          MutableHashMap.set(booting, agentId, bootHolds(keptWord.boot?.phase));
+      /** Notes the ids a queue the service said stores its boot-held messages under. */
+      const storedIn = (queue: AgentQueue) => {
+        for (const { id, sendKey } of queue.messages) {
+          if (sendKey !== undefined && sendKey !== id) MutableHashMap.set(stored, sendKey, id);
         }
+      };
 
-        const kept = keptWord?.queue;
+      /** The id the service stores the message `id` names under; `id` itself where it said no other. */
+      const storedId = (id: string) => Option.getOrElse(MutableHashMap.get(stored, id), () => id);
 
-        if (kept !== undefined) yield* Effect.andThen(taken(kept), redraw);
-        // Note that a transcript let go is left as the service last said it, so a write taken back once no window follows it is drawn there no more.
-        yield* Effect.addFinalizer(() =>
-          Effect.sync(() => {
-            const rows = answers.rows();
+      /**
+       * Whether the agent's first launch holds the lines sent to it now, so the
+       * service queues them: as its newest page said, or, before any page
+       * said, as the task list shows an agent just made, starting with no turn
+       * yet, whose first launch boots.
+       */
+      const holdsLines = (agentId: string) =>
+        Option.getOrElse(MutableHashMap.get(booting, agentId), () => {
+          const listed = agentListed(agentId);
 
-            if (rows === undefined || outboxes.pending().length === 0) return;
-            answers.answered(laid(rows, outboxes.synced()[0], refusedOf(agentId), accountId()));
-          }),
+          return listed?.status === AGENT_STATUS.STARTING && listed.turnId === null;
+        });
+      /** The messages the service refused, by the account that sent them and then the agent's id, in the order sent, kept for as long as the host runs. */
+
+      const refused = MutableHashMap.empty<
+        string,
+        MutableHashMap.MutableHashMap<string, readonly SendingMessage[]>
+      >();
+
+      /** The ids of the refused messages read back from the store, whose row landing means they went after all. */
+      const restored = new Set<string>();
+
+      /** The refusals of `account`'s, by the agent's id; none for no account. */
+      const refusedBy = (account: string | undefined) =>
+        account === undefined
+          ? undefined
+          : Option.getOrUndefined(MutableHashMap.get(refused, account));
+
+      /** The agent's refused messages the account signed in now sent; none while nobody is signed in. */
+      const refusedOf = (agentId: string): readonly SendingMessage[] =>
+        Option.getOrElse(
+          Option.flatMap(Option.fromUndefinedOr(refusedBy(accountId())), (byAgent) =>
+            MutableHashMap.get(byAgent, agentId),
+          ),
+          () => [],
         );
 
-        return {
-          rows: () => {
+      /**
+       * The agent's refused messages of `account`'s as `change` leaves them, its
+       * transcript drawn again where a follow stands for it. Note that the
+       * account is the one that sent the message, read as it was sent, so a
+       * refusal landing after a sign-out is kept for its sender alone.
+       */
+      const refusedChanged = (
+        account: string | undefined,
+        agentId: string,
+        change: (was: readonly SendingMessage[]) => readonly SendingMessage[],
+      ) =>
+        Effect.suspend(() => {
+          if (account === undefined) return Effect.void;
+
+          const byAgent =
+            refusedBy(account) ?? MutableHashMap.empty<string, readonly SendingMessage[]>();
+
+          MutableHashMap.set(refused, account, byAgent);
+          const now = change(Option.getOrElse(MutableHashMap.get(byAgent, agentId), () => []));
+
+          if (now.length === 0) MutableHashMap.remove(byAgent, agentId);
+          else MutableHashMap.set(byAgent, agentId, now);
+
+          return Effect.andThen(
+            PubSub.publish(moves, undefined),
+            Option.match(MutableHashMap.get(standing, agentId), {
+              onNone: () => Effect.void,
+              onSome: (waits) => waits.redraw,
+            }),
+          );
+        });
+
+      /** The agent's refused messages without the one drawn under `id`. */
+      const without = (id: string) => (was: readonly SendingMessage[]) =>
+        was.filter((message) => message.id !== id);
+
+      /** Lets go of the refused messages read back from the store whose row the agent's transcript holds, since they went after all. */
+      const wentAfterAll = (agentId: string, messages: readonly AgentTranscriptMessage[]) =>
+        Effect.suspend(() => {
+          const landed = landedLines(messages);
+
+          const went = refusedOf(agentId).filter(
+            (message) => restored.has(message.id) && landed.has(message.id),
+          );
+
+          if (went.length === 0) return Effect.void;
+
+          for (const message of went) restored.delete(message.id);
+          const ids = new Set(went.map((message) => message.id));
+
+          return refusedChanged(accountId(), agentId, (was) =>
+            was.filter((message) => !ids.has(message.id)),
+          );
+        });
+
+      const stand = (agentId: string, waits: Standing) =>
+        Effect.acquireRelease(
+          Effect.sync(() => MutableHashMap.set(standing, agentId, waits)),
+          () =>
+            Effect.sync(() => {
+              if (Option.getOrUndefined(MutableHashMap.get(standing, agentId)) === waits) {
+                MutableHashMap.remove(standing, agentId);
+              }
+            }),
+        );
+
+      const held = (agentId: string, answers: HeldAnswers<AppTranscript>) =>
+        Effect.gen(function* () {
+          const redraw = Effect.sync(() => {
             const rows = answers.rows();
 
-            return rows === undefined
-              ? undefined
-              : laid(rows, outboxes.synced()[0], [], accountId());
-          },
-          answered: (rows) =>
-            Effect.gen(function* () {
-              const queue = rows.word?.queue;
-              MutableHashMap.set(booting, agentId, bootHolds(rows.word?.boot?.phase));
-
-              if (queue !== undefined) yield* taken(queue);
+            if (rows !== undefined) {
               answers.answered(laid(rows, outboxes.row(agentId), refusedOf(agentId), accountId()));
-              yield* waits.lines.answered;
+            }
+          });
+
+          // Note that no write of the row answers a transaction, so the read hands no wait and each write waits on its rows (`carried`).
+          const outboxes = yield* pool.stand(AGENT_OUTBOX, {
+            redraw: () => redraw,
+            confirmation: () => undefined,
+          });
+
+          const waits: Standing = {
+            queue: yield* carriedWaits(() => outboxes.synced()),
+            lines: yield* carriedWaits(() => answers.rows()?.messages ?? []),
+            redraw,
+          };
+
+          yield* stand(agentId, waits);
+
+          /** A page's queue taken as the agent's, at its revision, and every change it carries let stand down. */
+          const taken = (queue: AgentQueue) =>
+            Effect.andThen(
+              Effect.sync(() => storedIn(queue)),
+              Effect.andThen(
+                outboxes.answer([{ agentId, queue, sending: [] }], { at: BigInt(queue.revision) }),
+                waits.queue.answered,
+              ),
+            );
+
+          // Note that a transcript held again takes the queue and the boot it was left with, so a change still standing is drawn over it before the next page lands.
+          const keptWord = answers.rows()?.word;
+
+          if (keptWord !== undefined) {
+            MutableHashMap.set(booting, agentId, bootHolds(keptWord.boot?.phase));
+          }
+
+          const kept = keptWord?.queue;
+
+          if (kept !== undefined) yield* Effect.andThen(taken(kept), redraw);
+          // Note that a transcript let go is left as the service last said it, so a write taken back once no window follows it is drawn there no more.
+          yield* Effect.addFinalizer(() =>
+            Effect.sync(() => {
+              const rows = answers.rows();
+
+              if (rows === undefined || outboxes.pending().length === 0) return;
+              answers.answered(laid(rows, outboxes.synced()[0], refusedOf(agentId), accountId()));
             }),
-        } satisfies HeldTranscript;
+          );
+
+          return {
+            rows: () => {
+              const rows = answers.rows();
+
+              return rows === undefined
+                ? undefined
+                : laid(rows, outboxes.synced()[0], [], accountId());
+            },
+            answered: (rows) =>
+              Effect.gen(function* () {
+                const queue = rows.word?.queue;
+                MutableHashMap.set(booting, agentId, bootHolds(rows.word?.boot?.phase));
+
+                if (queue !== undefined) yield* taken(queue);
+                yield* wentAfterAll(agentId, rows.messages);
+                answers.answered(
+                  laid(rows, outboxes.row(agentId), refusedOf(agentId), accountId()),
+                );
+                yield* waits.lines.answered;
+              }),
+          } satisfies HeldTranscript;
+        });
+
+      /** Waits until the agent's pages carry what `until` asks, at once where no follow stands for it. */
+      const carriedFor = <Row>(
+        agentId: string,
+        waitsOf: (waits: Standing) => CarriedWaits<Row>,
+        until: (rows: readonly Row[]) => boolean,
+      ) =>
+        Effect.suspend(() => {
+          const waits = Option.getOrUndefined(MutableHashMap.get(standing, agentId));
+
+          return waits === undefined ? Effect.void : waitsOf(waits).carried(until);
+        });
+
+      /** Waits until the agent's queue is at least as new as `queue`. */
+      const queueCarried = (agentId: string, queue: AgentQueue) =>
+        carriedFor(
+          agentId,
+          (waits) => waits.queue,
+          (rows) => rows.some((row) => row.queue.revision >= queue.revision),
+        );
+
+      /** Waits until the row of the line written under `id` lands in the agent's transcript. */
+      const lineCarried = (agentId: string, id: string) =>
+        carriedFor(
+          agentId,
+          (waits) => waits.lines,
+          (messages) => landedLines(messages).has(id),
+        );
+
+      /** The queue the service answered, standing over the outbox's in place of the change. */
+      const queueAnswered = (answered: AgentQueue): OutboxStep =>
+        queueChanged(answeredOver(answered));
+
+      const queue = (
+        sends: OutboxSends,
+      ): WriteDeclaration<OutboxRow, OutboxChange, QueuedWrite, AgentQueueAnswerView> => ({
+        kind: AGENT_OUTBOX,
+        keys: ({ agentId }) => [agentId],
+        change: (input) => ({ agentId: input.agentId, step: drawnChange(input, input.sentAt) }),
+        send: (input) =>
+          Effect.map(
+            // A change waiting behind another while its member signed out never goes under the next account's sign-in.
+            input.queuedBy === "" || input.queuedBy !== accountId()
+              ? Effect.succeed<AgentQueueAnswerView>({ failure: AGENT_CALL_FAILURE.UNANSWERED })
+              : // Note that the change is addressed as it goes, after any send ahead of it was answered the id it stored.
+                sends.queue(input.agentId, addressed(input.change, storedId)),
+            (
+              answer,
+            ): Written<OutboxChange, AgentQueueAnswerView> | Refused<AgentQueueAnswerView> => {
+              if (!("queue" in answer)) return { refused: answer };
+              const { agentId, change } = input;
+              const over = queueAnswered(answer.queue);
+              const taken = { agentId, step: over };
+              const queueLands = queueCarried(agentId, answer.queue);
+
+              if (change.change !== QUEUE_CHANGE.STEER) {
+                return { answer, txid: undefined, standsAs: taken, taken, carried: queueLands };
+              }
+
+              // A steer stands as the queue it left with its message sending, until both have landed.
+              const line = input.steered;
+
+              return {
+                answer,
+                txid: undefined,
+                standsAs: {
+                  agentId,
+                  step: (outbox) => {
+                    const now = over(outbox);
+
+                    return line === undefined
+                      ? now
+                      : { ...now, sending: sendingWith(now.sending, line) };
+                  },
+                },
+                taken,
+                carried: Effect.andThen(
+                  queueLands,
+                  line === undefined ? Effect.void : lineCarried(agentId, line.id),
+                ),
+              };
+            },
+          ),
       });
 
-    /** Waits until the agent's pages carry what `until` asks, at once where no follow stands for it. */
-    const carriedFor = <Row>(
-      agentId: string,
-      waitsOf: (waits: Standing) => CarriedWaits<Row>,
-      until: (rows: readonly Row[]) => boolean,
-    ) =>
-      Effect.suspend(() => {
-        const waits = Option.getOrUndefined(MutableHashMap.get(standing, agentId));
+      const message = (
+        sends: OutboxSends,
+      ): WriteDeclaration<OutboxRow, OutboxChange, MessageWrite, AgentAgentAnswer> => ({
+        kind: AGENT_OUTBOX,
+        keys: ({ agentId }) => [agentId],
+        change: (input) => ({
+          agentId: input.agentId,
+          // A message sent while the agent's machine boots goes into its queue, where the service puts it.
+          step: holdsLines(input.agentId)
+            ? queueChanged((queue) => queuedWith(queue, input))
+            : (outbox) => ({ ...outbox, sending: sendingWith(outbox.sending, sendingOf(input)) }),
+        }),
+        send: (input) =>
+          Effect.gen(function* () {
+            const {
+              agentId,
+              pictures: _pictures,
+              steers: _steers,
+              taskId: _taskId,
+              rewinds,
+              sentAt: _sentAt,
+              sentBy: sender,
+              ...request
+            } = input;
 
-        return waits === undefined ? Effect.void : waitsOf(waits).carried(until);
-      });
+            const line = sendingOf(input);
 
-    /** Waits until the agent's queue is at least as new as `queue`. */
-    const queueCarried = (agentId: string, queue: AgentQueue) =>
-      carriedFor(
-        agentId,
-        (waits) => waits.queue,
-        (rows) => rows.some((row) => row.queue.revision >= queue.revision),
-      );
+            // A message waiting behind another while its sender signed out never goes under the next account's sign-in,
+            // and stands refused for its sender, who finds it where it went on signing in again.
+            if (sender === undefined || sender !== accountId()) {
+              yield* refusedChanged(sender, agentId, (was) => [
+                ...without(line.id)(was),
+                { ...line, refused: { failure: AGENT_CALL_FAILURE.UNANSWERED } },
+              ]);
 
-    /** Waits until the row of the line written under `id` lands in the agent's transcript. */
-    const lineCarried = (agentId: string, id: string) =>
-      carriedFor(
-        agentId,
-        (waits) => waits.lines,
-        (messages) => landedLines(messages).has(id),
-      );
-
-    /** The queue the service answered, standing over the outbox's in place of the change. */
-    const queueAnswered = (answered: AgentQueue): OutboxStep =>
-      queueChanged(answeredOver(answered));
-
-    const queue = (
-      sends: OutboxSends,
-    ): WriteDeclaration<OutboxRow, OutboxChange, QueuedWrite, AgentQueueAnswerView> => ({
-      kind: AGENT_OUTBOX,
-      keys: ({ agentId }) => [agentId],
-      change: (input) => ({ agentId: input.agentId, step: drawnChange(input, input.sentAt) }),
-      send: (input) =>
-        Effect.map(
-          // A change waiting behind another while its member signed out never goes under the next account's sign-in.
-          input.queuedBy === "" || input.queuedBy !== accountId()
-            ? Effect.succeed<AgentQueueAnswerView>({ failure: AGENT_CALL_FAILURE.UNANSWERED })
-            : // Note that the change is addressed as it goes, after any send ahead of it was answered the id it stored.
-              sends.queue(input.agentId, addressed(input.change, storedId)),
-          (answer): Written<OutboxChange, AgentQueueAnswerView> | Refused<AgentQueueAnswerView> => {
-            if (!("queue" in answer)) return { refused: answer };
-            const { agentId, change } = input;
-            const over = queueAnswered(answer.queue);
-            const taken = { agentId, step: over };
-            const queueLands = queueCarried(agentId, answer.queue);
-
-            if (change.change !== QUEUE_CHANGE.STEER) {
-              return { answer, txid: undefined, standsAs: taken, taken, carried: queueLands };
+              return {
+                refused: { failure: AGENT_CALL_FAILURE.UNANSWERED },
+              } satisfies Refused<AgentAgentAnswer>;
             }
 
-            // A steer stands as the queue it left with its message sending, until both have landed.
-            const line = input.steered;
+            // A line in place of another takes the agent back to just before that one first; one that did not go sends nothing.
+            if (rewinds !== undefined) {
+              const rewound = yield* sends.rewind(
+                agentId,
+                rewinds.messageId,
+                rewinds.restoreFiles === true,
+              );
 
+              if ("failure" in rewound) {
+                yield* refusedChanged(sender, agentId, (was) => [
+                  ...without(line.id)(was),
+                  { ...line, refused: rewound },
+                ]);
+
+                return { refused: rewound } satisfies Refused<AgentAgentAnswer>;
+              }
+            }
+
+            // The account signed in may have changed while the rewind went, so the sender is asked again.
+            if (sender !== accountId()) {
+              yield* refusedChanged(sender, agentId, (was) => [
+                ...without(line.id)(was),
+                { ...line, refused: { failure: AGENT_CALL_FAILURE.UNANSWERED } },
+              ]);
+
+              return {
+                refused: { failure: AGENT_CALL_FAILURE.UNANSWERED },
+              } satisfies Refused<AgentAgentAnswer>;
+            }
+
+            const answer = yield* sends.message(agentId, request);
+
+            if ("failure" in answer) {
+              const said: AgentMessageRefusal =
+                rewinds === undefined ? answer : { ...answer, rewound: true };
+
+              yield* refusedChanged(sender, agentId, (was) => [
+                ...without(line.id)(was),
+                { ...line, refused: said },
+              ]);
+
+              return { refused: said } satisfies Refused<AgentAgentAnswer>;
+            }
+
+            yield* refusedChanged(sender, agentId, without(line.id));
+
+            // A message the agent's first launch holds stands as the queue it waits in, which the service answered, in the line's place.
+            if (answer.queued !== undefined) {
+              storedIn(answer.queued);
+              const taken = { agentId, step: queueAnswered(answer.queued) };
+
+              return {
+                answer: { agent: answer.agent, queued: true },
+                txid: undefined,
+                standsAs: taken,
+                taken,
+                carried: queueCarried(agentId, answer.queued),
+              } satisfies Written<OutboxChange, AgentAgentAnswer>;
+            }
+
+            // A message drawn in the queue that the service sent after all, its machine up meanwhile, stands on its way.
             return {
-              answer,
+              answer: { agent: answer.agent },
               txid: undefined,
               standsAs: {
                 agentId,
-                step: (outbox) => {
-                  const now = over(outbox);
-
-                  return line === undefined
-                    ? now
-                    : { ...now, sending: sendingWith(now.sending, line) };
-                },
+                step: (outbox) => ({ ...outbox, sending: sendingWith(outbox.sending, line) }),
               },
-              taken,
-              carried: Effect.andThen(
-                queueLands,
-                line === undefined ? Effect.void : lineCarried(agentId, line.id),
-              ),
-            };
-          },
-        ),
-    });
-
-    const message = (
-      sends: OutboxSends,
-    ): WriteDeclaration<OutboxRow, OutboxChange, MessageWrite, AgentAgentAnswer> => ({
-      kind: AGENT_OUTBOX,
-      keys: ({ agentId }) => [agentId],
-      change: (input) => ({
-        agentId: input.agentId,
-        // A message sent while the agent's machine boots goes into its queue, where the service puts it.
-        step: holdsLines(input.agentId)
-          ? queueChanged((queue) => queuedWith(queue, input))
-          : (outbox) => ({ ...outbox, sending: sendingWith(outbox.sending, sendingOf(input)) }),
-      }),
-      send: (input) =>
-        Effect.gen(function* () {
-          const {
-            agentId,
-            pictures: _pictures,
-            steers: _steers,
-            taskId: _taskId,
-            rewinds,
-            sentAt: _sentAt,
-            sentBy: sender,
-            ...request
-          } = input;
-
-          const line = sendingOf(input);
-
-          // A message waiting behind another while its sender signed out never goes under the next account's sign-in,
-          // and stands refused for its sender, who finds it where it went on signing in again.
-          if (sender === undefined || sender !== accountId()) {
-            yield* refusedChanged(sender, agentId, (was) => [
-              ...without(line.id)(was),
-              { ...line, refused: { failure: AGENT_CALL_FAILURE.UNANSWERED } },
-            ]);
-
-            return {
-              refused: { failure: AGENT_CALL_FAILURE.UNANSWERED },
-            } satisfies Refused<AgentAgentAnswer>;
-          }
-
-          // A line in place of another takes the agent back to just before that one first; one that did not go sends nothing.
-          if (rewinds !== undefined) {
-            const rewound = yield* sends.rewind(
-              agentId,
-              rewinds.messageId,
-              rewinds.restoreFiles === true,
-            );
-
-            if ("failure" in rewound) {
-              yield* refusedChanged(sender, agentId, (was) => [
-                ...without(line.id)(was),
-                { ...line, refused: rewound },
-              ]);
-
-              return { refused: rewound } satisfies Refused<AgentAgentAnswer>;
-            }
-          }
-
-          // The account signed in may have changed while the rewind went, so the sender is asked again.
-          if (sender !== accountId()) {
-            yield* refusedChanged(sender, agentId, (was) => [
-              ...without(line.id)(was),
-              { ...line, refused: { failure: AGENT_CALL_FAILURE.UNANSWERED } },
-            ]);
-
-            return {
-              refused: { failure: AGENT_CALL_FAILURE.UNANSWERED },
-            } satisfies Refused<AgentAgentAnswer>;
-          }
-
-          const answer = yield* sends.message(agentId, request);
-
-          if ("failure" in answer) {
-            const said: AgentMessageRefusal =
-              rewinds === undefined ? answer : { ...answer, rewound: true };
-
-            yield* refusedChanged(sender, agentId, (was) => [
-              ...without(line.id)(was),
-              { ...line, refused: said },
-            ]);
-
-            return { refused: said } satisfies Refused<AgentAgentAnswer>;
-          }
-
-          yield* refusedChanged(sender, agentId, without(line.id));
-
-          // A message the agent's first launch holds stands as the queue it waits in, which the service answered, in the line's place.
-          if (answer.queued !== undefined) {
-            storedIn(answer.queued);
-            const taken = { agentId, step: queueAnswered(answer.queued) };
-
-            return {
-              answer: { agent: answer.agent, queued: true },
-              txid: undefined,
-              standsAs: taken,
-              taken,
-              carried: queueCarried(agentId, answer.queued),
+              taken: { agentId, step: unchanged },
+              carried: lineCarried(agentId, line.id),
             } satisfies Written<OutboxChange, AgentAgentAnswer>;
-          }
+          }),
+      });
 
-          // A message drawn in the queue that the service sent after all, its machine up meanwhile, stands on its way.
-          return {
-            answer: { agent: answer.agent },
-            txid: undefined,
-            standsAs: {
-              agentId,
-              step: (outbox) => ({ ...outbox, sending: sendingWith(outbox.sending, line) }),
-            },
-            taken: { agentId, step: unchanged },
-            carried: lineCarried(agentId, line.id),
-          } satisfies Written<OutboxChange, AgentAgentAnswer>;
-        }),
-    });
+      const rewind = (
+        sends: OutboxSends,
+      ): WriteDeclaration<OutboxRow, OutboxChange, AgentRewindParams, AgentAgentAnswer> => ({
+        kind: AGENT_OUTBOX,
+        keys: ({ agentId }) => [agentId],
+        change: ({ agentId }) => ({ agentId, step: unchanged }),
+        send: ({ agentId, messageId, restoreFiles }) =>
+          Effect.map(
+            sends.rewind(agentId, messageId, restoreFiles === true),
+            (answer): Written<OutboxChange, AgentAgentAnswer> | Refused<AgentAgentAnswer> =>
+              "failure" in answer
+                ? { refused: answer }
+                : { answer, txid: undefined, settled: true },
+          ),
+      });
 
-    const rewind = (
-      sends: OutboxSends,
-    ): WriteDeclaration<OutboxRow, OutboxChange, AgentRewindParams, AgentAgentAnswer> => ({
-      kind: AGENT_OUTBOX,
-      keys: ({ agentId }) => [agentId],
-      change: ({ agentId }) => ({ agentId, step: unchanged }),
-      send: ({ agentId, messageId, restoreFiles }) =>
-        Effect.map(
-          sends.rewind(agentId, messageId, restoreFiles === true),
-          (answer): Written<OutboxChange, AgentAgentAnswer> | Refused<AgentAgentAnswer> =>
+      const inTurn = <Input extends { readonly agentId: string }, Answer extends object>(
+        send: (input: Input) => Effect.Effect<Answer>,
+      ): WriteDeclaration<OutboxRow, OutboxChange, Input, Answer> => ({
+        kind: AGENT_OUTBOX,
+        keys: ({ agentId }) => [agentId],
+        change: ({ agentId }) => ({ agentId, step: unchanged }),
+        send: (input) =>
+          Effect.map(send(input), (answer): Written<OutboxChange, Answer> | Refused<Answer> =>
             "failure" in answer ? { refused: answer } : { answer, txid: undefined, settled: true },
-        ),
-    });
+          ),
+      });
 
-    const inTurn = <Input extends { readonly agentId: string }, Answer extends object>(
-      send: (input: Input) => Effect.Effect<Answer>,
-    ): WriteDeclaration<OutboxRow, OutboxChange, Input, Answer> => ({
-      kind: AGENT_OUTBOX,
-      keys: ({ agentId }) => [agentId],
-      change: ({ agentId }) => ({ agentId, step: unchanged }),
-      send: (input) =>
-        Effect.map(send(input), (answer): Written<OutboxChange, Answer> | Refused<Answer> =>
-          "failure" in answer ? { refused: answer } : { answer, txid: undefined, settled: true },
-        ),
-    });
+      const queuedWrite = (write: QueueWrite, sentAt: number): QueuedWrite => {
+        const { change } = write;
 
-    const queuedWrite = (write: QueueWrite, sentAt: number): QueuedWrite => {
-      const { change } = write;
+        if (change.change !== QUEUE_CHANGE.STEER) return { ...write, sentAt };
 
-      if (change.change !== QUEUE_CHANGE.STEER) return { ...write, sentAt };
+        const message = pool
+          .row(AGENT_OUTBOX, write.agentId)
+          ?.queue.messages.find((each) => names(each, change.messageId));
 
-      const message = pool
-        .row(AGENT_OUTBOX, write.agentId)
-        ?.queue.messages.find((each) => names(each, change.messageId));
+        return message === undefined
+          ? { ...write, sentAt }
+          : {
+              ...write,
+              sentAt,
+              steered: steered(message, change, write.pictures, sentAt, write.queuedBy),
+            };
+      };
 
-      return message === undefined
-        ? { ...write, sentAt }
-        : {
-            ...write,
-            sentAt,
-            steered: steered(message, change, write.pictures, sentAt, write.queuedBy),
-          };
-    };
+      const unsend = ({ agentId, lineId }: AgentUnsendParams) =>
+        refusedChanged(accountId(), agentId, without(lineId));
 
-    const unsend = ({ agentId, lineId }: AgentUnsendParams) =>
-      refusedChanged(accountId(), agentId, without(lineId));
+      const refusedKept = () =>
+        [
+          ...(refusedBy(accountId()) ?? MutableHashMap.empty<string, readonly SendingMessage[]>()),
+        ].flatMap(([agentId, messages]) =>
+          messages.flatMap((message) =>
+            message.refused === undefined
+              ? []
+              : [encodeKeptRefused(keptOf(agentId, message, message.refused))],
+          ),
+        );
 
-    return { held, queuedWrite, queue, message, inTurn, rewind, unsend };
-  });
+      const refusedRestored = (account: string, kept: readonly unknown[]) =>
+        Effect.forEach(
+          kept.flatMap((entry) => {
+            // Note that an entry a build of another shape kept, which no longer reads, is let go.
+            const decoded = decodeKeptRefused(entry);
+
+            const read = Result.isFailure(decoded)
+              ? undefined
+              : refusedOfKept(decoded.success, account);
+
+            return read === undefined ? [] : [read];
+          }),
+          ([agentId, message]) =>
+            Effect.suspend(() => {
+              restored.add(message.id);
+
+              // Note that one refused since the host started stands as it is, since it is the newer word.
+              return refusedChanged(account, agentId, (was) =>
+                was.some((each) => each.id === message.id) ? was : [...was, message],
+              );
+            }),
+          { discard: true },
+        );
+
+      const refusedForgotten = Effect.suspend(() => {
+        restored.clear();
+
+        const agents = [...refused].flatMap(([, byAgent]) =>
+          [...byAgent].map(([agentId]) => agentId),
+        );
+
+        MutableHashMap.clear(refused);
+
+        return Effect.andThen(
+          PubSub.publish(moves, undefined),
+          Effect.forEach(
+            agents,
+            (agentId) =>
+              Option.match(MutableHashMap.get(standing, agentId), {
+                onNone: () => Effect.void,
+                onSome: (waits) => waits.redraw,
+              }),
+            { discard: true },
+          ),
+        );
+      });
+
+      return {
+        held,
+        queuedWrite,
+        queue,
+        message,
+        inTurn,
+        rewind,
+        unsend,
+        refusedKept,
+        refusedMoves: Stream.fromPubSub(moves),
+        refusedRestored,
+        refusedForgotten,
+      };
+    }),
+  );
 }
