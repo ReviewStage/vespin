@@ -16,9 +16,9 @@ faq:
     a: "Yes. Without them, two agents edit the same files and break each other's work. They just don't do anything about the questions."
 ---
 
-Running agents in parallel is solved, and isolating each in a worktree or sandbox is easy. The bottleneck is you: every agent stops to ask, decide, or get reviewed, and those asks pile up across terminals.
+When you run ten coding agents at once, most of your time goes to finding their questions and answering them, and very little to starting the agents. Each one stops to ask you something or to have its pull request reviewed, and with ten of them those stops pile up across terminals.
 
-We wrote the guides on this site that way. Seven agents ran at once, one per page, each with its own pull request, and a person approves every page before it goes up. Starting them was quick. What took the time was the part this guide is about: reading what each agent sent back and answering it.
+We saw this when we wrote the guides on this site. Seven agents ran at once, one per page, each with its own pull request, and a person read and approved every page.
 
 ## Give each agent its own checkout first
 
