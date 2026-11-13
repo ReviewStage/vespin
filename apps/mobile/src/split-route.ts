@@ -35,20 +35,29 @@ type UseSplitSelectionResult = {
  * window falls back on the item the tab last selected while the route names
  * none, because a page pushed over the tabs' split view and gone back from
  * (Back or a swipe) can hand the root back without its param, and the tab
- * should stand as it was left, as it does after a tab switch.
+ * should stand as it was left, as it does after a tab switch. A window
+ * turning compact pushes that item too, as it pushes the param's.
  */
 export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
   const router = useRouter();
   const { selected } = useLocalSearchParams<{ selected?: string }>();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
   useEffect(() => {
-    if (selected !== undefined && regular) picked.set(tab, selected);
+    if (regular) {
+      if (selected !== undefined) picked.set(tab, selected);
 
-    if (regular || selected === undefined) return;
+      return;
+    }
+
+    // Note that the item shown beside the list may be the tab's last pick rather than the param, so a fold pushes that one.
+    const held = selected ?? picked.get(tab);
+
+    if (held === undefined) return;
     // Note that the item now stands pushed over the list, so the tab no longer holds it beside the list.
     picked.delete(tab);
-    router.setParams({ selected: undefined });
-    router.push(itemRoute(tab, selected));
+
+    if (selected !== undefined) router.setParams({ selected: undefined });
+    router.push(itemRoute(tab, held));
   }, [regular, selected, router, tab]);
 
   return {
