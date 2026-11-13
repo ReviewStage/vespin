@@ -196,6 +196,7 @@ it.layer(getTestDB())("the account store's intros seen", (it) => {
       Effect.gen(function* () {
         const userId = yield* openAccount;
         yield* writeAccountPreferences(userId, { introsSeen: '["inbox"]' });
+
         // Note that a second device, which never read the first's dismissal, sends only its own.
         const written = yield* writeAccountPreferences(userId, {
           introsSeen: '["automations","inbox"]',
