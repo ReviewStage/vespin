@@ -177,6 +177,7 @@
   border: 1px solid var(--ui-color-border);
   border-radius: var(--ui-control-radius);
   background: var(--ui-color-code-ground);
+  box-shadow: var(--ui-shadow-card);
 }
 
 /* Note that the frame clips nothing, as the drawn card does, so the language

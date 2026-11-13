@@ -85,10 +85,12 @@ export const CARD_ELEMENT = {
 
 export type CardElement = (typeof CARD_ELEMENT)[keyof typeof CARD_ELEMENT];
 
-/** The shadow a card stands on: none; a hairline's lift off the well it stands in, as a board's card; or a menu's, standing over the page, as an open comment thread or a summary drawn over its rail. */
+/** The shadow a card stands on: none; a hairline's lift off the well it stands in, as a board's card; Geist's card shadow, which every card stands on unless it asks for another or sits in the page's well; or a menu's, standing over the page, as an open comment thread or a summary drawn over its rail. */
 export const CARD_SHADOW = {
   NONE: "none",
   SOFT: "soft",
+  /** Geist's card shadow (`--ui-shadow-card`), standing a card off the page: every card's unless it asks for another. */
+  CARD: "card",
   MENU: "menu",
 } as const;
 
@@ -144,6 +146,7 @@ function edgeClass(look: CardLook): string {
 const SHADOW_CLASS: Record<CardShadow, string> = {
   [CARD_SHADOW.NONE]: "",
   [CARD_SHADOW.SOFT]: "shadow-card-soft",
+  [CARD_SHADOW.CARD]: "shadow-card",
   [CARD_SHADOW.MENU]: "shadow-menu",
 };
 
@@ -198,6 +201,11 @@ function transitionClass(look: CardLook, hover: CardHover): string {
   return "transition-[border-color] duration-(--ui-duration-hover) ease-plain";
 }
 
+/** The shadow a card stands on where it asks for none in particular: Geist's card shadow, but for a well, which has no edge to stand a shadow under. */
+function defaultShadow(look: CardLook): CardShadow {
+  return look === CARD_LOOK.WELL ? CARD_SHADOW.NONE : CARD_SHADOW.CARD;
+}
+
 /** Every class a card's frame wears for the choices made, its owner's last. */
 function frameClass(
   look: CardLook,
@@ -232,7 +240,7 @@ export function Card({
   look = CARD_LOOK.SURFACE,
   corner = CARD_CORNER.CARD,
   padding = CARD_PADDING.REGULAR,
-  shadow = CARD_SHADOW.NONE,
+  shadow: asked,
   hover = CARD_HOVER.NONE,
   lit = false,
   dashed = false,
@@ -245,7 +253,8 @@ export function Card({
   look?: CardLook;
   corner?: CardCorner;
   padding?: CardPadding;
-  shadow?: CardShadow;
+  /** The shadow it stands on; Geist's card shadow where none is asked for, but in a well. */
+  shadow?: CardShadow | undefined;
   /** How it answers the pointer resting on it, where a press covers it. */
   hover?: CardHover;
   /** Whether it holds its hover's look with no pointer on it, as while the menu it opened stands or its words are pointed at elsewhere. */
@@ -258,6 +267,8 @@ export function Card({
   ref?: Ref<HTMLElement> | undefined;
   children: ReactNode;
 }): React.JSX.Element {
+  const shadow = asked ?? defaultShadow(look);
+
   return (
     <ShadcnCard
       {...rest}
