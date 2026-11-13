@@ -28,7 +28,13 @@ appId: dev.vespin.ios
 - scrollUntilVisible:
     element:
       id: "settings-notifications"
-- assertVisible: "Notifications, When I'm away"
+# Note that the iPhone hears the row as its name and value together
+# ("Notifications, When I'm away") and the iPad's form sheet as its name with
+# the value an element of its own, so the row is found by its id and name.
+- assertVisible:
+    id: "settings-notifications"
+    text: "Notifications.*"
+- assertVisible: ".*When I'm away"
 - tapOn:
     id: "settings-notifications"
 - waitForAnimationToEnd
