@@ -175,8 +175,9 @@ function macComputerUse(settings: SettingsComposer, helper: ComputerUseHelperSea
 /**
  * This Mac as a device of the accounts signed in on it, as the Mac's
  * commands join it: the ids this install keeps, the machine as its host
- * names it, and Settings' say over commands and apps, its command mode and
- * the apps allowed without asking, which the service's is written over.
+ * names it, and Settings' say over commands and apps, its command mode,
+ * its switch for apps, and the apps allowed without asking, which the
+ * service's is written over.
  */
 function machineCommandsDevice(
   settings: SettingsComposer,
@@ -203,6 +204,7 @@ function machineCommandsDevice(
     settings: Effect.map(stored, (values) => ({
       commandMode: values.macCommands ?? APP_SETTING_SCHEMA.macCommands.default,
       alwaysAllowedApps: computerUseAppsOf(values.computerUseApps),
+      computerUse: values.computerUse ?? APP_SETTING_SCHEMA.computerUse.default,
     })),
     applySettings: (kept) =>
       Effect.gen(function* () {
@@ -213,6 +215,17 @@ function machineCommandsDevice(
           landed = yield* written(
             settings.store.set(APP_SETTING_SCHEMA.macCommands.field, kept.commandMode),
           );
+        }
+
+        // Note that a service that holds no switch for apps yet names none, which leaves this Mac's for it to carry up.
+        if (
+          kept.computerUse !== undefined &&
+          (values.computerUse ?? APP_SETTING_SCHEMA.computerUse.default) !== kept.computerUse
+        ) {
+          landed =
+            (yield* written(
+              settings.store.set(APP_SETTING_SCHEMA.computerUse.field, kept.computerUse),
+            )) && landed;
         }
 
         const apps = computerUseAppsStored(kept.alwaysAllowedApps);
@@ -500,6 +513,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         ports: agentPortsClient,
         listed: tasks.listed,
         pullRequestListings: tasks.pullRequestListings,
+        openedOutside: tasks.openedOutside,
         pool,
         agentListed,
       }),

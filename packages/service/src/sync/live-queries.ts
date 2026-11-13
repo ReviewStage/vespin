@@ -21,6 +21,7 @@ import { inboxItemsRead } from "../live/reads/inbox-items.js";
 import { installedSkillsRead } from "../live/reads/installed-skills.js";
 import { integrationStatusesRead } from "../live/reads/integration-statuses.js";
 import { machineCommandsRead } from "../live/reads/machine-commands.js";
+import { machinesRead } from "../live/reads/machines.js";
 import { agentPagesRead, taskPagesRead } from "../live/reads/pages.js";
 import { pullRequestChaptersRead } from "../live/reads/pull-request-chapters.js";
 import { agentInboxRead, taskInboxRead } from "../live/reads/scope-inbox.js";
@@ -28,7 +29,7 @@ import { sidebarRead } from "../live/reads/sidebar.js";
 import { taskCommentsRead } from "../live/reads/task-comments.js";
 import { taskHistoryRead } from "../live/reads/task-history.js";
 import { taskRecordRead } from "../live/reads/task-record.js";
-import { tasksRead } from "../live/reads/tasks.js";
+import { taskRowsRead, taskSearchRead, tasksRead } from "../live/reads/tasks.js";
 import { workspaceIntegrationsRead } from "../live/reads/workspace-integrations.js";
 import { workspaceInvitationsRead } from "../live/reads/workspace-invitations.js";
 import { workspaceMembersRead } from "../live/reads/workspace-members.js";
@@ -38,12 +39,15 @@ import { workspacesRead } from "../live/reads/workspaces.js";
 /** Every live read, declared once and bound (`../live/live-read-binding.ts`). */
 export const BOUND_READS: readonly AnyBoundRead[] = [
   tasksRead,
+  taskRowsRead,
+  taskSearchRead,
   accountInboxRead,
   inboxItemsRead,
   taskInboxRead,
   agentInboxRead,
   agentTranscriptRead,
   hostsRead,
+  machinesRead,
   agentOriginRead,
   taskPagesRead,
   agentPagesRead,

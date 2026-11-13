@@ -289,6 +289,51 @@ export const TASK_LIST_READ = liveRead({
 
 export type TaskListLiveAnswer = LiveReadAnswer<typeof TASK_LIST_READ>;
 
+/**
+ * One task outside the list a window holds, by the task or the agent `id`
+ * names, read once rather than followed: the task as the list's plans
+ * answer it, and every agent of it as the list's agents do, or the agent
+ * alone where it stands on no task. The rows are the list's own, read on
+ * the same rule of who may read them, so a task or an agent the account
+ * does not reach answers no rows.
+ */
+export const TASK_ROWS_READ = liveRead({
+  name: "taskRows",
+  path: HOSTED_SERVICE_PATH.LIVE_TASK_ROWS,
+  params: { id: LIVE_PARAM.ID, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    plans: TASK_LIST_READ.parts.plans,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
+export type TaskRowsLiveAnswer = LiveReadAnswer<typeof TASK_ROWS_READ>;
+
+/** The most tasks one search answers, the latest changed first, so a query of one letter reads no account whole. */
+export const TASK_SEARCH_LIMIT = 20;
+
+/**
+ * The tasks a search's `query` finds, read once rather than followed, for
+ * a window searching tasks the list may not hold: each task whose name holds
+ * every word of the query, whatever its case, or whose number or key
+ * (`ACME-42`) the query is, the latest changed first and at most
+ * `TASK_SEARCH_LIMIT`, as the list's plans answer them, with every agent of
+ * them as the list's agents do. The rows are the list's own, read on the same
+ * rule of who may read them, so a task the account does not reach is never
+ * found.
+ */
+export const TASK_SEARCH_READ = liveRead({
+  name: "taskSearch",
+  path: HOSTED_SERVICE_PATH.LIVE_TASK_SEARCH,
+  params: { query: LIVE_PARAM.TEXT, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    plans: TASK_LIST_READ.parts.plans,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
 /** The plan list's rows as Realtime delivers them, decoded at the boundary before anything reads them. */
 export type TaskListLiveRows = typeof TASK_LIST_READ.rows.Type;
 

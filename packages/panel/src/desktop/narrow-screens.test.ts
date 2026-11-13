@@ -160,7 +160,11 @@ beforeEach(() => {
   fakeActPort({
     [ACT_KIND.TASKS_REVISION]: ({ seq }) =>
       Promise.resolve({
-        revision: { seq, document: DOCUMENT_TASK.document, previous: DOCUMENT_TASK.document },
+        revision: {
+          seq,
+          description: DOCUMENT_TASK.description,
+          previous: DOCUMENT_TASK.description,
+        },
       }),
   });
   sheets = layContainersAt({});

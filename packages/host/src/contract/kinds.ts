@@ -583,6 +583,8 @@ export const TASKS_ACT_KIND = {
   TASKS_COLOR_CODE: "tasks.colourCode",
   /** The id of the task a link names by its workspace and its number, found on the service before the link opens; answered to the window, never on the document. */
   TASKS_FIND: "tasks.find",
+  /** The tasks a search's words find on the service, read into the task list as cold tasks where it holds them not, so the window's own search finds them; answered once asked, never on the document. */
+  TASKS_SEARCH: "tasks.search",
   /** A page of a description's history, read from the service and answered to the view; an older page is laid on the task's held history too (`LIVE_READ.HISTORY`) where it is held. */
   TASKS_REVISIONS: "tasks.revisions",
   /** A revision of the open description beside the one before it for its version history, read from the service; answered to the view, never on the document. */
@@ -1224,6 +1226,7 @@ export const PORT_ACT_USE = {
   TASKS_BROWSER_TABS_FOLLOW: ACT_USE.READ,
   TASKS_COLOR_CODE: ACT_USE.FETCH,
   TASKS_FIND: ACT_USE.FETCH,
+  TASKS_SEARCH: ACT_USE.FETCH,
   TASKS_REVISIONS: ACT_USE.FETCH,
   TASKS_REVISION: ACT_USE.FETCH,
   TASKS_RESTORE: ACT_USE.WRITE,

@@ -8,7 +8,7 @@ import {
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { entityPool } from "@repo/sync";
-import { Duration, Effect } from "effect";
+import { Deferred, Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import { DRAW_TICK, rowWriteOn } from "./live-collection.js";
 import { AGENT, type LiveTaskList, PLAN, taskListCollections } from "./task-list-collections.js";
@@ -252,6 +252,60 @@ it.effect(
         assert.equal(ofTask(archived, BILLING), undefined);
         assert.equal(ofTask(archived, INVITES), ofTask(before, INVITES));
         assert.equal(ofAgent(archived, billing.id)?.pullRequest.number, 8);
+      }),
+    ),
+);
+
+it.effect(
+  "an earlier read of a task outside the list, answered last, draws back no agent a later read of it left out",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const drawings: LiveTaskList[] = [];
+
+        const collections = yield* taskListCollections({
+          pool: yield* entityPool(),
+          draw: (read) => {
+            drawings.push(read);
+          },
+          txWait: () => undefined,
+        });
+
+        // The list holds the billing task alone, so the invites task is read outside it.
+        yield* collections.answer({ plans: [planListRow(BILLING, "Billing")], agents: [] });
+        const invites = planListRow(INVITES, "Teammate invitations");
+        const kept = { ...agentListRow(INVITES, 1_000), id: "agent-kept" };
+        const deleted = { ...agentListRow(INVITES, 2_000), id: "agent-deleted" };
+
+        // Two reads of the task are out at once: the earlier one asked while both agents stood, the later one after one was deleted.
+        const earlier = yield* Deferred.make<void>();
+        const later = yield* Deferred.make<void>();
+        const earlierMark = collections.mark();
+        const laterMark = collections.mark();
+
+        const earlierRead = yield* Effect.forkChild(
+          Effect.andThen(
+            Deferred.await(earlier),
+            collections.cold({ plans: [invites], agents: [kept, deleted] }, earlierMark),
+          ),
+        );
+
+        const laterRead = yield* Effect.forkChild(
+          Effect.andThen(
+            Deferred.await(later),
+            collections.cold({ plans: [invites], agents: [kept] }, laterMark),
+          ),
+        );
+
+        // The later read answers first, then the earlier one.
+        yield* Deferred.succeed(later, undefined);
+        yield* Fiber.join(laterRead);
+        yield* Deferred.succeed(earlier, undefined);
+        yield* Fiber.join(earlierRead);
+
+        const agentsDrawn = drawings.at(-1)?.taskAgents.map((agent) => agent.id);
+
+        assert.deepEqual(agentsDrawn, [kept.id]);
       }),
     ),
 );

@@ -73,7 +73,7 @@ function mountVersion(answer: ActionResult, asked: (number | undefined)[], lande
         current: false,
         read: {
           kind: HISTORY_READ.READY,
-          document: { body: "## Plan\n\nShip it.", assumptions: [] },
+          description: { body: "## Plan\n\nShip it.", assumptions: [] },
           previous: null,
         },
       },

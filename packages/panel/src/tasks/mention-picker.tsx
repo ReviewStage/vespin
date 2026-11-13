@@ -1,4 +1,4 @@
-import type { ComputerAppKept } from "@repo/features/agent-parts";
+import { type ComputerApps, computerAppNamed } from "@repo/features/agent-parts";
 import type { NamedServer } from "@repo/features/agent-servers-model";
 import { INBOX_SCOPE_KIND } from "@repo/features/agent-view";
 import type { AgentPullRequest, AgentSummary } from "@repo/features/agent-wire";
@@ -13,7 +13,7 @@ import {
   readerZone,
   suggestedDates,
 } from "@repo/features/date-mention";
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { ENTITY_KIND, type EntityKind, entityOfMention } from "@repo/features/entity-kind";
 import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
@@ -124,7 +124,7 @@ import { Highlighted } from "../search-field.js";
 import { appStateQuery } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { type AgentRowPlace, agentMenuRow, useAgentRowPlace } from "./agent-menu-row.js";
-import { useKeptApps } from "./agent-pictures.js";
+import { useComputerApps } from "./agent-pictures.js";
 import { useOnThatMac } from "./computer-permission-note.js";
 import {
   DATE_PICKER_CLOSE,
@@ -929,10 +929,7 @@ function allowedAppName(app: string): string {
  * conversation named it, else by its bundle id, and is found by either. Where the reader has more than one
  * machine that allows an app, each row names the machines it is allowed on.
  */
-function allowedAppRows(
-  machines: readonly MachineAllowedApps[],
-  kept: ReadonlyMap<string, ComputerAppKept>,
-): MentionRow[] {
+function allowedAppRows(machines: readonly MachineAllowedApps[], kept: ComputerApps): MentionRow[] {
   const allowedOn = new Map<string, string[]>();
   const posted = new Map<string, string>();
 
@@ -950,7 +947,7 @@ function allowedAppRows(
   const named = machines.length > 1;
 
   const rows = [...allowedOn].map(([app, on]): MentionRow => {
-    const name = posted.get(app) ?? kept.get(app)?.name ?? allowedAppName(app);
+    const name = posted.get(app) ?? computerAppNamed(kept, app)?.name ?? allowedAppName(app);
 
     return {
       mention: { kind: MENTION_KIND.MAC_APP, app },
@@ -2136,7 +2133,7 @@ export function useMentionPicker({
   const onThatMac = useOnThatMac(appsAsked ? self : undefined);
   const apps = useMacApps(open && macApps && onThatMac === true);
   const allowedApps = useAllowedApps(open && macApps && onThatMac === false);
-  const keptApps = useKeptApps();
+  const keptApps = useComputerApps();
 
   const appRowsOffered =
     !open || onThatMac === undefined

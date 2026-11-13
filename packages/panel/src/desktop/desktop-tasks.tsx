@@ -1256,7 +1256,7 @@ function DescriptionDocument({
     return heldTaskMentions(
       opened,
       workspace,
-      read?.document.body,
+      read?.description.body,
       { pages, agents, readAgents: readMentionAgents },
       {
         onOpenTask: openMention,

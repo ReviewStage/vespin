@@ -84,7 +84,7 @@ export const taskSync = defineSyncTable(task, {
     { kind: TOPIC.TASK, column: task.id },
     { kind: TOPIC.WORKSPACE, column: task.organizationId },
   ],
-  ignore: [task.document, task.agentEdits, task.doneBy],
+  ignore: [task.description, task.agentEdits, task.doneBy],
   log: LOG.EVERY,
 });
 
@@ -678,7 +678,7 @@ export const automationRunSync = defineSyncTable(automationRun, {
  */
 export const descriptionRevisionSync = defineSyncTable(descriptionRevision, {
   topics: [{ kind: TOPIC.TASK, column: descriptionRevision.taskId }],
-  ignore: [descriptionRevision.document],
+  ignore: [descriptionRevision.description],
 });
 
 /**
