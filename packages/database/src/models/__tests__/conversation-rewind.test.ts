@@ -483,8 +483,8 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
           })
           .where(eq(messages.id, smallTalk));
         const second = yield* turnAt(target, 2_000);
-        yield* rowAt(target, 5, MESSAGE_ROLE.USER, second, 2_000);
-        yield* rowAt(target, 6, MESSAGE_ROLE.ASSISTANT, second, 2_001);
+        yield* rowAt(target, 6, MESSAGE_ROLE.USER, second, 2_000);
+        yield* rowAt(target, 7, MESSAGE_ROLE.ASSISTANT, second, 2_001);
 
         const forked = yield* readForkCut(target, answer);
         // A typed line its hand-over withdrew, standing between the small talk and the next ask.
@@ -493,10 +493,12 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
           .update(messages)
           .set({ withdrawnAt: new Date(1_700) })
           .where(eq(messages.id, withdrawn));
+        // And a line the first turn took after the small talk, which opened no turn.
+        yield* rowAt(target, 5, MESSAGE_ROLE.USER, first, 1_800);
         yield* rewindConversation(target, smallTalk);
 
-        assert.deepEqual(forked, Result.succeed("client-5"));
-        assert.deepEqual(yield* readNativeRewind(target), Option.some("client-5"));
+        assert.deepEqual(forked, Result.succeed("client-6"));
+        assert.deepEqual(yield* readNativeRewind(target), Option.some("client-6"));
       }),
   );
 

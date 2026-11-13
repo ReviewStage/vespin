@@ -1,5 +1,20 @@
 import { MESSAGE_ROLE } from "@repo/wire";
-import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, not, or, sql } from "drizzle-orm";
+import {
+  and,
+  asc,
+  eq,
+  exists,
+  gt,
+  gte,
+  inArray,
+  isNotNull,
+  isNull,
+  lt,
+  not,
+  or,
+  sql,
+} from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { Clock, Effect, Option, Result, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -390,7 +405,10 @@ const findLineAfter = SqlSchema.findOneOption({
     ),
 });
 
-/** The first line past a place in the conversation that opened a turn, where one stands: a turn took it, and not under way. */
+/** A line of the same turn as another, read beside it. */
+const turnMate = alias(messages, "turn_mate");
+
+/** The first line past a place in the conversation that opened a turn, where one stands: a turn took it, not under way, and no earlier line of that turn's. */
 const findOpeningLineAfter = SqlSchema.findOneOption({
   Request: Schema.Struct({ conversationId: Schema.String, seq: Schema.Number }),
   Result: Schema.Struct({ clientId: Schema.String }),
@@ -406,6 +424,21 @@ const findOpeningLineAfter = SqlSchema.findOneOption({
             gt(messages.seq, seq),
             isNotNull(messages.turnId),
             isNull(messages.takenAfterStep),
+            not(
+              exists(
+                db
+                  .select({ seq: turnMate.seq })
+                  .from(turnMate)
+                  .where(
+                    and(
+                      eq(turnMate.conversationId, conversationId),
+                      eq(turnMate.turnId, messages.turnId),
+                      eq(turnMate.role, MESSAGE_ROLE.USER),
+                      lt(turnMate.seq, messages.seq),
+                    ),
+                  ),
+              ),
+            ),
           ),
         )
         .orderBy(asc(messages.seq))
