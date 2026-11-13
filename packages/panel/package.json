@@ -36,6 +36,7 @@
     "./browser-live-port": "./src/tasks/browser-live-port.js",
     "./build-table": "./scripts/build-table.mjs",
     "./bundle-loader": "./src/bundle-loader.js",
+    "./call/call-card-of": "./src/call/call-card-of.js",
     "./composer-drafts": "./src/composer-drafts.js",
     "./desktop/product-identity": "./src/desktop/product-identity.js",
     "./failure-report": "./src/failure-report.js",

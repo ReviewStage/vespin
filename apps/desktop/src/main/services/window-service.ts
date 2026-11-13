@@ -2,8 +2,13 @@ import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { APP_LINK_CLAIM, APP_LINK_SCHEME, appLinkClaim } from "@repo/features/app-links";
-import type { ShownLink } from "@repo/features/link-grammar";
+import { LINK_DESTINATION, type ShownLink } from "@repo/features/link-grammar";
 import { PAGE_SCHEME } from "@repo/features/page-frame";
+import {
+  type StandingCall,
+  VOICE_CALL_PRESS,
+  type VoiceCallPress,
+} from "@repo/features/voice-wire";
 import type { AppStateSnapshot, AppWindowFacts } from "@repo/host/app-state";
 import { applyThemePreference, NativeTheme, windowMaterialFor } from "@repo/host/appearance";
 import type { AppStateStore, OperatorClient } from "@repo/host/client";
@@ -25,6 +30,9 @@ import {
   type WebContents,
 } from "electron";
 import type { BuildLabelMenu } from "../app-menu";
+import { whenPageGone } from "../ipc/page-gone";
+import { CallWindow } from "../window/call-window";
+import { CallWindowPresence } from "../window/call-window-presence";
 import { followDockIcon } from "../window/dock-icon";
 import { askForNotifications } from "../window/notice-doors";
 import { pageResponse } from "../window/page-protocol";
@@ -90,6 +98,10 @@ export interface WindowService extends DesktopService {
    * the change it produced.
    */
   reporterOf: (sender: WebContents) => string;
+  /** Keeps the voice call a panel holds, or none once it ends, which the floating call window draws while no panel has the keyboard. */
+  tellVoiceCall: (sender: WebContents, call: StandingCall | null) => void;
+  /** Hands a press on the floating call window's card on to the panel holding the call, answering false where the asking window is not the call window. */
+  pressVoiceCall: (sender: WebContents, press: VoiceCallPress) => boolean;
   /** Only this build's own renderer may reach a bridge entry. */
   trustedSender: (event: IpcMainEvent | IpcMainInvokeEvent) => boolean;
   applyLoginItem: (openAtLogin: boolean) => void;
@@ -122,6 +134,9 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
   // A file this build wrote into the resource directory, and the whole of
   // what any window here may navigate to or speak from.
   const rendererUrl = pathToFileURL(rendererHtmlPath).href;
+  // The floating call window's document, on the same terms: its own entry, which reaches no host.
+  const callHtmlPath = path.join(config.resourceDirectory, "renderer", "call.html");
+  const callUrl = pathToFileURL(callHtmlPath).href;
 
   const panels = new PanelManager({
     runMode,
@@ -145,6 +160,20 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
     },
     onRendererGone: (reason) => config.report(`Panel renderer gone: ${reason}`),
   });
+
+  const callWindow = new CallWindow({
+    runMode,
+    preloadPath,
+    rendererHtmlPath: callHtmlPath,
+    rendererUrl: callUrl,
+    placementPath: path.join(config.stateRoot, "call-window.json"),
+  });
+
+  const callPresence = new CallWindowPresence(callWindow);
+  /** The panel holding the voice call the document carries; none while none does. */
+  let callHolder: WebContents | undefined;
+  /** The panels whose page going away is already followed, each followed once. */
+  const callPagesFollowed = new WeakSet<WebContents>();
 
   /** What stops a development build's renderer errors reaching the terminal; nothing until the start begins it. */
   let stopRendererErrors = (): void => undefined;
@@ -181,7 +210,71 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
 
   function publishAppState(): void {
     for (const sender of panels.senders()) windowPushes.pushState(sender, appStateFor(sender));
+    const call = callWindow.current();
+
+    if (call !== undefined) windowPushes.pushState(call.webContents, appStateFor(call.webContents));
   }
+
+  /**
+   * The voice call a panel holds, kept on the document for the floating
+   * window, and that window shown or hidden by it. A call ends with the page
+   * that held it, a reload's or a crash's alike, so that page going away
+   * lets the call go here too, as its own hang-up cannot be relied on to
+   * say. A panel telling of no call lets go only the call it held.
+   */
+  function tellVoiceCall(sender: WebContents, call: StandingCall | null): void {
+    if (call === null && callHolder !== sender) return;
+    callHolder = call === null ? undefined : sender;
+
+    if (call !== null && !callPagesFollowed.has(sender)) {
+      callPagesFollowed.add(sender);
+      whenPageGone(sender, () => {
+        callPagesFollowed.delete(sender);
+        tellVoiceCall(sender, null);
+      });
+    }
+
+    state.update({ voiceCall: call });
+    callPresence.callChanged(call !== null);
+  }
+
+  /**
+   * A press on the floating card: the way back brings the holding panel
+   * forward on the call's agent, and every other press is handed to that
+   * panel, which acts on it as on a press of its own card.
+   */
+  function pressVoiceCall(sender: WebContents, press: VoiceCallPress): boolean {
+    if (!callWindow.owns(sender)) return false;
+    const holder = callHolder;
+    const call = state.snapshot().voiceCall;
+
+    if (holder === undefined || call === null) return true;
+
+    if (press.press !== VOICE_CALL_PRESS.OPEN) {
+      windowPushes.push(holder, PUSH.VOICE_CALL_PRESS, press);
+
+      return true;
+    }
+
+    const displayId = panels.displayIdFor(holder);
+
+    if (displayId !== undefined) panels.focusIfExpanded(displayId);
+    windowPushes.push(holder, PUSH.SHOW_LINK, {
+      workspace: "",
+      place: { kind: LINK_DESTINATION.AGENT, planId: call.taskId, agentId: call.agentId },
+    });
+
+    return true;
+  }
+
+  // Which panel has the keyboard, for the call window: while one does, that panel draws the call itself.
+  const panelFocused = (_event: Electron.Event, window: BrowserWindow) => {
+    if (panels.owns(window.webContents)) callPresence.panelFocused(window.webContents);
+  };
+
+  const panelBlurred = (_event: Electron.Event, window: BrowserWindow) => {
+    if (panels.owns(window.webContents)) callPresence.panelBlurred(window.webContents);
+  };
 
   function showSettings(): void {
     panels.broadcast(PUSH.MENU_COMMAND, APP_COMMAND.SETTINGS);
@@ -291,10 +384,12 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
     showSettings,
     onPanelFocusChanged,
     reporterOf,
+    tellVoiceCall,
+    pressVoiceCall,
     trustedSender: (event) => {
       const url = event.senderFrame?.url ?? event.sender.getURL();
 
-      return url === rendererUrl;
+      return url === rendererUrl || url === callUrl;
     },
     applyLoginItem,
     start: async () => {
@@ -375,6 +470,8 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
       if (linkClaim === APP_LINK_CLAIM.RELEASE) app.removeAsDefaultProtocolClient(APP_LINK_SCHEME);
       app.on("second-instance", handleSecondInstance);
       app.on("activate", handleActivate);
+      app.on("browser-window-focus", panelFocused);
+      app.on("browser-window-blur", panelBlurred);
       screen.on("display-added", handleDisplayChange);
       screen.on("display-removed", handleDisplayChange);
       screen.on("display-metrics-changed", handleDisplayChange);
@@ -387,6 +484,8 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
       stopRendererErrors();
       app.removeListener("second-instance", handleSecondInstance);
       app.removeListener("activate", handleActivate);
+      app.removeListener("browser-window-focus", panelFocused);
+      app.removeListener("browser-window-blur", panelBlurred);
       screen.removeListener("display-added", handleDisplayChange);
       screen.removeListener("display-removed", handleDisplayChange);
       screen.removeListener("display-metrics-changed", handleDisplayChange);
@@ -400,6 +499,8 @@ export function createWindowService(dependencies: WindowServiceDependencies): Wi
       if (session.defaultSession.protocol.isProtocolHandled(PAGE_SCHEME)) {
         session.defaultSession.protocol.unhandle(PAGE_SCHEME);
       }
+
+      callWindow.closeForGood();
     },
   };
 }

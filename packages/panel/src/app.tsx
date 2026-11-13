@@ -37,6 +37,7 @@ import {
 import { appPlatform } from "./app-platform.js";
 import { type SettingsDoors, useSettingsPanel, useShownUpdate } from "./app-settings.js";
 import { useAutomationsRoute } from "./automations-route.js";
+import { StandingCallProvider } from "./call/standing-call.js";
 import { useDraftsOwner } from "./composer-drafts.js";
 import { useConnected } from "./connection.js";
 import { CommandPalette } from "./desktop/command-palette.js";
@@ -944,17 +945,20 @@ function AppWindow(): React.JSX.Element {
                               <div className="desktop-stage">
                                 <MessageRevealProvider value={messageReveal}>
                                   <ThreadRevealProvider value={threadReveal}>
-                                    <SettingsShell
-                                      gates={gates}
-                                      tab={tab}
-                                      onTabChange={changeTab}
-                                      tasks={tasks}
-                                      history={history}
-                                      sidebar={sidebar}
-                                      room={room}
-                                      settingsStep={settingsStep}
-                                      doors={settingsDoors}
-                                    />
+                                    {/* The window's call as its card draws it, docked wherever the window is not on the call's agent. */}
+                                    <StandingCallProvider onShowAgent={tasks.onShowAgent}>
+                                      <SettingsShell
+                                        gates={gates}
+                                        tab={tab}
+                                        onTabChange={changeTab}
+                                        tasks={tasks}
+                                        history={history}
+                                        sidebar={sidebar}
+                                        room={room}
+                                        settingsStep={settingsStep}
+                                        doors={settingsDoors}
+                                      />
+                                    </StandingCallProvider>
                                   </ThreadRevealProvider>
                                 </MessageRevealProvider>
                               </div>

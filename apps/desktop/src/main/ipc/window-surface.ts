@@ -9,6 +9,7 @@ import {
 } from "@repo/features/analytics";
 import type { FeedbackResult, FeedbackSubmission } from "@repo/features/feedback";
 import type { HandoffActivity } from "@repo/features/ios-system-activity";
+import type { StandingCall, VoiceCallPress } from "@repo/features/voice-wire";
 import { actPortFor, type PlatformActProcedures } from "@repo/host/act-port";
 import { CONTACT_MAILTO, WINDOW_SURFACE_ACT_KIND } from "@repo/host/contract";
 import {
@@ -64,6 +65,10 @@ interface WindowSurfaceDependencies {
   tellMenuOffers: (sender: WebContents, commands: readonly AppCommand[]) => void;
   /** Keeps what a panel shows now, or none, which the Mac hands off to the member's iPhone while it is focused. */
   tellHandoff: (sender: WebContents, activity: HandoffActivity | null) => void;
+  /** Keeps the voice call a panel holds, or none once it ends, which the floating call window draws. */
+  tellVoiceCall: (sender: WebContents, call: StandingCall | null) => void;
+  /** Hands a press on the floating call window's card on, answering false where the asking window is not the call window. */
+  pressVoiceCall: (sender: WebContents, press: VoiceCallPress) => boolean;
 }
 
 /** The part of a window a still is asked of, in its CSS pixels. */
@@ -87,7 +92,9 @@ const surfacePort = actPortFor<WebContents>();
  * alone, since only a panel's ⌃Tab previews its tabs. An empty part is no
  * still. Unsaved work is a panel's to tell of, since only a panel edits,
  * and the build's label a panel's to hide, since only a panel draws it, and
- * refused in a build that draws none. The rest read no window.
+ * refused in a build that draws none. A voice call is a panel's to tell
+ * of, since only a panel holds one, and a press on the call's card the
+ * floating call window's alone. The rest read no window.
  */
 export function windowSurfaceProcedures(
   dependencies: WindowSurfaceDependencies,
@@ -196,6 +203,17 @@ export function windowSurfaceProcedures(
     ].handler(({ input, context, errors }) => {
       if (!context.actor.panel) throw errors.REFUSED();
       dependencies.tellHandoff(context.actor.sender, input.activity);
+    }),
+    [WINDOW_SURFACE_ACT_KIND.WINDOW_VOICE_CALL]: surfacePort[
+      WINDOW_SURFACE_ACT_KIND.WINDOW_VOICE_CALL
+    ].handler(({ input, context, errors }) => {
+      if (!context.actor.panel) throw errors.REFUSED();
+      dependencies.tellVoiceCall(context.actor.sender, input.call);
+    }),
+    [WINDOW_SURFACE_ACT_KIND.VOICE_CALL_PRESS]: surfacePort[
+      WINDOW_SURFACE_ACT_KIND.VOICE_CALL_PRESS
+    ].handler(({ input, context, errors }) => {
+      if (!dependencies.pressVoiceCall(context.actor.sender, input.press)) throw errors.REFUSED();
     }),
     [WINDOW_SURFACE_ACT_KIND.FEEDBACK_SEND]: surfacePort[
       WINDOW_SURFACE_ACT_KIND.FEEDBACK_SEND

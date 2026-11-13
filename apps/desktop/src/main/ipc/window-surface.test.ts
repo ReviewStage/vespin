@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { afterEach, it } from "@effect/vitest";
 import type { FeedbackSubmission } from "@repo/features/feedback";
+import { VOICE_CALL_PRESS, VOICE_CALL_STAGE } from "@repo/features/voice-wire";
 import type { ActSender } from "@repo/host/act-port";
 import { type TestActPort, testActPort } from "@repo/host/act-port/testing";
 import { WINDOW_SURFACE_ACT_KIND } from "@repo/host/contract";
@@ -106,6 +107,11 @@ function fixture() {
         heard.push(`unsaved:${sender === panelContents ? "panel" : "other"}:${holding}`),
       tellMenuOffers: (_sender, commands) => heard.push(`offers:${commands.join()}`),
       tellHandoff: (_sender, activity) => heard.push(`handoff:${activity?.webpageUrl ?? "none"}`),
+      tellVoiceCall: (sender, call) =>
+        heard.push(`call:${sender === panelContents ? "panel" : "other"}:${call?.stage ?? "none"}`),
+      // The other window stands for the floating call window, the one window a press is taken from.
+      pressVoiceCall: (sender, press) =>
+        sender === otherContents && heard.push(`press:${press.press}`) > 0,
     }),
   );
 
@@ -179,6 +185,36 @@ it("a panel's unsaved work is kept as it tells it, and refused from any other wi
     refused: "Could not tell this system about unsaved work.",
   });
   assert.deepEqual(heard, ["unsaved:panel:true", "unsaved:panel:false"]);
+});
+
+it("a panel's call is kept as it tells it, and a press on the call's card handed on from the call window alone", async () => {
+  const { port, panel, other, heard } = fixture();
+
+  const call = {
+    agentId: "agent_1",
+    taskId: "task_1",
+    name: "Teammate invitations",
+    stage: VOICE_CALL_STAGE.LIVE,
+    microphoneMuted: false,
+    speakerMuted: false,
+  };
+
+  assert.deepEqual(await port.call(panel, KIND.WINDOW_VOICE_CALL, { call }), { answer: undefined });
+  assert.deepEqual(await port.call(panel, KIND.WINDOW_VOICE_CALL, { call: null }), {
+    answer: undefined,
+  });
+  assert.deepEqual(await port.call(other, KIND.WINDOW_VOICE_CALL, { call }), {
+    refused: "Could not tell the Mac about this window's call.",
+  });
+  assert.deepEqual(
+    await port.call(other, KIND.VOICE_CALL_PRESS, { press: { press: VOICE_CALL_PRESS.END } }),
+    { answer: undefined },
+  );
+  assert.deepEqual(
+    await port.call(panel, KIND.VOICE_CALL_PRESS, { press: { press: VOICE_CALL_PRESS.END } }),
+    { refused: "Could not reach the call." },
+  );
+  assert.deepEqual(heard, ["call:panel:live", "call:panel:none", "press:end"]);
 });
 
 it("words are copied, a mail and the settings opened, and feedback carried", async () => {

@@ -28,6 +28,7 @@
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import { VOICE_CALL_STAGE, type VoiceCallStage } from "@repo/features/voice-wire";
 import { DEFAULT_LIVE_VOICE } from "@repo/features/voices";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
@@ -43,15 +44,6 @@ import { useOpenAiKeyMissing, useOpenApiKeys } from "./openai-key.js";
 import { MICROPHONE_REFUSAL, useOpenMicrophone } from "./tasks/use-open-microphone.js";
 import { showToast } from "./toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "./use-app-state.js";
-
-/** Where a call stands: connecting until the session says it started, live, then ending until its channel has closed. */
-export const VOICE_CALL_STAGE = {
-  CONNECTING: "connecting",
-  LIVE: "live",
-  ENDING: "ending",
-} as const;
-
-export type VoiceCallStage = (typeof VOICE_CALL_STAGE)[keyof typeof VOICE_CALL_STAGE];
 
 /** The call standing in this window, as a surface draws it. */
 export interface VoiceCallState {

@@ -13,6 +13,7 @@
         "src/preload/index.ts",
         "src/utility/task-code.ts",
         "src/renderer/index.tsx",
+        "src/renderer/call/index.tsx",
         "src/renderer/styles/index.css",
         "src/renderer/session-recorder/index.ts",
         "scripts/*.mjs",

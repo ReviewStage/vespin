@@ -15,6 +15,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BACK_BUTTON_LOOK,
   BackButton,
+  CALL_CARD_SURFACE,
   Fill,
   GAP,
   GroupHeader,
@@ -38,6 +39,7 @@ import { useQuery } from "@tanstack/react-query";
 import { type ReactNode, useEffect, useId, useRef, useState } from "react";
 import { useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
+import { CallCardDock } from "../call/standing-call.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
 import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import type { NavigationHistory } from "../places/window-history.js";
@@ -524,6 +526,8 @@ export function DesktopSettings({
             </ScrollArea>
           </Fill>
         </LinkWorkspaceProvider>
+        {/* The window's call card, at the foot of the column as the sidebar docks it. */}
+        <CallCardDock docked surface={CALL_CARD_SURFACE.SIDEBAR} />
         {/* Last, so the drag strip above the way back does not take the edge's top from it. */}
         {split.single ? null : <ResizeEdge edge={edge} />}
       </nav>
