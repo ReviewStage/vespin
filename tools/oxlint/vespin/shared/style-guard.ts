@@ -25,6 +25,7 @@ export const STYLE_RULE = {
   HAS_OVER_ANY: "has-over-any",
   BAR_CORNER: "bar-corner",
   GRID_COLUMNS: "grid-columns",
+  EDGE_CLIP: "edge-clip",
 } as const;
 export type StyleRule = (typeof STYLE_RULE)[keyof typeof STYLE_RULE];
 
@@ -90,6 +91,11 @@ export const STYLE_RULES: Readonly<
   [STYLE_RULE.GRID_COLUMNS]: {
     refuses:
       "a grid that places its items (`place-items-*`, `justify-items-*`) and names no columns: its one `auto` column grows to its item's widest line, so a card or a sheet centered in it stands off the screen's edge on a phone",
+    backlog: true,
+  },
+  [STYLE_RULE.EDGE_CLIP]: {
+    refuses:
+      "a box that rounds its corners, draws a border, and clips what it holds (`overflow` hidden or clip): Chromium clips a layer it composites apart, a playing video's among them, at the box's outer corner and paints it over the border's curve, so the box keeps its border and `@repo/ui`'s `EdgeClip` clips inside it",
     backlog: true,
   },
 };
@@ -669,6 +675,44 @@ function autoColumnGrid(block: CssBlock): CssDeclaration | undefined {
   return places && !named ? display : undefined;
 }
 
+/** A declaration drawing a border of some width, on every side or one. */
+const EDGE_PROPERTY =
+  /^border(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?(?:-width)?$/u;
+
+/** A border's value that draws no edge. */
+const NO_EDGE = /^(?:none|hidden|0(?:px)?)(?:\s|$)/u;
+
+/** An overflow that clips what a box holds. */
+const CLIP_PROPERTY = /^overflow(?:-[xy])?$/u;
+const CLIP_VALUE = /\b(?:hidden|clip)\b/u;
+
+/** A corner that rounds: any radius but none. */
+const SQUARE_CORNER = /^0(?:px)?$/u;
+
+/**
+ * The box's own declarations where a block rounds its corners, draws a
+ * border, and clips what it holds; none elsewhere. Note that the three are
+ * read in one block, as a rule written for one box states them.
+ */
+function edgeClipBlock(block: CssBlock): string | undefined {
+  const holds = (test: (declaration: CssDeclaration) => boolean) => block.declarations.find(test);
+  const corner = holds(
+    ({ property, value }) =>
+      RADIUS_PROPERTY.test(property) && !SQUARE_CORNER.test(bareValue(value)),
+  );
+  const edge = holds(
+    ({ property, value }) =>
+      EDGE_PROPERTY.test(property) &&
+      !property.endsWith("-color") &&
+      !NO_EDGE.test(bareValue(value)),
+  );
+  const clip = holds(
+    ({ property, value }) => CLIP_PROPERTY.test(property) && CLIP_VALUE.test(value),
+  );
+  if (corner === undefined || edge === undefined || clip === undefined) return undefined;
+  return `${selectorOf(block)} { ${edge.property}; ${corner.property}; ${clip.property}: ${clip.value.trim()} }`;
+}
+
 function cssRuleOf(declaration: CssDeclaration, block: CssBlock): StyleRule | undefined {
   const { property, value } = declaration;
   const bare = bareValue(value);
@@ -836,6 +880,54 @@ function autoColumnClasses(tokens: readonly string[]): string | undefined {
   return tokens.filter((_, index) => grid(utilities[index] ?? "")).join(" ");
 }
 
+/** What part of an edge that clips a utility draws: its corner, its border, or its clip. */
+const EDGE_PART = {
+  CORNER: "corner",
+  BORDER: "border",
+  CLIP: "clip",
+} as const;
+type EdgePart = (typeof EDGE_PART)[keyof typeof EDGE_PART];
+
+/** A border's width utility: every side's or one side's, bare or sized, never a color or a style. */
+const BORDER_WIDTH_UTILITY = /^border(?:-[xytrblse])?(?:-(\d+|\[[^\]]+\]))?$/u;
+
+/** A utility clipping what its box holds. */
+const CLIP_UTILITY = /^overflow(?:-[xy])?-(?:hidden|clip)$/u;
+
+function edgePartOf(utility: string): EdgePart | undefined {
+  const corner = RADIUS_UTILITY.exec(utility);
+  if (corner !== null) return corner[1] === "none" ? undefined : EDGE_PART.CORNER;
+  const border = BORDER_WIDTH_UTILITY.exec(utility);
+  if (border !== null) {
+    const width = border[1];
+    const sized = width === undefined || /^\d+$/u.test(width) || LENGTH_ARBITRARY.test(width);
+    return sized && width !== "0" ? EDGE_PART.BORDER : undefined;
+  }
+  return CLIP_UTILITY.test(utility) ? EDGE_PART.CLIP : undefined;
+}
+
+/**
+ * The classes where a class list rounds a box, draws its border, and clips
+ * what it holds, under one set of variants or none; none elsewhere. Note
+ * that a class with no variant counts under every set, so
+ * `rounded-control data-[open=true]:overflow-hidden border` is one box.
+ */
+function edgeClipClasses(tokens: readonly string[]): string | undefined {
+  const parts = tokens.flatMap((token) => {
+    const utility = utilityOf(token);
+    const part = edgePartOf(utility);
+    return part === undefined ? [] : [{ token, part, scope: variantsOf(token, utility) }];
+  });
+  for (const scope of new Set(parts.map((part) => part.scope))) {
+    const box = parts.filter((part) => part.scope === "" || part.scope === scope);
+    const whole = Object.values(EDGE_PART).every((needed) =>
+      box.some((part) => part.part === needed),
+    );
+    if (whole) return box.map((part) => part.token).join(" ");
+  }
+  return undefined;
+}
+
 function classViolations(
   classes: string,
   line: number,
@@ -847,6 +939,8 @@ function classViolations(
   const bar = tokens.some((token) => BAR_CLASS.test(`.${token}`));
   const grid = autoColumnClasses(tokens);
   if (grid !== undefined) violations.push({ rule: STYLE_RULE.GRID_COLUMNS, line, excerpt: grid });
+  const edge = edgeClipClasses(tokens);
+  if (edge !== undefined) violations.push({ rule: STYLE_RULE.EDGE_CLIP, line, excerpt: edge });
   for (const token of tokens) {
     const rule = classRuleOf(token, names);
     if (rule !== undefined) violations.push({ rule, line, excerpt: token });
@@ -942,6 +1036,10 @@ export function styleViolations(
           line: block.line,
           excerpt: selectorOf(block),
         });
+      }
+      const edge = edgeClipBlock(block);
+      if (edge !== undefined) {
+        violations.push({ rule: STYLE_RULE.EDGE_CLIP, line: block.line, excerpt: edge });
       }
       const grid = autoColumnGrid(block);
       if (grid !== undefined) {
