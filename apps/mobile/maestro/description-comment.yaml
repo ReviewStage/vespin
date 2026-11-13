@@ -61,3 +61,14 @@ appId: dev.vespin.ios
 - assertVisible: "Resolve"
 - waitForAnimationToEnd
 - takeScreenshot: comment-open-thread
+# A comment's row resolves from a swipe from its trailing edge, as an Inbox
+# thread's does.
+- tapOn:
+    id: "BackButton"
+- waitForAnimationToEnd
+- swipe:
+    from: "Should an owner be able to resend an expired invite from this page?"
+    direction: LEFT
+- assertVisible: "Resolve"
+- waitForAnimationToEnd
+- takeScreenshot: comment-row-swipe
