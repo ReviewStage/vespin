@@ -1440,9 +1440,11 @@ test("the side panel's toggle stands over a task's details while the panel is le
   const shell = createElement(PlacedShell, { place: PLACE.OTHER_TASK, patch: { sidePanel } });
   act(() => root?.render(withQueryClient(underRouter(shell, SHELL_AT.TASK))));
   await settle();
+
   const toggled = [...container.querySelectorAll("button")].some((button) =>
     ["Show panel", "Hide panel"].includes(button.getAttribute("aria-label") ?? ""),
   );
+
   act(() => root?.unmount());
   container.remove();
   assert.ok(toggled, "the toggle is the way out");
