@@ -1,0 +1,9 @@
+#8940 at 1c2c29a9f (built 1c2c29a9f), landscape iPad 26.5 and 27.2, light and dark. 4 flows, 0 failed steps, 26 shots each under pr-8940/landscape/.
+
+VERDICT: FAIL (agent page bar only).
+
+PASS - thread detail bar (02, 03, 05, 06-08, 11): expand and compose as one glass group at the leading edge; the task path chip; Mark unread, Remind me, Resolve, More and Search as glyphs in one trailing glass group. Expanded (06) puts the sidebar toggle, collapse and compose at the leading edge with the same trailing group. Same on 26.5 and 27.2, light and dark.
+PASS - Tasks with nothing picked (12-14): expand and compose leading; New agent and New sub-task glyphs dimmed with Search, as one group.
+NOT SHOWN - a picked task's bar: 13-task-picked and 14-task-more-menu still show "Select a task", so the flow never opened a task.
+
+FAIL - agent page (16-18), all four runs: the bar's new Pin and Archive buttons (agent-screens.tsx barActs, Stack.Toolbar.Button with Stack.Toolbar.Icon xcasset) draw as two wide, empty glass capsules spanning the bar right of the title, with no glyph in either. Only the ⋯ draws. ⋯ itself is right: Pin and Archive are gone from it (17). The page is the pushed agent page, not the split detail.
