@@ -1,7 +1,13 @@
 import "@orpc/experimental-effect/extensions/effect";
 import { createORPCErrorConstructorMap } from "@orpc/contract";
 import type { WithEffectContext } from "@orpc/experimental-effect";
-import { type AnyProcedure, type ContractedRouter, implement, ORPCError } from "@orpc/server";
+import {
+  type AnyProcedure,
+  type ContractedRouter,
+  implement,
+  ORPCError,
+  type RouterImplementerWithMiddlewares,
+} from "@orpc/server";
 import { Effect } from "effect";
 import {
   ACT_ERROR,
@@ -67,6 +73,13 @@ export function isRefusal(error: unknown): error is ORPCError<string, unknown> {
   return error instanceof ORPCError && error.code === ACT_ERROR.REFUSED;
 }
 
+/** The act port's implementer for a platform whose handle on a window is a `Sender`, named because its inferred type is past the length declarations will hold. */
+type ActPortImplementer<Sender> = RouterImplementerWithMiddlewares<
+  typeof actPortContract,
+  ActPortContext<Sender>,
+  Record<never, never>
+>;
+
 /**
  * The act port's contract to implement, for a platform whose handle on a window is
  * a `Sender`. Every procedure first refuses a sender this build does not
@@ -74,7 +87,7 @@ export function isRefusal(error: unknown): error is ORPCError<string, unknown> {
  * panel's alone, in its own sentence, before its input is read or its row
  * asks anything.
  */
-export function actPortFor<Sender>() {
+export function actPortFor<Sender>(): ActPortImplementer<Sender> {
   return implement(actPortContract)
     .$context<ActPortContext<Sender>>()
     .use(({ context, next, procedure }) => {
@@ -87,7 +100,7 @@ export function actPortFor<Sender>() {
 }
 
 /** The act contract to implement, for the host's own procedures, which read no platform's handle on a window. */
-export const actPort = actPortFor<unknown>();
+export const actPort: ActPortImplementer<unknown> = actPortFor<unknown>();
 
 /**
  * The procedures a platform answers itself, built from `actPortFor`: every

@@ -175,10 +175,10 @@ const readMachineCommand = readEither(machineCommandSchema);
 
 /** The machine a call names, as `run_on_mac` and `computer` take it. */
 export const MACHINE_INPUT = describeWire(
-  Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(200)),
-  "The machine to run on, by its name, where the conversation asks for one other than your " +
-    "default machine; a call refused for its machine names the ones that can take it. Leave it " +
-    "out for your default machine.",
+  Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64)),
+  "The id of the machine to run on, where the conversation asks for one other than your " +
+    "default machine; a call refused for its machine lists the ids of the ones that can take " +
+    "it. Leave it out for your default machine.",
 );
 
 const RUN_ON_MAC_INPUT = Schema.Struct({
@@ -363,15 +363,15 @@ export function askMacHeard(
   return Effect.catch(run, () => Effect.succeed(notRun(MACHINE_COMMAND_REFUSAL.UNAVAILABLE)));
 }
 
-/** Where a call of the kind given goes from the conversation given, naming the machine given or none (`machine-routing.ts`). */
+/** Where a call of the kind given goes from the conversation given, naming the machine's id given or none (`machine-routing.ts`). */
 export function routedCall(
   target: ConversationTarget,
   kind: MachineCommandKind,
-  name: string | undefined,
+  machineId: string | undefined,
 ): TaskStoreEffect<MachineRoute> {
   return routeOf(target, {
     kind,
-    name,
+    machineId,
     accountListening: macListening,
     noMachine: MACHINE_COMMAND_KIND_REFUSAL[kind].NO_MAC,
   });
