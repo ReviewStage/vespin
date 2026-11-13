@@ -32,7 +32,7 @@ import type { AGENT_ACTS } from "./contract/index.js";
 import { appHostCommandLinked, COMMAND_LINK_OUTCOME } from "./daemon/app-host-command.js";
 import { HOST_LEAVE_OUTCOME } from "./daemon/host-leave.js";
 import { uninstallBundledHost } from "./daemon/host-uninstall.js";
-import { keepsQuitting, type LaunchdJob } from "./daemon/launchd-job.js";
+import { keepsQuitting, type LaunchdJob, lastRunFailure } from "./daemon/launchd-job.js";
 import { Reporter, THIS_MAC_AGENT_STATUS, ThisMacHost } from "./effect/seams.js";
 import type { HostActTable } from "./host-acts.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
@@ -694,10 +694,11 @@ export function composeThisMacHost(
             if (next === MutableRef.get(quitting)) return;
             MutableRef.set(quitting, next);
 
-            if (next && now !== undefined) {
-              report("this Mac's host keeps quitting as launchd starts it", {
-                reason: `last exit code ${now.lastExit}`,
-              });
+            // Note that a job read as quitting always failed its last run, so the line always says how.
+            const failure = now === undefined ? undefined : lastRunFailure(now);
+
+            if (next && failure !== undefined) {
+              report("this Mac's host keeps quitting as launchd starts it", { reason: failure });
             }
 
             yield* tellThisMac;

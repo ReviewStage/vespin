@@ -591,19 +591,22 @@ it.effect(
     Effect.scoped(
       Effect.gen(function* () {
         const stateRoot = yield* recorded(STANDING);
+
         const mac = yield* thisMac(stateRoot, {
           listed: [KEPT_ID],
           status: THIS_MAC_AGENT_STATUS.ENABLED,
         });
+
         const quitLine = (line: string) => line.includes("keeps quitting");
-        mac.launchd({ runs: 1, lastExit: undefined });
+
+        mac.launchd({ runs: 1, lastExit: undefined, lastSignal: undefined });
         yield* until(() => mac.held() !== undefined);
         yield* nudged(Duration.minutes(1));
 
         // Note that launchd starts a dead agent again once a minute, its throttle, so five minutes hold five more failed runs.
-        mac.launchd({ runs: 6, lastExit: 1 });
+        mac.launchd({ runs: 6, lastExit: 1, lastSignal: undefined });
         yield* until(() => mac.held()?.wontStart === true);
-        mac.launchd({ runs: 11, lastExit: 1 });
+        mac.launchd({ runs: 11, lastExit: 1, lastSignal: undefined });
         yield* nudged(Duration.minutes(5));
         assert.equal(mac.held()?.wontStart, true);
         assert.deepEqual(
@@ -617,7 +620,7 @@ it.effect(
         );
 
         // A fixed bundle runs, so launchd starts it once more and no more.
-        mac.launchd({ runs: 12, lastExit: 1 });
+        mac.launchd({ runs: 12, lastExit: 1, lastSignal: undefined });
         yield* until(() => mac.held()?.wontStart === false);
         assert.equal(mac.reported.filter(quitLine).length, 1);
       }).pipe(Effect.provide(FILES)),
