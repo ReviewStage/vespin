@@ -22,7 +22,7 @@ import type { ListedAgent } from "@repo/features/agent-wire";
 import type { ListedPullRequest, TaskSummary } from "@repo/features/task-wire";
 import type { TasksView } from "@repo/features/tasks-view";
 import { type Collection, type CollectionConfig, createCollection } from "@tanstack/react-db";
-import { createContext, type ReactNode, use } from "react";
+import { createContext, type ReactNode, use, useCallback, useSyncExternalStore } from "react";
 
 /** One document as the follow wrote it: its version and the task list it lists from. */
 interface ListedView {
@@ -193,6 +193,84 @@ function partCollectionOptions<Row extends object>(
       },
     },
   };
+}
+
+/** Hears that one row moved. */
+type RowHeard = () => void;
+
+/** The readers of each collection's rows, by key, told through the one subscription each collection holds while it has any. */
+const rowReaders = new WeakMap<
+  object,
+  { readonly readers: Map<string, Set<RowHeard>>; stop: (() => void) | undefined }
+>();
+
+/**
+ * Listens for the row `key` names in `collection` to move. Every reader of
+ * a collection shares one `subscribeChanges`, which routes each change to the
+ * readers of its key alone, so a delivery costs the rows it moved rather than
+ * the readers standing; it unsubscribes once its last reader goes.
+ */
+function listenToRow<Row extends object>(
+  collection: Collection<Row, string>,
+  key: string,
+  heard: RowHeard,
+): () => void {
+  let held = rowReaders.get(collection);
+
+  if (held === undefined) {
+    held = { readers: new Map(), stop: undefined };
+    rowReaders.set(collection, held);
+  }
+
+  const { readers } = held;
+
+  if (held.stop === undefined) {
+    const subscription = collection.subscribeChanges((changes) => {
+      for (const change of changes) for (const hear of readers.get(change.key) ?? []) hear();
+    });
+
+    held.stop = () => subscription.unsubscribe();
+  }
+
+  const ofKey = readers.get(key) ?? new Set();
+  ofKey.add(heard);
+  readers.set(key, ofKey);
+  const standing = held;
+
+  return () => {
+    ofKey.delete(heard);
+
+    if (ofKey.size === 0) readers.delete(key);
+
+    if (readers.size > 0) return;
+    standing.stop?.();
+    standing.stop = undefined;
+  };
+}
+
+/** Nothing to listen for: what a read with no key subscribes with. */
+const LISTEN_TO_NOTHING = (): (() => void) => () => {};
+
+/**
+ * The row `key` names in `collection` (`.get(key)`), drawn again only when
+ * that row moves, and the same object until it does; none where the
+ * collection holds no such row, or no key is given. A screen with many
+ * readers of single rows, a transcript's chips say, reads through this
+ * rather than a live query each.
+ */
+export function useTaskListRow<Row extends object>(
+  collection: Collection<Row, string>,
+  key: string | undefined,
+): Row | undefined {
+  const subscribe = useCallback(
+    (heard: RowHeard) =>
+      key === undefined ? LISTEN_TO_NOTHING() : listenToRow(collection, key, heard),
+    [collection, key],
+  );
+
+  return useSyncExternalStore(subscribe, () =>
+    key === undefined ? undefined : collection.get(key),
+  );
 }
 
 /** The task list's collections, one per part, each keyed by its rows' id. */
