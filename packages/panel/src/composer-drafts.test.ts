@@ -82,7 +82,7 @@ function task(id: string, name: string, agentId: string) {
     createdAt: 1,
     updatedAt: 2,
     repository: null,
-    document: { body: `# ${name}`, assumptions: [] },
+    description: { body: `# ${name}`, assumptions: [] },
   };
 
   const agent: AgentSummary = {

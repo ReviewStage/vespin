@@ -1,4 +1,4 @@
-/* chart.css -- the chart's own frame around recharts' plot, and its tooltip's card.
+/* chart.css -- the chart's own frame around recharts' plot, and its tooltip's layout.
 
    Recharts is the engine and draws the plot; what it paints in its stock
    grays (an axis tick, the grid, the hover cursor) is redrawn here in the
@@ -71,19 +71,14 @@
     }
   }
 
-  /* The tooltip floats over a chart that sits on a card, so it is drawn on
-     the overlay's ground, a step above the card in the dark, never the
-     page's, which would draw the one floating surface below what it covers. */
+  /* The tooltip's layout. Its frame, the edge, corner, ground, and menu
+     shadow of a card floating over the plot, is `@repo/ui`'s `Card`
+     (`ChartTooltipCard` in `chart.tsx`), whose raised ground is the
+     overlay's, a step above the card the chart sits on in the dark. */
   .ui-chart-tooltip {
-    display: grid;
     align-items: start;
     gap: var(--ui-space-6);
     min-width: calc(2 * var(--ui-space-64));
-    border: 1px solid color-mix(in srgb, var(--ui-color-border) 50%, transparent);
-    border-radius: var(--ui-card-radius);
-    background: var(--ui-color-overlay);
-    box-shadow: var(--ui-menu-shadow);
-    padding: var(--ui-space-6) var(--ui-space-8);
     font-size: var(--ui-type-caption-size);
     line-height: var(--ui-type-caption-leading);
   }

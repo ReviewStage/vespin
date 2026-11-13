@@ -2,7 +2,7 @@ import { EXCESS_KEYS, isRecord, type UnparsedWireValue } from "@repo/wire";
 import { describeWire, readEither } from "@repo/wire/effect";
 import { Schema as EffectSchema, Result } from "effect";
 import { taskPicturesIn } from "./description-attachment-link.js";
-import { descriptionSections, openFenceAt } from "./description-document.js";
+import { descriptionSections, openFenceAt } from "./description-sections.js";
 import { mentionLinksIn } from "./mention-link.js";
 import { DESCRIPTION_SECTION_BOUNDS, TASK_BOUNDS } from "./task-wire.js";
 import { trimmedText } from "./text-schema.js";
@@ -11,7 +11,7 @@ import { withoutTrailingNewlines } from "./trailing-newlines.js";
 /**
  * description-notes.ts -- the notes the app takes into a description's text, and the agents' journal of them.
  *
- * A description is one Markdown text that starts empty (`description-document.ts`,
+ * A description is one Markdown text that starts empty (`description-sections.ts`,
  * `docs/TASKS.md`), its headings its sections.
  *
  * The app changes the text only by taking notes, of two kinds: a point added

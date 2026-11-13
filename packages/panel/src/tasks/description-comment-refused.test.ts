@@ -76,7 +76,7 @@ const THREAD: DescriptionCommentThread = {
 const PLAN: Task = {
   ...DOCUMENT_TASK,
   id: "plan-1",
-  document: { body: "## Goal\n\nAn invite is a single-use link.", assumptions: [] },
+  description: { body: "## Goal\n\nAn invite is a single-use link.", assumptions: [] },
 };
 
 const roots: Root[] = [];

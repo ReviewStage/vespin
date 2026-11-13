@@ -24,6 +24,7 @@ import {
   type MachineCommand,
   type MachineCommandKind,
   type MachineCommandResult,
+  type MachineUnreached,
   type MacShellResult,
   machineCommandSchema,
 } from "@repo/features/machine-command-wire";
@@ -148,6 +149,10 @@ export type MachineCommandAnswer = (
       readonly reason: string;
       /** The grants the Mac lacked for an action on an app, which the transcript offers the place to turn on. */
       readonly missingPermissions?: readonly ComputerPermission[];
+      /** Why the call reached no machine, where routing refused it, which the transcript says in its own words. */
+      readonly why?: MachineUnreached;
+      /** The machines that could take the call now, where routing refused it, which the transcript offers to make the default. */
+      readonly others?: readonly RoutedMachine[];
     }
 ) & {
   /** The machine the call went to, or was refused on, and whose it is; none for a call that went to an account's Macs from before machines claimed, or to no machine. */
@@ -167,6 +172,7 @@ export type MachineCommandAsk =
   | {
       readonly kind: typeof MACHINE_COMMAND_KIND.COMPUTER;
       readonly conversationId: string;
+      readonly agentId?: string;
       readonly action: MacComputerAction;
       readonly timeoutSeconds?: number;
     };
@@ -390,7 +396,14 @@ export function askMachine(
   if (route.kind === MACHINE_ROUTE.ACCOUNT) return askMacHeard(route.userId, ask);
 
   if (route.kind === MACHINE_ROUTE.REFUSED) {
-    const refused = machineCommandNotRun(route.reason);
+    const { reason, why, others } = route;
+
+    const refused: MachineCommandAnswer = {
+      status: MACHINE_COMMAND_STATUS.NOT_RUN,
+      reason,
+      why,
+      others,
+    };
 
     return Effect.succeed({
       answer: route.machine === undefined ? refused : { ...refused, machine: route.machine },

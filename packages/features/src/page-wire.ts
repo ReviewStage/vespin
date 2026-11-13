@@ -91,12 +91,12 @@ export const pageLineSchema = EffectSchema.Struct({
 
 export type PageLine = typeof pageLineSchema.Type;
 
-/** A plan's pages (GET `/api/plans/{id}/pages`), the most recently written first. */
+/** A plan's pages (GET `/api/tasks/{id}/pages`), the most recently written first. */
 export const taskPagesAnswerSchema = EffectSchema.Struct({
   pages: EffectSchema.Array(pageLineSchema),
 });
 
-/** One version of a page with its HTML (GET `/api/plans/{id}/pages/{page}/versions/{version}`), titled as that version was. */
+/** One version of a page with its HTML (GET `/api/tasks/{id}/pages/{page}/versions/{version}`), titled as that version was. */
 const pageVersionSchema = EffectSchema.Struct({
   ...pageLineSchema.fields,
   html: pageHtmlSchema,

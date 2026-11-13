@@ -32,6 +32,7 @@ import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platfo
 import { handHostReads } from "../testing/app-state.js";
 import { settleQueries, withQueryClient } from "../testing/copy-feedback.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
+import { standingTaskList } from "../testing/history-rows.js";
 import { agentsControl, listedAgent, tasksControl } from "../testing/tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { useVersionHistoryRoute, type VersionHistoryRoute } from "../version-history-route.js";
@@ -44,6 +45,7 @@ import {
   usePersonRoute,
   useRoutedViews,
 } from "../workspace-routes.js";
+import { type HistoryRows, useHistoryRows } from "./history-rows.js";
 import { type NarrowBacks, useNarrowBacks } from "./narrow-backs.js";
 import { PLACE_BINDING, usePlaceBinding } from "./place-binding.js";
 import { type LeaveAsk, type PlaceLeave, usePlaceLeave } from "./place-leave.js";
@@ -106,6 +108,7 @@ function mount(
     tasks: TasksControl,
     place: RoutedPlace | undefined,
     views: RoutedViews,
+    rows: HistoryRows,
   ) => StepTitle | undefined,
 ) {
   let history: (WindowHistory & HistoryBehind & TaskVisits & RecentSteps) | undefined;
@@ -126,6 +129,8 @@ function mount(
   // Leaves the routed place standing for `to`'s place, as the Tasks tab's door does: a navigation to its task's own place, or Home.
   let leaveTo: (to: TasksControl) => void = () => undefined;
   let taskRoute: TaskRoute | undefined;
+  // The window's task-list collections, standing on the tasks and agents the tab stands on, as the window's follow writes them.
+  const taskList = standingTaskList({ tasks: initial.tasks, taskAgents: initial.liveAgents });
 
   function Probe() {
     const [standing, setTasks] = useState(initial);
@@ -138,6 +143,7 @@ function mount(
     exits.stay = placeLeave.stays;
     restand = (tasks) => {
       wanted = tasks;
+      taskList.stand({ tasks: tasks.tasks, taskAgents: tasks.liveAgents });
       setTasks(tasks);
     };
 
@@ -221,6 +227,8 @@ function mount(
     const routed = useRoutedStanding();
     const views = useRoutedViews();
 
+    const rows = useHistoryRows();
+
     const copyLink = useCopyLink(
       tasks,
       undefined,
@@ -238,7 +246,8 @@ function mount(
       versionHistory: versions,
       inbox,
       room: SHELL_ROOM.WIDE,
-      title: titled?.(tasks, routed?.place, views),
+      title: titled?.(tasks, routed?.place, views, rows),
+      rows,
       tasks,
     });
     // Home and the task bound follow each other, as the window's root keeps them.
@@ -294,7 +303,7 @@ function mount(
   document.body.append(container);
   const root = createRoot(container);
   roots.push(root);
-  act(() => root.render(held.provide(withQueryClient(createElement(Probe)))));
+  act(() => root.render(held.provide(withQueryClient(taskList.provide(createElement(Probe))))));
   act(() => standInbox(initial));
 
   return {
@@ -941,7 +950,8 @@ const namedAsShown = (
   tasks: TasksControl,
   place: RoutedPlace | undefined,
   views: RoutedViews,
-): StepTitle | undefined => stepTitle(place, tasks, views);
+  rows: HistoryRows,
+): StepTitle | undefined => stepTitle(place, tasks, rows, views);
 
 /** The task the window lists, under `name`. */
 function listedTask(name: string): TaskSummary {
@@ -1000,6 +1010,25 @@ test("Back's list names a task and its agent's tab by the names they go by now, 
     label: "Auth rewrite",
     detail: "Token refresh",
   });
+});
+
+test("a delivery moving a task no step stands on leaves the history's answers as they were, the same objects, while one renaming a step's task names it anew", () => {
+  const held = listedTask("Auth refactor");
+  const other = { ...listedTask("Billing"), id: "task-billing" };
+  const open = onTabs({ column: AGENT_A });
+  const window = mount({ ...open, tasks: [held, other] }, windowRouter(), namedAsShown);
+
+  press();
+  window.stand(listedTab({ tasks: [held, other] }));
+  const { steps, away } = window.history();
+  assert.equal(steps.back[0]?.title?.label, "Auth refactor");
+
+  window.stand(listedTab({ tasks: [held, { ...other, name: "Billing export" }] }));
+  assert.equal(window.history().steps, steps);
+  assert.equal(window.history().away, away);
+
+  window.stand(listedTab({ tasks: [{ ...held, name: "Auth rewrite" }, other] }));
+  assert.equal(window.history().steps.back[0]?.title?.label, "Auth rewrite");
 });
 
 test("Back's list names a renamed agent's tab by its name now beside a page's tab named as the window called it there, whose page is read only while its task is open", () => {
@@ -1332,8 +1361,9 @@ function stepTitleOf(
   tasks: TasksControl,
   place: RoutedPlace | undefined,
   views: RoutedViews,
+  rows: HistoryRows,
 ): StepTitle | undefined {
-  return stepTitle(place, tasks, views);
+  return stepTitle(place, tasks, rows, views);
 }
 
 test("a task the Inbox is narrowed to is a step linked by it and named by the task, which Back leaves for the Inbox and Forward narrows to again", async () => {

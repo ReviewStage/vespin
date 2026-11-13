@@ -3,7 +3,7 @@
  *
  * `list` reads the account's open threads (`inbox.account`) and keeps those
  * of the workspace the command acts in, placing a task's thread by its
- * task (`plans.list`). `view` finds the thread's agent (`inbox.home`) and
+ * task (`tasks.list`). `view` finds the thread's agent (`inbox.home`) and
  * reads its threads (`inbox.agent`) for the one asked. The writes go
  * through the procedures the app's inbox sends them by: an answer is a
  * message carrying the answer to the open ask (`inbox.message`, its
@@ -244,7 +244,7 @@ const listCommand = Command.make(
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
       const read = yield* askService(hosted.inbox.account, {});
-      const { plans } = yield* askService(hosted.plans.list, {});
+      const { plans } = yield* askService(hosted.tasks.list, {});
 
       const tasks = new Map(
         plans

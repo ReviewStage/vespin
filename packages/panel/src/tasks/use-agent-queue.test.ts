@@ -258,6 +258,21 @@ test("an edit whose message left the queue, sent or deleted elsewhere, closes an
   assert.equal(now().composer.draft, "Run tests and fix failures");
 });
 
+test("an edit saved, its message handed off before the queue's answer lands, gives the box back", async () => {
+  act(() => now().page({ messages: [message("m1", "Run tests")], revision: 1 }));
+  act(() => now().composer.setDraft("my own words"));
+  act(() => now().editing.edit(message("m1", "Run tests")));
+  await answer({ queue: { messages: [message("m1", "Run tests")], revision: 2 } });
+  act(() => now().composer.setDraft("Run tests and fix failures"));
+  act(() => now().editing.save());
+  // The hold lifted, the agent idle, the service sends the message on, and the page says so first.
+  act(() => now().page({ messages: [], revision: 3 }));
+  await answer({ queue: { messages: [], revision: 3 } });
+
+  assert.equal(now().editing.editing, undefined);
+  assert.equal(now().composer.draft, "my own words");
+});
+
 test("an edit takes the message's files into the box, read as its row draws them, and Save sends the box's words and files as the message", async () => {
   const queued = {
     ...message("m1", "Match this."),
