@@ -155,7 +155,18 @@ body{{width:1200px;height:796px;display:flex;align-items:center;justify-content:
 </style></head><body><div class="col">
 {comment(dana(40), "danamoreno", "commented 8 minutes ago", '<p><a class="user-mention text-bold Link--primary">@vespin-agent</a> can you take this? An expired invite link should read “This invite is no longer valid” and offer to ask for a new invite, as the plan says.</p>', badge="Member", reactions='<span class="rx">👀 1</span>')}
 {comment(f'<img src="{BOT}">', "vespin-agent", "commented 2 minutes ago", '<p>Opened <a href="#">#232</a>. An expired invite link now reads “This invite is no longer valid”, with <strong>Ask for a new invite</strong>, which emails the member who sent it. I added a case for the expired link to <code>src/members/accept.test.ts</code>, and <code>pnpm test src/members</code> passes.</p><p><a href="#">Open in Vespin</a></p>', bot=True)}
-</div></body></html>'''
+</div>
+<script>
+// Fits the comments to the picture: the largest zoom whose height leaves room, then a gap between them that makes the top and bottom margins match the sides.
+(function () {{
+  var side = 52, room = 796 - 2 * side, col = document.querySelector(".col"), first = col.querySelector(".tl-item");
+  for (var z = 1.9; z >= 1.3; z -= 0.01) {{
+    col.style.zoom = z; col.style.width = (1200 - 2 * side) / z + "px"; first.style.marginBottom = "22px";
+    var h = col.getBoundingClientRect().height;
+    if (h <= room) {{ first.style.marginBottom = 22 + (room - h) / z + "px"; break; }}
+  }}
+}})();
+</script></body></html>'''
 
 css = "\n".join(open(p).read() for p in CSS_FILES)
 open(f"{ROOT}/.context/mock/github-comments.html", "w").write(abstract(css))
