@@ -52,6 +52,8 @@ private let ICON_EDGE = 64
 private let LAUNCH_WAIT_SECONDS = 8.0
 private let LINES_PER_PAGE = 12
 private let MAX_CLICKS = 3
+/// How many ancestors up the agent's cursor looks for a place to stand where an element has none.
+private let MAX_CURSOR_ANCESTORS = 4
 private let MAX_PAGES = 20.0
 /// The most base64 characters of one screenshot, as the wire bounds it (`COMPUTER_BOUNDS.MAX_SHOT_CHARS`).
 private let MAX_SHOT_CHARS = 1_600_000
@@ -612,6 +614,20 @@ private struct AppSession {
         }
         return CGPoint(x: bounds.midX, y: bounds.midY)
     }
+
+    /// Where the agent's cursor glides for an element: its center, or where it has no place of its own, the nearest
+    /// ancestor's that has one. Note that this places the cursor alone, never a click, which lands only on the element's own center.
+    func cursorPoint(_ index: Int) -> CGPoint? {
+        guard var element = try? element(index) else { return nil }
+        for _ in 0...MAX_CURSOR_ANCESTORS {
+            if let bounds = frame(element) { return CGPoint(x: bounds.midX, y: bounds.midY) }
+            guard let parent = attribute(element, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID()
+            else { return nil }
+            // SAFETY: the type id was checked just above.
+            element = parent as! AXUIElement
+        }
+        return nil
+    }
 }
 
 private var sessions: [pid_t: AppSession] = [:]
@@ -897,7 +913,7 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
     let count = min(max(integer(request, "click_count") ?? 1, 1), MAX_CLICKS)
     if let index = integer(request, "element_index") {
         let element = try current.element(index)
-        if let center = try? current.center(index) { await cursorTo(center) }
+        if let point = current.cursorPoint(index) { await cursorTo(point) }
         // Note that a plain press goes through Accessibility, which needs no point and no focus, before an event is aimed at the element's center.
         if button == BUTTON.left, count == 1 {
             let pressed = AXUIElementPerformAction(element, kAXPressAction as CFString)
@@ -1041,8 +1057,11 @@ private func drag(_ request: [String: Any]) async throws -> [String: Any] {
 private func setValue(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
     let app = try actedApp(request)
-    let element = try session(app).element(integer(request, "element_index") ?? -1)
+    let current = try session(app)
+    let index = integer(request, "element_index") ?? -1
+    let element = try current.element(index)
     let value = (request["value"] as? String) ?? ""
+    if let point = current.cursorPoint(index) { await cursorTo(point) }
     let result = AXUIElementSetAttributeValue(element, kAXValueAttribute as CFString, value as CFString)
     guard result == .success else {
         throw HelperError(kind: ERROR_KIND.failed, message: "The element did not take the value (\(result.rawValue)).")
@@ -1053,11 +1072,14 @@ private func setValue(_ request: [String: Any]) async throws -> [String: Any] {
 private func performSecondaryAction(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
     let app = try actedApp(request)
-    let element = try session(app).element(integer(request, "element_index") ?? -1)
+    let current = try session(app)
+    let index = integer(request, "element_index") ?? -1
+    let element = try current.element(index)
     let action = try string(request, "action")
     guard actions(element).contains(action) else {
         throw HelperError(kind: ERROR_KIND.badRequest, message: "The element offers no \(action) action.")
     }
+    if let point = current.cursorPoint(index) { await cursorTo(point) }
     let result = AXUIElementPerformAction(element, action as CFString)
     guard result == .success else {
         throw HelperError(kind: ERROR_KIND.failed, message: "The element refused \(action) (\(result.rawValue)).")
