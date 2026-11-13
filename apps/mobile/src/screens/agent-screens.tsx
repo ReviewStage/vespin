@@ -751,15 +751,18 @@ export function AgentScreen() {
               )}
             </Stack.Toolbar.Menu>
           )}
-          {agent === undefined || barActs ? null : (
+          {agent === undefined ? null : (
             <Stack.Toolbar.Menu inline>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(GLYPH.ARCHIVE)}
-                destructive
-                onPress={askArchive}
-              >
-                {MENU_WORDS.ARCHIVE}
-              </Stack.Toolbar.MenuAction>
+              {/* Note that Archive leaves the menu where it stands in the bar, while Delete, which the bar never holds, stays. */}
+              {barActs ? null : (
+                <Stack.Toolbar.MenuAction
+                  icon={glyphSymbol(GLYPH.ARCHIVE)}
+                  destructive
+                  onPress={askArchive}
+                >
+                  {MENU_WORDS.ARCHIVE}
+                </Stack.Toolbar.MenuAction>
+              )}
               <Stack.Toolbar.MenuAction
                 icon={glyphSymbol(GLYPH.DELETE)}
                 destructive
