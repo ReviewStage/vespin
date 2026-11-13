@@ -156,7 +156,7 @@ type TaskHeadProps = {
   readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */
   readonly createdBy?: string | undefined;
-  /** Who follows it, as a chip under its fields; none while its workspace has Following off. */
+  /** Who follows it, as a chip under its fields; none where it carries no followers. */
   readonly following?: PageFollowing | undefined;
   /** What a press on each of its chips offers, where the reader may change that field. */
   readonly menus?: StandingMenus | undefined;

@@ -563,7 +563,7 @@ export const tasksSetParentAnswerSchema = EffectSchema.Union([
 
 export type TasksSetParentAnswer = typeof tasksSetParentAnswerSchema.Type;
 
-/** Why a follower write wrote nothing: the service did not answer, the task is out of reach or its workspace has Following off, or, for an unfollow, the account is its assignee. */
+/** Why a follower write wrote nothing: the service did not answer, the task is out of reach, or, for an unfollow, the account is its assignee. */
 export const FOLLOWER_CALL_FAILURE = failureSetOf(taskFollowersContract);
 
 const FOLLOWER_CALL_FAILURES = Object.values(FOLLOWER_CALL_FAILURE);

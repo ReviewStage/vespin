@@ -2,10 +2,10 @@
  * machine-routing.ts -- which machine an agent's terminal command or action on an app goes to, and why none where it can go nowhere.
  *
  * A call may reach the machines of the people its task lets agents use:
- * where the workspace has Following on, each follower whose "Let agents
- * here use my machines" switch is on; otherwise the one member whose Mac
- * its commands have always run on (`machineOwnerOf`), the task's assignee
- * or its agent's starter. Of those machines, one is reachable for a call
+ * each follower whose "Let agents here use my machines" switch is on; for a
+ * call with no task, the one member whose Mac its commands have always run
+ * on (`machineOwnerOf`), the task's assignee or its agent's starter. Of
+ * those machines, one is reachable for a call
  * where it listened for commands lately and, for a shell command, its
  * command mode is not Never, or, for an action on an app, its switch for
  * apps is not off. A Mac whose app never carried that switch up keeps it on
@@ -41,9 +41,7 @@ import {
   type MachineUnreached,
 } from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
-import { EXPERIMENT } from "@repo/settings";
 import { Clock, Duration, Effect, Option } from "effect";
-import { experimentOnIn } from "./workspace-experiment-on.js";
 
 /** How lately a machine must have listened to count as online: one held read, and room for the next to arrive, as `machine-command.ts` counts an account. */
 export const ONLINE_WITHIN = Duration.seconds(45);
@@ -94,10 +92,6 @@ function peopleOf(routing: MachineRouting) {
     const { taskId, workspaceId } = routing;
 
     if (taskId === null || workspaceId === null) return [{ userId: routing.userId, lets: true }];
-
-    if (!(yield* experimentOnIn(workspaceId, EXPERIMENT.FOLLOWING))) {
-      return [{ userId: routing.userId, lets: true }];
-    }
 
     const followers = yield* listTaskFollowers(routing.userId, taskId);
 
@@ -321,7 +315,7 @@ export function defaultMachinesOf(
  * The machines of a task's followers, each with whether its owner lets the
  * task's agents use it and whether it listened lately, as a follower's card
  * lists them, read for the account given; none where the account does not
- * reach the task. Note that the caller decides the workspace has Following on.
+ * reach the task.
  */
 export function followerMachinesOf(
   userId: string,

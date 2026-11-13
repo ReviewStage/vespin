@@ -792,8 +792,8 @@ const taskSummaryFields = {
   /**
    * The members following the task, the earliest to follow first, each
    * with whether they are its assignee and whether its agents may use their
-   * machines (`@repo/wire`'s `taskFollowerSchema`); absent while its
-   * workspace has Following off, and from a service before it.
+   * machines (`@repo/wire`'s `taskFollowerSchema`); absent from a service
+   * before it.
    */
   followers: EffectSchema.optionalKey(EffectSchema.Array(taskFollowerSchema)),
 };

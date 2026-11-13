@@ -22,7 +22,6 @@ import { member, user } from "@repo/database/schemas/auth";
 import { automationRun } from "@repo/database/schemas/automation";
 import { task } from "@repo/database/schemas/task";
 import { taskBlock } from "@repo/database/schemas/task-block";
-import { workspaceExperiment } from "@repo/database/schemas/workspace-experiment";
 import { TOPIC } from "@repo/database/sync/notification";
 import {
   agentApprovalSync,
@@ -46,7 +45,6 @@ import {
   taskSync,
   turnsSync,
   userSync,
-  workspaceExperimentSync,
 } from "@repo/database/sync/tables";
 import { BOOT_PHASE, type WireBootPhase } from "@repo/features/agent-boot";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-wire";
@@ -62,7 +60,6 @@ import {
 } from "@repo/features/task-list-live";
 import { TASK_BLOCK_RELATION, TASK_STATUS } from "@repo/features/task-wire";
 import { SANDBOX_IDLE } from "@repo/sandbox";
-import { EXPERIMENT } from "@repo/settings";
 import {
   and,
   asc,
@@ -117,24 +114,9 @@ const starter = alias(user, "starter");
 const archiver = alias(user, "archiver");
 const assignee = alias(user, "assignee");
 
-/** Whether the task's workspace has Following on, which its followers are answered only while it does. */
-const FOLLOWING_ON_OF_TASK = exists(
-  queryBuilder
-    .select({ one: sql`1` })
-    .from(workspaceExperiment)
-    .where(
-      and(
-        eq(workspaceExperiment.organizationId, task.organizationId),
-        eq(workspaceExperiment.experiment, EXPERIMENT.FOLLOWING),
-        eq(workspaceExperiment.on, true),
-      ),
-    ),
-);
-
 /**
  * One column of the task's followers who are members of its workspace, the
- * earliest to follow first, as an array; null while its workspace has
- * Following off. Note that each follower's id and switch are two arrays in
+ * earliest to follow first, as an array. Note that each follower's id and switch are two arrays in
  * one order rather than one of objects, because building an object calls a
  * function Postgres marks only stable.
  */
@@ -162,7 +144,7 @@ function followersColumnOf<Value>(
     )
     .orderBy(asc(taskFollower.createdAt), asc(taskFollower.userId));
 
-  return sql<Value[] | null>`case when ${FOLLOWING_ON_OF_TASK} then array(${followers}) end`;
+  return sql<Value[] | null>`array(${followers})`;
 }
 
 /**
@@ -395,9 +377,8 @@ const PENDING_APPROVALS_OF_AGENT = sql<
 
 /**
  * The plans what moved could move: their own rows, the reader's pins and
- * read marks, a block either way, a follower, a plan a moved plan blocks, a
- * plan naming a moved member, and every plan of a workspace whose Following
- * flipped.
+ * read marks, a block either way, a follower, a plan a moved plan blocks,
+ * and a plan naming a moved member.
  */
 function movedPlans(moved: SyncMoved): SQL {
   const plans = moved.keys(taskSync, task.id);
@@ -421,10 +402,6 @@ function movedPlans(moved: SyncMoved): SQL {
       sql`${task.id} in ${blockedByMoved}`,
       liveKeysIn(task.userId, members),
       liveKeysIn(task.assigneeId, members),
-      liveKeysIn(
-        task.organizationId,
-        moved.keys(workspaceExperimentSync, workspaceExperiment.organizationId),
-      ),
     ) ?? sql`false`
   );
 }
@@ -485,7 +462,6 @@ const TASK_LIST_TABLES = [
   memberSync,
   githubPersonalTokenSync,
   githubRepositoryReadSync,
-  workspaceExperimentSync,
 ];
 
 /**

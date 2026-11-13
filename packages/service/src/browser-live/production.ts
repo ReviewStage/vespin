@@ -1,5 +1,5 @@
 /**
- * production.ts -- the live view's dependencies as the deployment stands them: the tab read and taken over in the store by the tabs contract's rules, the agent's sandbox session from its conversation, and its browser through `Sandbox` and the sandbox's PTY.
+ * production.ts -- the live view's dependencies as the deployment stands them: the tab read and taken over in the store by the tabs contract's rules, the agent's sandbox session from its conversation, its browser through `Sandbox` and the sandbox's PTY, and its hold on the sandbox in the store.
  *
  * Each dependency answers over the services the function's runtime holds,
  * captured once as the service stands, so the relay itself requires none.
@@ -16,13 +16,16 @@ import {
 } from "@repo/database/models/agent-browser-tabs";
 import { readVisibleAgentWorkspace } from "@repo/database/models/agent-store";
 import { standingSessionsNamed } from "@repo/database/models/recorded-session";
+import { AGENT_SANDBOX_BEAT_KIND } from "@repo/database/schemas/agent-sandbox";
 import { Sandbox } from "@repo/sandbox";
 import { Effect, Option } from "effect";
 import type { HttpClient } from "effect/http";
+import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import { AgentBrowser, agentBrowserOver } from "../agents/browser/agent-browser.js";
 import { connectRestoring } from "../agents/browser/restore-tabs.js";
 import { AgentImage } from "../agents/coder-host/agent-image.js";
 import { sandboxPtyOf } from "../agents/sandbox-pty.js";
+import { recordedSandboxBeat, recordedSandboxBeatReleased } from "../agents/sandbox-use.js";
 import { recordServerEventIn, SERVER_EVENT } from "../events/server-events.js";
 import type { BrowserLiveDependencies } from "./relay.js";
 
@@ -73,6 +76,20 @@ export const browserLiveDependencies: Effect.Effect<
           readVisibleAgentWorkspace(userId, agentId),
           { tool },
         ),
+      ),
+    holdSandbox: (sessionId, holder) =>
+      run(
+        recordedSandboxBeat(agentSandboxName(sessionId), {
+          kind: AGENT_SANDBOX_BEAT_KIND.VIEW,
+          holder,
+        }),
+      ),
+    releaseSandbox: (sessionId, holder) =>
+      run(
+        recordedSandboxBeatReleased(agentSandboxName(sessionId), {
+          kind: AGENT_SANDBOX_BEAT_KIND.VIEW,
+          holder,
+        }),
       ),
     notePage: (tabId, targetId, page) =>
       run(noteBrowserTabPage(tabId, targetId, page)).pipe(

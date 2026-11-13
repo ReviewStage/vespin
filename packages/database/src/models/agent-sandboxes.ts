@@ -54,6 +54,7 @@ import {
   type AgentSandboxState,
   agentSandboxTable,
 } from "../schemas/agent-sandbox.js";
+import { forgetAgentSandboxHolds } from "./agent-sandbox-holds.js";
 import { forgetTurnSnapshotsOfAgent, forgetTurnSnapshotsOfSandbox } from "./turn-state.js";
 
 type SandboxUseEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
@@ -309,8 +310,11 @@ export function recordAgentSandboxBootFailed(sandboxName: string): SandboxUseEff
 
 /** The sandbox deleted by its session's discard, its row RELEASED. */
 export function recordAgentSandboxDiscarded(sandboxName: string): SandboxUseEffect<void> {
-  // The snapshots its agent's turns hold went with its disk.
-  return Effect.andThen(forgetTurnSnapshotsOfSandbox(sandboxName), markReleased({ sandboxName }));
+  // The snapshots its agent's turns hold went with its disk, and every hold on it with its run.
+  return Effect.andThen(
+    Effect.andThen(forgetTurnSnapshotsOfSandbox(sandboxName), forgetAgentSandboxHolds(sandboxName)),
+    markReleased({ sandboxName }),
+  );
 }
 
 /**
@@ -380,10 +384,13 @@ export function settleAgentSandboxRelease(
   sandboxName: string,
   state: typeof AGENT_SANDBOX_STATE.LIVE | typeof AGENT_SANDBOX_STATE.RELEASED,
 ): SandboxUseEffect<void> {
-  // A sandbox deleted took the snapshots its agent's turns hold with it.
+  // A sandbox deleted took the snapshots its agent's turns hold with it, and every hold on it.
   return Effect.andThen(
     state === AGENT_SANDBOX_STATE.RELEASED
-      ? forgetTurnSnapshotsOfSandbox(sandboxName)
+      ? Effect.andThen(
+          forgetTurnSnapshotsOfSandbox(sandboxName),
+          forgetAgentSandboxHolds(sandboxName),
+        )
       : Effect.void,
     settleReleasing({ sandboxName, state }),
   );

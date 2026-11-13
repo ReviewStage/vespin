@@ -30,7 +30,9 @@ import {
   type HostedRefusal,
   hostedStoreOrUnavailable,
 } from "../http/http-effect.js";
+import { agentSandboxName } from "./agent-sandbox-open.js";
 import { workspaceEnvironmentOf } from "./coder-host/runner-sessions.js";
+import { recordedTerminalEnded, recordedTerminalOpened } from "./sandbox-use.js";
 import { AgentSandbox } from "./terminal/agent-sandbox.js";
 import {
   listedShells,
@@ -102,6 +104,10 @@ export const ranRunAction = Effect.fn("web/ranRunAction")(function* (
   );
 
   const sandbox = yield* AgentSandbox;
+  const sandboxName = agentSandboxName(sessionId);
+
+  // Note that the action's shell, a Terminal tab like any other, holds the sandbox before it starts, so a stop as a turn ends never takes the sandbox from under it.
+  yield* recordedTerminalOpened(sandboxName, action.id);
 
   const ran = yield* sandboxOrUpstream(
     // Note that the action's shell is started under the action's own id, so two presses at once start one shell, never two.
@@ -113,7 +119,14 @@ export const ranRunAction = Effect.fn("web/ranRunAction")(function* (
     }),
   );
 
-  if (Result.isFailure(ran)) return yield* Effect.fail(shellRefusal(ran.failure));
+  if (Result.isFailure(ran)) {
+    yield* recordedTerminalEnded(sandboxName, action.id);
+
+    return yield* Effect.fail(shellRefusal(ran.failure));
+  }
+
+  // Note that the hold is written again under the shell's own id once it stands, so a list that read before it started, and pruned it, never leaves it unheld.
+  yield* recordedTerminalOpened(sandboxName, ran.success.id);
 
   return { terminal: ran.success };
 });
