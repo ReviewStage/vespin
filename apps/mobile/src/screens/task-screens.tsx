@@ -1144,11 +1144,14 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
           count={related}
           add={{
             label: RELATION_WORDS.ADD_RELATION,
-            acts: (relationSubmenu(task, openRelation).actions ?? []).map((action) => ({
-              label: action.label,
-              symbol: action.symbol,
-              onPress: action.onPress,
-            })),
+            // Note that Sub-tasks' own + adds a sub-task, so this one offers the other kinds.
+            acts: TASK_RELATION_ORDER.filter((kind) => kind !== TASK_RELATION_KIND.SUB_TASK).map(
+              (kind) => ({
+                label: TASK_RELATION_VERBS[kind].choose,
+                symbol: RELATION_KIND_SYMBOL[kind],
+                onPress: () => openRelation(task.id, kind),
+              }),
+            ),
           }}
         >
           {sides.map(({ kind, ids }) =>
