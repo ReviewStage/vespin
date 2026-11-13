@@ -16,7 +16,9 @@ builds a control of its own.
   drag and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
   `WordsRow` for its description), `GroupRow` (a place a regular window's
-  sidebar opens, such as the Inbox with its count), `SplitView` (the app's
+  sidebar opens, such as the Inbox with its count, at Mail's mailbox
+  measures: its glyph a step over its 17 pt name, the count muted, and a
+  rounded selection fill set in from the sidebar's edges), `SplitView` (the app's
   sidebar, the list, and the detail, or the list and the detail, each column
   under its own `ColumnBar`: its inline title, what leads it such as the
   workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
@@ -158,7 +160,10 @@ navigation, tab bar, swipes, menus, sheets and glass.
   React Native scales by the reader's setting. The navigation bar's words are
   the system's fixed sizes (`BAR_TITLE`), as its own titles stand.
 - **Inline titles, no large titles.** A tab's root shows its name small and
-  inline. A pushed page shows its path (task › agent, repository › key) small
+  inline. A split view's list column, in a regular window, stands its title
+  bold at its bar's leading edge (`inlineLarge`), as Mail names the mailbox
+  over its list, and with three columns its search is one button at the
+  window's trailing edge, as Mail's is. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
   under it; a split view's detail column draws the same path in its bar. A
   thread's path opens its task and its agent, as the panel's crumbs do: in a
