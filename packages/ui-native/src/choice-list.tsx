@@ -1,15 +1,6 @@
 // choice-list.tsx -- a decide ask's options as a compact bordered card: one radio row each, the recommended one tagged, a detail line under its label, and the media it carries under it.
 
-import {
-  Button,
-  Divider,
-  HStack,
-  Image,
-  RNHostView,
-  Spacer,
-  Text,
-  VStack,
-} from "@expo/ui/swift-ui";
+import { Button, HStack, Image, RNHostView, Spacer, Text, VStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityLabel,
@@ -23,6 +14,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { RECOMMENDED } from "@repo/features/inbox-list-model";
 import { Fragment } from "react";
+import { CARD_WORDS_INSET, CardDivider } from "./ask-card.js";
 import { type ChoiceMedia, ChoiceMediaTiles } from "./choice-media.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
@@ -229,7 +221,7 @@ export function ChoiceList(props: ChoiceListProps) {
       >
         {choices.map((choice, index) => (
           <Fragment key={choice.label}>
-            {index === 0 ? null : <Divider />}
+            {index === 0 ? null : <CardDivider inset={CARD_WORDS_INSET.MARKED} />}
             <ChoiceRow
               choice={choice}
               picked={picked.includes(choice.label)}
@@ -244,7 +236,7 @@ export function ChoiceList(props: ChoiceListProps) {
         ))}
         {none === undefined ? null : (
           <>
-            <Divider />
+            <CardDivider inset={CARD_WORDS_INSET.MARKED} />
             <ChoiceRow
               choice={{ label: none.label }}
               picked={none.picked}

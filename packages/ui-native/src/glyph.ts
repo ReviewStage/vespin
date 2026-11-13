@@ -179,8 +179,9 @@ export const GLYPH = {
   JUMP_DOWN: lucide(LUCIDE_SYMBOL.ARROW_DOWN),
   FOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_RIGHT),
   UNFOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
-  // iOS's own: Share is the system's act, and the composer's Stop is the panel's filled square.
+  // iOS's own: Share is the system's act, a Settings row's chevron is the one iOS draws at a row that goes on, and the composer's Stop is the panel's filled square.
   SHARE: system("square.and.arrow.up"),
+  DISCLOSURE: system("chevron.forward"),
   STOP_TURN: system("stop.fill"),
   // A task's status ring, the panel's own mark.
   STATUS_BACKLOG: statusMark(TASK_STATUS_SYMBOL.BACKLOG),
