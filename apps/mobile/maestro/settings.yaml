@@ -51,10 +51,6 @@ appId: dev.vespin.ios
 - assertVisible: "What's new"
 - waitForAnimationToEnd
 - takeScreenshot: settings-about
-- scrollUntilVisible:
-    element: "Experimental"
-- waitForAnimationToEnd
-- takeScreenshot: settings-more-on-web
 # The Account page: who is signed in, Privacy, Sign out, and Delete account.
 # Note that the personal workspace's row below it bears the same name, so the
 # account is found by the line only it draws.

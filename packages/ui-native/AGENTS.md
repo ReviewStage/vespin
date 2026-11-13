@@ -238,9 +238,14 @@ navigation, tab bar, swipes, menus, sheets and glass.
   Settings' rows do; a choice among a few is `PickRows`, each a row with
   what it does under its name where it says and the picked one checked in
   copper, the one pick look every form uses; a connection's one act is a
-  small bordered capsule at its end; and the Account page heads with the
+  small bordered capsule at its end; what a section means is said in its
+  footer, never in a line under a switch; a row that leaves the app ends in
+  the arrow out; and the Account page heads with the
   account's photo, name and address centered on the ground, closing with
-  Sign out and Delete account centered in red, as Apple Account's does.
+  Sign out and Delete account centered in red, as Apple Account's does. A
+  red row never shares a group with the page's other rows: it stands alone
+  at the page's foot, centered, as Leave does, or behind a menu, as a
+  photo's Delete stands under Change photo.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, a
   row per option checked at its end in copper once picked, as `PickRows`
   checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,

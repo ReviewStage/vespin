@@ -963,7 +963,7 @@ type NoteRowProps = {
   readonly line: string;
   /** Where a press goes, such as a skill's file, the chevron at its end; a row with none takes no press. */
   readonly onPress?: (() => void) | undefined;
-  /** The act that opens its words to be changed, such as Edit, on a press of the row where it goes nowhere else, and first in the menu a long press opens; none where the reader may not. */
+  /** The act that opens its words to be changed on a page of their own, such as Edit, on a press of the row where it goes nowhere else, with the chevron at its end, and first in the menu a long press opens; none where the reader may not. */
   readonly edit?: NoteAct | undefined;
   /** The act that takes it away, such as Delete, behind a swipe from the trailing edge and in the menu a long press opens; none where the reader may not. */
   readonly remove?: NoteAct | undefined;
@@ -974,7 +974,8 @@ type NoteRowProps = {
  * where it has one, its words whole in the ink, what it is under them where
  * it says, and the chevron where a press opens it, then a
  * quiet line of whose they are. Where the reader may, a press that goes
- * nowhere else opens its words to be changed, as a note in Notes opens, and
+ * nowhere else opens its words to be changed on a page of their own, the
+ * chevron saying so, as a Settings row that goes on does, and
  * the act that takes it away stands behind a swipe from the trailing edge,
  * as Notes' rows carry Delete; a long press opens a menu of both, Edit
  * first. Note that a full swipe never runs Delete, since it asks first.
@@ -1003,6 +1004,9 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
     </VStack>
   );
 
+  // Note that a row a press takes somewhere, or opens to be changed on a page of its own, is the system's button with the chevron at its end, flashing the row's gray while held, its words keeping their own ink, as `PressedRow` draws one.
+  const pressed = onPress ?? edit?.onPress;
+
   const content = (
     <HStack
       spacing={SPACE.ROW}
@@ -1013,12 +1017,9 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
       )}
       {lines}
       <Spacer />
-      {onPress === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
+      {pressed === undefined ? null : <GoesMark goes={PUSH_ROW_GOES.PAGE} />}
     </HStack>
   );
-
-  // Note that a row a press takes somewhere, or opens to be changed, is the system's button, flashing the row's gray while held, its words keeping their own ink, as `PressedRow` draws one.
-  const pressed = onPress ?? edit?.onPress;
 
   const drawn =
     pressed === undefined ? content : <SwiftUIButton onPress={pressed}>{content}</SwiftUIButton>;
