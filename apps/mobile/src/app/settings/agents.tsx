@@ -125,8 +125,6 @@ export default function AgentsScreen() {
   // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was refused redraws its section, which reads the stored choice again.
   const [defaultRound, setDefaultRound] = useState(0);
   const [settingRound, setSettingRound] = useState(0);
-  // The setting last written, whose section says why a refusal was given; none once a model write came after it.
-  const [written, setWritten] = useState<AppSettingField | undefined>(undefined);
   const standard = current === undefined ? undefined : standardModelIdOf(current.model);
   const speeds = standard === undefined ? [] : speedsOffered(catalog, standard);
   const speed = current === undefined ? MODEL_SPEED.STANDARD : modelSpeedOf(current.model);
@@ -147,15 +145,13 @@ export default function AgentsScreen() {
       return;
     }
 
-    // Note that a model write is now the last in the New agents group, so its refusal is the one the group's footer says.
-    setWritten(undefined);
+    // Note that the model, effort and speed write the one default, so they follow each other as one row's writes.
     void write
-      .run(() => acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined))
+      .run(ACT_KIND.AGENTS_DEFAULT_WRITE, () =>
+        acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined),
+      )
       .then((landed) => {
-        if (landed) return;
-        // Note that the refusal that lands last owns the group's footer, whichever write began last.
-        setWritten(undefined);
-        setDefaultRound((round) => round + 1);
+        if (!landed) setDefaultRound((round) => round + 1);
       });
   };
 
@@ -167,13 +163,10 @@ export default function AgentsScreen() {
   const store = (field: AppSettingField, token: string) => {
     if (view === undefined) return;
     const value = settingFromOption(field, token, view);
-    setWritten(field);
     void setting
-      .run(() => acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(() => undefined))
+      .run(field, () => acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(() => undefined))
       .then((landed) => {
-        if (landed) return;
-        setWritten(field);
-        setSettingRound((round) => round + 1);
+        if (!landed) setSettingRound((round) => round + 1);
       });
   };
 
@@ -188,9 +181,10 @@ export default function AgentsScreen() {
   const newAgentRows = rowsOf(SCHEMA_GROUP.NEW_AGENTS);
   const preferenceRows = rowsOf(SCHEMA_GROUP.PREFERENCES);
 
-  // The refusal said for the setting last written, under the group that holds its row.
-  const refusalOf = (rows: readonly SchemaRow[]) =>
-    rows.some((row) => row.field === written) ? setting.refusal : undefined;
+  // The refusals said for a group's settings, each by its own field, under the group that holds its row.
+  const refusalOf = (rows: readonly SchemaRow[], also: readonly string[] = []) =>
+    [...also, ...rows.flatMap((row) => setting.refusals.get(row.field) ?? [])].join(" ") ||
+    undefined;
 
   const pickRow = ({ field, entry, control }: SchemaRow) =>
     control === undefined ? null : (
@@ -215,7 +209,7 @@ export default function AgentsScreen() {
           <ListSection
             key={defaultRound}
             title={DEFAULT_WORDS.SECTION}
-            footer={refusalOf(newAgentRows) ?? write.refusal}
+            footer={refusalOf(newAgentRows, write.said)}
           >
             {current === undefined || standard === undefined ? null : (
               <>

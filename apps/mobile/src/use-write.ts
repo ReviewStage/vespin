@@ -273,60 +273,87 @@ export function refusalOf<Answer>(
   }).then(() => said.words);
 }
 
-/** Writes a screen sends one after another, and the refusal it says for them. */
+/** No refusal said. */
+const NO_REFUSALS: ReadonlyMap<string, never> = new Map<string, never>();
+
+/** `held` with no refusal for `row`, the same map where it had none. */
+function without<Refusal>(
+  held: ReadonlyMap<string, Refusal>,
+  row: string,
+): ReadonlyMap<string, Refusal> {
+  if (!held.has(row)) return held;
+  const kept = new Map(held);
+  kept.delete(row);
+
+  return kept;
+}
+
+/** Writes a screen sends one after another, on rows of their own, and the refusals it says for them. */
 export interface LatestWrites<Refusal> {
-  /** Why the newest write was refused, until the next one is sent. */
-  readonly refusal: Refusal | undefined;
-  /** Sends `act` at once, even while an earlier one is out, and answers whether it went. */
-  readonly run: (act: () => PromiseLike<Refusal | undefined>) => Promise<boolean>;
+  /** Why each row's newest write was refused, by the row it changes, until that row's next write is sent. */
+  readonly refusals: ReadonlyMap<string, Refusal>;
+  /** The refusals said, in the order they were said, for a group's one footer. */
+  readonly said: readonly Refusal[];
+  /**
+   * Sends `act` at once for the row `row` names, such as a member's id or a
+   * setting's field, even while an earlier one is out, and answers whether it went.
+   */
+  readonly run: (row: string, act: () => PromiseLike<Refusal | undefined>) => Promise<boolean>;
 }
 
 /**
- * Writes that each go out at once, the newest one's refusal kept to say, for
+ * Writes that each go out at once, each row's newest refusal kept to say, for
  * acts the host declares, so their change is drawn as they are sent and a
  * refusal rolls it back. Note that this is `useAsyncAction` without its lock,
  * because a second pick or press while the first is out (an effort right after
  * a model, or one member's role right after another's) is a write of its own,
- * which the lock dropped unseen. An earlier write's refusal landing after a
- * later write began is not said, as an agent's model picks keep only the
- * latest's (`use-agent-model.ts`), though its caller still hears it refused.
+ * which the lock dropped unseen. Writes to one row follow each other, so an
+ * earlier one's refusal landing after a later one began is not said, as an
+ * agent's model picks keep only the latest's (`use-agent-model.ts`), though
+ * its caller still hears it refused. Writes to two rows are each their own, so
+ * a refused one is said whatever another row's write did.
  */
 export function useLatestWrites<Refusal>(
   unanswered: (cause: unknown) => Refusal,
 ): LatestWrites<Refusal> {
-  const [refusal, setRefusal] = useState<Refusal | undefined>(undefined);
-  /** How many writes have been sent, so an answer to an earlier one is told apart from the newest. */
-  const sent = useRef(0);
+  const [refusals, setRefusals] = useState<ReadonlyMap<string, Refusal>>(NO_REFUSALS);
+  /** How many writes each row has been sent, so an answer to an earlier one is told apart from the row's newest. */
+  const sent = useRef(new Map<string, number>());
   const newestUnanswered = useRef(unanswered);
   useEffect(() => {
     newestUnanswered.current = unanswered;
   }, [unanswered]);
 
-  const run = useCallback((act: () => PromiseLike<Refusal | undefined>): Promise<boolean> => {
-    sent.current += 1;
-    const write = sent.current;
-    setRefusal(undefined);
+  const run = useCallback(
+    (row: string, act: () => PromiseLike<Refusal | undefined>): Promise<boolean> => {
+      const write = (sent.current.get(row) ?? 0) + 1;
+      sent.current.set(row, write);
+      setRefusals((held) => without(held, row));
 
-    const settle = (said: Refusal | undefined): boolean => {
-      if (said !== undefined && write === sent.current) setRefusal(said);
+      const settle = (said: Refusal | undefined): boolean => {
+        if (said !== undefined && write === sent.current.get(row)) {
+          setRefusals((held) => new Map(held).set(row, said));
+        }
 
-      return said === undefined;
-    };
+        return said === undefined;
+      };
 
-    let started: PromiseLike<Refusal | undefined>;
+      let started: PromiseLike<Refusal | undefined>;
 
-    try {
-      started = act();
-    } catch (thrown) {
-      // Note that an act that throws before it starts anything is refused as one that rejects is.
-      started = Promise.reject(thrown);
-    }
+      try {
+        started = act();
+      } catch (thrown) {
+        // Note that an act that throws before it starts anything is refused as one that rejects is.
+        started = Promise.reject(thrown);
+      }
 
-    return Promise.resolve(started).then(
-      (said) => settle(said ?? undefined),
-      (cause: unknown) => settle(newestUnanswered.current(cause)),
-    );
-  }, []);
+      return Promise.resolve(started).then(
+        (said) => settle(said ?? undefined),
+        (cause: unknown) => settle(newestUnanswered.current(cause)),
+      );
+    },
+    [],
+  );
 
-  return useMemo(() => ({ refusal, run }), [refusal, run]);
+  return useMemo(() => ({ refusals, said: [...refusals.values()], run }), [refusals, run]);
 }

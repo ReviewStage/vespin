@@ -145,7 +145,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
   // Note that each refusal says why in place, in the host's words through the one write door, never an error's own text.
   const write = useWrite();
   const rename = useAsyncAction(() => ACT_UNREACHED_WORDS);
-  // Note that a member's role or removal, and an invitation sent or canceled, each go at once, since the host draws them as they go and one on another row must not wait on it.
+  // Note that a member's role or removal, and an invitation sent or canceled, each go at once and say a refusal by their own row (a member's id, an invite's address or id), since the host draws them as they go and one row must not wait on, or hide, another's.
   const people = useLatestWrites(() => ACT_UNREACHED_WORDS);
   const invite = useLatestWrites(() => ACT_UNREACHED_WORDS);
   const leave = useAsyncAction(() => ACT_UNREACHED_WORDS);
@@ -183,7 +183,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
     const may = memberActs(workspace, member, member.userId === readerId);
 
     const role = (next: typeof ASSIGNABLE_ROLE.ADMIN | typeof ASSIGNABLE_ROLE.MEMBER) => () =>
-      void people.run(() =>
+      void people.run(member.userId, () =>
         refusalOf(write, () =>
           acts[ACT_KIND.WORKSPACE_MEMBER_ROLE]({
             workspaceId,
@@ -222,7 +222,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
 
   const sendInvite = (role: (typeof INVITATION_ROLES)[number]) => (email: string) => {
     dismiss();
-    void invite.run(() =>
+    void invite.run(email, () =>
       refusalOf(write, () => acts[ACT_KIND.WORKSPACE_INVITE]({ workspaceId, email, role })),
     );
   };
@@ -282,7 +282,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
             footer={
               held?.members?.failed === true
                 ? WORKSPACE_READ_FAILED.MEMBERS
-                : (people.refusal ?? (ownerAlone ? LEAVE_WORDS.OWNER_NO_ADMIN : undefined))
+                : people.said.join(" ") || (ownerAlone ? LEAVE_WORDS.OWNER_NO_ADMIN : undefined)
             }
           >
             {(members ?? []).map((member) => (
@@ -304,7 +304,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
               footer={
                 held?.invitations?.failed === true
                   ? WORKSPACE_READ_FAILED.INVITATIONS
-                  : invite.refusal
+                  : invite.said.join(" ") || undefined
               }
             >
               <ActionRow
@@ -397,7 +397,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           if (asking?.kind !== ASKING.REMOVE) return;
           const { userId } = asking.member;
           dismiss();
-          void people.run(() =>
+          void people.run(userId, () =>
             refusalOf(write, () => acts[ACT_KIND.WORKSPACE_MEMBER_REMOVE]({ workspaceId, userId })),
           );
         }}
@@ -416,7 +416,7 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
           if (asking?.kind !== ASKING.CANCEL) return;
           const invitationId = asking.invitation.id;
           dismiss();
-          void invite.run(() =>
+          void invite.run(invitationId, () =>
             refusalOf(write, () =>
               acts[ACT_KIND.WORKSPACE_INVITATION_CANCEL]({ workspaceId, invitationId }),
             ),
