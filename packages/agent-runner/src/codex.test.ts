@@ -183,6 +183,32 @@ function exchange(exchanges: readonly Exchange[], index: number): Exchange {
   return found;
 }
 
+/** The objective the goal scenarios set. */
+const OBJECTIVE = "every billing test passes";
+
+/** The thread's goal as app-server says it: its status, its spend, and the moment it changed. */
+function threadGoal(
+  status: string,
+  tokensUsed: number,
+  { updatedAt = 2, tokenBudget = null }: { updatedAt?: number; tokenBudget?: number | null } = {},
+) {
+  return {
+    threadId: THREAD,
+    objective: OBJECTIVE,
+    status,
+    tokenBudget,
+    tokensUsed,
+    timeUsedSeconds: 60,
+    createdAt: 1,
+    updatedAt,
+  };
+}
+
+/** App-server's word that the thread's goal changed. */
+function goalUpdated(goal: ReturnType<typeof threadGoal>) {
+  return { method: "thread/goal/updated", params: { threadId: THREAD, turnId: null, goal } };
+}
+
 const OPEN = [exchange(FIRST, 0), exchange(FIRST, 1), exchange(FIRST, 2)];
 const RESUME = [exchange(RESUMED, 0), exchange(RESUMED, 1), exchange(RESUMED, 2)];
 
@@ -951,25 +977,9 @@ it.effect(
       const started = RESUMED_TURN.reply.find((line) => line.method === "turn/started");
 
       if (started === undefined) throw new Error("the resumed turn has no turn/started");
-      const objective = "every billing test passes";
 
-      const goal = (status: string, tokensUsed: number) => ({
-        method: "thread/goal/updated",
-        params: {
-          threadId: THREAD,
-          turnId: null,
-          goal: {
-            threadId: THREAD,
-            objective,
-            status,
-            tokenBudget: 500_000,
-            tokensUsed,
-            timeUsedSeconds: 60,
-            createdAt: 1,
-            updatedAt: 2,
-          },
-        },
-      });
+      const goal = (status: string, tokensUsed: number) =>
+        goalUpdated(threadGoal(status, tokensUsed, { tokenBudget: 500_000 }));
 
       const script: Script = {
         exchanges: [
@@ -996,7 +1006,7 @@ it.effect(
       yield* write({
         type: INPUT_LINE.MESSAGE,
         uuid: LINE.FIRST,
-        content: [{ type: "text", text: `/goal ${objective}` }],
+        content: [{ type: "text", text: `/goal ${OBJECTIVE}` }],
         goal: true,
       });
 
@@ -1004,7 +1014,7 @@ it.effect(
       const [process] = spawned;
       assert.deepEqual(process?.unexpected, []);
       assert.deepEqual(received(process, "thread/goal/set"), [
-        { threadId: THREAD, origin: "user", objective, status: "active" },
+        { threadId: THREAD, origin: "user", objective: OBJECTIVE, status: "active" },
       ]);
       assert.deepEqual(received(process, "turn/start"), []);
       assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
@@ -1028,23 +1038,11 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService("agent-probe-hermetic");
-      const objective = "every billing test passes";
 
-      const goal = (status: string, tokensUsed: number, updatedAt: number) => ({
-        threadId: THREAD,
-        objective,
-        status,
-        tokenBudget: null,
-        tokensUsed,
-        timeUsedSeconds: 60,
-        createdAt: 1,
-        updatedAt,
-      });
+      const goal = (status: string, tokensUsed: number, updatedAt: number) =>
+        threadGoal(status, tokensUsed, { updatedAt });
 
-      const updated = (said: ReturnType<typeof goal>) => ({
-        method: "thread/goal/updated",
-        params: { threadId: THREAD, turnId: null, goal: said },
-      });
+      const updated = goalUpdated;
 
       const script: Script = {
         exchanges: [
@@ -1075,7 +1073,7 @@ it.effect(
       yield* write({
         type: INPUT_LINE.MESSAGE,
         uuid: LINE.FIRST,
-        content: [{ type: "text", text: `/goal ${objective}` }],
+        content: [{ type: "text", text: `/goal ${OBJECTIVE}` }],
         goal: true,
       });
       yield* service.seen;
@@ -1102,18 +1100,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService("turn/completed");
-      const objective = "every billing test passes";
-
-      const paused = {
-        threadId: THREAD,
-        objective,
-        status: "paused",
-        tokenBudget: null,
-        tokensUsed: 40_000,
-        timeUsedSeconds: 60,
-        createdAt: 1,
-        updatedAt: 2,
-      };
+      const paused = threadGoal("paused", 40_000);
 
       // App-server says the goal a resumed thread holds again as it resumes it.
       const resumed = exchange(RESUMED, 2);
@@ -1125,13 +1112,7 @@ it.effect(
           exchange(RESUMED, 1),
           {
             ...resumed,
-            reply: [
-              ...resumed.reply,
-              {
-                method: "thread/goal/updated",
-                params: { threadId: THREAD, turnId: null, goal: paused },
-              },
-            ],
+            reply: [...resumed.reply, goalUpdated(paused)],
           },
           {
             method: "thread/goal/clear",
