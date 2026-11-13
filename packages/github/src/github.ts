@@ -281,8 +281,34 @@ const UNREAD_REJECTION: Rejection = { message: "GitHub request failed" };
 /** A GraphQL error, as far as its type. */
 const TypedError = Schema.Struct({ type: Schema.String });
 
-/** A GraphQL error, or a REST refusal's body, as far as GitHub's own words. */
+/** A GraphQL error as far as GitHub's own words. */
 const SaidError = Schema.Struct({ message: Schema.String });
+
+/** A REST refusal's body as far as GitHub's own words: its message, and each error's, or the field and code it names. */
+const SaidRefusal = Schema.Struct({
+  message: Schema.String,
+  errors: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        message: Schema.optional(Schema.String),
+        field: Schema.optional(Schema.String),
+        code: Schema.optional(Schema.String),
+      }),
+    ),
+  ),
+});
+
+/** A REST refusal's words: its message, then each error's message, or the field and code it names where it says none (`base invalid`). */
+function refusalWords(refusal: typeof SaidRefusal.Type): ReadonlyArray<string> {
+  const details = (refusal.errors ?? []).flatMap((error) => {
+    if (error.message !== undefined) return [error.message];
+    const named = [error.field, error.code].filter((word) => word !== undefined).join(" ");
+
+    return named === "" ? [] : [named];
+  });
+
+  return [refusal.message, ...details];
+}
 
 /** A GraphQL error as a partial answer carries it. */
 const PartialError = Schema.Struct({
@@ -379,12 +405,18 @@ function graphqlErrors(rejection: Rejection): ReadonlyArray<unknown> {
  * link; Octokit's where GitHub said none.
  */
 function wordsOf(rejection: Rejection): string {
-  const said = [...graphqlErrors(rejection), rejection.response?.data].flatMap((each) =>
-    Option.match(Schema.decodeUnknownOption(SaidError)(each), {
+  const said = [
+    ...graphqlErrors(rejection).flatMap((each) =>
+      Option.match(Schema.decodeUnknownOption(SaidError)(each), {
+        onNone: () => [],
+        onSome: (error) => [error.message],
+      }),
+    ),
+    ...Option.match(Schema.decodeUnknownOption(SaidRefusal)(rejection.response?.data), {
       onNone: () => [],
-      onSome: (error) => [error.message],
+      onSome: refusalWords,
     }),
-  );
+  ];
 
   return said.length > 0 ? said.join(" ") : (rejection.message ?? UNREAD_REJECTION.message ?? "");
 }
