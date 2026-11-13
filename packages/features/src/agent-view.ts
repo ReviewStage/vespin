@@ -35,6 +35,7 @@ import { liveActivitiesContract } from "./contract/live-activities.js";
 import { messagesContract } from "./contract/messages.js";
 import { modelsContract } from "./contract/models.js";
 import { pushDevicesContract } from "./contract/push-devices.js";
+import { voiceContract } from "./contract/voice.js";
 import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
 import { dictationRequestSchema } from "./dictation-wire.js";
 import { failureFactsSchema } from "./failure-facts.js";
@@ -86,6 +87,7 @@ import {
   soundRenameRequestSchema,
 } from "./sound-clip-wire.js";
 import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
+import { voiceCallEndedRequestSchema, voiceSessionRequestSchema } from "./voice-wire.js";
 
 /**
  * agent-view.ts -- a task's coding agents as one Mac's window hears them: each call's answer whole, or why there is none.
@@ -109,7 +111,9 @@ import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
  * A clip dictated into an agent's message box travels here too, since the
  * box is an agent's: the clip and its words to listen for, and the text
  * back, or why there is none, the account having saved no OpenAI key among
- * the reasons.
+ * the reasons. A voice call into an agent travels here for the same reason:
+ * the panel's SDP offer and GPT-Live's answer back, and the call's seconds
+ * once it ends.
  */
 
 /**
@@ -125,6 +129,7 @@ export const AGENT_RENAMES = {
 const AGENT_ACCOUNT_CALLS = {
   models: modelsContract,
   dictation: dictationContract,
+  voice: voiceContract,
   pushDevices: pushDevicesContract,
   liveActivities: liveActivitiesContract,
   githubToken: githubTokenContract,
@@ -1158,6 +1163,26 @@ export type DictationTranscribeParams = typeof dictationTranscribeParamsSchema.T
 export const dictationTranscribeAnswerViewSchema = answerView(dictationContract.transcribe);
 
 export type DictationTranscribeAnswerView = typeof dictationTranscribeAnswerViewSchema.Type;
+
+/** A voice call to open, as the window asks for it: the agent, the voice, and its peer's SDP offer. */
+export const voiceSessionParamsSchema = voiceSessionRequestSchema;
+
+export type VoiceSessionParams = typeof voiceSessionParamsSchema.Type;
+
+/** The opened call, as the window hears it: the SDP answer, or why there is none. */
+export const voiceSessionAnswerViewSchema = answerView(voiceContract.open);
+
+export type VoiceSessionAnswerView = typeof voiceSessionAnswerViewSchema.Type;
+
+/** A finished voice call, as the window reports it: the agent and the seconds it ran. */
+export const voiceCallEndedParamsSchema = voiceCallEndedRequestSchema;
+
+export type VoiceCallEndedParams = typeof voiceCallEndedParamsSchema.Type;
+
+/** A reported call, as the window hears it: kept, or why not. */
+export const voiceCallEndedAnswerViewSchema = answerView(voiceContract.ended);
+
+export type VoiceCallEndedAnswerView = typeof voiceCallEndedAnswerViewSchema.Type;
 
 /** The phone the app runs on, as it registers itself for pushes: its APNs token, its build's gateway, and its app. */
 export const pushDeviceRegisterParamsSchema = pushDeviceRegisterRequestSchema;

@@ -110,6 +110,14 @@ export const HOSTED_SERVICE_PATH = {
    */
   DICTATION: "/api/dictation",
   /**
+   * A voice call into an agent, opened on the caller's own OpenAI key (POST):
+   * the panel's SDP offer in, GPT-Live's SDP answer out, and never the key.
+   * `voice-wire.ts` declares both bodies.
+   */
+  VOICE_SESSION: "/api/voice/session",
+  /** A finished voice call's seconds, kept on the member's day (POST). `voice-wire.ts` declares both bodies. */
+  VOICE_CALLS: "/api/voice/calls",
+  /**
    * The member's grant of support access, under which a maintainer may sign
    * in as the account from the web for an hour at a time: grant it for seven
    * days (POST), or revoke it, ending any such sign-in under way (DELETE).

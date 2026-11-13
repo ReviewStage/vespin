@@ -1,0 +1,1 @@
+ALTER TABLE "hosted_usage" ADD COLUMN "voice_seconds" double precision DEFAULT 0 NOT NULL;
