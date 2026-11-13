@@ -43,7 +43,7 @@ export function App(): React.JSX.Element {
       bar={<SiteNavigation current={{ page: SITE_PAGE.HOME }} />}
       barCall={<SiteBarDownload />}
       badge={<LandingBackedBy href={Y_COMBINATOR_PAGE} />}
-      title="Steer your coding agents."
+      title="Run a team of agents."
       actions={
         <>
           <SiteDownload />
