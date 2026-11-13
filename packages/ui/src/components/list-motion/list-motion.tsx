@@ -221,6 +221,15 @@ const LeavesContext = createContext<Leaves | undefined>(undefined);
 /** The exits under way, by the element leaving, stopped where its entry is listed again. */
 const exits = new WeakMap<Element, Animation>();
 
+/** An inline style a leaving element wore before its exit wrote over it, and what the exit wrote there. */
+interface Worn {
+  readonly before: string;
+  readonly written: string;
+}
+
+/** What each leaving element wore under what its exit wrote, by property, put back as it stands again. */
+const wornBefore = new WeakMap<HTMLElement, Map<string, Worn>>();
+
 /** The commit each root is being played in, by the root, until the last motion over it has heard it. */
 const batches = new WeakMap<Element, Batch>();
 
@@ -514,15 +523,41 @@ function carrierOf(root: HTMLElement, element: Element): Element {
   return around === null || around === undefined || !root.contains(around) ? root : around;
 }
 
-/** An element whose exit was stopped, its entry listed again, standing as it did before it left. */
+/**
+ * Writes one of a leaving element's inline styles, keeping what it wore
+ * there before the first write, so it can stand again as it did.
+ */
+function writeLeaving(element: HTMLElement, property: string, value: string): void {
+  const worn = wornBefore.get(element) ?? new Map<string, Worn>();
+  const before = worn.get(property)?.before ?? element.style.getPropertyValue(property);
+  element.style.setProperty(property, value);
+  worn.set(property, { before, written: element.style.getPropertyValue(property) });
+  wornBefore.set(element, worn);
+}
+
+/**
+ * An element whose exit was stopped, its entry listed again, standing as it
+ * did before it left: each inline style its exit wrote put back as it was.
+ * Note that it is put back rather than cleared, because a row a run places
+ * itself (`VirtualRows`) wears its place inline, `position` from its style
+ * and `top` from the virtualizer, and neither writes it again while it is
+ * unchanged, so a row cleared of them would stand at the top of its run,
+ * over the row there, and leave its own place empty. A property something
+ * else wrote meanwhile, the virtualizer placing the row anew, is left as it
+ * wrote it.
+ */
 function standAgain(element: HTMLElement): void {
   exits.get(element)?.cancel();
   exits.delete(element);
 
-  for (const property of ["position", "top", "left", "width", "margin", "display"]) {
-    element.style.removeProperty(property);
+  for (const [property, { before, written }] of wornBefore.get(element) ?? []) {
+    if (element.style.getPropertyValue(property) !== written) continue;
+
+    if (before === "") element.style.removeProperty(property);
+    else element.style.setProperty(property, before);
   }
 
+  wornBefore.delete(element);
   element.removeAttribute("inert");
   element.removeAttribute("data-leaving");
 }
@@ -593,7 +628,7 @@ function playExits(
 
   for (const { element, onLeft } of leaving) {
     if (before.places.get(element)?.seen === true) continue;
-    element.style.display = "none";
+    writeLeaving(element, "display", "none");
     onLeft();
   }
 
@@ -612,11 +647,11 @@ function playExits(
 
   for (const { each, top, left, width, opacity } of placed) {
     const { element, onLeft } = each;
-    element.style.position = "absolute";
-    element.style.top = `${top}px`;
-    element.style.left = `${left}px`;
-    element.style.width = `${width}px`;
-    element.style.margin = "0";
+    writeLeaving(element, "position", "absolute");
+    writeLeaving(element, "top", `${top}px`);
+    writeLeaving(element, "left", `${left}px`);
+    writeLeaving(element, "width", `${width}px`);
+    writeLeaving(element, "margin", "0");
 
     const out = element.animate(
       [
@@ -942,7 +977,7 @@ class ListMotionPlayer extends Component<
       element.setAttribute("data-leaving", "");
 
       if ((keyedNow.get(key) ?? []).some((other) => other !== element)) {
-        element.style.display = "none";
+        writeLeaving(element, "display", "none");
         onLeft();
         continue;
       }
