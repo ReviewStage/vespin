@@ -694,10 +694,10 @@ index 000000000..f2cc7593b
 +}
 diff --git a/packages/panel/src/shots/automation-once.ts b/packages/panel/src/shots/automation-once.ts
 new file mode 100644
-index 000000000..b761a7bd1
+index 000000000..6c7038f37
 --- /dev/null
 +++ b/packages/panel/src/shots/automation-once.ts
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,84 @@
 +/**
 + * automation-once.ts -- 0.34.0 shot "Automations once, and on merges and releases": Dean's Check Postmark's domain verification open in the editor, its trigger reading Runs Once, on a date and time of its own.
 + *
@@ -741,6 +741,31 @@ index 000000000..b761a7bd1
 +    }, 1500);
 +  },
 +};
++
++/** Holds the editor's Runs picker open on Once, once the editor stands. */
++const OPEN_RUNS: ShotStep = {
++  key: "open-runs",
++  ready: () => true,
++  run: () => {
++    window.setTimeout(() => {
++      window.setInterval(() => {
++        if (!(document.body.textContent ?? "").includes("Date and time")) return;
++        const open = [...document.querySelectorAll<HTMLElement>("[role='listbox'], [role='menu']")].some(
++          (list) => list.getBoundingClientRect().height > 0 && (list.textContent ?? "").includes("Weekdays"),
++        );
++        if (open) return;
++        [...document.querySelectorAll<HTMLElement>("button, [role='combobox']")]
++          .find((each) => (each.textContent ?? "").trim() === "Once")
++          ?.click();
++      }, 700);
++    }, 3000);
++  },
++};
++
++/** The editor with its Runs picker open, every kind of schedule listed and Once chosen. */
++export function automationRunsShot(): ShotSpec {
++  return { ...automationOnceShot(), steps: [OPEN_EDITOR, OPEN_RUNS] };
++}
 +
 +export function automationOnceShot(): ShotSpec {
 +  const members = acmeMembers();
@@ -3406,10 +3431,10 @@ index 000000000..e8783890b
 +}
 diff --git a/packages/panel/src/shots/shot-profiles.ts b/packages/panel/src/shots/shot-profiles.ts
 new file mode 100644
-index 000000000..3e27a465f
+index 000000000..865c8f3e1
 --- /dev/null
 +++ b/packages/panel/src/shots/shot-profiles.ts
-@@ -0,0 +1,99 @@
+@@ -0,0 +1,100 @@
 +/**
 + * shot-profiles.ts -- the registry: which shot each `--profile shot-*` launch stages, built once on first use.
 + *
@@ -3432,7 +3457,7 @@ index 000000000..3e27a465f
 +import { pageCommentsShot } from "./page-comments";
 +import { homeShot } from "./home";
 +import { automationsShot } from "./automations";
-+import { automationOnceShot } from "./automation-once";
++import { automationOnceShot, automationRunsShot } from "./automation-once";
 +import { runActionsShot } from "./run-actions";
 +import { githubMentionShot } from "./github-mention";
 +import { railShot } from "./rail";
@@ -3443,6 +3468,7 @@ index 000000000..3e27a465f
 +  [RUN_PROFILE.SHOT_HOME, homeShot],
 +  [RUN_PROFILE.SHOT_AUTOMATIONS, automationsShot],
 +  [RUN_PROFILE.SHOT_AUTOMATION_ONCE, automationOnceShot],
++  [RUN_PROFILE.SHOT_AUTOMATION_RUNS, automationRunsShot],
 +  [RUN_PROFILE.SHOT_RUN_ACTIONS, runActionsShot],
 +  [RUN_PROFILE.SHOT_GITHUB_MENTION, githubMentionShot],
 +  [RUN_PROFILE.SHOT_RAIL, railShot],

@@ -92,8 +92,6 @@ filtered by tag, with prereleases left out unless you include them.
 ([#8855](https://github.com/ReviewStage/vespin/pull/8855),
 [#8834](https://github.com/ReviewStage/vespin/pull/8834))
 
-![Dean's Check Postmark's domain verification in the automation editor: its trigger is a Schedule that Runs Once, Next: Nov 20, 9:00 AM, its Date and time Nov 20, 2026 at 9:00 AM in America/New York, over its prompt to check whether acme.dev is verified in Postmark](apps/web/public/changelog/0.34.0/automations-once-and-on-merges-and-releases.png)
-
 ### Mention Vespin on GitHub
 
 A comment that mentions Vespin's GitHub App on an issue or a pull request starts
@@ -102,7 +100,7 @@ working on that pull request. Vespin reacts with 👀 and posts the agent's firs
 answer back as a comment with a link to it.
 ([#8898](https://github.com/ReviewStage/vespin/pull/8898))
 
-![GitHub issue #231 on acme/relay, Expired invite link shows a 404, open in Chrome: Dana asks the vespin-agent bot to take it, her comment wearing a 👀 reaction, and the bot answers that it opened #232, which shows an expired link as no longer valid with Ask for a new invite, ending in Open in Vespin; the sidebar's Development section links #232](apps/web/public/changelog/0.34.0/mention-vespin-on-github.png)
+![Two GitHub comments: danamoreno, a member, asks the vespin-agent bot to make an expired invite link read “This invite is no longer valid” and offer a new invite, her comment wearing a 👀 reaction; the vespin-agent bot answers that it opened #232 with Ask for a new invite and a passing test, ending in Open in Vespin](apps/web/public/changelog/0.34.0/mention-vespin-on-github.png)
 
 ### Copy and paste pictures and files
 

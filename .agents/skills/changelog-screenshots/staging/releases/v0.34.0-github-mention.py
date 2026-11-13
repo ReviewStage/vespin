@@ -1,7 +1,7 @@
-# v0.34.0-github-mention.py -- builds the GitHub issue mockup for 0.34.0's "Mention Vespin on GitHub": GitHub's dark theme from its own Primer CSS and Octicons, inlined, in a Chrome window.
+# v0.34.0-github-mention.py -- builds the GitHub mockups for 0.34.0's "Mention Vespin on GitHub" from GitHub's own Primer CSS and Octicons: the landed two comments (`abstract`) and the issue page in a Chrome window (`page`).
 #
 # Throwaway staging, kept to redo the picture. Needs `npm install @primer/css@21 @primer/octicons@19 @primer/primitives@10` under `.context/primer/`;
-# writes `.context/mock/github-mention.html`, which the Mac's Chrome renders (README's 0.34.0 row).
+# writes `.context/mock/github-comments.html` (landed) and `github-mention.html`, which the Mac's Chrome renders (README's 0.34.0 rows).
 import base64, os, re, sys
 ROOT = "/workspace/repository"
 PRIMER = f"{ROOT}/.context/primer/node_modules/@primer"
@@ -134,6 +134,30 @@ body{{width:1712px;height:1112px;position:relative;font-family:-apple-system,Bli
 <div class="ssec" style="border:0"><h3>Participants</h3><div class="d-flex" style="gap:4px">{dana(26)}<img src="{BOT}" style="width:26px;height:26px;border-radius:50%"></div></div>
 </div></div></div></div></body></html>'''
 
+def abstract(css):
+    return f'''<!doctype html><html data-color-mode="dark" data-dark-theme="dark" data-light-theme="dark"><head><meta charset="utf-8">
+<style>{css}</style>
+<style>
+html,body{{margin:0;background:var(--bgColor-default) !important}}
+body{{width:1200px;height:796px;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif;font-size:14px;color:var(--fgColor-default);-webkit-font-smoothing:antialiased}}
+.col{{width:760px;zoom:1.32;position:relative}}
+.col:before{{content:"";position:absolute;left:72px;top:40px;bottom:40px;width:2px;background:var(--borderColor-muted)}}
+.tl-item{{display:flex;gap:16px;margin-bottom:22px;position:relative}}
+.tl-item:last-child{{margin-bottom:0}}
+.tl-avatar img,.tl-avatar .dana{{width:40px;height:40px;border-radius:50%}}
+.dana{{display:flex;align-items:center;justify-content:center;background:#f2b880;color:#6b3a12;font-weight:600;border-radius:50%}}
+.cbox{{flex:1;border:1px solid var(--borderColor-default);border-radius:6px;background:var(--bgColor-default);position:relative}}
+.chead{{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;background:var(--bgColor-muted);border-bottom:1px solid var(--borderColor-default);border-radius:6px 6px 0 0;font-size:14px}}
+.cbody{{padding:16px;font-size:14px}}
+.creact{{display:flex;gap:8px;align-items:center;padding:0 16px 14px}}
+.rx{{display:inline-flex;align-items:center;gap:6px;height:26px;padding:0 9px;border-radius:13px;border:1px solid var(--borderColor-accent-emphasis);background:var(--bgColor-accent-muted);font-size:12px;color:var(--fgColor-accent)}}
+.react-add{{display:inline-flex;align-items:center;justify-content:center;width:28px;height:26px;border-radius:13px;border:1px solid var(--borderColor-default);color:var(--fgColor-muted)}}
+</style></head><body><div class="col">
+{comment(dana(40), "danamoreno", "commented 8 minutes ago", '<p><a class="user-mention text-bold Link--primary">@vespin-agent</a> can you take this? An expired invite link should read “This invite is no longer valid” and offer to ask for a new invite, as the plan says.</p>', badge="Member", reactions='<span class="rx">👀 1</span>')}
+{comment(f'<img src="{BOT}">', "vespin-agent", "commented 2 minutes ago", '<p>Opened <a href="#">#232</a>. An expired invite link now reads “This invite is no longer valid”, with <strong>Ask for a new invite</strong>, which emails the member who sent it. I added a case for the expired link to <code>src/members/accept.test.ts</code>, and <code>pnpm test src/members</code> passes.</p><p><a href="#">Open in Vespin</a></p>', bot=True)}
+</div></body></html>'''
+
 css = "\n".join(open(p).read() for p in CSS_FILES)
+open(f"{ROOT}/.context/mock/github-comments.html", "w").write(abstract(css))
 open(f"{ROOT}/.context/mock/github-mention.html", "w").write(page(css))
 print("ok", os.path.getsize(f"{ROOT}/.context/mock/github-mention.html"))
