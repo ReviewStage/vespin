@@ -233,7 +233,7 @@ function settledCalls(at: number): readonly AgentTranscriptMessage[] {
   ]);
 
   return [
-    // A plain exchange: the ask handed on, the turn it opened, folded since the voice retells it.
+    // A plain exchange: the ask handed on, and the turn it opened.
     own(
       "voice-ask-expiry",
       0,

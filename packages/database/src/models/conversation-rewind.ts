@@ -1,9 +1,9 @@
 import { MESSAGE_ROLE } from "@repo/wire";
-import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, or, sql } from "drizzle-orm";
+import { and, asc, eq, gt, gte, inArray, isNotNull, isNull, lt, not, or, sql } from "drizzle-orm";
 import { Clock, Effect, Option, Result, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
-import { conversations, messages, turns } from "../schemas/storage.js";
+import { conversations, messages, recordedSpokenLine, turns } from "../schemas/storage.js";
 import { expireTurnApprovals } from "./agent-approvals.js";
 import {
   DISPATCH_CLAIM,
@@ -358,7 +358,7 @@ const findNextSnapshot = SqlSchema.findOneOption({
     ),
 });
 
-/** The developer's first line past a place in the conversation, where one stands. */
+/** The developer's first line past a place in the conversation, where one stands, passing over a line said on a call that the agent never heard (`recordedSpokenLine`). */
 const findLineAfter = SqlSchema.findOneOption({
   Request: Schema.Struct({ conversationId: Schema.String, seq: Schema.Number }),
   Result: Schema.Struct({
@@ -382,6 +382,7 @@ const findLineAfter = SqlSchema.findOneOption({
             eq(messages.conversationId, conversationId),
             eq(messages.role, MESSAGE_ROLE.USER),
             gt(messages.seq, seq),
+            not(recordedSpokenLine(messages)),
           ),
         )
         .orderBy(asc(messages.seq))
@@ -415,6 +416,29 @@ const cutPoint = (conversationId: string, messageId: string) =>
     return Result.succeed({ seq, clientId, heard: turnId !== null, from });
   });
 
+/**
+ * Where the harness's session is cut for a cut at a line: before the line
+ * where a turn took it; else before the next line a turn opened on, since
+ * that turn goes with the cut, as it does past a line said on a call that
+ * no turn took; else the line, unheard, for an earlier cut to stand over.
+ */
+const harnessCut = (
+  conversationId: string,
+  line: { readonly seq: number; readonly clientId: string; readonly heard: boolean },
+) =>
+  Effect.gen(function* () {
+    if (line.heard) return { clientId: line.clientId, heard: true };
+    const next = yield* findLineAfter({ conversationId, seq: line.seq });
+
+    return Option.match(
+      Option.filter(next, (after) => after.turnId !== null && after.takenAfterStep === null),
+      {
+        onNone: () => ({ clientId: line.clientId, heard: false }),
+        onSome: (after) => ({ clientId: after.clientId, heard: true }),
+      },
+    );
+  });
+
 /** The cut, under the conversation's row lock and with no hand-over under way, answering what it cut or why it could not. */
 const cut = (target: ConversationTarget, messageId: string, place: number) =>
   Effect.gen(function* () {
@@ -429,7 +453,8 @@ const cut = (target: ConversationTarget, messageId: string, place: number) =>
     const point = yield* cutPoint(conversationId, messageId);
 
     if (Result.isFailure(point)) return Result.fail(point.failure);
-    const { seq, clientId, heard, from } = point.success;
+    const { seq, from } = point.success;
+    const { clientId, heard } = yield* harnessCut(conversationId, point.success);
     const turnIds = (yield* findTurnsFrom({ conversationId, from })).map((turn) => turn.id);
     yield* deleteMessagesFrom({ conversationId, seq, turnIds });
     // Note that a cut dropping every turn keeps the first one's row, its work gone and settled, because
