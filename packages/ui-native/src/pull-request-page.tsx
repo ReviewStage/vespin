@@ -4,9 +4,11 @@ import {
   Alert,
   Host,
   HStack,
+  Menu,
   Button as SwiftUIButton,
   Text,
   TextField,
+  Toggle,
   useNativeState,
   VStack,
 } from "@expo/ui/swift-ui";
@@ -23,6 +25,7 @@ import {
   listRowBackground,
   listRowInsets,
   listRowSeparator,
+  menuIndicator,
   monospacedDigit,
   textInputAutocapitalization,
   tint,
@@ -248,56 +251,87 @@ export function WriteNoteRow({
   );
 }
 
+/** A way to merge the merge's menu offers, such as Squash and merge, checked where it is the one a tap uses. */
+export interface MergeMethodChoice {
+  readonly label: string;
+  readonly on: boolean;
+  readonly onPress: () => void;
+}
+
 /**
  * The merge's one press as a row of the page, where a regular window's bar
  * folds its acts out of sight, as GitHub's own app stands Merge under a
- * pull request's checks: the system's large button across the row, filled
- * in the accent with its words in the brand's ink where it is the page's
- * one act, such as Squash and merge, and outlined in it otherwise, such as
- * Remove from queue. It is dimmed while a change is out, its words then
- * saying what is under way.
+ * pull request's checks: the system's large button, as wide as its words,
+ * filled in the accent with its words in the brand's ink where it is the
+ * page's one act, such as Squash and merge, and outlined in it otherwise,
+ * such as Remove from queue. Where the repository merges more than one way
+ * it is a split button, as the panel's merge box is: a tap merges the way
+ * chosen, and a long press or its chevron opens the ways, the chosen one
+ * checked. It is dimmed while a change is out, its words then saying what
+ * is under way.
  */
 export function MergeActRow({
   label,
   prominent,
   disabled: dimmed,
+  methods = [],
   onPress,
 }: {
   readonly label: string;
   readonly prominent: boolean;
   readonly disabled: boolean;
+  /** The ways to merge, offered behind the chevron where there is more than one. */
+  readonly methods?: readonly MergeMethodChoice[];
   readonly onPress: () => void;
 }) {
   const colors = useColors();
 
-  return (
-    <SwiftUIButton
-      onPress={onPress}
+  const words = (
+    <Text
       modifiers={[
-        buttonStyle(prominent ? "borderedProminent" : "bordered"),
-        controlSize("large"),
-        tint(prominent ? colors.ACCENT : colors.TEXT),
-        disabled(dimmed),
-        listRowBackground("clear"),
-        listRowSeparator("hidden"),
-        listRowInsets({
-          leading: SPACE.EDGE,
-          trailing: SPACE.EDGE,
-          top: SPACE.TIGHT,
-          bottom: SPACE.TIGHT,
-        }),
+        font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
+        foregroundStyle(prominent ? colors.ON_ACCENT : colors.TEXT),
       ]}
     >
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: "semibold" }),
-          foregroundStyle(prominent ? colors.ON_ACCENT : colors.TEXT),
-          frame({ maxWidth: Number.POSITIVE_INFINITY }),
-        ]}
-      >
-        {label}
-      </Text>
-    </SwiftUIButton>
+      {label}
+    </Text>
+  );
+
+  const look = [
+    buttonStyle(prominent ? "borderedProminent" : "bordered"),
+    controlSize("large"),
+    tint(prominent ? colors.ACCENT : colors.TEXT),
+    disabled(dimmed),
+    listRowBackground("clear"),
+    listRowSeparator("hidden"),
+    listRowInsets({
+      leading: SPACE.EDGE,
+      trailing: SPACE.EDGE,
+      top: SPACE.TIGHT,
+      bottom: SPACE.TIGHT,
+    }),
+  ];
+
+  // Note that a single way to merge leaves nothing to choose, so the press stands as a plain button with no chevron.
+  if (methods.length < 2) {
+    return (
+      <SwiftUIButton onPress={onPress} modifiers={look}>
+        {words}
+      </SwiftUIButton>
+    );
+  }
+
+  return (
+    <Menu label={words} onPrimaryAction={onPress} modifiers={[...look, menuIndicator("visible")]}>
+      {methods.map((method) => (
+        <Toggle
+          key={method.label}
+          label={method.label}
+          isOn={method.on}
+          onIsOnChange={() => method.onPress()}
+        />
+      ))}
+    </Menu>
   );
 }
 

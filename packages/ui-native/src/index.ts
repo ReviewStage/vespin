@@ -140,6 +140,7 @@ export {
   ConfirmAsk,
   MarkRow,
   MergeActRow,
+  type MergeMethodChoice,
   PullRequestHead,
   WORDS_ASK_KIND,
   WordsAsk,
