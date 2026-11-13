@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { Database } from "@repo/database/core/query";
+import { Database, type DatabaseServices } from "@repo/database/core/query";
 import {
   claimVoiceCallLease,
   insertVoiceCall,
@@ -267,8 +267,10 @@ it.layer(getTestDB())("a voice call held lease by lease", (it) => {
       const leases = yield* recordingLeases(true);
       const told = yield* Queue.unbounded<boolean>();
 
-      const observe: VoiceCallObserver<never> = (_event, holder) =>
-        Effect.flatMap(holder.send({ type: THINKING }), (sent) => Queue.offer(told, sent));
+      const observe: VoiceCallObserver<DatabaseServices> = (_event, holder) =>
+        Effect.flatMap(holder.send({ type: THINKING }), (sent) =>
+          Effect.asVoid(Queue.offer(told, sent)),
+        );
 
       const held = yield* Effect.gen(function* () {
         const holder = yield* Effect.forkChild(
