@@ -1060,7 +1060,14 @@ function adoptedSlice(slice: Slice, state: ComposerState, props: ComposerEditorP
           fresh.map((each) => fileOfCopy(each.file, isPictureName(each.name) ? "" : each.name)),
         );
 
-  const read = linked.length === 0 ? [] : copies?.linked(linked.map((each) => each.picture));
+  // Note that a description's picture pasted twice is read once, both chips naming it, as a carried file is.
+  const linkedOnce = linked.filter(
+    (each, at) =>
+      linked.findIndex((other) => other.picture.address === each.picture.address) === at,
+  );
+
+  const read =
+    linkedOnce.length === 0 ? [] : copies?.linked(linkedOnce.map((each) => each.picture));
 
   // Each carried chip's name in the box: its own where the box knows its file, the one the box took it in under, or none where it took none.
   const names = new Map<PmNode, string | undefined>([
@@ -1069,7 +1076,11 @@ function adoptedSlice(slice: Slice, state: ComposerState, props: ComposerEditorP
 
       return [each.node, at === -1 ? each.name : taken?.[at]];
     }),
-    ...linked.map((each, at): [PmNode, string | undefined] => [each.node, read?.[at]]),
+    ...linked.map((each): [PmNode, string | undefined] => {
+      const at = linkedOnce.findIndex((other) => other.picture.address === each.picture.address);
+
+      return [each.node, read?.[at]];
+    }),
   ]);
 
   state.files = new Set([
