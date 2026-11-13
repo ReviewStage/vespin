@@ -1,0 +1,2 @@
+#9025 at c2ba690ec, R1 bundle 77ed6fd8c (main 32a4961f0 + R1), iPhone 18 Pro, JS on Nov 12's app; 26.5 not run (memory); iPad 27.2 lane to follow where listed, r9025.yaml light, default and AX3, 0 failed steps.
+PASS: at AX3 each row's preview starts at its title's leading edge ("The test plan I followed:" under "Recorded the invite flow"), and an ask glyph stands in the lead column under the ring. Default size unchanged from main.
