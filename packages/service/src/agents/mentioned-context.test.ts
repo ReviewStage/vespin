@@ -363,21 +363,30 @@ test("a server or a tool the words mention is handed as one note naming its conn
   assert.equal(words.split("The developer pointed you at").length - 1, 2, words);
 });
 
-test("an app on the developer's Mac is handed as a note to use computer on it by its bundle id, and nothing with Computer use off", () => {
-  const simulator = mentionMarkdown(
-    { kind: MENTION_KIND.MAC_APP, app: "com.apple.iphonesimulator" },
-    "Simulator",
-    PLACE,
-  );
+test.each([
+  {
+    mentioned: "an app on their Mac",
+    link: mentionMarkdown(
+      { kind: MENTION_KIND.MAC_APP, app: "com.apple.iphonesimulator" },
+      "Simulator",
+      PLACE,
+    ),
+    note: /pointed you at the app Simulator on their Mac \(`com\.apple\.iphonesimulator`\).*`computer` on it with `app: "com\.apple\.iphonesimulator"`/u,
+  },
+  {
+    mentioned: "their Mac as a whole",
+    link: mentionMarkdown({ kind: MENTION_KIND.COMPUTER }, "Computer", PLACE),
+    note: /pointed you at their Mac for this message: `computer` is welcome on it.*Start with `list_apps`/u,
+  },
+])(
+  "$mentioned is handed as a note to use computer there, and nothing with Computer use off",
+  ({ link, note }) => {
+    const words = `Check the build in ${link}.`;
 
-  const words = `Check the build in ${simulator}.`;
-
-  assert.match(
-    mentionedContext(words, TASK) ?? "",
-    /pointed you at the app Simulator on their Mac \(`com\.apple\.iphonesimulator`\).*`computer` on it with `app: "com\.apple\.iphonesimulator"`/u,
-  );
-  assert.equal(mentionedContext(words, TASK, undefined, true, false), undefined);
-});
+    assert.match(mentionedContext(words, TASK) ?? "", note);
+    assert.equal(mentionedContext(words, TASK, undefined, true, false), undefined);
+  },
+);
 
 test("the servers the words mention, by themselves or by a tool, are named each once, and nothing else is", () => {
   assert.deepEqual(

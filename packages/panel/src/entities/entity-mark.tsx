@@ -257,6 +257,7 @@ const ENTITY_MARK: EntityMarks = {
   [ENTITY_KIND.WORKSPACE]: (workspace) => <WorkspaceMark slug={workspace.workspace} />,
   [ENTITY_KIND.DATE]: () => <EntityGlyph kind={ENTITY_KIND.DATE} />,
   [ENTITY_KIND.MAC_APP]: (macApp) => <MacAppMark app={macApp.app} />,
+  [ENTITY_KIND.COMPUTER]: () => <EntityGlyph kind={ENTITY_KIND.COMPUTER} />,
 };
 
 /** An entity's mark drawn through its kind's own entry. */

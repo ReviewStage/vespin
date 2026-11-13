@@ -92,6 +92,7 @@ const ENTITY_SYMBOL: Readonly<Record<EntityKind, Glyph>> = {
   [ENTITY_KIND.DATE]: GLYPH.DATE,
   // Note that an app on a Mac is never read from the phone, so it wears an app's shape rather than its icon.
   [ENTITY_KIND.MAC_APP]: GLYPH.APP,
+  [ENTITY_KIND.COMPUTER]: GLYPH.COMPUTER,
 };
 
 /** Each heading level's size and weight, a step above the 15 pt words as the denser scale reads, never past a page's own heading. */

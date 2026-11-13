@@ -850,14 +850,26 @@ function pullRequestRows(pullRequests: readonly MentionablePullRequest[]): Menti
 /** What an app's row says after its name: that the developer always allows it, or that it runs now. */
 const APP_DETAIL = { ALLOWED: "Always allowed", RUNNING: "Running" } as const;
 
+/** The row that names the Mac itself, any app on it, found by the words a person says it with. */
+const COMPUTER_ROW: MentionRow = {
+  mention: { kind: MENTION_KIND.COMPUTER },
+  name: "Computer",
+  detail: undefined,
+  terms: "Computer Mac screen",
+};
+
 /**
- * Each app on this Mac's row, as the host lists them, those running first:
- * a pick names it by its bundle id, or by its name where it has none, and it
- * is found by either. Note that routing's R3 adds the Mac each row stands on
- * once a command can name one; until then a row names the app alone.
+ * The Mac's own row, then each app on this Mac's row, as the host lists
+ * them, those running first; none where it lists none, as while agents use
+ * no apps here. A pick names an app by its bundle id, or by its name where
+ * it has none, and it is found by either. Note that routing's R3 adds the
+ * Mac each row stands on once a command can name one; until then a row
+ * names the app alone.
  */
 function appRows(apps: readonly MacApp[]): MentionRow[] {
-  return apps.map(({ name, bundleId, running, allowed }) => {
+  if (apps.length === 0) return [];
+
+  const rows = apps.map(({ name, bundleId, running, allowed }): MentionRow => {
     const detail = allowed ? APP_DETAIL.ALLOWED : running ? APP_DETAIL.RUNNING : undefined;
 
     return {
@@ -867,6 +879,8 @@ function appRows(apps: readonly MacApp[]): MentionRow[] {
       terms: bundleId === undefined ? name : `${name} ${bundleId}`,
     };
   });
+
+  return [COMPUTER_ROW, ...rows];
 }
 
 /** Each connected server's row, and where asked each of its tools' rows as far as its read answered, found by the server's name and the tool's. */

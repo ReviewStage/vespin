@@ -25,9 +25,9 @@ import { CatalogSection } from "../section";
  * the words as typed offered after them, open on a query; in a narrow
  * column with a long title; and a list standing alone on a popover, as an
  * editor's `@` hangs one, a row that opens a further list wearing its
- * chevron, and its note where nothing matches, and the apps on the
- * developer's Mac it offers, each by its icon, or a screen's glyph where
- * the Mac drew none yet; and a list too short to
+ * chevron, and its note where nothing matches, and the Mac and the apps on
+ * it the list offers, each app by its icon, the Mac and an app the Mac drew
+ * no icon for yet by a screen's glyph; and a list too short to
  * search, holding the keys itself, with a model that cannot be chosen now,
  * the one chosen checked, and a note after them; and rows a list engine of
  * the app's owns, each drawn as `ComboboxOptionItem`, the second lit as the
@@ -113,8 +113,9 @@ const NOTES_ICON = `data:image/svg+xml,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="4" y="4" width="56" height="56" rx="13" fill="#fff" stroke="#d8d8d8"/><path d="M4 17a13 13 0 0 1 13-13h30a13 13 0 0 1 13 13v5H4z" fill="#f7c948"/><rect x="12" y="32" width="40" height="3" rx="1.5" fill="#c9c9c9"/><rect x="12" y="42" width="30" height="3" rx="1.5" fill="#c9c9c9"/></svg>',
 )}`;
 
-/** Synthetic apps on the developer's Mac, as an agent's `@` offers them: running first, one always allowed, and one installed whose icon is still being read. */
+/** Synthetic apps on the developer's Mac, as an agent's `@` offers them: the Mac itself first, then running apps, one always allowed, and one installed whose icon is still being read. */
 const APPS: readonly ComboboxOption[] = [
+  { id: "computer", label: "Computer", icon: <AppIcon size={APP_ICON_SIZE.LINE} /> },
   {
     id: "simulator",
     label: "Simulator",
