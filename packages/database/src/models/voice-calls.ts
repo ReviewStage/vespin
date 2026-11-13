@@ -7,15 +7,19 @@
  * one compare-and-set, so of two claims on one epoch exactly one holds the
  * lease, and the loser reads the call's row it lost to. The holder writes the
  * told-through cursor under the epoch it claimed, so a holder whose lease
- * was taken writes nothing (`../schemas/voice-call.ts`).
+ * was taken writes nothing (`../schemas/voice-call.ts`). Any member who
+ * reaches the agent reads which calls stand on it, the caller and when each
+ * opened alone, so every window on the agent draws a call from its start.
  */
 
-import { and, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { Effect, type Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { agentTable } from "../schemas/agent.js";
 import { voiceCallTable } from "../schemas/voice-call.js";
 import { EpochMillisColumnSchema, InstantColumnSchema } from "./columns.js";
+import { agentVisibleTo } from "./workspace-store.js";
 
 type VoiceCallEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
 
@@ -33,6 +37,15 @@ const VoiceCallRowSchema = Schema.Struct({
 });
 
 export type VoiceCallRow = typeof VoiceCallRowSchema.Type;
+
+/** A call standing on an agent, as any member who reaches the agent reads it: its id, the member on it, and when it opened. */
+const StandingVoiceCallSchema = Schema.Struct({
+  id: Schema.String,
+  callerId: Schema.String,
+  startedAt: InstantColumnSchema,
+});
+
+export type StandingVoiceCall = typeof StandingVoiceCallSchema.Type;
 
 /** A call as the route opens it, holding lease 1 until `leaseUntil`. */
 export interface VoiceCallOpened {
@@ -79,6 +92,24 @@ const findOfCaller = SqlSchema.findOneOption({
         .select(voiceCallColumns)
         .from(voiceCallTable)
         .where(and(eq(voiceCallTable.id, id), eq(voiceCallTable.callerId, callerId))),
+    ),
+});
+
+const findStandingOnAgent = SqlSchema.findAll({
+  Request: Schema.Struct({ readerId: Schema.String, agentId: Schema.String }),
+  Result: StandingVoiceCallSchema,
+  execute: ({ readerId, agentId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: voiceCallTable.id,
+          callerId: voiceCallTable.callerId,
+          startedAt: voiceCallTable.startedAt,
+        })
+        .from(voiceCallTable)
+        .innerJoin(agentTable, eq(agentTable.id, voiceCallTable.agentId))
+        .where(and(eq(voiceCallTable.agentId, agentId), agentVisibleTo(readerId)))
+        .orderBy(asc(voiceCallTable.startedAt), asc(voiceCallTable.id)),
     ),
 });
 
@@ -142,6 +173,14 @@ export function readVoiceCall(
   id: string,
 ): VoiceCallEffect<Option.Option<VoiceCallRow>> {
   return findOfCaller({ callerId, id });
+}
+
+/** The calls standing on the agent, oldest first, where `readerId` reaches it; none for an agent it does not. */
+export function listStandingVoiceCalls(
+  readerId: string,
+  agentId: string,
+): VoiceCallEffect<readonly StandingVoiceCall[]> {
+  return findStandingOnAgent({ readerId, agentId });
 }
 
 /**

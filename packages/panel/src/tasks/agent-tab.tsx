@@ -37,6 +37,8 @@ import {
   type AgentFailure,
   type AgentOrigin,
   type AgentPullRequestAnswer,
+  type AgentSender,
+  type AgentStandingCall,
   type AgentStatus,
   type AgentSubagentStanding,
   type AgentSummary,
@@ -228,7 +230,6 @@ import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.j
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
-import { useVoiceCall } from "../voice-call.js";
 import {
   type AgentApprovalsControl,
   ApprovalsProvider,
@@ -1778,6 +1779,9 @@ export interface ArrivedLine {
 /** No line reached the turn while it ran. */
 const NO_ARRIVED: readonly ArrivedLine[] = [];
 
+/** No voice call stands on the agent, as on a worker's transcript. */
+const NO_STANDING_CALLS: readonly AgentStandingCall[] = [];
+
 /**
  * The line a finished turn ends on, the line under every message
  * (`MessageLine`): how long it worked and when it ended as its lead, then
@@ -2719,6 +2723,7 @@ function transcriptPlacing(
   unsent: ReadonlySet<string>,
   replayed: boolean,
   voiceShown: boolean,
+  standingCalls: readonly AgentStandingCall[],
 ) {
   // Note that the voice's lines on a call are drawn only where the Voice experiment is on, the caller's standing as any line of theirs where it is off.
   const messages = voiceShown ? held : held.filter((message) => !isVoiceLine(message));
@@ -2740,7 +2745,7 @@ function transcriptPlacing(
   const newest = working ? placed.findLast((row) => isAgentTurn(row.message))?.message : undefined;
 
   const writing = newest?.finishedAt === undefined ? newest?.id : undefined;
-  const calls = voiceShown ? callMarksOf(placed) : NO_CALL_MARKS;
+  const calls = voiceShown ? callMarksOf(placed, standingCalls) : NO_CALL_MARKS;
 
   return { todos, first, opening, placed, writing, calls };
 }
@@ -2748,6 +2753,7 @@ function transcriptPlacing(
 /** The transcript as the tab draws it: the messages, or what stands in their place. */
 function AgentTranscriptView({
   messages,
+  standingCalls = NO_STANDING_CALLS,
   brief,
   lead = AGENT_LEAD,
   delegation,
@@ -2787,6 +2793,8 @@ function AgentTranscriptView({
   payerSubscriptionId,
 }: {
   messages: readonly AgentTranscriptMessage[];
+  /** The voice calls standing on the agent, as its page said (`useAgentTranscript`), each drawn from the moment it opens and none of them ended; none on a worker's. */
+  standingCalls?: readonly AgentStandingCall[];
   /** What the empty transcript says in its centered line once the agent's first launch failed (`AgentBootLine`); none otherwise. */
   boot?: ReactNode;
   /** The working line the empty transcript stands at its top while the agent's first launch is under way (`AgentBootLine`); the lead's starting line where none. */
@@ -2864,8 +2872,6 @@ function AgentTranscriptView({
   const undelivered = useUndeliveredLines();
   const unsent = useUnsentLines();
   const voiceShown = useVoiceShown();
-  // The call this window holds, whose end is not yet among the rows however its last line reads.
-  const liveCallId = useVoiceCall().call?.callId;
   // Note that the voice may talk on after the turn, so the current turn is the agent's newest, whatever row stands last.
   const lastTurn = messages.findLast(isAgentTurn);
 
@@ -2904,8 +2910,17 @@ function AgentTranscriptView({
 
   // Read through once for the messages held, so a draw that brings no page reads none of them again.
   const placing = useMemo(
-    () => transcriptPlacing(messages, working, undelivered, unsent, replayed, voiceShown),
-    [messages, working, undelivered, unsent, replayed, voiceShown],
+    () =>
+      transcriptPlacing(
+        messages,
+        working,
+        undelivered,
+        unsent,
+        replayed,
+        voiceShown,
+        standingCalls,
+      ),
+    [messages, working, undelivered, unsent, replayed, voiceShown, standingCalls],
   );
 
   // Each line that reached a turn, with who sent it, kept from draw to draw while neither moved.
@@ -3043,9 +3058,8 @@ function AgentTranscriptView({
   if (!holding && messages.length > 0) {
     const { todos, first, opening, placed, writing, calls } = placing;
 
-    // Whose call each call was, by its caller's first line: a teammate's, or none for the reader's own.
-    const callerOf = (line: AgentTranscriptMessage) =>
-      messageSender(line, readerId, members, former);
+    // Whose call each call was, by its caller: a teammate's, or none for the reader's own.
+    const callerOf = (caller: AgentSender) => lineSender(caller, readerId, members, former);
 
     // The description is the first of the developer's messages, unless the agent
     // was handed a prompt in its place, which is the developer's message as
@@ -3227,13 +3241,14 @@ function AgentTranscriptView({
                           <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
                         ) : null}
                         {tails ? (
-                          <CallEnds
-                            spans={calls.closes.get(message.id)}
-                            live={liveCallId}
-                            callerOf={callerOf}
-                          />
+                          <CallEnds spans={calls.closes.get(message.id)} callerOf={callerOf} />
                         ) : null}
-                        {at === entries.length - 1 ? trailing : null}
+                        {at === entries.length - 1 ? (
+                          <>
+                            <CallStarts spans={calls.opening} callerOf={callerOf} />
+                            {trailing}
+                          </>
+                        ) : null}
                       </>
                     );
                   }}
@@ -3475,12 +3490,15 @@ function AgentTabView({
   const boxOpen =
     onUnarchive === undefined && continuedNote === undefined && composer.closed === undefined;
 
+  // Note that nothing is rewound under a call into the agent, which the service refuses too (`rewind.ts`).
+  const rewinds = boxOpen && transcript.calls.length === 0;
+
   // Only Codex pauses a goal, and only the agent's starter may change it, while the box can send.
   const pausesGoal = controlsQueue && boxOpen && agent.runtime === AGENT_RUNTIME.CODEX;
-  const onEdit = useSteady(boxOpen ? composer.edit : undefined);
+  const onEdit = useSteady(rewinds ? composer.edit : undefined);
   const onCancelEdit = useSteady(composer.dropEdit);
-  const onSendEdit = useSteady(boxOpen ? composer.sendEdit : undefined);
-  const onRevert = useSteady(boxOpen ? composer.revert : undefined);
+  const onSendEdit = useSteady(rewinds ? composer.sendEdit : undefined);
+  const onRevert = useSteady(rewinds ? composer.revert : undefined);
   // Note that the rewind doors stand as they were while what they say is unchanged, because every message
   // reads them, and a page that moved no rewind point must draw no message again.
   const pending = composer.sent.length > 0;
@@ -3731,6 +3749,7 @@ function AgentTabView({
                               <GoalConditions.Provider value={conditions}>
                                 <AgentTranscriptView
                                   messages={lines}
+                                  standingCalls={transcript.calls}
                                   brief={agent.brief}
                                   briefSender={starter === undefined ? undefined : starterActor}
                                   origin={origin}
