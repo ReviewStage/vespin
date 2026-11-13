@@ -202,6 +202,7 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
     body.soundWhen === undefined &&
     body.completionSound === undefined &&
     body.askSound === undefined &&
+    body.voice === undefined &&
     body.turnNotifications === undefined &&
     body.onboardingSurvey === undefined &&
     body.agent === undefined &&
@@ -300,6 +301,13 @@ export const writeOwnPreferences = /* @__PURE__ */ Effect.fnUntraced(function* (
 
     if (askSound === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
     write.askSound = askSound;
+  }
+
+  if (body.voice !== undefined) {
+    const voice = ownPreferenceFromWire("voice", body.voice);
+
+    if (voice === undefined) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+    write.voice = voice;
   }
 
   if (body.turnNotifications !== undefined) {

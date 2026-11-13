@@ -9,6 +9,7 @@ import {
 } from "@repo/features/chapters-model-choice";
 import { LINK_OPEN_LIST, type LinkOpen } from "@repo/features/link-open";
 import type { ModelChoice, ModelProvider } from "@repo/features/models-wire";
+import { type LiveVoice, LiveVoiceSchema } from "@repo/features/voices";
 import {
   type AccountExperiment,
   type AccountPreferences,
@@ -95,6 +96,7 @@ export interface AccountPreferencesWrite {
   soundWhen?: SoundWhen;
   completionSound?: CompletionSound;
   askSound?: CompletionSound;
+  voice?: LiveVoice;
   turnNotifications?: boolean;
   onboardingSurvey?: string;
   agent?: ModelChoice;
@@ -117,6 +119,7 @@ const PREFERENCE_COLUMNS = {
   soundWhen: accountPreference.soundWhen,
   completionSound: accountPreference.completionSound,
   askSound: accountPreference.askSound,
+  voice: accountPreference.voice,
   turnNotifications: accountPreference.turnNotifications,
   onboardingSurvey: accountPreference.onboardingSurvey,
   agentModel: accountPreference.agentModel,
@@ -138,6 +141,7 @@ const PreferenceRowSchema = Schema.Struct({
   soundWhen: Schema.NullOr(Schema.String),
   completionSound: Schema.NullOr(Schema.String),
   askSound: Schema.NullOr(Schema.String),
+  voice: Schema.NullOr(Schema.String),
   turnNotifications: Schema.NullOr(Schema.Boolean),
   onboardingSurvey: Schema.NullOr(Schema.String),
   agentModel: Schema.NullOr(Schema.String),
@@ -169,6 +173,7 @@ function snapshotOf(row: PreferenceRow): AccountPreferencesRow {
         ...(row.soundWhen ? { soundWhen: row.soundWhen } : undefined),
         ...(row.completionSound ? { completionSound: row.completionSound } : undefined),
         ...(row.askSound ? { askSound: row.askSound } : undefined),
+        ...(row.voice ? { voice: row.voice } : undefined),
         ...(row.turnNotifications === null
           ? undefined
           : { turnNotifications: row.turnNotifications }),
@@ -289,6 +294,7 @@ const PreferenceWriteSchema = Schema.Struct({
   soundWhen: Schema.optionalKey(Schema.Literals(SOUND_WHEN_LIST)),
   completionSound: Schema.optionalKey(Schema.Literals(COMPLETION_SOUNDS)),
   askSound: Schema.optionalKey(Schema.Literals(COMPLETION_SOUNDS)),
+  voice: Schema.optionalKey(LiveVoiceSchema),
   turnNotifications: Schema.optionalKey(Schema.Boolean),
   onboardingSurvey: Schema.optionalKey(Schema.String),
   agent: Schema.optionalKey(
@@ -326,6 +332,7 @@ function writtenColumns(write: PreferenceWrite) {
       ? undefined
       : { completionSound: write.completionSound }),
     ...(write.askSound === undefined ? undefined : { askSound: write.askSound }),
+    ...(write.voice === undefined ? undefined : { voice: write.voice }),
     ...(write.turnNotifications === undefined
       ? undefined
       : { turnNotifications: write.turnNotifications }),
@@ -409,6 +416,7 @@ export function writeAccountPreferences(
         ? undefined
         : { completionSound: write.completionSound }),
       ...(write.askSound === undefined ? undefined : { askSound: write.askSound }),
+      ...(write.voice === undefined ? undefined : { voice: write.voice }),
       ...(write.turnNotifications === undefined
         ? undefined
         : { turnNotifications: write.turnNotifications }),

@@ -2,6 +2,7 @@ import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import type { AgentMachineKind, ContextWindow } from "@repo/features/agent-wire";
 import type { ChaptersPick } from "@repo/features/chapters-model-choice";
 import type { LinkOpen } from "@repo/features/link-open";
+import type { LiveVoice } from "@repo/features/voices";
 import type {
   AgentEnter,
   CommitAuthor,
@@ -95,6 +96,12 @@ export const accountPreference = pgTable("account_preference", {
    * knock. A part of the snapshot of its own, as the link choice is.
    */
   askSound: text("ask_sound").$type<CompletionSound>(),
+  /**
+   * The voice a call speaks with (`@repo/features/voices`'s `LIVE_VOICE`);
+   * null until the account chooses, which reads as `marin`. A part of the
+   * snapshot of its own, as the link choice is.
+   */
+  voice: text("voice").$type<LiveVoice>(),
   /**
    * Whether the OS posts a notification as an agent the account started
    * finishes or asks, while the window is behind; null until the account

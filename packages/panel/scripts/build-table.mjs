@@ -151,9 +151,13 @@ export function panelDefines(highlightWorkerText) {
  * The folders of static files the panel reaches under its shell's asset base
  * (`src/app-platform.ts`'s `assetBase`), each as the directory it is copied
  * from and the path under that base it is served at: the harness marks
- * drawn as images rather than traced (`src/harness-marks.tsx`), so the
+ * drawn as images rather than traced (`src/harness-marks.tsx`), and the
+ * clip Settings › Voice plays for each voice (`voices/<voice>.m4a`), so the
  * bundle carries none of their bytes.
  */
 export function panelStaticDirectories() {
-  return [{ from: path.join(panelRoot, "marks"), to: "marks" }];
+  return [
+    { from: path.join(panelRoot, "marks"), to: "marks" },
+    { from: path.join(panelRoot, "voices"), to: "voices" },
+  ];
 }

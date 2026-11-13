@@ -7,6 +7,7 @@ import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { LINK_OPEN } from "@repo/features/link-open";
 import { MAC_COMMAND_MODE } from "@repo/features/mac-command-wire";
+import { LIVE_VOICE } from "@repo/features/voices";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import {
   type AccountPreferenceField,
@@ -217,6 +218,8 @@ const SAMPLE_VALUE = {
   completionSound: COMPLETION_SOUND.QUACK,
   // The knock is the ask's default, so another sound is the choice that has to survive a reopen.
   askSound: COMPLETION_SOUND.QUESTION,
+  // Marin is the default, so another voice is the choice that has to survive a reopen.
+  voice: LIVE_VOICE.CEDAR,
   // Off is the default, so a notification turned on is the choice that has to survive a reopen.
   turnNotifications: true,
   // Unanswered is the default, so answers given in setup's survey are the state that has to survive a reopen.
