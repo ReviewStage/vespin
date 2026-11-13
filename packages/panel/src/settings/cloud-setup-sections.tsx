@@ -1193,7 +1193,7 @@ interface AddedRunAction {
 }
 
 /**
- * Each repository's run actions, behind the Run actions experiment: a row
+ * Each repository's run actions: a row
  * for the repository with its Add action, and its actions under it in their
  * order, each edited in place. An owner or admin adds one from Add action,
  * to a repository already listed or one picked in the repository menu,

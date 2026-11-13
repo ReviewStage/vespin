@@ -16,7 +16,7 @@ import { workspaceIdSchema } from "./task-wire.js";
  * `PUT /api/workspaces/sandbox-setup/repository` save one, each to an owner
  * or admin, an empty script removing it. A repository's run actions are the
  * commands a member runs in one of its agents, each only when pressed, from
- * the Run menu over the agent's tabs, behind the Run actions experiment: in
+ * the Run menu over the agent's tabs: in
  * a cloud agent's sandbox, or on the Mac a local agent runs on, as each
  * action's availability allows; `PUT /api/workspaces/sandbox-setup/run-actions`
  * saves one repository's whole list in its order, to an owner or admin, an
