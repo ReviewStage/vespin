@@ -141,8 +141,8 @@ token, key, or file contents, that goes too.
 
 ### Apps on your Mac
 
-If your workspace turns on Computer use and you allow it in Settings › This
-Mac, agents can see and use apps on your Mac: Vespin asks you the first time an
+If you turn on Computer use in Settings › Experimental and allow it in
+Settings › This Mac, agents can see and use apps on your Mac: Vespin asks you the first time an
 agent wants each app, and you can answer Allow once, Always allow, or Deny.
 For an app you allow, the agent reads its window's controls and their text and
 a screenshot of the window, and clicks and types in it. The screenshot is sent

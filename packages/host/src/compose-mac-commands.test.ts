@@ -5,6 +5,7 @@ import { LIVE_POLL_URL, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import type { MacCommandsLiveAnswer } from "@repo/features/mac-command-live";
 import {
   COMPUTER_ACTION,
+  COMPUTER_PERMISSION,
   type ComputerApp,
   MAC_COMMAND_KIND,
   type MacCommand,
@@ -28,6 +29,7 @@ import {
   COMPUTER_HELPER_FAILURE,
   COMPUTER_HELPER_OP,
   type ComputerHelperRequest,
+  type ComputerPermissions,
   type ComputerUseHelperSeam,
 } from "./computer-use-helper.js";
 import { Environment, reporterLayer } from "./effect/seams.js";
@@ -98,8 +100,17 @@ const computerCommand = (id: string, conversationId: string, app: string): MacCo
   timeoutSeconds: 60,
 });
 
-/** The helper as a script: the apps it names, every request it was asked, and each action answered done. */
-function scriptedHelper(apps: readonly ComputerApp[]) {
+/** Both of the Mac's grants, as a Mac set up for computer use holds them. */
+const GRANTED: ComputerPermissions = { screenRecording: true, accessibility: true };
+
+/** The requests that are no action on an app: naming one, and reading the Mac's grants. */
+const NO_ACTION: readonly string[] = [
+  COMPUTER_HELPER_OP.DESCRIBE_APP,
+  COMPUTER_HELPER_OP.PERMISSIONS,
+];
+
+/** The helper as a script: the apps it names, the grants it reads, every request it was asked, and each action answered done. */
+function scriptedHelper(apps: readonly ComputerApp[], permissions = GRANTED) {
   const asked: ComputerHelperRequest[] = [];
 
   const helper: ComputerUseHelperSeam = {
@@ -108,7 +119,7 @@ function scriptedHelper(apps: readonly ComputerApp[]) {
         asked.push(request);
 
         if (request.op === COMPUTER_HELPER_OP.PERMISSIONS) {
-          return { permissions: { screenRecording: true, accessibility: false } };
+          return { permissions };
         }
 
         if (request.op !== COMPUTER_HELPER_OP.DESCRIBE_APP) return { outcome: { done: "pressed" } };
@@ -921,7 +932,7 @@ it.effect(
         assert.ok(result !== undefined && "refused" in result, `enabled: ${String(enabled)}`);
         assert.deepEqual(told, [], "nothing was asked");
         assert.ok(
-          scripted.asked.every((request) => request.op === COMPUTER_HELPER_OP.DESCRIBE_APP),
+          scripted.asked.every((request) => NO_ACTION.includes(request.op)),
           "no action reached the helper",
         );
       }
@@ -929,10 +940,59 @@ it.effect(
 );
 
 it.effect(
+  "an action the Mac lacks a grant for is refused at once naming it, without asking about the app, and never reaches the helper",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR], { screenRecording: false, accessibility: true });
+      const service = scriptedService();
+
+      const command: MacCommand = {
+        id: COMMAND.id,
+        kind: MAC_COMMAND_KIND.COMPUTER,
+        conversationId: AGENT,
+        timeoutSeconds: 60,
+        action: {
+          op: COMPUTER_ACTION.GET_APP_STATE,
+          app: "Simulator",
+          shots: [{ edge: 1280, quality: 0.7 }],
+        },
+      };
+
+      service.queue(command, NOW);
+
+      const { composer, told } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        {
+          mode: MAC_COMMAND_MODE.ASK,
+          signedIn: true,
+          computer: { helper: scripted.helper, enabled: true, allowed: [] },
+        },
+      );
+
+      yield* Effect.scoped(Effect.andThen(composer.lifetime, settled));
+
+      const result = service.settledResults.get(command.id);
+      assert.ok(result !== undefined && "refused" in result);
+      assert.deepEqual(result.missingPermissions, [COMPUTER_PERMISSION.SCREEN_RECORDING]);
+      assert.match(result.refused, /Screen Recording/);
+      assert.doesNotMatch(result.refused, /Accessibility/);
+      assert.deepEqual(told, [], "the developer was asked nothing");
+      assert.deepEqual(
+        scripted.asked.map((request) => request.op),
+        [COMPUTER_HELPER_OP.PERMISSIONS],
+      );
+    }),
+);
+
+it.effect(
   "Settings reads the Mac's grants and names each app allowed without asking as the helper does, one it no longer finds by its bundle id",
   () =>
     Effect.gen(function* () {
-      const scripted = scriptedHelper([SIMULATOR]);
+      const scripted = scriptedHelper([SIMULATOR], {
+        screenRecording: true,
+        accessibility: false,
+      });
 
       const { composer } = yield* subject(
         scriptedService(),

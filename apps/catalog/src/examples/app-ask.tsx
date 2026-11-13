@@ -12,6 +12,7 @@ import {
 } from "@repo/ui";
 import { PICTURE_STATE } from "@repo/ui/picture-read";
 import { useState } from "react";
+import { CATALOG_FAILURE } from "../catalog-failure";
 import type { Example } from "../example";
 import { CatalogSection } from "../section";
 
@@ -22,8 +23,8 @@ import { CatalogSection } from "../section";
  * answers, Escape, or a press on the dimmed window, for an app with its icon
  * and bundle id and for one with neither; and the windows of the apps an
  * agent is using, as the stack that floats over its box, for one app whose
- * window is a phone's, several apps, and an app whose window is still being
- * read.
+ * window is a phone's, several apps, an app whose window is still being
+ * read, and one whose window's read did not land, with Retry.
  */
 
 /** A synthetic app's icon, a rounded square with a phone in it, as a Mac's app sends one. */
@@ -120,6 +121,23 @@ function AppAsks(): React.JSX.Element {
                 name: "Simulator",
                 iconSrc: ICON,
                 window: { state: { kind: PICTURE_STATE.READING }, width: 236, height: 512 },
+              },
+            ]}
+          />
+          <Stack
+            apps={[
+              {
+                name: "Simulator",
+                iconSrc: ICON,
+                window: {
+                  state: {
+                    kind: PICTURE_STATE.FAILED,
+                    retry: () => undefined,
+                    failure: CATALOG_FAILURE,
+                  },
+                  width: 236,
+                  height: 512,
+                },
               },
             ]}
           />

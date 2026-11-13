@@ -285,6 +285,7 @@ import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
 import { AgentTabSkeleton, TranscriptSkeleton } from "./agent-tab-skeleton.js";
 import { ArchivedComposerNote } from "./archived-note.js";
 import { ComputerDock } from "./computer-dock.js";
+import { ComputerPermissionNote } from "./computer-permission-note.js";
 import { ConnectionNames, useServerName } from "./connection-names.js";
 import {
   ContinueAgent,
@@ -765,6 +766,7 @@ function ToolCallView({
         }
       />
       {inBody ? null : <CallPictures tool={part.tool} input={part.input} output={part.output} />}
+      <ComputerPermissionNote tool={part.tool} output={part.output} />
       {limit === undefined ? null : (
         <UsageLimitNotice notice={limit} look={USAGE_LIMIT_NOTICE_LOOK.TITLE} />
       )}
@@ -3248,6 +3250,16 @@ function AgentTabView({
     [composer.sent],
   );
 
+  // Note that a line that did not go reached no turn, so the apps in use read only the lines on their way.
+  const dockLines = useMemo(
+    () =>
+      agentLines(
+        kept,
+        composer.sent.filter((line) => line.state === SENT_LINE_STATE.PENDING),
+      ),
+    [kept, composer.sent],
+  );
+
   const queue = useAgentQueue(agent.id, transcript.queue);
   const pictures = useAgentPictureDoor(agent.id);
   const computerIcons = useMemo(() => computerIconsByCall(lines), [lines]);
@@ -3596,7 +3608,7 @@ function AgentTabView({
         <AgentPicturesProvider value={pictures}>
           <ComputerDock
             agentId={agent.id}
-            messages={lines}
+            messages={dockLines}
             working={standing.working}
             onStop={offersStop(agent) ? onStop : undefined}
           />

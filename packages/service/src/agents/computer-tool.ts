@@ -284,7 +284,10 @@ function answeredOutcome(
     return Effect.succeed({ ...ran, apps });
   }
 
-  const [shown, full]: readonly (ComputerShot | undefined)[] = outcome.shots;
+  // Note that each shot keeps its own place, the model's first and the kept one second, and one with no bytes is absent there alone, so neither the model nor the transcript is handed an empty picture or the other's.
+  const [first, second]: readonly (ComputerShot | undefined)[] = outcome.shots;
+  const shown = first?.jpeg === "" ? undefined : first;
+  const full = second?.jpeg === "" ? undefined : second;
 
   return Effect.gen(function* () {
     const app = yield* namedApp(transcript, outcome.app);
@@ -347,14 +350,16 @@ export function runComputerTool(
   });
 }
 
-/** The model's copy of a read window in a call's result, where it carries one. */
+/** The model's copy of a read window in a call's result, where it carries one; none for an empty one, which would fail the model's turn. */
 export function computerScreenshot(
   output: UnparsedWireValue,
 ): { readonly mime: string; readonly data: string } | undefined {
   if (!isRecord(output) || !isRecord(output.screenshot)) return undefined;
   const { mime, data } = output.screenshot;
 
-  return Predicate.isString(mime) && Predicate.isString(data) ? { mime, data } : undefined;
+  return Predicate.isString(mime) && Predicate.isString(data) && data !== ""
+    ? { mime, data }
+    : undefined;
 }
 
 /** A call's result as the conversation keeps it: the model's copy of the window without its base64, the kept copy named by id. */

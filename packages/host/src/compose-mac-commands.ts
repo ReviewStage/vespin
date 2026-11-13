@@ -6,7 +6,11 @@ import {
 } from "@repo/features/mac-command-live";
 import {
   COMPUTER_ACTION,
+  COMPUTER_PERMISSION,
+  type ComputerAction,
   type ComputerApp,
+  type ComputerPermission,
+  computerPermissionsNamed,
   isMacComputerCommand,
   isMacShellCommand,
   MAC_COMMAND_KIND,
@@ -231,9 +235,74 @@ function neverOffered(app: string): MacCommandRefusal {
   };
 }
 
+/**
+ * The grants each action needs before the helper is asked to take it:
+ * reading a window needs both, since it walks the app's elements and
+ * captures its window; every other action on an app needs Accessibility to
+ * press, type, and post input; listing the apps needs neither.
+ */
+const ACTION_NEEDS = {
+  [COMPUTER_ACTION.LIST_APPS]: [],
+  [COMPUTER_ACTION.GET_APP_STATE]: [
+    COMPUTER_PERMISSION.SCREEN_RECORDING,
+    COMPUTER_PERMISSION.ACCESSIBILITY,
+  ],
+  [COMPUTER_ACTION.CLICK]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.TYPE_TEXT]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.PRESS_KEY]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.SCROLL]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.DRAG]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.SET_VALUE]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.PERFORM_SECONDARY_ACTION]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+} as const satisfies Record<ComputerAction, readonly ComputerPermission[]>;
+
+/** Whether the Mac holds one grant, as the helper read them. */
+function granted(permissions: ComputerPermissions, permission: ComputerPermission): boolean {
+  return permission === COMPUTER_PERMISSION.SCREEN_RECORDING
+    ? permissions.screenRecording
+    : permissions.accessibility;
+}
+
+/**
+ * What an action answers where the Mac lacks a grant it needs: each grant
+ * missing by name and where it is turned on, short enough to read on the
+ * call's row, and asking the agent to pass it on, since nothing it does can
+ * grant them.
+ */
+function permissionsMissing(
+  missing: readonly [ComputerPermission, ...ComputerPermission[]],
+): MacCommandRefusal {
+  const names = computerPermissionsNamed(missing);
+  const them = missing.length === 1 ? "it" : "them";
+
+  return {
+    refused:
+      `Not run: ${PRODUCT_NAME} on the developer's Mac needs ${names}. ` +
+      `Ask them to turn ${them} on in ${PRODUCT_NAME}'s Settings › This Mac.`,
+    missingPermissions: missing,
+  };
+}
+
+/** What a read of a window answers where the helper captured no picture of it, so no empty picture goes on to the model or the transcript. */
+function nothingCaptured(app: string): MacCommandRefusal {
+  return {
+    refused: `Not run: ${app}'s window could not be captured. Read it again with get_app_state.`,
+  };
+}
+
+/** What an action answers where the helper answered a request with an answer of another kind. */
+const UNEXPECTED_ANSWER: MacCommandRefusal = {
+  refused: "Not run: the computer-use helper answered something else.",
+};
+
 /** What an action came to, as the helper answered it. */
 function computerResult(answer: ComputerHelperAnswer, app?: ComputerApp): MacCommandResult {
   if ("outcome" in answer) {
+    // Note that a read with no picture of its window is refused, because an empty picture handed on breaks the model's turn and draws a blank window.
+    if ("shots" in answer.outcome && !answer.outcome.shots.some((shot) => shot.jpeg !== "")) {
+      return nothingCaptured(answer.outcome.app.name);
+    }
+
     // Note that a done action names the app it acted on, which the helper's own answer does not.
     const outcome =
       "done" in answer.outcome && app !== undefined ? { ...answer.outcome, app } : answer.outcome;
@@ -243,7 +312,7 @@ function computerResult(answer: ComputerHelperAnswer, app?: ComputerApp): MacCom
 
   if ("failure" in answer) return { refused: `Not run: ${answer.message}` };
 
-  return { refused: "Not run: the computer-use helper answered something else." };
+  return UNEXPECTED_ANSWER;
 }
 
 /** What a command of a kind this Mac cannot run answers, such as one a newer service queued. */
@@ -486,9 +555,37 @@ export function composeMacCommands(
       });
 
     /**
+     * The grants an action needs that the Mac lacks, read off the helper,
+     * which answers at once and raises no prompt; why not where the helper
+     * could not say, since it would not take the action either.
+     */
+    const lacking = (
+      use: MacComputerUse,
+      op: ComputerAction,
+    ): Effect.Effect<MacCommandRefusal | undefined> => {
+      const needs: readonly ComputerPermission[] = ACTION_NEEDS[op];
+
+      if (needs.length === 0) return Effect.succeed(undefined);
+
+      return Effect.map(
+        use.helper.ask({ op: COMPUTER_HELPER_OP.PERMISSIONS }, DESCRIBE_WITHIN),
+        (answer) => {
+          if ("failure" in answer) return { refused: `Not run: ${answer.message}` };
+
+          if (!("permissions" in answer)) return UNEXPECTED_ANSWER;
+          const [first, ...rest] = needs.filter((need) => !granted(answer.permissions, need));
+
+          return first === undefined ? undefined : permissionsMissing([first, ...rest]);
+        },
+      );
+    };
+
+    /**
      * One claimed action on an app as Settings now says: refused where agents
-     * use no apps here, the app allowed or asked about where the action names
-     * one, and run through the helper in what is left of the command's own
+     * use no apps here, refused at once, naming them, where the Mac lacks a
+     * grant the action needs, so neither the developer nor the agent waits
+     * on an action that cannot run; the app allowed or asked about where the
+     * action names one, and run through the helper in what is left of the command's own
      * timeout from the claim, on the same terms as a shell command allowed
      * late.
      */
@@ -503,6 +600,9 @@ export function composeMacCommands(
           Duration.toMillis(Duration.seconds(command.timeoutSeconds));
 
         const { action } = command;
+        const missing = yield* lacking(computer, action.op);
+
+        if (missing !== undefined) return yield* settled(command.id, missing);
         let app: ComputerApp | undefined;
 
         if (action.op !== COMPUTER_ACTION.LIST_APPS) {

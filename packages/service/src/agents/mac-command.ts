@@ -16,6 +16,7 @@ import type { ConversationTarget } from "@repo/database/models/writer";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
+  type ComputerPermission,
   MAC_COMMAND_BOUNDS,
   MAC_COMMAND_KIND,
   type MacCommand,
@@ -134,7 +135,12 @@ const MAC_COMMAND_KIND_REFUSAL = {
 export type MacCommandAnswer =
   | ({ readonly status: typeof MAC_COMMAND_STATUS.RAN } & MacShellResult)
   | ({ readonly status: typeof MAC_COMMAND_STATUS.RAN } & MacComputerResult)
-  | { readonly status: typeof MAC_COMMAND_STATUS.NOT_RUN; readonly reason: string };
+  | {
+      readonly status: typeof MAC_COMMAND_STATUS.NOT_RUN;
+      readonly reason: string;
+      /** The grants the Mac lacked for an action on an app, which the transcript offers the place to turn on. */
+      readonly missingPermissions?: readonly ComputerPermission[];
+    };
 
 /**
  * What a call asks of the Mac: a command of one kind, what that kind
@@ -217,7 +223,12 @@ export function macListening(userId: string): TaskStoreEffect<boolean> {
 
 /** What a call answers for what the Mac said: what a shell command did, or why the Mac ran nothing. */
 function answered(result: MacCommandResult): MacCommandAnswer {
-  if ("refused" in result) return macCommandNotRun(result.refused);
+  if ("refused" in result) {
+    const { refused, missingPermissions } = result;
+    const reason = { status: MAC_COMMAND_STATUS.NOT_RUN, reason: refused } as const;
+
+    return missingPermissions === undefined ? reason : { ...reason, missingPermissions };
+  }
 
   return { status: MAC_COMMAND_STATUS.RAN, ...result };
 }

@@ -1360,6 +1360,11 @@ const MacOwnerContext = createContext<Actor | undefined>(undefined);
 /** Names whose Mac the transcript under it ran its Mac commands on. */
 export const MacOwnerProvider = MacOwnerContext.Provider;
 
+/** Whose Mac the transcript ran its Mac commands on, as `MacOwnerProvider` names it; none where the window cannot tell. */
+export function useMacOwner(): Actor | undefined {
+  return useContext(MacOwnerContext);
+}
+
 export type TranscriptToolProps = Omit<ComponentProps<typeof Tool>, "children"> &
   Pick<ToolHeaderProps, "state" | "subject"> & {
     kind: CallKind;
