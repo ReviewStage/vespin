@@ -81,6 +81,8 @@ import {
   tasksSetRepositoryAnswerSchema,
   tasksSetRepositoryParamsSchema,
   tasksSetStandingParamsSchema,
+  tasksSettledPageAnswerSchema,
+  tasksSettledPageParamsSchema,
   tasksSkillsAnswerSchema,
   tasksSkillsParamsSchema,
   tasksStartAnswerSchema,
@@ -409,6 +411,14 @@ export const TASKS_ACTS = declaredActs({
     panelOnly: true,
     door: ACT.READ,
     unanswered: undefined,
+  }),
+  TASKS_SETTLED_PAGE: hostAct({
+    input: tasksSettledPageParamsSchema,
+    output: tasksSettledPageAnswerSchema,
+    refusal: "Could not read that workspace's finished tasks on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: UNANSWERED,
   }),
   TASKS_REVISIONS: hostAct({
     input: tasksRevisionsParamsSchema,

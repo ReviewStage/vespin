@@ -369,6 +369,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     tasks: SCREEN_ONLY,
     taskRows: SCREEN_ONLY,
     taskSearch: SCREEN_ONLY,
+    taskPage: SCREEN_ONLY,
     automations: SCREEN_ONLY,
     automationWorkspaceRuns: SCREEN_ONLY,
     automationRuns: SCREEN_ONLY,

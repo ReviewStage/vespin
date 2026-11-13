@@ -775,6 +775,24 @@ export const tasksSearchParamsSchema = EffectSchema.Struct({
   query: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(TASK_SEARCH_QUERY_MAX_CHARS)),
 });
 
+/** Where a page of a workspace's settled tasks ends, which the next page reads past (`SettledPageCursor`). */
+const settledPageCursorSchema = EffectSchema.Struct({
+  finishedAt: EffectSchema.Finite,
+  taskId: EffectSchema.NonEmptyString,
+});
+
+/** A page of a workspace's settled tasks, as a list that shows finished work asks the host for it: the workspace, and the cursor the page reads past where it is not the first. */
+export const tasksSettledPageParamsSchema = EffectSchema.Struct({
+  workspaceId: EffectSchema.NonEmptyString,
+  before: EffectSchema.optionalKey(settledPageCursorSchema),
+});
+
+/** A page of settled tasks read into the task list, as the window hears it: the cursor the next page reads past, none after the last, or that the service did not answer. */
+export const tasksSettledPageAnswerSchema = EffectSchema.Union([
+  EffectSchema.Struct({ next: EffectSchema.optionalKey(settledPageCursorSchema) }),
+  EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
+]);
+
 /** A page of a description's history, as the version history asks the host for it: the task, and the revision the page is read before where it is an older page. */
 export const tasksRevisionsParamsSchema = EffectSchema.Struct({
   taskId: EffectSchema.NonEmptyString,

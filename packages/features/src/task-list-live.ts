@@ -335,6 +335,71 @@ export const TASK_SEARCH_READ = liveRead({
   },
 });
 
+/** How many settled tasks one page of `TASK_PAGE_READ` answers at most. */
+export const SETTLED_PAGE_SIZE = 50;
+
+/**
+ * Where a page of settled tasks ends, which the next page reads past: the
+ * instant the page's last task was finished, in whole milliseconds, and its
+ * id, which breaks a tie between tasks finished at one instant.
+ */
+export interface SettledPageCursor {
+  readonly finishedAt: number;
+  readonly taskId: string;
+}
+
+/**
+ * One page of a workspace's settled tasks, Done and Canceled, read once
+ * rather than followed, for a list that shows finished work past what the
+ * list a window holds: the newest finished first, as the Tasks page's
+ * completed window measures them (`completedAt`, else the last save), each
+ * with every agent of it, as the list's plans and agents answer them and on
+ * their rule of who may read them. A page names the cursor it reads past
+ * (`beforeAt`, `beforeId`), the first page none, and holds at most
+ * `SETTLED_PAGE_SIZE` tasks; one with fewer is the last.
+ */
+export const TASK_PAGE_READ = liveRead({
+  name: "taskPage",
+  path: HOSTED_SERVICE_PATH.LIVE_TASK_PAGE,
+  params: {
+    workspaceId: LIVE_PARAM.TEXT,
+    beforeAt: LIVE_PARAM.OPTIONAL_TEXT,
+    beforeId: LIVE_PARAM.OPTIONAL_ID,
+    [LIVE_USER_QUERY]: LIVE_PARAM.USER,
+  },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    plans: TASK_LIST_READ.parts.plans,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
+/**
+ * The cursor the page after `plans` reads past: its last task's, as the
+ * service orders them; none where the page was the last, holding fewer than
+ * a page's tasks.
+ */
+export function settledPageCursorOf(
+  plans: readonly Pick<TaskLiveRow, "id" | "completedAt" | "updatedAt">[],
+): SettledPageCursor | undefined {
+  if (plans.length < SETTLED_PAGE_SIZE) return undefined;
+  let last: SettledPageCursor | undefined;
+
+  for (const plan of plans) {
+    const finishedAt = plan.completedAt ?? plan.updatedAt;
+
+    if (
+      last === undefined ||
+      finishedAt < last.finishedAt ||
+      (finishedAt === last.finishedAt && plan.id < last.taskId)
+    ) {
+      last = { finishedAt, taskId: plan.id };
+    }
+  }
+
+  return last;
+}
+
 /** The plan list's rows as Realtime delivers them, decoded at the boundary before anything reads them. */
 export type TaskListLiveRows = typeof TASK_LIST_READ.rows.Type;
 

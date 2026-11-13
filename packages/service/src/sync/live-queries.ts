@@ -29,7 +29,7 @@ import { sidebarRead } from "../live/reads/sidebar.js";
 import { taskCommentsRead } from "../live/reads/task-comments.js";
 import { taskHistoryRead } from "../live/reads/task-history.js";
 import { taskRecordRead } from "../live/reads/task-record.js";
-import { taskRowsRead, taskSearchRead, tasksRead } from "../live/reads/tasks.js";
+import { taskPageRead, taskRowsRead, taskSearchRead, tasksRead } from "../live/reads/tasks.js";
 import { workspaceIntegrationsRead } from "../live/reads/workspace-integrations.js";
 import { workspaceInvitationsRead } from "../live/reads/workspace-invitations.js";
 import { workspaceMembersRead } from "../live/reads/workspace-members.js";
@@ -41,6 +41,7 @@ export const BOUND_READS: readonly AnyBoundRead[] = [
   tasksRead,
   taskRowsRead,
   taskSearchRead,
+  taskPageRead,
   accountInboxRead,
   inboxItemsRead,
   taskInboxRead,
