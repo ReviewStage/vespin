@@ -125,13 +125,11 @@ const filledWith = (workspaceId: string, missing: readonly string[]) =>
  * another fill holds the drive. `sessionsFor` is the sessions the boots'
  * machines are booted through, the routed ones in a function.
  */
-export const consumeWorkspaceDriveBuild = /* @__PURE__ */ Effect.fn(
-  "web/consumeWorkspaceDriveBuild",
-)(
-  function* (
-    workspaceId: string,
-    sessionsFor: QueueSessions = routedSessions,
-  ): Effect.fn.Return<QueueAnswer, unknown, WorkspaceDriveBuildServices> {
+export const consumeWorkspaceDriveBuild = (
+  workspaceId: string,
+  sessionsFor: QueueSessions = routedSessions,
+): Effect.Effect<QueueAnswer, unknown, WorkspaceDriveBuildServices> =>
+  Effect.gen(function* () {
     const boots = yield* buildingAgentBootsOf(workspaceId);
 
     if (boots.length === 0) return QUEUE_ACKNOWLEDGED;
@@ -163,9 +161,7 @@ export const consumeWorkspaceDriveBuild = /* @__PURE__ */ Effect.fn(
     );
 
     return QUEUE_ACKNOWLEDGED;
-  },
-  (effect, workspaceId) => effect.pipe(Effect.annotateLogs({ workspaceId })),
-);
+  }).pipe(Effect.withSpan("web/consumeWorkspaceDriveBuild"), Effect.annotateLogs({ workspaceId }));
 
 /**
  * On Vercel: the build sent to the topic, pinned to this deployment, as the
