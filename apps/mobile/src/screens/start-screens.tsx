@@ -11,10 +11,11 @@ import { REPLY_BUTTON_ACTION } from "@repo/features/reply-button-wire";
 import { type SuggestionRefusal, sentOf, suggestedChoice } from "@repo/features/suggestion-model";
 import { NO_REPOSITORY } from "@repo/features/task-list-model";
 import { REMOVE_RELATION, TASK_RELATION_MENU } from "@repo/features/task-relation-model";
-import { TASK_CREATE_RELATION_WORDS } from "@repo/features/task-standing-words";
+import { TASK_CREATE_RELATION_WORDS, TASK_STATUS_TONE } from "@repo/features/task-standing-words";
 import {
   isTaskSettled,
   TASK_CREATE_RELATION_KIND,
+  TASK_STATUS,
   type TaskCreateRelation,
   type TaskCreateRelationKind,
   type TaskSummary,
@@ -36,6 +37,7 @@ import {
   MENU_CHIP_LOOK,
   MenuChip,
   type PickOption,
+  STATUS_MARK_SYMBOL,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -593,6 +595,8 @@ function useRelationPick(
 function taskChoices(pick: RelationPick, kind: TaskCreateRelationKind): ChipMenuGroup["choices"] {
   return pick.tasks.map((task) => ({
     label: task.name,
+    symbol: STATUS_MARK_SYMBOL[task.status ?? TASK_STATUS.TODO],
+    tone: TASK_STATUS_TONE[task.status ?? TASK_STATUS.TODO],
     on: pick.relation?.kind === kind && pick.relation.taskId === task.id,
     onPress: () => pick.pick({ kind, taskId: task.id }),
   }));

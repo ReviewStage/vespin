@@ -1,0 +1,123 @@
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "list_apps",
+        "get_app_state",
+        "click",
+        "type_text",
+        "press_key",
+        "scroll",
+        "drag",
+        "set_value",
+        "perform_secondary_action",
+        "record",
+        "stop_recording"
+      ],
+      "description": "What to do: list_apps, get_app_state to read an app's window, or click, type_text, press_key, scroll, drag, set_value, or perform_secondary_action on it; record its window as a video, and stop_recording to stop and keep it."
+    },
+    "app": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255,
+      "description": "The app, by its name or bundle id, such as \"Simulator\" or \"com.apple.iphonesimulator\". Every action but list_apps and stop_recording names one."
+    },
+    "element_index": {
+      "type": "integer",
+      "description": "An element's number, as the app's last get_app_state numbered it."
+    },
+    "x": {
+      "type": "number",
+      "description": "A point's x in the pixels of the app's last screenshot, for click."
+    },
+    "y": {
+      "type": "number",
+      "description": "A point's y in the pixels of the app's last screenshot, for click."
+    },
+    "click_count": {
+      "type": "integer",
+      "description": "How many times click presses, 2 for a double-click; 1 when left out."
+    },
+    "mouse_button": {
+      "type": "string",
+      "enum": [
+        "left",
+        "right",
+        "middle"
+      ],
+      "description": "Which button click presses; left when left out."
+    },
+    "text": {
+      "type": "string",
+      "maxLength": 10000,
+      "description": "What type_text types into the app's focused element."
+    },
+    "key": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "What press_key presses, xdotool-style, such as \"Return\", \"Tab\", or \"super+c\"."
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "up",
+        "down",
+        "left",
+        "right"
+      ],
+      "description": "Which way scroll moves; down when left out."
+    },
+    "pages": {
+      "type": "number",
+      "description": "How far scroll moves, in pages; 1 when left out."
+    },
+    "from_x": {
+      "type": "number",
+      "description": "Where drag starts, in the pixels of the app's last screenshot."
+    },
+    "from_y": {
+      "type": "number",
+      "description": "Where drag starts, in the pixels of the app's last screenshot."
+    },
+    "to_x": {
+      "type": "number",
+      "description": "Where drag ends, in the pixels of the app's last screenshot."
+    },
+    "to_y": {
+      "type": "number",
+      "description": "Where drag ends, in the pixels of the app's last screenshot."
+    },
+    "value": {
+      "type": "string",
+      "maxLength": 10000,
+      "description": "What set_value sets a settable element to."
+    },
+    "secondary_action": {
+      "type": "string",
+      "maxLength": 64,
+      "description": "Which of the element's secondary actions perform_secondary_action performs, as its state names them, such as \"AXShowMenu\"."
+    },
+    "caption": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "description": "What the recording shows, in one line, which the transcript shows under it."
+    },
+    "description": {
+      "type": "string",
+      "description": "What the command is for, in plain English for the developer reading along: 3 to 8 words, sentence case, no trailing period, such as \"Run the unit tests\" or \"Find where invites are sent\"."
+    },
+    "machine": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "description": "The machine to run on, by its name, where the conversation asks for one other than your default machine; a call refused for its machine names the ones that can take it. Leave it out for your default machine."
+    }
+  },
+  "required": [
+    "action"
+  ],
+  "additionalProperties": false
+}
