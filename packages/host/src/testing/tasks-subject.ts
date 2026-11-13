@@ -1388,6 +1388,8 @@ export function fakeService(tasks: Task[]): FakeService {
           ? followers
           : [...followers, { userId, assignee: false, machines: false }],
       ),
+    removeFollower: (taskId, userId) =>
+      followersWrite(taskId, (followers) => followers.filter((each) => each.userId !== userId)),
     // The service sets the task's parent, or clears it, as the store does, and answers the task whole.
     setParent: (taskId, { parentTaskId }) =>
       Effect.sync((): TaskCallResult<TaskWritten, ParentCallFailure> => {

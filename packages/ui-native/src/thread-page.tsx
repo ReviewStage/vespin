@@ -34,6 +34,7 @@ import { sinceHeard, sinceText } from "@repo/features/time-format";
 import type { ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
+import { BarContent } from "./bar-content.js";
 import { FileChip } from "./file-chip.js";
 import { useDockRoom } from "./glass-bar.js";
 import { GLYPH, glyphImage } from "./glyph.js";
@@ -413,7 +414,7 @@ export function ThreadPage(props: ThreadPageProps) {
         </ScrollView>
         {foot}
       </VStack>
-      <Toolbar.Content>
+      <BarContent>
         <ToolbarItem placement="principal">
           <PathTitle path={path} status={status} actions={pathActions} />
         </ToolbarItem>
@@ -422,7 +423,7 @@ export function ThreadPage(props: ThreadPageProps) {
             <BarMenuItem menu={menu} />
           </ToolbarItem>
         )}
-      </Toolbar.Content>
+      </BarContent>
     </Toolbar>
   );
 }
