@@ -9,7 +9,7 @@ faq:
   - q: Do I have to watch my agents while they work?
     a: "No. Set them up to notify you when they need input, and review the pull request when they finish. Reading a transcript as it runs is rarely worth the time."
   - q: Can I answer agents from my phone or Slack?
-    a: "It depends on the tool. Cursor can send you a Slack message when an agent finishes ([Cursor docs](https://cursor.com/docs/integrations/slack)). Vespin's iOS app and Slack bot both let you answer an agent's question, with a button for each option on a decision."
+    a: "It depends on the tool. Cursor can send you a Slack message when an agent finishes ([Cursor docs](https://cursor.com/docs/integrations/slack)). Vespin's Slack bot sends you each question as a DM, so you can answer it from Slack on your phone, with a button for each option on a decision."
   - q: What should an agent ask me, and what should it decide alone?
     a: "Ask about product and design choices, trade-offs that cost something either way, steps that are hard to undo, and anything only you can do, such as adding a secret. Have it decide the rest itself."
   - q: Do I still need worktrees or sandboxes?
@@ -76,4 +76,4 @@ The Inbox's Needs me view shows only the threads waiting on you. A thread stays 
 
 Posting a question doesn't stop the agent. It keeps working, and your answer reaches it as a message. An agent can address a question to a teammate; otherwise it goes to the task's assignee, or to whoever started the agent.
 
-You can answer from the iOS app, which sends a notification with a button for each option, or from Slack, where Vespin's bot sends you each thread as a DM, with buttons to answer decisions and to-dos ([Slack docs](https://vespin.dev/docs/slack)). Agents post their pull requests to the same Inbox when they're ready for review.
+You can also answer from Slack, where Vespin's bot sends you each thread as a DM, with buttons to answer decisions and to-dos ([Slack docs](https://vespin.dev/docs/slack)). Agents post their pull requests to the same Inbox when they're ready for review.
