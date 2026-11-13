@@ -335,6 +335,8 @@ function ComposerPieces(props: ComposerProps) {
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
           lineLimit(FIELD_LINES),
+          // Note that the field stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there.
+          frame({ minHeight: PRESS_SIZE }),
           padding({
             vertical: FIELD_INSET,
             trailing: FIELD_TRAILING,
@@ -396,7 +398,7 @@ export function ComposerFoot(props: ComposerProps) {
 
   if (props.head === undefined) {
     return (
-      <HStack spacing={BAR_ROW_SPACING} modifiers={glass}>
+      <HStack alignment="bottom" spacing={BAR_ROW_SPACING} modifiers={glass}>
         <ComposerPieces {...props} />
       </HStack>
     );
@@ -405,7 +407,7 @@ export function ComposerFoot(props: ComposerProps) {
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2} modifiers={glass}>
       <BarHead>{props.head}</BarHead>
-      <HStack spacing={BAR_ROW_SPACING}>
+      <HStack alignment="bottom" spacing={BAR_ROW_SPACING}>
         <ComposerPieces {...props} />
       </HStack>
     </VStack>
