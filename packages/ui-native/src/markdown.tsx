@@ -21,6 +21,8 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { ChipMarkView, ChipSymbol, useChipMarkOf } from "./chip-mark.js";
+import type { ChipMarkOf } from "./chip-mark-model.js";
 import { DraftCard } from "./draft-card.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldActsButton, HeldMenu, useKeptActs } from "./held-menu.js";
@@ -169,6 +171,8 @@ interface Drawing {
   readonly headings: boolean;
   /** What GitHub holds of the pull request or issue a chip's page names, as the host read it; none while unread or unanswered. */
   readonly linkStanding: (page: string) => LinkStanding | undefined;
+  /** The mark the app holds for the entity a chip names (`ChipMarkProvider`); none where it holds nothing. */
+  readonly markOf: ChipMarkOf;
   /** How a suggestion's link stands, by its button and the words it was written with; none where it is drawn as the plain link it is. */
   readonly suggestion: (link: ReplyButtonLink, words: string) => SuggestionLook | undefined;
 }
@@ -239,31 +243,6 @@ function open(target: LinkTarget, drawing: Drawing): (() => void) | undefined {
   }
 }
 
-/**
- * A chip's glyph in a `size`-point square in `color`, through the system's
- * symbol view, which the app's patch (`patches/expo-symbols@58.0.4.patch`)
- * lets read Lucide's custom symbols from the asset catalog as well as SF
- * Symbols, so a chip costs no SwiftUI host of its own.
- */
-function ChipGlyph({
-  glyph,
-  size,
-  color,
-}: {
-  readonly glyph: Glyph;
-  readonly size: number;
-  readonly color: string;
-}) {
-  return (
-    <SymbolView
-      name={glyphSymbol(glyph)}
-      size={size}
-      tintColor={color}
-      accessibilityElementsHidden
-    />
-  );
-}
-
 /** A mention as its chip, standing in the line of words: its kind's glyph and its name, pressed open where it goes anywhere. */
 function MentionChip({
   chip,
@@ -277,6 +256,12 @@ function MentionChip({
   const size = TEXT_SIZE.FOOTNOTE;
   const standing = standingLook(chip, drawing);
   const heard = standing?.heard ?? chip.heard;
+
+  // Note that a GitHub page's standing wins over the entity's mark, since only the provider's answer says where it stands.
+  const mark =
+    standing === undefined && chip.of !== undefined ? drawing.markOf(chip.of) : undefined;
+
+  const markSize = size * fontScale;
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
@@ -294,11 +279,15 @@ function MentionChip({
           },
         ]}
       >
-        <ChipGlyph
-          glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
-          size={size * fontScale}
-          color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
-        />
+        {mark === undefined ? (
+          <ChipSymbol
+            glyph={standing?.glyph ?? ENTITY_SYMBOL[chip.entity]}
+            size={markSize}
+            color={standing === undefined ? colors.TEXT_MUTED : toneColor(colors, standing.tone)}
+          />
+        ) : (
+          <ChipMarkView mark={mark} size={markSize} colors={colors} />
+        )}
         <Text
           numberOfLines={1}
           style={{ flexShrink: 1, fontSize: size, color: colors.TEXT, fontWeight: "500" }}
@@ -350,7 +339,7 @@ function SuggestionChip({
           },
         ]}
       >
-        <ChipGlyph
+        <ChipSymbol
           glyph={offered ? SUGGESTION_SYMBOL : ENTITY_SYMBOL[ENTITY_KIND.AGENT]}
           size={size * fontScale}
           color={colors.TEXT_MUTED}
@@ -363,7 +352,7 @@ function SuggestionChip({
         </Text>
         {offered ? null : (
           <>
-            <ChipGlyph
+            <ChipSymbol
               glyph={SUGGESTION_SYMBOL}
               size={size * fontScale}
               color={colors.TEXT_MUTED}
@@ -1080,6 +1069,7 @@ export function Markdown({
 }: MarkdownProps) {
   const colors = useColors();
   const { fontScale, width } = useWindowDimensions();
+  const markOf = useChipMarkOf();
 
   const blocks = useMemo(
     () => markdownBlocks(words, { repository, now: Date.now(), zone: readerZone(), typed }),
@@ -1095,6 +1085,7 @@ export function Markdown({
     videoAt,
     headings,
     linkStanding,
+    markOf,
     suggestion,
   };
 

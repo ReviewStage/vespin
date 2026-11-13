@@ -3,6 +3,9 @@
 import { useColorScheme } from "react-native";
 import { useIncreaseContrast } from "../accessibility.js";
 import { BRAND_COLOR } from "./brand-colors.js";
+import { STATUS_TONE, type StatusTone } from "./status-tone.js";
+
+export { STATUS_TONE, type StatusTone };
 
 /**
  * One theme's colors, by the role each names, and the roles derived from
@@ -12,28 +15,6 @@ import { BRAND_COLOR } from "./brand-colors.js";
 export type BrandColors = {
   readonly [Role in keyof typeof BRAND_COLOR.LIGHT | "SELECTED" | "GROUPED" | "RAISED"]: string;
 };
-
-/**
- * Where something stands, as its color says it: the same six tones
- * `@repo/ui`'s `status-tone.ts` names, so a task done reads in one green on
- * the Mac and the iPhone alike.
- */
-export const STATUS_TONE = {
-  /** At rest, or ended with nothing to say: backlog, todo, canceled. */
-  NEUTRAL: "neutral",
-  /** Still going, with nothing to do yet: a task in progress. */
-  WORKING: "working",
-  /** Needs a person: an ask waiting on you. */
-  ATTENTION: "attention",
-  /** Finished well: a task done, an agent finished. */
-  COMPLETE: "complete",
-  /** GitHub's shipped: a merged pull request. */
-  MERGED: "merged",
-  /** Failed, or can't go on. */
-  DANGER: "danger",
-} as const;
-
-export type StatusTone = (typeof STATUS_TONE)[keyof typeof STATUS_TONE];
 
 /** The role each tone inks with. */
 const TONE_ROLE = {

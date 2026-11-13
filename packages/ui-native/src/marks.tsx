@@ -36,7 +36,7 @@ import { MARK_SIZE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The share of an avatar's width its letters stand at. */
-const MONOGRAM_SCALE = 0.42;
+export const MONOGRAM_SCALE = 0.42;
 
 /** How faint a done row's dot stands, as the panel fades a done row's unread column. */
 const FADED_OPACITY = 0.45;
@@ -234,7 +234,7 @@ const TILE_MARK_SCALE = 0.72;
  * Clawd from the brand's path in its own clay, and Codex's picture from the
  * files the panel serves, each as the panel's `HarnessMark` draws it.
  */
-const HARNESS_MARK_ASSET = {
+export const HARNESS_MARK_ASSET = {
   [MODEL_PROVIDER.ANTHROPIC]: "ClawdMark",
   [MODEL_PROVIDER.OPENAI]: "CodexMark",
 } as const satisfies Record<ModelProvider, string>;

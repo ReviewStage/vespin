@@ -8,7 +8,7 @@ import {
   type PullRequestMarkState,
 } from "@repo/features/pull-request-model";
 import { GLYPH, type Glyph } from "./glyph.js";
-import { STATUS_TONE, type StatusTone } from "./tokens/colors.js";
+import { STATUS_TONE, type StatusTone } from "./tokens/status-tone.js";
 
 type InboxLineLook = { readonly symbol: Glyph; readonly tone: StatusTone };
 
