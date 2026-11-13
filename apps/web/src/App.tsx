@@ -44,7 +44,7 @@ export function App(): React.JSX.Element {
       barCall={<SiteBarDownload />}
       badge={<LandingBackedBy href={Y_COMBINATOR_PAGE} />}
       title="Run a team of agents."
-      lead="Agents work in parallel and ask you when they're stuck."
+      lead="One inbox for all of them."
       actions={
         <>
           <SiteDownload />
