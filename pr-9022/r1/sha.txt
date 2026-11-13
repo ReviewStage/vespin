@@ -1,0 +1,36 @@
+base 32a4961f07
+  merged #8694 23a395d5c
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+  merged #8953 0ce6aa869
+  merged #8967 614b5a5b4
+  merged #8965 fa150d802
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/settings-form.tsx
+  merged #8973 6c1c8dbf6
+Auto-merging packages/ui-native/src/settings-form.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/settings-form.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #8986 conflict: packages/ui-native/src/settings-form.tsx 
+  merged #8975 95e81096d
+  merged #8977 288518dd0
+Auto-merging packages/ui-native/src/markdown.tsx
+  merged #8987 821e78502
+Auto-merging packages/ui-native/src/markdown.tsx
+  merged #8991 5192a31cc
+Auto-merging packages/ui-native/src/composer.tsx
+Auto-merging packages/ui-native/src/glass-bar.tsx
+  merged #9017 4556befda
+Auto-merging packages/ui-native/src/thread-page.tsx
+  merged #9022 49f1b3840
+Auto-merging packages/ui-native/src/list-row.tsx
+  merged #9025 c2ba690ec
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/marks.tsx
+Auto-merging packages/ui-native/src/row-list.tsx
+  merged #9036 e7c4abf84
+bundle built 77ed6fd8c1
+  install 0
+  export 0
+  signed 0
