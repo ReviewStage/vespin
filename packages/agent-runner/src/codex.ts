@@ -168,6 +168,7 @@ import {
   goalCleared,
   goalMoves,
   goalRuns,
+  newerGoal,
   sameGoal,
 } from "./codex-goals.js";
 import { CODEX_BUNDLED_MODELS_JSON } from "./codex-protocol/bundled-models.js";
@@ -833,12 +834,15 @@ interface CodexLaunch {
   /** Whether the launch's turn ended with the goal running, and the launch waits for the turn app-server starts toward it rather than calling the agent's turn over. */
   goalWait: boolean;
   /**
-   * The goal a resumed thread held as the launch opened it, which app-server
-   * says again as it resumes the thread and which moves nothing then (none
-   * where it held none); unset once said, past the first turn, or for a
-   * thread the launch did not resume.
+   * The goal app-server is yet to say again (none where it is to say it
+   * cleared): the one a resumed thread held as the launch opened it, which it
+   * says as it resumes the thread, or the one its answer to a goal line's ask
+   * said, which it says once more after the answer. Until it does, an update
+   * no newer than that goal was queued before it and moves nothing
+   * (`goalHeard`). Unset once said, past a turn's start, or where the launch
+   * awaits none.
    */
-  resumedGoal: { readonly goal: GoalSeen | undefined } | undefined;
+  awaitedGoal: { readonly goal: GoalSeen | undefined } | undefined;
   /** How many waits on the goal the launch began, the newest's number, so a wait's timer that outlived it ends nothing (`waitOnGoal`). */
   goalWaits: number;
   /** The service's lines this launch has said app-server took, each said once. */
@@ -1875,6 +1879,9 @@ const askGoal = Effect.fn("agent-runner/codex/askGoal")(function* (
 
   yield* accepted(launch, outgoing);
 
+  // Note that app-server says the goal its answer said once more, after updates it queued before the ask, so those are awaited past.
+  if (answer !== undefined) launch.awaitedGoal = { goal: answer.goal ?? undefined };
+
   const outcome =
     answer === undefined ? undefined : yield* goalSaid(launch, answer.goal ?? undefined);
 
@@ -1886,14 +1893,19 @@ const askGoal = Effect.fn("agent-runner/codex/askGoal")(function* (
   return goalRuns(launch.goal) ? yield* waitOnGoal(launch) : yield* turnOver(launch);
 });
 
-/** A goal update app-server sent of its own, said unless it is the resumed thread's goal said again (`sameGoal`). */
+/** A goal update app-server sent of its own, said unless it is the awaited goal said again (`sameGoal`), or one it queued before that goal and sent after (`newerGoal`). */
 const goalHeard = (launch: CodexLaunch, goal: GoalSeen | undefined) => {
-  const resumed = launch.resumedGoal;
+  const awaited = launch.awaitedGoal;
 
-  if (resumed !== undefined && sameGoal(goal, resumed.goal)) {
-    launch.resumedGoal = undefined;
+  if (awaited !== undefined) {
+    if (sameGoal(goal, awaited.goal)) {
+      launch.awaitedGoal = undefined;
 
-    return Effect.succeed(undefined);
+      return Effect.succeed(undefined);
+    }
+
+    if (!newerGoal(goal, awaited.goal)) return Effect.succeed(undefined);
+    launch.awaitedGoal = undefined;
   }
 
   return goalSaid(launch, goal);
@@ -2018,8 +2030,8 @@ function takeSignal(
         launch.state = { ...launch.state, id: signal.turnId };
       }
 
-      // Note that app-server says a resumed thread's goal again before any turn of it starts, so none is waited for past one.
-      launch.resumedGoal = undefined;
+      // Note that app-server says the awaited goal again before any turn it starts, so none is waited for past one.
+      launch.awaitedGoal = undefined;
 
       // A turn app-server started of its own toward the running goal is the launch's turn, as one a message started is.
       if (launch.state.kind === LAUNCH_STATE.IDLE && goalRuns(launch.goal)) {
@@ -2234,7 +2246,7 @@ export const runCodex = Effect.fn("agent-runner/runCodex")(function* (
     waiting: [],
     compactNext: undefined,
     goal: standing,
-    resumedGoal: resumed ? { goal: standing } : undefined,
+    awaitedGoal: resumed ? { goal: standing } : undefined,
     goalWait: false,
     goalWaits: 0,
     accepted: new Set(),

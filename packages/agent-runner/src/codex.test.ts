@@ -1024,6 +1024,80 @@ it.effect(
 );
 
 it.effect(
+  "says a goal paused mid-turn once, past an update app-server queued before the pause and sends after its answer",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService("agent-probe-hermetic");
+      const objective = "every billing test passes";
+
+      const goal = (status: string, tokensUsed: number, updatedAt: number) => ({
+        threadId: THREAD,
+        objective,
+        status,
+        tokenBudget: null,
+        tokensUsed,
+        timeUsedSeconds: 60,
+        createdAt: 1,
+        updatedAt,
+      });
+
+      const updated = (said: ReturnType<typeof goal>) => ({
+        method: "thread/goal/updated",
+        params: { threadId: THREAD, turnId: null, goal: said },
+      });
+
+      const script: Script = {
+        exchanges: [
+          ...RESUME,
+          {
+            method: "thread/goal/set",
+            reply: [
+              { id: 3, result: { goal: goal("active", 0, 2) } },
+              updated(goal("active", 0, 2)),
+              ...RESUMED_TURN.reply.slice(1, -2),
+            ],
+          },
+          {
+            method: "thread/goal/set",
+            // App-server answers first, then sends what its thread's listener holds in order: the turn's own count of the goal, active, then the pause.
+            reply: [
+              { id: 4, result: { goal: goal("paused", 40_000, 5) } },
+              updated(goal("active", 40_000, 5)),
+              updated(goal("paused", 40_000, 5)),
+              ...RESUMED_TURN_END,
+            ],
+          },
+        ],
+      };
+
+      const { spawned, write, run } = yield* launch([script], service);
+      yield* write({ ...CONFIG, threadId: THREAD });
+      yield* write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE.FIRST,
+        content: [{ type: "text", text: `/goal ${objective}` }],
+        goal: true,
+      });
+      yield* service.seen;
+      yield* write({
+        type: INPUT_LINE.MESSAGE,
+        uuid: LINE.STEERED,
+        content: [{ type: "text", text: "/goal pause" }],
+        goal: true,
+      });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.deepEqual(spawned[0]?.unexpected, []);
+      assert.deepEqual(
+        service.applied.flatMap(({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.GOAL ? [posted.event] : [],
+        ),
+        ["set", "paused"],
+      );
+    }),
+);
+
+it.effect(
   "takes a resumed thread's standing goal as it stands, posting nothing of it, and ends the agent's turn on a goal line that starts none",
   () =>
     Effect.gen(function* () {

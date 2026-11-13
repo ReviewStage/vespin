@@ -128,6 +128,21 @@ export function sameGoal(said: GoalSeen | undefined, read: GoalSeen | undefined)
   );
 }
 
+/**
+ * Whether a goal update is newer than the goal the launch awaits app-server
+ * saying again: the same goal, changed since. Note that app-server keeps
+ * `updatedAt` in seconds, so an update of the same second is taken as one it
+ * queued before, which only an update it sends ahead of the awaited one is.
+ */
+export function newerGoal(said: GoalSeen | undefined, awaited: GoalSeen | undefined): boolean {
+  return (
+    said !== undefined &&
+    awaited !== undefined &&
+    said.objective === awaited.objective &&
+    said.updatedAt > awaited.updatedAt
+  );
+}
+
 /** The GOAL event a cleared goal moves the transcript by; none where the launch knew of no goal. */
 export function goalCleared(before: GoalSeen | undefined): RunnerGoal | undefined {
   return before === undefined ? undefined : moveOf(GOAL_EVENT.CLEARED, before);
