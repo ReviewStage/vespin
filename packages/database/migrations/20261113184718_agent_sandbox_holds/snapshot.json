@@ -1,7 +1,7 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "7e48d163-48b8-4b2b-b082-a726bbb51266",
+  "id": "74ab4e03-fa2f-4716-a232-39817184e28d",
   "prevIds": ["76804cb1-578e-4022-9342-b167aea4605b"],
   "ddl": [
     {
@@ -103,12 +103,6 @@
     {
       "isRlsEnabled": false,
       "name": "agent_runner_record",
-      "entityType": "tables",
-      "schema": "public"
-    },
-    {
-      "isRlsEnabled": false,
-      "name": "agent_sandbox_beat",
       "entityType": "tables",
       "schema": "public"
     },
@@ -2976,58 +2970,6 @@
       "name": "sandbox_name",
       "entityType": "columns",
       "schema": "public",
-      "table": "agent_sandbox_beat"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "kind",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent_sandbox_beat"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "holder",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent_sandbox_beat"
-    },
-    {
-      "type": "timestamp with time zone",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "beat_at",
-      "entityType": "columns",
-      "schema": "public",
-      "table": "agent_sandbox_beat"
-    },
-    {
-      "type": "text",
-      "typeSchema": null,
-      "notNull": true,
-      "dimensions": 0,
-      "default": null,
-      "generated": null,
-      "identity": null,
-      "name": "sandbox_name",
-      "entityType": "columns",
-      "schema": "public",
       "table": "agent_sandbox"
     },
     {
@@ -3078,6 +3020,19 @@
       "generated": null,
       "identity": null,
       "name": "booting_since",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "agent_sandbox"
+    },
+    {
+      "type": "timestamp with time zone",
+      "typeSchema": null,
+      "notNull": false,
+      "dimensions": 0,
+      "default": null,
+      "generated": null,
+      "identity": null,
+      "name": "held_at",
       "entityType": "columns",
       "schema": "public",
       "table": "agent_sandbox"
@@ -18635,19 +18590,6 @@
     },
     {
       "nameExplicit": false,
-      "columns": ["sandbox_name"],
-      "schemaTo": "public",
-      "tableTo": "agent_sandbox",
-      "columnsTo": ["sandbox_name"],
-      "onUpdate": "NO ACTION",
-      "onDelete": "CASCADE",
-      "name": "agent_sandbox_beat_sandbox_name_agent_sandbox_sandbox_name_fkey",
-      "entityType": "fks",
-      "schema": "public",
-      "table": "agent_sandbox_beat"
-    },
-    {
-      "nameExplicit": false,
       "columns": ["agent_id"],
       "schemaTo": "public",
       "tableTo": "agent",
@@ -20973,14 +20915,6 @@
       "entityType": "pks",
       "schema": "public",
       "table": "agent_runner_record"
-    },
-    {
-      "columns": ["sandbox_name", "kind", "holder"],
-      "nameExplicit": false,
-      "name": "agent_sandbox_beat_pkey",
-      "entityType": "pks",
-      "schema": "public",
-      "table": "agent_sandbox_beat"
     },
     {
       "columns": ["sandbox_name", "terminal_id"],
