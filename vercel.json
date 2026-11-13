@@ -244,6 +244,10 @@
           "dest": "/api/default.js?route=triggers/sentry/installed"
         },
         {
+          "src": "/api/voice/probe",
+          "dest": "/api/default.js?route=voice/probe"
+        },
+        {
           "src": "/api/maintenance/sweep",
           "dest": "/api/maintenance-sweep.js?route=maintenance/sweep"
         },
