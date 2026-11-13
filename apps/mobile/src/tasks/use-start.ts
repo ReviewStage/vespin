@@ -63,10 +63,11 @@ import {
 import type { PickOption } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { randomUUID } from "expo-crypto";
-import { useMemo, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useLiveFollow } from "../host/live-follow.js";
+import type { HeldPicture } from "../use-attached-pictures.js";
 
 /** No models read yet. */
 const NO_MODELS: readonly CatalogModel[] = [];
@@ -313,6 +314,98 @@ export function useRepositoryPick(
   };
 }
 
+/* ----- A start that opened its task at once ----- */
+
+/** The id New task makes its task under, minted on the phone as the sheet opens, so the task opens the moment Start is pressed, as the panel's does. */
+interface MintedTask {
+  readonly id: string;
+}
+
+/** What a New task start came to after its sheet closed, which its task's page hears. */
+export const START_LANDED = {
+  /** Its agent started, which the task's page opens while it still stands in front. */
+  AGENT: "agent",
+  /** The start was refused, so the task the page opened on was never made. */
+  REFUSED: "refused",
+} as const;
+
+export type StartLanded =
+  | { readonly kind: typeof START_LANDED.AGENT; readonly agentId: string }
+  | { readonly kind: typeof START_LANDED.REFUSED };
+
+/** The page of each task that stands, by its task, which hears what its start came to. */
+const hearing = new Map<string, (landed: StartLanded) => void>();
+
+/** What a start came to before its task's page stood to hear it, by its task, kept until the page mounts. */
+const unheard = new Map<string, StartLanded>();
+
+/** Tells the page of the task a New task start opened what the start came to, or keeps it for the page about to mount. */
+export function startLanded(taskId: string, landed: StartLanded): void {
+  const hear = hearing.get(taskId);
+
+  if (hear === undefined) unheard.set(taskId, landed);
+  else hear(landed);
+}
+
+/**
+ * Hears what the start of the task `taskId` came to while its page stands,
+ * including an answer that landed before the page mounted, as an answer to
+ * a start refused at once does.
+ */
+export function useStartLanded(
+  taskId: string | undefined,
+  hear: (landed: StartLanded) => void,
+): void {
+  const heard = useEffectEvent(hear);
+
+  useEffect(() => {
+    if (taskId === undefined) return;
+    const listener = (landed: StartLanded) => heard(landed);
+    hearing.set(taskId, listener);
+    const waiting = unheard.get(taskId);
+
+    if (waiting !== undefined) {
+      unheard.delete(taskId);
+      listener(waiting);
+    }
+
+    return () => {
+      if (hearing.get(taskId) === listener) hearing.delete(taskId);
+    };
+  }, [taskId]);
+}
+
+/** New task as it pressed Start, which a start refused after the sheet closed opens New task again on, with why it was refused. */
+export interface RefusedStart {
+  readonly prompt: string;
+  readonly parent: string | undefined;
+  readonly workspaceId: string | undefined;
+  readonly repository: string | undefined;
+  readonly relation: TaskCreateRelation | undefined;
+  readonly picked: ModelChoice | undefined;
+  readonly runsOn: string;
+  readonly pictures: readonly HeldPicture[];
+  readonly note: string;
+}
+
+/** The start refused after its sheet closed, which the next New task opens on; none once it has. */
+let refusedStart: RefusedStart | undefined;
+
+/** Keeps a start refused after its sheet closed for New task to open on. */
+export function keepRefusedStart(refused: RefusedStart): void {
+  refusedStart = refused;
+}
+
+/** The start refused after its sheet closed that New task opens on, if any. */
+export function heldRefusedStart(): RefusedStart | undefined {
+  return refusedStart;
+}
+
+/** Lets go of `refused` once New task has opened on it, unless a newer one was kept since. */
+export function forgetRefusedStart(refused: RefusedStart | undefined): void {
+  if (refused !== undefined && refusedStart === refused) refusedStart = undefined;
+}
+
 /* ----- The starts ----- */
 
 /** The words, pictures, and choices a start carries. */
@@ -389,12 +482,13 @@ function unanswered(what: string) {
  */
 export function useStartTask(
   workspaceId: string | undefined,
-): (ask: StartAsk & TaskPlace) => Promise<StartAnswer> {
+): (ask: StartAsk & TaskPlace & MintedTask) => Promise<StartAnswer> {
   const acts = useHostActs();
   const [key] = useState(randomUUID);
 
-  return async ({ prompt, attachments, picked, runsOn, ...place }) => {
+  return async ({ id, prompt, attachments, picked, runsOn, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
+      id,
       ...placeOf(workspaceId, place),
       planning: false,
       agent: {
@@ -428,11 +522,12 @@ export function useStartTask(
  */
 export function useFileTask(
   workspaceId: string | undefined,
-): (ask: { readonly filed: FiledTask } & TaskPlace) => Promise<StartAnswer> {
+): (ask: { readonly filed: FiledTask } & TaskPlace & MintedTask) => Promise<StartAnswer> {
   const acts = useHostActs();
 
-  return async ({ filed, ...place }) => {
+  return async ({ id, filed, ...place }) => {
     const answer = await acts[ACT_KIND.TASKS_START]({
+      id,
       ...placeOf(workspaceId, place),
       ...filed,
       status: TASK_STATUS.BACKLOG,

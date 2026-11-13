@@ -108,8 +108,8 @@ import {
   WordsRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useLocalSearchParams, useRouter } from "expo-router";
-import { type ReactElement, useMemo, useState } from "react";
+import { Stack, useFocusEffect, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
+import { type ReactElement, useCallback, useMemo, useState } from "react";
 import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -135,6 +135,7 @@ import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
 import { useFoundTask } from "../tasks/use-found-task.js";
 import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
+import { START_LANDED, useStartLanded } from "../tasks/use-start.js";
 import {
   type ReadListing,
   type StatusQuestion,
@@ -1973,7 +1974,30 @@ function numberedIn(id: string, workspace: string | undefined): boolean {
 export function TaskScreen() {
   const { id, workspace } = useLocalSearchParams<{ id: string; workspace?: string }>();
   const router = useRouter();
+  const navigation = useNavigation();
+  const onTab = useOnTab();
   const colors = useColors();
+  // Note that a page New task opened before its task was made hears what the start came to: its agent opens while the page still stands in front, and a refused start takes the page back, at once or as soon as it stands in front again.
+  const [gone, setGone] = useState(false);
+
+  useStartLanded(id, (landed) => {
+    const shown = navigation.isFocused();
+
+    if (landed.kind === START_LANDED.AGENT) {
+      if (shown) router.push(onTab(iosAgentRoute(landed.agentId)));
+
+      return;
+    }
+
+    if (shown) router.back();
+    else setGone(true);
+  });
+
+  useFocusEffect(
+    useCallback(() => {
+      if (gone) router.back();
+    }, [gone, router]),
+  );
   const found = useFoundTask(id, workspace);
   const held = useTaskOverview(found.taskId);
 
@@ -2010,7 +2034,7 @@ export function TaskScreen() {
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
 
-  if (handed) return null;
+  if (handed || gone) return null;
 
   return (
     <>

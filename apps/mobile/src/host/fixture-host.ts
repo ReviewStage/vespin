@@ -13,6 +13,7 @@
  * the host wrote it, and a document already staged is handed nothing new.
  */
 
+import { TASK_CALL_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { type AppStateSnapshot, RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
 import type { AppStateStore } from "@repo/host/client";
@@ -230,7 +231,8 @@ function olderRead(
 /**
  * The writes `-refuseWrites true` refuses, each answered as the host
  * answers once the service has refused it: a task's status and its pin
- * not kept, so the screens put the row back and say why, as they would
+ * not kept, so the screens put the row back and say why, and a task's
+ * start not taken, so New task opens again on what it held, as they would
  * of a live refusal.
  */
 const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>> = new Map<
@@ -239,6 +241,7 @@ const REFUSED_WRITES: ReadonlyMap<PortActKind, () => PortActResult<PortActKind>>
 >([
   [ACT_KIND.TASKS_SET_STANDING, () => false],
   [ACT_KIND.TASKS_PIN, () => false],
+  [ACT_KIND.TASKS_START, () => ({ failure: TASK_CALL_FAILURE.UNANSWERED })],
 ]);
 
 /** A member of `members` by a key known only at run time, as the fixture reads each one of the port before it answers or forwards it. */
