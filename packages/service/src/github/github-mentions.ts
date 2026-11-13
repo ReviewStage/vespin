@@ -146,13 +146,11 @@ const MENTION_REPLY = {
   GONE: "That agent is gone.",
 } as const;
 
-/** Lines quoting an earlier comment, code fenced in backticks or tildes, and inline code: where a handle is never read as a mention. */
-const NOT_ADDRESSED = [
-  /```[\s\S]*?(?:```|$)/gu,
-  /~~~[\s\S]*?(?:~~~|$)/gu,
-  /`[^`\n]*`/gu,
-  /^[ \t]*>.*$/gmu,
-] as const;
+/** Inline code and lines quoting an earlier comment: where a handle is never read as a mention, beside fenced code. */
+const NOT_ADDRESSED = [/`[^`\n]*`/gu, /^[ \t]*>.*$/gmu] as const;
+
+/** A line opening a fenced code block, as GitHub reads one: three or more backticks or tildes, indented three spaces at most. */
+const FENCE_OPENER = /^ {0,3}(`{3,}|~{3,})/u;
 
 /** A comment's delivery as far as a mention is read: the installation, the repository, the issue or pull request, and the comment with its author. */
 const MentionDeliverySchema = Schema.Struct({
@@ -206,6 +204,29 @@ function escaped(text: string): string {
 }
 
 /**
+ * The words with every fenced code block's lines left out, read line by line
+ * as GitHub reads them: a fence opens at a line's start, and only a line of
+ * the opener's own character, at least as long and with nothing after it,
+ * closes it; an unclosed fence runs to the end.
+ */
+function unfenced(words: string): string {
+  let fence: string | undefined;
+  const kept: string[] = [];
+
+  for (const line of words.split("\n")) {
+    if (fence === undefined) {
+      fence = FENCE_OPENER.exec(line)?.[1];
+
+      if (fence === undefined) kept.push(line);
+    } else if (new RegExp(`^ {0,3}${fence[0]}{${fence.length},}[ \\t]*$`, "u").test(line)) {
+      fence = undefined;
+    }
+  }
+
+  return kept.join("\n");
+}
+
+/**
  * Whether the words name the App's bot, `@<slug>` or `@vespin`, on a word's
  * edges, whatever its case, outside a quoted line and code; a handle inside
  * an address (`team@vespin.dev`) or a longer login (`@vespin-other`) is none.
@@ -213,7 +234,8 @@ function escaped(text: string): string {
 function mentionsBot(words: string, slug: string): boolean {
   const handles = [slug, PRODUCT_NAME.toLowerCase()].map(escaped).join("|");
   const mention = new RegExp(`(?:^|[^A-Za-z0-9_./-])@(?:${handles})(?![A-Za-z0-9-])`, "iu");
-  const addressed = NOT_ADDRESSED.reduce((left, unread) => left.replace(unread, " "), words);
+  const outside = unfenced(words);
+  const addressed = NOT_ADDRESSED.reduce((left, unread) => left.replace(unread, " "), outside);
 
   return mention.test(addressed);
 }

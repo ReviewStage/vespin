@@ -1532,7 +1532,8 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
         const comment = commentDelivery(
           installation.id,
           { number: 7, pullRequest: false },
-          `@${slug} find out why invitations expire after an hour`,
+          // A tilde inside a sentence opens no fence, so the mention after it is read.
+          `The ~~~ in the expiry header breaks invitations.\n\n@${slug} find out why`,
           MEMBER_WRITER,
           commentId,
         );
