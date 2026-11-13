@@ -457,6 +457,7 @@ export function RowHead({
   unread,
   faded,
   lead,
+  beside,
   title,
   ink,
   end,
@@ -464,6 +465,8 @@ export function RowHead({
   readonly unread: boolean;
   readonly faded: boolean;
   readonly lead: ReactNode;
+  /** What stands between the lead and the title, such as the avatar of the App that runs a check; nothing where none is given. */
+  readonly beside?: ReactNode;
   readonly title: string;
   readonly ink: string;
   readonly end: ReactNode;
@@ -490,6 +493,7 @@ export function RowHead({
       <UnreadDot unread={unread} faded={faded} />
       <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
         <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
+        {beside}
         {stacked ? (
           <VStack alignment="leading" spacing={2}>
             {words}

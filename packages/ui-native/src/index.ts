@@ -124,7 +124,9 @@ export { MarkdownPage } from "./markdown-page.js";
 export {
   AgentTile,
   Avatar,
+  FACE_KIND,
   type Face,
+  type FaceKind,
   FailedMark,
   NeedsYouDot,
   TaskStatusMark,
@@ -157,6 +159,9 @@ export {
 
 export {
   ConfirmAsk,
+  githubFace,
+  MARK_FACE,
+  type MarkFace,
   MarkRow,
   MergeActRow,
   type MergeMethodChoice,

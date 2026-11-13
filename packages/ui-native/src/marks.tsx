@@ -114,10 +114,20 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
   );
 }
 
+/** What a face is of, which its shape says: a person, in a circle, or an App or its bot, in the rounded square the panel and GitHub draw one in. */
+export const FACE_KIND = {
+  PERSON: "person",
+  APP: "app",
+} as const;
+
+export type FaceKind = (typeof FACE_KIND)[keyof typeof FACE_KIND];
+
 /** A person as a mark draws them: their name, whose letters stand in for a picture, and their sign-in picture where one is known. */
 export type Face = {
   readonly name: string;
   readonly picture?: string | undefined;
+  /** What it is of, a person where none is given. */
+  readonly kind?: FaceKind | undefined;
 };
 
 type AvatarProps = {
@@ -168,29 +178,37 @@ export function AvatarPhoto({
  * A person's face on the brand's avatar tile: their photo where a picture is
  * given, from a host `@repo/features/account-picture` lets a picture load
  * from and asked for at the size it is drawn, and their letters otherwise.
- * Note that the letters stand only until the photo has drawn, so they show
- * while it loads and once it fails, which takes the photo away, but never
- * through a photo's transparent pixels.
+ * An App, or its bot, stands in a rounded square rather than a circle, as
+ * the panel and GitHub tell one from a person. Note that the letters stand
+ * only until the photo has drawn, so they show while it loads and once it
+ * fails, which takes the photo away, but never through a photo's
+ * transparent pixels.
  */
 export function Avatar({
   name,
   size = MARK_SIZE.AVATAR,
   picture,
+  kind = FACE_KIND.PERSON,
 }: AvatarProps & {
   /** The address of the person's photo, such as their sign-in picture; their letters alone where none is given. */
   readonly picture?: string | undefined;
+  readonly kind?: FaceKind | undefined;
 }) {
   const colors = useColors();
   const pinned = pinnedPictureUrl(picture);
   const [failed, setFailed] = useState<string | undefined>(undefined);
   const [drawn, setDrawn] = useState<string | undefined>(undefined);
   const photoDrawn = pinned !== undefined && pinned === drawn && pinned !== failed;
+  const corner = kind === FACE_KIND.APP ? size * TILE_ROUNDING : size / 2;
 
   return (
     <ZStack modifiers={[frame({ width: size, height: size }), accessibilityLabel(name)]}>
       {photoDrawn ? null : (
         <>
-          <Circle modifiers={[foregroundStyle(colors.AVATAR_TILE)]} />
+          <RoundedRectangle
+            cornerRadius={corner}
+            modifiers={[foregroundStyle(colors.AVATAR_TILE)]}
+          />
           <Text
             modifiers={[
               font({ size: size * MONOGRAM_SCALE, weight: "semibold", design: "rounded" }),
@@ -206,6 +224,7 @@ export function Avatar({
         <AvatarPhoto
           address={accountPictureAt(pinned, size * PixelRatio.get())}
           size={size}
+          corner={corner}
           onLoad={() => setDrawn(pinned)}
           onFail={() => setFailed(pinned)}
         />
