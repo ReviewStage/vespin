@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
+import { mp4Bytes } from "@repo/wire/testing";
 import { test } from "vitest";
-import { startsLikeWebm, streamableMp4, webmDimensions } from "./video-signature.js";
+import { mp4Dimensions, startsLikeWebm, streamableMp4, webmDimensions } from "./video-signature.js";
 
 /**
  * video-signature.test.ts -- a WebM told from its own bytes and its size
@@ -136,4 +137,9 @@ test("an MP4 copy streams only with its H.264 index ahead of its media, as +fast
   assert.equal(streamableMp4(Uint8Array.from([...fileType, ...media, ...index])), false);
   const vp9 = box("moov", box("trak", box("stsd", box("vp09"))));
   assert.equal(streamableMp4(Uint8Array.from([...fileType, ...vp9, ...media])), false);
+});
+
+test("an H.264 MP4 a Mac recorded states the size its track's header shows, only with its index ahead of its media", () => {
+  assert.deepEqual(mp4Dimensions(mp4Bytes(1206, 2622)), { width: 1206, height: 2622 });
+  assert.equal(mp4Dimensions(mp4Bytes(1206, 2622, true)), undefined);
 });

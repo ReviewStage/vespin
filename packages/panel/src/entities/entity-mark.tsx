@@ -18,11 +18,12 @@ import { useAutomation } from "../automation-directory.js";
 import { TILE_SIZE, WorkspaceTile } from "../desktop/workspace-tile.js";
 import { usePerson } from "../member-directory.js";
 import { providerOf } from "../tasks/agent-model.js";
+import { KeptAppIcon, useKeptApps } from "../tasks/agent-pictures.js";
 import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { FileTypeIcon } from "../tasks/file-type-icon.js";
 import { InboxItemChipGlyph } from "../tasks/inbox-item-chip.js";
 import { IssueMark } from "../tasks/issue-mark.js";
-import { useMacAppIcon } from "../tasks/mac-apps.js";
+import { useAllowedAppIcon, useMacAppIcon } from "../tasks/mac-apps.js";
 import { ReadAgentModel } from "../tasks/mentioned-agent-card.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { SkillMark } from "../tasks/skill-ref.js";
@@ -191,9 +192,23 @@ function WorkspaceMark({ slug }: { slug: string }): React.JSX.Element {
   return <WorkspaceTile workspace={listed ?? { id: slug, name: slug }} size={TILE_SIZE.INLINE} />;
 }
 
-/** An app on the developer's Mac by its icon, as this Mac draws it; a screen's glyph where the window reads none. */
+/**
+ * An app on the developer's Mac by its icon, as this Mac draws it; off the
+ * Mac, as a machine of the reader's that always allows it posted it, else
+ * the icon a `computer` call kept for the app in the conversation; a
+ * screen's glyph where there is none.
+ */
 function MacAppMark({ app }: { app: string }): React.JSX.Element {
-  return <AppIcon src={useMacAppIcon(app)} />;
+  const onMac = useMacAppIcon(app);
+  const posted = useAllowedAppIcon(app);
+  const own = onMac ?? posted;
+  const kept = useKeptApps().get(app)?.icon;
+
+  return own === undefined && kept !== undefined ? (
+    <KeptAppIcon id={kept} />
+  ) : (
+    <AppIcon src={own} />
+  );
 }
 
 /** An automation's mark, or one of its runs': the automation's tile. */

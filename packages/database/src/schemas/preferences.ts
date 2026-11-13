@@ -2,6 +2,7 @@ import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import type { AgentMachineKind, ContextWindow } from "@repo/features/agent-wire";
 import type { ChaptersPick } from "@repo/features/chapters-model-choice";
 import type { LinkOpen } from "@repo/features/link-open";
+import type { LiveVoice } from "@repo/features/voices";
 import type {
   AgentEnter,
   CommitAuthor,
@@ -96,6 +97,12 @@ export const accountPreference = pgTable("account_preference", {
    */
   askSound: text("ask_sound").$type<CompletionSound>(),
   /**
+   * The voice a call speaks with (`@repo/features/voices`'s `LIVE_VOICE`);
+   * null until the account chooses, which reads as `marin`. A part of the
+   * snapshot of its own, as the link choice is.
+   */
+  voice: text("voice").$type<LiveVoice>(),
+  /**
    * Whether the OS posts a notification as an agent the account started
    * finishes or asks, while the window is behind; null until the account
    * chooses, which reads as off. A part of the snapshot of its own, as the
@@ -109,6 +116,14 @@ export const accountPreference = pgTable("account_preference", {
    * it answers. A part of the snapshot of its own, as the link choice is.
    */
   onboardingSurvey: text("onboarding_survey"),
+  /**
+   * Which one-card intros the account has seen, as the JSON list of their
+   * ids (`@repo/settings`'s `INTRO`), so a card dismissed on one device never
+   * stands again on another; null until it dismisses one. A write stores the
+   * union of what stood and what it sends, since a dismissal is never taken
+   * back. A part of the snapshot of its own, as the link choice is.
+   */
+  introsSeen: text("intros_seen"),
   /**
    * The model and effort a coding agent starts on when Start is clicked, as
    * AI Gateway's catalog names them (`packages/service/src/providers/model-catalog.ts`); null on both

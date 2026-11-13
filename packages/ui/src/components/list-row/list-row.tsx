@@ -23,6 +23,7 @@ import { PRESS_PULSE, pulsePress } from "../../press-pulse.js";
 import { said } from "../../said.js";
 import { ReplayWords } from "../../session-replay-marks.js";
 import { Checkbox as ShadcnCheckbox } from "../../shadcn/checkbox.js";
+import type { StatusTone } from "../../status-tone.js";
 import { useClipped } from "../../use-clipped.js";
 import { BUTTON_SIZE } from "../button/button.js";
 import { motionKey, motionRows } from "../list-motion/list-motion.js";
@@ -356,7 +357,7 @@ export type ListRowInk = (typeof LIST_ROW_INK)[keyof typeof LIST_ROW_INK];
  * it by.
  */
 const LIST_CLASS =
-  "ui-list flex list-none flex-col gap-list-gap p-0 data-[variant=card]:gap-0 data-[variant=card]:overflow-hidden data-[variant=card]:rounded-control data-[variant=card]:border data-[variant=card]:border-border data-[variant=card]:bg-surface data-[variant=card]:shadow-card";
+  "ui-list flex list-none flex-col gap-list-gap p-0 data-[variant=card]:gap-0 data-[variant=card]:overflow-hidden data-[variant=card]:rounded-control data-[variant=card]:border data-[variant=card]:border-border data-[variant=card]:has-[>li.ui-list-row[data-menu-open=true]:only-of-type]:border-border-menu-open data-[variant=card]:bg-surface data-[variant=card]:shadow-card";
 
 /** The row: a grid of five tracks, its parts centered on its middle, in the text's ink, in by a nest for each level it stands nested at. */
 const ROW_CLASS =
@@ -392,6 +393,10 @@ const MAIN_BUTTON_CLASS = `${MAIN_CLASS} cursor-press disabled:cursor-default`;
  */
 const LEADING_CLASS =
   "ui-list-row-leading col-[leading] me-icon-gap inline-flex text-muted-foreground [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon";
+
+/** The leading mark of a row in a tone (`tone`), in the tone's ink rather than muted. */
+const LEADING_TONED_CLASS =
+  "ui-list-row-leading col-[leading] me-icon-gap inline-flex text-tone-ink [&>.ui-provider-mark]:text-foreground [&>svg]:size-control-icon";
 
 /** The row's end, its metadata and its chevron, at the end of its track, so it lines up with the acts that share it. */
 const END_CLASS =
@@ -646,6 +651,7 @@ export function ListRow({
   current,
   unread,
   muted,
+  tone,
   latent = false,
   hint,
   density,
@@ -714,13 +720,15 @@ export function ListRow({
   unread?: boolean | undefined;
   /** Whether what the row stands for is done with, so the row stands back, its words in quieter inks and its marks faded, its fill and acts as they are. */
   muted?: boolean | undefined;
+  /** Where what the row stands for stands, where it wants a person or can't go on (`STATUS_TONE.ATTENTION`, `STATUS_TONE.DANGER`): its ground in the tone's tint and its leading mark in its ink; none for a row at rest. Its words still say why. */
+  tone?: StatusTone | undefined;
   /**
    * Whether the row stands unseen until the pointer or the keyboard reaches
    * it, keeping a way back to something put away in the place it stood; a
    * screen with no hover draws it at rest.
    */
   latent?: boolean | undefined;
-  /** The app's hint hung from the row's press and the words it raises; a row that opens nothing raises none. */
+  /** The app's hint hung from the row's press, or from its words where it opens nothing, and the words it raises. */
   hint?: { readonly Hint: ListRowHint; readonly label: string } | undefined;
   /** Its density where it stands in a list of the app's own rather than a `List`, which sets its rows'. */
   density?: ListDensity | undefined;
@@ -792,6 +800,11 @@ export function ListRow({
     },
     [],
   );
+
+  // Note that a row that opens nothing hangs its hint from its words, whose parent, the item, is the row its card stands beside.
+  const wordsRef = useCallback((element: HTMLDivElement | null) => {
+    rowElement.current = element?.parentElement ?? null;
+  }, []);
 
   const pressRef = useCallback(
     (element: HTMLButtonElement | null) => {
@@ -948,7 +961,10 @@ export function ListRow({
   const face = (
     <>
       {said(mark) ? (
-        <span className={LEADING_CLASS} aria-hidden="true">
+        <span
+          className={tone === undefined ? LEADING_CLASS : LEADING_TONED_CLASS}
+          aria-hidden="true"
+        >
           {mark}
         </span>
       ) : null}
@@ -1049,9 +1065,19 @@ export function ListRow({
         </button>
       )}
       {press === undefined ? (
-        <div className={MAIN_CLASS} aria-current={current}>
-          {face}
-        </div>
+        hint === undefined ? (
+          <div className={MAIN_CLASS} aria-current={current}>
+            {face}
+          </div>
+        ) : (
+          // Note that a row that opens nothing still hangs its hint, from its words, which take the focus so the keyboard reaches the hint too.
+          <hint.Hint label={hint.label} row={rowElement}>
+            {/* biome-ignore lint/a11y/noNoninteractiveTabindex: the words take the focus so the keyboard reaches the hint, as the pointer does. */}
+            <div ref={wordsRef} className={MAIN_CLASS} aria-current={current} tabIndex={0}>
+              {face}
+            </div>
+          </hint.Hint>
+        )
       ) : hint === undefined ? (
         press
       ) : (
@@ -1123,6 +1149,7 @@ export function ListRow({
         }
         data-unread={unread === true ? "true" : undefined}
         data-muted={muted === true ? "true" : undefined}
+        data-tone={tone}
         data-latent={latent ? "true" : undefined}
         data-density={density}
         data-ink={ink}

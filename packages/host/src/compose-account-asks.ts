@@ -66,6 +66,7 @@ export type AccountAsksClient = Pick<
   HostedAgentClient,
   | "liveRead"
   | "devicePresence"
+  | "machineAllowedApps"
   | "removeHost"
   | "readHostPairing"
   | "approveHostPairing"
@@ -120,9 +121,10 @@ export interface AccountAsksDependencies extends AccountGateDependencies {
   readonly repositoriesMoved?: Effect.Effect<void>;
 }
 
-/** The agents' acts this composer answers: a host removed, and a host's pairing read, approved, or denied. */
+/** The agents' acts this composer answers: a host removed, a host's pairing read, approved, or denied, and the apps the account's machines always allow read. */
 export type AccountAsksAgentAct =
   | "HOSTS_REMOVE"
+  | "HOSTS_ALLOWED_APPS"
   | "HOSTS_PAIRING_READ"
   | "HOSTS_PAIRING_APPROVE"
   | "HOSTS_PAIRING_DENY";
@@ -559,6 +561,8 @@ function actsOf(
       hostRemove((id) => asked(client.removeHost(id))),
       { read: ({ id }) => Effect.succeed(id) },
     ),
+    // Note that the apps are asked afresh each time a window lists them, and kept nowhere here.
+    HOSTS_ALLOWED_APPS: () => asked(client.machineAllowedApps()),
     HOSTS_PAIRING_READ: ({ code }) => asked(client.readHostPairing(code)),
     HOSTS_PAIRING_APPROVE: ({ code }) => asked(client.approveHostPairing(code)),
     HOSTS_PAIRING_DENY: ({ code }) => asked(client.denyHostPairing(code)),

@@ -90,7 +90,7 @@ describe("the host's platform concerns", () => {
       };
 
       assert.deepEqual(asked.terminals, notHere);
-      assert.equal(asked.concerns.has(HOST_CONCERN.MAC_COMMANDS), false);
+      assert.equal(asked.concerns.has(HOST_CONCERN.MACHINE_COMMANDS), false);
       assert.equal(asked.concerns.has(HOST_CONCERN.TERMINALS), false);
       assert.equal(asked.concerns.has(HOST_CONCERN.TASKS), true);
       assert.deepEqual(hostCapabilities(asked.concerns, CLIENT), [HOST_CAPABILITY.MICROPHONE]);
@@ -154,7 +154,7 @@ describe("the host's platform concerns", () => {
         assert.equal(asked.concerns.has(concern), true);
       assert.deepEqual(hostCapabilities(asked.concerns, CLIENT), [
         HOST_CAPABILITY.MICROPHONE,
-        HOST_CAPABILITY.MAC_COMMANDS,
+        HOST_CAPABILITY.MACHINE_COMMANDS,
         HOST_CAPABILITY.TERMINALS,
         HOST_CAPABILITY.LOCAL_TERMINALS,
         HOST_CAPABILITY.PORT_FORWARDS,
@@ -163,7 +163,7 @@ describe("the host's platform concerns", () => {
       assert.deepEqual(hostCapabilities(asked.concerns, ALL_CLIENT_CAPABILITIES), [
         HOST_CAPABILITY.UPDATES,
         HOST_CAPABILITY.MICROPHONE,
-        HOST_CAPABILITY.MAC_COMMANDS,
+        HOST_CAPABILITY.MACHINE_COMMANDS,
         HOST_CAPABILITY.MAC_TERMINAL,
         HOST_CAPABILITY.TERMINALS,
         HOST_CAPABILITY.LOCAL_TERMINALS,

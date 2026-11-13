@@ -21,7 +21,11 @@ builds a control of its own.
   under its own `ColumnBar`: its inline title, what leads it such as the
   workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
-  caller says), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
+  caller says, and `SplitOverTabs`, the one split view a window wide enough
+  for three columns stands over the hidden tabs, in front of a tab's root and
+  behind a page the tab pushed, with `KeptColumns` keeping each tab's list
+  drawn behind the one shown; a detail is drawn alone, since a page such as
+  `ThreadPage` sets bar items SwiftUI reads from a hidden view too), `EmptyState`, `PageHeader`, `ThreadPage`, `Button`, `Chip` and
   `ScopePicker` (a list's scopes as the system's segmented control, or its menu picker in a split view's narrow list column), `FieldChip` and `StatusChip`, the ask's cards (`ChoiceList`
   for a decide, `StepList` for a do with its `AskActs`, `AnswerFields` for an
   answer's fields, and `AskNote` for what a send that did not go said),
@@ -98,13 +102,17 @@ builds a control of its own.
   `scripts/repository-checks.sh` fails when it drifts. `useColors()` picks the
   theme by the window's color scheme, since SwiftUI is handed plain values.
   The app reads as Vespin beside the desktop, not as iOS's defaults: a
-  screen, a list, and a sidebar stand on the brand's `GROUND` and `SIDEBAR`,
-  never the system's grays; lists stand plain, as the panel's do, never as
+  screen and a list stand on the brand's `GROUND` and `SIDEBAR`, never the
+  system's grays, and so do a split view's list and detail columns
+  themselves (`containerBackground`) and a sheet or popover to its edge
+  (`presentationBackground`); a split view's sidebar paints nothing, so it
+  stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
   inset cards; and the tint is the brand's copper, never the system's blue.
   Only a control's states and a label's hierarchy are the system's.
-- **Rows carry the panel's facts.** `ListRow` is an Inbox thread (the task's
-  status ring, the thread's title and time, and the glyph and words of what
-  it asks, then the task's name), `TaskRow` a task on one line (its status
+- **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
+  panel's three lines (the task's status ring and name, then the thread's
+  title and time, then the glyph and words of what it asks; an agent's own
+  thread, with no task, in two), `TaskRow` a task on one line (its status
   ring, its name, and at its end a thread that needs you, a failed agent,
   one at work, or its pull request, then its key), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
@@ -153,7 +161,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
-  button is the chevron alone. One button leads every tab's root bar, as
+  button is the chevron alone, and a column's ⋯ is its glyph alone
+  (`BarMenuItem`), never a menu's own button inside the bar's glass. One button leads every tab's root bar, as
   Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile alone
   at the photo's size in the bar's round glass, `SWITCHER_LOOK.TILE`, so the
   screen's title keeps its place beside it, as the App Store's photo does), whose list, as
@@ -166,7 +175,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. A landscape iPad's sidebar heads its
-  list with the switcher, its tile and its name, and stands Settings at its foot. Nothing draws a
+  list with the switcher, its tile and its name, and stands no Settings gear: Settings
+  opens from the switcher's menu and ⌘,, as Notion's and Linear's iPad sidebars keep it, and
+  the account's photo leads the sidebar's bar only until the switcher can draw. Nothing draws a
   copy of glass, and glass is one layer: a bar's own, or one glass view
   (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest). A
   glass that holds buttons takes no press of its own (not `interactive`),
@@ -203,6 +214,11 @@ navigation, tab bar, swipes, menus, sheets and glass.
   status, priority and assignee, and where handed a `FieldMenu`, open the
   system's pull-down menu of the field's values, as Reminders' fields do. Each stands
   on `SURFACE` inside a hairline.
+- **Grouped forms** (`SettingsForm` and the sheets that start work, pick
+  or remind) read as iOS Settings' cards: their rows stand in the panel's
+  raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
+  (`GROUPED`: the chip's hover gray in light, black in dark), and the sheet
+  around them stands on `GROUPED` too.
 - **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
   rows, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it; `AnswerFields`, a row per

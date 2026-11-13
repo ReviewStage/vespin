@@ -36,7 +36,7 @@ import { GLYPH, glyphImage } from "./glyph.js";
 import { CopyWordsSwiftMenu } from "./held-menu.js";
 import { Markdown, type MarkdownVideo, Picture } from "./markdown.js";
 import { AgentTile, Avatar, type Face, TaskStatusMark } from "./marks.js";
-import { type BarMenu, BarMenuButton } from "./split-view.js";
+import { type BarMenu, BarMenuItem } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -374,7 +374,7 @@ export function ThreadPage(props: ThreadPageProps) {
         </ToolbarItem>
         {menu === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
-            <BarMenuButton menu={menu} />
+            <BarMenuItem menu={menu} />
           </ToolbarItem>
         )}
       </Toolbar.Content>

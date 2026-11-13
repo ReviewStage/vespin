@@ -21,14 +21,14 @@
  */
 
 import { Predicate } from "effect";
-import { COMPUTER_ACTION, type ComputerAction } from "./mac-command-wire.js";
+import { COMPUTER_ACTION, type ComputerAction } from "./machine-command-wire.js";
 import { countWords } from "./words.js";
 
 /** The kinds of call a row can be, across both tabs. */
 export const CALL_KIND = {
   COMMAND: "command",
   /** A command an agent ran on the developer's own Mac (`run_on_mac`), drawn as a command with where it ran beside it. */
-  MAC_COMMAND: "mac-command",
+  MACHINE_COMMAND: "mac-command",
   /** Actions an agent took in the browser in its own sandbox (`browser`), its line saying what it did and in which tab, with where it ran beside it. */
   BROWSER: "browser",
   /** One action an agent took on an app on the developer's own Mac (`computer`), its line saying what it did and to which app, the app's icon in its kind's icon's place. */
@@ -153,7 +153,7 @@ export type CallKind = (typeof CALL_KIND)[keyof typeof CALL_KIND];
 /** How a call of each kind says what it did, and whether its subject is code (a command, a path) rather than words. */
 export const CALL_WORDS = {
   [CALL_KIND.COMMAND]: { verb: "Ran", code: true },
-  [CALL_KIND.MAC_COMMAND]: { verb: "Ran", code: true },
+  [CALL_KIND.MACHINE_COMMAND]: { verb: "Ran", code: true },
   [CALL_KIND.BROWSER]: { verb: "Used the browser", code: false },
   [CALL_KIND.COMPUTER]: { verb: "Used an app", code: false },
   [CALL_KIND.READ_FILE]: { verb: "Read", code: true },
@@ -266,6 +266,8 @@ const COMPUTER_ACTION_WORDS = {
   [COMPUTER_ACTION.DRAG]: "Dragged in",
   [COMPUTER_ACTION.SET_VALUE]: "Set a value in",
   [COMPUTER_ACTION.PERFORM_SECONDARY_ACTION]: "Acted in",
+  [COMPUTER_ACTION.RECORD]: "Started recording",
+  [COMPUTER_ACTION.STOP_RECORDING]: "Stopped recording",
 } as const satisfies { readonly [Action in ComputerAction]: string };
 
 const COMPUTER_ACTIONS: ReadonlySet<string> = new Set(Object.values(COMPUTER_ACTION));
@@ -373,7 +375,7 @@ export function madeCallLine(kind: MadeCallKind): CallLine {
 
 /** Whether a call is a shell command, wherever it ran: its line may say its description, and its body draws it behind a prompt. */
 export function isCommandKind(kind: CallKind): boolean {
-  return kind === CALL_KIND.COMMAND || kind === CALL_KIND.MAC_COMMAND;
+  return kind === CALL_KIND.COMMAND || kind === CALL_KIND.MACHINE_COMMAND;
 }
 
 /**
@@ -385,7 +387,7 @@ export function isCommandKind(kind: CallKind): boolean {
 export function callPlace(kind: CallKind, server?: string): string | undefined {
   if (kind === CALL_KIND.MCP_TOOL || kind === CALL_KIND.SEARCH_TOOLS) return server;
 
-  if (kind === CALL_KIND.MAC_COMMAND || kind === CALL_KIND.COMPUTER) return ON_YOUR_MAC;
+  if (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) return ON_YOUR_MAC;
 
   return kind === CALL_KIND.BROWSER ? IN_THE_BROWSER : undefined;
 }

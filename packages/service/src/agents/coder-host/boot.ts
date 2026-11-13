@@ -12,20 +12,26 @@
  * machine that could not come up fails the boot with why and pauses its
  * queue, the messages kept for Retry (`retryBoot`). A boot that never says
  * either way is failed by the minute sweep past its deadline
- * (`reconcile.ts`).
+ * (`reconcile.ts`). A cloud Start whose repository its workspace's drive
+ * does not hold yet is held BUILDING instead, its machine not opened, and
+ * its workspace's build published (`workspace-drive-builds.ts`); the boot
+ * is booted once the build is done (`builtBootResumed`), as Retry boots one.
  */
 
 import {
+  agentBootBuilding,
+  agentBootBuilt,
   agentBootRunnerUp,
   beginAgentBoot,
   failAgentBoot,
   rebootAgent,
 } from "@repo/database/models/agent-boot-store";
 import type { QueuedLine } from "@repo/database/models/agent-queue-store";
-import type { Agent } from "@repo/database/models/agent-store";
+import { type Agent, hasRepository } from "@repo/database/models/agent-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
+import { workspaceDriveRepositories } from "@repo/database/models/workspace-drive-repositories";
 import { BOOT_FAILURE, type BootFailure } from "@repo/features/agent-boot";
-import type { AgentAttachment } from "@repo/features/agent-wire";
+import { AGENT_MACHINE, type AgentAttachment } from "@repo/features/agent-wire";
 import { DateTime, Effect, Option } from "effect";
 import { afterResponse } from "../../http/after-response.js";
 import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
@@ -38,6 +44,8 @@ import {
   type MachineUp,
   SESSION_SEND_OUTCOME,
 } from "../sessions/agent-sessions.js";
+import { WorkspaceDriveFills, workspaceFolderOf } from "../workspace-drive.js";
+import { workspaceDriveBuildPublished } from "../workspace-drive-builds.js";
 import { agentFailureSaid, agentLogIds } from "./agent-log.js";
 import { type QueueSessions, queueAtTouch } from "./agent-queue.js";
 import { routedSessions } from "./runtime-sessions.js";
@@ -135,11 +143,53 @@ const machineCameUp = (
   );
 
 /**
+ * The agent's machine booted under `attempt`, its boot just moved to
+ * STARTING: failed at once where the machine could not even be asked for,
+ * and else its session claimed and the machine's open left past the answer.
+ */
+const machineBootedUnder = (agent: Agent, attempt: number, sessionsFor: QueueSessions) =>
+  Effect.gen(function* () {
+    const boot = yield* booted(yield* sessionsFor(agent.userId), agent);
+
+    if (boot === undefined || boot.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) {
+      yield* hostedStoreOrUnavailable(bootFailed(agent, BOOT_FAILURE.MACHINE_UNAVAILABLE, attempt));
+
+      return;
+    }
+
+    yield* claimedFor(agent, boot.sessionId);
+    yield* machineCameUp(agent, boot.up, attempt, sessionsFor);
+  });
+
+/**
+ * Whether a Start's machine waits for its workspace's drive: a cloud agent
+ * in a repository, not forked from another's own drive, in a function that
+ * fills drives, whose workspace's drive does not hold its repository yet.
+ * Note that only the agent's own repository counts: its extra repositories
+ * are cloned at its open as they always were.
+ */
+const waitsForDrive = (agent: Agent) =>
+  Effect.gen(function* () {
+    if (!hasRepository(agent) || (agent.machine ?? AGENT_MACHINE.VERCEL) !== AGENT_MACHINE.VERCEL) {
+      return false;
+    }
+
+    if (agent.startedFrom?.sandbox !== undefined) return false;
+
+    if (Option.isNone(yield* Effect.serviceOption(WorkspaceDriveFills))) return false;
+    const held = yield* hostedStoreOrUnavailable(workspaceDriveRepositories(agent.organizationId));
+
+    return !held.includes(workspaceFolderOf(agent.repository));
+  });
+
+/**
  * The agent's first launch begun: its boot written with its first message
  * queued, then its machine booted through the Start's sessions. Answers how
  * the boot's start went, as an open answers, none where its runtime could
  * not be reached, so a Start refused for its plan, its key, or its Mac is
- * refused at once; the machine itself comes up past the answer.
+ * refused at once; the machine itself comes up past the answer, or, where
+ * its workspace's drive does not hold its repository yet, once the drive's
+ * build is done (`builtBootResumed`).
  */
 export const startBoot = Effect.fn("web/startBoot")(function* (
   sessions: AgentSessions,
@@ -154,6 +204,17 @@ export const startBoot = Effect.fn("web/startBoot")(function* (
 
   if (boot === undefined || boot.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) return boot;
   yield* claimedFor(agent, boot.sessionId);
+
+  if (yield* waitsForDrive(agent)) {
+    const building = yield* hostedStoreOrUnavailable(
+      agentBootBuilding(agent.id, yield* DateTime.nowAsDate, FIRST_ATTEMPT),
+    );
+
+    if (Option.isSome(building)) yield* workspaceDriveBuildPublished(agent.organizationId);
+
+    return { outcome: boot.outcome, sessionId: boot.sessionId } as const;
+  }
+
   // Note that the first message goes through the very sessions that booted its machine.
   yield* machineCameUp(agent, boot.up, FIRST_ATTEMPT, () => Effect.succeed(sessions));
 
@@ -176,15 +237,27 @@ export const retryBoot = Effect.fn("web/retryBoot")(function* (userId: string, a
   );
 
   if (Option.isNone(rebooted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-  const { attempt } = rebooted.value;
-  const boot = yield* booted(yield* routedSessions(agent.userId), agent);
+  yield* machineBootedUnder(agent, rebooted.value.attempt, routedSessions);
+});
 
-  if (boot === undefined || boot.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) {
-    yield* hostedStoreOrUnavailable(bootFailed(agent, BOOT_FAILURE.MACHINE_UNAVAILABLE, attempt));
+/**
+ * A boot that waited on its workspace's drive moved on once the build is
+ * done (`agentBootBuilt`), and its machine booted as Retry boots one, under
+ * the attempt the boot was building under. Nothing where the boot no longer
+ * stands building under it: the sweep failed it meanwhile, or another
+ * delivery already moved it. The machine opens from a fork of the drive
+ * where the drive now holds its repository, and from the image with a clone
+ * where it does not, as any open does.
+ */
+export const builtBootResumed = Effect.fn("web/builtBootResumed")(function* (
+  agent: Agent,
+  attempt: number,
+  sessionsFor: QueueSessions = routedSessions,
+) {
+  const moved = yield* hostedStoreOrUnavailable(
+    agentBootBuilt(agent.id, yield* DateTime.nowAsDate, attempt),
+  );
 
-    return;
-  }
-
-  yield* claimedFor(agent, boot.sessionId);
-  yield* machineCameUp(agent, boot.up, attempt, routedSessions);
+  if (Option.isNone(moved)) return;
+  yield* machineBootedUnder(agent, attempt, sessionsFor);
 });

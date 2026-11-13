@@ -63,6 +63,8 @@ export const SETTING_SECTION = {
   PRIVACY: "privacy",
   /** Whether the app opens as this Mac starts, a group of its own on This Mac, under its own rows. */
   STARTUP: "startup",
+  /** The voice a call speaks with, a card of its own on Agents under the harnesses' cards, drawn while the Voice experiment is on. */
+  VOICE: "voice",
   /** The microphone dictation listens on, a group of its own on This Mac, under the permission that lets the app listen. */
   MICROPHONE: "microphone",
   /** How an agent's message box sends while its turn runs, and who authors its commits, a group of its own on Preferences, under General. */
@@ -137,6 +139,10 @@ export interface SettingOption {
   label: string;
   /** What the option does, said under its name; none where its name says it. */
   hint?: string | undefined;
+  /** The heading it stands under where the set is drawn in groups, such as a voice's language. */
+  group?: string | undefined;
+  /** A short word of what it is, said after its name, such as how a voice presents. */
+  tag?: string | undefined;
 }
 
 /**

@@ -5,7 +5,8 @@
  * the box runs itself rather than sending as words (`/model` changes the
  * model, `/clear` and its alias `/new` start the agent's harness on a fresh
  * session), or `/compact`, which goes as a message the service hands its
- * harness as a compaction; or one of the harness's own, which the service
+ * harness as a compaction, or `/goal`, which goes as a message the service
+ * hands its harness as its goal command; or one of the harness's own, which the service
  * hands it bare (`coder-host/harness-commands.ts`). A `/name` anywhere but
  * at the message's start is words, and so is a path (`/tmp/build.log`),
  * whose name is followed by another `/` rather than a space or the end.
@@ -17,9 +18,17 @@ export const SLASH_COMMAND = {
   COMPACT: "compact",
   CLEAR: "clear",
   NEW: "new",
+  GOAL: "goal",
 } as const;
 
 export type SlashCommand = (typeof SLASH_COMMAND)[keyof typeof SLASH_COMMAND];
+
+/** The lines that change an agent's goal from its row: clear it, which both harnesses' `/goal` takes, and pause or resume it, which Codex's alone does. */
+export const GOAL_LINE = {
+  CLEAR: "/goal clear",
+  PAUSE: "/goal pause",
+  RESUME: "/goal resume",
+} as const;
 
 /** A message's leading command: its name, without the slash, and the words after it. */
 export interface LeadingCommand {

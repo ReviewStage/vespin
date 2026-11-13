@@ -62,6 +62,12 @@
     min-width: 0;
   }
 
+  /* An intro at the content's head stands a section's gap above what it
+     introduces (reveal.tsx draws it in a box of its own). */
+  .ui-collection-page-content > .ui-reveal {
+    margin-block-end: var(--ui-section-gap);
+  }
+
   /* A list reaches past the column by its rows' inset, so a row's words
      open on the title's edge and its fill runs out either side. */
   .ui-collection-page-content > .ui-list,

@@ -31,6 +31,7 @@ import { Schema } from "effect";
 import { AGENT_ATTACHMENT_TYPE, AGENT_BOUNDS } from "./agent-wire.js";
 import { BROWSER_SHOWN_MAX_CHARS, isBrowserAddress } from "./browser-acts.js";
 import { CONVERSATION_MEDIA_TYPE, PICTURE_OMISSION } from "./conversation-picture-wire.js";
+import { RECORDING_LIMITS, recordingCaptionSchema } from "./recording-wire.js";
 
 /** The actions an agent takes on a browser's tabs. */
 export const BROWSER_AGENT_ACTION = {
@@ -90,11 +91,11 @@ export const BROWSER_AGENT_LIMITS = {
   /** The furthest a click lands from the page's corner, in CSS pixels. */
   POINT_MAX_PIXELS: 100_000,
   /** The longest a recording runs before it stops on its own, in seconds. */
-  RECORDING_MAX_SECONDS: 120,
+  RECORDING_MAX_SECONDS: RECORDING_LIMITS.MAX_SECONDS,
   /** How long `stop_recording` may take, since the video is encoded as it stops. */
   RECORDING_STOP_TIMEOUT_MS: 90_000,
   /** The longest caption a recording is kept with. */
-  RECORDING_CAPTION_MAX_CHARS: 300,
+  RECORDING_CAPTION_MAX_CHARS: RECORDING_LIMITS.CAPTION_MAX_CHARS,
 } as const;
 
 /**
@@ -390,16 +391,7 @@ const recordAction = Schema.Struct({ action: Schema.Literal(BROWSER_AGENT_ACTION
 
 const stopRecordingAction = Schema.Struct({
   action: Schema.Literal(BROWSER_AGENT_ACTION.STOP_RECORDING),
-  caption: Schema.optionalKey(
-    describeWire(
-      Schema.String.check(
-        Schema.isNonEmpty(),
-        Schema.isMaxLength(BROWSER_AGENT_LIMITS.RECORDING_CAPTION_MAX_CHARS),
-        Schema.isPattern(/^[^\r\n]*$/u),
-      ),
-      "What the recording shows, in one line, which the transcript shows under it.",
-    ),
-  ),
+  caption: Schema.optionalKey(recordingCaptionSchema),
 });
 
 /** One action on a browser's tabs. */

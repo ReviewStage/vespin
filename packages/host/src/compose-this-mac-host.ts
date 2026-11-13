@@ -206,7 +206,7 @@ export interface ThisMacHostDependencies {
   keepAwake: Effect.Effect<KeepAwake>;
   /** A pulse each time the settings are told again, which a sign-in, a sign-out, and a setting changed each do, subscribed as it is yielded. */
   settingsTold: Effect.Effect<Stream.Stream<void>, never, Scope.Scope>;
-  /** The id this install is to the account given (`this-mac-device.ts`), which a Mac enrolled for the first time enrolls under, so its commands and its host are one device; none mints one. */
+  /** The id this install is to the account given (`this-machine-device.ts`), which a Mac enrolled for the first time enrolls under, so its commands and its host are one device; none mints one. */
   deviceIdFor?: (userId: string) => Effect.Effect<string>;
   /** Whether the service lists the device given among the account's hosts; none where it could not answer. */
   hostListed: (

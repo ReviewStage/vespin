@@ -38,7 +38,7 @@ export {
   selectInbox,
   selectInboxTasks,
   selectInboxWaiting,
-  selectMacCommands,
+  selectMachineCommands,
   selectMirrors,
   selectNetwork,
   selectNotifications,

@@ -525,6 +525,7 @@ function fakeService() {
           Effect.sync(() => removeAnswer),
         ),
       ),
+    machineAllowedApps: () => Effect.succeed({ machines: [] }),
     readHostPairing: () => Effect.succeed({ failure: "unanswered" }),
     approveHostPairing: () => Effect.succeed({ failure: "unanswered" }),
     denyHostPairing: () => Effect.succeed({ failure: "unanswered" }),

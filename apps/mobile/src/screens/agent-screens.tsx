@@ -883,7 +883,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.SIDEBAR },
+          contentStyle: { backgroundColor: colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="right">
@@ -1010,7 +1010,7 @@ export function AgentPortsScreen({ agentId }: { readonly agentId: string }) {
           headerTintColor: colors.TEXT,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
-          contentStyle: { backgroundColor: colors.SIDEBAR },
+          contentStyle: { backgroundColor: colors.GROUPED },
         }}
       />
       <Stack.Toolbar placement="right">

@@ -410,6 +410,11 @@ const devicePresenceAnswerViewSchema = answerView(hostsContract.presence);
 
 export type DevicePresenceAnswerView = typeof devicePresenceAnswerViewSchema.Type;
 
+/** The apps the reader's own machines always allow, as the window hears them read, or why not. */
+export const machineAllowedAppsAnswerViewSchema = answerView(hostsContract.allowedApps);
+
+export type MachineAllowedAppsAnswerView = typeof machineAllowedAppsAnswerViewSchema.Type;
+
 /** A host removed, as the window hears it: done, or why not. */
 export const hostDoneAnswerViewSchema = answerView(hostsContract.remove);
 

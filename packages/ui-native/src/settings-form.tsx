@@ -30,6 +30,7 @@ import {
   scrollContentBackground,
   scrollDismissesKeyboard,
   tint,
+  useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
@@ -108,7 +109,7 @@ function PressedRow({
         buttonStyle("plain"),
         accessibilityLabel(label),
         ...spokenValue(...(value ?? [])),
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
       ]}
     >
@@ -126,15 +127,29 @@ function PressedRow({
  * once, as a composing sheet's words otherwise keep it standing over the
  * rows below them, with no key of the keyboard's own that lowers it.
  */
-export function SettingsForm({ children }: { readonly children: ReactNode }) {
+export function SettingsForm({
+  onContentHeight,
+  children,
+}: {
+  /** Told the height its rows stand in, as they lay out, for a popover that fits it; none where the form fills its place. */
+  readonly onContentHeight?: ((height: number) => void) | undefined;
+  readonly children: ReactNode;
+}) {
   const colors = useColors();
+
+  const measured = useScrollGeometryChange(
+    onContentHeight === undefined
+      ? undefined
+      : (geometry) => onContentHeight(geometry.contentHeight),
+  );
 
   return (
     <Form
       modifiers={[
+        ...(measured === null ? [] : [measured]),
         scrollContentBackground("hidden"),
         scrollDismissesKeyboard("immediately"),
-        background(colors.SIDEBAR),
+        background(colors.GROUPED),
         tint(colors.TEXT),
         font({ textStyle: TYPE_ROLE.ROW_TITLE }),
       ]}
@@ -164,7 +179,7 @@ function HeadRow({ face, name, line, detail, onPress }: HeadRowProps) {
     <HStack
       spacing={SPACE.ROW + 2}
       modifiers={[
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
       ]}
     >
@@ -318,7 +333,7 @@ export function ToggleRow({ label, detail, on, disabled: off = false, onChange }
     <Toggle
       isOn={on}
       onIsOnChange={onChange}
-      modifiers={[tint(colors.ACCENT), disabled(off), listRowBackground(colors.SURFACE)]}
+      modifiers={[tint(colors.ACCENT), disabled(off), listRowBackground(colors.RAISED)]}
     >
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
       {detail === undefined ? null : (
@@ -337,7 +352,7 @@ export function ValueRow({ label, value }: { readonly label: string; readonly va
   const colors = useColors();
 
   return (
-    <LabeledContent label={label} modifiers={[listRowBackground(colors.SURFACE)]}>
+    <LabeledContent label={label} modifiers={[listRowBackground(colors.RAISED)]}>
       <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{value}</Text>
     </LabeledContent>
   );
@@ -357,7 +372,7 @@ export function CodeRow({ code, testId }: { readonly code: string; readonly test
       modifiers={[
         font({ textStyle: TYPE_ROLE.PAGE_HEADING, design: "monospaced", weight: "semibold" }),
         foregroundStyle(colors.TEXT),
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         accessibilityLabel(spelled),
         ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
       ]}
@@ -405,7 +420,7 @@ export function ActionRow({
         {...actContent(label, symbol)}
         role={role}
         onPress={onPress}
-        modifiers={[accessibilityLabel(heard), listRowBackground(colors.SURFACE), disabled(off)]}
+        modifiers={[accessibilityLabel(heard), listRowBackground(colors.RAISED), disabled(off)]}
       />
     );
   }
@@ -415,7 +430,7 @@ export function ActionRow({
       role={role}
       onPress={onPress}
       modifiers={[
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         disabled(off),
         accessibilityLabel(heard),
         accessibilityValue(detail),
@@ -478,7 +493,7 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
             buttonStyle("plain"),
             accessibilityLabel(option.label),
             ...(option.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
-            listRowBackground(colors.SURFACE),
+            listRowBackground(colors.RAISED),
           ]}
         >
           <HStack modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}>
@@ -536,7 +551,7 @@ export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRows
             ...(line === undefined ? [] : [accessibilityValue(line)]),
             ...(workspace.id === picked ? [accessibilityAddTraits(["isSelected"])] : []),
             disabled(off),
-            listRowBackground(colors.SURFACE),
+            listRowBackground(colors.RAISED),
           ]}
         >
           <HStack
@@ -611,7 +626,7 @@ export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
             accessibilityLabel(name),
             ...(line === undefined ? [] : [accessibilityValue(line)]),
             disabled(off),
-            listRowBackground(colors.SURFACE),
+            listRowBackground(colors.RAISED),
           ]}
         >
           <HStack
@@ -696,14 +711,14 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
   );
 
   if (acts.length === 0) {
-    return <VStack modifiers={[listRowBackground(colors.SURFACE)]}>{face}</VStack>;
+    return <VStack modifiers={[listRowBackground(colors.RAISED)]}>{face}</VStack>;
   }
 
   return (
     <Menu
       label={face}
       modifiers={[
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         accessibilityLabel(badge === undefined ? name : `${name}, ${badge}`),
         ...spokenValue(email, role),
       ]}
@@ -739,7 +754,7 @@ export function FollowerRow({ name, picture, role, machines, heard }: FollowerRo
     <HStack
       spacing={SPACE.ROW}
       modifiers={[
-        listRowBackground(colors.SURFACE),
+        listRowBackground(colors.RAISED),
         accessibilityElement("ignore"),
         accessibilityLabel(name),
         ...spokenValue(role, heard),
@@ -817,11 +832,11 @@ export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
   const heard = [accessibilityLabel(label), ...spokenValue(detail, value)];
 
   if (acts.length === 0) {
-    return <VStack modifiers={[listRowBackground(colors.SURFACE), ...heard]}>{face}</VStack>;
+    return <VStack modifiers={[listRowBackground(colors.RAISED), ...heard]}>{face}</VStack>;
   }
 
   return (
-    <Menu label={face} modifiers={[listRowBackground(colors.SURFACE), ...heard]}>
+    <Menu label={face} modifiers={[listRowBackground(colors.RAISED), ...heard]}>
       <RowActs acts={acts} />
     </Menu>
   );
@@ -913,7 +928,7 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
     );
 
   const placed = [
-    listRowBackground(colors.SURFACE),
+    listRowBackground(colors.RAISED),
     accessibilityElement("combine"),
     accessibilityLabel(words),
     accessibilityValue(detail === undefined ? line : `${detail}, ${line}`),
@@ -1023,7 +1038,7 @@ export function ConnectionRow({ name, lines, act, menu = [] }: ConnectionRowProp
     </HStack>
   );
 
-  const placed = [listRowBackground(colors.SURFACE), ...spokenValue(said)];
+  const placed = [listRowBackground(colors.RAISED), ...spokenValue(said)];
 
   if (menu.length === 0) return <HStack modifiers={placed}>{drawn}</HStack>;
 

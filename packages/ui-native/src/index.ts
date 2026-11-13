@@ -116,6 +116,8 @@ export {
   WorkingMark,
 } from "./marks.js";
 
+export { type MediaReadSeams, type MediaReads, mediaReads } from "./media-reads-model.js";
+
 export { monogramOf } from "./monogram.js";
 
 export { type HintOption, HintPickRows, RenameAsk, SwitchRow } from "./option-rows.js";
@@ -195,7 +197,11 @@ export {
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  KeptColumns,
+  type KeptView,
+  SplitOverTabs,
   SplitView,
+  UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 
 export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";

@@ -182,6 +182,8 @@
   --shadow-selected-edge: inset 0 0 0 1px var(--ui-color-border-selected);
   /* A row's ring while its menu stands open (`--ui-color-border-menu-open`). */
   --shadow-menu-open-edge: inset 0 0 0 1px var(--ui-color-border-menu-open);
+  /* A card's hairline while its only row's menu stands open, in that ring's ink. */
+  --color-border-menu-open: var(--ui-color-border-menu-open);
   --ease-plain: var(--ui-motion-exit);
   /* A field turning wrong shakes once; an arriving part fades in, a clear
      grows in and shrinks out, an error drops into its line, and a count

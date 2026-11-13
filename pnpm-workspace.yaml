@@ -141,6 +141,18 @@ patchedDependencies:
 # over. Delete it when `@sentry/electron` moves to a browser SDK that has it.
   "@sentry/browser@11.8.0": patches/@sentry__browser@11.8.0.patch
 #
+# `expo-notifications` 58.1.8's `getPermissionsAsync` runs on Expo's one shared
+# async queue (`expo.modules.AsyncFunctionQueue`, which every module's
+# synchronous `AsyncFunction` runs on) and blocks it on a semaphore until
+# usernotificationsd answers `getNotificationSettings`. On a cold-booted
+# simulator that answer never came, so every other module's async call queued
+# behind it for good, the iOS app's cached recording writes among them, and
+# the agent page's recording never played. The patch runs the module's two
+# permission calls on a serial queue of their own, so a late answer holds the
+# permission read alone. Delete it when a release stops blocking the shared
+# queue there.
+  expo-notifications@58.1.8: patches/expo-notifications@58.1.8.patch
+#
 # `expo-symbols` 58.0.4's `SymbolView` reads its name as an SF Symbol alone
 # (`UIImage(systemName:)`), so a custom symbol the app's asset catalog holds,
 # such as the Lucide glyphs `@repo/ui-native` draws, stays blank. The patch
@@ -163,6 +175,15 @@ patchedDependencies:
 # already do. Delete the first when a react-native-screens release carries
 # #4851, and the second when one reads a bar item's symbol from the catalog.
   react-native-screens@4.30.1: patches/react-native-screens@4.30.1.patch
+#
+# `@expo/ui` 58.0.27's `Image` colors a symbol only through a `foregroundStyle`
+# modifier, which a system menu drops, drawing every item's icon as a template
+# in the menu's ink; so the Status menu's marks lost the status tones the
+# panel's menu draws them in. The patch adds `originalColor`, which tints the
+# symbol's own image (`withTintColor`, rendering kept original), as Mail's Flag
+# menu hands its colored flags to the menu. Delete it when an `@expo/ui`
+# release offers a tinted image a menu keeps.
+  "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
 #
 # `@sentry/react-native` 8.28.0's native start (`RNSentrySDK.start`, which the
 # iOS app's AppDelegate calls first at launch, `useNativeInit`) reads the

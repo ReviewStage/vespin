@@ -197,9 +197,6 @@ const mcpEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpEndpoint")(function*
 
   if (Result.isFailure(admitted)) return HttpServerResponse.raw(admitted.failure);
   const member: AdmittedMemberValues = { ...admitted.success, baseURL: auth.baseURL };
-  // Note that the handler is built per request, because the tools run on
-  // the services this request's fiber holds, which the SDK's factory is
-  // handed nothing of; a handler holds nothing between requests besides.
   const renamed = yield* renamedToolAnswer(request);
 
   if (Option.isSome(renamed)) return HttpServerResponse.raw(renamed.value);
@@ -212,6 +209,9 @@ const mcpEndpoint = /* @__PURE__ */ Effect.fn("web/memberMcpEndpoint")(function*
 
   const services = yield* Effect.context<MemberMcpRequestServices>();
 
+  // Note that the handler is built per request, because the tools run on
+  // the services this request's fiber holds, which the SDK's factory is
+  // handed nothing of; a handler holds nothing between requests besides.
   const handler = createMcpHandler(() =>
     memberMcpServer(services, agentSandbox, workspaces, member, experimentsOn),
   );

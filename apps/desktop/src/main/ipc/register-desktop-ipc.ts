@@ -167,7 +167,9 @@ export function registerDesktopIpc(services: DesktopServices): void {
     }),
     // Note that `open -b` brings a running app forward as the Dock does, at the window it was last in.
     ...macAppProcedures({
-      showApp: (bundleId) => execFile("/usr/bin/open", ["-b", bundleId], () => undefined),
+      showApp: async (bundleId) => {
+        await promisify(execFile)("/usr/bin/open", ["-b", bundleId]);
+      },
     }),
     ...macTerminalProcedures({
       home: os.homedir(),

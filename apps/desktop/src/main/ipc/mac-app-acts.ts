@@ -6,13 +6,14 @@
 
 import { actPortFor, type PlatformActProcedures, refuseUnlessPanel } from "@repo/host/act-port";
 import { MAC_APP_ACT_KIND } from "@repo/host/contract";
+import { Effect } from "effect";
 import type { WebContents } from "electron";
 
 type MacAppActKind = (typeof MAC_APP_ACT_KIND)[keyof typeof MAC_APP_ACT_KIND];
 
 export interface MacAppActsDependencies {
-  /** Brings the app with a bundle id to the front, as opening it from the Dock does; the host's own, or a test's. */
-  showApp: (bundleId: string) => void;
+  /** Brings the app with a bundle id to the front, as opening it from the Dock does, failing where it could not; the host's own, or a test's. */
+  showApp: (bundleId: string) => Promise<void>;
 }
 
 const macAppPort = actPortFor<WebContents>();
@@ -29,7 +30,11 @@ export function macAppProcedures(
       errors,
     }) {
       yield* refuseUnlessPanel(context.actor, () => errors.REFUSED());
-      showApp(input.bundleId);
+      // Note that an app no longer installed fails to open, which the press says rather than passing it over.
+      yield* Effect.tryPromise({
+        try: () => showApp(input.bundleId),
+        catch: () => errors.REFUSED(),
+      });
     }),
   };
 }

@@ -27,6 +27,9 @@ import {
   CompactedNoticeSchema,
   type ConnectionLostNotice,
   ConnectionLostNoticeSchema,
+  GOAL_PART,
+  type GoalNotice,
+  GoalNoticeSchema,
   SESSION_CLEARED_PART,
   USAGE_LIMIT_PART,
   UsageLimitAnswerSchema,
@@ -52,6 +55,7 @@ import { drawnCall } from "./native-tool-calls.js";
 import { formatBytes } from "./number-format.js";
 import { TOOL_STATE, type ToolState } from "./tool-call-block.js";
 import {
+  computerAppBundleId,
   computerAppIcon,
   computerAppName,
   remoteCallOf,
@@ -76,6 +80,8 @@ export const AGENT_PART = {
   COMPACTED: COMPACTED_PART,
   /** Where the agent's harness was started on a fresh session (`/clear`). */
   SESSION_CLEARED: SESSION_CLEARED_PART,
+  /** Where the agent's goal moved: set, judged, paused, resumed, or ended. */
+  GOAL: GOAL_PART,
   TEXT: "text",
   REASONING: "reasoning",
   TOOL: "tool",
@@ -126,6 +132,7 @@ export type AgentPart =
   | { readonly kind: typeof AGENT_PART.CONNECTION_LOST; readonly notice: ConnectionLostNotice }
   | { readonly kind: typeof AGENT_PART.COMPACTED; readonly notice: CompactedNotice }
   | { readonly kind: typeof AGENT_PART.SESSION_CLEARED }
+  | { readonly kind: typeof AGENT_PART.GOAL; readonly notice: GoalNotice }
   | { readonly kind: typeof AGENT_PART.TEXT; readonly text: string }
   | {
       readonly kind: typeof AGENT_PART.REASONING;
@@ -196,6 +203,14 @@ export function agentPart(part: WireValue): AgentPart {
   }
 
   if (part.type === AGENT_PART.SESSION_CLEARED) return { kind: AGENT_PART.SESSION_CLEARED };
+
+  if (part.type === AGENT_PART.GOAL) {
+    const notice = Schema.decodeUnknownOption(GoalNoticeSchema)(part.data);
+
+    return Option.isSome(notice)
+      ? { kind: AGENT_PART.GOAL, notice: notice.value }
+      : { kind: AGENT_PART.OTHER };
+  }
 
   if (part.type === AGENT_PART.STEP_START) return { kind: AGENT_PART.STEP_START };
 
@@ -296,6 +311,37 @@ export function computerIconsByCall(
   }
 
   return byCall;
+}
+
+/** An app a `computer` call used, as its answer named it: its name, and the icon a call kept for it, by the picture's id, where one did. */
+export interface ComputerAppKept {
+  readonly name: string;
+  readonly icon: string | undefined;
+}
+
+/**
+ * The apps the conversation's `computer` calls used, by the bundle id the
+ * Mac answered each with: the name the newest answer gave it, and the icon
+ * the newest call that kept one kept. A call the Mac answered no bundle id
+ * for, as an app with none, or that it refused, is left out.
+ */
+export function computerAppsKept(
+  messages: readonly AgentTranscriptMessage[],
+): ReadonlyMap<string, ComputerAppKept> {
+  const apps = new Map<string, ComputerAppKept>();
+
+  for (const message of messages) {
+    for (const part of agentParts(message)) {
+      if (part.kind !== AGENT_PART.TOOL || part.tool !== AGENT_TOOL.COMPUTER) continue;
+      const bundleId = computerAppBundleId(part.output);
+      const name = computerAppName(undefined, part.output);
+
+      if (bundleId === undefined || name === undefined) continue;
+      apps.set(bundleId, { name, icon: computerAppIcon(part.output) ?? apps.get(bundleId)?.icon });
+    }
+  }
+
+  return apps;
 }
 
 /**
@@ -413,7 +459,8 @@ const AGENT_READING: RowReading<AgentPart> = {
       part.kind === AGENT_PART.USAGE_LIMIT ||
       part.kind === AGENT_PART.CONNECTION_LOST ||
       part.kind === AGENT_PART.COMPACTED ||
-      part.kind === AGENT_PART.SESSION_CLEARED
+      part.kind === AGENT_PART.SESSION_CLEARED ||
+      part.kind === AGENT_PART.GOAL
     ) {
       return ROW_PART.NOTICE;
     }
@@ -542,28 +589,12 @@ function drawnParts(
   message: AgentTranscriptMessage,
   arrived: readonly AgentTranscriptMessage[] = [],
 ): readonly AgentPart[] {
-  const parts = agentParts(message);
+  const parts = arrivedParts(message, arrived);
   const ran = runConnectionCalls(parts);
   const drawn: AgentPart[] = [];
-  const waiting = arrived.toSorted((a, b) => afterStepOf(a) - afterStepOf(b));
-  let begun = 0;
-
-  const arrive = (steps: number) => {
-    while (waiting[0] !== undefined && afterStepOf(waiting[0]) <= steps) {
-      const line = waiting.shift();
-
-      if (line !== undefined) drawn.push({ kind: AGENT_PART.ARRIVED, line });
-    }
-  };
 
   for (const part of parts) {
-    if (part.kind === AGENT_PART.STEP_START) {
-      arrive(begun);
-      begun += 1;
-      continue;
-    }
-
-    if (part.kind === AGENT_PART.OTHER) continue;
+    if (part.kind === AGENT_PART.STEP_START || part.kind === AGENT_PART.OTHER) continue;
 
     if (
       part.kind === AGENT_PART.TOOL &&
@@ -589,14 +620,46 @@ function drawnParts(
     }
   }
 
-  arrive(Number.POSITIVE_INFINITY);
-
   return drawn;
 }
 
 /** The steps of its turn a line arrived after; none for a line no turn took in under way. */
 function afterStepOf(line: AgentTranscriptMessage): number {
   return line.arrivedIn?.afterStep ?? 0;
+}
+
+/** A message's parts with each line that reached its turn while it ran (`arrived`) placed among them as an ARRIVED part: ahead of the first step after the steps it arrived after, or at the end where that step has not begun. */
+export function arrivedParts(
+  message: AgentTranscriptMessage,
+  arrived: readonly AgentTranscriptMessage[] = [],
+): readonly AgentPart[] {
+  const parts = agentParts(message);
+
+  if (arrived.length === 0) return parts;
+  const placed: AgentPart[] = [];
+  const waiting = arrived.toSorted((a, b) => afterStepOf(a) - afterStepOf(b));
+  let begun = 0;
+
+  const arrive = (steps: number) => {
+    while (waiting[0] !== undefined && afterStepOf(waiting[0]) <= steps) {
+      const line = waiting.shift();
+
+      if (line !== undefined) placed.push({ kind: AGENT_PART.ARRIVED, line });
+    }
+  };
+
+  for (const part of parts) {
+    if (part.kind === AGENT_PART.STEP_START) {
+      arrive(begun);
+      begun += 1;
+    }
+
+    placed.push(part);
+  }
+
+  arrive(Number.POSITIVE_INFINITY);
+
+  return placed;
 }
 
 /** How a turn ended where it ended with `end_turn`: the summary its developer reads as its reply, and the follow-ups it offered, at most three. */

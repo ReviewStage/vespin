@@ -54,6 +54,8 @@ export * from "./github-install-intent.js";
 
 export * from "./github-installation.js";
 
+export * from "./github-mention.js";
+
 export * from "./github-personal-token.js";
 
 export * from "./github-rate-hold.js";
@@ -80,7 +82,7 @@ export * from "./integration-installation.js";
 
 export * from "./live-activity.js";
 
-export * from "./mac-command.js";
+export * from "./machine-command.js";
 
 export * from "./memory.js";
 
@@ -129,6 +131,8 @@ export * from "./task-section.js";
 export * from "./usage.js";
 
 export * from "./voice-call.js";
+
+export * from "./workspace-drive-repository.js";
 
 export * from "./workspace-environment-variable.js";
 

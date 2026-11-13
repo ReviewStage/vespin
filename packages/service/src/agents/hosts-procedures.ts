@@ -12,7 +12,10 @@
  * a phone as in the desktop. A host removed is refused at once on its
  * secret (`auth/device-secret.ts`), its box cleans itself up as it hears
  * so, and its agents' running turns are settled lost with it; a host may
- * leave on its own secret the same way (`removeAccountHost`). Each host is
+ * leave on its own secret the same way (`removeAccountHost`). The apps each
+ * of the account's machines always allow are read for an agent's `@` where
+ * it is typed off that machine, and only while the reader has Computer use
+ * on. Each host is
  * listed with whether its daemon is below the floor, where its setup
  * stands, where its update to a newer release stands, whether its program
  * has called in since it joined, and, for a Mac, the user it runs as, and
@@ -34,7 +37,8 @@
 
 import { randomUUID } from "node:crypto";
 import { runningTurnIds } from "@repo/database/models/abandoned-turns";
-import { devicesSeenSince } from "@repo/database/models/device-store";
+import { accountExperimentOn } from "@repo/database/models/account-store";
+import { allowedAppsOf, devicesSeenSince } from "@repo/database/models/device-store";
 import {
   approveHostPairing,
   denyHostPairing,
@@ -44,6 +48,7 @@ import {
 } from "@repo/database/models/host-pairing-store";
 import { hostAgentConversations, hostsOf, removeHost } from "@repo/database/models/host-store";
 import { HOST_WIRE, hostUserCodeOf, hostVersionMeets } from "@repo/features/host-wire";
+import { EXPERIMENT } from "@repo/settings";
 import { Clock, Effect } from "effect";
 import { HOST_VERSION } from "../auth/device-secret.js";
 import {
@@ -185,6 +190,16 @@ export function hostsProcedures(seams: HostsProcedureSeams) {
           ageMs: Math.max(0, now - row.lastSeenAt.getTime()),
         })),
       };
+    }),
+    // Note that a reader with Computer use off is answered no machine, since nothing of it stands for them.
+    allowedApps: hosts.allowedApps.effect(function* ({ context }) {
+      const on = yield* hostedStoreOrUnavailable(
+        accountExperimentOn(context.userId, EXPERIMENT.COMPUTER_USE),
+      );
+
+      if (!on) return { machines: [] };
+
+      return { machines: yield* hostedStoreOrUnavailable(allowedAppsOf(context.userId)) };
     }),
     remove: hosts.remove.effect(function* ({ context, input }) {
       return yield* removedOrNotFound(yield* removeAccountHost(context.userId, input.id));
