@@ -232,7 +232,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   (`pull-request-look.ts`); and its acts in the bar, an act that
   asks first asking in `ConfirmAsk`, but for the merge's press in a regular
   window, whose bar folds it into More: it stands under the checks as a
-  large button (`MergeActRow`), as GitHub's own app draws Merge.
+  large button as wide as its words (`MergeActRow`), as GitHub's own app
+  draws Merge, and as a split button where the repository merges more than
+  one way, its chevron choosing the way as the panel's merge box does.
 - **The tab bar** is `NativeTabs`: icons alone in a compact window, through
   its `Label`'s own `hidden`, the Inbox count in copper, and the round + for
   New task; a regular window's bar keeps its labels. A window wide enough
