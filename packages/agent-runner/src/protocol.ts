@@ -719,7 +719,10 @@ const UuidSchema = Schema.String.check(
  * compacts its thread (`thread/compact/start`), which takes no words, once no
  * turn of its own runs, and Claude Code, whose CLI runs the message's bare
  * `/compact` as its own command, needs no mark. A runner from before the mark
- * hands the message on as words.
+ * hands the message on as words. `goal` asks, in the same way, for the
+ * message's `/goal` to be applied to Codex's thread goal (`thread/goal/set`
+ * or `thread/goal/clear`, `codex-goals.ts`) rather than read as words;
+ * Claude Code runs a bare `/goal` itself and needs no mark.
  */
 const MessageLineSchema = Schema.Struct({
   type: Schema.Literal(INPUT_LINE.MESSAGE),
@@ -727,6 +730,7 @@ const MessageLineSchema = Schema.Struct({
   content: Schema.Array(ContentBlockSchema),
   resent: Schema.optionalKey(Schema.Boolean),
   compact: Schema.optionalKey(Schema.Boolean),
+  goal: Schema.optionalKey(Schema.Boolean),
 });
 
 /**

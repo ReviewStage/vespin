@@ -1,7 +1,7 @@
 import { literalsReadingUnknown } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import { AGENT_PERMISSION_MODE, agentPendingApprovalSchema } from "./agent-approval-wire.js";
-import { BOOT_PHASE } from "./agent-boot.js";
+import { WIRE_BOOT_PHASES } from "./agent-boot.js";
 import { agentSandboxSchema } from "./agent-sandbox-wire.js";
 import { agentStatusAt, type StatusTurn, statusClockEdge, turnStoppable } from "./agent-status.js";
 import {
@@ -124,6 +124,9 @@ const taskLiveRowSchema = EffectSchema.Struct({
   mode: plan.mode,
   /** Whether it waits on an open task the reader reaches; absent from a service before blocks. */
   blocked: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** The tasks it waits on and that wait on it, each one the reader reaches, the earliest added first; absent from a service before they were carried. */
+  blockedBy: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
+  blocks: EffectSchema.optionalKey(EffectSchema.Array(EffectSchema.String)),
   /** Whether an automation's run made it for itself alone; absent from a service before it. */
   madeByRun: EffectSchema.optionalKey(EffectSchema.Boolean),
   /**
@@ -231,9 +234,9 @@ const agentLiveRowSchema = EffectSchema.Struct({
   sandboxStateAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   sandboxRunsUntil: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
   /** Where the agent's first launch stands while its boot record does (`agent-boot.ts`), which its status reads before its first turn; null for every other agent, and absent from a statement before it was carried. */
-  bootPhase: EffectSchema.optionalKey(
-    EffectSchema.NullOr(EffectSchema.Literals(Object.values(BOOT_PHASE))),
-  ),
+  bootPhase: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.Literals(WIRE_BOOT_PHASES))),
+  /** Whether that first launch waits on its workspace's drive being built, its phase said as starting meanwhile; null for every other agent, and absent from a statement before it was carried. */
+  building: EffectSchema.optionalKey(EffectSchema.NullOr(EffectSchema.Literal(true))),
 });
 
 /**
@@ -505,6 +508,8 @@ function taskSummaryOf(row: TaskLiveRow, agents: AgentGroup | undefined, now: nu
       : { parentTaskId: row.parentTaskId }),
     ...(row.mode === undefined ? undefined : { mode: row.mode }),
     ...(row.blocked === true ? { blocked: true } : undefined),
+    ...(row.blockedBy === undefined ? undefined : { blockedBy: row.blockedBy }),
+    ...(row.blocks === undefined ? undefined : { blocks: row.blocks }),
     ...(row.madeByRun === true ? { madeByRun: true } : undefined),
     ...followersOf(row),
     ...(agents === undefined ? undefined : { agents: agentsSummaryOf(agents, now) }),

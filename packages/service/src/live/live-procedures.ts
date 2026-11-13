@@ -44,8 +44,8 @@
  *
  * `GET /api/live/mac-commands?kinds=` answers the commands of those kinds
  * no Mac of the account has claimed, as one statement, for the Mac to claim
- * each by its id (`../agents/mac-commands-procedures.ts`), woken by a write
- * to any command of the account (`macCommandsLive`).
+ * each by its id (`../agents/machine-commands-procedures.ts`), woken by a write
+ * to any command of the account (`machineCommandsLive`).
  *
  * `GET /api/live/sidebar` answers the account's sidebar sections, the tasks
  * and agents in them, and its pinned repositories as four, woken by a write
@@ -204,7 +204,7 @@ import { hostsRead } from "./reads/hosts.js";
 import { inboxItemsRead } from "./reads/inbox-items.js";
 import { installedSkillsRead } from "./reads/installed-skills.js";
 import { integrationStatusesRead } from "./reads/integration-statuses.js";
-import { macCommandsRead } from "./reads/mac-commands.js";
+import { machineCommandsRead } from "./reads/machine-commands.js";
 import { agentPagesRead, taskPagesRead } from "./reads/pages.js";
 import { pullRequestChaptersRead } from "./reads/pull-request-chapters.js";
 import { agentInboxRead, taskInboxRead } from "./reads/scope-inbox.js";
@@ -917,7 +917,7 @@ export function liveProcedures(seams: LiveProcedureSeams) {
     taskComments: signedIn.taskComments.effect(answerBoundRead(taskCommentsRead)),
     taskBrowserTabs: signedIn.taskBrowserTabs.effect(answerBoundRead(taskBrowserTabsRead)),
     agentBrowserTabs: signedIn.agentBrowserTabs.effect(answerBoundRead(agentBrowserTabsRead)),
-    macCommands: signedIn.macCommands.effect(answerBoundRead(macCommandsRead)),
+    macCommands: signedIn.macCommands.effect(answerBoundRead(machineCommandsRead)),
     agentTranscript: signedIn.agentTranscript.effect(answerBoundRead(agentTranscriptRead)),
     taskInbox: signedIn.taskInbox.effect(answerBoundRead(taskInboxRead)),
     agentInbox: signedIn.agentInbox.effect(answerBoundRead(agentInboxRead)),

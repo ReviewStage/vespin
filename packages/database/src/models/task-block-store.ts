@@ -1,4 +1,8 @@
-import { TASK_SETTLED } from "@repo/features/task-wire";
+import {
+  TASK_BLOCK_RELATION,
+  TASK_SETTLED,
+  type TaskBlockRelation,
+} from "@repo/features/task-wire";
 import { and, asc, eq, exists, inArray, notInArray, or, type SQL, sql } from "drizzle-orm";
 import { Data, DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
@@ -246,6 +250,30 @@ export function taskBlockedFor(userId: string): SQL {
       .from(taskBlock)
       .where(and(eq(taskBlock.blockedTaskId, task.id), inArray(taskBlock.blockerTaskId, open))),
   );
+}
+
+/**
+ * The tasks the row a statement reads waits on (`BLOCKED_BY`) or that wait
+ * on it (`BLOCKS`), each one the account reaches, the earliest added first,
+ * as an array of ids, empty where there are none. As in `taskBlockedFor`,
+ * the reached tasks are read in a subquery of their own over `task`, so the
+ * block alone names the row the statement reads.
+ */
+export function taskBlockIdsFor(userId: string, side: TaskBlockRelation): SQL<string[]> {
+  const reached = queryBuilder.select({ id: task.id }).from(task).where(taskReachableBy(userId));
+
+  const [own, other] =
+    side === TASK_BLOCK_RELATION.BLOCKED_BY
+      ? [taskBlock.blockedTaskId, taskBlock.blockerTaskId]
+      : [taskBlock.blockerTaskId, taskBlock.blockedTaskId];
+
+  const ids = queryBuilder
+    .select({ id: other })
+    .from(taskBlock)
+    .where(and(eq(own, task.id), inArray(other, reached)))
+    .orderBy(asc(taskBlock.createdAt), asc(other));
+
+  return sql<string[]>`array(${ids})`;
 }
 
 /**

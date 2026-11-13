@@ -10,6 +10,8 @@ import { user } from "../../schemas/auth.js";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "../../storage-vocabulary.js";
 import { getTestDB, startTask } from "../../testing/index.js";
 import {
+  agentBootBuilding,
+  agentBootBuilt,
   agentBootHandedOff,
   agentBootOf,
   agentBootRunnerUp,
@@ -250,6 +252,39 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
             1,
           ),
           true,
+        );
+      }),
+  );
+
+  it.effect(
+    "waits on its workspace's drive under the building deadline, then starts under a fresh one",
+    () =>
+      Effect.gen(function* () {
+        const lapsed = yield* openAccount;
+        const built = yield* openAccount;
+        yield* beginAgentBoot(lapsed.agentId, AT, undefined);
+        yield* beginAgentBoot(built.agentId, AT, undefined);
+        yield* agentBootBuilding(lapsed.agentId, AT);
+        yield* agentBootBuilding(built.agentId, AT);
+
+        const lapsedAt = (now: Date) =>
+          Effect.map(lapsedAgentBoots(now, 100), (boots) =>
+            boots.some(({ agentId }) => agentId === lapsed.agentId),
+          );
+
+        // A build runs past under way's ten minutes; only its function dying lets it reach fifteen.
+        assert.equal(yield* lapsedAt(past(10 * 60 * 1000)), false);
+        assert.equal(yield* lapsedAt(past(15 * 60 * 1000)), true);
+        assert.equal(
+          yield* failAgentBoot(lapsed.agentId, BOOT_FAILURE.NO_RESPONSE, past(15 * 60 * 1000)),
+          true,
+        );
+
+        const started = yield* agentBootBuilt(built.agentId, past(60_000));
+
+        assert.deepEqual(
+          Option.map(started, (boot) => [boot.phase, boot.phaseAt.getTime(), boot.deadlineAt]),
+          Option.some([BOOT_PHASE.STARTING, AT.getTime(), past(60_000 + 10 * 60 * 1000)]),
         );
       }),
   );

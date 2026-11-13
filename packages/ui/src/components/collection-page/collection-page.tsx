@@ -9,6 +9,7 @@ import {
 } from "../page-frame/page-frame.js";
 import { type PageScroll, PageScrollContext } from "../page-frame/page-scroll.js";
 import { PageHeader } from "../page-header/page-header.js";
+import { RevealArea, revealArea } from "../reveal/reveal.js";
 import { SKELETON_KIND, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js";
 
 /**
@@ -32,6 +33,11 @@ import { SKELETON_KIND, Skeleton, SkeletonRegion } from "../skeleton/skeleton.js
  * room on the toolbar's own edges rather than at the measure, so the bar's
  * title and actions line up with what it heads. A board that scrolls sideways stands its content
  * across the whole room (`PAGE_WIDTH.FULL`) rather than at the measure.
+ *
+ * An intro (`IntroCard`) stands at the head of the content, under the
+ * filters, whatever state the content is in, and scrolls away with it. The
+ * content is a reveal area (`RevealArea`), so as Got it rolls the card up,
+ * what stands under it closes over it.
  *
  * The page heads itself with a document's header (`PageHeader`), its title
  * the page's one `h1`. The empty and failed states are the caller's, handed in whole, since an
@@ -137,6 +143,7 @@ function CollectionPageSkeleton({
 /** A collection's page: its heading, `filters` under it, and the content `state` says. */
 export function CollectionPage({
   filters,
+  intro,
   state,
   loadingLabel,
   skeleton,
@@ -148,6 +155,8 @@ export function CollectionPage({
 }: PageHeading & {
   /** What narrows the collection (a search field, chips, a `ChoiceBar`), on one wrapping line. */
   filters?: ReactNode;
+  /** The page's first-visit card (`IntroCard`), at the head of the content. */
+  intro?: ReactNode;
   state: CollectionState;
   /** What is being read, said to a reader while the rows are. */
   loadingLabel: string;
@@ -231,23 +240,27 @@ export function CollectionPage({
         className={`ui-collection-page-scroll flex flex-1 flex-col min-h-0 ${sized.scroll} overflow-y-auto overscroll-contain scrollbar-gutter-stable`}
         ref={holdScroll}
       >
-        <div
-          ref={content}
-          className={`ui-collection-page-content ${COLUMN_CLASS} ${sized.measure} flex flex-col ${sized.content} ${toolbarGap}`}
-        >
-          {state === COLLECTION_STATE.LOADING ? (
-            <CollectionPageSkeleton label={loadingLabel} skeleton={skeleton} />
-          ) : null}
-          {state === COLLECTION_STATE.EMPTY ? (
-            <div className={`ui-collection-page-notice ${NOTICE_CLASS}`}>{empty}</div>
-          ) : null}
-          {state === COLLECTION_STATE.ERROR ? (
-            <div className={`ui-collection-page-notice ${NOTICE_CLASS}`}>{error}</div>
-          ) : null}
-          {state === COLLECTION_STATE.READY ? (
-            <PageScrollContext value={pageScroll}>{children}</PageScrollContext>
-          ) : null}
-        </div>
+        <RevealArea root={content}>
+          <div
+            ref={content}
+            className={`ui-collection-page-content ${COLUMN_CLASS} ${sized.measure} flex flex-col ${sized.content} ${toolbarGap}`}
+            {...revealArea()}
+          >
+            {intro}
+            {state === COLLECTION_STATE.LOADING ? (
+              <CollectionPageSkeleton label={loadingLabel} skeleton={skeleton} />
+            ) : null}
+            {state === COLLECTION_STATE.EMPTY ? (
+              <div className={`ui-collection-page-notice ${NOTICE_CLASS}`}>{empty}</div>
+            ) : null}
+            {state === COLLECTION_STATE.ERROR ? (
+              <div className={`ui-collection-page-notice ${NOTICE_CLASS}`}>{error}</div>
+            ) : null}
+            {state === COLLECTION_STATE.READY ? (
+              <PageScrollContext value={pageScroll}>{children}</PageScrollContext>
+            ) : null}
+          </div>
+        </RevealArea>
       </div>
     </section>
   );

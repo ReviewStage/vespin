@@ -54,7 +54,7 @@ import { useKeyboardModality } from "./keyboard-modality.js";
 import { useLastSignIn } from "./last-sign-in.js";
 import { LinkMenu } from "./link-menu.js";
 import { useCopyLink } from "./links-at-hand.js";
-import { MacCommandAskDialog } from "./mac-command-ask.js";
+import { MachineCommandAskDialog } from "./machine-command-ask.js";
 import { useOfflineRefusedToast } from "./offline-refused-toast.js";
 import { OpenFeedbackProvider } from "./open-feedback.js";
 import { OpenSettingsProvider } from "./open-settings.js";
@@ -971,7 +971,7 @@ function AppWindow(): React.JSX.Element {
                           {/* The window's one pair of live regions, which the panel's live words are read aloud through. */}
                           <Announcer />
                           {/* A command an agent asks to run on this Mac, while main holds it for an answer. */}
-                          <MacCommandAskDialog />
+                          <MachineCommandAskDialog />
                           {/* The menu a right-click on any link in the window hangs. */}
                           <LinkMenu />
                           <UpdatedToast />

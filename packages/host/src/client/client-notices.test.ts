@@ -66,7 +66,7 @@ function linked(
         workspacesRefresh,
       },
       presenter: {
-        openMacCommandAsk: () => {
+        openMachineCommandAsk: () => {
           forward += 1;
         },
         openPlace: () => undefined,
@@ -94,28 +94,31 @@ it.effect(
       const { focus, state, forwarded } = yield* linked(scope, () => Effect.void, []);
       const ask = (id: string) => ({ id, command: "node --version", askedAt: 1 });
 
-      state.update({ macCommands: { asks: [ask("first")] } });
+      state.update({ machineCommands: { asks: [ask("first")] } });
       yield* Effect.yieldNow;
       assert.equal(posted.length, 1);
-      assert.deepEqual(posted[0]?.subject, { kind: NOTICE_KIND.MAC_COMMAND_ASK, askId: "first" });
+      assert.deepEqual(posted[0]?.subject, {
+        kind: NOTICE_KIND.MACHINE_COMMAND_ASK,
+        askId: "first",
+      });
       assert.ok(posted[0]?.title.includes("command"));
       assert.equal(posted[0]?.body.includes("node"), false, "the command itself is not said");
       posted[0]?.onClick();
       assert.equal(forwarded(), 1);
 
       // The same ask told again, beside a second, announces only the second.
-      state.update({ macCommands: { asks: [ask("first"), ask("second")] } });
+      state.update({ machineCommands: { asks: [ask("first"), ask("second")] } });
       yield* Effect.yieldNow;
       assert.deepEqual(
         posted.map((notice) => notice.subject),
         [
-          { kind: NOTICE_KIND.MAC_COMMAND_ASK, askId: "first" },
-          { kind: NOTICE_KIND.MAC_COMMAND_ASK, askId: "second" },
+          { kind: NOTICE_KIND.MACHINE_COMMAND_ASK, askId: "first" },
+          { kind: NOTICE_KIND.MACHINE_COMMAND_ASK, askId: "second" },
         ],
       );
 
       focus()?.(true);
-      state.update({ macCommands: { asks: [ask("first"), ask("second"), ask("third")] } });
+      state.update({ machineCommands: { asks: [ask("first"), ask("second"), ask("third")] } });
       yield* Effect.yieldNow;
       assert.equal(posted.length, 2, "the panel in front shows the prompt itself");
 

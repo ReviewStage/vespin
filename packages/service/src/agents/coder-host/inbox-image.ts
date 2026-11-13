@@ -19,8 +19,8 @@ import type { InboxImage } from "../../inbox/inbox-store.js";
  * rendered or a WebM it recorded of a flow, and nothing else of it: no
  * address, no type. The file is read here through the same door the
  * agent's own file tools reach the sandbox by, as a stream: its first
- * bytes are read for a PNG, JPEG, or WebP signature, or a WebM's where the
- * read takes one, as soon as they are in, since the name a file
+ * bytes are read for a PNG, JPEG, or WebP signature, or a WebM's or an
+ * MP4's where the read takes one, as soon as they are in, since the name a file
  * carries says nothing about what it holds and the type is what the
  * picture is served to the desktop under, so a file that is no image is
  * refused at its first chunk, and one past the bound is refused at the
@@ -252,7 +252,7 @@ function readSandboxPosted<Type extends PostedFileType>(
       }
 
       if (
-        file.contentType === CONVERSATION_MEDIA_TYPE.WEBM &&
+        isVideoType(file.contentType) &&
         mediaDimensions(file.bytes, file.contentType) === undefined
       ) {
         return refused<Type>(refusals.NOT_IMAGE, path);
@@ -273,7 +273,7 @@ function readSandboxPosted<Type extends PostedFileType>(
 }
 
 /**
- * A picture or a WebM recording a post draws, at the path, a recording with
+ * A picture or a recording a post draws, at the path, a WebM recording with
  * the MP4 its sandbox makes of it, or the one sentence refusing it in the
  * refusals' words: a still held to the picture bound, and a recording to the
  * video bound and refused where it states no size.

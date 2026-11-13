@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { DEVICE_ARCH, DEVICE_PLATFORM, HOST_UPDATE } from "@repo/features/device-agent-wire";
-import { MAC_COMMAND_MODE } from "@repo/features/mac-command-wire";
+import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
 import { eq } from "drizzle-orm";
 import { Clock, Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
@@ -11,6 +11,7 @@ import { user } from "../../schemas/auth.js";
 import { device } from "../../schemas/device.js";
 import { DEVICE_LAYOUT, getTestDB } from "../../testing/index.js";
 import {
+  allowedAppsOf,
   beatDevice,
   devicesNamed,
   devicesSeenSince,
@@ -18,6 +19,7 @@ import {
   markAwayDevices,
   registerDevice,
   saveCommandDeviceSettings,
+  saveDeviceAppLooks,
 } from "../device-store.js";
 import { enrollOwnDevice, hostsOf, removeHost } from "../host-store.js";
 
@@ -26,7 +28,8 @@ import { enrollOwnDevice, hostsOf, removeHost } from "../host-store.js";
  * read by its own account alone, an id another account holds is never taken
  * over, a Mac that stopped beating is no longer read as there, a host's
  * update stands until its own beat names none, a Mac quiet past fresh is marked away once and its next beat clears it, and the Macs a read's local agents name are read by their ids alone.
- * A Mac joining for its commands carries its own settings up once.
+ * A Mac joining for its commands carries its own settings up once, and the
+ * apps each machine always allows are read by its own account alone.
  * Synthetic accounts and Macs throughout.
  */
 
@@ -88,11 +91,11 @@ it.layer(getTestDB())("the device store", (it) => {
         };
 
         const carried = {
-          commandMode: MAC_COMMAND_MODE.NEVER,
+          commandMode: MACHINE_COMMAND_MODE.NEVER,
           alwaysAllowedApps: ["com.apple.Notes"],
         };
 
-        const changed = { commandMode: MAC_COMMAND_MODE.ALWAYS, alwaysAllowedApps: [] };
+        const changed = { commandMode: MACHINE_COMMAND_MODE.ALWAYS, alwaysAllowedApps: [] };
 
         const first = yield* joinCommandDevice(owner, { ...machine, settings: carried });
         const again = yield* joinCommandDevice(owner, { ...machine, settings: changed });
@@ -107,6 +110,53 @@ it.layer(getTestDB())("the device store", (it) => {
         assert.equal(savedByOther, false);
         assert.equal(saved, true);
         assert.deepEqual(afterSave, Option.some(changed));
+      }),
+  );
+
+  it.effect(
+    "an account reads the apps its own machines always allow and their looks, never another's",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const machine = { platform: DEVICE_PLATFORM.DARWIN, arch: DEVICE_ARCH.ARM64 };
+        const ask = MACHINE_COMMAND_MODE.ASK;
+        const studio = randomUUID();
+
+        yield* joinCommandDevice(owner, {
+          ...machine,
+          deviceId: studio,
+          name: "Studio",
+          settings: { commandMode: ask, alwaysAllowedApps: ["com.apple.Notes"] },
+        });
+        yield* joinCommandDevice(owner, {
+          ...machine,
+          deviceId: randomUUID(),
+          name: "Laptop",
+          settings: { commandMode: ask, alwaysAllowedApps: [] },
+        });
+        yield* joinCommandDevice(other, {
+          ...machine,
+          deviceId: randomUUID(),
+          name: "Teammate's",
+          settings: { commandMode: ask, alwaysAllowedApps: ["com.tinyspeck.slackmacgap"] },
+        });
+
+        const notes = { app: "com.apple.Notes", name: "Notes", iconPng: "iVBORw0KGgo=" };
+        // Note that a look of an app the machine no longer allows is kept as posted but never read.
+        const gone = { app: "com.apple.Safari", name: "Safari" };
+        const savedByOther = yield* saveDeviceAppLooks(other, studio, [gone]);
+        const saved = yield* saveDeviceAppLooks(owner, studio, [notes, gone]);
+
+        assert.equal(savedByOther, false, "another account posts no looks for the owner's machine");
+        assert.equal(saved, true);
+        assert.deepEqual(yield* allowedAppsOf(owner), [
+          { deviceId: studio, name: "Studio", apps: ["com.apple.Notes"], looks: [notes] },
+        ]);
+        assert.deepEqual(
+          (yield* allowedAppsOf(other)).map((each) => each.name),
+          ["Teammate's"],
+          "each account reads its own machine alone",
+        );
       }),
   );
 
@@ -133,7 +183,7 @@ it.layer(getTestDB())("the device store", (it) => {
           arch: DEVICE_ARCH.ARM64,
           machineId,
           model: "Mac mini (M4, 2024)",
-          settings: { commandMode: MAC_COMMAND_MODE.ASK, alwaysAllowedApps: [] },
+          settings: { commandMode: MACHINE_COMMAND_MODE.ASK, alwaysAllowedApps: [] },
         });
 
         const [row] = yield* Database.use((db) =>

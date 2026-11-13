@@ -21,13 +21,13 @@ import type { AppStateStore } from "./app-state-store.js";
 /** Where a notice's click takes the developer, as the platform brings its window forward on it. */
 interface NoticePresenter {
   /** Brings the app's window forward, where the prompt for a command stands: a command ask's notification's click. */
-  openMacCommandAsk: () => void;
+  openMachineCommandAsk: () => void;
   /** Brings the app's window forward on a place, an agent's tab or an Inbox item: the click of a notification of news. */
   openPlace: (place: LinkDestination) => void;
 }
 
 /** What the notification of a command waiting says: nothing of the command, which the prompt shows. */
-const MAC_COMMAND_ASK_NOTICE = {
+const MACHINE_COMMAND_ASK_NOTICE = {
   title: "Run a command on your Mac?",
   body: "An agent is waiting for you to allow or deny a command.",
 } as const;
@@ -221,7 +221,7 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
   const told = new Set<string>();
   yield* Effect.forkScoped(
     Stream.runForEach(
-      Stream.changes(Stream.map(state.changes, (document) => document.macCommands.asks)),
+      Stream.changes(Stream.map(state.changes, (document) => document.machineCommands.asks)),
       (asks) =>
         Effect.sync(() => {
           const waiting = new Set(asks.map((ask) => ask.id));
@@ -231,14 +231,14 @@ export const linkClientNotices = /* @__PURE__ */ Effect.fn("client/linkClientNot
           for (const ask of asks) {
             if (told.has(ask.id)) continue;
             told.add(ask.id);
-            const subject = { kind: NOTICE_KIND.MAC_COMMAND_ASK, askId: ask.id } as const;
+            const subject = { kind: NOTICE_KIND.MACHINE_COMMAND_ASK, askId: ask.id } as const;
             notices.heard(subject);
 
             if (focused) continue;
             doors.post({
-              ...MAC_COMMAND_ASK_NOTICE,
+              ...MACHINE_COMMAND_ASK_NOTICE,
               subject,
-              onClick: presenter.openMacCommandAsk,
+              onClick: presenter.openMachineCommandAsk,
             });
           }
         }),

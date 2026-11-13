@@ -83,7 +83,7 @@ import {
  * so the line says whether it carries words a person other than the told
  * agent's owner wrote (`outside_words`), by GitHub's id of its author
  * against the GitHub accounts the owner linked to their account, and such a line
- * takes `run_on_mac` from the agent (`mac-command-store.ts`'s
+ * takes `run_on_mac` from the agent (`machine-command-store.ts`'s
  * `heardFromAnotherAccount`). An App's words never count, our own, a
  * deployment's, and a review bot's among them, told by the `[bot]` GitHub
  * ends every App's login with and no person's login can spell: Dean's

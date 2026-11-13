@@ -6,7 +6,7 @@ import { it } from "@effect/vitest";
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { LINK_OPEN } from "@repo/features/link-open";
-import { MAC_COMMAND_MODE } from "@repo/features/mac-command-wire";
+import { MACHINE_COMMAND_MODE } from "@repo/features/machine-command-wire";
 import { LIVE_VOICE } from "@repo/features/voices";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
 import {
@@ -195,7 +195,7 @@ const SAMPLE_VALUE = {
   openAtLogin: false,
   preferBuiltInMicrophone: false,
   // Ask is the default, so Never is the choice that has to survive a reopen.
-  macCommands: MAC_COMMAND_MODE.NEVER,
+  macCommands: MACHINE_COMMAND_MODE.NEVER,
   // While agents work is the default, so While plugged in is the choice that has to survive a reopen.
   keepAwake: KEEP_AWAKE.PLUGGED_IN,
   // Steer is the default, so Queue is the choice that has to survive a reopen.
@@ -224,6 +224,7 @@ const SAMPLE_VALUE = {
   turnNotifications: true,
   // Unanswered is the default, so answers given in setup's survey are the state that has to survive a reopen.
   onboardingSurvey: '{"referral":"other","referralOther":"A meetup","role":"founder"}',
+  introsSeen: '["inbox"]',
   // Each diff setting away from its default, the look a review tool's reader picked.
   lineNumbers: false,
   wordWrap: false,
@@ -366,16 +367,16 @@ it.effect(
 
 test("the Mac commands switch an earlier build stored reads as a mode: on as Ask, off as Never", async (t) => {
   const directory = await temporaryDirectory(t, "settings-");
-  await storeIn(directory).set("macCommands", MAC_COMMAND_MODE.ALWAYS);
+  await storeIn(directory).set("macCommands", MACHINE_COMMAND_MODE.ALWAYS);
   const file = path.join(directory, SETTINGS_FILE_NAME);
   const stored = await readSettingsFile(directory);
-  assert.ok(stored.includes(`"${MAC_COMMAND_MODE.ALWAYS}"`));
+  assert.ok(stored.includes(`"${MACHINE_COMMAND_MODE.ALWAYS}"`));
 
-  await fs.writeFile(file, stored.replace(`"${MAC_COMMAND_MODE.ALWAYS}"`, "true"));
-  assert.equal(await storeIn(directory).get("macCommands"), MAC_COMMAND_MODE.ASK);
+  await fs.writeFile(file, stored.replace(`"${MACHINE_COMMAND_MODE.ALWAYS}"`, "true"));
+  assert.equal(await storeIn(directory).get("macCommands"), MACHINE_COMMAND_MODE.ASK);
 
-  await fs.writeFile(file, stored.replace(`"${MAC_COMMAND_MODE.ALWAYS}"`, "false"));
-  assert.equal(await storeIn(directory).get("macCommands"), MAC_COMMAND_MODE.NEVER);
+  await fs.writeFile(file, stored.replace(`"${MACHINE_COMMAND_MODE.ALWAYS}"`, "false"));
+  assert.equal(await storeIn(directory).get("macCommands"), MACHINE_COMMAND_MODE.NEVER);
 });
 
 test.for([

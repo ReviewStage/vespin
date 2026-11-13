@@ -19,7 +19,7 @@ import {
   linkIntegrationInstallation,
   markIntegrationInstallationDeleted,
 } from "@repo/database/models/integration-installation-store";
-import { queueMacCommand } from "@repo/database/models/mac-command-store";
+import { queueMachineCommand } from "@repo/database/models/machine-command-store";
 import { rememberMemory } from "@repo/database/models/memory-store";
 import { claimChapterGeneration } from "@repo/database/models/pull-request-chapters-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
@@ -81,8 +81,11 @@ import {
   liveDigestOf,
   liveDigestOn,
 } from "@repo/features/live-wire";
-import { MAC_COMMANDS_READ, macCommandsOfLiveRows } from "@repo/features/mac-command-live";
-import { MAC_COMMAND_KIND } from "@repo/features/mac-command-wire";
+import {
+  MACHINE_COMMANDS_READ,
+  machineCommandsOfLiveRows,
+} from "@repo/features/machine-command-live";
+import { MACHINE_COMMAND_KIND } from "@repo/features/machine-command-wire";
 import { memoriesOfLiveRows, WORKSPACE_MEMORIES_READ } from "@repo/features/memory-live";
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
@@ -307,16 +310,16 @@ it.layer(getTestDB())("the account's live reads", (it) => {
 
         const shell = {
           id: randomUUID(),
-          kind: MAC_COMMAND_KIND.SHELL,
+          kind: MACHINE_COMMAND_KIND.SHELL,
           command: "git branch --show-current",
           timeoutSeconds: 60,
         };
 
-        yield* queueMacCommand(dana, shell);
+        yield* queueMachineCommand(dana, shell);
         // A row of a kind this service no longer queues, as an older build left one waiting.
         const queuedAt = new Date(yield* Clock.currentTimeMillis).toISOString();
         yield* db.execute(
-          sql`INSERT INTO mac_command (id, user_id, kind, timeout_seconds, queued_at)
+          sql`INSERT INTO machine_command (id, user_id, kind, timeout_seconds, queued_at)
               VALUES (${randomUUID()}, ${dana}, 'browser', 30, ${queuedAt})`,
         );
 
@@ -326,11 +329,11 @@ it.layer(getTestDB())("the account's live reads", (it) => {
         });
 
         assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
-        const answer = Schema.decodeUnknownSync(MAC_COMMANDS_READ.answer)(answered.body);
+        const answer = Schema.decodeUnknownSync(MACHINE_COMMANDS_READ.answer)(answered.body);
         assert.equal(answer.url, LIVE_POLL_URL);
         assert.deepEqual(
-          macCommandsOfLiveRows(
-            Schema.decodeUnknownSync(MAC_COMMANDS_READ.rows)({
+          machineCommandsOfLiveRows(
+            Schema.decodeUnknownSync(MACHINE_COMMANDS_READ.rows)({
               commands: answer.queries.commands.rows,
             }),
           ),

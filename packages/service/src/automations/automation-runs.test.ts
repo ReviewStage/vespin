@@ -21,7 +21,7 @@ import {
   recordAutomationRun,
   updateAutomation,
 } from "@repo/database/models/automation-store";
-import { heardFromAnotherAccount } from "@repo/database/models/mac-command-store";
+import { heardFromAnotherAccount } from "@repo/database/models/machine-command-store";
 import { readMessageByClientId, sentLineStands } from "@repo/database/models/message-reads";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { createTask, readTask } from "@repo/database/models/task-store";

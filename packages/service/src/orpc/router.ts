@@ -48,9 +48,9 @@ import {
 } from "../agents/device-agents-procedures.js";
 import { type HostsProcedureSeams, hostsProcedures } from "../agents/hosts-procedures.js";
 import {
-  type MacCommandsProcedureSeams,
-  macCommandsProcedures,
-} from "../agents/mac-commands-procedures.js";
+  type MachineCommandsProcedureSeams,
+  machineCommandsProcedures,
+} from "../agents/machine-commands-procedures.js";
 import { type MessagesProcedureSeams, messagesProcedures } from "../agents/messages-procedures.js";
 import {
   type AutomationsProcedureSeams,
@@ -162,7 +162,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   LinkPreviewsProcedureSeams &
   LiveProcedureSeams &
   DeviceAgentsProcedureSeams &
-  MacCommandsProcedureSeams &
+  MachineCommandsProcedureSeams &
   McpClientsProcedureSeams &
   MergeQueueProcedureSeams &
   MessagesProcedureSeams &
@@ -212,7 +212,7 @@ export function hostedRouter(seams: HostedRouterSeams) {
     live: liveProcedures(seams),
     liveActivities: liveActivitiesProcedures(seams),
     deviceAgents: deviceAgentsProcedures(seams),
-    macCommands: macCommandsProcedures(seams),
+    machineCommands: machineCommandsProcedures(seams),
     mcpClients: mcpClientsProcedures(seams),
     messages: messagesProcedures(seams),
     models: modelsProcedures(seams),

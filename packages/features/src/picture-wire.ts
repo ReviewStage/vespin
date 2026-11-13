@@ -1,9 +1,10 @@
 import { Schema as EffectSchema, Result } from "effect";
 import { Base64 } from "effect/encoding";
+import { isVideoType } from "./conversation-picture-wire.js";
 import { INBOX_BOUNDS, INBOX_IMAGE_TYPE, type InboxImageType } from "./inbox-wire.js";
-import { sniffMediaType } from "./media-signature.js";
+import { mediaDimensions, sniffMediaType } from "./media-signature.js";
 import { MAX_REQUEST_DATA_URL_BYTES } from "./request-body-limit.js";
-import { WEBM_TYPE, webmDimensions } from "./video-signature.js";
+import { MP4_TYPE, WEBM_TYPE } from "./video-signature.js";
 
 /**
  * picture-wire.ts -- a picture we keep for a reader: the types it may be, its byte bounds, and the one reading of the `data:` URL a picture is sent as.
@@ -33,10 +34,11 @@ export type PictureType = InboxImageType;
 /** An image picture's media type as the wire carries it. */
 export const pictureTypeSchema = EffectSchema.Literals(Object.values(PICTURE_TYPE));
 
-/** The types a kept picture may be: one of the images, or a WebM an agent recorded, played rather than drawn. */
+/** The types a kept picture may be: one of the images, or a recording an agent made, a WebM or an H.264 MP4, played rather than drawn. */
 export const PICTURE_MEDIA_TYPE = {
   ...PICTURE_TYPE,
   WEBM: WEBM_TYPE,
+  MP4: MP4_TYPE,
 } as const;
 
 type PictureMediaType = (typeof PICTURE_MEDIA_TYPE)[keyof typeof PICTURE_MEDIA_TYPE];
@@ -76,7 +78,7 @@ export interface Picture {
 
 /** Whether a picture is a video, played rather than drawn, and never handed to a model as an image. */
 export function isVideoPicture(picture: Picture): boolean {
-  return picture.contentType === PICTURE_MEDIA_TYPE.WEBM;
+  return isVideoType(picture.contentType);
 }
 
 /**
@@ -97,7 +99,9 @@ export function pictureOfDataUrl(text: string): Picture | undefined {
   if (Result.isFailure(bytes) || sniffMediaType(bytes.success) !== contentType) return undefined;
   const picture: Picture = { contentType, bytes: bytes.success };
 
-  if (isVideoPicture(picture) && webmDimensions(picture.bytes) === undefined) return undefined;
+  if (isVideoPicture(picture) && mediaDimensions(picture.bytes, contentType) === undefined) {
+    return undefined;
+  }
 
   return picture;
 }

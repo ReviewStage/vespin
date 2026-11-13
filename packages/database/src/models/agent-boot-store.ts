@@ -12,11 +12,17 @@
  * The phases (`@repo/features/agent-boot`'s `BOOT_PHASE`), and nothing else:
  *
  *   (none)      -> STARTING     beginAgentBoot, its first line queued
+ *   STARTING    -> BUILDING     agentBootBuilding, its workspace's drive
+ *                               to be built first, under the longer
+ *                               building deadline
+ *   BUILDING    -> STARTING     agentBootBuilt, the drive built, under a
+ *                               fresh deadline
  *   STARTING    -> HANDING_OFF  agentBootRunnerUp, its queue holding a
  *                               message, keeping the instant its attempt
  *                               began; READY where none
  *   HANDING_OFF -> READY        agentBootHandedOff
- *   STARTING | HANDING_OFF -> FAILED  failAgentBoot, its queue paused
+ *   STARTING | BUILDING | HANDING_OFF -> FAILED  failAgentBoot, its
+ *                               queue paused
  *   FAILED      -> STARTING     rebootAgent, the pause lifted
  *   READY       -> (none)       endAgentBoot, once the first turn settles
  *
@@ -57,16 +63,21 @@ const PHASES: readonly BootPhase[] = Object.values(BOOT_PHASE);
 const FAILURES: readonly BootFailure[] = Object.values(BOOT_FAILURE);
 
 /**
- * The phases a boot can fail from and lapse in: under way, or handing its
- * first message off, so a hand-off whose queue read failed, and which
- * nothing would move on again, is failed by the minute sweep past its
- * deadline and booted again by Retry rather than standing for good. A
- * hand-off stopped at a first message a member is editing never lapses,
- * since it waits on them, and one whose first message moved within a
- * deadline, as their save or cancel moves it and the claim that sends it
- * does, lapses only a deadline after that.
+ * The phases a boot can fail from and lapse in: under way, waiting on its
+ * workspace's drive, or handing its first message off, so a hand-off whose
+ * queue read failed, or a build whose function died, and which nothing
+ * would move on again, is failed by the minute sweep past its deadline and
+ * booted again by Retry rather than standing for good. A hand-off stopped at
+ * a first message a member is editing never lapses, since it waits on them,
+ * and one whose first message moved within a deadline, as their save or
+ * cancel moves it and the claim that sends it does, lapses only a deadline
+ * after that.
  */
-const UNSETTLED_PHASES: readonly BootPhase[] = [...BOOTING_PHASES, BOOT_PHASE.HANDING_OFF];
+const UNSETTLED_PHASES: readonly BootPhase[] = [
+  ...BOOTING_PHASES,
+  BOOT_PHASE.BUILDING,
+  BOOT_PHASE.HANDING_OFF,
+];
 
 /** An agent's first launch as its row keeps it. */
 export interface AgentBootRow {
@@ -103,8 +114,9 @@ function bootOf(row: typeof BootRowSchema.Type): AgentBootRow {
   };
 }
 
-/** When a boot entered under way at `at` is failed by the minute sweep. */
-const deadlineFrom = (at: Date) => new Date(at.getTime() + BOOT_BOUNDS.DEADLINE_MS);
+/** When a boot that entered its phase at `at` is failed by the minute sweep, `bound` later: under way's deadline where none is named. */
+const deadlineFrom = (at: Date, bound: number = BOOT_BOUNDS.DEADLINE_MS) =>
+  new Date(at.getTime() + bound);
 
 /** The earliest a hand-off's first message may have moved and still keep it from lapsing at `now`: a deadline back. */
 const movedSince = (now: Date) => new Date(now.getTime() - BOOT_BOUNDS.DEADLINE_MS);
@@ -146,16 +158,17 @@ const updatePhase = SqlSchema.findAll({
     failure: Schema.NullOr(Schema.Literals(FAILURES)),
     nextAttempt: Schema.Boolean,
     keepsPhaseAt: Schema.Boolean,
+    deadlineMs: Schema.Number,
   }),
   Result: BootRowSchema,
-  execute: ({ agentId, attempt, from, to, at, failure, nextAttempt, keepsPhaseAt }) =>
+  execute: ({ agentId, attempt, from, to, at, failure, nextAttempt, keepsPhaseAt, deadlineMs }) =>
     Database.use((db) =>
       db
         .update(agentBootTable)
         .set({
           phase: to,
           ...(keepsPhaseAt ? undefined : { phaseAt: at }),
-          deadlineAt: deadlineFrom(at),
+          deadlineAt: deadlineFrom(at, deadlineMs),
           ...(failure === null ? undefined : { failure }),
           // Note that a next attempt keeps nothing of the last, its failure among it.
           ...(nextAttempt
@@ -218,6 +231,8 @@ function moved(
     readonly nextAttempt?: boolean | undefined;
     /** Whether the move keeps the instant the boot entered the phase it leaves, as a hand-off still says the boot is starting. */
     readonly keepsPhaseAt?: boolean | undefined;
+    /** How long past `at` the sweep fails the boot: under way's deadline where none is named. */
+    readonly deadlineMs?: number | undefined;
   },
 ): AgentBootEffect<Option.Option<AgentBootRow>> {
   return Effect.map(
@@ -230,6 +245,7 @@ function moved(
       failure: move.failure ?? null,
       nextAttempt: move.nextAttempt === true,
       keepsPhaseAt: move.keepsPhaseAt === true,
+      deadlineMs: move.deadlineMs ?? BOOT_BOUNDS.DEADLINE_MS,
     }),
     ([row]) => Option.map(Option.fromNullishOr(row), bootOf),
   );
@@ -320,6 +336,56 @@ export function agentBootRunnerUp(
   );
 }
 
+/**
+ * The agent's first launch held for its workspace's drive to be built
+ * (STARTING -> BUILDING) under `attempt` where one is named, failed by the
+ * sweep only past the building deadline, since that lapses only where the
+ * build's function died. It keeps the instant it began starting, since the
+ * wire still says it is starting. Answers the boot where it moved.
+ */
+export function agentBootBuilding(
+  agentId: string,
+  at: Date,
+  attempt?: number,
+): AgentBootEffect<Option.Option<AgentBootRow>> {
+  return underAgentQueueLock(
+    agentId,
+    moved(agentId, {
+      attempt,
+      from: [BOOT_PHASE.STARTING],
+      to: BOOT_PHASE.BUILDING,
+      at,
+      keepsPhaseAt: true,
+      deadlineMs: BOOT_BOUNDS.BUILDING_DEADLINE_MS,
+    }),
+    () => false,
+  );
+}
+
+/**
+ * The agent's workspace drive built (BUILDING -> STARTING) under `attempt`
+ * where one is named, so its machine boots under a fresh deadline, still
+ * counted from when it began starting. Answers the boot where it moved,
+ * none where it stood elsewhere: the sweep failed it meanwhile.
+ */
+export function agentBootBuilt(
+  agentId: string,
+  at: Date,
+  attempt?: number,
+): AgentBootEffect<Option.Option<AgentBootRow>> {
+  return underAgentQueueLock(
+    agentId,
+    moved(agentId, {
+      attempt,
+      from: [BOOT_PHASE.BUILDING],
+      to: BOOT_PHASE.STARTING,
+      at,
+      keepsPhaseAt: true,
+    }),
+    () => false,
+  );
+}
+
 /** The queue's head handed off to the agent's runner (HANDING_OFF -> READY). */
 export function agentBootHandedOff(agentId: string, at: Date): AgentBootEffect<void> {
   return Effect.asVoid(
@@ -332,7 +398,7 @@ export function agentBootHandedOff(agentId: string, at: Date): AgentBootEffect<v
 }
 
 /**
- * The agent's first launch failed (STARTING | HANDING_OFF -> FAILED) for `failure`,
+ * The agent's first launch failed (STARTING | BUILDING | HANDING_OFF -> FAILED) for `failure`,
  * under `attempt` where one is named, and its queue paused in
  * the same transaction, its messages kept for Retry. Answers whether it
  * moved.
@@ -394,7 +460,7 @@ export function rebootAgent(
   );
 }
 
-/** The boots still under way or handing off past their deadline at `now`, the longest past first, bar a hand-off held for an edit to its first message or whose first message moved within a deadline. */
+/** The boots still under way, building, or handing off past their deadline at `now`, the longest past first, bar a hand-off held for an edit to its first message or whose first message moved within a deadline. */
 export function lapsedAgentBoots(
   now: Date,
   limit: number,

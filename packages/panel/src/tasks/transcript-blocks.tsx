@@ -1207,7 +1207,7 @@ function CutWords({
 /** Each kind of call's icon: a verb's own, or, for a call about something the window draws a glyph for, that glyph's likeness: the Code tab's brackets for code shown, the transcript's scroll for an agent read, as Copy full transcript wears it, never the terminal a shell command wears. A list of the agents is a list's own, rows each led by its mark, since it reads them all rather than one; a list of the models wears a chip, what an agent runs on. */
 const CALL_ICON = {
   [CALL_KIND.COMMAND]: TerminalIcon,
-  [CALL_KIND.MAC_COMMAND]: LaptopIcon,
+  [CALL_KIND.MACHINE_COMMAND]: LaptopIcon,
   [CALL_KIND.BROWSER]: GlobeIcon,
   [CALL_KIND.COMPUTER]: MonitorIcon,
   [CALL_KIND.READ_FILE]: FileTextIcon,
@@ -1537,7 +1537,7 @@ export function TranscriptTool({
         subjectIsCode={line.code}
         subjectInBody={(command && input.kind === TOOL_BLOCK.COMMAND) || blockSays(input, subject)}
         place={
-          (kind === CALL_KIND.MAC_COMMAND || kind === CALL_KIND.COMPUTER) &&
+          (kind === CALL_KIND.MACHINE_COMMAND || kind === CALL_KIND.COMPUTER) &&
           macOwner !== undefined ? (
             <ActorLine>
               {"On "}

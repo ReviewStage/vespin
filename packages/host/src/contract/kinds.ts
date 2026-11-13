@@ -221,6 +221,8 @@ export const AGENT_ACT_KIND = {
   /** Run agents on this Mac turned on or off, from This Mac's row in Settings › Hosts; only the desktop answers it. */
   HOSTS_THIS_MAC_SET: "hosts.thisMacSet",
   HOSTS_PAIRING_READ: "hosts.pairingRead",
+  /** The apps the account's own machines always allow agents to use, each machine's by its name, which an agent's `@` offers where it is typed off the agent's Mac; asked of the service on every host. */
+  HOSTS_ALLOWED_APPS: "hosts.allowedApps",
   HOSTS_PAIRING_APPROVE: "hosts.pairingApprove",
   HOSTS_PAIRING_DENY: "hosts.pairingDeny",
   AGENTS_LIST: "agents.list",
@@ -698,13 +700,13 @@ export const MAC_SHELL_ACT_KIND = {
 export type MacShellActKind = (typeof MAC_SHELL_ACT_KIND)[keyof typeof MAC_SHELL_ACT_KIND];
 
 /**
- * A command an agent asked to run on this Mac (`../mac-command-ask.ts`),
+ * A command an agent asked to run on this Mac (`../machine-command-ask.ts`),
  * answered by the developer from the prompt the panel draws over the window:
  * allowed once, allowed always, which also writes Settings › This Mac to
  * Always allow, or denied. Answered by the host, which holds the ask.
  */
-const MAC_COMMAND_ACT_KIND = {
-  MAC_COMMAND_ANSWER: "macCommands.answer",
+const MACHINE_COMMAND_ACT_KIND = {
+  MACHINE_COMMAND_ANSWER: "macCommands.answer",
   COMPUTER_USE_STATUS: "macCommands.computerUseStatus",
   COMPUTER_USE_APPS: "macCommands.computerUseApps",
   COMPUTER_USE_APP_ICON: "macCommands.computerUseAppIcon",
@@ -923,7 +925,7 @@ export const PORT_ACT_KIND = {
   ...INSTALLED_SKILL_ACT_KIND,
   ...INTEGRATION_ACT_KIND,
   ...MAC_APP_ACT_KIND,
-  ...MAC_COMMAND_ACT_KIND,
+  ...MACHINE_COMMAND_ACT_KIND,
   ...MAC_PHOTO_ACT_KIND,
   ...MAC_RESOURCES_ACT_KIND,
   ...MAC_SHELL_ACT_KIND,
@@ -1029,6 +1031,7 @@ export const PORT_ACT_USE = {
   HOSTS_REMOVE: ACT_USE.WRITE,
   HOSTS_THIS_MAC_SET: ACT_USE.WRITE,
   HOSTS_PAIRING_READ: ACT_USE.FETCH,
+  HOSTS_ALLOWED_APPS: ACT_USE.FETCH,
   HOSTS_PAIRING_APPROVE: ACT_USE.WRITE,
   HOSTS_PAIRING_DENY: ACT_USE.WRITE,
   AGENTS_LIST: ACT_USE.READ,
@@ -1128,7 +1131,7 @@ export const PORT_ACT_USE = {
   MCP_CLIENTS_RETRY: ACT_USE.READ,
   MCP_CLIENTS_REVOKE: ACT_USE.WRITE,
 
-  MAC_COMMAND_ANSWER: ACT_USE.WRITE,
+  MACHINE_COMMAND_ANSWER: ACT_USE.WRITE,
   COMPUTER_USE_STATUS: ACT_USE.FETCH,
   COMPUTER_USE_APPS: ACT_USE.FETCH,
   COMPUTER_USE_APP_ICON: ACT_USE.FETCH,

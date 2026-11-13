@@ -49,7 +49,7 @@ import { inboxMessage } from "../schemas/inbox-message.js";
 import { installedSkill } from "../schemas/installed-skill.js";
 import { integrationConnection } from "../schemas/integration.js";
 import { integrationInstallation } from "../schemas/integration-installation.js";
-import { macCommand } from "../schemas/mac-command.js";
+import { machineCommand } from "../schemas/machine-command.js";
 import { memory, memoryRecall } from "../schemas/memory.js";
 import { personalWorkspace } from "../schemas/personal-workspace.js";
 import { accountPreference } from "../schemas/preferences.js";
@@ -272,7 +272,9 @@ export const userSync = defineSyncTable(user, {
  * its enrolling, which writes its version, and its removal. Note that every other column is
  * ignored, because the device beats and registers again often, rewriting
  * when it was last seen and what it runs, and no view the capture wakes
- * reads them: a window judges a device by its own presence read.
+ * reads them: a window judges a device by its own presence read. Its
+ * allowed apps' names and icons are ignored too, since they are read only
+ * as an `@` list asks for them (`hosts.allowedApps`).
  */
 export const deviceSync = defineSyncTable(device, {
   topics: [
@@ -296,6 +298,7 @@ export const deviceSync = defineSyncTable(device, {
     device.updateFailure,
     device.secretHash,
     device.lastSeenAt,
+    device.allowedAppLooks,
   ],
   log: LOG.EVERY,
 });
@@ -418,12 +421,12 @@ export const taskReadSync = defineSyncTable(taskRead, {
 /**
  * A command an agent queued for the account's Mac, on the account's topic,
  * which the Mac's read of the commands it may claim is woken on. Note that
- * the account's and each device's listener rows (`mac_command_listener`,
- * `mac_command_device_listener`), which every such read rewrites, are not
+ * the account's and each device's listener rows (`machine_command_listener`,
+ * `machine_command_device_listener`), which every such read rewrites, are not
  * captured: no read waits on them.
  */
-export const macCommandSync = defineSyncTable(macCommand, {
-  topics: [{ kind: TOPIC.ACCOUNT, column: macCommand.userId }],
+export const machineCommandSync = defineSyncTable(machineCommand, {
+  topics: [{ kind: TOPIC.ACCOUNT, column: machineCommand.userId }],
 });
 
 /**
@@ -880,7 +883,7 @@ export const SYNC_TABLES: readonly SyncTable[] = [
   taskPinSync,
   agentPinSync,
   taskReadSync,
-  macCommandSync,
+  machineCommandSync,
   accountPreferenceSync,
   accountSoundSync,
   accountSoundChoiceSync,

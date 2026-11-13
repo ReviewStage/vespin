@@ -5,7 +5,7 @@ import type {
   DeviceSetup,
   HostUpdate,
 } from "@repo/features/device-agent-wire";
-import type { MacCommandMode } from "@repo/features/mac-command-wire";
+import type { AllowedAppLook, MachineCommandMode } from "@repo/features/machine-command-wire";
 import { sql } from "drizzle-orm";
 import { index, jsonb, pgTable, text, uniqueIndex, uuid } from "drizzle-orm/pg-core";
 import { createdAt, timestamptz } from "./_helpers.js";
@@ -40,7 +40,7 @@ import { user } from "./auth.js";
  * new secret.
  *
  * A device is also where an agent's terminal commands and computer use go
- * (`agent.target_device_id`, `mac_command.device_id`), so it keeps the
+ * (`agent.target_device_id`, `machine_command.device_id`), so it keeps the
  * machine's own opt-in for them and the apps allowed on it without asking.
  */
 export const device = pgTable(
@@ -109,15 +109,23 @@ export const device = pgTable(
     /** The host's own words for why its update failed, naming no secret; null unless `update_phase` is failed. */
     updateFailure: text("update_failure"),
     /**
-     * How agents' terminal commands run on this machine (`MAC_COMMAND_MODE`):
+     * How agents' terminal commands run on this machine (`MACHINE_COMMAND_MODE`):
      * never, after the member allows each, or always, the same three the
      * machine's own setting names, kept here so any device of theirs can
      * change it. Null until the machine first carries its own setting up,
      * which it does once, and for a host that never ran the app.
      */
-    commandMode: text("command_mode").$type<MacCommandMode>(),
+    commandMode: text("command_mode").$type<MachineCommandMode>(),
     /** The apps on this machine the member answered Always allow for, by bundle id; null until the machine first carries its own list up. */
     alwaysAllowedApps: jsonb("always_allowed_apps").$type<readonly string[]>(),
+    /**
+     * How the machine names and draws the apps it always allows, as it last
+     * posted them: each app by the bundle id it is allowed by, its display
+     * name, and its icon as a small PNG in base64 where the machine drew one
+     * and it fit; null until the machine first posts them. Read only for the
+     * account's own `@` lists off the machine (`allowedAppsOf`).
+     */
+    allowedAppLooks: jsonb("allowed_app_looks").$type<readonly AllowedAppLook[]>(),
     /** The device's secret as its SHA-256 in hex, never the secret; null for a device that never enrolled, which the service no longer takes a call from, and for a removed one. */
     secretHash: text("secret_hash"),
     /** The host program version the device last called with; null for one that never enrolled. */

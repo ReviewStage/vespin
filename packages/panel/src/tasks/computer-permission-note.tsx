@@ -1,5 +1,5 @@
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import { COMPUTER_PERMISSION, computerPermissionsNamed } from "@repo/features/mac-command-wire";
+import { COMPUTER_PERMISSION, computerPermissionsNamed } from "@repo/features/machine-command-wire";
 import { THIS_MAC } from "@repo/features/machine-name";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { computerPermissionsMissing } from "@repo/features/tool-call-model";
@@ -20,7 +20,7 @@ import { useMacOwner } from "./transcript-blocks.js";
  * computer-permission-note.tsx -- why a `computer` call ran nothing because the Mac lacked Screen Recording or Accessibility, said under its row where its window would have stood.
  *
  * The Mac refuses an action at once where it lacks a grant the action
- * needs (`compose-mac-commands.ts`), and the call's answer carries the
+ * needs (`compose-machine-commands.ts`), and the call's answer carries the
  * grants (`computerPermissionsMissing`). The answer's own words are the
  * agent's, so the row says its own to the reader instead, as every failure
  * with a remedy is said (`ErrorState`), where a read's window would have
@@ -61,8 +61,8 @@ export function useOnThatMac(): boolean {
   const owner = useMacOwner();
 
   const runsCommands =
-    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.MAC_COMMANDS) }).data ===
-    true;
+    useQuery({ ...appStateQuery, select: selectCapability(HOST_CAPABILITY.MACHINE_COMMANDS) })
+      .data === true;
 
   if (!runsCommands) return false;
 

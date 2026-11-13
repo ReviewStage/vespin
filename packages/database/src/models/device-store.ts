@@ -23,12 +23,14 @@ import {
   hostUpdateSchema,
 } from "@repo/features/device-agent-wire";
 import {
-  type MacCommandMode,
-  type MacDeviceJoinRequest,
-  type MacDeviceSettings,
-  macCommandModeSchema,
-  macDeviceSettingsSchema,
-} from "@repo/features/mac-command-wire";
+  type AllowedAppLook,
+  allowedAppLookSchema,
+  type MachineCommandMode,
+  type MachineDeviceJoinRequest,
+  type MachineDeviceSettings,
+  machineCommandModeSchema,
+  machineDeviceSettingsSchema,
+} from "@repo/features/machine-command-wire";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
@@ -346,11 +348,11 @@ const joinDevice = SqlSchema.findAll({
     platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     arch: Schema.Literals(Object.values(DEVICE_ARCH)),
     ...MachineColumnsSchema.fields,
-    commandMode: macCommandModeSchema,
+    commandMode: machineCommandModeSchema,
     alwaysAllowedApps: Schema.Array(Schema.String),
     now: Schema.Date,
   }),
-  Result: macDeviceSettingsSchema,
+  Result: machineDeviceSettingsSchema,
   execute: ({
     userId,
     id,
@@ -389,16 +391,32 @@ const joinDevice = SqlSchema.findAll({
           setWhere: sql`${device.userId} = ${userId}`,
         })
         .returning({
-          commandMode: sql<MacCommandMode>`${device.commandMode}`,
+          commandMode: sql<MachineCommandMode>`${device.commandMode}`,
           alwaysAllowedApps: sql<readonly string[]>`${device.alwaysAllowedApps}`,
         }),
+    ),
+});
+
+const writeAppLooks = SqlSchema.findAll({
+  Request: Schema.Struct({
+    ...DeviceKeySchema.fields,
+    looks: Schema.Array(allowedAppLookSchema),
+  }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, id, looks }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ allowedAppLooks: looks })
+        .where(and(eq(device.id, id), eq(device.userId, userId)))
+        .returning({ id: device.id }),
     ),
 });
 
 const writeSettings = SqlSchema.findAll({
   Request: Schema.Struct({
     ...DeviceKeySchema.fields,
-    commandMode: macCommandModeSchema,
+    commandMode: machineCommandModeSchema,
     alwaysAllowedApps: Schema.Array(Schema.String),
   }),
   Result: Schema.Struct({ id: Schema.String }),
@@ -409,6 +427,35 @@ const writeSettings = SqlSchema.findAll({
         .set({ commandMode, alwaysAllowedApps })
         .where(and(eq(device.id, id), eq(device.userId, userId)))
         .returning({ id: device.id }),
+    ),
+});
+
+const findAllowedApps = SqlSchema.findAll({
+  Request: Schema.Struct({ userId: Schema.String }),
+  Result: Schema.Struct({
+    id: Schema.String,
+    name: Schema.String,
+    alwaysAllowedApps: Schema.Array(Schema.String),
+    allowedAppLooks: Schema.NullOr(Schema.Array(allowedAppLookSchema)),
+  }),
+  execute: ({ userId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: device.id,
+          name: device.name,
+          alwaysAllowedApps: sql<readonly string[]>`${device.alwaysAllowedApps}`,
+          allowedAppLooks: device.allowedAppLooks,
+        })
+        .from(device)
+        .where(
+          and(
+            eq(device.userId, userId),
+            isNotNull(device.alwaysAllowedApps),
+            isNull(device.removedAt),
+          ),
+        )
+        .orderBy(device.name, device.id),
     ),
 });
 
@@ -530,8 +577,8 @@ export function devicesNamed(ids: readonly string[]): DeviceEffect<ReadonlyMap<s
  */
 export function joinCommandDevice(
   userId: string,
-  joining: MacDeviceJoinRequest,
-): DeviceEffect<Option.Option<MacDeviceSettings>> {
+  joining: MachineDeviceJoinRequest,
+): DeviceEffect<Option.Option<MachineDeviceSettings>> {
   return Effect.flatMap(DateTime.nowAsDate, (now) =>
     Effect.map(
       joinDevice({
@@ -549,11 +596,54 @@ export function joinCommandDevice(
   );
 }
 
+/** One of the account's machines by its id and name, the apps on it the member always allows, by bundle id, and how the machine names and draws each it posted a look for. */
+export interface MachineAllowedApps {
+  readonly deviceId: string;
+  readonly name: string;
+  readonly apps: readonly string[];
+  readonly looks: readonly AllowedAppLook[];
+}
+
+/**
+ * The account's own machines that always allow an app, each with those
+ * apps and the looks it posted for them, by the machine's name; a machine removed, or one that allows none
+ * or never carried its list up, is left out. Note that the read is keyed by
+ * the account, so a teammate's machines are never among them.
+ */
+export function allowedAppsOf(userId: string): DeviceEffect<readonly MachineAllowedApps[]> {
+  return Effect.map(findAllowedApps({ userId }), (rows) =>
+    rows.flatMap((row) =>
+      row.alwaysAllowedApps.length === 0
+        ? []
+        : [
+            {
+              deviceId: row.id,
+              name: row.name,
+              apps: row.alwaysAllowedApps,
+              // Note that a look of an app the machine no longer allows is left out, as one posted before a change the service took from elsewhere.
+              looks: (row.allowedAppLooks ?? []).filter((look) =>
+                row.alwaysAllowedApps.includes(look.app),
+              ),
+            },
+          ],
+    ),
+  );
+}
+
+/** Keeps how the account's device names and draws the apps it always allows, in place of what it posted before; false where the account holds no such device. */
+export function saveDeviceAppLooks(
+  userId: string,
+  id: string,
+  looks: readonly AllowedAppLook[],
+): DeviceEffect<boolean> {
+  return Effect.map(writeAppLooks({ userId, id, looks }), (rows) => rows.length > 0);
+}
+
 /** Keeps the settings the member gave the account's device; false where the account holds no such device. */
 export function saveCommandDeviceSettings(
   userId: string,
   id: string,
-  settings: MacDeviceSettings,
+  settings: MachineDeviceSettings,
 ): DeviceEffect<boolean> {
   return Effect.map(writeSettings({ userId, id, ...settings }), (rows) => rows.length > 0);
 }
