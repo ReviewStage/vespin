@@ -228,6 +228,7 @@ import { TranscriptAgentOn, TranscriptUsageLimitNotice } from "../reset-credit.j
 import { useToast } from "../toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "../use-app-state.js";
 import { type FindRow, useVirtualFind } from "../virtual-find.js";
+import { useVoiceCall } from "../voice-call.js";
 import {
   type AgentApprovalsControl,
   ApprovalsProvider,
@@ -2861,6 +2862,8 @@ function AgentTranscriptView({
   const undelivered = useUndeliveredLines();
   const unsent = useUnsentLines();
   const voiceShown = useVoiceShown();
+  // The call this window holds, whose end is not yet among the rows however its last line reads.
+  const liveCallId = useVoiceCall().call?.callId;
   // Note that the voice may talk on after the turn, so the current turn is the agent's newest, whatever row stands last.
   const lastTurn = messages.findLast(isAgentTurn);
 
@@ -3222,7 +3225,11 @@ function AgentTranscriptView({
                           <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
                         ) : null}
                         {tails ? (
-                          <CallEnds spans={calls.closes.get(message.id)} callerOf={callerOf} />
+                          <CallEnds
+                            spans={calls.closes.get(message.id)}
+                            live={liveCallId}
+                            callerOf={callerOf}
+                          />
                         ) : null}
                         {at === entries.length - 1 ? trailing : null}
                       </>
@@ -3883,6 +3890,7 @@ function AgentTabView({
                 <KeptAppsProvider value={keptApps}>
                   <AgentComposer
                     {...box}
+                    talksIn={agent.planId}
                     composer={composer}
                     usage={transcript.usage}
                     payer={transcript.payer}

@@ -296,9 +296,10 @@ export function CallLive(props: CallLiveProps): React.JSX.Element {
 
 /**
  * The call's place in an agent's composer row, beside Send, while a call
- * into the agent stands: its status, then the speaker and the microphone,
- * square, each struck through and lit while muted, and End call apart from
- * them on its red disc, so muting never hangs up.
+ * into the agent stands: its status where `live` is given, then the
+ * speaker and the microphone, square, each struck through and lit while
+ * muted, and End call apart from them on its red disc, so muting never
+ * hangs up.
  */
 export function CallComposerControls({
   live,
@@ -306,7 +307,8 @@ export function CallComposerControls({
   speaker,
   onEnd,
 }: {
-  live: CallLiveProps;
+  /** The call's status; none draws the three presses alone, as an agent's composer does, which keeps its row uncrowded. */
+  live?: CallLiveProps | undefined;
   microphone: CallMuteState;
   speaker: CallMuteState;
   onEnd: () => void;
@@ -316,7 +318,7 @@ export function CallComposerControls({
       className="ui-call-composer-controls m-0 flex min-w-0 flex-none items-center gap-tight-gap border-0 p-0"
       aria-label={CALL_CONTROLS_LABEL}
     >
-      <CallLive {...live} />
+      {live === undefined ? null : <CallLive {...live} />}
       <CallMute
         device={CALL_DEVICE.SPEAKER}
         corners={BUTTON_CORNERS.SQUARE}

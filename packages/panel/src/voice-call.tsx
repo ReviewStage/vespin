@@ -23,7 +23,7 @@
  * at once. Whatever fails says why in a toast and lets the microphone go.
  * A call runs on the account's own OpenAI key, so with none saved a start
  * opens Settings › Agents instead. Nothing here starts while the Voice
- * experiment is off.
+ * experiment is off, and turning it off ends a call under way.
  */
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
@@ -335,6 +335,11 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     if (held !== undefined) tell(held, LIVE_EVENT.CLOSE);
     drop(generation.current);
   };
+
+  // Note that the Voice experiment turned off ends a call under way, because no surface draws its End call once the feature stands nowhere.
+  useEffect(() => {
+    if (on === false) hangUpNow.current();
+  }, [on]);
 
   useEffect(() => {
     const hangUp = () => hangUpNow.current();

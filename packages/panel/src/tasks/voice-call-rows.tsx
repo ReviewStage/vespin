@@ -11,7 +11,8 @@
  * call", and the day and time its first line began, before the row its
  * first line stands in; and "Call ended", or the teammate's chip and
  * "ended a call", and how long it ran, to the end of its last line on the
- * call's clock, after the row its last line stands in. All of it is drawn
+ * call's clock, after the row its last line stands in, but for the call
+ * this window still holds, which has not ended. All of it is drawn
  * only while the Voice experiment is on (`useVoiceShown`).
  */
 
@@ -121,9 +122,12 @@ export function CallStarts({
 /** The rule each call that ends at a row stands on after it: "Call ended", or a teammate's chip and "ended a call", and how long it ran. */
 export function CallEnds({
   spans,
+  live,
   callerOf,
 }: {
   spans: readonly CallSpan[] | undefined;
+  /** The call this window holds, still under way, which ends at no row yet; none where it holds none. */
+  live: string | undefined;
   /** The teammate whose call it was, by its caller's first line; none for the reader's own. */
   callerOf: (line: AgentTranscriptMessage) => Actor | undefined;
 }): React.JSX.Element | null {
@@ -131,29 +135,31 @@ export function CallEnds({
 
   return (
     <>
-      {spans.map((span) => {
-        const length = callLength(span);
-        const caller = span.callerLine === undefined ? undefined : callerOf(span.callerLine);
+      {spans
+        .filter((span) => span.callId !== live)
+        .map((span) => {
+          const length = callLength(span);
+          const caller = span.callerLine === undefined ? undefined : callerOf(span.callerLine);
 
-        return (
-          <CallMark key={span.callId} end={CALL_MARK_END.END}>
-            {caller === undefined ? (
-              CALL_MARK_WORDS.ENDED
-            ) : (
-              <Fragment>
-                <ActorRef actor={caller} />
-                {CALL_MARK_WORDS.TEAMMATE_ENDED}
-              </Fragment>
-            )}
-            {length === undefined ? null : (
-              <Fragment>
-                <span aria-hidden="true">·</span>
-                <span className="tabular-nums">{length}</span>
-              </Fragment>
-            )}
-          </CallMark>
-        );
-      })}
+          return (
+            <CallMark key={span.callId} end={CALL_MARK_END.END}>
+              {caller === undefined ? (
+                CALL_MARK_WORDS.ENDED
+              ) : (
+                <Fragment>
+                  <ActorRef actor={caller} />
+                  {CALL_MARK_WORDS.TEAMMATE_ENDED}
+                </Fragment>
+              )}
+              {length === undefined ? null : (
+                <Fragment>
+                  <span aria-hidden="true">·</span>
+                  <span className="tabular-nums">{length}</span>
+                </Fragment>
+              )}
+            </CallMark>
+          );
+        })}
     </>
   );
 }

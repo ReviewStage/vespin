@@ -208,6 +208,7 @@ test("an experiment is found by its name, what it brings, and what other apps ca
   const experiments = [
     "Goals",
     "Merge queue",
+    "Voice",
     "Following",
     "Turn changes",
     "Suggestions",
@@ -310,8 +311,16 @@ test("skills and rename each find the row the page draws", () => {
 });
 
 test("voice finds Agents' Voice row only while the Voice experiment is on", () => {
+  // Note that Settings › Experimental's own Voice row is found either way, so only the Agents page's rows are read.
   const voiceFound = (experiments = NO_EXPERIMENTS) =>
-    labelsFound("voice", { ...FULL_INPUT, settings: settingsView({ experiments }) });
+    (
+      searchSettings(
+        settingsSearchCorpus({ ...FULL_INPUT, settings: settingsView({ experiments }) }),
+        "voice",
+      )?.groups ?? []
+    )
+      .filter((group) => group.page === SETTINGS_VIEW.AGENTS)
+      .flatMap((group) => group.items.map((entry) => entry.label));
 
   assert.ok(!voiceFound().includes("Voice"));
   assert.ok(voiceFound(experimentsOn(EXPERIMENT.VOICE)).includes("Voice"));
