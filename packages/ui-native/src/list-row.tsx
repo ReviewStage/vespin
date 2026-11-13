@@ -47,7 +47,7 @@ import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { dragLink } from "./interactions.js";
+import { dragLink, focusEffectDisabled } from "./interactions.js";
 import {
   Avatar,
   type Face,
@@ -376,6 +376,8 @@ export function RowFrame({
           accessibilityValue(heardValue(heard.value)),
         ]),
     ...(link === undefined ? [] : [dragLink(link)]),
+    // Note that a row of a list that opens its rows draws no keyboard focus ring of its own, since the list's own modifier doesn't reach the cell iPadOS rings (`row-list.tsx`).
+    ...(open === undefined ? [] : [focusEffectDisabled()]),
   ];
 
   if (swiped.length + menuSubmenus.length + menuActions.length === 0 && preview === undefined) {

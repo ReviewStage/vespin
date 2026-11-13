@@ -60,9 +60,20 @@ public final class NativeInteractionsModule: Module {
 /// row and drawn over its fill, which iPadOS's own sidebars (Mail, Files)
 /// don't draw. The selection itself still moves with the arrow keys, and the
 /// row's fill shows where it stands.
+///
+/// Note that a list's own `focusEffectDisabled()` doesn't reach the cells
+/// iPadOS 26 and 27 ring (seen on both simulators), so each row takes it too,
+/// and `unfocusable` also takes the row out of keyboard focus, where the
+/// effect alone still leaves the ring.
 internal struct FocusEffectDisabledModifier: ViewModifier, Record {
+  @Field var unfocusable: Bool = false
+
   func body(content: Content) -> some View {
-    content.focusEffectDisabled()
+    if unfocusable {
+      content.focusEffectDisabled().focusable(false)
+    } else {
+      content.focusEffectDisabled()
+    }
   }
 }
 

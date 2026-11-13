@@ -15,9 +15,9 @@ const MODIFIER = {
   DROP_LINK: "vespinDropLink",
 } as const;
 
-/** A view drawn with no keyboard focus ring, such as a list whose selected row already stands on its own fill. */
-export function focusEffectDisabled(): ModifierConfig {
-  return createModifier(MODIFIER.FOCUS_EFFECT_DISABLED, {});
+/** A view drawn with no keyboard focus ring, such as a list whose selected row already stands on its own fill, and, `unfocusable`, taken out of keyboard focus too. */
+export function focusEffectDisabled(unfocusable = false): ModifierConfig {
+  return createModifier(MODIFIER.FOCUS_EFFECT_DISABLED, { unfocusable });
 }
 
 /** A view dragged out as its link: another app takes it as a URL, and a place here that takes a link reads it back. */
