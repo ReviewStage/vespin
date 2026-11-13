@@ -3,8 +3,10 @@
 import { AGENT_STATUS, type AgentStatus } from "@repo/features/agent-wire";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
 import { descriptionBlocks } from "@repo/features/description-blocks";
+import type { DescriptionCommentThread } from "@repo/features/description-comment-wire";
 import { VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
-import { INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
+import { RESOLVE } from "@repo/features/inbox-ask-words";
+import { INBOX_LINE, INBOX_READ_MARK, threadsWaitingWords } from "@repo/features/inbox-list-model";
 import { iosAgentRoute, iosAppRouteOf, iosPullRequestRoute } from "@repo/features/ios-app-links";
 import { taskActivity } from "@repo/features/ios-system-activity";
 import {
@@ -82,6 +84,7 @@ import {
   LIST_LOOK,
   LinkRow,
   type ListLook,
+  ListRow,
   ListSection,
   PATH_PART,
   RelationRow,
@@ -126,6 +129,7 @@ import {
   threadComments,
   threadOpen,
   threadsOnBlocks,
+  useCommentSettle,
   useTaskComments,
   useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
@@ -1637,20 +1641,71 @@ const COMMENTS_SHOWN = {
   OPEN: "Show open comments",
 } as const;
 
+/** What a resolved thread's row offers to stand it open again, as its page's bar does. */
+const REOPEN = "Reopen";
+
+/** How many replies follow a thread's first comment, as the panel's card at rest counts them. */
+function repliesWords(count: number): string | undefined {
+  if (count === 0) return undefined;
+
+  return count === 1 ? "1 reply" : `${count} replies`;
+}
+
 /**
- * The description's comment threads, as the panel's comments list holds
- * them, the oldest started first: those that still stand open, each its
- * first comment's words and when it last moved, opening the thread with its
- * reply field; and, where any is resolved, a last row that lists the
- * resolved ones in their place, as the panel's Resolved toggle does, and
- * back. None where no thread stands, open or resolved.
+ * One description thread's row, in two lines as an Inbox thread's: its first
+ * comment's words with the time it last changed, then its replies' count
+ * and the words it is on, muted, as the panel's card in the comments list
+ * stands its quote and replies. A resolved one leads with the resolved
+ * glyph and mutes its words. A swipe from the trailing edge resolves it, or
+ * reopens it once resolved, which a full swipe runs; a press opens it.
  */
-function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
-  const router = useRouter();
-  const onOwnTab = useOnOwnTab();
-  const { task } = overview;
-  const threads = useTaskComments(task.id);
-  const retry = useTaskCommentsRetry(task.id);
+function CommentRow({
+  thread,
+  onSettle,
+}: {
+  readonly thread: DescriptionCommentThread;
+  readonly onSettle: (thread: DescriptionCommentThread) => void;
+}) {
+  const open = threadOpen(thread);
+  const comments = threadComments(thread);
+  const replies = repliesWords(Math.max(comments.length - 1, 0));
+
+  return (
+    <ListRow
+      id={thread.id}
+      title={comments[0]?.words ?? thread.quote}
+      line={open ? INBOX_LINE.SAID : INBOX_LINE.RESOLVED}
+      summary={[replies, thread.quote].filter((part) => part !== undefined).join(LINE_PART)}
+      done={!open}
+      at={thread.updatedAt}
+      trailingActions={[
+        {
+          label: open ? RESOLVE : REOPEN,
+          symbol: open ? GLYPH.RESOLVED : GLYPH.RESTORE,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => onSettle(thread),
+        },
+      ]}
+    />
+  );
+}
+
+/**
+ * The comment threads on a task's description, as the panel's comments pane
+ * lists them: the open ones, each a thread's row its list opens, and, where
+ * any are resolved, a last row that shows the resolved ones in their place
+ * and back, as the panel's Show resolved comments does. Nothing while none
+ * stands, and a row that reads them again where their read failed.
+ */
+function OverviewComments({
+  taskId,
+  threads,
+}: {
+  readonly taskId: string;
+  readonly threads: readonly DescriptionCommentThread[];
+}) {
+  const retry = useTaskCommentsRetry(taskId);
+  const settle = useCommentSettle(taskId);
   const [resolvedShown, setResolvedShown] = useState(false);
   const open = threads.filter(threadOpen);
   const resolved = threads.filter((thread) => !threadOpen(thread));
@@ -1663,7 +1718,7 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
     );
   }
 
-  // Note that the resolved list falls back to the open one once nothing in it stays resolved, as a reopen from its thread leaves it.
+  // Note that the resolved list falls back to the open one once nothing in it stays resolved, as a reopen from its row or its thread leaves it.
   const showingResolved = resolvedShown && resolved.length > 0;
   const listed = showingResolved ? resolved : open;
 
@@ -1672,18 +1727,7 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
   return (
     <ListSection title={WORDS.COMMENTS} count={listed.length}>
       {listed.map((thread) => (
-        <LinkRow
-          key={thread.id}
-          symbol={showingResolved ? GLYPH.RESOLVED : GLYPH.COMMENT}
-          label={threadComments(thread)[0]?.words ?? thread.quote}
-          detail={provenanceText(thread.updatedAt, Date.now())}
-          onPress={() =>
-            router.push({
-              pathname: onOwnTab("/tasks/comments/[id]"),
-              params: { id: thread.id, task: task.id },
-            })
-          }
-        />
+        <CommentRow key={thread.id} thread={thread} onSettle={settle} />
       ))}
       {resolved.length === 0 ? null : (
         <LinkRow
@@ -1716,6 +1760,7 @@ function OverviewPage({
 }) {
   const router = useRouter();
   const onTab = useOnTab();
+  const onOwnTab = useOnOwnTab();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
 
@@ -1724,14 +1769,18 @@ function OverviewPage({
     select: selectWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS),
   });
 
+  const threads = useTaskComments(descriptions ? task.id : undefined);
   const related = new Set(overview.tasks.map((each) => each.id));
   const agents = new Set(overview.agents.map(({ agent }) => agent.id));
+  const commented = new Set(threads.map((thread) => thread.id));
 
-  // A related task opens on its own Overview, and an agent on its page, where its transcript and its composer stand.
+  // A related task opens on its own Overview, an agent on its page, where its transcript and its composer stand, and a comment thread on its own.
   const open = (id: string) => {
     if (related.has(id))
       router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id })));
     else if (agents.has(id)) router.push(onTab(iosAgentRoute(id)));
+    else if (commented.has(id))
+      router.push({ pathname: onOwnTab("/tasks/comments/[id]"), params: { id, task: task.id } });
   };
 
   return (
@@ -1749,7 +1798,7 @@ function OverviewPage({
       ) : document === undefined || document.document.body.trim() === "" ? null : (
         <OverviewDescription overview={overview} body={document.document.body} />
       )}
-      {descriptions ? <OverviewComments overview={overview} /> : null}
+      {descriptions ? <OverviewComments taskId={task.id} threads={threads} /> : null}
     </RowList>
   );
 }
