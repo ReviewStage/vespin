@@ -227,7 +227,7 @@ const selectNumberedPullRequests = memoizedSelect(
   },
 );
 
-/** What the task list's collections carry of one task: its agents in the order started, the archived among them, and its agents' pull requests; none of either where they do not carry the task. */
+/** What the task list's collections carry of one task: its agents in the order started, the archived among them, none where they are not followed, and its agents' pull requests. */
 interface TaskRows {
   readonly listedHere: readonly AgentSummary[] | undefined;
   readonly listedPullRequests: readonly ListedPullRequest[] | undefined;
@@ -243,15 +243,6 @@ function useTaskRows(
   taskId: string | undefined,
   followed: boolean,
 ): TaskRows {
-  const { data: task } = useLiveQuery((q) =>
-    taskId === undefined
-      ? undefined
-      : q
-          .from({ task: collections.tasks })
-          .where(({ task }) => eq(task.id, taskId))
-          .findOne(),
-  );
-
   const { data: agents } = useLiveQuery((q) =>
     taskId === undefined
       ? undefined
@@ -271,7 +262,7 @@ function useTaskRows(
   );
 
   return {
-    listedHere: task === undefined || !followed ? undefined : agents,
+    listedHere: followed ? agents : undefined,
     listedPullRequests: pullRequests,
   };
 }
@@ -933,7 +924,7 @@ export function useAgents(input: {
   taskId: string | undefined;
   /** The open task's repository, or null while it names none. */
   repository: string | null;
-  /** Whether the task list follows its agents live, so a task it carries with none has none, rather than none read yet. */
+  /** Whether the task list follows the open task's agents live, so a task with none has none, rather than none read yet. */
   agentsFollowed: boolean;
   /** A fixture run's staged task list, which stands in for the task list's collections, which never carry it; none outside one. */
   staged?: TasksView | undefined;

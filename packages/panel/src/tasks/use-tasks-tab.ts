@@ -1126,11 +1126,15 @@ export function useTasksTab(input: {
   );
 
   // A fixture's task lists its agents at the act door: none, but where an agent profile stages one (`tasks-fixture.ts`).
+  // The open task as the list carries it, looked up by its id alone; its agents are followed only where the list carries it.
+  const listCollections = useTaskListCollections();
+  const openListed = useTaskListRow(listCollections.tasks, viewed.activeTaskId);
+
   const agents = useAgents({
     taskId: viewed.activeTaskId,
     repository:
       openDocument?.id === viewed.activeTaskId ? (openDocument?.repository ?? null) : null,
-    agentsFollowed: liveAgents !== undefined,
+    agentsFollowed: liveAgents !== undefined && openListed !== undefined,
     staged: fixture,
     onOpenIntegrations: input.onOpenIntegrations,
     onOpenApiKeys: input.onOpenApiKeys,
@@ -1460,7 +1464,7 @@ export function useTasksTab(input: {
   }, [shownAgent, tellShown]);
   // The agent on screen is kept warm for the next message while the page is visible.
   // Note that it is looked up by its id alone, so a delivery that moves another agent walks no list here.
-  const shownListed = useTaskListRow(useTaskListCollections().agents, shownAgent ?? undefined);
+  const shownListed = useTaskListRow(listCollections.agents, shownAgent ?? undefined);
   useWarmAgent(shownListed ?? agents.agents?.find((agent) => agent.id === shownAgent));
 
   // The host answers a press a round trip later, so where the tab is bound
