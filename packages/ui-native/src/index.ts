@@ -227,6 +227,7 @@ export {
   menuWithout,
   SplitOverTabs,
   SplitView,
+  scopeMenu,
   UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 

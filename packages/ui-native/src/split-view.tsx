@@ -30,7 +30,8 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { type ReactElement, type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
 import { BarContent } from "./bar-content.js";
-import type { Glyph } from "./glyph.js";
+import type { Scope } from "./button.js";
+import { GLYPH, type Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
@@ -127,6 +128,8 @@ export type ColumnBar = {
   readonly path?: BarPath | undefined;
   /** A page's main acts as glyphs before its ⋯, as Mail's Reply and Trash stand, sharing the bar's one glass. */
   readonly acts?: readonly BarAction[] | undefined;
+  /** A list's scopes as Mail's filter button before its ⋯, where the column is too narrow for segments. */
+  readonly filter?: BarMenu | undefined;
   readonly menu?: BarMenu | undefined;
   readonly action?: BarAction | undefined;
   readonly search?: BarSearch | undefined;
@@ -223,6 +226,31 @@ export function barActItems(acts: readonly BarAction[]): ReactElement[] {
   ));
 }
 
+/**
+ * A list's scopes as Mail's filter menu: each scope a choice, checked where
+ * it stands, with its count only where it has one worth reading, so an empty
+ * scope reads as its name alone. Note that the glyph fills while any scope
+ * but the first stands, as Mail's does while a filter is on, since the bar
+ * keeps no other word of which scope is shown.
+ */
+export function scopeMenu(label: string, scopes: readonly Scope[]): BarMenu {
+  const narrowed = scopes.findIndex((scope) => scope.selected) > 0;
+
+  return {
+    label,
+    symbol: narrowed ? GLYPH.FILTERED : GLYPH.FILTER,
+    choices: scopes.map((scope) => ({
+      label:
+        scope.count === undefined || scope.count === 0
+          ? scope.label
+          : `${scope.label} ${scope.count}`,
+      on: scope.selected,
+      onPress: scope.onPress,
+    })),
+    actions: [],
+  };
+}
+
 /** A menu with the acts a bar already stands as glyphs left out, so ⋯ holds only the rest. */
 export function menuWithout(menu: BarMenu, acts: readonly BarAction[]): BarMenu {
   const barred = new Set(acts.map((act) => act.label));
@@ -254,6 +282,7 @@ function barHolds(bar: ColumnBar): boolean {
     bar.leading !== undefined ||
     (bar.lead ?? []).length > 0 ||
     (bar.acts ?? []).length > 0 ||
+    bar.filter !== undefined ||
     bar.path !== undefined ||
     bar.menu !== undefined ||
     bar.action !== undefined ||
@@ -322,6 +351,11 @@ function Column({
           </ToolbarItem>
         )}
         {barActItems(bar.acts ?? [])}
+        {bar.filter === undefined ? null : (
+          <ToolbarItem placement="topBarTrailing">
+            <BarMenuItem menu={bar.filter} />
+          </ToolbarItem>
+        )}
         {bar.action === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
             <BarActionButton action={bar.action} />
