@@ -32,7 +32,15 @@ import {
   selectFollowedAgent,
   selectTranscript,
 } from "@repo/host/app-state-reads";
-import { BUZZ, latestStep, NO_TOGGLES, type OlderPages, transcriptItems } from "@repo/ui-native";
+import {
+  BUZZ,
+  latestStep,
+  type MediaReads,
+  mediaReads,
+  NO_TOGGLES,
+  type OlderPages,
+  transcriptItems,
+} from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -43,6 +51,9 @@ import { useWrite } from "../use-write.js";
 
 /** What an agent's recordings are named under among the app's caches. */
 const AGENT_MEDIA_PREFIX = "agent";
+
+/** No media read yet, held as one value so a page that holds none reads the same each time. */
+const NO_SOURCES: ReadonlyMap<string, string> = new Map();
 
 /** Says on the console a read the host refused, which the page draws without. */
 function refused(what: string): (cause: unknown) => void {
@@ -234,6 +245,45 @@ export function useAgentTranscript(agentId: string): AppHostRead<AppTranscript> 
   return useQuery({ ...appStateQuery, select }).data;
 }
 
+/** Waits `ms` milliseconds, as a failed media read pauses before it is tried again. */
+function paused(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Says a media read that failed in one line of words, the cause's own among
+ * them, since React Native writes a console error to the device's log
+ * (`com.facebook.react.log`, category `javascript`) in a release build too,
+ * and an error handed beside the words may reach it without its message.
+ */
+function mediaReadFailed(agentId: string, pictureId: string, cause: unknown, again: boolean): void {
+  const why = cause instanceof Error ? `${cause.name}: ${cause.message}` : String(cause);
+
+  const next = again
+    ? "it is tried again shortly"
+    : "it is read again on the transcript's next change";
+
+  console.error(
+    `A picture the agent showed did not land (agent ${agentId}, picture ${pictureId}); ${next}. ${why}`,
+  );
+}
+
+/** One picture or recording the agent showed, read through the host into what it is drawn from. */
+async function agentMediaSource(
+  acts: ReturnType<typeof useHostActs>,
+  agentId: string,
+  pictureId: string,
+): Promise<string> {
+  // Note that a recording is asked for as its MP4 copy, which the system's player plays, where the service kept one.
+  const read = await acts[ACT_KIND.AGENTS_PICTURE]({ agentId, pictureId, playable: MP4_TYPE });
+
+  if (!("base64" in read)) throw new Error(`The picture was not read: ${read.failure}.`);
+
+  return read.contentType === CONVERSATION_MEDIA_TYPE.WEBM || read.contentType === MP4_TYPE
+    ? cachedVideo(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
+    : `data:${read.contentType};base64,${read.base64}`;
+}
+
 /**
  * What each picture and recording the agent showed is drawn from, by its
  * id, read once through the host as the panel reads one
@@ -242,59 +292,49 @@ export function useAgentTranscript(agentId: string): AppHostRead<AppTranscript> 
  * app's caches, written whole before it is drawn, since the system's player
  * reads a file; one on its way, or that could not be read, is absent. Note
  * that each is asked for once while the agent's page stands, however often
- * the transcript moves, and that one whose read failed is asked for again on
- * its next change.
+ * the transcript moves; that one whose read failed is tried again on its
+ * own a few times after a pause (`mediaReads`), since a transcript that
+ * never moves, as the fixture's, would never ask again, and then on the
+ * transcript's next change; and that each failure is written to the
+ * device's log.
  */
 export function useAgentMedia(
   agentId: string,
   ids: readonly string[],
 ): ReadonlyMap<string, string> {
   const acts = useHostActs();
-  const [sources, setSources] = useState<ReadonlyMap<string, string>>(new Map());
 
-  // The agent the pictures were asked for, and the pictures asked for of it.
-  const asked = useRef<{ readonly agentId: string; readonly ids: Set<string> }>({
-    agentId,
-    ids: new Set(),
-  });
+  const [shown, setShown] = useState<{
+    readonly agentId: string;
+    readonly sources: ReadonlyMap<string, string>;
+  }>({ agentId, sources: new Map() });
 
+  const [reads, setReads] = useState<MediaReads | undefined>(undefined);
+
+  // Note that the agent's reads stand while its page does, and are let go as another agent's page stands or the page leaves, so none that lands after is drawn.
   useEffect(() => {
-    if (asked.current.agentId !== agentId) {
-      asked.current = { agentId, ids: new Set() };
-      setSources(new Map());
-    }
+    const standing = mediaReads({
+      read: (pictureId) => agentMediaSource(acts, agentId, pictureId),
+      landed: (pictureId, source) =>
+        setShown((held) => ({
+          agentId,
+          sources: new Map(held.agentId === agentId ? held.sources : undefined).set(
+            pictureId,
+            source,
+          ),
+        })),
+      failed: (pictureId, cause, again) => mediaReadFailed(agentId, pictureId, cause, again),
+      pause: paused,
+    });
 
-    const held = asked.current.ids;
+    setReads(standing);
 
-    for (const pictureId of ids) {
-      if (held.has(pictureId)) continue;
-      held.add(pictureId);
+    return () => standing.stop();
+  }, [acts, agentId]);
 
-      // A read that fails is forgotten, so the transcript's next change asks for it again.
-      const forget = (cause: unknown) => {
-        if (asked.current.agentId === agentId) held.delete(pictureId);
-        refused("A picture the agent showed")(cause);
-      };
+  useEffect(() => reads?.ask(ids), [reads, ids]);
 
-      // Note that a recording is asked for as its MP4 copy, which the system's player plays, where the service kept one.
-      acts[ACT_KIND.AGENTS_PICTURE]({ agentId, pictureId, playable: MP4_TYPE })
-        .then(async (read) => {
-          if (!("base64" in read)) throw new Error(`The picture was not read: ${read.failure}.`);
-
-          const source =
-            read.contentType === CONVERSATION_MEDIA_TYPE.WEBM || read.contentType === MP4_TYPE
-              ? await cachedVideo(AGENT_MEDIA_PREFIX, pictureId, read.contentType, read.base64)
-              : `data:${read.contentType};base64,${read.base64}`;
-
-          // A read that lands once another agent's page stands is that agent's no longer.
-          if (asked.current.agentId !== agentId) return;
-          setSources((shown) => new Map(shown).set(pictureId, source));
-        })
-        .catch(forget);
-    }
-  }, [acts, agentId, ids]);
-
-  return sources;
+  return shown.agentId === agentId ? shown.sources : NO_SOURCES;
 }
 
 /** A cut part's whole read as held: the size it was asked at, and how it stands. */

@@ -34,6 +34,8 @@ const PDF_EXTENSION = ".pdf";
 /** Bytes written under a name of their own beside `file` and moved into place as it, answering its address once they are all on disk. */
 async function written(file: File, base64: string): Promise<string> {
   const partial = new File(file.parentDirectory, `${file.name}${WRITING_SUFFIX}`);
+  // Note that the folder is made first where it is missing, because nothing in Expo makes the app's caches folder, and a write into a folder that is not there fails.
+  file.parentDirectory.create({ intermediates: true, idempotent: true });
 
   // A write an earlier launch left unfinished is cleared rather than written over.
   if (partial.exists) partial.delete();
