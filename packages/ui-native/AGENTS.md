@@ -170,7 +170,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. A landscape iPad's sidebar heads its
-  list with the switcher, its tile and its name, and stands Settings at its foot. Nothing draws a
+  list with the switcher, its tile and its name, and stands no Settings gear: Settings
+  opens from the switcher's menu and ⌘,, as Notion's and Linear's iPad sidebars keep it, and
+  the account's photo leads the sidebar's bar only until the switcher can draw. Nothing draws a
   copy of glass, and glass is one layer: a bar's own, or one glass view
   (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest). A
   glass that holds buttons takes no press of its own (not `interactive`),
