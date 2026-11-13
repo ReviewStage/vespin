@@ -229,6 +229,8 @@ type MarkRowProps = {
   readonly title: string;
   /** What ends its line, muted: where it stands in words, or how long it ran. */
   readonly detail?: string | undefined;
+  /** Where it stands in words, heard before the detail, since the mark says it only to the eye; not heard twice where the detail says it already. */
+  readonly standing?: string | undefined;
   /** Whose row it is, by their face, where the panel draws one: a reviewer, or the App that runs a check. */
   readonly face?: { readonly of: Face; readonly stands: MarkFace } | undefined;
 };
@@ -240,9 +242,10 @@ type MarkRowProps = {
  * hairline under the words. A reviewer's face takes the lead column, its
  * mark moving to the line's end before its words, as the panel's facepile
  * wears where each stands; a check's App stands by its avatar beside the
- * mark. The row is heard as one element, its name and then its words.
+ * mark. The row is heard as one element: its name, where it stands, and
+ * then its words.
  */
-export function MarkRow({ id, mark, title, detail, face }: MarkRowProps) {
+export function MarkRow({ id, mark, title, detail, standing, face }: MarkRowProps) {
   const colors = useColors();
   const faceSize = useScaledSize(MARK_SIZE.FACE);
   const glyph = <ToneGlyph glyph={mark.symbol} tone={mark.tone} textStyle={TYPE_ROLE.ROW_TITLE} />;
@@ -288,7 +291,13 @@ export function MarkRow({ id, mark, title, detail, face }: MarkRowProps) {
     />
   );
 
-  return <RowFrame id={id} row={row} heard={{ label: title, value: [detail] }} />;
+  return (
+    <RowFrame
+      id={id}
+      row={row}
+      heard={{ label: title, value: [standing !== detail && standing, detail] }}
+    />
+  );
 }
 
 /**

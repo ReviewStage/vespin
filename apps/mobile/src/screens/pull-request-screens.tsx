@@ -509,6 +509,7 @@ export function PullRequestScreen() {
                   mark={CHECK_LOOK[check.state]}
                   title={check.name}
                   detail={checkDetail(check)}
+                  standing={CHECK_WORDS[check.state]}
                   face={checkFace(check)}
                 />
               ))
