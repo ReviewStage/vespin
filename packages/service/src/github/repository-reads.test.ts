@@ -11,6 +11,7 @@ import {
   memberRepositoryJson,
   openGithubUser,
   openTokenMember,
+  overNoGitHub,
   type SentToGitHub,
 } from "../testing/github-app-fake.js";
 import { refreshRepositoryReads } from "./repository-reads.js";
@@ -84,6 +85,6 @@ it.layer(getTestDB())("a teammate's task on their own GitHub token", (it) => {
         yield* TestClock.adjust("61 minutes");
         yield* refresh(reader);
         assert.equal(github.sent.length, 3);
-      }).pipe(Effect.provide(GITHUB_APP_WITH_TOKENS)),
+      }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 });

@@ -501,17 +501,20 @@ export const standing = (
 ) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
+    const clock = Layer.succeed(Clock.Clock, yield* Clock.Clock);
+    // Note that GitHub is built on the test's clock, so the tokens it mints are dated by the clock the test moves.
+    const reached = Layer.provide(github.layer, clock);
 
     const services = Layer.mergeAll(
       afterResponse,
       Layer.succeed(SqlClient.SqlClient, client),
       Layer.succeed(Database, yield* Database),
-      Layer.succeed(Clock.Clock, yield* Clock.Clock),
+      clock,
       Layer.succeed(HostedEnvironment, NO_KEYS),
       scriptedHarnessLayer((account) => agentSessions.agentSessions(harnessFor(account))),
-      github.layer,
+      reached,
       // A sandbox's calls reach the same fake as GitHub's, through the adapter's `fetch`.
-      Layer.provide(vercelSandboxOver(github.respond), github.layer),
+      Layer.provide(vercelSandboxOver(github.respond), reached),
       modelCatalogOf(CATALOG),
       integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),

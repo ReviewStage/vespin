@@ -26,6 +26,7 @@ import { webSqlClient } from "./db/sql-client.js";
 import { hostedEnvironment } from "./environment.js";
 import { productAnalyticsFromEnvironment } from "./events/server-events.js";
 import { githubAppFromEnvironment } from "./github/github-app.js";
+import { githubHoldStoreLayer } from "./github/github-hold-store.js";
 import { githubRateGate } from "./github/github-rate-gate.js";
 import { githubDeliveryReadsFromEnvironment } from "./github/github-webhook-app.js";
 import { pullRequestLinksLayer } from "./github/pull-request-links.js";
@@ -69,8 +70,22 @@ const gatedGitHubClient = githubRateGate.pipe(
   Layer.provide(Layer.merge(FetchHttpClient.layer, webSqlClient)),
 );
 
-/** Our GitHub App as the environment names it, named once so every layer that reaches it shares one. */
-const githubApp = githubAppFromEnvironment.pipe(Layer.provide(hostedEnvironment));
+/**
+ * Our GitHub App as the environment names it, named once so every layer that
+ * reaches it shares one. Its `@repo/github` client sends on a fetch client of
+ * its own rather than the gated one, since the module queues, spaces, and
+ * holds its requests itself, and keeps its holds in the same table as the
+ * gate over `webSqlClient`.
+ */
+const githubApp = githubAppFromEnvironment.pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      hostedEnvironment,
+      FetchHttpClient.layer,
+      githubHoldStoreLayer.pipe(Layer.provide(webSqlClient)),
+    ),
+  ),
+);
 
 /** Our Slack bot as the environment names it, named once so every layer that reaches it shares one. */
 const slackBot = slackBotFromEnvironment.pipe(
@@ -125,7 +140,9 @@ const apnsSender = apnsSenderFromEnvironment.pipe(Layer.provide(apnsHttp2Transpo
  * and none while GitHub says it is rate limited to any instance. The gate
  * keeps its holds in the database over `webSqlClient`, the very layer below,
  * which a build of this layer builds once however many name it, so the gate
- * holds no pool of its own.
+ * holds no pool of its own. The App's installation tokens are minted through
+ * `@repo/github` instead, which holds them under its own rows of that table
+ * (`github/github-hold-store.ts`).
  *
  * `Sync` is here for the same reason: Sync's hub holds one `LISTEN`
  * per instance, shared by every held read and wait on it (`sync/hub.ts`),

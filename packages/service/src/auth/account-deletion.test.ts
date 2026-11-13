@@ -70,6 +70,7 @@ import { accountDeletionTestServices } from "../testing/account-deletion-service
 import { announcingClock, driven } from "../testing/clock-driven.js";
 import {
   fakeGitHub,
+  fixtureGitHubApp,
   GITHUB_APP_SETTINGS,
   GITHUB_FIXTURE,
   type SentToGitHub,
@@ -627,7 +628,7 @@ const hanging = (sent: SentToGitHub) =>
   });
 
 /** The App over the fixture settings, as every fake stands it. */
-const FIXTURE_APP = GitHubApp.layer(GITHUB_APP_SETTINGS);
+const FIXTURE_APP = fixtureGitHubApp(GITHUB_APP_SETTINGS);
 
 /** The fixture App, but that its read of the sign-in token dies once it has the token, as a bug past the read would, before the delete. */
 const APP_DYING_ON_READ = Layer.effect(
