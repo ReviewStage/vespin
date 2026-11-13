@@ -1,0 +1,135 @@
+A base a2ded1476
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+  merged #8986 e92a3b14e
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/index.ts
+  merged #8992 c4b36ff6b
+  merged #8969 ad0e231b4
+  merged #8983 5748dff67
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/index.ts
+  merged #8993 d777dd31c
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/button.tsx
+Auto-merging packages/ui-native/src/index.ts
+  merged #8971 63c1d1bf0
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging apps/mobile/src/tasks/use-comments.ts
+  merged #8968 5147c5359
+  merged #8977 288518dd0
+Auto-merging apps/mobile/src/app/_layout.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/app/_layout.tsx
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging apps/mobile/src/screens/search-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/ui-native/AGENTS.md
+CONFLICT (content): Merge conflict in packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/index.ts
+CONFLICT (content): Merge conflict in packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/option-rows.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/option-rows.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #8960 conflict: apps/mobile/src/app/_layout.tsx packages/ui-native/AGENTS.md packages/ui-native/src/index.ts packages/ui-native/src/option-rows.tsx 
+Auto-merging packages/ui-native/AGENTS.md
+CONFLICT (content): Merge conflict in packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/glass-bar.tsx
+Auto-merging packages/ui-native/src/glyph.ts
+Auto-merging packages/ui-native/src/index.ts
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #8956 conflict: packages/ui-native/AGENTS.md 
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+  merged #8953 0ce6aa869
+  merged #8965 fa150d802
+  merged #8991 5192a31cc
+Auto-merging packages/ui-native/src/composer.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/composer.tsx
+Auto-merging packages/ui-native/src/row-list.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #8935 conflict: packages/ui-native/src/composer.tsx 
+Auto-merging apps/mobile/src/app/settings/machines.tsx
+Auto-merging apps/mobile/src/app/settings/mcp.tsx
+Auto-merging apps/mobile/src/app/settings/memory.tsx
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/agent-screens.tsx
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging apps/mobile/src/screens/pull-request-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/pull-request-screens.tsx
+Auto-merging apps/mobile/src/screens/relation-screens.tsx
+Auto-merging apps/mobile/src/screens/search-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/search-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/ui-native/AGENTS.md
+CONFLICT (content): Merge conflict in packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/button.tsx
+Auto-merging packages/ui-native/src/glyph.ts
+CONFLICT (content): Merge conflict in packages/ui-native/src/glyph.ts
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #8946 conflict: apps/mobile/src/screens/agent-screens.tsx apps/mobile/src/screens/pull-request-screens.tsx apps/mobile/src/screens/search-screens.tsx packages/ui-native/AGENTS.md packages/ui-native/src/glyph.ts 
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/button.tsx
+Auto-merging packages/ui-native/src/list-row.tsx
+Auto-merging packages/ui-native/src/row-list.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/row-list.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #8955 conflict: packages/ui-native/src/row-list.tsx 
+Auto-merging apps/mobile/src/screens/inbox-remind.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/inbox-remind.tsx
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging apps/mobile/src/screens/search-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/search-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/list-row.tsx
+Auto-merging packages/ui-native/src/remind-sheet.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/remind-sheet.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #8959 conflict: apps/mobile/src/screens/inbox-remind.tsx apps/mobile/src/screens/inbox-screens.tsx apps/mobile/src/screens/search-screens.tsx packages/ui-native/src/remind-sheet.tsx 
+Auto-merging apps/mobile/src/app/_layout.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/app/_layout.tsx
+Auto-merging packages/ui-native/src/index.ts
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #8974 conflict: apps/mobile/src/app/_layout.tsx 
+Auto-merging apps/mobile/src/screens/agent-screens.tsx
+Auto-merging apps/mobile/src/screens/inbox-screens.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/screens/inbox-screens.tsx
+Auto-merging apps/mobile/src/screens/search-screens.tsx
+Auto-merging apps/mobile/src/screens/task-screens.tsx
+Auto-merging packages/ui-native/AGENTS.md
+Auto-merging packages/ui-native/src/empty-state.tsx
+Auto-merging packages/ui-native/src/glyph.ts
+CONFLICT (content): Merge conflict in packages/ui-native/src/glyph.ts
+Auto-merging packages/ui-native/src/index.ts
+Auto-merging packages/ui-native/src/list-row.tsx
+Auto-merging packages/ui-native/src/row-list.tsx
+Auto-merging packages/ui-native/src/split-view.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/split-view.tsx
+Auto-merging packages/ui-native/src/thread-page.tsx
+CONFLICT (content): Merge conflict in packages/ui-native/src/thread-page.tsx
+Auto-merging packages/ui-native/src/tokens/type.ts
+Auto-merging packages/ui-native/src/workspace-switcher.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #8978 conflict: apps/mobile/src/screens/inbox-screens.tsx packages/ui-native/src/glyph.ts packages/ui-native/src/split-view.tsx packages/ui-native/src/thread-page.tsx 
+Auto-merging apps/mobile/src/app/_layout.tsx
+CONFLICT (content): Merge conflict in apps/mobile/src/app/_layout.tsx
+Automatic merge failed; fix conflicts and then commit the result.
+  SKIPPED #8729 conflict: apps/mobile/src/app/_layout.tsx 
+bundle A built e3cf0ca8d
+  install 0
+  export 0
+  signed 0
+B = #8972 stack as pushed
+bundle B built a4505cb99
+  install 0
+  export 0
+  signed 0
+C base a2ded1476
+  merged #8952 db8c50860
+bundle C built 278a5057b
+  install 0
+  export 0
+  signed 0
