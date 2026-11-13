@@ -1067,7 +1067,9 @@ function InboxSplitScreen({
       choosing === undefined
         ? {
             title: INBOX_TITLE,
-            filter: threeColumns ? scopeMenu(SCOPE_LABEL, scopes) : undefined,
+            filter: threeColumns
+              ? scopeMenu(SCOPE_LABEL, scopes, show !== INBOX_SHOW.OPEN)
+              : undefined,
             menu,
             search: { placeholder: SEARCH_INBOX, text: search, onChange: setSearch },
           }
