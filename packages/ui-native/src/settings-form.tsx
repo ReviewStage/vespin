@@ -21,6 +21,7 @@ import {
   accessibilityIdentifier,
   accessibilityLabel,
   accessibilityValue,
+  alignmentGuide,
   background,
   buttonStyle,
   disabled,
@@ -33,10 +34,10 @@ import {
   useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
-import { useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
-import { actContent } from "./glyph-label.js";
+import { actContent, GlyphImage } from "./glyph-label.js";
 import { Avatar } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
@@ -392,6 +393,23 @@ export function CodeRow({ code, testId }: { readonly code: string; readonly test
   );
 }
 
+/**
+ * An act's glyph and its words at an accessibility text size, the words
+ * wrapping under their own first word, as iOS Settings wraps a long row's
+ * name. Note that SwiftUI's own Label is left for this one size, because in a
+ * Form it ran a wrapped name's second line under its glyph ("Workspace
+ * settings" at AX3), and that the separator starts at the words, as the
+ * Label's does.
+ */
+function WrappedAct({ label, symbol }: { readonly label: string; readonly symbol: Glyph }) {
+  return (
+    <HStack alignment="firstTextBaseline" spacing={SPACE.ROW}>
+      <GlyphImage glyph={symbol} />
+      <Text modifiers={[alignmentGuide("listRowSeparatorLeading", 0)]}>{label}</Text>
+    </HStack>
+  );
+}
+
 type ActionRowProps = {
   readonly label: string;
   readonly symbol?: Glyph | undefined;
@@ -422,12 +440,15 @@ export function ActionRow({
   onPress,
 }: ActionRowProps) {
   const colors = useColors();
+  const stacked = useAccessibilitySize();
   const role = destructive ? "destructive" : "default";
 
   if (detail === undefined) {
     return (
       <SwiftUIButton
-        {...actContent(label, symbol)}
+        {...(stacked && symbol !== undefined
+          ? { children: <WrappedAct label={label} symbol={symbol} /> }
+          : actContent(label, symbol))}
         role={role}
         onPress={onPress}
         modifiers={[accessibilityLabel(heard), listRowBackground(colors.RAISED), disabled(off)]}
