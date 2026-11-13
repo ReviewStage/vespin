@@ -19,6 +19,7 @@ import {
   accessibilityValue,
   alignmentGuide,
   background,
+  bold,
   buttonStyle,
   fixedSize,
   font,
@@ -28,6 +29,7 @@ import {
   listRowBackground,
   listRowInsets,
   listRowSeparatorTint,
+  type ModifierConfig,
   monospacedDigit,
   padding,
   tag,
@@ -37,13 +39,14 @@ import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { type InboxLineKind, NEEDS_YOU } from "@repo/features/inbox-list-model";
 import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
+import { matchRanges } from "@repo/features/search-tokens";
 import { TASK_AGENTS_STATUS, type TaskAgentsStatus } from "@repo/features/task-agents-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { dueText, sinceHeard, sinceText } from "@repo/features/time-format";
 import { VERB } from "@repo/features/words";
 import { Predicate } from "effect";
-import { type ReactElement, type ReactNode, useContext } from "react";
+import { Fragment, type ReactElement, type ReactNode, useContext } from "react";
 import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
@@ -59,7 +62,7 @@ import {
   UnreadDot,
   WorkingMark,
 } from "./marks.js";
-import { RowOpenContext, RowSelectedContext } from "./row-open.js";
+import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
 import {
   type BrandColors,
   STATUS_TONE,
@@ -447,6 +450,49 @@ export function RowFrame({
 }
 
 /**
+ * A row's title, the words a search typed set in bold where they stand in
+ * it, as Mail's search results set them, and plain outside a search. Note
+ * that a marked title is drawn anew whenever its words or the search's
+ * change, because `@expo/ui`'s native text joins the texts nested in it as
+ * it draws and is never told one of them changed.
+ */
+function TitleWords({
+  title,
+  modifiers,
+}: {
+  readonly title: string;
+  readonly modifiers: readonly ModifierConfig[];
+}) {
+  const searched = useContext(RowSearchedContext);
+  const ranges = matchRanges(title, searched);
+
+  if (ranges.length === 0) return <Text modifiers={[...modifiers]}>{title}</Text>;
+
+  const parts: ReactElement[] = [];
+  let from = 0;
+
+  for (const range of ranges) {
+    if (range.start > from) parts.push(<Text key={from}>{title.slice(from, range.start)}</Text>);
+    parts.push(
+      <Text key={range.start} modifiers={[bold()]}>
+        {title.slice(range.start, range.end)}
+      </Text>,
+    );
+    from = range.end;
+  }
+
+  if (from < title.length) parts.push(<Text key={from}>{title.slice(from)}</Text>);
+
+  return (
+    <Fragment key={title}>
+      <Text key={searched.join(" ")} modifiers={[...modifiers]}>
+        {parts}
+      </Text>
+    </Fragment>
+  );
+}
+
+/**
  * A row's first line: the unread dot in the margin, the leading mark in its
  * column, the title, and what ends the line. The line centers its pieces,
  * so the mark stands on the title at any Dynamic Type size, and at an
@@ -473,15 +519,14 @@ export function RowHead({
   const leadWidth = useScaledSize(MARK_SIZE.LEAD);
 
   const words = (
-    <Text
+    <TitleWords
+      title={title}
       modifiers={[
         font({ textStyle: TYPE_ROLE.ROW_TITLE, weight: unread ? "medium" : "regular" }),
         foregroundStyle(ink),
         lineLimit(lines.title),
       ]}
-    >
-      {title}
-    </Text>
+    />
   );
 
   // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line.

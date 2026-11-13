@@ -24,13 +24,14 @@ import {
   scrollDismissesKeyboard,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
+import { searchTokens } from "@repo/features/search-tokens";
 import { Predicate } from "effect";
-import { type ReactElement, type ReactNode, useState } from "react";
+import { type ReactElement, type ReactNode, useMemo, useState } from "react";
 import { GLYPH, type Glyph, glyphImage, type MarkLook } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { dropLink } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
-import { RowOpenContext, RowSelectedContext } from "./row-open.js";
+import { RowOpenContext, RowSearchedContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -78,6 +79,8 @@ type RowListProps = {
   readonly onRefresh?: (() => Promise<void>) | undefined;
   /** Its Select mode, while it stands in one; none for a list a tap opens rows in. */
   readonly choosing?: RowChoosing | undefined;
+  /** What a search typed, whose words each row's title sets in bold; none for a list no search found. */
+  readonly searched?: string | undefined;
   readonly children: ReactNode;
 };
 
@@ -108,8 +111,17 @@ function listGround(colors: BrandColors, look: ListLook): readonly ModifierConfi
  * row, a tap ticks it rather than opening it, two fingers dragged down tick
  * a run, and the rows' swipes step aside, as the system's do.
  */
-export function RowList({ look, selected, onSelect, onRefresh, choosing, children }: RowListProps) {
+export function RowList({
+  look,
+  selected,
+  onSelect,
+  onRefresh,
+  choosing,
+  searched,
+  children,
+}: RowListProps) {
   const colors = useColors();
+  const searchedWords = useMemo(() => searchTokens(searched ?? ""), [searched]);
   const [width, setWidth] = useState(0);
   const sides = look === LIST_LOOK.PLAIN ? Math.max(0, (width - READING_WIDTH) / 2) : 0;
 
@@ -145,7 +157,7 @@ export function RowList({ look, selected, onSelect, onRefresh, choosing, childre
     >
       <RowOpenContext value={onSelect}>
         <RowSelectedContext value={choosing === undefined ? selected : undefined}>
-          {children}
+          <RowSearchedContext value={searchedWords}>{children}</RowSearchedContext>
         </RowSelectedContext>
       </RowOpenContext>
     </List>
