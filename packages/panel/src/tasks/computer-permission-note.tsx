@@ -91,8 +91,8 @@ export function ComputerPermissionNote({
   if (missing === undefined) return null;
   const names = computerPermissionsNamed(missing.permissions);
   const them = missing.permissions.length === 1 ? "it" : "them";
-  // Note that macOS applies Screen Recording only once the app is reopened, so a reader who went to turn it on is told so.
 
+  // Note that macOS applies Screen Recording only once the app is reopened, so a reader who went to turn it on is told so.
   const reopen =
     thatMac && !asked.isIdle && missing.permissions.includes(COMPUTER_PERMISSION.SCREEN_RECORDING);
 
