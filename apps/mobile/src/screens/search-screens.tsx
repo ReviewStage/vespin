@@ -263,7 +263,7 @@ function SearchStackScreen(words: SearchWords) {
       {regular ? (
         <Stack.Toolbar placement="right">
           <Stack.Toolbar.Button
-            icon={glyphSymbol(compose.symbol)}
+            icon={compose.symbol === undefined ? undefined : glyphSymbol(compose.symbol)}
             accessibilityLabel={compose.label}
             onPress={compose.onPress}
           />
