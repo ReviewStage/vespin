@@ -1207,50 +1207,55 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
   const decodeTaskRows = Schema.decodeUnknownOption(TASK_ROWS_READ.rows);
   /** Each read out now of a task the list does not hold, by the id a window opened, which every ask meanwhile joins. */
   const coldReads = yield* FiberMap.make<string>();
-  /** The ids read outside the list since the session signed in, the service's answer kept, so a second open reads nothing; one it did not answer is asked again. */
-  const coldAsked = new Set<string>();
-  /** The ids opened before the list first answered, read outside it once it has, where it holds them not. */
+  /** The ids the service answered no task for, as one the account does not reach, so a second open reads nothing; a read it did not answer is asked again at the next open. */
+  const coldNone = new Set<string>();
+  /** The ids read into the list as cold tasks, which a session signing in reads again, since its windows hold them still. */
+  const coldRead = new Set<string>();
+  /** The ids opened while the list could not be read outside of: signed out, or not answered yet, since until then every task is outside it. Each is read once the list answers, where it holds it not. */
   const coldWaiting = new Set<string>();
 
   /**
    * The task or the agent `id` names, read from the service with the task's
    * agents where the list holds neither, and drawn in it as a cold task
    * (`task-list-collections.ts`), behind the open that asked: answered at
-   * once, the read running on. Note that one opened before the list first
-   * answered waits for that answer, because until then every task is
-   * outside it. A list replaced by a sign-out meanwhile draws nothing of it.
+   * once, the read running on. A task once read stands in the list, so a
+   * second open reads nothing while it does; one the follow later lets go
+   * is read again. A list replaced by a sign-out meanwhile draws nothing of
+   * it.
    */
   const openedOutside = (id: string): Effect.Effect<void> =>
     Effect.suspend(() => {
       const userId = dependencies.accountId();
       const { collections } = taskList;
 
-      if (!gate() || userId === undefined || coldAsked.has(id) || collections.holds(id)) {
-        return Effect.void;
-      }
+      if (coldNone.has(id) || collections.holds(id)) return Effect.void;
 
-      if (view.listStatus !== TASKS_READ.READY) {
+      if (!gate() || userId === undefined || view.listStatus !== TASKS_READ.READY) {
         coldWaiting.add(id);
 
         return Effect.void;
       }
 
-      coldAsked.add(id);
+      // Note that the read is marked before it is asked, so a task the follow lets go while it is out is not drawn back by its answer.
+      const mark = collections.mark();
 
       const read = Effect.gen(function* () {
         const sealed = yield* served(client.liveRead(TASK_ROWS_READ, { id, userId }, {}));
 
-        if ("failure" in sealed) {
-          coldAsked.delete(id);
-
-          return;
-        }
-
+        if ("failure" in sealed) return;
         const { plans, agents } = sealed.queries;
         const rows = decodeTaskRows({ plans: plans.rows, agents: agents.rows });
 
         if (Option.isNone(rows) || taskList.collections !== collections) return;
-        yield* collections.cold(rows.value);
+
+        if (rows.value.plans.length + rows.value.agents.length === 0) {
+          coldNone.add(id);
+
+          return;
+        }
+
+        coldRead.add(id);
+        yield* collections.cold(rows.value, mark);
       });
 
       return Effect.asVoid(FiberMap.run(coldReads, id, read, { onlyIfMissing: true }));
@@ -2829,8 +2834,10 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       yield* documents.end;
       yield* FiberHandle.clear(listFollow);
       yield* FiberMap.clear(coldReads);
-      coldAsked.clear();
-      coldWaiting.clear();
+      // Note that the cold tasks read are read again for the session signing in, as the windows' holds on them stand through a sign-out.
+      for (const id of coldRead) coldWaiting.add(id);
+      coldRead.clear();
+      coldNone.clear();
       yield* Scope.close(taskList.scope, Exit.void);
       taskList = yield* openTaskList;
       yield* FiberHandle.clear(sidebarFollow);

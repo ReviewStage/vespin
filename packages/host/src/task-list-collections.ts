@@ -90,12 +90,15 @@ export interface TaskListCollections {
   readonly synced: () => TaskListLiveRows;
   /** Whether the list draws the task or the agent `id` names, from its follow or as a cold one. */
   readonly holds: (id: string) => boolean;
+  /** Where the follow's answers stand now, which a read outside the list is marked with as it is asked. */
+  readonly mark: () => number;
   /**
    * Takes one task read outside the list, its plan and its agents, as cold
-   * rows drawn beside the list's, and draws it; each the follow already
-   * holds is the follow's alone.
+   * rows drawn beside the list's, and draws it, the read asked at `mark`;
+   * each the follow holds is the follow's alone, and each it let go since
+   * `mark` is gone, not drawn back by an answer read before it went.
    */
-  readonly cold: (rows: TaskListLiveRows) => Effect.Effect<void>;
+  readonly cold: (rows: TaskListLiveRows, mark: number) => Effect.Effect<void>;
 }
 
 /**
@@ -124,6 +127,9 @@ export function taskListCollections(
     /** The plans and the agents the list holds, by id, as its answers joined them. */
     let planKeys: readonly string[] = [];
     let agentKeys: readonly string[] = [];
+    /** How many answers the follow gave, and the answer each id it let go was let go at. */
+    let answers = 0;
+    const letGoAt = new Map<string, number>();
     // Note that a write still standing once the scope closed draws nothing, since a sign-out closed it and its rows were the account's that left.
     let open = true;
     yield* Effect.addFinalizer(() =>
@@ -215,6 +221,13 @@ export function taskListCollections(
             nextAgents.length === agentKeys.length;
 
           if (still) return Effect.succeed(false);
+          answers += 1;
+          const kept = new Set([...nextPlans, ...nextAgents]);
+
+          for (const id of [...planKeys, ...agentKeys]) {
+            if (!kept.has(id)) letGoAt.set(id, answers);
+          }
+
           planKeys = nextPlans;
           agentKeys = nextAgents;
           const at = syncIdOf(standing);
@@ -237,10 +250,12 @@ export function taskListCollections(
       synced: () => ({ plans: plans.synced(), agents: agents.synced() }),
       holds: (id) =>
         plans.holds(id) || agents.holds(id) || coldPlans.holds(id) || coldAgents.holds(id),
-      cold: (rows) =>
+      mark: () => answers,
+      cold: (rows, mark) =>
         Effect.gen(function* () {
-          const planRows = rows.plans.filter((row) => !plans.holds(row.id));
-          const agentRows = rows.agents.filter((row) => !agents.holds(row.id));
+          const standing = (row: { readonly id: string }) => (letGoAt.get(row.id) ?? 0) <= mark;
+          const planRows = rows.plans.filter((row) => !plans.holds(row.id) && standing(row));
+          const agentRows = rows.agents.filter((row) => !agents.holds(row.id) && standing(row));
 
           if (planRows.length + agentRows.length === 0) return;
           coldPlanKeys = [...new Set([...coldPlanKeys, ...planRows.map((row) => row.id)])];
