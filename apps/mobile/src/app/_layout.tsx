@@ -30,6 +30,33 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 const SHORT_SHEET_DETENTS = [0.5, 1];
 
 /**
+ * What the root keeps running while the app stands, drawing nothing: the
+ * phone's pushes and their taps, the Live Activity, the Inbox widget,
+ * Spotlight and Handoff, crash reports' account, the write notices' offline
+ * word and account, the share sheet, and a machine's pairing link.
+ */
+function RootEffects({
+  signedIn,
+  updateNeeded,
+}: {
+  readonly signedIn: boolean;
+  readonly updateNeeded: boolean;
+}) {
+  usePushRegistration(signedIn);
+  useInboxNotifications(signedIn);
+  useLiveActivity(signedIn);
+  useInboxWidget(signedIn);
+  useSystemActivity(signedIn);
+  useCrashReportAccount();
+  useOfflineNotice();
+  useNoticeForAccount();
+  useShareSheet(updateNeeded);
+  useHostConnectLink(signedIn && !updateNeeded);
+
+  return null;
+}
+
+/**
  * The screens, each behind the account's standing: the tabs, Settings, and
  * the sheets that start a task or an agent or change an agent's model while an account is signed in, and the sign-in screen otherwise, so a
  * sign-out anywhere, Settings' or a refused renewal's, lands on it and a
@@ -65,17 +92,6 @@ function GuardedScreens() {
     ...appStateQuery,
     select: (state) => state.network.updateNeeded === true,
   });
-
-  usePushRegistration(signedIn);
-  useInboxNotifications(signedIn);
-  useLiveActivity(signedIn);
-  useInboxWidget(signedIn);
-  useSystemActivity(signedIn);
-  useCrashReportAccount();
-  useOfflineNotice();
-  useNoticeForAccount();
-  useShareSheet(updateNeeded);
-  useHostConnectLink(signedIn && !updateNeeded);
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
@@ -134,6 +150,8 @@ function GuardedScreens() {
           <Stack.Screen name="update-needed" options={{ gestureEnabled: false }} />
         </Stack.Protected>
       </Stack>
+      {/* Note that the root's effects stand in a sibling after the navigator, so they still run once its screens have mounted, as they did in this component, and apart from it, because several read wide slices (the tasks for Spotlight, the Inbox for its widget, the share sheet's snapshot), and each delivery that moved one re-rendered the whole navigator under them. */}
+      <RootEffects signedIn={signedIn} updateNeeded={updateNeeded} />
     </>
   );
 }
