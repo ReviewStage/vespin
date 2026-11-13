@@ -32,7 +32,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useRouter } from "expo-router";
 import { useCallback, useRef, useState } from "react";
-import { useChosenWorkspace } from "../chosen-workspace.js";
+import { chooseOver, useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useTaskOverview } from "../tasks/use-tasks.js";
@@ -104,18 +104,23 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
   // Note that a second tap can land before the sheet has gone, so a press is read off a ref.
   const sent = useRef(false);
 
-  // Note that the move is a declared write, drawn in the workspace it goes to at once, so the phone follows the task there and the sheet closes as it goes, as the panel's list follows it. A refusal is said by the app's failure notice, and the phone goes back to the workspace the task stands in.
+  // Note that the move is a declared write, drawn in the workspace it goes to at once, so the phone follows the task there and the sheet closes as it goes, as the panel's list follows it. A refusal is said by the app's failure notice with Try again, and the phone goes back to the workspace the task stands in.
   const move = () => {
     if (task === undefined || chosen === undefined || sent.current) return;
     sent.current = true;
     choose(chosen.id);
     router.back();
 
+    // Note that the phone is put back, and forward again on a Try again that goes, only while it still works where the move left it.
     void write(() => acts[ACT_KIND.TASKS_MOVE]({ taskId: task.id, workspaceId: chosen.id }), {
       refused: (answer) => ("failure" in answer ? TASK_MOVE_WORDS.REFUSED : undefined),
+      retry: true,
       went: BUZZ.SUCCESS,
+      done: () => {
+        if (from !== undefined) chooseOver(from.id, chosen.id);
+      },
     }).then((moved) => {
-      if (!moved && from !== undefined) choose(from.id);
+      if (!moved && from !== undefined) chooseOver(chosen.id, from.id);
     });
   };
 
