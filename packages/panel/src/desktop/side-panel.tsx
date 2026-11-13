@@ -3476,7 +3476,7 @@ function PanelFrame({
       ) : null}
       <aside
         ref={aside}
-        className="side-panel relative flex min-w-0 max-w-side-panel flex-none flex-col border-l border-border bg-well"
+        className="side-panel relative flex min-w-0 max-w-side-panel flex-none flex-col border-l border-border"
         aria-label={label}
         inert={leaving !== PANEL_LEAVING.NONE}
         data-full-screen={String(panel.fullScreen)}
