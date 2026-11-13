@@ -44,7 +44,7 @@ import { machinesQuery, machinesRetryMutation } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useAllowedApps } from "../tasks/mac-apps.js";
 import { appStateQuery, selectAccount, selectExperiment } from "../use-app-state.js";
-import { type AllowedApp, AllowedAppRow } from "./allowed-app-row.js";
+import { type AllowedApp, AllowedAppList } from "./allowed-app-row.js";
 import { MachineMark, MachineStandingLine } from "./machine-standing.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
@@ -226,16 +226,15 @@ function MachineRows({
               drawn: (asked) => asked.computerUse ?? appsOn,
             })}
           />
-          {appsOn
-            ? settings.alwaysAllowedApps.map((bundleId) => (
-                <AllowedAppRow
-                  key={bundleId}
-                  indent={SETTINGS_ROW_INDENT.MARK}
-                  app={apps.get(bundleId) ?? { bundleId, name: bundleId }}
-                  onRemove={removeApp}
-                />
-              ))
-            : null}
+          {appsOn ? (
+            <AllowedAppList
+              indent={SETTINGS_ROW_INDENT.MARK}
+              apps={settings.alwaysAllowedApps.map(
+                (bundleId) => apps.get(bundleId) ?? { bundleId, name: bundleId },
+              )}
+              onRemove={removeApp}
+            />
+          ) : null}
         </>
       )}
     </>

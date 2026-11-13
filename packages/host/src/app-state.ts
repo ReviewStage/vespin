@@ -145,6 +145,8 @@ export const RUN_PROFILE = {
   SETTINGS_AGENTS: "settings-agents",
   /** The same account, Settings on Hosts: a server online, one to upgrade, and one offline. */
   SETTINGS_HOSTS: "settings-hosts",
+  /** The same account in the desktop app, Settings on This Mac: Computer use on with Accessibility still to allow, and many apps always allowed. */
+  SETTINGS_THIS_MAC: "settings-this-mac",
   /** The same account, Settings on Integrations: some connected, some with their sign-in expired. */
   SETTINGS_INTEGRATIONS: "settings-integrations",
   /** The same account, Settings on MCP & CLI: the agents it let in, how to connect another, and the `vespin` command's install and sign-in. */

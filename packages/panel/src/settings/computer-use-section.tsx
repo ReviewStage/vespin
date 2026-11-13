@@ -9,16 +9,7 @@ import {
   computerUseAppsWithout,
   type SettingsRowsInput,
 } from "@repo/settings";
-import {
-  BUTTON_VARIANT,
-  Button,
-  ErrorState,
-  SETTINGS_ROW_STATE,
-  SettingsLine,
-  SettingsRow,
-  SettingsRowStateLine,
-  SettingsSection,
-} from "@repo/ui";
+import { ErrorState, SettingsLine, SettingsSection } from "@repo/ui";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
@@ -26,7 +17,8 @@ import { actFailureWords, askAct } from "../act.js";
 import { refusalShown, unreadShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { appStateIn, selectAppSettingsView } from "../use-app-state.js";
-import { AllowedAppRow } from "./allowed-app-row.js";
+import { AllowedAppList } from "./allowed-app-row.js";
+import { PERMISSION_STANDING, PermissionRow } from "./permission-row.js";
 import type { SettingRefusal } from "./row-write.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
 import type { SettingsWrites } from "./writes.js";
@@ -47,27 +39,30 @@ import type { SettingsWrites } from "./writes.js";
  */
 
 /** Computer use on this Mac, read through the host's helper, read again as the window comes back. */
-const statusQuery = queryOptions({
+export const computerUseStatusQuery = queryOptions({
   queryKey: [QUERY_ROOT.COMPUTER_USE_STATUS],
   queryFn: () => askAct(ACT_KIND.COMPUTER_USE_STATUS, {}),
   refetchOnWindowFocus: true,
 });
 
 /** What each grant lets agents do, and what they cannot do without it. */
-const GRANTS = [
+export const COMPUTER_USE_GRANTS = [
   {
     key: "screenRecording",
     label: "Screen Recording",
+    allowed: "Agents see the windows of the apps you allow",
     missing: "Not allowed yet, so agents cannot see apps' windows",
   },
   {
     key: "accessibility",
     label: "Accessibility",
+    allowed: "Agents click and type in the apps you allow",
     missing: "Not allowed yet, so agents cannot click or type in apps",
   },
 ] as const satisfies readonly {
   key: keyof ComputerUseStatus["permissions"];
   label: string;
+  allowed: string;
   missing: string;
 }[];
 
@@ -79,7 +74,7 @@ export function ComputerUseSection({
   writes: SettingsWrites;
 }): React.JSX.Element {
   const queries = useQueryClient();
-  const status = useQuery(statusQuery);
+  const status = useQuery(computerUseStatusQuery);
   /** The Remove written last, which the next waits on, so no two writes of the list cross. */
   const writing = useRef<Promise<unknown>>(Promise.resolve());
   /** The apps whose Remove the store took, left out of every list written after, until the stored list leaves them out too. */
@@ -92,17 +87,6 @@ export function ComputerUseSection({
 
     for (const app of removed.current) if (!apps.includes(app)) removed.current.delete(app);
   }, [listed]);
-
-  const asking = useMutation({
-    mutationFn: () => askAct(ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS, {}),
-    onSettled: () => queries.invalidateQueries({ queryKey: statusQuery.queryKey }),
-  });
-
-  // Note that only a request that did not reach macOS is said here: a grant macOS was asked for stands as the developer leaves it in System Settings, which the status read says.
-  const askRefused: SettingRefusal | undefined =
-    asking.error === null
-      ? undefined
-      : { words: actFailureWords(asking.error), cause: asking.error };
 
   /**
    * An app taken off the list, or why the setting's write was refused, which
@@ -138,7 +122,7 @@ export function ComputerUseSection({
       );
 
       if (listed.includes(bundleId)) removed.current.add(bundleId);
-      await queries.invalidateQueries({ queryKey: statusQuery.queryKey });
+      await queries.invalidateQueries({ queryKey: computerUseStatusQuery.queryKey });
 
       return undefined;
     };
@@ -149,73 +133,81 @@ export function ComputerUseSection({
     return next;
   };
 
-  const permissions = status.data?.permissions;
   const apps = status.data?.apps ?? [];
 
   return (
-    <>
-      <SettingsSection
-        {...settingsSectionHead(SECTION.COMPUTER_USE)}
-        caption={`Agents see and control the apps you allow, in the background, while you keep working. macOS lets ${PRODUCT_NAME} do it once you allow both.`}
-      >
-        {status.isError ? (
-          <ErrorState
-            failure={unreadShown(FAILURE_SURFACE.COMPUTER_USE_READ)}
-            onRetry={() => void status.refetch()}
-          >
-            {readFailedWords("this Mac's computer use")}
-          </ErrorState>
-        ) : null}
-        {status.isError
-          ? null
-          : GRANTS.map((grant) => {
-              const granted = permissions?.[grant.key];
-              const firstMissing = GRANTS.find((each) => permissions?.[each.key] === false);
+    <SettingsSection
+      {...settingsSectionHead(SECTION.COMPUTER_USE_APPS)}
+      caption={`Agents use these without asking. Terminals, password managers, System Settings, and ${PRODUCT_NAME} itself are never offered.`}
+    >
+      {status.isError ? (
+        <ErrorState
+          failure={unreadShown(FAILURE_SURFACE.COMPUTER_USE_READ)}
+          onRetry={() => void status.refetch()}
+        >
+          {readFailedWords("this Mac's computer use")}
+        </ErrorState>
+      ) : status.data === undefined ? null : apps.length === 0 ? (
+        <SettingsLine>
+          None yet. Choose Always allow when an agent asks to use an app, and it stands here.
+        </SettingsLine>
+      ) : (
+        <AllowedAppList apps={apps} onRemove={remove} />
+      )}
+    </SettingsSection>
+  );
+}
 
-              return (
-                <SettingsRow
-                  key={grant.key}
-                  label={grant.label}
-                  error={
-                    firstMissing === grant
-                      ? refusalShown(askRefused, FAILURE_SURFACE.COMPUTER_USE_PERMISSIONS)
-                      : undefined
-                  }
-                  description={
-                    granted === undefined ? undefined : granted ? (
-                      <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
-                        Allowed
-                      </SettingsRowStateLine>
-                    ) : (
-                      <SettingsRowStateLine state={SETTINGS_ROW_STATE.ATTENTION}>
-                        {grant.missing}
-                      </SettingsRowStateLine>
-                    )
-                  }
-                >
-                  {() =>
-                    granted === false ? (
-                      <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => asking.mutate()}>
-                        Allow…
-                      </Button>
-                    ) : null
-                  }
-                </SettingsRow>
-              );
-            })}
-      </SettingsSection>
-      <SettingsSection
-        {...settingsSectionHead(SECTION.COMPUTER_USE_APPS)}
-        caption={`Agents use these without asking. Terminals, password managers, System Settings, and ${PRODUCT_NAME} itself are never offered.`}
-      >
-        {status.data === undefined ? null : apps.length === 0 ? (
-          <SettingsLine>
-            None yet. Choose Always allow when an agent asks to use an app, and it stands here.
-          </SettingsLine>
-        ) : (
-          apps.map((app) => <AllowedAppRow key={app.bundleId} app={app} onRemove={remove} />)
-        )}
-      </SettingsSection>
+/**
+ * The two grants as This Mac's Permissions lists them, each as every
+ * permission reads (`PermissionRow`): Allow… raises macOS's own prompt or
+ * pane for the first one still missing, read again as it answers and as the
+ * window comes back to the front, and an ask that never reached macOS says
+ * why under that row.
+ */
+export function ComputerUsePermissionRows(): React.JSX.Element | null {
+  const queries = useQueryClient();
+  const status = useQuery(computerUseStatusQuery);
+
+  const asking = useMutation({
+    mutationFn: () => askAct(ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS, {}),
+    onSettled: () => queries.invalidateQueries({ queryKey: computerUseStatusQuery.queryKey }),
+  });
+
+  // Note that only a request that did not reach macOS is said here: a grant macOS was asked for stands as the developer leaves it in System Settings, which the status read says.
+  const askRefused: SettingRefusal | undefined =
+    asking.error === null
+      ? undefined
+      : { words: actFailureWords(asking.error), cause: asking.error };
+
+  const permissions = status.data?.permissions;
+
+  // Note that a status that cannot be read is said once, under Always-allowed apps, which reads the same status.
+  if (permissions === undefined) return null;
+  const firstMissing = COMPUTER_USE_GRANTS.find((grant) => !permissions[grant.key]);
+
+  return (
+    <>
+      {COMPUTER_USE_GRANTS.map((grant) => (
+        <PermissionRow
+          key={grant.key}
+          label={grant.label}
+          standing={permissions[grant.key] ? PERMISSION_STANDING.ALLOWED : PERMISSION_STANDING.ASK}
+          allowed={grant.allowed}
+          missing={grant.missing}
+          error={
+            firstMissing === grant
+              ? refusalShown(askRefused, FAILURE_SURFACE.COMPUTER_USE_PERMISSIONS)
+              : undefined
+          }
+          onAllow={() =>
+            asking.mutateAsync().then(
+              () => undefined,
+              () => undefined,
+            )
+          }
+        />
+      ))}
     </>
   );
 }

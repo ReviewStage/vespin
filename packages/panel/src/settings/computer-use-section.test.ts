@@ -6,7 +6,7 @@ import type { PortActKind, PortActResult } from "@repo/host/contract";
 import { APP_SETTING_SCHEMA, type AppSettingField, type AppSettingValue } from "@repo/settings";
 import { settingsView } from "@repo/settings/testing";
 import { ACTION_RESULT_STATUS, type ActionResult } from "@repo/wire";
-import { act, createElement } from "react";
+import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import {
@@ -18,7 +18,7 @@ import {
 } from "../testing/app-bridge.js";
 import { DESKTOP_CAPABILITIES } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
-import { ComputerUseSection } from "./computer-use-section.js";
+import { ComputerUsePermissionRows, ComputerUseSection } from "./computer-use-section.js";
 
 /**
  * computer-use-section.test.ts -- This Mac's computer use says which of
@@ -130,10 +130,15 @@ async function mount(): Promise<HTMLElement> {
     act(() =>
       root.render(
         withQueryClient(
-          createElement(ComputerUseSection, {
-            view: { settings: view, accountDrawn: true, capabilities: DESKTOP_CAPABILITIES },
-            writes,
-          }),
+          createElement(
+            Fragment,
+            null,
+            createElement(ComputerUsePermissionRows),
+            createElement(ComputerUseSection, {
+              view: { settings: view, accountDrawn: true, capabilities: DESKTOP_CAPABILITIES },
+              writes,
+            }),
+          ),
         ),
       ),
     );

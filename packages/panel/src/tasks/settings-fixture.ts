@@ -103,7 +103,8 @@ import {
   type PortActPayload,
   type PortActResult,
 } from "@repo/host/contract";
-import { EXPERIMENT } from "@repo/settings";
+import { computerUseAppsStored, EXPERIMENT, HOST_CAPABILITY } from "@repo/settings";
+import { MICROPHONE_STATUS } from "@repo/settings/microphone";
 import { SETTINGS_VIEW, type SettingsLink } from "@repo/settings/settings-views";
 import { appStateQuery } from "../use-app-state.js";
 import { fixtureClient } from "./tasks-fixture-loader.js";
@@ -173,6 +174,7 @@ const SETTINGS_LINKS: ReadonlyMap<string, SettingsLink> = new Map<string, Settin
   [RUN_PROFILE.SETTINGS_WORKSPACE, { page: SETTINGS_VIEW.WORKSPACE, workspaceId: WORKSPACE.ACME }],
   [RUN_PROFILE.SETTINGS_AGENTS, { page: SETTINGS_VIEW.AGENTS }],
   [RUN_PROFILE.SETTINGS_HOSTS, { page: SETTINGS_VIEW.HOSTS }],
+  [RUN_PROFILE.SETTINGS_THIS_MAC, { page: SETTINGS_VIEW.THIS_MAC }],
   [RUN_PROFILE.SETTINGS_INTEGRATIONS, { page: SETTINGS_VIEW.INTEGRATIONS }],
   [RUN_PROFILE.SETTINGS_MCP, { page: SETTINGS_VIEW.MCP }],
   [RUN_PROFILE.SETTINGS_SKILLS, { page: SETTINGS_VIEW.SKILLS, workspaceId: WORKSPACE.ACME }],
@@ -954,13 +956,15 @@ const ANSWERS: StagedAnswers = {
       {
         deviceId: FIXTURE_HOST.MAC,
         name: "studio-mini",
-        apps: ["com.apple.Notes", "com.apple.calculator"],
-        looks: [
-          { app: "com.apple.Notes", name: "Notes" },
-          { app: "com.apple.calculator", name: "Calculator" },
-        ],
+        apps: STAGED_ALLOWED_APPS.map((app) => app.bundleId),
+        looks: STAGED_ALLOWED_APPS.map((app) => ({ app: app.bundleId, name: app.name })),
       },
     ],
+  }),
+  // This Mac's computer use as its helper reads it: Screen Recording allowed, Accessibility still to allow, and the apps it always allows.
+  [ACT_KIND.COMPUTER_USE_STATUS]: () => ({
+    permissions: { screenRecording: true, accessibility: false },
+    apps: STAGED_ALLOWED_APPS.map((app) => ({ ...app })),
   }),
   // A box waiting on its code, as a pairing's link opened over Settings › Hosts reads it.
   [ACT_KIND.HOSTS_PAIRING_READ]: () => ({
@@ -1150,6 +1154,26 @@ const STAGED_HOSTS: AppHosts = {
   },
 };
 
+/** The apps the staged Mac always allows, by bundle id and name: enough of them that the list folds. */
+const STAGED_ALLOWED_APPS = [
+  { bundleId: "com.apple.Notes", name: "Notes" },
+  { bundleId: "com.apple.calculator", name: "Calculator" },
+  { bundleId: "com.apple.reminders", name: "Reminders" },
+  { bundleId: "com.apple.iCal", name: "Calendar" },
+  { bundleId: "com.apple.Preview", name: "Preview" },
+  { bundleId: "com.apple.iphonesimulator", name: "Simulator" },
+  { bundleId: "com.apple.dt.Xcode", name: "Xcode" },
+  { bundleId: "com.apple.Safari", name: "Safari" },
+  { bundleId: "com.apple.iWork.Keynote", name: "Keynote" },
+] as const;
+
+/** The desktop's own capabilities, which This Mac's page is drawn by in the profile that opens it. */
+const DESKTOP_CAPABILITIES = [
+  HOST_CAPABILITY.MACHINE_COMMANDS,
+  HOST_CAPABILITY.MICROPHONE,
+  HOST_CAPABILITY.DESKTOP_APP,
+];
+
 /** A Mac the account signed in on that runs no agents, whose app has gone quiet. */
 const STAGED_LAPTOP = "7d3c2a10-0000-4000-8000-0000000000a1";
 
@@ -1172,7 +1196,7 @@ const STAGED_MACHINES: AppMachines = {
         settings: {
           commandMode: MACHINE_COMMAND_MODE.ASK,
           computerUse: true,
-          alwaysAllowedApps: ["com.apple.Notes", "com.apple.calculator"],
+          alwaysAllowedApps: STAGED_ALLOWED_APPS.map((app) => app.bundleId),
         },
       },
       {
@@ -1421,6 +1445,7 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
 
   return {
     ...held,
+    ...(profile === RUN_PROFILE.SETTINGS_THIS_MAC ? thisMacStaged(held) : undefined),
     account: ACCOUNT,
     access: ADMIN_ACCESS,
     [LIVE_READ.ACCOUNT_PREFERENCES]: STAGED_PREFERENCES,
@@ -1441,6 +1466,37 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
     [LIVE_READ.TOKEN_REPOSITORIES]: STAGED_TOKEN_REPOSITORIES,
     [LIVE_READ.MCP_CLIENTS]: STAGED_MCP_CLIENTS,
     [LIVE_READ.REPOSITORY_LISTS]: STAGED_REPOSITORIES,
+  };
+}
+
+/**
+ * The desktop's own slices, laid over a run in a browser tab so This Mac's
+ * page is drawn: its capabilities, the microphone allowed, and Computer use
+ * on with the staged apps always allowed.
+ */
+function thisMacStaged(state: AppStateSnapshot): Partial<AppStateSnapshot> {
+  const settings = state.settings;
+
+  return {
+    run: {
+      ...state.run,
+      capabilities: [...new Set([...state.run.capabilities, ...DESKTOP_CAPABILITIES])],
+    },
+    audio: { ...state.audio, microphoneStatus: MICROPHONE_STATUS.GRANTED },
+    ...(settings === undefined
+      ? undefined
+      : {
+          settings: {
+            ...settings,
+            stored: {
+              ...settings.stored,
+              computerUse: true,
+              computerUseApps: computerUseAppsStored(
+                STAGED_ALLOWED_APPS.map((app) => app.bundleId),
+              ),
+            },
+          },
+        }),
   };
 }
 

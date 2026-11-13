@@ -189,10 +189,15 @@ export function SettingsPanel({
 
       {view === SETTINGS_VIEW.THIS_MAC && panelView ? (
         <>
-          <MachineCommandsSection view={panelView} writes={writes} notifications={notifications} />
+          <MachineCommandsSection
+            view={panelView}
+            writes={writes}
+            notifications={notifications}
+            microphone={capabilities.includes(HOST_CAPABILITY.MICROPHONE) ? microphone : undefined}
+          />
           {/* Dictation's microphone, on a platform whose microphone the app asks for itself. */}
           {capabilities.includes(HOST_CAPABILITY.MICROPHONE) ? (
-            <MicrophoneSection view={panelView} writes={writes} microphone={microphone} />
+            <MicrophoneSection view={panelView} />
           ) : null}
         </>
       ) : null}
