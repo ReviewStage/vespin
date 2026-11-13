@@ -28,7 +28,7 @@ import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
-import { askAct } from "../act.js";
+import { actFailureWords, askAct } from "../act.js";
 import { refusalShown, unreadShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { appStateIn, selectAppSettingsView } from "../use-app-state.js";
@@ -139,10 +139,16 @@ export function ComputerUseSection({
     for (const app of removed.current) if (!apps.includes(app)) removed.current.delete(app);
   }, [listed]);
 
-  const { mutate: askPermissions } = useMutation({
+  const asking = useMutation({
     mutationFn: () => askAct(ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS, {}),
     onSettled: () => queries.invalidateQueries({ queryKey: statusQuery.queryKey }),
   });
+
+  // Note that only a request that did not reach macOS is said here: a grant macOS was asked for stands as the developer leaves it in System Settings, which the status read says.
+  const askRefused: SettingRefusal | undefined =
+    asking.error === null
+      ? undefined
+      : { words: actFailureWords(asking.error), cause: asking.error };
 
   /**
    * An app taken off the list, or why the setting's write was refused, which
@@ -210,11 +216,17 @@ export function ComputerUseSection({
           ? null
           : GRANTS.map((grant) => {
               const granted = permissions?.[grant.key];
+              const firstMissing = GRANTS.find((each) => permissions?.[each.key] === false);
 
               return (
                 <SettingsRow
                   key={grant.key}
                   label={grant.label}
+                  error={
+                    firstMissing === grant
+                      ? refusalShown(askRefused, FAILURE_SURFACE.COMPUTER_USE_PERMISSIONS)
+                      : undefined
+                  }
                   description={
                     granted === undefined ? undefined : granted ? (
                       <SettingsRowStateLine state={SETTINGS_ROW_STATE.CONNECTED}>
@@ -229,7 +241,7 @@ export function ComputerUseSection({
                 >
                   {() =>
                     granted === false ? (
-                      <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => askPermissions()}>
+                      <Button variant={BUTTON_VARIANT.OUTLINE} onClick={() => asking.mutate()}>
                         Allow…
                       </Button>
                     ) : null
