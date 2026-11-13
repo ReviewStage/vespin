@@ -768,6 +768,14 @@
   transform: translate(-50%, var(--ui-space-4));
 }
 
+/* The list of changed files (diff-list.tsx) stands on the side panel's own
+   ground (`--side-panel-ground`, desktop.css), as the rest of its tab does,
+   its files' cards on it; a ground named here would draw the list as a sheet
+   of another color wherever the panel stands on the other. */
+.diff-list {
+  background: var(--side-panel-ground);
+}
+
 /* Pierre's own container, which it draws the files into inside the scroller. */
 [data-diff-list-scroller] > :first-child {
   padding-inline: var(--ui-list-inset);

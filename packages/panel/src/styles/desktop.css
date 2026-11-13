@@ -1486,9 +1486,9 @@ body,
 
 /* The panel's ground, named once (`--side-panel-ground`): the panel paints
    it, or its sheet does where the shell stands it on one (shell.css), and
-   what stands opaque in a tab over what scrolls beneath it (a Pull request
-   tab's stuck headings, its folding header) paints it too, so they never
-   show as a strip of another ground. A page that stands the panel on
+   whatever in a tab must paint a ground of its own paints this one (a Pull
+   request tab's stuck headings and folding header, the list of changed
+   files), so none shows as a strip or a sheet of another ground. A page that stands the panel on
    another ground changes this one name (`.desktop-task` beside its
    conversation, below). */
 .side-panel {
