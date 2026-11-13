@@ -82,6 +82,8 @@ export const QUERY_ROOT = {
   PICTURE: "picture",
   /** The section icon picker's wholes loaded on demand (`desktop/section-icon-picker.tsx`), Lucide's and the emoji, by which. */
   SECTION_ICONS: "section-icons",
+  /** A person's page: how many of their tasks and agents the service counts, their newest read into the task list (`desktop/person-page.tsx`). */
+  PERSON_PAGE: "person-page",
 } as const;
 
 /**
@@ -109,6 +111,7 @@ const ACCOUNT_SCOPED_ROOTS: ReadonlySet<unknown> = new Set<string>([
   QUERY_ROOT.MERGE_QUEUE,
   QUERY_ROOT.MACHINE_ALLOWED_APPS,
   QUERY_ROOT.WORKSPACE_MACHINES,
+  QUERY_ROOT.PERSON_PAGE,
 ]);
 
 /**

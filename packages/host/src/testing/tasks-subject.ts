@@ -39,6 +39,7 @@ import { SIDEBAR_READ } from "@repo/features/sidebar-live";
 import type { WorkspaceSlackBot } from "@repo/features/slack-bot-wire";
 import { TASK_HISTORY_READ } from "@repo/features/task-history-live";
 import {
+  PERSON_PAGE_READ,
   TASK_LIST_READ,
   TASK_PAGE_READ,
   TASK_ROWS_READ,
@@ -1257,6 +1258,7 @@ export function fakeService(tasks: Task[]): FakeService {
       params: {
         readonly id: string;
         readonly workspaceId?: string;
+        readonly personId?: string;
         readonly page?: string;
         readonly query?: string;
         readonly userId?: string;
@@ -1305,6 +1307,31 @@ export function fakeService(tasks: Task[]): FakeService {
           );
 
           rows.set({ plans: settled.map(rowOfTask), agents: [] });
+
+          return Effect.succeed(rows.first());
+        }
+
+        // A person's page: every task of the workspace the fake assigns them, counted and read with no agents, as none of theirs were created by them.
+        if (read.name === PERSON_PAGE_READ.name) {
+          service.reads.push(`person-page:${params.personId}`);
+          const rows = polledLive<"counts" | "plans" | "agents">(["counts", "plans", "agents"]);
+
+          const assigned = service.tasks.filter(
+            (each) =>
+              each.workspaceId === params.workspaceId && each.assignee?.userId === params.personId,
+          );
+
+          rows.set({
+            counts: [
+              { personId: params.personId, assigned: assigned.length, created: 0, agents: 0 },
+            ],
+            plans: assigned.map((each) => ({
+              ...rowOfTask(each),
+              assigneeId: each.assignee?.userId ?? null,
+              assigneeName: each.assignee?.name ?? null,
+            })),
+            agents: [],
+          });
 
           return Effect.succeed(rows.first());
         }
