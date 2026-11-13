@@ -29,7 +29,7 @@ import { machinesQuery, machinesRetryMutation } from "../live-reads.js";
 import { useAllowedApps } from "../tasks/mac-apps.js";
 import { appStateQuery, selectAccount, selectExperiment } from "../use-app-state.js";
 import { type AllowedApp, AllowedAppList } from "./allowed-app-row.js";
-import { MachineMark, MachineStandingLine } from "./machine-standing.js";
+import { type MachineAgentFacts, MachineMark, MachineStandingLine } from "./machine-standing.js";
 import { MenuRow } from "./menu-row.js";
 import { refusalToast, rowWrite, type SettingRefusal } from "./row-write.js";
 import { SelectRow } from "./select-row.js";
@@ -85,27 +85,28 @@ function changeRefused(answer: HostDoneAnswerView): string | undefined {
 }
 
 /** What a machine lets agents do, as its folded row says it under its name; none for a machine whose app never joined, which holds no settings. */
-export function machineAgentsLine(
+export function machineAgentFacts(
   machine: MachineLine,
   apps: ReadonlyMap<string, AllowedApp> | undefined,
-): string | undefined {
+): MachineAgentFacts | undefined {
   const settings = machine.settings;
 
   if (settings === undefined) return undefined;
-  const commands = `${MACHINE_SETTINGS_WORDS.COMMANDS_SHORT}: ${MACHINE_COMMAND_MODE_LABEL[settings.commandMode]}`;
+  const commands = MACHINE_COMMAND_MODE_LABEL[settings.commandMode];
 
-  // Note that the apps are said only where the reader has Computer use on, as their rows are drawn only there.
-  if (apps === undefined) return commands;
+  // Note that computer use is said only where the reader has it on, as its rows are drawn only there.
+  if (apps === undefined) return { commands };
   const count = settings.alwaysAllowedApps.length;
 
-  const used =
-    settings.computerUse === false
-      ? MACHINE_SETTINGS_WORDS.APPS_OFF
-      : count === 0
-        ? MACHINE_SETTINGS_WORDS.APPS_ON
-        : MACHINE_SETTINGS_WORDS.appsAllowed(count);
-
-  return `${commands} · ${used}`;
+  return {
+    commands,
+    apps:
+      settings.computerUse === false
+        ? MACHINE_SETTINGS_WORDS.APPS_OFF
+        : count === 0
+          ? MACHINE_SETTINGS_WORDS.APPS_ON
+          : MACHINE_SETTINGS_WORDS.appsAllowed(count),
+  };
 }
 
 /** A machine as the list of machines names it (`machineName`). */
@@ -183,7 +184,6 @@ export function MachineAgentRows({
             indent={SETTINGS_ROW_INDENT.MARK}
             label={MACHINE_SETTINGS_WORDS.APPS}
             labelReplayUnmasked
-            detail={MACHINE_SETTINGS_WORDS.APPS_DETAIL}
             checked={appsOn}
             write={rowWrite(appsSwitch, {
               ask: (computerUse: boolean): MachineChangeParams => ({ id, computerUse }),
@@ -210,18 +210,18 @@ export function MachineAgentRows({
 export function CommandMachineRow({
   machine,
   label,
-  detail,
-  end,
+  facts,
+  chevron,
   onRemove,
   locked,
 }: {
   machine: MachineLine;
   /** What the list calls the machine (`machineName`). */
   label: string;
-  /** What it lets agents do (`machineAgentsLine`). */
-  detail: string | undefined;
-  /** The chevron of its settings' fold, last in the row's end. */
-  end: React.ReactNode;
+  /** What it lets agents do (`machineAgentFacts`). */
+  facts: MachineAgentFacts | undefined;
+  /** The chevron of its settings' fold, before its ⋯. */
+  chevron: React.ReactNode;
   onRemove: () => void;
   /** Whether a removal is out, which every Remove waits out. */
   locked: boolean;
@@ -238,10 +238,8 @@ export function CommandMachineRow({
       row={{
         leading: <MachineMark platform={platform} standing={standing} />,
         label: <ReplayMask>{label}</ReplayMask>,
-        description: (
-          <MachineStandingLine standing={standing} platform={platform} detail={detail} />
-        ),
-        end,
+        description: <MachineStandingLine standing={standing} platform={platform} facts={facts} />,
+        control: chevron,
       }}
     />
   );

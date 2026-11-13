@@ -37,6 +37,7 @@ import {
   SettingsBlock,
   SettingsLine,
   SettingsRow,
+  SettingsRowActSlot,
   type SettingsRowSkeletonLayout,
   SettingsRowStateLine,
   SettingsRowsFold,
@@ -70,12 +71,12 @@ import { HostConnectDialog, useHostConnect } from "./host-connect-dialog.js";
 import {
   CommandMachineRow,
   MachineAgentRows,
-  machineAgentsLine,
+  machineAgentFacts,
   machineListedOf,
   useMachineRemove,
   useMachineSettings,
 } from "./machine-settings-section.js";
-import { MachineMark, MachineStandingLine } from "./machine-standing.js";
+import { type MachineAgentFacts, MachineMark, MachineStandingLine } from "./machine-standing.js";
 import { ReadFailed } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
 import { SECTION, settingsSectionHead } from "./settings-sections.js";
@@ -207,20 +208,20 @@ function StandingLine({
   host,
   book,
   joined,
-  detail,
+  facts,
 }: {
   host: HostLine;
   book: PresenceBook;
   /** Whether the host joined while the page stands. */
   joined: boolean;
-  /** What it lets agents do (`machineAgentsLine`). */
-  detail: string | undefined;
+  /** What it lets agents do (`machineAgentFacts`). */
+  facts: MachineAgentFacts | undefined;
 }): React.JSX.Element {
   return (
     <MachineStandingLine
       standing={standingOf(host, book, joined)}
       platform={host.platform}
-      detail={detail}
+      facts={facts}
     />
   );
 }
@@ -260,8 +261,8 @@ function HostRow({
   label,
   book,
   joined,
-  detail,
-  end,
+  facts,
+  chevron,
   onRemove,
   locked,
 }: {
@@ -269,10 +270,10 @@ function HostRow({
   /** What the list calls the machine (`machineName`). */
   label: string;
   book: PresenceBook;
-  /** What it lets agents do (`machineAgentsLine`). */
-  detail: string | undefined;
-  /** The chevron of its settings' fold, last in the row's end. */
-  end: React.ReactNode;
+  /** What it lets agents do (`machineAgentFacts`). */
+  facts: MachineAgentFacts | undefined;
+  /** The chevron of its settings' fold, before its ⋯. */
+  chevron: React.ReactNode;
   /** Whether the host joined while the page stands, which lights its row once. */
   joined: boolean;
   /** Asks the section's Remove question of this machine. */
@@ -294,9 +295,9 @@ function HostRow({
       row={{
         leading: <MachineMark platform={host.platform} standing={standingOf(host, book, joined)} />,
         label: <ReplayMask>{label}</ReplayMask>,
-        description: <StandingLine host={host} book={book} joined={joined} detail={detail} />,
+        description: <StandingLine host={host} book={book} joined={joined} facts={facts} />,
         landed: joined,
-        end,
+        control: chevron,
       }}
     />
   );
@@ -316,14 +317,14 @@ function ThisMacRow({
   on,
   needsApproval,
   setupFailed,
-  detail,
-  end,
+  facts,
+  chevron,
   onChange,
 }: {
-  /** What it lets agents do (`machineAgentsLine`). */
-  detail: string | undefined;
-  /** The chevron of its settings' fold, last in the row's end. */
-  end: React.ReactNode;
+  /** What it lets agents do (`machineAgentFacts`). */
+  facts: MachineAgentFacts | undefined;
+  /** The chevron of its settings' fold, after its switch. */
+  chevron: React.ReactNode;
   /** This Mac as the service lists it; none before it does. */
   host: HostLine | undefined;
   book: PresenceBook;
@@ -352,7 +353,7 @@ function ThisMacRow({
       {MACHINE_STANDING_WORDS[DEVICE_STANDING.SETTING_UP]}
     </SettingsRowStateLine>
   ) : (
-    <StandingLine host={host} book={book} joined={true} detail={detail} />
+    <StandingLine host={host} book={book} joined={true} facts={facts} />
   );
 
   // Note that the dot on the glyph says online or offline only once the host stands; the line says setting up and failed.
@@ -366,16 +367,19 @@ function ThisMacRow({
         label={THIS_MAC}
         description={description}
         labelsControl
-        end={() => end}
+        end={() => <SettingsRowActSlot />}
       >
         {(control) => (
-          <Switch
-            id={control.controlId}
-            checked={on}
-            label={THIS_MAC_WORDS.SWITCH}
-            describedBy={control["aria-describedby"]}
-            onChange={(next) => onChange(next)}
-          />
+          <>
+            <Switch
+              id={control.controlId}
+              checked={on}
+              label={THIS_MAC_WORDS.SWITCH}
+              describedBy={control["aria-describedby"]}
+              onChange={(next) => onChange(next)}
+            />
+            {chevron}
+          </>
         )}
       </SettingsRow>
       {/* Note that macOS holds a registered agent until the member allows it, and only System Settings can, so the line opens it there. */}
@@ -683,12 +687,12 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   };
 
   /** What a machine lets agents do, said under its name, where its app joined. */
-  const agentLine = (id: string | undefined) => {
+  const agentFacts = (id: string | undefined) => {
     const machine = machineOfId(id);
 
     return machine === undefined
       ? undefined
-      : machineAgentsLine(machine, machineSettings.appsOf(machine.id));
+      : machineAgentFacts(machine, machineSettings.appsOf(machine.id));
   };
 
   const list = (
@@ -701,6 +705,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
         <>
           {thisMac === undefined ? null : (
             <SettingsRowsFold
+              room={false}
               label={MACHINES_WORDS.settingsOf(THIS_MAC)}
               rows={agentRows(thisMacMachine?.id)}
               head={(chevron) => (
@@ -710,8 +715,8 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
                   on={thisMacOn}
                   needsApproval={thisMac.needsApproval === true}
                   setupFailed={thisMac.setupFailed === true}
-                  detail={agentLine(thisMacMachine?.id)}
-                  end={chevron}
+                  facts={agentFacts(thisMacMachine?.id)}
+                  chevron={chevron}
                   onChange={switchThisMac}
                 />
               )}
@@ -723,6 +728,7 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
             return (
               <SettingsRowsFold
                 key={host.id}
+                room={false}
                 label={MACHINES_WORDS.settingsOf(label)}
                 rows={agentRows(host.id)}
                 head={(chevron) => (
@@ -731,8 +737,8 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
                     label={label}
                     book={book}
                     joined={joinedNow(host)}
-                    detail={agentLine(host.id)}
-                    end={chevron}
+                    facts={agentFacts(host.id)}
+                    chevron={chevron}
                     onRemove={() => askRemove(host, label)}
                     locked={removing.busy}
                   />
@@ -746,14 +752,15 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
             return (
               <SettingsRowsFold
                 key={machine.id}
+                room={false}
                 label={MACHINES_WORDS.settingsOf(label)}
                 rows={agentRows(machine.id)}
                 head={(chevron) => (
                   <CommandMachineRow
                     machine={machine}
                     label={label}
-                    detail={agentLine(machine.id)}
-                    end={chevron}
+                    facts={agentFacts(machine.id)}
+                    chevron={chevron}
                     onRemove={() => machineRemove.ask(machine, label)}
                     locked={machineRemove.busy}
                   />

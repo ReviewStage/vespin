@@ -36,14 +36,13 @@ export const MACHINE_SETTINGS_WORDS = {
     "Each machine's own settings for agents' terminal commands and apps. A machine takes a change as soon as it's online.",
   NONE: `No machine has joined yet. Sign in to ${PRODUCT_NAME} on a Mac to add it here.`,
   COMMANDS: "Terminal commands",
-  /** Terminal commands as a machine's folded row names them, before their mode. */
-  COMMANDS_SHORT: "Commands",
-  APPS: "Let agents use its apps",
-  APPS_OFF: "Apps off",
-  APPS_ON: "Apps on",
+  APPS: "Computer use",
+  /** Computer use as a machine's folded row says it where it is off. */
+  APPS_OFF: "Computer use off",
+  /** Computer use as a machine's folded row says it where it is on and no app is always allowed. */
+  APPS_ON: "Computer use on",
   /** A machine's apps as its folded row counts them where some are always allowed. */
   appsAllowed: (count: number) => `${count} ${count === 1 ? "app" : "apps"} always allowed`,
-  APPS_DETAIL: "Agents ask before using an app unless it's always allowed below.",
   CHANGE_FAILED: "Could not change this machine. Try again.",
 } as const;
 

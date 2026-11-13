@@ -54,6 +54,7 @@ import {
   Minimize2,
   Minus,
   Monitor,
+  MousePointerClick,
   PanelLeft,
   PanelRight,
   Pause,
@@ -295,6 +296,9 @@ export const NotificationsIcon = lucideGlyph(Bell, "settings-icon");
 
 /** A screen being shared: whether macOS lets the app see other apps' windows. */
 export const ScreenRecordingIcon = lucideGlyph(ScreenShare, "settings-icon");
+
+/** A pointer pressing: agents using a machine's apps, as computer use does. */
+export const ComputerUseIcon = lucideGlyph(MousePointerClick, "settings-icon");
 
 /** A person standing, macOS's own mark for Accessibility: whether macOS lets the app click and type in other apps. */
 export const AccessibilityIcon = lucideGlyph(PersonStanding, "settings-icon");

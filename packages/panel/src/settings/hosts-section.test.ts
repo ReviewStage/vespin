@@ -184,7 +184,7 @@ test("a host that joins while the page stands is said to be connected in the wai
     !pageText().includes("Waiting for a machine to connect"),
     "the wait gives way to the host",
   );
-  assert.ok(pageText().includes("hel-02Setting up… · Linux server"), pageText());
+  assert.ok(pageText().includes("hel-02Setting up…Linux server"), pageText());
 });
 
 test("a sign-in to another account names none of its hosts as just connected", async () => {
@@ -327,7 +327,7 @@ test("a host's row says Setting up… while its update runs, though the restart 
   const text = document.body.textContent ?? "";
 
   assert.ok(text.includes("ams-01Linux server"), text);
-  assert.ok(text.includes("ord-01Setting up… · Linux server"), text);
+  assert.ok(text.includes("ord-01Setting up…Linux server"), text);
 
   const ams = [...document.querySelectorAll(".ui-settings-row")].find(
     (row) => row.textContent?.includes("ams-01") ?? false,
@@ -567,9 +567,7 @@ test("a machine's apps switch and an app's Remove are sent for that machine alon
   await vi.waitFor(() => assert.ok(pageText().includes("Notes")));
   removeOf("Notes");
 
-  const switches = [
-    ...document.querySelectorAll<HTMLElement>('[aria-label="Let agents use its apps"]'),
-  ];
+  const switches = [...document.querySelectorAll<HTMLElement>('[aria-label="Computer use"]')];
 
   // The laptop's switch, its machine's second, is off; pressing it turns that machine's on.
   await act(async () => switches[1]?.click());
