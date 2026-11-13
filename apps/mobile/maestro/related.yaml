@@ -1,12 +1,14 @@
-# related.yaml -- a thread's task and agent, from its ⋯ menu, and the task its words name as a chip, each pushed onto the Inbox's own stack in a compact window, so Back lands on the thread again, as Mail and Messages push; a regular window selects them on Tasks beside its list instead, which `tasks.yaml` walks.
+# related.yaml -- a thread's task and agent, from its ⋯ menu, each pushed onto the Inbox's own stack in a compact window, so Back lands on the thread again, as Mail and Messages push; a regular window selects them on Tasks beside its list instead, which `tasks.yaml` walks.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
 ---
 # Launched on the host's Inbox fixture, whose invite recording thread stands
-# on the Teammate invitations task under its invitations agent, and whose
-# first message names that task as a chip (`@repo/host/fixture-inbox`).
+# on the Teammate invitations task under its invitations agent
+# (`@repo/host/fixture-inbox`). Note that a chip in a message opens on the
+# tab the path menu does (`useOpenLink` through `useOnTab`), but stands mid-line, where
+# no element of its own is heard, so no flow taps it.
 - launchApp:
     clearState: true
     arguments:
@@ -50,15 +52,3 @@ appId: dev.vespin.ios
       - assertVisible: ".*walked the invite flow.*"
       - waitForAnimationToEnd
       - takeScreenshot: related-agent-back
-      # Note that iOS hears a chip as part of its line rather than as an
-      # element of its own (`heardLine`), so the line is pressed at its
-      # middle, where the task's chip stands.
-      - tapOn: ".*walked the invite flow.*"
-      - assertVisible: "Agents"
-      - waitForAnimationToEnd
-      - takeScreenshot: related-chip
-      - tapOn:
-          id: "BackButton"
-      - assertVisible: ".*walked the invite flow.*"
-      - waitForAnimationToEnd
-      - takeScreenshot: related-chip-back
