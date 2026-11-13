@@ -300,7 +300,7 @@ it.effect("a web function that throws is captured, and throws the same failure o
     );
 
     yield* Effect.promise(() =>
-      assert.rejects(fetch(new Request("https://app.test/api/plans")), {
+      assert.rejects(fetch(new Request("https://app.test/api/tasks")), {
         name: "SyntaxError",
         message: "DATABASE_URL is not set",
       }),

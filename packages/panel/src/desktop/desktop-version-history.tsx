@@ -13,6 +13,7 @@ import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BACK_BUTTON_LOOK,
   BackButton,
+  CALL_CARD_SURFACE,
   EmptyState,
   ERROR_STATE_PLACEMENT,
   ErrorState,
@@ -58,6 +59,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { type RefObject, useEffect, useMemo, useRef } from "react";
 import { ACTOR_SIZE, ActorMark, actorCard, LeftWords } from "../actor-ref.js";
 import { useAppCommand } from "../app-commands.js";
+import { CallCardDock } from "../call/standing-call.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
 import { useCopyToast } from "../copy-feedback.js";
@@ -1121,6 +1123,8 @@ export function DesktopVersionHistory({
             </ScrollArea>
           </Fill>
         </div>
+        {/* The window's call card, at the foot of the column as the sidebar docks it. */}
+        <CallCardDock docked surface={CALL_CARD_SURFACE.SIDEBAR} />
         {/* Last, so the drag strip above the way back does not take the edge's top from it. */}
         {split.single ? null : <ResizeEdge edge={edge} />}
       </nav>

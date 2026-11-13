@@ -1,5 +1,6 @@
 import { type ReactNode, useId } from "react";
 import { said } from "../../said.js";
+import { EDGE_CLIP_LAYOUT, EdgeClip } from "../edge-clip/edge-clip.js";
 import { SiteFrame, SiteRule } from "../landing/site-frame.js";
 import { TEXT_VARIANT } from "../text/text.js";
 import { TextLink } from "../text-link/text-link.js";
@@ -130,8 +131,8 @@ export function PublicSection({
  */
 export function PublicMedia({ children }: { children: ReactNode }): React.JSX.Element {
   return (
-    <div className="ui-public-media mx-public-media-reach [*+&]:mt-ui-48 overflow-hidden border border-border rounded-public-media shadow-public-media">
-      {children}
+    <div className="ui-public-media mx-public-media-reach [*+&]:mt-ui-48 border border-border rounded-public-media shadow-public-media">
+      <EdgeClip layout={EDGE_CLIP_LAYOUT.BLOCK}>{children}</EdgeClip>
     </div>
   );
 }

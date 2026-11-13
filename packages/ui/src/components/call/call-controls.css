@@ -1,0 +1,14 @@
+/* call-controls.css -- a mute's voice ring: what a utility cannot say, a
+   ring as wide as a custom property the call writes each frame. The mute
+   (`call-controls.tsx`) writes `--ui-call-level`, its voice's loudness in the
+   unit interval, on the box around its button; the ring is the button's own
+   shadow, so it follows the button's corners, square or round, and stands
+   at nothing while the property is unset. Both voices wear the one gray,
+   since the button a ring stands on says whose voice it is. */
+
+@layer components {
+  .ui-call-mute > .ui-button {
+    box-shadow: 0 0 0 calc(var(--ui-call-level, 0) * var(--ui-space-4))
+      var(--ui-color-border-strong);
+  }
+}
