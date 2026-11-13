@@ -223,7 +223,7 @@ export function MachineAgentRows({
                   : undefined
               }
               checked={appsOn}
-              after={chevron}
+              before={chevron}
               write={rowWrite(appsSwitch, {
                 ask: (computerUse: boolean): MachineChangeParams => ({ id, computerUse }),
                 refused: changeRefused,

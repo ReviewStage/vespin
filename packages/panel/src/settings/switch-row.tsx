@@ -33,7 +33,7 @@ export function SwitchRow({
   density,
   indent,
   leading,
-  after,
+  before,
   write,
   onChange,
 }: RowChange<boolean> & {
@@ -55,8 +55,8 @@ export function SwitchRow({
   indent?: SettingsRowIndent | undefined;
   /** The glyph the row leads with, where what it sets has one. */
   leading?: React.ReactNode;
-  /** What stands after the switch: the chevron of the rows it folds open. */
-  after?: React.ReactNode;
+  /** What stands before the switch: the chevron of the rows it folds open, so the switch keeps its place whether one stands or not. */
+  before?: React.ReactNode;
 }): React.JSX.Element {
   const ahead = write?.ahead;
   const agreed = write !== undefined && !write.busy && ahead?.value === checked;
@@ -78,6 +78,7 @@ export function SwitchRow({
     >
       {(control) => (
         <>
+          {before}
           <Switch
             id={control.controlId}
             {...(anchor === undefined ? undefined : searchAnchorProps(anchor))}
@@ -89,7 +90,6 @@ export function SwitchRow({
             locked={locked}
             onChange={(next) => run(next)}
           />
-          {after}
         </>
       )}
     </SettingsRow>
