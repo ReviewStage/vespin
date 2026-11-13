@@ -23,6 +23,8 @@ export const MENU_COMMAND = {
   SIDEBAR: "sidebar",
   DETAIL_ONLY: "detailOnly",
   MARK_DONE: "markDone",
+  RESOLVE: "resolve",
+  STOP_AGENT: "stopAgent",
   TOGGLE_READ: "toggleRead",
   PIN: "pin",
   REMIND_HOUR: "remindHour",
