@@ -109,6 +109,7 @@ export function useAgentTalk(
             muted: call.speakerMuted,
             onPress: () => voice.setSpeakerMuted(!call.speakerMuted),
           }}
+          levels={voice.levels}
           onEnd={voice.end}
         />
       ),

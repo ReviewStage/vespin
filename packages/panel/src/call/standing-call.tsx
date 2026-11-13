@@ -190,8 +190,12 @@ export function StandingCallProvider({
     () =>
       standing === null
         ? undefined
-        : { agentId: standing.agentId, card: callCardOf(standing, presses) },
-    [standing, presses],
+        : {
+            agentId: standing.agentId,
+            // Note that the window's own card rings its mutes, while the floating window's, which holds no audio, stands still.
+            card: { ...callCardOf(standing, presses), levels: voice.levels },
+          },
+    [standing, presses, voice.levels],
   );
 
   return <StandingCardContext.Provider value={value}>{children}</StandingCardContext.Provider>;

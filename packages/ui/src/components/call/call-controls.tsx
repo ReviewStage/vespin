@@ -15,6 +15,7 @@
  */
 
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { useEffect, useRef } from "react";
 import { GLYPH } from "../../icons/glyph-registry.js";
 import {
   MicrophoneIcon,
@@ -24,6 +25,7 @@ import {
   WaveformIcon,
 } from "../../icons/lucide-glyphs.js";
 import { STATUS_TONE } from "../../status-tone.js";
+import { useMotionHeld } from "../../use-motion-held.js";
 import {
   BUTTON_CORNERS,
   BUTTON_VARIANT,
@@ -113,6 +115,57 @@ export interface CallStatus {
   readonly agent: { readonly action: string | undefined } | undefined;
 }
 
+/** How loud each side of a call is, in the unit interval: the caller's microphone, and the agent's voice. */
+export interface CallLevel {
+  readonly you: number;
+  readonly voice: number;
+}
+
+/**
+ * A call's levels as they change: `draw` is handed each frame's, and the
+ * function returned stops them. The owner runs one loop for every mute that
+ * draws them, and none while no mute does.
+ */
+export type CallLevels = (draw: (level: CallLevel) => void) => () => void;
+
+/** The level a voice reads as speaking at, where reduced motion draws the ring whole or not at all. */
+const SPEAKING_LEVEL = 0.06;
+
+/** The custom property a mute's ring is as wide as (`call-controls.css`). */
+const LEVEL_PROPERTY = "--ui-call-level";
+
+/**
+ * Draws a mute's voice on its ring, written straight to the ring's custom
+ * property each frame rather than through a render: the agent's voice on the
+ * speaker, and the caller's on the microphone while it is on, since a muted
+ * microphone reaches nobody. Reduced motion holds the ring at its width while
+ * the voice speaks rather than growing it.
+ */
+function useCallRing(device: CallDevice, muted: boolean, levels: CallLevels | undefined) {
+  const ring = useRef<HTMLSpanElement>(null);
+  const held = useMotionHeld();
+  const silent = levels === undefined || (device === CALL_DEVICE.MICROPHONE && muted);
+
+  useEffect(() => {
+    const element = ring.current;
+
+    if (levels === undefined || silent || element === null) return;
+
+    const stop = levels((level) => {
+      const loud = device === CALL_DEVICE.MICROPHONE ? level.you : level.voice;
+      const width = held ? Number(loud > SPEAKING_LEVEL) : loud;
+      element.style.setProperty(LEVEL_PROPERTY, width.toFixed(3));
+    });
+
+    return () => {
+      stop();
+      element.style.removeProperty(LEVEL_PROPERTY);
+    };
+  }, [device, held, levels, silent]);
+
+  return ring;
+}
+
 /** A mute as its owner hands it: whether it is on, and its press. */
 export interface CallMuteState {
   readonly muted: boolean;
@@ -155,33 +208,39 @@ export function TalkButton({
 /**
  * A mute the call offers, round in the call bar and square in an agent's
  * composer row: named for what the press will do, and its glyph struck
- * through, lit in neutral gray, while muted.
+ * through, lit in neutral gray, while muted. Handed the call's `levels`, it
+ * wears its voice's ring (`useCallRing`), which follows its corners.
  */
 export function CallMute({
   device,
   muted,
   corners = BUTTON_CORNERS.ROUND,
+  levels,
   onPress,
 }: {
   device: CallDevice;
   muted: boolean;
   corners?: ButtonCorners | undefined;
+  levels?: CallLevels | undefined;
   onPress: () => void;
 }): React.JSX.Element {
   const mute = MUTE[device];
   const label = muted ? mute.unmute : mute.mute;
+  const ring = useCallRing(device, muted, levels);
 
   return (
-    <Tooltip label={label}>
-      <IconButton
-        variant={BUTTON_VARIANT.QUIET}
-        corners={corners}
-        icon={muted ? <mute.Muted /> : <mute.Live />}
-        label={label}
-        pressed={muted}
-        onClick={onPress}
-      />
-    </Tooltip>
+    <span className="ui-call-mute flex flex-none" ref={ring}>
+      <Tooltip label={label}>
+        <IconButton
+          variant={BUTTON_VARIANT.QUIET}
+          corners={corners}
+          icon={muted ? <mute.Muted /> : <mute.Live />}
+          label={label}
+          pressed={muted}
+          onClick={onPress}
+        />
+      </Tooltip>
+    </span>
   );
 }
 
@@ -327,12 +386,15 @@ export function CallComposerControls({
   live,
   microphone,
   speaker,
+  levels,
   onEnd,
 }: {
   /** The call's status; none draws the three presses alone, as an agent's composer does, which keeps its row uncrowded. */
   live?: CallLiveProps | undefined;
   microphone: CallMuteState;
   speaker: CallMuteState;
+  /** The call's levels, which ring the mutes as each voice speaks; none draws them still. */
+  levels?: CallLevels | undefined;
   onEnd: () => void;
 }): React.JSX.Element {
   return (
@@ -345,12 +407,14 @@ export function CallComposerControls({
         device={CALL_DEVICE.SPEAKER}
         corners={BUTTON_CORNERS.SQUARE}
         muted={speaker.muted}
+        levels={levels}
         onPress={speaker.onPress}
       />
       <CallMute
         device={CALL_DEVICE.MICROPHONE}
         corners={BUTTON_CORNERS.SQUARE}
         muted={microphone.muted}
+        levels={levels}
         onPress={microphone.onPress}
       />
       <EndCallButton onPress={onEnd} />
@@ -451,6 +515,7 @@ export function CallBar({
   status,
   microphone,
   speaker,
+  levels,
   onStop,
   onEnd,
   titled = false,
@@ -459,6 +524,8 @@ export function CallBar({
   status: CallStatus | undefined;
   microphone: CallMuteState;
   speaker: CallMuteState;
+  /** The call's levels, which ring the mutes as each voice speaks; none draws them still. */
+  levels?: CallLevels | undefined;
   /** Stops the agent's turn; drawn only while the status says the agent works. */
   onStop: () => void;
   onEnd: () => void;
@@ -471,10 +538,16 @@ export function CallBar({
       <div className={CONTROLS}>
         {status?.agent === undefined ? null : <StopAgentButton onPress={onStop} />}
         <div className={MUTES}>
-          <CallMute device={CALL_DEVICE.SPEAKER} muted={speaker.muted} onPress={speaker.onPress} />
+          <CallMute
+            device={CALL_DEVICE.SPEAKER}
+            muted={speaker.muted}
+            levels={levels}
+            onPress={speaker.onPress}
+          />
           <CallMute
             device={CALL_DEVICE.MICROPHONE}
             muted={microphone.muted}
+            levels={levels}
             onPress={microphone.onPress}
           />
         </div>
