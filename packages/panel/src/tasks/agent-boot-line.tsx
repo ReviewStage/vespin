@@ -22,10 +22,19 @@ import {
 } from "@repo/features/agent-boot-words";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { BUTTON_SIZE, BUTTON_VARIANT, Button, RetryIcon, TEXT_TONE, Text } from "@repo/ui";
+import {
+  ANNOUNCE,
+  BUTTON_SIZE,
+  BUTTON_VARIANT,
+  Button,
+  RetryIcon,
+  TEXT_TONE,
+  Text,
+} from "@repo/ui";
 import { useMutation } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { pressMutation } from "../act-mutations.js";
+import { useAnnounceShown } from "../use-announce-shown.js";
 import { WorkingLine } from "./working-time.js";
 
 /** What the empty transcript says of a first launch. */
@@ -80,6 +89,18 @@ export function bootLineOf(
   }
 }
 
+/**
+ * The ready line, standing still while an edit holds the first message, and
+ * said politely as it is drawn, since it takes the place of a working line
+ * that said itself and says nothing of its own.
+ */
+function ReadyLine({ byReader }: { byReader: boolean }): ReactNode {
+  const words = bootReadyWords(!byReader);
+  useAnnounceShown(ANNOUNCE.POLITE, words);
+
+  return <Text tone={TEXT_TONE.MUTED}>{words}</Text>;
+}
+
 /** The empty transcript's line while the agent's first launch stands, as `line` says it. */
 export function AgentBootLine({
   line,
@@ -104,7 +125,7 @@ export function AgentBootLine({
       return <WorkingLine startedAt={undefined} words={BOOT_WORDS.HANDING_OFF} />;
     case BOOT_LINE.READY:
       // Note that it neither shimmers nor counts, because nothing runs until the edit ends.
-      return <Text tone={TEXT_TONE.MUTED}>{bootReadyWords(!line.byReader)}</Text>;
+      return <ReadyLine byReader={line.byReader} />;
     case BOOT_LINE.FAILED:
       return (
         <>
