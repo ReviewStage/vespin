@@ -43,6 +43,7 @@ import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
 import {
+  answerKeeper,
   INBOX_FEED,
   type InboxFeed,
   inboxFeedHolds,
@@ -51,7 +52,6 @@ import {
   selectInboxReader,
   selectTaskListStatus,
   selectWorkspaces,
-  shareAppState,
 } from "@repo/host/app-state-reads";
 import { BUZZ } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -178,7 +178,7 @@ export function useInboxListing(view: {
 
   const { show, search, chosen } = view;
   // Note that the last listing is kept where the new one lists the same rows, because a new array resets every row its list holds (`RowForEach`), as a pick in a split view's list would on each press.
-  const kept = useRef<InboxListing | undefined>(undefined);
+  const [keep] = useState(answerKeeper<InboxListing>);
 
   return useMemo(() => {
     const standing = inboxAtNow(groups, Date.now());
@@ -193,12 +193,8 @@ export function useInboxListing(view: {
 
     const unread = listed.filter(({ item }) => isUnread(item)).map(({ item }) => item.id);
 
-    const next = { listed, feed, counts: inboxCounts(standing, readerId, MINE), unread, readerId };
-    const shared = kept.current === undefined ? next : shareAppState(kept.current, next);
-    kept.current = shared;
-
-    return shared;
-  }, [groups, readerId, feed, show, search, chosen]);
+    return keep({ listed, feed, counts: inboxCounts(standing, readerId, MINE), unread, readerId });
+  }, [keep, groups, readerId, feed, show, search, chosen]);
 }
 
 /**
