@@ -56,6 +56,8 @@ const ENTITY_GLYPH: Readonly<Record<EntityKind, () => React.JSX.Element>> = {
   [ENTITY_KIND.MAC_APP]: () => <AppIcon />,
   // Note that the Mac itself wears the same screen, which is what an app's icon stands in for.
   [ENTITY_KIND.COMPUTER]: () => <AppIcon />,
+  // Note that a machine whose platform is not known wears a Mac's, as a device does where its platform was never said.
+  [ENTITY_KIND.MACHINE]: GLYPH.DESKTOP,
 };
 
 /** The glyph of an entity of `kind` where nothing more of it is known. */

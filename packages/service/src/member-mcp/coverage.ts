@@ -438,6 +438,8 @@ export const MEMBER_MCP_EXCLUSIONS = {
   voice: { open: SCREEN_ONLY },
   workspaceSlackBot: { connect: NEEDS_BROWSER },
   workspaces: {
+    // A workspace's machines stand in the @ list; an agent is handed a mentioned machine's id, and a refused call names the machines it could reach.
+    machines: SCREEN_ONLY,
     setExperiment: INTERNAL,
     transfer: DESTRUCTIVE,
     leave: DESTRUCTIVE,

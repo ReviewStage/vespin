@@ -509,6 +509,8 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACES_EXPERIMENT_SET: "/api/workspaces/experiment/set",
   /** One workspace's members, to a member of it (GET), the workspace named in `workspace-wire.ts`'s `WORKSPACE_MEMBERS_QUERY`. */
   WORKSPACES_MEMBERS: "/api/workspaces/members",
+  /** The machines of a workspace's members, to a member of it (GET), the workspace, and a member where it is theirs alone, named in its query (`workspace-wire.ts`'s `workspaceMachinesRequestSchema`). */
+  WORKSPACES_MACHINES: "/api/workspaces/machines",
   /** The owner removes an admin or a member, and an admin a member (POST), answered with those who remain. */
   WORKSPACES_MEMBERS_REMOVE: "/api/workspaces/members/remove",
   /** The owner makes another member an admin or an admin a member (POST), answered with the members as they then stand. */

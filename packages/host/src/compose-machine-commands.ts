@@ -188,9 +188,8 @@ const RELEASE_WITHIN = Duration.seconds(10);
 /** Why a release is let go as its turn comes: another agent's action took the cursor meanwhile. */
 const CURSOR_TAKEN_WORDS = "another agent took the cursor.";
 
-/** The actions that never move the agent's cursor, so never hand it to the agent asking. */
+/** The actions that never move the agent's cursor, so never hand it to the agent asking. Note that an app's read is not among them, because it brings the cursor in where it shows nowhere yet. */
 const STILL_CURSOR: ReadonlySet<string> = new Set([
-  COMPUTER_ACTION.GET_APP_STATE,
   COMPUTER_ACTION.LIST_APPS,
   COMPUTER_ACTION.RECORD,
   COMPUTER_ACTION.STOP_RECORDING,

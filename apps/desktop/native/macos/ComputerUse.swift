@@ -41,7 +41,8 @@ import UniformTypeIdentifiers
 /// refused where the app it finds no longer matches.
 ///
 /// The agent's own cursor, the browser's pointer drawn over the app in a
-/// window that takes no clicks, glides to each point an action
+/// window that takes no clicks, comes in over the window's middle as the
+/// agent first reads an app, glides to each point an action
 /// lands on just before it lands, and stands there, swaying about its tip
 /// while the agent thinks, until `release_cursor` says the agent's turn
 /// ended, so the developer sees where it works without losing their own
@@ -709,6 +710,8 @@ private func getAppState(_ request: [String: Any]) async throws -> [String: Any]
     sessions[pid] = AppSession(
         pid: pid, windowID: window.windowID, windowFrame: window.frame,
         shotSize: CGSize(width: width, height: height), elements: walk.elements)
+    // Note that the agent's cursor comes in on its first look at an app, resting over the window's middle, so the developer sees the agent at work before its first press, which glides from there.
+    await MainActor.run { agentCursor.appear(at: CGPoint(x: window.frame.midX, y: window.frame.midY)) }
     return [
         "app": describe(app),
         "window": [
@@ -954,6 +957,12 @@ private final class AgentCursor {
             guard !Task.isCancelled else { return }
             self?.hide()
         }
+    }
+
+    /// The cursor brought in resting at a point, with no press, where it shows nowhere yet, as an app's first read brings it; where it already stands, it stays.
+    func appear(at point: CGPoint) {
+        if let panel, panel.isVisible, panel.alphaValue > 0 { return }
+        glide(to: point)
     }
 
     /// The cursor put away at once, as the agent's turn ends: it fades where it stands, and a recording stops drawing it.

@@ -297,6 +297,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
   const generation = useRef(0);
   const standing = useRef<Standing | undefined>(undefined);
   const [levels] = useState(() => levelsOf(standing));
+  // Note that the meters' context is held from the press until its peer takes it, because an end while the microphone is still asked for must close it too.
+  const pendingContext = useRef<AudioContext | undefined>(undefined);
   // Note that the microphone's mute and the session's start are refs too, because the channel's handler reads them outside any render.
   const microphoneMuted = useRef(false);
   const sessionStarted = useRef(false);
@@ -307,6 +309,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     generation.current += 1;
     const held = standing.current;
     standing.current = undefined;
+    pendingContext.current?.close().catch(() => undefined);
+    pendingContext.current = undefined;
 
     if (held !== undefined) release(held);
     setCall(undefined);
@@ -352,8 +356,6 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     const opened = await openMicrophone();
 
     if ("refused" in opened) {
-      context?.close().catch(() => undefined);
-
       return fail(
         asked,
         opened.refused === MICROPHONE_REFUSAL.DENIED
@@ -365,12 +367,12 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
 
     if (generation.current !== asked) {
       for (const track of opened.stream.getTracks()) track.stop();
-      context?.close().catch(() => undefined);
 
       return;
     }
 
     const held = connect(opened.stream, context);
+    pendingContext.current = undefined;
     silenced(held.microphone, microphoneMuted.current);
     standing.current = held;
     listen(asked, held);
@@ -428,11 +430,10 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
       speakerMuted: false,
     });
     const context = pressedContext();
-    open(asked, into.agentId, context).catch((cause: unknown) => {
-      // Note that a context the peer took is let go with the peer, and one it never took, here.
-      if (standing.current?.meters?.context !== context) context?.close().catch(() => undefined);
-      fail(asked, VOICE_CALL_NOTE.NOT_STARTED, cause);
-    });
+    pendingContext.current = context;
+    open(asked, into.agentId, context).catch((cause: unknown) =>
+      fail(asked, VOICE_CALL_NOTE.NOT_STARTED, cause),
+    );
   };
 
   // A mute pressed before the session started is kept, and told as it starts.
