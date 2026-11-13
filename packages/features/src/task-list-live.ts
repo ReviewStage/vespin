@@ -281,6 +281,27 @@ export const TASK_LIST_READ = liveRead({
 
 export type TaskListLiveAnswer = LiveReadAnswer<typeof TASK_LIST_READ>;
 
+/**
+ * One task outside the list a window holds, by the task or the agent `id`
+ * names, read once rather than followed: the task as the list's plans
+ * answer it, and every agent of it as the list's agents do, or the agent
+ * alone where it stands on no task. The rows are the list's own, read on
+ * the same rule of who may read them, so a task or an agent the account
+ * does not reach answers no rows.
+ */
+export const TASK_ROWS_READ = liveRead({
+  name: "taskRows",
+  path: HOSTED_SERVICE_PATH.LIVE_TASK_ROWS,
+  params: { id: LIVE_PARAM.ID, [LIVE_USER_QUERY]: LIVE_PARAM.USER },
+  mode: LIVE_MODE.SNAPSHOT,
+  parts: {
+    plans: TASK_LIST_READ.parts.plans,
+    agents: TASK_LIST_READ.parts.agents,
+  },
+});
+
+export type TaskRowsLiveAnswer = LiveReadAnswer<typeof TASK_ROWS_READ>;
+
 /** The plan list's rows as Realtime delivers them, decoded at the boundary before anything reads them. */
 export type TaskListLiveRows = typeof TASK_LIST_READ.rows.Type;
 

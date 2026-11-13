@@ -477,6 +477,7 @@ export function hostAssemblyLayer<const Chosen extends HostPlatformConcern>(
         ports: agentPortsClient,
         listed: tasks.listed,
         pullRequestListings: tasks.pullRequestListings,
+        openedOutside: tasks.openedOutside,
         pool,
         agentListed,
       }),

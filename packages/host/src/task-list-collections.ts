@@ -22,6 +22,15 @@
  * (`compose-tasks.ts`), which the list shows while it stands, so it stands in
  * the list from the press, before the service answers. The tasks a write
  * stands over are the list's pending ones.
+ *
+ * A task a window opens that the list does not hold is read once from the
+ * service with its agents (`compose-tasks.ts`) and stands in the pool on
+ * reads of its own, the cold ones (`cold`), drawn into the list beside the
+ * rows its follow answers and kept for as long as the scope stands, so a
+ * second open reads nothing. They are one row with the list's where both
+ * hold it, so a write draws over a cold task as over any, and a cold task
+ * the follow comes to answer, as one edited or reopened does, is the list's
+ * again and no longer cold.
  */
 
 import type { ListedAgent } from "@repo/features/agent-wire";
@@ -79,6 +88,14 @@ export interface TaskListCollections {
   readonly answer: (rows: TaskListLiveRows, standing?: SyncStanding) => Effect.Effect<boolean>;
   /** The plans and agents the list holds as the service answered them, with no write drawn over them, as the entity store keeps them. */
   readonly synced: () => TaskListLiveRows;
+  /** Whether the list draws the task or the agent `id` names, from its follow or as a cold one. */
+  readonly holds: (id: string) => boolean;
+  /**
+   * Takes one task read outside the list, its plan and its agents, as cold
+   * rows drawn beside the list's, and draws it; each the follow already
+   * holds is the follow's alone.
+   */
+  readonly cold: (rows: TaskListLiveRows) => Effect.Effect<void>;
 }
 
 /**
@@ -132,12 +149,53 @@ export function taskListCollections(
 
     const agents: HeldRows<AgentRow> = yield* pool.stand(AGENT, { redraw, confirmation });
 
+    /** The tasks read outside the list and their agents, by id, which the list's follow does not hold. */
+    let coldPlanKeys: readonly string[] = [];
+    let coldAgentKeys: readonly string[] = [];
+    const coldPlans: HeldRows<PlanRow> = yield* pool.stand(PLAN, { redraw, confirmation });
+    const coldAgents: HeldRows<AgentRow> = yield* pool.stand(AGENT, { redraw, confirmation });
+
+    /** The rows `live` shows, then each of `cold`'s it does not. */
+    const beside = <Row extends { readonly id: string }>(
+      live: HeldRows<Row>,
+      cold: HeldRows<Row>,
+    ): readonly Row[] => {
+      const coldRows = cold.rows().filter((row) => !live.holds(row.id));
+
+      return coldRows.length === 0 ? live.rows() : [...live.rows(), ...coldRows];
+    };
+
+    /** The cold keys the list's follow holds no more of, standing on the cold reads alone. */
+    const settleCold = Effect.suspend(() => {
+      const planKeys = coldPlanKeys.filter((id) => !plans.holds(id));
+      const agentKeys = coldAgentKeys.filter((id) => !agents.holds(id));
+
+      if (planKeys.length === coldPlanKeys.length && agentKeys.length === coldAgentKeys.length) {
+        return Effect.void;
+      }
+
+      coldPlanKeys = planKeys;
+      coldAgentKeys = agentKeys;
+
+      return Effect.asVoid(
+        Effect.all([
+          coldPlans.answer([], { held: coldPlanKeys }),
+          coldAgents.answer([], { held: coldAgentKeys }),
+        ]),
+      );
+    });
+
     const drawing = taskListDrawer();
 
     /** Draws the list as it stands now, what every standing write drew among it, and arms its next edge. */
     const drawn: Effect.Effect<void> = yield* drawnAtEdges((at) => {
       if (!open) return undefined;
-      const { edge, ...list } = drawing({ plans: plans.rows(), agents: agents.rows() }, at);
+
+      const { edge, ...list } = drawing(
+        { plans: beside(plans, coldPlans), agents: beside(agents, coldAgents) },
+        at,
+      );
+
       dependencies.draw({ ...list, pendingTasks: plans.pending() });
 
       return edge;
@@ -169,12 +227,28 @@ export function taskListCollections(
           return Effect.gen(function* () {
             const plansMoved = yield* plans.answer(rows.plans, answered(planKeys));
             const agentsMoved = yield* agents.answer(rows.agents, answered(agentKeys));
+            // Note that a cold task the follow now answers is the follow's alone, so one it later lets go is gone from the list too.
+            yield* settleCold;
             yield* drawn;
 
             return plansMoved.length + agentsMoved.length > 0;
           });
         }),
       synced: () => ({ plans: plans.synced(), agents: agents.synced() }),
+      holds: (id) =>
+        plans.holds(id) || agents.holds(id) || coldPlans.holds(id) || coldAgents.holds(id),
+      cold: (rows) =>
+        Effect.gen(function* () {
+          const planRows = rows.plans.filter((row) => !plans.holds(row.id));
+          const agentRows = rows.agents.filter((row) => !agents.holds(row.id));
+
+          if (planRows.length + agentRows.length === 0) return;
+          coldPlanKeys = [...new Set([...coldPlanKeys, ...planRows.map((row) => row.id)])];
+          coldAgentKeys = [...new Set([...coldAgentKeys, ...agentRows.map((row) => row.id)])];
+          yield* coldPlans.answer(planRows, { held: coldPlanKeys });
+          yield* coldAgents.answer(agentRows, { held: coldAgentKeys });
+          yield* redraw();
+        }),
     };
   });
 }
