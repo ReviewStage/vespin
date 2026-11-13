@@ -52,7 +52,7 @@ const swept = (sandboxName: string, at: Date) =>
 
 it.layer(getTestDB())("what a member holds open in an agent's sandbox", (it) => {
   it.effect(
-    "a Terminal tab holds its sandbox until its shell ends or a list leaves it out, and another account's sandbox is never held by it",
+    "a Terminal tab holds its sandbox until its shell ends or a list begun after it opened leaves it out, and another account's sandbox is never held by it",
     () =>
       Effect.gen(function* () {
         const held = yield* openSandbox;
@@ -71,8 +71,12 @@ it.layer(getTestDB())("what a member holds open in an agent's sandbox", (it) => 
         yield* recordAgentSandboxTerminalEnded(held, first);
         assert.equal(yield* agentSandboxHeld(held, MINUTES_LATER), true, "one tab still stands");
 
-        // A list that no longer reads the second shell, which ended inside the sandbox.
-        yield* keepAgentSandboxTerminals(held, [first]);
+        // A list begun a minute in, which no longer reads the second shell, and a tab opened while it read.
+        const opening = randomUUID();
+        yield* recordAgentSandboxTerminalOpened(held, opening, MINUTES_LATER);
+        yield* keepAgentSandboxTerminals(held, [first], MINUTE_LATER);
+        assert.equal(yield* agentSandboxHeld(held, MINUTES_LATER), true, "the newer tab stands");
+        yield* recordAgentSandboxTerminalEnded(held, opening);
         assert.equal(yield* agentSandboxHeld(held, MINUTES_LATER), false);
 
         yield* recordAgentSandboxTerminalOpened(held, first, MINUTES_LATER);

@@ -695,13 +695,15 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** The agent's shells and where its sandbox stands. */
     terminals: signedIn.terminals.effect(function* ({ input, context }) {
       const sessionId = yield* reachedSession(context.userId, input.id);
+      const listedAt = yield* Clock.currentTimeMillis;
       const listed = yield* inSandbox(listedShells(sessionId));
 
-      // Note that a shell that ended inside the sandbox, or with its run, holds it no longer.
+      // Note that a shell that ended inside the sandbox, or with its run, holds it no longer; one opened since the list began stands.
       if (sessionId !== undefined)
         yield* keptSandboxTerminals(
           agentSandboxName(sessionId),
           listed.terminals.map((terminal) => terminal.id),
+          listedAt,
         );
 
       return listed;

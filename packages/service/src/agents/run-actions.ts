@@ -30,7 +30,9 @@ import {
   type HostedRefusal,
   hostedStoreOrUnavailable,
 } from "../http/http-effect.js";
+import { agentSandboxName } from "./agent-sandbox-open.js";
 import { workspaceEnvironmentOf } from "./coder-host/runner-sessions.js";
+import { recordedTerminalOpened } from "./sandbox-use.js";
 import { AgentSandbox } from "./terminal/agent-sandbox.js";
 import {
   listedShells,
@@ -114,6 +116,8 @@ export const ranRunAction = Effect.fn("web/ranRunAction")(function* (
   );
 
   if (Result.isFailure(ran)) return yield* Effect.fail(shellRefusal(ran.failure));
+  // Note that the action's shell is a Terminal tab like any other, so it holds the sandbox until it ends.
+  yield* recordedTerminalOpened(agentSandboxName(sessionId), ran.success.id);
 
   return { terminal: ran.success };
 });

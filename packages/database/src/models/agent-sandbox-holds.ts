@@ -16,7 +16,7 @@
  * shows.
  */
 
-import { and, eq, inArray, notInArray, or, sql } from "drizzle-orm";
+import { and, eq, inArray, lt, notInArray, or, sql } from "drizzle-orm";
 import { Duration, Effect, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
@@ -133,8 +133,9 @@ const deleteTerminals = SqlSchema.void({
     sandboxName: Schema.String,
     ended: Schema.optional(Schema.Array(Schema.String)),
     kept: Schema.optional(Schema.Array(Schema.String)),
+    openedBefore: Schema.optional(Schema.Date),
   }),
-  execute: ({ sandboxName, ended, kept }) =>
+  execute: ({ sandboxName, ended, kept, openedBefore }) =>
     Database.use((db) =>
       db
         .delete(agentSandboxTerminalTable)
@@ -147,6 +148,9 @@ const deleteTerminals = SqlSchema.void({
             kept === undefined || kept.length === 0
               ? undefined
               : notInArray(agentSandboxTerminalTable.terminalId, [...kept]),
+            openedBefore === undefined
+              ? undefined
+              : lt(agentSandboxTerminalTable.openedAt, openedBefore),
           ),
         ),
     ),
@@ -228,12 +232,13 @@ export function recordAgentSandboxTerminalEnded(
   return deleteTerminals({ sandboxName, ended: [terminalId] });
 }
 
-/** The sandbox's shells as a list read them: every tab's hold whose shell it left out let go, and every one where it listed none. */
+/** The sandbox's shells as a list begun at `listedAt` read them: every tab's hold opened before then whose shell it left out let go, and every one where it listed none; a tab opened since stands, since the list could not have read it. */
 export function keepAgentSandboxTerminals(
   sandboxName: string,
   terminalIds: ReadonlyArray<string>,
+  listedAt: Date,
 ): HoldEffect<void> {
-  return deleteTerminals({ sandboxName, kept: terminalIds });
+  return deleteTerminals({ sandboxName, kept: terminalIds, openedBefore: listedAt });
 }
 
 /** Every hold on the sandbox let go, as its run ends: its shells ended with it, and nothing is left to forward or view. */

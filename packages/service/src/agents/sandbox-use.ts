@@ -161,9 +161,10 @@ export const recordedTerminalEnded = (
 ): Effect.Effect<void, never, DatabaseServices> =>
   loggedIfFailed(recordAgentSandboxTerminalEnded(sandboxName, terminalId));
 
-/** The sandbox's shells as a list read them, every other tab's hold let go. */
+/** The sandbox's shells as a list begun at `listedAt` (epoch milliseconds) read them, every other tab's hold opened before then let go. */
 export const keptSandboxTerminals = (
   sandboxName: string,
   terminalIds: ReadonlyArray<string>,
+  listedAt: number,
 ): Effect.Effect<void, never, DatabaseServices> =>
-  loggedIfFailed(keepAgentSandboxTerminals(sandboxName, terminalIds));
+  loggedIfFailed(keepAgentSandboxTerminals(sandboxName, terminalIds, new Date(listedAt)));
