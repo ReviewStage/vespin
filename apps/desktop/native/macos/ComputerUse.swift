@@ -731,8 +731,8 @@ private let CURSOR_HOLD_SECONDS = 120.0
 /// How far the cursor turns about its tip either way while it rests, and how long one sway there and back takes, as the browser's pointer sways while the agent works (`cloud-browser-cursor`).
 private let CURSOR_SWAY_DEGREES = 3.0
 private let CURSOR_SWAY_SECONDS = 3.0
-/// How often the cursor's window redraws while it sways.
-private let CURSOR_FRAME_NANOSECONDS: UInt64 = 16_666_667
+/// How often the cursor's window redraws while it sways: 30 a second, which a sway of a few degrees over seconds needs no more than, so a cursor held a while costs little.
+private let CURSOR_FRAME_NANOSECONDS: UInt64 = 33_333_333
 /// The cursor's box, and where in it the arrow's tip stands.
 private let CURSOR_BOX = CGSize(width: 36, height: 36)
 private let CURSOR_TIP = CGPoint(x: 8, y: 6)
@@ -941,7 +941,10 @@ private final class AgentCursor {
         if swaying == nil {
             swaying = Task { @MainActor [weak self] in
                 while !Task.isCancelled {
-                    self?.panel?.contentView?.needsDisplay = true
+                    // Note that a cursor faded out, or not yet shown, is never redrawn.
+                    if let panel = self?.panel, panel.isVisible, panel.alphaValue > 0 {
+                        panel.contentView?.needsDisplay = true
+                    }
                     try? await Task.sleep(nanoseconds: CURSOR_FRAME_NANOSECONDS)
                 }
             }
