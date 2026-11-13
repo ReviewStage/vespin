@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { BOOT_BOUNDS, BOOT_FAILURE, BOOT_PHASE } from "@repo/features/agent-boot";
 import { QUEUE_PAUSE } from "@repo/features/agent-queue-wire";
 import { Effect, Option } from "effect";
+import { TestClock } from "effect/testing";
 import { Database } from "../../core/query.js";
 import { user } from "../../schemas/auth.js";
 import { CONVERSATION_RUNTIME, MESSAGE_SENDER } from "../../storage-vocabulary.js";
@@ -21,6 +22,7 @@ import {
 import {
   agentQueueNow,
   claimQueueHead,
+  holdQueuedMessage,
   pauseAgentQueue,
   queueWhileBooting,
 } from "../agent-queue-store.js";
@@ -185,11 +187,13 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
   );
 
   it.effect(
-    "is read past its deadline while under way or handing off, and never once failed or ready",
+    "is read past its deadline while under way or handing off, and never once failed or ready, while an edit holds its first message, or within a deadline of the edit's end",
     () =>
       Effect.gen(function* () {
         const starting = yield* openAccount;
         const handingOff = yield* openAccount;
+        const editing = yield* openAccount;
+        const released = yield* openAccount;
         const failed = yield* openAccount;
         const ready = yield* openAccount;
         yield* beginAgentBoot(starting.agentId, AT, undefined);
@@ -200,19 +204,43 @@ it.layer(getTestDB())("an agent's first launch", (it) => {
         yield* failAgentBoot(failed.agentId, BOOT_FAILURE.MACHINE_UNAVAILABLE, AT);
         yield* agentBootRunnerUp(ready.agentId, AT, 1);
         yield* agentBootRunnerUp(handingOff.agentId, AT, 1);
+        // A hand-off stopped at a first message its member is editing waits on them, past any deadline.
+        const edited = firstLine(editing.userId);
+        yield* beginAgentBoot(editing.agentId, AT, edited);
+        yield* holdQueuedMessage(editing.userId, editing.agentId, edited.id, true);
+        yield* agentBootRunnerUp(editing.agentId, AT, 1);
+        // An edit let go only once the deadline passed is under way again, not lapsed, until a deadline after it.
+        const releasedLine = firstLine(released.userId);
+        yield* beginAgentBoot(released.agentId, AT, releasedLine);
+        yield* holdQueuedMessage(released.userId, released.agentId, releasedLine.id, true);
+        yield* agentBootRunnerUp(released.agentId, AT, 1);
+        yield* TestClock.setTime(past(BOOT_BOUNDS.DEADLINE_MS).getTime());
+        yield* holdQueuedMessage(released.userId, released.agentId, releasedLine.id, false);
 
         const before = yield* lapsedAgentBoots(past(BOOT_BOUNDS.DEADLINE_MS - 1), 100);
         const after = yield* lapsedAgentBoots(past(BOOT_BOUNDS.DEADLINE_MS), 100);
+        const longAfter = yield* lapsedAgentBoots(past(2 * BOOT_BOUNDS.DEADLINE_MS), 100);
 
         const mine = (boots: readonly { readonly agentId: string }[]) =>
           boots.flatMap(({ agentId }) =>
-            [starting.agentId, handingOff.agentId, failed.agentId, ready.agentId].includes(agentId)
+            [
+              starting.agentId,
+              handingOff.agentId,
+              editing.agentId,
+              released.agentId,
+              failed.agentId,
+              ready.agentId,
+            ].includes(agentId)
               ? [agentId]
               : [],
           );
 
         assert.deepEqual(mine(before), []);
         assert.deepEqual(mine(after).toSorted(), [starting.agentId, handingOff.agentId].toSorted());
+        assert.ok(
+          mine(longAfter).includes(released.agentId),
+          "a hand-off that never went lapses a deadline after its edit's end",
+        );
         // The sweep fails the stuck hand-off as it fails a boot that never came up, so Retry can boot it again.
         assert.equal(
           yield* failAgentBoot(
