@@ -4,7 +4,9 @@
  * The agent travels in the path. The read is cheap enough for the desktop
  * to ask every few seconds while the control is open or forwarding is on:
  * one look at whether the sandbox is running, and one short command in it
- * while it runs. It never wakes a stopped sandbox.
+ * while it runs. It never wakes a stopped sandbox. A read made because the
+ * desktop forwards the ports says so (`forwarding`), which holds the running
+ * sandbox up while it reads.
  *
  * One port may be shared by a public link (`listening-ports-wire.ts`):
  * shared, which never wakes a stopped sandbox and refuses one as stopped,
@@ -31,6 +33,9 @@ import { bodyCap, declaredProcedure, exactBodyInput, refuses } from "./base.js";
 /** The agent a path names; the service reads an id that is no UUID as naming none. */
 const agentParamsSchema = EffectSchema.Struct({ id: EffectSchema.String });
 
+/** What a read's `forwarding` query says where the desktop reads the ports because it forwards them, which holds the sandbox up; the popover's own reads leave it out. */
+export const AGENT_PORTS_FORWARDING = "1";
+
 /** Where the agent's shared port stands. */
 const SHARE_PATH = `${HOSTED_SERVICE_PATH.AGENTS}/{id}/ports/share` as const;
 
@@ -49,10 +54,15 @@ const portsProcedure = declaredProcedure.errors(
 );
 
 export const agentPortsContract = {
-  /** The ports listened on in the agent's sandbox, and whether it is running. */
+  /** The ports listened on in the agent's sandbox, and whether it is running; a read that says it forwards them holds the sandbox up. */
   list: portsProcedure
     .meta(openapi({ method: HTTP_METHOD.GET, path: `${HOSTED_SERVICE_PATH.AGENTS}/{id}/ports` }))
-    .input(agentParamsSchema)
+    .input(
+      EffectSchema.Struct({
+        ...agentParamsSchema.fields,
+        forwarding: EffectSchema.optionalKey(EffectSchema.Literal(AGENT_PORTS_FORWARDING)),
+      }),
+    )
     .output(EffectSchema.flip(listeningPortsAnswerSchema)),
   /** The port shared by a public link, replacing any shared before; a sandbox not running is refused as stopped. */
   share: portsProcedure

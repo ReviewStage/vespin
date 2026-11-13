@@ -35,9 +35,12 @@ export function agentPortsProcedures(seams: AgentPortsProcedureSeams) {
   const signedIn = hosted.agentPorts.use(accountMiddleware(seams.resolveUserId));
 
   return {
-    /** The ports listened on in the agent's sandbox, and whether it is running. */
+    /** The ports listened on in the agent's sandbox, and whether it is running; a read the desktop makes while it forwards them holds the sandbox up. */
     list: signedIn.list.effect(function* ({ input, context }) {
-      return yield* Effect.provide(listAgentPorts(context.userId, input.id), seams.sandbox);
+      return yield* Effect.provide(
+        listAgentPorts(context.userId, input.id, input.forwarding !== undefined),
+        seams.sandbox,
+      );
     }),
     /** The port shared by a public link; a sandbox not running is refused as stopped. */
     share: signedIn.share.effect(function* ({ input, context }) {

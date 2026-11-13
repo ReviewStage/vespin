@@ -91,6 +91,7 @@ import {
   warmedAgent,
 } from "./agent-lifecycle.js";
 import { controlsAgent, reachedAgentById } from "./agent-reach.js";
+import { agentSandboxName } from "./agent-sandbox-open.js";
 import {
   askedPullRequest,
   githubReadRefusal,
@@ -127,6 +128,11 @@ import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
 import { turnChangesOf } from "./coder-host/turn-changes.js";
 import { pressReplyButton, readReplyButtonView } from "./reply-buttons/press.js";
 import { ranRunAction, stoppedRunAction } from "./run-actions.js";
+import {
+  keptSandboxTerminals,
+  recordedTerminalEnded,
+  recordedTerminalOpened,
+} from "./sandbox-use.js";
 import type { SandboxDeleteReach } from "./session-sandboxes.js";
 import type { TypedTurn } from "./sessions/agent-sessions.js";
 import { AgentSandbox } from "./terminal/agent-sandbox.js";
@@ -689,8 +695,16 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** The agent's shells and where its sandbox stands. */
     terminals: signedIn.terminals.effect(function* ({ input, context }) {
       const sessionId = yield* reachedSession(context.userId, input.id);
+      const listed = yield* inSandbox(listedShells(sessionId));
 
-      return yield* inSandbox(listedShells(sessionId));
+      // Note that a shell that ended inside the sandbox, or with its run, holds it no longer.
+      if (sessionId !== undefined)
+        yield* keptSandboxTerminals(
+          agentSandboxName(sessionId),
+          listed.terminals.map((terminal) => terminal.id),
+        );
+
+      return listed;
     }),
     /** A shell started in the agent's running sandbox, under an id the service mints. */
     openTerminal: signedIn.openTerminal.effect(function* ({ input, context }) {
@@ -705,6 +719,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
           const started = yield* sandboxOrUpstream(sandbox.start(sessionId, randomUUID(), title));
 
           if (Result.isFailure(started)) return yield* Effect.fail(shellRefusal(started.failure));
+          yield* recordedTerminalOpened(agentSandboxName(sessionId), started.success.id);
 
           return { terminal: started.success };
         }),
@@ -766,6 +781,8 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
           const killed = yield* sandboxOrUpstream(sandbox.kill(sessionId, terminalId));
+          // Note that a shell the sandbox no longer has holds it no longer either.
+          yield* recordedTerminalEnded(agentSandboxName(sessionId), terminalId);
 
           if (Result.isFailure(killed)) return yield* Effect.fail(shellRefusal(killed.failure));
 

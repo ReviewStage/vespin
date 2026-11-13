@@ -1,4 +1,4 @@
-import { index, pgTable, text, uuid } from "drizzle-orm/pg-core";
+import { index, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
 import { timestamptz } from "./_helpers.js";
 import { agentTable } from "./agent.js";
 
@@ -17,6 +17,9 @@ import { agentTable } from "./agent.js";
  * sandbox began, set as the launch opens it and cleared once its runner is
  * handed its first lines or the open failed, so the task list reads the
  * sandbox booting, running, or off (`@repo/service`'s `live/reads/tasks.ts`).
+ * `held_at` is the last heartbeat of a member's hold on the sandbox (its
+ * ports forwarded to their Mac, or its Browser view open), and each Terminal
+ * tab open in it is a row of `agent_sandbox_terminal` (`../models/agent-sandbox-holds.ts`).
  * The row goes with its agent. It holds ids, a name, and instants alone.
  */
 
@@ -55,6 +58,8 @@ export const agentSandboxTable = pgTable(
     state: text("state").$type<AgentSandboxState>().notNull().default(AGENT_SANDBOX_STATE.LIVE),
     /** When the boot under way began; null where none is. */
     bootingSince: timestamptz("booting_since"),
+    /** When a member's heartbeat last said they hold the sandbox open: its ports forwarded, or its Browser view open; null where none ever did. */
+    heldAt: timestamptz("held_at"),
   },
   (table) => [
     // An agent's delete cascades to its rows, found by the agent alone.
@@ -62,4 +67,25 @@ export const agentSandboxTable = pgTable(
     // A sweep reads the live sandboxes unused the longest first.
     index("agent_sandbox_used").on(table.usedAt),
   ],
+);
+
+/**
+ * One Terminal tab open in an agent's sandbox, which holds the sandbox up:
+ * written as the tab's shell is started and deleted as it is ended, or with
+ * every tab of the sandbox once the shells it lists leave it out, a boot
+ * begins, or the sandbox is released, since its shells end with the run. A
+ * row names the sandbox, the shell's id, and when it opened, never a byte of
+ * the shell, and goes with the sandbox's row.
+ */
+export const agentSandboxTerminalTable = pgTable(
+  "agent_sandbox_terminal",
+  {
+    sandboxName: text("sandbox_name")
+      .notNull()
+      .references(() => agentSandboxTable.sandboxName, { onDelete: "cascade" }),
+    /** The shell's id, as the service minted it for the tab. */
+    terminalId: text("terminal_id").notNull(),
+    openedAt: timestamptz("opened_at").notNull(),
+  },
+  (table) => [primaryKey({ columns: [table.sandboxName, table.terminalId] })],
 );

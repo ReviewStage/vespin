@@ -61,6 +61,7 @@ import {
   settleRunnerLostTurns,
 } from "@repo/database/models/abandoned-turns";
 import { failAgentBoot, lapsedAgentBoots } from "@repo/database/models/agent-boot-store";
+import { heldAgentSandboxes } from "@repo/database/models/agent-sandbox-holds";
 import {
   type Agent,
   recordAgentRunnerToken,
@@ -657,15 +658,23 @@ export const reconcileAgents = /* @__PURE__ */ Effect.fn("web/reconcileAgents")(
 
 /**
  * The minute sweep's keep-alive: the sandbox of every cloud turn still
- * running inside its progress deadline touched, at most a sweep's worth, a
- * few at a time, each and all within their bounds (`KEEP_UP_SWEEP`); answers
- * how many it drew, each one's use recorded (`touchAgentSandbox`). A touch
- * that fails is said in the log, and one cut short here, and passed over,
- * since the next minute's sweep touches it again well inside its idle window.
+ * running inside its progress deadline touched, and every LIVE sandbox a
+ * member holds open (a Terminal tab, its ports forwarded, or its Browser
+ * view, `@repo/database`'s `agent-sandbox-holds.ts`), whether or not a turn
+ * runs or a client is attached, at most a sweep's worth of each, a few at a
+ * time, each and all within their bounds (`KEEP_UP_SWEEP`); answers how many
+ * it drew, each one's use recorded (`touchAgentSandbox`). A touch never
+ * resumes a stopped sandbox. A touch that fails is said in the log, and one
+ * cut short here, and passed over, since the next minute's sweep touches it
+ * again well inside its idle window.
  */
 export const keepRunningSandboxesUp = /* @__PURE__ */ Effect.fn("web/keepRunningSandboxesUp")(
   function* (now: number) {
-    const names = yield* runningTurnSandboxes(new Date(now), KEEP_UP_SWEEP.SANDBOXES);
+    const [running, held] = yield* Effect.all([
+      runningTurnSandboxes(new Date(now), KEEP_UP_SWEEP.SANDBOXES),
+      heldAgentSandboxes(new Date(now), KEEP_UP_SWEEP.SANDBOXES),
+    ]);
+    const names = [...new Set([...running, ...held])];
 
     const touched = (name: string) =>
       touchAgentSandbox(name).pipe(
@@ -673,7 +682,7 @@ export const keepRunningSandboxesUp = /* @__PURE__ */ Effect.fn("web/keepRunning
         Effect.flatMap((done) =>
           Option.isSome(done)
             ? Effect.void
-            : Effect.logWarning("a running turn's sandbox was not touched in time"),
+            : Effect.logWarning("a running turn's or held sandbox was not touched in time"),
         ),
       );
 
@@ -683,7 +692,9 @@ export const keepRunningSandboxesUp = /* @__PURE__ */ Effect.fn("web/keepRunning
     }).pipe(Effect.timeoutOption(KEEP_UP_SWEEP.SWEEP));
 
     if (Option.isNone(swept)) {
-      yield* Effect.logWarning("the running turns' sandboxes were not all touched in time");
+      yield* Effect.logWarning(
+        "the running turns' and held sandboxes were not all touched in time",
+      );
     }
 
     return names.length;

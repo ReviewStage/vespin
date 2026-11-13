@@ -11,11 +11,21 @@
  * written in the last `SANDBOX_USE.WRITE_EVERY`, so a sandbox many callers
  * hold costs one write a minute. A launch records its boot beside it, begun,
  * done, or failed, and a discard the sandbox's deletion, so the task list
- * reads it booting, running, or off. A write that fails is logged and let be: it
- * never fails a turn or an open, and the next touch writes it again.
+ * reads it booting, running, or off. What a member holds open in it is
+ * recorded here too (`@repo/database`'s `models/agent-sandbox-holds.ts`): a
+ * Terminal tab's shell as it starts and ends, the shells a list reads, and a
+ * heartbeat while its ports are forwarded or its Browser view is open. A
+ * write that fails is logged and let be: it never fails a turn, an open, or
+ * a member's call, and the next touch, list, or beat writes it again.
  */
 
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
+import {
+  keepAgentSandboxTerminals,
+  recordAgentSandboxHeld,
+  recordAgentSandboxTerminalEnded,
+  recordAgentSandboxTerminalOpened,
+} from "@repo/database/models/agent-sandbox-holds";
 import {
   recordAgentSandboxBooted,
   recordAgentSandboxBootFailed,
@@ -111,3 +121,38 @@ export const recordedSandboxDiscarded = (
   sandboxName: string,
 ): Effect.Effect<void, never, DatabaseServices> =>
   loggedIfFailed(recordAgentSandboxDiscarded(sandboxName));
+
+/** A member's heartbeat on the sandbox now: its ports forwarded to their Mac, or its Browser view open. */
+export const recordedSandboxHeld = (
+  sandboxName: string,
+): Effect.Effect<void, never, DatabaseServices> =>
+  loggedIfFailed(
+    Effect.flatMap(Clock.currentTimeMillis, (now) =>
+      recordAgentSandboxHeld(sandboxName, new Date(now)),
+    ),
+  );
+
+/** A Terminal tab's shell started in the sandbox now, which holds it until the shell ends. */
+export const recordedTerminalOpened = (
+  sandboxName: string,
+  terminalId: string,
+): Effect.Effect<void, never, DatabaseServices> =>
+  loggedIfFailed(
+    Effect.flatMap(Clock.currentTimeMillis, (now) =>
+      recordAgentSandboxTerminalOpened(sandboxName, terminalId, new Date(now)),
+    ),
+  );
+
+/** A Terminal tab's shell ended, its hold let go. */
+export const recordedTerminalEnded = (
+  sandboxName: string,
+  terminalId: string,
+): Effect.Effect<void, never, DatabaseServices> =>
+  loggedIfFailed(recordAgentSandboxTerminalEnded(sandboxName, terminalId));
+
+/** The sandbox's shells as a list read them, every other tab's hold let go. */
+export const keptSandboxTerminals = (
+  sandboxName: string,
+  terminalIds: ReadonlyArray<string>,
+): Effect.Effect<void, never, DatabaseServices> =>
+  loggedIfFailed(keepAgentSandboxTerminals(sandboxName, terminalIds));

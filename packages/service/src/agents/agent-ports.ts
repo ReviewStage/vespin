@@ -16,8 +16,10 @@
  * running sandbox each time they are asked (`terminal/listening-ports.ts`),
  * one look at where the sandbox stands and one short command in it, so the
  * desktop polls this every few seconds while the control is open or
- * forwarding is on. A sandbox that is not running, stopped or never opened,
- * is never woken here, and answers so with no ports; an agent on a Mac has
+ * forwarding is on; a read made while forwarding is on holds the sandbox up
+ * (`sandbox-use.ts`'s `recordedSandboxHeld`), and the popover's own do
+ * not. A sandbox that is not running, stopped or never opened, is never
+ * woken here, and answers so with no ports; an agent on a Mac has
  * no sandbox, and answers the same.
  *
  * One port may be shared, only from a running sandbox: a share is refused as
@@ -47,6 +49,8 @@ import {
 } from "../http/http-effect.js";
 import { PageLinks } from "../pages/page-links.js";
 import { previewNameOf, previewOrigin } from "../previews/preview-links.js";
+import { agentSandboxName } from "./agent-sandbox-open.js";
+import { recordedSandboxHeld } from "./sandbox-use.js";
 import { AgentSandbox, type AgentSandboxService } from "./terminal/agent-sandbox.js";
 import { reachedAgentSession, sandboxOrUpstream } from "./terminal/sandbox-reach.js";
 
@@ -78,13 +82,22 @@ const linkOf = (userId: string, id: string, route: string) =>
     return `${previewOrigin(sandbox, previewNameOf(key.value.slug, key.value.number, id))}/`;
   });
 
-/** The ports listened on in the agent's sandbox, and whether it is running. */
-export function listAgentPorts(userId: string, id: string): PortsEffect<ListeningPortsAnswer> {
-  return Effect.flatMap(cloudSession(userId, id), (sessionId) =>
-    sessionId === undefined
-      ? Effect.succeed({ running: false, ports: [], labels: [] })
-      : onSandbox((sandbox) => sandbox.listeningPorts(sessionId)),
-  );
+/** The ports listened on in the agent's sandbox, and whether it is running; one read while the member's desktop is `forwarding` them beats a hold on the running sandbox. */
+export function listAgentPorts(
+  userId: string,
+  id: string,
+  forwarding = false,
+): PortsEffect<ListeningPortsAnswer> {
+  return Effect.gen(function* () {
+    const sessionId = yield* cloudSession(userId, id);
+
+    if (sessionId === undefined) return { running: false, ports: [], labels: [] };
+    const answer = yield* onSandbox((sandbox) => sandbox.listeningPorts(sessionId));
+
+    if (forwarding && answer.running) yield* recordedSandboxHeld(agentSandboxName(sessionId));
+
+    return answer;
+  });
 }
 
 /** The port shared by link, replacing any shared before; a sandbox not running is refused as stopped. */

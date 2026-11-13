@@ -212,6 +212,8 @@ export const agentSandboxSync = defineSyncTable(agentSandboxTable, {
       ],
     },
   ],
+  // Note that a hold's heartbeat moves `held_at` each minute and no reader shows it, so it notifies nothing.
+  ignore: [agentSandboxTable.heldAt],
   log: LOG.EVERY,
 });
 

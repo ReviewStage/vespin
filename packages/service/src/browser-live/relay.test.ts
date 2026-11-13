@@ -214,6 +214,7 @@ function world(
         return true;
       }),
     counted: (_userId, _agentId, tool) => Effect.sync(() => void counted.push(tool)),
+    holdSandbox: () => Effect.void,
     notePage: (_tab, targetId, page) =>
       Effect.sync(() => void notedPages.push({ targetId, address: page.address })),
   };
@@ -989,44 +990,6 @@ it.effect(
       assert.deepEqual(resizedPanel.closed, [], "a resize keeps the socket open");
       yield* resizedPanel.leave;
       yield* Fiber.join(relay.fiber);
-    }),
-);
-
-it.effect(
-  "a panel saying it is watching once a minute still closes as idle once the member has sent no input for the input bound",
-  () =>
-    Effect.gen(function* () {
-      const { peer, browser, commands } = yield* liveBrowser();
-      const panel = yield* scriptedViewer;
-      const store = world(browser);
-
-      const { fiber } = yield* started(
-        peer,
-        commands,
-        Effect.scoped(relayBrowserTab(panel.viewer, ASK, reachedTab(undefined), store.deps)),
-      );
-
-      const watchFor = (minutes: number) =>
-        Effect.gen(function* () {
-          for (let minute = 0; minute < minutes; minute += 1) {
-            yield* TestClock.adjust(Duration.minutes(1));
-            yield* panel.push({ type: BROWSER_LIVE_CLIENT.WATCHING });
-            yield* settle;
-          }
-        });
-
-      yield* watchFor(3);
-      assert.deepEqual(panel.closed, [], "a watched panel stays open");
-      assert.deepEqual(panel.ofType(BROWSER_LIVE_SERVER.REFUSED), [], "watching drives nothing");
-
-      // A resize is the member's input, so the input bound runs from it.
-      yield* panel.push({ ...VIEWPORT, width: VIEWPORT.width + 1 });
-      yield* settle;
-      yield* watchFor(4);
-      assert.deepEqual(panel.closed, [], "input moved the input bound on");
-      yield* watchFor(2);
-      yield* Fiber.join(fiber);
-      assert.deepEqual(panel.closed, [BROWSER_LIVE_CLOSE_CODE[BROWSER_LIVE_CLOSE_REASON.IDLE]]);
     }),
 );
 

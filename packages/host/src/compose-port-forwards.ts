@@ -189,7 +189,8 @@ export function composePortForwards(
      */
     const look = (current: Forwarding) =>
       Effect.gen(function* () {
-        const answer = yield* withHttp(client.list(current.agentId));
+        // Note that the read says it forwards, so the service holds the sandbox up while it does.
+        const answer = yield* withHttp(client.list(current.agentId, true));
 
         if ("failure" in answer) return false;
 
