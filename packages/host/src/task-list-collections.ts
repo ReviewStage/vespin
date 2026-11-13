@@ -19,6 +19,11 @@
  * and agents a moved row or that instant reaches, and every other is the
  * object drawn before.
  *
+ * The agents' pull requests are TanStack DB live queries instead
+ * (`task-list-pull-requests.ts`), standing on the agents as the list draws
+ * them (`drawn-rows.ts`), which take only the keys the pool names as moved:
+ * those an answer moved, took up, or let go, and those a write drew again.
+ *
  * A write to one row, a plan's or an agent's, is a write the pool draws over
  * it at once (`compose-tasks.ts` and `compose-agents.ts` declare them),
  * standing until the list carries its transaction, or taken back where the
@@ -47,12 +52,15 @@ import {
   type EntityPool,
   fieldKind,
   type HeldRows,
+  type PoolRead,
   scopedCollection,
 } from "@repo/sync";
 import { createCollection, localOnlyCollectionOptions } from "@tanstack/db";
 import { Effect, type Scope } from "effect";
+import { drawnRows } from "./drawn-rows.js";
 import { drawnAtEdges, drawnPerTick } from "./live-collection.js";
 import { confirmWrite, type SyncStanding, syncIdOf, type TxWait } from "./live-follow.js";
+import { taskListPullRequests } from "./task-list-pull-requests.js";
 
 /** A plan's row as the list's statement answers it. */
 export type PlanRow = TaskListLiveRows["plans"][number];
@@ -153,7 +161,24 @@ export function taskListCollections(
       adopts: () => true,
     });
 
-    const agents: HeldRows<AgentRow> = yield* pool.stand(AGENT, { redraw, confirmation });
+    // The agents as the list draws them, for its live queries to stand on, written only for the keys that moved.
+    const drawnAgents = yield* drawnRows<AgentRow>(AGENT.key);
+    const pullRequests = yield* taskListPullRequests(drawnAgents.collection);
+
+    const agentsDrawn = (keys: readonly string[]) =>
+      drawnAgents.drawn(keys, (key) => agents.row(key));
+
+    const agentsRedraw: PoolRead<AgentRow>["redraw"] = (keys) =>
+      Effect.suspend(() => {
+        agentsDrawn(keys);
+
+        return ticks.drawn;
+      });
+
+    const agents: HeldRows<AgentRow> = yield* pool.stand(AGENT, {
+      redraw: agentsRedraw,
+      confirmation,
+    });
 
     const pastGrace = yield* scopedCollection(() =>
       createCollection(
@@ -197,7 +222,13 @@ export function taskListCollections(
       if (!open) return undefined;
       const rows = { plans: plans.rows(), agents: agents.rows() };
       const edge = gracesAt(rows.agents, at);
-      dependencies.draw({ ...drawing(rows, pastGrace), pendingTasks: plans.pending() });
+
+      dependencies.draw({
+        ...drawing(rows, pastGrace, pullRequests.linesOf),
+        taskPullRequests: pullRequests.taskPullRequests(),
+        agentPullRequests: pullRequests.agentPullRequests(),
+        pendingTasks: plans.pending(),
+      });
 
       return edge;
     });
@@ -230,6 +261,7 @@ export function taskListCollections(
           return Effect.gen(function* () {
             const plansMoved = yield* plans.answer(rows.plans, answered(planKeys));
             const agentsMoved = yield* agents.answer(rows.agents, answered(agentKeys));
+            agentsDrawn(agentsMoved);
             // Note that a whole answer, the list's first or one read again, draws at once, and one past a sync id rides the tick, since a busy account's agents answer many a second.
             yield* standing?.past === undefined ? ticks.drawn : ticks.soon;
 
