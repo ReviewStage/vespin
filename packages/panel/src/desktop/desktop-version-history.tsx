@@ -1,7 +1,7 @@
 import { ACCOUNT_STATUS, type AccountSnapshot } from "@repo/credentials/snapshot";
 import type { AgentSummary } from "@repo/features/agent-wire";
-import { descriptionSections } from "@repo/features/description-document";
 import { revisionSummary, VERSION_HISTORY_WORDS } from "@repo/features/description-history-words";
+import { descriptionSections } from "@repo/features/description-sections";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
 import { sectionAnchors } from "@repo/features/mention-link";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
@@ -646,7 +646,7 @@ function openedSections(
 
   if (read.kind !== HISTORY_READ.READY) return undefined;
 
-  return changedSections(versionDiff(read.previous, read.document), read.previous === null);
+  return changedSections(versionDiff(read.previous, read.description), read.previous === null);
 }
 
 /** Whether the open revision's version failed to read, so its sections will not stand until it is read again. */
@@ -749,7 +749,7 @@ export function taskVersionSubject(tasks: TasksControl): VersionSubject {
             place: { workspace: workspace?.slug ?? task.workspaceId, repository: task.repository },
             anchors: new Set(
               sectionAnchors(
-                descriptionSections(task.document.body).map((section) => section.heading),
+                descriptionSections(task.description.body).map((section) => section.heading),
               ),
             ),
           },

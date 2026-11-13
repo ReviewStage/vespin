@@ -10,7 +10,7 @@ import {
 import { LIVE_READ } from "@repo/features/live-wire";
 import {
   DESCRIPTION_ACTOR,
-  type DescriptionDocument,
+  type Description,
   type DescriptionRevisionLine,
   type DescriptionRevisionsAnswer,
   TASK_PRIORITY,
@@ -204,14 +204,14 @@ const FIXTURE_TASK: Task = {
   status: TASK_STATUS.IN_PROGRESS,
   priority: TASK_PRIORITY.HIGH,
   number: 42,
-  document: { body: `${FIXTURE_TEXT}\n`, assumptions: [] },
+  description: { body: `${FIXTURE_TEXT}\n`, assumptions: [] },
 };
 
 /**
  * The fixture task's description as it stood after its first `sections` sections,
  * each a heading and its words, as a revision partway through drafting saved it.
  */
-function draftOf(sections: number): DescriptionDocument {
+function draftOf(sections: number): Description {
   return { body: `${FIXTURE_SECTIONS.slice(0, sections * 2).join("\n\n")}\n`, assumptions: [] };
 }
 
@@ -226,7 +226,7 @@ function draftOf(sections: number): DescriptionDocument {
  */
 const FIXTURE_HISTORY: readonly {
   readonly line: DescriptionRevisionLine;
-  readonly document: DescriptionDocument;
+  readonly description: Description;
 }[] = [
   {
     line: {
@@ -240,7 +240,7 @@ const FIXTURE_HISTORY: readonly {
       startedAt: CALL_AT - 20 * 60_000,
       changes: 3,
     },
-    document: FIXTURE_TASK.document,
+    description: FIXTURE_TASK.description,
   },
   {
     line: {
@@ -254,7 +254,7 @@ const FIXTURE_HISTORY: readonly {
       startedAt: CALL_AT - 2 * HOUR - 10 * 60_000,
       changes: 2,
     },
-    document: draftOf(10),
+    description: draftOf(10),
   },
   {
     line: {
@@ -268,7 +268,7 @@ const FIXTURE_HISTORY: readonly {
       startedAt: CALL_AT - 5 * HOUR - 25 * 60_000,
       changes: 9,
     },
-    document: draftOf(7),
+    description: draftOf(7),
   },
   {
     line: {
@@ -282,7 +282,7 @@ const FIXTURE_HISTORY: readonly {
       startedAt: CALL_AT - DAY - 30 * 60_000,
       changes: 4,
     },
-    document: draftOf(4),
+    description: draftOf(4),
   },
   {
     line: {
@@ -296,7 +296,7 @@ const FIXTURE_HISTORY: readonly {
       startedAt: FIXTURE_TASK.createdAt,
       changes: 1,
     },
-    document: draftOf(2),
+    description: draftOf(2),
   },
 ];
 
@@ -344,8 +344,8 @@ function historyActAnswer(
 
   const revision = {
     seq,
-    document: FIXTURE_HISTORY[at]?.document ?? draftOf(0),
-    previous: FIXTURE_HISTORY[at + 1]?.document ?? null,
+    description: FIXTURE_HISTORY[at]?.description ?? draftOf(0),
+    previous: FIXTURE_HISTORY[at + 1]?.description ?? null,
   };
 
   // SAFETY: a revision is what this kind answers.
@@ -483,7 +483,7 @@ function thread(input: {
   readonly status: DescriptionCommentThread["status"];
   readonly entries: readonly DescriptionCommentEntry[];
 }): DescriptionCommentThread {
-  const from = FIXTURE_TASK.document.body.indexOf(input.quote);
+  const from = FIXTURE_TASK.description.body.indexOf(input.quote);
 
   if (from < 0) throw new Error(`The fixture's description holds no "${input.quote}"`);
   const times = input.entries.map((entry) => entry.at);

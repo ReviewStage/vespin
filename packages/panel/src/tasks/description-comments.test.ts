@@ -81,7 +81,7 @@ const TEXT = [
   "",
 ].join("\n\n");
 
-const PLAN: Task = { ...DOCUMENT_TASK, document: { body: TEXT, assumptions: [] } };
+const PLAN: Task = { ...DOCUMENT_TASK, description: { body: TEXT, assumptions: [] } };
 
 const ID = {
   OPEN: "0f9b5f6e-6a8e-4c51-9a0e-2c1f2f0b7a11",
@@ -680,7 +680,7 @@ test("the button beside a list comments on the bullet under the pointer, a paren
     "\n\n",
   );
 
-  const listed: Task = { ...DOCUMENT_TASK, document: { body: text, assumptions: [] } };
+  const listed: Task = { ...DOCUMENT_TASK, description: { body: text, assumptions: [] } };
   const { container, started } = wide(() => drawn("page", [], () => true, listed));
 
   const second = [...container.querySelectorAll("li")].find((li) =>

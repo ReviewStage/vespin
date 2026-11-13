@@ -305,7 +305,7 @@ function browserTabsPlaceOf(owner: BrowserTabsOwnerKey): BrowserTabsPlace {
 }
 
 /** The description a task starts on, empty, as the service makes it. */
-const EMPTY_DESCRIPTION = { body: "", assumptions: [] } as const satisfies Task["document"];
+const EMPTY_DESCRIPTION = { body: "", assumptions: [] } as const satisfies Task["description"];
 
 /** A start's request as the service is sent it, under the id the host minted for its task where the window named none. */
 type StartRequest = Omit<TasksStartRequest, "quiet"> & { readonly id: string };
@@ -1439,12 +1439,20 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
     if (listed === undefined) return task;
     const { agents: _agents, ...row } = listed;
-    const { updatedAt, document, agentEdits, lastEdit, sectionEdits, blockedBy, blocks } = task;
+    const {
+      updatedAt,
+      description: document,
+      agentEdits,
+      lastEdit,
+      sectionEdits,
+      blockedBy,
+      blocks,
+    } = task;
 
     return {
       ...row,
       updatedAt,
-      document,
+      description: document,
       ...(agentEdits === undefined ? undefined : { agentEdits }),
       ...(lastEdit === undefined ? undefined : { lastEdit }),
       ...(sectionEdits === undefined ? undefined : { sectionEdits }),
@@ -1611,7 +1619,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       if (listed === undefined) return { ...opened, drawn: false };
       const { agents: _agents, ...row } = listed;
       // Note that the description is laid before the task opens, so the window's first frame of it draws its description.
-      yield* documents.started({ ...row, document: EMPTY_DESCRIPTION });
+      yield* documents.started({ ...row, description: EMPTY_DESCRIPTION });
       write({ activeTaskId: taskId });
 
       return { ...opened, drawn: true };
@@ -1747,7 +1755,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
               documentTook(taskId, answered, (held) => ({
                 ...held,
                 name: answered.name,
-                document: answered.document,
+                document: answered.description,
               }));
 
               return {

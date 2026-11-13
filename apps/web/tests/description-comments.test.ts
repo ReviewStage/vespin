@@ -430,7 +430,7 @@ it.layer(getTestDB())("a description's comment threads through the routes", (it)
             owner,
             {},
             {
-              document: { base: DESCRIPTION_TEXT, value: deleted },
+              description: { base: DESCRIPTION_TEXT, value: deleted },
               comments: { anchors: [], carried: [thread.id] },
             },
           ),
@@ -453,7 +453,7 @@ it.layer(getTestDB())("a description's comment threads through the routes", (it)
             owner,
             {},
             {
-              document: { base: deleted, value: DESCRIPTION_TEXT },
+              description: { base: deleted, value: DESCRIPTION_TEXT },
               comments: {
                 anchors: [{ thread: thread.id, from, to: from + WORDS.length }],
                 carried: [thread.id],

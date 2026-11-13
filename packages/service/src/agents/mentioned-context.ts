@@ -1,7 +1,7 @@
 import { MENTIONED_HEADING } from "@repo/database/models/attached-file-parts";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
-import { descriptionSections } from "@repo/features/description-document";
 import { descriptionMarkdown } from "@repo/features/description-markdown";
+import { descriptionSections } from "@repo/features/description-sections";
 import {
   INTEGRATION_NAME,
   INTEGRATION_PROVIDER,
@@ -234,9 +234,9 @@ function excerptOf({ mention, name }: NamedMention, task: Task): string {
     // Note that a section is left out by where it starts, past the cut, never by its heading's words, which earlier text may quote.
     const bodyKept =
       keptLength(whole, MENTIONED_BOUNDS.DESCRIPTION_CHARS) -
-      (whole.length - task.document.body.trimEnd().length - 1);
+      (whole.length - task.description.body.trimEnd().length - 1);
 
-    const headings = descriptionSections(task.document.body)
+    const headings = descriptionSections(task.description.body)
       .filter((section) => section.heading !== "" && section.from >= bodyKept)
       .map((section) => section.heading);
 
@@ -245,7 +245,7 @@ function excerptOf({ mention, name }: NamedMention, task: Task): string {
     return `The whole description, cut short:\n\n${cutOnLine(whole, MENTIONED_BOUNDS.DESCRIPTION_CHARS)}${rest}`;
   }
 
-  const sections = descriptionSections(task.document.body);
+  const sections = descriptionSections(task.description.body);
   const anchors = sectionAnchors(sections.map((section) => section.heading));
   const section = sections[anchors.indexOf(mention.anchor)];
 

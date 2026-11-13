@@ -1508,7 +1508,7 @@ function invitesDocument(listed: TaskSummary): Task {
 
   return {
     ...task,
-    document: { body: INVITES_DESCRIPTION, assumptions: [] },
+    description: { body: INVITES_DESCRIPTION, assumptions: [] },
     blockedBy: [LISTED.ALERTS],
     blocks: [],
   };
@@ -2361,7 +2361,11 @@ const ANSWERS: StagedAnswers = {
   [ACT_KIND.TASKS_SET_STANDING]: () => true,
   // Note that a version of the reference journey's description is read as the service reads one, and a restore is taken as the service takes one, though nothing here moves.
   [ACT_KIND.TASKS_REVISION]: ({ seq }) => ({
-    revision: { seq, document: { body: invitesVersionBody(seq), assumptions: [] }, previous: null },
+    revision: {
+      seq,
+      description: { body: invitesVersionBody(seq), assumptions: [] },
+      previous: null,
+    },
   }),
   [ACT_KIND.TASKS_RESTORE]: () => true,
   // Note that a note to the people who make the app is taken as the feedback service takes one, and goes nowhere, so a run that sends one mails no one.
