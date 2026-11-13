@@ -21,7 +21,7 @@ import { type InboxGroup, type InboxReads, inboxGroups } from "@repo/features/in
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
 import { LIVE_READ } from "@repo/features/live-wire";
 import { agentName, providerOf } from "@repo/features/model-label";
-import type { ModelChoice, ModelProvider, ModelsAnswer } from "@repo/features/models-wire";
+import type { ModelChoice, ModelsAnswer } from "@repo/features/models-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { HOST_LIVE } from "@repo/features/tasks-view";
 import { formatInstant } from "@repo/features/time-format";
@@ -539,24 +539,56 @@ export function selectInboxReader(state: AppStateSnapshot): string | undefined {
   return state.account.status === ACCOUNT_STATUS.SIGNED_IN ? state.account.id : undefined;
 }
 
-/** Every agent's name the task list holds, by the agent's id, as a `select`: the agents on its tasks, each named as the panel names it (`agentName`). Made anew only as the list moves. */
-export const selectAgentNames = memoizedSelect(
-  (state: AppStateSnapshot) => [state.tasks],
-  (tasks): ReadonlyMap<string, string> =>
-    new Map((tasks.taskAgents ?? []).map((agent) => [agent.id, agentName(agent)] as const)),
+/** Whether two maps hold the same values under the same keys. */
+function sameEntries<K, V>(held: ReadonlyMap<K, V>, next: ReadonlyMap<K, V>): boolean {
+  if (held.size !== next.size) return false;
+
+  for (const [key, value] of next) {
+    if (held.get(key) !== value || !held.has(key)) return false;
+  }
+
+  return true;
+}
+
+/**
+ * A `select` answering a map read off the task list's agents, made anew
+ * only as they move, and kept as the map it last answered while every
+ * entry stays the same. Note that it is kept, because Query hands a map on
+ * as it is (`shareAppState` shares plain objects alone), so a new map equal
+ * to the last re-renders every reader, each Inbox row among them, on every
+ * change of an agent's status.
+ */
+function agentMapSelect<V>(
+  entries: (
+    agents: NonNullable<AppStateSnapshot["tasks"]["taskAgents"]>,
+  ) => Iterable<readonly [string, V]>,
+): (state: AppStateSnapshot) => ReadonlyMap<string, V> {
+  let answered: ReadonlyMap<string, V> | undefined;
+
+  return memoizedSelect(
+    (state: AppStateSnapshot) => [state.tasks.taskAgents],
+    (agents): ReadonlyMap<string, V> => {
+      const next = new Map(entries(agents ?? []));
+
+      if (answered === undefined || !sameEntries(answered, next)) answered = next;
+
+      return answered;
+    },
+  );
+}
+
+/** Every agent's name the task list holds, by the agent's id, as a `select`: the agents on its tasks, each named as the panel names it (`agentName`). Made anew only as a name moves. */
+export const selectAgentNames = agentMapSelect((agents) =>
+  agents.map((agent) => [agent.id, agentName(agent)] as const),
 );
 
-/** The provider whose harness each agent on the task list runs in, by the agent's id, as a `select`: read off its model's catalog id, an agent on a provider we run no agent on left out. Made anew only as the list moves. */
-export const selectAgentHarnesses = memoizedSelect(
-  (state: AppStateSnapshot) => [state.tasks],
-  (tasks): ReadonlyMap<string, ModelProvider> =>
-    new Map(
-      (tasks.taskAgents ?? []).flatMap(({ id, model }) => {
-        const harness = providerOf(model);
+/** The provider whose harness each agent on the task list runs in, by the agent's id, as a `select`: read off its model's catalog id, an agent on a provider we run no agent on left out. Made anew only as a harness moves. */
+export const selectAgentHarnesses = agentMapSelect((agents) =>
+  agents.flatMap(({ id, model }) => {
+    const harness = providerOf(model);
 
-        return harness === undefined ? [] : [[id, harness] as const];
-      }),
-    ),
+    return harness === undefined ? [] : [[id, harness] as const];
+  }),
 );
 
 /** Where the account's feed of Inbox threads stands: still on its first read, refused, or answered. */
