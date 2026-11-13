@@ -360,6 +360,14 @@ export type ListRowInk = (typeof LIST_ROW_INK)[keyof typeof LIST_ROW_INK];
 const LIST_CLASS = "ui-list flex list-none flex-col gap-list-gap p-0 data-[variant=card]:gap-0";
 
 /**
+ * The ring a card list's only row would wear while its menu is open, taken
+ * by the card's own hairline instead, so the ring's corners are the card's
+ * (`list-row.css`).
+ */
+const ONLY_ROW_MENU_OPEN =
+  "has-[>.ui-list>li.ui-list-row[data-menu-open=true]:only-of-type]:border-border-menu-open";
+
+/**
  * A list drawn as a card (`LIST_VARIANT.CARD`) stands in a `Card` at a
  * control's corner, its rows edge to edge on the card's ground and clipped
  * at its corner, on Geist's card shadow; any other list stands bare.
@@ -368,7 +376,12 @@ function framed(variant: ListVariant, list: React.JSX.Element): React.JSX.Elemen
   if (variant !== LIST_VARIANT.CARD) return list;
 
   return (
-    <Card corner={CARD_CORNER.CONTROL} padding={CARD_PADDING.FLUSH} shadow={CARD_SHADOW.CARD}>
+    <Card
+      corner={CARD_CORNER.CONTROL}
+      padding={CARD_PADDING.FLUSH}
+      shadow={CARD_SHADOW.CARD}
+      className={ONLY_ROW_MENU_OPEN}
+    >
       {list}
     </Card>
   );

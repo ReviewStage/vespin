@@ -169,11 +169,12 @@ const HOVER_CLASS: Record<CardHover, string> = {
 /**
  * A card set inside a card whose edge shows: its own edge and shadow drop,
  * its fill kept, so two edges never stand one inside the other. Note that a
- * well's edge is unseen, so a card in a well keeps its own, and a drop
- * target keeps its ring.
+ * well's edge is unseen, and so is a bare dialog's, a window's or a sheet's
+ * (`DIALOG_SIZE`), whose owner draws the card that is its frame, so a card
+ * in either keeps its own; and a drop target keeps its ring.
  */
 const NESTED_CLASS =
-  "in-[.ui-card:not([data-look=well])]:not-data-[drop-target=true]:border-transparent in-[.ui-card:not([data-look=well])]:shadow-none";
+  "in-[.ui-card:not([data-look=well],[data-size=window],[data-size=sheet])]:not-data-[drop-target=true]:border-transparent in-[.ui-card:not([data-look=well],[data-size=window],[data-size=sheet])]:shadow-none";
 
 /** The edge while what it holds stops its form, shaken and in the danger ink, as a text field's is. */
 const INVALID_CLASS =
