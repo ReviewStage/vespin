@@ -36,7 +36,7 @@ import { chooseOver, useChosenWorkspace } from "../chosen-workspace.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useTaskOverview } from "../tasks/use-tasks.js";
-import { useWrite } from "../use-write.js";
+import { useWrite, WRITE_SUBJECT } from "../use-write.js";
 import { selectPhotos, switcherWorkspace } from "../workspace-switcher.js";
 
 /** The sheet's own words. */
@@ -115,6 +115,8 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
     void write(() => acts[ACT_KIND.TASKS_MOVE]({ taskId: task.id, workspaceId: chosen.id }), {
       refused: (answer) => ("failure" in answer ? TASK_MOVE_WORDS.REFUSED : undefined),
       retry: true,
+      // Note that a newer move of the task makes this one's Try again do nothing, so it never sends the task back where it was moved from since.
+      subject: { kind: WRITE_SUBJECT.TASK_WORKSPACE, id: task.id },
       went: BUZZ.SUCCESS,
       done: () => {
         if (from !== undefined) chooseOver(from.id, chosen.id);
