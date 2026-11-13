@@ -152,9 +152,11 @@ function removalQuestion(name: string): DialogQuestion {
  */
 function useFollowerRemoval(taskId: string, followers: readonly TaskFollowerWire[]) {
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
+
   const [asked, setAsked] = useState<{ taskId: string; userId: string; name: string } | undefined>(
     undefined,
   );
+
   const mutation = useMutation(actMutation(ACT_KIND.TASKS_REMOVE_FOLLOWER));
 
   const act = useConfirmAct(mutation, {
