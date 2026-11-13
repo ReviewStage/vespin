@@ -1,0 +1,1 @@
+#9022 at 49f1b3840: NOT RUN on the Mac this window (09:00-10:15 ET). Queue order and two DISK STOPs (09:57, 10:00 ET) left no time. No verdict; goes in the next round.
