@@ -220,6 +220,8 @@ function asUserCommand(command: string, args: readonly string[]) {
 
 type Hooks = {
   onStart?: ((command: FakeCommand) => Promise<void>) | undefined;
+  /** What a test does as a stop arrives, before the sandbox stops. */
+  onStop?: (() => Promise<void>) | undefined;
   runExit?: ((args: readonly string[]) => number) | undefined;
   runStdout?: ((args: readonly string[]) => string | undefined) | undefined;
   onRun?:
@@ -469,6 +471,7 @@ export function runnerSandboxApi() {
       const refused = sandboxStopRefusal(init);
 
       if (refused !== undefined) return refused;
+      await hooks.onStop?.();
 
       for (const sandbox of sandboxes.filter((each) => each.currentSessionId === sessionId)) {
         sandbox.status = "stopped";
