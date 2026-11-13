@@ -16,10 +16,16 @@ builds a control of its own.
   drag and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
   `WordsRow` for its description), `GroupRow` (a place a regular window's
-  sidebar opens, such as the Inbox with its count), `SplitView` (the app's
+  sidebar opens, such as the Inbox with its count, at Mail's mailbox
+  measures: its glyph a step over its 17 pt name, the count muted, and a
+  rounded selection fill set in from the sidebar's edges), `SplitView` (the app's
   sidebar, the list, and the detail, or the list and the detail, each column
   under its own `ColumnBar`: its inline title, what leads it such as the
-  workspace switcher, a path, a `BarMenu` such as the ⋯ menu, an
+  workspace switcher, its `lead` glyphs such as Mail's expand button (the
+  detail alone, `detailOnly`) and compose,
+  a path, a page's main acts as glyphs in the bar's one glass before its ⋯
+  (two or three, dimmed rather than gone with nothing picked, the rest left
+  in ⋯ by `menuWithout`), a `BarMenu` such as the ⋯ menu, an
   act, a search, and the acts at its foot, the sidebar shown or hidden as its
   caller says, and `SplitOverTabs`, the one split view a window wide enough
   for three columns stands over the hidden tabs, in front of a tab's root and
@@ -37,8 +43,7 @@ builds a control of its own.
   pictures and choices, `ComposeSheet` for a sheet that starts work (its
   words filling the page, and the + and `MenuChip` capsule menus in glass
   over the keyboard),
-  `SwitchRow` and `HintPickRows` (a choice among a few, what each does under
-  its name) for an agent's options, `RenameAsk` (the system's alert a name is
+  `SwitchRow` for an agent's options, `RenameAsk` (the system's alert a name is
   typed in),
   `AccountButton`, `FailureNoticeProvider` (the app's one notice that a
   write did not go: a banner of Liquid Glass sliding down from the top with
@@ -132,7 +137,8 @@ builds a control of its own.
   takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
   items, which expo-router types as plain names, take `GLYPH.X` too
   (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
-  where iOS draws the thing its own way (Share) or where the panel draws a
+  where iOS draws the thing its own way (Share, and the chevron at the end of
+  a Settings row that goes on) or where the panel draws a
   mark of its own rather than a Lucide glyph (a check box, a face, an MCP
   server, the panel's product mark). A task's status ring is the panel's own
   mark, cut into the asset catalog from `@repo/brand`'s table
@@ -158,7 +164,12 @@ navigation, tab bar, swipes, menus, sheets and glass.
   React Native scales by the reader's setting. The navigation bar's words are
   the system's fixed sizes (`BAR_TITLE`), as its own titles stand.
 - **Inline titles, no large titles.** A tab's root shows its name small and
-  inline. A pushed page shows its path (task › agent, repository › key) small
+  inline. A split view's list column beside the app sidebar stands its title
+  bold at its bar's leading edge (`inlineLarge`), as Mail names the mailbox
+  over its list, and its search is one button at the window's trailing edge,
+  as Mail's is; a list standing first, as a portrait iPad's, keeps its title
+  small and inline, since its bar also holds the switcher, compose, ⋯ and
+  the sidebar button. A pushed page shows its path (task › agent, repository › key) small
   and muted in the bar, `PATH_PART` joining it, with the page's own heading
   under it; a split view's detail column draws the same path in its bar. A
   thread's path opens its task and its agent, as the panel's crumbs do: in a
@@ -236,13 +247,24 @@ navigation, tab bar, swipes, menus, sheets and glass.
   or remind) read as iOS Settings' cards: their rows stand in the panel's
   raised fill (`RAISED`, the brand's `OVERLAY`) on the form's own ground
   (`GROUPED`: the chip's hover gray in light, black in dark), and the sheet
-  around them stands on `GROUPED` too.
-- **Cards** are kept for what a person acts on: the ask (`ChoiceList`, radio
-  rows, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
+  around them stands on `GROUPED` too. A row a press takes somewhere is the
+  system's default button, so it flashes the row's gray while held, as
+  Settings' rows do; a choice among a few is `PickRows`, each a row with
+  what it does under its name where it says and the picked one checked in
+  copper, the one pick look every form uses; a connection's one act is a
+  small bordered capsule at its end; and the Account page heads with the
+  account's photo, name and address centered on the ground, closing with
+  Sign out and Delete account centered in red, as Apple Account's does.
+- **Cards** are kept for what a person acts on: the ask (`ChoiceList`, a
+  row per option checked at its end in copper once picked, as `PickRows`
+  checks one, a "Recommended" tag and a detail line; `StepList`, a round check per step, as Reminders draws one,
   with Mark done and Couldn't do it under it; `AnswerFields`, a row per
-  field: a text or number field under its label, a select's menu picker, a
+  field: a text or number field under its label, the field plain inside the
+  card and prompting with its label while empty, a select's menu picker at
+  the end of its label's row, a
   boolean's toggle, the rows a SwiftUI `Form` holds, drawn in a card because
-  a `Form` scrolls on its own inside the thread's scroll) and the pull request
+  a `Form` scrolls on its own inside the thread's scroll; a card's hairlines
+  start where its rows' words do, as iOS insets a list's separator) and the pull request
   (`PullRequestCard`: its state's glyph, its title, its lines in green and
   red, and its acts as pills; a press on it opens its own page), each on
   `SURFACE` inside a hairline.

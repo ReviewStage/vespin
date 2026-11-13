@@ -52,8 +52,13 @@ const PRESS_FRAME = [
   SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
 ];
 
-/** The mark inside the round button, centered in the circle's own size, so the system's circle draws at Send's size around it. */
-const ROUND_MARK = [frame({ width: SEND_SIZE - 12, height: SEND_SIZE - 12 })];
+/** How far the round button's circle stands past the mark inside it, on each axis, in points. */
+const ROUND_EDGE = 12;
+
+/** The mark inside the round button, centered in the circle's own size less its edge, so the system's circle draws at Send's size around it. */
+function roundMark(round: number) {
+  return [frame({ width: round - ROUND_EDGE, height: round - ROUND_EDGE })];
+}
 
 /**
  * The round button's look: the system's prominent circle in the ink, its mark
@@ -156,12 +161,16 @@ function SendButton({
   readonly stopping: boolean;
 }) {
   const colors = useColors();
+  // Note that the circle and its marks grow with the reader's text size, as Messages' Send does, so the field's words never outgrow the button beside them.
+  const round = useScaledSize(SEND_SIZE);
+  const stopSize = useScaledSize(MARK_SIZE.GLYPH - 2);
+  const sendSize = useScaledSize(MARK_SIZE.GLYPH);
 
   if (empty && onStop !== undefined && stopping) {
     return (
       <ProgressView
         modifiers={[
-          frame({ width: SEND_SIZE, height: SEND_SIZE }),
+          frame({ width: round, height: round }),
           ...PRESS_FRAME,
           tint(colors.TEXT_MUTED),
           accessibilityLabel("Stopping"),
@@ -173,7 +182,7 @@ function SendButton({
   if (empty && onStop !== undefined) {
     return (
       <Button onPress={onStop} modifiers={[...roundModifiers(colors), accessibilityLabel("Stop")]}>
-        <Image {...glyphImage(GLYPH.STOP_TURN)} size={MARK_SIZE.GLYPH - 2} modifiers={ROUND_MARK} />
+        <Image {...glyphImage(GLYPH.STOP_TURN)} size={stopSize} modifiers={roundMark(round)} />
       </Button>
     );
   }
@@ -200,7 +209,7 @@ function SendButton({
         accessibilityLabel("Send"),
       ]}
     >
-      <Image {...glyphImage(GLYPH.SEND)} size={MARK_SIZE.GLYPH} modifiers={ROUND_MARK} />
+      <Image {...glyphImage(GLYPH.SEND)} size={sendSize} modifiers={roundMark(round)} />
     </Button>
   );
 }
