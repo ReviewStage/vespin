@@ -112,10 +112,10 @@ test("an agent's tab just made, before its first transcript page lands, says Sta
   );
 });
 
-test("an agent's tab whose machine is up says its first message is on its way", async () => {
+test("an agent's tab whose machine is up says the agent is starting", async () => {
   const words = await bootingTabWords({ phase: BOOT_PHASE.HANDING_OFF, since: Date.now() });
 
-  assert.ok(words.includes("Sending the first message…"));
+  assert.ok(words.includes("Starting the agent…"));
 });
 
 test("an agent's tab whose first launch failed says why in its empty transcript, with Retry for its starter", async () => {

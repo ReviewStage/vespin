@@ -1,13 +1,13 @@
 /**
- * agent-boot-line.tsx -- what an agent's empty transcript says while its first launch stands: where it is starting and how long, its first message going, or a machine that never came up, with Retry.
+ * agent-boot-line.tsx -- what an agent's empty transcript says while its first launch stands: where it is starting and how long, the agent starting once its machine is up, or a machine that never came up, with Retry.
  *
  * An agent's first launch boots its machine before any turn opens, its
  * first message waiting in its queue (`@repo/features/agent-boot`), so its
  * transcript stands empty meanwhile, and says how the boot stands
  * (`bootLineOf`). While it is under way, that is the transcript's own
  * working line at the log's top, where the first line will land: a cloud
- * sandbox or the agent's Mac starting, then the first message on its way
- * once the machine is up, each counting from when it began. A boot that
+ * sandbox or the agent's Mac starting, then the agent itself once the
+ * machine is up, one count from when the boot began. A boot that
  * failed says why in the transcript's centered line, with Retry where the
  * reader may message the agent.
  */
