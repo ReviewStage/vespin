@@ -283,11 +283,11 @@ function answeredOutcome(
 
     return Effect.succeed({ ...ran, apps });
   }
-  // Note that a shot with no bytes is passed over, so neither the model nor the transcript is handed an empty picture.
 
-  const [shown, full]: readonly (ComputerShot | undefined)[] = outcome.shots.filter(
-    (shot) => shot.jpeg !== "",
-  );
+  // Note that each shot keeps its own place, the model's first and the kept one second, and one with no bytes is absent there alone, so neither the model nor the transcript is handed an empty picture or the other's.
+  const [first, second]: readonly (ComputerShot | undefined)[] = outcome.shots;
+  const shown = first?.jpeg === "" ? undefined : first;
+  const full = second?.jpeg === "" ? undefined : second;
 
   return Effect.gen(function* () {
     const app = yield* namedApp(transcript, outcome.app);

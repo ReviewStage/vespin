@@ -38,8 +38,8 @@ function noteWords(
   owner: Actor | undefined,
 ): string {
   if (thatMac) return `${PRODUCT_NAME} needs ${names} to use apps on this Mac.`;
-  // Note that a Mac the window cannot name is the reader's own, as `MacOwnerProvider` says.
 
+  // Note that a Mac the window cannot name is the reader's own, as `MacOwnerProvider` says.
   const whose =
     owner === undefined ? "your" : actorName(owner, { sentence: true, possessive: true });
 

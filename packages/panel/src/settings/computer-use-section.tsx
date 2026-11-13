@@ -3,7 +3,12 @@ import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { readFailedWords } from "@repo/features/words";
 import { ACT_KIND } from "@repo/host/acts";
 import type { ComputerUseStatus } from "@repo/host/contract";
-import { APP_SETTING_SCHEMA, computerUseAppsWithout, type SettingsRowsInput } from "@repo/settings";
+import {
+  APP_SETTING_SCHEMA,
+  computerUseAppsOf,
+  computerUseAppsWithout,
+  type SettingsRowsInput,
+} from "@repo/settings";
 import {
   APP_ICON_SIZE,
   AppIcon,
@@ -22,7 +27,7 @@ import {
 import { rejectionWords, useAsyncAction } from "@repo/ui/use-async-action";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { queryOptions, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import { askAct } from "../act.js";
 import { refusalShown, unreadShown } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
@@ -125,11 +130,20 @@ export function ComputerUseSection({
   const writing = useRef<Promise<unknown>>(Promise.resolve());
   /** The apps whose Remove the store took, left out of every list written after, until the stored list leaves them out too. */
   const removed = useRef(new Set<string>());
+  const listed = view.settings.computerUseApps;
+
+  // Note that an app is let go of once the stored list leaves it out, so one allowed again after is not taken off by the next Remove.
+  useEffect(() => {
+    const apps = computerUseAppsOf(listed);
+
+    for (const app of removed.current) if (!apps.includes(app)) removed.current.delete(app);
+  }, [listed]);
 
   const { mutate: askPermissions } = useMutation({
     mutationFn: () => askAct(ACT_KIND.COMPUTER_USE_ASK_PERMISSIONS, {}),
     onSettled: () => queries.invalidateQueries({ queryKey: statusQuery.queryKey }),
   });
+
   /**
    * An app taken off the list, or why the setting's write was refused, which
    * its row says. Note that each write waits for the one before it and is
@@ -138,7 +152,6 @@ export function ComputerUseSection({
    * because a second Remove pressed before the first lands would otherwise
    * write the first app back; a refused Remove takes nothing off a later one.
    */
-
   const remove = (bundleId: string): Promise<SettingRefusal | undefined> => {
     const write = async (): Promise<SettingRefusal | undefined> => {
       const state = appStateIn(queries);

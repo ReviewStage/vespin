@@ -91,6 +91,9 @@ let answer: ActionResult = { status: ACTION_RESULT_STATUS.ACCEPTED };
 /** The writes a test holds unanswered, each answered when the test lands it; none held unless a test holds them. */
 let landing: (() => void)[] | undefined;
 
+/** Draws the section again over the always-allowed apps as the store holds them now, as a write landing would; set by `mount`. */
+let stored: (apps: readonly string[]) => Promise<void> = () => Promise.resolve();
+
 async function mount(): Promise<HTMLElement> {
   const container = document.createElement("div");
   document.body.append(container);
@@ -117,16 +120,24 @@ async function mount(): Promise<HTMLElement> {
     reset: () => Promise.reject(new Error("not reset in these tests")),
   };
 
-  act(() =>
-    root.render(
-      withQueryClient(
-        createElement(ComputerUseSection, {
-          view: { settings, accountDrawn: true, capabilities: DESKTOP_CAPABILITIES },
-          writes,
-        }),
+  const drawn = (view: typeof settings) =>
+    act(() =>
+      root.render(
+        withQueryClient(
+          createElement(ComputerUseSection, {
+            view: { settings: view, accountDrawn: true, capabilities: DESKTOP_CAPABILITIES },
+            writes,
+          }),
+        ),
       ),
-    ),
-  );
+    );
+
+  drawn(settings);
+  stored = async (apps) => {
+    drawn({ ...settings, computerUseApps: JSON.stringify(apps) });
+    await settle();
+  };
+
   await settle();
 
   return container;
@@ -185,4 +196,19 @@ test("two Removes pressed before the first lands take both apps off, the second 
     written.map((write) => write.value),
     [JSON.stringify([FIGMA]), JSON.stringify([])],
   );
+});
+
+test("an app removed, then allowed again once the store dropped it, is kept by the next Remove", async () => {
+  const page = await mount();
+
+  await vi.waitFor(() => assert.ok(page.textContent?.includes("Figma")));
+
+  act(() => button("Remove Simulator").click());
+  await vi.waitFor(() => assert.equal(written.length, 1));
+  await stored([FIGMA]);
+  await stored([SIMULATOR, FIGMA]);
+
+  act(() => button("Remove Figma").click());
+  await vi.waitFor(() => assert.equal(written.length, 2));
+  assert.equal(written[1]?.value, JSON.stringify([SIMULATOR]));
 });

@@ -302,8 +302,8 @@ function computerResult(answer: ComputerHelperAnswer, app?: ComputerApp): MacCom
     if ("shots" in answer.outcome && !answer.outcome.shots.some((shot) => shot.jpeg !== "")) {
       return nothingCaptured(answer.outcome.app.name);
     }
-    // Note that a done action names the app it acted on, which the helper's own answer does not.
 
+    // Note that a done action names the app it acted on, which the helper's own answer does not.
     const outcome =
       "done" in answer.outcome && app !== undefined ? { ...answer.outcome, app } : answer.outcome;
 
