@@ -136,7 +136,7 @@ export function useLiveActivity(signedIn: boolean): void {
       );
   }, [acts, phone, start]);
   useEffect(() => {
-    if (liveActivityModule === null || phone === undefined || fixture) return;
+    if (liveActivityModule === null || phone === undefined || fixture) return undefined;
     const module = liveActivityModule;
 
     const kept: KeptPhone = {
@@ -146,8 +146,15 @@ export function useLiveActivity(signedIn: boolean): void {
       headers: clientHeaders({ platform: CLIENT_PLATFORM.IOS, version: APP_VERSION }),
     };
 
-    // Note that the phone is kept once the service holds it, so a token sent from Swift names a phone the service knows.
-    registeredPushDevice(acts, phone).then(() => module.keepPhone(JSON.stringify(kept)));
+    // Note that the phone is kept once the service holds it, so a token sent from Swift names a phone the service knows, and never after a sign-out already forgot it.
+    let live = true;
+    registeredPushDevice(acts, phone).then(() => {
+      if (live) module.keepPhone(JSON.stringify(kept));
+    });
+
+    return () => {
+      live = false;
+    };
   }, [acts, phone, fixture]);
   useEffect(() => {
     if (phone === undefined || activity === undefined) return;
