@@ -569,6 +569,12 @@
   border-radius: 0 0 var(--sheet-radius, 0) var(--sheet-radius, 0);
 }
 
+/* A cloud Browser tab's intro (`page-intro.tsx`) stands over the page, at
+   the column's inset under the line saying who has the tab. */
+.cloud-browser-view > .ui-reveal {
+  padding: var(--ui-block-gap) var(--column-inset);
+}
+
 /* A cloud Browser tab's quiet line over its page (cloud-browser-pane.tsx)
    keeps to a readable measure. */
 .cloud-browser-body > .cloud-browser-notice > .ui-text {
