@@ -66,10 +66,21 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "Invite limits"
-    direction: DOWN
-    centerElement: true
+# Note that a row already on screen is tapped where it stands, since a
+# centered scroll swipes at the window's middle, which on a landscape iPad is
+# the edge between the list and detail columns and never moves the list; one
+# off screen, as on the iPhone, is scrolled to the middle as before.
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 15000
+- runFlow:
+    when:
+      notVisible: "Invite limits"
+    commands:
+      - scrollUntilVisible:
+          element: "Invite limits"
+          direction: DOWN
+          centerElement: true
 - waitForAnimationToEnd
 - tapOn: "Invite limits"
 - assertVisible: "Choose"
@@ -128,10 +139,17 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "Verify the digest's sender domain"
-    direction: DOWN
-    centerElement: true
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 15000
+- runFlow:
+    when:
+      notVisible: "Verify the digest's sender domain"
+    commands:
+      - scrollUntilVisible:
+          element: "Verify the digest's sender domain"
+          direction: DOWN
+          centerElement: true
 - waitForAnimationToEnd
 - tapOn: "Verify the digest's sender domain"
 - assertVisible: "Mark done"
@@ -152,10 +170,17 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "The digest's subject line"
-    direction: DOWN
-    centerElement: true
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 15000
+- runFlow:
+    when:
+      notVisible: "The digest's subject line"
+    commands:
+      - scrollUntilVisible:
+          element: "The digest's subject line"
+          direction: DOWN
+          centerElement: true
 - waitForAnimationToEnd
 - tapOn: "The digest's subject line"
 - tapOn:
@@ -191,10 +216,17 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "acceptInvite can add a member twice"
-    direction: DOWN
-    centerElement: true
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 15000
+- runFlow:
+    when:
+      notVisible: "acceptInvite can add a member twice"
+    commands:
+      - scrollUntilVisible:
+          element: "acceptInvite can add a member twice"
+          direction: DOWN
+          centerElement: true
 - waitForAnimationToEnd
 - tapOn: "acceptInvite can add a member twice"
 - assertVisible: "Reply"
@@ -228,10 +260,17 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- scrollUntilVisible:
-    element: "What the expired invite page says"
-    direction: DOWN
-    centerElement: true
+- extendedWaitUntil:
+    visible: "Who can withdraw an invite?"
+    timeout: 15000
+- runFlow:
+    when:
+      notVisible: "What the expired invite page says"
+    commands:
+      - scrollUntilVisible:
+          element: "What the expired invite page says"
+          direction: DOWN
+          centerElement: true
 - waitForAnimationToEnd
 - tapOn: "What the expired invite page says"
 - waitForAnimationToEnd
