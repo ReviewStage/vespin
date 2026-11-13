@@ -560,11 +560,11 @@ test("a picture of an item opens a viewer the arrow keys walk across every pictu
     );
 
   // The picture the message carried is drawn over its words, so the viewer walks it first.
-  assert.deepEqual(viewer(), ["The form after.png", "3 of 3"]);
+  assert.deepEqual(viewer(), ["The form after", "3 of 3"]);
   key("ArrowRight");
   assert.deepEqual(viewer(), ["The pull request tab.png", "1 of 3"]);
   key("ArrowRight");
-  assert.deepEqual(viewer(), ["The form before.png", "2 of 3"]);
+  assert.deepEqual(viewer(), ["The form before", "2 of 3"]);
   key("ArrowLeft");
   assert.deepEqual(viewer(), ["The pull request tab.png", "1 of 3"]);
 });
@@ -674,10 +674,10 @@ test("a recording an agent's words draw plays where it stands, and its Expand op
       "under Vespin's own bar",
     );
     assert.equal(player.hasAttribute("controls"), false, "and not the browser's");
-    assert.equal(player.getAttribute("aria-label"), "Video: Inviting a member.webm");
+    assert.equal(player.getAttribute("aria-label"), "Video: Inviting a member");
     assert.equal(player.getAttribute("src"), "blob:video-2");
     assert.equal(
-      card?.querySelector('[aria-label="Inviting a member.webm"] video')?.getAttribute("src"),
+      card?.querySelector('[aria-label="The invite flow.webm"] video')?.getAttribute("src"),
       "blob:video-3",
       "the viewer's strip shows the recording by its first frame",
     );
@@ -690,7 +690,7 @@ test("a recording an agent's words draw plays where it stands, and its Expand op
     );
     assert.equal(
       document.querySelector('[role="dialog"] .ui-zoom-image')?.getAttribute("alt"),
-      "The email.png",
+      "The email",
       "the walk goes on to the picture drawn with it",
     );
   } finally {
@@ -795,13 +795,13 @@ test("a thread draws a comment's files over its words: an agent's pictures stand
         ),
     );
 
-  assert.deepEqual(viewer(), ["After.png", "3 of 4"]);
+  assert.deepEqual(viewer(), ["After", "3 of 4"]);
   key("ArrowRight");
   assert.deepEqual(viewer(), ["mine.png", "4 of 4"]);
   key("ArrowRight");
   assert.deepEqual(viewer(), ["older.png", "1 of 4"]);
   key("ArrowRight");
-  assert.deepEqual(viewer(), ["Before.png", "2 of 4"]);
+  assert.deepEqual(viewer(), ["Before", "2 of 4"]);
 });
 
 function standingCard(): readonly [string | null | undefined, string | null | undefined] {

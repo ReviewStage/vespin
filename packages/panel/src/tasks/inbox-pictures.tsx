@@ -33,7 +33,10 @@ import type { InboxImageReads } from "./use-task-inbox.js";
  * own, as `DescriptionPictures` does a description's (`description-pictures.tsx`). A press on
  * any of them opens one viewer over every picture of the item, in the order
  * they are drawn, which the arrow keys walk, as an agent's pictures' viewer
- * does (`agent-pictures.tsx`): a picture still read joins the walk once its
+ * does (`agent-pictures.tsx`). The viewer's header names a picture by its
+ * caption, the short line drawn under it, and never by its alt text, a
+ * sentence for a reader who cannot see it that the viewer's picture carries
+ * as its own alt alone: a picture still read joins the walk once its
  * bytes are held, and one whose read failed is left out. A WebM the agent
  * recorded is drawn and walked as a picture is, as its still, and the viewer
  * plays it. The bytes are the Inbox's own reads (`use-task-inbox.ts`), asked
@@ -52,7 +55,7 @@ import type { InboxImageReads } from "./use-task-inbox.js";
  * Every picture is left out of the session recording (`picture-block.tsx`).
  */
 
-/** What a picture is called in the viewer where its Markdown gives it no alt text. */
+/** What a picture is called in the viewer where it carries no caption. */
 const UNNAMED_PICTURE = "Picture";
 
 /** What a file's name may not spell on the Mac it is saved to. */
@@ -62,6 +65,8 @@ const UNSAVEABLE = /[/\\:]/gu;
 interface DrawnPicture {
   readonly attachmentId: string;
   readonly alt: string;
+  /** The short line drawn under it, where it has one, which the viewer titles it by. */
+  readonly caption: string | undefined;
   /** The file's own name, where it has one, which the viewer saves it by. */
   readonly name: string | undefined;
   readonly anchor: RefObject<HTMLElement | null>;
@@ -81,16 +86,19 @@ const InboxPicturesContext = createContext<InboxPicturesDoor | undefined>(undefi
 
 /**
  * The picture as the viewer takes a file: by the file's own name where it
- * has one, a file a member attached, or else named by its words under the
- * type's own extension, since the viewer saves it by that name; its type
- * read off the `data:` URL.
+ * has one, a file a member attached, or else by its caption under the
+ * type's own extension, since the viewer titles and saves it by that name;
+ * its alt text kept as the picture's own alt, and its type read off the
+ * `data:` URL. Note that the alt text never names the file, because it is a
+ * sentence written to stand in for the picture, too long for a title.
  */
-function viewerFile(alt: string, name: string | undefined, url: string): FileChip {
+function viewerFile(picture: WalkedPicture, url: string): FileChip {
   const mediaType = url.slice("data:".length, url.indexOf(";"));
-  const words = alt === "" ? UNNAMED_PICTURE : alt;
-  const saved = name ?? `${words}.${mediaType.slice(mediaType.indexOf("/") + 1)}`;
+  const words = picture.caption || UNNAMED_PICTURE;
+  const saved = picture.name ?? `${words}.${mediaType.slice(mediaType.indexOf("/") + 1)}`;
+  const alt = picture.alt === "" ? undefined : picture.alt;
 
-  return { name: saved.replace(UNSAVEABLE, "-"), mediaType, url };
+  return { name: saved.replace(UNSAVEABLE, "-"), mediaType, url, alt };
 }
 
 /**
@@ -128,8 +136,8 @@ export function InboxPicture({
   );
 
   useLayoutEffect(
-    () => register?.(key, { attachmentId, alt, name, anchor }),
-    [register, key, attachmentId, alt, name],
+    () => register?.(key, { attachmentId, alt, caption, name, anchor }),
+    [register, key, attachmentId, alt, caption, name],
   );
 
   if (door === undefined) return null;
@@ -197,8 +205,9 @@ export function useInboxPictureThumb(
     pictureUnread,
   );
 
+  // Note that an option's words for its file are short, its label and the file's caption, so they title it in the viewer too.
   useLayoutEffect(
-    () => register?.(key, { attachmentId, alt, name: undefined, anchor }),
+    () => register?.(key, { attachmentId, alt, caption: alt, name: undefined, anchor }),
     [register, key, attachmentId, alt],
   );
 
@@ -223,20 +232,29 @@ interface WalkedPicture {
   readonly key: string;
   readonly attachmentId: string;
   readonly alt: string;
+  readonly caption: string | undefined;
   readonly name: string | undefined;
 }
 
 /** The item's pictures drawn now, in the order they stand in the window. */
 function inDrawnOrder(drawn: ReadonlyMap<string, DrawnPicture>): readonly WalkedPicture[] {
-  const standing = [...drawn].flatMap(([key, { attachmentId, alt, name, anchor }]) =>
-    anchor.current === null ? [] : [{ key, attachmentId, alt, name, element: anchor.current }],
+  const standing = [...drawn].flatMap(([key, { attachmentId, alt, caption, name, anchor }]) =>
+    anchor.current === null
+      ? []
+      : [{ key, attachmentId, alt, caption, name, element: anchor.current }],
   );
 
   standing.sort((one, other) =>
     one.element.compareDocumentPosition(other.element) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
   );
 
-  return standing.map(({ key, attachmentId, alt, name }) => ({ key, attachmentId, alt, name }));
+  return standing.map(({ key, attachmentId, alt, caption, name }) => ({
+    key,
+    attachmentId,
+    alt,
+    caption,
+    name,
+  }));
 }
 
 /** Whether the picture shown is drawn among the item's: its own copy, or, where its words were drawn again, another of the same picture. */
@@ -277,7 +295,7 @@ function ItemViewer({
 
     if (read?.kind !== PICTURE_STATE.READY) return [];
 
-    return [{ picture, file: viewerFile(picture.alt, picture.name, read.url) }];
+    return [{ picture, file: viewerFile(picture, read.url) }];
   });
 
   const byKey = held.findIndex((each) => each.picture.key === shown.key);
