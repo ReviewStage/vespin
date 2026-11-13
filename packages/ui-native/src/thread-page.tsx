@@ -18,6 +18,7 @@ import {
   accessibilityElement,
   accessibilityHidden,
   accessibilityLabel,
+  defaultScrollAnchorForRole,
   disabled,
   font,
   foregroundStyle,
@@ -377,7 +378,8 @@ function MessageView({
  * page and as tall as they are, since SwiftUI has no piece that draws the
  * panel's Markdown. The path stands in the bar: a compact window's stack
  * names it as the screen's title, and a split view's detail column draws it
- * here. A message that lands while it is open is drawn at its foot, as the
+ * here. It opens at its newest message, as Messages and the panel's board
+ * do. A message that lands while it is open is drawn at its foot, as the
  * thread's document moves, and the open ask's card stands under the last.
  */
 export function ThreadPage(props: ThreadPageProps) {
@@ -387,10 +389,18 @@ export function ThreadPage(props: ThreadPageProps) {
   // Note that a page docked under a composer leaves room under its last message for the bar as tall as it stands; one in a split view's column leaves none.
   const footRoom = useDockRoom();
 
+  // Note that a thread opens at its newest message and keeps to its foot as it grows or the keyboard rises, as Messages does and the panel's board does, while one too short to scroll stands under its heading.
   return (
     <Toolbar>
       <VStack spacing={0}>
-        <ScrollView modifiers={[scrollDismissesKeyboard("interactively")]}>
+        <ScrollView
+          modifiers={[
+            scrollDismissesKeyboard("interactively"),
+            defaultScrollAnchorForRole("bottom", "initialOffset"),
+            defaultScrollAnchorForRole("bottom", "sizeChanges"),
+            defaultScrollAnchorForRole("top", "alignment"),
+          ]}
+        >
           <VStack
             alignment="leading"
             spacing={SPACE.EDGE}
