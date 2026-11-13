@@ -36,6 +36,10 @@ const FILES = [
       "",
       "## Steps",
       "",
+      "See [how fast](review-agents.md#how-fast).",
+      "",
+      "## Steps",
+      "",
       "Do this.",
     ].join("\n"),
   },
@@ -98,8 +102,10 @@ test("a guide's front matter FAQ is its FAQPage's questions in plain words, and 
       "## Frequently asked questions\n\n### Can I run two?\n\nYes, see [the docs](https://vespin.dev/docs) and [reviewing](review-agents.md):\n\n- one *each*\n",
     ),
   );
-  // A link to another guide's file opens that guide's page.
+  // A link to another guide's file opens that guide's page, and its section's heading id.
   assert.ok(guide.faq[0]?.html.includes('href="/guides/review-agents"'));
+  assert.ok(guide.html.includes('href="/guides/review-agents#how-fast"'));
+  assert.ok(guide.html.includes('<h2 id="steps">') && guide.html.includes('<h2 id="steps-1">'));
 });
 
 test("a draft is left out where drafts are, and a guide naming a related guide that isn't there, or a day the calendar lacks, fails the build", () => {
@@ -111,6 +117,20 @@ test("a draft is left out where drafts are, and a guide naming a related guide t
   );
 
   assert.throws(() => parseGuides([FILES[0]], true), /related.*review-agents/);
+
+  // A link in the body to a guide the build leaves out fails it too.
+  const linked = FILES[0].words.replace("related: [review-agents]\n", "");
+  assert.throws(
+    () =>
+      parseGuides(
+        [
+          { file: "run-agents.md", words: linked },
+          { file: "review-agents.md", words: draft },
+        ],
+        false,
+      ),
+    /doesn't publish: review-agents/,
+  );
 
   assert.throws(
     () =>
