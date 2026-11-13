@@ -19,24 +19,24 @@ env:
 - extendedWaitUntil:
     visible: ".*Who can withdraw an invite.*"
     timeout: 15000
-# On an iPad, which `FLOATING_TABS` names, Notification Center stands its
-# notifications at the window's foot, where a swipe to the right turns the
-# page to the widgets instead of opening one, so the list is drawn up first,
-# slowly, from above the Home indicator's edge.
+- takeScreenshot: notification-center
+# On an iPad, which `FLOATING_TABS` names, the notification stands at the
+# window's foot, where a swipe to the right turns Notification Center's
+# page to the widgets rather than opening it, and a drag up does not raise
+# it, so it is tapped there instead; an iPhone swipes it, as above.
 - runFlow:
     when:
       true: ${FLOATING_TABS == 'true'}
     commands:
+      - tapOn: ".*Who can withdraw an invite.*"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
       - swipe:
-          start: 50%, 85%
-          end: 50%, 45%
-          duration: 1200
-      - waitForAnimationToEnd
-      - assertVisible: ".*Who can withdraw an invite.*"
-- swipe:
-    from:
-      text: ".*Who can withdraw an invite.*"
-    direction: RIGHT
+          from:
+            text: ".*Who can withdraw an invite.*"
+          direction: RIGHT
 - tapOn:
     id: "swipe-action-button-identifier"
     optional: true
