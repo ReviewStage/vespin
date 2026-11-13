@@ -384,25 +384,21 @@ export function PullRequestPage({
   );
   const path = [...(agent?.repository == null ? [] : [agent.repository]), `#${key.number}`];
 
+  // Note that a column's bar stands the page's two acts as glyphs, as Mail stands a message's, since the panel's ⋯ holds only these two; the merge stays under the checks.
   const columnBar: ColumnBar = {
     path: { path },
-    menu: {
-      label: MENU_WORDS.MORE,
-      symbol: GLYPH.MORE,
-      choices: [],
-      actions: [
-        ...(url === undefined
-          ? []
-          : [
-              {
-                label: MENU_WORDS.OPEN_ON_GITHUB,
-                symbol: GLYPH.OPEN_EXTERNALLY,
-                onPress: () => openInSafari(url),
-              },
-            ]),
-        { label: MENU_WORDS.REFRESH, symbol: GLYPH.RETRY, onPress: () => void retry() },
-      ],
-    },
+    acts: [
+      ...(url === undefined
+        ? []
+        : [
+            {
+              label: MENU_WORDS.OPEN_ON_GITHUB,
+              symbol: GLYPH.OPEN_EXTERNALLY,
+              onPress: () => openInSafari(url),
+            },
+          ]),
+      { label: MENU_WORDS.REFRESH, symbol: GLYPH.RETRY, onPress: () => void retry() },
+    ],
   };
 
   // Note that a page in a split view's column draws its bar in its column, and a stack's page in the stack's bar.

@@ -87,24 +87,20 @@ export function PageScreen({
   );
 
   if (inColumn) {
-    const menu =
+    // Note that a column's bar stands Open in browser as a glyph, as Mail stands a message's acts, since it is the page's one act.
+    const acts =
       address === undefined
-        ? undefined
-        : {
-            label: PAGE_WORDS.MORE,
-            symbol: GLYPH.MORE,
-            choices: [],
-            actions: [
-              {
-                label: VERB.OPEN_IN_BROWSER,
-                symbol: GLYPH.OPEN_EXTERNALLY,
-                onPress: () => openInSafari(address),
-              },
-            ],
-          };
+        ? []
+        : [
+            {
+              label: VERB.OPEN_IN_BROWSER,
+              symbol: GLYPH.OPEN_EXTERNALLY,
+              onPress: () => openInSafari(address),
+            },
+          ];
 
     return (
-      <DetailPage bar={{ name: named, menu }}>
+      <DetailPage bar={{ name: named, acts }}>
         {"html" in read ? (
           <HostedFill>
             <SealedPage html={read.html} title={named} />
