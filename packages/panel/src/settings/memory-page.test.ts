@@ -42,8 +42,7 @@ import { MemorySection } from "./memory-page.js";
  * forget that fails says so in the dialog and keeps the memory listed;
  * another workspace is held for its own memories; and a read that fails
  * offers to try again. The memories agents recall most stand first, one no
- * agent was handed in the window says so, Saved by sorts them by their
- * agent's name, and Edit saves a memory's words
+ * agent was ever handed says so, and Edit saves a memory's words
  * from the card it opens, which goes with a memory deleted while it saves
  * and is never replaced while it saves; Add memory saves a new one from the
  * same card, which stands under a refusal. Synthetic workspaces, members,
@@ -293,7 +292,7 @@ beforeAll(() => {
   return Effect.runPromise(editorBundleLanded);
 });
 
-const rows = (page: HTMLElement) => [...page.querySelectorAll<HTMLElement>("tbody tr[data-index]")];
+const rows = (page: HTMLElement) => [...page.querySelectorAll<HTMLElement>(".ui-list-row")];
 
 const words = (page: HTMLElement) =>
   rows(page).map((row) => row.querySelector(".memory-text")?.textContent);
@@ -312,7 +311,7 @@ const dialog = () =>
 
 /** A memory row's box, which chooses it. */
 const boxOf = (page: HTMLElement, memory: MemorySummary) =>
-  rowOf(page, memory).querySelector<HTMLElement>('[role="checkbox"]') ??
+  rowOf(page, memory).querySelector<HTMLElement>(".ui-select-box") ??
   assert.fail("no box on the row");
 
 /** The card's field a memory's words are written in, where one stands; the card hangs over the window, outside the page. */
@@ -606,30 +605,13 @@ test("the memories agents recalled most in the last 30 days stand first, then th
   assert.deepEqual(words(page), [flags.text, pricing.text, DEPLOYS.text, TESTS.text]);
 });
 
-test("a memory no agent was handed in the recall window reads no recalls and Never", async () => {
+test("a memory no agent was ever handed says it was never recalled", async () => {
   const { page } = await mount();
 
-  const cells = [...rowOf(page, DEPLOYS).querySelectorAll("td")].map((cell) => cell.textContent);
-  assert.deepEqual(cells.slice(3, 5), ["—", "Never"]);
-});
-
-test("Saved by sorts the memories by the name the agent's chip says", async () => {
-  const sourced = (memory: MemorySummary, agentId: string, taskName: string): MemorySummary => ({
-    ...memory,
-    source: { agentId, messageId: null, taskId: `task-${agentId}`, taskName },
-  });
-
-  stored = new Map([
-    [
-      ACME.id,
-      [sourced(DEPLOYS, "agent-1", "Ship the release"), sourced(TESTS, "agent-2", "Audit tests")],
-    ],
-  ]);
-  const { page } = await mount();
-
-  act(() => button(page, "Saved by").click());
-
-  assert.deepEqual(words(page), [TESTS.text, DEPLOYS.text]);
+  assert.equal(
+    rowOf(page, DEPLOYS).querySelector(".ui-list-row-meta")?.textContent,
+    "Never recalled",
+  );
 });
 
 test("Edit opens the memory's words in a card and saves the new words in place of the memory it edits", async () => {
