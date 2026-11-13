@@ -24,6 +24,7 @@ import { agentSandboxName } from "../agents/agent-sandbox-open.js";
 import { AgentBrowser, agentBrowserOver } from "../agents/browser/agent-browser.js";
 import { connectRestoring } from "../agents/browser/restore-tabs.js";
 import { AgentImage } from "../agents/coder-host/agent-image.js";
+import { sandboxLetGo } from "../agents/coder-host/runner-sessions.js";
 import { sandboxPtyOf } from "../agents/sandbox-pty.js";
 import { recordedSandboxBeat, recordedSandboxBeatReleased } from "../agents/sandbox-use.js";
 import { recordServerEventIn, SERVER_EVENT } from "../events/server-events.js";
@@ -84,12 +85,16 @@ export const browserLiveDependencies: Effect.Effect<
           holder,
         }),
       ),
+    // Note that the view may have been the sandbox's last hold, with no turn running.
     releaseSandbox: (sessionId, holder) =>
       run(
-        recordedSandboxBeatReleased(agentSandboxName(sessionId), {
-          kind: AGENT_SANDBOX_BEAT_KIND.VIEW,
-          holder,
-        }),
+        Effect.andThen(
+          recordedSandboxBeatReleased(agentSandboxName(sessionId), {
+            kind: AGENT_SANDBOX_BEAT_KIND.VIEW,
+            holder,
+          }),
+          sandboxLetGo(sessionId),
+        ),
       ),
     notePage: (tabId, targetId, page) =>
       run(noteBrowserTabPage(tabId, targetId, page)).pipe(

@@ -383,8 +383,6 @@ export function relayTerminal(
     if (Result.isFailure(attached)) return yield* device.close(TERMINAL_RELAY_CLOSE.UNAVAILABLE);
     const sandbox = attached.success;
 
-    if ("gone" in sandbox) return yield* device.close(TERMINAL_RELAY_CLOSE.GONE);
-
     if (sandbox.state !== SANDBOX_STATE.RUNNING) {
       return yield* device.close(
         sandbox.state === SANDBOX_STATE.STOPPED

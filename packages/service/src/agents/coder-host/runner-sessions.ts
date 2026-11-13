@@ -73,14 +73,17 @@
  * writes a runner that runs a `warm` line, which runs its warm window again
  * from now, or launches the runner with no message where none runs, past its
  * answer, so the next message goes into the running session as a line. A
- * sandbox's runner lives until its sandbox stops (`@repo/sandbox`'s
- * `SANDBOX_IDLE`); a Mac's ends itself past its window (`CODER.RUNNER_WARM`).
+ * sandbox is stopped, and its runner with it, the moment its agent's turn is
+ * over and nothing holds it (`sandboxStoppedIfUnheld`: at the launch's IDLE
+ * or END, and as a member lets go of its last hold), or else `SANDBOX_IDLE`
+ * after its last touch (`@repo/sandbox`); a Mac's runner ends itself past
+ * its window (`CODER.RUNNER_WARM`).
  *
  * At a launch's end (`runnerEnded`, which the events route calls on the
- * runner's END event) the place is left as it stands, for its own idle stop;
- * where a message waits on a launch that read its lines, the turn's delivery
- * is published again. An END from a launch a newer one replaced, told by its
- * event number, does nothing.
+ * runner's END event), where a message waits on a launch that read its
+ * lines, the place is left up and the turn's delivery is published again;
+ * otherwise a sandbox is stopped where nothing holds it. An END from a
+ * launch a newer one replaced, told by its event number, does nothing.
  *
  * `open`, `send`, `deliverTurn`, `cancel`, and `retune` each hold the
  * agent's runner lease (`agent-runner-lease.ts`) from before they read where
@@ -123,6 +126,8 @@ import {
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
 import { accountExperimentOn } from "@repo/database/models/account-store";
+import { agentSandboxHeld } from "@repo/database/models/agent-sandbox-holds";
+import { agentSandboxRelease } from "@repo/database/models/agent-sandboxes";
 import {
   type Agent,
   hasRepository,
@@ -214,6 +219,7 @@ import {
 import { AfterResponse, afterResponse } from "../../http/after-response.js";
 import { logStoreFailure } from "../../http/store-failure.js";
 import { agentSpanAttributes, sentryRunnerTrace } from "../../observability/sentry.js";
+import { agentSandboxName } from "../agent-sandbox-open.js";
 import {
   AgentMachine,
   type AgentMachineService,
@@ -235,7 +241,7 @@ import {
 import { deploymentLifecycle } from "../machine/agent-machines.js";
 import { REPOSITORY_REFUSAL } from "../repository-shell.js";
 import { LAUNCH_SWAP } from "../sandbox-firewall.js";
-import { touchAgentSandbox } from "../sandbox-use.js";
+import { recordedSandboxStopped, touchAgentSandbox } from "../sandbox-use.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
   MACHINE_UP,
@@ -1161,7 +1167,8 @@ export const runnerSessions = <
               .pipe(Effect.withSpan("web/runnerConfig"));
 
             // Note that a runner stays warm past the agent's turn: a Mac's for its window
-            // (`CODER.RUNNER_WARM`), ending itself once it passes, and a sandbox's until its sandbox stops.
+            // (`CODER.RUNNER_WARM`), ending itself once it passes, and a sandbox's until its sandbox stops,
+            // at its turn's end where nothing holds it (`sandboxStoppedIfUnheld`).
             const warmForMs =
               kind === AGENT_MACHINE.DEVICE
                 ? Duration.toMillis(Duration.sum(CODER.RUNNER_WARM, CODER.RUNNER_WARM_SLACK))
@@ -3232,9 +3239,99 @@ const retireWarmRunner = Effect.fn("web/retireWarmRunner")(function* (retiring: 
   return yield* holdingRunner(retiring.agentId, retiredHolding(machine, retiring));
 });
 
+/** An agent's sandbox a stop names: the agent's starter, whose account its lines are queued under, the agent, and the session its sandbox is found by. */
+export interface UnheldSandbox {
+  readonly userId: string;
+  readonly agentId: string;
+  readonly sessionId: string;
+}
+
+/**
+ * The stop `sandboxStoppedIfUnheld` makes, its caller holding the agent's
+ * runner lease: nothing where a turn may be at work or a message waits for a
+ * launch, where the sandbox is not running, or where a member holds it open;
+ * otherwise its runner told of no longer, the sandbox stopped, and the stop
+ * recorded on its row.
+ */
+const stoppedHolding = (machine: MachineLifecycle, unheld: UnheldSandbox) =>
+  Effect.gen(function* () {
+    const { userId, agentId, sessionId } = unheld;
+
+    if (yield* runnerMayBeAtWork(agentId)) return false;
+
+    if (Option.isSome(yield* runnerLineWaitingSince(userId, agentId))) return false;
+    const found = yield* machine.findPlace(userId, sessionId);
+
+    if (Option.isNone(found) || found.value.machine !== AGENT_MACHINE.VERCEL) return false;
+    const { running, launch } = found.value;
+
+    if (running === undefined) return false;
+    const sandboxName = agentSandboxName(sessionId);
+
+    if (yield* agentSandboxHeld(sandboxName, new Date(yield* Clock.currentTimeMillis))) {
+      return false;
+    }
+
+    // The runner is told of no longer before the sandbox stops, its launch kept for a late END, so
+    // the next message relaunches it rather than writing to a runner the stop ended.
+    yield* machine.recordRunner(
+      recordOf(found.value, userId, agentId),
+      launch === undefined
+        ? { kind: RUNNER_RECORD.NONE }
+        : { kind: RUNNER_RECORD.LAUNCHED, mark: launch },
+    );
+    yield* machine.stop(running);
+    yield* recordedSandboxStopped(sandboxName);
+
+    return true;
+  });
+
+/**
+ * An agent's sandbox stopped the moment nothing keeps it up: no turn of the
+ * agent's at work, no message waiting for a launch, and nothing a member
+ * holds open in it (`@repo/database`'s `agentSandboxHeld`: a Terminal tab,
+ * port forwarding, or the Browser view). Called as a turn ends (a launch's
+ * IDLE or END) and as a member lets go of the sandbox's last hold. Decided
+ * under the agent's runner lease, read again once it is held, so a delivery
+ * that relaunches the runner either finishes first, and its turn keeps the
+ * sandbox, or starts after the stop and resumes it. A background command,
+ * subagent, or wakeup Claude Code still waits on keeps its launch's turn
+ * open (`@repo/agent-runner`'s `runner.ts`), so no IDLE comes while it
+ * runs. Answers whether the sandbox was stopped; fails where the machine or
+ * the store could not be asked, or the lease stayed held past its wait.
+ */
+export const sandboxStoppedIfUnheld = Effect.fn("web/sandboxStoppedIfUnheld")(function* (
+  unheld: UnheldSandbox,
+) {
+  const machine = yield* deploymentLifecycle;
+
+  return yield* holdingRunner(unheld.agentId, stoppedHolding(machine, unheld));
+});
+
+/**
+ * A member's hold on the session's sandbox let go, as a Terminal tab ends,
+ * port forwarding is turned off, or the Browser view closes: the sandbox
+ * stopped where nothing else keeps it up (`sandboxStoppedIfUnheld`), once
+ * the member's answer has left, so the call never waits on the runner
+ * lease. Nothing where no open recorded the sandbox. A stop that fails is
+ * said in the log; the sandbox still stops `SANDBOX_IDLE` after its last
+ * touch.
+ */
+export const sandboxLetGo = (sessionId: string) =>
+  afterResponse(
+    "a sandbox let go",
+    Effect.gen(function* () {
+      const row = yield* agentSandboxRelease(agentSandboxName(sessionId));
+
+      if (Option.isNone(row)) return;
+      const { userId, agentId } = row.value;
+      yield* sandboxStoppedIfUnheld({ userId, agentId, sessionId });
+    }),
+  );
+
 /** How a launch's end left its place. */
 export const RUNNER_ENDED = {
-  /** The place left as it stands, for its own idle stop. */
+  /** No message waits: the place left as it stands, or a sandbox stopped where nothing holds it. */
   LEFT: "left",
   /** The END is from a launch a newer one replaced, or the place is gone or already down. */
   STALE: "stale",
@@ -3251,9 +3348,10 @@ export const RUNNER_ENDED = {
 
 /**
  * A launch's end, as its END event tells it, for either harness: a
- * sandbox's runner cleared from its place's record, and the place left as
- * it stands, for its own idle stop, and where a message waits for the
- * launch the turn's delivery starts, said so, for the END to hand it on;
+ * sandbox's runner cleared from its place's record, and where a message
+ * waits for the launch the turn's delivery starts, the place left up and
+ * said so, for the END to hand it on, and otherwise a sandbox stopped where
+ * nothing holds it (`stoppedHolding`);
  * nothing for an END older than the launch its place runs now. Decided under
  * the agent's runner lease, read again once it is held, so a delivery
  * relaunching the runner either finishes first, and its newer launch makes
@@ -3269,34 +3367,49 @@ export const runnerEnded = Effect.fn("web/runnerEnded")(function* (ending: Runne
 
   // A place no agent is recorded for was never launched into, so no runner of it has a lease to wait out.
   if (agentId === undefined) return yield* leftAtEnd(machine, ending);
+  const unheld = { userId: ending.target.userId, agentId, sessionId: ending.sessionId };
 
-  return yield* holdingRunner(agentId, leftAtEnd(machine, ending));
+  // A launch's end with no message waiting is its turn's end too, so its sandbox stops where nothing holds it.
+  return yield* holdingRunner(
+    agentId,
+    Effect.tap(leftAtEnd(machine, ending), (left) =>
+      left === RUNNER_ENDED.LEFT ? stoppedHolding(machine, unheld) : Effect.void,
+    ),
+  );
 });
 
 /**
- * A device's launch's IDLE, its runner warm past the agent's turn: the
- * runner retired at once (`retireWarmRunner`) where its device last beat
- * that it waits to switch release (`HOST_UPDATE.WAITING`), so a host waiting
- * to update goes idle as its last turn ends. It otherwise stays warm for the
- * next message, and past its window ends itself or is retired by a message
- * sent past it (`sendHolding`). Retiring under the runner lease is what keeps a message
- * sent at the turn's end: one a send wrote first is taken by the runner,
- * which still reads its stdin, and one sent after finds the runner no
- * longer told of and relaunches. Nothing for a sandbox's runner, which
- * stays warm until its sandbox stops, nor for an IDLE older than the launch
- * its place runs now.
- * Answers whether the retire line was written.
+ * A launch's IDLE, the agent's turn over and its runner warm. A sandbox is
+ * stopped at once where nothing keeps it up (`sandboxStoppedIfUnheld`).
+ * A device's runner is retired at once (`retireWarmRunner`) where its device
+ * last beat that it waits to switch release (`HOST_UPDATE.WAITING`), so a
+ * host waiting to update goes idle as its last turn ends. It otherwise stays
+ * warm for the next message, and past its window ends itself or is retired
+ * by a message sent past it (`sendHolding`). Retiring under the runner lease
+ * is what keeps a message sent at the turn's end: one a send wrote first is
+ * taken by the runner, which still reads its stdin, and one sent after finds
+ * the runner no longer told of and relaunches. Nothing for an IDLE older than
+ * the launch its place runs now.
+ * Answers whether the runner was retired or its sandbox stopped.
  */
 export const runnerIdled = Effect.fn("web/runnerIdled")(function* (idle: RunnerEnding) {
   const machine = yield* deploymentLifecycle;
   const found = yield* machine.findPlace(idle.target.userId, idle.sessionId);
 
-  if (Option.isNone(found) || found.value.machine !== AGENT_MACHINE.DEVICE) return false;
+  if (Option.isNone(found)) return false;
   const { agentId, launch, running } = found.value;
 
   if (agentId === undefined || running === undefined) return false;
 
   if (launch !== undefined && idle.sequence < launch.firstSequence) return false;
+
+  if (found.value.machine === AGENT_MACHINE.VERCEL) {
+    return yield* sandboxStoppedIfUnheld({
+      userId: idle.target.userId,
+      agentId,
+      sessionId: idle.sessionId,
+    });
+  }
 
   if (!(yield* deviceAgentAwaitsUpdate(idle.target.userId, agentId))) return false;
 

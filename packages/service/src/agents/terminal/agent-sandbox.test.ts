@@ -21,7 +21,7 @@ import { LOCAL_AGENT_ENVIRONMENT } from "../../testing/local-agent.js";
 import { agentSandboxName } from "../agent-sandbox-open.js";
 import { AgentImage } from "../coder-host/agent-image.js";
 import { AgentSandbox, agentSandboxLayer, SHELL_REFUSAL } from "./agent-sandbox.js";
-import { RUN_ACTION_EXIT, RUN_ACTION_SIGNAL, TMUX_EXIT } from "./tmux.js";
+import { attachTerminal, RUN_ACTION_EXIT, RUN_ACTION_SIGNAL, TMUX_EXIT } from "./tmux.js";
 
 /**
  * A coding agent's sandbox as its Terminal tab reaches it, through `Sandbox`
@@ -29,8 +29,9 @@ import { RUN_ACTION_EXIT, RUN_ACTION_SIGNAL, TMUX_EXIT } from "./tmux.js";
  * shells and is never woken by a list or a start, a running one's shells are
  * read from tmux in its running session, a shell starts under the id given
  * and is read back, one tmux does not hold is not found, a list tmux could
- * not give is an outage, and only a resume wakes a stopped sandbox, by its
- * name. A GitHub credential is set at the firewall in its shape: an
+ * not give is an outage, and a resume, or a tab's attach, wakes a stopped
+ * sandbox, by its name, the attach making the tab's shell afresh where it is
+ * gone. A GitHub credential is set at the firewall in its shape: an
  * installation's on GitHub's two hosts, a member's own on its repository's
  * paths alone, its record kept in the test's own database under a key ring
  * of the suite's.
@@ -569,55 +570,39 @@ it.layer(getTestDB())("a coding agent's sandbox", (it) => {
       }),
   );
 
-  it.effect("an attach mints the running session's PTY and never wakes a stopped sandbox", () =>
-    Effect.gen(function* () {
-      const running = standing(SANDBOX_STATUS.RUNNING);
-      const stopped = standing(SANDBOX_STATUS.STOPPED);
-
-      const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
-        sandbox.attach(SESSION, SHELL),
-      ).pipe(Effect.provide(running.layer));
-
-      const refused = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
-        sandbox.attach(SESSION, SHELL),
-      ).pipe(Effect.provide(stopped.layer));
-
-      assert.equal(attached.state, SANDBOX_STATE.RUNNING);
-      assert.ok("shell" in attached);
-      assert.deepEqual(running.state.interactive, [{ name: SANDBOX, running: RUNNING_SESSION }]);
-      assert.deepEqual(refused, { state: SANDBOX_STATE.STOPPED });
-      assert.deepEqual(stopped.state.resumed, []);
-      assert.deepEqual(stopped.state.interactive, []);
-    }),
-  );
-
-  it.effect("an attach to a shell tmux does not hold is gone, and no PTY is minted for it", () =>
-    Effect.gen(function* () {
-      const api = standing(SANDBOX_STATUS.RUNNING);
-      const unknown = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
-
-      const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
-        sandbox.attach(SESSION, unknown),
-      ).pipe(Effect.provide(api.layer));
-
-      assert.deepEqual(attached, { state: SANDBOX_STATE.RUNNING, gone: true });
-      assert.deepEqual(api.state.interactive, []);
-    }),
-  );
-
   it.effect(
-    "a tmux that could not be asked is an outage the tab may retry, never a shell gone",
+    "an attach to a stopped sandbox whose tab's shell is gone resumes it and mints its PTY, whose attach makes the shell afresh",
     () =>
       Effect.gen(function* () {
-        const api = standing(SANDBOX_STATUS.RUNNING, [], 0, 1);
+        const api = standing(SANDBOX_STATUS.STOPPED);
         const unknown = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
 
         const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
           sandbox.attach(SESSION, unknown),
-        ).pipe(Effect.provide(api.layer), Effect.flip);
+        ).pipe(Effect.provide(api.layer));
 
-        assert.ok(attached instanceof SandboxUnavailable);
+        assert.equal(attached.state, SANDBOX_STATE.RUNNING);
+        assert.ok("shell" in attached && !attached.readOnly);
+        assert.deepEqual(
+          api.state.resumed.map((each) => each.name),
+          [SANDBOX],
+        );
+        assert.equal(api.state.interactive.length, 1);
+        assert.ok(attachTerminal(unknown).args.join(" ").includes("new-session -A"));
       }),
+  );
+
+  it.effect("a tmux that could not be asked is an outage the tab may retry", () =>
+    Effect.gen(function* () {
+      const api = standing(SANDBOX_STATUS.RUNNING, [], 0, 1);
+      const unknown = "0f9e8d7c-6b5a-4f3e-8d2c-1b0a9f8e7d6c";
+
+      const attached = yield* Effect.flatMap(AgentSandbox, (sandbox) =>
+        sandbox.attach(SESSION, unknown),
+      ).pipe(Effect.provide(api.layer), Effect.flip);
+
+      assert.ok(attached instanceof SandboxUnavailable);
+    }),
   );
 
   it.effect(

@@ -11,7 +11,8 @@
  * written in the last `SANDBOX_USE.WRITE_EVERY`, so a sandbox many callers
  * hold costs one write a minute. A launch records its boot beside it, begun,
  * done, or failed, and a discard the sandbox's deletion, so the task list
- * reads it booting, running, or off. What a member holds open in it is
+ * reads it booting, running, or off, and a stop as nothing held it, so it
+ * reads off at once. What a member holds open in it is
  * recorded here too (`@repo/database`'s `models/agent-sandbox-holds.ts`): a
  * Terminal tab's shell as it starts and ends, the shells a list reads, and a
  * holder's heartbeat while it forwards its ports or views its Browser, and
@@ -35,9 +36,10 @@ import {
   recordAgentSandboxBooting,
   recordAgentSandboxDiscarded,
   recordAgentSandboxOpen,
+  recordAgentSandboxStopped,
   recordAgentSandboxUse,
 } from "@repo/database/models/agent-sandboxes";
-import { Sandbox, type SandboxError, touchSandbox } from "@repo/sandbox";
+import { SANDBOX_IDLE, Sandbox, type SandboxError, touchSandbox } from "@repo/sandbox";
 import { Clock, Duration, Effect } from "effect";
 
 const SANDBOX_USE = {
@@ -124,6 +126,18 @@ export const recordedSandboxDiscarded = (
   sandboxName: string,
 ): Effect.Effect<void, never, DatabaseServices> =>
   loggedIfFailed(recordAgentSandboxDiscarded(sandboxName));
+
+/** The sandbox stopped now as nothing held it, so the task list reads it off at once. */
+export const recordedSandboxStopped = (
+  sandboxName: string,
+): Effect.Effect<void, never, DatabaseServices> =>
+  loggedIfFailed(
+    Effect.flatMap(Clock.currentTimeMillis, (now) =>
+      // Note that the last use is moved back one idle window, because the task list reads a sandbox
+      // running until `SANDBOX_IDLE` past it, so the stop reads off now with no column of its own.
+      recordAgentSandboxStopped(sandboxName, new Date(now - Duration.toMillis(SANDBOX_IDLE))),
+    ),
+  );
 
 /** One holder's heartbeat on the sandbox now: a Mac forwarding its ports, or a Browser view of it open. */
 export const recordedSandboxBeat = (

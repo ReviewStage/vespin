@@ -39,6 +39,7 @@ import {
   reachedAgentSession,
   sandboxOrUpstream,
   shellRefusal,
+  startedWaking,
 } from "./terminal/sandbox-reach.js";
 
 /** What of an agent names its run actions: where it runs, its workspace, and its repository. */
@@ -85,9 +86,9 @@ const runActionOf = /* @__PURE__ */ Effect.fnUntraced(function* (
 });
 
 /**
- * One of the agent's repository's run actions run in its running sandbox,
- * as the member, with the workspace's variables, answering its shell; a
- * stopped sandbox is refused rather than woken.
+ * One of the agent's repository's run actions run in its sandbox, as the
+ * member, with the workspace's variables, answering its shell; a stopped
+ * sandbox is resumed first (`startedWaking`).
  */
 export const ranRunAction = Effect.fn("web/ranRunAction")(function* (
   userId: string,
@@ -110,13 +111,16 @@ export const ranRunAction = Effect.fn("web/ranRunAction")(function* (
   yield* recordedTerminalOpened(sandboxName, action.id);
 
   const ran = yield* sandboxOrUpstream(
-    // Note that the action's shell is started under the action's own id, so two presses at once start one shell, never two.
-    sandbox.run(sessionId, action.id, {
-      actionId: action.id,
-      label: action.label,
-      command: action.command,
-      environment,
-    }),
+    startedWaking(
+      sessionId,
+      // Note that the action's shell is started under the action's own id, so two presses at once start one shell, never two.
+      sandbox.run(sessionId, action.id, {
+        actionId: action.id,
+        label: action.label,
+        command: action.command,
+        environment,
+      }),
+    ),
   );
 
   if (Result.isFailure(ran)) {
