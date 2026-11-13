@@ -220,7 +220,6 @@ export default function FeedbackScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: FEEDBACK_WORDS.TITLE }} />
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button
           icon={glyphSymbol(GLYPH.SEND)}
@@ -268,13 +267,8 @@ export default function FeedbackScreen() {
               />
             </ListSection>
             {signature === undefined ? null : (
-              <ListSection>
-                <ToggleRow
-                  label={FEEDBACK_WORDS.SIGN}
-                  detail={signatureLine(signature, signed)}
-                  on={signed}
-                  onChange={setSigned}
-                />
+              <ListSection footer={signatureLine(signature, signed)}>
+                <ToggleRow label={FEEDBACK_WORDS.SIGN} on={signed} onChange={setSigned} />
               </ListSection>
             )}
           </SettingsForm>
