@@ -82,7 +82,7 @@ export type Merged<Union> = (Union extends unknown ? (record: Union) => void : n
   : never;
 
 /** A call that reached no answer, with the facts of what failed beneath it, which a window reports and never draws (`failure-facts.ts`). */
-interface HostedUnansweredFailure {
+export interface HostedUnansweredFailure {
   readonly failure: typeof HOSTED_CALL_FAILURE.UNANSWERED;
   readonly cause?: FailureFacts;
 }

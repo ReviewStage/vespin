@@ -375,8 +375,13 @@ const subject = (
   const told: ToldAsk[][] = [];
   const written: MachineCommandMode[] = [];
   const reported: string[] = [];
+  const devices: (string | undefined)[] = [];
 
   const emit = (kind: GatewayEventKind, payload: WireValue) => {
+    if (kind === GATEWAY_EVENT.MACHINE_COMMAND_DEVICE_CHANGED && isRecord(payload)) {
+      devices.push(Predicate.isString(payload.deviceId) ? payload.deviceId : undefined);
+    }
+
     if (kind !== GATEWAY_EVENT.MACHINE_COMMAND_ASKS_CHANGED || !isRecord(payload)) return;
     const asks = Array.isArray(payload.asks) ? payload.asks : [];
     told.push(
@@ -466,6 +471,8 @@ const subject = (
       told,
       written,
       reported,
+      /** The devices told to the windows as the one the Mac claims as, in order. */
+      devices,
       moved: Effect.asVoid(PubSub.publish(moves, undefined)),
       /** The asks waiting as last told. */
       asks: () => told.at(-1) ?? [],
@@ -562,7 +569,7 @@ it.effect(
         device: { id: studio, apps: [] },
       };
 
-      const { composer, moved } = yield* subject(service, spawner, gate);
+      const { composer, moved, devices } = yield* subject(service, spawner, gate);
 
       yield* Effect.scoped(
         Effect.gen(function* () {
@@ -599,6 +606,11 @@ it.effect(
       assert.deepEqual(service.savedSettings, [
         { commandMode: MACHINE_COMMAND_MODE.NEVER, alwaysAllowedApps: ["com.apple.Notes"] },
       ]);
+      assert.deepEqual(
+        [...new Set(devices)],
+        [studio],
+        "the windows are told the device once it joined",
+      );
     }),
 );
 
