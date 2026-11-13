@@ -12,6 +12,8 @@ Pod::Spec.new do |s|
   s.static_framework = true
 
   s.dependency 'ExpoModulesCore'
+  # The share sheet's access token, which an update token handed in the background is sent under.
+  s.dependency 'VespinShareToken'
   s.frameworks = 'WidgetKit'
 
   s.source_files = '*.swift'
