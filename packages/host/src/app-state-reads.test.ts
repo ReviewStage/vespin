@@ -78,9 +78,11 @@ describe("selectAgentNames", () => {
 
   it("answers the same names while an agent moves without its name moving, so its readers draw nothing anew", () => {
     const running = selectAgentNames(withAgents([UNTITLED_AGENT]));
+
     const done = selectAgentNames(
       withAgents([{ ...UNTITLED_AGENT, status: AGENT_STATUS.COMPLETED }]),
     );
+
     const named = selectAgentNames(withAgents([{ ...UNTITLED_AGENT, title: "Triage the queue" }]));
 
     expect(done).toBe(running);
