@@ -28,6 +28,7 @@ import {
 import type { TaskStatus } from "@repo/features/task-wire";
 import { type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
+import { BarContent } from "./bar-content.js";
 import type { Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
@@ -65,10 +66,10 @@ const layers = StyleSheet.create({
  */
 export const BAR_ITEM_MENU = [menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")];
 
-/** An act a bar holds by its symbol alone, such as Settings. */
+/** An act a bar holds by its symbol alone, such as Settings, or by its words where it has no symbol, such as a Select mode's Done. */
 export type BarAction = {
   readonly label: string;
-  readonly symbol: Glyph;
+  readonly symbol?: Glyph | undefined;
   readonly onPress: () => void;
 };
 
@@ -186,7 +187,7 @@ export function BarMenuItem({ menu }: { readonly menu: BarMenu }) {
   return <BarMenuButton menu={menu} modifiers={BAR_ITEM_MENU} />;
 }
 
-/** A bar act as SwiftUI's button, its symbol alone, heard by its words. */
+/** A bar act as SwiftUI's button, its symbol alone, heard by its words, or its words where it has no symbol. */
 function BarActionButton({ action }: { readonly action: BarAction }) {
   return <SwiftUIButton {...actContent(action.label, action.symbol)} onPress={action.onPress} />;
 }
@@ -255,7 +256,7 @@ function Column({
   ) : (
     <Toolbar>
       {stacked}
-      <Toolbar.Content>
+      <BarContent>
         {bar.leading === undefined ? null : (
           <ToolbarItem placement="topBarLeading">{bar.leading}</ToolbarItem>
         )}
@@ -264,14 +265,14 @@ function Column({
             <PathTitle path={bar.path.path} status={bar.path.status} />
           </ToolbarItem>
         )}
-        {bar.menu === undefined ? null : (
-          <ToolbarItem placement="topBarTrailing">
-            <BarMenuItem menu={bar.menu} />
-          </ToolbarItem>
-        )}
         {bar.action === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
             <BarActionButton action={bar.action} />
+          </ToolbarItem>
+        )}
+        {bar.menu === undefined ? null : (
+          <ToolbarItem placement="topBarTrailing">
+            <BarMenuItem menu={bar.menu} />
           </ToolbarItem>
         )}
         {(bar.foot ?? []).map((action) => (
@@ -279,7 +280,7 @@ function Column({
             <BarActionButton action={action} />
           </ToolbarItem>
         ))}
-      </Toolbar.Content>
+      </BarContent>
     </Toolbar>
   );
 

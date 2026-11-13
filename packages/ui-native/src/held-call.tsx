@@ -141,6 +141,8 @@ export function DeniesWaiting({ onShow }: { readonly onShow?: (() => void) | und
         font({ textStyle: TYPE_ROLE.ROW_LINE }),
         foregroundStyle(colors.TEXT_MUTED),
         frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+        // Note that the shape stands on the words' full-width frame, not on the button, since a plain button takes a press only where its label is hit, and a wide window leaves most of the line past the words.
+        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
       ]}
     >
       {DENIES_WAITING}
@@ -152,11 +154,7 @@ export function DeniesWaiting({ onShow }: { readonly onShow?: (() => void) | und
   return (
     <SwiftUIButton
       onPress={onShow}
-      modifiers={[
-        buttonStyle("plain"),
-        SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
-        accessibilityHint(SHOW_WAITING_HINT),
-      ]}
+      modifiers={[buttonStyle("plain"), accessibilityHint(SHOW_WAITING_HINT)]}
     >
       {words}
     </SwiftUIButton>

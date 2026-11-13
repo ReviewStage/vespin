@@ -1,4 +1,4 @@
-// inbox-remind.tsx -- Remind me on an Inbox thread: the sheet a row's swipe, its long press, or the thread's ⋯ menu opens, offering the panel's times.
+// inbox-remind.tsx -- Remind me on an Inbox thread, or on several chosen at once: the sheet a row's swipe, its long press, the thread's ⋯ menu, or the Inbox's Select mode opens, offering the panel's times.
 
 import { hasReminder } from "@repo/features/inbox-list-model";
 import {
@@ -17,24 +17,45 @@ export const REMIND_ME = { label: REMIND_WORDS.REMIND_ME, symbol: GLYPH.TIME } a
 
 type UseRemindSheetResult = {
   readonly open: (item: InboxItem) => void;
+  /** Opens the sheet on several threads, whose every reminder a choice sets, calling `after` once a choice is sent. */
+  readonly openMany: (items: readonly InboxItem[], after?: () => void) => void;
   readonly sheet: ReactNode;
+};
+
+/** The threads the sheet stands open on, when it opened, and what runs once a choice is sent. */
+type Held = {
+  readonly items: readonly InboxItem[];
+  readonly at: number;
+  readonly after?: (() => void) | undefined;
 };
 
 /**
  * The Remind me sheet a screen draws beside its rows, and the opening of it
- * on a thread: the panel's times (`@repo/features/inbox-remind-times`),
- * each saying when it comes due from the moment the sheet opens and set from
- * the moment it is pressed, a day and time of the reader's own, and Clear
- * reminder on a thread that holds one, as the panel's Remind me submenu
- * offers them. Each choice sends the panel's act and closes the sheet.
+ * on a thread, or on several chosen at once: the panel's times
+ * (`@repo/features/inbox-remind-times`), each saying when it comes due from
+ * the moment the sheet opens and set from the moment it is pressed, a day
+ * and time of the reader's own, and Clear reminder where a thread holds one,
+ * as the panel's Remind me submenu offers them. Each choice sends the
+ * panel's act, on every thread it stands open on, and closes the sheet.
  */
 export function useRemindSheet(): UseRemindSheetResult {
-  const { remind } = useInboxActs();
-  const [held, setHeld] = useState<{ readonly item: InboxItem; readonly at: number }>();
+  const { remind, remindMany } = useInboxActs();
+  const [held, setHeld] = useState<Held>();
   const close = () => setHeld(undefined);
 
   const set = (until: number | null) => {
-    if (held !== undefined) remind(held.item.id, until);
+    if (held !== undefined) {
+      const [only] = held.items;
+
+      if (held.items.length === 1 && only !== undefined) remind(only.id, until);
+      else
+        remindMany(
+          held.items.map((item) => item.id),
+          until,
+        );
+      held.after?.();
+    }
+
     close();
   };
 
@@ -50,10 +71,16 @@ export function useRemindSheet(): UseRemindSheetResult {
       }))}
       pick={{ opensAt: remindPickOpensAt(openedAt), earliest: openedAt }}
       onPick={set}
-      onClear={held !== undefined && hasReminder(held.item) ? () => set(null) : undefined}
+      onClear={held?.items.some(hasReminder) === true ? () => set(null) : undefined}
       onDismiss={close}
     />
   );
 
-  return { open: (item) => setHeld({ item, at: Date.now() }), sheet };
+  return {
+    open: (item) => setHeld({ items: [item], at: Date.now() }),
+    openMany: (items, after) => {
+      if (items.length > 0) setHeld({ items, at: Date.now(), after });
+    },
+    sheet,
+  };
 }
