@@ -126,14 +126,14 @@
   "devDependencies": {
     "@effect/vitest": "catalog:",
     "@repo/gateway": "workspace:*",
-    "@tailwindcss/vite": "4.3.3",
+    "@tailwindcss/vite": "4.3.5",
     "@types/hast": "3.0.5",
     "@types/node": "catalog:",
     "@types/react": "19.2.18",
     "@types/react-dom": "19.2.4",
     "ai": "catalog:",
     "jsdom": "^30.0.1",
-    "tailwindcss": "4.3.3",
+    "tailwindcss": "4.3.5",
     "typescript": "catalog:",
     "vitest": "catalog:"
   }
