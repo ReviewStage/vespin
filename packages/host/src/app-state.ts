@@ -753,11 +753,14 @@ export interface AppHostReads {
  * The commands agents asked to run on this Mac that wait on the developer's
  * answer, the earliest first, as the host holds them while Settings › This
  * Mac asks every time (`compose-machine-commands.ts`): what the panel's prompt
- * draws. Main's, because the host holds the command whichever window is
+ * draws; and the device the Mac claims commands as, which the panel tells
+ * this Mac from the account's others by. Main's, because the host holds the command whichever window is
  * open, and empty wherever this platform runs no commands.
  */
 export interface AppMachineCommandsSlice {
   asks: readonly MachineCommandAsk[];
+  /** The device this Mac claims commands as for the account signed in (`this-machine-device.ts`), which the service names the machine a call goes to by; absent before it joined for that account, and wherever this platform runs no commands. */
+  deviceId?: string;
 }
 
 /**
