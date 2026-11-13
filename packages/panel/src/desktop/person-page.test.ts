@@ -666,10 +666,12 @@ test("machines read again that could not be read say so and offer Retry, their l
 
   machinesRefused = true;
   await act(() => vi.advanceTimersByTimeAsync(30_000));
-  await settle();
+  // Note that the refused read lands some ticks after the poll that asked it, so the words are waited for.
+  await vi.waitFor(() =>
+    assert.match(page.textContent ?? "", /Their machines could not be read\./u),
+  );
 
   assert.deepEqual(sections(page), { Machines: ["Studio"] });
-  assert.match(page.textContent ?? "", /Their machines could not be read\./u);
 });
 
 test("each row opens what it names: an agent its tab, an item the Inbox on it, and a task the task", async () => {
