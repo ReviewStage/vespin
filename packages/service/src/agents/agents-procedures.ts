@@ -27,9 +27,9 @@
  *
  * The shells (`/api/agents/{id}/terminals`) are the agent's Terminal tab's:
  * listed, started, named, and ended in its sandbox, and the sandbox resumed
- * on the developer's click and nothing else; a list never wakes a stopped
- * sandbox, a shell starts only in a running one, and an archived agent's
- * shells are gone. Nothing here reads or writes a byte of what a shell
+ * on the developer's click: its Resume, or a shell or run action started in
+ * it, which resumes a stopped sandbox first (`startedWaking`); a list never
+ * wakes a stopped sandbox, and an archived agent's shells are gone. Nothing here reads or writes a byte of what a shell
  * printed: a list is each shell's name, foreground command, and folder,
  * read from tmux in the sandbox (`terminal/`).
  */
@@ -144,6 +144,7 @@ import {
   reachedAgentSession,
   sandboxOrUpstream,
   shellRefusal,
+  startedWaking,
 } from "./terminal/sandbox-reach.js";
 import { listedPage } from "./workspace-agents.js";
 import { defaultMachineChoices, runOnMacStanding } from "./workspace-tools.js";
@@ -716,7 +717,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
 
       return yield* workspaceToolsOf(userId, agent.id);
     }),
-    /** The agent's sandbox resumed from its snapshot (`agent-lifecycle.ts`), the developer's click and nothing else, answering where it stands after. */
+    /** The agent's sandbox resumed from its snapshot (`agent-lifecycle.ts`), on the developer's click, answering where it stands after. */
     sandboxResume: signedIn.sandboxResume.effect(function* ({ input, context }) {
       return { sandbox: yield* inSandbox(resumedAgentSandbox(context.userId, input.id)) };
     }),
@@ -736,7 +737,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
 
       return listed;
     }),
-    /** A shell started in the agent's running sandbox, under an id the service mints. */
+    /** A shell started in the agent's sandbox, under an id the service mints, the sandbox resumed first where it stopped. */
     openTerminal: signedIn.openTerminal.effect(function* ({ input, context }) {
       const sessionId = yield* reachedSession(context.userId, input.params.id);
 
@@ -747,13 +748,16 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       const terminalId = randomUUID();
 
       // Note that the tab holds the sandbox before its shell starts, under the runner lease a stop as a turn ends is
-      // decided under, so that stop either finished first, and the start below is refused as stopped, or keeps the sandbox up.
+      // decided under, so that stop either finished first, and the start below resumes the sandbox, or keeps the sandbox up.
       yield* heldPastStops(sessionId, recordedTerminalOpened(sandboxName, terminalId));
 
       const opened = yield* inSandbox(
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
-          const started = yield* sandboxOrUpstream(sandbox.start(sessionId, terminalId, title));
+
+          const started = yield* sandboxOrUpstream(
+            startedWaking(sessionId, sandbox.start(sessionId, terminalId, title)),
+          );
 
           // Note that a refused start started nothing, so it lets go; one the sandbox did not answer may have started, so a later list's prune decides.
           if (Result.isFailure(started)) {
@@ -798,10 +802,10 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       );
     }),
     /**
-     * One of the agent's repository's run actions run in its running sandbox
+     * One of the agent's repository's run actions run in its sandbox
      * (`run-actions.ts`), with the workspace's variables, answering its
      * shell; the press is the only thing that runs one, and a stopped
-     * sandbox is refused rather than woken.
+     * sandbox is resumed first.
      */
     runAction: signedIn.runAction.effect(function* ({ input, context }) {
       const actionId = yield* pathUuid(input.action);
