@@ -1,0 +1,2 @@
+#9036 at e7c4abf84, R1 bundle 77ed6fd8c (main 32a4961f0 + R1), iPhone 18 Pro, r9036.yaml light and dark.
+PASS (the orchestrator read the shots, 17:07 UTC): Tasks group headers lead with their marks, and Move to section lists each section with its icon. Experiments draws no glyph because Nov 12's native app lacks the rocket symbol set, which is not a regression. 26.5: not run (memory).
