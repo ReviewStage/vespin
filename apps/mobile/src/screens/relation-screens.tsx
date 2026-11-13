@@ -16,11 +16,12 @@ import {
   type TaskRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { readingWords } from "@repo/features/words";
+import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
+  BUTTON_LOOK,
   EmptyState,
   GLYPH,
   type Glyph,
@@ -69,6 +70,12 @@ export function useOpenRelation(): OpenRelation {
 
 /** What the sheet says while the task's document, which holds its blocks, is first read. */
 const READING_TASK = readingWords("the task");
+
+/** What the page says where the task's blocks could not be read, beside Try again. */
+const TASK_UNREAD = readFailedWords("the task");
+
+/** What a failed read offers. */
+const TRY_AGAIN = "Try again";
 
 /** Whether a kind is a block, which the open task's document judges, since the list carries no blocks. */
 function blockKind(kind: TaskRelationKind): boolean {
@@ -216,11 +223,22 @@ export function TaskRelationScreen({
 
   // Note that the open task's blocks are its document's, which the list does not carry, so a block's tasks wait for it rather than be judged against none.
   if (blockKind(kind) && document === undefined) {
+    const retry = overview.documentRetry;
+
+    // Note that a read that failed says so with Try again, rather than a spinner that would wait on nothing.
     return (
       <>
         {bar}
         <Screen>
-          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
+          {retry === undefined ? (
+            <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
+          ) : (
+            <EmptyState
+              title={TASK_UNREAD}
+              symbol={GLYPH.TASK}
+              action={{ label: TRY_AGAIN, onPress: retry, look: BUTTON_LOOK.BORDERED }}
+            />
+          )}
         </Screen>
       </>
     );

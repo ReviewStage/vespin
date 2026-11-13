@@ -3,11 +3,12 @@
 import { type DescriptionBlock, descriptionBlocks } from "@repo/features/description-blocks";
 import { COMMENT_NOTE } from "@repo/features/description-comment-notes";
 import { agentName } from "@repo/features/model-label";
-import { readingWords } from "@repo/features/words";
+import { readFailedWords, readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import {
   AskNote,
   BAR_TITLE,
+  BUTTON_LOOK,
   Composer,
   EmptyState,
   GLYPH,
@@ -42,6 +43,37 @@ const WORDS = {
 
 /** What the description is called while it is first read. */
 const READING_DESCRIPTION = readingWords("the description");
+
+/** What the page says where the description could not be read, beside Try again. */
+const DESCRIPTION_UNREAD = readFailedWords("the description");
+
+/** What a failed read offers. */
+const TRY_AGAIN = "Try again";
+
+/**
+ * What a new comment's page shows where it has no block to answer: the
+ * spinner while the description is first read, its failure with Try again
+ * where the read failed, and that the block has no words once it's read.
+ */
+function BlockState({ overview }: { readonly overview: TaskOverview | undefined }) {
+  if (overview?.document !== undefined) {
+    return <EmptyState title={COMMENT_NOTE.NO_WORDS} symbol={GLYPH.COMMENT} />;
+  }
+
+  const retry = overview?.documentRetry;
+
+  if (retry === undefined) {
+    return <EmptyState title={READING_DESCRIPTION} symbol={GLYPH.COMMENT} loading />;
+  }
+
+  return (
+    <EmptyState
+      title={DESCRIPTION_UNREAD}
+      symbol={GLYPH.COMMENT}
+      action={{ label: TRY_AGAIN, onPress: retry, look: BUTTON_LOOK.BORDERED }}
+    />
+  );
+}
 
 /** A comment screen's path, as the bar names it: the task's name and its key. */
 function commentPath(overview: TaskOverview | undefined): readonly string[] {
@@ -193,11 +225,7 @@ export function NewCommentScreen() {
       />
       {block === undefined ? (
         <Screen>
-          <EmptyState
-            title={overview?.document === undefined ? READING_DESCRIPTION : COMMENT_NOTE.NO_WORDS}
-            symbol={GLYPH.COMMENT}
-            loading={overview?.document === undefined}
-          />
+          <BlockState overview={overview} />
         </Screen>
       ) : (
         <GlassDock

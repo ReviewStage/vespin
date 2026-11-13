@@ -112,7 +112,8 @@ export function NewWorkspaceScreen() {
           disabled={name.trim() === "" || waiting}
           onPress={make}
         >
-          {waiting ? WORDS.CREATING : WORDS.CREATE}
+          {/* Note that Creating stands only while the create is out; once it's made, Create stays dimmed beside Close until the list holds it. */}
+          {create.running ? WORDS.CREATING : WORDS.CREATE}
         </Stack.Toolbar.Button>
       </Stack.Toolbar>
       <Screen>
