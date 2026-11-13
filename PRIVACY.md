@@ -235,7 +235,9 @@ A machine you run Vespin's host on, This Mac or one you installed it on,
 sends Sentry the host's own lines about its setup and running: that it
 connected, fetched the tools its agents run on, became ready, or could not,
 in Vespin's own words, with the host's version and operating system. A line
-saying something failed is sent as an error report. These never carry your
+saying something failed is sent as an error report, except a step that is
+tried again on its own, which is sent as a warning until it has failed five
+times in a row and as an error report then. These never carry your
 agents' messages, their work, what a tool or a terminal printed, or a
 credential. The Mac app sends the same of setting up This Mac's host. The
 host on This Mac also keeps these lines in `~/Library/Logs/Vespin Host/` on

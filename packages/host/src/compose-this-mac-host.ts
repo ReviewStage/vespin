@@ -235,14 +235,15 @@ export function composeThisMacHost(
   return Effect.gen(function* () {
     const { report } = yield* Reporter;
 
-    /** A step that failed, reported as one line naming it, its ending after it, with why as an attribute beside the line and what was printed after its words. */
-    const reportFailed = (failed: FailedStep, ending = "") => {
+    /** A step that failed, reported as one line naming it, said to be tried again where it is one of a keep's tries, with why and which try as attributes beside the line and what was printed after its words. */
+    const reportFailed = (failed: FailedStep, attempt?: number) => {
+      const ending = attempt === undefined ? "" : ", so it is tried again";
       const line = `this Mac's host: could not ${failed.step}${ending}`;
 
-      report(
-        failed.printed === undefined ? line : `${line}: ${failed.printed}`,
-        failed.reason === undefined ? undefined : { reason: failed.reason },
-      );
+      report(failed.printed === undefined ? line : `${line}: ${failed.printed}`, {
+        ...(failed.reason === undefined ? undefined : { reason: failed.reason }),
+        ...(attempt === undefined ? undefined : { attempt }),
+      });
     };
 
     const host = yield* ThisMacHost;
@@ -616,27 +617,34 @@ export function composeThisMacHost(
       return { userId, turns: MutableRef.get(turns) };
     });
 
-    /** The host kept as asked, each step that failed tried again after `RETRY` until it lands. */
+    /** The host kept as asked, each step that failed reported with which of this keep's tries it was, and tried again after `RETRY` until it lands. */
     const keep = (kept: Kept) =>
       kept === undefined
         ? Effect.void
-        : (kept.userId === undefined ? stoppedSignedOut : keepRunning).pipe(
-            Effect.tapError((failed) =>
-              Effect.andThen(
-                Effect.sync(() => {
-                  reportFailed(failed, ", so it is tried again");
-                  MutableRef.set(keepFailed, kept.userId !== undefined && MutableRef.get(starting));
-                }),
-                tellThisMac,
+        : Effect.suspend(() => {
+            const tries = MutableRef.make(0);
+
+            return (kept.userId === undefined ? stoppedSignedOut : keepRunning).pipe(
+              Effect.tapError((failed) =>
+                Effect.andThen(
+                  Effect.sync(() => {
+                    reportFailed(failed, MutableRef.incrementAndGet(tries));
+                    MutableRef.set(
+                      keepFailed,
+                      kept.userId !== undefined && MutableRef.get(starting),
+                    );
+                  }),
+                  tellThisMac,
+                ),
               ),
-            ),
-            Effect.retry(RETRY),
-            Effect.andThen(Effect.sync(() => MutableRef.set(keepFailed, false))),
-            Effect.andThen(tellThisMac),
-            Effect.catchDefect(() =>
-              Effect.sync(() => report("this Mac's host could not be kept as asked")),
-            ),
-          );
+              Effect.retry(RETRY),
+              Effect.andThen(Effect.sync(() => MutableRef.set(keepFailed, false))),
+              Effect.andThen(tellThisMac),
+              Effect.catchDefect(() =>
+                Effect.sync(() => report("this Mac's host could not be kept as asked")),
+              ),
+            );
+          });
 
     /** How the member keeps this Mac awake handed to its host, where it is installed; one that cannot be written is handed again at the next change. */
     const keepAwakeHanded = Effect.flatMap(dependencies.keepAwake, (choice) =>

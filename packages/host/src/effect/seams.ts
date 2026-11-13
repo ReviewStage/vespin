@@ -398,10 +398,12 @@ export interface HostReporter {
  * does, keeps one line per kind of event and carries these as data. Only
  * our own words, never what a command or a file printed.
  */
-export interface ReportAttributes {
+export type ReportAttributes = {
   /** Why the step the line names failed, as the seam it asked said so. */
-  readonly reason: string;
-}
+  readonly reason?: string;
+  /** Which try at the step this was, from 1, where the line says a step that is tried again failed. */
+  readonly attempt?: number;
+};
 
 export class Reporter extends Context.Service<Reporter, HostReporter>()("@repo/host/Reporter") {}
 
