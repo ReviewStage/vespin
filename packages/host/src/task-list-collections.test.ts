@@ -283,14 +283,14 @@ it.effect(
           ...agentListRow(INVITES, 2_000),
           id: "agent-invites-again",
           title: "Invite flow, continued",
-          startedFrom: { agentId: invites.id },
+          startedFrom: { agentId: invites.id, steps: 4, totalSteps: 4 },
         };
 
         const billingAgain = {
           ...agentListRow(BILLING, 2_000),
           id: "agent-billing-again",
           title: "Billing, continued",
-          startedFrom: { agentId: billing.id },
+          startedFrom: { agentId: billing.id, steps: 4, totalSteps: 4 },
         };
 
         const agents = [invites, billing, invitesAgain, billingAgain];
@@ -302,7 +302,7 @@ it.effect(
           ...agentListRow(BILLING, 3_000),
           id: "agent-billing-fork",
           title: "Billing, forked",
-          startedFrom: { agentId: billing.id, messageId: "message-7" },
+          startedFrom: { agentId: billing.id, messageId: "message-7", steps: 2, totalSteps: 4 },
         };
 
         yield* collections.answer({ plans, agents: [...agents, billingFork] });

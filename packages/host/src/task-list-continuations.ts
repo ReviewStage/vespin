@@ -29,8 +29,8 @@ export function taskListContinuations(
           q
             .from({ agent: agents })
             .where(({ agent }) => not(isNull(agent.startedFrom)))
-            .groupBy(groupKeys(({ agent }) => agent.startedFrom.agentId))
-            .select(({ agent }) => ({ agentId: agent.startedFrom.agentId })),
+            .groupBy(groupKeys(({ agent }) => agent.startedFrom?.agentId))
+            .select(({ agent }) => ({ agentId: agent.startedFrom?.agentId })),
         gcTime: KEPT_BY_SCOPE,
         startSync: true,
       }),
@@ -45,7 +45,7 @@ export function taskListContinuations(
             agents: toArray(
               q
                 .from({ agent: agents })
-                .where(({ agent }) => eq(agent.startedFrom.agentId, source.agentId))
+                .where(({ agent }) => eq(agent.startedFrom?.agentId, source.agentId))
                 .orderBy(({ agent }) => agent.createdAt)
                 .orderBy(({ agent }) => agent.id, { stringSort: "lexical" }),
             ),
