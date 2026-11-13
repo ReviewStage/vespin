@@ -680,29 +680,16 @@ export const disabledServersSchema = EffectSchema.Array(
  * The agent a Start takes over from, on the same plan: everything it did
  * where no message is named, which is a continue, or its transcript up to
  * and including one of its own assistant messages, by that message's id as
- * its transcript carries it, which is a fork. A fork of a reply still being
- * written names where the developer saw it end as they pressed Fork: how
- * many of that message's steps had begun, and how many words and calls the
- * last of them held, so the cut keeps those and nothing the agent wrote
- * after; a fork naming none keeps the message whole, as a desktop before
- * the count asked.
+ * its transcript carries it, which is a fork, kept whole.
  */
 const agentStartFromSchema = EffectSchema.Struct({
   agentId: wireUuidSchema,
   messageId: EffectSchema.optionalKey(wireUuidSchema),
-  messageSteps: EffectSchema.optionalKey(
-    EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(1)),
-  ),
-  messageStepParts: EffectSchema.optionalKey(
-    EffectSchema.Int.check(EffectSchema.isGreaterThanOrEqualTo(0)),
-  ),
-}).check(
-  EffectSchema.makeFilter(
-    ({ messageId, messageSteps, messageStepParts }) =>
-      (messageSteps === undefined || messageId !== undefined) &&
-      (messageStepParts === undefined || messageSteps !== undefined),
-  ),
-);
+  /** Where a desktop before this release cut a reply still being written as Fork was pressed, taken so its Start is not refused and read by nothing, so its fork keeps the message whole; the key goes with the minimum supported desktop version. */
+  messageSteps: EffectSchema.optionalKey(EffectSchema.Number),
+  /** As `messageSteps`, the words and calls of the last of those steps. */
+  messageStepParts: EffectSchema.optionalKey(EffectSchema.Number),
+});
 
 export type AgentStartFrom = typeof agentStartFromSchema.Type;
 
@@ -1295,10 +1282,7 @@ export const agentSummarySchema = EffectSchema.Struct({
   owner: EffectSchema.optionalKey(agentOwnerSchema),
   /**
    * The agent this one was started from, on the same plan, and the message
-   * of its it was forked at where it was forked rather than continued, and
-   * how many of that message's steps it kept, and of the last of them how
-   * many words and calls, where it was forked while that message was still
-   * written, with
+   * of its it was forked at where it was forked rather than continued, with
    * how many of that agent's steps its replay kept of how many there were,
    * and the branch that agent's work was copied to for this one where it
    * could be; absent for an agent started afresh, and from a service before it.
@@ -1307,8 +1291,6 @@ export const agentSummarySchema = EffectSchema.Struct({
     EffectSchema.Struct({
       agentId: wireUuidSchema,
       messageId: EffectSchema.optionalKey(wireUuidSchema),
-      messageSteps: EffectSchema.optionalKey(countedNumber),
-      messageStepParts: EffectSchema.optionalKey(countedNumber),
       steps: countedNumber,
       totalSteps: countedNumber,
       branch: EffectSchema.optionalKey(EffectSchema.String),
