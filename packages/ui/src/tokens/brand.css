@@ -21,17 +21,17 @@
   --ui-color-text: light-dark(#171717, #ededed);
   --ui-color-text-body: light-dark(#171717, #ededed);
   --ui-color-text-muted: light-dark(#4d4d4d, #a1a1a1);
-  --ui-color-accent: #ff9900;
-  --ui-color-on-accent: #171717;
-  --ui-color-on-accent-muted: #171717;
-  --ui-color-accent-text: light-dark(#9e4b00, #ff9900);
+  --ui-color-accent: light-dark(#a64f00, #ff9900);
+  --ui-color-on-accent: light-dark(#ffffff, #171717);
+  --ui-color-on-accent-muted: light-dark(#ffffff, #171717);
+  --ui-color-accent-text: light-dark(#a64f00, #ff9900);
   --ui-color-focus-ring: light-dark(#a64f00, #ff9900);
-  --ui-color-switch-on: #ff9900;
+  --ui-color-switch-on: light-dark(#a64f00, #ff9900);
   --ui-color-danger: light-dark(#d60020, #ff5e63);
   --ui-color-danger-text: light-dark(#d60020, #ff5e63);
   --ui-color-danger-fill: light-dark(#d60020, #e2162a);
   --ui-color-attention: light-dark(#a64f00, #ff9900);
-  --ui-color-attention-fill: #a64f00;
+  --ui-color-attention-fill: light-dark(#a64f00, #ff9900);
   --ui-color-working: light-dark(#0064e2, #50a8ff);
   --ui-color-starting: light-dark(#007a6e, #00c9b5);
   --ui-color-complete: light-dark(#107d32, #00ca52);
@@ -58,12 +58,12 @@
   --ui-color-text: #171717;
   --ui-color-text-body: #171717;
   --ui-color-text-muted: #4d4d4d;
-  --ui-color-accent: #ff9900;
-  --ui-color-on-accent: #171717;
-  --ui-color-on-accent-muted: #171717;
-  --ui-color-accent-text: #9e4b00;
+  --ui-color-accent: #a64f00;
+  --ui-color-on-accent: #ffffff;
+  --ui-color-on-accent-muted: #ffffff;
+  --ui-color-accent-text: #a64f00;
   --ui-color-focus-ring: #a64f00;
-  --ui-color-switch-on: #ff9900;
+  --ui-color-switch-on: #a64f00;
   --ui-color-danger: #d60020;
   --ui-color-danger-text: #d60020;
   --ui-color-danger-fill: #d60020;
@@ -104,7 +104,7 @@
   --ui-color-danger-text: #ff5e63;
   --ui-color-danger-fill: #e2162a;
   --ui-color-attention: #ff9900;
-  --ui-color-attention-fill: #a64f00;
+  --ui-color-attention-fill: #ff9900;
   --ui-color-working: #50a8ff;
   --ui-color-starting: #00c9b5;
   --ui-color-complete: #00ca52;
@@ -117,6 +117,6 @@
    agent's pointer is drawn: the light theme's over a light page and the dark
    theme's over a dark one, whatever the window's own theme. */
 [data-ui-profile] {
-  --ui-color-accent-on-light: #ff9900;
+  --ui-color-accent-on-light: #a64f00;
   --ui-color-accent-on-dark: #ff9900;
 }

@@ -70,7 +70,7 @@
   /* The row open beside its list: the accent's own ink over the ground, a
      step past the neutral fills, so it reads apart from a row merely hovered
      or chosen in a set. */
-  --ui-color-fill-current: color-mix(in srgb, var(--ui-color-accent-text) 14%, transparent);
+  --ui-color-fill-current: color-mix(in srgb, var(--ui-color-accent-text) 12%, transparent);
   --ui-color-fill-pressed: light-dark(rgba(0, 0, 0, 0.21), rgba(255, 255, 255, 0.24));
   --ui-color-border: light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.14));
   --ui-color-border-strong: light-dark(rgba(0, 0, 0, 0.21), rgba(255, 255, 255, 0.24));
@@ -84,7 +84,7 @@
   --ui-color-scrollbar: light-dark(rgba(0, 0, 0, 0.2), rgba(255, 255, 255, 0.18));
 
   --ui-color-on-danger: #fff;
-  --ui-color-on-attention: #fff;
+  --ui-color-on-attention: var(--ui-color-on-accent);
   /* A tone's ink as the ground of a pill or a glyph that carries it, one
      strength for every tone (`status-tone.css`). */
   --ui-color-neutral-tint: color-mix(in srgb, var(--ui-color-text-muted) 14%, transparent);
@@ -157,7 +157,7 @@
   /* The row open beside its list: the accent's own ink over the ground, a
      step past the neutral fills, so it reads apart from a row merely hovered
      or chosen in a set. */
-  --ui-color-fill-current: color-mix(in srgb, var(--ui-color-accent-text) 14%, transparent);
+  --ui-color-fill-current: color-mix(in srgb, var(--ui-color-accent-text) 12%, transparent);
   --ui-color-fill-pressed: rgba(0, 0, 0, 0.21);
   --ui-color-border: rgba(0, 0, 0, 0.08);
   /* The edge a field, a menu, and a raised or hovered card stand on: a step
@@ -173,7 +173,7 @@
   --ui-color-scrollbar: rgba(0, 0, 0, 0.2);
 
   --ui-color-on-danger: #fff;
-  --ui-color-on-attention: #fff;
+  --ui-color-on-attention: var(--ui-color-on-accent);
   --ui-color-neutral-tint: color-mix(in srgb, var(--ui-color-text-muted) 14%, transparent);
   --ui-color-working-tint: color-mix(in srgb, var(--ui-color-working) 14%, transparent);
   --ui-color-starting-tint: color-mix(in srgb, var(--ui-color-starting) 14%, transparent);
@@ -226,7 +226,7 @@
   /* The row open beside its list: the accent's own ink over the ground, a
      step past the neutral fills, so it reads apart from a row merely hovered
      or chosen in a set. */
-  --ui-color-fill-current: color-mix(in srgb, var(--ui-color-accent-text) 14%, transparent);
+  --ui-color-fill-current: color-mix(in srgb, var(--ui-color-accent-text) 12%, transparent);
   --ui-color-fill-pressed: rgba(255, 255, 255, 0.24);
   --ui-color-border: rgba(255, 255, 255, 0.14);
   --ui-color-border-strong: rgba(255, 255, 255, 0.24);
@@ -240,7 +240,7 @@
   --ui-color-scrollbar: rgba(255, 255, 255, 0.18);
 
   --ui-color-on-danger: #fff;
-  --ui-color-on-attention: #fff;
+  --ui-color-on-attention: var(--ui-color-on-accent);
   --ui-color-neutral-tint: color-mix(in srgb, var(--ui-color-text-muted) 14%, transparent);
   --ui-color-working-tint: color-mix(in srgb, var(--ui-color-working) 14%, transparent);
   --ui-color-starting-tint: color-mix(in srgb, var(--ui-color-starting) 14%, transparent);

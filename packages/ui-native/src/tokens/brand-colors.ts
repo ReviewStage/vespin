@@ -6,9 +6,9 @@
 
 export const BRAND_COLOR = {
   LIGHT: {
-    ACCENT: "#ff9900",
-    ON_ACCENT: "#171717",
-    ACCENT_TEXT: "#9e4b00",
+    ACCENT: "#a64f00",
+    ON_ACCENT: "#ffffff",
+    ACCENT_TEXT: "#a64f00",
     GROUND: "#ffffff",
     SURFACE: "#ffffff",
     SIDEBAR: "#fafafa",
@@ -44,7 +44,7 @@ export const BRAND_COLOR = {
     DANGER: "#ff5e63",
     DANGER_TEXT: "#ff5e63",
     ATTENTION: "#ff9900",
-    ATTENTION_FILL: "#a64f00",
+    ATTENTION_FILL: "#ff9900",
     WORKING: "#50a8ff",
     COMPLETE: "#00ca52",
     MERGED: "#c472fb",
