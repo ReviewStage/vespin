@@ -195,6 +195,9 @@ export function useSuggestionLooks(
       };
     }
 
+    // Note that a message's suggestion to an agent the reader can't see opens nowhere, so it stands as its plain link.
+    if (action.kind === REPLY_BUTTON_ACTION.SEND && view.sendTo === null) return undefined;
+
     const params = { suggestedBy: link.agentId, button: link.buttonId };
 
     const onPress = () => {
