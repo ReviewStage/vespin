@@ -11,6 +11,7 @@ import {
   LINK_DESTINATION,
   type LinkDestination,
   linkOf,
+  linkWorkspaceStep,
   readLink,
   taskLinkStep,
   taskNumberOf,
@@ -112,6 +113,7 @@ import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
 import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
+import { useKeeping } from "../keeping.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
@@ -139,6 +141,7 @@ import {
   type TaskAgentLine,
   type TaskOverview,
   type TaskPlacing,
+  type TaskRowDoors,
   type TasksListing,
   useDeleteAsk,
   useListingAsks,
@@ -381,6 +384,16 @@ function relationSubmenu(task: TaskSummary, openRelation: OpenRelation): RowSubm
   };
 }
 
+/** A bar's ⋯ acts as a row's long press offers them, in the ink. */
+function rowActions(actions: BarMenu["actions"]): readonly RowAction[] {
+  return actions.map((action) => ({
+    label: action.label,
+    symbol: action.symbol,
+    tone: ROW_ACTION_TONE.NEUTRAL,
+    onPress: action.onPress,
+  }));
+}
+
 /** A task's Remove parent, which takes it out from under its parent, as the panel's does; none for a task at the top level. */
 function removeParentActs(task: TaskSummary, relations: TaskRelationWrites): readonly RowAction[] {
   if (task.parentTaskId === undefined) return [];
@@ -460,12 +473,14 @@ function rowActs(
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => askRename(task, listing.rename),
       },
+      ...rowActions(historyActions(task, listing.doors.history)),
       {
         label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
         symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => listing.markRead(task.id, !unread),
       },
+      ...rowActions(moveActions(listing.doors.moveDoor(task))),
       {
         label: VERB.OPEN_IN_BROWSER,
         symbol: GLYPH.OPEN_EXTERNALLY,
@@ -932,14 +947,10 @@ export function useSidebarTasks(): SidebarTasks {
 }
 
 /** What a task's ⋯ asks first, what opens New task for a sub-task of it, and what opens its Task relation sheet. */
-interface TaskMenuDoors {
+interface TaskMenuDoors extends TaskRowDoors {
   readonly askDelete: (task: TaskSummary) => void;
   readonly newSubTask: (task: TaskSummary) => void;
-  /** Opens the description's version history; none where the workspace's descriptions stand off, as the panel's ⋯ offers it only where they stand on. */
-  readonly history: ((task: TaskSummary) => void) | undefined;
   readonly openRelation: OpenRelation;
-  /** Move to workspace's door for a task, none where the reader may not move it (`useMoveTaskDoor`). */
-  readonly moveDoor: (task: TaskSummary) => (() => void) | undefined;
 }
 
 /** Version history as a task's ⋯ offers it, none where the workspace's descriptions stand off. */
@@ -1037,6 +1048,14 @@ function useHistoryDoor(
   if (!descriptions) return undefined;
 
   return (task) => router.push({ pathname: onOwnTab(HISTORY_ROUTE), params: { id: task.id } });
+}
+
+/** The doors a list's task rows open past it, opened once for the whole list rather than on each recycled row. */
+export function useTaskRowDoors(workspaceId: string | undefined): TaskRowDoors {
+  const history = useHistoryDoor(workspaceId);
+  const moveDoor = useMoveTaskDoor();
+
+  return { history, moveDoor };
 }
 
 /** Opens New task as a sub-task of the task, as the panel's New sub-task opens its card. */
@@ -1312,6 +1331,35 @@ function agentSwipes(
   ];
 }
 
+/**
+ * What an agent row's long press holds past its swipes, which `RowFrame`
+ * stands in the menu already (Stop, or Archive asked first): the panel's
+ * Copy link and Open in browser (`agentMenuGroups`), once its workspace is
+ * known. Rename, Copy transcript and Permanently delete stay on the agent's
+ * page, which holds the questions and the transcript they need.
+ */
+function agentMenuActs(
+  link: string | undefined,
+  onCopyLink: (link: string) => void,
+): readonly RowAction[] {
+  return link === undefined
+    ? []
+    : [
+        {
+          label: WORDS.COPY_LINK,
+          symbol: GLYPH.LINK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => onCopyLink(link),
+        },
+        {
+          label: VERB.OPEN_IN_BROWSER,
+          symbol: GLYPH.OPEN_EXTERNALLY,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => openInSafari(link),
+        },
+      ];
+}
+
 type UseAgentArchiveAskResult = {
   readonly archive: (agentId: string) => void;
   readonly ask: ReactElement;
@@ -1388,6 +1436,14 @@ export function TaskAgentRow({
   const name = agentName(agent);
   const harness = providerOf(agent.model);
   const runsOn = agentRunsOnWords(agent);
+  const keeping = useKeeping();
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+  const linkStep = linkWorkspaceStep(agent.workspaceId, workspaces);
+
+  const link =
+    linkStep === undefined
+      ? undefined
+      : linkOf({ kind: LINK_DESTINATION.AGENT, planId: agent.planId, agentId: agent.id }, linkStep);
 
   return (
     <AgentRow
@@ -1408,6 +1464,7 @@ export function TaskAgentRow({
             }
       }
       trailingActions={agentSwipes(agent, acts, onArchive)}
+      menuActions={agentMenuActs(link, keeping.copyWords)}
       preview={
         <AgentPreview
           name={name}
@@ -1741,7 +1798,8 @@ type TasksSearch = { readonly search: string; readonly setSearch: (search: strin
  */
 function useTasksScreen({ search, setSearch }: TasksSearch) {
   const read = useTasksListing(search);
-  const { listing, status, deletion } = useListingAsks(read);
+  const doors = useTaskRowDoors(read.workspace?.id);
+  const { listing, status, deletion } = useListingAsks(read, doors);
   const { refreshTasks } = useInboxActs();
 
   return { search, setSearch, listing, status, deletion, refreshTasks };

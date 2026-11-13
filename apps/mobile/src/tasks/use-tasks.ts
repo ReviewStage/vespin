@@ -404,6 +404,18 @@ export interface TasksListing {
   readonly placing: TaskPlacing;
   /** The writes that relate a task to another, change how it stands, or take it out from under its parent. */
   readonly relations: TaskRelationWrites;
+  /** The doors a row's long press opens past the list, which the screen holding the list opens once for every row. */
+  readonly doors: TaskRowDoors;
+}
+
+/**
+ * The doors a task row's long press opens past the list, as the panel's row
+ * menu offers them: Version history where the workspace's descriptions stand
+ * on, and Move to workspace where the reader may move the task.
+ */
+export interface TaskRowDoors {
+  readonly history: ((task: TaskSummary) => void) | undefined;
+  readonly moveDoor: (task: TaskSummary) => (() => void) | undefined;
 }
 
 /** A task at a glance: how many of its threads wait on the reader, and its agents not archived, in its Overview's order. */
@@ -441,7 +453,7 @@ function taskAgentsInOrder(
 }
 
 /** The listing as it is read, before the screen that draws it holds the questions its acts ask first. */
-export type ReadListing = Omit<TasksListing, "askDelete">;
+export type ReadListing = Omit<TasksListing, "askDelete" | "doors">;
 
 /**
  * The chosen workspace's tasks as the panel's phone Tasks lists them, under
@@ -887,17 +899,17 @@ type UseListingAsksResult = {
 
 /**
  * A list's acts that ask first, as every list of tasks offers them: its
- * status set, asking where it stops agents, and its delete, asking always.
- * Answers the listing its rows act through and the two questions, which the
- * screen draws.
+ * status set, asking where it stops agents, and its delete, asking always,
+ * with the doors its rows open. Answers the listing its rows act through
+ * and the two questions, which the screen draws.
  */
-export function useListingAsks(read: ReadListing): UseListingAsksResult {
+export function useListingAsks(read: ReadListing, doors: TaskRowDoors): UseListingAsksResult {
   const { setStatus, question } = useStatusAsk(read);
   const { remove } = useTaskWrites();
   const deletion = useDeleteAsk(remove);
 
   return {
-    listing: { ...read, setStatus, askDelete: deletion.askDelete },
+    listing: { ...read, setStatus, askDelete: deletion.askDelete, doors },
     status: question,
     deletion: deletion.question,
   };

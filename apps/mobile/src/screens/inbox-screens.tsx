@@ -42,6 +42,7 @@ import {
   selectAgentNames,
   selectWorkspaces,
 } from "@repo/host/app-state-reads";
+import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
   BAR_TITLE,
   type BarAction,
@@ -183,6 +184,7 @@ function InboxRows({
 }: InboxRowsProps) {
   // The members' pictures, read once for every row rather than once a row.
   const pictureOf = useMemberPictures();
+  const keeping = useKeeping();
 
   return (
     <RowList
@@ -199,6 +201,7 @@ function InboxRows({
         onMark={onMark}
         onRemind={onRemind}
         onResolve={onResolve}
+        onCopyLink={keeping.copyWords}
       />
     </RowList>
   );
@@ -213,6 +216,8 @@ type InboxRowActs = {
   readonly onRemind: (item: InboxItem) => void;
   /** Resolves the open thread, which a full swipe from the trailing edge runs. */
   readonly onResolve: (item: InboxItem) => void;
+  /** Copies the thread's vespin.dev link, which its long press offers last, as the thread's own ⋯ offers it first. */
+  readonly onCopyLink: (link: string) => void;
 };
 
 /**
@@ -248,6 +253,7 @@ function InboxRow({
   onMark,
   onRemind,
   onResolve,
+  onCopyLink,
 }: InboxRowActs & { readonly listed: InboxListed }) {
   const { holder, item } = listed;
   const unread = isUnread(item);
@@ -257,6 +263,11 @@ function InboxRow({
   const title = cardTitle(item.title);
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
   const workspaceStep = linkWorkspaceStep(holder.task.workspaceId, workspaces);
+
+  const link = linkOf(
+    { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+    workspaceStep,
+  );
 
   // Note that only the thread's tail is read for its preview, since the preview draws its newest few messages alone.
   const messages = useMemo(
@@ -316,10 +327,15 @@ function InboxRow({
           onPress: () => onMark(item.id, !unread),
         },
       ]}
-      link={linkOf(
-        { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
-        workspaceStep,
-      )}
+      menuActions={[
+        {
+          label: APP_SHORTCUTS[APP_COMMAND.COPY_LINK].label,
+          symbol: GLYPH.LINK,
+          tone: ROW_ACTION_TONE.NEUTRAL,
+          onPress: () => onCopyLink(link),
+        },
+      ]}
+      link={link}
       preview={
         <ThreadPreview
           title={title}

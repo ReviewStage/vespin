@@ -211,6 +211,8 @@ type AgentRowProps = {
     | undefined;
   /** What a swipe from the trailing edge reveals, such as Stop or Archive, the first of it on a full swipe. */
   readonly trailingActions?: readonly RowSwipe[] | undefined;
+  /** What its long press menu holds past its swipes, as the panel's agent menu offers it: its links, then Archive. */
+  readonly menuActions?: readonly RowAction[] | undefined;
   /** What its long press lifts over its menu (`AgentPreview`). */
   readonly preview?: ReactElement | undefined;
 };
@@ -310,7 +312,13 @@ export function AgentRow(props: AgentRowProps) {
   );
 
   return (
-    <RowFrame id={id} row={row} trailingActions={props.trailingActions} preview={props.preview} />
+    <RowFrame
+      id={id}
+      row={row}
+      trailingActions={props.trailingActions}
+      menuActions={props.menuActions}
+      preview={props.preview}
+    />
   );
 }
 
