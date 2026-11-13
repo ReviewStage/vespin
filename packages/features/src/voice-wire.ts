@@ -15,13 +15,14 @@
  */
 
 import { Schema as EffectSchema } from "effect";
+import { modelProviderSchema } from "./models-wire.js";
 import { wireUuidSchema } from "./service-wire.js";
 import { LiveVoiceSchema } from "./voices.js";
 
 export const VOICE_BOUNDS = {
   /** The most characters an SDP offer may spell: a browser's offer for one audio track and a data channel runs a few thousand. */
   MAX_SDP_CHARS: 32_000,
-  /** The most characters a standing call's name or its agent's command is told in; the card cuts both to one line long before. */
+  /** The most characters a standing call's names or its agent's command is told in; the card cuts each to one line long before. */
   MAX_CARD_CHARS: 1_000,
 } as const;
 
@@ -38,16 +39,19 @@ const cardText = EffectSchema.String.check(EffectSchema.isMaxLength(VOICE_BOUNDS
 
 /**
  * The call a window holds, as its card draws it wherever the window is not
- * in front: the agent and task it is about, its task's name (its agent's
- * where it has no task), where it stands, its two mutes, and what the agent
- * is doing, absent while it is idle, its command while it runs one. The
+ * in front: the agent and task it is about, the agent's name and the
+ * harness its tile wears, the task's name where the task is listed, where
+ * the call stands, its two mutes, and what the agent is doing, absent while
+ * it is idle, its command while it runs one. The
  * panel that holds the call tells the Mac this, and the floating call
  * window draws it and nothing else.
  */
 export const standingCallSchema = EffectSchema.Struct({
   agentId: EffectSchema.String,
   taskId: EffectSchema.String,
-  name: cardText,
+  agentName: cardText,
+  provider: EffectSchema.optionalKey(modelProviderSchema),
+  taskName: EffectSchema.optionalKey(cardText),
   stage: EffectSchema.Literals(Object.values(VOICE_CALL_STAGE)),
   microphoneMuted: EffectSchema.Boolean,
   speakerMuted: EffectSchema.Boolean,
@@ -58,10 +62,11 @@ export const standingCallSchema = EffectSchema.Struct({
 
 export type StandingCall = typeof standingCallSchema.Type;
 
-/** A press on the floating call card: a mute set as it says, or End call, which the Mac hands to the window holding the call, or the way back to the call's agent, which the Mac opens itself. */
+/** A press on the floating call card: a mute set as it says, Stop, or End call, which the Mac hands to the window holding the call, or the way back to the call's agent, which the Mac opens itself. */
 export const VOICE_CALL_PRESS = {
   MICROPHONE: "microphone",
   SPEAKER: "speaker",
+  STOP: "stop",
   END: "end",
   OPEN: "open",
 } as const;
@@ -72,7 +77,11 @@ export const voiceCallPressSchema = EffectSchema.Union([
     muted: EffectSchema.Boolean,
   }),
   EffectSchema.Struct({
-    press: EffectSchema.Literals([VOICE_CALL_PRESS.END, VOICE_CALL_PRESS.OPEN]),
+    press: EffectSchema.Literals([
+      VOICE_CALL_PRESS.STOP,
+      VOICE_CALL_PRESS.END,
+      VOICE_CALL_PRESS.OPEN,
+    ]),
   }),
 ]);
 

@@ -179,7 +179,7 @@ function saver(
   taskId: string,
 ): (base: string, value: string) => Promise<TasksEditAnswer> {
   return (base, value) =>
-    send({ taskId, edit: { document: { base, value } } }).catch(
+    send({ taskId, edit: { description: { base, value } } }).catch(
       unreachedAs(TASK_CALL_FAILURE.UNANSWERED),
     );
 }

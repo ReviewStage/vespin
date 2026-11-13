@@ -14,19 +14,13 @@
  * read, each entry by its path from the folder, and says when it cut that
  * short too (past a hundred thousand entries or seven megabytes). A blob
  * carries its size in bytes, which a caller weighing a folder reads.
- * The request composes over the App module's own kit, so the token leaves
- * this module no more than it leaves that one.
+ * The request is sent on the bearer's `@repo/github` client, so the token
+ * leaves this module no more than it leaves that one.
  */
 
-import { Effect, type Redacted, Schema } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
-import {
-  GITHUB_HTTP_STATUS,
-  type GitHubUnavailable,
-  githubRead,
-  readBody,
-  send,
-} from "./github-app.js";
+import type { GitHubFailure } from "@repo/github";
+import { Effect, Option, Schema } from "effect";
+import { type GitHubBearer, githubRead, readOptional, repositoryParts } from "./github-app.js";
 import { repositorySegments } from "./repository-file.js";
 
 /** What git holds an entry of a tree as: a file or a link (a blob), a folder (a tree), or a submodule (a commit). */
@@ -75,52 +69,55 @@ export type RepositoryFolder =
 
 const NO_FOLDER: RepositoryFolder = { found: false };
 
+/** What GitHub answers a tree-ish naming a blob with. */
+const UNPROCESSABLE = 422;
+
 /**
  * The repository's folder at the path on the branch named, the root for an
  * empty path, as the git trees API lists it: its own entries, or with
  * `recursive` everything under it, each named by its path from the folder.
- * A commit's sha names the commit as a branch's name does. Read anonymously
- * where the token is `null`.
+ * A commit's sha names the commit as a branch's name does.
  */
 export function readRepositoryFolder(
-  token: Redacted.Redacted | null,
+  bearer: GitHubBearer,
   repository: { readonly fullName: string; readonly defaultBranch: string },
   path: string,
   recursive = false,
-): Effect.Effect<RepositoryFolder, GitHubUnavailable, HttpClient.HttpClient> {
+): Effect.Effect<RepositoryFolder, GitHubFailure> {
   return Effect.gen(function* () {
     if (path !== "" && repositorySegments(path) === undefined) return NO_FOLDER;
-    const treeish = encodeURIComponent(`${repository.defaultBranch}:${path}`);
-    const listing = `/repos/${repository.fullName}/git/trees/${treeish}`;
-    const request = githubRead(recursive ? `${listing}?recursive=1` : listing, token);
 
-    return yield* Effect.scoped(
-      Effect.gen(function* () {
-        const response = yield* send(request);
-
-        // Note that GitHub answers a path naming a file as unprocessable,
-        // since `<branch>:<file>` is a blob and no tree.
-        if (
-          response.status === GITHUB_HTTP_STATUS.NOT_FOUND ||
-          response.status === GITHUB_HTTP_STATUS.UNPROCESSABLE
-        ) {
-          return NO_FOLDER;
-        }
-
-        const answer = yield* readBody(response, TreeSchema);
-
-        return {
-          found: true,
-          entries: answer.tree.map((entry) => ({
-            name: entry.path,
-            type: entry.type,
-            ...(entry.mode === LINK_MODE ? { link: true as const } : undefined),
-            ...(entry.size === undefined ? undefined : { size: entry.size }),
-          })),
-          truncated: answer.truncated,
-          ...(answer.sha === undefined ? undefined : { sha: answer.sha }),
-        } satisfies RepositoryFolder;
-      }),
+    const read = yield* readOptional(
+      githubRead(
+        bearer.client.request("GET /repos/{owner}/{repo}/git/trees/{tree_sha}", {
+          ...repositoryParts(repository.fullName),
+          tree_sha: `${repository.defaultBranch}:${path}`,
+          ...(recursive && { recursive: "1" }),
+        }),
+        TreeSchema,
+      ),
+    ).pipe(
+      // Note that GitHub answers a path naming a file as unprocessable, since `<branch>:<file>` is a blob and no tree.
+      Effect.catchTag("GitHubRejected", (rejected) =>
+        rejected.status === UNPROCESSABLE
+          ? Effect.succeed(Option.none<typeof TreeSchema.Type>())
+          : Effect.fail(rejected),
+      ),
     );
+
+    if (Option.isNone(read)) return NO_FOLDER;
+    const answer = read.value;
+
+    return {
+      found: true,
+      entries: answer.tree.map((entry) => ({
+        name: entry.path,
+        type: entry.type,
+        ...(entry.mode === LINK_MODE ? { link: true as const } : undefined),
+        ...(entry.size === undefined ? undefined : { size: entry.size }),
+      })),
+      truncated: answer.truncated,
+      ...(answer.sha === undefined ? undefined : { sha: answer.sha }),
+    } satisfies RepositoryFolder;
   });
 }

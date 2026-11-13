@@ -4,9 +4,9 @@ import { AUTH_SESSION_END } from "@repo/credentials";
 import { ACCOUNT_PROVIDER, ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { ACT_KIND } from "@repo/host/acts";
 import { RUN_PROFILE, type RunProfile } from "@repo/host/app-state";
-import { selectInboxGroupsIn } from "@repo/host/app-state-reads";
+import { selectExperiment, selectInboxGroupsIn } from "@repo/host/app-state-reads";
 import { temporaryDirectoryScoped } from "@repo/runtime/testing";
-import { THEME } from "@repo/settings";
+import { EXPERIMENT, THEME } from "@repo/settings";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
 import { Context, Effect, Layer } from "effect";
@@ -17,7 +17,8 @@ import { STUB_ACCOUNT, stubAuthFetch, stubAuthSession } from "./stub-auth-server
 /**
  * compose-mobile.test.ts -- the shared host as the Expo app composes it,
  * over seams a test answers on Node: a fixture run's document lists the
- * Inbox profile's threads, which the Inbox draws, and an act the screens
+ * Inbox profile's threads, which the Inbox draws, with the Skills
+ * experiment on that its composers' `/` offers stand behind, and an act the screens
  * send rides the in-process channel to the host and back, its settings
  * kept in the host's folder for the next launch.
  */
@@ -76,7 +77,7 @@ const standingHost = (
 const ownFolder = Effect.provide(temporaryDirectoryScoped("mobile-host-"), NodeFileSystem.layer);
 
 it.effect(
-  "a fixture run's document lists the Inbox profile's threads, signed in as its account",
+  "a fixture run's document lists the Inbox profile's threads, signed in as its account with Skills on",
   () =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -92,6 +93,8 @@ it.effect(
         );
 
         expect(titles).toContain(STAGED_THREAD);
+        // Note that a `/` in any of the app's composers offers skills only while the account has Skills on (`use-skill-offer.ts`).
+        expect(selectExperiment(EXPERIMENT.SKILLS)(state)).toBe(true);
       }),
     ),
 );

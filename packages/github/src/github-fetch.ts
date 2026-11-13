@@ -23,7 +23,7 @@
  */
 
 import type { Context } from "effect";
-import { Effect, Schema } from "effect";
+import { Effect, Schema, Stream } from "effect";
 import * as HttpBody from "effect/http/HttpBody";
 import * as HttpClient from "effect/http/HttpClient";
 import * as HttpClientRequest from "effect/http/HttpClientRequest";
@@ -55,12 +55,16 @@ interface KeptAnswer {
 /** One identity's kept GET answers, by URL, least recently used first. */
 export type Kept = Map<string, KeptAnswer>;
 
-/** What one request was answered with, read whole. */
+/** A GET answer read whole, as it is kept. */
 interface Answer {
-  readonly status: number;
   readonly headers: Readonly<Record<string, string>>;
   readonly body: ArrayBuffer;
 }
+
+/** A body read up to a bound: whole where it ended within it, else the stream of all of it, the part read included. */
+type Bounded =
+  | { readonly whole: true; readonly body: ArrayBuffer }
+  | { readonly whole: false; readonly body: ReadableStream<Uint8Array> };
 
 /** A header of an answer, whose names the client keeps lowercase. */
 function header(headers: Readonly<Record<string, string>>, name: string): string | undefined {
@@ -83,8 +87,6 @@ function keep(kept: Kept, url: string, answer: Answer): void {
   const lastModified = header(answer.headers, "last-modified");
 
   if (etag === undefined && lastModified === undefined) return;
-
-  if (answer.body.byteLength > CONDITIONAL.LARGEST_BODY) return;
   kept.delete(url);
   kept.set(url, { etag, lastModified, headers: answer.headers, body: answer.body });
 
@@ -94,27 +96,83 @@ function keep(kept: Kept, url: string, answer: Answer): void {
   }
 }
 
+/**
+ * The answer as `fetch` would hand it, at the URL it was asked of, as
+ * `fetch` names it: a `Response` built here names none, and Octokit's
+ * paginator reads the URL of a listing's page that wraps its items.
+ */
+function at(response: Response, url: string): Response {
+  Object.defineProperty(response, "url", { value: url });
+
+  return response;
+}
+
 /** The kept answer, with the rate-limit headers and date of the `304` that confirmed it. */
-function fromKept(answer: KeptAnswer, confirmed: Answer): Response {
+function fromKept(answer: KeptAnswer, confirmed: Readonly<Record<string, string>>): Response {
   const headers = new globalThis.Headers(answer.headers);
 
-  for (const [name, value] of Object.entries(confirmed.headers)) {
+  for (const [name, value] of Object.entries(confirmed)) {
     if (name.startsWith(RATE_HEADER_PREFIX) || name === "date") headers.set(name, value);
   }
 
   return new Response(answer.body.slice(0), { status: STATUS.OK, headers });
 }
 
-function toResponse(answer: Answer): Response {
-  return new Response(BODILESS_STATUSES.has(answer.status) ? null : answer.body, {
-    status: answer.status,
-    headers: answer.headers,
+/**
+ * A body read no further than `bound` bytes: whole where it ends within
+ * them, so it may be kept; else every byte of it still to be read, the part
+ * read first, so a large answer, such as an archive, is never held whole.
+ */
+async function readUpTo(body: ReadableStream<Uint8Array>, bound: number): Promise<Bounded> {
+  const reader = body.getReader();
+  const read: Uint8Array[] = [];
+  let total = 0;
+
+  while (total <= bound) {
+    const next = await reader.read();
+
+    if (next.done) {
+      const whole = new Uint8Array(total);
+      let at = 0;
+
+      for (const chunk of read) {
+        whole.set(chunk, at);
+        at += chunk.byteLength;
+      }
+
+      return { whole: true, body: whole.buffer };
+    }
+
+    read.push(next.value);
+    total += next.value.byteLength;
+  }
+
+  const rest = new ReadableStream<Uint8Array>({
+    start: (controller) => {
+      for (const chunk of read) controller.enqueue(chunk);
+    },
+    pull: async (controller) => {
+      const next = await reader.read();
+
+      if (next.done) controller.close();
+      else controller.enqueue(next.value);
+    },
+    cancel: (reason) => reader.cancel(reason),
   });
+
+  return { whole: false, body: rest };
 }
 
-/** The request body as the client sends it: Octokit hands a string, or bytes for an upload. */
-function bodyOf(init: RequestInit): HttpBody.HttpBody {
-  return init.body === undefined || init.body === null ? HttpBody.empty : HttpBody.raw(init.body);
+/**
+ * The request body as the client sends it: Octokit hands a string, or bytes
+ * for an upload. Note that the body carries the content type Octokit named,
+ * because the client sets the header from the body and drops the one asked
+ * for; sent as `fetch`'s `text/plain`, GitHub's token endpoint answers 404.
+ */
+function bodyOf(init: RequestInit, headers: Headers): HttpBody.HttpBody {
+  return init.body === undefined || init.body === null
+    ? HttpBody.empty
+    : HttpBody.raw(init.body, { contentType: headers.get("content-type") ?? undefined });
 }
 
 /**
@@ -144,26 +202,38 @@ export function githubFetch(
 
     const request = HttpClientRequest.make(method)(url, {
       headers: Object.fromEntries(headers),
-      body: bodyOf(init),
+      body: bodyOf(init, headers),
     });
 
-    const answer = await run(
-      Effect.flatMap(following.execute(request), (response) =>
-        Effect.map(response.arrayBuffer, (body) => ({
-          status: response.status,
-          headers: response.headers,
-          body,
-        })),
-      ),
+    const response = await run(
+      following.execute(request),
       init.signal === null || init.signal === undefined ? undefined : { signal: init.signal },
     );
 
-    if (answer.status === STATUS.NOT_MODIFIED && known !== undefined) {
-      return fromKept(known, answer);
+    const { status } = response;
+    const answered = response.headers;
+
+    if (status === STATUS.NOT_MODIFIED && known !== undefined) {
+      return at(fromKept(known, answered), url);
     }
 
-    if (method === "GET" && answer.status === STATUS.OK) keep(kept, url, answer);
+    if (BODILESS_STATUSES.has(status)) {
+      return at(new Response(null, { status, headers: answered }), url);
+    }
 
-    return toResponse(answer);
+    const body = Stream.toReadableStreamWith(response.stream, context);
+
+    const keepable =
+      method === "GET" &&
+      status === STATUS.OK &&
+      (header(answered, "etag") !== undefined || header(answered, "last-modified") !== undefined);
+
+    // Note that only an answer that may be kept is read here, and only as far as the largest kept, so any other streams through.
+    if (!keepable) return at(new Response(body, { status, headers: answered }), url);
+    const bounded = await readUpTo(body, CONDITIONAL.LARGEST_BODY);
+
+    if (bounded.whole) keep(kept, url, { headers: answered, body: bounded.body });
+
+    return at(new Response(bounded.body, { status, headers: answered }), url);
   };
 }

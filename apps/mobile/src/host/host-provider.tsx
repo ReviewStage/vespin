@@ -8,6 +8,7 @@ import Constants from "expo-constants";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.js";
 import { HostFailedScreen } from "../screens/host-failed.js";
+import { releaseSplashAfterFrame } from "../splash.js";
 import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
 import {
@@ -113,7 +114,8 @@ function launchOptions(): MobileHostStartOptions {
 /**
  * Starts the host once, follows its document into a Query client of the
  * app's own, and draws the screens once the first reading is in it, so no
- * screen draws an empty document first. A host that cannot stand is said on
+ * screen draws an empty document first; the launch splash stands until then
+ * (`splash.ts`). A host that cannot stand is said on
  * the console, reported to Sentry, and shown in the screens' place with Retry, which starts it
  * again, rather than drawing an empty Inbox over nothing; a host that stands
  * but refuses its first read is said on the console too, and the screens
@@ -168,6 +170,8 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
       void started?.close();
     };
   }, [attempt]);
+  // Note that the splash stands over the launch until the screens, or the failure in their place, first draw, so no blank screen shows while the host starts.
+  useEffect(() => (standing === undefined ? undefined : releaseSplashAfterFrame()), [standing]);
 
   if (standing === undefined) return null;
 

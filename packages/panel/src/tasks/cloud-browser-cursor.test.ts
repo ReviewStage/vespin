@@ -181,7 +181,7 @@ test("the agent's pointer hides while a member drives the tab, and fades once th
 
 // Reduced motion leaves its durations at 1ms, and a capture run zeroes them: the tokens say both, the OS setting only the first.
 test.each(["1ms", "0s"])(
-  "where the motion tokens stand at %s the agent's pointer is held still: it neither rocks, glides, nor ripples",
+  "where the motion tokens stand at %s the agent's pointer is held still: it neither sways, glides, nor ripples",
   async (duration) => {
     document.documentElement.style.setProperty("--ui-duration-fast", duration);
 

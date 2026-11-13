@@ -15,8 +15,11 @@
  * `session.close`.
  *
  * The call is live once the session says it started, and timed from then.
- * Muting the microphone tells the session to stop hearing it; muting the
- * speaker silences the voice on this device alone. End sends
+ * Muting the microphone silences its track at once and tells the session to
+ * stop hearing it, and a mute pressed while the call still connects is told
+ * the moment the session starts, since the session takes no command before,
+ * while the silenced track sends nothing meanwhile; muting the speaker
+ * silences the voice on this device alone. End sends
  * `session.close` and closes the channel, which sends what it holds first,
  * and the peer is dropped once the channel has closed; a `session.closed`
  * from the service, a peer that failed, or the window going away drops it
@@ -24,6 +27,13 @@
  * A call runs on the account's own OpenAI key, so with none saved a start
  * opens Settings › Agents instead. Nothing here starts while the Voice
  * experiment is off, and turning it off ends a call under way.
+ *
+ * The call's levels, how loud the caller and the voice each are, which the
+ * mutes ring with (`CallMute`), are measured here: an analyzer on the
+ * microphone and one on the voice, in an audio context of the call's own,
+ * made in the press that starts it. One loop reads both each frame while a
+ * mute draws them and none while no mute does. No audio or level leaves the
+ * window, and none is stored or counted.
  */
 
 import { AGENT_CALL_FAILURE } from "@repo/features/agent-view";
@@ -32,7 +42,7 @@ import { VOICE_CALL_STAGE, type VoiceCallStage } from "@repo/features/voice-wire
 import { DEFAULT_LIVE_VOICE } from "@repo/features/voices";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
-import { STATUS_TONE } from "@repo/ui";
+import { type CallLevel, type CallLevels, STATUS_TONE } from "@repo/ui";
 import { OPENAI_KEY_MISSING_NOTE } from "@repo/ui/microphone-access";
 import { EXCESS_KEYS, unparsedWire } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
@@ -41,6 +51,7 @@ import { Schema as EffectSchema, Result } from "effect";
 import { createContext, type ReactNode, useContext, useEffect, useRef, useState } from "react";
 import { sendAct } from "./act.js";
 import { useOpenAiKeyMissing, useOpenApiKeys } from "./openai-key.js";
+import { frameLevel } from "./tasks/frame-level.js";
 import { MICROPHONE_REFUSAL, useOpenMicrophone } from "./tasks/use-open-microphone.js";
 import { showToast } from "./toast.js";
 import { appStateQuery, selectAppSettingsView, selectExperiment } from "./use-app-state.js";
@@ -69,6 +80,8 @@ export interface VoiceCall {
   readonly end: () => void;
   readonly setMicrophoneMuted: (muted: boolean) => void;
   readonly setSpeakerMuted: (muted: boolean) => void;
+  /** How loud the caller and the voice are, frame by frame, while a call stands; nothing but silence otherwise. */
+  readonly levels: CallLevels;
 }
 
 /** The channel GPT-Live's events ride on, by the name it opens it under. */
@@ -93,12 +106,28 @@ const VOICE_CALL_NOTE = {
   DROPPED: "The call dropped.",
 } as const;
 
+/** The analyzers' window: enough samples for a steady level at a frame's rate, as dictation's meter reads. */
+const ANALYZER_FFT_SIZE = 1_024;
+
+/** How much of a level a frame keeps from the last: a meter's quick rise and slower fall, so a ring eases off between words. */
+const LEVEL_FALL = 0.86;
+
+const SILENCE: CallLevel = { you: 0, voice: 0 };
+
+/** The call's two meters, in the audio context of its own its press made: the microphone's, and the voice's once its track arrives. */
+interface Meters {
+  readonly context: AudioContext;
+  readonly you: AnalyserNode;
+  voice: AnalyserNode | undefined;
+}
+
 /** One call's machinery: what its start opened, which its end lets go. */
 interface Standing {
   readonly peer: RTCPeerConnection;
   readonly channel: RTCDataChannel;
   readonly microphone: MediaStream;
   readonly speaker: HTMLAudioElement;
+  readonly meters: Meters | undefined;
 }
 
 const NO_CALL: VoiceCall = {
@@ -107,6 +136,7 @@ const NO_CALL: VoiceCall = {
   end: () => undefined,
   setMicrophoneMuted: () => undefined,
   setSpeakerMuted: () => undefined,
+  levels: () => () => undefined,
 };
 
 const VoiceCallContext = createContext<VoiceCall>(NO_CALL);
@@ -140,27 +170,113 @@ function eventType(text: string): string | undefined {
   }
 }
 
-/** Everything a call opened, let go: the peer closed, the microphone's light out, the voice stopped. */
+/** The microphone's tracks silenced while the call is muted, and sounding again once it is not. */
+function silenced(microphone: MediaStream, muted: boolean): void {
+  for (const track of microphone.getTracks()) track.enabled = !muted;
+}
+
+/**
+ * The meters' context, made and resumed in the press that starts the call,
+ * because Safari runs a context only from a gesture, as dictation's does;
+ * nothing where the page can make none, which leaves the rings still.
+ */
+function pressedContext(): AudioContext | undefined {
+  try {
+    const context = new AudioContext();
+    context.resume().catch(() => undefined);
+
+    return context;
+  } catch {
+    return undefined;
+  }
+}
+
+/** An analyzer hearing `stream` in `context`, connected to nothing else, so it measures and never plays. */
+function analyzerOf(context: AudioContext, stream: MediaStream): AnalyserNode {
+  const analyzer = context.createAnalyser();
+  analyzer.fftSize = ANALYZER_FFT_SIZE;
+  context.createMediaStreamSource(stream).connect(analyzer);
+
+  return analyzer;
+}
+
+/** Everything a call opened, let go: the peer closed, the microphone's light out, the voice stopped, the meters closed. */
 function release(standing: Standing): void {
   standing.peer.close();
 
   for (const track of standing.microphone.getTracks()) track.stop();
   standing.speaker.srcObject = null;
+  standing.meters?.context.close().catch(() => undefined);
 }
 
-/** The peer a call speaks over: the microphone's track out, the voice into the speaker, and the events channel. */
-function connect(microphone: MediaStream): Standing {
+/** The peer a call speaks over: the microphone's track out, the voice into the speaker and its meter, and the events channel. */
+function connect(microphone: MediaStream, context: AudioContext | undefined): Standing {
   const peer = new RTCPeerConnection();
   const speaker = new Audio();
   speaker.autoplay = true;
+
+  const meters: Meters | undefined =
+    context === undefined
+      ? undefined
+      : { context, you: analyzerOf(context, microphone), voice: undefined };
+
+  // Note that the voice is measured from its stream while the speaker plays it, so muting the speaker leaves its ring moving.
   peer.ontrack = (event) => {
-    speaker.srcObject = event.streams[0] ?? new MediaStream([event.track]);
+    const voice = event.streams[0] ?? new MediaStream([event.track]);
+    speaker.srcObject = voice;
+
+    if (meters !== undefined) meters.voice = analyzerOf(meters.context, voice);
   };
 
   for (const track of microphone.getTracks()) peer.addTrack(track, microphone);
   const channel = peer.createDataChannel(EVENTS_CHANNEL);
 
-  return { peer, channel, microphone, speaker };
+  return { peer, channel, microphone, speaker, meters };
+}
+
+/** How loud an analyzer hears its stream this frame, in the unit interval; silence where there is none yet. */
+function heard(analyzer: AnalyserNode | undefined, samples: Uint8Array<ArrayBuffer>): number {
+  if (analyzer === undefined) return 0;
+  analyzer.getByteTimeDomainData(samples);
+
+  return frameLevel(samples);
+}
+
+/**
+ * The call's levels for every mute that draws them: one loop on the
+ * window's frames, run while any mute listens and stopped once none does,
+ * reading the standing call's meters each frame, silence while none stands.
+ */
+function levelsOf(standing: { readonly current: Standing | undefined }): CallLevels {
+  const draws = new Set<(level: CallLevel) => void>();
+  const samples = new Uint8Array(ANALYZER_FFT_SIZE);
+  let level = SILENCE;
+  let frame = 0;
+
+  const read = () => {
+    const meters = standing.current?.meters;
+    level = {
+      you: Math.max(heard(meters?.you, samples), level.you * LEVEL_FALL),
+      voice: Math.max(heard(meters?.voice, samples), level.voice * LEVEL_FALL),
+    };
+
+    for (const draw of draws) draw(level);
+    frame = requestAnimationFrame(read);
+  };
+
+  return (draw) => {
+    draws.add(draw);
+
+    if (draws.size === 1) frame = requestAnimationFrame(read);
+
+    return () => {
+      draws.delete(draw);
+
+      if (draws.size > 0) return;
+      cancelAnimationFrame(frame);
+      level = SILENCE;
+    };
+  };
 }
 
 /**
@@ -180,6 +296,12 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
   // an answer arriving after the call was ended must find it gone.
   const generation = useRef(0);
   const standing = useRef<Standing | undefined>(undefined);
+  const [levels] = useState(() => levelsOf(standing));
+  // Note that the meters' context is held from the press until its peer takes it, because an end while the microphone is still asked for must close it too.
+  const pendingContext = useRef<AudioContext | undefined>(undefined);
+  // Note that the microphone's mute and the session's start are refs too, because the channel's handler reads them outside any render.
+  const microphoneMuted = useRef(false);
+  const sessionStarted = useRef(false);
 
   /** Lets the call go, where it is still the one standing. */
   const drop = (asked: number) => {
@@ -187,6 +309,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     generation.current += 1;
     const held = standing.current;
     standing.current = undefined;
+    pendingContext.current?.close().catch(() => undefined);
+    pendingContext.current = undefined;
 
     if (held !== undefined) release(held);
     setCall(undefined);
@@ -206,6 +330,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
       if (type === LIVE_EVENT.CLOSED) return drop(asked);
 
       if (type !== LIVE_EVENT.STARTED || generation.current !== asked) return;
+      sessionStarted.current = true;
+
+      if (microphoneMuted.current) tell(held, LIVE_EVENT.MUTE);
       setCall((last) =>
         last === undefined || last.stage !== VOICE_CALL_STAGE.CONNECTING
           ? last
@@ -225,7 +352,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
   };
 
   /** Opens the call the start asked for: the microphone, the peer, and the session. */
-  const open = async (asked: number, agentId: string) => {
+  const open = async (asked: number, agentId: string, context: AudioContext | undefined) => {
     const opened = await openMicrophone();
 
     if ("refused" in opened) {
@@ -244,7 +371,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
       return;
     }
 
-    const held = connect(opened.stream);
+    const held = connect(opened.stream, context);
+    pendingContext.current = undefined;
+    silenced(held.microphone, microphoneMuted.current);
     standing.current = held;
     listen(asked, held);
     const offer = await held.peer.createOffer();
@@ -289,6 +418,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     end();
     generation.current += 1;
     const asked = generation.current;
+    microphoneMuted.current = false;
+    sessionStarted.current = false;
     setCall({
       stage: VOICE_CALL_STAGE.CONNECTING,
       agentId: into.agentId,
@@ -298,16 +429,24 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
       microphoneMuted: false,
       speakerMuted: false,
     });
-    open(asked, into.agentId).catch((cause: unknown) =>
+    const context = pressedContext();
+    pendingContext.current = context;
+    open(asked, into.agentId, context).catch((cause: unknown) =>
       fail(asked, VOICE_CALL_NOTE.NOT_STARTED, cause),
     );
   };
 
+  // A mute pressed before the session started is kept, and told as it starts.
   const setMicrophoneMuted = (muted: boolean) => {
     const held = standing.current;
+    microphoneMuted.current = muted;
 
-    if (held === undefined || held.channel.readyState !== "open") return;
-    tell(held, muted ? LIVE_EVENT.MUTE : LIVE_EVENT.UNMUTE);
+    if (held !== undefined) silenced(held.microphone, muted);
+
+    if (held !== undefined && sessionStarted.current) {
+      tell(held, muted ? LIVE_EVENT.MUTE : LIVE_EVENT.UNMUTE);
+    }
+
     setCall((last) => last && { ...last, microphoneMuted: muted });
   };
 
@@ -343,7 +482,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     };
   }, []);
 
-  const value: VoiceCall = { call, start, end, setMicrophoneMuted, setSpeakerMuted };
+  const value: VoiceCall = { call, start, end, setMicrophoneMuted, setSpeakerMuted, levels };
 
   return <VoiceCallContext.Provider value={value}>{children}</VoiceCallContext.Provider>;
 }

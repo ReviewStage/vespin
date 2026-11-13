@@ -2,7 +2,7 @@
  * tasks.ts -- the task and the member a `vespin` command names: a task argument read as its id, its number, or its key, and the signed-in member's own id.
  *
  * A number or a key names a task of the workspace the command acts in
- * (`workspace.ts`), found through `plans.find` as a link's is; an id is
+ * (`workspace.ts`), found through `tasks.find` as a link's is; an id is
  * taken as it is, and the service answers one the member does not reach as
  * not found.
  */
@@ -31,7 +31,7 @@ export function resolveTaskId(argument: string) {
     const { workspace } = yield* resolveWorkspace;
     const { hosted } = yield* session;
 
-    const { taskId } = yield* askService(hosted.plans.find, {
+    const { taskId } = yield* askService(hosted.tasks.find, {
       workspace: workspace.id,
       number: String(ref.number),
     });

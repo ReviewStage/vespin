@@ -461,7 +461,7 @@ test("Home standing in a workspace the reader is no longer in stands under the w
 });
 
 test("a Home link to a workspace the reader is not in, pressed on an open task, leaves no row of the sidebar current under the not-found page", async () => {
-  const { document: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+  const { description: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
   first = stateWith(
     {},
     {
@@ -536,7 +536,7 @@ test("a link to a workspace the reader has since left, opened after a not-found 
 });
 
 test("a move from one open task to another keeps the task's page drawn, never its loading frame", async () => {
-  const { document: _document, ...one } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+  const { description: _document, ...one } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
   const other = { ...one, id: "b2000002-0000-4000-8000-0000000000f9", name: "Other", number: 77 };
 
   const openOn = (taskId: string): AppStateSnapshot => ({
@@ -602,7 +602,7 @@ function currentRows(): string[] {
 }
 
 test("a task pressed in the sidebar on Home is its row current while the host opens it, as the address already names it", async () => {
-  const { document: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+  const { description: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
   first = stateWith(
     {},
     {
@@ -633,7 +633,7 @@ test.each([
 ] as const)(
   "a task pressed in the sidebar on %s that the host refuses to open lands back where it was pressed",
   async (_from, at, other) => {
-    const { document: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
+    const { description: _document, ...listed } = { ...DOCUMENT_TASK, workspaceId: ACME.id };
 
     const open = {
       ...listed,

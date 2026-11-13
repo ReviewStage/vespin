@@ -3,10 +3,12 @@
 import assert from "node:assert/strict";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
+import type { AppStateDelivery, AppStateSnapshot } from "@repo/host/app-state";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
-import { handState } from "../testing/app-state.js";
+import { fakeAppBridge, fakeAppBridgeCalls } from "../testing/app-bridge.js";
+import { deliveryOf, handState, stateWith } from "../testing/app-state.js";
 import { withQueryClient } from "../testing/copy-feedback.js";
 import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
@@ -14,7 +16,7 @@ import { relayout } from "../testing/resize-observer.js";
 import { tasksControl } from "../testing/tasks-control.js";
 
 /**
- * sidebar-task-name.test.ts -- a sidebar task's name held to its row's one line: fading out where the row cuts it, never ending hard, and named whole by the row's hint while it is cut. Synthetic.
+ * sidebar-task-name.test.ts -- a sidebar task's name held to its row's one line: fading out where the row cuts it, never ending hard, and named whole by the row's hint while it is cut; and a rename delivered redrawing that row's words alone. Synthetic.
  */
 
 const WORKSPACE: Workspace = {
@@ -50,13 +52,13 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function task(id: string, name: string): TaskSummary {
+function task(id: string, name: string, updatedAt = 2): TaskSummary {
   return {
     id,
     workspaceId: WORKSPACE.id,
     name,
     createdAt: 1,
-    updatedAt: 2,
+    updatedAt,
     repository: "acme/relay",
   };
 }
@@ -121,4 +123,82 @@ test("a task name cut short by its row fades out where it is cut, and the row's 
   assert.equal(name.dataset.end, "fade");
   assert.equal(name.dataset.overflow, "true");
   assert.ok(pillOver(row)?.startsWith(LONG_NAME));
+});
+
+/** Main's document at `version` listing `tasks`, and the push that hands the window each later one as JSON crosses the bridge. */
+function handTasks(
+  tasks: readonly TaskSummary[],
+): (version: number, next: readonly TaskSummary[]) => void {
+  const listeners = new Set<(delivery: AppStateDelivery) => void>();
+
+  const documentOf = (version: number, listed: readonly TaskSummary[]): AppStateSnapshot => {
+    const idle = stateWith({}, {});
+
+    return { ...idle, version, tasks: { ...idle.tasks, tasks: listed } };
+  };
+
+  fakeAppBridge({
+    ...fakeAppBridgeCalls(),
+    requestAppState: () => Promise.resolve(documentOf(1, tasks)),
+    onAppState: (listener: (delivery: AppStateDelivery) => void) => {
+      listeners.add(listener);
+
+      return () => listeners.delete(listener);
+    },
+  });
+
+  return (version, next) => {
+    const delivery: AppStateDelivery = JSON.parse(
+      JSON.stringify(deliveryOf(documentOf(version, next))),
+    );
+
+    for (const listener of listeners) listener(delivery);
+  };
+}
+
+test("a delivery renaming one task changes that row's words alone, the other rows standing as they were", async () => {
+  const first = task("0a1b2c3d-0000-4000-8000-100000000001", "Ship the importer", 30);
+  const second = task("0a1b2c3d-0000-4000-8000-100000000002", "Retry webhooks", 20);
+  const third = task("0a1b2c3d-0000-4000-8000-100000000003", "Audit the cache", 10);
+  const deliver = handTasks([first, second, third]);
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+
+  const draw = (tasks: readonly TaskSummary[]) =>
+    root.render(
+      withQueryClient(
+        drawnSidebar(
+          sidebarProps(tasksControl({ tasks, workspaces: [WORKSPACE], workspace: WORKSPACE })),
+        ),
+      ),
+    );
+
+  const settle = () =>
+    act(async () => {
+      for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+    });
+
+  act(() => draw([first, second, third]));
+  await settle();
+  const rows = () => [...container.querySelectorAll<HTMLElement>(".sidebar-tasks > li")];
+  const before = rows();
+  assert.deepEqual(
+    before.map((row) => row.querySelector(".ui-list-row-title .ui-one-line")?.textContent),
+    ["Ship the importer", "Retry webhooks", "Audit the cache"],
+  );
+
+  const renamed = { ...second, name: "Retry webhooks with backoff" };
+  act(() => deliver(2, [first, renamed, third]));
+  act(() => draw([first, renamed, third]));
+  await settle();
+  const after = rows();
+
+  assert.deepEqual(
+    after.map((row) => row.querySelector(".ui-list-row-title .ui-one-line")?.textContent),
+    ["Ship the importer", "Retry webhooks with backoff", "Audit the cache"],
+  );
+  assert.equal(after[0], before[0]);
+  assert.equal(after[2], before[2]);
+  assert.equal(after[0]?.innerHTML, before[0]?.innerHTML);
 });

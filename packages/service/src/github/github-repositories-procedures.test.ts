@@ -338,7 +338,7 @@ function releaseSkillRead(sent: { readonly url: string }): Response | undefined 
     });
   }
 
-  const file = /^\/repos\/acme\/relay\/contents\/\.agents\/skills\/([a-z-]+)\/SKILL\.md$/u.exec(
+  const file = /^\/repos\/acme\/relay\/contents\/\.agents%2Fskills%2F([a-z-]+)%2FSKILL\.md$/u.exec(
     path,
   );
 
@@ -1300,7 +1300,7 @@ it.layer(getTestDB())("the repositories route", (it) => {
 
         assert.deepEqual(refused, unavailable);
         assert.deepEqual(held, unavailable);
-        assert.equal(logged.filter((line) => line.includes("GitHub answered 403")).length, 1);
+        assert.equal(logged.filter((line) => line.includes("GitHub App read failed")).length, 1);
         assert.equal(
           readOf(githubRepositoryPullRequestAnswerSchema, afresh).pullRequest?.title,
           "Send invitations in batches",
@@ -1745,11 +1745,11 @@ it.layer(getTestDB())("the repositories route", (it) => {
               });
             }
 
-            if (path === "/repos/acme/relay/git/ref/heads/main") {
+            if (path === "/repos/acme/relay/git/ref/heads%2Fmain") {
               return Response.json({ object: { type: "commit", sha: head } });
             }
 
-            if (path !== "/repos/acme/relay/contents/src/invite.ts") return undefined;
+            if (path !== "/repos/acme/relay/contents/src%2Finvite.ts") return undefined;
             const text = "export const seats = 3;\nexport const sent = 0;";
 
             return Response.json({

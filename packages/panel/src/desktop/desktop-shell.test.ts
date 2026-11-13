@@ -1531,7 +1531,7 @@ test("a plan's chip in a description's version history hangs the plan's card, as
           changes: 1,
         },
         current: true,
-        read: { kind: HISTORY_READ.READY, document: { body, assumptions: [] }, previous: null },
+        read: { kind: HISTORY_READ.READY, description: { body, assumptions: [] }, previous: null },
       },
     },
   });

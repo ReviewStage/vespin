@@ -1,27 +1,19 @@
 /* disclosure.css -- what of a fold its utilities (`disclosure.tsx`: the
-   summary in each look, the body at each inset) leave here: a card, on the
-   hover's wash inside a hairline, which a frame wears as a fold does; a
+   summary in each look, the body at each inset, a card's frame drawn by
+   `Card`) leave here: a card's type and focus ring, which a frame wears as a fold does; a
    head with controls of its own, laid out by subgrid and filled under the
    pointer through `:has()`; the chevron turned down while open, which the
    tests read here; and the motion a press plays as the body lands or
    leaves, which any fold built on `useDisclosureFold` shares. */
 
 @layer components {
-  /* A card, clipped to its corners so its head's hover fill follows them and
-     a ring inside it is drawn inside its control, in the caption's type; a
-     card whose head holds controls is its frame, so they stand inside it. */
+  /* A card's fold stands in a `Card` (`disclosure.tsx`), which draws its edge,
+     corner, ground, and clip; its words stand in the caption's type, and a
+     ring inside it is drawn inside its control. A card whose head holds
+     controls is its frame, so they stand inside it. */
   :is(.ui-disclosure, .ui-disclosure-frame):is([data-look="card"], [data-look="dock"]) {
     --ui-focus-ring-offset: var(--ui-focus-ring-inset);
-    overflow: clip;
-    border: 1px solid var(--ui-color-border);
-    border-radius: var(--ui-control-radius);
-    background: var(--ui-color-fill-hover);
     font-size: var(--ui-type-caption-size);
-  }
-
-  /* A dock stands on the card ground a list's card does, so two docks stacked over the composer read as one system. */
-  :is(.ui-disclosure, .ui-disclosure-frame)[data-look="dock"] {
-    background: var(--ui-color-surface);
   }
 
   /* A head with controls of its own (`DisclosureFrame`): one row of the
