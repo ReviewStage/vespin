@@ -50,7 +50,7 @@ import { useChosenWorkspace } from "../../chosen-workspace.js";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { useLiveFollow } from "../../host/live-follow.js";
-import { refusalOf, useWrite } from "../../use-write.js";
+import { refusalOf, useLatestWrites, useWrite } from "../../use-write.js";
 import { pickWorkspacePhoto } from "../../workspace-photo.js";
 import { selectPhotos, switcherWorkspace } from "../../workspace-switcher.js";
 
@@ -145,8 +145,9 @@ function WorkspacePage({ workspace }: { readonly workspace: Workspace }) {
   // Note that each refusal says why in place, in the host's words through the one write door, never an error's own text.
   const write = useWrite();
   const rename = useAsyncAction(() => ACT_UNREACHED_WORDS);
-  const people = useAsyncAction(() => ACT_UNREACHED_WORDS);
-  const invite = useAsyncAction(() => ACT_UNREACHED_WORDS);
+  // Note that a member's role or removal, and an invitation sent or canceled, each go at once, since the host draws them as they go and one on another row must not wait on it.
+  const people = useLatestWrites(() => ACT_UNREACHED_WORDS);
+  const invite = useLatestWrites(() => ACT_UNREACHED_WORDS);
   const leave = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const transfer = useAsyncAction(() => ACT_UNREACHED_WORDS);
   const photo = useAsyncAction(() => ACT_UNREACHED_WORDS);

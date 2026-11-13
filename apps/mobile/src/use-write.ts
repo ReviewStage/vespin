@@ -27,7 +27,7 @@ import { actRefusalSentence } from "@repo/host/contract";
 import { BUZZ, type Buzz, buzz, NOTICE_KIND, useFailureNotices } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Predicate } from "effect";
-import { useCallback, useEffect, useLayoutEffect, useRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs } from "./host/host-provider.js";
 
@@ -271,4 +271,62 @@ export function refusalOf<Answer>(
       said.words = words;
     },
   }).then(() => said.words);
+}
+
+/** Writes a screen sends one after another, and the refusal it says for them. */
+export interface LatestWrites<Refusal> {
+  /** Why the newest write was refused, until the next one is sent. */
+  readonly refusal: Refusal | undefined;
+  /** Sends `act` at once, even while an earlier one is out, and answers whether it went. */
+  readonly run: (act: () => PromiseLike<Refusal | undefined>) => Promise<boolean>;
+}
+
+/**
+ * Writes that each go out at once, the newest one's refusal kept to say, for
+ * acts the host declares, so their change is drawn as they are sent and a
+ * refusal rolls it back. Note that this is `useAsyncAction` without its lock,
+ * because a second pick or press while the first is out (an effort right after
+ * a model, or one member's role right after another's) is a write of its own,
+ * which the lock dropped unseen. An earlier write's refusal landing after a
+ * later write began is not said, as an agent's model picks keep only the
+ * latest's (`use-agent-model.ts`), though its caller still hears it refused.
+ */
+export function useLatestWrites<Refusal>(
+  unanswered: (cause: unknown) => Refusal,
+): LatestWrites<Refusal> {
+  const [refusal, setRefusal] = useState<Refusal | undefined>(undefined);
+  /** How many writes have been sent, so an answer to an earlier one is told apart from the newest. */
+  const sent = useRef(0);
+  const newestUnanswered = useRef(unanswered);
+  useEffect(() => {
+    newestUnanswered.current = unanswered;
+  }, [unanswered]);
+
+  const run = useCallback((act: () => PromiseLike<Refusal | undefined>): Promise<boolean> => {
+    sent.current += 1;
+    const write = sent.current;
+    setRefusal(undefined);
+
+    const settle = (said: Refusal | undefined): boolean => {
+      if (said !== undefined && write === sent.current) setRefusal(said);
+
+      return said === undefined;
+    };
+
+    let started: PromiseLike<Refusal | undefined>;
+
+    try {
+      started = act();
+    } catch (thrown) {
+      // Note that an act that throws before it starts anything is refused as one that rejects is.
+      started = Promise.reject(thrown);
+    }
+
+    return Promise.resolve(started).then(
+      (said) => settle(said ?? undefined),
+      (cause: unknown) => settle(newestUnanswered.current(cause)),
+    );
+  }, []);
+
+  return useMemo(() => ({ refusal, run }), [refusal, run]);
 }

@@ -43,13 +43,13 @@ import {
   Screen,
   SettingsForm,
   ToggleRow,
-  useAsyncAction,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Fragment, useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { effortOptions, modelOptions, useModelCatalog } from "../../tasks/use-start.js";
+import { useLatestWrites } from "../../use-write.js";
 
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
@@ -119,9 +119,10 @@ export default function AgentsScreen() {
   const { data: settings } = useQuery({ ...appStateQuery, select: selectAppSettingsView });
   const { data: capabilities = [] } = useQuery({ ...appStateQuery, select: selectCapabilities });
   const { data: account } = useQuery({ ...appStateQuery, select: selectAccount });
-  const write = useAsyncAction(rejectionWords);
-  const setting = useAsyncAction(rejectionWords);
-  // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was dropped or refused redraws its section, which reads the stored choice again.
+  // Note that each pick goes at once, even while an earlier one is out, such as an effort right after a model, since the host draws the default and a setting as they are sent.
+  const write = useLatestWrites(rejectionWords);
+  const setting = useLatestWrites(rejectionWords);
+  // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was refused redraws its section, which reads the stored choice again.
   const [defaultRound, setDefaultRound] = useState(0);
   const [settingRound, setSettingRound] = useState(0);
   // The setting last written, whose section says why a refusal was given; none once a model write came after it.
