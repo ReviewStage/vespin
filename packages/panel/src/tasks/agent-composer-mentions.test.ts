@@ -805,7 +805,7 @@ test("an @ in the box browses the account's connected MCP servers as one kind, a
 test("with Computer use on, an @ in the box offers the apps on this Mac, a pick sent as the app's mention by its bundle id", async () => {
   const sent: string[] = [];
 
-  const sender: MessageSender = (_agentId, text) => {
+  const sender: MessageSender = (_agentId, { text }) => {
     sent.push(text);
 
     return new Promise<AgentAgentAnswer>(ignore);
