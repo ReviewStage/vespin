@@ -494,6 +494,13 @@ function WideRail({
     return () => sized.disconnect();
   }, []);
 
+  // Note that lines arriving or going move every line's place without the column changing size, so they are read again, and an open stack put back at its line.
+  useLayoutEffect(() => {
+    layout.current = undefined;
+
+    if (opened.current) moveTo(inFront.current);
+  }, [marks]);
+
   // The stack opens and shuts where it stands, and follows the keys. Note that `moveTo` reads refs alone, so it is the same move on every draw.
   useLayoutEffect(() => {
     opened.current = open;
@@ -587,7 +594,11 @@ function WideRail({
         onKeyDown={(event) => field.onKeyDown(event)}
         onFocus={() => {
           measure();
-          setActive(pointed ? inFront.current : lastShown(marks));
+          // Note that the stack is put at the focus's line here, since the keys may hold that line already, which no draw would move it to.
+          const target = pointed ? inFront.current : lastShown(marks);
+
+          moveTo(target);
+          setActive(target);
           setShut(false);
           setFocused(true);
         }}
@@ -598,7 +609,15 @@ function WideRail({
       >
         {lines}
       </button>
-      <div ref={stack} id={listId} role="listbox" aria-label={RAIL_LABEL} className={STACK}>
+      <div
+        ref={stack}
+        id={listId}
+        role="listbox"
+        aria-label={RAIL_LABEL}
+        // Note that the stack stands drawn while it is shut, so a reader is kept from it until it opens.
+        aria-hidden={!open}
+        className={STACK}
+      >
         {options}
       </div>
     </nav>
