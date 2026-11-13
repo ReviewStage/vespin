@@ -1,0 +1,2 @@
+#8953 at 0ce6aa869, R1 bundle 77ed6fd8c (main 32a4961f0 + R1), iPhone 18 Pro light and dark, select8953.yaml, 0 failed steps.
+PASS: Select mode reads "1 selected" with a plain Done (no copper fill), the round check on the picked row, the scope bar intact, and Mark as read, Remind me and Resolve in the bottom bar. Same in both schemes. 26.5: not run (memory).

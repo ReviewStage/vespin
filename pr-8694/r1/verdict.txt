@@ -1,0 +1,3 @@
+#8694 at 23a395d5c, R1 bundle 77ed6fd8c, iPhone 18 Pro light, undo.yaml.
+Got it half: PASS. The notice is found by its words, Undo is pressed at once, and Got it comes back (got-it, got-it-undo, got-it-undone).
+Resolve half: FAIL, the same symptom as Nov 12. Resolve's notice shows ("Resolved "What the expired invite page says"" with Undo, resolve-undo). The tap on Undo lands, and the notice leaves. But the thread stays Resolved: its title still reads Resolved, and the reopened ⋯ has no Resolve item (step-038). So the step that checks that Resolve came back fails. The press's timing is fixed. What's left is that Undo of a Resolve doesn't take on the fixture, which is either the app's undo of resolve or the fixture's staged answer, and not the flow's timing.

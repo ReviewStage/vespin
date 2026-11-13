@@ -1,0 +1,3 @@
+#8967 at 614b5a5b4, R1 bundle 77ed6fd8c, iPhone 18 Pro light, tasks.yaml as a smoke run (perf PR: its verdict comes from the snappy agent's timing runs).
+OPEN (orchestrator 16:45 UTC): tasks-row-unread and tasks-row-read are byte-identical, and the unread dot still shows after the task is opened. A main-bundle control of tasks.yaml up to tasks-row-read is queued in round 2 to tell whether that's #8967 or main.
+The flow stopped at a stale step, not #8967: assertVisible "Relation, Sub-task of" (step 154), which no longer matches since #8903 made a picked relation a capsule. Sent to the switcher agent.
