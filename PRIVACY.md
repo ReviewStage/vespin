@@ -471,7 +471,7 @@ its dependencies installed, may also remain on a drive of its own made before
 workspace drives, which nothing reads or writes any more. A sandbox's own
 disk is discarded when it stops, so only its drive outlives it; a sandbox made
 before that changed keeps a snapshot of its disk instead.
-We use encryption in transit (TLS), encrypt saved credentials as described
+We use encryption in transit (TLS) and encrypt saved credentials as described
 above. Transcripts, descriptions, and other content are not
 end-to-end encrypted.
 
