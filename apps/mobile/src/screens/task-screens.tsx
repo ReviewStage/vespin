@@ -686,23 +686,20 @@ function dropOnto(group: TaskTreeGroup, listing: ReadListing): ((url: string) =>
   };
 }
 
-/** A group's rows, a task's sub-tasks folded under it, each parent opened and shut by its chevron. */
-function FoldedRows({
-  rows,
-  listing,
-}: {
-  readonly rows: TaskTreeGroup["rows"];
-  readonly listing: TasksListing;
-}) {
-  const keyed = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
+/** Which parents of a group stand open, and the toggle a parent's chevron calls. */
+type OpenedParents = {
+  readonly opened: ReadonlySet<string>;
+  readonly toggle: (taskId: string) => void;
+};
 
-  // Note that the rows' owner holds which parents stand open, rather than each row, since a recycled row draws another task once scrolled past.
+/**
+ * Which parents of a group stand open. Note that the group's owner holds it,
+ * rather than each row, since a recycled row draws another task once
+ * scrolled past, and rather than the rows, since a folded section drops its
+ * rows and a parent opened before the fold must stand open after it.
+ */
+function useOpenedParents(): OpenedParents {
   const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
-
-  const folded = useMemo(
-    () => foldedTaskRows(rows, (taskId) => opened.has(taskId)),
-    [rows, opened],
-  );
 
   const toggle = (taskId: string) =>
     setOpened((was) => {
@@ -712,6 +709,27 @@ function FoldedRows({
 
       return next;
     });
+
+  return { opened, toggle };
+}
+
+/** A group's rows, a task's sub-tasks folded under it, each parent opened and shut by its chevron. */
+function FoldedRows({
+  rows,
+  listing,
+  parents,
+}: {
+  readonly rows: TaskTreeGroup["rows"];
+  readonly listing: TasksListing;
+  readonly parents: OpenedParents;
+}) {
+  const keyed = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
+  const { opened, toggle } = parents;
+
+  const folded = useMemo(
+    () => foldedTaskRows(rows, (taskId) => opened.has(taskId)),
+    [rows, opened],
+  );
 
   return (
     <RowForEach data={folded} keyOf={(row) => row.task.id}>
@@ -732,6 +750,23 @@ function FoldedRows({
   );
 }
 
+/** One collection's rows alone, under no header, as the app sidebar picked it. */
+function CollectionRows({
+  collection,
+  listing,
+}: {
+  readonly collection: TaskTreeGroup;
+  readonly listing: TasksListing;
+}) {
+  const parents = useOpenedParents();
+
+  return (
+    <ListSection>
+      <FoldedRows rows={collection.rows} listing={listing} parents={parents} />
+    </ListSection>
+  );
+}
+
 /**
  * One group of the tree as its section: Pinned, Following, a section of the
  * member's, or a repository, folding under its header and count; My tasks
@@ -745,6 +780,8 @@ function GroupSection({
   readonly group: TaskTreeGroup;
   readonly listing: TasksListing;
 }) {
+  const parents = useOpenedParents();
+
   return (
     <ListSection
       title={group.title ?? listing.tree.tasksHead}
@@ -752,9 +789,16 @@ function GroupSection({
       foldable
       onDropLink={dropOnto(group, listing)}
     >
-      <FoldedRows rows={group.rows} listing={listing} />
+      <FoldedRows rows={group.rows} listing={listing} parents={parents} />
     </ListSection>
   );
+}
+
+/** Whether a task stands among a collection's rows, a sub-task under one of them included. */
+function inCollection(collection: TaskTreeGroup): (task: TaskSummary) => boolean {
+  const ids = new Set(collection.rows.map((row) => row.task.id));
+
+  return (task) => ids.has(task.id);
 }
 
 /** Whether the tree lists no task at all. */
@@ -784,7 +828,8 @@ type TasksTreeProps = {
  * the member's sections, and the repository groups, each folding under its
  * header and count, a task's sub-tasks folded under it; or one collection's
  * rows alone, under no header, where the app sidebar picked it; or, while a
- * search is typed, every task of the workspace it finds. A pull reads it again.
+ * search is typed, every task it finds, of the workspace or of the picked
+ * collection. A pull reads it again.
  */
 function TasksTree({
   listing,
@@ -795,7 +840,11 @@ function TasksTree({
   onSelect,
   onRefresh,
 }: TasksTreeProps) {
-  const { tree, found } = listing;
+  const { tree } = listing;
+
+  // Note that a search under a picked collection finds only that collection's tasks, as its title says.
+  const found =
+    collection === undefined ? listing.found : listing.found.filter(inCollection(collection));
 
   if (search.trim() !== "") {
     if (found.length === 0) {
@@ -818,9 +867,7 @@ function TasksTree({
 
     return (
       <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
-        <ListSection>
-          <FoldedRows rows={collection.rows} listing={listing} />
-        </ListSection>
+        <CollectionRows collection={collection} listing={listing} />
       </RowList>
     );
   }
