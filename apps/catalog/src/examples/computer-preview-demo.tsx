@@ -30,6 +30,7 @@ import {
   PictureTile,
   PlusIcon,
   Stack,
+  StaticChip,
   SUBMIT_STATE,
   TEXT_TONE,
   TEXT_VARIANT,
@@ -85,27 +86,27 @@ interface Live {
 
 /** The app's name, a chip on the Mac the agent uses that brings the app's own window forward, words elsewhere. */
 function AppName({ app, live }: { app: App; live: Live }): React.JSX.Element {
-  if (!live.onThatMac) {
-    return (
-      <span className="flex min-w-0 items-center gap-ui-6">
-        <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />
-        <Text variant={TEXT_VARIANT.LABEL} truncate>
-          {app.name}
-        </Text>
-      </span>
-    );
-  }
+  const face = (
+    <>
+      <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />
+      <ChipName>{app.name}</ChipName>
+    </>
+  );
 
-  return (
+  // Note that the name is the same chip on every device; only on the agent's Mac does it press.
+  return live.onThatMac ? (
     <Chip
       look={CHIP_LOOK.TOOLBAR}
       size={CHIP_SIZE.COMPACT}
       aria-label={`Show ${app.name} on your Mac`}
       onClick={ignore}
     >
-      <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />
-      <ChipName>{app.name}</ChipName>
+      {face}
     </Chip>
+  ) : (
+    <StaticChip look={CHIP_LOOK.TOOLBAR} size={CHIP_SIZE.COMPACT}>
+      {face}
+    </StaticChip>
   );
 }
 
@@ -153,10 +154,12 @@ function FrontCard({ live, children }: { live: Live; children: ReactNode }): Rea
       corner={CARD_CORNER.CONTROL}
       padding={CARD_PADDING.FLUSH}
       shadow={CARD_SHADOW.SOFT}
-      className={live.narrow ? "w-full" : "w-fit min-w-app-window-least max-w-cpo-wide"}
+      className={live.narrow ? "w-full" : "w-cpo-wide"}
     >
       {children}
-      <span className="flex justify-center bg-muted">
+      <span
+        className={`flex items-center justify-center bg-muted ${live.narrow ? "h-cpo-narrow" : "h-cpo-tall"}`}
+      >
         <PictureTile name={shown.name} face={PICTURE_TILE_FACE.FLUSH} onOpen={ignore}>
           <img
             className={`block h-auto w-auto max-w-full ${live.narrow ? "max-h-cpo-narrow" : "max-h-cpo-tall"}`}
@@ -202,12 +205,51 @@ function BehindTitle({
           {using ? <WorkingMark /> : null}
           {using ? null : (
             <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} truncate>
-              {LAST_DONE.get(app) ?? ""}
+              {LAST_DONE.get(app) ?? "Looked at the window"}
             </Text>
           )}
         </span>
       </CardPress>
     </Card>
+  );
+}
+
+/** "+N", a menu of the apps the stack has no room to show, each choice bringing it forward. */
+function MoreApps({
+  apps,
+  live,
+  onPick,
+}: {
+  apps: readonly App[];
+  live: Live;
+  onPick: (app: App) => void;
+}): React.JSX.Element {
+  const menu = useMenu(true);
+
+  return (
+    <>
+      <Chip look={CHIP_LOOK.TOOLBAR} size={CHIP_SIZE.COMPACT} chevron {...menu.trigger()}>
+        <ChipName>{`+${String(apps.length)}`}</ChipName>
+      </Chip>
+      {menu.drawn && (
+        <Menu
+          label="More apps this turn"
+          menu={menu.drawn}
+          groups={[
+            apps.map((app) => ({
+              label: app.name,
+              icon: <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />,
+              detail:
+                live.working && app === live.inUse
+                  ? "Using now"
+                  : (LAST_DONE.get(app) ?? "Looked at the window"),
+              onSelect: () => onPick(app),
+            })),
+          ]}
+          onClose={menu.close}
+        />
+      )}
+    </>
   );
 }
 
@@ -226,7 +268,7 @@ function Stacked({
   const counted = others.length - behind.length;
 
   return (
-    <div className={`flex flex-col ${live.narrow ? "w-full" : "w-fit max-w-cpo-wide"}`}>
+    <div className={`flex flex-col ${live.narrow ? "w-full" : "w-cpo-wide"}`}>
       {behind.toReversed().map((app, at) => (
         <BehindTitle
           key={app.name}
@@ -242,9 +284,7 @@ function Stacked({
             live={live}
             middle={
               counted > 0 ? (
-                <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED}>
-                  {`+${String(counted)}`}
-                </Text>
+                <MoreApps apps={others.slice(MOST_BEHIND)} live={live} onPick={onPick} />
               ) : null
             }
             onMinimize={onMinimize}
@@ -274,7 +314,10 @@ function AppsMenu({ live, onPick }: { live: Live; onPick: (app: App) => void }):
             live.used.map((app) => ({
               label: app.name,
               icon: <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />,
-              detail: live.working && app === live.inUse ? "Using now" : (LAST_DONE.get(app) ?? ""),
+              detail:
+                live.working && app === live.inUse
+                  ? "Using now"
+                  : (LAST_DONE.get(app) ?? "Looked at the window"),
               checked: app === live.shown,
               mark: MENU_ITEM_MARK.CHECK,
               onSelect: () => onPick(app),
@@ -331,6 +374,65 @@ function Control<Value extends string>({
   );
 }
 
+/** A synthetic app icon: a rounded square in one color with a white mark. */
+function iconOf(color: string, mark: string): string {
+  return `data:image/svg+xml,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="4" y="4" width="56" height="56" rx="13" fill="${color}"/>${mark}</svg>`,
+  )}`;
+}
+
+/** Every app the demo's agent may use, the three the mockups drew and more. */
+const ALL_APPS: readonly App[] = [
+  ...APPS,
+  {
+    name: "Notes",
+    icon: iconOf(
+      "#f5c542",
+      '<rect x="16" y="20" width="32" height="4" rx="2" fill="#fff"/><rect x="16" y="30" width="32" height="4" rx="2" fill="#fff"/><rect x="16" y="40" width="22" height="4" rx="2" fill="#fff"/>',
+    ),
+    window: APPS[2].window,
+    width: APPS[2].width,
+    height: APPS[2].height,
+  },
+  {
+    name: "Calculator",
+    icon: iconOf(
+      "#3a3a3c",
+      '<circle cx="24" cy="24" r="5" fill="#ff9f0a"/><circle cx="40" cy="24" r="5" fill="#fff"/><circle cx="24" cy="40" r="5" fill="#fff"/><circle cx="40" cy="40" r="5" fill="#ff9f0a"/>',
+    ),
+    window: APPS[1].window,
+    width: APPS[1].width,
+    height: APPS[1].height,
+  },
+  {
+    name: "Maps",
+    icon: iconOf("#34c759", '<path d="M18 46 L30 18 L34 30 L46 34 Z" fill="#fff"/>'),
+    window: APPS[2].window,
+    width: APPS[2].width,
+    height: APPS[2].height,
+  },
+  {
+    name: "Music",
+    icon: iconOf(
+      "#ff375f",
+      '<circle cx="26" cy="42" r="6" fill="#fff"/><rect x="30" y="16" width="4" height="26" fill="#fff"/><rect x="30" y="16" width="14" height="4" fill="#fff"/>',
+    ),
+    window: APPS[0].window,
+    width: APPS[0].width,
+    height: APPS[0].height,
+  },
+  {
+    name: "Figma",
+    icon: iconOf(
+      "#1e1e1e",
+      '<circle cx="38" cy="32" r="7" fill="#1abcfe"/><rect x="19" y="14" width="14" height="12" rx="6" fill="#f24e1e"/><rect x="19" y="26" width="14" height="12" rx="6" fill="#a259ff"/><rect x="19" y="38" width="14" height="12" rx="6" fill="#0acf83"/>',
+    ),
+    window: APPS[0].window,
+    width: APPS[0].width,
+    height: APPS[0].height,
+  },
+];
+
 export function ComputerPreviewDemo(): React.JSX.Element {
   const [design, setDesign] = useState<Design>(DESIGN.STACKED);
   const [theme, setTheme] = useState<Theme>(openingTheme);
@@ -359,7 +461,11 @@ export function ComputerPreviewDemo(): React.JSX.Element {
 
   // Note that the agent moving on brings its new app to the front, newest first in the stack.
   const useNext = () => {
-    const next = APPS[(APPS.indexOf(inUse) + 1) % APPS.length] ?? XCODE;
+    const fresh = ALL_APPS.find((app) => !used.includes(app));
+    const next =
+      (working ? fresh : undefined) ??
+      ALL_APPS[(ALL_APPS.indexOf(inUse) + 1) % ALL_APPS.length] ??
+      XCODE;
     const startsTurn = !working;
     setUsed(startsTurn ? [next] : [next, ...used.filter((app) => app !== next)]);
     setInUse(next);
@@ -367,7 +473,19 @@ export function ComputerPreviewDemo(): React.JSX.Element {
     setWorking(true);
 
     if (startsTurn) setMinimized(false);
-    setLines([...lines, `${LAST_DONE.get(next) ?? "Used"} in ${next.name}`]);
+    setLines([...lines, `${LAST_DONE.get(next) ?? "Looked at the window"} in ${next.name}`]);
+  };
+
+  // Note that every app not yet used this turn is used at once, the last of them in front.
+  const useEvery = () => {
+    const fresh = ALL_APPS.filter((app) => !used.includes(app));
+    const last = fresh.at(-1);
+
+    if (!working || last === undefined) return;
+    setUsed([...fresh.toReversed(), ...used]);
+    setInUse(last);
+    setShown(last);
+    setLines([...lines, ...fresh.map((app) => `Looked at the window in ${app.name}`)]);
   };
 
   const stop = () => {
@@ -443,6 +561,11 @@ export function ComputerPreviewDemo(): React.JSX.Element {
           <Button variant={BUTTON_VARIANT.OUTLINE} onClick={useNext}>
             Agent uses the next app
           </Button>
+          {working ? (
+            <Button variant={BUTTON_VARIANT.OUTLINE} onClick={useEvery}>
+              Agent uses every app
+            </Button>
+          ) : null}
           {working ? (
             <Button variant={BUTTON_VARIANT.OUTLINE} onClick={stop}>
               Agent finishes
