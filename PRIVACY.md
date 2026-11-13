@@ -489,8 +489,8 @@ provide the Service. Deleting a task deletes it at once with its history,
 pages, inbox items, and pictures, and its agents' transcripts. Deleting an
 agent deletes its transcript at once. Deleting an agent asks Vercel to delete
 its sandbox and the drive holding its checkout; where that fails or does not
-finish in time, the delete goes ahead anyway, and the drive may remain.
-Archiving an agent deletes neither: its sandbox and drive are deleted once
+finish in time, the delete goes ahead anyway, and the sandbox and drive may
+remain. Archiving an agent deletes neither: its sandbox and drive are deleted once
 they have gone seven days unused, as any agent's are. A sandbox keeps no snapshot; the snapshots of one made
 before that changed otherwise expire and are removed seven days after they
 were last used. The workspace's drive of every
