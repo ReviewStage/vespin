@@ -10,9 +10,9 @@
  * reply (`changedFiles`, `@repo/features/turn-files-wire`), the same diff
  * the Turn changes tab draws, so the two agree; a turn with none kept, as
  * one from before the summary or a Mac's host older than it, draws none.
- * The count names no file: a press on it opens the turn's changes on its
- * first file, where the Turn changes tab names them all, and it stands as
- * words where no such tab opens from here. A line count of zero is not
+ * The count names no file: a press on it opens the turn's changes, where
+ * the Turn changes tab names them all, and it stands as words where no
+ * such tab opens from here. A line count of zero is not
  * written, so a turn that only added reads as its added lines alone.
  */
 
@@ -45,9 +45,8 @@ export function TurnFilesRow({
   const lines = useContext(TurnFilesOnContext);
   const agentId = useContext(TranscriptAgent);
   const changed = message.changedFiles;
-  const first = changed?.files[0];
 
-  if (lines === undefined || changed === undefined || first === undefined) return null;
+  if (lines === undefined || changed === undefined || changed.total === 0) return null;
   const line = lines.get(message.id);
   const openTurn = doors.onOpenTurnChanges;
 
@@ -67,7 +66,7 @@ export function TurnFilesRow({
       {openTurn === undefined || agentId === undefined || line === undefined ? (
         totals
       ) : (
-        <TextButton onClick={() => openTurn(agentId, line, first.path)}>{totals}</TextButton>
+        <TextButton onClick={() => openTurn(agentId, line)}>{totals}</TextButton>
       )}
     </span>
   );
