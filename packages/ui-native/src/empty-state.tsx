@@ -1,23 +1,11 @@
-// empty-state.tsx -- what a screen or a column says when it has nothing to show, laid out as the system's own ContentUnavailableView lays it out, or the system's spinner over its words while what it shows is still read.
+// empty-state.tsx -- what a screen or a column says when it has nothing to show, in the system's own ContentUnavailableView, or the system's spinner over its words while what it shows is still read.
 
-import { Image, ProgressView, Text, VStack } from "@expo/ui/swift-ui";
-import {
-  accessibilityHidden,
-  font,
-  foregroundStyle,
-  frame,
-  multilineTextAlignment,
-  padding,
-  tint,
-} from "@expo/ui/swift-ui/modifiers";
-import { Fragment } from "react";
+import { ContentUnavailableView, ProgressView, Text } from "@expo/ui/swift-ui";
+import { font, foregroundStyle, frame, tint } from "@expo/ui/swift-ui/modifiers";
 import { BUTTON_LOOK, Button, type ButtonLook } from "./button.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
-
-/** The room between the glyph, the title, the line, and the act, as the system's view stands them. */
-const EMPTY_SPACING = 12;
 
 export type EmptyStateProps = {
   readonly title: string;
@@ -52,14 +40,12 @@ function LoadingState({ title }: { readonly title: string }) {
 }
 
 /**
- * An empty screen's glyph, title, line, and the act that fills it; or, while
- * it reads, the spinner and its title. Note that it stacks them itself, as
- * the system's ContentUnavailableView does (a large muted glyph, a bold
- * title, a muted line), because that view takes only an SF Symbol and the
- * glyph is the panel's own Lucide one. Note too that the stack is drawn anew
- * whenever its title or line changes, keyed by both, because `@expo/ui`'s
- * native text keeps the words it first stood with when only its props change,
- * so Search went on saying what it finds after a query that found nothing.
+ * An empty screen's glyph, title, line, and the act that fills it, in the
+ * system's own ContentUnavailableView, as Mail and Notes say a list is empty;
+ * or, while it reads, the spinner and its title. Note that the view takes the
+ * panel's own Lucide glyph from the asset catalog, and its title and line in
+ * the brand's inks, through the app's `@expo/ui` patch
+ * (`patches/@expo__ui@58.0.27.patch`).
  */
 export function EmptyState({
   title,
@@ -71,51 +57,27 @@ export function EmptyState({
   const colors = useColors();
 
   if (loading) return <LoadingState title={title} />;
-  const centered = multilineTextAlignment("center");
+  const image = glyphImage(symbol);
 
   return (
-    <Fragment key={description ?? ""}>
-      <VStack
-        key={title}
-        spacing={EMPTY_SPACING}
-        modifiers={[
-          padding({ all: EMPTY_SPACING * 2 }),
-          frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
-        ]}
-      >
-        <Image
-          {...glyphImage(symbol)}
-          color={colors.TEXT_MUTED}
-          modifiers={[font({ textStyle: "largeTitle", weight: "regular" }), accessibilityHidden()]}
-        />
-        <Text
-          modifiers={[
-            font({ textStyle: "title2", weight: "bold" }),
-            foregroundStyle(colors.TEXT),
-            centered,
-          ]}
-        >
-          {title}
-        </Text>
-        {description === undefined ? null : (
-          <Text
-            modifiers={[
-              font({ textStyle: "callout" }),
-              foregroundStyle(colors.TEXT_MUTED),
-              centered,
-            ]}
-          >
-            {description}
-          </Text>
-        )}
-        {action === undefined ? null : (
+    <ContentUnavailableView
+      title={title}
+      {...("assetName" in image ? { image: image.assetName } : { systemImage: image.systemName })}
+      description={description ?? ""}
+      primaryColor={colors.TEXT}
+      secondaryColor={colors.TEXT_MUTED}
+      modifiers={[
+        frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+      ]}
+      actions={
+        action === undefined ? undefined : (
           <Button
             label={action.label}
             onPress={action.onPress}
             look={action.look ?? BUTTON_LOOK.PROMINENT}
           />
-        )}
-      </VStack>
-    </Fragment>
+        )
+      }
+    />
   );
 }
