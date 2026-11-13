@@ -109,7 +109,8 @@ export const AUTOMATION_TOOL_REFUSAL = {
   UNREADABLE_CREATE:
     `Not made: give a name of at most ${AUTOMATION_BOUNDS.MAX_NAME_CHARS} characters, a prompt ` +
     `of at most ${AUTOMATION_BOUNDS.MAX_PROMPT_CHARS}, and a trigger: a schedule as ` +
-    '{"kind":"schedule","cron":"<five-field cron>","timezone":"<IANA zone>"}, a GitHub event ' +
+    '{"kind":"schedule","cron":"<five-field cron>","timezone":"<IANA zone>"} or once as ' +
+    '{"kind":"schedule","at":"<YYYY-MM-DDTHH:mm>","timezone":"<IANA zone>"}, a GitHub event ' +
     'as {"kind":"github","event":"<event>"}, or a Sentry event as ' +
     '{"kind":"integration","provider":"sentry","event":"alert-triggered"}; and a model with its ' +
     "effort, both or neither.",
@@ -137,6 +138,8 @@ export const AUTOMATION_TOOL_REFUSAL = {
   TIMEZONE:
     "Not run: the schedule's time zone is not one the IANA database names, such as Europe/London.",
   TOO_FREQUENT: "Not run: a schedule may fire at most once every fifteen minutes.",
+  AT: "Not run: a one-time schedule's at is not a real date and time as YYYY-MM-DDTHH:mm, such as 2026-11-27T09:00.",
+  PAST: "Not run: a one-time schedule's at has already passed in its time zone; give one still to come.",
   SENTRY_UNCONFIGURED:
     `Not run: this deployment of ${PRODUCT_NAME} has no Sentry integration configured, so no automation ` +
     "here may fire on Sentry's events; use a schedule or a GitHub event instead.",
@@ -178,8 +181,9 @@ const PROMPT = describeWire(
 );
 
 const TRIGGER = describeWire(
-  Schema.Union([scheduleTriggerSchema, githubTriggerSchema, sentryTriggerSchema]),
-  "cron: five fields in an IANA timezone, at most every fifteen minutes. GitHub senders " +
+  Schema.Union([...scheduleTriggerSchema.members, githubTriggerSchema, sentryTriggerSchema]),
+  "cron: five fields in an IANA timezone, at most every fifteen minutes; or at, a date and " +
+    "time on that zone's clock, to run once, after which it is paused. GitHub senders " +
     "default to people, moments (pull-request-updated only) to all, drafts and forks to false. " +
     "Sentry: prefer alert-triggered, fired by an alert rule whose action is " +
     `"Send a notification via ${PRODUCT_NAME}"; issue-created fires on every new issue. A ` +
@@ -471,13 +475,16 @@ function automationReading(summary: AutomationSummary, whole: boolean): WireReco
 
 /** The schedule's refusal in the model's words, where the trigger is a schedule that does not read. */
 const scheduleRefused = (
-  trigger: { readonly kind: string } & Partial<{ cron: string; timezone: string }>,
+  trigger: { readonly kind: string } & Partial<{ cron: string; at: string; timezone: string }>,
 ) =>
   Effect.map(Clock.currentTimeMillis, (now) => {
     if (trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE) return undefined;
+    const timezone = trigger.timezone ?? "";
 
     const read = readSchedule(
-      { cron: trigger.cron ?? "", timezone: trigger.timezone ?? "" },
+      trigger.at === undefined
+        ? { cron: trigger.cron ?? "", timezone }
+        : { at: trigger.at, timezone },
       new Date(now),
     );
 
@@ -488,7 +495,11 @@ const scheduleRefused = (
         return AUTOMATION_TOOL_REFUSAL.TIMEZONE;
       case SCHEDULE_REFUSAL.TOO_FREQUENT:
         return AUTOMATION_TOOL_REFUSAL.TOO_FREQUENT;
-      default:
+      case SCHEDULE_REFUSAL.AT:
+        return AUTOMATION_TOOL_REFUSAL.AT;
+      case SCHEDULE_REFUSAL.PAST:
+        return AUTOMATION_TOOL_REFUSAL.PAST;
+      case SCHEDULE_REFUSAL.CRON:
         return AUTOMATION_TOOL_REFUSAL.CRON;
     }
   });

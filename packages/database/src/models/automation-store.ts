@@ -567,6 +567,17 @@ const writeNextRun = SqlSchema.void({
     Database.use((db) => db.update(automation).set({ nextRunAt }).where(eq(automation.id, id))),
 });
 
+const writeSpent = SqlSchema.void({
+  Request: Schema.String,
+  execute: (id) =>
+    Database.use((db) =>
+      db
+        .update(automation)
+        .set({ enabled: false, nextRunAt: null })
+        .where(and(eq(automation.id, id), eq(automation.enabled, true))),
+    ),
+});
+
 const findAutomationToRun = SqlSchema.findOneOption({
   Request: Schema.String,
   Result: AutomationRowSchema,
@@ -1284,6 +1295,14 @@ export function advanceAutomationSchedule(
   nextRunAt: Date | null,
 ): TaskStoreEffect<void> {
   return writeNextRun({ id, nextRunAt });
+}
+
+/**
+ * Pauses an automation whose one-time schedule has run, so it shows as
+ * having run and is due never again; one already paused stays as it is.
+ */
+export function pauseSpentAutomation(id: string): TaskStoreEffect<void> {
+  return writeSpent(id);
 }
 
 /** The agents the automation's runs fired at or after `since` started, and that stand still. */

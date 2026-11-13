@@ -20,6 +20,8 @@ import {
   PULL_REQUEST_DEFAULT_MOMENTS,
   PULL_REQUEST_MOMENT,
   type PullRequestMoment,
+  type ScheduleTrigger,
+  scheduleRunsOnce,
 } from "./automation-wire.js";
 import { readerZone } from "./date-mention.js";
 import { GLYPH_STATE, GLYPH_STATE_WORDS, STOPPED_WORDS } from "./glyph-state.js";
@@ -36,7 +38,9 @@ import { andList, orList } from "./words.js";
  * doubt, so the list falls into the workspace's automations, then the
  * account's personal ones, and each row names its owner besides. A schedule
  * is said in words where its cron is one the picker writes, and as its cron
- * otherwise, with its zone named by its city; a GitHub event as what happens
+ * otherwise, a one-time one as the date and time it runs on, read off its
+ * own spelling, its year named only where it is not this one, with its
+ * zone named by its city; a GitHub event as what happens
  * and where, a webhook as its call, and an integration's event with the
  * projects, environments, and levels it keeps to. Nothing here formats a date:
  * when a row's next run falls is handed back as an instant for the window to
@@ -177,6 +181,8 @@ export const AUTOMATION_NEXT = {
   EVENT: "event",
   /** Its schedule has no next run. */
   UNSCHEDULED: "unscheduled",
+  /** It ran once, as its one-time schedule asked, and was paused for having run. */
+  RAN: "ran",
   /** It is due at an instant. */
   AT: "at",
 } as const;
@@ -185,6 +191,7 @@ export type AutomationNext =
   | { readonly kind: typeof AUTOMATION_NEXT.OFF }
   | { readonly kind: typeof AUTOMATION_NEXT.EVENT }
   | { readonly kind: typeof AUTOMATION_NEXT.UNSCHEDULED }
+  | { readonly kind: typeof AUTOMATION_NEXT.RAN }
   | { readonly kind: typeof AUTOMATION_NEXT.AT; readonly at: number };
 
 /** One owner's automations, in the order the service listed them. */
@@ -192,6 +199,25 @@ export interface AutomationGroup {
   readonly owner: AutomationScope;
   readonly automations: readonly AutomationSummary[];
 }
+
+/** The months as a one-time schedule names them, January first. */
+const MONTH_NAMES = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+] as const;
+
+/** A one-time schedule's date and time as it is read: `YYYY-MM-DDTHH:mm`. */
+const ONCE_AT = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/u;
 
 /** A whole number a cron field spells, or nothing for any other field. */
 function cronNumber(field: string | undefined): number | undefined {
@@ -269,6 +295,30 @@ function scheduleText(cron: string, timezone: string, reader: string): string {
   return name === undefined ? `${spelled}${cronZone}` : `${name} at ${at}${zone}`;
 }
 
+/**
+ * A one-time schedule in words, "Once · Nov 27, 9:00 AM", its year named
+ * where it is not the year `now` falls in, and its zone where it is not the
+ * reader's.
+ */
+function onceText(at: string, timezone: string, reader: string, now: Date): string {
+  const spelled = ONCE_AT.exec(at);
+  const [, year, month, day, hour, minute] = spelled?.map(Number) ?? [];
+  const monthName = month === undefined ? undefined : MONTH_NAMES[month - 1];
+
+  if (monthName === undefined || hour === undefined || minute === undefined) return `Once · ${at}`;
+  const thisYear = year === now.getFullYear() ? "" : `, ${year}`;
+  const zone = timezone === reader ? "" : ` ${zoneWords(timezone)}`;
+
+  return `Once · ${monthName} ${day}${thisYear}, ${clockText(hour, minute)}${zone}`;
+}
+
+/** A schedule in words: once on its date, or on its cron. */
+function scheduleTriggerText(trigger: ScheduleTrigger, reader: string): string {
+  return scheduleRunsOnce(trigger)
+    ? onceText(trigger.at, trigger.timezone, reader, new Date())
+    : scheduleText(trigger.cron, trigger.timezone, reader);
+}
+
 /** Who owns an automation; one a service before scopes answered is its creator's own. */
 export function automationOwner(automation: AutomationSummary): AutomationScope {
   return automation.scope ?? AUTOMATION_SCOPE.PERSONAL;
@@ -299,7 +349,7 @@ export function automationTriggerText(
 ): string {
   switch (trigger.kind) {
     case AUTOMATION_TRIGGER.SCHEDULE:
-      return scheduleText(trigger.cron, trigger.timezone, reader);
+      return scheduleTriggerText(trigger, reader);
     case AUTOMATION_TRIGGER.GITHUB: {
       const words = GITHUB_EVENT_WORDS[trigger.event];
       // Note that each list is read in its own order and once, because a trigger may name one twice.
@@ -387,12 +437,28 @@ export function automationRunStanding(run: AutomationRunSummary | null): Automat
   }
 }
 
-/** When an automation runs next: off before any instant, since it fires at all, and an event's trigger has none to name. */
+/**
+ * When an automation runs next: off before any instant, since it fires at
+ * all, ran where a one-time schedule paused it once its run came, and an
+ * event's trigger has none to name.
+ */
 export function automationNext(automation: AutomationSummary): AutomationNext {
+  const { trigger, lastRun } = automation;
+  const scheduled = trigger.kind === AUTOMATION_TRIGGER.SCHEDULE;
+
+  // Note that a one-time automation turned off after its schedule fired was paused for having run, since nothing else fires it on its schedule.
+  if (
+    !automation.enabled &&
+    scheduled &&
+    scheduleRunsOnce(trigger) &&
+    lastRun?.firing.kind === AUTOMATION_FIRING.SCHEDULE
+  ) {
+    return { kind: AUTOMATION_NEXT.RAN };
+  }
+
   if (!automation.enabled) return { kind: AUTOMATION_NEXT.OFF };
 
-  if (automation.trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE)
-    return { kind: AUTOMATION_NEXT.EVENT };
+  if (!scheduled) return { kind: AUTOMATION_NEXT.EVENT };
 
   if (automation.nextRunAt === null) return { kind: AUTOMATION_NEXT.UNSCHEDULED };
 

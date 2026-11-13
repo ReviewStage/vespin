@@ -31,7 +31,10 @@ import {
   type IntegrationTriggerFilters,
   PULL_REQUEST_DEFAULT_MOMENTS,
   type PullRequestMoment,
+  type ScheduleTrigger,
+  scheduleRunsOnce,
 } from "./automation-wire.js";
+import { dateLabel, dateOfWords, dateWall } from "./date-mention.js";
 import type { ModelChoice } from "./models-wire.js";
 import { formatCount } from "./number-format.js";
 import { PRODUCT_NAME } from "./product-name.js";
@@ -45,8 +48,8 @@ import {
  * automation-draft-model.ts -- an automation as its editor holds it while it is written: its trigger, a schedule in the picker's terms, a GitHub event, or a webhook, the task, the repository, and the owner, with what stops it saving and the write that saves it.
  *
  * The picker writes a schedule as a kind and a time, every hour, every day,
- * on weekdays, or on one day of the week, and keeps a cron it did not write
- * as it was, so opening an automation made elsewhere never rewrites its
+ * on weekdays, on one day of the week, or once on a date, and keeps a cron
+ * it did not write as it was, so opening an automation made elsewhere never rewrites its
  * schedule. A GitHub event is chosen by its kind, any label or branch filter
  * it was given kept as it was, since the editor does not show them; a
  * webhook is its kind alone, its secret the service's; an integration's
@@ -65,6 +68,8 @@ export const SCHEDULE_KIND = {
   DAILY: "daily",
   WEEKDAYS: "weekdays",
   WEEKLY: "weekly",
+  /** One date and time, after which it runs no more. */
+  ONCE: "once",
   /** A cron the picker did not write, kept as it was. */
   CUSTOM: "custom",
 } as const;
@@ -85,12 +90,14 @@ export const DRAFT_FIELD = {
 
 type DraftField = (typeof DRAFT_FIELD)[keyof typeof DRAFT_FIELD];
 
-/** A schedule as the picker holds it: the kind, the time of day, the day of the week cron numbers, and the cron a custom one keeps. */
+/** A schedule as the picker holds it: the kind, the time of day, the day of the week cron numbers, the date a one-time one runs on, and the cron a custom one keeps. */
 export interface ScheduleDraft {
   readonly kind: ScheduleKind;
   readonly hour: number;
   readonly minute: number;
   readonly weekday: number;
+  /** The day a one-time schedule runs on, `YYYY-MM-DD`; empty until one is picked. */
+  readonly date: string;
   readonly cron: string;
 }
 
@@ -180,6 +187,7 @@ const NEW_SCHEDULE: ScheduleDraft = {
   hour: 9,
   minute: 0,
   weekday: 1,
+  date: "",
   cron: "0 9 * * 1-5",
 };
 
@@ -188,7 +196,12 @@ const SCHEDULE_REFUSAL_WORDS = {
   [SCHEDULE_REFUSAL.CRON]: `That isn't a schedule ${PRODUCT_NAME} can read.`,
   [SCHEDULE_REFUSAL.TIMEZONE]: "Pick a time zone.",
   [SCHEDULE_REFUSAL.TOO_FREQUENT]: "It can run at most every 15 minutes.",
+  [SCHEDULE_REFUSAL.AT]: "Pick the date it runs on.",
+  [SCHEDULE_REFUSAL.PAST]: "That time has passed. Pick one still to come.",
 } as const satisfies Record<ScheduleRefusal, string>;
+
+/** A one-time schedule's date and time as it is read: `YYYY-MM-DDTHH:mm`. */
+const ONCE_AT = /^(\d{4}-\d{2}-\d{2})T(\d{2}):(\d{2})$/u;
 
 /** A whole number a cron field spells, within its bounds, or nothing for any other field. */
 function cronNumber(field: string | undefined, most: number): number | undefined {
@@ -335,11 +348,7 @@ function filtersAdmitted(filters: IntegrationTriggerFilters | undefined): boolea
 export function draftTrigger(draft: AutomationDraft): AutomationTrigger {
   switch (draft.triggerKind) {
     case AUTOMATION_TRIGGER.SCHEDULE:
-      return {
-        kind: AUTOMATION_TRIGGER.SCHEDULE,
-        cron: cronOf(draft.schedule),
-        timezone: draft.timezone,
-      };
+      return scheduleOf(draft);
     case AUTOMATION_TRIGGER.GITHUB: {
       const { senders, moments, drafts, forks } = draft.githubSettings;
       // The moments speak to an update alone, so no other event carries them.
@@ -400,7 +409,75 @@ export function scheduleDraftOf(cron: string): ScheduleDraft {
     : { ...at, kind: SCHEDULE_KIND.WEEKLY, weekday: weekday % 7 };
 }
 
-/** The cron a schedule draft spells. */
+/** The date and time a one-time schedule draft spells: `YYYY-MM-DDTHH:mm`, read in the draft's zone. */
+function atOf(schedule: ScheduleDraft): string {
+  const pad = (value: number) => String(value).padStart(2, "0");
+
+  return `${schedule.date}T${pad(schedule.hour)}:${pad(schedule.minute)}`;
+}
+
+/** The schedule a draft writes: its date and time where it runs once, its cron otherwise, in its zone. */
+export function scheduleOf(draft: AutomationDraft): ScheduleTrigger {
+  const { schedule, timezone } = draft;
+
+  return schedule.kind === SCHEDULE_KIND.ONCE
+    ? { kind: AUTOMATION_TRIGGER.SCHEDULE, at: atOf(schedule), timezone }
+    : { kind: AUTOMATION_TRIGGER.SCHEDULE, cron: cronOf(schedule), timezone };
+}
+
+/** What a schedule draft spells, its date and time where it runs once and its cron otherwise: what two drafts compare. */
+function scheduleSpelling(schedule: ScheduleDraft): string {
+  return schedule.kind === SCHEDULE_KIND.ONCE ? atOf(schedule) : cronOf(schedule);
+}
+
+/** The schedule a trigger reads as in the picker's terms: its date and time where it runs once, its cron read as `scheduleDraftOf` reads one otherwise. */
+export function scheduleDraftOfTrigger(trigger: ScheduleTrigger): ScheduleDraft {
+  if (!scheduleRunsOnce(trigger)) return scheduleDraftOf(trigger.cron);
+  const spelled = ONCE_AT.exec(trigger.at);
+
+  if (spelled === null) return { ...NEW_SCHEDULE, kind: SCHEDULE_KIND.ONCE };
+  const [, date = "", hour, minute] = spelled;
+
+  return {
+    ...NEW_SCHEDULE,
+    kind: SCHEDULE_KIND.ONCE,
+    date,
+    hour: Number(hour),
+    minute: Number(minute),
+  };
+}
+
+/**
+ * A schedule moved to another kind. One moved to Once with no date yet
+ * runs on the day after `now` in the draft's zone, at the time it had, so
+ * the picker opens on a time still to come.
+ */
+export function withScheduleKind(
+  draft: AutomationDraft,
+  kind: ScheduleKind,
+  now: Date,
+): ScheduleDraft {
+  const { schedule } = draft;
+
+  if (kind !== SCHEDULE_KIND.ONCE || schedule.date !== "") return { ...schedule, kind };
+  const tomorrow = dateOfWords("tomorrow", now.getTime(), draft.timezone)?.start ?? "";
+
+  return { ...schedule, kind, date: tomorrow };
+}
+
+/** The day a one-time schedule's date field reads typed words as, `YYYY-MM-DD`, counted from `now` in `zone` as a date mention's are ("Nov 27", "next fri"); nothing for words that name no day. */
+export function onceDateOf(words: string, now: Date, zone: string): string | undefined {
+  const span = dateOfWords(words, now.getTime(), zone);
+
+  return span === undefined ? undefined : dateWall(span, zone)?.start.day;
+}
+
+/** A one-time schedule's day as its field says it: "Nov 27, 2026"; nothing while none is picked. */
+export function onceDateText(date: string): string {
+  return date === "" ? "" : dateLabel({ start: date });
+}
+
+/** The cron a schedule draft spells; a one-time one spells none, and keeps the cron it had. */
 export function cronOf(schedule: ScheduleDraft): string {
   const { minute, hour } = schedule;
 
@@ -413,6 +490,7 @@ export function cronOf(schedule: ScheduleDraft): string {
       return `${minute} ${hour} * * 1-5`;
     case SCHEDULE_KIND.WEEKLY:
       return `${minute} ${hour} * * ${schedule.weekday}`;
+    case SCHEDULE_KIND.ONCE:
     case SCHEDULE_KIND.CUSTOM:
       return schedule.cron.trim();
   }
@@ -458,7 +536,7 @@ export function automationDraft(
 
   return {
     name: automation.name,
-    schedule: scheduled ? scheduleDraftOf(trigger.cron) : NEW_SCHEDULE,
+    schedule: scheduled ? scheduleDraftOfTrigger(trigger) : NEW_SCHEDULE,
     timezone: scheduled ? trigger.timezone : defaults.timezone,
     prompt: automation.action.prompt,
     triggerKind: trigger.kind,
@@ -498,11 +576,17 @@ export function repositoryHeld(automation: AutomationSummary | undefined): boole
 /**
  * What stops a draft saving, at the field it is about: a name and a task
  * written, a schedule we read and that fires no more often than its
- * floor, an integration's filters within their bounds and its cooldown a
+ * floor, a one-time one's date and time still to come unless it stands as
+ * `opened` had it, so a spent one may still be renamed, an integration's filters within their bounds and its cooldown a
  * whole number of hours up to a week, and a repository chosen for a GitHub
  * trigger, whose events come from it, where none is held (`repositoryHeld`).
  */
-export function draftProblems(draft: AutomationDraft, held: boolean, now: Date): DraftProblems {
+export function draftProblems(
+  draft: AutomationDraft,
+  held: boolean,
+  now: Date,
+  opened?: AutomationDraft,
+): DraftProblems {
   const name = textProblem(
     draft.name,
     AUTOMATION_BOUNDS.MAX_NAME_CHARS,
@@ -517,10 +601,17 @@ export function draftProblems(draft: AutomationDraft, held: boolean, now: Date):
     `Keep the prompt under ${formatCount(AUTOMATION_BOUNDS.MAX_PROMPT_CHARS)} characters.`,
   );
 
-  const read = readSchedule({ cron: cronOf(draft.schedule), timezone: draft.timezone }, now);
+  const read = readSchedule(scheduleOf(draft), now);
+
+  // Note that a one-time schedule already spent is no problem where it stands as it opened, because only moving it or turning it on sets it to run.
+  const spent =
+    Result.isFailure(read) &&
+    read.failure === SCHEDULE_REFUSAL.PAST &&
+    opened !== undefined &&
+    sameScheduleOf(draft, opened);
 
   const schedule =
-    draft.triggerKind === AUTOMATION_TRIGGER.SCHEDULE && Result.isFailure(read)
+    draft.triggerKind === AUTOMATION_TRIGGER.SCHEDULE && Result.isFailure(read) && !spent
       ? SCHEDULE_REFUSAL_WORDS[read.failure]
       : draft.triggerKind === AUTOMATION_TRIGGER.GITHUB
         ? githubSettingsProblem(draft)
@@ -560,6 +651,15 @@ export function draftProblems(draft: AutomationDraft, held: boolean, now: Date):
   return problems;
 }
 
+/** Whether two drafts' schedules say the same: the same kind of spelling, spelled alike, in one zone. */
+function sameScheduleOf(one: AutomationDraft, other: AutomationDraft): boolean {
+  return (
+    (one.schedule.kind === SCHEDULE_KIND.ONCE) === (other.schedule.kind === SCHEDULE_KIND.ONCE) &&
+    scheduleSpelling(one.schedule) === scheduleSpelling(other.schedule) &&
+    one.timezone === other.timezone
+  );
+}
+
 /** What stops a GitHub trigger's settings saving: no one whose events fire it, or an update at no moment. */
 function githubSettingsProblem(draft: AutomationDraft): string | undefined {
   const { senders, moments } = draft.githubSettings;
@@ -578,7 +678,7 @@ function githubSettingsProblem(draft: AutomationDraft): string | undefined {
 /** The next instants a draft's schedule is due after `now`, as many as asked; none for one we cannot read. */
 export function draftNextRuns(draft: AutomationDraft, now: Date, count: number): readonly number[] {
   if (draft.triggerKind !== AUTOMATION_TRIGGER.SCHEDULE) return [];
-  const schedule = { cron: cronOf(draft.schedule), timezone: draft.timezone };
+  const schedule = scheduleOf(draft);
   const runs: number[] = [];
   let after = now;
 
@@ -635,8 +735,7 @@ export function sameDraft(one: AutomationDraft, other: AutomationDraft): boolean
       (one.guards.maxConcurrentRuns === other.guards.maxConcurrentRuns &&
         one.guards.dailyRunCap === other.guards.dailyRunCap &&
         one.guards.subjectCooldownHours === other.guards.subjectCooldownHours)) &&
-    cronOf(one.schedule) === cronOf(other.schedule) &&
-    one.timezone === other.timezone &&
+    sameScheduleOf(one, other) &&
     one.repository === other.repository &&
     one.owner === other.owner &&
     one.target === other.target &&
@@ -662,8 +761,7 @@ export function changeOf(
   const was = automationDraft(automation, defaults);
 
   const scheduleMoved =
-    draft.triggerKind === AUTOMATION_TRIGGER.SCHEDULE &&
-    (cronOf(draft.schedule) !== cronOf(was.schedule) || draft.timezone !== was.timezone);
+    draft.triggerKind === AUTOMATION_TRIGGER.SCHEDULE && !sameScheduleOf(draft, was);
 
   // Note that filters let go of on the way to another event and back are a change, because the editor then shows none.
   const eventMoved =

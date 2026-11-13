@@ -22,6 +22,7 @@ import {
   type AutomationTrigger,
   automationTriggerSchema,
   GITHUB_TRIGGER_EVENT,
+  scheduleRunsOnce,
 } from "@repo/features/automation-wire";
 import { CLI_EXIT } from "@repo/features/cli-exit";
 import { SENTRY_TRIGGER_EVENT, TRIGGER_PROVIDER } from "@repo/features/trigger-catalog";
@@ -190,7 +191,9 @@ const choiceOf = Effect.fnUntraced(function* (
 function triggerWords(trigger: AutomationTrigger): string {
   switch (trigger.kind) {
     case AUTOMATION_TRIGGER.SCHEDULE:
-      return `${trigger.cron} (${trigger.timezone})`;
+      return scheduleRunsOnce(trigger)
+        ? `once at ${trigger.at} (${trigger.timezone})`
+        : `${trigger.cron} (${trigger.timezone})`;
     case AUTOMATION_TRIGGER.GITHUB:
       return `github ${trigger.event}`;
     case AUTOMATION_TRIGGER.WEBHOOK:

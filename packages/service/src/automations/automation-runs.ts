@@ -34,6 +34,7 @@ import {
   type AutomationRunReason,
   GITHUB_TRIGGER_EVENT,
   type GitHubTriggerEvent,
+  scheduleRunsOnce,
 } from "@repo/features/automation-wire";
 import {
   GITHUB_ACCESS,
@@ -180,15 +181,22 @@ function subjectTitle(firing: AutomationFiring): string | undefined {
   return named.slice(0, AGENT_BOUNDS.MAX_TITLE_CHARS).trim();
 }
 
+/** The schedule a run's prompt names: its cron or its one date and time, in its zone, where the trigger is still a schedule. */
+function scheduleWords(trigger: Automation["trigger"]): string {
+  if (trigger.kind !== AUTOMATION_TRIGGER.SCHEDULE) return "its schedule";
+
+  return scheduleRunsOnce(trigger)
+    ? `its one-time schedule (${trigger.at} in ${trigger.timezone})`
+    : `its schedule (\`${trigger.cron}\` in ${trigger.timezone})`;
+}
+
 /** Why this run was fired, in the words the agent's prompt closes with. */
 function firingSentence(automation: Automation, run: ActedRun): string {
   const { firing } = run;
 
   switch (firing.kind) {
     case AUTOMATION_FIRING.SCHEDULE:
-      return automation.trigger.kind === AUTOMATION_TRIGGER.SCHEDULE
-        ? `its schedule (\`${automation.trigger.cron}\` in ${automation.trigger.timezone}) was due at ${new Date(firing.dueAt).toISOString()}`
-        : `its schedule was due at ${new Date(firing.dueAt).toISOString()}`;
+      return `${scheduleWords(automation.trigger)} was due at ${new Date(firing.dueAt).toISOString()}`;
     case AUTOMATION_FIRING.MANUAL:
       return "its owner asked for a run now";
     case AUTOMATION_FIRING.GITHUB:
