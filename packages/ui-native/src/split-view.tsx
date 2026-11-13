@@ -22,6 +22,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
 import type { Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
+import type { MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 
 /** What the first column holds, so it is drawn afresh as that changes. */
@@ -42,11 +43,7 @@ export type BarAction = {
 export type BarMenu = {
   readonly label: string;
   readonly symbol: Glyph;
-  readonly choices: readonly {
-    readonly label: string;
-    readonly on: boolean;
-    readonly onPress: () => void;
-  }[];
+  readonly choices: readonly MenuChoice[];
   readonly actions: readonly {
     readonly label: string;
     readonly symbol: Glyph;
@@ -114,7 +111,7 @@ export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
       {menu.choices.map((choice) => (
         <Toggle
           key={choice.label}
-          label={choice.label}
+          {...actContent(choice.label, choice.symbol)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />
