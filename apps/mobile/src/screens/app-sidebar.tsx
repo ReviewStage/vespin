@@ -14,7 +14,7 @@ import {
   WorkspaceSwitcherItem,
 } from "@repo/ui-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { type ReactNode, useCallback, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { useInboxBadge } from "../inbox/use-inbox.js";
 import { useOpenSettings, useSettingsAccount } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
@@ -135,6 +135,8 @@ export function useAppSidebar(
   // Note that a pick stands selected at once, until the route moves or this screen next gains focus, because each tab draws its own sidebar, and the tab left behind drew its own place again for the frames before the window swapped.
   const [tapped, setTapped] = useState<TappedRow | undefined>(undefined);
   useFocusEffect(useCallback(() => setTapped(undefined), []));
+  // Note that a moved route drops the hold outright, so a later return to the selection it was made over can't raise it again.
+  useEffect(() => setTapped(undefined), [routed]);
   const selected = tapped !== undefined && tapped.over === routed ? tapped.id : routed;
 
   const pick = (id: string) => {
