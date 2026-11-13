@@ -34,7 +34,9 @@ import { OneLine } from "../one-line/one-line.js";
  * name, and words, the line under the pointer in front and those either
  * side fainter, the stack gliding on the app's spring as the
  * pointer moves; a press asks the caller to go to the line under it
- * (`onJump`). The rail is one Tab stop, steering the stack as a field
+ * (`onJump`). The pointer may cross onto the stack, which then holds still,
+ * and press any pill shown in it, the pill under it standing at full
+ * strength. The rail is one Tab stop, steering the stack as a field
  * steers a menu (`useComboboxField`): it opens as the keyboard reaches it,
  * its arrows walking the lines and Enter going to one.
  *
@@ -106,19 +108,16 @@ const BUBBLE =
 /** How many pills stand either side of the line in front. */
 const STACK_REACH = 3;
 
-/** The gap between two pills, in pixels, as `--ui-space-4`. */
-const STACK_GAP = 4;
-
 /** How much fainter each pill stands for each line it is from the one in front, so one just past the stack's ends is gone. */
 const STACK_FADE = 1 / (STACK_REACH + 1);
 
-/** The stack beside the rail, its middle moved to the line in front; it takes no pointer, which scrubs the rail and presses it. */
+/** The stack beside the rail, its middle moved to the line in front; only its shown pills take the pointer. */
 const STACK =
   "pointer-events-none absolute top-0 left-ui-24 transition-transform duration-(--ui-duration-pane) ease-spring";
 
-/** A pill's place in the stack, moved by its transform and opacity on the app's spring. */
+/** A pill's place in the stack, gliding on the app's spring and fading at once; its padding is the gap to the next pill, so the pointer crosses from one to the next without leaving the stack. */
 const PILL_PLACE =
-  "absolute top-0 left-0 origin-left transition-[transform,opacity] duration-(--ui-duration-pane) ease-spring";
+  "pointer-events-none absolute top-0 left-0 origin-left cursor-press py-ui-2 transition-transform duration-(--ui-duration-pane) ease-spring";
 
 const PILL_WORDS = "flex max-w-popover-wide items-center gap-ui-6 px-ui-4 text-caption";
 
@@ -327,6 +326,11 @@ const StackPill = memo(function StackPill({
   );
 });
 
+/** How strong a line's pill stands with the line in front at `active`: full in front, fainter by each line away. */
+function pillFade(index: number, active: number): number {
+  return Math.max(0, 1 - Math.abs(index - active) * STACK_FADE);
+}
+
 /** How many lines from the one in front a line stands, held to just past the stack's ends, so a pill past the stack waits there and slides in from there rather than across the column. */
 function stackPlace(index: number, active: number): number {
   return Math.max(-STACK_REACH - 1, Math.min(index - active, STACK_REACH + 1));
@@ -335,9 +339,9 @@ function stackPlace(index: number, active: number): number {
 /**
  * Moves the pills near the line in front, and those near where it was, to
  * where it stands now: each to its place in the stack, fainter by its
- * distance. Note that only these are written, as their own transform and
- * opacity, so the pointer crossing a line restyles a few pills rather than
- * the rail.
+ * distance, taking the pointer only while it shows. Note that only these are
+ * written, as their own transform, opacity, and pointer, so the pointer
+ * crossing a line restyles a few pills rather than the rail.
  */
 function placeStack(
   pills: readonly (HTMLElement | null)[],
@@ -355,8 +359,11 @@ function placeStack(
     const element = pills[index];
 
     if (element == null) continue;
-    element.style.transform = `translateY(${at * (pill + STACK_GAP) - pill / 2}px)`;
-    element.style.opacity = String(open ? Math.max(0, 1 - Math.abs(at) * STACK_FADE) : 0);
+    const fade = open ? pillFade(index, to) : 0;
+
+    element.style.transform = `translateY(${at * pill - pill / 2}px)`;
+    element.style.opacity = String(fade);
+    element.style.pointerEvents = fade > 0 ? "auto" : "none";
   }
 }
 
@@ -385,7 +392,7 @@ const RailLine = memo(function RailLine({
 /** A pill before the stack first opens: below the stack's end, and gone. */
 const PILL_WAITING: React.CSSProperties = { opacity: 0, transform: "translateY(0px)" };
 
-/** A line's pill as an option of the stack; it draws once, and draws again only as the keys name it selected or not; the line in front moves it (`placeStack`). */
+/** A line's pill as an option of the stack, pressed to go to its line; it draws once, and draws again only as the keys name it selected or not; the line in front moves it (`placeStack`), and the pointer resting on it brings it to full strength (`onHover`). */
 const StackOption = memo(function StackOption({
   mark,
   index,
@@ -393,6 +400,7 @@ const StackOption = memo(function StackOption({
   selected,
   pills,
   onChoose,
+  onHover,
 }: {
   mark: TranscriptRailMark;
   index: number;
@@ -400,6 +408,7 @@ const StackOption = memo(function StackOption({
   selected: boolean;
   pills: RefObject<(HTMLElement | null)[]>;
   onChoose: (index: number) => void;
+  onHover: (index: number, on: boolean) => void;
 }): React.JSX.Element {
   const hold = useCallback(
     (element: HTMLElement | null) => {
@@ -420,6 +429,8 @@ const StackOption = memo(function StackOption({
       className={PILL_PLACE}
       style={PILL_WAITING}
       onClick={() => onChoose(index)}
+      onPointerEnter={() => onHover(index, true)}
+      onPointerLeave={() => onHover(index, false)}
     >
       <StackPill mark={mark} />
     </div>
@@ -472,7 +483,7 @@ function WideRail({
 
     if (read === undefined || box === null || to < 0) return;
     const pill = pillHeight.current;
-    const span = STACK_REACH * (pill + STACK_GAP) + pill;
+    const span = STACK_REACH * pill + pill;
     const center = Math.max(span, Math.min(read.middles[to] ?? 0, read.room - span));
     placeStack(pills.current, placed.current < 0 ? to : placed.current, to, opened.current, pill);
     box.style.transform = `translateY(${center}px)`;
@@ -542,6 +553,14 @@ function WideRail({
     },
   });
 
+  // Note that a pill under the pointer stands at full strength until the pointer leaves it or the stack moves.
+  const hover = useCallback((index: number, on: boolean) => {
+    const element = pills.current[index];
+
+    if (element == null || !opened.current) return;
+    element.style.opacity = String(on ? 1 : pillFade(index, placed.current));
+  }, []);
+
   const selected = open && focused ? active : -1;
 
   const lines = useMemo(
@@ -560,9 +579,10 @@ function WideRail({
           selected={index === selected}
           pills={pills}
           onChoose={choose}
+          onHover={hover}
         />
       )),
-    [marks, listId, selected, choose],
+    [marks, listId, selected, choose, hover],
   );
 
   // The line under the pointer, read off where the lines were laid out as the hover began.
@@ -586,7 +606,11 @@ function WideRail({
         setShut(false);
         setPointed(true);
       }}
-      onPointerMove={(event) => point(event.clientY)}
+      // Note that the stack holds still while the pointer stands on it, so a pill can be reached and pressed.
+      onPointerMove={(event) => {
+        if (event.target instanceof Node && stack.current?.contains(event.target)) return;
+        point(event.clientY);
+      }}
       onPointerLeave={() => setPointed(false)}
     >
       <Bubble bubble={bubble} inset="left-ui-2 w-ui-20" />
