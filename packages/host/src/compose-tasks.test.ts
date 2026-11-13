@@ -1511,6 +1511,44 @@ it.effect(
 );
 
 it.effect(
+  "a block added on a service whose rows name no blocks keeps the open task's other blockers",
+  () =>
+    Effect.gen(function* () {
+      const design = "5d2c8e1f-7a3b-4c9d-8e6f-1a2b3c4d5e6f";
+
+      const service = fakeService([
+        { ...task(INVITES, "Teammate invitations", "# Draft", 10), blockedBy: [design] },
+        task(BILLING, "Billing", "# Draft", 11),
+        task(design, "Design", "# Draft", 12),
+      ]);
+
+      const { call, listed, openTask, description } = yield* subject(service);
+      yield* call("TASKS_REFRESH", undefined);
+      yield* listed();
+      yield* openTask(INVITES);
+
+      const adding = yield* Effect.forkChild(
+        call("TASKS_BLOCK", {
+          taskId: INVITES,
+          block: {
+            change: TASK_BLOCK_CHANGE.ADD,
+            relation: TASK_BLOCK_RELATION.BLOCKED_BY,
+            taskId: BILLING,
+          },
+        }),
+      );
+
+      yield* Fiber.join(adding);
+      yield* listed();
+
+      assert.deepEqual(
+        [...(description(INVITES)?.blockedBy ?? [])].sort(),
+        [design, BILLING].sort(),
+      );
+    }),
+);
+
+it.effect(
   "a block turned around between two tasks draws on both at once, and a refusal takes both back",
   () =>
     Effect.gen(function* () {
@@ -1527,7 +1565,9 @@ it.effect(
         plans: service.tasks.map((each) => ({
           ...rowOfTask(each),
           blocked: each.id === INVITES,
-          ...(each.id === INVITES ? { blockedBy: [BILLING] } : { blocks: [INVITES] }),
+          ...(each.id === INVITES
+            ? { blockedBy: [BILLING], blocks: [] }
+            : { blockedBy: [], blocks: [INVITES] }),
         })),
       });
       yield* nextPoll(settled);

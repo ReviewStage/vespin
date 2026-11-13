@@ -490,22 +490,32 @@ interface RelationChange {
 }
 
 /** `ids` with `id` added at its end or taken away, as a block is. */
-function blockIdsMoved(ids: readonly string[] | undefined, id: string, added: boolean): string[] {
-  const rest = (ids ?? []).filter((each) => each !== id);
+function blockIdsMoved(ids: readonly string[], id: string, added: boolean): string[] {
+  const rest = ids.filter((each) => each !== id);
 
   return added ? [...rest, id] : rest;
 }
 
-/** What a block added or taken away leaves of either task's lists of blocks: the waiting task's `blockedBy`, and the blocker's `blocks`. */
+/**
+ * What a block added or taken away leaves of either task's lists of blocks:
+ * the waiting task's `blockedBy`, and the blocker's `blocks`. Note that a
+ * row that carries no list, from a service before rows carried them, is
+ * left without one, because the change drawn over nothing would read as the
+ * whole list and hide the blocks the row never named.
+ */
 function blockListFields(
   row: PlanRow,
   waiting: string,
   blocker: string,
   added: boolean,
 ): Partial<PlanRow> {
-  if (row.id === waiting) return { blockedBy: blockIdsMoved(row.blockedBy, blocker, added) };
+  if (row.id === waiting && row.blockedBy !== undefined) {
+    return { blockedBy: blockIdsMoved(row.blockedBy, blocker, added) };
+  }
 
-  if (row.id === blocker) return { blocks: blockIdsMoved(row.blocks, waiting, added) };
+  if (row.id === blocker && row.blocks !== undefined) {
+    return { blocks: blockIdsMoved(row.blocks, waiting, added) };
+  }
 
   return {};
 }
