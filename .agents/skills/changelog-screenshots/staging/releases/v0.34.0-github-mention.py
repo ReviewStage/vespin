@@ -140,7 +140,7 @@ def abstract(css):
 <style>
 html,body{{margin:0;background:var(--bgColor-default) !important}}
 body{{width:1200px;height:796px;display:flex;align-items:center;justify-content:center;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans",Helvetica,Arial,sans-serif;font-size:14px;color:var(--fgColor-default);-webkit-font-smoothing:antialiased}}
-.col{{width:760px;zoom:1.32;position:relative}}
+.col{{width:730px;zoom:1.5;position:relative}}
 .col:before{{content:"";position:absolute;left:72px;top:40px;bottom:40px;width:2px;background:var(--borderColor-muted)}}
 .tl-item{{display:flex;gap:16px;margin-bottom:22px;position:relative}}
 .tl-item:last-child{{margin-bottom:0}}
