@@ -198,7 +198,11 @@ function BehindTitle({
       <CardPress label={WORDS.FORWARD(app.name)} onPress={() => onPick(app.name)}>
         <span className="flex min-w-0 items-center gap-ui-6 pt-ui-4 pb-ui-12 ps-ui-8 pe-ui-8">
           <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />
-          <Text variant={TEXT_VARIANT.LABEL} tone={using ? undefined : TEXT_TONE.MUTED} truncate>
+          <Text
+            variant={TEXT_VARIANT.LABEL}
+            tone={using ? TEXT_TONE.DEFAULT : TEXT_TONE.MUTED}
+            truncate
+          >
             {app.name}
           </Text>
           {using ? <WorkingMark /> : null}
