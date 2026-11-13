@@ -60,6 +60,7 @@ import {
 } from "@repo/database/models/voice-calls";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
+import type { Sandbox } from "@repo/sandbox";
 import { send } from "@vercel/queue";
 import {
   Cause,
@@ -77,11 +78,13 @@ import {
   Schema,
   Stream,
 } from "effect";
+import type { HttpClient } from "effect/http";
 import { ownApiKeyOf } from "../accounts/own-api-key.js";
 import { harnessOf } from "../agents/coder-host/native-runtime.js";
 import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../auth/auth-deployment.js";
 import { HostedEnvironment } from "../environment.js";
 import { recordServerEventIn, SERVER_EVENT, voiceCallDurationOf } from "../events/server-events.js";
+import type { GitHubApp } from "../github/github-app.js";
 import { logStoreFailure } from "../http/store-failure.js";
 import { QUEUE_ACKNOWLEDGED, queueConsumer } from "../queues/queue-consumer.js";
 import {
@@ -92,11 +95,17 @@ import {
   sessionGone,
 } from "./live-sideband.js";
 import { VOICE_CALL_LEASE } from "./voice-call-bounds.js";
+import { voiceCallDelegations } from "./voice-call-delegations.js";
 
 const MS_PER_SECOND = 1_000;
 
-/** What a lease's delivery runs against: the store, and the deployment's environment the caller's key is opened under. */
-export type VoiceCallLeaseServices = DatabaseServices | HostedEnvironment;
+/** What a lease's delivery runs against: the store, the deployment's environment the caller's key is opened under, and what sending a line to the agent reaches. */
+export type VoiceCallLeaseServices =
+  | DatabaseServices
+  | HostedEnvironment
+  | HttpClient.HttpClient
+  | GitHubApp
+  | Sandbox;
 
 /** How a lease ended. */
 export const VOICE_CALL_HELD = {
@@ -132,17 +141,29 @@ export interface VoiceCallLease extends VoiceCallLeaseMessage {
 export interface VoiceCallHolder {
   /** The call's row as this lease claimed it, under the epoch it holds. */
   readonly call: VoiceCallRow;
+  /** Whether this lease still holds the call, read now, which fences an act that says nothing to the session. A holder told no lets go. */
+  readonly holds: Effect.Effect<boolean, StoreFailure, DatabaseServices>;
   /** The event sent where this lease still holds the call, read just before; whether it was. A holder told no lets go. */
   readonly send: (event: {
     readonly type: string;
   }) => Effect.Effect<boolean, StoreFailure, DatabaseServices>;
 }
 
-/** What a holder does with each event the session says before it closes: at least once, under a key of the event's own. */
+/**
+ * What a holder does once it holds the call: with each event the session
+ * says before it closes, at least once, under a key of the event's own; and
+ * beside them, for as long as the lease holds, what it follows of its own,
+ * which ends only once it finds the lease lost.
+ */
+export interface VoiceCallObserving<R> {
+  readonly observe: (event: LiveEvent) => Effect.Effect<void, StoreFailure, R>;
+  readonly beside: Effect.Effect<void, StoreFailure, R>;
+}
+
+/** How a holder sets out to observe the call, once, as it claims it. */
 export type VoiceCallObserver<R> = (
-  event: LiveEvent,
   holder: VoiceCallHolder,
-) => Effect.Effect<void, StoreFailure, R>;
+) => Effect.Effect<VoiceCallObserving<R>, StoreFailure, R>;
 
 /** A lease's message the queue did not take. */
 export class VoiceCallLeaseNotPublished extends Data.TaggedError("VoiceCallLeaseNotPublished")<{
@@ -165,7 +186,8 @@ interface VoiceCallLeasesService {
 }
 
 /** An observer that does nothing with what it hears: the call is held, handed over, and ended, and nothing more. */
-export const observeNothing: VoiceCallObserver<never> = () => Effect.void;
+export const observeNothing: VoiceCallObserver<never> = () =>
+  Effect.succeed({ observe: () => Effect.void, beside: Effect.never });
 
 /**
  * The call's row deleted, and, where this delete is the one that took it,
@@ -306,6 +328,7 @@ export const holdVoiceCall = Effect.fn("voice/holdVoiceCall")(function* <R>(
 
       const holder: VoiceCallHolder = {
         call,
+        holds: stillHolds,
         send: (event) =>
           Effect.gen(function* () {
             if (!(yield* stillHolds)) return false;
@@ -315,13 +338,15 @@ export const holdVoiceCall = Effect.fn("voice/holdVoiceCall")(function* <R>(
           }),
       };
 
+      const observing = yield* observe(holder);
+
       const listened = Effect.gen(function* () {
         let seconds = Option.none<number>();
         let closed = false;
 
         yield* Stream.runForEachWhile(sideband.events, (event) => {
           if (event.type !== LIVE_SIDEBAND_EVENT.CLOSED) {
-            return Effect.map(observe(event, holder), () => !lost);
+            return Effect.map(observing.observe(event), () => !lost);
           }
 
           closed = true;
@@ -373,14 +398,17 @@ export const holdVoiceCall = Effect.fn("voice/holdVoiceCall")(function* <R>(
         return VOICE_CALL_HELD.CLOSED;
       });
 
-      return yield* Effect.raceFirst(listened, held);
+      // What the observer follows of its own ends only where it found the lease lost.
+      const beside = Effect.as(observing.beside, VOICE_CALL_HELD.STALE);
+
+      return yield* Effect.raceFirst(Effect.raceFirst(listened, held), beside);
     }),
   );
 });
 
-/** One delivery of a lease, as the queue hands its message, held with nothing observed beyond the call's end. */
+/** One delivery of a lease, as the queue hands its message, held with the call's delegations run (`voice-call-delegations.ts`). */
 const consumeVoiceCallLease = (lease: VoiceCallLease) =>
-  holdVoiceCall(lease, observeNothing).pipe(
+  holdVoiceCall(lease, voiceCallDelegations).pipe(
     Effect.annotateLogs({ callId: lease.callId, epoch: lease.epoch }),
   );
 

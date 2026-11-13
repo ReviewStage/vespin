@@ -1,20 +1,12 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
-import {
-  claimVoiceCallLease,
-  insertVoiceCall,
-  readVoiceCall,
-} from "@repo/database/models/voice-calls";
-import { agentTable } from "@repo/database/schemas/agent";
-import { conversations } from "@repo/database/schemas/storage";
+import { claimVoiceCallLease, readVoiceCall } from "@repo/database/models/voice-calls";
 import { hostedUsage } from "@repo/database/schemas/usage";
-import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
-import { getTestDB, openAgentOnOwnTask, openWorkspace } from "@repo/database/testing";
-import { LIVE_VOICE } from "@repo/features/voices";
-import type { WireValue } from "@repo/wire";
+import { getTestDB } from "@repo/database/testing";
+import { memorySandbox } from "@repo/sandbox/testing";
 import { eq } from "drizzle-orm";
-import { type Cause, Deferred, Effect, Fiber, Layer, Option, Queue, Stream } from "effect";
+import { Deferred, Effect, Fiber, Layer, Option, Queue } from "effect";
 import { TestClock } from "effect/testing";
 import { HostedEnvironment } from "../environment.js";
 import {
@@ -23,8 +15,14 @@ import {
   SERVER_EVENT,
   SERVER_VOICE_CALL_DURATION,
 } from "../events/server-events.js";
-import { openVoiceCaller, VOICE_CALLER_ENVIRONMENT } from "../testing/voice-callers.js";
-import { LIVE_SIDEBAND_EVENT, type LiveEvent, LiveSidebands } from "./live-sideband.js";
+import { githubReaching } from "../testing/github-app-fake.js";
+import {
+  fakeLiveSession,
+  LIVE_REPLAYED,
+  openVoiceCall,
+  VOICE_CALLER_ENVIRONMENT,
+} from "../testing/voice-callers.js";
+import { LIVE_SIDEBAND_EVENT } from "./live-sideband.js";
 import { VOICE_CALL_LEASE } from "./voice-call-bounds.js";
 import {
   holdVoiceCall,
@@ -49,9 +47,6 @@ import {
 
 const ANALYTICS = recordingProductAnalytics();
 
-/** How many of its last events the fake session replays to a new connection, as GPT-Live replays its last few seconds. */
-const REPLAYED = 2;
-
 /** Transcript fragments, the most common event a call says. */
 const SPOKEN = "session.input_transcript.delta";
 
@@ -62,62 +57,6 @@ const THINKING = "session.thinking.append";
 interface Heard {
   readonly eventId: string;
   readonly epoch: number;
-}
-
-/**
- * A fake GPT-Live session: what it says reaches every attached connection,
- * a new one hears its last `REPLAYED` events first, and a close it is sent
- * is answered with `session.closed` carrying the seconds given.
- */
-function fakeSession(closingSeconds: number | undefined) {
-  const said: LiveEvent[] = [];
-  const sent: string[] = [];
-  const askedToClose = Deferred.makeUnsafe<void>();
-  const connections = new Set<Queue.Queue<LiveEvent, Cause.Done>>();
-
-  const say = (type: string, extra: { readonly [key: string]: WireValue } = {}) =>
-    Effect.sync(() => {
-      const eventId = `event_${said.length + 1}`;
-      const event: LiveEvent = { type, eventId, body: { type, event_id: eventId, ...extra } };
-      said.push(event);
-
-      for (const connection of connections) Queue.offerUnsafe(connection, event);
-
-      if (type === LIVE_SIDEBAND_EVENT.CLOSED) {
-        for (const connection of connections) Queue.endUnsafe(connection);
-      }
-
-      return eventId;
-    });
-
-  const layer = Layer.succeed(LiveSidebands, {
-    attach: () =>
-      Effect.gen(function* () {
-        const connection = yield* Queue.make<LiveEvent, Cause.Done>();
-
-        for (const event of said.slice(-REPLAYED)) Queue.offerUnsafe(connection, event);
-        connections.add(connection);
-        yield* Effect.addFinalizer(() => Effect.sync(() => connections.delete(connection)));
-
-        return {
-          events: Stream.fromQueue(connection),
-          send: (event: { readonly type: string }) =>
-            Effect.gen(function* () {
-              sent.push(event.type);
-
-              if (event.type === LIVE_SIDEBAND_EVENT.CLOSE)
-                Deferred.doneUnsafe(askedToClose, Effect.void);
-
-              // A session given no seconds to close with never confirms the close.
-              if (event.type === LIVE_SIDEBAND_EVENT.CLOSE && closingSeconds !== undefined) {
-                yield* say(LIVE_SIDEBAND_EVENT.CLOSED, { usage: { seconds: closingSeconds } });
-              }
-            }),
-        };
-      }),
-  });
-
-  return { say, sent, askedToClose, layer };
 }
 
 /** A queue that records what it is handed, or refuses every lease. */
@@ -135,8 +74,14 @@ const recordingLeases = (takes: boolean) =>
 
 /** An observer that hands every event it hears to the test, with the epoch it heard it under. */
 const hearing = Effect.map(Queue.unbounded<Heard>(), (heard) => {
-  const observe: VoiceCallObserver<never> = (event, holder) =>
-    Effect.asVoid(Queue.offer(heard, { eventId: event.eventId, epoch: holder.call.leaseEpoch }));
+  const observe: VoiceCallObserver<never> = (holder) =>
+    Effect.succeed({
+      observe: (event) =>
+        Effect.asVoid(
+          Queue.offer(heard, { eventId: event.eventId, epoch: holder.call.leaseEpoch }),
+        ),
+      beside: Effect.never,
+    });
 
   return { heard, observe };
 });
@@ -144,36 +89,6 @@ const hearing = Effect.map(Queue.unbounded<Heard>(), (heard) => {
 /** The next `count` events holders heard, in any order. */
 const nextHeard = (heard: Queue.Queue<Heard>, count: number) =>
   Effect.forEach(Array.from({ length: count }), () => Queue.take(heard));
-
-/** A call opened by the route on a Claude Code agent, its row at epoch 1. */
-const openCall = Effect.gen(function* () {
-  const db = yield* Database;
-  const callerId = yield* openVoiceCaller();
-  const workspaceId = yield* openWorkspace(callerId);
-  const agentId = yield* openAgentOnOwnTask(callerId, workspaceId);
-
-  const [agent] = yield* db
-    .select({ conversationId: agentTable.conversationId })
-    .from(agentTable)
-    .where(eq(agentTable.id, agentId));
-
-  assert.ok(agent);
-  yield* db
-    .update(conversations)
-    .set({ runtime: CONVERSATION_RUNTIME.CLAUDE_CODE })
-    .where(eq(conversations.id, agent.conversationId));
-
-  const call = yield* insertVoiceCall({
-    liveSessionId: "live_test",
-    callerId,
-    agentId,
-    voice: LIVE_VOICE.MARIN,
-    startedAt: new Date(0),
-    leaseUntil: new Date(0),
-  });
-
-  return { call, callerId, workspaceId };
-});
 
 /** The seconds on the caller's days. */
 const metered = (callerId: string) =>
@@ -191,7 +106,7 @@ const countedCalls = (callerId: string) =>
 
 /** A test's world: the caller's key opened, the fake session attached, the queue recording, analytics counted. */
 const world = (
-  session: ReturnType<typeof fakeSession>,
+  session: ReturnType<typeof fakeLiveSession>,
   leases: { readonly layer: Layer.Layer<never> },
 ) =>
   Layer.mergeAll(
@@ -201,13 +116,16 @@ const world = (
     ANALYTICS.layer,
   );
 
-it.layer(getTestDB())("a voice call held lease by lease", (it) => {
+/** The store, and what a holder's sends to the agent reach, which no case here makes. */
+const SUITE = Layer.mergeAll(getTestDB(), githubReaching([]).layer, memorySandbox().layer);
+
+it.layer(SUITE)("a voice call held lease by lease", (it) => {
   it.effect(
     "a lease hands the call to the next, which attaches before it lets go, every event is heard, and a close both hear keeps the seconds once",
     () =>
       Effect.gen(function* () {
-        const { call, callerId, workspaceId } = yield* openCall;
-        const session = fakeSession(754.5);
+        const { call, callerId, workspaceId } = yield* openVoiceCall;
+        const session = fakeLiveSession(754.5);
         const leases = yield* recordingLeases(true);
         const { heard, observe } = yield* hearing;
 
@@ -231,7 +149,7 @@ it.layer(getTestDB())("a voice call held lease by lease", (it) => {
             holdVoiceCall({ ...next, redelivered: false }, observe),
           );
 
-          const replayed = yield* nextHeard(heard, REPLAYED);
+          const replayed = yield* nextHeard(heard, LIVE_REPLAYED);
           assert.deepEqual(replayed, [
             { eventId: said[0], epoch: 3 },
             { eventId: said[1], epoch: 3 },
@@ -267,15 +185,19 @@ it.layer(getTestDB())("a voice call held lease by lease", (it) => {
 
   it.effect("a holder whose epoch was taken says nothing more and lets go", () =>
     Effect.gen(function* () {
-      const { call, callerId } = yield* openCall;
-      const session = fakeSession(10);
+      const { call, callerId } = yield* openVoiceCall;
+      const session = fakeLiveSession(10);
       const leases = yield* recordingLeases(true);
       const told = yield* Queue.unbounded<boolean>();
 
-      const observe: VoiceCallObserver<DatabaseServices> = (_event, holder) =>
-        Effect.flatMap(holder.send({ type: THINKING }), (sent) =>
-          Effect.asVoid(Queue.offer(told, sent)),
-        );
+      const observe: VoiceCallObserver<DatabaseServices> = (holder) =>
+        Effect.succeed({
+          observe: () =>
+            Effect.flatMap(holder.send({ type: THINKING }), (sent) =>
+              Effect.asVoid(Queue.offer(told, sent)),
+            ),
+          beside: Effect.never,
+        });
 
       const held = yield* Effect.gen(function* () {
         const holder = yield* Effect.forkChild(
@@ -305,8 +227,8 @@ it.layer(getTestDB())("a voice call held lease by lease", (it) => {
     "a lease that cannot publish the next one closes the session, and the close ends the call with its seconds",
     () =>
       Effect.gen(function* () {
-        const { call, callerId } = yield* openCall;
-        const session = fakeSession(709);
+        const { call, callerId } = yield* openVoiceCall;
+        const session = fakeLiveSession(709);
         const leases = yield* recordingLeases(false);
         const { heard, observe } = yield* hearing;
 
@@ -333,8 +255,8 @@ it.layer(getTestDB())("a voice call held lease by lease", (it) => {
     "a lease whose close goes unconfirmed leaves the call to a lease that took it meanwhile",
     () =>
       Effect.gen(function* () {
-        const { call, callerId } = yield* openCall;
-        const session = fakeSession(undefined);
+        const { call, callerId } = yield* openVoiceCall;
+        const session = fakeLiveSession(undefined);
         const leases = yield* recordingLeases(false);
         const { heard, observe } = yield* hearing;
 
@@ -365,8 +287,8 @@ it.layer(getTestDB())("a voice call held lease by lease", (it) => {
     "a lease delivered again after its holders crashed, however many times, takes the call back, and a stale one takes nothing",
     () =>
       Effect.gen(function* () {
-        const { call, callerId } = yield* openCall;
-        const session = fakeSession(10);
+        const { call, callerId } = yield* openVoiceCall;
+        const session = fakeLiveSession(10);
         const leases = yield* recordingLeases(true);
         const { heard, observe } = yield* hearing;
         const lease = { callId: call.id, callerId, epoch: 1 };
