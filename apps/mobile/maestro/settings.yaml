@@ -50,7 +50,11 @@ appId: dev.vespin.ios
 - tapOn:
     id: "BackButton"
 - waitForAnimationToEnd
-- assertVisible: "Notifications, Always"
+# Note that the iPad's form sheet hears the value apart from the row's name, as above.
+- assertVisible:
+    id: "settings-notifications"
+    text: "Notifications.*"
+- assertVisible: ".*Always"
 # About, and the pages still kept on vespin.dev under it.
 - scrollUntilVisible:
     element: "Send feedback"
