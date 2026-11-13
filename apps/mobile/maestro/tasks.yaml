@@ -46,11 +46,11 @@ onFlowComplete:
     direction: DOWN
 - waitForAnimationToEnd
 # Note that a swipe on a split view's sidebar reads as a tap under Maestro's
-# driver, so a regular window, which stands "Select a task" beside its list,
+# driver, so a regular window, which stands "Choose an item" beside its list,
 # marks the task done from its menu instead.
 - runFlow:
     when:
-      notVisible: "Select a task"
+      notVisible: "Choose an item"
     commands:
       - swipe:
           from: "Usage alerts"
@@ -60,7 +60,7 @@ onFlowComplete:
           optional: true
 - runFlow:
     when:
-      visible: "Select a task"
+      visible: "Choose an item"
     commands:
       - longPressOn: "Usage alerts"
       - tapOn: "Mark done"
@@ -81,7 +81,7 @@ onFlowComplete:
 # a regular window, whose swipes read as taps, is left out.
 - runFlow:
     when:
-      notVisible: "Select a task"
+      notVisible: "Choose an item"
     commands:
       - swipe:
           start: "8%, 21%"
@@ -186,7 +186,7 @@ onFlowComplete:
 - waitForAnimationToEnd
 - runFlow:
     when:
-      notVisible: "Select a task"
+      notVisible: "Choose an item"
     commands:
       # Note that the swipe runs partway across the agent's row, where the
       # Overview opened at its top stands it, as the leading swipe above

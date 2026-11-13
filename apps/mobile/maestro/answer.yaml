@@ -72,10 +72,10 @@ appId: dev.vespin.ios
     centerElement: true
 - waitForAnimationToEnd
 - tapOn: "Invite limits"
-- assertVisible: "Choose"
+- assertVisible: "Choose an item"
 - waitForAnimationToEnd
 - takeScreenshot: answer-fields
-- tapOn: "Choose"
+- tapOn: "Choose an item"
 - tapOn: "Every member \\(recommended\\)"
 - tapOn: "Email the sender when an invite is accepted.*"
 # The number comes last, since the decimal pad has no key that puts it away:
@@ -120,7 +120,7 @@ appId: dev.vespin.ios
 - extendedWaitUntil:
     visible: "Submitted"
     timeout: 5000
-- assertNotVisible: "Choose"
+- assertNotVisible: "Choose an item"
 
 # A do: its steps as checkbox rows, one ticked by hand, then Mark done, which
 # sends at once with every step ticked.

@@ -59,7 +59,14 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { provenanceText } from "@repo/features/time-format";
-import { countWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
+import {
+  CHOOSE_AN_ITEM_WORDS,
+  countWords,
+  readFailedWords,
+  readingWords,
+  TERM,
+  VERB,
+} from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { selectWorkspaceExperiment, selectWorkspaces } from "@repo/host/app-state-reads";
@@ -160,9 +167,6 @@ import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./rela
 
 /** The Tasks tab's name, at its head and on its back button. */
 const TASKS_TITLE = "Tasks";
-
-/** What the task's column says before a task is picked, in a regular window. */
-const SELECT_A_TASK = "Select a task";
 
 /** What a pushed task's screen says where the read list holds no task its link names, such as one deleted since. */
 const TASK_NOT_FOUND = "Task not found";
@@ -1850,11 +1854,11 @@ function TasksSplitScreen({
         onArchiveAgent={archiveAsk.archive}
       />
     ) : selected === undefined ? (
-      <EmptyState title={SELECT_A_TASK} symbol={GLYPH.TASK} />
+      <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.TASK} />
     ) : read && !found.seeking ? (
       <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
     ) : (
-      <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
+      <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
     );
 
   const detailBar =
@@ -2032,7 +2036,7 @@ export function TaskScreen() {
         ) : read && !found.seeking ? (
           <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         ) : (
-          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
+          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
         )}
       </Screen>
       <StatusQuestionAsk question={question} />

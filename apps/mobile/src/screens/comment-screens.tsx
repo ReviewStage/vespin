@@ -196,6 +196,7 @@ export function NewCommentScreen() {
           <EmptyState
             title={overview?.document === undefined ? READING_DESCRIPTION : COMMENT_NOTE.NO_WORDS}
             symbol={GLYPH.COMMENT}
+            loading={overview?.document === undefined}
           />
         </Screen>
       ) : (

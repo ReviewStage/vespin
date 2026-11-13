@@ -220,7 +220,7 @@ export function TaskRelationScreen({
       <>
         {bar}
         <Screen>
-          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
+          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} loading />
         </Screen>
       </>
     );
