@@ -866,6 +866,37 @@ it.effect(
 );
 
 it.effect(
+  "a message sent to an agent just made, before its transcript's first page says it boots, stands in its queue too",
+  () =>
+    Effect.gen(function* () {
+      const harness = yield* subject({
+        agentListed: () => ({ ...AGENT, status: AGENT_STATUS.STARTING, turnId: null }),
+      });
+
+      const answered = yield* Deferred.make<void>();
+      harness.answerMessage({ agent: AGENT }, Deferred.await(answered));
+      const sent = yield* Effect.forkChild(harness.acts.AGENTS_MESSAGE(SENT));
+      yield* settled;
+
+      // The first page lands after the send was asked.
+      harness.sealTranscript(LIVE_ANSWERED);
+      harness.pageNewest({
+        ...newestPage("1:0", "Reading the invites."),
+        queue: queueOf("Run the tests", 1),
+      });
+      harness.pageNow({ ...pageNow("1:0", { holds: false }), queue: queueOf("Run the tests", 1) });
+      yield* harness.acts.AGENTS_TRANSCRIPT.hold(FOLLOWED);
+      yield* settled;
+      transcriptRows(harness.live, 1);
+      yield* settled;
+
+      assert.deepEqual(placesIn(placesOf(harness.held, 0, SENT.text)), ["queued"]);
+      yield* Deferred.succeed(answered, undefined);
+      yield* Fiber.interrupt(sent);
+    }),
+);
+
+it.effect(
   "a queued message steered moves out of the queue and into the transcript as the member's line in one draw, before the service answers",
   () =>
     Effect.gen(function* () {

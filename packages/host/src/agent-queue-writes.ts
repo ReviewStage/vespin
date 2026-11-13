@@ -13,9 +13,11 @@ import {
   type SendingMessage,
 } from "@repo/features/agent-view";
 import {
+  AGENT_STATUS,
   type AgentAttachment,
   type AgentMessageRequest,
   type AgentQueueChange,
+  type AgentSummary,
   type AgentTranscriptMessage,
   QUEUE_CHANGE,
 } from "@repo/features/agent-wire";
@@ -429,6 +431,7 @@ const unchanged: OutboxStep = (outbox) => outbox;
 export function agentQueues(
   pool: EntityPool,
   accountId: () => string | undefined,
+  agentListed: (agentId: string) => AgentSummary | undefined = () => undefined,
 ): Effect.Effect<AgentQueues, never, Scope.Scope> {
   return Effect.sync(() => {
     /** Each followed agent's waits on what its pages carry, while its follow stands. */
@@ -436,9 +439,18 @@ export function agentQueues(
     /** Whether each followed agent's first launch holds its lines while its machine boots, as its newest page said. */
     const booting = MutableHashMap.empty<string, boolean>();
 
-    /** Whether the agent's first launch holds the lines sent to it now, so the service queues them. */
+    /**
+     * Whether the agent's first launch holds the lines sent to it now, so the
+     * service queues them: as its newest page said, or, before any page
+     * said, as the task list shows an agent just made, starting with no turn
+     * yet, whose first launch boots.
+     */
     const holdsLines = (agentId: string) =>
-      Option.getOrElse(MutableHashMap.get(booting, agentId), () => false);
+      Option.getOrElse(MutableHashMap.get(booting, agentId), () => {
+        const listed = agentListed(agentId);
+
+        return listed?.status === AGENT_STATUS.STARTING && listed.turnId === null;
+      });
     /** The messages the service refused, by the account that sent them and then the agent's id, in the order sent, kept for as long as the host runs. */
 
     const refused = MutableHashMap.empty<
@@ -536,8 +548,14 @@ export function agentQueues(
             waits.queue.answered,
           );
 
-        // Note that a transcript held again takes the queue it was left with, so a change still standing is drawn over it before the next page lands.
-        const kept = answers.rows()?.word?.queue;
+        // Note that a transcript held again takes the queue and the boot it was left with, so a change still standing is drawn over it before the next page lands.
+        const keptWord = answers.rows()?.word;
+
+        if (keptWord !== undefined) {
+          MutableHashMap.set(booting, agentId, bootHolds(keptWord.boot?.phase));
+        }
+
+        const kept = keptWord?.queue;
 
         if (kept !== undefined) yield* Effect.andThen(taken(kept), redraw);
         // Note that a transcript let go is left as the service last said it, so a write taken back once no window follows it is drawn there no more.

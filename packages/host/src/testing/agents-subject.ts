@@ -1318,6 +1318,7 @@ export function subject(
     sendsNetwork?: boolean;
     accountId?: () => string | undefined;
     listed?: (txid: string | undefined) => Effect.Effect<void>;
+    agentListed?: (agentId: string) => AgentSummary | undefined;
     repositoriesMoved?: Effect.Effect<void>;
     pool?: EntityPool;
   } = {},
@@ -1356,6 +1357,7 @@ export function subject(
         unshare: () => Effect.succeed({ shared: null }),
       },
       ...(options.listed === undefined ? undefined : { listed: options.listed }),
+      ...(options.agentListed === undefined ? undefined : { agentListed: options.agentListed }),
       pool,
     }).pipe(Effect.provide(noNetwork));
 
