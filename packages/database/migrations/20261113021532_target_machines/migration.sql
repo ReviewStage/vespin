@@ -19,8 +19,11 @@ ALTER TABLE "agent" ADD COLUMN "target_device_id" uuid;--> statement-breakpoint
 ALTER TABLE "device" ADD COLUMN "command_mode" text;--> statement-breakpoint
 ALTER TABLE "device" ADD COLUMN "always_allowed_apps" jsonb;--> statement-breakpoint
 ALTER TABLE "mac_command" ADD COLUMN "device_id" uuid;--> statement-breakpoint
-ALTER TABLE "agent" ADD CONSTRAINT "agent_target_device_id_device_id_fkey" FOREIGN KEY ("target_device_id") REFERENCES "device"("id") ON DELETE SET NULL;--> statement-breakpoint
-ALTER TABLE "mac_command" ADD CONSTRAINT "mac_command_device_id_device_id_fkey" FOREIGN KEY ("device_id") REFERENCES "device"("id") ON DELETE CASCADE;--> statement-breakpoint
+-- Added unvalidated, so the add takes no scan under the lock that holds back every agent and command written meanwhile; the validation after each scans under a lock that lets writes through.
+ALTER TABLE "agent" ADD CONSTRAINT "agent_target_device_id_device_id_fkey" FOREIGN KEY ("target_device_id") REFERENCES "device"("id") ON DELETE SET NULL NOT VALID;--> statement-breakpoint
+ALTER TABLE "agent" VALIDATE CONSTRAINT "agent_target_device_id_device_id_fkey";--> statement-breakpoint
+ALTER TABLE "mac_command" ADD CONSTRAINT "mac_command_device_id_device_id_fkey" FOREIGN KEY ("device_id") REFERENCES "device"("id") ON DELETE CASCADE NOT VALID;--> statement-breakpoint
+ALTER TABLE "mac_command" VALIDATE CONSTRAINT "mac_command_device_id_device_id_fkey";--> statement-breakpoint
 ALTER TABLE "mac_command_device_listener" ADD CONSTRAINT "mac_command_device_listener_device_id_device_id_fkey" FOREIGN KEY ("device_id") REFERENCES "device"("id") ON DELETE CASCADE;
 --> statement-breakpoint
 CREATE OR REPLACE FUNCTION "app_sync_device"() RETURNS trigger LANGUAGE plpgsql AS $app_sync$

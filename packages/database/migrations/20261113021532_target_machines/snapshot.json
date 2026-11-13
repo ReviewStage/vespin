@@ -1,12 +1,8 @@
 {
   "version": "8",
   "dialect": "postgres",
-  "id": "27adb115-b997-4ade-9430-debbd66d49ec",
-  "prevIds": [
-    "368bde3f-1327-4e4c-aedb-579c08a4c1c7",
-    "6e399965-bc27-49e4-9a88-31a697bc82fb",
-    "be3bfbac-51c0-4044-935d-eb521be34c94"
-  ],
+  "id": "90ce0e78-7345-46c5-8bb6-430ac9c83551",
+  "prevIds": ["368bde3f-1327-4e4c-aedb-579c08a4c1c7", "bbe7462b-e94e-4c8f-8c1e-b88d12bb4ccb"],
   "ddl": [
     {
       "isRlsEnabled": false,
@@ -13193,6 +13189,19 @@
       "generated": null,
       "identity": null,
       "name": "dictation_seconds",
+      "entityType": "columns",
+      "schema": "public",
+      "table": "hosted_usage"
+    },
+    {
+      "type": "double precision",
+      "typeSchema": null,
+      "notNull": true,
+      "dimensions": 0,
+      "default": "0",
+      "generated": null,
+      "identity": null,
+      "name": "voice_seconds",
       "entityType": "columns",
       "schema": "public",
       "table": "hosted_usage"
