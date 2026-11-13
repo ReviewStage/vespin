@@ -15,15 +15,16 @@ type InboxLineLook = { readonly symbol: Glyph; readonly tone: StatusTone };
 /**
  * The panel's own Lucide glyph for each line
  * (`@repo/features/inbox-list-model`'s `INBOX_LINE`): an ask that waits on
- * you in the attention ink, the accent's, since it wants you, and an
- * answered or resolved thread in the muted ink, since it no longer does. A
+ * you in the attention ink, the accent's, since it wants you, an answered
+ * one's check in the green every other done wears, as the panel's line
+ * draws it (`inbox-list.tsx`), and a resolved thread in the muted ink. A
  * plain message leads with no glyph, as the panel's.
  */
 export const INBOX_LINE_LOOK = {
   [INBOX_LINE.DECIDE]: { symbol: GLYPH.DECIDE, tone: STATUS_TONE.ATTENTION },
   [INBOX_LINE.DO]: { symbol: GLYPH.DO, tone: STATUS_TONE.ATTENTION },
   [INBOX_LINE.ANSWER]: { symbol: GLYPH.ANSWER, tone: STATUS_TONE.ATTENTION },
-  [INBOX_LINE.SETTLED]: { symbol: GLYPH.CHECK, tone: STATUS_TONE.NEUTRAL },
+  [INBOX_LINE.SETTLED]: { symbol: GLYPH.CHECK, tone: STATUS_TONE.COMPLETE },
   [INBOX_LINE.RESOLVED]: { symbol: GLYPH.RESOLVED, tone: STATUS_TONE.NEUTRAL },
   [INBOX_LINE.SAID]: undefined,
 } as const satisfies Record<InboxLineKind, InboxLineLook | undefined>;
