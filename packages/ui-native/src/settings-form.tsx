@@ -33,7 +33,7 @@ import {
   useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
-import { useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, BUTTON_SIZE, Button } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
@@ -87,6 +87,37 @@ function spokenValue(...parts: readonly (string | undefined)[]) {
   const said = parts.filter((part) => part !== undefined && part.length > 0).join(", ");
 
   return said.length === 0 ? [] : [accessibilityValue(said)];
+}
+
+/**
+ * A row's words and what stands at its end, such as a value, a role or an
+ * act: beside each other at the reader's usual sizes, and the end under the
+ * words at an accessibility size, as iOS Settings stacks a value under its
+ * label, so neither is squeezed into a word a line. A spacer follows either
+ * way, so a chevron after it keeps the row's end.
+ */
+function WordsAndEnd({ words, end }: { readonly words: ReactNode; readonly end: ReactNode }) {
+  const stacked = useAccessibilitySize();
+
+  if (!stacked || end === null) {
+    return (
+      <>
+        {words}
+        <Spacer />
+        {end}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <VStack alignment="leading" spacing={SPACE.TIGHT}>
+        {words}
+        {end}
+      </VStack>
+      <Spacer />
+    </>
+  );
 }
 
 /**
@@ -372,11 +403,14 @@ export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRo
         {symbol === undefined ? null : (
           <Image {...glyphImage(symbol)} size={leadSize} color={colors.TEXT_MUTED} />
         )}
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
-        <Spacer />
-        {detail === undefined ? null : (
-          <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{detail}</Text>
-        )}
+        <WordsAndEnd
+          words={<Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>}
+          end={
+            detail === undefined ? null : (
+              <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{detail}</Text>
+            )
+          }
+        />
         <GoesMark goes={goes} />
       </HStack>
     </PressedRow>
@@ -794,20 +828,28 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
   const face = (
     <HStack spacing={SPACE.ROW}>
       <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
-      <VStack alignment="leading" spacing={1}>
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>
-          {badge === undefined ? name : `${name} · ${badge}`}
-        </Text>
-        <Text
-          modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE }), foregroundStyle(colors.TEXT_MUTED)]}
-        >
-          {email}
-        </Text>
-      </VStack>
-      <Spacer />
-      {role === undefined ? null : (
-        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
-      )}
+      <WordsAndEnd
+        words={
+          <VStack alignment="leading" spacing={1}>
+            <Text modifiers={[foregroundStyle(colors.TEXT)]}>
+              {badge === undefined ? name : `${name} · ${badge}`}
+            </Text>
+            <Text
+              modifiers={[
+                font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                foregroundStyle(colors.TEXT_MUTED),
+              ]}
+            >
+              {email}
+            </Text>
+          </VStack>
+        }
+        end={
+          role === undefined ? null : (
+            <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
+          )
+        }
+      />
     </HStack>
   );
 
@@ -910,23 +952,28 @@ export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
   const face = (
     <HStack spacing={SPACE.ROW}>
       <Image {...glyphImage(symbol)} size={glyphSize} color={colors.TEXT_MUTED} />
-      <VStack alignment="leading" spacing={1}>
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
-        {detail === undefined ? null : (
-          <Text
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE }),
-              foregroundStyle(colors.TEXT_MUTED),
-            ]}
-          >
-            {detail}
-          </Text>
-        )}
-      </VStack>
-      <Spacer />
-      {value === undefined ? null : (
-        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{value}</Text>
-      )}
+      <WordsAndEnd
+        words={
+          <VStack alignment="leading" spacing={1}>
+            <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
+            {detail === undefined ? null : (
+              <Text
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                  foregroundStyle(colors.TEXT_MUTED),
+                ]}
+              >
+                {detail}
+              </Text>
+            )}
+          </VStack>
+        }
+        end={
+          value === undefined ? null : (
+            <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{value}</Text>
+          )
+        }
+      />
     </HStack>
   );
 
@@ -1110,30 +1157,35 @@ export function ConnectionRow({ name, lines, act, menu = [] }: ConnectionRowProp
       spacing={SPACE.ROW}
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
     >
-      <VStack alignment="leading" spacing={SPACE.TIGHT}>
-        <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
-        {lines.map((line) => (
-          <Text
-            key={line.text}
-            modifiers={[
-              font({ textStyle: TYPE_ROLE.ROW_LINE }),
-              foregroundStyle(line.problem === true ? colors.DANGER_TEXT : colors.TEXT_MUTED),
-            ]}
-          >
-            {line.text}
-          </Text>
-        ))}
-      </VStack>
-      <Spacer />
-      {act === undefined ? null : (
-        <Button
-          label={act.label}
-          look={BUTTON_LOOK.BORDERED}
-          size={BUTTON_SIZE.SMALL}
-          disabled={act.disabled}
-          onPress={act.onPress}
-        />
-      )}
+      <WordsAndEnd
+        words={
+          <VStack alignment="leading" spacing={SPACE.TIGHT}>
+            <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
+            {lines.map((line) => (
+              <Text
+                key={line.text}
+                modifiers={[
+                  font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                  foregroundStyle(line.problem === true ? colors.DANGER_TEXT : colors.TEXT_MUTED),
+                ]}
+              >
+                {line.text}
+              </Text>
+            ))}
+          </VStack>
+        }
+        end={
+          act === undefined ? null : (
+            <Button
+              label={act.label}
+              look={BUTTON_LOOK.BORDERED}
+              size={BUTTON_SIZE.SMALL}
+              disabled={act.disabled}
+              onPress={act.onPress}
+            />
+          )
+        }
+      />
     </HStack>
   );
 

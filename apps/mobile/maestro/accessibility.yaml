@@ -1,4 +1,4 @@
-# accessibility.yaml -- the main screens at the largest accessibility text size (AX5, Accessibility XXXL): the Inbox, a thread, the Tasks tab, a task's page, an agent's page, New task, and Settings, each shot to check that words wrap rather than cut, rows grow and stack their ends under their titles, chips stand one to a line, and bars do not overflow.
+# accessibility.yaml -- the main screens at the largest accessibility text size (AX5, Accessibility XXXL): the Inbox, a thread, the Tasks tab, a task's page, an agent's page, New task, Settings, and Settings' Workspace, Machines, and Integrations pages, each shot to check that words wrap rather than cut, rows grow and stack their ends under their titles, chips stand one to a line, and bars do not overflow.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -102,3 +102,62 @@ appId: dev.vespin.ios
 - waitForAnimationToEnd:
     timeout: 5000
 - takeScreenshot: accessibility-settings
+# Settings' Workspace page: each member's role stacked under their address.
+- launchApp:
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 15000
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd:
+    timeout: 5000
+- tapOn:
+    id: "settings-workspace"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "Grace Hopper"
+- takeScreenshot: accessibility-settings-workspace
+# Settings' Machines page: each machine's facts line wrapped under its name.
+- launchApp:
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 15000
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd:
+    timeout: 5000
+- scrollUntilVisible:
+    element: "Machines"
+- tapOn: "Machines"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "Ada's MacBook Pro"
+- takeScreenshot: accessibility-settings-machines
+# Settings' Integrations page: each account's Connect or Reconnect stacked under its lines.
+- launchApp:
+    arguments:
+      fixture: inbox
+      UIPreferredContentSizeCategoryName: UICTContentSizeCategoryAccessibilityXXXL
+- extendedWaitUntil:
+    visible: "Recorded the invite flow"
+    timeout: 15000
+- tapOn:
+    id: "workspace-switcher"
+- tapOn: ".*, Settings"
+- waitForAnimationToEnd:
+    timeout: 5000
+- scrollUntilVisible:
+    element: "Integrations"
+- tapOn: "Integrations"
+- waitForAnimationToEnd:
+    timeout: 5000
+- assertVisible: "Linear"
+- takeScreenshot: accessibility-settings-integrations
