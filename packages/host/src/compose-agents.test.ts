@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { ServiceReach } from "@repo/features";
+import { type AgentBoot, BOOT_PHASE } from "@repo/features/agent-boot";
 import { AGENT_CALL_FAILURE, INBOX_SCOPE_KIND, TRANSCRIPT_KIND } from "@repo/features/agent-view";
 import {
   AGENT_BOUNDS,
@@ -731,15 +732,21 @@ const EDITED = {
 };
 
 /** A held transcript whose newest page and first page past it carry the queue holding "Run the tests" at its first revision. */
-function queueFollowed(accountId?: () => string | undefined) {
+function queueFollowed(accountId?: () => string | undefined, boot?: AgentBoot) {
   return Effect.gen(function* () {
     const harness = yield* subject(accountId === undefined ? {} : { accountId });
+    const booted = boot === undefined ? {} : { boot };
     harness.sealTranscript(LIVE_ANSWERED);
     harness.pageNewest({
       ...newestPage("1:0", "Reading the invites."),
       queue: queueOf("Run the tests", 1),
+      ...booted,
     });
-    harness.pageNow({ ...pageNow("1:0", { holds: false }), queue: queueOf("Run the tests", 1) });
+    harness.pageNow({
+      ...pageNow("1:0", { holds: false }),
+      queue: queueOf("Run the tests", 1),
+      ...booted,
+    });
     yield* harness.acts.AGENTS_TRANSCRIPT.hold(FOLLOWED);
     yield* settled;
     transcriptRows(harness.live, 1);
@@ -822,10 +829,14 @@ function placesIn(places: readonly string[]): readonly string[] {
 }
 
 it.effect(
-  "a message the service holds in the queue while the agent boots moves from the transcript into the queue in one draw, never in both nor in neither",
+  "a message sent while the agent's machine boots stands in its queue from the moment it is sent, where the service puts it, and never in the transcript",
   () =>
     Effect.gen(function* () {
-      const { acts, held, answerMessage } = yield* queueFollowed();
+      const { acts, held, answerMessage } = yield* queueFollowed(undefined, {
+        phase: BOOT_PHASE.STARTING,
+        since: NOW,
+      });
+
       const from = held().length;
       const answered = yield* Deferred.make<void>();
 
@@ -850,7 +861,7 @@ it.effect(
       yield* Fiber.join(sent);
       yield* settled;
 
-      assert.deepEqual(placesIn(placesOf(held, from, SENT.text)), ["sending", "queued"]);
+      assert.deepEqual(placesIn(placesOf(held, from, SENT.text)), ["queued"]);
     }),
 );
 

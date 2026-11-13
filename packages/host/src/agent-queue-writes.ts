@@ -1,3 +1,4 @@
+import { bootHolds } from "@repo/features/agent-boot";
 import type { AgentQueue, QueuedMessage } from "@repo/features/agent-queue-wire";
 import {
   AGENT_CALL_FAILURE,
@@ -57,6 +58,11 @@ import type { HeldTranscript } from "./transcript-follow.js";
  * still, until it is sent again under its key, which draws it on its way in
  * the same draw, or let go (`agents.unsend`). The refusal is kept before the
  * write is taken back, so the line never leaves the transcript between.
+ * A message the member sends while the agent's first launch boots its
+ * machine is drawn in the queue from the moment it is sent, never in the
+ * transcript, because that is where the service puts it (`bootHolds`, the
+ * one rule both read, of the boot the agent's own pages carry); its answer
+ * then names the queue it stands in, in its drawn place.
  * Note that the refusals are kept by the account that sent them, and drawn
  * only while that account is signed in, because a host one member signs out
  * of may next be signed in to by another, who may reach the same agent but
@@ -299,6 +305,25 @@ function sendingOf({
   };
 }
 
+/** The queue with a message sent while the agent's machine boots at its end, as the service queues it, under its send key. */
+function queuedWith(queue: AgentQueue, write: MessageWrite): AgentQueue {
+  if (queue.messages.some((message) => message.sendKey === write.clientKey)) return queue;
+
+  return {
+    ...queue,
+    messages: [
+      ...queue.messages,
+      {
+        id: write.clientKey,
+        text: write.text,
+        queuedBy: write.sentBy ?? "",
+        sendKey: write.clientKey,
+        ...filesOf(write.attachments, write.pictures),
+      },
+    ],
+  };
+}
+
 /** The ids the member's rows of a transcript were written under, which a message sending lands as. */
 function landedLines(messages: readonly AgentTranscriptMessage[]): ReadonlySet<string> {
   return new Set(
@@ -408,6 +433,12 @@ export function agentQueues(
   return Effect.sync(() => {
     /** Each followed agent's waits on what its pages carry, while its follow stands. */
     const standing = MutableHashMap.empty<string, Standing>();
+    /** Whether each followed agent's first launch holds its lines while its machine boots, as its newest page said. */
+    const booting = MutableHashMap.empty<string, boolean>();
+
+    /** Whether the agent's first launch holds the lines sent to it now, so the service queues them. */
+    const holdsLines = (agentId: string) =>
+      Option.getOrElse(MutableHashMap.get(booting, agentId), () => false);
     /** The messages the service refused, by the account that sent them and then the agent's id, in the order sent, kept for as long as the host runs. */
 
     const refused = MutableHashMap.empty<
@@ -530,6 +561,7 @@ export function agentQueues(
           answered: (rows) =>
             Effect.gen(function* () {
               const queue = rows.word?.queue;
+              MutableHashMap.set(booting, agentId, bootHolds(rows.word?.boot?.phase));
 
               if (queue !== undefined) yield* taken(queue);
               answers.answered(laid(rows, outboxes.row(agentId), refusedOf(agentId), accountId()));
@@ -626,7 +658,10 @@ export function agentQueues(
       keys: ({ agentId }) => [agentId],
       change: (input) => ({
         agentId: input.agentId,
-        step: (outbox) => ({ ...outbox, sending: sendingWith(outbox.sending, sendingOf(input)) }),
+        // A message sent while the agent's machine boots goes into its queue, where the service puts it.
+        step: holdsLines(input.agentId)
+          ? queueChanged((queue) => queuedWith(queue, input))
+          : (outbox) => ({ ...outbox, sending: sendingWith(outbox.sending, sendingOf(input)) }),
       }),
       send: (input) =>
         Effect.gen(function* () {
@@ -703,9 +738,14 @@ export function agentQueues(
             } satisfies Written<OutboxChange, AgentAgentAnswer>;
           }
 
+          // A message drawn in the queue that the service sent after all, its machine up meanwhile, stands on its way.
           return {
             answer: { agent: answer.agent },
             txid: undefined,
+            standsAs: {
+              agentId,
+              step: (outbox) => ({ ...outbox, sending: sendingWith(outbox.sending, line) }),
+            },
             taken: { agentId, step: unchanged },
             carried: lineCarried(agentId, line.id),
           } satisfies Written<OutboxChange, AgentAgentAnswer>;
