@@ -56,6 +56,7 @@ import {
 import { INTEGRATION } from "../../integrations/integrations.js";
 import { PageLinks } from "../../pages/page-links.js";
 import { modelCatalogOf } from "../../providers/model-catalog.js";
+import { SlackBot, slackBotOver } from "../../slack/slack-bot.js";
 import type { CommentToolName } from "../../tasks/comment-tools.js";
 import { PICTURE_LOOK_REFUSAL, pictureNotLooked } from "../../tasks/picture-look.js";
 import {
@@ -182,6 +183,7 @@ const doorServices = Effect.gen(function* () {
     NO_INTEGRATIONS,
     Layer.succeed(HostedEnvironment, NO_ENVIRONMENT),
     Layer.succeed(SentryApp, sentryAppService(undefined, [])),
+    Layer.succeed(SlackBot, slackBotOver(undefined)),
     NO_PAGE_SANDBOX,
   );
 });
@@ -433,6 +435,7 @@ const AGENT_TOOLS = [
   "search_memory",
   "list_memories",
   "forget_memory",
+  "send_slack_message",
   "schedule_wakeup",
   "end_turn",
 ] as const;

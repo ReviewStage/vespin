@@ -11,22 +11,31 @@ import {
   RUN_STATUS,
   RUN_TURN_ORIGIN,
   type RunStatus,
+  TOOL_CALL_SETTLEMENT,
   TURN_FAILURE,
   TURN_TRIGGER,
   type TurnFailure,
 } from "@repo/features/turn-run";
 import { sessionKey } from "@repo/runtime/vocabulary";
-import { TURN_ORIGIN } from "@repo/wire";
+import { TURN_ORIGIN, type WireRecord } from "@repo/wire";
 import { Effect } from "effect";
 import { CODER_TOOL_SET } from "../agents/coder-host/tool-set.js";
 
-/** One turn of the agent's, begun just before `at`, answered with the words given where some are, and ended in the run status given at `at`, a failed one for `failure`; its id. */
+/** A call the turn made before its words, and what it answered. */
+export interface EndedCall {
+  readonly name: string;
+  readonly input: WireRecord;
+  readonly output: WireRecord;
+}
+
+/** One turn of the agent's, begun just before `at`, answered with the words given where some are after the calls given, and ended in the run status given at `at`, a failed one for `failure`; its id. */
 export const endedAt = (
   agent: Agent,
   status: RunStatus,
   at: number,
   said?: string,
   failure: TurnFailure = TURN_FAILURE.MODEL,
+  calls: readonly EndedCall[] = [],
 ) =>
   Effect.gen(function* () {
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
@@ -51,6 +60,19 @@ export const endedAt = (
       const answer = new AssistantMessageBuilder();
       answer.stepStart();
       answer.text("Reading the description first.");
+
+      for (const [index, call] of calls.entries()) {
+        const callId = `call-${index}`;
+        answer.toolCall(
+          { callId, name: call.name, argumentsJson: JSON.stringify(call.input) },
+          call.input,
+        );
+        answer.toolResult(callId, {
+          state: TOOL_CALL_SETTLEMENT.OUTPUT_AVAILABLE,
+          output: call.output,
+        });
+      }
+
       answer.stepStart();
       answer.text(said);
       yield* writer.consume(target, {

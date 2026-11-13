@@ -66,6 +66,8 @@ import { logStoreFailure } from "../../http/store-failure.js";
 import type { IntegrationConnect } from "../../integrations/integration-connect.js";
 import type { PageLinks } from "../../pages/page-links.js";
 import type { ModelCatalog } from "../../providers/model-catalog.js";
+import type { SlackBot } from "../../slack/slack-bot.js";
+import { runSendSlackMessage, SEND_SLACK_MESSAGE_TOOL } from "../../slack/slack-message-tool.js";
 import {
   type CommentToolName,
   commentToolOf,
@@ -210,6 +212,7 @@ export type WorkspaceMcpServices =
   | IntegrationConnect
   | HostedEnvironment
   | SentryApp
+  | SlackBot
   | PageLinks;
 
 /** What a tool runs against: the doors' services, and the agent's browser and sandbox, which the server provides itself (`../workspace-mcp/app.ts`). */
@@ -649,6 +652,8 @@ const CATALOG = [
   // The ports of the agent's sandbox, and the one it shares by link.
   portTool(LIST_PORTS_TOOL, runListPorts),
   portTool(SHARE_PORT_TOOL, runSharePort),
+  // A message in the agent's Slack thread.
+  agentTool(SEND_SLACK_MESSAGE_TOOL, runSendSlackMessage),
   // A wakeup booked for later.
   agentTool(SCHEDULE_WAKEUP_TOOL, runScheduleWakeup),
   // A turn's end: the summary its developer reads as the reply, and the follow-ups it offers.

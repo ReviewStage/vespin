@@ -1236,6 +1236,7 @@ const CALL_ICON = {
   [CALL_KIND.LIST_AGENTS]: LayoutListIcon,
   [CALL_KIND.READ_AGENT]: ScrollTextIcon,
   [CALL_KIND.MESSAGE_AGENT]: SendIcon,
+  [CALL_KIND.SLACK_MESSAGE]: SendIcon,
   [CALL_KIND.START_AGENT]: PlayIcon,
   [CALL_KIND.ADD_SUGGESTION]: CornerDownRightIcon,
   [CALL_KIND.ARCHIVE_AGENT]: ArchiveIcon,

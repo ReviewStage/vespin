@@ -471,6 +471,24 @@ const claimThreadTurn = SqlSchema.findOneOption({
     ),
 });
 
+const findCurrentThread = SqlSchema.findOneOption({
+  Request: Schema.Struct({ agentId: Schema.String }),
+  Result: SlackThreadSchema,
+  execute: ({ agentId }) =>
+    Database.use((db) =>
+      db
+        .select({
+          organizationId: slackAgentThread.organizationId,
+          channelId: slackAgentThread.channelId,
+          threadTs: slackAgentThread.threadTs,
+        })
+        .from(slackAgentThread)
+        .where(eq(slackAgentThread.agentId, agentId))
+        .orderBy(desc(slackAgentThread.activeAt), desc(slackAgentThread.threadTs))
+        .limit(1),
+    ),
+});
+
 const findSlackStart = SqlSchema.findOneOption({
   Request: Schema.Struct({ agentId: Schema.String }),
   Result: Schema.Struct({ threadTs: Schema.String }),
@@ -779,6 +797,11 @@ export function claimSlackThreadTurn(
   turnId: string,
 ): TaskStoreEffect<Option.Option<SlackThread>> {
   return claimThreadTurn({ agentId, turnId });
+}
+
+/** The agent's current thread, the one kept, moved, or written in latest, as a turn is posted in; nothing for an agent no thread speaks for. */
+export function currentSlackThread(agentId: string): TaskStoreEffect<Option.Option<SlackThread>> {
+  return findCurrentThread({ agentId });
 }
 
 /** Whether the agent was started from a Slack message, or continues one that was: a started thread is kept for it. */

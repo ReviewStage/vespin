@@ -153,6 +153,8 @@ import {
   modelCatalogOf,
   type OfferedModel,
 } from "../../providers/model-catalog.js";
+import { SlackBot, slackBotOver } from "../../slack/slack-bot.js";
+import { SEND_SLACK_MESSAGE_TOOL } from "../../slack/slack-message-tool.js";
 import { connectAgentApiKeys } from "../../testing/agent-credentials.js";
 import {
   connectWorkspaceGitHub,
@@ -582,6 +584,7 @@ const UNREACHED = Layer.mergeAll(
   Layer.succeed(PageLinks, { sandbox: undefined }),
   integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
   LOCAL_AGENT_ENVIRONMENT,
+  Layer.succeed(SlackBot, slackBotOver(undefined)),
 );
 
 /**
@@ -1619,6 +1622,14 @@ test("message_agent shows the model the recorded input", async () => {
 
 test("end_turn shows the model the recorded input", async () => {
   await settleJsonSchemaGolden(GOLDEN_ROOT, "end-turn-input", END_TURN_TOOL.inputSchema);
+});
+
+test("send_slack_message shows the model the recorded input", async () => {
+  await settleJsonSchemaGolden(
+    GOLDEN_ROOT,
+    "send-slack-message-input",
+    SEND_SLACK_MESSAGE_TOOL.inputSchema,
+  );
 });
 
 test("list_memories and forget_memory show the model the recorded input", async () => {

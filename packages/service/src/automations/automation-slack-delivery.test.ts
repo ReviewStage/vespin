@@ -18,6 +18,7 @@ import { SettledTurnListener } from "@repo/database/models/writer";
 import { user } from "@repo/database/schemas/auth";
 import { CONVERSATION_RUNTIME } from "@repo/database/storage-vocabulary";
 import { getTestDB, openWorkspace } from "@repo/database/testing";
+import { AGENT_TOOL } from "@repo/features/agent-tools";
 import { AGENT_PAYER } from "@repo/features/agent-wire";
 import {
   AUTOMATION_ACTION,
@@ -26,10 +27,12 @@ import {
   AUTOMATION_TRIGGER,
 } from "@repo/features/automation-wire";
 import { RUN_STATUS, TURN_FAILURE } from "@repo/features/turn-run";
-import { TURN_STATUS } from "@repo/wire";
+import { ACTION_RESULT_STATUS, TURN_STATUS } from "@repo/wire";
 import { Effect, Layer, Option } from "effect";
+import { AGENT_CALLER } from "../agents/agent-tools.js";
 import { postTurnToSlack } from "../slack/slack-agent-starts.js";
 import { SlackBot, SlackBotFailure, type SlackWebApi, slackBotOver } from "../slack/slack-bot.js";
+import { runSendSlackMessage } from "../slack/slack-message-tool.js";
 import { connectAgentApiKeys } from "../testing/agent-credentials.js";
 import { endedAt } from "../testing/agent-turns.js";
 
@@ -210,6 +213,52 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
   );
 
   it.effect(
+    "an agent sends its messages in its thread itself, and its turn's final message is then not posted again",
+    () =>
+      Effect.gen(function* () {
+        const slack = recordingSlack();
+        const bot = slackBotOver(slack.api);
+        const { agent } = yield* openDeliveringRun();
+
+        const posting = Layer.succeed(SettledTurnListener, {
+          heard: (turn) => postTurnToSlack(turn).pipe(Effect.provideService(SlackBot, bot)),
+        });
+
+        yield* endedAt(agent, RUN_STATUS.SUCCEEDED, T0, "Nothing needs you today.").pipe(
+          Effect.provide(posting),
+        );
+
+        const caller = { kind: AGENT_CALLER.AGENT, agent, descriptionsOn: false } as const;
+
+        const send = (text: string) =>
+          runSendSlackMessage({ caller }, { text }).pipe(Effect.provideService(SlackBot, bot));
+
+        const sent = [yield* send("Yes, it counts."), yield* send("Cold brew is still coffee.")];
+
+        yield* endedAt(agent, RUN_STATUS.SUCCEEDED, T0 + 60_000, "I answered.", undefined, [
+          {
+            name: AGENT_TOOL.SEND_SLACK_MESSAGE,
+            input: { text: "Yes, it counts." },
+            output: { status: ACTION_RESULT_STATUS.ACCEPTED },
+          },
+        ]).pipe(Effect.provide(posting));
+
+        assert.deepEqual(
+          sent.map((answer) => answer.status),
+          [ACTION_RESULT_STATUS.ACCEPTED, ACTION_RESULT_STATUS.ACCEPTED],
+        );
+        const [, ...replies] = slack.posted;
+        assert.deepEqual(
+          replies.map((reply) => [reply.thread_ts, reply.text]),
+          [
+            ["1700000000.000001", "Yes, it counts."],
+            ["1700000000.000001", "Cold brew is still coffee."],
+          ],
+        );
+      }),
+  );
+
+  it.effect(
     "a run's result DM is kept as its agent's thread, so the turn a reply there starts is answered under it and the next run is sent as a DM of its own",
     () =>
       Effect.gen(function* () {
@@ -232,7 +281,7 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
           agent,
           RUN_STATUS.SUCCEEDED,
           T0 + 60_000,
-          "Yes, black cold brew counts.\n\n---\n\n````\n```\n---\n````\n\n---\n\n",
+          "Yes, black cold brew counts.",
         ).pipe(Effect.provide(posting));
         yield* runOn(automation, agent.id, T0 + 86_400_000);
         yield* endedAt(agent, RUN_STATUS.SUCCEEDED, T0 + 86_460_000, "Two threads need you.").pipe(
@@ -243,16 +292,11 @@ it.layer(getTestDB())("an automation run's result sent on Slack", (it) => {
           Option.map(kept, (thread) => thread.agentId),
           Option.some(agent.id),
         );
-        // The answer's parts between lines of `---` are posted one to a message, a `---` within a fence, a shorter fence-like line among it, and an empty part left as they are.
-        const [, answer, fenced, nextDigest, ...more] = slack.posted;
+        const [, answer, nextDigest, ...more] = slack.posted;
         assert.equal(more.length, 0);
         assert.equal(answer?.channel, DM_CHANNEL);
         assert.equal(answer?.thread_ts, digest);
-        assert.equal(answer?.text, "Yes, black cold brew counts.");
-        assert.equal(fenced?.thread_ts, digest);
-        assert.equal(fenced?.text, "````\n```\n---\n````");
-        assert.ok(!(answer?.blocks ?? "").includes("Open in Vespin"));
-        assert.ok((fenced?.blocks ?? "").includes("Open in Vespin"));
+        assert.match(answer?.text ?? "", /black cold brew/u);
         assert.equal(nextDigest?.channel, SLACK_USER);
         assert.equal(nextDigest?.thread_ts, undefined);
         assert.match(nextDigest?.text ?? "", /^Email digest: Two threads/u);
