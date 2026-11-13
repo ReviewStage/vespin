@@ -42,9 +42,13 @@ async function written(file: File, base64: string): Promise<string> {
   if (partial.exists) partial.delete();
   await partial.write(base64, { encoding: "base64" });
 
-  // Note that a write another read finished meanwhile is kept, and this one let go, so a player already reading that file never finds it moved over.
-  if (file.exists) partial.delete();
-  else await partial.move(file, { overwrite: true });
+  // Note that the bytes move into place only where no other write has landed the file, and never over it, so a player already reading that file never finds it gone; the write that loses keeps the one that landed.
+  try {
+    await partial.move(file, { overwrite: false });
+  } catch (cause) {
+    if (!file.exists) throw cause;
+    partial.delete();
+  }
 
   return file.uri;
 }
@@ -54,8 +58,8 @@ async function written(file: File, base64: string): Promise<string> {
  * Note that a read of a file another read is still writing begins a write
  * of its own rather than waiting on that one, because a native write can
  * hang on a cold boot, and a read tried again after it must not wait on the
- * same write; each lands whole under its own partial name, so the last to
- * move into place holds the same bytes as the first.
+ * same write; each is written whole under its own partial name, and the
+ * first to move into place stands while the rest are let go (`written`).
  */
 function once(file: File, base64: string): Promise<string> {
   return file.exists ? Promise.resolve(file.uri) : written(file, base64);
