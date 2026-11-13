@@ -38,6 +38,8 @@ const TOKENS = {
   "--ui-motion-exit": "ease",
   "--ui-duration-quick": "140ms",
   "--ui-duration-shape": "460ms",
+  "--ui-duration-pane": "240ms",
+  "--ui-motion-pane": "ease-in-out",
   "--ui-spring": "ease-out",
   "--ui-row-stagger": "32ms",
   "--ui-list-travel": "16px",
@@ -266,9 +268,10 @@ test("rows arriving together arrive a stagger apart", () => {
   expect(delays).toEqual([0, 32]);
 });
 
-test("a change landing while rows still move stops none of what they play, and adds the glide it asks for onto it", () => {
+test("a change landing while rows still move stops none of what they play, and adds the glide it asks for onto it, where a row standing still replaces, as the compositor plays it", () => {
   const show = draw([["A", "B"]]);
   show([["A", "N", "B"]]);
+  const first = played.length;
 
   show([["A", "M", "N", "B"]]);
 
@@ -277,8 +280,22 @@ test("a change landing while rows still move stops none of what they play, and a
     { transform: `translate(0px, ${-ROW}px)` },
     { transform: "none" },
   ]);
-  const travels = played.filter((each) => "transform" in (each.keyframes[0] ?? {}));
-  expect(travels.map((each) => each.timing.composite)).toEqual(travels.map(() => "add"));
+  const travelOf = (each: Played) => ("transform" in (each.keyframes[0] ?? {}) ? [each] : []);
+
+  expect(
+    played
+      .slice(0, first)
+      .flatMap(travelOf)
+      .map((each) => each.timing.composite),
+  ).toEqual(["replace", "replace"]);
+  const moving = new Set([rowOf("N"), rowOf("B")]);
+
+  const onMoving = played
+    .slice(first)
+    .flatMap(travelOf)
+    .filter((each) => moving.has(each.element));
+
+  expect(onMoving.map((each) => each.timing.composite)).toEqual(["add", "add"]);
 });
 
 test("while the lists are still read, rows arriving fade in where they stand, together, the change that ends the read included", () => {
@@ -362,6 +379,61 @@ test("a row moved into another list glides across from where it stood rather tha
   ]);
 });
 
+test("the rows a row moved out of a list leaves glide up into its room once it is let go", () => {
+  const show = draw([["A", "B", "C"], []]);
+
+  show([["A", "C"], ["B"]]);
+
+  expect(drawn()).toEqual([["A", "C"], ["B"]]);
+  expect(motionsOf(rowOf("C"))).toEqual([
+    [{ transform: `translate(0px, ${ROW}px)` }, { transform: "none" }],
+  ]);
+});
+
+test("a group arriving with a row moved into it from another list arrives around that row, which glides across whole", () => {
+  for (const [name, value] of Object.entries(TOKENS)) {
+    document.documentElement.style.setProperty(name, value);
+  }
+
+  /** A group of rows as a sidebar draws one: a mover holding its head and its own list of rows. */
+  const group = (key: string, keys: readonly string[]) =>
+    createElement(
+      "li",
+      { key, ...motionKey(key) },
+      createElement("h3", null, key),
+      createElement(Rows, { keys }),
+    );
+
+  function Sidebar({ pinned }: { pinned: boolean }): React.JSX.Element {
+    const box = useRef<HTMLDivElement>(null);
+
+    const groups = pinned
+      ? [group("Pinned", ["B"]), group("Tasks", ["A"])]
+      : [group("Tasks", ["A", "B"])];
+
+    return createElement(ListMotion, {
+      root: box,
+      children: createElement("div", { ref: box }, createElement("ul", motionRows(), groups)),
+    });
+  }
+
+  const container = document.body.appendChild(document.createElement("div"));
+  root = createRoot(container);
+  act(() => root?.render(createElement(Sidebar, { pinned: false })));
+
+  act(() => root?.render(createElement(Sidebar, { pinned: true })));
+
+  const pinned = document.querySelector('[data-motion-key="Pinned"]');
+
+  const fades = (element: Element | null | undefined) =>
+    motionsOf(element ?? undefined).filter((keyframes) => "opacity" in (keyframes[0] ?? {}));
+
+  expect(fades(pinned)).toEqual([]);
+  expect(fades(pinned?.querySelector("h3"))).toEqual([[{ opacity: 0 }, { opacity: 1 }]]);
+  expect(fades(rowOf("B"))).toEqual([]);
+  expect(motionsOf(rowOf("B"))).toHaveLength(1);
+});
+
 test("a row arriving or leaving below the window's foot plays nothing, and one leaving there goes at once", () => {
   // Note that jsdom's window is 768px tall, so of these 40px rows the first stand in it and the last far below it.
   const many = Array.from({ length: 40 }, (_, at) => `R${at}`);
@@ -428,7 +500,7 @@ test("a list whose rows scale rather than slide scales a leaving row out where i
   ]);
 });
 
-test("the rows under a fold glide down as a press opens it, and up once its body has faded and gone", () => {
+test("the rows under a fold glide down as a press opens it, and up once its body has faded and gone, on the beat the fold unrolls on", () => {
   for (const [name, value] of Object.entries(TOKENS)) {
     document.documentElement.style.setProperty(name, value);
   }
@@ -468,6 +540,8 @@ test("the rows under a fold glide down as a press opens it, and up once its body
   expect(motionsOf(rowOf("Under"))).toEqual([
     [{ transform: `translate(0px, ${-ROW}px)` }, { transform: "none" }],
   ]);
+  const opening = played.find((each) => each.element === rowOf("Under"))?.timing;
+  expect([opening?.duration, opening?.easing]).toEqual([240, "ease-in-out"]);
 
   played = [];
   act(() => toggle());

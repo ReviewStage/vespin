@@ -16,7 +16,10 @@
  * (`data-motion-key`, `motionKey()`, or `ListRow`'s `motionKey`) is followed
  * by that key, so one taken out of one list and drawn in another, a task
  * pinned or moved to another group, glides across from where it stood rather
- * than leaving one and arriving in the other.
+ * than leaving one and arriving in the other, and the rows of the list it
+ * left close over its room as its old entry is let go. A group arriving with
+ * such a row in it, the Pinned section a first pin opens, arrives around
+ * the row: its other parts fade and slide in, and the row glides in whole.
  *
  * A list keeps an entry it no longer lists drawn where it stood, leaving
  * (`useLeaving`), until its exit has played: "An element that unmounts is
@@ -49,7 +52,10 @@
  * the glide that change asks for is added onto the ones still playing
  * (`composite: "add"`), so a row in flight carries on at the speed it had
  * rather than stopping dead and setting off again, and a row fading in
- * finishes its fade rather than showing at once.
+ * finishes its fade rather than showing at once. A glide onto a row standing
+ * still replaces rather than adds, because Chromium plays only a replacing
+ * transform on its compositor: an added one is drawn by the main thread, so
+ * it froze through every long render and then jumped.
  *
  * Every duration is read from the tokens where the list stands, so reduced
  * motion and a capture run, which zero them, hold the list still and let a
@@ -180,6 +186,10 @@ interface Leaves {
   readonly pending: Leaver[];
   readonly returned: string[];
   readonly replay: () => void;
+  /** What a fold calls as it opens or closes: a replay whose glides ride the fold's own beat. */
+  readonly fold: () => void;
+  /** Whether a fold asked for the commit to be read, until the motion plays it. */
+  folding: boolean;
 }
 
 /** A point from the root's top left corner, in CSS pixels. */
@@ -223,6 +233,9 @@ const exits = new WeakMap<Element, Animation>();
 
 /** The commit each root is being played in, by the root, until the last motion over it has heard it. */
 const batches = new WeakMap<Element, Batch>();
+
+/** How many of this file's travels each element is playing, so a glide knows whether it lands on one under way. */
+const travels = new WeakMap<Element, number>();
 
 /** Whether the DOM plays motions at all. Note that a test's DOM has no animation engine, and runs none. */
 function animates(element: Element): boolean {
@@ -342,12 +355,15 @@ export function useLeaving<T>(
 const NO_REPLAY = (): void => undefined;
 
 /**
- * What something under a `ListMotion` calls in the same breath as it leaves
- * the layout on a state of its own, so the motion reads that commit and
- * glides what it moved; nothing, where no motion stands around it.
+ * What a fold under a `ListMotion` calls in the same breath as its body
+ * enters or leaves the layout on a state of its own, so the motion reads
+ * that commit and glides what it moved on the fold's beat (`--ui-motion-pane`
+ * over `--ui-duration-pane`), as the body unrolls on it, so the rows under it
+ * part as fast as it opens rather than being drawn over; nothing, where no
+ * motion stands around it.
  */
 export function useListMotionReplay(): () => void {
-  return useContext(LeavesContext)?.replay ?? NO_REPLAY;
+  return useContext(LeavesContext)?.fold ?? NO_REPLAY;
 }
 
 /** Every mover under `root`, outside any list a drag moves and any motion of its own inside it. */
@@ -597,6 +613,9 @@ function playExits(
     onLeft();
   }
 
+  // Note that the motion reads the commit that lets an unseen row go, as it reads an exit's, because a run that places its rows itself keeps that row's room until then.
+  if (seen.length < leaving.length) replay();
+
   const placed = seen.map((each) => {
     const { element } = each;
     const shift = shiftOf(element);
@@ -649,6 +668,36 @@ interface MoveTiming {
   readonly close: KeyframeAnimationOptions | undefined;
 }
 
+/**
+ * Plays a travel on `transform` from `from` home, added onto any travel of
+ * the element's own still under way, so it carries on at the speed it had.
+ * Note that a travel onto nothing under way replaces rather than adds,
+ * because Chromium runs only a replacing animation on its compositor: an
+ * added one is drawn by the main thread, and freezes there through every
+ * long task, a React render among them, then jumps to where it should be.
+ */
+function travel(element: Element, from: Keyframe, timing: KeyframeAnimationOptions): void {
+  const under = travels.get(element) ?? 0;
+  const still = under === 0 && (getComputedStyle(element).transform || "none") === "none";
+
+  const motion = element.animate([from, { transform: "none" }], {
+    ...timing,
+    composite: still ? "replace" : "add",
+  });
+
+  travels.set(element, under + 1);
+
+  const done = () => {
+    const left = (travels.get(element) ?? 1) - 1;
+
+    if (left > 0) travels.set(element, left);
+    else travels.delete(element);
+  };
+
+  motion.onfinish = done;
+  motion.oncancel = done;
+}
+
 /** Plays a row's arrival, the way it would leave played back on the spring, added onto any motion of its own, as it fades in, `step` staggers after the first; only the fade where it does not travel. */
 function arrive(mover: Element, step: number, away: Keyframe, timing: MoveTiming): void {
   if (timing.arrive === undefined) return;
@@ -656,14 +705,15 @@ function arrive(mover: Element, step: number, away: Keyframe, timing: MoveTiming
   mover.animate([{ opacity: 0 }, { opacity: 1 }], { ...timing.arrive, delay, fill: "backwards" });
 
   if (!timing.travels) return;
+
   // Note that a clip is no offset to add onto one under way, so an unroll replaces any clip of its own.
-  const unrolls = timing.way === LIST_MOTION_WAY.UNROLL;
-  mover.animate([away, homeOf(timing.way)], {
-    ...timing.travel,
-    delay,
-    fill: "backwards",
-    composite: unrolls ? "replace" : "add",
-  });
+  if (timing.way === LIST_MOTION_WAY.UNROLL) {
+    mover.animate([away, homeOf(timing.way)], { ...timing.travel, delay, fill: "backwards" });
+
+    return;
+  }
+
+  travel(mover, away, { ...timing.travel, delay, fill: "backwards" });
 }
 
 /**
@@ -710,9 +760,23 @@ function playMoves(root: HTMLElement, before: Snapshot, timing: MoveTiming): voi
   });
 
   const away = awayOf(root, timing.way);
-  const seenArriving = arriving.filter((mover) => now.get(mover)?.seen === true);
 
-  for (const [step, mover] of seenArriving.entries()) arrive(mover, step, away, timing);
+  // Note that a group arriving with a row it carries in from where that row stood, the Pinned section a first pin opens, arrives around that row, which glides in whole rather than fading and sliding in with the group.
+  const partsOf = (mover: Element): Element[] => {
+    const followed = movers.filter(
+      (other) => other !== mover && mover.contains(other) && wasOf(other) !== undefined,
+    );
+
+    if (followed.length === 0) return [mover];
+
+    return [...mover.children].filter((part) => !followed.some((row) => part.contains(row)));
+  };
+
+  const seenArriving = arriving
+    .filter((mover) => now.get(mover)?.seen === true)
+    .flatMap((mover) => partsOf(mover));
+
+  for (const [step, part] of seenArriving.entries()) arrive(part, step, away, timing);
   // Note that rows arriving in a leaving row's place, a choice's next rows, set the beat what they move glides on.
   const glide = arriving.length === 0 ? (timing.close ?? timing.travel) : timing.travel;
 
@@ -727,12 +791,15 @@ function playMoves(root: HTMLElement, before: Snapshot, timing: MoveTiming): voi
     const y = own.y - carried.y;
 
     if (Math.abs(x) < STILL && Math.abs(y) < STILL) continue;
-    mover.animate([{ transform: `translate(${x}px, ${y}px)` }, { transform: "none" }], {
-      ...glide,
-      delay: timing.wait,
-      fill: "backwards",
-      composite: "add",
-    });
+    travel(
+      mover,
+      { transform: `translate(${x}px, ${y}px)` },
+      {
+        ...glide,
+        delay: timing.wait,
+        fill: "backwards",
+      },
+    );
   }
 }
 
@@ -820,8 +887,9 @@ class ListMotionPlayer extends Component<
     _state: ListMotionPlayerState,
     batch: Batch | null,
   ): void {
-    const { pending, returned } = this.props.leaves;
+    const { pending, returned, folding } = this.props.leaves;
     const leavers = pending.splice(0);
+    this.props.leaves.folding = false;
     const root = this.props.root.current;
     root?.setAttribute(ROOT_ATTRIBUTE, "");
 
@@ -840,7 +908,7 @@ class ListMotionPlayer extends Component<
     if (batch.waiting > 0) return;
 
     if (batches.get(root) === batch) batches.delete(root);
-    this.play(root, batch, this.props.reading || previous.reading);
+    this.play(root, batch, this.props.reading || previous.reading, folding);
   }
 
   override componentDidMount(): void {
@@ -861,7 +929,7 @@ class ListMotionPlayer extends Component<
    * Note that the rows a leaving row unrolled away from close over it as it
    * rolls up, on its exit's tokens, where the rest glide after it.
    */
-  private play(root: HTMLElement, batch: Batch, reading: boolean): void {
+  private play(root: HTMLElement, batch: Batch, reading: boolean, folding: boolean): void {
     const { before } = batch;
     const leaving = this.leavingOf(root, batch.leavers, before);
 
@@ -883,13 +951,18 @@ class ListMotionPlayer extends Component<
       ? tokenTiming(root, MOTION_TOKEN.DURATION_SPRING, MOTION_TOKEN.SPRING)
       : undefined;
 
+    // Note that what a fold moved glides on the fold's beat, the one its body unrolls on.
+    const beat = folding
+      ? (tokenTiming(root, MOTION_TOKEN.DURATION_PANE, MOTION_TOKEN.EASE_PANE) ?? spring)
+      : spring;
+
     if (spring === undefined) return;
     const left = leaving.length > 0 && exit !== undefined;
     const closes = left && way === LIST_MOTION_WAY.UNROLL;
     // Note that the change that ends the read lands the last of it, which arrives as the rest of it did.
     playMoves(root, before, {
       wait: left && !closes ? Number(exit.duration) : 0,
-      travel: spring,
+      travel: beat ?? spring,
       close: closes ? exit : undefined,
       arrive: tokenTiming(root, MOTION_TOKEN.DURATION_QUICK, MOTION_TOKEN.EASE_EXIT),
       stagger: reading
@@ -929,6 +1002,7 @@ class ListMotionPlayer extends Component<
     }
 
     const leaving: Exit[] = [];
+    let moved = false;
 
     for (const { key, onLeft } of leavers) {
       const element = before.keyed.get(key);
@@ -944,11 +1018,15 @@ class ListMotionPlayer extends Component<
       if ((keyedNow.get(key) ?? []).some((other) => other !== element)) {
         element.style.display = "none";
         onLeft();
+        moved = true;
         continue;
       }
 
       leaving.push({ element, onLeft });
     }
+
+    // Note that the motion reads the commit that lets a moved row's old entry go, because a row a run places itself (`VirtualRows`) keeps its room until then, and the rows that close over it would otherwise jump there.
+    if (moved) this.props.leaves.replay();
 
     return leaving;
   }
@@ -1015,11 +1093,22 @@ export function ListMotion({
 }): React.JSX.Element {
   const [replays, setReplays] = useState(0);
 
-  const [leaves] = useState<Leaves>(() => ({
-    pending: [],
-    returned: [],
-    replay: () => setReplays((count) => count + 1),
-  }));
+  const [leaves] = useState<Leaves>(() => {
+    const replay = () => setReplays((count) => count + 1);
+
+    const made: Leaves = {
+      pending: [],
+      returned: [],
+      replay,
+      fold: () => {
+        made.folding = true;
+        replay();
+      },
+      folding: false,
+    };
+
+    return made;
+  });
 
   return (
     <LeavesContext.Provider value={leaves}>

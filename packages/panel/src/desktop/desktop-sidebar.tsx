@@ -1446,6 +1446,20 @@ function sameTaskOrder(was: TaskOrderView, now: TaskOrderView): boolean {
   );
 }
 
+/**
+ * The view the Tasks section is drawn under, kept while it stands its rows
+ * as before (`sameTaskOrder`), so a view changed, another workspace, grouping,
+ * or Assigned to, is a scene of its own to the list's motion, whose rows stand
+ * at once rather than slide in a stagger and glide.
+ */
+function useTaskScene(view: TaskOrderView): TaskOrderView {
+  const kept = useRef(view);
+
+  if (!sameTaskOrder(kept.current, view)) kept.current = view;
+
+  return kept.current;
+}
+
 /** The sections with each row drawn as it is now, wherever its held place stood it. */
 function liveSections(
   sections: TaskSections,
@@ -2181,6 +2195,7 @@ function SidebarColumn({
     assignedTo,
   };
 
+  const scene = useTaskScene(orderView);
   const placing = { grouping: orderView.grouping, pending: tasks.pendingTasks };
 
   // While the pointer is over the sidebar each task keeps the place it was
@@ -2427,7 +2442,7 @@ function SidebarColumn({
       <ReplayUnmask>
         <Fill className="sidebar-section -my-ring-reach -ms-ring-reach -me-column-inset">
           <ScrollArea ref={scroller} fade={SCROLL_FADE.BOTH}>
-            <ListMotion root={body}>
+            <ListMotion root={body} scene={scene}>
               <ChosenTasksContext.Provider value={selection.chosenOf}>
                 <SelectionRegion
                   id={selection.regionId}
