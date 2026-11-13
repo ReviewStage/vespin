@@ -98,7 +98,9 @@ function stackPages(place: SidebarPlace, pages: readonly HeldPage[], front: bool
  * Mail's expand button, which stands the page alone across the window and
  * back, with New task's compose beside it, as Mail keeps both over the
  * message rather than over its list; the page's main acts stand in the same
- * bar. A page opened from the detail, such as a task's agent or its pull
+ * bar. Expanded, the bar keeps only Collapse and the page's own acts, as
+ * Mail's full-screen message does, since New task belongs to the list the
+ * page stands beside and stays on ⌘N. A page opened from the detail, such as a task's agent or its pull
  * request, is pushed over it inside the detail's own column, with a Back
  * there, as Mail opens a message's related pages, so the sidebar and the
  * list stand beside it; each place keeps its own pages, which go as another
@@ -163,7 +165,7 @@ export function AppSplit({
             <InFrontProvider value={front && pages.length === 0}>{columns?.detail}</InFrontProvider>
           </DetailPlaceProvider>
         }
-        detailBar={{ ...columns?.detailBar, lead: [expand, compose] }}
+        detailBar={{ ...columns?.detailBar, lead: detailOnly ? [expand] : [expand, compose] }}
         detailStack={{
           pages: stackPages(standing, pages, front),
           onPathChange: (path) => keepDetailPath(standing, path),
