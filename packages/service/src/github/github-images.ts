@@ -223,9 +223,14 @@ function repositoryFile(
 
         if (length > GITHUB_IMAGE_BOUNDS.MAX_BYTES) return Effect.succeed(Option.none<ReadImage>());
 
+        // Note that a body that fails partway, a connection dropped after its headers, is no image, as one off the type is.
         return readStream(answer).pipe(
-          Effect.flatMap((body) => Effect.promise(() => new Response(body).arrayBuffer())),
-          Effect.map((buffer) => imageWithin(buffer, file.contentType)),
+          Effect.flatMap((body) =>
+            Effect.tryPromise(() => new Response(body).arrayBuffer()).pipe(
+              Effect.map((buffer) => imageWithin(buffer, file.contentType)),
+              Effect.orElseSucceed(() => Option.none<ReadImage>()),
+            ),
+          ),
         );
       }),
       Effect.catchTags({
