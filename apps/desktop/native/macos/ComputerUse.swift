@@ -47,11 +47,14 @@ import UniformTypeIdentifiers
 /// in no screenshot, since a read captures the app's window alone.
 ///
 /// Note that input is never posted to the system's event stream: an element
-/// is pressed through Accessibility, and a point is clicked by an event posted
-/// to the app's own process aimed at its window, so the developer keeps the
-/// cursor and whatever app they are typing into. Terminals, password
-/// managers, System Settings, the login and security prompts, and the app
-/// itself are refused whatever the request says.
+/// is pressed through Accessibility, as is a point on a page's control, and
+/// any other point is clicked by an event posted to the app's own process
+/// aimed at its window, so the developer keeps the cursor and whatever app
+/// they are typing into. A press answers pressed only once the window's
+/// elements changed after it, and pressed_unconfirmed where they did not,
+/// since a browser may answer a press it never acts on.
+/// Terminals, password managers, System Settings, the login and security
+/// prompts, and the app itself are refused whatever the request says.
 
 private let MAX_ELEMENTS = 600
 private let MAX_DEPTH = 40
@@ -62,6 +65,27 @@ private let LINES_PER_PAGE = 12
 private let MAX_CLICKS = 3
 /// How many ancestors up the agent's cursor looks for a place to stand where an element has none.
 private let MAX_CURSOR_ANCESTORS = 4
+/// How many ancestors up a point on a page looks for the control that takes its press, as text inside a link.
+private let MAX_PRESS_ANCESTORS = 4
+/// The roles of a page's controls whose press does what a click anywhere on them would, so a click at a point on one may be pressed instead. Note that a field, a canvas, or a map is left out, since where on it the click lands matters.
+private let PRESSED_ROLES: Set<String> = [
+    "AXButton", "AXLink", "AXCheckBox", "AXRadioButton", "AXMenuItem", "AXMenuButton", "AXPopUpButton",
+    "AXDisclosureTriangle",
+]
+/// The attribute Chromium and Electron read as a request to build their pages' Accessibility tree in full, as they do for a screen reader. An app that does not know it refuses it, and nothing else changes.
+private let MANUAL_ACCESSIBILITY = "AXManualAccessibility"
+/// The role of a page's root in a browser's tree, Chromium's and WebKit's alike.
+private let WEB_AREA_ROLE = "AXWebArea"
+/// How long an app is given to build its pages' tree the first time it is asked to.
+private let WEB_TREE_WAIT_SECONDS = 0.5
+/// The modifiers a menu item's shortcut names (`AXMenuItemCmdModifiers`), as the menu manager numbers them: ⌘ is meant unless `noCommand` is set.
+private let MENU_MODIFIER = (shift: 1, option: 2, control: 4, noCommand: 8)
+/// How deep into an app's menus, and through how many of their elements, a shortcut's item is looked for.
+private let MAX_MENU_DEPTH = 6
+private let MAX_MENU_ELEMENTS = 3000
+/// How long a press is given to show in the window's elements, and how often they are read again in that time.
+private let PRESS_SETTLE_SECONDS = 1.5
+private let PRESS_LOOK_SECONDS = 0.3
 private let MAX_PAGES = 20.0
 /// The most base64 characters of one screenshot, as the wire bounds it (`COMPUTER_BOUNDS.MAX_SHOT_CHARS`).
 private let MAX_SHOT_CHARS = 1_600_000
@@ -392,6 +416,13 @@ private func children(_ element: AXUIElement) -> [AXUIElement] {
     (attribute(element, kAXChildrenAttribute) as? [AXUIElement]) ?? []
 }
 
+/// An element by an attribute that names one, such as its parent or its window, where it does.
+private func elementAttribute(_ element: AXUIElement, _ name: String) -> AXUIElement? {
+    guard let found = attribute(element, name), CFGetTypeID(found) == AXUIElementGetTypeID() else { return nil }
+    // SAFETY: the type id was checked just above.
+    return (found as! AXUIElement)
+}
+
 private func actions(_ element: AXUIElement) -> [String] {
     var names: CFArray?
     guard AXUIElementCopyActionNames(element, &names) == .success else { return [] }
@@ -455,12 +486,6 @@ private struct TreeWalk {
     }
 }
 
-/// One of an app's windows by an attribute that names one, where it does.
-private func windowAttribute(_ app: AXUIElement, _ name: String) -> AXUIElement? {
-    guard let window = attribute(app, name), CFGetTypeID(window) == AXUIElementGetTypeID() else { return nil }
-    return (window as! AXUIElement)
-}
-
 /// Whether a window is in the Dock, which no capture reads without bringing it back, and bringing it back takes the developer's screen.
 private func minimized(_ window: AXUIElement) -> Bool {
     (attribute(window, kAXMinimizedAttribute) as? Bool) == true
@@ -475,7 +500,7 @@ private func minimized(_ window: AXUIElement) -> Bool {
  */
 private func focusedWindow(_ app: NSRunningApplication) throws -> AXUIElement? {
     let element = AXUIElementCreateApplication(app.processIdentifier)
-    let named = [kAXFocusedWindowAttribute, kAXMainWindowAttribute].compactMap { windowAttribute(element, $0) }
+    let named = [kAXFocusedWindowAttribute, kAXMainWindowAttribute].compactMap { elementAttribute(element, $0) }
     let candidates = named + ((attribute(element, kAXWindowsAttribute) as? [AXUIElement]) ?? [])
     if let shown = candidates.first(where: { !minimized($0) }) { return shown }
     guard candidates.isEmpty else {
@@ -634,16 +659,34 @@ private struct AppSession {
         guard var element = try? element(index) else { return nil }
         for _ in 0...MAX_CURSOR_ANCESTORS {
             if let bounds = frame(element) { return CGPoint(x: bounds.midX, y: bounds.midY) }
-            guard let parent = attribute(element, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID()
-            else { return nil }
-            // SAFETY: the type id was checked just above.
-            element = parent as! AXUIElement
+            guard let parent = elementAttribute(element, kAXParentAttribute) else { return nil }
+            element = parent
         }
         return nil
     }
 }
 
 private var sessions: [pid_t: AppSession] = [:]
+
+/// The processes already asked to build their pages' tree, which are given no time to build it again.
+private var webTreesAsked: Set<pid_t> = []
+
+/**
+ Asks an app to build its pages' Accessibility tree in full, and gives it a
+ moment to the first time. Note that Chromium and Electron build that tree
+ in full only for a screen reader, or once this attribute asks them to, and
+ until then may list a page's buttons yet answer a press on one without
+ acting on it. It is asked of every app on every read, since an app that
+ does not know the attribute refuses it and nothing else changes, and so no
+ browser is named.
+ */
+private func askForWebTree(_ app: NSRunningApplication) async {
+    let pid = app.processIdentifier
+    let element = AXUIElementCreateApplication(pid)
+    let asked = AXUIElementSetAttributeValue(element, MANUAL_ACCESSIBILITY as CFString, kCFBooleanTrue)
+    guard asked == .success, webTreesAsked.insert(pid).inserted else { return }
+    try? await Task.sleep(nanoseconds: UInt64(WEB_TREE_WAIT_SECONDS * 1_000_000_000))
+}
 
 private func session(_ app: NSRunningApplication) throws -> AppSession {
     guard let found = sessions[app.processIdentifier] else {
@@ -658,6 +701,7 @@ private func getAppState(_ request: [String: Any]) async throws -> [String: Any]
     let app = try await resolveApp(try string(request, "app"))
     try requirePinned(request, app)
     let pid = app.processIdentifier
+    await askForWebTree(app)
     let axWindow = try focusedWindow(app)
     let title = axWindow.flatMap { text($0, kAXTitleAttribute) }
     // Note that a window whose elements are numbered and that has no frame is refused too, since no capture could be paired with it.
@@ -783,6 +827,60 @@ private final class AgentCursorView: NSView {
     }
 }
 
+/**
+ Where the agent's cursor stands, as a recording draws it into its frames:
+ the glide it is on, the last press, and whether it shows. The cursor's
+ window is no part of a recording of one window, so a recording draws the
+ pointer itself, as the browser's draws it into the page
+ (`recording-cursor.ts`). Note that the main actor writes it and a
+ recording's frame queue reads it, so every touch holds the lock.
+ */
+private final class CursorTrack: @unchecked Sendable {
+    private let lock = NSLock()
+    private var from: CGPoint?
+    private var to: CGPoint?
+    private var glidedAt: TimeInterval = 0
+    private var pressedAt: TimeInterval?
+    private var shownUntil: TimeInterval = 0
+
+    /// Where the cursor stands at the instant given, on the window server's points, its top left the main display's, with how long since its last press; nothing where it shows nowhere.
+    func at(_ now: TimeInterval) -> (point: CGPoint, sincePress: TimeInterval?)? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let to, now < shownUntil else { return nil }
+        let start = from ?? to
+        let share = min(max((now - glidedAt) / CURSOR_GLIDE_SECONDS, 0), 1)
+        let point = CGPoint(x: start.x + (to.x - start.x) * share, y: start.y + (to.y - start.y) * share)
+        return (point, pressedAt.map { now - $0 })
+    }
+
+    func glide(to point: CGPoint, at now: TimeInterval) {
+        lock.lock()
+        defer { lock.unlock() }
+        let showing = to != nil && now < shownUntil
+        from = showing ? at(unlocked: now) : point
+        to = point
+        glidedAt = now
+        shownUntil = now + CURSOR_GLIDE_SECONDS + CURSOR_REST_SECONDS + CURSOR_GLIDE_SECONDS
+    }
+
+    func press(at now: TimeInterval) {
+        lock.lock()
+        defer { lock.unlock() }
+        pressedAt = now
+    }
+
+    /// Where the glide stands at the instant given, for a caller already holding the lock.
+    private func at(unlocked now: TimeInterval) -> CGPoint? {
+        guard let to else { return nil }
+        let start = from ?? to
+        let share = min(max((now - glidedAt) / CURSOR_GLIDE_SECONDS, 0), 1)
+        return CGPoint(x: start.x + (to.x - start.x) * share, y: start.y + (to.y - start.y) * share)
+    }
+}
+
+private let cursorTrack = CursorTrack()
+
 /// The window the agent's cursor stands in: borderless, clear, over every app, taking no clicks, on every space.
 @MainActor
 private final class AgentCursor {
@@ -809,18 +907,12 @@ private final class AgentCursor {
     /// The press landing where the cursor stands, its ring rippling out.
     func press() {
         (panel?.contentView as? AgentCursorView)?.ripple()
-    }
-
-    /// The cursor's window ordered in, unseen where it stands nowhere yet, so a recording of the helper's windows finds it among them from the start.
-    func standBy() {
-        let panel = made()
-        guard !panel.isVisible else { return }
-        panel.alphaValue = 0
-        panel.orderFrontRegardless()
+        cursorTrack.press(at: ProcessInfo.processInfo.systemUptime)
     }
 
     func glide(to point: CGPoint) {
         let panel = made()
+        cursorTrack.glide(to: point, at: ProcessInfo.processInfo.systemUptime)
         let height = NSScreen.screens.first?.frame.height ?? 0
         let origin = CGPoint(x: point.x - CURSOR_TIP.x, y: height - point.y - CURSOR_BOX.height + CURSOR_TIP.y)
         fade?.cancel()
@@ -926,25 +1018,92 @@ private func clickPoint(_ point: CGPoint, session: AppSession, button: String, c
     }
 }
 
+/// The numbered lines of the window an agent reads of an app, as they stand now; none where it has no window.
+private func windowLines(_ app: NSRunningApplication) -> String {
+    guard let window = try? focusedWindow(app) else { return "" }
+    var walk = TreeWalk()
+    walk.walk(window, depth: 0)
+    return walk.lines.joined(separator: "\n")
+}
+
+/**
+ Presses an element through Accessibility, which needs no point and no
+ focus, and answers pressed once the window's elements read differently from
+ how they read just before the press, after the cursor has glided, so a page
+ that changes by itself meanwhile is not read as the press. Note that a press
+ answered as taken is not proof it acted, since a browser may answer one it never acts on, so a
+ window that reads the same for `PRESS_SETTLE_SECONDS` answers
+ pressed_unconfirmed. That is never an error, since many a press that acted
+ changes nothing in its window, as a Send or one opening another window, and
+ an agent told it failed would press again. Nothing where the element offers
+ no press, so its caller clicks it instead; a press macOS refused may have
+ pressed it already, so it is answered rather than pressed twice.
+ */
+private func confirmedPress(
+    _ element: AXUIElement, of app: NSRunningApplication, named name: String
+) async throws -> [String: Any]? {
+    let before = windowLines(app)
+    let result = AXUIElementPerformAction(element, kAXPressAction as CFString)
+    if result == .actionUnsupported { return nil }
+    guard result == .success else {
+        throw HelperError(
+            kind: ERROR_KIND.failed,
+            message: "\(name) did not confirm its press (\(result.rawValue)); read the app again to see whether it took it.")
+    }
+    let deadline = Date().addingTimeInterval(PRESS_SETTLE_SECONDS)
+    while Date() < deadline {
+        try await Task.sleep(nanoseconds: UInt64(PRESS_LOOK_SECONDS * 1_000_000_000))
+        if windowLines(app) != before { return ["done": "pressed"] }
+    }
+    return ["done": "pressed_unconfirmed"]
+}
+
+/**
+ The control of a page under `point` that takes a press, where the point
+ lands on a page in the window the session numbered: the element itself, or
+ the nearest of `MAX_PRESS_ANCESTORS` above it, of a role in `PRESSED_ROLES`
+ that offers a press. Note that a browser in the background may drop a click
+ posted at a point, or come forward for it, where it takes a press through
+ Accessibility as it stands, so a click on a page's control goes that way.
+ Nothing where the point is on no page or on no such control, as on a field,
+ a canvas, or a map, which is clicked at the point as before.
+ */
+private func pagePressTarget(at point: CGPoint, of app: NSRunningApplication, session: AppSession) -> AXUIElement? {
+    var hit: AXUIElement?
+    let found = AXUIElementCopyElementAtPosition(
+        AXUIElementCreateApplication(app.processIdentifier), Float(point.x), Float(point.y), &hit)
+    guard found == .success, let hit,
+        let window = elementAttribute(hit, kAXWindowAttribute), let place = frame(window),
+        sameFrame(place, session.windowFrame)
+    else { return nil }
+    var element = hit
+    var control: AXUIElement?
+    for depth in 0..<MAX_DEPTH {
+        let role = text(element, kAXRoleAttribute) ?? ""
+        if role == WEB_AREA_ROLE { return control }
+        if control == nil, depth <= MAX_PRESS_ANCESTORS, PRESSED_ROLES.contains(role),
+            actions(element).contains(kAXPressAction as String)
+        {
+            control = element
+        }
+        guard let parent = elementAttribute(element, kAXParentAttribute) else { return nil }
+        element = parent
+    }
+    return nil
+}
+
 private func click(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
     let app = try actedApp(request)
     let current = try session(app)
     let button = (request["mouse_button"] as? String) ?? BUTTON.left
     let count = min(max(integer(request, "click_count") ?? 1, 1), MAX_CLICKS)
+    let plain = button == BUTTON.left && count == 1
     if let index = integer(request, "element_index") {
         let element = try current.element(index)
         if let point = current.cursorPoint(index) { await cursorTo(point) }
-        // Note that a plain press goes through Accessibility, which needs no point and no focus, before an event is aimed at the element's center.
-        if button == BUTTON.left, count == 1 {
-            let pressed = AXUIElementPerformAction(element, kAXPressAction as CFString)
-            if pressed == .success { return ["done": "pressed"] }
-            // Note that only an element that offers no press is clicked at its center instead; any other failure may have pressed it already, so it is answered rather than pressed twice.
-            guard pressed == .actionUnsupported else {
-                throw HelperError(
-                    kind: ERROR_KIND.failed,
-                    message: "Element \(index) did not confirm its press (\(pressed.rawValue)); read the app again to see whether it took it.")
-            }
+        if plain, let answer = try await confirmedPress(element, of: app, named: "Element \(index)") {
+            return answer
         }
         clickPoint(try current.center(index), session: current, button: button, count: count)
         return ["done": "clicked"]
@@ -953,7 +1112,13 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
         throw HelperError(kind: ERROR_KIND.badRequest, message: "Give an element_index, or x and y.")
     }
     let point = current.point(x: x, y: y)
+    let target = plain ? pagePressTarget(at: point, of: app, session: current) : nil
     await cursorTo(point)
+    if let target,
+        let answer = try await confirmedPress(target, of: app, named: "The page's element at \(Int(x)), \(Int(y))")
+    {
+        return answer
+    }
     clickPoint(point, session: current, button: button, count: count)
     return ["done": "clicked"]
 }
@@ -1010,17 +1175,63 @@ private func chord(_ name: String) throws -> (key: CGKeyCode, flags: CGEventFlag
     return (key, flags)
 }
 
+/**
+ The enabled item of the app's own menus whose shortcut is `key` with
+ `flags`, where the chord holds ⌘ and names one character; nothing where
+ none does. Note that the menu bar's first menu is the system's own, whose
+ items, such as Log Out, are never the app's to press, so it is passed over.
+ */
+private func menuItem(for key: String, flags: CGEventFlags, of app: NSRunningApplication) -> AXUIElement? {
+    guard flags.contains(.maskCommand), !flags.contains(.maskSecondaryFn), key.count == 1,
+        let bar = elementAttribute(AXUIElementCreateApplication(app.processIdentifier), kAXMenuBarAttribute)
+    else { return nil }
+    var modifiers = 0
+    if flags.contains(.maskShift) { modifiers |= MENU_MODIFIER.shift }
+    if flags.contains(.maskAlternate) { modifiers |= MENU_MODIFIER.option }
+    if flags.contains(.maskControl) { modifiers |= MENU_MODIFIER.control }
+    var pending = children(bar).dropFirst().map { (element: $0, depth: 0) }
+    var next = 0
+    while next < pending.count, next < MAX_MENU_ELEMENTS {
+        let found = pending[next]
+        next += 1
+        if text(found.element, kAXMenuItemCmdCharAttribute)?.uppercased() == key.uppercased(),
+            (attribute(found.element, kAXMenuItemCmdModifiersAttribute) as? Int) == modifiers,
+            (attribute(found.element, kAXEnabledAttribute) as? Bool) != false
+        {
+            return found.element
+        }
+        if found.depth < MAX_MENU_DEPTH {
+            pending += children(found.element).map { (element: $0, depth: found.depth + 1) }
+        }
+    }
+    return nil
+}
+
+/**
+ Presses a chord. Note that a ⌘ shortcut the app's menus hold is pressed
+ through its menu item, answered as any press is, since an app in the
+ background has no key window for a posted ⌘ key to reach, and pressing the
+ item keeps the app behind. Any other chord is posted to the app's window and
+ answers sent, since nothing tells whether the app took it.
+ */
 private func pressKey(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
     let app = try actedApp(request)
     let current = try session(app)
-    let pressed = try chord(try string(request, "key"))
+    let name = try string(request, "key")
+    let pressed = try chord(name)
+    let key = name.split(separator: "+").last.map { $0.lowercased() } ?? ""
+    if let item = menuItem(for: key, flags: pressed.flags, of: app),
+        let answer = try await confirmedPress(item, of: app, named: "The menu item for \(name)")
+    {
+        return answer
+    }
     for down in [true, false] {
         let event = CGEvent(keyboardEventSource: source, virtualKey: pressed.key, keyDown: down)
         event?.flags = pressed.flags
         post(event, to: current)
     }
-    return ["done": "pressed"]
+    return ["done": "sent"]
 }
 
 private let DIRECTION = (up: "up", down: "down", left: "left", right: "right")
@@ -1164,6 +1375,77 @@ private func isDrawnFrame(_ buffer: CMSampleBuffer) -> Bool {
     return status == .complete
 }
 
+/// The window's bounds now, on the window server's points, its top left the main display's; nothing where it is gone.
+private func windowBounds(_ windowID: CGWindowID) -> CGRect? {
+    guard
+        let listed = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID) as? [[String: Any]],
+        let bounds = listed.first?[kCGWindowBounds as String] as? NSDictionary,
+        let rect = CGRect(dictionaryRepresentation: bounds)
+    else { return nil }
+    return rect
+}
+
+/// How long a press's ring takes to ripple out, as the cursor's window draws it.
+private let RIPPLE_SECONDS = CURSOR_GLIDE_SECONDS * 1.6
+
+/**
+ The agent's cursor drawn into a frame of the window, where it stands over
+ the window: the browser pointer's arrow and, just after a press, its ring.
+ The window fills the frame at its own shape, scaled to fit and centered,
+ so a point on the window is placed by the window's bounds now, which follow
+ it as it moves or resizes. Nothing is drawn where the cursor shows nowhere,
+ or off the window.
+ */
+private func drawCursor(into pixels: CVPixelBuffer, window: CGRect, color: CGColor, at now: TimeInterval) {
+    guard let cursor = cursorTrack.at(now), window.width > 0, window.height > 0 else { return }
+    let width = CGFloat(CVPixelBufferGetWidth(pixels))
+    let height = CGFloat(CVPixelBufferGetHeight(pixels))
+    let scale = min(width / window.width, height / window.height)
+    let origin = CGPoint(x: (width - window.width * scale) / 2, y: (height - window.height * scale) / 2)
+    let tip = CGPoint(
+        x: origin.x + (cursor.point.x - window.minX) * scale, y: origin.y + (cursor.point.y - window.minY) * scale)
+    guard tip.x >= 0, tip.y >= 0, tip.x <= width, tip.y <= height else { return }
+    CVPixelBufferLockBaseAddress(pixels, [])
+    defer { CVPixelBufferUnlockBaseAddress(pixels, []) }
+    guard
+        let context = CGContext(
+            data: CVPixelBufferGetBaseAddress(pixels), width: Int(width), height: Int(height), bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(pixels), space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+    else { return }
+    // Note that the frame's rows run top down, so the context is flipped to place points as the window server does.
+    context.translateBy(x: 0, y: height)
+    context.scaleBy(x: 1, y: -1)
+    context.translateBy(x: tip.x, y: tip.y)
+    context.scaleBy(x: scale, y: scale)
+    if let since = cursor.sincePress, since < RIPPLE_SECONDS {
+        let share = since / RIPPLE_SECONDS
+        let radius = 12 * (0.4 + share)
+        context.setStrokeColor(color.copy(alpha: 1 - share) ?? color)
+        context.setLineWidth(1.5)
+        context.strokeEllipse(in: CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2))
+    }
+    let arrow = CGMutablePath()
+    arrow.move(to: CGPoint(x: 0, y: 0))
+    arrow.addLine(to: CGPoint(x: 12.07, y: 4.16))
+    arrow.addCurve(to: CGPoint(x: 12.56, y: 5.58), control1: CGPoint(x: 13.49, y: 4.65), control2: CGPoint(x: 13.65, y: 5.12))
+    arrow.addLine(to: CGPoint(x: 7.64, y: 7.64))
+    arrow.addLine(to: CGPoint(x: 5.58, y: 12.56))
+    arrow.addCurve(to: CGPoint(x: 4.16, y: 12.07), control1: CGPoint(x: 5.12, y: 13.65), control2: CGPoint(x: 4.65, y: 13.49))
+    arrow.closeSubpath()
+    context.setLineJoin(.round)
+    context.setLineWidth(2.4)
+    // Note that a shadow's offset ignores the flip, so it falls a point down as the cursor's window draws it.
+    context.setShadow(offset: CGSize(width: 0, height: -1), blur: 1.5, color: CGColor(gray: 0, alpha: 0.35))
+    context.setStrokeColor(CGColor(gray: 1, alpha: 1))
+    context.addPath(arrow)
+    context.strokePath()
+    context.setShadow(offset: .zero, blur: 0, color: nil)
+    context.setFillColor(color)
+    context.addPath(arrow)
+    context.fillPath()
+}
+
 /// How a capture ended: the seconds it ran, or why it came to no video.
 private enum CaptureEnd {
     case ran(Double)
@@ -1172,15 +1454,18 @@ private enum CaptureEnd {
 }
 
 /**
- One recording as it runs: a stream of the display the window stands on,
- holding only the app's windows and the helper's own, which the agent's
- cursor stands in, cropped to the window, written frame by frame into an
- H.264 MP4. Note that every frame is handled on its own queue, which the
- end reads through, so a frame never lands in a writer being finished.
+ One recording as it runs: a stream of the one window alone, as a read
+ captures it, so no other window, the app's own among them, is ever in its
+ frames, with the agent's cursor drawn into each, written frame by frame
+ into an H.264 MP4. Note that every frame is handled on its own queue,
+ which the end reads through, so a frame never lands in a writer being
+ finished.
  */
 private final class WindowRecorder: NSObject, SCStreamOutput {
     let width: Int
     let height: Int
+    private let windowID: CGWindowID
+    private let pointer: CGColor
     private let stream: SCStream
     private let writer: AVAssetWriter
     private let input: AVAssetWriterInput
@@ -1191,9 +1476,11 @@ private final class WindowRecorder: NSObject, SCStreamOutput {
     private var firstUptime: TimeInterval?
     private var ended = false
 
-    init(filter: SCContentFilter, configuration: SCStreamConfiguration) throws {
+    init(window: SCWindow, configuration: SCStreamConfiguration, pointer: CGColor) throws {
         width = configuration.width
         height = configuration.height
+        windowID = window.windowID
+        self.pointer = pointer
         writer = try AVAssetWriter(outputURL: CAPTURED_URL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
         input = AVAssetWriterInput(
@@ -1203,7 +1490,8 @@ private final class WindowRecorder: NSObject, SCStreamOutput {
             throw HelperError(kind: ERROR_KIND.recordingEncoder, message: "The recording could not be encoded.")
         }
         writer.add(input)
-        stream = SCStream(filter: filter, configuration: configuration, delegate: nil)
+        stream = SCStream(
+            filter: SCContentFilter(desktopIndependentWindow: window), configuration: configuration, delegate: nil)
         super.init()
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: frames)
     }
@@ -1217,6 +1505,9 @@ private final class WindowRecorder: NSObject, SCStreamOutput {
 
     func stream(_ stream: SCStream, didOutputSampleBuffer buffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .screen, !ended, buffer.isValid, isDrawnFrame(buffer) else { return }
+        if let pixels = buffer.imageBuffer, let bounds = windowBounds(windowID) {
+            drawCursor(into: pixels, window: bounds, color: pointer, at: ProcessInfo.processInfo.systemUptime)
+        }
         let at = buffer.presentationTimeStamp
         if first == nil {
             writer.startSession(atSourceTime: at)
@@ -1434,12 +1725,12 @@ private func recordedWindow(_ app: NSRunningApplication, in content: SCShareable
 }
 
 /**
- Starts recording the app's window: the display it stands on, holding the
- app's windows and the helper's own, so its menus and sheets and the
- agent's cursor are in the video while the developer's other windows and
- their own pointer never are, cropped to the window as it stood at the
- start. A recording that runs is left to run, and refused, as the browser's
- is.
+ Starts recording the app's window: that one window alone, as a read
+ captures it, following it as it moves or resizes, with the agent's cursor
+ drawn in. No other window is ever in the video, the developer's or the
+ app's own, so a menu or popover the app opens as a window of its own is
+ not either; the developer's pointer never is. A recording that runs is
+ left to run, and refused, as the browser's is.
  */
 private func record(_ request: [String: Any]) async throws -> [String: Any] {
     let app = try await resolveApp(try string(request, "app"))
@@ -1455,29 +1746,19 @@ private func record(_ request: [String: Any]) async throws -> [String: Any] {
     }
     let maxSeconds = Double(min(max(integer(request, "max_seconds") ?? 120, 1), 120))
     let maxBytes = max(integer(request, "max_bytes") ?? 0, 1)
-    await MainActor.run { agentCursor.standBy() }
-    // Note that every window is listed, not those on screen alone, so the helper is found by its cursor's window however it stands.
-    let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
+    let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
     let window = try recordedWindow(app, in: content)
-    guard
-        let display = content.displays.max(by: {
-            $0.frame.intersection(window.frame).width * $0.frame.intersection(window.frame).height
-                < $1.frame.intersection(window.frame).width * $1.frame.intersection(window.frame).height
-        }), display.frame.intersects(window.frame)
-    else {
-        throw HelperError(kind: ERROR_KIND.noWindow, message: "\(appName(app))'s window stands on no display.")
-    }
-    let own = getpid()
-    let included = content.applications.filter { $0.processID == app.processIdentifier || $0.processID == own }
-    let filter = SCContentFilter(display: display, including: included, exceptingWindows: [])
-    let crop = window.frame.intersection(display.frame).offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
-    let scale = Double(filter.pointPixelScale)
-    let size = evenSize(width: crop.width * scale, height: crop.height * scale, edge: RECORDING_EDGE)
+    let scale = Double(SCContentFilter(desktopIndependentWindow: window).pointPixelScale)
+    let size = evenSize(width: window.frame.width * scale, height: window.frame.height * scale, edge: RECORDING_EDGE)
+    let pointer = await MainActor.run { pointerColor().cgColor }
     let configuration = SCStreamConfiguration()
-    configuration.sourceRect = crop
     configuration.width = size.width
     configuration.height = size.height
-    configuration.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+    configuration.scalesToFit = true
+    configuration.preservesAspectRatio = true
+    configuration.ignoreShadowsSingleWindow = true
+    // Note that the frames are BGRA, rather than the encoder's own 4:2:0, so the cursor can be drawn into them.
+    configuration.pixelFormat = kCVPixelFormatType_32BGRA
     configuration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(RECORDING_FPS))
     configuration.showsCursor = false
     configuration.queueDepth = 6
@@ -1485,7 +1766,7 @@ private func record(_ request: [String: Any]) async throws -> [String: Any] {
     try? FileManager.default.removeItem(at: RECORDING_FOLDER)
     try FileManager.default.createDirectory(
         at: RECORDING_FOLDER, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-    let recorder = try WindowRecorder(filter: filter, configuration: configuration)
+    let recorder = try WindowRecorder(window: window, configuration: configuration, pointer: pointer)
     try await recorder.start()
     await recordings.begin(recorder, maxSeconds: maxSeconds, maxBytes: maxBytes)
     return ["done": "record"]

@@ -1,9 +1,37 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../tsconfig.package.json",
   "compilerOptions": {
     "jsx": "react-jsx",
-    "types": ["node"],
-    "noEmit": true
+    "types": ["node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "references": [
+    {
+      "path": "../agent-runner"
+    },
+    {
+      "path": "../brand"
+    },
+    {
+      "path": "../credentials"
+    },
+    {
+      "path": "../features"
+    },
+    {
+      "path": "../gateway"
+    },
+    {
+      "path": "../host"
+    },
+    {
+      "path": "../settings"
+    },
+    {
+      "path": "../ui"
+    },
+    {
+      "path": "../wire"
+    }
+  ]
 }
