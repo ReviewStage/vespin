@@ -5,7 +5,7 @@
 //
 //   node packages/brand/scripts/generate-surface-shared.mjs
 //
-// It writes four committed outputs into packages/brand/src/generated, three
+// It writes four committed outputs into packages/brand/src/generated, four
 // into @repo/ui's tokens, and three into @repo/ui-native's, all from the
 // tables further down:
 //
@@ -15,6 +15,7 @@
 //   src/lucide-symbols.ts       Lucide's glyphs as SF Symbols templates, outlined
 //   ui/src/tokens/motion-tokens.css  the --ui-* motion tokens the shared
 //                               components read, imported by @repo/ui/tokens.css
+//   ui/src/tokens/geist.css     Geist's steps as --geist-* properties
 //   ui/src/tokens/brand.css     the brand's colors on the --ui-color-* roles
 //   ui/src/tokens/identity.css  the identity hues on --ui-color-identity-*
 //   ui-native/src/tokens/brand-colors.ts  the iOS app's share of those
@@ -33,6 +34,7 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { BRAND, IDENTITY } from "./brand-palette.mjs";
+import { GEIST } from "./geist.mjs";
 import { symbolTemplate } from "./lucide-symbols.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -171,17 +173,133 @@ const GOOGLE_MARK_LAYERS = [
 ];
 
 // ---------- Lucide symbols ----------
-// The panel's Lucide glyphs for the marks that are our own and that SF
-// Symbols has no drawing of, under the names the iOS app's asset catalog
-// holds them by: a pull request in each state, a branch, and a decide ask.
-// Every other glyph the app draws is an SF Symbol.
+// Every glyph the iOS app draws itself is the panel's own Lucide glyph for
+// the same place (the developer, Nov 12, 2026), written into the app's asset
+// catalog as a custom symbol under its Lucide name: the icons `@repo/ui-native`'s
+// `GLYPH` table names, by Lucide's own name for each. Only iOS's own chrome
+// (the back chevron, the share sheet, the search field) stays an SF Symbol.
+// An alias of Lucide's (`trash-2`) re-exports no drawing, so the table names
+// the icon it stands for (`trash`).
 const LUCIDE_SYMBOLS = {
-  GIT_PULL_REQUEST: "git-pull-request",
-  GIT_PULL_REQUEST_DRAFT: "git-pull-request-draft",
-  GIT_PULL_REQUEST_CLOSED: "git-pull-request-closed",
-  GIT_MERGE: "git-merge",
+  ALARM_CLOCK_CHECK: "alarm-clock-check",
+  ALARM_CLOCK_OFF: "alarm-clock-off",
+  APP_WINDOW: "app-window",
+  ARCHIVE: "archive",
+  ARCHIVE_RESTORE: "archive-restore",
+  ARROW_DOWN: "arrow-down",
+  ARROW_UP: "arrow-up",
+  BOOK_OPEN: "book-open",
+  BOOKMARK: "bookmark",
+  BOT: "bot",
+  BUILDING_COMPLEX: "building-complex",
+  CALENDAR: "calendar",
+  CALENDAR_CHECK: "calendar-check",
+  CALENDAR_CLOCK: "calendar-clock",
+  CALENDAR_COG: "calendar-cog",
+  CALENDAR_PLUS: "calendar-plus",
+  CALENDAR_X: "calendar-x",
+  CHECK: "check",
+  CHECK_CHECK: "check-check",
+  CHEVRON_DOWN: "chevron-down",
+  CHEVRON_RIGHT: "chevron-right",
+  CIRCLE_ALERT: "circle-alert",
+  CIRCLE_ARROW_UP: "circle-arrow-up",
+  CIRCLE_CHECK: "circle-check",
+  CIRCLE_DASHED: "circle-dashed",
+  CIRCLE_DOT: "circle-dot",
+  CIRCLE_PLUS: "circle-plus",
+  CIRCLE_SLASH: "circle-slash",
+  CIRCLE_STOP: "circle-stop",
+  CLOCK: "clock",
+  COPY: "copy",
+  CORNER_DOWN_RIGHT: "corner-down-right",
+  CORNER_LEFT_UP: "corner-left-up",
+  CPU: "cpu",
+  CROWN: "crown",
+  DOWNLOAD: "download",
+  ELLIPSIS: "ellipsis",
+  EXTERNAL_LINK: "external-link",
+  EYE: "eye",
+  EYE_OFF: "eye-off",
+  FILE: "file",
+  FILE_DIFF: "file-diff",
+  FILE_PEN: "file-pen",
+  FILE_PLUS: "file-plus",
+  FILE_TEXT: "file-text",
+  FOLDER: "folder",
+  FOLDER_GIT: "folder-git",
+  FOLDER_INPUT: "folder-input",
+  FOLDER_MINUS: "folder-minus",
+  FOLDER_PLUS: "folder-plus",
+  FOLDER_X: "folder-x",
   GIT_BRANCH: "git-branch",
+  GIT_MERGE: "git-merge",
+  GIT_PULL_REQUEST: "git-pull-request",
+  GIT_PULL_REQUEST_CLOSED: "git-pull-request-closed",
+  GIT_PULL_REQUEST_DRAFT: "git-pull-request-draft",
+  GLOBE: "globe",
+  HAND: "hand",
+  HEADING: "heading",
+  HOURGLASS: "hourglass",
+  HOUSE: "house",
+  IMAGE: "image",
+  INBOX: "inbox",
+  LAPTOP: "laptop",
+  LAYOUT_LIST: "layout-list",
+  LIGHTBULB: "lightbulb",
+  LINK: "link",
+  LIST_CHECKS: "list-checks",
+  LIST_END: "list-end",
+  LIST_TODO: "list-todo",
+  LIST_TREE: "list-tree",
+  LOG_OUT: "log-out",
+  MAIL: "mail",
+  MAIL_OPEN: "mail-open",
+  MESSAGE_SQUARE: "message-square",
+  MESSAGE_SQUARE_PLUS: "message-square-plus",
+  MESSAGES_SQUARE: "messages-square",
+  MIC: "mic",
+  MONITOR: "monitor",
+  NETWORK: "network",
+  OCTAGON_MINUS: "octagon-minus",
+  PANEL_LEFT: "panel-left",
+  PAPERCLIP: "paperclip",
+  PEN_LINE: "pen-line",
+  PENCIL: "pencil",
+  PENCIL_LINE: "pencil-line",
+  PIN: "pin",
+  PIN_OFF: "pin-off",
+  PLAY: "play",
+  PLUG: "plug",
+  PLUS: "plus",
+  ROTATE_CCW: "rotate-ccw",
+  ROTATE_CCW_CLOCK: "rotate-ccw-clock",
+  ROTATE_CW: "rotate-cw",
+  SCROLL_TEXT: "scroll-text",
+  SEARCH: "search",
+  SEARCH_X: "search-x",
+  SEND: "send",
+  SERVER: "server",
+  SETTINGS: "settings",
+  SHIELD_ALERT: "shield-alert",
+  SHIELD_ELLIPSIS: "shield-ellipsis",
+  SHIELD_USER: "shield-user",
+  SLIDERS_HORIZONTAL: "sliders-horizontal",
   SPLIT: "split",
+  SQUARE_CHECK: "square-check",
+  SQUARE_PEN: "square-pen",
+  TERMINAL: "terminal",
+  TIMER: "timer",
+  TRASH: "trash",
+  UNDO_2: "undo-2",
+  UNLINK: "unlink",
+  USER: "user",
+  USER_PLUS: "user-plus",
+  USERS: "users",
+  WIFI_OFF: "wifi-off",
+  WRENCH: "wrench",
+  X: "x",
+  ZAP: "zap",
 };
 
 // Note that the drawings are read from the lucide-react @repo/ui resolves,
@@ -196,6 +314,12 @@ const lucideSymbols = await Promise.all(
   Object.entries(LUCIDE_SYMBOLS).map(async ([key, icon]) => {
     const module = lucideFrom.resolve(`lucide-react/dist/esm/icons/${icon}.mjs`);
     const { __iconData } = await import(pathToFileURL(module).href);
+
+    // Note that an alias of Lucide's (`trash-2`) re-exports the component alone, so the table names the icon it stands for (`trash`).
+    if (__iconData === undefined)
+      throw new Error(
+        `generate-surface-shared: "${icon}" is an alias of a Lucide icon; name the icon it re-exports`,
+      );
 
     return { key, name: assetName(icon), svg: symbolTemplate(__iconData.node) };
   }),
@@ -389,6 +513,44 @@ ${block((key) => BRAND.DARK[key])}
 `;
 }
 
+// Geist's steps under --geist-<scale>-<step> names, laid out as brand.css
+// lays out the brand's: once as light-dark() on the desktop, and a block per
+// theme on the site. palettes.css names these rather than writing a hex.
+function uiGeistCss() {
+  const steps = Object.entries(GEIST).flatMap(([scale, values]) =>
+    Object.entries(values).map(([at, colors]) => [
+      `--geist-${scale.toLowerCase().replaceAll("_", "-")}-${at}`,
+      colors,
+    ]),
+  );
+
+  const block = (value) => steps.map(([name, colors]) => `  ${name}: ${value(colors)};`).join("\n");
+
+  const pair = (colors) =>
+    colors.LIGHT === colors.DARK ? colors.LIGHT : `light-dark(${colors.LIGHT}, ${colors.DARK})`;
+
+  return `/* Generated by packages/brand/scripts/generate-surface-shared.mjs. Do not edit by hand: change
+   geist.mjs and re-run it.
+
+   Geist's colors (https://vercel.com/geist/colors), every step of every
+   scale, both profiles, both themes. A role names one of these; none is
+   drawn with directly. */
+
+[data-ui-profile="desktop"] {
+${block(pair)}
+}
+
+[data-ui-profile="web"],
+[data-ui-profile="web"][data-ui-theme="light"] {
+${block((colors) => colors.LIGHT)}
+}
+
+[data-ui-profile="web"][data-ui-theme="dark"] {
+${block((colors) => colors.DARK)}
+}
+`;
+}
+
 // The identity hues under --ui-color-identity-1 through -6, laid out as
 // brand.css lays out the brand's: once as light-dark() on the desktop, and a
 // block per theme on the site.
@@ -506,6 +668,7 @@ const outputs = [
   [join(SURFACE, "provider-mark-paths.ts"), providerMarkPathsTs()],
   [join(UI_TOKENS, "motion-tokens.css"), uiMotionTokensCss()],
   [join(SURFACE, "brand-palette.ts"), brandPaletteTs()],
+  [join(UI_TOKENS, "geist.css"), uiGeistCss()],
   [join(UI_TOKENS, "brand.css"), uiBrandCss()],
   [join(UI_NATIVE_TOKENS, "brand-colors.ts"), nativeBrandColorsTs()],
   [join(UI_TOKENS, "identity.css"), uiIdentityCss()],

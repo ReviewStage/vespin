@@ -22,6 +22,7 @@ import {
   BAR_TITLE,
   BUZZ,
   EmptyState,
+  GLYPH,
   ListSection,
   Screen,
   SettingsForm,
@@ -164,7 +165,7 @@ export function MoveTaskScreen({ taskId }: { readonly taskId: string }) {
       <>
         {bar}
         <Screen>
-          <EmptyState title={WORDS.TASK_NOT_FOUND} symbol="questionmark.folder" />
+          <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         </Screen>
       </>
     );

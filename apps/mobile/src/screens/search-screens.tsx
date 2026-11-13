@@ -10,7 +10,15 @@ import {
   SEARCH_FOUND_KIND,
   SEARCH_FOUND_TITLE,
 } from "@repo/features/search-found-model";
-import { EmptyState, LIST_LOOK, ListSection, RowList, Screen, SplitView } from "@repo/ui-native";
+import {
+  EmptyState,
+  GLYPH,
+  LIST_LOOK,
+  ListSection,
+  RowList,
+  Screen,
+  SplitView,
+} from "@repo/ui-native";
 import { Stack, useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
@@ -144,9 +152,9 @@ function useSearchScreen({ query, setQuery }: SearchWords) {
 
   const results =
     query.trim() === "" ? (
-      <EmptyState title={SEARCH_TITLE} symbol="magnifyingglass" description={SEARCH_FINDS} />
+      <EmptyState title={SEARCH_TITLE} symbol={GLYPH.SEARCH} description={SEARCH_FINDS} />
     ) : none ? (
-      <EmptyState title={noResultsWords(query)} symbol="magnifyingglass" />
+      <EmptyState title={noResultsWords(query)} symbol={GLYPH.SEARCH} />
     ) : (
       <FoundList
         found={found}

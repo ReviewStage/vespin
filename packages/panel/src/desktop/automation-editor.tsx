@@ -335,10 +335,12 @@ const GITHUB_EVENTS: readonly { value: GitHubTriggerEvent; label: string }[] = [
   { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED, label: "Pull request opened or updated" },
   { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED, label: "Pull request opened" },
   { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED, label: "Pull request labeled" },
+  { value: GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED, label: "Pull request merged" },
   { value: GITHUB_TRIGGER_EVENT.ISSUE_OPENED, label: "Issue opened" },
   { value: GITHUB_TRIGGER_EVENT.ISSUE_LABELED, label: "Issue labeled" },
   { value: GITHUB_TRIGGER_EVENT.CHECK_FAILED, label: "Checks failed" },
   { value: GITHUB_TRIGGER_EVENT.PUSH, label: "Commits pushed" },
+  { value: GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED, label: "Release published" },
 ];
 
 /** The days of the week as cron numbers them. */
@@ -1404,11 +1406,12 @@ const MOMENT_CHOICES: readonly { value: PullRequestMoment; label: string; detail
   },
 ];
 
-/** The GitHub events a pull request's drafts and forks speak to. */
+/** The GitHub events a pull request's forks speak to. */
 const PULL_REQUEST_EVENTS: ReadonlySet<GitHubTriggerEvent> = new Set([
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED,
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED,
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
+  GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED,
 ]);
 
 /** A list with a value in it or out of it, as a switch leaves it. */
@@ -1421,8 +1424,10 @@ function toggled<Value>(list: readonly Value[], value: Value, on: boolean): read
 /**
  * A GitHub trigger's settings, as rows of the Trigger card, a switch each
  * as Settings lists several: whose events fire it, the moments an update
- * fires on, and whether drafts are skipped and forks heard, each shown
- * only for the events it speaks to. A check names no sender, so it shows none.
+ * fires on, whether drafts are skipped and forks heard, and whether
+ * prereleases are heard, each shown only for the events it speaks to. A
+ * check names no sender, so it shows none, and a merged pull request is
+ * never a draft, so it shows no drafts switch.
  */
 function GitHubSettingsRows({
   event,
@@ -1466,13 +1471,15 @@ function GitHubSettingsRows({
         ))}
       </Reveal>
       <Reveal shown={PULL_REQUEST_EVENTS.has(event)}>
-        <SwitchRow
-          label="Skip drafts"
-          labelReplayUnmasked
-          detail={<ReplayUnmask>A draft starts a run once it is marked ready.</ReplayUnmask>}
-          checked={!settings.drafts}
-          onChange={(skip) => onSettings({ ...settings, drafts: !skip })}
-        />
+        <Reveal shown={event !== GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED}>
+          <SwitchRow
+            label="Skip drafts"
+            labelReplayUnmasked
+            detail={<ReplayUnmask>A draft starts a run once it is marked ready.</ReplayUnmask>}
+            checked={!settings.drafts}
+            onChange={(skip) => onSettings({ ...settings, drafts: !skip })}
+          />
+        </Reveal>
         <SwitchRow
           label="Include forks"
           labelReplayUnmasked
@@ -1484,6 +1491,14 @@ function GitHubSettingsRows({
           }
           checked={settings.forks}
           onChange={(forks) => onSettings({ ...settings, forks })}
+        />
+      </Reveal>
+      <Reveal shown={event === GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED}>
+        <SwitchRow
+          label="Include prereleases"
+          labelReplayUnmasked
+          checked={settings.prereleases}
+          onChange={(prereleases) => onSettings({ ...settings, prereleases })}
         />
       </Reveal>
     </Reveal>

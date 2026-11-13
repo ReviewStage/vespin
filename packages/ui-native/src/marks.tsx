@@ -28,7 +28,7 @@ import { TASK_STATUS_TONE, TASK_STATUS_WORDS } from "@repo/features/task-standin
 import type { TaskStatus } from "@repo/features/task-wire";
 import { useState } from "react";
 import { Image as Photo, PixelRatio, View } from "react-native";
-import { type Glyph, isLucideSymbol } from "./glyph.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { monogramOf } from "./monogram.js";
 import { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
 import { type StatusTone, toneColor, useColors } from "./tokens/colors.js";
@@ -71,8 +71,8 @@ export function UnreadDot({
 /**
  * A glyph in a tone's ink at a text style's size, the caption's unless
  * another is named, so it grows with Dynamic Type beside the words it leads:
- * an SF Symbol from the system, or one of Lucide's from the asset catalog's
- * symbol sets, which SwiftUI sizes, weighs, and sets on the baseline alike.
+ * one of Lucide's from the asset catalog's symbol sets, or an SF Symbol from
+ * the system, which SwiftUI sizes, weighs, and sets on the baseline alike.
  * A glyph whose words beside it say what it marks is never heard.
  */
 export function ToneGlyph({
@@ -87,11 +87,10 @@ export function ToneGlyph({
   readonly hidden?: boolean;
 }) {
   const colors = useColors();
-  const drawn = isLucideSymbol(glyph) ? { assetName: glyph } : { systemName: glyph };
 
   return (
     <Image
-      {...drawn}
+      {...glyphImage(glyph)}
       color={toneColor(colors, tone)}
       modifiers={[font({ textStyle }), ...(hidden ? [accessibilityHidden()] : [])]}
     />
@@ -107,7 +106,7 @@ export function TaskStatusMark({ status }: { readonly status: TaskStatus }) {
 
   return (
     <Image
-      systemName={STATUS_MARK_SYMBOL[status]}
+      {...glyphImage(STATUS_MARK_SYMBOL[status])}
       size={MARK_SIZE.GLYPH}
       color={toneColor(colors, TASK_STATUS_TONE[status])}
       modifiers={[accessibilityLabel(TASK_STATUS_WORDS[status])]}
@@ -266,7 +265,7 @@ export function AgentTile({
       />
       {harness === undefined ? (
         <Image
-          systemName="sparkles"
+          {...glyphImage(GLYPH.AGENT)}
           size={glyph}
           color={colors.TEXT}
           modifiers={[accessibilityHidden()]}
@@ -306,7 +305,7 @@ export function FailedMark() {
 
   return (
     <Image
-      systemName="exclamationmark.circle.fill"
+      {...glyphImage(GLYPH.FAILED)}
       color={colors.DANGER}
       modifiers={[
         font({ textStyle: TYPE_ROLE.TIME }),

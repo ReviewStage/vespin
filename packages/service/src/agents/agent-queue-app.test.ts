@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
+import { beginAgentBoot, endAgentBoot } from "@repo/database/models/agent-boot-store";
 import {
   claimQueueHead,
   type QueuedMessageRow,
@@ -19,15 +20,17 @@ import {
   AGENT_KIND,
   AGENT_MACHINE,
   AGENT_SENDER,
+  agentMessageAnswerSchema,
   agentMessagesAnswerSchema,
   agentQueueAnswerSchema,
   QUEUE_CHANGE,
+  VOICE_SPEAKER,
 } from "@repo/features/agent-wire";
 import { memorySandbox } from "@repo/sandbox/testing";
-import { MESSAGE_CHANNEL, type WireBoundaryInput } from "@repo/wire";
+import { isRecord, MESSAGE_CHANNEL, type WireBoundaryInput } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { noNetwork } from "@repo/wire/testing";
-import { Effect, Layer, Option } from "effect";
+import { DateTime, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import {
@@ -50,6 +53,7 @@ import {
   type Answer,
   countedWith,
   fakeAgentSessions,
+  messageAs,
   messagedAgent,
   readAnswer,
   receiptOf,
@@ -255,15 +259,32 @@ it.layer(SUITE)("an agent's queue", (it) => {
   );
 
   it.effect(
-    "a message queued on the voice channel goes on as a spoken line, and a typed one beside it does not",
+    "a message queued on the voice channel goes on as a spoken line on the caller's line already kept, and a typed one beside it does not",
     () =>
       Effect.gen(function* () {
         const agentSessions = fakeAgentSessions();
         const { agent, ask, owner } = yield* messagedAgent(agentSessions, { running: true });
+        const line = randomUUID();
+
+        yield* ask(
+          request("/api/agents/voice-lines", owner, {
+            method: "POST",
+            id: agent.id,
+            body: {
+              id: line,
+              callId: randomUUID(),
+              speaker: VOICE_SPEAKER.CALLER,
+              text: "Is it done?",
+            },
+          }),
+        );
 
         const [typed, voice] =
           (yield* Effect.forEach(
-            [{}, { channel: MESSAGE_CHANNEL.VOICE, delegationId: "item_delegation_1" }],
+            [
+              {},
+              { channel: MESSAGE_CHANNEL.VOICE, delegationId: "item_delegation_1", lines: [line] },
+            ],
             (spoken) =>
               queueChanged(ask, owner, agent.id, {
                 change: QUEUE_CHANGE.ADD,
@@ -286,6 +307,148 @@ it.layer(SUITE)("an agent's queue", (it) => {
           agentSessions.sent.slice(-2).map((each) => each.message.spoken ?? false),
           [false, true],
         );
+
+        // The spoken line the queue handed on is the one kept as it was said, never a second row of its words.
+        const page = readAnswer(
+          agentMessagesAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
+        );
+
+        assert.deepEqual(
+          page.messages.flatMap((message) =>
+            isRecord(message.metadata) && message.metadata.channel === MESSAGE_CHANNEL.VOICE
+              ? [message.metadata.delegation_id]
+              : [],
+          ),
+          ["item_delegation_1"],
+        );
+      }),
+  );
+
+  it.effect(
+    "a spoken message edited in the queue goes as a line of its own, the caller's line standing as said",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { agent, ask, owner } = yield* messagedAgent(agentSessions, { running: true });
+        const line = randomUUID();
+
+        yield* ask(
+          request("/api/agents/voice-lines", owner, {
+            method: "POST",
+            id: agent.id,
+            body: {
+              id: line,
+              callId: randomUUID(),
+              speaker: VOICE_SPEAKER.CALLER,
+              text: "Is it done?",
+            },
+          }),
+        );
+
+        const [queued] = (yield* queueChanged(ask, owner, agent.id, {
+          change: QUEUE_CHANGE.ADD,
+          text: "Is it done?",
+          id: randomUUID(),
+          channel: MESSAGE_CHANNEL.VOICE,
+          delegationId: "item_delegation_1",
+          lines: [line],
+        })).messages;
+
+        assert.ok(queued !== undefined);
+        yield* queueChanged(ask, owner, agent.id, {
+          change: QUEUE_CHANGE.STEER,
+          messageId: queued.id,
+          text: "Is the export done?",
+        });
+
+        const page = readAnswer(
+          agentMessagesAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
+        );
+
+        assert.deepEqual(
+          page.messages.flatMap((message) =>
+            isRecord(message.metadata) && message.metadata.channel === MESSAGE_CHANNEL.VOICE
+              ? [
+                  [
+                    message.parts.map((part) => (isRecord(part) ? part.text : undefined)),
+                    message.metadata.delegation_id,
+                  ],
+                ]
+              : [],
+          ),
+          [
+            [["Is it done?"], undefined],
+            [["Is the export done?"], "item_delegation_1"],
+          ],
+        );
+      }),
+  );
+
+  it.effect(
+    "a spoken message held while the agent boots and edited there goes with the edit's words",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { agent, ask, owner } = yield* messagedAgent(agentSessions, { running: false });
+        const line = randomUUID();
+
+        yield* ask(
+          request("/api/agents/voice-lines", owner, {
+            method: "POST",
+            id: agent.id,
+            body: {
+              id: line,
+              callId: randomUUID(),
+              speaker: VOICE_SPEAKER.CALLER,
+              text: "Is it done?",
+            },
+          }),
+        );
+
+        // The agent's machine boots afresh, so the delegation waits in its queue.
+        yield* endAgentBoot(agent.id);
+        yield* beginAgentBoot(agent.id, yield* DateTime.nowAsDate, undefined);
+
+        const held = readAnswer(
+          agentMessageAnswerSchema,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+          yield* ask(
+            messageAs(owner, agent.id, {
+              text: "Is it done?",
+              clientKey: randomUUID(),
+              channel: MESSAGE_CHANNEL.VOICE,
+              delegationId: "item_delegation_1",
+              lines: [line],
+            }),
+          ),
+        );
+
+        const [queued] = held.queued?.messages ?? [];
+        assert.ok(queued !== undefined);
+        yield* queueChanged(ask, owner, agent.id, {
+          change: QUEUE_CHANGE.EDIT,
+          messageId: queued.id,
+          text: "Is the export done?",
+        });
+        // The machine up, its boot record goes, and the member steers the edited message.
+        const sql = yield* SqlClient.SqlClient;
+        yield* sql`delete from agent_boot where agent_id = ${agent.id}`;
+        const sentBefore = agentSessions.sent.length;
+        yield* queueChanged(ask, owner, agent.id, {
+          change: QUEUE_CHANGE.STEER,
+          messageId: queued.id,
+        });
+
+        const handed = agentSessions.sent
+          .slice(sentBefore)
+          .map((each) => JSON.stringify(each.message.message));
+
+        assert.equal(handed.length, 1);
+        assert.ok(handed[0]?.includes("Is the export done?"), handed[0] ?? "");
       }),
   );
 

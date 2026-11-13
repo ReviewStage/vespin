@@ -19,6 +19,8 @@ import { selectWorkspaceMemories, selectWorkspaces } from "@repo/host/app-state-
 import {
   ConfirmAsk,
   EmptyState,
+  GLYPH,
+  glyphSymbol,
   ListSection,
   NoteRow,
   Screen,
@@ -38,7 +40,7 @@ import { useWrite } from "../../use-write.js";
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
 /** The glyph a page of memories stands under, the panel's brain. */
-const MEMORY_SYMBOL = "brain";
+const MEMORY_SYMBOL = GLYPH.MEMORY;
 
 /** What a memory kept by an account since deleted names its keeper as. */
 const FORMER_KEEPER = "Former member";
@@ -109,7 +111,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
       held?.failed === true ? (
         <EmptyState
           title={MEMORY_PAGE_WORDS.FAILED}
-          symbol="exclamationmark.triangle"
+          symbol={GLYPH.FAILED}
           action={{
             label: VERB.RETRY,
             onPress: () => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost),
@@ -121,7 +123,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
     ) : memories.length === 0 ? (
       <EmptyState title={MEMORY_PAGE_WORDS.EMPTY} symbol={MEMORY_SYMBOL} />
     ) : listed.length === 0 ? (
-      <EmptyState title={MEMORY_PAGE_WORDS.NO_MATCH} symbol="magnifyingglass" />
+      <EmptyState title={MEMORY_PAGE_WORDS.NO_MATCH} symbol={GLYPH.SEARCH} />
     ) : (
       <SettingsForm>
         <ListSection
@@ -168,7 +170,7 @@ function MemoryPage({ workspace }: { readonly workspace: Workspace }) {
       </Stack.Screen>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button
-          icon="plus"
+          icon={glyphSymbol(GLYPH.ADD)}
           tintColor={colors.TEXT}
           accessibilityLabel={ADD_MEMORY}
           disabled={memories === undefined}

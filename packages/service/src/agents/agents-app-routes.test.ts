@@ -57,6 +57,8 @@ import {
   LOCAL_AGENT_REFUSAL,
   PART_CUT_FIELD,
   TRANSCRIPT_PARTS_QUERY,
+  VOICE_SPEAKER,
+  type VoiceSpeaker,
 } from "@repo/features/agent-wire";
 import { INBOX_IMAGE_TYPE, inboxAnswerSchema } from "@repo/features/inbox-wire";
 import { transcriptNowAnswerSchema } from "@repo/features/live-wire";
@@ -106,6 +108,8 @@ import {
   drivenWhileStarting,
   fakeAgentSessions,
   freshInstallation,
+  messageAs,
+  messagedAgent,
   ORIGIN,
   openTask,
   PUBLISHED,
@@ -145,7 +149,7 @@ import {
 import { harnessFor } from "../testing/native-harness-fake.js";
 import { CODER } from "./coder-host/bounds.js";
 import { CODER_TOOL_SET } from "./coder-host/tool-set.js";
-import { SESSION_TURN } from "./sessions/agent-sessions.js";
+import { SESSION_SEND_OUTCOME, SESSION_TURN } from "./sessions/agent-sessions.js";
 
 it.layer(getTestDB())("the coding-agent routes", (it) => {
   it.effect(
@@ -1464,6 +1468,180 @@ it.layer(getTestDB())("a blank agent and the calls into an agent", (it) => {
           { startedAt: undefined, model: undefined, sentAt: call.startedAt + 1_500 },
         );
       }),
+  );
+});
+
+it.layer(getTestDB())("the lines of a call into an agent", (it) => {
+  /** Where a line of a call is recorded. */
+  const VOICE_LINES = "/api/agents/voice-lines";
+
+  /** One line of a call as the window holding the call records it, as the member given. */
+  const recordAs = (
+    bearer: string,
+    agentId: string,
+    line: { id: string; callId: string; speaker: VoiceSpeaker; text: string },
+  ) => request(VOICE_LINES, bearer, { method: "POST", id: agentId, body: line });
+
+  it.effect(
+    "a call's lines are kept once each in the order said, and a delegation starts one turn on the caller's lines alone",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const { agent, ask, owner } = yield* messagedAgent(agentSessions, { running: false });
+        const callId = randomUUID();
+        const [question, answer, ask_] = [randomUUID(), randomUUID(), randomUUID()];
+
+        // The caller asks, a late word growing their line and an older record of it arriving last; the voice answers
+        // by itself; the caller asks for work, recorded twice.
+        const lines = [
+          { id: question, speaker: VOICE_SPEAKER.CALLER, text: "What's left" },
+          { id: question, speaker: VOICE_SPEAKER.CALLER, text: "What's left on the task?" },
+          { id: question, speaker: VOICE_SPEAKER.CALLER, text: "What's left" },
+          { id: answer, speaker: VOICE_SPEAKER.VOICE, text: "Only the docs." },
+          { id: ask_, speaker: VOICE_SPEAKER.CALLER, text: "Then write them." },
+          { id: ask_, speaker: VOICE_SPEAKER.CALLER, text: "Then write them." },
+        ];
+
+        for (const line of lines) {
+          const answered = yield* ask(recordAs(owner, agent.id, { ...line, callId }));
+          assert.equal(answered.status, HOSTED_HTTP_STATUS.OK);
+        }
+
+        const sentBefore = agentSessions.sent.length;
+        const words = "What's left on the task? Then write them.";
+
+        const delegated = yield* ask(
+          messageAs(owner, agent.id, {
+            text: words,
+            clientKey: randomUUID(),
+            channel: MESSAGE_CHANNEL.VOICE,
+            delegationId: "item_delegation_1",
+            lines: [question, ask_],
+          }),
+        );
+
+        assert.equal(delegated.status, HOSTED_HTTP_STATUS.ACCEPTED);
+        const handed = agentSessions.sent.slice(sentBefore).map((each) => each.message);
+        assert.equal(handed.length, 1);
+        assert.equal(handed[0]?.spoken, true);
+        const said = JSON.stringify(handed[0]?.message);
+        assert.ok(said.includes(words), said);
+        assert.ok(!said.includes("Only the docs."), said);
+
+        const page = readAnswer(
+          agentMessagesAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
+        );
+
+        assert.deepEqual(
+          page.messages
+            .filter(
+              (message) =>
+                isRecord(message.metadata) && message.metadata.channel === MESSAGE_CHANNEL.VOICE,
+            )
+            .map((message) => ({
+              role: message.role,
+              words: message.parts.map((part) => (isRecord(part) ? part.text : undefined)),
+              delegation: isRecord(message.metadata) ? message.metadata.delegation_id : undefined,
+            })),
+          [
+            {
+              role: MESSAGE_ROLE.USER,
+              words: ["What's left on the task?"],
+              delegation: "item_delegation_1",
+            },
+            { role: MESSAGE_ROLE.ASSISTANT, words: ["Only the docs."], delegation: undefined },
+            {
+              role: MESSAGE_ROLE.USER,
+              words: ["Then write them."],
+              delegation: "item_delegation_1",
+            },
+          ],
+        );
+      }),
+  );
+
+  it.effect(
+    "a delegation the agent's session does not take leaves the caller's line standing as said",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions({ sends: SESSION_SEND_OUTCOME.NOT_READY });
+        const { agent, ask, owner } = yield* messagedAgent(agentSessions, { running: false });
+        const line = randomUUID();
+
+        yield* ask(
+          recordAs(owner, agent.id, {
+            id: line,
+            callId: randomUUID(),
+            speaker: VOICE_SPEAKER.CALLER,
+            text: "Run the tests.",
+          }),
+        );
+
+        const refused = yield* ask(
+          messageAs(owner, agent.id, {
+            text: "Run the tests.",
+            clientKey: randomUUID(),
+            channel: MESSAGE_CHANNEL.VOICE,
+            delegationId: "item_delegation_1",
+            lines: [line],
+          }),
+        );
+
+        assert.notEqual(refused.status, HOSTED_HTTP_STATUS.ACCEPTED);
+
+        const page = readAnswer(
+          agentMessagesAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
+        );
+
+        assert.deepEqual(
+          page.messages
+            .filter(
+              (message) =>
+                isRecord(message.metadata) && message.metadata.channel === MESSAGE_CHANNEL.VOICE,
+            )
+            .map((message) => ({
+              words: message.parts.map((part) => (isRecord(part) ? part.text : undefined)),
+              delegation: isRecord(message.metadata) ? message.metadata.delegation_id : undefined,
+            })),
+          [{ words: ["Run the tests."], delegation: undefined }],
+        );
+      }),
+  );
+
+  it.effect("an account outside the agent's workspace records no line into it", () =>
+    Effect.gen(function* () {
+      const agentSessions = fakeAgentSessions();
+      const { agent, ask, owner, other } = yield* messagedAgent(agentSessions, { running: false });
+
+      const before = readAnswer(
+        agentMessagesAnswerSchema,
+        HOSTED_HTTP_STATUS.OK,
+        yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
+      ).messages.length;
+
+      const refused = yield* ask(
+        recordAs(other, agent.id, {
+          id: randomUUID(),
+          callId: randomUUID(),
+          speaker: VOICE_SPEAKER.CALLER,
+          text: "Delete the branch.",
+        }),
+      );
+
+      assert.deepEqual(refused, refusal(HOSTED_HTTP_STATUS.NOT_FOUND, HOSTED_API_ERROR.NOT_FOUND));
+      assert.equal(
+        readAnswer(
+          agentMessagesAnswerSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(request(AGENT_MESSAGES, owner, { id: agent.id })),
+        ).messages.length,
+        before,
+      );
+    }),
   );
 });
 

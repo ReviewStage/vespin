@@ -8,12 +8,12 @@ import {
   remindWords,
 } from "@repo/features/inbox-remind-times";
 import type { InboxItem } from "@repo/features/inbox-wire";
-import { RemindSheet } from "@repo/ui-native";
+import { GLYPH, RemindSheet } from "@repo/ui-native";
 import { type ReactNode, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
 
 /** What Remind me is called and drawn with, wherever it stands: a row's swipe and long press, and a thread's ⋯ menu. */
-export const REMIND_ME = { label: REMIND_WORDS.REMIND_ME, symbol: "clock" } as const;
+export const REMIND_ME = { label: REMIND_WORDS.REMIND_ME, symbol: GLYPH.TIME } as const;
 
 type UseRemindSheetResult = {
   readonly open: (item: InboxItem) => void;

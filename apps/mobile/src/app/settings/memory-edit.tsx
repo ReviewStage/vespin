@@ -14,6 +14,7 @@ import {
   BUZZ,
   ConfirmAsk,
   EmptyState,
+  GLYPH,
   ListSection,
   NOTICE_KIND,
   Screen,
@@ -38,7 +39,7 @@ export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 const WORDS_TEST_ID = "memory-words";
 
 /** The glyph a memory gone meanwhile stands under, the panel's brain. */
-const MEMORY_SYMBOL = "brain";
+const MEMORY_SYMBOL = GLYPH.MEMORY;
 
 export default function MemoryEditScreen() {
   const { memory } = useLocalSearchParams<{ memory?: string }>();
@@ -195,7 +196,7 @@ function MemoryEditor({
         {failed ? (
           <EmptyState
             title={MEMORY_PAGE_WORDS.FAILED}
-            symbol="exclamationmark.triangle"
+            symbol={GLYPH.FAILED}
             action={{
               label: VERB.RETRY,
               onPress: () => void acts[ACT_KIND.MEMORIES_RETRY]({ workspaceId }).catch(retryLost),

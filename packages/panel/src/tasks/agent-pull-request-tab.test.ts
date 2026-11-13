@@ -1763,13 +1763,30 @@ test("Add reaction opens one row of GitHub's eight, each named, the arrows movin
   );
 });
 
-/** The chip of the Conversation's filter named as given, beside the end of the Conversation's heading. */
-function filter(tab: HTMLElement, name: string): HTMLButtonElement {
+/** The Conversation's View options, at the end of its heading. */
+function viewOptions(tab: HTMLElement): HTMLButtonElement {
   return (
     tab.querySelector<HTMLButtonElement>(
-      `section[aria-label="Conversation"] > .ui-disclosure-frame > .ui-disclosure-actions .pull-request-filter button[aria-label="${name}"]`,
-    ) ?? assert.fail(`the conversation offers ${name}`)
+      'section[aria-label="Conversation"] > .ui-disclosure-frame > .ui-disclosure-actions button[aria-label="View options"]',
+    ) ?? assert.fail("the conversation offers View options")
   );
+}
+
+/** Files changed's View options, the diff's settings, rather than the Conversation's of the same name. */
+function filesViewOptions(tab: HTMLElement): HTMLButtonElement | undefined {
+  return [...tab.querySelectorAll<HTMLButtonElement>('button[aria-label="View options"]')].find(
+    (each) => each.closest('section[aria-label="Conversation"]') === null,
+  );
+}
+
+/** Turns the Conversation's filter named as given in its View options, opening the menu first where it stands closed. */
+async function turnFilter(tab: HTMLElement, name: string): Promise<void> {
+  if (document.querySelector('[role="menu"]:not([data-leaving])') === null) {
+    act(() => viewOptions(tab).click());
+    await settle();
+  }
+
+  await pressItem(name);
 }
 
 /** The heading of the Conversation view's section named as given, which folds it. */
@@ -1781,13 +1798,6 @@ function sectionHead(tab: HTMLElement, name: string): HTMLElement {
   );
 }
 
-/** What a filter's switch says it leaves out, as a reader hears it. */
-function filterNote(tab: HTMLElement, name: string): string {
-  const note = filter(tab, name).getAttribute("aria-describedby");
-
-  return note === null ? "" : (document.getElementById(note)?.textContent ?? "");
-}
-
 /** Who wrote each entry still drawn, and how many threads stand under it. */
 function drawnEntries(tab: HTMLElement): string[] {
   return [...tab.querySelectorAll(".pull-request-entry")].map(
@@ -1796,7 +1806,7 @@ function drawnEntries(tab: HTMLElement): string[] {
   );
 }
 
-test("Hide bots and Hide resolved each count what they leave out, leave it out while on, a review whose every thread was resolved going with them, and stay as left for the next conversation drawn", async () => {
+test("View options holds Hide resolved and Hide bots as switches, each counting what it leaves out and leaving it out while on, a review whose every thread was resolved going with them, and stay as left for the next conversation drawn", async () => {
   const devin = { login: "devin-ai-integration[bot]", bot: true };
 
   const conversation: AgentOverviewConversation = {
@@ -1869,16 +1879,6 @@ test("Hide bots and Hide resolved each count what they leave out, leave it out w
 
   const tab = await draw(control);
 
-  await vi.waitFor(() =>
-    assert.deepEqual(
-      words(tab, ".pull-request-filter button"),
-      ["Hide resolved3", "Hide bots2"],
-      "each counts what it would leave out, resolved threads and bots' entries",
-    ),
-  );
-  assert.equal(filterNote(tab, "Hide bots"), "Hides 2 comments and reviews by bots");
-  assert.equal(filterNote(tab, "Hide resolved"), "Hides 3 resolved review threads");
-
   const all = [
     "devin-ai-integration 1",
     "Charles Pan 2",
@@ -1887,109 +1887,28 @@ test("Hide bots and Hide resolved each count what they leave out, leave it out w
     "Charles Pan 0",
   ];
 
-  assert.deepEqual(drawnEntries(tab), all, "both start off, everything drawn");
-
-  act(() => filter(tab, "Hide bots").click());
-  assert.equal(filter(tab, "Hide bots").getAttribute("aria-pressed"), "true");
+  await vi.waitFor(() =>
+    assert.deepEqual(drawnEntries(tab), all, "both start off, everything drawn"),
+  );
   assert.equal(
-    sectionHead(tab, "Conversation").getAttribute("aria-expanded"),
-    "true",
-    "a press on a filter in the heading folds nothing",
-  );
-  assert.deepEqual(drawnEntries(tab), ["Charles Pan 2", "Charles Pan 1", "Charles Pan 0"]);
-
-  act(() => filter(tab, "Hide bots").click());
-  act(() => filter(tab, "Hide resolved").click());
-  assert.deepEqual(
-    drawnEntries(tab),
-    ["Charles Pan 1", "vercel 0", "Charles Pan 0"],
-    "a resolved thread goes, and a review whose every thread was resolved with it; a comment stays",
+    viewOptions(tab).getAttribute("aria-description"),
+    null,
+    "nothing is said filtered while both are off",
   );
 
-  act(() => filter(tab, "Hide bots").click());
-  act(() => root?.unmount());
-  root = undefined;
-  document.body.innerHTML = "";
-  const again = await draw(control);
-  assert.deepEqual(
-    [filter(again, "Hide resolved"), filter(again, "Hide bots")].map((each) =>
-      each.getAttribute("aria-pressed"),
-    ),
-    ["true", "true"],
-    "the choice stands for the next conversation drawn",
-  );
-  assert.deepEqual(drawnEntries(again), ["Charles Pan 1", "Charles Pan 0"]);
-});
-
-test("a phone draws the filters as one chip saying what is hidden, whose menu turns each on and off, counting what it leaves out", async () => {
-  const conversation: AgentOverviewConversation = {
-    reviewers: [],
-    conversation: [
-      {
-        kind: CONVERSATION_ENTRY.REVIEW,
-        by: CHARLES_ON_GITHUB,
-        state: REVIEW_STATE.COMMENTED,
-        html: '<p dir="auto">Two things.</p>',
-        body: "",
-        at: 2_000,
-        url: `${PAGE}#pullrequestreview-2`,
-        threads: [
-          thread({ resolved: true }),
-          thread({
-            path: "src/other.ts",
-            comments: [
-              {
-                ...(thread().comments[0] ?? assert.fail("a comment")),
-                url: `${PAGE}#discussion_r2`,
-              },
-            ],
-          }),
-        ],
-      },
-      {
-        kind: CONVERSATION_ENTRY.COMMENT,
-        by: { login: "vercel[bot]", bot: true },
-        html: '<p dir="auto">Deployed.</p>',
-        body: "",
-        at: 3_000,
-        url: `${PAGE}#issuecomment-4`,
-      },
-    ],
-    earlier: 0,
-  };
-
-  const tab = await drawn(
-    createElement(
-      ShellRoomContext.Provider,
-      { value: SHELL_ROOM.NARROW },
-      createElement(Switching, {
-        control: controlAnswering({
-          conversation: () => Promise.resolve({ pullRequest: conversation }),
-        }),
-        first: PULL_REQUEST_VIEW.CONVERSATION,
-      }),
-    ),
-  );
-
-  const actions =
-    tab.querySelector<HTMLElement>(
-      'section[aria-label="Conversation"] > .ui-disclosure-frame > .ui-disclosure-actions',
-    ) ?? assert.fail("the Conversation's heading has an end");
-
-  const chip = () =>
-    actions.querySelector<HTMLButtonElement>('button[aria-haspopup="menu"]') ??
-    assert.fail("the heading's end is a chip that opens a menu");
-
-  assert.equal(actions.querySelectorAll("button").length, 1, "one chip, not two pills");
-  assert.equal(chip().textContent, "Showing all");
-
-  act(() => chip().click());
+  act(() => viewOptions(tab).click());
   await settle();
   assert.deepEqual(
     [...document.querySelectorAll('[role="menuitemcheckbox"]')].map((item) => item.textContent),
-    ["Hide resolved1", "Hide bots1"],
-    "each filter is a setting counting what it would leave out",
+    ["Hide resolved3", "Hide bots2"],
+    "each is a switch counting what it would leave out, resolved threads and bots' entries",
   );
+  assert.equal(
+    sectionHead(tab, "Conversation").getAttribute("aria-expanded"),
+    "true",
+    "a press on View options in the heading folds nothing",
+  );
+
   await pressItem("Hide bots");
   assert.deepEqual(
     menuItems(),
@@ -1999,17 +1918,33 @@ test("a phone draws the filters as one chip saying what is hidden, whose menu tu
     ],
     "the menu stands while a filter is turned",
   );
-  assert.equal(chip().textContent, "Hiding bots");
-  assert.deepEqual(drawnEntries(tab), ["Charles Pan 2"]);
-
-  await pressItem("Hide resolved");
-  assert.equal(chip().textContent, "Hiding resolved and bots");
-  assert.deepEqual(drawnEntries(tab), ["Charles Pan 1"]);
+  assert.equal(viewOptions(tab).getAttribute("aria-description"), "Filtered");
+  assert.deepEqual(drawnEntries(tab), ["Charles Pan 2", "Charles Pan 1", "Charles Pan 0"]);
 
   await pressItem("Hide bots");
   await pressItem("Hide resolved");
-  assert.equal(chip().textContent, "Showing all");
-  assert.deepEqual(drawnEntries(tab), ["Charles Pan 2", "vercel 0"]);
+  assert.deepEqual(
+    drawnEntries(tab),
+    ["Charles Pan 1", "vercel 0", "Charles Pan 0"],
+    "a resolved thread goes, and a review whose every thread was resolved with it; a comment stays",
+  );
+
+  await pressItem("Hide bots");
+  act(() => root?.unmount());
+  root = undefined;
+  document.body.innerHTML = "";
+  const again = await draw(control);
+  act(() => viewOptions(again).click());
+  await settle();
+  assert.deepEqual(
+    menuItems(),
+    [
+      { label: "Hide resolved", checked: "true" },
+      { label: "Hide bots", checked: "true" },
+    ],
+    "the choice stands for the next conversation drawn",
+  );
+  assert.deepEqual(drawnEntries(again), ["Charles Pan 1", "Charles Pan 0"]);
 });
 
 test("where the filters leave nothing of the conversation, it says no comment matches", async () => {
@@ -5201,7 +5136,7 @@ test("Files changed draws each review thread under its line, its comments throug
   await choose(tab, "Files changed");
 
   const minimize = async () => {
-    act(() => tab.querySelector<HTMLButtonElement>('button[aria-label="View options"]')?.click());
+    act(() => filesViewOptions(tab)?.click());
 
     const toggle = [...document.querySelectorAll<HTMLButtonElement>('[role="switch"]')].find(
       (each) => each.getAttribute("aria-label") === "Minimize inline comments",
@@ -5209,7 +5144,7 @@ test("Files changed draws each review thread under its line, its comments throug
 
     act(() => toggle?.click());
     await settle();
-    act(() => tab.querySelector<HTMLButtonElement>('button[aria-label="View options"]')?.click());
+    act(() => filesViewOptions(tab)?.click());
   };
 
   const drawn = lists.at(-1) ?? assert.fail("the files are drawn");
@@ -5327,7 +5262,7 @@ test("the pointer resting on a review thread in Files changed lights the lines i
   assert.equal(lists.at(-1)?.selected, undefined, "the focus leaving lets them go");
   delete document.documentElement.dataset.keyboard;
 
-  act(() => tab.querySelector<HTMLButtonElement>('button[aria-label="View options"]')?.click());
+  act(() => filesViewOptions(tab)?.click());
   await settle();
 
   const minimize =
@@ -6340,13 +6275,13 @@ test("a thread's file and lines in the Conversation take it to Files changed thr
   );
 
   act(() => header.querySelector<HTMLButtonElement>('button[aria-label="Collapse file"]')?.click());
-  act(() => tab.querySelector<HTMLButtonElement>('button[aria-label="View options"]')?.click());
+  act(() => filesViewOptions(tab)?.click());
   act(() =>
     [...document.querySelectorAll<HTMLButtonElement>('[role="switch"]')]
       .find((each) => each.getAttribute("aria-label") === "Minimize inline comments")
       ?.click(),
   );
-  act(() => tab.querySelector<HTMLButtonElement>('button[aria-label="View options"]')?.click());
+  act(() => filesViewOptions(tab)?.click());
   await settle();
   assert.equal(lists.at(-1)?.files[0]?.collapsed, true, "the file stands collapsed");
   await choose(tab, "Conversation");
@@ -6627,8 +6562,7 @@ test("a thread's ⋯ in Files changed shows it in the Conversation through the s
   );
 
   await choose(tab, "Conversation");
-  act(() => filter(tab, "Hide resolved").click());
-  await settle();
+  await turnFilter(tab, "Hide resolved");
   assert.equal(
     tab.querySelector(".pull-request-thread") === null,
     true,

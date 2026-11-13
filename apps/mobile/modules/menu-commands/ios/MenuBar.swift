@@ -30,7 +30,8 @@ private struct Command {
   let title: String
   /// What it reads as while JavaScript says it is toggled: Mark as Read on an unread thread, Unpin on a pinned task.
   var toggledTitle: String? = nil
-  let symbol: String
+  /// The glyph it leads with, the panel's own Lucide symbol from the asset catalog; none where the panel draws none.
+  let symbol: String?
   var toggledSymbol: String? = nil
   var input: String? = nil
   var modifiers: UIKeyModifierFlags = .command
@@ -38,47 +39,54 @@ private struct Command {
   var nonRepeatable = false
 }
 
+/// A glyph by its name: the asset catalog's symbol of that name, as the app's Lucide glyphs are, else an SF Symbol's.
+/// Note that the catalog is asked first, because every name here is a Lucide one, and a system lookup should never stand in for it.
+private func glyph(_ name: String?) -> UIImage? {
+  guard let name else { return nil }
+  return UIImage(named: name) ?? UIImage(systemName: name)
+}
+
 /// What a command takes no key for: one pressed rarely, or one inside a submenu.
 private let noKey: String? = nil
 
 private let commands: [Command] = [
   Command(
-    id: "settings", place: .application, title: "Vespin Settings…", symbol: "gearshape",
+    id: "settings", place: .application, title: "Vespin Settings…", symbol: "Settings",
     input: ",", nonRepeatable: true),
   Command(
     id: "signOut", place: .application, title: "Sign Out…",
-    symbol: "rectangle.portrait.and.arrow.right", input: noKey, nonRepeatable: true),
+    symbol: "LogOut", input: noKey, nonRepeatable: true),
   Command(
-    id: "newTask", place: .file, title: "New Task", symbol: "square.and.pencil", input: "n",
+    id: "newTask", place: .file, title: "New Task", symbol: "SquarePen", input: "n",
     nonRepeatable: true),
   Command(
-    id: "newAgent", place: .file, title: "New Agent", symbol: "plus.bubble", input: "n",
+    id: "newAgent", place: .file, title: "New Agent", symbol: "Plus", input: "n",
     modifiers: [.command, .shift], nonRepeatable: true),
-  Command(id: "inbox", place: .view, title: "Inbox", symbol: "tray", input: "1"),
-  Command(id: "tasks", place: .view, title: "Tasks", symbol: "checklist", input: "2"),
-  Command(id: "search", place: .view, title: "Search", symbol: "magnifyingglass", input: "3"),
+  Command(id: "inbox", place: .view, title: "Inbox", symbol: "Inbox", input: "1"),
+  Command(id: "tasks", place: .view, title: "Tasks", symbol: "ListTodo", input: "2"),
+  Command(id: "search", place: .view, title: "Search", symbol: "Search", input: "3"),
   Command(
     id: "sidebar", place: .sidebar, title: "Hide Sidebar", toggledTitle: "Show Sidebar",
-    symbol: "sidebar.left", input: "s", modifiers: [.command, .control]),
+    symbol: "PanelLeft", input: "s", modifiers: [.command, .control]),
   Command(
-    id: "markDone", place: .subject, title: "Mark Done", symbol: "checkmark.circle", input: "d",
+    id: "markDone", place: .subject, title: "Mark Done", symbol: "Check", input: "d",
     modifiers: [.command, .shift], nonRepeatable: true),
   Command(
     id: "toggleRead", place: .subject, title: "Mark as Unread", toggledTitle: "Mark as Read",
-    symbol: "envelope.badge", toggledSymbol: "envelope.open", input: "u",
+    symbol: "Mail", toggledSymbol: "MailOpen", input: "u",
     modifiers: [.command, .shift]),
   Command(
-    id: "pin", place: .subject, title: "Pin", toggledTitle: "Unpin", symbol: "pin",
-    toggledSymbol: "pin.slash", input: "p", modifiers: [.command, .shift]),
-  Command(id: "remindHour", place: .remind, title: "In 1 Hour", symbol: "clock"),
-  Command(id: "remindTomorrow", place: .remind, title: "Tomorrow", symbol: "sun.max"),
-  Command(id: "remindNextWeek", place: .remind, title: "Next Week", symbol: "calendar"),
-  Command(id: "remindClear", place: .remind, title: "Clear Reminder", symbol: "clock.badge.xmark"),
+    id: "pin", place: .subject, title: "Pin", toggledTitle: "Unpin", symbol: "Pin",
+    toggledSymbol: "PinOff", input: "p", modifiers: [.command, .shift]),
+  Command(id: "remindHour", place: .remind, title: "In 1 Hour", symbol: nil),
+  Command(id: "remindTomorrow", place: .remind, title: "Tomorrow", symbol: nil),
+  Command(id: "remindNextWeek", place: .remind, title: "Next Week", symbol: nil),
+  Command(id: "remindClear", place: .remind, title: "Clear Reminder", symbol: "Inbox"),
   Command(
-    id: "openInBrowser", place: .subject, title: "Open in Browser", symbol: "safari", input: "o",
+    id: "openInBrowser", place: .subject, title: "Open in Browser", symbol: "ExternalLink", input: "o",
     modifiers: [.command, .alternate]),
-  Command(id: "help", place: .help, title: "Vespin Help", symbol: "questionmark.circle"),
-  Command(id: "feedback", place: .help, title: "Send Feedback", symbol: "envelope"),
+  Command(id: "help", place: .help, title: "Vespin Help", symbol: nil),
+  Command(id: "feedback", place: .help, title: "Send Feedback", symbol: "MessageSquare"),
 ]
 
 /// The app's own menu, named for what stands in front, which JavaScript names by its kind.
@@ -172,7 +180,7 @@ enum MenuBar {
       after: .edit, into: builder)
 
     let remind = UIMenu(
-      title: "Remind Me", image: UIImage(systemName: "clock"), children: elements(.remind))
+      title: "Remind Me", image: glyph("Clock"), children: elements(.remind))
     let subjectCommands = elements(.subject)
     let menu = UIMenu(
       title: subjectTitles[subject] ?? "Task", identifier: subjectMenu,
@@ -197,7 +205,7 @@ enum MenuBar {
     }
     return showingImages(
       UIMenu(
-        title: "Switch Workspace", image: UIImage(systemName: "square.stack"), children: items))
+        title: "Switch Workspace", image: glyph("BuildingComplex"), children: items))
   }
 
   /// Checks the chosen workspace and enables the list while JavaScript says it may be switched.
@@ -251,7 +259,7 @@ enum MenuBar {
   private static func look(of command: Command) -> (title: String, image: UIImage?, enabled: Bool) {
     let on = toggled.contains(command.id)
     let title = on ? command.toggledTitle ?? command.title : command.title
-    let image = UIImage(systemName: on ? command.toggledSymbol ?? command.symbol : command.symbol)
+    let image = glyph(on ? command.toggledSymbol ?? command.symbol : command.symbol)
     return (title, image, mayAct(command.id))
   }
 

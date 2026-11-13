@@ -28,10 +28,13 @@ browser.
 ### Voice calls
 
 When you talk to an agent by voice, your audio goes from the app to OpenAI, on
-your own OpenAI API key, and nowhere else; the key never leaves the Service.
-What you say reaches the agent as its messages, as a typed line does, and is
-kept in its conversation like one. We keep nothing else of a call but its
-length, which counts toward your day and in our usage counts.
+your own OpenAI API key, and nowhere else; the key never leaves the Service,
+and we never store the audio. What you and the voice say is kept as text in
+the agent's conversation, one message for each thing either of you said, so
+the agent's transcript shows both sides of the call. What you say reaches the
+agent as its messages, as a typed line does. What the voice says stays in the
+transcript and is never handed to the agent's model. We keep nothing else of a
+call but its length, which counts toward your day and in our usage counts.
 
 ### Workspaces, tasks, and descriptions
 
@@ -471,9 +474,8 @@ its dependencies installed, may also remain on a drive of its own made before
 workspace drives, which nothing reads or writes any more. A sandbox's own
 disk is discarded when it stops, so only its drive outlives it; a sandbox made
 before that changed keeps a snapshot of its disk instead.
-We use encryption in transit (TLS), encrypt saved credentials as described
-above, and keep the tokens agents use outside their sandboxes, adding them at
-the sandbox's network firewall. Transcripts, descriptions, and other content are not
+We use encryption in transit (TLS) and encrypt saved credentials as described
+above. Transcripts, descriptions, and other content are not
 end-to-end encrypted.
 
 While we strive to protect your information, no method of electronic storage
@@ -486,10 +488,11 @@ affected users and relevant authorities as required by applicable law.
 We retain your data for as long as your account is active and as needed to
 provide the Service. Deleting a task deletes it at once with its history,
 pages, inbox items, and pictures, and its agents' transcripts. Deleting an
-agent deletes its transcript at once. Deleting or archiving an agent asks
-Vercel to delete its sandbox and the drive holding its checkout; where that
-fails or does not finish in time, the delete or archive goes ahead anyway, and
-the drive may remain. A sandbox keeps no snapshot; the snapshots of one made
+agent deletes its transcript at once. Deleting an agent asks Vercel to delete
+its sandbox and the drive holding its checkout; where that fails or does not
+finish in time, the delete goes ahead anyway, and the sandbox and drive may
+remain. Archiving an agent deletes neither: its sandbox and drive are deleted once
+they have gone seven days unused, as any agent's are. A sandbox keeps no snapshot; the snapshots of one made
 before that changed otherwise expire and are removed seven days after they
 were last used. The workspace's drive of every
 repository it connects is kept for the workspace's agents until the workspace
