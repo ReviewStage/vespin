@@ -44,7 +44,6 @@ export function App(): React.JSX.Element {
       barCall={<SiteBarDownload />}
       badge={<LandingBackedBy href={Y_COMBINATOR_PAGE} />}
       title="Steer your coding agents."
-      lead="Hand off tasks, follow along from anywhere, and review the pull requests when they're ready."
       actions={
         <>
           <SiteDownload />
