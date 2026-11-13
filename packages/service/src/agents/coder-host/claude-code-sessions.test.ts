@@ -1046,6 +1046,7 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
             "browser",
             "list_ports",
             "share_port",
+            "send_slack_message",
             "schedule_wakeup",
             "end_turn",
           ],
