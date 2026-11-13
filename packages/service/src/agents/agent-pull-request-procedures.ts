@@ -81,6 +81,7 @@ import {
   setReviewThreadResolved,
   submitPullRequestReview,
   takeOutOfMergeQueue,
+  tickTask,
 } from "../github/pull-request-writes.js";
 import {
   GRAPHQL_REACTION_OF,
@@ -397,6 +398,8 @@ function writeOf(
         request.path,
         request.action === PULL_REQUEST_ACTION.MARK_FILE_VIEWED,
       );
+    case PULL_REQUEST_ACTION.TICK_TASK:
+      return tickTask(token, id, request);
   }
 }
 

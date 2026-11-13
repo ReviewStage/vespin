@@ -108,7 +108,7 @@ const UNNAMED_AGENT = "Your agent";
 /** What kind of event a notice tells of. */
 export const NOTICE_KIND = {
   /** A command an agent asked to run on this Mac waits on the developer (`client/client-notices.ts`). */
-  MAC_COMMAND_ASK: "mac-command-ask",
+  MACHINE_COMMAND_ASK: "mac-command-ask",
   /** A turn of an agent the account started ended, completed or failed. */
   AGENT_FINISHED: "agent-finished",
   /** An inbox item asking the account something was posted. */
@@ -117,7 +117,7 @@ export const NOTICE_KIND = {
 
 /** The event a notice tells of, by the identifiers that name it. */
 export type NoticeSubject =
-  | { readonly kind: typeof NOTICE_KIND.MAC_COMMAND_ASK; readonly askId: string }
+  | { readonly kind: typeof NOTICE_KIND.MACHINE_COMMAND_ASK; readonly askId: string }
   | { readonly kind: typeof NOTICE_KIND.AGENT_FINISHED; readonly agentId: string }
   | { readonly kind: typeof NOTICE_KIND.ITEM_ASKED; readonly itemId: string };
 

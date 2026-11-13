@@ -6,7 +6,7 @@ import { GLYPH, type Glyph } from "./glyph.js";
 /** The glyph each kind of call leads its line with. */
 export const CALL_SYMBOL = {
   [CALL_KIND.COMMAND]: GLYPH.TERMINAL,
-  [CALL_KIND.MAC_COMMAND]: GLYPH.MAC,
+  [CALL_KIND.MACHINE_COMMAND]: GLYPH.MAC,
   [CALL_KIND.COMPUTER]: GLYPH.COMPUTER,
   [CALL_KIND.BROWSER]: GLYPH.GLOBE,
   [CALL_KIND.READ_FILE]: GLYPH.FILE_TEXT,

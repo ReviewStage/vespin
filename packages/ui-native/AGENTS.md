@@ -109,9 +109,10 @@ builds a control of its own.
   stands clear on the system's floating glass pane, as Mail's does; lists stand plain, as the panel's do, never as
   inset cards; and the tint is the brand's copper, never the system's blue.
   Only a control's states and a label's hierarchy are the system's.
-- **Rows carry the panel's facts.** `ListRow` is an Inbox thread (the task's
-  status ring, the thread's title and time, and the glyph and words of what
-  it asks, then the task's name), `TaskRow` a task on one line (its status
+- **Rows carry the panel's facts.** `ListRow` is an Inbox thread in the
+  panel's three lines (the task's status ring and name, then the thread's
+  title and time, then the glyph and words of what it asks; an agent's own
+  thread, with no task, in two), `TaskRow` a task on one line (its status
   ring, its name, and at its end a thread that needs you, a failed agent,
   one at work, or its pull request, then its key), and `AgentRow` an agent
   on a task's page; an avatar stands only where the panel's row has one.
@@ -173,7 +174,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. A landscape iPad's sidebar heads its
-  list with the switcher, its tile and its name, and stands Settings at its foot. Nothing draws a
+  list with the switcher, its tile and its name, and stands no Settings gear: Settings
+  opens from the switcher's menu and ⌘,, as Notion's and Linear's iPad sidebars keep it, and
+  the account's photo leads the sidebar's bar only until the switcher can draw. Nothing draws a
   copy of glass, and glass is one layer: a bar's own, or one glass view
   (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest). A
   glass that holds buttons takes no press of its own (not `interactive`),

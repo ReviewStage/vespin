@@ -122,6 +122,7 @@ import {
 } from "@repo/agent-runner/protocol";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
+import { accountExperimentOn } from "@repo/database/models/account-store";
 import {
   type Agent,
   hasRepository,
@@ -183,6 +184,7 @@ import {
   type SandboxFile,
   SandboxUnavailable,
 } from "@repo/sandbox";
+import { EXPERIMENT } from "@repo/settings";
 import { TURN_STATUS, type WireValue } from "@repo/wire";
 import type { UserContent } from "ai";
 import { EffectDrizzleQueryError } from "drizzle-orm/effect-core";
@@ -436,14 +438,18 @@ interface RunnerMessage {
   readonly timeZone: string | undefined;
 }
 
-type RoutedContentResult = { readonly content: readonly ContentBlock[]; readonly compact?: true };
+type RoutedContentResult = {
+  readonly content: readonly ContentBlock[];
+  readonly compact?: true;
+  readonly goal?: true;
+};
 
 /**
  * A message line's blocks as its route hands them: the turn's words ahead
  * of the developer's, as every message goes; after them, so the harness
  * reads the line as words rather than a command; or the developer's alone,
  * for the harness to run as its own command or, marked, as the session's
- * compaction (`harness-commands.ts`).
+ * compaction or a change of its goal (`harness-commands.ts`).
  */
 function routedContent(
   route: CommandRoute,
@@ -459,6 +465,8 @@ function routedContent(
       return { content };
     case COMMAND_ROUTE.COMPACT:
       return { content, compact: true };
+    case COMMAND_ROUTE.GOAL:
+      return { content, goal: true };
   }
 }
 
@@ -1549,9 +1557,22 @@ export const runnerSessions = <
         const ahead: readonly ContentBlock[] =
           words.length === 0 ? [] : [{ type: "text", text: words.join("\n\n") }];
 
-        const route = commandRouteOf(content, replay !== undefined);
+        const commanded = commandRouteOf(content, replay !== undefined);
+
+        // Note that a `/goal` runs the harness's goal only for a starter with the Goals experiment on, and goes as the words it is otherwise.
+        const route =
+          commanded === COMMAND_ROUTE.GOAL &&
+          !(yield* accountExperimentOn(agent.userId, EXPERIMENT.GOALS).pipe(
+            Effect.orElseSucceed(() => false),
+          ))
+            ? COMMAND_ROUTE.WORDS
+            : commanded;
+
         // Note that a line the harness takes as its own command never reads the turn's words, so the session is not told it was handed them.
-        const read = route !== COMMAND_ROUTE.BARE && route !== COMMAND_ROUTE.COMPACT;
+        const read =
+          route !== COMMAND_ROUTE.BARE &&
+          route !== COMMAND_ROUTE.COMPACT &&
+          route !== COMMAND_ROUTE.GOAL;
 
         const next: TurnHanded = {
           ...(read ? opened.handed : handed),

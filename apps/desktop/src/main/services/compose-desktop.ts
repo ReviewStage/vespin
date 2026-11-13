@@ -353,7 +353,7 @@ export function composeDesktop(
         state,
         host: operator.host,
         presenter: {
-          openMacCommandAsk: () => windows.panels.focusExpanded(),
+          openMachineCommandAsk: () => windows.panels.focusExpanded(),
           openPlace: (place) => {
             windows.panels.focusExpanded();
             windows.panels.broadcast(PUSH.SHOW_LINK, { workspace: "", place });

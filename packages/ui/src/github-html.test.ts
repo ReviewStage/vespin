@@ -14,7 +14,8 @@ import {
  * draws its own: a highlighted block into a fenced one in its language, and
  * a diagram into a fenced mermaid block of its source, a themed picture
  * into an `<img>` for each theme, and a picture GitHub links to itself into
- * the picture alone; and a picture sharing its line with words is marked to
+ * the picture alone, and an alert into the quote it was written as; and a
+ * picture sharing its line with words is marked to
  * stand in it. The trees are as the parse leaves them. And a place that
  * opens the rendering's pictures itself reads those no other link takes, in
  * the theme it is drawn in.
@@ -241,5 +242,19 @@ test("the pictures a place opens are those of the theme it is drawn in, a themed
       "https://github.com/user-attachments/assets/0b6f3a9c-1d2e-4f5a-8b7c-9d0e1f2a3b4c",
       "light logo",
     ],
+  ]);
+});
+
+test("an alert becomes the quote it was written as, its marker in its title's place", () => {
+  const alert = element("div", { className: ["markdown-alert", "markdown-alert-warning"] }, [
+    element("p", { className: ["markdown-alert-title"] }, [element("svg", {}), text("Warning")]),
+    element("p", {}, [text("Mind the gap.")]),
+  ]);
+
+  assert.deepEqual(redressed(alert), [
+    element("blockquote", {}, [
+      element("p", {}, [text("[!WARNING]")]),
+      element("p", {}, [text("Mind the gap.")]),
+    ]),
   ]);
 });

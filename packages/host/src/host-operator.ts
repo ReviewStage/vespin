@@ -61,7 +61,7 @@ import type {
   AppWorkspacePhotos,
   SessionReplayState,
 } from "./app-state.js";
-import { type MacCommandAsk, macCommandAsksSchema } from "./mac-command-ask.js";
+import { type MachineCommandAsk, machineCommandAsksSchema } from "./machine-command-ask.js";
 
 /** Everything a window's bootstrap reads of the host, in one answer. */
 export interface HostBootstrap {
@@ -135,7 +135,7 @@ export interface HostOperator {
   onSessionReplayChanged(listener: (replay: SessionReplayState) => void): () => void;
   onTasksChanged(listener: (view: TasksView) => void): () => void;
   /** The commands agents asked to run on this Mac that wait on the developer, whole, each time one is asked or answered. */
-  onMacCommandAsksChanged(listener: (asks: readonly MacCommandAsk[]) => void): () => void;
+  onMachineCommandAsksChanged(listener: (asks: readonly MachineCommandAsk[]) => void): () => void;
   /** How many changes made offline the service refused as they were sent again, each time the count moves. */
   onOfflineRefusedChanged(listener: (count: number) => void): () => void;
   /** An agent's shells and where its sandbox stands, or why not; none where the host could not answer. */
@@ -389,12 +389,12 @@ export function createHostOperator(options: HostOperatorOptions): HostOperator {
         (payload) => (isRecord(payload) ? answered<TasksView>(payload) : undefined),
         listener,
       ),
-    onMacCommandAsksChanged: (listener) =>
+    onMachineCommandAsksChanged: (listener) =>
       on(
-        GATEWAY_EVENT.MAC_COMMAND_ASKS_CHANGED,
+        GATEWAY_EVENT.MACHINE_COMMAND_ASKS_CHANGED,
         (payload) =>
           Result.getOrUndefined(
-            readEither(macCommandAsksSchema, { excess: EXCESS_KEYS.DROP })(payload),
+            readEither(machineCommandAsksSchema, { excess: EXCESS_KEYS.DROP })(payload),
           )?.asks,
         listener,
       ),

@@ -4,7 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import { agentQueueNow } from "@repo/database/models/agent-queue-store";
 import { readAgent, readAgentByKey } from "@repo/database/models/agent-store";
-import { heardFromAnotherAccount } from "@repo/database/models/mac-command-store";
+import { heardFromAnotherAccount } from "@repo/database/models/machine-command-store";
 import { createTask, readTask } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { messages } from "@repo/database/schemas/storage";

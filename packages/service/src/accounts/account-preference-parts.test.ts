@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
 import {
   readAccountAccess,
+  readAccountCreatedAt,
   readAccountPreferences,
   writeAccountPreferences,
 } from "@repo/database/models/account-store";
@@ -14,7 +15,7 @@ import { LINK_OPEN } from "@repo/features/link-open";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { LIVE_VOICE } from "@repo/features/voices";
-import { EXPERIMENT, SOUND_WHEN } from "@repo/settings";
+import { EXPERIMENT, INTROS_SHIPPED_AT, SOUND_WHEN } from "@repo/settings";
 import {
   HTTP_METHOD,
   isRecord,
@@ -24,6 +25,7 @@ import {
 } from "@repo/wire";
 import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { noNetwork } from "@repo/wire/testing";
+import { eq } from "drizzle-orm";
 import { Clock, Effect, Layer, Option } from "effect";
 import { SqlClient } from "effect/sql";
 import { accountFastOffer } from "../agents/coder-host/agent-runtime-choice.js";
@@ -118,6 +120,7 @@ const openAccounts = Effect.gen(function* () {
         Option.fromNullishOr(bearers.get(incoming.headers.get("authorization") ?? "")),
       ),
     readPreferences: readAccountPreferences,
+    readCreatedAt: readAccountCreatedAt,
     readAccess: readAccountAccess,
     accountFastOffer,
     writePreferences: writeAccountPreferences,
@@ -492,5 +495,35 @@ it.layer(getTestDB())("the preferences snapshot's agent part", (it) => {
         effort: "high",
       });
     }),
+  );
+});
+
+it.layer(getTestDB())("the preferences snapshot's intros seen", (it) => {
+  it.effect(
+    "an account made before the intros shipped reads the launch's as seen beside what it dismissed, and one made after reads only what it dismissed",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, ask } = yield* openAccounts;
+        const db = yield* Database;
+        const before = new Date(INTROS_SHIPPED_AT.getTime() - 1);
+        const after = new Date(INTROS_SHIPPED_AT.getTime() + 1);
+        yield* db.update(user).set({ createdAt: before }).where(eq(user.id, owner));
+        yield* db.update(user).set({ createdAt: after }).where(eq(user.id, other));
+
+        assert.equal(
+          partOf(yield* ask(request(owner)), "introsSeen"),
+          '["automations","browser","inbox","task_overview"]',
+        );
+        assert.equal(partOf(yield* ask(request(other)), "introsSeen"), undefined);
+
+        // Note that a later intro dismissed by the older account still leaves the launch's seen.
+        const dismissed = yield* ask(request(owner, { introsSeen: '["a_later_page"]' }));
+        assert.equal(
+          partOf(dismissed, "introsSeen"),
+          '["a_later_page","automations","browser","inbox","task_overview"]',
+        );
+        const newer = yield* ask(request(other, { introsSeen: '["inbox"]' }));
+        assert.equal(partOf(newer, "introsSeen"), '["inbox"]');
+      }),
   );
 });

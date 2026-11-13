@@ -1160,6 +1160,12 @@ body,
   --ui-toolbar-ground: var(--ui-color-fill-hover);
 }
 
+/* The Inbox's intro (`page-intro.tsx`) stands at the head of the rows, a
+   section's gap above the first, and rolls up as the rows close over it. */
+.inbox-tasks-body > .ui-reveal {
+  margin-block-end: var(--ui-section-gap);
+}
+
 /* A group's room above it counts only the groups still in the layout, so a
    group stands as it will once the one leaving before it is gone, and its
    glide ends there rather than a margin short. */

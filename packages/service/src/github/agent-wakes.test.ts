@@ -11,7 +11,7 @@ import {
   takeAgentMentionedServers,
   updateAgentBranch,
 } from "@repo/database/models/agent-store";
-import { heardFromAnotherAccount } from "@repo/database/models/mac-command-store";
+import { heardFromAnotherAccount } from "@repo/database/models/machine-command-store";
 import { readMessageByClientId } from "@repo/database/models/message-reads";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { queuedTurnOf } from "@repo/database/models/turn-state";

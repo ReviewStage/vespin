@@ -2,7 +2,7 @@ import type {
   ComputerApp,
   ComputerOutcome,
   MacComputerAction,
-} from "@repo/features/mac-command-wire";
+} from "@repo/features/machine-command-wire";
 import {
   type Cause,
   Clock,

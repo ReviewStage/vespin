@@ -1,0 +1,52 @@
+diff --git a/build/swift-ui/Image/index.d.ts b/build/swift-ui/Image/index.d.ts
+index f1aeaae3b55fd5cb2d30b952c096b086391575a6..c78a6397b9dfb3195c25a0153129dc73b28e0f87 100644
+--- a/build/swift-ui/Image/index.d.ts
++++ b/build/swift-ui/Image/index.d.ts
+@@ -28,6 +28,11 @@ export interface ImageProps extends CommonViewModifierProps {
+      * Can be a color name like '#ff00ff', 'red', 'blue', etc.
+      */
+     color?: ColorValue;
++    /**
++     * A color drawn into the symbol itself, its rendering kept original, so a
++     * system menu, which templates an icon tinted by `color`, keeps it.
++     */
++    originalColor?: ColorValue;
+     /**
+      * The variable value that alters the symbol's appearance.
+      * A number between 0.0 and 1.0.
+diff --git a/ios/ImageView.swift b/ios/ImageView.swift
+index 170de73445439a3ba4e5495643ee5f7c3eb332ab..8578f82e55be76c860b1557aa81fe55dbfd3343d 100644
+--- a/ios/ImageView.swift
++++ b/ios/ImageView.swift
+@@ -8,6 +8,8 @@ public final class ImageViewProps: UIBaseViewProps {
+   @Field var systemName: String?
+   @Field var assetName: String?
+   @Field var variableValue: Double?
++  // A color drawn into the symbol itself, which a system menu keeps where it templates an icon tinted by a modifier.
++  @Field var originalColor: Color?
+   @Field var useTapGesture: Bool?
+   var onTap = EventDispatcher()
+ }
+@@ -19,7 +21,22 @@ public struct ImageView: ExpoSwiftUI.View {
+     self.props = props
+   }
+ 
++  // A symbol already filled with its color, its rendering kept original, as Mail's Flag menu hands its flags to the menu.
++  private var originalImage: Image? {
++    guard let color = props.originalColor else {
++      return nil
++    }
++    let symbol = props.systemName.flatMap { UIImage(systemName: $0) } ?? props.assetName.flatMap { UIImage(named: $0) }
++    guard let tinted = symbol?.withTintColor(UIColor(color), renderingMode: .alwaysOriginal) else {
++      return nil
++    }
++    return Image(uiImage: tinted)
++  }
++
+   private var symbolImage: Image? {
++    if let originalImage {
++      return originalImage
++    }
+     if let systemName = props.systemName {
+       if #available(iOS 16.0, tvOS 16.0, *) {
+         return Image(systemName: systemName, variableValue: props.variableValue)

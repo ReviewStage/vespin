@@ -1,4 +1,4 @@
-// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned, Following, and the member's sections with their tasks, and Settings at its foot.
+// app-sidebar.tsx -- a wide window's sidebar, as iPad apps stand theirs: the workspace switcher at its head, the Inbox with its count, Tasks, and Search, then Pinned, Following, and the member's sections with their tasks; Settings opens from the switcher's menu, as Notion's and Linear's iPad sidebars keep it, and from ⌘,.
 
 import {
   AccountBarItem,
@@ -16,7 +16,7 @@ import {
 import { useRouter } from "expo-router";
 import type { ReactNode } from "react";
 import { useInboxBadge } from "../inbox/use-inbox.js";
-import { useOpenSettings, useSettingsAccount } from "../settings-button.js";
+import { useSettingsAccount } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useThreeColumns } from "../use-window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
@@ -60,9 +60,8 @@ const PLACES = [
   },
 ] as const;
 
-/** The acts the sidebar's bar holds, as the tab bar's round + and the account's photo name them. */
+/** The act the sidebar's bar holds, as the tab bar's round + names it. */
 const NEW_TASK = { label: "New task", symbol: GLYPH.NEW_TASK } as const;
-const SETTINGS = { label: "Settings", symbol: GLYPH.SETTINGS } as const;
 
 /** The member's tasks the sidebar lists under its places: Pinned, Following, and each of their sections, as the Tasks tab draws them. */
 export type SidebarTasks = {
@@ -139,9 +138,12 @@ export function useListColumn(list: ListColumn): FirstColumn {
  * landscape, which stands where the system's tab bar would, which that
  * window hides: the place the window stands in, or the task it has open
  * where the sidebar lists it, drawn selected. A place opens its tab, and a
- * task opens on the Tasks tab beside its list, as a link to it does. The
- * switcher's account and Settings at the foot, where an iPad sidebar stands
- * it, both open Settings; New task opens its sheet. The switcher heads the
+ * task opens on the Tasks tab beside its list, as a link to it does.
+ * Settings opens from the switcher's account and its Settings…, with no gear
+ * at the sidebar's foot, as Notion's and Linear's iPad sidebars keep it, and
+ * from the menu bar's ⌘,; until the workspaces are read and the switcher can
+ * draw, the account's photo leads the sidebar's bar instead, so Settings is
+ * never out of reach. New task opens its sheet. The switcher heads the
  * sidebar's list rather than its bar, as Notion's iPad sidebar names its
  * workspace, because a second leading item folds into the bar's overflow
  * beside the sidebar's own button. Note that the tabs' layout draws it once,
@@ -157,7 +159,7 @@ export function useAppSidebar(
 ): FirstColumn {
   const router = useRouter();
   const waiting = useInboxBadge();
-  const openSettings = useOpenSettings();
+  const account = useSettingsAccount();
   const switcher = useWorkspaceSwitcher();
   const { shown, setShown } = useSidebarShown();
   const header = switcher === undefined ? undefined : <WorkspaceSwitcherItem {...switcher} />;
@@ -192,8 +194,12 @@ export function useAppSidebar(
       </RowList>
     ),
     sidebarBar: {
+      // Note that the photo leads only until the switcher heads the list, so the bar never stands two leading items, which fold into its overflow.
+      leading:
+        switcher === undefined && account !== undefined ? (
+          <AccountBarItem {...account} />
+        ) : undefined,
       action: { ...NEW_TASK, onPress: () => router.push("/start-task") },
-      foot: [{ ...SETTINGS, onPress: () => openSettings() }],
     },
     sidebarShown: shown,
     onSidebarShownChange: setShown,

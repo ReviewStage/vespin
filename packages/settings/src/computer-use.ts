@@ -7,7 +7,7 @@ import { Option, Predicate, Schema } from "effect";
  * Settings stores both as app settings of this Mac's own (`schema.ts`): the
  * switch, which the host reads as each action on an app arrives, and the
  * apps the developer answered Always allow for, by bundle id, as JSON, which
- * the prompt's Always allow writes (`compose-mac-commands.ts`).
+ * the prompt's Always allow writes (`compose-machine-commands.ts`).
  */
 
 /** What the switch is called, wherever its control stands. */

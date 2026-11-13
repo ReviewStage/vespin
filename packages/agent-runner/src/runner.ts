@@ -517,6 +517,9 @@ function control<Answer>(step: string, call: () => Promise<Answer>) {
   );
 }
 
+/** What a launch whose CLI never answered the interrupt a mid-turn `/goal` line needs says it failed of. */
+const GOAL_UNINTERRUPTED = "the CLI never answered the interrupt a goal line needs";
+
 /** Whether a message is a `/goal` line that sets or clears the goal, rather than one that asks where it stands. */
 function movesGoal(content: Extract<InputLine, { type: "message" }>["content"]): boolean {
   const text = content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
@@ -588,7 +591,11 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
           // Note that Claude Code runs a command only as a turn of its own, where a line taken mid-turn is words to the model, and a goal holds its turn open, so a `/goal` that sets or clears it interrupts the turn first; held unanswered ahead of it, so the turn it cuts off leaves the launch up for the command.
           if (movesGoal(content) && (yield* Ref.get(launch.turnRunning))) {
             yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
-            yield* control("interrupt", () => launch.session.interrupt());
+
+            // An interrupt the CLI never answers fails the launch, as a stop's ends it, rather than queue the command behind a turn that holds.
+            if (!(yield* control("interrupt", () => launch.session.interrupt()))) {
+              return yield* endFailed(launch, GOAL_UNINTERRUPTED);
+            }
           }
 
           yield* handToCli(launch, uuid, prompt, content);

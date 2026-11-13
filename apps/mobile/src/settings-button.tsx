@@ -39,8 +39,8 @@ export type SettingsRoute = (typeof SETTINGS_ROUTE)[keyof typeof SETTINGS_ROUTE]
 
 /**
  * The one way to open Settings, from the workspace switcher's account, the
- * account's photo, the iPad's menu bar's ⌘, (`modules/menu-commands/`), the
- * sidebar's foot, or anywhere else that offers it: on its main list, or on one of its pages.
+ * account's photo, the iPad's menu bar's ⌘, (`modules/menu-commands/`), or
+ * anywhere else that offers it: on its main list, or on one of its pages.
  */
 export function useOpenSettings(): (route?: SettingsRoute) => void {
   const router = useRouter();

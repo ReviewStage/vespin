@@ -38,6 +38,7 @@ import {
   NO_ASSIGNEE_WORDS,
   TASK_PRIORITY_WORDS,
   TASK_RELATION_WORDS,
+  TASK_STATUS_TONE,
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
 import {
@@ -247,6 +248,7 @@ function statusSubmenu(
     choices: STATUS_ORDER.map((status) => ({
       label: TASK_STATUS_WORDS[status],
       symbol: STATUS_MARK_SYMBOL[status],
+      tone: TASK_STATUS_TONE[status],
       on: task.status === status,
       onPress: () => setStatus(task.id, status),
     })),

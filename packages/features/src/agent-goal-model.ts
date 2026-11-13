@@ -173,7 +173,7 @@ function moved(
   if (own === undefined) return goal;
 
   if (own.event === GOAL_EVENT.CLEARED) return undefined;
-  const at = { ...goal, ...counted };
+  const at = { ...goal, ...counted, turns: own.turns ?? goal.turns };
 
   switch (own.event) {
     case GOAL_EVENT.NOT_MET:
@@ -186,7 +186,6 @@ function moved(
       return {
         ...at,
         state: settledState(own.event) ?? goal.state,
-        turns: own.turns ?? goal.turns,
         reason: own.reason ?? goal.reason,
       };
   }
@@ -320,11 +319,21 @@ export function readGoal(messages: readonly AgentTranscriptMessage[], older = fa
       if (part.kind === AGENT_PART.ARRIVED) seen(part.line);
 
       if (part.kind !== AGENT_PART.GOAL) continue;
+      const notice = part.notice;
+
+      // Note that a project's own Stop hook, said as a verdict of no goal's, answers no ask.
+      if (
+        notice.event === GOAL_EVENT.NOT_MET &&
+        (goal === undefined || ofGoal(notice, goal.condition) === undefined)
+      ) {
+        continue;
+      }
+
       asked = undefined;
       goal =
-        goal === undefined && older && part.notice.event !== GOAL_EVENT.SET
-          ? takenUp(part.notice, message)
-          : moved(goal, part.notice, message);
+        goal === undefined && older && notice.event !== GOAL_EVENT.SET
+          ? takenUp(notice, message)
+          : moved(goal, notice, message);
     }
   }
 

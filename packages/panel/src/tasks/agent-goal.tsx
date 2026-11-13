@@ -214,7 +214,13 @@ export function GoalDock({
     if (sentAt === undefined) return undefined;
     const left = sentAt + GOAL_ASK_WAIT_MS - Date.now();
 
-    if (left <= 0) return undefined;
+    // An ask that already waited its while moves the row no more, which the row is drawn again for now.
+    if (left <= 0) {
+      setNow(Date.now());
+
+      return undefined;
+    }
+
     const timer = setTimeout(() => setNow(Date.now()), left);
 
     return () => clearTimeout(timer);

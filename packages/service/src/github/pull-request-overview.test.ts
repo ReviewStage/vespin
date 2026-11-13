@@ -1191,7 +1191,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
   );
 
   it.effect(
-    "each comment, review, thread comment, and the description carry the GraphQL id a reaction is added by, and the member's own read, on their own token, marks which reactions are theirs",
+    "each comment, review, thread comment, and the description carry the GraphQL id a reaction is added by, and the member's own read, on their own token, marks which reactions are theirs and which words they may edit",
     () =>
       Effect.gen(function* () {
         const workspace = yield* openWorkspace(yield* linkedAccount(CHARLES.id));
@@ -1247,7 +1247,13 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
                       id: "PR_7",
                       reactionGroups: [viewed("HEART", true), viewed("ROCKET", false)],
                       comments: {
-                        nodes: [{ id: "IC_11", reactionGroups: [viewed("EYES", false)] }],
+                        nodes: [
+                          {
+                            id: "IC_11",
+                            viewerCanUpdate: false,
+                            reactionGroups: [viewed("EYES", false)],
+                          },
+                        ],
                       },
                       reviews: { nodes: [] },
                       reviewThreads: {
@@ -1255,7 +1261,11 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
                           {
                             comments: {
                               nodes: [
-                                { id: "PRRC_1", reactionGroups: [viewed("THUMBS_UP", true)] },
+                                {
+                                  id: "PRRC_1",
+                                  viewerCanUpdate: true,
+                                  reactionGroups: [viewed("THUMBS_UP", true)],
+                                },
                               ],
                             },
                           },
@@ -1334,6 +1344,7 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
         );
         const [comment, approved] = conversation.conversation;
         assert.equal(comment?.subject, "IC_11");
+        assert.equal(comment?.editable, false, "words the member may not edit say so");
         assert.deepEqual(
           comment?.reactions?.map(({ content, mine }) => [content, mine]),
           [[REACTION.EYES, false]],
@@ -1341,6 +1352,12 @@ it.layer(getTestDB())("a pull request's overview", (it) => {
         assert.equal(approved?.subject, "PRR_5");
         const threadComment = approved?.threads?.[0]?.comments[0];
         assert.equal(threadComment?.subject, "PRRC_1");
+        assert.equal(threadComment?.editable, true);
+        assert.equal(
+          approved?.editable,
+          undefined,
+          "words the member's read did not reach say nothing",
+        );
         assert.deepEqual(threadComment?.reactions, [
           { content: REACTION.THUMBS_UP, count: 1, mine: true },
         ]);

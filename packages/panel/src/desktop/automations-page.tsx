@@ -26,7 +26,7 @@ import { TRIGGER_PROVIDER, type TriggerProvider } from "@repo/features/trigger-c
 import { managesWorkspace } from "@repo/features/workspace-role";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { EXPERIMENT, type Experiment, experimentOn } from "@repo/settings";
+import { EXPERIMENT, type Experiment, experimentOn, INTRO } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import {
   BackButton,
@@ -85,6 +85,7 @@ import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-
 import { unreadShown } from "../failure-report.js";
 import { workspaceIntegrationsQuery, workspaceIntegrationsRetryMutation } from "../live-reads.js";
 import { MemberDirectory, useCreator } from "../member-directory.js";
+import { PageIntro } from "../page-intro.js";
 import { useAutomationsDoor } from "../places/routed-doors.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { stateEndMark } from "../state-glyph.js";
@@ -789,6 +790,7 @@ function ListPage({
         label="Automations"
         toolbar={<AutomationsHead tasks={tasks} room={room} />}
         filters={<AutomationsTabs tasks={tasks} />}
+        intro={<PageIntro intro={INTRO.AUTOMATIONS} />}
         state={listState(workspacesUnread, read)}
         loadingLabel={READING_AUTOMATIONS}
         skeleton={<AutomationListSkeleton narrow={room === SHELL_ROOM.NARROW} />}

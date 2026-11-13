@@ -73,14 +73,14 @@ import type { AppSettings } from "@repo/settings/wire";
 import { EXCESS_KEYS, keepIdentity, type UnparsedWireValue } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { Equal, Predicate, Result, Schema } from "effect";
-import type { MacCommandAsk } from "./mac-command-ask.js";
+import type { MachineCommandAsk } from "./machine-command-ask.js";
 
 export {
-  isMacShellAsk,
+  isMachineShellAsk,
   type MacAppAsk,
-  type MacCommandAsk,
-  type MacShellAsk,
-} from "./mac-command-ask.js";
+  type MachineCommandAsk,
+  type MachineShellAsk,
+} from "./machine-command-ask.js";
 
 /**
  * The launch profiles a window answers to. A fixture run stages the panel's
@@ -752,12 +752,12 @@ export interface AppHostReads {
 /**
  * The commands agents asked to run on this Mac that wait on the developer's
  * answer, the earliest first, as the host holds them while Settings › This
- * Mac asks every time (`compose-mac-commands.ts`): what the panel's prompt
+ * Mac asks every time (`compose-machine-commands.ts`): what the panel's prompt
  * draws. Main's, because the host holds the command whichever window is
  * open, and empty wherever this platform runs no commands.
  */
-interface AppMacCommandsSlice {
-  asks: readonly MacCommandAsk[];
+interface AppMachineCommandsSlice {
+  asks: readonly MachineCommandAsk[];
 }
 
 /**
@@ -933,7 +933,7 @@ export interface AppState {
   [LIVE_READ.HISTORY]: AppHistories;
   /** Each task's description the windows opened, held while a window has it open and a while after: what the task's page, a section's chip, and a mention's saved text draw. */
   [LIVE_READ.DESCRIPTION_DOCUMENT]: AppDescriptionDocuments;
-  macCommands: AppMacCommandsSlice;
+  machineCommands: AppMachineCommandsSlice;
   notifications: AppNotificationsSlice;
   network: AppNetworkSlice;
   sessionReplay: AppSessionReplaySlice;

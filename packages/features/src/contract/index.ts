@@ -26,7 +26,7 @@ import { integrationsContract } from "./integrations.js";
 import { linkPreviewsContract } from "./link-previews.js";
 import { liveContract } from "./live.js";
 import { liveActivitiesContract } from "./live-activities.js";
-import { macCommandsContract } from "./mac-commands.js";
+import { machineCommandsContract } from "./machine-commands.js";
 import { mcpClientsContract } from "./mcp-clients.js";
 import { messagesContract } from "./messages.js";
 import { modelsContract } from "./models.js";
@@ -87,7 +87,7 @@ export const hostedContract = {
   live: liveContract,
   liveActivities: liveActivitiesContract,
   deviceAgents: deviceAgentsContract,
-  macCommands: macCommandsContract,
+  machineCommands: machineCommandsContract,
   mcpClients: mcpClientsContract,
   messages: messagesContract,
   models: modelsContract,

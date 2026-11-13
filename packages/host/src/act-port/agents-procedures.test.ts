@@ -63,6 +63,8 @@ const REFUSAL = {
     "Could not change which key chapters run on on this system.",
   [AGENT_ACT_KIND.HOSTS_REMOVE]: "Could not remove the host on this system.",
   [AGENT_ACT_KIND.HOSTS_THIS_MAC_SET]: "Could not change this Mac on this system.",
+  [AGENT_ACT_KIND.HOSTS_ALLOWED_APPS]:
+    "Could not read the apps your machines allow on this system.",
   [AGENT_ACT_KIND.HOSTS_PAIRING_READ]: "Could not read the code on this system.",
   [AGENT_ACT_KIND.HOSTS_PAIRING_APPROVE]: "Could not connect the host on this system.",
   [AGENT_ACT_KIND.HOSTS_PAIRING_DENY]: "Could not deny the host on this system.",
@@ -115,6 +117,7 @@ const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
   AGENTS_PREFERENCES_RETRY: undefined,
   HOSTS_REMOVE: { id: HOST_ID },
   HOSTS_THIS_MAC_SET: { on: true },
+  HOSTS_ALLOWED_APPS: {},
   HOSTS_PAIRING_READ: { code: PAIRING_CODE },
   HOSTS_PAIRING_APPROVE: { code: PAIRING_CODE },
   HOSTS_PAIRING_DENY: { code: PAIRING_CODE },

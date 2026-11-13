@@ -1,6 +1,7 @@
 // inbox-screens.tsx -- the Inbox's list and its thread: the Stack's two screens in a compact window, one split view in a regular one.
 
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
+import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { RESOLVE } from "@repo/features/inbox-ask-words";
 import { inboxAttachmentOf, inboxPictureDestination } from "@repo/features/inbox-attachment-link";
 import {
@@ -28,12 +29,7 @@ import {
   RETRY,
   SEARCH_INBOX,
 } from "@repo/features/inbox-list-model";
-import {
-  INBOX_FILE_TYPE,
-  INBOX_STATUS,
-  type InboxItem,
-  inboxWaitsOn,
-} from "@repo/features/inbox-wire";
+import { INBOX_STATUS, type InboxItem, inboxWaitsOn } from "@repo/features/inbox-wire";
 import { iosAppRouteOf } from "@repo/features/ios-app-links";
 import { threadActivity } from "@repo/features/ios-system-activity";
 import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
@@ -457,7 +453,7 @@ function ThreadDetail({
         })),
       ]),
       ...openAskFiles(item).map((file) => ({
-        kind: file.mediaType === INBOX_FILE_TYPE.WEBM ? INBOX_MEDIA.VIDEO : INBOX_MEDIA.PICTURE,
+        kind: isVideoType(file.mediaType) ? INBOX_MEDIA.VIDEO : INBOX_MEDIA.PICTURE,
         attachmentId: file.attachmentId,
         name: "",
         mediaType: file.mediaType,

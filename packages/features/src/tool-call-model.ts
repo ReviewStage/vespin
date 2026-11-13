@@ -36,7 +36,7 @@ import {
   integrationRemoteCallSchema,
 } from "./integration-wire.js";
 import { LINK_DESTINATION, type LinkDestination, linkOf } from "./link-grammar.js";
-import { COMPUTER_PERMISSION, type ComputerPermission } from "./mac-command-wire.js";
+import { COMPUTER_PERMISSION, type ComputerPermission } from "./machine-command-wire.js";
 import type { MentionHolder } from "./mention-holder.js";
 import type { ModelChoice } from "./models-wire.js";
 import { cardTitle } from "./plain-words.js";
@@ -206,7 +206,7 @@ const isComputerPermission = Schema.is(Schema.Literals(Object.values(COMPUTER_PE
 
 /** Whether a computer call answered that the Mac ran nothing, so it read no window and used no app. */
 export function computerCallRefused(output: WireValue | undefined): boolean {
-  return stringAt(output, "status") === MAC_COMMAND_NOT_RUN;
+  return stringAt(output, "status") === MACHINE_COMMAND_NOT_RUN;
 }
 
 /** Why a computer call ran nothing because the Mac lacked a grant it needed, in the Mac's own words, with those grants; none for any other answer. */
@@ -279,7 +279,7 @@ const TRUNCATED_NOTE = "(output truncated)";
 const TIMED_OUT_NOTE = "(killed at its timeout)";
 
 /** The status `run_on_mac` answers with when the Mac ran nothing. */
-const MAC_COMMAND_NOT_RUN = "not-run";
+const MACHINE_COMMAND_NOT_RUN = "not-run";
 
 /** The status `browser` answers with when it ran nothing. */
 const BROWSER_NOT_RUN = "not-run";
@@ -328,8 +328,8 @@ function browserOutput(output: WireValue): ToolBlock {
 }
 
 /** A command the Mac ran: as a terminal would have shown it, its timeout said where it was killed; or why it was not run. */
-function macCommandOutput(output: WireValue): ToolBlock {
-  if (stringAt(output, "status") === MAC_COMMAND_NOT_RUN) {
+function machineCommandOutput(output: WireValue): ToolBlock {
+  if (stringAt(output, "status") === MACHINE_COMMAND_NOT_RUN) {
     return textBlock(stringAt(output, "reason") ?? "");
   }
 
@@ -1278,11 +1278,11 @@ const AGENT_TOOL_VIEWS = {
     const description = commandDescription(stringAt(input, "description"));
 
     return {
-      kind: CALL_KIND.MAC_COMMAND,
+      kind: CALL_KIND.MACHINE_COMMAND,
       subject: command,
       ...(description === undefined ? undefined : { description }),
       input: { kind: TOOL_BLOCK.COMMAND, text: command },
-      output: output === undefined ? undefined : macCommandOutput(output),
+      output: output === undefined ? undefined : machineCommandOutput(output),
     };
   },
   [AGENT_TOOL.COMPUTER]: ({ input, output }) => {
