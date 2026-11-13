@@ -36,10 +36,13 @@ import { useQuery } from "@tanstack/react-query";
 import { openURL } from "expo-linking";
 import { useGlobalSearchParams, usePathname, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
+import { useAgentPullRequests } from "../agents/use-agent.js";
+import { PUSHED_PAGE, type PushedPage, useTopPage } from "../detail-stack.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useInboxActs, useInboxThread } from "../inbox/use-inbox.js";
 import { openInSafari } from "../open-link.js";
+import { placeOfRoute, type SidebarPlace } from "../screens/app-sidebar.js";
 import { SETTINGS_ROUTE, useOpenSettings } from "../settings-button.js";
 import { useSidebarShown } from "../sidebar-shown.js";
 import { useSignOut } from "../sign-out.js";
@@ -109,11 +112,51 @@ function namesTask(task: TaskSummary, named: string): boolean {
   return task.id === named || (task.number !== undefined && String(task.number) === named);
 }
 
+/** The place whose split view stands at a tab's root, by the route; none on a page pushed over the window. */
+function rootPlaceOf(pathname: string): SidebarPlace | undefined {
+  const segments = pathname.split("/").filter((segment) => segment !== "");
+
+  return segments.length === 1 ? placeOfRoute(segments[0]) : undefined;
+}
+
+/**
+ * What a page pushed over a split view's detail puts in front of the menu:
+ * an agent for its own page, its pull request, or a page it showed, so Stop
+ * and Pin follow it; a task for its page, comments, history, or versions.
+ */
+function pushedFocus(page: PushedPage): MenuFocus {
+  switch (page.kind) {
+    case PUSHED_PAGE.AGENT:
+    case PUSHED_PAGE.PULL_REQUEST:
+    case PUSHED_PAGE.AGENT_PAGE:
+      return { kind: MENU_SUBJECT.AGENT, id: page.agentId };
+    case PUSHED_PAGE.TASK:
+    case PUSHED_PAGE.TASK_PAGE:
+    case PUSHED_PAGE.COMMENTS:
+    case PUSHED_PAGE.NEW_COMMENT:
+    case PUSHED_PAGE.HISTORY:
+    case PUSHED_PAGE.VERSION:
+      return { kind: MENU_SUBJECT.TASK, id: page.taskId };
+  }
+}
+
 /** Reads what the route stands in front into what each command may do to it. */
 function useSubject(signedIn: boolean): Subject {
   const pathname = usePathname();
   const { selected } = useGlobalSearchParams<{ selected?: string }>();
-  const focus: MenuFocus = signedIn ? menuFocusOf(pathname, selected) : { kind: MENU_SUBJECT.NONE };
+  // Note that a page pushed over a split view's detail is no route, so it is read off the detail's stack while its tab's root stands.
+  const pushed = useTopPage(signedIn ? rootPlaceOf(pathname) : undefined);
+
+  const focus: MenuFocus = !signedIn
+    ? { kind: MENU_SUBJECT.NONE }
+    : pushed === undefined
+      ? menuFocusOf(pathname, selected)
+      : pushedFocus(pushed);
+
+  const pulled = useAgentPullRequests(
+    pushed?.kind === PUSHED_PAGE.PULL_REQUEST ? pushed.agentId : "",
+  );
+
   const thread = useInboxThread(focus.kind === MENU_SUBJECT.THREAD ? focus.id : undefined).listed;
   const { data: view } = useQuery({ ...appStateQuery, select: selectTasks });
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data ?? [];
@@ -170,6 +213,15 @@ function useSubject(signedIn: boolean): Subject {
     if (taskRowLook(task, 0, undefined).unread) toggled.push(MENU_COMMAND.TOGGLE_READ);
 
     if (task.pinnedAt !== undefined) toggled.push(MENU_COMMAND.PIN);
+  }
+
+  // Note that a pushed pull request or page opens itself in the browser, not the agent or task it stands over.
+  if (pushed?.kind === PUSHED_PAGE.PULL_REQUEST) {
+    address = pulled.find(({ number }) => number === pushed.number)?.url;
+  } else if (pushed?.kind === PUSHED_PAGE.AGENT_PAGE && agent !== undefined) {
+    address = linked({ kind: LINK_DESTINATION.PAGE, planId: agent.planId, pageId: pushed.pageId });
+  } else if (pushed?.kind === PUSHED_PAGE.TASK_PAGE) {
+    address = linked({ kind: LINK_DESTINATION.PAGE, planId: pushed.taskId, pageId: pushed.pageId });
   }
 
   if (address !== undefined) enabled.push(MENU_COMMAND.OPEN_IN_BROWSER);

@@ -278,6 +278,23 @@ export function useDetailStack(place: SidebarPlace): PlaceStack {
   return useSyncExternalStore(subscribe, () => stackOf(place));
 }
 
+/** The page on top of a place's stack, while it stands over the detail it was pushed over. */
+function topPageOf(place: SidebarPlace | undefined): PushedPage | undefined {
+  if (place === undefined) return undefined;
+  const stack = stackOf(place);
+
+  return stack.over === roots.get(place) ? stack.pages.at(-1)?.page : undefined;
+}
+
+/**
+ * The page on top of a place's detail stack, live as it is pushed and
+ * popped, such as the pull request the iPad's menu bar acts on; none with
+ * nothing pushed or no place named.
+ */
+export function useTopPage(place: SidebarPlace | undefined): PushedPage | undefined {
+  return useSyncExternalStore(subscribe, () => topPageOf(place));
+}
+
 /**
  * Names what a place's detail stands for as its split view draws it, such
  * as the picked thread's id, so a page is pushed over that detail and goes
