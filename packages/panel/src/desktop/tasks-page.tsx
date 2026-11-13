@@ -212,10 +212,10 @@ export function TasksPage({
   const onDisplay = view === TASKS_VIEW.LIST ? onListDisplay : onBoardDisplay;
   const choose = (next: TasksView) => keepView(next);
 
-  // Note that settled tasks past those the list holds are read from the service a page at a time while the view shows them in full.
-  const onSettledEnd = useSettledPages(
+  // Note that settled tasks past those the list holds are read from the service a page at a time while the view shows them in full, once the list they stand beside is read.
+  const settledPages = useSettledPages(
     workspaceId,
-    tasks.shown && showsSettledInFull(filter, display),
+    tasks.shown && tasks.listRead && showsSettledInFull(filter, display),
   );
 
   const shared = (tasks.workspace?.memberCount ?? 1) > 1;
@@ -340,7 +340,7 @@ export function TasksPage({
     filter,
     display,
     onDisplay,
-    onSettledEnd,
+    settledPages,
     chosen: held?.chosenIn(view),
     measured: held?.measuredIn(view),
     column: held?.column,

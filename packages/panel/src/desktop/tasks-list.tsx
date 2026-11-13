@@ -1030,13 +1030,13 @@ export function TasksList({
       }),
   );
 
-  // Note that a view drawing no row a settled task may stand in has no end to scroll to, so it asks the next page of settled tasks itself, until one draws or the last is read, and one drawing such a row leaves its run to tell its end (`use-settled-pages.ts`).
+  // Note that a view drawing no row a settled task may stand in has no run to come to its end, so it tells the paging so, which reads on until one draws or the last is read (`use-settled-pages.ts`).
   const drawsSettled = settledRowsDrawn(groups);
-  const { onSettledEnd } = frame;
+  const onDrawn = frame.settledPages?.onDrawn;
 
   useEffect(() => {
-    onSettledEnd?.(!drawsSettled);
-  }, [drawsSettled, groups, onSettledEnd]);
+    onDrawn?.(drawsSettled);
+  }, [drawsSettled, groups, onDrawn]);
 
   // Note that every door a row is handed stands across draws, so a row held while what it is handed does (`memo`) holds.
   const standingDoor = useStandingDoor(tasks);
@@ -1213,7 +1213,9 @@ export function TasksList({
                     onShowOlder={() =>
                       frame.onDisplay({ ...display, completed: COMPLETED_WINDOW.ALL })
                     }
-                    onSettledEnd={mayHoldSettled(group.head) ? frame.onSettledEnd : undefined}
+                    onSettledEnd={
+                      mayHoldSettled(group.head) ? frame.settledPages?.onRunEnd : undefined
+                    }
                     tasks={tasks}
                     properties={properties}
                     place={runsPlace}

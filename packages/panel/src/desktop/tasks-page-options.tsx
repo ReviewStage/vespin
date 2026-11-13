@@ -95,6 +95,7 @@ import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { actionSearchPanel } from "./action-search-menu.js";
 import { type MenuAsk, useAskedMenu } from "./phone-head.js";
 import type { ChosenTasksStore } from "./tasks-selection.js";
+import type { SettledPages } from "./use-settled-pages.js";
 
 /**
  * tasks-page-options.tsx -- the Tasks page's Filter and View options, the two buttons at its toolbar's end, and the chips under it saying what the filter keeps.
@@ -130,8 +131,8 @@ export interface TasksViewFrame {
   readonly display: TasksDisplay;
   /** Changes the view's display, as the line under a settled group does. */
   readonly onDisplay: (display: TasksDisplay) => void;
-  /** Hears whether a run of rows that may hold settled tasks stands scrolled to its end, which reads the next page of them while the view shows them in full (`use-settled-pages.ts`); none reads none. */
-  readonly onSettledEnd?: ((atEnd: boolean) => void) | undefined;
+  /** What the view tells the paging of settled tasks past those the list holds, while it shows them in full: a run that may hold them at its end, and whether it draws any (`use-settled-pages.ts`); none pages none. */
+  readonly settledPages?: SettledPages | undefined;
   /** Where the view's chosen tasks are held across the page's visits; the view's own while nothing outlives it. */
   readonly chosen?: ChosenTasksStore | undefined;
   /** What each run of the view's rows measured, by the run's key, held across the page's visits; none while nothing outlives the view. */
