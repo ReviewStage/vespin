@@ -36,7 +36,7 @@ import { useMutation, useMutationState, useQuery, useQueryClient } from "@tansta
 import { Predicate } from "effect";
 import Constants from "expo-constants";
 import { getDevicePushTokenAsync } from "expo-notifications";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs } from "./host/host-provider.js";
 import {
