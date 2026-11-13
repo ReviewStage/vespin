@@ -1,5 +1,7 @@
 import AppKit
 import ApplicationServices
+import AVFoundation
+import CoreMedia
 import Foundation
 import ImageIO
 import ScreenCaptureKit
@@ -27,6 +29,12 @@ import UniformTypeIdentifiers
 /// - `click`, `type_text`, `press_key`, `scroll`, `drag`, `set_value`,
 ///   `perform_secondary_action`: act on the app by an element's number or by
 ///   a point in the first screenshot's pixels.
+/// - `record {app, max_seconds, max_bytes}`: starts recording the app's
+///   window as an H.264 MP4, the agent's cursor drawn over it, until
+///   `stop_recording` or `max_seconds`, whichever comes first.
+/// - `stop_recording`: stops it, makes it fit `max_bytes`, and answers its
+///   length, size, and bytes; asked again, it answers the same recording
+///   until the next one starts.
 ///
 /// A read or an action may pin its app to the one the developer allowed,
 /// by `pin_bundle_id`, or by `pin_pid` for an app with no bundle id, and is
@@ -97,7 +105,12 @@ private let ERROR_KIND = (
     noPermission: "no_permission",
     noWindow: "no_window",
     noState: "no_state",
-    failed: "failed"
+    failed: "failed",
+    recordingNone: "recording_none",
+    recordingRunning: "recording_running",
+    recordingEmpty: "recording_empty",
+    recordingEncoder: "recording_encoder",
+    recordingTooLarge: "recording_too_large"
 )
 
 private struct HelperError: Error {
@@ -798,6 +811,14 @@ private final class AgentCursor {
         (panel?.contentView as? AgentCursorView)?.ripple()
     }
 
+    /// The cursor's window ordered in, unseen where it stands nowhere yet, so a recording of the helper's windows finds it among them from the start.
+    func standBy() {
+        let panel = made()
+        guard !panel.isVisible else { return }
+        panel.alphaValue = 0
+        panel.orderFrontRegardless()
+    }
+
     func glide(to point: CGPoint) {
         let panel = made()
         let height = NSScreen.screens.first?.frame.height ?? 0
@@ -1087,6 +1108,377 @@ private func performSecondaryAction(_ request: [String: Any]) async throws -> [S
     return ["done": "performed"]
 }
 
+// MARK: - Recording
+
+/// The most frames a second a recording keeps, as the window draws them: a still window draws none, and its last frame holds.
+private let RECORDING_FPS = 15
+/// A recording's longest edge in pixels, and its bit rate while it records.
+private let RECORDING_EDGE = 1600
+private let RECORDING_BIT_RATE = 2_500_000
+/// How long the last frame is held past the last change, so the video does not end on the very frame that changed.
+private let RECORDING_TAIL_SECONDS = 0.5
+/// The longest edges a recording past its byte bound is made again at, each at the bit rate that bound leaves, until one fits.
+private let RECORDING_SHRINK_EDGES = [1280, 960, 720]
+/// The share of the byte bound a made-again recording aims at, leaving room for the bit rate to run over.
+private let RECORDING_SHRINK_SHARE = 0.85
+
+/// Where a recording is kept on this Mac: one folder, cleared as the next recording starts, so its frames and video stay on disk until then.
+private let RECORDING_FOLDER = FileManager.default.temporaryDirectory
+    .appendingPathComponent("vespin-computer-recording", isDirectory: true)
+/// The video as captured, and as kept once it fits.
+private let CAPTURED_URL = RECORDING_FOLDER.appendingPathComponent("captured.mp4")
+private let KEPT_URL = RECORDING_FOLDER.appendingPathComponent("recording.mp4")
+private let SMALLER_URL = RECORDING_FOLDER.appendingPathComponent("smaller.mp4")
+
+/// An H.264 encoding at a size and bit rate, its index ahead of its media once written, as every player streams it.
+private func h264Settings(width: Int, height: Int, bitRate: Int) -> [String: Any] {
+    [
+        AVVideoCodecKey: AVVideoCodecType.h264,
+        AVVideoWidthKey: width,
+        AVVideoHeightKey: height,
+        AVVideoScalingModeKey: AVVideoScalingModeResizeAspect,
+        AVVideoCompressionPropertiesKey: [
+            AVVideoAverageBitRateKey: bitRate,
+            AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
+            AVVideoMaxKeyFrameIntervalDurationKey: 2,
+            AVVideoAllowFrameReorderingKey: false,
+            AVVideoExpectedSourceFrameRateKey: RECORDING_FPS,
+        ],
+    ]
+}
+
+/// A size fit inside `edge` on its longest side, each side even, as 4:2:0 H.264 needs.
+private func evenSize(width: Double, height: Double, edge: Int) -> (width: Int, height: Int) {
+    let scale = min(1, Double(edge) / max(width, height, 1))
+    return (max(2, Int(width * scale) / 2 * 2), max(2, Int(height * scale) / 2 * 2))
+}
+
+/// Whether a frame ScreenCaptureKit handed over is one the window drew, rather than a note that nothing changed.
+private func isDrawnFrame(_ buffer: CMSampleBuffer) -> Bool {
+    guard
+        let attachments = CMSampleBufferGetSampleAttachmentsArray(buffer, createIfNecessary: false)
+            as? [[SCStreamFrameInfo: Any]],
+        let raw = attachments.first?[SCStreamFrameInfo.status] as? Int,
+        let status = SCFrameStatus(rawValue: raw)
+    else { return false }
+    return status == .complete
+}
+
+/// How a capture ended: the seconds it ran, or why it came to no video.
+private enum CaptureEnd {
+    case ran(Double)
+    case empty
+    case encoder
+}
+
+/**
+ One recording as it runs: a stream of the display the window stands on,
+ holding only the app's windows and the helper's own, which the agent's
+ cursor stands in, cropped to the window, written frame by frame into an
+ H.264 MP4. Note that every frame is handled on its own queue, which the
+ end reads through, so a frame never lands in a writer being finished.
+ */
+private final class WindowRecorder: NSObject, SCStreamOutput {
+    let width: Int
+    let height: Int
+    private let stream: SCStream
+    private let writer: AVAssetWriter
+    private let input: AVAssetWriterInput
+    private let frames = DispatchQueue(label: "dev.vespin.computer-use.recording")
+    private var first: CMTime?
+    private var last: CMTime?
+    private var ended = false
+
+    init(filter: SCContentFilter, configuration: SCStreamConfiguration) throws {
+        width = configuration.width
+        height = configuration.height
+        writer = try AVAssetWriter(outputURL: CAPTURED_URL, fileType: .mp4)
+        writer.shouldOptimizeForNetworkUse = true
+        input = AVAssetWriterInput(
+            mediaType: .video, outputSettings: h264Settings(width: width, height: height, bitRate: RECORDING_BIT_RATE))
+        input.expectsMediaDataInRealTime = true
+        guard writer.canAdd(input) else {
+            throw HelperError(kind: ERROR_KIND.recordingEncoder, message: "The recording could not be encoded.")
+        }
+        writer.add(input)
+        stream = SCStream(filter: filter, configuration: configuration, delegate: nil)
+        super.init()
+        try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: frames)
+    }
+
+    func start() async throws {
+        guard writer.startWriting() else {
+            throw HelperError(kind: ERROR_KIND.recordingEncoder, message: "The recording could not be encoded.")
+        }
+        try await stream.startCapture()
+    }
+
+    func stream(_ stream: SCStream, didOutputSampleBuffer buffer: CMSampleBuffer, of type: SCStreamOutputType) {
+        guard type == .screen, !ended, buffer.isValid, isDrawnFrame(buffer) else { return }
+        let at = buffer.presentationTimeStamp
+        if first == nil {
+            writer.startSession(atSourceTime: at)
+            first = at
+        }
+        guard input.isReadyForMoreMediaData, input.append(buffer) else { return }
+        last = at
+    }
+
+    /// The capture stopped and its video written whole, the last frame held for the tail; how it ended.
+    func finish() async -> CaptureEnd {
+        try? await stream.stopCapture()
+        let span: (first: CMTime, last: CMTime)? = frames.sync {
+            ended = true
+            guard let first, let last else { return nil }
+            return (first, last)
+        }
+        guard let span else {
+            writer.cancelWriting()
+            return .empty
+        }
+        let tail = CMTime(seconds: RECORDING_TAIL_SECONDS, preferredTimescale: 600)
+        input.markAsFinished()
+        writer.endSession(atSourceTime: CMTimeAdd(span.last, tail))
+        await writer.finishWriting()
+        guard writer.status == .completed else { return .encoder }
+        return .ran(CMTimeGetSeconds(CMTimeSubtract(span.last, span.first)) + RECORDING_TAIL_SECONDS)
+    }
+}
+
+/// The video at `source` made again at `target`, no longer than `edge` on its longest side, at `bitRate`; its size, or nothing where it could not be made.
+private func madeSmaller(_ source: URL, to target: URL, edge: Int, bitRate: Int) async -> (width: Int, height: Int)? {
+    try? FileManager.default.removeItem(at: target)
+    let asset = AVURLAsset(url: source)
+    guard
+        let track = try? await asset.loadTracks(withMediaType: .video).first,
+        let natural = try? await track.load(.naturalSize),
+        let reader = try? AVAssetReader(asset: asset),
+        let writer = try? AVAssetWriter(outputURL: target, fileType: .mp4)
+    else { return nil }
+    let size = evenSize(width: natural.width, height: natural.height, edge: edge)
+    let output = AVAssetReaderTrackOutput(
+        track: track,
+        outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange])
+    let input = AVAssetWriterInput(
+        mediaType: .video, outputSettings: h264Settings(width: size.width, height: size.height, bitRate: bitRate))
+    writer.shouldOptimizeForNetworkUse = true
+    guard reader.canAdd(output), writer.canAdd(input) else { return nil }
+    reader.add(output)
+    writer.add(input)
+    guard reader.startReading(), writer.startWriting() else { return nil }
+    writer.startSession(atSourceTime: .zero)
+    let queue = DispatchQueue(label: "dev.vespin.computer-use.recording-smaller")
+    await withCheckedContinuation { (done: CheckedContinuation<Void, Never>) in
+        var finished = false
+        input.requestMediaDataWhenReady(on: queue) {
+            while !finished, input.isReadyForMoreMediaData {
+                guard let buffer = output.copyNextSampleBuffer() else {
+                    finished = true
+                    input.markAsFinished()
+                    done.resume()
+                    return
+                }
+                // Note that a frame the writer refuses ends the copy, which the writer's status then answers as failed.
+                if !input.append(buffer) {
+                    finished = true
+                    input.markAsFinished()
+                    done.resume()
+                    return
+                }
+            }
+        }
+    }
+    await writer.finishWriting()
+    guard reader.status == .completed, writer.status == .completed else { return nil }
+    return size
+}
+
+private func fileBytes(_ url: URL) -> Int {
+    ((try? FileManager.default.attributesOfItem(atPath: url.path))?[.size] as? Int) ?? 0
+}
+
+/// What a recording came to: its seconds and size, its video kept at `KEPT_URL`, or the helper's word for why there is none.
+private enum RecordingOutcome {
+    case recorded(seconds: Double, width: Int, height: Int)
+    case failed(kind: String, message: String)
+}
+
+/**
+ The captured video kept as one that fits `maxBytes`: as it was where it
+ fits, else made again at ever smaller sizes at the bit rate the bound
+ leaves for its length, until one fits.
+ */
+private func kept(_ recorder: WindowRecorder, maxBytes: Int) async -> RecordingOutcome {
+    let encoder = RecordingOutcome.failed(kind: ERROR_KIND.recordingEncoder, message: "The recording could not be encoded.")
+    let seconds: Double
+    switch await recorder.finish() {
+    case .empty:
+        return .failed(kind: ERROR_KIND.recordingEmpty, message: "The app drew nothing while it was recorded.")
+    case .encoder:
+        return encoder
+    case .ran(let ran):
+        seconds = ran
+    }
+    var size = (width: recorder.width, height: recorder.height)
+    var source = CAPTURED_URL
+    if fileBytes(CAPTURED_URL) > maxBytes {
+        let bitRate = Int(Double(maxBytes) * 8 * RECORDING_SHRINK_SHARE / max(seconds, 1))
+        var fits = false
+        for edge in RECORDING_SHRINK_EDGES where !fits {
+            guard let made = await madeSmaller(CAPTURED_URL, to: SMALLER_URL, edge: edge, bitRate: bitRate) else {
+                return encoder
+            }
+            size = made
+            source = SMALLER_URL
+            fits = fileBytes(SMALLER_URL) <= maxBytes
+        }
+        guard fits else {
+            return .failed(
+                kind: ERROR_KIND.recordingTooLarge, message: "The recording would not fit its bound even made small.")
+        }
+    }
+    try? FileManager.default.removeItem(at: KEPT_URL)
+    guard (try? FileManager.default.moveItem(at: source, to: KEPT_URL)) != nil else { return encoder }
+    return .recorded(seconds: (seconds * 10).rounded() / 10, width: size.width, height: size.height)
+}
+
+/**
+ The one recording this helper keeps: the one running, stopped by the
+ agent or once its time runs out, and what the last one came to, which a
+ stop asked again answers until the next recording starts. Note that a stop
+ made while another is still finishing waits on that one, so a recording is
+ finished once.
+ */
+private actor Recordings {
+    private var running: WindowRecorder?
+    private var maxBytes = 0
+    private var stopping: Task<RecordingOutcome, Never>?
+    private var timer: Task<Void, Never>?
+
+    /// Whether a recording runs and is not yet being stopped.
+    var isRunning: Bool { running != nil && stopping == nil }
+
+    func begin(_ recorder: WindowRecorder, maxSeconds: Double, maxBytes: Int) {
+        running = recorder
+        self.maxBytes = maxBytes
+        stopping = nil
+        timer?.cancel()
+        timer = Task {
+            try? await Task.sleep(nanoseconds: UInt64(maxSeconds * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            _ = await self.stop()
+        }
+    }
+
+    /// What the last recording came to, stopping it first where it runs; nothing where none ran since the helper started.
+    func stop() async -> RecordingOutcome? {
+        if let stopping { return await stopping.value }
+        guard let running else { return nil }
+        let bound = maxBytes
+        let finishing = Task { await kept(running, maxBytes: bound) }
+        stopping = finishing
+        timer?.cancel()
+        return await finishing.value
+    }
+}
+
+private let recordings = Recordings()
+
+/// The app's window to record: the one its last `get_app_state` read where it still stands, else its largest on screen.
+private func recordedWindow(_ app: NSRunningApplication, in content: SCShareableContent) throws -> SCWindow {
+    let pid = app.processIdentifier
+    let windows = content.windows.filter {
+        $0.owningApplication?.processID == pid && $0.windowLayer == 0 && $0.isOnScreen && $0.frame.width > 1
+    }
+    if let read = sessions[pid], let same = windows.first(where: { $0.windowID == read.windowID }) { return same }
+    guard let largest = windows.max(by: { $0.frame.width * $0.frame.height < $1.frame.width * $1.frame.height })
+    else {
+        throw HelperError(
+            kind: ERROR_KIND.noWindow,
+            message:
+                "\(appName(app)) has no window on screen to record, as when it is minimized or on another Space. Ask the developer to bring it onto this Space; it can stay behind their other windows.")
+    }
+    return largest
+}
+
+/**
+ Starts recording the app's window: the display it stands on, holding the
+ app's windows and the helper's own, so its menus and sheets and the
+ agent's cursor are in the video while the developer's other windows and
+ their own pointer never are, cropped to the window as it stood at the
+ start. A recording that runs is left to run, and refused, as the browser's
+ is.
+ */
+private func record(_ request: [String: Any]) async throws -> [String: Any] {
+    let app = try await resolveApp(try string(request, "app"))
+    try requirePinned(request, app)
+    guard CGPreflightScreenCaptureAccess() else {
+        throw HelperError(
+            kind: ERROR_KIND.noPermission,
+            message: "Screen Recording is not allowed for this app, so it cannot record other apps' windows.")
+    }
+    guard !(await recordings.isRunning) else {
+        throw HelperError(
+            kind: ERROR_KIND.recordingRunning, message: "A recording already runs: stop it with stop_recording first.")
+    }
+    let maxSeconds = Double(min(max(integer(request, "max_seconds") ?? 120, 1), 120))
+    let maxBytes = max(integer(request, "max_bytes") ?? 0, 1)
+    await MainActor.run { agentCursor.standBy() }
+    // Note that every window is listed, not those on screen alone, so the helper is found by its cursor's window however it stands.
+    let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
+    let window = try recordedWindow(app, in: content)
+    guard
+        let display = content.displays.max(by: {
+            $0.frame.intersection(window.frame).width * $0.frame.intersection(window.frame).height
+                < $1.frame.intersection(window.frame).width * $1.frame.intersection(window.frame).height
+        }), display.frame.intersects(window.frame)
+    else {
+        throw HelperError(kind: ERROR_KIND.noWindow, message: "\(appName(app))'s window stands on no display.")
+    }
+    let own = getpid()
+    let included = content.applications.filter { $0.processID == app.processIdentifier || $0.processID == own }
+    let filter = SCContentFilter(display: display, including: included, exceptingWindows: [])
+    let crop = window.frame.intersection(display.frame).offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
+    let scale = Double(filter.pointPixelScale)
+    let size = evenSize(width: crop.width * scale, height: crop.height * scale, edge: RECORDING_EDGE)
+    let configuration = SCStreamConfiguration()
+    configuration.sourceRect = crop
+    configuration.width = size.width
+    configuration.height = size.height
+    configuration.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+    configuration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(RECORDING_FPS))
+    configuration.showsCursor = false
+    configuration.queueDepth = 6
+    // Note that the last recording's video goes only now, as the browser's does, so a stop asked again could still read it until then.
+    try? FileManager.default.removeItem(at: RECORDING_FOLDER)
+    try FileManager.default.createDirectory(
+        at: RECORDING_FOLDER, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+    let recorder = try WindowRecorder(filter: filter, configuration: configuration)
+    try await recorder.start()
+    await recordings.begin(recorder, maxSeconds: maxSeconds, maxBytes: maxBytes)
+    return ["done": "record"]
+}
+
+/// Stops the recording, or reads the last one again, and answers its length, size, and video as base64.
+private func stopRecording(_ request: [String: Any]) async throws -> [String: Any] {
+    guard let outcome = await recordings.stop() else {
+        throw HelperError(kind: ERROR_KIND.recordingNone, message: "No recording runs: start one with record.")
+    }
+    switch outcome {
+    case .failed(let kind, let message):
+        throw HelperError(kind: kind, message: message)
+    case .recorded(let seconds, let width, let height):
+        guard let video = try? Data(contentsOf: KEPT_URL) else {
+            throw HelperError(kind: ERROR_KIND.recordingNone, message: "No recording runs: start one with record.")
+        }
+        return [
+            "recorded": [
+                "seconds": seconds, "width": width, "height": height, "mp4": video.base64EncodedString(),
+            ]
+        ]
+    }
+}
+
 // MARK: - Entry
 
 private let OPERATIONS: [String: ([String: Any]) async throws -> [String: Any]] = [
@@ -1103,6 +1495,8 @@ private let OPERATIONS: [String: ([String: Any]) async throws -> [String: Any]] 
     "drag": drag,
     "set_value": setValue,
     "perform_secondary_action": performSecondaryAction,
+    "record": record,
+    "stop_recording": stopRecording,
 ]
 
 private func handle(_ line: String) async -> [String: Any] {
