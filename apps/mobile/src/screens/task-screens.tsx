@@ -121,6 +121,7 @@ import { useTasksCollection } from "../sidebar-pick.js";
 import { SPLIT_TAB, useHandToSplit, useSplitSelection } from "../split-route.js";
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
+import { useOnOwnTab, useOnTab } from "../tab-route.js";
 import {
   threadComments,
   threadOpen,
@@ -1026,6 +1027,7 @@ function useHistoryDoor(
   workspaceId: string | undefined,
 ): ((task: TaskSummary) => void) | undefined {
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
 
   const { data: descriptions = false } = useQuery({
     ...appStateQuery,
@@ -1034,7 +1036,7 @@ function useHistoryDoor(
 
   if (!descriptions) return undefined;
 
-  return (task) => router.push({ pathname: HISTORY_ROUTE, params: { id: task.id } });
+  return (task) => router.push({ pathname: onOwnTab(HISTORY_ROUTE), params: { id: task.id } });
 }
 
 /** Opens New task as a sub-task of the task, as the panel's New sub-task opens its card. */
@@ -1378,6 +1380,7 @@ export function TaskAgentRow({
   readonly onArchive?: ((agentId: string) => void) | undefined;
 }) {
   const router = useRouter();
+  const onTab = useOnTab();
   const acts = useAgentRowActs();
   const { agent, waiting, pullRequest } = line;
   const step = useHeldAgentStep(agent.id, agent.status);
@@ -1400,7 +1403,7 @@ export function TaskAgentRow({
               number: pullRequest.number,
               state: pullRequest.state,
               queued: pullRequest.queued,
-              onPress: () => router.push(iosPullRequestRoute(agent.id, pullRequest.number)),
+              onPress: () => router.push(onTab(iosPullRequestRoute(agent.id, pullRequest.number))),
             }
       }
       trailingActions={agentSwipes(agent, acts, onArchive)}
@@ -1465,6 +1468,7 @@ function OverviewAgents({
 /** The pages the task's agents showed, each opened whole on the app's own page screen, at the version the list holds. */
 function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const { task, pages } = overview;
 
   if (pages.length === 0) return null;
@@ -1479,7 +1483,7 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
           detail={provenanceText(page.at, Date.now())}
           onPress={() =>
             router.push({
-              pathname: "/tasks/page/[id]",
+              pathname: onOwnTab("/tasks/page/[id]"),
               params: {
                 id: page.id,
                 task: task.id,
@@ -1517,6 +1521,7 @@ function OverviewDescription({
   readonly body: string;
 }) {
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const openLink = useOpenLink();
   const { task } = overview;
   const threads = useTaskComments(task.id);
@@ -1533,7 +1538,10 @@ function OverviewDescription({
   );
 
   const openThread = (threadId: string) =>
-    router.push({ pathname: "/tasks/comments/[id]", params: { id: threadId, task: task.id } });
+    router.push({
+      pathname: onOwnTab("/tasks/comments/[id]"),
+      params: { id: threadId, task: task.id },
+    });
 
   if (blocks.length === 0) {
     return (
@@ -1576,7 +1584,7 @@ function OverviewDescription({
                       tone: ROW_ACTION_TONE.NEUTRAL,
                       onPress: () =>
                         router.push({
-                          pathname: "/tasks/comments/new",
+                          pathname: onOwnTab("/tasks/comments/new"),
                           params: {
                             task: task.id,
                             from: `${block.from}`,
@@ -1630,6 +1638,7 @@ function ReadFailedRow({
  */
 function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const { task } = overview;
   const open = useTaskComments(task.id).filter(threadOpen);
   const retry = useTaskCommentsRetry(task.id);
@@ -1654,7 +1663,7 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
           detail={provenanceText(thread.updatedAt, Date.now())}
           onPress={() =>
             router.push({
-              pathname: "/tasks/comments/[id]",
+              pathname: onOwnTab("/tasks/comments/[id]"),
               params: { id: thread.id, task: task.id },
             })
           }
@@ -1682,6 +1691,7 @@ function OverviewPage({
   readonly onArchiveAgent: (agentId: string) => void;
 }) {
   const router = useRouter();
+  const onTab = useOnTab();
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
 
@@ -1695,8 +1705,9 @@ function OverviewPage({
 
   // A related task opens on its own Overview, and an agent on its page, where its transcript and its composer stand.
   const open = (id: string) => {
-    if (related.has(id)) router.push(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id }));
-    else if (agents.has(id)) router.push(iosAgentRoute(id));
+    if (related.has(id))
+      router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id })));
+    else if (agents.has(id)) router.push(onTab(iosAgentRoute(id)));
   };
 
   return (
@@ -1740,6 +1751,7 @@ function useTasksScreen({ search, setSearch }: TasksSearch) {
 // row pushing its task as the Stack's next screen.
 function TasksStackList(words: TasksSearch) {
   const router = useRouter();
+  const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
   const { search, setSearch, listing, status, deletion, refreshTasks } = useTasksScreen(words);
   const field = useRefilledSearchField(search);
@@ -1762,7 +1774,9 @@ function TasksStackList(words: TasksSearch) {
           listing={listing}
           look={LIST_LOOK.PLAIN}
           search={search}
-          onSelect={(id) => router.push(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id }))}
+          onSelect={(id) =>
+            router.push(onOwnTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: id })))
+          }
           onRefresh={refreshTasks}
         />
       </Screen>

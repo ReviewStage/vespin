@@ -47,6 +47,7 @@ import { useRouter } from "expo-router";
 import { useCallback, useMemo } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
+import { useOnTab } from "../tab-route.js";
 
 /** The root of a suggestion's button read's key, under the account signed in, the agent whose reply holds it, and the button. */
 const REPLY_BUTTON_QUERY = "reply-button";
@@ -144,6 +145,7 @@ export function useSuggestionLooks(
 ): (link: ReplyButtonLink, words: string) => SuggestionLook | undefined {
   const acts = useHostActs();
   const router = useRouter();
+  const onTab = useOnTab();
   const accountId = useAccountId();
 
   const experimentSelect = useMemo(
@@ -191,7 +193,7 @@ export function useSuggestionLooks(
         look: SUGGESTION_LOOK.REACHED,
         suggests: action.kind,
         name: reached.title,
-        onPress: () => router.push(iosAgentRoute(reached.id)),
+        onPress: () => router.push(onTab(iosAgentRoute(reached.id))),
       };
     }
 
@@ -209,7 +211,10 @@ export function useSuggestionLooks(
       }
 
       if (view.sendTo !== null) {
-        router.push({ pathname: "/tasks/agent/[id]", params: { id: view.sendTo.id, ...params } });
+        router.push({
+          pathname: onTab("/tasks/agent/[id]"),
+          params: { id: view.sendTo.id, ...params },
+        });
       }
     };
 

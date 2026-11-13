@@ -1,8 +1,8 @@
 // _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, in a compact window, the prominent round + that opens New task; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation.
 
-import { iosRouteHidesTabs } from "@repo/features/ios-app-links";
+import { type IosTab, iosRouteHidesTabs, iosTabOfGroup } from "@repo/features/ios-app-links";
 import { GLYPH, SplitOverTabs, UNDER_SPLIT_SCREEN, useColors } from "@repo/ui-native";
-import { usePathname, useRouter } from "expo-router";
+import { usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
@@ -13,19 +13,29 @@ import { AppSplit } from "../../screens/app-split.js";
 import { useThreeColumns, useWindowSizeClass } from "../../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
 
-/**
- * The route standing in the tabs, by its parts: the one shown, or, while a
- * sheet such as New task or Settings stands over the tabs, the one under it,
- * so the split view behind the sheet keeps its place and its layer.
- */
-function useTabRoute(pathname: string): readonly string[] {
-  const inTabs = placeOfRoute(pathname.split("/")[1]) !== undefined ? pathname : undefined;
-  const [kept, keep] = useState(pathname);
-  useEffect(() => {
-    if (inTabs !== undefined) keep(inTabs);
-  }, [inTabs]);
+/** Where the tabs stand: the tab shown, and whether its root, or an item of its own the split view selects beside its list, stands in front rather than a page pushed over it. */
+type TabStanding = { readonly tab: IosTab | undefined; readonly atRoot: boolean };
 
-  return (inTabs ?? kept).split("/").filter((part) => part !== "");
+/**
+ * Where the tabs stand, by the route's segments (`(tabs)`, `(inbox)`,
+ * `inbox`, `[id]`): the one shown, or, while a sheet such as New task or
+ * Settings stands over the tabs, the one under it, so the split view behind
+ * the sheet keeps its place and its layer. Note that a tab's own item route
+ * stands at its root too, since a wide window hands it straight back to the
+ * split view (`useHandToSplit`), while an item pushed onto another tab's
+ * stack, a thread's task on the Inbox's, is a page over it.
+ */
+function useTabStanding(segments: readonly string[]): TabStanding {
+  const [, group, first, ...rest] = segments;
+  const tab = iosTabOfGroup(group);
+  const atRoot = tab !== undefined && first === tab && rest.length <= 1;
+  const [kept, keep] = useState<TabStanding>({ tab, atRoot });
+
+  useEffect(() => {
+    if (tab !== undefined) keep({ tab, atRoot });
+  }, [tab, atRoot]);
+
+  return tab === undefined ? kept : { tab, atRoot };
 }
 
 // Note that nothing here draws the bar: the system draws it in Liquid Glass
@@ -79,9 +89,7 @@ export default function TabsLayout() {
   const appSidebar = useThreeColumns();
   const pathname = usePathname();
   const conversation = iosRouteHidesTabs(pathname);
-  const standing = useTabRoute(pathname);
-  // Note that a tab's item route stands at its root too, since a wide window hands it straight back to the split view (`useHandToSplit`).
-  const atRoot = standing.length <= 2 && placeOfRoute(standing[0]) !== undefined;
+  const { tab: standing, atRoot } = useTabStanding(useSegments());
   // Note that a tab under the split view leaves its content clear, because NativeTabs paints each tab in the navigation theme's light ground, which flashed over the split as a page pushed.
   const underSplit = appSidebar ? UNDER_SPLIT_SCREEN.contentStyle : undefined;
 
@@ -94,7 +102,7 @@ export default function TabsLayout() {
       badgeBackgroundColor={colors.ATTENTION_FILL}
       badgeTextColor={colors.ON_ACCENT}
     >
-      <NativeTabs.Trigger name="inbox" accessibilityLabel="Inbox" contentStyle={underSplit}>
+      <NativeTabs.Trigger name="(inbox)" accessibilityLabel="Inbox" contentStyle={underSplit}>
         <NativeTabs.Trigger.Icon xcasset={GLYPH.INBOX} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Inbox</NativeTabs.Trigger.Label>
         {/* Note that the badge is left out at none rather than marked hidden, since NativeTabs draws a badge that holds a value whatever its hidden says. */}
@@ -102,13 +110,13 @@ export default function TabsLayout() {
           <NativeTabs.Trigger.Badge>{String(waiting)}</NativeTabs.Trigger.Badge>
         )}
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="tasks" accessibilityLabel="Tasks" contentStyle={underSplit}>
+      <NativeTabs.Trigger name="(tasks)" accessibilityLabel="Tasks" contentStyle={underSplit}>
         <NativeTabs.Trigger.Icon xcasset={GLYPH.TASK} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Tasks</NativeTabs.Trigger.Label>
       </NativeTabs.Trigger>
       {/* Note that the Search tab carries an id of its own, since a list's round search button and a split view's search field are named Search too, and a flow taps the tab by it. */}
       <NativeTabs.Trigger
-        name="search"
+        name="(search)"
         role="search"
         contentStyle={underSplit}
         accessibilityLabel="Search"
@@ -136,7 +144,7 @@ export default function TabsLayout() {
   return (
     <SplitOverTabs
       tabs={tabs}
-      split={appSidebar ? <AppSplit place={placeOfRoute(standing[0])} front={atRoot} /> : undefined}
+      split={appSidebar ? <AppSplit place={placeOfRoute(standing)} front={atRoot} /> : undefined}
       front={atRoot}
     />
   );

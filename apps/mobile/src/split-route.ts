@@ -1,7 +1,9 @@
 // split-route.ts -- a tab's selection kept in its root route, so a link, a notification, or a fold lands on the item beside its list or pushed over it, as the window allows.
 
+import { iosRouteOnTab, iosRouteTab } from "@repo/features/ios-app-links";
 import { useIsFocused, useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
+import { useOwnTab } from "./tab-route.js";
 import { useWindowSizeClass } from "./use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "./window-size-class.js";
 
@@ -13,9 +15,9 @@ export const SPLIT_TAB = {
 
 export type SplitTab = (typeof SPLIT_TAB)[keyof typeof SPLIT_TAB];
 
-/** An item's pushed route under its tab. */
+/** An item's pushed route on its own tab's stack. */
 function itemRoute(tab: SplitTab, id: string): string {
-  return `${tab}/${encodeURIComponent(id)}`;
+  return iosRouteOnTab(`${tab}/${encodeURIComponent(id)}`, undefined);
 }
 
 /** Each tab's item as its root last selected it, beside its list. */
@@ -92,14 +94,20 @@ export function useSplitSelection(tab: SplitTab): UseSplitSelectionResult {
  * beside the list, rather than covering the list with a page of its own, so
  * a link, a notification, an unfold, or a related task opened from a page
  * lands where a tap on the list would. Nothing is handed while `id` is none,
- * as while a task a link names by number is still found.
+ * as while a task a link names by number is still found. Note that an item
+ * pushed onto another tab's stack, as a compact window opens a thread's task
+ * on the Inbox's, stays a page there once the window turns regular, as an
+ * agent's page does, because that tab's root has no list to select it in.
  */
 export function useHandToSplit(tab: SplitTab, id: string | undefined): boolean {
   const router = useRouter();
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
-  useEffect(() => {
-    if (regular && id !== undefined) router.dismissTo({ pathname: tab, params: { selected: id } });
-  }, [regular, router, tab, id]);
+  const own = useOwnTab();
+  const handing = regular && (own === undefined || own === iosRouteTab(tab));
 
-  return regular;
+  useEffect(() => {
+    if (handing && id !== undefined) router.dismissTo({ pathname: tab, params: { selected: id } });
+  }, [handing, router, tab, id]);
+
+  return handing;
 }
