@@ -335,13 +335,13 @@ function ComposerPieces(props: ComposerProps) {
         modifiers={[
           font({ textStyle: TYPE_ROLE.ROW_TITLE }),
           lineLimit(FIELD_LINES),
-          // Note that the field stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there.
-          frame({ minHeight: PRESS_SIZE }),
           padding({
             vertical: FIELD_INSET,
             trailing: FIELD_TRAILING,
             ...(addMenu === undefined && onAdd === undefined && { leading: FIELD_LEADING }),
           }),
+          // Note that the field with its room stands at least as tall as its buttons' frames, so one line sits level with them in a row laid along its foot, and a longer field grows up from there.
+          frame({ minHeight: PRESS_SIZE }),
           accessibilityIdentifier("composer-field"),
         ]}
       />
