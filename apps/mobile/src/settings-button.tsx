@@ -21,6 +21,8 @@ export const SETTINGS_ROUTE = {
   /** A machine's pairing, approved or denied by the `code` its link named. */
   MACHINE_CONNECT: "/settings/machine-connect",
   MCP: "/settings/mcp",
+  /** Notifications: how this phone's pushes fare, when it takes them, and iOS's own notification settings. */
+  NOTIFICATIONS: "/settings/notifications",
   MEMORY: "/settings/memory",
   /** A memory's words, written anew or edited (`?memory=` its id), as Settings › Memory opens it. */
   MEMORY_EDIT: "/settings/memory-edit",

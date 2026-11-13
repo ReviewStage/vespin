@@ -169,10 +169,12 @@ type HeadRowProps = {
   readonly detail?: string | undefined;
   /** Where a press goes; a row with none takes no press. */
   readonly onPress?: (() => void) | undefined;
+  /** The name a flow finds a pressed row by, where its words are not its own, such as a workspace named for its owner. */
+  readonly testId?: string | undefined;
 };
 
 /** A page's head: its face, its name, its lines, and the chevron where a press goes on, as the account heads iOS's own Settings. */
-function HeadRow({ face, name, line, detail, onPress }: HeadRowProps) {
+function HeadRow({ face, name, line, detail, onPress, testId }: HeadRowProps) {
   const colors = useColors();
 
   const drawn = (
@@ -218,7 +220,7 @@ function HeadRow({ face, name, line, detail, onPress }: HeadRowProps) {
   return onPress === undefined ? (
     drawn
   ) : (
-    <PressedRow label={name} value={[line, detail]} onPress={onPress}>
+    <PressedRow label={name} value={[line, detail]} onPress={onPress} testId={testId}>
       {drawn}
     </PressedRow>
   );
@@ -256,21 +258,29 @@ export function AccountRow({ name, email, picture, detail, onPress }: AccountRow
  * A workspace heading its own page: its tile, as the switcher draws it (its
  * photo, its owner's picture, or its letter on its hue, on a softened square,
  * since a square says a team as a circle says a person), its name, and what
- * the reader is in it.
+ * the reader is in it. Pressed, it goes to the workspace's page, the chevron
+ * at its end, as it heads Settings' Workspace group.
  */
 export function WorkspaceRow({
   workspace,
   role,
+  onPress,
+  testId,
 }: {
   readonly workspace: SwitcherWorkspace;
   /** The reader's role in it, in the panel's words. */
   readonly role: string;
+  /** Where a press goes, such as the Workspace page from Settings' main list; a row with none takes no press. */
+  readonly onPress?: (() => void) | undefined;
+  readonly testId?: string | undefined;
 }) {
   return (
     <HeadRow
       face={<WorkspaceTile workspace={workspace} size={ACCOUNT_FACE_SIZE} />}
       name={workspace.name}
       line={role}
+      onPress={onPress}
+      testId={testId}
     />
   );
 }

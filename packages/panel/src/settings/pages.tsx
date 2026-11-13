@@ -1,6 +1,7 @@
 import { type ExperimentChoices, HOST_CAPABILITY, type HostCapability } from "@repo/settings";
 import {
   SETTINGS_PAGE_GROUP,
+  SETTINGS_PAGE_GROUP_HEADING,
   SETTINGS_PAGE_GROUPS,
   SETTINGS_PAGE_TITLE,
   SETTINGS_VIEW,
@@ -59,13 +60,6 @@ const SETTINGS_PAGE_ICON = {
  */
 export const WORKSPACE_CONNECTIONS = "Workspace connections";
 
-/** What each of the Settings sidebar's groups is headed by where no workspace is listed to name the first. */
-const SETTINGS_GROUP_HEADING = {
-  [SETTINGS_PAGE_GROUP.WORKSPACE]: "Workspace",
-  [SETTINGS_PAGE_GROUP.ACCOUNT]: "Account",
-  [SETTINGS_PAGE_GROUP.THIS_MAC]: "This Mac",
-} satisfies Record<SettingsPageGroup, string>;
-
 /** The last group's heading in a browser, which runs on whatever the reader holds rather than on a Mac. */
 const THIS_DEVICE_HEADING = "This device";
 
@@ -97,5 +91,5 @@ export function settingsGroupHeadingOf(
     return THIS_DEVICE_HEADING;
   }
 
-  return SETTINGS_GROUP_HEADING[group];
+  return SETTINGS_PAGE_GROUP_HEADING[group];
 }
