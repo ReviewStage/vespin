@@ -117,6 +117,9 @@ const IOS = {
   HOVER: byDesign("A finger has no pointer to rest on a link, so no card hangs from one"),
   HANDOFF: byDesign("iOS advertises each screen's activity itself (use-system-activity.ts)"),
   MAC_COMMAND: byDesign("run_on_mac asks the Mac the command runs on, which is the desktop"),
+  FOLLOWERS: notYet(
+    "iOS's Following sheet adds a follower but leaves taking one away to the desktop and the web for now",
+  ),
   MERGE_QUEUE: notYet("iOS leaves the Merge queue page to the desktop and the web for now"),
   MENU_BAR: byDesign("iOS has no menu bar to dim"),
   NOTIFICATIONS: byDesign("iOS's Settings screen opens the system's settings itself"),
@@ -383,6 +386,7 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.TASKS_UNFOLLOW]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_SET_FOLLOWER_MACHINES]: EVERYWHERE,
   [PORT_ACT_KIND.TASKS_ADD_FOLLOWER]: EVERYWHERE,
+  [PORT_ACT_KIND.TASKS_REMOVE_FOLLOWER]: panel(IOS.FOLLOWERS),
   [PORT_ACT_KIND.GITHUB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.WEB_OPEN]: panel(IOS.LINKS),
   [PORT_ACT_KIND.GITHUB_CONNECT]: panel(IOS.SETTINGS),

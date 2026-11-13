@@ -27,8 +27,14 @@ export const FOLLOWING_WORDS = {
   UNFOLLOW: "Unfollow",
   /** The reader's own row. */
   YOU: "You",
-  /** Adding someone else as a follower: the panel's offer to add a person mentioned, and the iPhone's member picker. */
+  /** Adding someone else as a follower: the panel's offer to add a person mentioned, the popover's foot row, and the iPhone's member picker. */
   ADD_FOLLOWER: "Add a follower",
+  /** Why Add a follower stands dimmed: every member already follows. */
+  EVERYONE_FOLLOWS: "Everyone here follows",
+  /** What a follower's row is, which names its ⋯ menu. */
+  FOLLOWER_THING: "Follower",
+  /** Taking another follower away, from their row's ⋯ menu. */
+  REMOVE: "Remove follower",
   /** A row's muted mark on the assignee, and their card's role. */
   ASSIGNEE: "Assignee",
   /** A card's role for a follower who is not the assignee. */
@@ -85,14 +91,14 @@ export function followerMachinesSentence(follower: TaskFollowerWire, whose: stri
 
 /**
  * What a refused follower write says, in a notice, since the popover that
- * asked has changed nothing: the assignee may not unfollow, the task is out
+ * asked has changed nothing: the assignee may not unfollow or be removed, the task is out
  * of reach or Following is off for its workspace, or the service did not
  * answer.
  */
 export function followerRefusedNote(failure: FollowerCallFailure): string {
   switch (failure) {
     case FOLLOWER_CALL_FAILURE.NOT_PERMITTED:
-      return "The assignee can't unfollow their own task.";
+      return "The assignee keeps following their task while assigned.";
     case FOLLOWER_CALL_FAILURE.NOT_FOUND:
       return "This task can't be followed. It may be gone, or Following is off for its workspace.";
     default:

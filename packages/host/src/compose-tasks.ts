@@ -75,6 +75,7 @@ import {
   type TasksPageParams,
   type TasksPageSourceAnswer,
   type TasksPinParams,
+  type TasksRemoveFollowerParams,
   type TasksRenameParams,
   type TasksSetFollowerMachinesParams,
   type TasksSetParentAnswer,
@@ -392,6 +393,7 @@ export type TasksClient = Pick<
   | "unfollow"
   | "setFollowerMachines"
   | "addFollower"
+  | "removeFollower"
 >;
 
 export interface TasksDependencies {
@@ -2223,6 +2225,15 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     call: ({ taskId, userId }) => client.addFollower(taskId, userId),
   });
 
+  /** A follower taken away, drawn gone from the followers. */
+  const followerRemoved = followersChanged({
+    drawn:
+      ({ userId }: TasksRemoveFollowerParams) =>
+      (followers) =>
+        followers.filter((each) => each.userId !== userId),
+    call: ({ taskId, userId }) => client.removeFollower(taskId, userId),
+  });
+
   // A write of the reader's own reads, as it is asked, who the reader is, which its draw names.
   const stampReader = <Read>(read: Read) =>
     Effect.sync(() => ({ ...read, readerId: dependencies.accountId() }));
@@ -2540,6 +2551,7 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
       read: stampReader,
     }),
     TASKS_ADD_FOLLOWER: declaredWrite(dependencies.pool, followerAdded),
+    TASKS_REMOVE_FOLLOWER: declaredWrite(dependencies.pool, followerRemoved),
     TASKS_CHANGE_RELATION: declaredWrite(dependencies.pool, relationChanged, {
       read: (read) =>
         Effect.sync(() => ({

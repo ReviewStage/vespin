@@ -419,6 +419,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     unfollow: MEMBER_ONLY,
     setMachines: MEMBER_ONLY,
     add: MEMBER_ONLY,
+    remove: MEMBER_ONLY,
   },
   workspaceGithub: { connect: NEEDS_BROWSER, disconnect: RETIRED },
   workspaceInvitations: { offer: NEEDS_BROWSER },

@@ -521,6 +521,8 @@ export const TASKS_ACT_KIND = {
   TASKS_SET_FOLLOWER_MACHINES: "tasks.setFollowerMachines",
   /** Another member of the task's workspace added as a follower on the service, their machines off; answers as a follow does. */
   TASKS_ADD_FOLLOWER: "tasks.addFollower",
+  /** A follower of the task taken away on the service, which the assignee may not be; answers as a follow does. */
+  TASKS_REMOVE_FOLLOWER: "tasks.removeFollower",
   /** The developer's edit of the open task's document, saved on the service; answers saved, a conflict with the text as it stands now, or why nothing was saved. */
   TASKS_EDIT: "tasks.edit",
   /** A page of GitHub's opened in the browser: a repository, or where our GitHub App is installed. No other address opens through it. */
@@ -1177,6 +1179,7 @@ export const PORT_ACT_USE = {
   TASKS_UNFOLLOW: ACT_USE.WRITE,
   TASKS_SET_FOLLOWER_MACHINES: ACT_USE.WRITE,
   TASKS_ADD_FOLLOWER: ACT_USE.WRITE,
+  TASKS_REMOVE_FOLLOWER: ACT_USE.WRITE,
   TASKS_EDIT: ACT_USE.WRITE,
   GITHUB_OPEN: ACT_USE.WRITE,
   WEB_OPEN: ACT_USE.WRITE,

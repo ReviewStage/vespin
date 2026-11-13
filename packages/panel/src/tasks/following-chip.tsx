@@ -10,10 +10,14 @@ import {
 } from "@repo/features/task-followers-model";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { TASK_CALL_FAILURE, type TasksFollowersAnswer } from "@repo/features/tasks-view";
+import type { WorkspaceMember } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENT } from "@repo/settings";
 import {
   ChipPopover,
+  CONFIRM_LOSS,
+  ConfirmDialog,
+  type DialogQuestion,
   type FootRow,
   HoverCard,
   HoverCardList,
@@ -25,17 +29,23 @@ import {
   TEXT_TONE,
   TEXT_VARIANT,
   Text,
+  useConfirmDialog,
   VisuallyHidden,
 } from "@repo/ui";
 import { type Actor, actorName, personActor } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
-import type { TaskFollowerWire } from "@repo/wire";
+import { ACTION_RESULT_STATUS, type ActionResult, type TaskFollowerWire } from "@repo/wire";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useState } from "react";
 import { type Unreached, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorHead, ActorMark, ActorStack } from "../actor-ref.js";
+import { ANSWER_ACCEPTED, useConfirmAct } from "../confirm-act.js";
 import { type PresenceBook, presenceStanding, useDevicePresence } from "../device-presence.js";
+import { confirmFailure } from "../failure-report.js";
 import { useMemberDirectory } from "../member-directory.js";
+import { memberRows } from "../member-rows.js";
+import { useOpenPerson } from "../person-door.js";
 import { useToast } from "../toast.js";
 import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
@@ -51,13 +61,18 @@ import { DeviceStandingGlyph, STANDING_WORDS } from "./runs-on.js";
  * with no title, the reader first as You: each row a face, a name, a muted
  * Assignee on the assignee, and a laptop at its end where the task's agents
  * may use that person's machines, nothing where they may not. A press on a
- * row changes nothing; each hangs the person's card: who they are, Assignee
- * or Following, the reader's own machines each with the Runs on menu's dot
- * and its words for where the machine stands, and what the task's agents may do on their
- * machines. Pinned under the list stand the reader's own switch and
- * Unfollow, which the assignee may not press, or Follow alone where the
- * reader does not follow. A write is drawn on the task at once
- * (`compose-tasks.ts`), and a refusal said in a toast.
+ * row opens that person's page, where the window has one to open; each row
+ * hangs the person's card: who they are, Assignee or Following, the
+ * reader's own machines each with the Runs on menu's dot and its words for
+ * where the machine stands, and what the task's agents may do on their
+ * machines. Each other follower but the assignee has a ⋯ holding Remove
+ * follower, which asks first, in the accent, since it reaches someone else.
+ * Pinned under the list stand the reader's own switch and Unfollow, which
+ * the assignee may not press, or Follow alone where the reader does not
+ * follow, and then Add a follower, whose submenu lists every other member
+ * of the workspace not following yet. A write is drawn on the task at once
+ * (`compose-tasks.ts`), and a refusal said in a toast, or in the question
+ * that asked.
  *
  * Note that a teammate's machines are not listed on their card, since the
  * window reads only the reader's own; machine routing reads them later.
@@ -86,6 +101,8 @@ function useFollowerWrites(taskId: string) {
     actMutation(ACT_KIND.TASKS_SET_FOLLOWER_MACHINES),
   );
 
+  const { mutateAsync: sendAdd } = useMutation(actMutation(ACT_KIND.TASKS_ADD_FOLLOWER));
+
   const asked = (sent: () => Promise<TasksFollowersAnswer>) => {
     if (staged) return;
     void sent()
@@ -105,6 +122,69 @@ function useFollowerWrites(taskId: string) {
     follow: () => asked(() => sendFollow({ taskId })),
     unfollow: () => asked(() => sendUnfollow({ taskId })),
     setMachines: (machines: boolean) => asked(() => sendMachines({ taskId, machines })),
+    add: (userId: string) => asked(() => sendAdd({ taskId, userId })),
+  };
+}
+
+/** A removal's answer as its question reads it: carried, or refused with the notice's words. */
+function removalAnswer(answer: TasksFollowersAnswer): ActionResult {
+  return "failure" in answer
+    ? { status: ACTION_RESULT_STATUS.REJECTED, reason: followerRefusedNote(answer.failure) }
+    : ANSWER_ACCEPTED;
+}
+
+/** What Remove follower asks before it takes `name` away. */
+function removalQuestion(name: string): DialogQuestion {
+  return {
+    title: `Remove ${name} as a follower?`,
+    body: "They stop following this task, and its agents can no longer use their machines. You can add them again, with their machines off.",
+    verb: "Remove",
+    running: "Removing…",
+    loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+    replayUnmasked: true,
+    titleReplayMasked: true,
+  };
+}
+
+/**
+ * Remove follower's question for one task: whom it asks about, set by
+ * `ask`, and the dialog that asks; a fixture run's removal goes nowhere.
+ */
+function useFollowerRemoval(taskId: string, followers: readonly TaskFollowerWire[]) {
+  const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
+  const [asked, setAsked] = useState<{ userId: string; name: string } | undefined>(undefined);
+  const mutation = useMutation(actMutation(ACT_KIND.TASKS_REMOVE_FOLLOWER));
+
+  const act = useConfirmAct(mutation, {
+    send: () =>
+      staged || asked === undefined
+        ? Promise.resolve()
+        : mutation.mutateAsync({ taskId, userId: asked.userId }),
+    answered: removalAnswer,
+    failed: (error) => ({ status: ACTION_RESULT_STATUS.REJECTED, reason: error.message }),
+  });
+
+  // Note that the question goes once its follower does, as one removed elsewhere would leave it asking after no one.
+  const following = asked !== undefined && followers.some((each) => each.userId === asked.userId);
+
+  const confirm = useConfirmDialog(
+    { subject: following || mutation.isPending, surfaceOpen: true },
+    act,
+    confirmFailure(FAILURE_SURFACE.TASK_FOLLOW, { taskId }),
+  );
+
+  return {
+    ask: (userId: string, name: string) => {
+      setAsked({ userId, name });
+      confirm.ask();
+    },
+    dialog: (
+      <ConfirmDialog
+        open={asked !== undefined}
+        confirm={confirm}
+        question={removalQuestion(asked?.name ?? UNNAMED)}
+      />
+    ),
   };
 }
 
@@ -184,8 +264,49 @@ function RowEnd({ follower }: { follower: TaskFollowerWire }): React.JSX.Element
   );
 }
 
-/** The pinned rows: the reader's switch and Unfollow, the assignee's dimmed, or Follow alone where they do not follow. */
-function footRows(
+/**
+ * Add a follower: a submenu of the workspace's members who do not follow
+ * the task, the reader left to Follow, each as every people menu lists
+ * them; dimmed where no one is left to add.
+ */
+function addFollowerRow(
+  members: readonly WorkspaceMember[] | undefined,
+  readerId: string | undefined,
+  followers: readonly TaskFollowerWire[],
+  add: (userId: string) => void,
+): FootRow {
+  const rows = memberRows(members, readerId)
+    .filter(
+      ({ member, actor }) => !actor.you && !followers.some((each) => each.userId === member.userId),
+    )
+    .map((row) => ({
+      id: row.member.userId,
+      label: row.label,
+      icon: row.icon,
+      detail: row.detail,
+      terms: row.terms,
+      card: row.card,
+      replayMasked: true,
+    }));
+
+  return {
+    id: "add-follower",
+    label: FOLLOWING_WORDS.ADD_FOLLOWER,
+    icon: <GLYPH.ADD aria-hidden="true" />,
+    disabled:
+      members !== undefined && rows.length === 0 ? FOLLOWING_WORDS.EVERYONE_FOLLOWS : undefined,
+    submenu: {
+      label: FOLLOWING_WORDS.ADD_FOLLOWER,
+      rows,
+      value: undefined,
+      onPick: add,
+      stays: true,
+    },
+  };
+}
+
+/** The reader's own pinned rows: their switch and Unfollow, the assignee's dimmed, or Follow alone where they do not follow. */
+function ownRows(
   reader: TaskFollowerWire | undefined,
   writes: ReturnType<typeof useFollowerWrites>,
 ): readonly FootRow[] {
@@ -246,49 +367,70 @@ function FollowingShown({
   editable: boolean;
 }): React.JSX.Element | null {
   const on = useWorkspaceExperiment(task.workspaceId, EXPERIMENT.FOLLOWING);
-  const { readerId } = useMemberDirectory();
+  const { members, readerId, workspaceId } = useMemberDirectory();
+  const openPerson = useOpenPerson();
   const view = followersView(followers, readerId);
   const actors = useFollowerActors(view.followers, task.assignee);
   const book = useDevicePresence(on && view.reader !== undefined);
   const writes = useFollowerWrites(task.id);
+  const removal = useFollowerRemoval(task.id, followers);
 
   if (!on) return null;
 
   const rows: readonly MenuRow[] = view.followers.map((follower, index) => {
     const actor = actors[index] ?? personActor(undefined, undefined, undefined);
     const you = follower === view.reader;
+    const name = actorName(actor);
+    // Note that the reader leaves by Unfollow and the assignee stays while assigned, so neither row offers Remove.
+    const removable = editable && !you && !follower.assignee;
 
     return {
       id: follower.userId,
-      label: you ? FOLLOWING_WORDS.YOU : actorName(actor),
+      label: you ? FOLLOWING_WORDS.YOU : name,
       icon: <ActorMark actor={actor} size={ACTOR_SIZE.INLINE} />,
       end: <RowEnd follower={follower} />,
       card: <FollowerCard follower={follower} actor={actor} you={you} book={book} />,
+      actions: removable
+        ? {
+            thing: FOLLOWING_WORDS.FOLLOWER_THING,
+            rows: [{ id: "remove", label: FOLLOWING_WORDS.REMOVE }],
+            onPick: () => removal.ask(follower.userId, name),
+          }
+        : undefined,
       replayMasked: !you,
     };
   });
 
+  const foot = editable
+    ? [...ownRows(view.reader, writes), addFollowerRow(members, readerId, followers, writes.add)]
+    : undefined;
+
+  // Note that a pick opens the follower's page where the window has one, and changes nothing where it has none.
+  const onPick =
+    openPerson === undefined
+      ? undefined
+      : (userId: string) => openPerson(userId, undefined, workspaceId);
+
   return (
-    <ChipPopover
-      label={FOLLOWING_WORDS.CHIP}
-      glyph={
-        actors.length === 0 ? (
-          <GLYPH.SHOW aria-hidden="true" />
-        ) : (
-          <ActorStack
-            actors={actors}
-            drawn={FOLLOWING_FACES}
-            faces={actors.map(() => ({}))}
-            label={FOLLOWING_WORDS.CHIP}
-          />
-        )
-      }
-      words={view.chipWords}
-      menu={{
-        rows,
-        noMatch: "No followers",
-        foot: editable ? footRows(view.reader, writes) : undefined,
-      }}
-    />
+    <>
+      <ChipPopover
+        label={FOLLOWING_WORDS.CHIP}
+        glyph={
+          actors.length === 0 ? (
+            <GLYPH.SHOW aria-hidden="true" />
+          ) : (
+            <ActorStack
+              actors={actors}
+              drawn={FOLLOWING_FACES}
+              faces={actors.map(() => ({}))}
+              label={FOLLOWING_WORDS.CHIP}
+            />
+          )
+        }
+        words={view.chipWords}
+        menu={{ rows, noMatch: "No followers", onPick, foot }}
+      />
+      {removal.dialog}
+    </>
   );
 }
