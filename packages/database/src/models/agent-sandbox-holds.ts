@@ -79,7 +79,7 @@ const upsertBeat = SqlSchema.void({
             agentSandboxBeatTable.holder,
           ],
           set: { beatAt: at },
-          setWhere: sql`${agentSandboxBeatTable.beatAt} < ${writtenBefore.toISOString()}::timestamptz`,
+          setWhere: sql`${agentSandboxBeatTable.beatAt} <= ${writtenBefore.toISOString()}::timestamptz`,
         }),
     ),
 });
