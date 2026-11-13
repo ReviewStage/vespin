@@ -186,7 +186,7 @@ export function NewCommentScreen() {
   const colors = useColors();
   const openLink = useOpenLink();
   const overview = useTaskOverview(taskId);
-  const body = overview?.document?.document.body ?? "";
+  const body = overview?.document?.description.body ?? "";
 
   // Note that the block must still quote the words it was opened on, so an edit that put other words at the same offsets before this read finds nothing rather than the wrong block.
   const found = useMemo(

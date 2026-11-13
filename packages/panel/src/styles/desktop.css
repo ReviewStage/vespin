@@ -1097,6 +1097,20 @@ body,
   margin-top: 1.6em;
 }
 
+/* The call card (`call/standing-call.tsx`) --------------------------------- */
+
+/* Folded, the sidebar's call card stands in the corner it would have stood
+   over, as far in as the toasts are from theirs, over the work rather than
+   moving it, at the sidebar's own width less its rows' inset. */
+.desktop-shell .ui-call-card[data-surface="floating"] {
+  position: fixed;
+  z-index: var(--ui-z-toast);
+  /* Above the on-screen keyboard, while it is up. */
+  bottom: calc(var(--ui-space-16) + var(--ui-keyboard-inset));
+  left: var(--ui-space-16);
+  width: calc(var(--sidebar-width) - 2 * var(--row-inset));
+}
+
 /* The repository chip ------------------------------------------------------ */
 
 /* An integration whose brand publishes its one-color mark in named inks
@@ -1611,10 +1625,17 @@ body,
 .side-panel-content .agent-tab-foot .agent-composer {
   padding-inline: max(var(--content-inset), var(--reading-room));
 }
-/* The apps' windows an agent is using float at the right edge of that same column. */
+/* The apps an agent is using float at the right edge of that same column,
+   and across it in a narrow foot (`tasks.css`). */
 .desktop-agent .agent-computer-float,
 .side-panel-content .agent-computer-float {
   inset-inline-end: max(var(--content-inset), var(--reading-room));
+}
+@container agent-tab-foot (width < 480px) {
+  .desktop-agent .agent-computer-float,
+  .side-panel-content .agent-computer-float {
+    inset-inline-start: max(var(--content-inset), var(--reading-room));
+  }
 }
 
 /* Tabs ------------------------------------------------------------------------ */

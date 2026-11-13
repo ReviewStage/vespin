@@ -7,7 +7,7 @@ import { appsInUse } from "./computer-dock.js";
 /**
  * computer-dock.test.ts -- the stack over an agent's box holds every app
  * it used this turn, the one it used last first, each with the newest window
- * it read of that app, and stands only while the agent works. Synthetic words.
+ * it read of that app, none in use once the agent is done. Synthetic words.
  */
 
 const WINDOW = {
@@ -76,14 +76,26 @@ test("every app used this turn stands once, the one used last first, each with i
 
   assert.deepEqual(appsInUse(messages, true), {
     apps: [
-      { app: "Simulator", bundleId: "com.example.simulator", icon: ICON.id, window: WINDOW },
-      { app: "Xcode", bundleId: "com.example.xcode", icon: ICON.id, window: OTHER_WINDOW },
+      {
+        id: "com.example.simulator",
+        name: "Simulator",
+        bundleId: "com.example.simulator",
+        icon: ICON.id,
+        window: WINDOW,
+      },
+      {
+        id: "com.example.xcode",
+        name: "Xcode",
+        bundleId: "com.example.xcode",
+        icon: ICON.id,
+        window: OTHER_WINDOW,
+      },
     ],
     using: true,
   });
 });
 
-test("the app used last is no longer in use once another tool is called, and nothing stands once the agent stops working", () => {
+test("the app used last is no longer in use once another tool is called, or once the agent is done, its apps still standing", () => {
   const using = [asked("ask-1"), turn("turn-1", [read("r1", "Simulator", WINDOW)])];
 
   const movedOn = [
@@ -92,7 +104,11 @@ test("the app used last is no longer in use once another tool is called, and not
   ];
 
   assert.equal(appsInUse(movedOn, true)?.using, false);
-  assert.equal(appsInUse(using, false), undefined);
+  assert.deepEqual(
+    appsInUse(using, false)?.apps.map((each) => each.name),
+    ["Simulator"],
+  );
+  assert.equal(appsInUse(using, false)?.using, false);
 });
 
 test("a call the Mac refused, as for a grant it lacks, adds no app, so no blank window floats as in use", () => {
@@ -116,7 +132,7 @@ test("a line sent while the turn runs steers it and keeps the apps used before i
   const closed = [asked("ask-1"), { ...running, finishedAt: 1_000 }, asked("ask-2")];
 
   assert.deepEqual(
-    appsInUse(steered, true)?.apps.map((each) => each.app),
+    appsInUse(steered, true)?.apps.map((each) => each.name),
     ["Simulator"],
   );
   assert.equal(appsInUse(closed, true), undefined);

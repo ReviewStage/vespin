@@ -25,7 +25,7 @@ import { trimmedText } from "./text-schema.js";
  * task-wire.ts -- a named feature task and its one saved document, as the Tasks tab and the service read them.
  *
  * A task is its owner's name for it and one current document: one free
- * Markdown text (`description-document.ts`, `docs/TASKS.md`), answered as the
+ * Markdown text (`description-sections.ts`, `docs/TASKS.md`), answered as the
  * document's `body` with no title line, since the name is its own, and an
  * empty `assumptions` list, since its assumptions are a section of the text;
  * the list stays on the wire because a desktop through v0.11.0 requires it.
@@ -211,8 +211,8 @@ const descriptionAssumptionSchema = EffectSchema.Struct({
   text: trimmedText(TASK_BOUNDS.MAX_ASSUMPTION_CHARS),
 });
 
-/** The one saved document of a task, replaced whole by every save. */
-const descriptionDocumentSchema = EffectSchema.Struct({
+/** The one saved description of a task, replaced whole by every save. */
+const descriptionSchema = EffectSchema.Struct({
   /** The description's whole text, as written. */
   body: EffectSchema.String.check(EffectSchema.isMaxLength(TASK_BOUNDS.MAX_BODY_CHARS)),
   assumptions: EffectSchema.Array(descriptionAssumptionSchema).check(
@@ -220,7 +220,7 @@ const descriptionDocumentSchema = EffectSchema.Struct({
   ),
 });
 
-export type DescriptionDocument = typeof descriptionDocumentSchema.Type;
+export type Description = typeof descriptionSchema.Type;
 
 /** A task's repository as a request names it: a full name, or null for none. */
 const repositoryChoiceSchema = EffectSchema.NullOr(githubRepositoryFullNameSchema);
@@ -1017,10 +1017,10 @@ const descriptionSectionEditSchema = EffectSchema.Struct({
 
 export type DescriptionSectionEdit = typeof descriptionSectionEditSchema.Type;
 
-/** One task with its saved document, its newest revision, who last changed each section, and the saves coding agents made on it, oldest first; its blocks are its summary's. */
+/** One task with its saved description, its newest revision, who last changed each section, and the saves coding agents made on it, oldest first; its blocks are its summary's. */
 export const taskSchema = EffectSchema.Struct({
   ...taskSummaryFields,
-  document: descriptionDocumentSchema,
+  description: descriptionSchema,
   /** Optional on the wire so a task from a service without the journal still reads; none is no edits. */
   agentEdits: EffectSchema.optionalKey(
     EffectSchema.Array(agentEditLineSchema).check(EffectSchema.isMaxLength(MAX_AGENT_EDITS)),
@@ -1158,7 +1158,7 @@ export type TaskStartAnswer = typeof taskStartAnswerSchema.Type;
 /** The task a link names by its workspace and its number (GET), by its id, which every other read names it by. */
 export const taskFoundAnswerSchema = EffectSchema.Struct({ taskId: EffectSchema.String });
 
-/** A deleted task (DELETE): its row, its document, and its association are gone. */
+/** A deleted task (DELETE): its row, its description, and its association are gone. */
 export const taskDeleteAnswerSchema = EffectSchema.Struct({
   deleted: EffectSchema.Literal(true),
   txid: EffectSchema.optionalKey(taskTxidSchema),
@@ -1200,7 +1200,7 @@ const descriptionRevisionLineSchema = EffectSchema.Struct({
 export type DescriptionRevisionLine = typeof descriptionRevisionLineSchema.Type;
 
 /**
- * A page of a description's history (GET `/api/plans/{id}/revisions`), the newest
+ * A page of a description's history (GET `/api/tasks/{id}/description/revisions`), the newest
  * first, before the revision the `before` query names where it names one;
  * `earlier` is what the next older page is read before, absent on the oldest.
  */
@@ -1214,7 +1214,7 @@ export const descriptionRevisionsAnswerSchema = EffectSchema.Struct({
 export type DescriptionRevisionsAnswer = typeof descriptionRevisionsAnswerSchema.Type;
 
 /**
- * One revision's content (GET `/api/plans/{id}/revisions/{seq}`): the description
+ * One revision's content (GET `/api/tasks/{id}/description/revisions/{seq}`): the description
  * as it stood after the revision and as it stood before it, null for the
  * first, each formatted under the task's name as it stands now, so a rename
  * since is no difference between them.
@@ -1222,8 +1222,8 @@ export type DescriptionRevisionsAnswer = typeof descriptionRevisionsAnswerSchema
 export const descriptionRevisionAnswerSchema = EffectSchema.Struct({
   revision: EffectSchema.Struct({
     seq: descriptionRevisionSeqSchema,
-    document: descriptionDocumentSchema,
-    previous: EffectSchema.NullOr(descriptionDocumentSchema),
+    description: descriptionSchema,
+    previous: EffectSchema.NullOr(descriptionSchema),
   }),
 });
 
@@ -1307,7 +1307,7 @@ function fileWindowIsReadable(window: { firstLine: number; lastLine: number }): 
 
 /**
  * One window of a file of the task's repository, as the File tab asks it
- * (GET `/api/plans/{id}/file`): the path, and its first and last line; or,
+ * (GET `/api/tasks/{id}/file`): the path, and its first and last line; or,
  * with `raw`, the file's whole text, its lines uncut, as a copy or a
  * download of the file asks it, the window then standing for nothing. With
  * `ref`, the file is read as it stood at that commit, as an inbox item's
@@ -1388,7 +1388,7 @@ export const TASK_TREE_BOUNDS = {
 
 /**
  * One folder of the task's repository, as the File tab's tree asks it (GET
- * `/api/plans/{id}/tree`): its path from the repository's root, empty for
+ * `/api/tasks/{id}/tree`): its path from the repository's root, empty for
  * the root itself, and whether everything under it is asked, every entry
  * then named by its path from the folder, as the tree's search reads the
  * whole repository in one listing.
@@ -1486,7 +1486,7 @@ const taskSkillSchema = EffectSchema.Struct({
 });
 
 /**
- * The skills a developer may choose of a task (GET `/api/plans/{id}/skills`)
+ * The skills a developer may choose of a task (GET `/api/tasks/{id}/skills`)
  * or of a workspace's repository (GET `/api/github/repositories/skills`):
  * the repository and the branch read, null where there is no repository,
  * and the skills, the repository's as they stand now on its default branch,

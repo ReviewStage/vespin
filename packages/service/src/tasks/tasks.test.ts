@@ -19,17 +19,17 @@ import {
   type TestTask,
 } from "@repo/database/testing";
 import { noDatabase } from "@repo/database/testing/no-database";
-import { descriptionSections } from "@repo/features/description-document";
 import type { DescriptionNote } from "@repo/features/description-notes";
-import { type DescriptionDocument, TASK_STATUS } from "@repo/features/task-wire";
+import { descriptionSections } from "@repo/features/description-sections";
+import { type Description, TASK_STATUS } from "@repo/features/task-wire";
 import { Effect, Option } from "effect";
 import { TestClock } from "effect/testing";
-import { INVITATIONS_TEXT, makeDocumentTask } from "../testing/description-documents.js";
+import { INVITATIONS_TEXT, makeDescriptionTask } from "../testing/descriptions.js";
 import { added } from "../testing/task-contents.js";
 import {
   DESCRIPTION_SAVE_REFUSAL,
   DESCRIPTION_SAVE_STATUS,
-  type DescriptionDocumentBinding,
+  type DescriptionBinding,
   type DescriptionSaveResult,
   saveNotes,
 } from "./description-notes.js";
@@ -86,17 +86,17 @@ const openUser = Effect.gen(function* () {
 });
 
 /** The binding the service builds for a task: its account and its id. */
-function bound(userId: string, taskId: string): DescriptionDocumentBinding {
+function bound(userId: string, taskId: string): DescriptionBinding {
   return { userId, taskId };
 }
 
 /** The document a saved result carries, failing the test on any other outcome. */
-function savedDocument(result: DescriptionSaveResult): DescriptionDocument {
+function savedDocument(result: DescriptionSaveResult): Description {
   if (result.status !== DESCRIPTION_SAVE_STATUS.SAVED) {
     return assert.fail(`expected a save, got: ${JSON.stringify(result)}`);
   }
 
-  return result.document;
+  return result.description;
 }
 
 /** The document the window opens and the model resumes from, failing the test where the task does not read. */
@@ -104,7 +104,7 @@ const resumedDocument = (userId: string, taskId: string) =>
   Effect.map(readTask(userId, taskId), (stored) =>
     Option.match(stored, {
       onNone: () => assert.fail("the plan did not read"),
-      onSome: (found) => found.task.document,
+      onSome: (found) => found.task.description,
     }),
   );
 
@@ -186,7 +186,7 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
       Effect.gen(function* () {
         const userId = yield* openUser;
         const { id: taskId } = yield* startTask(userId, RELAY_TASK);
-        yield* makeDocumentTask(taskId, INVITATIONS_TEXT);
+        yield* makeDescriptionTask(taskId, INVITATIONS_TEXT);
 
         const result = yield* saveNotes(bound(userId, taskId), [
           added("Goal", "- Pending invites show in settings."),
@@ -253,7 +253,7 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
           (yield* listTasks(teammate)).map((task) => task.id),
           [started.id],
         );
-        assert.deepEqual(yield* resumedDocument(teammate, started.id), started.document);
+        assert.deepEqual(yield* resumedDocument(teammate, started.id), started.description);
         const renamed = yield* updateTask(teammate, started.id, { name: "Shared invitations" });
         assert.deepEqual(
           Option.map(renamed, (task) => task.name),
@@ -313,7 +313,7 @@ it.layer(getTestDB())("named plans and the notes that write them", (it) => {
 
       const task = Option.getOrThrow(renamed);
       assert.equal(task.name, "Team invites");
-      assert.deepEqual(task.document, saved);
+      assert.deepEqual(task.description, saved);
       assert.deepEqual(yield* resumedDocument(userId, relay.id), saved);
       assert.deepEqual(
         new Map((yield* listTasks(userId)).map(({ id, name }) => [id, name])),

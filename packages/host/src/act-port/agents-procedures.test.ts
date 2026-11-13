@@ -108,12 +108,15 @@ const REFUSAL = {
   [AGENT_ACT_KIND.AGENTS_PULL_REQUEST_ACTION]: "Could not change the pull request on this system.",
   [AGENT_ACT_KIND.AGENTS_PREFERENCES_RETRY]:
     "Could not read your preferences again on this system.",
+  [AGENT_ACT_KIND.AGENTS_SET_DEFAULT_MACHINE]:
+    "Could not change that agent's default machine on this system.",
 } as const;
 
 /** A payload each declared act's schema takes, so a window refused it was refused for who it is alone. */
 const PAYLOAD: Readonly<Record<keyof typeof AGENT_ACTS, WireBoundaryInput>> = {
   AGENTS_DEFAULT_WRITE: { model: "anthropic/claude-opus-5.5", effort: "high" },
   AGENTS_CHAPTERS_PROVIDER_WRITE: { provider: "openai" },
+  AGENTS_SET_DEFAULT_MACHINE: { agentId: AGENT_ID, machineId: HOST_ID },
   AGENTS_PREFERENCES_RETRY: undefined,
   HOSTS_REMOVE: { id: HOST_ID },
   HOSTS_THIS_MAC_SET: { on: true },

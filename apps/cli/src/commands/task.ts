@@ -6,7 +6,7 @@
  * repository from the working folder's `origin` unless `-R` names one, and
  * with `--start` or `--prompt` starts an agent on the new task, the one-shot
  * every peer leads with: in the create's own request where there is no plan
- * to write first, else created, then planned through `plans.editDescription`, then
+ * to write first, else created, then planned through `tasks.editDescription`, then
  * started, so the agent reads the plan it was given. `cat` and `ls` read the
  * task's repository as its File tab does, on GitHub at the default branch's
  * head or a commit, never from an agent's sandbox.
@@ -119,7 +119,7 @@ const listCommand = Command.make(
       const { workspace } = yield* resolveWorkspace;
       const { hosted } = yield* session;
       const me = mine ? yield* signedInMemberId : undefined;
-      const { plans } = yield* askService(hosted.plans.list, {});
+      const { plans } = yield* askService(hosted.tasks.list, {});
 
       const listed = plans.filter(
         (task) =>
@@ -177,9 +177,9 @@ const viewCommand = Command.make(
 
       const [{ plan }, { agents }, { plans }, { items }, { workspaces }] = yield* Effect.all(
         [
-          askService(hosted.plans.open, { id }),
+          askService(hosted.tasks.open, { id }),
           askService(hosted.agents.listOfTask, { id }),
-          askService(hosted.plans.list, {}),
+          askService(hosted.tasks.list, {}),
           askService(hosted.inbox.task, { id }),
           askService(hosted.workspaces.list, undefined),
         ],
@@ -292,7 +292,7 @@ const createCommand = Command.make(
       const together = starting && descriptionText === undefined;
 
       const created = yield* askService(
-        hosted.plans.create,
+        hosted.tasks.create,
         {
           name: title,
           workspaceId: workspace.id,
@@ -312,7 +312,7 @@ const createCommand = Command.make(
       const task = taskJson(created.body.plan, workspace.name);
 
       if (descriptionText !== undefined) {
-        yield* writeDescription(task.id, created.body.plan.document.body, descriptionText);
+        yield* writeDescription(task.id, created.body.plan.description.body, descriptionText);
       }
 
       const agent =
@@ -362,7 +362,7 @@ function taskFlags(name: string, description: string) {
   return Flag.String(name).pipe(Flag.atLeast(0), Flag.withDescription(description));
 }
 
-/** The blocks `--blocked-by`, `--blocks`, and their `--remove-` forms name, each as `plans.block` takes it, the tasks resolved to ids. */
+/** The blocks `--blocked-by`, `--blocks`, and their `--remove-` forms name, each as `tasks.block` takes it, the tasks resolved to ids. */
 function blockChangesOf(named: {
   readonly blockedBy: readonly string[];
   readonly blocks: readonly string[];
@@ -462,19 +462,19 @@ const updateCommand = Command.make(
       let plan: Task | undefined;
 
       if (Object.keys(fields).length > 0) {
-        plan = (yield* askService(hosted.plans.update, { params: { id }, body: fields })).plan;
+        plan = (yield* askService(hosted.tasks.update, { params: { id }, body: fields })).plan;
       }
 
       if (parentTaskId !== undefined) {
-        plan = (yield* askService(hosted.plans.parent, { params: { id }, body: { parentTaskId } }))
+        plan = (yield* askService(hosted.tasks.parent, { params: { id }, body: { parentTaskId } }))
           .plan;
       }
 
       for (const block of blockChanges) {
-        plan = (yield* askService(hosted.plans.block, { params: { id }, body: block })).plan;
+        plan = (yield* askService(hosted.tasks.block, { params: { id }, body: block })).plan;
       }
 
-      plan ??= (yield* askService(hosted.plans.open, { id })).plan;
+      plan ??= (yield* askService(hosted.tasks.open, { id })).plan;
 
       const sectionId = Option.isNone(section)
         ? undefined
@@ -555,7 +555,7 @@ const deleteCommand = Command.make(
       const { hosted } = yield* session;
 
       const [{ plan }, { workspaces }] = yield* Effect.all(
-        [askService(hosted.plans.open, { id }), askService(hosted.workspaces.list, undefined)],
+        [askService(hosted.tasks.open, { id }), askService(hosted.workspaces.list, undefined)],
         { concurrency: "unbounded" },
       );
 
@@ -564,7 +564,7 @@ const deleteCommand = Command.make(
         `Delete ${taskLabel(found)} ${found.name} for good, with its agents and their transcripts?`,
         yes,
       );
-      yield* askService(hosted.plans.delete, { id });
+      yield* askService(hosted.tasks.delete, { id });
       yield* answer({
         json: { id: found.id, key: found.key, name: found.name, deleted: true },
         lines: [`Deleted ${taskLabel(found)} ${found.name}.`],
@@ -649,7 +649,7 @@ const relateCommand = Command.make(
       const otherId = yield* resolveTaskId(asked.other);
       const { hosted } = yield* session;
 
-      const { plan } = yield* askService(hosted.plans.relation, {
+      const { plan } = yield* askService(hosted.tasks.relation, {
         params: { id },
         body: { taskId: otherId, from: fromKind, to: asked.to },
       });
@@ -684,7 +684,7 @@ const relateCommand = Command.make(
 function taskMembersOf(taskId: string) {
   return Effect.gen(function* () {
     const { hosted } = yield* session;
-    const { plan } = yield* askService(hosted.plans.open, { id: taskId });
+    const { plan } = yield* askService(hosted.tasks.open, { id: taskId });
 
     const { members } = yield* askService(hosted.workspaces.members, {
       workspaceId: plan.workspaceId,

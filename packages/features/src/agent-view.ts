@@ -87,7 +87,7 @@ import {
   soundRenameRequestSchema,
 } from "./sound-clip-wire.js";
 import { MP4_TYPE, playableVideoTypeSchema } from "./video-signature.js";
-import { voiceCallEndedRequestSchema, voiceSessionRequestSchema } from "./voice-wire.js";
+import { voiceSessionRequestSchema } from "./voice-wire.js";
 
 /**
  * agent-view.ts -- a task's coding agents as one Mac's window hears them: each call's answer whole, or why there is none.
@@ -218,6 +218,7 @@ const AGENT_ROW_CALLS = {
     startFrom: agentsContract.startFrom,
     change: agentsContract.change,
     delete: agentsContract.delete,
+    setDefaultMachine: agentsContract.setDefaultMachine,
   },
 };
 
@@ -1131,6 +1132,17 @@ const agentWorkspaceToolsAnswerViewSchema = answerView(agentsContract.workspaceT
 
 export type AgentWorkspaceToolsAnswerView = typeof agentWorkspaceToolsAnswerViewSchema.Type;
 
+/** An agent's default machine set, as the window hears it: its tools as they then stand, or why it is unchanged. */
+export const agentDefaultMachineAnswerViewSchema = answerView(agentsContract.setDefaultMachine);
+
+export type AgentDefaultMachineAnswerView = typeof agentDefaultMachineAnswerViewSchema.Type;
+
+/** One agent's default machine set, as the window asks it: the agent, and the machine by its id. */
+export const agentDefaultMachineParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.NonEmptyString,
+  machineId: EffectSchema.NonEmptyString,
+});
+
 /** What the reviewer and label pickers of an agent's Pull request tab offer, as the window hears it: the labels, users, and teams, or why there is no answer. */
 const agentReviewOptionsAnswerViewSchema = answerView(agentsContract.reviewOptions, {
   as: AGENT_NOT_FOUND_RENAMES,
@@ -1174,20 +1186,10 @@ export const voiceSessionParamsSchema = voiceSessionRequestSchema;
 
 export type VoiceSessionParams = typeof voiceSessionParamsSchema.Type;
 
-/** The opened call, as the window hears it: the SDP answer, or why there is none. */
+/** The opened call, as the window hears it: its id and the SDP answer, or why there is none. */
 export const voiceSessionAnswerViewSchema = answerView(voiceContract.open);
 
 export type VoiceSessionAnswerView = typeof voiceSessionAnswerViewSchema.Type;
-
-/** A finished voice call, as the window reports it: the agent and the seconds it ran. */
-export const voiceCallEndedParamsSchema = voiceCallEndedRequestSchema;
-
-export type VoiceCallEndedParams = typeof voiceCallEndedParamsSchema.Type;
-
-/** A reported call, as the window hears it: kept, or why not. */
-export const voiceCallEndedAnswerViewSchema = answerView(voiceContract.ended);
-
-export type VoiceCallEndedAnswerView = typeof voiceCallEndedAnswerViewSchema.Type;
 
 /** The phone the app runs on, as it registers itself for pushes: its APNs token, its build's gateway, and its app. */
 export const pushDeviceRegisterParamsSchema = pushDeviceRegisterRequestSchema;

@@ -746,6 +746,7 @@ function fakeService() {
         return REVIEW_OPTIONS;
       }),
     workspaceTools: () => Effect.die("no Vespin tools read in this suite"),
+    setDefaultMachine: () => Effect.die("no default machine set in this suite"),
     overviewChecks: (agentId) =>
       Effect.sync(() => {
         asked.push(`overview-checks:${agentId}`);
@@ -886,6 +887,7 @@ function fakeService() {
 
         return { text: "Run the tests" };
       }),
+    openVoiceSession: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     inboxAttachment: (itemId, attachmentId) =>
       Effect.sync(() => {
         asked.push(`attachment:${itemId}:${attachmentId}`);

@@ -60,6 +60,7 @@ import {
   type HeldDescriptionDocument,
   type TasksView,
 } from "@repo/features/tasks-view";
+import type { StandingCall } from "@repo/features/voice-wire";
 import type { WorkspaceIntegrations } from "@repo/features/workspace-integrations-live";
 import type { WorkspaceInvitation } from "@repo/features/workspace-invitation-wire";
 import type { WorkspaceToolsAnswer } from "@repo/features/workspace-tools-wire";
@@ -753,11 +754,14 @@ export interface AppHostReads {
  * The commands agents asked to run on this Mac that wait on the developer's
  * answer, the earliest first, as the host holds them while Settings › This
  * Mac asks every time (`compose-machine-commands.ts`): what the panel's prompt
- * draws. Main's, because the host holds the command whichever window is
+ * draws; and the device the Mac claims commands as, which the panel tells
+ * this Mac from the account's others by. Main's, because the host holds the command whichever window is
  * open, and empty wherever this platform runs no commands.
  */
 export interface AppMachineCommandsSlice {
   asks: readonly MachineCommandAsk[];
+  /** The device this Mac claims commands as for the account signed in (`this-machine-device.ts`), which the service names the machine a call goes to by; absent before it joined for that account, and wherever this platform runs no commands. */
+  deviceId?: string;
 }
 
 /**
@@ -941,6 +945,8 @@ export interface AppState {
   portForwarding: PortForwarding;
   /** How each cloud agent's mirror on this Mac stands until its worktree does, by the agent, as the host tells it: what a Local tab says while it connects. */
   mirrors: MirrorStandings;
+  /** The voice call a panel window holds, as that window tells the Mac, which the floating call window draws; none while no window holds one, and in a host with no such window. */
+  voiceCall: StandingCall | null;
 }
 
 /**

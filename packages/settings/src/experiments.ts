@@ -34,6 +34,8 @@ export const EXPERIMENT = {
   VOICE: "voice",
   /** Goals: `/goal` in a box written to an agent, which runs its harness's own goal (Claude Code's `/goal`, Codex's thread goal), the goal's row over the box, and its moves in the transcript. */
   GOALS: "goals",
+  /** Move agents: an agent's Move to ›, its place chip's menu of places, and Move to cloud, each continuing the agent in the cloud or on another of the member's devices. */
+  MOVE_AGENTS: "move-agents",
 } as const;
 
 export type Experiment = (typeof EXPERIMENT)[keyof typeof EXPERIMENT];
@@ -105,6 +107,16 @@ export interface ExperimentEntry {
  */
 export const EXPERIMENTS = [
   {
+    key: EXPERIMENT.MOVE_AGENTS,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: true,
+    name: "Move agents",
+    detail:
+      "Move an agent between the cloud and your Macs and hosts, continuing it where you pick.",
+    owner: "Charles",
+    since: "2026-11-13",
+  },
+  {
     key: EXPERIMENT.GOALS,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
     listed: true,
@@ -127,7 +139,7 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.VOICE,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
-    listed: false,
+    listed: true,
     name: "Voice",
     detail:
       "Talk to an agent out loud through GPT-Live on your own OpenAI API key, from Talk in an agent's box.",

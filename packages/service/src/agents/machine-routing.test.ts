@@ -3,7 +3,8 @@
  *
  * A call goes to the machine it names, else to the agent's default, else to
  * its owner's machine that listened last; a default or a named machine that
- * cannot take it refuses it, naming the machines that can. With Following
+ * cannot take it refuses it, naming the machines that can, in words for the
+ * model and as data for the transcript, with why. With Following
  * on, a follower's machines are reached only while their switch is on, and
  * a shell command never goes to a machine set to Never. Where none of the
  * owner's machines listens but a Mac from before machines claimed does, the
@@ -34,13 +35,14 @@ import {
 import {
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
+  MACHINE_UNREACHED,
   type MachineCommandKind,
   type MachineCommandMode,
 } from "@repo/features/machine-command-wire";
 import { EXPERIMENT } from "@repo/settings";
 import { eq } from "drizzle-orm";
 import { Effect } from "effect";
-import { MACHINE_ROUTE, routeOf } from "./machine-routing.js";
+import { defaultMachinesOf, MACHINE_ROUTE, routeOf } from "./machine-routing.js";
 
 const NO_MACHINE = "Not run: no machine can take it.";
 
@@ -107,7 +109,7 @@ const route = (
 
 it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
   it.effect(
-    "a call goes to the machine whose id it names, else the agent's default, else the owner's that listened; one that cannot take it, or a default that is gone, is refused listing the ids of the ones that can",
+    "a call goes to the machine whose id it names, else the agent's default, else the owner's that listened; one that cannot take it, its apps switched off for an action on an app among them, or a default that is gone, is refused listing the ids of the ones that can",
     () =>
       Effect.gen(function* () {
         const { owner, agentId, target } = yield* openPeople;
@@ -129,12 +131,41 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
         assert.deepEqual(yield* route(target, {}), {
           kind: MACHINE_ROUTE.REFUSED,
           reason: `Not run: Studio is offline, or Vespin isn't running on it. It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
+          why: MACHINE_UNREACHED.OFFLINE,
+          others: [toLaptop.machine],
           machine: { id: studio, name: "Studio", owner: ana },
         });
         assert.deepEqual(yield* route(target, { machineId: laptop }), toLaptop, "by its id");
+
+        yield* Database.use((db) =>
+          db.update(device).set({ computerUse: false }).where(eq(device.id, laptop)),
+        );
+
+        const appsOff = yield* route(target, {
+          kind: MACHINE_COMMAND_KIND.COMPUTER,
+          machineId: laptop,
+        });
+
+        assert.match(
+          appsOff.kind === MACHINE_ROUTE.REFUSED ? appsOff.reason : "",
+          /^Not run: Laptop doesn't let agents use its apps \(Let agents use its apps is off for it in Settings › Machines\)\./u,
+          "an action on an app is refused where the machine's apps switch is off",
+        );
+        assert.equal(
+          appsOff.kind === MACHINE_ROUTE.REFUSED ? appsOff.why : undefined,
+          MACHINE_UNREACHED.APPS_OFF,
+          "and says why as data, for the card",
+        );
+        assert.deepEqual(
+          yield* route(target, { machineId: laptop }),
+          toLaptop,
+          "a shell command still goes",
+        );
         assert.deepEqual(yield* route(target, { machineId: "Laptop" }), {
           kind: MACHINE_ROUTE.REFUSED,
           reason: `Not run: no machine this task's agents may use has the id "Laptop". It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
+          why: MACHINE_UNREACHED.UNKNOWN_MACHINE,
+          others: [toLaptop.machine],
         });
 
         yield* Database.use((db) =>
@@ -147,6 +178,8 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
         assert.deepEqual(yield* route(target, {}), {
           kind: MACHINE_ROUTE.REFUSED,
           reason: `Not run: this agent's default machine was removed, or its owner no longer lets this task's agents use it. It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,
+          why: MACHINE_UNREACHED.DEFAULT_GONE,
+          others: [toLaptop.machine],
         });
       }),
   );
@@ -187,6 +220,37 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
   );
 
   it.effect(
+    "an agent's default may be set to a machine of anyone who lets the task's agents use theirs, online or not, and to no machine of a follower whose switch is off",
+    () =>
+      Effect.gen(function* () {
+        const { owner, teammate, workspace, taskId, target } = yield* openPeople;
+        const laptop = yield* openMachine(owner, "Laptop", false);
+        const studio = yield* openMachine(teammate, "Studio", true);
+        yield* followTask(owner, { taskId, followerId: teammate, machines: true });
+
+        yield* setWorkspaceExperiment({
+          organizationId: workspace,
+          experiment: EXPERIMENT.FOLLOWING,
+          on: true,
+          by: owner,
+        });
+
+        const listed = (yield* defaultMachinesOf(target)).map(({ id, online }) => ({ id, online }));
+        yield* setFollowerMachines(teammate, taskId, false);
+        const switchedOff = (yield* defaultMachinesOf(target)).map(({ id }) => id);
+
+        assert.deepEqual(
+          [...listed].sort((a, b) => a.id.localeCompare(b.id)),
+          [
+            { id: laptop, online: false },
+            { id: studio, online: true },
+          ].sort((a, b) => a.id.localeCompare(b.id)),
+        );
+        assert.deepEqual(switchedOff, [laptop]);
+      }),
+  );
+
+  it.effect(
     "a Mac from before machines claimed takes the call as its account, only where none of the owner's machines listens",
     () =>
       Effect.gen(function* () {
@@ -200,6 +264,8 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
         assert.deepEqual(nowhere, {
           kind: MACHINE_ROUTE.REFUSED,
           reason: `${NO_MACHINE} No other machine can take it now.`,
+          why: MACHINE_UNREACHED.NO_MACHINE,
+          others: [],
         });
         assert.equal(claimed.kind, MACHINE_ROUTE.MACHINE);
       }),

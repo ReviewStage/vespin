@@ -58,7 +58,10 @@ import {
   terminalRenameRequestSchema,
   terminalsAnswerSchema,
 } from "../terminal-wire.js";
-import { workspaceToolsAnswerSchema } from "../workspace-tools-wire.js";
+import {
+  defaultMachineRequestSchema,
+  workspaceToolsAnswerSchema,
+} from "../workspace-tools-wire.js";
 import { bodyCap, declaredProcedure, exactBodyInput, refuses } from "./base.js";
 import { MESSAGE_REFUSALS } from "./messages.js";
 
@@ -452,6 +455,19 @@ export const agentsContract = {
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(openapi({ method: HTTP_METHOD.GET, path: `${AGENT_PATH}/workspace-tools` }))
     .input(idParams)
+    .output(EffectSchema.flip(workspaceToolsAnswerSchema)),
+  /** One agent's default machine set, where its terminal commands and computer use go when a call names none, answering its tools as they then stand; refused for a machine its task's agents may not use. */
+  setDefaultMachine: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.NOT_PERMITTED))
+    .meta(bodyCap(CHOICE_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.PUT,
+        path: `${AGENT_PATH}/default-machine`,
+        inputStructure: "detailed",
+      }),
+    )
+    .input(exactBodyInput(idParams, defaultMachineRequestSchema))
     .output(EffectSchema.flip(workspaceToolsAnswerSchema)),
   /** One agent's stopped sandbox resumed, on the developer's click. */
   sandboxResume: sandboxProcedure

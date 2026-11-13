@@ -578,6 +578,11 @@ export const tasksFollowersAnswerSchema = EffectSchema.Union([
 
 export type TasksFollowersAnswer = typeof tasksFollowersAnswerSchema.Type;
 
+/** A task's followers' machines, as the window hears them: each with whose it is, whether its owner lets the task's agents use it, and whether it listened lately, or why there is no answer. */
+export const tasksMachinesAnswerSchema = answerView(taskFollowersContract.machines);
+
+export type TasksMachinesAnswer = typeof tasksMachinesAnswerSchema.Type;
+
 /** Why a relation's move wrote nothing: a block's reasons, or a parent's. */
 const RELATION_CALL_FAILURES = Object.values(
   failureSetOf(tasksContract.relation, { as: TASK_BLOCK_RENAMES }),
@@ -761,6 +766,14 @@ export const tasksFindAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ taskId: EffectSchema.NonEmptyString }),
   EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
 ]);
+
+/** The most characters a task search sends the service. */
+export const TASK_SEARCH_QUERY_MAX_CHARS = 200;
+
+/** A search of the account's tasks the window asks the host to read past the list it holds: the words typed. */
+export const tasksSearchParamsSchema = EffectSchema.Struct({
+  query: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(TASK_SEARCH_QUERY_MAX_CHARS)),
+});
 
 /** A page of a description's history, as the version history asks the host for it: the task, and the revision the page is read before where it is an older page. */
 export const tasksRevisionsParamsSchema = EffectSchema.Struct({

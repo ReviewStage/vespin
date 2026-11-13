@@ -127,6 +127,9 @@ export interface AgentComposerControl {
   sent: readonly SentLine[];
 }
 
+/** No send's call waiting on its answer. */
+const NOTHING_ASKING: ReadonlySet<string> = new Set();
+
 interface Held {
   agentId: string;
   /** The developer's line open for writing again where it stands, by its message id; none while none is. */
@@ -143,6 +146,8 @@ interface Held {
     | undefined;
   /** The newest turn a send's answer named, the one its line awaits; none before a send answered. */
   turn: AgentTurn | undefined;
+  /** The sends this tab made whose calls have not answered, by their keys, which hold the working line after their rows land and until their answers name the turn. */
+  asking: ReadonlySet<string>;
 }
 
 /** A tab's composer as it opens on an agent: nothing of its own; what it sent stands in the host's record. */
@@ -155,6 +160,7 @@ function fresh(agentId: string): Held {
     cut: undefined,
     revertFailed: undefined,
     turn: undefined,
+    asking: NOTHING_ASKING,
   };
 }
 
@@ -442,6 +448,7 @@ export function useAgentComposer(input: {
     });
 
     const { taskId } = latest.current;
+    ours((was) => ({ ...was, asking: new Set(was.asking).add(line.clientKey) }));
 
     void latest.current
       .send(agentId, {
@@ -476,7 +483,17 @@ export function useAgentComposer(input: {
 
     /** What the send's answer leaves: a refusal said where the tab is away, or the turn it opened. */
     const answered = (answer: AgentActAnswer) => {
+      // Note that the call is let go in the same change that keeps the turn it named, so the working line never falls between them.
+      const letGo = (was: Held) => {
+        const asking = new Set(was.asking);
+        asking.delete(line.clientKey);
+
+        return asking;
+      };
+
       if ("failure" in answer) {
+        ours((was) => ({ ...was, asking: letGo(was) }));
+
         sayWhereAway(answer);
 
         // A rewind that did not go drops nothing, so the messages it would have dropped are drawn again.
@@ -487,7 +504,11 @@ export function useAgentComposer(input: {
         return;
       }
 
-      ours((was) => ({ ...was, turn: newerTurn(answer.agent.turn, was.turn) }));
+      ours((was) => ({
+        ...was,
+        turn: newerTurn(answer.agent.turn, was.turn),
+        asking: letGo(was),
+      }));
     };
   };
 
@@ -764,7 +785,8 @@ export function useAgentComposer(input: {
     rewindOut: held.reverting !== undefined,
     rewoundAt: held.rewoundAt,
     rewinding: held.reverting !== undefined || going.some((line) => line.rewinds !== undefined),
-    unanswered: going.length > 0,
+    // Note that a line's row may land before its send answers, which ends it going, so the call's own wait holds the line until the answer names the turn.
+    unanswered: going.length > 0 || held.asking.size > 0,
     turn: held.turn,
     revert,
     cut: held.cut,

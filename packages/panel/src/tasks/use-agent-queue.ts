@@ -279,9 +279,12 @@ export function useQueueEditing(
   if (listed) seen.current = true;
 
   if (stashed === undefined) seen.current = false;
+  // The message whose Save or Steer is on its way, by id, which the queue may send on before it answers.
+  const [settling, setSettling] = useState<string | undefined>();
   // A message that left the queue while its edit stood open, sent or deleted elsewhere, is no longer the box's to
-  // edit: the edit closes, its words left in the box.
-  const left = stashed !== undefined && seen.current && !listed;
+  // edit: the edit closes, its words left in the box. One that left on the box's own Save or Steer is closed by its
+  // answer instead, which gives the box back.
+  const left = stashed !== undefined && seen.current && !listed && settling !== stashed.id;
   useEffect(() => {
     if (left) setStashed(undefined);
   }, [left]);
@@ -299,7 +302,10 @@ export function useQueueEditing(
 
   /** The edit closed once the queue took `edit`, where it is still this message's; left open where it was refused. */
   const closing = (stash: Stashed, edit: AgentQueueChange) => {
+    setSettling(stash.id);
     void change(edit).then((answer) => {
+      setSettling((was) => (was === stash.id ? undefined : was));
+
       if (!("failure" in answer) && held.current === stash.id) giveBack(stash);
     });
   };

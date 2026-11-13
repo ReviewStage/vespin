@@ -67,7 +67,7 @@ export const RECORDING_CURSOR_FILE = {
  * the rest to its `-edge` and `-shadow`,
  * to the `.cloud-browser-cursor` rules, and to `--ui-color-tooltip`, its edge,
  * text, and chord inks, `--ui-tooltip-radius`, and `--ui-tooltip-shadow`; the
- * caps stand larger than a tooltip's words, which a compressed video blurs. Note that it does not rock while
+ * caps stand larger than a tooltip's words, which a compressed video blurs. Note that it does not sway while
  * still, as the panel's does while the agent works, because a video shows the
  * agent only as it acts.
  */
