@@ -53,6 +53,7 @@ import { formatBytes } from "./number-format.js";
 import { TOOL_STATE, type ToolState } from "./tool-call-block.js";
 import { remoteCallOf, TOOL_TARGET, toolTarget } from "./tool-call-model.js";
 import { ROW_PART, type RowReading, TURN_ROW, type TurnRow, turnRows } from "./turn-rows.js";
+import { isAgentTurn, spokenLineOf } from "./voice-call-lines.js";
 
 /** The kinds of part a stored message holds that the tab draws apart. */
 export const AGENT_PART = {
@@ -666,13 +667,15 @@ export interface PlacedMessage {
  * line steers the turn, and drawn below it, it would stand the turn as
  * done, offering a finished turn's actions, then move into it as the
  * service takes it. A line that did not go (`unsent`) reached no turn, so
- * it stands where the order puts it.
+ * it stands where the order puts it, as does every line of a call, either
+ * speaker's, which stands in the order it was said (`voice-call-lines.ts`'s
+ * `callItemsOf`).
  */
 function steeringPlaced(
   messages: readonly AgentTranscriptMessage[],
   unsent: (id: string) => boolean,
 ): readonly AgentTranscriptMessage[] {
-  const at = messages.findLastIndex((message) => message.role === MESSAGE_ROLE.ASSISTANT);
+  const at = messages.findLastIndex(isAgentTurn);
   const journal = messages[at];
 
   if (journal === undefined || journal.finishedAt !== undefined) return messages;
@@ -683,6 +686,7 @@ function steeringPlaced(
     index > at &&
     message.role === MESSAGE_ROLE.USER &&
     message.arrivedIn === undefined &&
+    spokenLineOf(message) === undefined &&
     !unsent(message.id)
       ? { ...message, arrivedIn }
       : message,
@@ -702,26 +706,29 @@ export function placedMessages(
 ): readonly PlacedMessage[] {
   const shown = steeringPlaced(messages, unsent);
 
-  const journals = new Set(
-    shown.filter((message) => message.role === MESSAGE_ROLE.ASSISTANT).map((each) => each.id),
-  );
+  const journals = new Set(shown.filter(isAgentTurn).map((each) => each.id));
 
   const arrived = new Map<string, AgentTranscriptMessage[]>();
 
-  for (const message of shown) {
+  // A line of a call is never moved into a turn, even one the service says took it under way: it stands where it was said.
+  const placedIn = (message: AgentTranscriptMessage) => {
     const journal = message.arrivedIn?.journalId;
 
-    if (journal === undefined || !journals.has(journal)) continue;
+    return journal !== undefined && journals.has(journal) && spokenLineOf(message) === undefined
+      ? journal
+      : undefined;
+  };
+
+  for (const message of shown) {
+    const journal = placedIn(message);
+
+    if (journal === undefined) continue;
     arrived.set(journal, [...(arrived.get(journal) ?? []), message]);
   }
 
-  return shown.flatMap((message) => {
-    const journal = message.arrivedIn?.journalId;
-
-    if (journal !== undefined && journals.has(journal)) return [];
-
-    return [{ message, arrived: arrived.get(message.id) ?? [] }];
-  });
+  return shown.flatMap((message) =>
+    placedIn(message) === undefined ? [{ message, arrived: arrived.get(message.id) ?? [] }] : [],
+  );
 }
 
 /** A stretch of a turn's rows as the tab draws it: the turn's own rows, or a line that reached it while it ran, which stands between them as the developer's own message. */

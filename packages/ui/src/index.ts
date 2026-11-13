@@ -442,6 +442,8 @@ export * from "./components/video-player/video-player.js";
 
 export * from "./components/visually-hidden/visually-hidden.js";
 
+export * from "./components/voice-call/voice-call.js";
+
 export * from "./components/waiting-line/waiting-line.js";
 
 export * from "./components/working-mark/working-mark.js";

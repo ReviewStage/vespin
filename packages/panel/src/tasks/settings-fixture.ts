@@ -184,6 +184,12 @@ const SIGNED_IN_PROFILES: ReadonlySet<string> = new Set<string>([
   RUN_PROFILE.AUTOMATIONS_RUNS,
 ]);
 
+/** The profiles the account is signed in under and nothing more is staged for: the voice profiles', whose teammate's call is told from the reader's own by the account. */
+const ACCOUNT_PROFILES: ReadonlySet<string> = new Set<string>([
+  RUN_PROFILE.AGENT_VOICE,
+  RUN_PROFILE.AGENT_VOICE_LIVE,
+]);
+
 /* ----- Settings › Workspace ----- */
 
 /** Someone by id and name, as a task names its creator and a member is listed. */
@@ -1272,8 +1278,9 @@ const STAGED_INTEGRATIONS: AppIntegrations = {
 
 /**
  * Main's document as these profiles draw it: the fixture workspaces'
- * members held read, and under the signed-in profiles the account signed
- * in, an admin of the service, with the staged pages' experiments on, the
+ * members held read, the account signed in alone under the voice
+ * profiles, and under the signed-in profiles the account signed in, an
+ * admin of the service, with the staged pages' experiments on, the
  * staged hosts beating, and its integrations, credentials, GitHub token,
  * servers' tools, the staged workspaces' token repositories, invitations,
  * own integrations, and Acme's Slack channels, and the staged workspace's
@@ -1292,6 +1299,8 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
     [LIVE_READ.WORKSPACE_MEMBERS]: HELD_MEMBERS,
     ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
   };
+
+  if (ACCOUNT_PROFILES.has(profile)) return { ...held, account: ACCOUNT };
 
   if (!SIGNED_IN_PROFILES.has(profile)) return held;
 
