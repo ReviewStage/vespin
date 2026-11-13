@@ -20,14 +20,16 @@ import {
   type ModifierConfig,
   menuIndicator,
   menuStyle,
-  navigationBarTitleDisplayMode,
   navigationSplitViewStyle,
   navigationTitle,
   searchable,
+  searchToolbarBehavior,
+  toolbarTitleDisplayMode,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
+import { BarContent } from "./bar-content.js";
 import type { Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
 import { choiceContent, type MenuChoice } from "./list-row.js";
@@ -191,6 +193,24 @@ function BarActionButton({ action }: { readonly action: BarAction }) {
   return <SwiftUIButton {...actContent(action.label, action.symbol)} onPress={action.onPress} />;
 }
 
+/**
+ * A search field's words as the system's field holds them, started from the
+ * query its list is filtered by. Note that the field is handed a query only
+ * as its search changes hands or first arrives, so typing never fights its
+ * own echo.
+ */
+function useSearchWords(search: BarSearch | undefined, searchKey: string | undefined) {
+  const text = useNativeState(search?.text ?? "");
+  const query = search?.text ?? "";
+  const searching = search !== undefined;
+
+  useEffect(() => {
+    text.set(query);
+  }, [searchKey, searching]);
+
+  return text;
+}
+
 /** Whether a bar holds anything for the toolbar to draw. */
 function barHolds(bar: ColumnBar): boolean {
   return (
@@ -227,23 +247,19 @@ function Column({
   readonly searchKey?: string | undefined;
 }) {
   const colors = useColors();
-  const text = useNativeState(bar.search?.text ?? "");
-  const query = bar.search?.text ?? "";
-
-  const searching = bar.search !== undefined;
-
-  // Note that the field is handed a query only as its search changes hands or first arrives, so typing never fights its own echo.
-  useEffect(() => {
-    text.set(query);
-  }, [searchKey, searching]);
+  const text = useSearchWords(bar.search, searchKey);
 
   const stacked = (
     <ZStack
       modifiers={[
         ...(sidebar ? [] : [containerBackground(colors.GROUND, "navigationSplitView")]),
+        // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, compose, ⋯ and the sidebar button, and a leading title folds them into an overflow.
         ...(bar.title === undefined
           ? []
-          : [navigationTitle(bar.title), navigationBarTitleDisplayMode("inline")]),
+          : [
+              navigationTitle(bar.title),
+              toolbarTitleDisplayMode(sidebar ? "inline" : "inlineLarge"),
+            ]),
       ]}
     >
       {view}
@@ -255,7 +271,7 @@ function Column({
   ) : (
     <Toolbar>
       {stacked}
-      <Toolbar.Content>
+      <BarContent>
         {bar.leading === undefined ? null : (
           <ToolbarItem placement="topBarLeading">{bar.leading}</ToolbarItem>
         )}
@@ -264,14 +280,14 @@ function Column({
             <PathTitle path={bar.path.path} status={bar.path.status} />
           </ToolbarItem>
         )}
-        {bar.menu === undefined ? null : (
-          <ToolbarItem placement="topBarTrailing">
-            <BarMenuItem menu={bar.menu} />
-          </ToolbarItem>
-        )}
         {bar.action === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
             <BarActionButton action={bar.action} />
+          </ToolbarItem>
+        )}
+        {bar.menu === undefined ? null : (
+          <ToolbarItem placement="topBarTrailing">
+            <BarMenuItem menu={bar.menu} />
           </ToolbarItem>
         )}
         {(bar.foot ?? []).map((action) => (
@@ -279,7 +295,7 @@ function Column({
             <BarActionButton action={action} />
           </ToolbarItem>
         ))}
-      </Toolbar.Content>
+      </BarContent>
     </Toolbar>
   );
 
@@ -323,6 +339,10 @@ export function SplitView({
   onSidebarShownChange,
 }: SplitViewProps) {
   const hidden = content === undefined ? "detailOnly" : "doubleColumn";
+  // Note that with three columns the list's search stands in the window's toolbar, a button at its trailing edge, as Mail's does on iPadOS 26, rather than as a field under the list's title.
+  const windowSearch = content === undefined ? undefined : contentBar?.search;
+  const searchWords = useSearchWords(windowSearch, searchKey);
+  const listBar = contentBar === undefined ? undefined : { ...contentBar, search: undefined };
 
   return (
     <NavigationSplitView
@@ -334,7 +354,19 @@ export function SplitView({
           visibility === "all" || (content === undefined && visibility === "doubleColumn"),
         );
       }}
-      modifiers={[navigationSplitViewStyle("balanced")]}
+      modifiers={[
+        navigationSplitViewStyle("balanced"),
+        ...(windowSearch === undefined
+          ? []
+          : [
+              searchable(searchWords, {
+                placement: "toolbar",
+                prompt: windowSearch.placeholder,
+                onChange: windowSearch.onChange,
+              }),
+              searchToolbarBehavior("minimize"),
+            ]),
+      ]}
     >
       <NavigationSplitView.Sidebar>
         {/* Note that the sidebar column is drawn afresh as it changes from the app's sidebar to the list or back, so its search field starts from the list's query rather than keeping what the other held. */}
@@ -347,7 +379,7 @@ export function SplitView({
       </NavigationSplitView.Sidebar>
       {content === undefined ? null : (
         <NavigationSplitView.Content>
-          <Column view={content} bar={contentBar} searchKey={searchKey} />
+          <Column view={content} bar={listBar} searchKey={searchKey} />
         </NavigationSplitView.Content>
       )}
       <NavigationSplitView.Detail>

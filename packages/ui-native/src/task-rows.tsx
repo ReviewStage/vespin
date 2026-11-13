@@ -37,11 +37,13 @@ import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dropLink } from "./interactions.js";
 import {
   actionButton,
+  ROW_PLACE,
   type RowAction,
   RowFrame,
   RowHead,
@@ -441,20 +443,61 @@ type GroupRowProps = {
   readonly onDropLink?: ((url: string) => void) | undefined;
 };
 
-/** A place a wide window's sidebar picks, such as the Inbox, Tasks, or a section of tasks: its glyph, its name, and how many it holds. */
+/**
+ * A place a wide window's sidebar picks, such as the Inbox, Tasks, or a
+ * section of tasks, as Mail draws a mailbox: its glyph a step over its name
+ * in a column of its own, so every name starts at one edge, its name at the
+ * body's size, and how many it holds at the trailing edge in the muted ink,
+ * the whole row in a rounded fill while it is picked.
+ */
 export function GroupRow({ id, title, symbol, count, testId, onDropLink }: GroupRowProps) {
   const colors = useColors();
+  const stacked = useAccessibilitySize();
+  const leadWidth = useScaledSize(MARK_SIZE.SIDEBAR_LEAD);
 
+  const name = (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE }),
+        foregroundStyle(colors.TEXT),
+        lineLimit(stacked ? 2 : 1),
+      ]}
+    >
+      {title}
+    </Text>
+  );
+
+  const counted =
+    count === undefined ? null : (
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.SIDEBAR_COUNT }),
+          monospacedDigit(),
+          foregroundStyle(colors.TEXT_MUTED),
+          lineLimit(1),
+        ]}
+      >
+        {String(count)}
+      </Text>
+    );
+
+  // Note that at an accessibility size the count stands under the name rather than beside it, as the list's rows stack their end, so a long name keeps the row's width.
   const row: ReactElement = (
-    <RowHead
-      unread={false}
-      faded={false}
-      // Note that the glyph takes the title's size, as Mail's mailbox glyphs do, since a sidebar row is a place named by both.
-      lead={<LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.ROW_TITLE} />}
-      title={title}
-      ink={colors.TEXT_BODY}
-      end={count === undefined ? undefined : <EndWords words={String(count)} />}
-    />
+    <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
+      <HStack modifiers={[frame({ width: leadWidth })]}>
+        <LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.SIDEBAR_GLYPH} />
+      </HStack>
+      {stacked ? (
+        <VStack alignment="leading" spacing={2}>
+          {name}
+          {counted}
+        </VStack>
+      ) : (
+        name
+      )}
+      <Spacer />
+      {stacked ? null : counted}
+    </HStack>
   );
 
   const heard = { label: title, value: count === undefined ? [] : [String(count)] };
@@ -464,9 +507,14 @@ export function GroupRow({ id, title, symbol, count, testId, onDropLink }: Group
     ...(onDropLink === undefined ? [] : [dropLink(onDropLink)]),
   ];
 
-  if (modifiers.length === 0) return <RowFrame id={id} row={row} heard={heard} />;
-
-  return <RowFrame id={id} row={<HStack modifiers={modifiers}>{row}</HStack>} heard={heard} />;
+  return (
+    <RowFrame
+      id={id}
+      row={modifiers.length === 0 ? row : <HStack modifiers={modifiers}>{row}</HStack>}
+      heard={heard}
+      place={ROW_PLACE.SIDEBAR}
+    />
+  );
 }
 
 /** How many comment threads stand open on a block, and what opens them. */

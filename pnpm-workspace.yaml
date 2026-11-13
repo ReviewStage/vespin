@@ -25,6 +25,7 @@ catalog:
   "@orpc/experimental-effect": 2.0.0-beta.44
   "@orpc/openapi": 2.0.0-beta.44
   "@orpc/publisher": 2.0.0-beta.44
+  "@orpc/shared": 2.0.0-beta.44
   "@orpc/server": 2.0.0-beta.44
   "@modelcontextprotocol/server": 2.4.0
   "@modelcontextprotocol/client": 2.4.0
@@ -250,17 +251,23 @@ overrides:
   # The same brace-expansion advisories on 1.x and 2.x, through electron-builder's `minimatch`
   "brace-expansion@>=1.0.0 <1.1.22": 1.1.22
   "brace-expansion@>=2.0.0 <2.1.8": 2.1.8
-  # GHSA-27p8-2357-5qqv, GHSA-c7q8-3ch8-vqpv and other @xmldom/xmldom advisories, through electron-builder's `plist`; Expo's `@expo/plist` keeps its own
+  # GHSA-27p8-2357-5qqv, GHSA-c7q8-3ch8-vqpv and other @xmldom/xmldom advisories, through electron-builder's `plist`
   "plist>@xmldom/xmldom@<0.8.15": 0.8.15
+  # The same advisories on 0.8, through Expo's `@expo/plist`
+  "@expo/plist>@xmldom/xmldom@<0.8.15": 0.8.15
   # The same advisories on 0.9, through `@electron/osx-sign` and `@electron/universal`'s `plist`, which Expo's `simple-plist` shares
   "@xmldom/xmldom@>=0.9.0 <0.9.12": 0.9.12
-  # GHSA-2883-xcg3-v3hh, through electron-builder and electron-updater; Expo's `@expo/xcpretty` keeps its own
+  # GHSA-2883-xcg3-v3hh, through electron-builder and electron-updater
   "app-builder-lib>js-yaml": 4.3.2
   "builder-util>js-yaml": 4.3.2
   "dmg-builder>js-yaml": 4.3.2
   "electron-updater>js-yaml": 4.3.2
-  # GHSA-2m5v-pch6-74hx and the other undici advisories on 6.x, through `@electron/rebuild`'s `node-gyp`; `@sentry/cli` keeps its own
+  # The same advisory, through Expo's `@expo/xcpretty`
+  "@expo/xcpretty>js-yaml": 4.3.2
+  # GHSA-2m5v-pch6-74hx and the other undici advisories on 6.x, through `@electron/rebuild`'s `node-gyp`
   "node-gyp>undici": 6.29.1
+  # The same undici advisories on 6.x, through `@sentry/react-native`'s `@sentry/cli`
+  "@sentry/cli>undici": 6.29.1
 
 # A dependency is keyed by its peers' names alone, not by the peers' own peer
 # graphs, so one `vitest` serves every workspace. Keyed in full, a peer's own
