@@ -3,6 +3,7 @@
 import { searchTokens } from "@repo/features/search-tokens";
 import {
   NO_TASKS_MATCH,
+  relationSubject,
   relationWhyNot,
   TASK_RELATION_MENU,
   TASK_RELATION_ORDER,
@@ -67,13 +68,8 @@ export function useOpenRelation(): OpenRelation {
     });
 }
 
-/** What the sheet says while the task's document, which holds its blocks, is first read. */
+/** What the sheet says while the task's document, which holds its blocks where its row names none, is first read. */
 const READING_TASK = readingWords("the task");
-
-/** Whether a kind is a block, which the open task's document judges, since the list carries no blocks. */
-function blockKind(kind: TaskRelationKind): boolean {
-  return kind === TASK_RELATION_KIND.BLOCKED_BY || kind === TASK_RELATION_KIND.BLOCKS;
-}
 
 /** Whether a route's word names one of the four kinds. */
 export function isRelationKind(word: string | undefined): word is TaskRelationKind {
@@ -168,13 +164,15 @@ export function TaskRelationScreen({
       <Stack.Screen
         options={{
           headerShown: true,
-          title: kind === undefined ? TASK_RELATION_MENU : TASK_RELATION_VERBS[kind].head,
           headerTintColor: colors.TEXT,
-          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
           headerShadowVisible: false,
           contentStyle: { backgroundColor: colors.SIDEBAR },
         }}
       >
+        {/* Note that the title is the bar's own (`Stack.Title`), as its search and Cancel are, since the root stack's title for the sheet stood over one set in the options. */}
+        <Stack.Title style={{ ...BAR_TITLE.SCREEN, color: colors.TEXT }}>
+          {kind === undefined ? TASK_RELATION_MENU : TASK_RELATION_VERBS[kind].head}
+        </Stack.Title>
         {kind === undefined ? null : (
           <Stack.SearchBar
             placeholder={TASK_RELATION_SEARCH[kind].find}
@@ -212,10 +210,10 @@ export function TaskRelationScreen({
     );
   }
 
-  const { document } = overview;
+  // Note that a block is judged by the row's blocks, and waits on the task's document only where a service before rows carried them names none.
+  const subject = relationSubject(overview.task, overview.document, kind);
 
-  // Note that the open task's blocks are its document's, which the list does not carry, so a block's tasks wait for it rather than be judged against none.
-  if (blockKind(kind) && document === undefined) {
+  if (subject === undefined) {
     return (
       <>
         {bar}
@@ -225,12 +223,6 @@ export function TaskRelationScreen({
       </>
     );
   }
-
-  const subject: TaskRelationSubject = {
-    ...overview.task,
-    ...(document?.blockedBy === undefined ? undefined : { blockedBy: document.blockedBy }),
-    ...(document?.blocks === undefined ? undefined : { blocks: document.blocks }),
-  };
 
   const workspaceName = workspaces.find((each) => each.id === subject.workspaceId)?.name;
   const candidates = candidatesFor(subject, overview.tasks, kind, workspaceName, search);
