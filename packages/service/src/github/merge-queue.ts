@@ -28,9 +28,9 @@ import {
   type MergeQueueEntryState,
   type MergeQueueRepository,
 } from "@repo/features/merge-queue-wire";
+import type { GitHubFailure } from "@repo/github";
 import { EXPERIMENT } from "@repo/settings";
-import { Effect, type Redacted, Schema } from "effect";
-import type { HttpClient } from "effect/http";
+import { Effect, Schema } from "effect";
 import type { GitHubRepository } from "../core.js";
 import {
   HOSTED_REFUSAL,
@@ -38,14 +38,7 @@ import {
   hostedStoreOrUnavailable,
   upstreamRefused,
 } from "../http/http-effect.js";
-import {
-  GITHUB_HTTP_STATUS,
-  GitHubApp,
-  type GitHubUnavailable,
-  githubPost,
-  readBody,
-  send,
-} from "./github-app.js";
+import { GitHubApp, type GitHubBearer } from "./github-app.js";
 import { githubReadOrRefusal } from "./github-refusal.js";
 import type { WorkspaceRepositoriesServices } from "./workspace-repositories.js";
 
@@ -76,29 +69,23 @@ const QueueEntrySchema = Schema.Struct({
   ),
 });
 
-const QueuesAnswerSchema = Schema.Struct({
-  // Note that GitHub leaves `data` out of a query it refuses whole, which its errors then say why.
-  data: Schema.optionalKey(
-    Schema.NullOr(
-      Schema.Record(
-        Schema.String,
-        Schema.NullOr(
-          Schema.Struct({
-            mergeQueue: Schema.NullOr(
-              Schema.Struct({
-                url: Schema.String,
-                entries: Schema.Struct({ nodes: Schema.Array(Schema.NullOr(QueueEntrySchema)) }),
-              }),
-            ),
-          }),
-        ),
+/** GitHub's answer's data: each alias's repository, null where GitHub resolved none or refused it. */
+const QueuesAnswerSchema = Schema.Record(
+  Schema.String,
+  Schema.NullOr(
+    Schema.Struct({
+      mergeQueue: Schema.NullOr(
+        Schema.Struct({
+          url: Schema.String,
+          entries: Schema.Struct({ nodes: Schema.Array(Schema.NullOr(QueueEntrySchema)) }),
+        }),
       ),
-    ),
+    }),
   ),
-  errors: Schema.optionalKey(
-    Schema.Array(Schema.Struct({ type: Schema.optionalKey(Schema.String) })),
-  ),
-});
+);
+
+/** The status the wire refuses a queue GitHub kept from the App's token with. */
+const FORBIDDEN = 403;
 
 /**
  * GitHub's word for an alias whose repository it could not resolve, which
@@ -173,19 +160,16 @@ function entryOf(read: QueueEntryRead | null) {
  * each repository that has one in the order given, and whether GitHub
  * refused any of it: an error but an unresolved repository, or no data at
  * all. Note that a refusal answers its alias null as a repository with no
- * queue does, so only its error tells the two apart. A status GitHub
+ * queue does, so only its error tells the two apart. A refusal GitHub
  * answers past 2xx, a rate limit among them, is GitHub not answering, and
- * fails as unavailable.
+ * fails as `@repo/github` says.
  */
 const readQueues = /* @__PURE__ */ Effect.fnUntraced(function* (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   repositories: readonly GitHubRepository[],
-): Effect.fn.Return<QueuesRead, GitHubUnavailable, HttpClient.HttpClient> {
-  const answer = yield* Effect.scoped(
-    Effect.flatMap(send(githubPost("/graphql", token, queuesRequest(repositories))), (response) =>
-      readBody(response, QueuesAnswerSchema),
-    ),
-  );
+): Effect.fn.Return<QueuesRead, GitHubFailure> {
+  const { query, variables } = queuesRequest(repositories);
+  const answer = yield* bearer.client.graphqlPartial(query, variables, QueuesAnswerSchema);
 
   const queues = repositories.flatMap((repository, index) => {
     const queue = answer.data?.[aliasAt(index)]?.mergeQueue;
@@ -204,9 +188,7 @@ const readQueues = /* @__PURE__ */ Effect.fnUntraced(function* (
   return {
     queues,
     refused:
-      answer.data === undefined ||
-      answer.data === null ||
-      (answer.errors ?? []).some((error) => error.type !== GITHUB_NOT_FOUND),
+      answer.data === undefined || answer.errors.some((error) => error.type !== GITHUB_NOT_FOUND),
   };
 });
 
@@ -240,14 +222,14 @@ export const readWorkspaceMergeQueue = /* @__PURE__ */ Effect.fnUntraced(functio
 
   const reads = yield* githubReadOrRefusal(
     Effect.flatMap(app.repositoriesPullRequestTokens(workspaceId, named), (tokens) =>
-      Effect.forEach(tokens, (held) => readQueues(held.token, held.repositories)),
+      Effect.forEach(tokens, (held) => readQueues(held.bearer, held.repositories)),
     ),
   );
 
   if (reads.some((read) => read.refused)) {
     yield* Effect.logWarning("GitHub refused a merge queue read to the App's token");
 
-    return yield* Effect.fail(upstreamRefused(GITHUB_HTTP_STATUS.FORBIDDEN));
+    return yield* Effect.fail(upstreamRefused(FORBIDDEN));
   }
 
   // Note that the queues keep the order the repositories were named in, the most recently changed first.

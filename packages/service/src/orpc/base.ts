@@ -26,13 +26,13 @@
 import { presentedClient } from "@repo/features/client-identity";
 import "@orpc/experimental-effect/extensions/effect";
 import { middlewareGen, type WithEffectContext } from "@orpc/experimental-effect";
-import { implement } from "@orpc/server";
+import { implement, type RouterImplementerWithMiddlewares } from "@orpc/server";
 import type { ResponseHeadersHandlerPluginContext } from "@orpc/server/plugins";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { type KeyRing, parseKeyRing } from "@repo/database/models/provider-key-seal";
 import { keepWriteReceipt, writeReceiptStands } from "@repo/database/models/write-receipts";
 import { IDEMPOTENCY_KEY } from "@repo/features";
-import { hostedContract } from "@repo/features/contract";
+import { type HostedContract, hostedContract } from "@repo/features/contract";
 import { Context, Effect, Option, References, Result, Tracer } from "effect";
 import { Headers } from "effect/http";
 import {
@@ -78,7 +78,7 @@ export interface HostedCaller {
 type AccountContext<Caller extends HostedCaller> = Caller & WithEffectContext<WebServices>;
 
 /** A Better Auth session's account, and the headers that carry it on to the plugin. */
-interface HostedSessionCaller extends HostedCaller {
+export interface HostedSessionCaller extends HostedCaller {
   readonly sessionHeaders: Headers;
 }
 
@@ -146,8 +146,12 @@ function forAccount(context: HostedContext, userId: string): WithEffectContext<W
   };
 }
 
-/** The hosted contract to implement, every procedure taking the context above. */
-export const hosted = implement(hostedContract).$context<HostedContext>().use(procedureTraced);
+/** The hosted contract to implement, every procedure taking the context above, its type named because the inferred one is past the length declarations will hold. */
+export const hosted: RouterImplementerWithMiddlewares<
+  HostedContract,
+  HostedContext,
+  WithEffectContext<WebServices>
+> = implement(hostedContract).$context<HostedContext>().use(procedureTraced);
 
 /** The caller by its bearer, or with no `Authorization` at all, the browser's session cookie (`auth/bearer.ts`'s `resolveHostedUserId`). */
 export function accountMiddleware(resolveUserId: UserIdResolver) {

@@ -1200,7 +1200,7 @@ const descriptionRevisionLineSchema = EffectSchema.Struct({
 export type DescriptionRevisionLine = typeof descriptionRevisionLineSchema.Type;
 
 /**
- * A page of a description's history (GET `/api/plans/{id}/revisions`), the newest
+ * A page of a description's history (GET `/api/tasks/{id}/description/revisions`), the newest
  * first, before the revision the `before` query names where it names one;
  * `earlier` is what the next older page is read before, absent on the oldest.
  */
@@ -1214,7 +1214,7 @@ export const descriptionRevisionsAnswerSchema = EffectSchema.Struct({
 export type DescriptionRevisionsAnswer = typeof descriptionRevisionsAnswerSchema.Type;
 
 /**
- * One revision's content (GET `/api/plans/{id}/revisions/{seq}`): the description
+ * One revision's content (GET `/api/tasks/{id}/description/revisions/{seq}`): the description
  * as it stood after the revision and as it stood before it, null for the
  * first, each formatted under the task's name as it stands now, so a rename
  * since is no difference between them.
@@ -1307,7 +1307,7 @@ function fileWindowIsReadable(window: { firstLine: number; lastLine: number }): 
 
 /**
  * One window of a file of the task's repository, as the File tab asks it
- * (GET `/api/plans/{id}/file`): the path, and its first and last line; or,
+ * (GET `/api/tasks/{id}/file`): the path, and its first and last line; or,
  * with `raw`, the file's whole text, its lines uncut, as a copy or a
  * download of the file asks it, the window then standing for nothing. With
  * `ref`, the file is read as it stood at that commit, as an inbox item's
@@ -1388,7 +1388,7 @@ export const TASK_TREE_BOUNDS = {
 
 /**
  * One folder of the task's repository, as the File tab's tree asks it (GET
- * `/api/plans/{id}/tree`): its path from the repository's root, empty for
+ * `/api/tasks/{id}/tree`): its path from the repository's root, empty for
  * the root itself, and whether everything under it is asked, every entry
  * then named by its path from the folder, as the tree's search reads the
  * whole repository in one listing.
@@ -1486,7 +1486,7 @@ const taskSkillSchema = EffectSchema.Struct({
 });
 
 /**
- * The skills a developer may choose of a task (GET `/api/plans/{id}/skills`)
+ * The skills a developer may choose of a task (GET `/api/tasks/{id}/skills`)
  * or of a workspace's repository (GET `/api/github/repositories/skills`):
  * the repository and the branch read, null where there is no repository,
  * and the skills, the repository's as they stand now on its default branch,

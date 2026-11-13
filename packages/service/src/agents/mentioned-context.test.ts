@@ -388,6 +388,22 @@ test.each([
   },
 );
 
+test("a machine is handed the id run_on_mac and computer take, with Computer use on or off", () => {
+  const link = mentionMarkdown(
+    { kind: MENTION_KIND.MACHINE, machineId: "6f1c0d2e-machine" },
+    "Ada's Mac mini",
+    PLACE,
+  );
+
+  const words = `Run the tests on ${link}.`;
+
+  const note =
+    /pointed you at the machine "Ada's Mac mini" \(id `6f1c0d2e-machine`\).*pass `machine: "6f1c0d2e-machine"` to `run_on_mac` or `computer`/u;
+
+  assert.match(mentionedContext(words, TASK) ?? "", note);
+  assert.match(mentionedContext(words, TASK, undefined, true, false) ?? "", note);
+});
+
 test("the servers the words mention, by themselves or by a tool, are named each once, and nothing else is", () => {
   assert.deepEqual(
     mentionedServers(`See ${LIST_ISSUES}, ${LINEAR}, and ${section("Rollout")}.`, TASK.repository),

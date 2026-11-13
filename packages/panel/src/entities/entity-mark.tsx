@@ -29,6 +29,7 @@ import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { SkillMark } from "../tasks/skill-ref.js";
 import { AgentGlyph, AgentMark, PlanGlyph } from "../tasks/tab-look.js";
 import { useAgentStatus, useTaskStatus } from "../tasks/use-known-names.js";
+import { MachineMark } from "../tasks/workspace-machines.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { EntityGlyph } from "./entity-glyph.js";
 
@@ -273,6 +274,9 @@ const ENTITY_MARK: EntityMarks = {
   [ENTITY_KIND.DATE]: () => <EntityGlyph kind={ENTITY_KIND.DATE} />,
   [ENTITY_KIND.MAC_APP]: (macApp) => <MacAppMark app={macApp.app} />,
   [ENTITY_KIND.COMPUTER]: () => <EntityGlyph kind={ENTITY_KIND.COMPUTER} />,
+  [ENTITY_KIND.MACHINE]: (machine, at) => (
+    <MachineMark machineId={machine.machineId} workspace={at.workspace} />
+  ),
 };
 
 /** An entity's mark drawn through its kind's own entry. */

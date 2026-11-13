@@ -115,6 +115,7 @@ import {
   type TasksBrowserTabOpenAnswer,
   type TasksBrowserTabOpenParams,
   type TasksCommentAnswer,
+  type TasksMachinesAnswer,
   type TasksPictureAnswer,
   type TasksPictureKeepAnswer,
 } from "./tasks-view.js";
@@ -399,7 +400,7 @@ export class HostedTaskClient {
   > {
     // Note that the query still asks for the archived, because the service reads it for the agents with no plan too, whose archive stands.
     return Effect.map(
-      hostedCall(this.#hosted.plans.list, { archived: TASK_LIST_ARCHIVED.INCLUDE }),
+      hostedCall(this.#hosted.tasks.list, { archived: TASK_LIST_ARCHIVED.INCLUDE }),
       (listed) => ("failure" in listed ? failedAs(listed, []) : succeeded(listed)),
     );
   }
@@ -410,7 +411,7 @@ export class HostedTaskClient {
     number: number,
   ): Effect.Effect<string | undefined, never, HttpClient.HttpClient> {
     return Effect.map(
-      hostedCall(this.#hosted.plans.find, { workspace, number: String(number) }),
+      hostedCall(this.#hosted.tasks.find, { workspace, number: String(number) }),
       (found) => ("failure" in found ? undefined : found.taskId),
     );
   }
@@ -419,7 +420,7 @@ export class HostedTaskClient {
   open(
     taskId: string,
   ): Effect.Effect<TaskCallResult<Task, TaskCallFailure>, never, HttpClient.HttpClient> {
-    return Effect.map(hostedCall(this.#hosted.plans.open, { id: taskId }), (opened) =>
+    return Effect.map(hostedCall(this.#hosted.tasks.open, { id: taskId }), (opened) =>
       "failure" in opened
         ? failedAs(opened, [TASK_CALL_FAILURE.NOT_FOUND])
         : succeeded(opened.plan),
@@ -449,7 +450,7 @@ export class HostedTaskClient {
     if (admitted === undefined) return Effect.succeed(UNANSWERED);
 
     return Effect.map(
-      hostedCall(this.#hosted.plans.editDescription, { params: { id: taskId }, body: admitted }),
+      hostedCall(this.#hosted.tasks.editDescription, { params: { id: taskId }, body: admitted }),
       (edited) =>
         "failure" in edited ? failedAs(edited, [TASK_CALL_FAILURE.NOT_FOUND]) : succeeded(edited),
     );
@@ -543,7 +544,7 @@ export class HostedTaskClient {
 
     return Effect.map(
       hostedCall(
-        this.#hosted.plans.block,
+        this.#hosted.tasks.block,
         { params: { id: taskId }, body: admitted },
         { as: TASK_BLOCK_RENAMES },
       ),
@@ -569,7 +570,7 @@ export class HostedTaskClient {
 
     return Effect.map(
       hostedCall(
-        this.#hosted.plans.parent,
+        this.#hosted.tasks.parent,
         { params: { id: taskId }, body: admitted },
         { as: TASK_RENAMES },
       ),
@@ -593,7 +594,7 @@ export class HostedTaskClient {
 
     return Effect.map(
       hostedCall(
-        this.#hosted.plans.relation,
+        this.#hosted.tasks.relation,
         { params: { id: taskId }, body: admitted },
         { as: TASK_BLOCK_RENAMES },
       ),
@@ -621,6 +622,13 @@ export class HostedTaskClient {
     HttpClient.HttpClient
   > {
     return Effect.map(hostedCall(this.#hosted.taskFollowers.unfollow, { id: taskId }), followersOf);
+  }
+
+  /** The machines of one task's followers, each with whose it is, whether its owner lets the task's agents use it, and whether it listened lately, as a follower's card lists them. */
+  followerMachines(
+    taskId: string,
+  ): Effect.Effect<TasksMachinesAnswer, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.taskFollowers.machines, { id: taskId });
   }
 
   /** The account's own switch on one task it follows: whether the task's agents may use its machines; answers as `follow` does. */
@@ -839,7 +847,7 @@ export class HostedTaskClient {
     before?: number,
   ): Effect.Effect<DescriptionRevisionsAnswer | undefined, never, HttpClient.HttpClient> {
     return Effect.map(
-      hostedCall(this.#hosted.plans.descriptionRevisions, {
+      hostedCall(this.#hosted.tasks.descriptionRevisions, {
         id: taskId,
         ...(before === undefined ? undefined : { before: String(before) }),
       }),
@@ -857,7 +865,7 @@ export class HostedTaskClient {
     HttpClient.HttpClient
   > {
     return Effect.map(
-      hostedCall(this.#hosted.plans.descriptionRevision, { id: taskId, seq: String(seq) }),
+      hostedCall(this.#hosted.tasks.descriptionRevision, { id: taskId, seq: String(seq) }),
       (answer) => ("failure" in answer ? undefined : answer.revision),
     );
   }
@@ -945,7 +953,7 @@ export class HostedTaskClient {
     HttpClient.HttpClient
   > {
     return Effect.map(
-      hostedCall(this.#hosted.plans.restoreDescription, { id: taskId, seq: String(seq) }),
+      hostedCall(this.#hosted.tasks.restoreDescription, { id: taskId, seq: String(seq) }),
       (answer) => ("failure" in answer ? undefined : { task: answer.plan, txid: answer.txid }),
     );
   }
@@ -954,7 +962,7 @@ export class HostedTaskClient {
   delete(
     taskId: string,
   ): Effect.Effect<{ readonly txid?: string } | undefined, never, HttpClient.HttpClient> {
-    return Effect.map(hostedCall(this.#hosted.plans.delete, { id: taskId }), (answer) => {
+    return Effect.map(hostedCall(this.#hosted.tasks.delete, { id: taskId }), (answer) => {
       if ("failure" in answer) return undefined;
 
       return answer.txid === undefined ? {} : { txid: answer.txid };
@@ -1025,7 +1033,7 @@ export class HostedTaskClient {
   #update(taskId: string, changes: TaskUpdateRequest, key?: string) {
     return Effect.map(
       hostedCall(
-        this.#hosted.plans.update,
+        this.#hosted.tasks.update,
         { params: { id: taskId }, body: changes },
         {
           as: TASK_RENAMES,
@@ -1116,7 +1124,7 @@ export class HostedTaskClient {
       ...(key === undefined ? undefined : { idempotencyKey: key }),
     };
 
-    return Effect.map(hostedCall(this.#hosted.plans.create, admitted, reading), (started) =>
+    return Effect.map(hostedCall(this.#hosted.tasks.create, admitted, reading), (started) =>
       "failure" in started
         ? {
             ...failedAs(started, START_NAMED),

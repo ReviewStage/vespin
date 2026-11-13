@@ -122,7 +122,7 @@ import { keepAwakeDetached } from "../testing/session-sandboxes-fake.js";
 import { SentryApp, sentryAppService } from "../triggers/sentry/sentry-app-config.js";
 
 export const ORIGIN = "https://app.test";
-export const TASK_AGENTS = "/api/plans/agents";
+export const TASK_AGENTS = "/api/tasks/agents";
 export const AGENT_MESSAGES = "/api/agents/messages";
 export const SUBAGENT_MESSAGES = "/api/agents/subagent-messages";
 export const AGENT_NEWEST = "/api/agents/messages-newest";
@@ -143,10 +143,10 @@ export const AGENT_OVERVIEW = [
 ] as const;
 
 /** The public paths the inbox's procedures answer on the hosted oRPC router, its attachment's bytes aside. */
-const INBOX_PROCEDURE_PATH = /^\/api\/(?:inbox(?:\/.*)?|(?:plans|agents)\/[^/]+\/inbox)$/u;
+const INBOX_PROCEDURE_PATH = /^\/api\/(?:inbox(?:\/.*)?|(?:tasks|agents)\/[^/]+\/inbox)$/u;
 
 /** The account's tasks, served by the hosted oRPC router, each naming its agents in brief. */
-export const TASKS = "/api/plans";
+export const TASKS = "/api/tasks";
 
 /** One task, served by the hosted oRPC router, whose delete stops the task's agents through the same Stop. */
 export const TASK = (taskId: string) => `${TASKS}/${taskId}`;
@@ -155,7 +155,7 @@ export const TASK = (taskId: string) => `${TASKS}/${taskId}`;
 /** The brain's own transcript of a task, served by the hosted oRPC router. */
 /** A task's own path, its Stop, or its transcript, by the task's id, which the router serves where the old groups serve flattened keys. */
 const TASK_PATH =
-  /^\/api\/plans\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\/stop|\/messages)?$/u;
+  /^\/api\/tasks\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(\/stop|\/messages)?$/u;
 
 /** One part of a message of an agent's or a worker's transcript, whole, at its public path on the hosted oRPC router. */
 const TRANSCRIPT_PART_PATH =
@@ -175,7 +175,7 @@ export const AGENT_GITHUB_IMAGE = "/api/agents/github-image";
 
 /** An SVG a repository might hold, with a script in it that must never run as a page of the service. */
 export const SCRIPTED_SVG = new TextEncoder().encode(
-  '<svg xmlns="http://www.w3.org/2000/svg"><script>fetch("/api/plans")</script></svg>',
+  '<svg xmlns="http://www.w3.org/2000/svg"><script>fetch("/api/tasks")</script></svg>',
 );
 
 /** The installation ids handed out so far: one installation stands for one workspace, so each task's workspace connects its own. */
@@ -452,7 +452,7 @@ export const countedProperties = (userId: string, name: string) =>
  * it, as a request here does.
  */
 const ORPC_PUBLIC_PATH: ReadonlyMap<string, (id: string) => string> = new Map([
-  ["/api/plans/agents", (id: string) => `/api/plans/${id}/agents`],
+  ["/api/tasks/agents", (id: string) => `/api/tasks/${id}/agents`],
   ["/api/agents/agent", (id: string) => `/api/agents/${id}`],
   ["/api/agents/calls", (id: string) => `/api/agents/${id}/calls`],
   ["/api/agents/stop", (id: string) => `/api/agents/${id}/stop`],
@@ -501,17 +501,20 @@ export const standing = (
 ) =>
   Effect.gen(function* () {
     const client = yield* SqlClient.SqlClient;
+    const clock = Layer.succeed(Clock.Clock, yield* Clock.Clock);
+    // Note that GitHub is built on the test's clock, so the tokens it mints are dated by the clock the test moves.
+    const reached = Layer.provide(github.layer, clock);
 
     const services = Layer.mergeAll(
       afterResponse,
       Layer.succeed(SqlClient.SqlClient, client),
       Layer.succeed(Database, yield* Database),
-      Layer.succeed(Clock.Clock, yield* Clock.Clock),
+      clock,
       Layer.succeed(HostedEnvironment, NO_KEYS),
       scriptedHarnessLayer((account) => agentSessions.agentSessions(harnessFor(account))),
-      github.layer,
+      reached,
       // A sandbox's calls reach the same fake as GitHub's, through the adapter's `fetch`.
-      Layer.provide(vercelSandboxOver(github.respond), github.layer),
+      Layer.provide(vercelSandboxOver(github.respond), reached),
       modelCatalogOf(CATALOG),
       integrationConnectOf(() => CONNECTOR_ASKED_NOTHING),
       Layer.succeed(SentryApp, sentryAppService(undefined, [])),
@@ -556,7 +559,7 @@ export const standing = (
       { disableLogger: true },
     );
 
-    // SAFETY: the plans and messages procedures yield the services above alone, which is all a test provides of the web runtime's services.
+    // SAFETY: the tasks and messages procedures yield the services above alone, which is all a test provides of the web runtime's services.
     const webServices = (yield* Effect.context<never>().pipe(
       Effect.provide(services),
     )) as Context.Context<WebServices>;
@@ -580,7 +583,7 @@ export const standing = (
       }),
       inbox: inboxProcedures(seams),
       messages: messagesProcedures(seams),
-      plans: tasksProcedures(seams),
+      tasks: tasksProcedures(seams),
     });
 
     yield* Effect.addFinalizer(() => Effect.promise(() => agents.dispose()));
@@ -1073,7 +1076,7 @@ export function startAs(
   return request(TASK_AGENTS, bearer, { method: "POST", id: taskId, body });
 }
 
-export const TASK_INBOX = "/api/plans/{id}/inbox";
+export const TASK_INBOX = "/api/tasks/{id}/inbox";
 export const INBOX_ITEM = "/api/inbox/{id}";
 export const ACCOUNT_INBOX = "/api/inbox";
 export const INBOX_ATTACHMENT = "/api/inbox/attachment";

@@ -62,14 +62,7 @@ import {
   TOOL_TARGET,
   toolTarget,
 } from "./tool-call-model.js";
-import {
-  groupSummary,
-  ROW_PART,
-  type RowReading,
-  TURN_ROW,
-  type TurnRow,
-  turnRows,
-} from "./turn-rows.js";
+import { ROW_PART, type RowReading, TURN_ROW, type TurnRow, turnRows } from "./turn-rows.js";
 import { isAgentTurn, spokenLineOf } from "./voice-call-lines.js";
 
 /** The kinds of part a stored message holds that the tab draws apart. */
@@ -756,21 +749,6 @@ export function agentRows(
   };
 
   return turnRows(parts, reading, { moving });
-}
-
-/** What a whole turn's work holds, in the words its groups' lines say it (`groupSummary`): its calls, a coding agent's start among them, and its subagents; empty where it made none. */
-export function turnWorkSummary(message: AgentTranscriptMessage): string {
-  const held = { calls: 0, subagents: 0, startedAgents: 0 };
-
-  for (const part of agentParts(message)) {
-    const read = AGENT_READING.part(part);
-
-    if (read === ROW_PART.CALL || read === ROW_PART.LONE_CALL) held.calls += 1;
-    else if (read === ROW_PART.SUBAGENT) held.subagents += 1;
-    else if (read === ROW_PART.AGENT) held.startedAgents += 1;
-  }
-
-  return groupSummary(held);
 }
 
 /** One of a transcript's rows as the tab draws it, with the developer's lines that reached it while its turn ran. */

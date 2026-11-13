@@ -120,6 +120,12 @@ export const ACCOUNT_ASK_ACT_KIND = {
    */
   DICTATION_TRANSCRIBE: "dictation.transcribe",
   /**
+   * A voice call into an agent opened from the panel that carries its audio:
+   * the panel's SDP offer out, the call's id and GPT-Live's SDP answer back.
+   * Nothing on the way keeps either.
+   */
+  VOICE_OPEN: "voice.open",
+  /**
    * The member used this window just now: a key, a press, or a move of the
    * pointer, told at most once every `PRESENCE.BEAT_EVERY_MS`, which the
    * service stamps so their phone holds its pushes (`presence-wire.ts`).
@@ -192,6 +198,8 @@ export const AGENT_ACT_KIND = {
   AGENTS_MODELS_RETRY: "agents.modelsRetry",
   /** The default drawn over the account's preferences at once and written; the panel draws it from app state (`LIVE_READ.ACCOUNT_PREFERENCES`). */
   AGENTS_DEFAULT_WRITE: "agents.defaultWrite",
+  /** One agent's default machine set on the service, where its terminal commands and computer use go when a call names none; answers its tools as they then stand, which the host lays on their slice (`LIVE_READ.WORKSPACE_TOOLS`), or why it is unchanged. */
+  AGENTS_SET_DEFAULT_MACHINE: "agents.setDefaultMachine",
   /** Whose API key chapters run on, drawn over the account's preferences at once and written; the panel draws it from app state (`LIVE_READ.ACCOUNT_PREFERENCES`). */
   AGENTS_CHAPTERS_PROVIDER_WRITE: "agents.chaptersProviderWrite",
   /** The account's preferences row, which the host holds for the session and the panel reads on app state, read again at once, as Try again asks. */
@@ -525,6 +533,8 @@ export const TASKS_ACT_KIND = {
   TASKS_ADD_FOLLOWER: "tasks.addFollower",
   /** A follower of the task taken away on the service, which the assignee may not be; answers as a follow does. */
   TASKS_REMOVE_FOLLOWER: "tasks.removeFollower",
+  /** The machines of a task's followers read of the service, as a follower's card lists them, held nowhere here; answers them, or why there is no answer. */
+  TASKS_FOLLOWER_MACHINES: "tasks.followerMachines",
   /** The developer's edit of the open task's document, saved on the service; answers saved, a conflict with the text as it stands now, or why nothing was saved. */
   TASKS_EDIT: "tasks.edit",
   /** A page of GitHub's opened in the browser: a repository, or where our GitHub App is installed. No other address opens through it. */
@@ -856,6 +866,8 @@ export const WORKSPACE_ACT_KIND = {
   WORKSPACE_RUN_ACTIONS_PUT: "workspace.runActionsPut",
   /** Every pull request GitHub's merge queues hold across a workspace's repositories, read as the Merge queue page opens and again while it stands; refused while the account's Merge queue experiment is off. */
   WORKSPACE_MERGE_QUEUE_READ: "workspace.mergeQueueRead",
+  /** The machines of a workspace's members, as the @ list offers them and a machine's chip names its owner, read as a place drawing them opens. */
+  WORKSPACE_MACHINES_READ: "workspace.machinesRead",
 } as const;
 
 /**
@@ -909,6 +921,14 @@ export const WINDOW_SURFACE_ACT_KIND = {
    * member's iPhone as the phone's own screen for it would.
    */
   WINDOW_HANDOFF: "window.handoff",
+  /**
+   * The voice call the asking panel holds, told whenever its card would
+   * change, or none once it ends, so the floating call window draws it while
+   * no window of the app is in front.
+   */
+  WINDOW_VOICE_CALL: "window.voiceCall",
+  /** A press on the floating call window's card, which the Mac hands to the panel holding the call, or answers itself for the way back to the call's agent. */
+  VOICE_CALL_PRESS: "window.voiceCallPress",
   FEEDBACK_SEND: "feedback.send",
 } as const;
 
@@ -1010,6 +1030,7 @@ export const PORT_ACT_USE = {
   SOUND_REMOVE: ACT_USE.WRITE,
   SOUND_CHOOSE: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
+  VOICE_OPEN: ACT_USE.WRITE,
   ACCOUNT_ACTIVE: ACT_USE.WRITE,
   PUSH_DEVICE_REGISTER: ACT_USE.WRITE,
   PUSH_DEVICE_UNREGISTER: ACT_USE.WRITE,
@@ -1022,6 +1043,7 @@ export const PORT_ACT_USE = {
   AGENTS_MODELS_FOLLOW: ACT_USE.READ,
   AGENTS_MODELS_RETRY: ACT_USE.READ,
   AGENTS_DEFAULT_WRITE: ACT_USE.WRITE,
+  AGENTS_SET_DEFAULT_MACHINE: ACT_USE.WRITE,
   AGENTS_CHAPTERS_PROVIDER_WRITE: ACT_USE.WRITE,
   AGENTS_PREFERENCES_RETRY: ACT_USE.READ,
   HOSTS_FOLLOW: ACT_USE.READ,
@@ -1183,6 +1205,7 @@ export const PORT_ACT_USE = {
   TASKS_SET_FOLLOWER_MACHINES: ACT_USE.WRITE,
   TASKS_ADD_FOLLOWER: ACT_USE.WRITE,
   TASKS_REMOVE_FOLLOWER: ACT_USE.WRITE,
+  TASKS_FOLLOWER_MACHINES: ACT_USE.FETCH,
   TASKS_EDIT: ACT_USE.WRITE,
   GITHUB_OPEN: ACT_USE.WRITE,
   WEB_OPEN: ACT_USE.WRITE,
@@ -1246,6 +1269,8 @@ export const PORT_ACT_USE = {
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,
   WINDOW_MENU_OFFERS: ACT_USE.WRITE,
   WINDOW_HANDOFF: ACT_USE.WRITE,
+  WINDOW_VOICE_CALL: ACT_USE.WRITE,
+  VOICE_CALL_PRESS: ACT_USE.WRITE,
   FEEDBACK_SEND: ACT_USE.WRITE,
 
   WORKSPACE_CREATE: ACT_USE.WRITE,
@@ -1288,6 +1313,7 @@ export const PORT_ACT_USE = {
   WORKSPACE_REPOSITORY_SETUP_PUT: ACT_USE.WRITE,
   WORKSPACE_RUN_ACTIONS_PUT: ACT_USE.WRITE,
   WORKSPACE_MERGE_QUEUE_READ: ACT_USE.FETCH,
+  WORKSPACE_MACHINES_READ: ACT_USE.FETCH,
 } as const satisfies Record<keyof typeof PORT_ACT_KIND, ActUse>;
 
 /**

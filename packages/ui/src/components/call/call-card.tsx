@@ -1,5 +1,5 @@
 /**
- * call-card.tsx -- the standing call as a small card: the name of what it is about, the way back to it, and the call bar under them.
+ * call-card.tsx -- the standing call as a small card: the agent it is with as its chip, which is the way back to it, its task's name, and the call bar under them.
  *
  * One card, drawn in whichever one place the call is not otherwise on
  * screen: at the foot of the column at a window's left while the window
@@ -9,13 +9,20 @@
  * nothing: every press is handed back to its owner, which holds the call.
  */
 
-import { ReturnIcon } from "../../icons/lucide-glyphs.js";
-import { IconButton } from "../button/button.js";
+import type { AnimationEvent, ReactNode } from "react";
+import {
+  CARD_CORNER,
+  CARD_ELEMENT,
+  CARD_LOOK,
+  CARD_PADDING,
+  CARD_SHADOW,
+  Card,
+} from "../card/card.js";
+import { INLINE_REF_LOOK, InlineRef } from "../inline-ref/inline-ref.js";
 import { KeepFocus } from "../keep-focus/keep-focus.js";
 import { OneLine } from "../one-line/one-line.js";
 import { TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
-import { Tooltip } from "../tooltip/hint.js";
-import { CallBar, type CallMuteState, type CallStatus } from "./call-controls.js";
+import { CallBar, type CallLevels, type CallMuteState, type CallStatus } from "./call-controls.js";
 
 /** What the card is named for a reader. */
 const CALL_CARD_LABEL = "Call";
@@ -32,89 +39,127 @@ export const CALL_CARD_SURFACE = {
 
 export type CallCardSurface = (typeof CALL_CARD_SURFACE)[keyof typeof CALL_CARD_SURFACE];
 
-/** The way back's name, for a reader and its hover: what it opens. */
-function returnLabel(name: string): string {
+/** The chip's press, for a reader: what it opens. */
+function openLabel(name: string): string {
   return `Open ${name}`;
 }
 
-const CARD =
-  "ui-call-card flex flex-col gap-ui-4 rounded-ui-14 border border-border-strong bg-popover px-ui-12 py-ui-8 text-label text-foreground shadow-menu data-[surface=sidebar]:mb-ui-8";
+/** The agent a call is with, as its owner hands it: the name it goes by, and its tile, wearing where its work stands, as every place naming an agent draws it. */
+export interface CallAgent {
+  readonly name: string;
+  readonly tile: ReactNode;
+}
 
 /**
- * The card's head: what the call is about by name, its task's or its
- * agent's where it has no task, cut short on one line, and the way back to
- * it beside the name. The floating window is too small to hold a tooltip,
- * so there the system's own hint names what the button opens.
+ * The card rises in as a menu does and leaves the same way, and takes no
+ * press on its way out. Alone in the floating window, which shows and hides
+ * it whole, it neither rises nor leaves, its shadow keeps within the room
+ * the window leaves it, and on the Mac the whole card drags the window but
+ * its buttons, which each answer their press. Its ground, edge, corner,
+ * and shadow are a raised `Card`'s, at a dialog's corner on a menu's
+ * shadow.
+ */
+const CARD =
+  "ui-call-card flex flex-col gap-ui-4 px-ui-12 py-ui-8 text-label text-foreground animate-call-card-in data-[surface=sidebar]:mb-ui-8 data-[leaving=true]:pointer-events-none data-[leaving=true]:animate-call-card-out data-[surface=window]:w-call-window-card data-[surface=window]:animate-none data-[surface=window]:shadow-toast-dismiss in-data-[ui-profile=desktop]:data-[surface=window]:[-webkit-app-region:drag] in-data-[ui-profile=desktop]:data-[surface=window]:[&_button]:[-webkit-app-region:no-drag]";
+
+/**
+ * The card's head, read as a row of the agents' list: the agent's chip, its
+ * tile and its name as one press that opens it, and the call's task by name
+ * under it, both cut short on one line. The floating window is too small to
+ * hold a tooltip, so there the system's own hint names the agent whole.
  */
 function CallCardHead({
-  name,
+  agent,
+  taskName,
   titled,
   onReturn,
 }: {
-  name: string;
+  agent: CallAgent;
+  taskName: string | undefined;
   titled: boolean;
   onReturn: () => void;
 }): React.JSX.Element {
-  const label = returnLabel(name);
-  const button = <IconButton icon={<ReturnIcon />} label={label} onClick={onReturn} />;
-
   return (
-    <div className="ui-call-card-head flex min-w-0 items-center gap-tight-gap">
-      <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} className="min-w-0 flex-1">
-        <OneLine>{name}</OneLine>
-      </Text>
-      {titled ? (
-        <span className="ui-call-card-return flex" title={label}>
-          {button}
-        </span>
-      ) : (
-        <Tooltip label={label}>{button}</Tooltip>
+    <div className="ui-call-card-head flex min-w-0 flex-col gap-ui-2">
+      <span className="ui-call-card-agent flex min-w-0" title={titled ? agent.name : undefined}>
+        <InlineRef
+          look={INLINE_REF_LOOK.WASH}
+          glyph={agent.tile}
+          label={agent.name}
+          pressLabel={openLabel(agent.name)}
+          onPress={onReturn}
+          hint={titled ? false : undefined}
+        />
+      </span>
+      {taskName === undefined ? null : (
+        <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} className="min-w-0">
+          <OneLine>{taskName}</OneLine>
+        </Text>
       )}
     </div>
   );
 }
 
 /**
- * The card as drawn from what it is handed: the call's task by name, with
- * the way back beside it, over the call bar itself, the same component an
- * agent's own page draws, so its status, its mutes, and its end are the
- * bar's in every word, glyph, and color, and restyling the bar restyles the
- * card. There is no ×: End call is the way to put a call away, and a live
+ * The card as drawn from what it is handed: the agent's chip, which is the
+ * way back to it, over the call's task by name, over the call bar: the
+ * agent's line or the call's stage at the left, and Stop while the agent
+ * works, the mutes, and End call at the right. There is no ×: End call is the way to put a call away, and a live
  * call nobody can see is what the card is for. In the floating window a
  * press acts without taking the focus (`KeepFocus`), so the next drag never
- * finds a button holding it.
+ * finds a button holding it. A card `leaving` slides out, and says so
+ * (`onLeft`) once it has, so its dock can let it go.
  */
 export function CallCard({
-  name,
+  agent,
+  taskName,
   status,
   microphone,
   speaker,
+  levels,
   surface,
   onReturn,
+  onStop,
   onEnd,
+  leaving = false,
+  onLeft,
 }: {
-  /** The call's task by name, or its agent's where it has no task. */
-  name: string;
-  /** The call bar's two lines; absent while the voice names none. */
+  agent: CallAgent;
+  /** The call's task by name; none where its task is not listed. */
+  taskName: string | undefined;
+  /** The call bar's line; absent while the call names none. */
   status: CallStatus | undefined;
   microphone: CallMuteState;
   speaker: CallMuteState;
+  /** The call's levels, which ring the mutes as each voice speaks; none draws them still, as the floating window, which holds no audio, does. */
+  levels?: CallLevels | undefined;
   surface: CallCardSurface;
-  /** Opens what the call is about. */
+  /** Opens the call's agent, the chip's press. */
   onReturn: () => void;
+  /** Stops the agent's turn, which the bar offers while the agent works. */
+  onStop: () => void;
   onEnd: () => void;
+  /** Whether the card is on its way out, which it slides through before it is gone. */
+  leaving?: boolean | undefined;
+  onLeft?: (() => void) | undefined;
 }): React.JSX.Element {
+  const left = (event: AnimationEvent<HTMLElement>) => {
+    if (leaving && event.target === event.currentTarget) onLeft?.();
+  };
+
   const inWindow = surface === CALL_CARD_SURFACE.WINDOW;
 
   const body = (
     <>
-      <CallCardHead name={name} titled={inWindow} onReturn={onReturn} />
+      <CallCardHead agent={agent} taskName={taskName} titled={inWindow} onReturn={onReturn} />
       {/* A block of its own, as an agent's page holds it, so the bar spans the card. */}
       <div>
         <CallBar
           status={status}
           microphone={microphone}
           speaker={speaker}
+          levels={levels}
+          onStop={onStop}
           onEnd={onEnd}
           titled={inWindow}
         />
@@ -123,9 +168,20 @@ export function CallCard({
   );
 
   return (
-    <section className={CARD} aria-label={CALL_CARD_LABEL} data-surface={surface}>
+    <Card
+      as={CARD_ELEMENT.SECTION}
+      look={CARD_LOOK.RAISED}
+      corner={CARD_CORNER.DIALOG}
+      padding={CARD_PADDING.NONE}
+      shadow={CARD_SHADOW.MENU}
+      className={CARD}
+      aria-label={CALL_CARD_LABEL}
+      data-surface={surface}
+      data-leaving={String(leaving)}
+      onAnimationEnd={left}
+    >
       {/* Note that the box is drawn as its children alone, so the card lays them out either way. */}
       {inWindow ? <KeepFocus className="contents">{body}</KeepFocus> : body}
-    </section>
+    </Card>
   );
 }

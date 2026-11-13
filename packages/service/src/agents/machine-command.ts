@@ -24,6 +24,7 @@ import {
   type MachineCommand,
   type MachineCommandKind,
   type MachineCommandResult,
+  type MachineUnreached,
   type MacShellResult,
   machineCommandSchema,
 } from "@repo/features/machine-command-wire";
@@ -148,6 +149,10 @@ export type MachineCommandAnswer = (
       readonly reason: string;
       /** The grants the Mac lacked for an action on an app, which the transcript offers the place to turn on. */
       readonly missingPermissions?: readonly ComputerPermission[];
+      /** Why the call reached no machine, where routing refused it, which the transcript says in its own words. */
+      readonly why?: MachineUnreached;
+      /** The machines that could take the call now, where routing refused it, which the transcript offers to make the default. */
+      readonly others?: readonly RoutedMachine[];
     }
 ) & {
   /** The machine the call went to, or was refused on, and whose it is; none for a call that went to an account's Macs from before machines claimed, or to no machine. */
@@ -167,6 +172,7 @@ export type MachineCommandAsk =
   | {
       readonly kind: typeof MACHINE_COMMAND_KIND.COMPUTER;
       readonly conversationId: string;
+      readonly agentId?: string;
       readonly action: MacComputerAction;
       readonly timeoutSeconds?: number;
     };
@@ -175,10 +181,10 @@ const readMachineCommand = readEither(machineCommandSchema);
 
 /** The machine a call names, as `run_on_mac` and `computer` take it. */
 export const MACHINE_INPUT = describeWire(
-  Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(200)),
-  "The machine to run on, by its name, where the conversation asks for one other than your " +
-    "default machine; a call refused for its machine names the ones that can take it. Leave it " +
-    "out for your default machine.",
+  Schema.String.check(Schema.isMinLength(1), Schema.isMaxLength(64)),
+  "The id of the machine to run on, where the conversation asks for one other than your " +
+    "default machine; a call refused for its machine lists the ids of the ones that can take " +
+    "it. Leave it out for your default machine.",
 );
 
 const RUN_ON_MAC_INPUT = Schema.Struct({
@@ -363,15 +369,15 @@ export function askMacHeard(
   return Effect.catch(run, () => Effect.succeed(notRun(MACHINE_COMMAND_REFUSAL.UNAVAILABLE)));
 }
 
-/** Where a call of the kind given goes from the conversation given, naming the machine given or none (`machine-routing.ts`). */
+/** Where a call of the kind given goes from the conversation given, naming the machine's id given or none (`machine-routing.ts`). */
 export function routedCall(
   target: ConversationTarget,
   kind: MachineCommandKind,
-  name: string | undefined,
+  machineId: string | undefined,
 ): TaskStoreEffect<MachineRoute> {
   return routeOf(target, {
     kind,
-    name,
+    machineId,
     accountListening: macListening,
     noMachine: MACHINE_COMMAND_KIND_REFUSAL[kind].NO_MAC,
   });
@@ -390,7 +396,14 @@ export function askMachine(
   if (route.kind === MACHINE_ROUTE.ACCOUNT) return askMacHeard(route.userId, ask);
 
   if (route.kind === MACHINE_ROUTE.REFUSED) {
-    const refused = machineCommandNotRun(route.reason);
+    const { reason, why, others } = route;
+
+    const refused: MachineCommandAnswer = {
+      status: MACHINE_COMMAND_STATUS.NOT_RUN,
+      reason,
+      why,
+      others,
+    };
 
     return Effect.succeed({
       answer: route.machine === undefined ? refused : { ...refused, machine: route.machine },

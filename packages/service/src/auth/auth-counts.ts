@@ -38,7 +38,7 @@ export type AuthCount = {
 const noted = new AsyncLocalStorage<AuthCount[]>();
 
 /** What a hook says of the request it ran in: the provider's id on a callback's path, `/callback/:id`. */
-interface HookRequest {
+export interface HookRequest {
   readonly params?: Record<string, string | undefined> | undefined;
 }
 

@@ -2,22 +2,14 @@
 
 import { SymbolView } from "expo-symbols";
 import { useState } from "react";
-import {
-  ActivityIndicator,
-  Linking,
-  Modal,
-  Pressable,
-  Share,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { ActivityIndicator, Linking, Modal, Share, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { WebView, type WebViewNavigation } from "react-native-webview";
 import { useAccessibilitySize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs } from "./held-menu.js";
 import { KEPT_KIND } from "./keep-model.js";
+import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -180,7 +172,7 @@ function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
             },
           ]}
         >
-          <Pressable
+          <Press
             onPress={onClose}
             accessibilityRole="button"
             testID="file-viewer-done"
@@ -189,7 +181,7 @@ function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
             <Text style={{ fontSize: TEXT_SIZE.BODY, fontWeight: "600", color: colors.TEXT }}>
               {FILE_WORDS.DONE}
             </Text>
-          </Pressable>
+          </Press>
           <Text
             numberOfLines={1}
             ellipsizeMode="middle"
@@ -201,7 +193,7 @@ function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
           >
             {name}
           </Text>
-          <Pressable
+          <Press
             onPress={() => shareFile(source, name)}
             accessibilityRole="button"
             accessibilityLabel={FILE_WORDS.SHARE}
@@ -213,7 +205,7 @@ function FileViewer({ source, name, visible, onClose }: FileViewerProps) {
               size={MARK_SIZE.LEAD + 2}
               tintColor={colors.TEXT}
             />
-          </Pressable>
+          </Press>
         </View>
         {failed ? (
           <View style={styles.cannot}>
@@ -302,7 +294,7 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
   return (
     <>
       <HeldMenu acts={acts}>
-        <Pressable
+        <Press
           onPress={press}
           disabled={source === undefined}
           accessibilityRole="button"
@@ -334,7 +326,7 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
               {size === undefined ? null : <Text style={fact}>{size}</Text>}
             </View>
           </View>
-        </Pressable>
+        </Press>
       </HeldMenu>
       {source === undefined || !viewed ? null : (
         <FileViewer source={source} name={name} visible={open} onClose={() => setOpen(false)} />

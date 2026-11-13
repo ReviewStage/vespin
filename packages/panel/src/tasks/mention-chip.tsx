@@ -92,6 +92,7 @@ import { useKnownNames, useWordTargets } from "./use-known-names.js";
 import { useLinkStanding, useNumberedTaskId, useWordsWorkspaceId } from "./use-link-standing.js";
 import { useOpenLink } from "./use-open-link.js";
 import { useWordsDates } from "./words-dates.js";
+import { MachineChipOwner, useMachineOwnerHeard } from "./workspace-machines.js";
 
 /**
  * mention-chip.tsx -- a mention drawn in words as its chip: its kind's glyph and its name, a button that opens what it names, or a link where that leaves the app, hanging a card that says what that is, struck through where what it names is gone.
@@ -138,6 +139,10 @@ import { useWordsDates } from "./words-dates.js";
  * their picture and hangs their card, their email and role, or grayed as
  * having left, as the workspace's members around the chip say
  * (`../member-directory.tsx`), and opens their page in the workspace. A
+ * machine of the workspace wears its platform's glyph with its online dot,
+ * and before its name its owner's face where it is a teammate's, as the
+ * agent's Default machine menu draws it, and hangs whose it is and what it
+ * is (`workspace-machines.tsx`); it opens nothing. A
  * link to any other place in the app, an Inbox item, an
  * automation, an agent's message (`@repo/features/link-grammar`), is drawn as
  * the same chip, wearing the place's glyph and named as the window already
@@ -263,6 +268,7 @@ const WHOLE_KINDS: ReadonlySet<Mention["kind"]> = new Set([
   MENTION_KIND.TOOL,
   MENTION_KIND.MAC_APP,
   MENTION_KIND.COMPUTER,
+  MENTION_KIND.MACHINE,
 ]);
 
 /** What a gone section's card says of it. */
@@ -307,6 +313,7 @@ function pressOf(
     case MENTION_KIND.DATE:
     case MENTION_KIND.MAC_APP:
     case MENTION_KIND.COMPUTER:
+    case MENTION_KIND.MACHINE:
       return undefined;
     case MENTION_KIND.TASK:
       return () => doors.onOpenTask(mention);
@@ -644,6 +651,12 @@ function MentionChip({
   const state = mentionState(mention, doors);
   const press = pressOf(mention, target, state, doors, openLink);
 
+  // Note that a teammate's machine is heard as theirs, since the face that says so to the eye is hidden from a screen reader.
+  const ownerHeard = useMachineOwnerHeard(
+    mention.kind === MENTION_KIND.MACHINE ? mention.machineId : undefined,
+    readLink(target)?.workspace ?? doors.place.workspace,
+  );
+
   const card = (
     <MentionCard
       mention={mention}
@@ -672,6 +685,8 @@ function MentionChip({
       kind={entityWordHeard(entityOfMention(mention).kind, label)}
       label={label}
       name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
+      before={ownerOf(mention, target, doors)}
+      heard={ownerHeard}
       state={told ?? standing?.state}
       gone={state === MENTION_STATE.GONE}
       onPress={
@@ -690,6 +705,18 @@ function MentionChip({
       data-kind={mention.kind}
       data-state={state}
       data-stated={standing?.state === undefined ? undefined : ""}
+    />
+  );
+}
+
+/** What stands before a machine's chip's name: its owner's face, where it is a teammate's; nothing for any other mention. */
+function ownerOf(mention: Mention, target: string, doors: MentionDoors): ReactNode {
+  if (mention.kind !== MENTION_KIND.MACHINE) return undefined;
+
+  return (
+    <MachineChipOwner
+      machineId={mention.machineId}
+      workspace={readLink(target)?.workspace ?? doors.place.workspace}
     />
   );
 }

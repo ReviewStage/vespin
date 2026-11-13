@@ -2,6 +2,7 @@ import { PRODUCT_NAME } from "@repo/features/product-name";
 import { ICON_SIZE } from "../../icons/icon-size.js";
 import { CheckIcon } from "../../icons/lucide-glyphs.js";
 import { BUTTON_VARIANT, Button } from "../button/button.js";
+import { CARD_CORNER, CARD_PADDING, Card } from "../card/card.js";
 import { GLYPH_INK, GlyphSlot } from "../glyph-slot/glyph-slot.js";
 import { AuthMark } from "./auth-mark.js";
 import { AuthPage } from "./auth-page.js";
@@ -105,22 +106,24 @@ export function ConsentCard({
         </div>
       }
     >
-      <ul
-        className="ui-consent-abilities m-0 p-0 list-none flex flex-col border border-border rounded-control bg-well text-label"
-        aria-label={`What ${client} will be able to do`}
-      >
-        {abilities.map((ability) => (
-          <li
-            className="ui-consent-ability flex items-start gap-ui-8 px-ui-12 py-ui-8 not-first:border-t not-first:border-border"
-            key={ability}
-          >
-            <GlyphSlot ink={GLYPH_INK.INHERIT} size={ICON_SIZE.SMALL} line>
-              <CheckIcon />
-            </GlyphSlot>
-            <span>{ability}</span>
-          </li>
-        ))}
-      </ul>
+      <Card corner={CARD_CORNER.CONTROL} padding={CARD_PADDING.FLUSH}>
+        <ul
+          className="ui-consent-abilities m-0 p-0 list-none flex flex-col text-label"
+          aria-label={`What ${client} will be able to do`}
+        >
+          {abilities.map((ability) => (
+            <li
+              className="ui-consent-ability flex items-start gap-ui-8 px-ui-12 py-ui-8 not-first:border-t not-first:border-border"
+              key={ability}
+            >
+              <GlyphSlot ink={GLYPH_INK.INHERIT} size={ICON_SIZE.SMALL} line>
+                <CheckIcon />
+              </GlyphSlot>
+              <span>{ability}</span>
+            </li>
+          ))}
+        </ul>
+      </Card>
     </AuthPage>
   );
 }

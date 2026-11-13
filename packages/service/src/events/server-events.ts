@@ -687,7 +687,7 @@ function surveyResponseItem(
   };
 }
 
-interface ProductAnalyticsValues {
+export interface ProductAnalyticsValues {
   /** Records one event, or does nothing; it never fails and never names the key. */
   readonly capture: (event: ServerEvent) => Effect.Effect<void>;
   /** Records one survey response under its person, or does nothing; never fails. */

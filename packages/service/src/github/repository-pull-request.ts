@@ -32,7 +32,7 @@
 
 import type { AgentPullRequest } from "@repo/features/agent-wire";
 import type { PullRequestActionRequest } from "@repo/features/pull-request-write-wire";
-import { Effect, Option, type Redacted } from "effect";
+import { Effect, Option } from "effect";
 import {
   actionWrite,
   type OverviewRead,
@@ -48,7 +48,12 @@ import {
   writeAnswerOf,
 } from "../agents/pull-request-write.js";
 import { HOSTED_REFUSAL } from "../http/http-effect.js";
-import { GitHubApp, type GitHubTokenAccess, markRefusedToken } from "./github-app.js";
+import {
+  GitHubApp,
+  type GitHubBearer,
+  type GitHubTokenAccess,
+  markRefusedToken,
+} from "./github-app.js";
 import { type PullRequestReadFailure, pullRequestByNumber } from "./pull-requests.js";
 import { memberPlace } from "./workspace-repositories.js";
 
@@ -61,14 +66,14 @@ export interface PullRequestQuery {
 
 /** The repository the query names, reached for a member of its workspace: the token minted for it, how that token was had, and what its reads name it against. */
 interface ReachedRepository {
-  readonly token: Redacted.Redacted;
+  readonly bearer: GitHubBearer;
   readonly access: GitHubTokenAccess;
   readonly subject: PullRequestSubject;
 }
 
 /** The pull request reached: the token it was read on, what its reads name it against, and it as GitHub holds it now. */
 export interface ReachedPullRequest {
-  readonly token: Redacted.Redacted;
+  readonly bearer: GitHubBearer;
   readonly subject: PullRequestSubject;
   readonly branch: string;
   readonly pullRequest: AgentPullRequest;
@@ -92,7 +97,7 @@ export const reachedRepository = /* @__PURE__ */ Effect.fnUntraced(function* (
   );
 
   if (Option.isNone(minted)) return yield* Effect.fail(HOSTED_REFUSAL.REPOSITORY_NOT_REACHABLE);
-  const { token, repository, access } = minted.value;
+  const { bearer, repository, access } = minted.value;
 
   const subject: PullRequestSubject = {
     organizationId: place.workspaceId,
@@ -100,7 +105,7 @@ export const reachedRepository = /* @__PURE__ */ Effect.fnUntraced(function* (
     author: null,
   };
 
-  return { token, access, subject } satisfies ReachedRepository;
+  return { bearer, access, subject } satisfies ReachedRepository;
 });
 
 /**
@@ -112,28 +117,28 @@ export const reachedByNumber = <A, R>(
   userId: string,
   query: PullRequestQuery,
   read: (
-    token: Redacted.Redacted,
+    bearer: GitHubBearer,
     repository: string,
     number: number,
   ) => Effect.Effect<Option.Option<A>, PullRequestReadFailure, R>,
 ) =>
   Effect.gen(function* () {
-    const { token, access, subject } = yield* reachedRepository(userId, query);
+    const { bearer, access, subject } = yield* reachedRepository(userId, query);
 
     const found = yield* githubReadRefusal(
-      read(token, subject.repository, query.number).pipe(markRefusedToken(access)),
+      read(bearer, subject.repository, query.number).pipe(markRefusedToken(access)),
     );
 
     if (Option.isNone(found)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
-    return { token, subject, found: found.value };
+    return { bearer, subject, found: found.value };
   });
 
 /** The pull request the query names, read with its head's checks, to a member of its workspace; not found as `reachedByNumber` is. */
 export const reachedPullRequest = (userId: string, query: PullRequestQuery) =>
   Effect.map(
     reachedByNumber(userId, query, pullRequestOfNumber),
-    ({ token, subject, found }): ReachedPullRequest => ({ token, subject, ...found }),
+    ({ bearer, subject, found }): ReachedPullRequest => ({ bearer, subject, ...found }),
   );
 
 /**
@@ -157,7 +162,7 @@ export function publishedOf(reached: ReachedPullRequest) {
 /** Its changed files, who it names, and the commits its changed images are read at, read afresh on the token it was reached on. */
 export const changesOf = (reached: ReachedPullRequest) =>
   Effect.map(
-    githubReadRefusal(pullRequestChangesRead(reached.token, reached.subject, reached.pullRequest)),
+    githubReadRefusal(pullRequestChangesRead(reached.bearer, reached.subject, reached.pullRequest)),
     (changes) => ({ pullRequest: changes }),
   );
 
@@ -168,7 +173,7 @@ export const overviewOf = <A, R>(
   read: OverviewRead<A, R>,
 ) =>
   Effect.map(
-    githubReadRefusal(read(reached.token, reached.subject, reached.pullRequest, userId)),
+    githubReadRefusal(read(reached.bearer, reached.subject, reached.pullRequest, userId)),
     (part) => ({ pullRequest: part }),
   );
 

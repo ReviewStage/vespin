@@ -28,13 +28,18 @@
     "transit": {
       "dependsOn": ["^transit"]
     },
-    // No task declares outputs: each is a check, and what it leaves behind
-    // is read by nothing that runs after it. A
-    // hit replays the log and restores no files, so no bundle or stamped
-    // commit ever travels through the cache.
+    // No task but the typecheck declares outputs: each other is a check, and
+    // what it leaves behind is read by nothing that runs after it. A hit
+    // replays the log and restores no files, so no bundle or stamped commit
+    // ever travels through the cache; the typecheck's are declarations only.
+    //
+    // A workspace's typecheck reads the declarations each package it imports
+    // emits (`tsconfig.package.json`), so it runs after theirs, and its own
+    // are its output: a hit restores them, with the incremental build info
+    // beside them, for the dependents that run next.
     "typecheck": {
-      "dependsOn": ["^transit"],
-      "outputs": []
+      "dependsOn": ["^typecheck"],
+      "outputs": ["node_modules/.cache/tsbuild/**"]
     },
     // The iOS app bundled with Metro (`apps/mobile`), which is what catches a
     // module Hermes cannot resolve; like typecheck, it runs again whenever the

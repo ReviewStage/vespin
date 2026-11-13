@@ -9,6 +9,7 @@ import {
   noteGitHubRepository,
   type RepositorySighting,
 } from "@repo/database/models/github-repositories";
+import { GitHubPriority, PRIORITY } from "@repo/github";
 import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { EXCESS_KEYS, HTTP_METHOD, type UnparsedWireValue, WireValueSchema } from "@repo/wire";
@@ -58,7 +59,6 @@ import { clearRevokedAuthorization, GitHubApp } from "./github-app.js";
 import { GITHUB_DELIVERY_READ } from "./github-delivery-read-bounds.js";
 import { setInstallationStatus } from "./github-installations.js";
 import { actOnGitHubMention, githubMentionOf, type MentionServices } from "./github-mentions.js";
-import { GitHubBackground } from "./github-rate-gate.js";
 
 /**
  * github-webhook-app.ts -- our GitHub App's webhook: a delivery about a pull request or its checks reads what the agents on that branch published again, one about an installation marks its workspace active or not, and a revoked authorization clears that GitHub user's tokens.
@@ -559,7 +559,7 @@ const deliveryReads = /* @__PURE__ */ Effect.fn("web/githubDeliveryReads")(
 
     return { read, told: counts.reduce((sum, count) => sum + count, 0) };
   },
-  Effect.provideService(GitHubBackground, true),
+  Effect.provideService(GitHubPriority, PRIORITY.BACKGROUND),
 );
 
 /** A delivery's reads as a queue message carries them. */
@@ -728,8 +728,8 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
 
     return hostedJsonResponse(200, { read, queued, told });
   },
-  // Note that no member waits on a delivery, so what it asks GitHub waits in the background lane (`github-rate-gate.ts`).
-  Effect.provideService(GitHubBackground, true),
+  // Note that no member waits on a delivery, so what it asks GitHub is asked at the background priority, leaving the members their reserve.
+  Effect.provideService(GitHubPriority, PRIORITY.BACKGROUND),
 );
 
 /** The group: the one delivery path, and the hosted vocabulary's own refusal for any other. */

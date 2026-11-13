@@ -243,14 +243,14 @@ test("a plan's routes refuse through the committed table, the dispatcher and the
 
   assert.deepEqual(
     await bytes(
-      await dispatched(new Request(`${ORIGIN}/api/plans/${plan}/description/revisions`), routes),
+      await dispatched(new Request(`${ORIGIN}/api/tasks/${plan}/description/revisions`), routes),
     ),
     unsigned,
   );
   assert.deepEqual(
     await bytes(
       await dispatched(
-        new Request(`${ORIGIN}/api/plans/${plan}`, {
+        new Request(`${ORIGIN}/api/tasks/${plan}`, {
           method: HTTP_METHOD.PATCH,
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ unknown: true }),
@@ -263,7 +263,7 @@ test("a plan's routes refuse through the committed table, the dispatcher and the
   assert.deepEqual(
     await bytes(
       await dispatched(
-        new Request(`${ORIGIN}/api/plans/${plan}/description/revisions`, {
+        new Request(`${ORIGIN}/api/tasks/${plan}/description/revisions`, {
           method: HTTP_METHOD.POST,
           headers: { authorization: "Bearer t" },
         }),
@@ -302,7 +302,7 @@ test("a plan's comment thread path reaches its procedure through the committed t
   const routes = ORPC_ROUTES;
 
   const unsigned = await dispatched(
-    new Request(`${ORIGIN}/api/plans/${plan}/comments/${thread}`, {
+    new Request(`${ORIGIN}/api/tasks/${plan}/comments/${thread}`, {
       method: HTTP_METHOD.POST,
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ action: "resolve" }),
@@ -315,7 +315,7 @@ test("a plan's comment thread path reaches its procedure through the committed t
   assert.equal(await unsigned.text(), '{"error":"invalid-token"}');
 
   const read = await dispatched(
-    new Request(`${ORIGIN}/api/plans/${plan}/comments/${thread}`),
+    new Request(`${ORIGIN}/api/tasks/${plan}/comments/${thread}`),
     routes,
   );
 
@@ -358,7 +358,7 @@ test("the inbox's parameterized paths reach their procedures through the committ
   const unsigned = [HOSTED_HTTP_STATUS.UNAUTHORIZED, '{"error":"invalid-token"}'];
   const otherMethod = [HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED, '{"error":"method-not-allowed"}'];
 
-  assert.deepEqual(await answer(HTTP_METHOD.GET, `/api/plans/${id}/inbox?after=0`), unsigned);
+  assert.deepEqual(await answer(HTTP_METHOD.GET, `/api/tasks/${id}/inbox?after=0`), unsigned);
   assert.deepEqual(await answer(HTTP_METHOD.GET, `/api/agents/${id}/inbox?after=0`), unsigned);
   assert.deepEqual(await answer(HTTP_METHOD.GET, "/api/inbox?after=0"), unsigned);
   assert.deepEqual(await answer(HTTP_METHOD.PUT, `/api/inbox/${id}/read`), unsigned);

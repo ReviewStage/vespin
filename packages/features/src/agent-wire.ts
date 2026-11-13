@@ -2719,6 +2719,15 @@ const agentSubagentTitleSchema = EffectSchema.Struct({
 
 export type AgentSubagentTitle = typeof agentSubagentTitleSchema.Type;
 
+/** A voice call standing on the agent, as its row says while the call stands: the call's id, the member on it, and when it opened, in epoch milliseconds. */
+const agentStandingCallSchema = EffectSchema.Struct({
+  callId: EffectSchema.String,
+  callerId: EffectSchema.String,
+  startedAt: countedNumber,
+});
+
+export type AgentStandingCall = typeof agentStandingCallSchema.Type;
+
 /**
  * Where the launch a local agent's transcript waits on stands, as its page
  * says it (`agentMessagesAnswerSchema`'s `launch`): written and waiting for
@@ -2813,6 +2822,14 @@ export const agentMessagesAnswerSchema = EffectSchema.Struct({
    * the agent has delegated nothing, and from a service older than it.
    */
   subagents: EffectSchema.optionalKey(EffectSchema.Array(agentSubagentStandingSchema)),
+  /**
+   * The voice calls standing on the agent, oldest first, read from each
+   * call's row, which stands exactly while the call does, so every window
+   * on the agent draws a call from the moment it opens, before anyone
+   * speaks, and draws none of them ended. Absent on a worker's page, while
+   * none stands, and from a service older than it.
+   */
+  calls: EffectSchema.optionalKey(EffectSchema.Array(agentStandingCallSchema)),
   title: EffectSchema.NullOr(EffectSchema.String),
   failureReason: EffectSchema.optionalKey(agentFailureSchema),
   /**
