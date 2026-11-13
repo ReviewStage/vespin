@@ -413,6 +413,19 @@ const WORK: AgentTranscriptMessage = {
   ],
   startedAt: STARTED_AT,
   finishedAt: STARTED_AT + 6 * MINUTE,
+  // What the turn's runner diffed when it ended: the invite it added, the members it wired it into, and the tests and docs beside them.
+  changedFiles: {
+    files: [
+      { path: "src/members/invite.ts", additions: 4, deletions: 0 },
+      { path: "src/members/index.ts", additions: 2, deletions: 1 },
+      { path: "src/members/invite.test.ts", additions: 18, deletions: 0 },
+      { path: "src/members/pending.ts", additions: 6, deletions: 2 },
+      { path: "docs/members.md", additions: 3, deletions: 0 },
+    ],
+    total: 5,
+    additions: 33,
+    deletions: 3,
+  },
 };
 
 /** Grace's review of the pull request, which the long transcript's second turn answers. */

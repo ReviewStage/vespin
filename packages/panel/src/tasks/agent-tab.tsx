@@ -1740,7 +1740,7 @@ function TurnFoot({
 }: {
   workedFor: ReactNode;
   copy: ReactNode;
-  /** The files the turn changed, over its line (`turn-files.tsx`); none while the turn runs. */
+  /** The files the turn changed, on its line after how long it worked (`turn-files.tsx`); none while the turn runs. */
   files: ReactNode;
 }): ReactNode {
   if (workedFor === null && copy === null) return null;
@@ -1748,11 +1748,15 @@ function TurnFoot({
   return (
     // Note that the room above is the row's rather than the worked line's, because the buttons are taller than the words and centering them would push the words down.
     <div className="agent-turn-foot mt-tight-gap" data-turn-foot="">
-      {files}
       <MessageLine
         align={MESSAGE_LINE_ALIGN.START}
         inset={MESSAGE_LINE_INSET.FLUSH}
-        sender={workedFor}
+        sender={
+          <span className="flex min-w-0 flex-wrap items-center gap-ui-2">
+            {workedFor}
+            {files}
+          </span>
+        }
         actions={copy}
       />
     </div>
