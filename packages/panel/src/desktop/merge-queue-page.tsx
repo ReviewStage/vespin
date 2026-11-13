@@ -1,13 +1,14 @@
 /**
  * merge-queue-page.tsx -- the Merge queue page: every pull request GitHub's merge queues hold across the listed workspace's repositories, each repository's line drawn front first.
  *
- * Each repository stands on a card of its own, headed by GitHub's mark, its
- * name, how many it holds, and a way to its queue on GitHub, over its line
- * on a track (`TrackList`), front first, each node in its stage's tone, a
- * waiting one's hollow. Every row says who
- * opened the pull request, its title, its number, its task's name, and how
- * long it has been queued, and its stage at its end as words led by a dot
- * in its tone (`mergeQueueStage`). A
+ * Each repository is a section of the page, as a task's Overview draws its
+ * own: a section's head (`GROUP_LOOK.SECTION`) with GitHub's mark, its name,
+ * how many it holds, and a way to its queue on GitHub, over its line on a
+ * track (`TrackList`), front first, each node in its stage's tone, a waiting
+ * one's hollow. Every row says who opened the pull request, its title, its
+ * number, its task's name, and how long it has been queued, and its stage at
+ * its end in words (`mergeQueueStage`), the node alone carrying its tone so
+ * no row draws its stage twice. A
  * row opens its pull request as the window opens a GitHub address
  * (`useOpenLink`): in its agent's Pull request tab where a listed task's
  * agent opened it, else on GitHub. The pull request the page was opened for,
@@ -39,9 +40,6 @@ import {
   AVATAR_SIZE,
   Avatar,
   type AvatarSize,
-  CARD_LOOK,
-  CARD_PADDING,
-  Card,
   DetailPage,
   EmptyState,
   ErrorState,
@@ -58,7 +56,6 @@ import {
   STATUS_TONE,
   Stack,
   type StatusTone,
-  StatusWords,
   TIME_LOOK,
   Time,
   Tooltip,
@@ -94,7 +91,7 @@ const GHOST_LOGIN = "ghost";
 /** How often the queues are read again while the page stands. */
 const READ_EVERY = Duration.seconds(30);
 
-/** The tone each stage is drawn in, its badge's, its node's, and its segment's; none for a pull request still waiting its turn, which stands at rest. */
+/** The tone each stage's node is drawn in; none for a pull request still waiting its turn, which stands at rest. */
 const STAGE_TONE = {
   [MERGE_QUEUE_STAGE.WAITING]: undefined,
   [MERGE_QUEUE_STAGE.CHECKING]: STATUS_TONE.WORKING,
@@ -115,15 +112,6 @@ function mergeQueueQuery(workspaceId: string | undefined) {
     refetchInterval: Duration.toMillis(READ_EVERY),
     retry: false,
   });
-}
-
-/** A stage, as its words led by a dot in its tone. */
-function StageWords({ stage }: { stage: MergeQueueStage }): React.JSX.Element {
-  return (
-    <StatusWords tone={STAGE_TONE[stage] ?? STATUS_TONE.NEUTRAL}>
-      {MERGE_QUEUE_STAGE_LABEL[stage]}
-    </StatusWords>
-  );
 }
 
 /** Who opened the pull request, at `size`, GitHub's ghost for a deleted account. */
@@ -162,7 +150,7 @@ function nodeOf(stage: MergeQueueStage): TrackNode {
   };
 }
 
-/** One repository's line: its head, the bar over it, its front on a card, and the rest on the track. */
+/** One repository's line: its section's head over its pull requests on the track, front first. */
 function RepositoryQueue({
   queue,
   marked,
@@ -173,7 +161,8 @@ function RepositoryQueue({
   onOpen: (url: string) => void;
 }): React.JSX.Element {
   return (
-    <Card look={CARD_LOOK.OUTLINE} padding={CARD_PADDING.FLUSH}>
+    // Note that the section is pulled out by a row's inset on each side, as a task's Overview's are, so its marks stand on the title's edge.
+    <div className="-mx-row-inset">
       <GroupHeader
         look={GROUP_LOOK.SECTION}
         glyph={<ProviderMark provider={MARK_PROVIDER.GITHUB} />}
@@ -191,26 +180,27 @@ function RepositoryQueue({
             />
           </Tooltip>
         }
-      />
-      <TrackList label={queue.repository} moves>
-        {queue.entries.map((entry) => (
-          <TrackRow
-            key={entry.pullRequest.url}
-            motionKey={entry.pullRequest.url}
-            node={nodeOf(mergeQueueStage(entry.state))}
-            leading={<AuthorFace entry={entry} size={AVATAR_SIZE.ROW} />}
-            title={entry.pullRequest.title}
-            titleReplayMasked
-            description={<RowFacts entry={entry} />}
-            descriptionReplayMasked
-            meta={<StageWords stage={mergeQueueStage(entry.state)} />}
-            current={entry.pullRequest.url === marked ? LIST_ROW_CURRENT.ITEM : undefined}
-            linkHref={entry.pullRequest.url}
-            onPress={() => onOpen(entry.pullRequest.url)}
-          />
-        ))}
-      </TrackList>
-    </Card>
+      >
+        <TrackList label={queue.repository} moves>
+          {queue.entries.map((entry) => (
+            <TrackRow
+              key={entry.pullRequest.url}
+              motionKey={entry.pullRequest.url}
+              node={nodeOf(mergeQueueStage(entry.state))}
+              leading={<AuthorFace entry={entry} size={AVATAR_SIZE.ROW} />}
+              title={entry.pullRequest.title}
+              titleReplayMasked
+              description={<RowFacts entry={entry} />}
+              descriptionReplayMasked
+              meta={MERGE_QUEUE_STAGE_LABEL[mergeQueueStage(entry.state)]}
+              current={entry.pullRequest.url === marked ? LIST_ROW_CURRENT.ITEM : undefined}
+              linkHref={entry.pullRequest.url}
+              onPress={() => onOpen(entry.pullRequest.url)}
+            />
+          ))}
+        </TrackList>
+      </GroupHeader>
+    </div>
   );
 }
 
@@ -246,7 +236,7 @@ function QueuesRead({
   return <Queues repositories={repositories} marked={marked} onOpen={onOpen} />;
 }
 
-/** Every repository's line, under one motion, so a pull request glides from the track onto the front's card as the one before it merges. */
+/** Every repository's line, under one motion, so the line glides up as its front merges. */
 function Queues({
   repositories,
   marked,

@@ -43,6 +43,7 @@ import {
   MESSAGE_SENDER,
 } from "../../storage-vocabulary.js";
 import {
+  DEVICE_LAYOUT,
   getTestDB,
   joinWorkspace,
   leaveWorkspace,
@@ -104,7 +105,9 @@ import {
   turnUsagesOf,
   unarchiveAgentFrom,
   updateAgentBranch,
+  updateAgentTargetDevice,
 } from "../agent-store.js";
+import { registerDevice } from "../device-store.js";
 import { readMessageByClientId } from "../message-reads.js";
 import { claimRuntimeSession } from "../recorded-session.js";
 import { createTask } from "../task-store.js";
@@ -1150,6 +1153,40 @@ it.layer(getTestDB())("the coding-agent store's kept pull request", (it) => {
         );
         assert.equal(yield* readAgentPublished(outsider, agentId), null);
         assert.equal(yield* readAgentKeptPublished(outsider, agentId), null);
+      }),
+  );
+
+  it.effect(
+    "an agent's default machine is set by a member of its workspace, and an outsider's write sets nothing",
+    () =>
+      Effect.gen(function* () {
+        const starter = yield* openAccount;
+        const teammate = yield* openAccount;
+        const outsider = yield* openAccount;
+        const workspace = yield* openWorkspace(starter);
+        yield* joinWorkspace(workspace, teammate);
+        yield* openWorkspace(outsider);
+        const { agentId } = yield* workspaceAgent(starter, workspace);
+        const [studio, outsiders] = [randomUUID(), randomUUID()];
+        yield* registerDevice(starter, { id: studio, name: "Studio", ...DEVICE_LAYOUT });
+        yield* registerDevice(outsider, { id: outsiders, name: "Laptop", ...DEVICE_LAYOUT });
+
+        const targetOf = Effect.map(
+          Database.use((db) =>
+            db
+              .select({ target: agentTable.targetDeviceId })
+              .from(agentTable)
+              .where(eq(agentTable.id, agentId)),
+          ),
+          ([row]) => row?.target,
+        );
+
+        yield* updateAgentTargetDevice(teammate, agentId, studio);
+        const set = yield* targetOf;
+        yield* updateAgentTargetDevice(outsider, agentId, outsiders);
+
+        assert.equal(set, studio);
+        assert.equal(yield* targetOf, studio);
       }),
   );
 

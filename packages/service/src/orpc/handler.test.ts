@@ -324,7 +324,7 @@ it.effect(
 );
 
 it.effect(
-  "a path the description was edited and read back at before its rename asks the older client to update, where any other unserved path is none",
+  "a path a task was served at before its rename asks the older client to update, where any other unserved path is none",
   () =>
     Effect.gen(function* () {
       // SAFETY: the test procedures yield no service, so an empty context stands in for the web runtime's.
@@ -332,9 +332,9 @@ it.effect(
       const handle = hostedFetch(testRouter);
 
       for (const [method, path] of [
+        [HTTP_METHOD.GET, "/api/plans"],
+        [HTTP_METHOD.GET, "/api/plans/ABC/description"],
         [HTTP_METHOD.POST, "/api/plans/ABC/edit"],
-        [HTTP_METHOD.GET, "/api/plans/ABC/revisions"],
-        [HTTP_METHOD.GET, "/api/plans/ABC/revisions/3"],
         [HTTP_METHOD.POST, "/api/plans/ABC/revisions/3/restore"],
       ] as const) {
         const answered = yield* Effect.promise(() =>
@@ -349,7 +349,7 @@ it.effect(
       }
 
       const elsewhere = yield* Effect.promise(() =>
-        handle(new Request(new URL("/api/plans/ABC/edits", ORIGIN)), services),
+        handle(new Request(new URL("/api/tasks/ABC/edits", ORIGIN)), services),
       );
 
       assert.equal(elsewhere.status, HOSTED_HTTP_STATUS.NOT_FOUND);
@@ -366,7 +366,7 @@ it.effect(
 
       const below = yield* Effect.promise(() =>
         handle(
-          new Request(new URL("/api/plans/ABC/edits", ORIGIN), {
+          new Request(new URL("/api/tasks/ABC/edits", ORIGIN), {
             headers: { [CLIENT_HEADER.CLIENT]: "ios/0.1.0", [CLIENT_HEADER.API_VERSION]: "0" },
           }),
           services,
@@ -382,7 +382,7 @@ it.effect(
       );
 
       const unnamed = yield* Effect.promise(() =>
-        handle(new Request(new URL("/api/plans/ABC/edits", ORIGIN)), services),
+        handle(new Request(new URL("/api/tasks/ABC/edits", ORIGIN)), services),
       );
 
       assert.equal(unnamed.status, HOSTED_HTTP_STATUS.NOT_FOUND);

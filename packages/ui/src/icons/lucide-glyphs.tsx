@@ -131,6 +131,9 @@ export const ExpandIcon = lucideGlyph(Maximize2, "icon-button-glyph");
 /** Two arrows in from opposite corners: a full-window pane brought back to its place. */
 export const CollapseIcon = lucideGlyph(Minimize2, "icon-button-glyph");
 
+/** A bar alone, as a window's title bar draws it: a window shrunk down to its pill, there to bring back. */
+export const MinimizeIcon = lucideGlyph(Minus, "icon-button-glyph");
+
 /** An arrow turning round to where it began: tries again what did not land. */
 export const RetryIcon = lucideGlyph(RotateCw, "icon-button-glyph");
 

@@ -205,7 +205,7 @@ function headOf(container: Element): string {
 
 /** The line under the replay card as a reader reads it: whom it names, if anyone, and the moment its time stands for. */
 function cardMeta(container: Element) {
-  const meta = container.querySelector(":has(> [data-replay-card]) ~ .ui-message-line");
+  const meta = container.querySelector(":has([data-replay-card]) ~ .ui-message-line");
   assert.ok(meta !== null);
 
   return {
@@ -550,7 +550,7 @@ test("the line under the card says when the reader's own agent was started, nami
     at: new Date(SENT_AT).toISOString(),
   });
   assert.doesNotMatch(
-    container.querySelector(":has(> [data-replay-card]) ~ .ui-message-line")?.textContent ?? "",
+    container.querySelector(":has([data-replay-card]) ~ .ui-message-line")?.textContent ?? "",
     /You|·/u,
   );
 });
@@ -575,7 +575,7 @@ test("the line under the card names a teammate who started the agent by their fa
     at: new Date(SENT_AT).toISOString(),
   });
   assert.match(
-    container.querySelector(":has(> [data-replay-card]) ~ .ui-message-line .ui-message-line-time")
+    container.querySelector(":has([data-replay-card]) ~ .ui-message-line .ui-message-line-time")
       ?.textContent ?? "",
     /^·/u,
   );
@@ -773,7 +773,7 @@ test("a replayed line stands under who sent it, over when and Copy, and the card
 
   press(
     container.querySelector(
-      ':has(> [data-replay-card]) ~ .ui-message-line button[aria-label="Copy message"]',
+      ':has([data-replay-card]) ~ .ui-message-line button[aria-label="Copy message"]',
     ),
   );
   await settle();

@@ -236,6 +236,16 @@ function answer(request: AnyAct): Promise<FakeActAnswer> {
 }
 
 /** The window's Inbox on the plan's item, its side panel the window's own hook held by the chosen item's plan, and every place it was asked to leave for. */
+/** The task's agents as the task list carries them. */
+const LISTED_AGENTS = [ARCHIVED, AGENT].map((agent) => listedAgent(agent));
+
+/** Both agents' rows keep the pull request they opened, which the list carries beside them. */
+const LISTED_PULL_REQUESTS = [ARCHIVED, AGENT].map((agent) => ({
+  agentId: agent.id,
+  taskId: TASK.id,
+  pullRequest: BATCHED,
+}));
+
 async function inbox(
   { pages }: { pages: readonly PageLine[] | undefined } = {
     pages: [FUNNEL],
@@ -250,12 +260,18 @@ async function inbox(
   fakeAppPlatform({ ...QUIET_PANEL, pageFrameUrl });
   fakeActs({ act: answer });
   fakeActPort({ ...fakeActPortCalls() });
-  // Main's read of the account's inbox holds the task's one item as waiting.
+  // Main's read of the account's inbox holds the task's one item as waiting, and its task list the task's agents and
+  // the pull request each opened, which the task list's collections hold.
   handState(NO_EXPERIMENTS, {
     inbox: {
       ...stateWith({}, {}).inbox,
       waiting: [{ taskId: TASK.id, items: [waitingOf(ITEM)] }],
       tasks: [{ taskId: TASK.id, items: 1, updatedAt: 2_000 }],
+    },
+    tasks: {
+      ...stateWith({}, {}).tasks,
+      taskAgents: LISTED_AGENTS,
+      agentPullRequests: LISTED_PULL_REQUESTS,
     },
   });
   // The account's feed holds the task's one item, which the Inbox draws from.
@@ -295,13 +311,8 @@ async function inbox(
         tasks: tasksControl({
           workspace: ACME,
           tasks: [TASK, OTHER],
-          liveAgents: [ARCHIVED, AGENT].map((agent) => listedAgent(agent)),
-          // Both agents' rows keep the pull request they opened, which the list carries beside them.
-          listedPullRequests: [ARCHIVED, AGENT].map((agent) => ({
-            agentId: agent.id,
-            taskId: TASK.id,
-            pullRequest: BATCHED,
-          })),
+          liveAgents: LISTED_AGENTS,
+          listedPullRequests: LISTED_PULL_REQUESTS,
           inboxView: { ...tasksControl().inboxView, pages, onTaskAgents: taskAgents.onRead },
           sidePanel,
           onShowTask: (taskId) => left.tasks.push(taskId),

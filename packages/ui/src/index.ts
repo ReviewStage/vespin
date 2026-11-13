@@ -142,6 +142,8 @@ export * from "./components/drop-line/drop-line.js";
 
 export * from "./components/drop-slot/drop-slot.js";
 
+export * from "./components/edge-clip/edge-clip.js";
+
 export * from "./components/edit-actions/edit-actions.js";
 
 export * from "./components/editable-block/editable-block.js";

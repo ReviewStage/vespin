@@ -56,9 +56,9 @@ import { tasksApp } from "@repo/service/tasks/tasks-app";
 import { tasksProcedures } from "@repo/service/tasks/tasks-procedures";
 import {
   INVITATIONS_TEXT,
-  makeDocumentTask,
-  makeSavedDocumentTask,
-} from "@repo/service/testing/description-documents";
+  makeDescriptionTask,
+  makeSavedDescriptionTask,
+} from "@repo/service/testing/descriptions";
 import {
   connectWorkspaceGitHub,
   type FakeGitHub,
@@ -109,7 +109,7 @@ import { dispatched } from "./support/platform-landing";
  */
 
 const ORIGIN = "https://app.test";
-const TASKS = "/api/plans";
+const TASKS = "/api/tasks";
 const ONE_TASK = (taskId: string) => `${TASKS}/${taskId}`;
 const FILE = (taskId: string) => `${ONE_TASK(taskId)}/file`;
 const SKILLS = (taskId: string) => `${ONE_TASK(taskId)}/skills`;
@@ -255,7 +255,7 @@ const answer = (signedIn: SignedIn, github: FakeGitHub, request: Request, landed
 
     const routed = hostedFetch({
       messages: messagesProcedures(seams),
-      plans: tasksProcedures(seams),
+      tasks: tasksProcedures(seams),
       taskFiles: taskFilesProcedures(seams),
     });
 
@@ -429,8 +429,8 @@ it.layer(getTestDB())("the plan routes", (it) => {
         [[taskId, RELAY.name]],
       );
       assert.deepEqual(
-        readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.OK, opened).plan.document,
-        saved.status === DESCRIPTION_SAVE_STATUS.SAVED ? saved.document : undefined,
+        readAnswer(taskAnswerSchema, HOSTED_HTTP_STATUS.OK, opened).plan.description,
+        saved.status === DESCRIPTION_SAVE_STATUS.SAVED ? saved.description : undefined,
       );
     }),
   );
@@ -811,7 +811,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
             taskId,
             seq: 1_000,
             actor: sql`'a-later-writer'`,
-            document: "## Goal\n\nInvite a teammate.\n",
+            description: "## Goal\n\nInvite a teammate.\n",
             changes: 1,
             startedAt: now,
             at: now,
@@ -895,7 +895,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         );
 
         const body = {
-          document: { base: "", value: "Mine now.\n" },
+          description: { base: "", value: "Mine now.\n" },
         };
 
         assert.deepEqual(
@@ -1114,7 +1114,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const relay = relayInstallation(7011);
 
         const github = githubReaching([relay], undefined, {}, (sent) =>
-          new URL(sent.url).pathname === "/repos/Acme/Relay/git/ref/heads/main"
+          new URL(sent.url).pathname === "/repos/Acme/Relay/git/ref/heads%2Fmain"
             ? Response.json({ ref: "refs/heads/main", object: { type: "commit", sha: head } })
             : contentsOf(sent),
         );
@@ -1432,7 +1432,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const steered = (method?: string) =>
           ask(
             request(PAGES(taskId), owner, {
-              query: { [DISPATCH_QUERY.PATH]: "plans/plan" },
+              query: { [DISPATCH_QUERY.PATH]: "tasks/plan" },
               ...(method === undefined ? undefined : { method }),
             }),
           );
@@ -1460,7 +1460,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           yield* ask(request(TASKS, owner, { method: "POST", body: RELAY })),
         );
 
-        yield* makeSavedDocumentTask(taskId, INVITATIONS_TEXT);
+        yield* makeSavedDescriptionTask(taskId, INVITATIONS_TEXT);
         const value = INVITATIONS_TEXT.replace("Only an admin", "Only an owner");
 
         const answered = readAnswer(
@@ -1469,7 +1469,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
           yield* ask(
             request(EDIT(taskId), owner, {
               method: "POST",
-              body: { document: { base: INVITATIONS_TEXT, value } },
+              body: { description: { base: INVITATIONS_TEXT, value } },
             }),
           ),
         );
@@ -1489,7 +1489,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         assert.ok("plan" in answered);
         const { plan: task } = answered;
         const at = task.lastEdit?.at ?? assert.fail("the edit names no last edit");
-        assert.deepEqual(task.document, { body: value, assumptions: [] });
+        assert.deepEqual(task.description, { body: value, assumptions: [] });
         // A host waits on the transaction the edit answers before it lets a delivery of the plan land.
         assert.match(answered.txid ?? "", /^\d+$/u);
         assert.equal(task.lastEdit?.actor, DESCRIPTION_ACTOR.DEVELOPER);
@@ -1505,7 +1505,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
             [1, DESCRIPTION_ACTOR.EARLIER, 0],
           ],
         );
-        assert.deepEqual(revision.document, { body: value, assumptions: [] });
+        assert.deepEqual(revision.description, { body: value, assumptions: [] });
         assert.deepEqual(revision.previous, { body: INVITATIONS_TEXT, assumptions: [] });
       }),
   );
@@ -1521,13 +1521,13 @@ it.layer(getTestDB())("the plan routes", (it) => {
         );
 
         const appText = `${INVITATIONS_TEXT}- An accepted invite is never reused.\n`;
-        yield* makeDocumentTask(taskId, appText);
+        yield* makeDescriptionTask(taskId, appText);
 
         const edit = (id: string, value: string) =>
           ask(
             request(EDIT(id), owner, {
               method: "POST",
-              body: { document: { base: INVITATIONS_TEXT, value } },
+              body: { description: { base: INVITATIONS_TEXT, value } },
             }),
           );
 
@@ -1552,7 +1552,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
 
         assert.ok("plan" in merged);
         const mergedText = appText.replace("Only an admin", "Only an owner");
-        assert.equal(merged.plan.document.body, mergedText);
+        assert.equal(merged.plan.description.body, mergedText);
         assert.deepEqual(conflicted, {
           status: HOSTED_HTTP_STATUS.OK,
           body: { conflict: { current: mergedText, by: merged.plan.lastEdit } },
@@ -1578,13 +1578,15 @@ it.layer(getTestDB())("the plan routes", (it) => {
           ),
         );
 
-        yield* makeSavedDocumentTask(taskId, INVITATIONS_TEXT);
+        yield* makeSavedDescriptionTask(taskId, INVITATIONS_TEXT);
         const db = yield* Database;
         yield* db.update(user).set({ name: "Charles Pan" }).where(eq(user.id, other));
 
         const edit = (as: string, base: string, value: string) =>
           Effect.map(
-            ask(request(EDIT(taskId), as, { method: "POST", body: { document: { base, value } } })),
+            ask(
+              request(EDIT(taskId), as, { method: "POST", body: { description: { base, value } } }),
+            ),
             (answered) => readAnswer(descriptionEditAnswerSchema, HOSTED_HTTP_STATUS.OK, answered),
           );
 

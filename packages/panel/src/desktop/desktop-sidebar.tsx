@@ -21,8 +21,8 @@ import {
   followingTasks,
   homedTaskRows,
   NO_REPOSITORY,
+  orderTasks,
   type RepositoryGroup,
-  repositoryGroups,
   repositoryHeadingsDrawn,
   repositoryLabel,
   TASK_GROUPING,
@@ -116,6 +116,7 @@ import {
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { agentTab, sameTab } from "@repo/ui/tab-strip-model";
 import { useVirtualRuns, VIRTUAL_ROW_KEY_ATTRIBUTE } from "@repo/ui/virtual-rows";
+import { caseWhen, coalesce, gt, useLiveQuery } from "@tanstack/react-db";
 import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { runAppCommand, useAppCommand } from "../app-commands.js";
 import { useAutomationsPlace } from "../automations-route.js";
@@ -148,6 +149,7 @@ import { useRepositoryPictures } from "../repository-pictures.js";
 import { SHELL_ROOM, type ShellRoom } from "../shell-room.js";
 import { stateEndMark } from "../state-glyph.js";
 import { useSteadyDoors } from "../steady-door.js";
+import { useTaskListCollections } from "../task-list-collections.js";
 import { agentName } from "../tasks/agent-model.js";
 import { AUTOMATIONS_PAGE } from "../tasks/automations-place.js";
 import { openRepositoryOnGitHub } from "../tasks/task-repository-menus.js";
@@ -446,6 +448,70 @@ function nestedRows(
   every: TasksById,
 ): TaskSummary[] {
   return drawnTaskRows(tasks, folds.taskOpened, current, every).map(({ task }) => task);
+}
+
+/**
+ * The window's tasks newest active first, as one live query over its task
+ * collection keeps them (`taskTime` under Updated: the later of a task's
+ * own update and its agents' last settled activity), so a delivery moves
+ * only the tasks it changed rather than sorting every task again.
+ */
+function useActivityOrder(): readonly TaskSummary[] {
+  const collections = useTaskListCollections();
+
+  return useLiveQuery({
+    query: (q) =>
+      q.from({ task: collections.tasks }).orderBy(({ task }) => {
+        const agentsAt = coalesce(task.agents?.activityAt, 0);
+
+        return caseWhen(gt(agentsAt, task.updatedAt), agentsAt, task.updatedAt);
+      }, "desc"),
+  }).data;
+}
+
+/**
+ * `tasks` newest active first, read off `order` (`useActivityOrder`), each
+ * task as `tasks` hands it. Note that a task the collection does not hold
+ * yet, between a document landing and its live query answering, is merged
+ * in by its own time, so the list never drops or misplaces a row while the
+ * two catch up.
+ */
+function inActivityOrder(
+  tasks: readonly TaskSummary[],
+  order: readonly TaskSummary[],
+): TaskSummary[] {
+  const unordered = new Map(tasks.map((task) => [task.id, task] as const));
+  const ordered: TaskSummary[] = [];
+
+  for (const row of order) {
+    const task = unordered.get(row.id);
+
+    if (task === undefined) continue;
+    unordered.delete(row.id);
+    ordered.push(task);
+  }
+
+  if (unordered.size === 0) return ordered;
+  const late = orderTasks([...unordered.values()]);
+  const timeOf = (task: TaskSummary) => taskTime(task, TASK_ORDER.UPDATED);
+  const merged: TaskSummary[] = [];
+  let at = 0;
+
+  for (const task of ordered) {
+    for (let next = late[at]; next !== undefined && timeOf(next) > timeOf(task); next = late[at]) {
+      merged.push(next);
+      at += 1;
+    }
+
+    merged.push(task);
+  }
+
+  return [...merged, ...late.slice(at)];
+}
+
+/** The repositories among `tasks`, each once, as `repositoryLabel` reads the groups beside one. */
+function repositoriesOf(tasks: readonly TaskSummary[]): Pick<RepositoryGroup, "repository">[] {
+  return [...new Set(tasks.map((task) => task.repository))].map((repository) => ({ repository }));
 }
 
 /** A repository's group's key, by which it leaves the list. */
@@ -1980,6 +2046,7 @@ function SidebarColumn({
   });
   const unread = useUnreadTasks({ staged: sidebar.staged });
   const listedPullRequests = useListedTaskPullRequests();
+  const activityOrder = useActivityOrder();
   const now = useMinute();
   const edge = useSidebarEdge(sidebar, sidebar.onToggle);
 
@@ -2155,7 +2222,7 @@ function SidebarColumn({
   // Note that an archived task, which the list does not show, counts for nothing here.
   const unlisted = listedRows.tasks.length === 0;
   // A row names its repository as its group's header would, its owner's picture and its name, owner and all where two share a name.
-  const named = repositoryGroups(unpinnedTasks);
+  const named = repositoriesOf(unpinnedTasks);
 
   const repositoryOf = (task: TaskSummary) => {
     const { repository } = task;
@@ -2172,8 +2239,12 @@ function SidebarColumn({
   };
 
   const assigned = tasksAssignedTo(unpinnedTasks, assignedTo, tasks.me);
-  // The list holds the tasks to do and in progress, and the finished sub-tasks where the view asks; the Tasks page holds the rest.
-  const statusTasks = assigned.filter((task) => taskInView(task, taskView.view));
+
+  // The list holds the tasks to do and in progress, and the finished sub-tasks where the view asks, newest active first; the Tasks page holds the rest.
+  const statusTasks = inActivityOrder(
+    assigned.filter((task) => taskInView(task, taskView.view)),
+    activityOrder,
+  );
 
   const orderView: TaskOrderView = {
     workspaceId: tasks.workspace?.id,
@@ -2191,8 +2262,10 @@ function SidebarColumn({
   const sections = useHeldOrder(orderView, tasks.shown && overlay.inSight && pointing, {
     sameOrder: sameTaskOrder,
     draw: (places: ReadonlyMap<string, TaskSummary>) => {
-      const placed = taskPlaces(statusTasks, places, placing);
-      const held = taskSections([...placed.values()], orderView.grouping, tasks.pinnedRepositories);
+      const placed = [...taskPlaces(statusTasks, places, placing).values()];
+      // Note that rows held still are ordered by the times they were first drawn with, so only a list holding none stands in the live order as it is.
+      const ordered = places.size === 0 ? placed : orderTasks(placed);
+      const held = taskSections(ordered, orderView.grouping, tasks.pinnedRepositories);
 
       return liveSections(held, new Map(statusTasks.map((task) => [task.id, task])));
     },

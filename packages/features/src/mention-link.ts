@@ -124,6 +124,12 @@ import { DESCRIPTION_SECTION_BOUNDS } from "./task-wire.js";
  * The Mac itself, any app on it, is `mention://computer/`, labeled
  * Computer.
  *
+ * A machine of the workspace, a member's Mac or host, has no page either,
+ * so it is `mention://machine/<id>`, the device's id alone, as an agent is
+ * named by its id, and its label its name. It points an agent at that
+ * machine for `run_on_mac` and `computer`, whose `machine` input takes the
+ * same id; a mention makes no machine reachable that routing would not.
+ *
  * A date has no page of its own either, so it takes the `mention:` form too:
  * `mention://date/<start>`, and `mention://date/<start>/<end>` for a range, each
  * end ISO 8601 as Notion holds a date's (`date-mention.ts`): a day,
@@ -159,6 +165,8 @@ export const MENTION_KIND = {
   MAC_APP: "mac-app",
   /** The developer's Mac as a whole, any app on which the agent may use through `computer`. */
   COMPUTER: "computer",
+  /** A machine of the workspace, a member's Mac or host, by its device id. */
+  MACHINE: "machine",
 } as const;
 
 const MENTION_BOUNDS = {
@@ -380,6 +388,11 @@ const mentionSchema = EffectSchema.Union([
   // Note that routing's R3 adds the Mac here too, a `machine`, once a command can name the Mac it runs on.
   EffectSchema.Struct({ kind: EffectSchema.Literal(MENTION_KIND.COMPUTER) }),
   EffectSchema.Struct({
+    kind: EffectSchema.Literal(MENTION_KIND.MACHINE),
+    /** The machine's device id, as `run_on_mac`'s and `computer`'s `machine` input takes it. */
+    machineId: thingIdSchema,
+  }),
+  EffectSchema.Struct({
     kind: EffectSchema.Literal(MENTION_KIND.DATE),
     start: dateMomentSchema,
     /** A range's end: both ends days or both times, the end after the start. */
@@ -411,6 +424,9 @@ export type MacAppMention = Extract<Mention, { readonly kind: typeof MENTION_KIN
 
 /** A mention of the developer's Mac as a whole. */
 export type ComputerMention = Extract<Mention, { readonly kind: typeof MENTION_KIND.COMPUTER }>;
+
+/** A mention of a machine of the workspace. */
+export type MachineMention = Extract<Mention, { readonly kind: typeof MENTION_KIND.MACHINE }>;
 
 /** A mention of an MCP server or one of its tools, or a page of its provider's. */
 export type ServerMention = Extract<Mention, { readonly provider: string }>;
@@ -516,6 +532,14 @@ function schemeFields({ host, steps, hash, search }: SchemeLink) {
       return steps.join("") === "" && hash === "" && search === ""
         ? { kind: MENTION_KIND.COMPUTER }
         : undefined;
+
+    case SCHEME_LINK_HOST.MACHINE: {
+      const [machineId, ...rest] = steps;
+
+      if (rest.length > 0 || hash !== "" || search !== "") return undefined;
+
+      return { kind: MENTION_KIND.MACHINE, machineId: decodedStep(machineId ?? "") };
+    }
 
     case SCHEME_LINK_HOST.PLAN: {
       const taskId = decodedStep(steps.join("/"));
@@ -926,6 +950,9 @@ export function encodeMention(mention: Mention, place: MentionPlace): string {
       return schemeLinkOf(SCHEME_LINK_HOST.MAC_APP, encodedStep(mention.app));
     case MENTION_KIND.COMPUTER:
       return schemeLinkOf(SCHEME_LINK_HOST.COMPUTER, "");
+    // A machine has no page of its own, so it keeps the app's own form, named by its id.
+    case MENTION_KIND.MACHINE:
+      return schemeLinkOf(SCHEME_LINK_HOST.MACHINE, encodedStep(mention.machineId));
     // A date has no page of its own, so it keeps the app's own form; its ends spell nothing a target must encode.
     case MENTION_KIND.DATE:
       return schemeLinkOf(
@@ -1022,6 +1049,7 @@ const BARE_NAME = {
   PERSON: "Person",
   APP: PRODUCT_NAME,
   COMPUTER: "Computer",
+  MACHINE: "Machine",
 } as const;
 
 /** A file's lines as a chip names them, `app.ts:12–20`, as a mention of them picked from a File tab is named. */
@@ -1071,6 +1099,8 @@ function bareName(mention: Mention): string {
       return mention.app;
     case MENTION_KIND.COMPUTER:
       return BARE_NAME.COMPUTER;
+    case MENTION_KIND.MACHINE:
+      return BARE_NAME.MACHINE;
   }
 }
 

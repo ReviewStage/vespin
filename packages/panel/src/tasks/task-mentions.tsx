@@ -1,5 +1,5 @@
 import type { AgentSummary } from "@repo/features/agent-wire";
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import { type MentionPlace, sectionAnchors } from "@repo/features/mention-link";
 import type { CatalogModel } from "@repo/features/models-wire";
@@ -275,7 +275,7 @@ async function newestRevisionText(taskId: string): Promise<string | null> {
   if (newest === undefined) return "";
   const answer = await askAct(ACT_KIND.TASKS_REVISION, { taskId, seq: newest.seq });
 
-  return "revision" in answer ? answer.revision.document.body : null;
+  return "revision" in answer ? answer.revision.description.body : null;
 }
 
 /**
@@ -290,7 +290,7 @@ export function useSavedDescriptionText(
   task: Pick<TaskSummary, "id" | "updatedAt"> | undefined,
 ): string | undefined {
   const held = useQuery({ ...descriptionDocumentQuery(task?.id), enabled: false }).data;
-  const openText = held !== undefined && "task" in held ? held.task.document.body : undefined;
+  const openText = held !== undefined && "task" in held ? held.task.description.body : undefined;
   const reading = openText === undefined ? task?.id : undefined;
   const savedAt = task?.updatedAt;
 
