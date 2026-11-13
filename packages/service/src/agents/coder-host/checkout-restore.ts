@@ -27,14 +27,14 @@
  * turn's snapshot as it is), so a miss here is the rare race with it.
  */
 
-import type { DatabaseServices } from "@repo/database/core/query";
-import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import {
   CHECKOUT_DIFF_EXIT,
   CHECKOUT_DIFF_SCRIPT,
   type CheckoutDiffRange,
   checkoutDiffEnv,
-} from "@repo/features/checkout-diff";
+} from "@repo/agent-runner/checkout-diff";
+import type { DatabaseServices } from "@repo/database/core/query";
+import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import {
   CHECKOUT_RESTORE_EXIT,
   CHECKOUT_RESTORE_SCRIPT,

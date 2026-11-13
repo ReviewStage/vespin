@@ -13,6 +13,7 @@ import type {
   UsageLimitNotice,
 } from "@repo/wire/ui-messages";
 import type { UIMessage } from "ai";
+import type { TurnFilesSummaryView } from "../turn-files-wire.js";
 import type { RunModelUsage, RunStatus, RunUsage, TurnFailure } from "./requests.js";
 import { spokenProse } from "./spoken-prose.js";
 import type { TurnTrigger } from "./turn.js";
@@ -269,6 +270,8 @@ export type RunEventBody =
       readonly usageByModel?: readonly RunModelUsage[];
       /** The id of every response the turn was answered with, in order. */
       readonly responseIds: readonly string[];
+      /** The files the turn changed, as its runner diffed its checkout when it ended (`turn-files-wire.ts`); absent where it changed none or none was read. */
+      readonly files?: TurnFilesSummaryView;
       readonly at: number;
       /** The attempt the end is told by, which must be the one the turn runs under, so a launch the turn no longer runs under ends nothing; absent for a turn no launch runs, read as 0. */
       readonly attempt?: number;

@@ -912,6 +912,9 @@ importers:
       '@orpc/openapi':
         specifier: 'catalog:'
         version: 2.0.0-beta.44(crossws@0.4.12)
+      '@repo/agent-runner':
+        specifier: workspace:*
+        version: link:../agent-runner
       '@repo/runtime':
         specifier: workspace:*
         version: link:../runtime

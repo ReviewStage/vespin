@@ -1,7 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { NodeChildProcessSpawner, NodeFileSystem, NodePath } from "@effect/platform-node";
 import { assert, describe, it } from "@effect/vitest";
-import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
+import { CHECKOUT_DIFF_EXIT } from "@repo/agent-runner/checkout-diff";
 import {
   DEVICE_AGENT_REQUEST_KIND,
   type DeviceAgentLayout,
