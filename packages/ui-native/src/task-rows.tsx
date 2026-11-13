@@ -342,6 +342,8 @@ type RelationRowProps = {
   readonly status: TaskStatus | undefined;
   /** How the task stands to this one: "Blocked by", "Blocks"; or, in a picker, its key or why it cannot be picked; none where its section says it, as a task's Sub-tasks does. */
   readonly relation?: string | undefined;
+  /** The relation's kind's glyph, which leads its words as the panel's relation pill does, and whether it wants the reader, as a blocker still open does, which draws both in the attention ink. */
+  readonly relationMark?: { readonly glyph: Glyph; readonly attention: boolean } | undefined;
   /** Whether its words stand muted: a finished task's, as the panel mutes a settled row's name, or one a picker cannot pick, as it dims a task that cannot take the relation. */
   readonly faded?: boolean | undefined;
   /** What a swipe from the trailing edge reveals, such as Remove relation. */
@@ -350,12 +352,13 @@ type RelationRowProps = {
   readonly menuSubmenus?: readonly RowSubmenu[] | undefined;
 };
 
-/** A task related to the one shown, or one a picker offers: its status ring and name, and at the line's end how it stands to this one, its swipe and long press holding what changes that. */
+/** A task related to the one shown, or one a picker offers: its status ring and name, and at the line's end how it stands to this one, led by its kind's glyph where given, its swipe and long press holding what changes that. */
 export function RelationRow({
   id,
   name,
   status,
   relation,
+  relationMark,
   faded = false,
   trailingActions,
   menuSubmenus,
@@ -375,7 +378,23 @@ export function RelationRow({
       }
       title={name}
       ink={faded ? colors.TEXT_MUTED : colors.TEXT_BODY}
-      end={relation === undefined ? undefined : <EndWords words={relation} />}
+      end={
+        relation === undefined ? undefined : (
+          <HStack spacing={SPACE.TIGHT}>
+            {relationMark === undefined ? null : (
+              <ToneGlyph
+                glyph={relationMark.glyph}
+                tone={relationMark.attention ? STATUS_TONE.ATTENTION : STATUS_TONE.NEUTRAL}
+                hidden
+              />
+            )}
+            <EndWords
+              words={relation}
+              ink={relationMark?.attention === true ? colors.ACCENT_TEXT : undefined}
+            />
+          </HStack>
+        )
+      }
     />
   );
 
