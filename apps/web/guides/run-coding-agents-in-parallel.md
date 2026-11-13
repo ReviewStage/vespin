@@ -14,7 +14,7 @@ faq:
     a: Claude Squad, Vibe Kanban, Sculptor, Nimbalyst, Paradev, and Emdash are open source and run locally. Vespin is open source and runs agents in the cloud. All of them are free; you pay for the model.
 ---
 
-There are three kinds of tool for running coding agents in parallel: local worktree apps, the agent vendors' own cloud agents, and agent-neutral cloud workspaces. Local apps run agents on your machine, so they stop when it sleeps. Vendor cloud agents keep running with your laptop closed, but each runs only its vendor's agent. Agent-neutral workspaces run Claude Code, Codex, and others in the cloud.
+There are three kinds of tool for running coding agents in parallel: local worktree apps, the agent vendors' own cloud agents, and agent-neutral cloud workspaces. Local apps run agents on your machine, so they stop when it sleeps. Vendor cloud agents keep running with your laptop closed, but most run only their vendor's agent. Agent-neutral workspaces run Claude Code, Codex, and others in the cloud.
 
 ## Doing it by hand
 
@@ -53,7 +53,7 @@ You start a task in the browser, it runs on the vendor's servers, and you get a 
 - [Cursor's cloud agents](https://cursor.com/docs/cloud-agent) need a [paid Cursor plan](https://cursor.com/pricing).
 - [Devin](https://devin.ai/pricing) caps parallel sessions by plan.
 
-Google's Jules [shuts down on December 31, 2026](https://jules.google/docs/changelog/).
+Google's Jules [is read-only and shuts down on December 31, 2026](https://jules.google/docs/changelog/).
 
 ## Agent-neutral cloud workspaces
 
@@ -68,7 +68,7 @@ Google's Jules [shuts down on December 31, 2026](https://jules.google/docs/chang
 | --- | --- | --- | --- | --- | --- |
 | Conductor | Your Mac | Claude Code, Codex, Cursor, OpenCode | No | Free for now | None published |
 | Claude Squad | Your terminal | Claude Code, Codex, Gemini, Aider | No | Free | AGPL-3.0 |
-| Paradev | Mac; cloud on paid plans | Claude Code, Codex, Gemini, more | Team plan | Free; from $20/mo | MIT |
+| Paradev | Mac; cloud on Team plan | Claude Code, Codex, Gemini, more | Team plan | Free; Team $60/user/mo | MIT |
 | Emdash | Mac, Windows, Linux, SSH | Claude Code, Codex, Amp, more | No | Free | Apache-2.0 |
 | Nimbalyst | Mac, Windows, Linux | Claude Code, Codex | Paid wiki | Free app | MIT |
 | Sculptor | Mac, Linux | Claude Code | No | Free | MIT |
@@ -85,7 +85,7 @@ Prices are for the tool, checked November 12, 2026. The model is billed separate
 
 ## Which to choose
 
-- One agent you already pay for: that vendor's cloud agent.
+- One agent you already pay for: that vendor's cloud agent. Copilot can also hand tasks to Claude or Codex, in preview.
 - A few agents at your desk, for free: a local worktree app.
 - Claude Code and Codex together in the cloud, or a team watching each other's agents: an agent-neutral workspace.
 
