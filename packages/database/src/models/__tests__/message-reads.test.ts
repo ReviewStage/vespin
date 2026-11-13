@@ -17,6 +17,7 @@ import { conversations, messages, turns } from "../../schemas/storage.js";
 import { CONVERSATION_KIND } from "../../storage-vocabulary.js";
 import { getTestDB, plansOf } from "../../testing/index.js";
 import {
+  listCallLines,
   listMessagesBefore,
   listMessagesFrom,
   listMessagesPast,
@@ -351,6 +352,60 @@ it.layer(getTestDB())("a conversation's reader", (it) => {
           { type: "text", text: "Two" },
           { type: "text", text: "Three" },
         ]);
+      }),
+  );
+});
+
+/** A line of the voice call given, the caller's or the voice's. */
+const writeCallLine = (
+  userId: string,
+  conversationId: string,
+  seq: number,
+  callId: string,
+  role: typeof MESSAGE_ROLE.USER | typeof MESSAGE_ROLE.ASSISTANT,
+) =>
+  Database.use((db) =>
+    db.insert(messages).values({
+      userId,
+      conversationId,
+      seq,
+      clientId: randomUUID(),
+      role,
+      parts: [{ type: "text", text: `Line ${seq}` }],
+      metadata: {
+        author: role === MESSAGE_ROLE.USER ? MESSAGE_AUTHOR.DEVELOPER : MESSAGE_AUTHOR.VOICE_MODEL,
+        channel: MESSAGE_CHANNEL.VOICE,
+        voice_session_id: callId,
+      },
+      createdAt: new Date(),
+      placedAt: new Date(),
+      finishedAt: new Date(),
+    }),
+  );
+
+it.layer(getTestDB())("a voice call's lines", (it) => {
+  it.effect(
+    "a call's lines are read in the conversation's order, both speakers', and no other call's, nor by another account",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openAccount;
+        const stranger = yield* openAccount;
+        const conversation = yield* openConversation(owner);
+        const call = randomUUID();
+        yield* writeCallLine(owner, conversation, 1, call, MESSAGE_ROLE.USER);
+        yield* writeLine(owner, conversation, 2);
+        yield* writeCallLine(owner, conversation, 3, randomUUID(), MESSAGE_ROLE.USER);
+        yield* writeCallLine(owner, conversation, 4, call, MESSAGE_ROLE.ASSISTANT);
+
+        const read = yield* listCallLines(owner, conversation, call, {});
+        assert.ok(read.ok);
+        assert.deepEqual(
+          read.value.map((record) => record.seq),
+          [1, 4],
+        );
+
+        const strangers = yield* listCallLines(stranger, conversation, call, {});
+        assert.deepEqual(strangers, { ok: true, value: [] });
       }),
   );
 });
