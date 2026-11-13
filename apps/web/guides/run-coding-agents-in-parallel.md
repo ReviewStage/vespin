@@ -16,7 +16,7 @@ faq:
 
 There are three kinds of tool for running coding agents in parallel: local worktree apps, the agent vendors' own cloud agents, and agent-neutral cloud workspaces. Local apps run agents on your machine, so they stop when it sleeps. Vendor cloud agents keep going with your laptop closed, but most of them run only their vendor's agent. Agent-neutral workspaces run Claude Code, Codex, and others in the cloud, side by side.
 
-We build Vespin, one of the agent-neutral workspaces, so we have a stake in this. Every claim on this page about another product links to that product's own page, and we say where another tool does something better than ours. We also wrote these guides the way this page describes: seven agents ran in parallel, one per page, each with its own pull request, and a person read and approved every page before it went up.
+We build Vespin, one of the agent-neutral workspaces, so we have a stake in this. Every claim on this page about another product links to that product's own page, and we say where another tool does something better than ours.
 
 ## Start with git worktree
 
