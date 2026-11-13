@@ -5,7 +5,7 @@
  * agents, GitHub, and automations send the agent, so the transcript wears
  * `@repo/ui`'s `TranscriptRail` down its leading edge, a mark for each line
  * sent in (`sent-lines.ts`). Its list names each line as the app names a
- * person: their face and name, the reader's own under their own. A press
+ * person: their face and name, the reader's own under their own face as "You". A press
  * goes to the line as a link to a message does, bringing its row in where
  * the log has not drawn it and lighting it once it lands
  * (`message-links.tsx`).
@@ -18,7 +18,7 @@
  */
 
 import { QuietWords, TIME_LOOK, Time, TranscriptRail, type TranscriptRailMark } from "@repo/ui";
-import { ACTOR_KIND, type Actor, actorName } from "@repo/ui/actor-model";
+import { type Actor, actorName } from "@repo/ui/actor-model";
 import { land } from "@repo/ui/landed";
 import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
 import {
@@ -30,13 +30,13 @@ import {
   useRef,
   useState,
 } from "react";
-import { ACTOR_SIZE, ActorMark, BotBadge, YouBadge } from "../actor-ref.js";
+import { ACTOR_SIZE, ActorMark, BotBadge } from "../actor-ref.js";
 import { useMemberDirectory, usePerson } from "../member-directory.js";
 import { usePhoneRoom } from "../stage-room.js";
 import { drawnMessages, messageElement } from "./message-links.js";
 import type { SentLine } from "./sent-lines.js";
 
-/** What the rail names the reader by where their own name is not known. */
+/** What the rail names the reader by on their own lines, as a comment's head does. */
 const READER_NAME = "You";
 
 /** A line sent in, and the key of the log's row that draws it. */
@@ -146,22 +146,18 @@ function centerIn(box: HTMLElement, rows: VirtualRowsHandle, element: HTMLElemen
 
 /**
  * What stands beside a line's sender in a phone's list, as a comment's head
- * says it: the reader's own badge on their line where it is named by their
- * name, a GitHub App's on its, then how long ago it was sent.
+ * says it: a GitHub App's badge on its line, then how long ago it was sent.
  */
 function SheetTag({
   sender,
-  badged,
   sentAt,
 }: {
   sender: Actor | undefined;
-  /** Whether the reader's own line wears their badge, which one named "You" already says. */
-  badged: boolean;
   sentAt: number | undefined;
 }): React.JSX.Element {
   return (
     <>
-      {sender !== undefined ? <BotBadge actor={sender} /> : badged ? <YouBadge /> : null}
+      {sender === undefined ? null : <BotBadge actor={sender} />}
       {sentAt === undefined ? null : (
         <QuietWords>
           <Time at={sentAt} look={TIME_LOOK.SINCE} hint={false} />
@@ -185,20 +181,16 @@ export function AgentRail({
 }): React.JSX.Element | null {
   const { readerId } = useMemberDirectory();
   const reader = usePerson(readerId === undefined ? undefined : { userId: readerId, name: "" });
-  // Note that the reader's own lines are named by their name, their badge saying they are theirs, as a person card names them.
-  const readerName = reader.kind === ACTOR_KIND.PERSON ? reader.name : READER_NAME;
   const inView = useLinesInView(list, rows, lines);
   const narrow = usePhoneRoom();
 
   const marks = lines.map(
     ({ line }): TranscriptRailMark => ({
       key: line.messageId,
-      sender: line.sender === undefined ? readerName : actorName(line.sender),
+      sender: line.sender === undefined ? READER_NAME : actorName(line.sender),
       words: line.words,
       face: <ActorMark actor={line.sender ?? reader} size={ACTOR_SIZE.INLINE} />,
-      tag: (
-        <SheetTag sender={line.sender} badged={readerName !== READER_NAME} sentAt={line.sentAt} />
-      ),
+      tag: <SheetTag sender={line.sender} sentAt={line.sentAt} />,
       shown: inView.has(line.messageId),
     }),
   );

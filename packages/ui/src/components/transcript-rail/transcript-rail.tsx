@@ -73,7 +73,7 @@ const BUBBLE =
 
 /** The list the rail opens into, standing over the rail on a menu's surface, its rows scrolling inside it. */
 const LIST =
-  "ui-transcript-rail-list absolute top-1/2 left-ui-4 flex max-h-[calc(100%-var(--spacing-ui-16))] w-menu-most -translate-y-1/2 flex-col overflow-y-auto overscroll-contain rounded-menu border border-border-strong bg-background p-menu-inset text-foreground shadow-menu transition-[opacity,translate] duration-(--ui-duration-quick) ease-motion-exit";
+  "ui-transcript-rail-list absolute top-1/2 left-ui-4 flex max-h-[calc(100%-var(--spacing-ui-16))] w-popover-wide -translate-y-1/2 flex-col overflow-y-auto overscroll-contain rounded-menu border border-border-strong bg-background p-menu-inset text-foreground shadow-menu transition-[opacity,translate] duration-(--ui-duration-quick) ease-motion-exit";
 
 const LIST_SHUT = "pointer-events-none -translate-x-ui-4 opacity-0";
 const LIST_OPEN = "pointer-events-auto translate-x-0 opacity-100";
