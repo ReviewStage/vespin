@@ -59,7 +59,12 @@ import {
   settleStopWords,
   TASK_MARK,
 } from "@repo/features/tasks-model";
-import { TASKS_READ, type TasksView } from "@repo/features/tasks-view";
+import {
+  serviceTaskSearchQuery,
+  TASK_SEARCH_PAUSE_MILLIS,
+  TASKS_READ,
+  type TasksView,
+} from "@repo/features/tasks-view";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import type { AppStateSnapshot } from "@repo/host/app-state";
@@ -441,6 +446,30 @@ function taskAgentsInOrder(
   );
 }
 
+/**
+ * Asks the host for the tasks `search` finds past the list it holds once
+ * typing pauses, while the list is read (`TASKS_SEARCH`), as ⌘K asks it.
+ * The host keeps only some of the account's tasks live, and draws each task
+ * the service finds that the list holds not into it as a cold task, where
+ * the listing's own search then finds it beside the rest, one row each.
+ * Nothing is read back here: the answer arrives as the list's.
+ */
+function useServiceTaskSearch(search: string, listRead: boolean): void {
+  const acts = useHostActs();
+  const words = serviceTaskSearchQuery(search);
+
+  useEffect(() => {
+    if (!listRead || words === undefined) return;
+
+    const pause = setTimeout(
+      () => void acts[ACT_KIND.TASKS_SEARCH]({ query: words }).catch(refused("The task search")),
+      TASK_SEARCH_PAUSE_MILLIS,
+    );
+
+    return () => clearTimeout(pause);
+  }, [acts, listRead, words]);
+}
+
 /** The listing as it is read, before the screen that draws it holds the questions its acts ask first. */
 export type ReadListing = Omit<TasksListing, "askDelete">;
 
@@ -461,6 +490,7 @@ export function useTasksListing(search: string): ReadListing {
   const { rename } = useTaskWrites();
   const placing = useTaskPlacing(workspace?.id);
   const relations = useTaskRelationWrites();
+  useServiceTaskSearch(search, view?.listStatus === TASKS_READ.READY);
   // Note that the last tree is kept where the new one draws the same rows, because a group's new array resets every row it holds (`RowForEach`), and every delivery to the task list built the tree anew.
   const [keepTree] = useState(answerKeeper<TaskTree>);
 
