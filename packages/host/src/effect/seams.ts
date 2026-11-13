@@ -30,6 +30,7 @@ import type { FileSystem } from "effect/FileSystem";
 import type { HttpClient } from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
 import type { AccountSourceSeam } from "../account-source.js";
+import type { ComputerUseHelperSeam } from "../computer-use-helper.js";
 import type { RunMode as RunModeFacts } from "../run-mode.js";
 import type { SecretCipher as SecretCipherSeam } from "../settings-store.js";
 
@@ -333,13 +334,13 @@ export interface ThisMacHostSeam {
   readonly status: Effect.Effect<ThisMacAgentStatus>;
   /** Whether this app's own version registered the agent; another's leaves it running the bundle an update replaced until it is registered again. */
   readonly registeredHere: Effect.Effect<boolean>;
-  /** The agent registered, which starts the host, the job the account install loaded booted out first so two never run. */
+  /** The agent registered, which starts the host, the job the account install loaded booted out first so two never run; a failure says why in our own words, never a command's output. */
   readonly register: Effect.Effect<
     Result.Result<void, string>,
     never,
     ChildProcessSpawner.ChildProcessSpawner
   >;
-  /** The agent unregistered, which stops the host and keeps it from starting at the next login, its files kept; answered once its daemon has exited. */
+  /** The agent unregistered, which stops the host and keeps it from starting at the next login, its files kept; answered once its daemon has exited. A failure says why in our own words, never a command's output. */
   readonly unregister: Effect.Effect<
     Result.Result<void, string>,
     never,
@@ -362,6 +363,16 @@ export class ThisMacHost extends Context.Service<ThisMacHost, ThisMacHostSeam>()
 ) {}
 
 /**
+ * The Mac's computer-use helper, where this process ships one: the desktop,
+ * which spawns it as its own child so the Mac's Screen Recording and
+ * Accessibility grants are the app's (`computer-use-helper.ts`). Optional,
+ * so the Mac's commands stand without it and take no action on an app.
+ */
+export class ComputerUseHelper extends Context.Service<ComputerUseHelper, ComputerUseHelperSeam>()(
+  "@repo/host/ComputerUseHelper",
+) {}
+
+/**
  * Where the account's identity and credentials come from, as the shell
  * chooses it (`account-source.ts`): the desktop's OAuth source, which needs
  * `SecretCipher` and `SignInConsent` of its own, or a browser's cookie
@@ -378,12 +389,23 @@ export class AccountSource extends Context.Service<AccountSource, AccountSourceS
  * reported line land in one place rather than two.
  */
 export interface HostReporter {
-  readonly report: (message: string) => void;
+  readonly report: (message: string, attributes?: ReportAttributes) => void;
+}
+
+/**
+ * What a reported line names beside its words, as structured attributes
+ * rather than more of the line, so a sink that sends the line on, as Sentry's
+ * does, keeps one line per kind of event and carries these as data. Only
+ * our own words, never what a command or a file printed.
+ */
+export interface ReportAttributes {
+  /** Why the step the line names failed, as the seam it asked said so. */
+  readonly reason: string;
 }
 
 export class Reporter extends Context.Service<Reporter, HostReporter>()("@repo/host/Reporter") {}
 
-export const reporterLayer = (report: (message: string) => void): Layer.Layer<Reporter> =>
+export const reporterLayer = (report: HostReporter["report"]): Layer.Layer<Reporter> =>
   Layer.merge(
     Layer.succeed(Reporter, { report }),
     // v4 states the whole active set rather than swapping one logger out of

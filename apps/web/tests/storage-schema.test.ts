@@ -126,6 +126,7 @@ const DECLARED_TABLES = [
   "sync_log",
   "task",
   "task_block",
+  "task_follower",
   "task_number_counter",
   "task_number_forward",
   "task_pin",

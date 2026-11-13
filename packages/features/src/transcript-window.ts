@@ -89,6 +89,8 @@ export const transcriptWindowRowSchema = Schema.Struct({
   turnFastRefused: Schema.NullOr(Schema.Boolean),
   /** The commit the turn's runner recorded the checkout at before the turn, where it did (`turns.snapshot_commit`); absent from a service older than it. */
   turnSnapshotCommit: Schema.optionalKey(NullableString),
+  /** The files the turn changed, as its row keeps them (`turns.files`); absent from a service older than it. */
+  turnFiles: Schema.optionalKey(Schema.NullOr(Schema.Unknown)),
 });
 
 export type TranscriptWindowRow = typeof transcriptWindowRowSchema.Type;
@@ -229,6 +231,7 @@ function windowMessageOf(
       usage: row.turnUsage,
       failure: row.turnFailure,
       fastRefused: row.turnFastRefused === true,
+      files: row.turnFiles,
     }),
   };
 }

@@ -8,6 +8,7 @@ import {
   type InboxReplyKind,
   inboxFormValueSchema,
 } from "@repo/features/inbox-wire";
+import { type DraftSuggestion, draftSuggestionSchema } from "@repo/features/suggestion-model";
 import { createWait, type Wait } from "@repo/ui";
 import { createStore, type ReadonlyStore, Store, useSelector } from "@tanstack/react-store";
 import { Duration, Effect, Equal, Schema, SchemaTransformation } from "effect";
@@ -121,6 +122,8 @@ const draftPlaceSchema = Schema.Union([
         messageStepParts: Schema.optionalKey(Schema.Number),
       }),
     ),
+    /** The suggestion the draft was opened from, which a relaunch keeps beside its words; none for any other draft. */
+    suggestion: Schema.optionalKey(draftSuggestionSchema),
   }),
   Schema.Struct({
     kind: Schema.Literal(DRAFT_PLACE.INBOX),
@@ -287,6 +290,7 @@ const storedDrafts = Schema.fromJsonString(
       dropped: Schema.optionalKey(Schema.Array(Schema.String)),
       revision: Schema.optionalKey(Schema.Number),
       element: Schema.optionalKey(pageElementSchema),
+      suggestion: Schema.optionalKey(draftSuggestionSchema),
     }),
   ),
 );
@@ -310,6 +314,8 @@ export interface Draft {
   readonly revision?: number | undefined;
   /** The element of a page a thread being started there is on, so the page pins the draft where it was started; none on the page as a whole (`description-comments.tsx`). */
   readonly element?: DraftPageElement | undefined;
+  /** The suggestion in another agent's reply an agent's box was filled in from, whose send goes through it; none for any other draft. */
+  readonly suggestion?: DraftSuggestion | undefined;
 }
 
 /** One place's draft. */
@@ -349,7 +355,8 @@ function stored(draft: Draft): boolean {
     draft.values.length > 0 ||
     (draft.steps ?? []).length > 0 ||
     draft.press !== undefined ||
-    (draft.dropped ?? []).length > 0
+    (draft.dropped ?? []).length > 0 ||
+    draft.suggestion !== undefined
   );
 }
 
@@ -371,7 +378,7 @@ function readDrafts(owner: Owner): readonly KeptDraft[] {
       const read = placeOf(storedPlace);
 
       if (read === undefined) return [];
-      const { steps, press, dropped, element } = rest;
+      const { steps, press, dropped, element, suggestion } = rest;
       const revision = rest.revision ?? read.revision;
 
       return [
@@ -386,6 +393,7 @@ function readDrafts(owner: Owner): readonly KeptDraft[] {
           ...(dropped === undefined ? undefined : { dropped }),
           ...(revision === undefined ? undefined : { revision }),
           ...(element === undefined ? undefined : { element }),
+          ...(suggestion === undefined ? undefined : { suggestion }),
         },
       ];
     })
@@ -409,14 +417,26 @@ function storedAs(owner: Owner, kept: KeptDraft, entry: StoredDraft): boolean {
     entry.press === kept.press &&
     Equal.equals(entry.dropped ?? [], kept.dropped ?? []) &&
     entry.revision === kept.revision &&
-    Equal.equals(entry.element, kept.element)
+    Equal.equals(entry.element, kept.element) &&
+    Equal.equals(entry.suggestion, kept.suggestion)
   );
 }
 
 /** A draft as storage keeps it, a card's picks only where it holds some. */
 function entryOf(
   owner: Owner,
-  { place, text, choices, values, steps = [], press, dropped = [], revision, element }: KeptDraft,
+  {
+    place,
+    text,
+    choices,
+    values,
+    steps = [],
+    press,
+    dropped = [],
+    revision,
+    element,
+    suggestion,
+  }: KeptDraft,
 ): StoredDraft {
   return {
     accountId: owner,
@@ -429,6 +449,7 @@ function entryOf(
     ...(dropped.length === 0 ? undefined : { dropped }),
     ...(revision === undefined ? undefined : { revision }),
     ...(element === undefined ? undefined : { element }),
+    ...(suggestion === undefined ? undefined : { suggestion }),
   };
 }
 
@@ -846,7 +867,9 @@ function rereadKept(): void {
  * starts from what storage holds, because another window keeps its lines
  * there too: it changes the lines it changed, adds the ones it added, and
  * lets go of the ones it let go, so a line another window let go is never
- * written back. A window not signed in keeps nothing.
+ * written back. A window not signed in keeps nothing in storage, which
+ * keeps each line under its account, and holds its lines in the window
+ * alone, as `heldLines` does.
  */
 export function keptLines<Line, Kept>(spec: KeptLines<Line, Kept>): AccountLines<Line> {
   const stored = Schema.fromJsonString(
@@ -856,14 +879,19 @@ export function keptLines<Line, Kept>(spec: KeptLines<Line, Kept>): AccountLines
   const idOf = (line: Line) => spec.idOf(spec.toKept(line));
   // Each line as this window last wrote it, its files among it, by its id.
   const held = new Store<ReadonlyMap<string, Line>>(new Map());
+  // The lines of a window signed in to no account, which storage cannot keep.
+  const unowned = new Store<readonly Line[]>(NO_LINES);
   HELD_BESIDE.push({
     adopt: () => undefined,
-    forget: () => held.setState(() => new Map()),
+    forget: () => {
+      held.setState(() => new Map());
+      unowned.setState(() => NO_LINES);
+    },
   });
 
   const read = (owner: Owner, lines: ReadonlyMap<string, Line>): readonly Line[] =>
     owner === null
-      ? NO_LINES
+      ? unowned.state
       : readKept(spec.key, stored, [])
           .filter((entry) => entry.accountId === owner)
           .map(({ line: kept }) => {
@@ -884,7 +912,12 @@ export function keptLines<Line, Kept>(spec: KeptLines<Line, Kept>): AccountLines
   const set = (change: (now: readonly Line[]) => readonly Line[]): void => {
     const owner = ownerStore.state;
 
-    if (owner === null) return;
+    if (owner === null) {
+      unowned.setState(change);
+
+      return;
+    }
+
     const now = store.state;
     const next = change(now);
     const was = new Set(now.map(idOf));

@@ -1,5 +1,6 @@
 import type { AgentChangesPeople, AgentPullRequest } from "@repo/features/agent-wire";
 import { NEEDS_YOU, needsYouWords } from "@repo/features/inbox-list-model";
+import { openerOf } from "@repo/features/link-standing-model";
 import type { CatalogModel } from "@repo/features/models-wire";
 import type { PageLine, PagePlace } from "@repo/features/page-wire";
 import type { TaskStatus } from "@repo/features/task-wire";
@@ -17,7 +18,6 @@ import { PageCard, PageNameCard, PageNameSkeleton } from "../tasks/page-card.js"
 import { PullRequestCard } from "../tasks/pull-request-card.js";
 import { type PlanStanding, TAB_KIND, tabLook } from "../tasks/tab-look.js";
 import { type FixedSidePanelTab, SIDE_PANEL_TAB } from "../tasks/task-tab-model.js";
-import { openerOf } from "../tasks/use-link-standing.js";
 import { SIDE_PANEL_TAB_KIND } from "../tasks/use-side-panel.js";
 
 /**

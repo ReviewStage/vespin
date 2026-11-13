@@ -23,9 +23,10 @@
  * A drive is a Vercel Drive (https://vercel.com/docs/sandbox/concepts/drives),
  * mounted read-write at the path the ask names in the drive's region: a
  * base drive got or created by its name for a fill, or a sandbox's own drive,
- * named after the sandbox (`ownDriveName`), forked from its origin as the
- * sandbox is created, mounted again by a later create under its name, and
- * deleted with the sandbox; a base drive is deleted by its name alone.
+ * named after the sandbox (`ownDriveName`), forked from its origin or made
+ * empty as the sandbox is created, mounted again by a later create under its
+ * name, and deleted with the sandbox; a base drive is deleted by its name
+ * alone.
  *
  * A sandbox is found by a tag its caller gave it, whose value names few
  * sandboxes, so the first page is all of them. What is sent is a tag, a
@@ -163,18 +164,6 @@ const STATUS_OF_VERCEL: ReadonlyMap<string, SandboxStatus> = new Map([
   ["snapshotting", SANDBOX_STATUS.STOPPING],
   ["stopped", SANDBOX_STATUS.STOPPED],
 ]);
-
-/**
- * The snapshots Vercel keeps of a sandbox: the newest alone, which is all a
- * resume reads, so snapshot storage stays flat however many runs stop it.
- * An evicted one is deleted at once, and the kept one expires `EXPIRATION`
- * after it was last used unless the create names its own lapse, as Vercel's
- * persistent sandbox examples keep one
- * (https://vercel.com/docs/sandbox/concepts/persistent-sandboxes), named here
- * because Vercel's own pages disagree on the default. The cost: a sandbox
- * resumed after 7 idle days finds no snapshot (`SnapshotGone`).
- */
-const KEPT_SNAPSHOTS = { COUNT: 1, EXPIRATION: Duration.days(7), DELETE_EVICTED: true } as const;
 
 /**
  * How a touch lengthens a running session (`touch`). Vercel's extension adds
@@ -579,11 +568,12 @@ interface Under {
   readonly fetch: typeof globalThis.fetch;
 }
 
-/** What a create mounts: the drive, the path it is mounted at, and whether this call forked it. */
+/** What a create mounts: the drive, the path it is mounted at, whether this call forked or made it, and whether it is the sandbox's own as it stood. */
 interface MountedDrive {
   readonly drive: Drive;
   readonly at: string;
-  readonly forked: boolean;
+  readonly made: boolean;
+  readonly kept: boolean;
 }
 
 /** Nothing where the SDK's failure was Vercel's not-found, else the failure thrown on. */
@@ -596,7 +586,7 @@ function absentIfNotFound(cause: unknown): undefined {
  * The drive a create opens with, ready to mount: for a fill, the base drive
  * got or created by its name; for its own, the sandbox's own where it
  * stands, as Vercel mounts the same drive in a later run to pick up where
- * the last left off, and none where it forked none; for a fork, the
+ * the last left off, else one made empty under its name; for a fork, the
  * sandbox's own where it stands, as after a create whose snapshot lapsed,
  * else forked from its origin, which Vercel answers as not found where it is
  * missing.
@@ -610,15 +600,19 @@ async function driveFor(
   if ("fill" in asked) {
     const drive = await Drive.getOrCreate({ ...under, name: asked.fill, signal });
 
-    return { drive, at: asked.at, forked: false };
+    return { drive, at: asked.at, made: false, kept: false };
   }
 
   const own = ownDriveName(name);
   const standing = await Drive.get({ ...under, name: own, signal }).catch(absentIfNotFound);
 
-  if (standing !== undefined) return { drive: standing, at: asked.at, forked: false };
+  if (standing !== undefined) return { drive: standing, at: asked.at, made: false, kept: true };
 
-  if ("own" in asked) return undefined;
+  if ("own" in asked) {
+    const made = await Drive.getOrCreate({ ...under, name: own, signal });
+
+    return { drive: made, at: asked.at, made: true, kept: false };
+  }
 
   const origin = await Drive.get({
     ...under,
@@ -626,13 +620,18 @@ async function driveFor(
     signal,
   });
 
-  return { drive: await origin.fork({ name: own, signal }), at: asked.at, forked: true };
+  return {
+    drive: await origin.fork({ name: own, signal }),
+    at: asked.at,
+    made: true,
+    kept: false,
+  };
 }
 
 /**
  * The sandbox `open` answers, opened with the drive its ask names made
  * ready first (`driveFor`); `open` calls `stands` once the sandbox stands.
- * Note that a drive this call forked for a sandbox that never stood is
+ * Note that a drive this call forked or made for a sandbox that never stood is
  * deleted again, because the caller may open the name next from another
  * origin, which a fork left behind would stand in for.
  */
@@ -652,7 +651,7 @@ async function openedWithDrive(
       stood = true;
     });
   } catch (failure) {
-    if (mounted?.forked === true && !stood) {
+    if (mounted?.made === true && !stood) {
       await mounted.drive.delete({ signal }).catch(() => undefined);
     }
 
@@ -686,11 +685,39 @@ async function clearedStale(name: string, under: Under, signal: AbortSignal): Pr
 }
 
 /**
- * A create as `@vercel/sandbox` takes it: persistent, each run `SANDBOX_IDLE`
- * long, from the image or the snapshot the ask names, with the drive mounted
- * read-write at its path in the drive's own region where it opens with one,
- * as Vercel's drives must be, keeping its newest snapshot alone
- * (`KEPT_SNAPSHOTS`), on the open internet.
+ * Whether a stopped sandbox under the name whose own drive stands was
+ * deleted, its drive kept, so a create makes it again on that drive rather
+ * than resuming its snapshot (`SandboxDrive`'s `own`). Note that one up, or
+ * on its way down, is left to the resume, which answers it as it stands.
+ */
+async function replacedOnOwnDrive(
+  name: string,
+  under: Under,
+  signal: AbortSignal,
+): Promise<boolean> {
+  const [standing, own] = await Promise.all([
+    SdkSandbox.get({ ...under, name, resume: false, signal }).catch(absentIfNotFound),
+    Drive.get({ ...under, name: ownDriveName(name), signal }).catch(absentIfNotFound),
+  ]);
+
+  if (standing === undefined || own === undefined) return false;
+
+  if (STATUS_OF_VERCEL.get(standing.status) !== SANDBOX_STATUS.STOPPED) return false;
+  await standing.delete({ deleteOrphanSnapshots: true, signal }).catch(absentIfNotFound);
+
+  return true;
+}
+
+/**
+ * A create as `@vercel/sandbox` takes it: not persistent, so a stop
+ * discards its disk and Vercel keeps no snapshot of it, each run
+ * `SANDBOX_IDLE` long, from the image or the snapshot the ask names, with
+ * the drive mounted read-write at its path in the drive's own region where
+ * it opens with one, as Vercel's drives must be, on the open internet. Note
+ * that Vercel resumes no stopped sandbox that is not persistent
+ * (https://vercel.com/docs/sandbox/concepts/persistent-sandboxes), so one
+ * is made again on its own drive (`replacedOnOwnDrive`), while a sandbox
+ * created persistent before keeps the setting it was created with.
  */
 function createParams(ask: SandboxCreate, mounted: MountedDrive | undefined) {
   return {
@@ -701,15 +728,10 @@ function createParams(ask: SandboxCreate, mounted: MountedDrive | undefined) {
       ? undefined
       : { mounts: { [mounted.at]: mounted.drive }, region: mounted.drive.region }),
     name: ask.name,
-    persistent: true,
+    persistent: false,
     tags: { ...ask.tags },
     timeout: Duration.toMillis(SANDBOX_IDLE),
     ...(ask.vcpus === undefined ? undefined : { resources: { vcpus: ask.vcpus } }),
-    keepLastSnapshots: {
-      count: KEPT_SNAPSHOTS.COUNT,
-      expiration: Duration.toMillis(ask.snapshotLapse ?? KEPT_SNAPSHOTS.EXPIRATION),
-      deleteEvicted: KEPT_SNAPSHOTS.DELETE_EVICTED,
-    },
     env: { ...ask.env },
     networkPolicy: sdkPolicyOf(OPEN_INTERNET),
   };
@@ -999,8 +1021,14 @@ function vercelSandbox(
         Effect.map(
           asked(SANDBOX_CALL.GET_OR_CREATE, async (signal, under) => {
             // Note that a sandbox standing under the name resumes with the drive it was created with,
-            // so the drive an ask names is made ready only where none stands to resume.
-            if (ask.drive !== undefined) {
+            // so the drive an ask names is made ready only where none stands to resume, or where
+            // one stopped on a drive of its own is made again on it.
+            const replaced =
+              ask.drive !== undefined &&
+              "own" in ask.drive &&
+              (await replacedOnOwnDrive(ask.name, under, signal));
+
+            if (ask.drive !== undefined && !replaced) {
               const standing = await SdkSandbox.get({
                 ...under,
                 name: ask.name,
@@ -1021,7 +1049,7 @@ function vercelSandbox(
                 stands();
 
                 if (ask.user !== undefined) await madeUser(created, ask.user, signal);
-                await onCreate?.(openedOf(created));
+                await onCreate?.({ ...openedOf(created), driveKept: mounted?.kept === true });
               };
 
               const gotOrCreated = () =>

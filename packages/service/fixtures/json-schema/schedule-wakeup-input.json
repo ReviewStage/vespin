@@ -4,7 +4,7 @@
     "delaySeconds": {
       "type": "integer",
       "minimum": 1,
-      "description": "Seconds from now to wake up, held to 60 through 3600. Required unless stop is true."
+      "description": "Seconds from now to wake up, held to 60 through 601200, a minute through 7 days less an hour. Required unless stop is true."
     },
     "prompt": {
       "type": "string",

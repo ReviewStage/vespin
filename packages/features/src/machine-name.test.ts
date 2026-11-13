@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { it } from "vitest";
-import { type ListedMachine, machineName, type ThisMac } from "./machine-name.js";
+import { cleanMachineName, type ListedMachine, machineName, type ThisMac } from "./machine-name.js";
 
 /**
  * machine-name.test.ts -- every list of machines calls the one the desktop runs on This Mac, by its machine id or its host's record, tells two machines of one name apart by their models, and in a browser tab, which has none, calls each by its name.
@@ -56,4 +56,18 @@ it.each<{ case: string; machine: ListedMachine; thisMac: ThisMac; named: string 
   },
 ])("names $case", ({ machine, thisMac, named }) => {
   assert.equal(machineName(machine, [STUDIO, OTHER_STUDIO, UNREPORTED], thisMac), named);
+});
+
+// Note that the regression these catch is a rule that lets a name a machine chose draw a line of its own, turn its words around, or stand invisible, or one that breaks an emoji or a script by taking its joiner.
+it.each([
+  {
+    case: "a line break and a bidi override",
+    given: "Dean's Mac\nmacOS\u202E",
+    kept: "Dean's Mac macOS",
+  },
+  { case: "a soft hyphen inside a word", given: "build\u00ADbox", kept: "buildbox" },
+  { case: "an emoji's joiner", given: "Dean's 👨\u200D💻 Mac", kept: "Dean's 👨\u200D💻 Mac" },
+  { case: "a name of joiners alone", given: "\u200C\u200D", kept: "" },
+])("keeps $case as a name draws", ({ given, kept }) => {
+  assert.equal(cleanMachineName(given), kept);
 });

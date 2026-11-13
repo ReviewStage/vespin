@@ -3,6 +3,7 @@ import {
   LEGACY_APP_WORD,
   literalsReadingLegacy,
   literalsReadingUnknown,
+  MESSAGE_CHANNEL,
   MESSAGE_ROLE,
   TURN_ORIGIN,
   TURN_STATUS,
@@ -33,6 +34,7 @@ import { MAX_REQUEST_FILES_BYTES } from "./request-body-limit.js";
 import { countedNumber, memberRefSchema, wireUuidSchema } from "./service-wire.js";
 import { trimmedText } from "./text-schema.js";
 import { TRIGGER_PROVIDER } from "./trigger-catalog.js";
+import { TurnFilesSummarySchema } from "./turn-files-wire.js";
 
 /**
  * agent-wire.ts -- a task's coding agents, as the desktop starts, lists, reads, messages, and stops them.
@@ -843,6 +845,22 @@ export const agentStartRequestOnWire = (request: AgentStartRequest) =>
   );
 
 /**
+ * What a line carries when it is the developer's words spoken on a call: the
+ * channel it came by (absent for a typed line) and, where a voice delegated
+ * it, the delegation's id, which a delegation alone has no meaning without
+ * the channel.
+ */
+const spokenFields = {
+  channel: EffectSchema.optionalKey(EffectSchema.Literal(MESSAGE_CHANNEL.VOICE)),
+  delegationId: EffectSchema.optionalKey(trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS)),
+};
+
+const spokenFilter = EffectSchema.makeFilter(
+  ({ channel, delegationId }: { channel?: unknown; delegationId?: unknown }) =>
+    delegationId === undefined || channel === MESSAGE_CHANNEL.VOICE,
+);
+
+/**
  * Messaging an agent (POST): the developer's words, trimmed and bounded,
  * the files they attached, words or files or both but never neither, and
  * the client's own key for
@@ -861,7 +879,11 @@ export const agentMessageRequestSchema = EffectSchema.Struct({
   clientKey: trimmedText(AGENT_BOUNDS.MAX_KEY_CHARS),
   attachments: EffectSchema.optionalKey(agentAttachmentsSchema),
   retry: EffectSchema.optionalKey(EffectSchema.Literal(true)),
-}).check(EffectSchema.makeFilter(({ text, attachments }) => hasWordsOrFiles(text, attachments)));
+  ...spokenFields,
+}).check(
+  EffectSchema.makeFilter(({ text, attachments }) => hasWordsOrFiles(text, attachments)),
+  spokenFilter,
+);
 
 export type AgentMessageRequest = typeof agentMessageRequestSchema.Type;
 
@@ -892,7 +914,11 @@ export const agentQueueChangeSchema = EffectSchema.Union([
     id: queuedMessageIdSchema,
     text: messageWordsSchema,
     attachments: EffectSchema.optionalKey(agentAttachmentsSchema),
-  }).check(EffectSchema.makeFilter(({ text, attachments }) => hasWordsOrFiles(text, attachments))),
+    ...spokenFields,
+  }).check(
+    EffectSchema.makeFilter(({ text, attachments }) => hasWordsOrFiles(text, attachments)),
+    spokenFilter,
+  ),
   EffectSchema.Struct({
     change: EffectSchema.Literal(QUEUE_CHANGE.EDIT),
     messageId: queuedMessageIdSchema,
@@ -1520,6 +1546,19 @@ export const listedAgentSchema = EffectSchema.Struct({
 });
 
 export type ListedAgent = typeof listedAgentSchema.Type;
+
+/**
+ * One agent as its own page read it, in the shape the task list holds it:
+ * a surface that draws an agent the list doesn't hold, such as one a link
+ * names, draws it as it draws a listed one. Note that a page names no
+ * automation by null where the list leaves the key out, and carries the run
+ * that started it and its branch, which the list's row doesn't.
+ */
+export function listedAgentOfPage(page: AgentPage): ListedAgent {
+  const { automationId, origin: _origin, branch: _branch, ...agent } = page;
+
+  return automationId === null ? agent : { ...agent, automationId };
+}
 
 /** What became of one file: made, changed in place, removed, or moved, with or without changes. */
 export const CHANGED_FILE_STATUS = {
@@ -2337,6 +2376,8 @@ const turnRecordFields = {
   ending: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(TURN_ENDING))),
   /** Whether Anthropic refused a fast step of the turn, which ran at standard speed instead; absent where none was refused, and from a service older than it. */
   fastRefused: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /** The files the turn changed, as its runner diffed its checkout when the turn ended (`turn-files-wire.ts`); absent where it changed none, its runner read none, and from a service older than it. */
+  changedFiles: EffectSchema.optionalKey(TurnFilesSummarySchema),
 };
 
 const turnRecordSchema = EffectSchema.Struct(turnRecordFields);

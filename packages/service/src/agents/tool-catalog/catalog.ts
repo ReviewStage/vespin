@@ -153,6 +153,12 @@ import { OPEN_PULL_REQUEST_TOOL } from "../coder-host/pull-request.js";
 import { sessionsRouter } from "../coder-host/runtime-sessions.js";
 import { SHOW_IMAGE_TOOL } from "../coder-host/show-image.js";
 import { runScheduleWakeup, SCHEDULE_WAKEUP_TOOL } from "../coder-host/wakeup-tool.js";
+import {
+  COMPUTER_TOOL,
+  computerScreenshot,
+  runComputerTool,
+  storedComputerOutput,
+} from "../computer-tool.js";
 import { macCommandNotRun, RUN_ON_MAC_TOOL, runOnMacTool } from "../mac-command.js";
 import {
   FORGET_MEMORY_TOOL,
@@ -171,6 +177,7 @@ import {
   runSharePort,
   SHARE_PORT_TOOL,
 } from "../port-tools.js";
+import { ADD_SUGGESTION_TOOL, runAddSuggestion } from "../reply-buttons/add-suggestion.js";
 import type { AdmittedConversation } from "../sessions/admitted-conversation.js";
 import {
   CREATE_SECTION_TOOL,
@@ -402,6 +409,22 @@ function browserContent(result: WorkspaceMcpToolResult): readonly McpContent[] {
 }
 
 /**
+ * What the agent is shown of a `computer` call: its JSON with the window's
+ * base64 taken out and its kept full-size copy named by id
+ * (`storedComputerOutput`) as one text block, then the window's bounded copy
+ * as an image, on the same terms as a browser call's (`browserContent`).
+ */
+function computerContent(result: WorkspaceMcpToolResult): readonly McpContent[] {
+  const output = unparsedWire(result);
+  const text: McpContent = { type: "text", text: JSON.stringify(storedComputerOutput(output)) };
+  const shot = computerScreenshot(output);
+
+  return shot === undefined
+    ? [text]
+    : [text, { type: "image", data: shot.data, mimeType: shot.mime }];
+}
+
+/**
  * One `browser` call on the Chromium in the agent's own sandbox: the
  * sandbox tagged with the conversation's session, which is up, since the
  * agent calling runs in it. A conversation that records no session has no
@@ -547,8 +570,8 @@ const CATALOG = [
   // Note that a look stands on no gate, because it shows a thread's pictures as much as a description's, and every workspace has threads.
   served(
     LOOK_AT_PICTURE_TOOL,
-    (admitted, input, { standing }) =>
-      runAgentLookAtPicture(admitted, input, standing.open.has(TOOL_GATE.DESCRIPTIONS)),
+    (admitted, input, { standing, sandbox }) =>
+      runAgentLookAtPicture(admitted, input, standing.open.has(TOOL_GATE.DESCRIPTIONS), sandbox),
     {
       reads: true,
       variant: lookAtPictureToolOf,
@@ -574,6 +597,10 @@ const CATALOG = [
   agentTool(LIST_AGENTS_TOOL, runListAgents, { ...LOADED, ...READS }),
   agentTool(CODER_READ_AGENT_TOOL, runReadAgent, READS),
   agentTool(MESSAGE_AGENT_TOOL, runMessageAgent, LOADED),
+  agentTool(ADD_SUGGESTION_TOOL, runAddSuggestion, {
+    gate: TOOL_GATE.REPLY_BUTTONS,
+    alwaysLoad: true,
+  }),
   agentTool(UPDATE_AGENT_TOOL, runUpdateAgent),
   agentTool(LIST_MODELS_TOOL, runListModels, READS),
   // Tasks and sections.
@@ -601,6 +628,12 @@ const CATALOG = [
   // The developer's Mac.
   served(RUN_ON_MAC_TOOL, (admitted, input) => runOnMacTool(admitted.target, input), {
     gate: TOOL_GATE.SANDBOX,
+    refused: macCommandNotRun,
+  }),
+  // One app on the developer's Mac, offered wherever the agent runs, since the Mac it reaches is the task's assignee's, where the workspace has Computer use on.
+  served(COMPUTER_TOOL, (admitted, input) => runComputerTool(admitted.target, input), {
+    gate: TOOL_GATE.COMPUTER_USE,
+    content: computerContent,
     refused: macCommandNotRun,
   }),
   // The agent's browser.

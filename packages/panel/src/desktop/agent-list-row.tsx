@@ -1,4 +1,5 @@
 import { AGENT_BOUNDS, type AgentPullRequest, type AgentSummary } from "@repo/features/agent-wire";
+import { openerOf } from "@repo/features/link-standing-model";
 import {
   InlineEdit,
   RowHint,
@@ -20,7 +21,6 @@ import { PullRequestChip } from "../tasks/pull-request-chip.js";
 import { RunsOnPlace } from "../tasks/runs-on.js";
 import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
 import type { AgentsControl } from "../tasks/use-agents.js";
-import { openerOf } from "../tasks/use-link-standing.js";
 import { useRefocusAfterEdit } from "../use-refocus-after-edit.js";
 import { rowMenu } from "./action-menu.js";
 import { agentMenuGroups, rowDoors, useAgentActions } from "./agent-actions.js";

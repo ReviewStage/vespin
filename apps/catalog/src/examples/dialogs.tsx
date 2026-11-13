@@ -268,7 +268,7 @@ function Dialogs(): React.JSX.Element {
     <CatalogSection id="dialog-states" title="Dialogs">
       <Inline>
         <Opener label="Rename task…" Body={RenameDialog} />
-        <Opener label="Delete task…" Body={DeleteDialog} />
+        <Opener label="Delete task" Body={DeleteDialog} />
         <Opener label="Send feedback…" Body={NoteDialog} />
         <Opener label="New task…" Body={ComposerDialog} />
         <Opener label="Open picture…" Body={PictureDialog} />

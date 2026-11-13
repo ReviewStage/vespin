@@ -10,9 +10,10 @@
  * them. It runs detached, as root, for as long as the share stands, one at a
  * time, found again by the marker its command line carries.
  *
- * A stopped sandbox keeps its disk and nothing else, so its dev server is
- * gone when it wakes. When a port is shared, the relay records how the
- * server on it was started, in a file on that disk (`RECORD_PATH`): the
+ * A stopped sandbox keeps its drive and nothing else, so its dev server is
+ * gone when it wakes, made again from the image on that drive. When a port
+ * is shared, the relay records how the server on it was started, in a file
+ * on the agent's own drive beside the checkout's record (`RECORD_PATH`): the
  * command the agent's shell ran (the listener's ancestor whose parent is a
  * shell, or the listener itself where no shell stands above it), its folder, its user, and its `PATH` and `HOME`, never the rest of
  * its environment, which may carry credentials. When a preview wakes the
@@ -24,6 +25,8 @@
  */
 
 import type { CommandAsk, DetachedCommandAsk } from "@repo/sandbox";
+import { REPOSITORY_SANDBOX_CONTRACT } from "../repository-sandbox-contract.js";
+import { SANDBOX_STATE_FOLDER } from "../sandbox-state-folder.js";
 
 /** What marks the relay's process, so a new share or a stop ends the one before. */
 const RELAY_MARKER = "vespin-preview-relay";
@@ -31,8 +34,8 @@ const RELAY_MARKER = "vespin-preview-relay";
 /** How far above the shared port its relay listens: the shared port is below it, the relay at or past it. */
 const RELAY_OFFSET = 32_768;
 
-/** Where the shared port and how its server was started are kept, on the sandbox's own disk. */
-const RECORD_PATH = "/var/lib/vespin/preview.json";
+/** Where the shared port and how its server was started are kept: in our state folder on the agent's own drive, which a sandbox made again mounts. */
+const RECORD_PATH = `${REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE}/${SANDBOX_STATE_FOLDER}/preview.json`;
 
 /** How the relay is started: recording the server on the port at a share, or bringing it back from the record at a wake. */
 const RELAY_MODE = { RECORD: "record", RESTORE: "restore" } as const;
@@ -92,7 +95,9 @@ const record = (port) => {
     gid: idOf(pid, "Gid"),
     env: { PATH: environ.PATH || process.env.PATH, HOME: environ.HOME || "/" },
   };
-  fs.mkdirSync(path.dirname(recordPath), { recursive: true });
+  // A state folder the relay makes is handed to the workspace's owner, who writes the checkout's record in it.
+  const made = fs.mkdirSync(path.dirname(recordPath), { recursive: true });
+  if (made !== undefined) { const owner = fs.statSync(path.dirname(made)); fs.chownSync(made, owner.uid, owner.gid); }
   fs.writeFileSync(recordPath, JSON.stringify(kept));
 };
 const restore = (kept) => {

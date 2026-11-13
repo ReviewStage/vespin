@@ -11,6 +11,7 @@ import {
   type SlashChoice,
   sameTrigger,
 } from "./contract.js";
+import { DIAGRAM_LANGUAGE } from "./diagram-card.js";
 import { turnInto } from "./writing-format.js";
 import { inTableCell } from "./writing-keys.js";
 
@@ -40,9 +41,6 @@ const WORD_REST = /^[^\s/￼]*/u;
 
 /** The character an inline node that is no text stands for in its block's words, one position wide as the node is. */
 const LEAF_CHARACTER = "￼";
-
-/** The language a code block names to be drawn as a diagram, as `./diagram-preview.ts` reads it. */
-const DIAGRAM_LANGUAGE = "mermaid";
 
 /** The table a `/table` lays in: three rows by three columns, the first its header. */
 const TABLE = { rows: 3, cols: 3, withHeaderRow: true } as const;

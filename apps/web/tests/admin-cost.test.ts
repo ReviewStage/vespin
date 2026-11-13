@@ -53,6 +53,7 @@ function cost(overrides: Partial<AdminCost> = {}): AdminCost {
         unpricedTokens: 2_500_000,
       },
     ],
+    byHarness: [],
     topAccounts: [
       {
         id: "account-ada",

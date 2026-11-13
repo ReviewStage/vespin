@@ -243,11 +243,10 @@ export const selectLiveMark = (state: AppStateSnapshot): LiveMark | undefined =>
   const { network } = state;
 
   if (!network.online) return LIVE_MARK.MAC_OFFLINE;
-  const live = state.tasks.live;
 
-  if (!network.reachable || live === HOST_LIVE.OFFLINE) return LIVE_MARK.SERVICE_OFFLINE;
+  if (!network.reachable) return LIVE_MARK.SERVICE_OFFLINE;
 
-  if (live === HOST_LIVE.CATCHING_UP) return LIVE_MARK.CATCHING_UP;
+  if (state.tasks.live === HOST_LIVE.CATCHING_UP) return LIVE_MARK.CATCHING_UP;
 
   return undefined;
 };

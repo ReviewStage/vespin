@@ -76,6 +76,10 @@ export interface PageHead {
   readonly description: string;
   readonly url: string;
   readonly image: ReleaseImage | undefined;
+  /** The address of the page's words as Markdown, which its head names as an alternate, where it has one. */
+  readonly markdown?: string;
+  /** JSON-LD blocks, each a JSON document safe inside a `<script>`, which its head carries. */
+  readonly structuredData?: readonly string[];
 }
 
 export interface ChangelogRoute {

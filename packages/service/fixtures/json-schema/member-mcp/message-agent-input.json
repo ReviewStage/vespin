@@ -15,7 +15,7 @@
     },
     "queue": {
       "type": "boolean",
-      "description": "true to queue it behind the agent's turn, as the composer's ⌘↩ would, rather than steer it into the turn under way: it waits unsent, and goes as the member's next message once the turn and every message queued before it are over, at once where the agent stands idle. Only the agent's starter queues to it."
+      "description": "true to queue it behind the agent's turn, as the composer's ⌘↩ would, rather than steer it into the turn under way: it waits unsent, and goes as the member's next message once the turn and every message queued before it are over, at once where the agent stands idle. Any member who may message the agent queues to it."
     }
   },
   "required": [

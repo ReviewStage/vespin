@@ -18,6 +18,7 @@ import { Base64 } from "effect/encoding";
 import type { DescriptionDocumentBinding } from "./description-notes.js";
 import {
   lookNamedOnly,
+  type PdfWrite,
   PICTURE_LOOK_REFUSAL,
   PICTURE_LOOK_STATUS,
   pictureNotLooked,
@@ -74,8 +75,11 @@ function lookCall(userId: string, taskId: string): DescriptionDocumentBinding {
   return { userId, taskId: taskId };
 }
 
+/** A writer for a look that names no PDF, which writes nothing. */
+const noPdfWrite: PdfWrite = () => Effect.die(new Error("a PDF was written"));
+
 const look = (call: DescriptionDocumentBinding, address: string) =>
-  runLookAtPicture(call, unparsedWire({ address }));
+  runLookAtPicture(call, unparsedWire({ address }), noPdfWrite);
 
 it.layer(getTestDB())("look_at_picture", (it) => {
   it.effect("a member's look answers the picture, its type and its bytes", () =>
@@ -118,7 +122,11 @@ it.layer(getTestDB())("look_at_picture", (it) => {
           yield* look(lookCall(owner, taskId), missing),
           yield* look(lookCall(outsider, taskId), address),
           yield* look(lookCall(owner, taskId), pageOfTask),
-          yield* runLookAtPicture(lookCall(owner, taskId), unparsedWire({ attachmentId })),
+          yield* runLookAtPicture(
+            lookCall(owner, taskId),
+            unparsedWire({ attachmentId }),
+            noPdfWrite,
+          ),
         ];
 
         assert.deepEqual(answers, [

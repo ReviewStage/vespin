@@ -95,6 +95,10 @@
       "entry": ["demo-postgres.ts"],
       "project": ["*.ts"]
     },
+    "tools/oxlint/vespin": {
+      "entry": ["index.ts", "repository-guard.ts"],
+      "project": ["**/*.ts"]
+    },
     "tools/polish": {
       "entry": ["polish-shots.ts"],
       "ignoreDependencies": ["playwright", "vite"]

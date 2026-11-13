@@ -1,13 +1,14 @@
 // transcript.tsx -- an agent's transcript as the iPhone draws it: the app's one React Native list, lazy, anchored at its newest row, its rows the panel's anatomy in the brand's inks.
 
-import { Host } from "@expo/ui/swift-ui";
 import type { AgentStatus } from "@repo/features/agent-wire";
 import { agentGlyphState, agentStateWords, GLYPH_STATE } from "@repo/features/glyph-state";
+import type { ReplyButtonLink } from "@repo/features/reply-button-wire";
 import type { CallKind } from "@repo/features/turn-rows";
 import { GlassView, isLiquidGlassAvailable } from "expo-glass-effect";
 import { SymbolView } from "expo-symbols";
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { Fragment, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
+  type AccessibilityActionEvent,
   ActivityIndicator,
   FlatList,
   type NativeScrollEvent,
@@ -32,9 +33,11 @@ import { useDockRoom } from "./glass-bar.js";
 import { isLucideSymbol } from "./glyph.js";
 import { type HeldCall, HeldCallBody } from "./held-call.js";
 import { CopyWordsMenu } from "./held-menu.js";
+import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
 import { ToneGlyph } from "./marks.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
+import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { MONOSPACE_FONT, TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
@@ -42,6 +45,7 @@ import { CALL_SYMBOL } from "./transcript-look.js";
 import {
   CALL_STANDING,
   type CallStanding,
+  type OriginPart,
   TRANSCRIPT_ITEM,
   type TranscriptItem,
   type TranscriptPlace,
@@ -116,6 +120,7 @@ const styles = StyleSheet.create({
   saidRow: { alignItems: "flex-end", gap: SPACE.TIGHT + 2, paddingVertical: SPACE.ROW },
   // Note that the line's menu spans the row, so its bubble stands at the row's end inside it as it stands outside.
   saidHeld: { alignSelf: "stretch", alignItems: "flex-end" },
+  originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
   said: {
     maxWidth: "82%",
     borderRadius: 18,
@@ -271,9 +276,9 @@ function CallGlyph({ callKind }: { readonly callKind: CallKind }) {
   }
 
   return (
-    <Host style={styles.callGlyph}>
+    <InlineHost style={styles.callGlyph}>
       <ToneGlyph glyph={glyph} tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} hidden />
-    </Host>
+    </InlineHost>
   );
 }
 
@@ -366,9 +371,9 @@ function CallRow({
       {held === undefined ? null : (
         <View style={styles.body}>
           {/* Note that the presses are SwiftUI's, hosted in the row at the height they draw. */}
-          <Host matchContents={{ vertical: true }}>
+          <InlineHost matchContents={{ vertical: true }}>
             <HeldCallBody held={held} />
-          </Host>
+          </InlineHost>
         </View>
       )}
       {item.open ? (
@@ -378,6 +383,103 @@ function CallRow({
           ))}
         </View>
       ) : null}
+    </View>
+  );
+}
+
+/** What a webhook call's body is called, folded under the prompt it rode in with, and its block's title, as the panel names them. */
+const WEBHOOK_BODY = { LABEL: "Webhook body", KIND: "body" } as const;
+
+/** What a part of an automation's sender line that opens somewhere is offered to VoiceOver as, and the name its action goes by before its place in the line. */
+const OPEN_WORD = "Open";
+const OPEN_ACTION = "open-";
+
+/**
+ * Who sent an automation's prompt, as the panel's sender line names it: the
+ * automation, then what its run was about and who asked for it, joined by
+ * " · ". A part with an address opens it in Safari, as an underlined word in
+ * the ink, and is offered to VoiceOver as one of the line's actions, since a
+ * word inside a line is never an element of its own on iOS.
+ */
+function OriginFrom({
+  parts,
+  onOpenAddress,
+}: {
+  readonly parts: readonly OriginPart[];
+  readonly onOpenAddress: (address: string) => void;
+}) {
+  const colors = useColors();
+
+  // Note that each part that opens somewhere is offered by its place in the line, since two parts may read alike.
+  const opening = parts.flatMap(({ words, address }, at) =>
+    address === undefined ? [] : [{ name: `${OPEN_ACTION}${at}`, words, address }],
+  );
+
+  const actions =
+    opening.length === 0
+      ? {}
+      : {
+          accessibilityActions: opening.map(({ name, words }) => ({
+            name,
+            label: `${OPEN_WORD} ${words}`,
+          })),
+          onAccessibilityAction: (event: AccessibilityActionEvent) => {
+            const address = opening.find(
+              ({ name }) => name === event.nativeEvent.actionName,
+            )?.address;
+
+            if (address !== undefined) onOpenAddress(address);
+          },
+        };
+
+  return (
+    <Text {...actions} style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+      {parts.map(({ words, address }, at) => (
+        <Fragment key={at}>
+          {at === 0 ? null : " · "}
+          <Text
+            onPress={address === undefined ? undefined : () => onOpenAddress(address)}
+            style={{
+              color: at === 0 || address !== undefined ? colors.TEXT : undefined,
+              fontWeight: at === 0 ? "600" : undefined,
+              textDecorationLine: address === undefined ? undefined : "underline",
+            }}
+          >
+            {words}
+          </Text>
+        </Fragment>
+      ))}
+    </Text>
+  );
+}
+
+/** A webhook call's body under the prompt it rode in with, folded under its own line, as the caller sent it. */
+function OriginBody({ body }: { readonly body: string }) {
+  const colors = useColors();
+  const [open, setOpen] = useState(false);
+
+  return (
+    <View style={styles.originBody}>
+      <Pressable
+        onPress={() => setOpen((was) => !was)}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: open }}
+        accessibilityLabel={WEBHOOK_BODY.LABEL}
+        hitSlop={LINE_REACH}
+        style={styles.callLine}
+      >
+        <SymbolView
+          name={open ? "chevron.down" : "chevron.right"}
+          size={MARK_SIZE.GLYPH - 3}
+          tintColor={colors.TEXT_MUTED}
+          style={{ width: MARK_SIZE.GLYPH, height: MARK_SIZE.GLYPH }}
+          accessibilityElementsHidden
+        />
+        <Text style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
+          {WEBHOOK_BODY.LABEL}
+        </Text>
+      </Pressable>
+      {open ? <BodyBlock title={WEBHOOK_BODY.KIND} text={body} colors={colors} /> : null}
     </View>
   );
 }
@@ -452,6 +554,10 @@ interface RowDrawing {
   readonly pullRequestActs?: ((item: PullRequestItem) => readonly PullRequestAct[]) | undefined;
   /** The answer the agent holds a call for, by the call's id; none where it holds none. */
   readonly heldCall?: ((callId: string) => HeldCall | undefined) | undefined;
+  /** How a suggestion the agent wrote into its words stands, by its button and the words it was written with; every suggestion is drawn as its plain link where none is given. */
+  readonly suggestion?:
+    | ((link: ReplyButtonLink, words: string) => SuggestionLook | undefined)
+    | undefined;
 }
 
 /** A pull request an agent opened, as the transcript lists it. */
@@ -472,6 +578,9 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.SAID:
       return (
         <View style={[styles.row, styles.saidRow]}>
+          {item.from === undefined ? null : (
+            <OriginFrom parts={item.from} onOpenAddress={drawing.onOpenAddress} />
+          )}
           {item.sender === undefined ? null : (
             <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}>
               {item.sender}
@@ -489,6 +598,7 @@ function TranscriptRow({
               </View>
             </View>
           </CopyWordsMenu>
+          {item.body === undefined ? null : <OriginBody body={item.body} />}
           {item.sent === undefined ? null : (
             <Text style={{ fontSize: TEXT_SIZE.CAPTION, color: colors.TEXT_MUTED }}>
               {item.sent}
@@ -522,6 +632,7 @@ function TranscriptRow({
                 words={item.words}
                 repository={drawing.repository}
                 onOpenLink={drawing.onOpenLink}
+                suggestion={drawing.suggestion}
               />
             </View>
           </CopyWordsMenu>
@@ -599,7 +710,7 @@ function TranscriptRow({
       return (
         <View style={[styles.row, inset(item.depth), { paddingVertical: SPACE.TIGHT + 2 }]}>
           {/* Note that the card is SwiftUI's, hosted in the row at the height it draws. */}
-          <Host matchContents={{ vertical: true }}>
+          <InlineHost matchContents={{ vertical: true }}>
             <PullRequestCard
               state={item.state}
               number={item.number}
@@ -616,7 +727,7 @@ function TranscriptRow({
                   : () => drawing.onOpenPullRequest?.(item)
               }
             />
-          </Host>
+          </InlineHost>
         </View>
       );
     default: {
@@ -793,9 +904,9 @@ function OlderRow({ older }: { readonly older: OlderPages }) {
       <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
         {OLDER_WORDS.FAILED}
       </Text>
-      <Host matchContents>
+      <InlineHost matchContents>
         <Button label={OLDER_WORDS.RETRY} look={BUTTON_LOOK.BORDERED} onPress={older.onRetry} />
-      </Host>
+      </InlineHost>
     </View>
   );
 }
@@ -893,9 +1004,9 @@ export function AgentTranscript({
         // Note that the empty state is SwiftUI's, so it stands in a host of its own: mounted bare in the list's React Native view, it raises a native exception that crashes the app.
         ListEmptyComponent={
           empty === undefined ? undefined : (
-            <Host matchContents={{ vertical: true }}>
+            <InlineHost matchContents={{ vertical: true }}>
               <EmptyState {...empty} />
-            </Host>
+            </InlineHost>
           )
         }
         ListFooterComponent={<View style={{ height: foot }} />}

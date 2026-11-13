@@ -397,7 +397,6 @@ export function IntegrationRow({
 
   const leave = {
     label: INTEGRATION_ROW_WORDS.DISCONNECT,
-    icon: <GLYPH.DISCONNECT />,
     danger: true,
     onSelect: disconnect.ask,
   };

@@ -71,6 +71,7 @@ import { accountMiddleware, type HostedContext, hosted } from "../orpc/base.js";
 import { queueOnPage } from "./coder-host/agent-queue.js";
 import { cutMessage, wholePartOf } from "./coder-host/part-cut.js";
 import { changeAgentQueue } from "./coder-host/queue-change.js";
+import { spokenLineMetadata } from "./coder-host/spoken-line.js";
 import { startedBlank } from "./coder-host/status.js";
 import { STEER_OUTCOME, steerMemberWords } from "./coder-host/steer.js";
 import { summaryOf } from "./coder-host/stop.js";
@@ -382,7 +383,9 @@ export function messagesProcedures(seams: MessagesProcedureSeams) {
       .use(tooLongMiddleware)
       .send.effect(function* ({ input, context }) {
         const { agent } = yield* reachedAgent(context.userId, input.params.id);
-        const { retry, ...line } = input.body;
+        const { retry, channel, delegationId, ...words } = input.body;
+        const metadata = spokenLineMetadata({ channel, delegationId });
+        const line = metadata === undefined ? words : { ...words, metadata };
 
         const { txid, outcome } = yield* steerMemberWords(
           writer,

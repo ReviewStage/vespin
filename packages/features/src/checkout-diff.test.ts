@@ -3,9 +3,10 @@
  */
 
 import assert from "node:assert/strict";
+import { CHECKOUT_DIFF_BOUNDS } from "@repo/agent-runner/checkout-diff";
 import { test } from "vitest";
 import { CHANGED_FILE_STATUS, CHANGES_BOUNDS, PATCH_OMITTED } from "./agent-wire.js";
-import { CHECKOUT_DIFF_BOUNDS, checkoutDiffEnv, checkoutDiffFiles } from "./checkout-diff.js";
+import { checkoutDiffFiles } from "./checkout-diff.js";
 
 const DIFF = [
   "diff --git a/src/invite.ts b/src/invite.ts",
@@ -189,15 +190,4 @@ test("a patch past the view's bound is left out as too large with its counts kep
   );
 
   assert.deepEqual([many.truncated, many.files.length], [true, CHANGES_BOUNDS.MAX_FILES]);
-});
-
-test("the script's variables carry the two commits, the second empty for the working tree", () => {
-  assert.deepEqual(checkoutDiffEnv({ from: "abc", to: "def" }), {
-    APP_DIFF_FROM: "abc",
-    APP_DIFF_TO: "def",
-  });
-  assert.deepEqual(checkoutDiffEnv({ from: "abc", to: null }), {
-    APP_DIFF_FROM: "abc",
-    APP_DIFF_TO: "",
-  });
 });

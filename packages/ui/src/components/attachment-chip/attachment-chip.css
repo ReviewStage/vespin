@@ -1,7 +1,7 @@
 /* attachment-chip.css -- what an attachment chip's utilities cannot say
    (`attachment-chip.tsx`, drawn in the shared Tailwind theme): the motions it
-   arrives in, its upload sweeps in, and its landed check springs in by, which
-   play keyframes. */
+   arrives in and its landed check springs in by, which play keyframes. Its
+   upload's meter is `upload-cover.css`'s. */
 
 @layer components {
   /* A chip with a way off was added to what it comes along with, so it
@@ -14,15 +14,6 @@
       ui-chip-pop var(--ui-duration-fast) var(--ui-spring-fast) backwards;
   }
 
-  /* Where no share of an upload is known, a third of the track sweeps across
-     it from its middle, an endless loop with no end to wait for, so its
-     duration is a literal held still on --ui-loop-motion. */
-  .ui-attachment-chip-meter[data-indeterminate="true"] > .ui-attachment-chip-meter-fill {
-    width: 34%;
-    animation: ui-attachment-chip-sweep 1200ms var(--ui-motion-pane) infinite;
-    animation-play-state: var(--ui-loop-motion);
-  }
-
   /* A file that lands takes a check on its corner, which springs in on the
      pair an arriving element rides and fades once it has stood as long as
      any confirmation does (`--ui-confirm-delay`). */
@@ -32,25 +23,6 @@
       ui-attachment-chip-spring var(--ui-duration-fast) var(--ui-spring-fast) backwards,
       ui-attachment-chip-leave var(--ui-duration-exit) var(--ui-motion-exit) var(--ui-confirm-delay)
       forwards;
-  }
-
-  /* Note that the sweep starts with its segment in the track's middle
-     third and wraps round off its ends, because a loop held still holds its
-     first frame, and a segment held off the track would leave reduced motion
-     and a capture with no sign of the upload at all. */
-  @keyframes ui-attachment-chip-sweep {
-    0% {
-      transform: translateX(100%);
-    }
-    50% {
-      transform: translateX(300%);
-    }
-    50.001% {
-      transform: translateX(-100%);
-    }
-    100% {
-      transform: translateX(100%);
-    }
   }
 
   @keyframes ui-attachment-chip-fade {

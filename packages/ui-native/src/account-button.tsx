@@ -1,4 +1,4 @@
-// account-button.tsx -- the signed-in account's photo at the leading edge of a tab's bar, the button that opens Settings, as Conductor's and Cursor's iPhone apps stand theirs.
+// account-button.tsx -- the signed-in account's photo at the leading edge of a tab's bar, the button that opens Settings.
 
 import { Host, Button as SwiftUIButton } from "@expo/ui/swift-ui";
 import { accessibilityLabel, buttonStyle } from "@expo/ui/swift-ui/modifiers";

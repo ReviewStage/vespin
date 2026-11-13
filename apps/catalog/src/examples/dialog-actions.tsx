@@ -81,15 +81,15 @@ function DialogActionsExample(): React.JSX.Element {
     <CatalogSection id="dialog-actions-states" title="Dialog actions">
       <Inline>
         <Asking
-          label="Delete task…"
+          label="Delete task"
           title="Delete this task?"
-          verb="Delete"
+          verb="Delete task"
           tone={DIALOG_TONE.DANGER}
         />
         <Asking
-          label="Remove member…"
+          label="Remove member"
           title="Remove Ada from the workspace?"
-          verb="Remove"
+          verb="Remove member"
           tone={DIALOG_TONE.PRIMARY}
         />
         <Showing />

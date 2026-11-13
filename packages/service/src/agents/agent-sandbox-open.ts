@@ -7,7 +7,11 @@
  * gone is deleted and created again under the same name: from the agents'
  * image, or from the snapshot a launch names
  * (`machine/sandbox-machine.ts`), with the drive of its own a launch has it
- * fork (`workspace-drive.ts`), whose files already hold a checkout.
+ * fork (`workspace-drive.ts`), whose files already hold a checkout. Every
+ * open of a sandbox standing under its session's name asks for its own drive
+ * (`AGENT_OWN_DRIVE`), so one stopped on a drive of its own is made again from
+ * the image with that drive mounted rather than resumed from its snapshot,
+ * whichever caller wakes it.
  * Whichever caller opens it, a message's
  * launch (`machine/sandbox-machine.ts`), the Terminal, or the agent's browser,
  * opens it here, so a sandbox any of them creates is the same sandbox: the
@@ -20,8 +24,8 @@
 import { createHash } from "node:crypto";
 import { AGENT_USER, CODEX_PIN } from "@repo/agent-runner/pins";
 import {
+  type CreatedSandbox,
   type ListedSandbox,
-  type OpenedSandbox,
   SANDBOX_STATUS,
   Sandbox,
   type SandboxDrive,
@@ -33,6 +37,7 @@ import {
 import { Duration, Effect, Predicate, Schedule } from "effect";
 import { afterResponse } from "../http/after-response.js";
 import { AgentImage } from "./coder-host/agent-image.js";
+import { REPOSITORY_SANDBOX_CONTRACT } from "./repository-sandbox-contract.js";
 
 /**
  * What a sandbox we open is named as, beside a digest of its session's id
@@ -64,6 +69,17 @@ const AGENT_TAG_BEFORE_RENAME = "lukeAgent";
 export function agentTag(tags: Readonly<Record<string, string>> | undefined): string | undefined {
   return tags?.[AGENT_TAG] ?? tags?.[AGENT_TAG_BEFORE_RENAME];
 }
+
+/**
+ * The agent's own drive, mounted where the checkout's workspace stands: the
+ * one its first open forked or made, as it stands, else one made empty
+ * (`@repo/sandbox`'s `SandboxDrive`), so no agent's work lives only on its
+ * sandbox's disk.
+ */
+export const AGENT_OWN_DRIVE = {
+  own: true,
+  at: REPOSITORY_SANDBOX_CONTRACT.PATH.WORKSPACE,
+} as const satisfies SandboxDrive;
 
 /** The variables the sandbox opens with. */
 export const SANDBOX_ENV = { NO_COLOR: "1", GH_STACK_NO_UPDATE_NOTIFIER: "1" } as const;
@@ -146,7 +162,7 @@ export const agentSandboxOf = (
 /**
  * What opening the agent's standing sandbox again asks of `getOrCreate`
  * (`openAgentSandbox`): its session's name, with the tags and the size it
- * stood with. MIGRATION: a legacy sandbox (`legacySandboxOf`) is created
+ * stood with, and its own drive (`AGENT_OWN_DRIVE`). MIGRATION: a legacy sandbox (`legacySandboxOf`) is created
  * anew under its session's name from its last snapshot, which holds its
  * disk and the `agent` user, and is left stopped, so it is never resumed in
  * place; one up or on its way down is waited out as any sandbox stopping
@@ -159,7 +175,12 @@ export function reopenedOf(
   standing: ListedSandbox,
 ): Effect.Effect<AgentSandboxOf, SandboxEnding> {
   if (standing.name === agentSandboxName(sessionId)) {
-    return Effect.succeed({ sessionId, tags: { ...standing.tags }, vcpus: standing.vcpus });
+    return Effect.succeed({
+      sessionId,
+      tags: { ...standing.tags },
+      vcpus: standing.vcpus,
+      drive: AGENT_OWN_DRIVE,
+    });
   }
 
   if (standing.status !== undefined && standing.status !== SANDBOX_STATUS.STOPPED) {
@@ -208,12 +229,13 @@ export interface AgentSandboxOf {
 /**
  * The agent's sandbox opened once through `getOrCreate`, as above, from the
  * agents' image or the snapshot named: running, with whether this call
- * created it. A sandbox it creates has the `agent` user made in it, and is
+ * created it and, where it did, whether it mounted the agent's own drive as
+ * it stood (`driveKept`). A sandbox it creates has the `agent` user made in it, and is
  * then handed to the caller's `onCreate` where it gives one; a failure of
  * either fails the open, as does an image the build named none of, which
  * reads as the sandbox unavailable.
  */
-const openedOnce = (of: AgentSandboxOf, onCreate?: (created: OpenedSandbox) => Promise<void>) =>
+const openedOnce = (of: AgentSandboxOf, onCreate?: (created: CreatedSandbox) => Promise<void>) =>
   Effect.gen(function* () {
     const from =
       of.snapshot === undefined
@@ -227,6 +249,7 @@ const openedOnce = (of: AgentSandboxOf, onCreate?: (created: OpenedSandbox) => P
         : { snapshotId: of.snapshot.snapshotId };
 
     let created = false;
+    let driveKept = false;
 
     const sandbox = yield* (yield* Sandbox).getOrCreate(
       {
@@ -242,11 +265,12 @@ const openedOnce = (of: AgentSandboxOf, onCreate?: (created: OpenedSandbox) => P
       },
       async (opened) => {
         created = true;
+        driveKept = opened.driveKept;
         await onCreate?.(opened);
       },
     );
 
-    return { sandbox, created };
+    return { sandbox, created, driveKept };
   });
 
 /**
@@ -256,7 +280,7 @@ const openedOnce = (of: AgentSandboxOf, onCreate?: (created: OpenedSandbox) => P
  */
 export const openAgentSandbox = (
   of: AgentSandboxOf,
-  onCreate?: (created: OpenedSandbox) => Promise<void>,
+  onCreate?: (created: CreatedSandbox) => Promise<void>,
 ) =>
   openedOnce(of, onCreate).pipe(
     Effect.retry({

@@ -1,4 +1,4 @@
-// skills.tsx -- Settings' Skills page for the workspace the app works in: the workspace's skills, then the account's own, each opening its SKILL.md, and Delete, asked first, where the reader may; a skill is added from the desktop or the web, where its paste is read.
+// skills.tsx -- Settings' Skills page for the workspace the app works in: the workspace's skills, then the account's own, each opening its SKILL.md, Delete, asked first, where the reader may, and Add skill from the bar's +.
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
@@ -24,9 +24,10 @@ import {
   NoteRow,
   Screen,
   SettingsForm,
+  useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { useChosenWorkspace } from "../../chosen-workspace.js";
 import { appStateQuery } from "../../host/app-state-query.js";
@@ -62,6 +63,7 @@ export default function SkillsScreen() {
 }
 
 function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
+  const colors = useColors();
   const acts = useHostActs();
   const write = useWrite();
   const router = useRouter();
@@ -150,6 +152,14 @@ function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
 
   return (
     <>
+      <Stack.Toolbar placement="right">
+        <Stack.Toolbar.Button
+          icon="plus"
+          tintColor={colors.TEXT}
+          accessibilityLabel={SKILLS_LINE.ADD_SKILL}
+          onPress={() => router.push(SETTINGS_ROUTE.SKILL_ADD)}
+        />
+      </Stack.Toolbar>
       <Screen>{body}</Screen>
       <ConfirmAsk
         title={question.title}

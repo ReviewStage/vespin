@@ -846,7 +846,7 @@ it.layer(SUITE)("the runner events route", (it) => {
   );
 
   it.effect(
-    "a warm launch's IDLE settles its turn as a turn's end does and is told once, its heartbeats touch no sandbox, and the END that retires it later settles nothing more",
+    "a warm launch's IDLE settles its turn as a turn's end does, keeping the files it says the turn changed, and is told once, its heartbeats touch no sandbox, and the END that retires it later settles nothing more",
     () =>
       Effect.gen(function* () {
         const told: RunnerEnded[] = [];
@@ -860,6 +860,13 @@ it.layer(SUITE)("the runner events route", (it) => {
         const agent = yield* agentWithBearer;
         const envelope = { parent_tool_use_id: null, session_id: SESSION, uuid: randomUUID() };
 
+        const files = {
+          files: [{ path: "src/queue.ts", additions: 12, deletions: 3 }],
+          total: 1,
+          additions: 12,
+          deletions: 3,
+        };
+
         const turn = [
           { type: RUNNER_EVENT.ACCEPTED, uuid: agent.lineId },
           { type: "system", subtype: "init", ...envelope },
@@ -869,7 +876,7 @@ it.layer(SUITE)("the runner events route", (it) => {
             ...envelope,
           },
           { type: "result", subtype: "success", is_error: false, ...envelope },
-          { type: RUNNER_EVENT.IDLE },
+          { type: RUNNER_EVENT.IDLE, files },
         ];
 
         const retired = [{ type: RUNNER_EVENT.END, reason: RUNNER_END.IDLED }];
@@ -887,10 +894,18 @@ it.layer(SUITE)("the runner events route", (it) => {
         yield* post(agent.bearer, events.slice(turn.length));
         const ended = yield* transcriptOf(agent.target.conversationId);
 
+        const kept = yield* Effect.flatMap(Database, (db) =>
+          db
+            .select({ files: turns.files })
+            .from(turns)
+            .where(eq(turns.conversationId, agent.target.conversationId)),
+        );
+
         assert.deepEqual(
           idle.turns.map(({ status, failureDetail }) => ({ status, failureDetail })),
           [{ status: TURN_STATUS.SETTLED, failureDetail: null }],
         );
+        assert.deepEqual(kept, [{ files }], "the END that retired it later kept the IDLE's files");
         assert.deepEqual(idle.rows.at(-1)?.parts.map(drawn), [["step-start"], ["text", "Done."]]);
         assert.deepEqual(ended, idle);
         assert.deepEqual(

@@ -1,5 +1,6 @@
 import { RUNNER_END, RUNNER_EVENT, type RunnerEnd } from "@repo/agent-runner/protocol";
 import { redactCredentials } from "@repo/features/credential-redaction";
+import { TurnFilesSummarySchema, type TurnFilesSummaryView } from "@repo/features/turn-files-wire";
 import {
   TOOL_CALL_SETTLEMENT,
   type ToolCallSettlement,
@@ -97,6 +98,22 @@ const readSnapshot = Schema.decodeUnknownOption(
   }),
 );
 
+/**
+ * The files the turn changed, as the runner's IDLE or END carries them, read
+ * apart from the end so a summary spelled wrong is left out rather than
+ * leaving the turn unended. A host bundles its own runner, so one from
+ * before the summary sends none.
+ */
+const readFiles = Schema.decodeUnknownOption(Schema.Struct({ files: TurnFilesSummarySchema }));
+
+/** The files the runner's event carries, as a moment spreads them; none where it carries none it can read. */
+function filesOf(message: WireValue): { readonly files?: TurnFilesSummaryView } {
+  return Option.match(readFiles(message), {
+    onSome: ({ files }) => ({ files }),
+    onNone: () => ({}),
+  });
+}
+
 const readConnectionLost = Schema.decodeUnknownOption(Schema.Struct({ host: Schema.String }));
 
 const readConnectionRestored = Schema.decodeUnknownOption(
@@ -152,6 +169,7 @@ function endMoments(message: WireValue): readonly NativeMoment[] {
         ? undefined
         : { detail: redactKeepingPlanCodes(said).slice(0, END_DETAIL_CHARS) }),
       ...(reason === RUNNER_END.FAILED ? { launchFailed: true } : undefined),
+      ...filesOf(message),
     },
   ];
 }
@@ -220,7 +238,9 @@ export function runnerMoments(message: WireValue): Option.Option<readonly Native
       );
     // The agent's turn is over, as a `turn_ended` END says, though the launch stays warm.
     case RUNNER_EVENT.IDLE:
-      return Option.some([{ kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.DONE, warm: true }]);
+      return Option.some([
+        { kind: NATIVE_MOMENT.ENDED, ending: NATIVE_ENDING.DONE, warm: true, ...filesOf(message) },
+      ]);
     case RUNNER_EVENT.END:
       return Option.some(endMoments(message));
     // An ask and its settle are no moment of the run: the events route lands them apart (`runner-approvals.ts`).

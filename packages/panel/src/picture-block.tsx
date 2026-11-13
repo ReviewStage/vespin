@@ -16,6 +16,7 @@ import {
   VideoPlayer,
 } from "@repo/ui";
 import { PICTURE_STATE, type PictureState } from "@repo/ui/picture-read";
+import type { ReportedFailure, Unreported } from "@repo/ui/reported-failure";
 import { FileTypeIcon } from "./tasks/file-type-icon.js";
 
 /**
@@ -67,6 +68,9 @@ const PICTURE_MISSING_CLASS =
 const PICTURE_CAPTION_CLASS =
   "picture-caption mt-item-gap block text-picture-caption text-muted-foreground";
 
+/** Where a caption typed in place stands, the field setting the caption's type and ink itself. */
+const PICTURE_CAPTION_FIELD_CLASS = "picture-caption mt-item-gap block";
+
 /** Whether a `data:` URL a picture read answered holds a PDF, drawn as its file rather than a picture. */
 export function isPdfDataUrl(dataUrl: string): boolean {
   return dataUrlMediaType(dataUrl) === DESCRIPTION_FILE_TYPE.PDF;
@@ -83,12 +87,24 @@ export function PdfFile({
   name,
   onOpen,
   state = ATTACHMENT_CHIP_STATE.READY,
+  failure,
+  reported,
+  onRetry,
+  onRemove,
 }: {
   url: string;
   name: string;
   onOpen?: (() => void) | undefined;
   /** Where the file stands: kept, or on its way up from the editor, or failed to go. */
   state?: AttachmentChipState;
+  /** Why it failed to go, hung as the chip's hint. */
+  failure?: string | undefined;
+  /** The failure as the app reports it. */
+  reported?: ReportedFailure | Unreported | undefined;
+  /** Sends it again, the chip's face its press; none where a second try could not land. */
+  onRetry?: (() => void) | undefined;
+  /** Takes it out of the description, from the chip's corner. */
+  onRemove?: (() => void) | undefined;
 }): React.JSX.Element {
   const base64 = chipBase64({ name, mediaType: DESCRIPTION_FILE_TYPE.PDF, url });
 
@@ -101,8 +117,11 @@ export function PdfFile({
         detail={sizeLabel(base64)}
         onOpen={onOpen}
         state={state}
-        // Note that a failed chip says its file's name, since it hangs no card that would name it, and the failure's words stand under it.
-        failure={state === ATTACHMENT_CHIP_STATE.FAILED ? name : undefined}
+        // Note that a failed chip says why, or its file's name where none is given, since it hangs no card that would name it.
+        failure={state === ATTACHMENT_CHIP_STATE.FAILED ? (failure ?? name) : undefined}
+        reported={reported}
+        onRetry={onRetry}
+        onRemove={onRemove}
         // Note that it hangs no card, because a card would cover the description's words and say only what the chip does.
         hover={ATTACHMENT_CHIP_HOVER.NONE}
       />
@@ -116,7 +135,9 @@ export function PictureBlock({
   state,
   alt,
   caption,
+  captionField,
   onOpen,
+  pointerOpens = true,
 }: {
   /** The block's own element, as the place drawing it may need to find it among others. */
   ref?: React.Ref<HTMLSpanElement> | undefined;
@@ -125,12 +146,24 @@ export function PictureBlock({
   alt: string;
   /** The words drawn under it, as its Markdown's title gives them; none where it gives none. */
   caption: string | undefined;
+  /** The caption typed in place, as an editor draws it, standing where `caption` would; none where the caption is only read. */
+  captionField?: React.ReactNode;
   /** Opens the picture over the window; without one, the picture is drawn with no press to it. */
   onOpen?: (() => void) | undefined;
+  /** Whether a pointer's press on a picture opens it, rather than passing on to the place around it, as an editable description's text takes it; a key's press always does. */
+  pointerOpens?: boolean | undefined;
 }): React.JSX.Element {
-  const said =
+  const read =
     caption === undefined || caption === "" ? null : (
       <span className={PICTURE_CAPTION_CLASS}>{caption}</span>
+    );
+
+  // Note that a caption typed in place stands where the read one would, so the editor draws the picture as the text does.
+  const said =
+    captionField === undefined || captionField === null ? (
+      read
+    ) : (
+      <span className={PICTURE_CAPTION_FIELD_CLASS}>{captionField}</span>
     );
 
   // A PDF stands as its file, which a press opens over the window.
@@ -183,6 +216,7 @@ export function PictureBlock({
       <span ref={ref} className={PICTURE_BLOCK_CLASS} data-state={state.kind}>
         <PictureTile
           name={alt}
+          pointerOpens={pointerOpens}
           onOpen={(event) => {
             // Note that the press stops here, because a click into a section opens its editor.
             event.stopPropagation();

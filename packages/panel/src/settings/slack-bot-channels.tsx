@@ -254,7 +254,6 @@ function ChannelRow({
           [
             {
               label: WORDS.REMOVE,
-              icon: <GLYPH.REMOVE />,
               danger: true,
               onSelect: () => remove.ask(),
             },

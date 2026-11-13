@@ -19,7 +19,7 @@ import { Label } from "./label.js";
  * ink, dropping into its line as it arrives, fading out where its caller
  * holds it leaving (`data-leaving`), and, while empty, standing out of the
  * flow, so it gives back the gap before it in whatever stack holds it.
- * None of shadcn's ring utilities. `@repo/ui`'s
+ * None of shadcn's ring utilities (`vespin/no-shadcn-focus-ring`). `@repo/ui`'s
  * `FormField` (`components/form-field`) is what an app draws, and its
  * `ErrorLine` (`components/error-line`) the error alone; this is their inside.
  */

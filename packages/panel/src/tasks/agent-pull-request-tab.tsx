@@ -35,6 +35,7 @@ import {
   PULL_REQUEST_THREAD_VIEW,
   type PullRequestThreadView,
 } from "@repo/features/link-grammar";
+import { type LinkStanding, PULL_REQUEST_MOMENT } from "@repo/features/link-standing-model";
 import { formatCount } from "@repo/features/number-format";
 import {
   CHECK_SUMMARY_WORDS,
@@ -292,7 +293,7 @@ import {
 } from "./thread-reveal.js";
 import { type GitHubPictureDrawer, GitHubWords, TranscriptWords } from "./transcript-blocks.js";
 import type { AgentsControl } from "./use-agents.js";
-import { type LinkStanding, PULL_REQUEST_MOMENT, usePlaceStanding } from "./use-link-standing.js";
+import { usePlaceStanding } from "./use-link-standing.js";
 import {
   linkPressOf,
   type OpenHere,

@@ -27,6 +27,7 @@ function unanswered(): Promise<never> {
 }
 
 const UNANSWERED: AdminReads = {
+  catalog: unanswered,
   metrics: unanswered,
   cost: unanswered,
   reliability: unanswered,

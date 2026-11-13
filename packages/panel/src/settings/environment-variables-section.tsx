@@ -8,7 +8,6 @@ import {
 import { managesWorkspace } from "@repo/features/workspace-role";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { SETTINGS_SEARCH_ROW } from "@repo/settings/settings-anchors";
 import {
   BUTTON_VARIANT,
   Button,
@@ -49,6 +48,7 @@ import { confirmFailure } from "../failure-report.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { ReadFailed, replayMaskedError } from "./marks.js";
 import { MenuRow } from "./menu-row.js";
+import { SECTION, settingsSectionHead } from "./settings-sections.js";
 
 /**
  * environment-variables-section.tsx -- Settings › Cloud environment's Variables: the variables the workspace hands its members' cloud agents, added, replaced, and deleted by its owners and admins.
@@ -241,9 +241,9 @@ function VariableRow({
             confirm={deletion}
             question={{
               title: `Delete ${name}?`,
-              verb: "Delete",
+              verb: "Delete variable",
               running: "Deleting",
-              loss: CONFIRM_LOSS.AFFECTS_OTHERS,
+              loss: CONFIRM_LOSS.IRREVERSIBLE,
               replayUnmasked: true,
               titleReplayMasked: true,
             }}
@@ -268,8 +268,7 @@ export function EnvironmentVariablesSection({
   return (
     <>
       <SettingsSection
-        title="Variables"
-        anchor={SETTINGS_SEARCH_ROW.ENVIRONMENT_VARIABLES}
+        {...settingsSectionHead(SECTION.ENVIRONMENT_VARIABLES)}
         action={
           manages ? (
             <Button variant={BUTTON_VARIANT.OUTLINE} icon={<PlusIcon />} onClick={add.ask}>

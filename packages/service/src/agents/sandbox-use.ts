@@ -50,14 +50,14 @@ const loggedIfFailed = (
     ),
   );
 
-/** The agent's sandbox, just opened, recorded LIVE and used now; one the open `created` has the snapshots its agent's turns hold forgotten, since they stood on a disk that is gone. */
+/** The agent's sandbox, just opened, recorded LIVE and used now; one the open created on a `fresh` checkout, on any drive but the agent's own as it stood, has the snapshots its agent's turns hold forgotten, since they stood on a disk that is gone. */
 export const recordedSandboxOpen = (
   agentId: string,
   sandboxName: string,
-  created = false,
+  fresh = false,
 ): Effect.Effect<void, never, DatabaseServices> =>
   loggedIfFailed(
-    Effect.flatMap(useNow(sandboxName), (use) => recordAgentSandboxOpen(agentId, use, created)),
+    Effect.flatMap(useNow(sandboxName), (use) => recordAgentSandboxOpen(agentId, use, fresh)),
   );
 
 /** The sandbox's last use moved to now, where an open recorded it. */

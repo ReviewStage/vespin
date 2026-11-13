@@ -52,9 +52,11 @@ import {
   DESCRIPTION_COMMENT_STATUS,
   type DescriptionCommentThread,
 } from "@repo/features/description-comment-wire";
-import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
+import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import type { GitHubRepositoriesAnswer } from "@repo/features/github-repositories-wire";
 import type { HostLine } from "@repo/features/host-live";
+import { HOST_PAIRING_CALL_FAILURE } from "@repo/features/host-pairing-view";
+import type { HostPairingAnswer } from "@repo/features/host-wire";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import {
   INBOX_APPROVAL_OPTION,
@@ -77,7 +79,13 @@ import {
   inboxSendingDrawn,
   takenBackNow,
 } from "@repo/features/inbox-writes";
-import type { InstalledSkillSummary } from "@repo/features/installed-skill-route-wire";
+import {
+  type InstalledSkillCandidate,
+  type InstalledSkillPreview,
+  type InstalledSkillSummary,
+  SKILL_PASTE_KIND,
+  UNSUPPORTED_PREVIEW,
+} from "@repo/features/installed-skill-route-wire";
 import { INSTALLED_SKILL_CALL_FAILURE } from "@repo/features/installed-skill-view";
 import { INSTALLED_SKILL_SCOPE, INSTALLED_SKILL_SOURCE } from "@repo/features/installed-skill-wire";
 import type { IntegrationStatusesAnswer } from "@repo/features/integration-live";
@@ -88,6 +96,7 @@ import {
 } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { LIVE_READ } from "@repo/features/live-wire";
+import type { McpClient } from "@repo/features/mcp-client-wire";
 import { MEMORY_SAVED, type MemorySummary } from "@repo/features/memory-wire";
 import {
   MODEL_PROVIDER,
@@ -176,6 +185,9 @@ const STAGED_PROFILES: ReadonlySet<string> = new Set<string>([
 /** The account signed in: the owner of the fixture's first workspace, which is named for it. */
 const ADA = { userId: "user-ada", name: "Ada Lovelace" } as const;
 
+/** A teammate, the workspace's admin, who is assigned a task the account follows. */
+const GRACE = { userId: "user-grace", name: "Grace Hopper" } as const;
+
 /**
  * The sign-in pictures the fixture's people stand in with: organizations'
  * logos on GitHub's avatar host, which the apps may load pictures from,
@@ -203,12 +215,13 @@ const TASK = {
   ROUNDING: "4dae6081-2f5b-4c73-9e9b-5a6b7c8d9ea4",
 } as const;
 
-/** The account's tasks that hold no item, which fill out its Tasks list: a sub-task of the reference journey's, one in a second repository, and one in a section of its own. */
+/** The account's tasks that hold no item, which fill out its Tasks list: a sub-task of the reference journey's, one in a second repository, one in a section of its own, and a teammate's it follows. */
 const LISTED = {
   COPY: "81e2a425-6d9f-4ab7-92df-9eafb0c1d2e8",
   ALERTS: "92f3b536-7eaf-4bc8-a3ea-afb0c1d2e3f9",
   LAUNCH: "a304c647-8fb0-4cd9-b4fb-b0c1d2e3f40a",
   SECTION: "b415d758-90c1-4dea-85ac-c1d2e3f4051b",
+  BILLING: "c526e869-a1d2-4efb-96bd-d2e3f405162c",
 } as const;
 
 /** The agents that posted the items, one at work on each task. */
@@ -839,6 +852,12 @@ const OWN_TASKS: readonly TaskSummary[] = [
     createdBy: ADA,
     assignee: ADA,
     pinnedAt: LANDED - 9 * DAY,
+    // Note that its followers are the account, its assignee, letting its agents use her machines, and both teammates, one letting them.
+    followers: [
+      { userId: ADA.userId, assignee: true, machines: true },
+      { userId: GRACE.userId, assignee: false, machines: true },
+      { userId: "user-alan", assignee: false, machines: false },
+    ],
     ...agentsLine(TASK.DIGEST),
   },
   {
@@ -880,8 +899,9 @@ function listedTask(
 /**
  * The account's tasks that hold no item, which fill out its Tasks list as
  * the sidebar stands it: a sub-task under the reference journey's, a task
- * in a second repository, so the list draws its repositories' headings, and
- * one the account keeps in a section of its own.
+ * in a second repository, so the list draws its repositories' headings,
+ * one the account keeps in a section of its own, and a teammate's it
+ * follows, which the list draws under Following.
  */
 const LISTED_TASKS: readonly TaskSummary[] = [
   listedTask(LISTED.COPY, "Invite email copy", {
@@ -903,6 +923,20 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     status: TASK_STATUS.IN_PROGRESS,
     number: 46,
     updatedAt: LANDED - 7 * HOUR,
+  }),
+  // Note that the account follows a teammate's task, which the Tasks list draws under Following.
+  listedTask(LISTED.BILLING, "Billing export", {
+    repository: "ada/relay",
+    status: TASK_STATUS.IN_PROGRESS,
+    number: 47,
+    updatedAt: LANDED - 9 * HOUR,
+    ownerId: GRACE.userId,
+    createdBy: GRACE,
+    assignee: GRACE,
+    followers: [
+      { userId: GRACE.userId, assignee: true, machines: true },
+      { userId: ADA.userId, assignee: false, machines: false },
+    ],
   }),
 ];
 
@@ -1042,6 +1076,23 @@ const MEMORIES: readonly MemorySummary[] = [
   },
 ];
 
+/** The code of the one pairing waiting on the account, as a machine's link names it (`maestro/settings-machine-connect.yaml`). */
+const PENDING_PAIRING_CODE = "BCDFGHJK";
+
+/** The machine waiting on that code, as it named itself, and when its code lapses: ten minutes after the fixture landed. */
+const PENDING_PAIRING: HostPairingAnswer = {
+  name: "Ada's Mac mini",
+  platform: DEVICE_PLATFORM.DARWIN,
+  arch: DEVICE_ARCH.ARM64,
+  ip: "203.0.113.7",
+  expiresAt: LANDED + 10 * 60_000,
+};
+
+/** A pairing's read, approve, or deny, as the service answers it: the waiting machine for its code, and no pending pairing for any other. */
+function pairingAnswer<Answer>(code: string, answer: Answer) {
+  return code === PENDING_PAIRING_CODE ? answer : { failure: HOST_PAIRING_CALL_FAILURE.NOT_FOUND };
+}
+
 /** The account's machines, as Settings › Machines lists them: a Mac online and a Linux server the sweep marks away. */
 const HOSTS: readonly HostLine[] = [
   {
@@ -1059,6 +1110,83 @@ const HOSTS: readonly HostLine[] = [
     away: true,
   },
 ];
+
+/** The skills a fixture run's Add skill finds in its repository, the one the paste named ticked. */
+const SOURCE_SKILLS: readonly InstalledSkillCandidate[] = [
+  {
+    name: "frontend-design",
+    description: "Lay out a screen from the team's design tokens.",
+    path: "skills/frontend-design",
+    bytes: 2_048,
+    selected: true,
+    fileCount: 2,
+    problems: [],
+  },
+  {
+    name: "changelog",
+    description: "Write a changelog entry from the commits since the last tag.",
+    path: "skills/changelog",
+    bytes: 1_536,
+    selected: false,
+    fileCount: 1,
+    problems: [],
+  },
+];
+
+/** The repository a fixture run's Add skill reads. */
+const SKILL_SOURCE_PREVIEW: InstalledSkillPreview = {
+  kind: SKILL_PASTE_KIND.SOURCE,
+  owner: "acme",
+  repo: "agent-skills",
+  ref: "main",
+  sha: "7a1b2c3d4e5f60718293a4b5c6d7e8f901a2b3c4",
+  skills: SOURCE_SKILLS,
+  missing: [],
+};
+
+/** A frontmatter line's value, such as a pasted skill's `name:`. */
+function frontmatterValue(text: string, key: string): string | undefined {
+  const line = text.split("\n").find((each) => each.startsWith(`${key}:`));
+
+  return line?.slice(key.length + 1).trim();
+}
+
+/** What a fixture run's Add skill reads a paste as: a skill's text where it opens on frontmatter, a GitHub source where it names one, and nothing we install from otherwise. */
+function skillPreviewOf(text: string): InstalledSkillPreview {
+  const pasted = text.trim();
+
+  if (!pasted.startsWith("---")) {
+    return /github\.com|^npx skills add |^[\w.-]+\/[\w.-]+$/.test(pasted)
+      ? SKILL_SOURCE_PREVIEW
+      : UNSUPPORTED_PREVIEW;
+  }
+
+  // Note that a key the frontmatter leaves out reads as empty, as the page fills an absent one.
+  return {
+    kind: SKILL_PASTE_KIND.TEXT,
+    name: frontmatterValue(pasted, "name") ?? "",
+    description: frontmatterValue(pasted, "description") ?? "",
+    bytes: pasted.length,
+    problems: [],
+  };
+}
+
+/** A skill a fixture run's Add skill installed, as the service answers it: the account's own, by Ada. */
+function installedSkill(name: string, description: string): InstalledSkillSummary {
+  return {
+    id: "9c1e2d3f-4a5b-4c6d-8e7f-0a1b2c3d4e59",
+    scope: INSTALLED_SKILL_SCOPE.PERSONAL,
+    name,
+    description,
+    userInvocable: true,
+    source: { type: INSTALLED_SKILL_SOURCE.TEXT },
+    enabled: true,
+    installedBy: ADA.userId,
+    manageable: true,
+    createdAt: LANDED,
+    updatedAt: LANDED,
+  };
+}
 
 /** The account's own skills, as Settings › Skills lists them: one read from GitHub at a commit, and one pasted. */
 const INSTALLED_SKILLS: readonly InstalledSkillSummary[] = [
@@ -1125,6 +1253,24 @@ const INSTALLED_SKILL_FILES: ReadonlyMap<
     },
   ],
 ]);
+
+/** The apps the account allowed to use it over MCP, as Settings › MCP lists them: one signing in on this computer, active today, and one on the web. */
+const MCP_CLIENTS: readonly McpClient[] = [
+  {
+    clientId: "mcp-client-terminal",
+    name: "Claude Code",
+    redirectUris: ["http://localhost:53682/callback"],
+    allowedAt: LANDED - 12 * DAY,
+    lastRefreshedAt: LANDED - 3 * HOUR,
+  },
+  {
+    clientId: "mcp-client-web",
+    name: "ChatGPT",
+    redirectUris: ["https://chatgpt.com/connector_platform_oauth_redirect"],
+    allowedAt: LANDED - 30 * DAY,
+    lastRefreshedAt: null,
+  },
+];
 
 /** The fixture workspace's one pending invitation, a week from running out. */
 const INVITATIONS: readonly WorkspaceInvitation[] = [
@@ -1702,6 +1848,20 @@ const INTEGRATIONS: IntegrationStatusesAnswer = {
   ],
 };
 
+/**
+ * What each connected server answered when asked for its tools: GitHub's,
+ * Linear's, and Relay's Notion list theirs, and the Personal Notion's read
+ * couldn't be answered, so Settings › Integrations says so with Try again.
+ */
+const INTEGRATION_TOOLS: AppStateSnapshot[typeof LIVE_READ.INTEGRATION_TOOLS] = {
+  github: {
+    rows: { tools: [{ name: "search_code", description: "Search code across repositories" }] },
+  },
+  linear: { rows: { tools: [{ name: "list_issues", description: "List the team's issues" }] } },
+  notion: { rows: { tools: [{ name: "search", description: "Search the workspace's pages" }] } },
+  "notion-2": { failed: true },
+};
+
 /** The skills the invitations task's repository keeps, as the service finds them. */
 const SKILLS = {
   repository: "ada/relay",
@@ -1777,11 +1937,15 @@ export function inboxAppState(
     [LIVE_READ.TRANSCRIPT]: stagedTranscripts(state[LIVE_READ.TRANSCRIPT]),
     [LIVE_READ.MODELS]: { [ADA.userId]: { rows: MODELS } },
     [LIVE_READ.INTEGRATIONS]: { [ADA.userId]: { rows: INTEGRATIONS } },
+    [LIVE_READ.INTEGRATION_TOOLS]: INTEGRATION_TOOLS,
     [LIVE_READ.WORKSPACE_MEMBERS]: { [FIXTURE_IDS.WORKSPACE]: { rows: MEMBERS } },
     // Note that Relay, the team a flow switches to, holds no memories and none of its own skills, so its pages draw their empty states rather than reading for good; the account's own skills stand in every workspace.
     [LIVE_READ.MEMORIES]: {
       [FIXTURE_IDS.WORKSPACE]: { rows: MEMORIES },
       [TEAM_WORKSPACE.id]: { rows: [] },
+    },
+    [LIVE_READ.MCP_CLIENTS]: {
+      [ADA.userId]: { rows: { serverUrl: "https://vespin.dev/api/mcp", clients: MCP_CLIENTS } },
     },
     [LIVE_READ.INSTALLED_SKILLS]: {
       [FIXTURE_IDS.WORKSPACE]: { rows: INSTALLED_SKILLS },
@@ -2060,6 +2224,28 @@ type StagedAnswers = { readonly [Kind in PortActKind]?: StagedAnswer<Kind> };
  * (`settings-fixture.ts`), and the page names the account by its tasks meanwhile.
  */
 const ANSWERS: StagedAnswers = {
+  // Note that a pairing is read, approved, and denied as the service would answer, though nothing here makes a machine.
+  [ACT_KIND.HOSTS_PAIRING_READ]: ({ code }) => pairingAnswer(code, PENDING_PAIRING),
+  [ACT_KIND.HOSTS_PAIRING_APPROVE]: ({ code }) =>
+    pairingAnswer(code, { deviceId: "00000000-0000-4000-8000-0000000000a1" }),
+  [ACT_KIND.HOSTS_PAIRING_DENY]: ({ code }) => pairingAnswer(code, { done: true as const }),
+  // Note that an account's rename is taken as the service takes one, the account answered under the label asked, though nothing here moves.
+  [ACT_KIND.INTEGRATIONS_RENAME]: ({ provider, connection, label }) => ({
+    account: { provider, connection, label, status: INTEGRATION_STATUS.CONNECTED },
+  }),
+  // Note that Add skill's paste is read as the service reads one, though no repository is reached, and its install is taken and answered, though nothing here moves.
+  [ACT_KIND.INSTALLED_SKILLS_PREVIEW]: ({ text }) => skillPreviewOf(text),
+  [ACT_KIND.INSTALLED_SKILLS_INSTALL]: (request) => ({
+    skills:
+      request.skills === undefined
+        ? [installedSkill(request.name ?? "", request.description ?? "")]
+        : request.skills.map((name) =>
+            installedSkill(
+              name,
+              SOURCE_SKILLS.find((each) => each.name === name)?.description ?? "",
+            ),
+          ),
+  }),
   [ACT_KIND.INSTALLED_SKILLS_READ]: ({ skillId }) => {
     const read = INSTALLED_SKILL_FILES.get(skillId);
 

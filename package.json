@@ -19,7 +19,7 @@
     "db:generate": "pnpm --filter @repo/database db:generate",
     "format": "biome format --write .",
     "knip": "knip --no-config-hints",
-    "lint": "biome lint . && pnpm oxlint",
+    "lint": "biome lint . && pnpm oxlint && node tools/oxlint/vespin/press-guard-check.ts && node tools/oxlint/vespin/style-guard.ts",
     "lint:fix": "biome check --write .",
     "oxlint": "./scripts/oxlint.sh",
     "package": "pnpm --filter @repo/desktop package",

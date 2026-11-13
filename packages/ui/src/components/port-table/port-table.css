@@ -1,0 +1,77 @@
+/* port-table.css -- a cloud agent's ports as a table: the port's column
+   taking the room, each place's column its widest cell's width, a muted head
+   over each, and a cell's stop beside its action in room it keeps. */
+
+@layer components {
+  .ui-port-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+  }
+
+  .ui-port-table-head {
+    padding: var(--ui-space-2) var(--ui-space-8);
+    color: var(--ui-color-text-muted);
+    font-size: var(--ui-type-caption-size);
+    font-weight: inherit;
+    text-align: start;
+    white-space: nowrap;
+  }
+
+  .ui-port-table-head-icon {
+    display: inline-flex;
+    margin-inline-end: var(--ui-icon-gap);
+    vertical-align: -0.15em;
+  }
+
+  .ui-port-table-head-icon > svg {
+    width: var(--ui-icon-16);
+    height: var(--ui-icon-16);
+  }
+
+  .ui-port-table-port {
+    width: 100%;
+    padding: var(--ui-space-6) var(--ui-space-8);
+    font-weight: inherit;
+    text-align: start;
+  }
+
+  .ui-port-table-number {
+    display: block;
+    font-family: var(--ui-font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Note that what serves a port wraps rather than being cut, since the column is narrow. */
+  .ui-port-table-detail {
+    display: block;
+    color: var(--ui-color-text-muted);
+    font-size: var(--ui-type-caption-size);
+    overflow-wrap: anywhere;
+  }
+
+  .ui-port-table-cell {
+    padding: var(--ui-space-6) var(--ui-space-8);
+    white-space: nowrap;
+  }
+
+  .ui-port-table-act {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--ui-space-2);
+  }
+
+  /* Note that the stop's room is a compact glyph button's, kept while it is empty. */
+  .ui-port-table-stop {
+    display: inline-flex;
+    width: var(--ui-space-24);
+    flex: none;
+  }
+
+  .ui-port-table-note {
+    margin: 0;
+    padding: var(--ui-space-2) var(--ui-space-8) var(--ui-space-8);
+    color: var(--ui-color-text-muted);
+    font-size: var(--ui-type-caption-size);
+  }
+}

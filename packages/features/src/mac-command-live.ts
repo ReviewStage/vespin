@@ -18,11 +18,9 @@ import {
   orderedLiveRows,
 } from "./live-read.js";
 import { LIVE_USER_QUERY } from "./live-wire.js";
-import { type MacCommand, macCommandSchema } from "./mac-command-wire.js";
+import { MAC_COMMAND_KIND, type MacCommand, macCommandOfStored } from "./mac-command-wire.js";
 import { HOSTED_SERVICE_PATH } from "./service-paths.js";
 import { countedNumber } from "./service-wire.js";
-
-const [macShellCommandSchema] = macCommandSchema.members;
 
 /**
  * The commands of the kinds a Mac runs that no Mac of the account has
@@ -39,7 +37,13 @@ export const MAC_COMMANDS_READ = liveRead({
   mode: LIVE_MODE.SNAPSHOT,
   parts: {
     commands: liveRows({
-      row: Schema.Struct({ ...macShellCommandSchema.fields, queuedAt: countedNumber }),
+      row: Schema.Struct({
+        id: Schema.String,
+        kind: Schema.Literals(Object.values(MAC_COMMAND_KIND)),
+        command: Schema.String,
+        timeoutSeconds: Schema.Number,
+        queuedAt: countedNumber,
+      }),
       key: "id",
       order: [
         ["queuedAt", ORDER.ASC],
@@ -55,12 +59,9 @@ export type MacCommandsLiveAnswer = LiveReadAnswer<typeof MAC_COMMANDS_READ>;
 export function macCommandsOfLiveRows(
   rows: typeof MAC_COMMANDS_READ.rows.Type,
 ): readonly MacCommand[] {
-  return orderedLiveRows(MAC_COMMANDS_READ.parts.commands, rows.commands).map(
-    (row): MacCommand => ({
-      id: row.id,
-      kind: row.kind,
-      command: row.command,
-      timeoutSeconds: row.timeoutSeconds,
-    }),
-  );
+  return orderedLiveRows(MAC_COMMANDS_READ.parts.commands, rows.commands).flatMap((row) => {
+    const command = macCommandOfStored(row);
+
+    return command === undefined ? [] : [command];
+  });
 }

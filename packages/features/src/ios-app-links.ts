@@ -15,6 +15,7 @@
  * pages under a task are excluded before the task itself is claimed.
  */
 
+import { HOST_WIRE } from "./host-wire.js";
 import { IOS_OAUTH_CALLBACK_PATH } from "./ios-sign-in-wire.js";
 import {
   GITHUB_PAGE,
@@ -23,7 +24,9 @@ import {
   type LinkDestination,
   pullRequestAddressOf,
   readLink,
+  readShownLink,
   samePullRequest,
+  taskNumberOf,
 } from "./link-grammar.js";
 
 /** One path pattern of the association's `applinks` components, as Apple's format names its keys. */
@@ -36,6 +39,10 @@ export interface AppLinkComponent {
 /** The paths the home host hands the app, in the order Apple reads them. */
 export const IOS_APP_LINK_COMPONENTS: readonly AppLinkComponent[] = [
   { "/": IOS_OAUTH_CALLBACK_PATH, comment: "The sign-in's return." },
+  {
+    "/": `${HOST_WIRE.CONNECT_PATH}/*`,
+    comment: "A machine's pairing, which Settings › Machines approves or denies.",
+  },
   { "/": "/*/task/*/inbox/*", comment: "A thread on a task's Inbox." },
   { "/": "/*/agent/*/inbox/*", comment: "A thread on an agent's Inbox." },
   {
@@ -87,14 +94,29 @@ function addressPath(address: string): string {
   return (address.split(/[?#]/u)[0] ?? "").replace(/\/$/u, "");
 }
 
+/** The query a task's route carries the workspace its link names it under by, where it names the task by number. */
+export const IOS_TASK_WORKSPACE_PARAM = "workspace";
+
+/** A task's route as its link names it: by id, or by number with the workspace the number counts in, for the task's screen to find. */
+function taskRoute(planId: string, workspace: string | undefined): string {
+  const route = `${IOS_ROUTE.TASKS}/${encodeURIComponent(planId)}`;
+  const numbered = taskNumberOf({ kind: LINK_DESTINATION.TASK, planId }) !== undefined;
+
+  return numbered && workspace !== undefined
+    ? `${route}?${new URLSearchParams({ [IOS_TASK_WORKSPACE_PARAM]: workspace })}`
+    : route;
+}
+
 /**
  * The app's route for a place it draws, or none for a place it leaves to the
  * web. A task is routed as the link names it, by id or by number, for the
- * task's screen to find.
+ * task's screen to find; a number carries `workspace`, the workspace the
+ * link names it under, since a number counts within one workspace and the
+ * screen finds a task the phone doesn't hold by both (`TASKS_FIND`).
  */
-export function iosAppRouteOf(place: IosRoutedPlace): string;
-export function iosAppRouteOf(place: LinkDestination): string | undefined;
-export function iosAppRouteOf(place: LinkDestination): string | undefined {
+export function iosAppRouteOf(place: IosRoutedPlace, workspace?: string): string;
+export function iosAppRouteOf(place: LinkDestination, workspace?: string): string | undefined;
+export function iosAppRouteOf(place: LinkDestination, workspace?: string): string | undefined {
   switch (place.kind) {
     case LINK_DESTINATION.INBOX:
       return IOS_ROUTE.INBOX;
@@ -103,12 +125,25 @@ export function iosAppRouteOf(place: LinkDestination): string | undefined {
     case LINK_DESTINATION.BOARD:
       return IOS_ROUTE.TASKS;
     case LINK_DESTINATION.TASK:
-      return `${IOS_ROUTE.TASKS}/${encodeURIComponent(place.planId)}`;
+      return taskRoute(place.planId, workspace);
     case LINK_DESTINATION.AGENT:
       return iosAgentRoute(place.agentId);
     default:
       return undefined;
   }
+}
+
+/**
+ * The code a machine's pairing link names (`/connect/<code>`), which the app
+ * approves or denies on Settings › Machines rather than at a route a link
+ * reaches by itself; none for any other address. Note that the code is
+ * handed to the page, which reads the pairing and asks before anything is
+ * sent, as the panel's Connect dialog does.
+ */
+export function iosHostConnectCode(address: string): string | undefined {
+  const read = readShownLink(address);
+
+  return read === undefined || "workspace" in read ? undefined : read.place.code;
 }
 
 /** The app's route for an agent's page: its transcript and its composer. */
@@ -152,7 +187,7 @@ export function iosAppRouteOfAddress(
 ): string | undefined {
   const read = readLink(address);
 
-  if (read !== undefined) return iosAppRouteOf(read.place);
+  if (read !== undefined) return iosAppRouteOf(read.place, read.workspace);
   const named = pullRequestAddressOf(address);
 
   if (named === undefined) return undefined;

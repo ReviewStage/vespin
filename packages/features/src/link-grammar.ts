@@ -152,6 +152,9 @@ export const LINK_DESTINATION = {
 export const ADMIN_LINK_SECTION = {
   COST: "cost",
   RELIABILITY: "reliability",
+  AGENTS: "agents",
+  TOOLS: "tools",
+  PROMPTS: "prompts",
   WORKSPACES: "workspaces",
   USERS: "users",
   LIMITS: "limits",

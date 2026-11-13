@@ -20,7 +20,7 @@ import { readConversationPicture } from "@repo/database/models/conversation-pict
 import { sentLineStands } from "@repo/database/models/message-reads";
 import { recordedRuntimeSession } from "@repo/database/models/recorded-session";
 import { readTaskDescription } from "@repo/database/models/task-store";
-import { releaseWaitedTurns } from "@repo/database/models/turn-state";
+import { releaseWaitedTurns, type WaitedTurn } from "@repo/database/models/turn-state";
 import { readAccountNames } from "@repo/database/models/workspace-store";
 import {
   type AwaitingLineMetadata,
@@ -60,6 +60,7 @@ import {
   hostedStoreOrUnavailable,
 } from "../../http/http-effect.js";
 import { agentSpansAnnotated } from "../../observability/sentry.js";
+import { followAsMessaged } from "../../tasks/task-following.js";
 import { controlsAgent, writesToAgent } from "../agent-reach.js";
 import { keptHandedImages, senderLabel, turnContent } from "../attached-files.js";
 import { mentionedContext, mentionedServers, NO_MENTIONED_READS } from "../mentioned-context.js";
@@ -621,6 +622,7 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   const message = {
     conversationId: agent.conversationId,
     turn: SESSION_TURN.TYPED,
+    ...(line.metadata?.channel === MESSAGE_CHANNEL.VOICE ? { spoken: true } : undefined),
     message: turnContent(line.text, attachments, mentioned, label),
     // The line's own id, which a native harness's runner names back as it takes the message.
     lineId: sentLineId(line.clientKey),
@@ -766,6 +768,12 @@ const lostLineMessage = (target: ConversationTarget, agent: Agent, line: LostLin
     const message: SessionMessage<TypedTurn> = {
       conversationId: target.conversationId,
       turn: SESSION_TURN.TYPED,
+      // Note that a row's metadata may be a runtime note, which names no channel.
+      ...(line.metadata !== null &&
+      "channel" in line.metadata &&
+      line.metadata.channel === MESSAGE_CHANNEL.VOICE
+        ? { spoken: true }
+        : undefined),
       message: turnContent(read.text, files.flat(), read.mentioned, label),
       lineId: line.clientId,
     };
@@ -854,6 +862,21 @@ export const resumeWaitedTurns = /* @__PURE__ */ Effect.fn("web/resumeWaitedTurn
   now: number,
 ) {
   const released = yield* releaseWaitedTurns(new Date(now), WAITED_TURNS.RESUME_LIMIT);
+  yield* handWaitedTurnsOn(released);
+
+  return released.length;
+});
+
+/**
+ * Turns whose wait for a limit's reset was cleared handed on as its reset
+ * does: a queued turn published for its pickup, and a running one handed to
+ * a launch as a limited turn's retry (`turnRetried`), past the answer, since
+ * a launch may take most of a minute. Both the sweep, once a reset passes,
+ * and a reset credit spent before it (`chatgpt-reset-credits.ts`) hand theirs on so.
+ */
+export const handWaitedTurnsOn = /* @__PURE__ */ Effect.fnUntraced(function* (
+  released: readonly WaitedTurn[],
+) {
   const queue = yield* TurnQueue;
   yield* Effect.forEach(
     released,
@@ -876,8 +899,6 @@ export const resumeWaitedTurns = /* @__PURE__ */ Effect.fn("web/resumeWaitedTurn
           ),
     { discard: true },
   );
-
-  return released.length;
 });
 
 /**
@@ -987,6 +1008,9 @@ export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords"
     ...line,
     sender: { kind: MESSAGE_SENDER.MEMBER, userId },
   });
+
+  // A member who messages one of the task's agents follows the task, with their machines on where they did not yet; a repeat wrote nothing new.
+  if (written.outcome !== STEER_OUTCOME.REPEATED) yield* followAsMessaged(userId, agent.taskId);
 
   if (written.sent !== undefined) {
     yield* recordServerEvent(
