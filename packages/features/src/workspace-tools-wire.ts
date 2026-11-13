@@ -3,9 +3,11 @@
  *
  * The Mac is the machine a call would go to now, as the service routes it:
  * the agent's default machine, or else the one it runs on, or else its
- * task's assignee's, or its starter's, that listened last. `run_on_mac` is
- * answered off where the service would refuse a call now. An agent its catalog offers no `run_on_mac`, one that
- * runs on a device, is answered nothing. A new read, which a released
+ * task's assignee's, or its starter's, that listened last; none for a local
+ * agent with no default, whose call would go to the machine it runs on,
+ * which refuses it. `run_on_mac` is answered off where the service would
+ * refuse a call now. An agent its catalog offers no `run_on_mac` is
+ * answered nothing. A new read, which a released
  * desktop never calls, so each field may change with the panel that reads
  * it.
  */

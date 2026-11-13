@@ -7,8 +7,9 @@
  * (`machineOwnerOf`). `run_on_mac` is answered off where a call would be
  * refused now. The machines its default may be set to are those of the
  * people who let the task's agents use them (`defaultMachinesOf`), online
- * or not. An agent the catalog offers no `run_on_mac`
- * (`tool-catalog/catalog.ts`), one on a device, is answered nothing.
+ * or not. A local agent with no default names no machine, since a call
+ * would go to the one it runs on, which refuses it. An agent the catalog
+ * offers no `run_on_mac` (`tool-catalog/catalog.ts`) is answered nothing.
  */
 
 import type { Agent } from "@repo/database/models/agent-store";

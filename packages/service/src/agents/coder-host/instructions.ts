@@ -577,8 +577,8 @@ function toolsOn(tools: ToolWords, machine: CoderMachine, standing: AgentStandin
 
 /**
  * What an agent offered `run_on_mac` is told of the developer's Mac: what
- * it reaches. A local agent is told none of it, since it is offered no
- * `run_on_mac`.
+ * it reaches. A local agent is told none of it, since it already runs on
+ * one of the developer's machines, and the tool's own words say the rest.
  */
 const RUN_ON_MAC_WORDS = `\`${AGENT_TOOL.RUN_ON_MAC}\` runs a command on the developer's own Mac, for what only their Mac has: their local checkouts, uncommitted work, installed tools, and running servers.`;
 
