@@ -200,7 +200,8 @@ private func listApps() -> [String: Any] {
 /// The folders an app not yet running is looked for in, by its name: the usual ones, the developer's own, and Xcode's tools.
 private let APP_FOLDERS: [URL] =
     ["/Applications", "/System/Applications", "/System/Applications/Utilities",
-     "/Applications/Utilities", "/Applications/Xcode.app/Contents/Developer/Applications"]
+     "/Applications/Utilities", "/Applications/Xcode.app/Contents/Developer/Applications",
+     "/Applications/Xcode.app/Contents/Applications"]
     .map { URL(fileURLWithPath: $0) }
     + [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Applications")]
 
