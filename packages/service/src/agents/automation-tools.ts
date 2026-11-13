@@ -180,7 +180,9 @@ const PROMPT = describeWire(
 const TRIGGER = describeWire(
   Schema.Union([scheduleTriggerSchema, githubTriggerSchema, sentryTriggerSchema]),
   "cron: five fields in an IANA timezone, at most every fifteen minutes. GitHub senders " +
-    "default to people, moments (pull-request-updated only) to all, drafts and forks to false. " +
+    "default to people (for pull-request-merged, whose pull request it is), moments " +
+    "(pull-request-updated only) to all, drafts, forks, and prereleases (release-published only) " +
+    "to false; tags match a release's tag exactly. " +
     "Sentry: prefer alert-triggered, fired by an alert rule whose action is " +
     `"Send a notification via ${PRODUCT_NAME}"; issue-created fires on every new issue. A ` +
     "filter matches any of its values, and every filter given must. Webhooks are made only on " +

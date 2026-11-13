@@ -293,7 +293,6 @@ import { DescriptionPictures } from "./description-pictures.js";
 import { EditComposer } from "./edit-composer.js";
 import { FollowOfferDock } from "./follow-offer-dock.js";
 import { ForkedToLine, SuggestionChip, useForkOffered } from "./fork-action.js";
-import { type ForkCut, forkCutOf, openReply } from "./fork-model.js";
 import { GitHubSignInCard, type GitHubSignInDoors, RETRY_LINE } from "./github-sign-in-card.js";
 import {
   CommentLineHead,
@@ -1730,8 +1729,8 @@ const NO_ARRIVED: readonly ArrivedLine[] = [];
  * (`MessageLine`): how long it worked and when it ended as its lead, then
  * its Copy and Copy link beside it, set as any message's are under its
  * bubble rather than floated over the turn's corner, though flush with the
- * turn's words, which stand on no bubble. A turn still running
- * offers no Copy, because its words are not yet whole.
+ * turn's words, which stand on no bubble. A turn still running draws no
+ * foot (`AgentMessage`).
  */
 function TurnFoot({
   workedFor,
@@ -1740,7 +1739,7 @@ function TurnFoot({
 }: {
   workedFor: ReactNode;
   copy: ReactNode;
-  /** The files the turn changed, on its line after how long it worked (`turn-files.tsx`); none while the turn runs. */
+  /** The files the turn changed, on its line after how long it worked (`turn-files.tsx`). */
   files: ReactNode;
 }): ReactNode {
   if (workedFor === null && copy === null) return null;
@@ -1813,7 +1812,6 @@ export function AgentMessage({
   wakeupDelay,
   taskId,
   forkable = true,
-  forkCut,
   piece,
 }: {
   message: AgentTranscriptMessage;
@@ -1821,8 +1819,6 @@ export function AgentMessage({
   piece?: TurnPiece | undefined;
   /** Whether its tab may offer to fork at it. */
   forkable?: boolean;
-  /** Where a fork cuts it, where it is the reply a running turn is still writing (`forkCutOf`), which offers no fork before its first step; none for a settled message, kept whole. */
-  forkCut?: ForkCut | undefined;
   /** Whether this is the description the agent was handed, which is the first of the developer's messages. */
   description: boolean;
   /** The task the agent works on, whose description's pictures its description's card draws; none where it works on none. */
@@ -2008,7 +2004,7 @@ export function AgentMessage({
   const { startedAt, finishedAt } = message;
 
   const workedFor =
-    moving || startedAt === undefined || finishedAt === undefined ? null : (
+    startedAt === undefined || finishedAt === undefined ? null : (
       <WorkedFor
         startedAt={startedAt}
         endedAt={finishedAt}
@@ -2026,22 +2022,20 @@ export function AgentMessage({
   const last =
     piece?.last === false ? -1 : stretches.findLastIndex((stretch) => stretch.line === undefined);
 
-  // Note that Copy waits for whole words, while Fork takes a turn of no words, or one still running, as it stands.
-  const copyable = words !== "" && !moving;
-  const forks = forkable && forkCut?.messageSteps !== 0;
+  // Note that a turn still running draws no foot, because its words are not yet whole, and a bar of actions hidden until hovered would hold an empty line open over the working line.
+  const copyable = words !== "";
 
-  const foot = (
+  const foot = moving ? null : (
     <TurnFoot
       workedFor={workedFor}
-      files={moving ? null : <TurnFilesRow message={message} />}
+      files={<TurnFilesRow message={message} />}
       copy={
-        copyable || (forks && forkOffered) ? (
+        copyable || (forkable && forkOffered) ? (
           <CopyMessageAction
             words={words}
             copyable={copyable}
             messageId={message.id}
-            forkable={forks}
-            forkCut={forkCut}
+            forkable={forkable}
             rewind={REWIND_ACTION.REVERT}
           />
         ) : null
@@ -2295,7 +2289,6 @@ function sameMessageDraw(a: AgentMessageProps, b: AgentMessageProps): boolean {
   return sameFieldsBy(a, b, {
     message: (ours, theirs) => ours === theirs || sameHeldPiece(a, b),
     todos: sameTodosPlace,
-    forkCut: sameFields,
     sender: sameFields,
     arrived: sameArrived,
     delegation: sameDoors,
@@ -2449,7 +2442,6 @@ function sameRead(
  */
 function useLogEntries(
   placing: ReturnType<typeof transcriptPlacing>,
-  working: boolean,
   standings: ReadonlyMap<string, AgentSubagentStanding> | undefined,
   arrivals: ReadonlyMap<string, readonly ArrivedLine[]>,
 ): readonly LogEntry[] {
@@ -2458,7 +2450,7 @@ function useLogEntries(
   return useMemo(() => {
     const held = reads.current;
     const next = new Map<string, PiecesRead>();
-    const { placed } = placing;
+    const { placed, writing } = placing;
 
     const entries = placed.flatMap((row, index): LogEntry[] => {
       const { message } = row;
@@ -2473,7 +2465,7 @@ function useLogEntries(
         return [{ key, row, index }];
       }
 
-      const moving = working && index === placed.length - 1;
+      const moving = message.id === writing;
       const place: StretchPlace = { standings, arrived };
       const was = held.get(message.id);
 
@@ -2495,7 +2487,7 @@ function useLogEntries(
     reads.current = next;
 
     return entries;
-  }, [placing, working, standings, arrivals]);
+  }, [placing, standings, arrivals]);
 }
 
 /** Whether two runs of lines are the same lines in the same order. */
@@ -2626,9 +2618,15 @@ function transcriptPlacing(
   const opening = !replayed || first === undefined ? undefined : replayOpening(first);
   // A line that reached a turn while it ran is drawn inside that turn, where it arrived.
   const placed = placedMessages(messages, (id) => undelivered.has(id) || unsent.has(id));
-  const open = openReply(messages, working);
 
-  return { todos, first, opening, placed, open };
+  // Note that the reply is the newest unfinished one rather than the last row, because a line that did not go stands after it, and a finished reply is not the next turn's, whose reply has yet to land.
+  const newest = working
+    ? placed.findLast((row) => row.message.role === MESSAGE_ROLE.ASSISTANT)?.message
+    : undefined;
+
+  const writing = newest?.finishedAt === undefined ? newest?.id : undefined;
+
+  return { todos, first, opening, placed, writing };
 }
 
 /** The transcript as the tab draws it: the messages, or what stands in their place. */
@@ -2805,7 +2803,7 @@ function AgentTranscriptView({
   );
 
   // A turn too long to draw at once stands in the log as its pieces, each a row of its own.
-  const entries = useLogEntries(placing, working, delegation?.standings, arrivals);
+  const entries = useLogEntries(placing, delegation?.standings, arrivals);
 
   // Each row is keyed by the message it draws, which its measured height is kept by, a
   // developer's line by the id it was written under, so its row lands where the line was drawn.
@@ -2857,7 +2855,7 @@ function AgentTranscriptView({
   });
 
   if (!holding && messages.length > 0) {
-    const { todos, first, opening, placed, open } = placing;
+    const { todos, first, opening, placed, writing } = placing;
 
     // An agent a member started from a suggestion opens on the suggestion's card, which its first line alone says.
     const drawnOrigin =
@@ -3001,8 +2999,7 @@ function AgentTranscriptView({
                           description={message === description}
                           taskId={message === description ? taskId : undefined}
                           lead={lead}
-                          moving={working && index === placed.length - 1}
-                          forkCut={forkCutOf(message, open)}
+                          moving={message.id === writing}
                           delegation={delegation}
                           todos={todos}
                           briefTitle={briefTitle}

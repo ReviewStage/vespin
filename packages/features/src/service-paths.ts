@@ -448,6 +448,8 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACE_ENVIRONMENT: "/api/workspaces/environment",
   /** One of a workspace's environment variables removed by an owner or admin (POST), answering the names as they then stand. */
   WORKSPACE_ENVIRONMENT_DELETE: "/api/workspaces/environment/delete",
+  /** Every pull request GitHub's merge queues hold across the repositories a workspace's tasks work in, to a member with the Merge queue experiment on (GET, `MERGE_QUEUE_QUERY`) (`merge-queue-wire.ts`). */
+  WORKSPACE_MERGE_QUEUE: "/api/workspaces/merge-queue",
   /** A workspace's cloud sandbox setup, its install script and each repository's setup script, to a member (GET, `WORKSPACE_SANDBOX_SETUP_QUERY`) (`workspace-sandbox-setup-wire.ts`). */
   WORKSPACE_SANDBOX_SETUP: "/api/workspaces/sandbox-setup",
   /** A workspace's install script saved by an owner or admin (PUT), answering the setup as it then stands. */

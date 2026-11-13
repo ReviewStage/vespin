@@ -26,6 +26,8 @@ export const EXPERIMENT = {
   RUN_ACTIONS: "run-actions",
   /** Turn changes: the files a turn changed, drawn under its words, and the Turn changes tab a file there opens, the diff of the checkouts the runner records before each turn. */
   TURN_CHANGES: "turn-changes",
+  /** Merge queue: every pull request GitHub's merge queues hold across the repositories the workspace's tasks work in, on a page of its own. */
+  MERGE_QUEUE: "merge-queue",
   /** Reply buttons: a button an agent puts in its reply, beside the line it is about, that starts a new agent on a brief it wrote, or sends one to a running agent, once a member presses it. */
   REPLY_BUTTONS: "reply-buttons",
   /** Following: the members who follow each task, who starts, is assigned, or messages its agents, and each follower's switch letting the task's agents use their machines. */
@@ -102,6 +104,16 @@ export interface ExperimentEntry {
  * Settings sets it, and every other read treats it as any experiment.
  */
 export const EXPERIMENTS = [
+  {
+    key: EXPERIMENT.MERGE_QUEUE,
+    scope: EXPERIMENT_SCOPE.ACCOUNT,
+    listed: false,
+    name: "Merge queue",
+    detail:
+      "See every pull request waiting in GitHub's merge queues across your workspace's repositories, with the task each belongs to.",
+    owner: "Charles",
+    since: "2026-11-12",
+  },
   {
     key: EXPERIMENT.VOICE,
     scope: EXPERIMENT_SCOPE.ACCOUNT,

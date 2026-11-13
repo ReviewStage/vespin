@@ -1,7 +1,7 @@
-// status-mark-model.ts -- the SF Symbol a task's status is drawn with, as the panel's task marks draw it; its tone is the panel's own (`@repo/features/task-standing-words`'s `TASK_STATUS_TONE`).
+// status-mark-model.ts -- the glyph a task's status is drawn with, as the panel's task marks draw it; its tone is the panel's own (`@repo/features/task-standing-words`'s `TASK_STATUS_TONE`).
 
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
-import type { SfSymbol } from "./sf-symbol.js";
+import { GLYPH, type Glyph } from "./glyph.js";
 
 /**
  * A ring that fills as work moves through it, as `@repo/ui`'s `task-marks.tsx`
@@ -9,9 +9,9 @@ import type { SfSymbol } from "./sf-symbol.js";
  * filled disc once settled, a check for done and a cross for canceled.
  */
 export const STATUS_MARK_SYMBOL = {
-  [TASK_STATUS.BACKLOG]: "circle.dashed",
-  [TASK_STATUS.TODO]: "circle",
-  [TASK_STATUS.IN_PROGRESS]: "circle.righthalf.filled",
-  [TASK_STATUS.DONE]: "checkmark.circle.fill",
-  [TASK_STATUS.CANCELED]: "xmark.circle.fill",
-} as const satisfies Record<TaskStatus, SfSymbol>;
+  [TASK_STATUS.BACKLOG]: GLYPH.STATUS_BACKLOG,
+  [TASK_STATUS.TODO]: GLYPH.STATUS_TODO,
+  [TASK_STATUS.IN_PROGRESS]: GLYPH.STATUS_IN_PROGRESS,
+  [TASK_STATUS.DONE]: GLYPH.STATUS_DONE,
+  [TASK_STATUS.CANCELED]: GLYPH.STATUS_CANCELED,
+} as const satisfies Record<TaskStatus, Glyph>;

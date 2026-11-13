@@ -71,6 +71,10 @@ import {
   githubTokenProcedures,
 } from "../github/github-token-procedures.js";
 import {
+  type MergeQueueProcedureSeams,
+  mergeQueueProcedures,
+} from "../github/merge-queue-procedures.js";
+import {
   type RepositoryPinsProcedureSeams,
   repositoryPinsProcedures,
 } from "../github/repository-pins-procedures.js";
@@ -158,6 +162,7 @@ export type HostedRouterSeams = AccountProcedureSeams &
   DeviceAgentsProcedureSeams &
   MacCommandsProcedureSeams &
   McpClientsProcedureSeams &
+  MergeQueueProcedureSeams &
   MessagesProcedureSeams &
   ModelsProcedureSeams &
   DescriptionCommentsProcedureSeams &
@@ -223,6 +228,7 @@ export function hostedRouter(seams: HostedRouterSeams) {
     workspaceSandboxSetup: workspaceSandboxSetupProcedures(seams),
     workspaceGithub: workspaceGithubProcedures(seams),
     workspaceInvitations: workspaceInvitationsProcedures(seams),
+    workspaceMergeQueue: mergeQueueProcedures(seams),
     workspaceSentry: sentryInstallProcedures(seams),
     workspaceSlackBot: slackBotProcedures(seams),
     workspaces: workspacesProcedures(seams),

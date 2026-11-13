@@ -123,7 +123,9 @@ export interface SuggestedSend {
  * hears each message sent straight to the agent, and whether it was taken.
  * Opened on a message suggestion (`suggested`), the box lays its words in
  * under anything typed, offers no queue, and its Send goes through the
- * suggestion, once, as the panel's box filled in from one does.
+ * suggestion, once, as the panel's box filled in from one does: while that
+ * send is out, a second Send waits with its words in the field, and once it
+ * lands the box sends as any other.
  */
 export function useAgentComposer(
   agentId: string,
@@ -151,6 +153,8 @@ export function useAgentComposer(
     setWords((typed) => suggestedWords(typed, suggested.words));
   }
 
+  // Whether a send through the suggestion is out, so a second never goes through its one press.
+  const [suggestionOut, setSuggestionOut] = useState(false);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const [stopping, setStopping] = useState(false);
@@ -215,6 +219,8 @@ export function useAgentComposer(
 
     if (text === "" && pictures.files === undefined) return;
 
+    if (suggested !== undefined && suggestionOut) return;
+
     if (pictures.refusal !== undefined) {
       setNote(pictures.refusal);
       buzz(BUZZ.WARNING);
@@ -237,10 +243,13 @@ export function useAgentComposer(
     } as const;
 
     if (suggested !== undefined) {
+      setSuggestionOut(true);
       write(() => suggested.send(text, attachments?.attachments ?? []), {
         ...saying,
         refused: (result) => ("failure" in result ? result.failure.text : undefined),
         unanswered: messageFailureWords(AGENT_CALL_FAILURE.UNANSWERED),
+      }).then(() => {
+        setSuggestionOut(false);
       });
 
       return;

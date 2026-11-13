@@ -23,6 +23,8 @@
 // under way is the one status that would otherwise share it, so it is a blue
 // of its own at 250 degrees, at the other status inks' lightness, and a
 // running agent reads apart from one that needs you.
+import { GEIST_BLACK, GEIST_WHITE, geistTheme } from "./geist.mjs";
+
 const COPPER = {
   LIGHT: { FILL: "#a7611b", INK: "#8e5323" },
   DARK: { FILL: "#cf7b26", INK: "#f19a4b" },
@@ -34,25 +36,23 @@ const COPPER = {
 // draws it from these where it shows how a commit reads on GitHub.
 const AVATAR = { TILE: "#171412", INK: COPPER.DARK.FILL };
 
-// Geist: Vercel's design system (https://vercel.com/geist/colors), its
-// neutral grays and backgrounds verbatim, and its amber-900 as the one
-// accent: a burnt orange in the light theme and amber-800's orange in the
-// dark, where Geist's 900 step is the same color. Each role takes the step
-// Geist names for it: background-100 the ground and background-200 the
-// frame and the wells, gray-100 to 300 a control's rest, hover, and press,
-// gray-400 and 500 its edges, gray-900 the secondary words and gray-1000 the
-// primary. A status ink is its scale's 900, Geist's accessible text step.
-// Attention shares the accent, as copper's did, and so does a start, which
-// copper drew in a yellow Geist has no scale for; work under way is
-// Geist's blue, as it was copper's.
+// Geist (geist.mjs): every role names a step of Geist's, its grays and
+// backgrounds for the grounds and the words and its amber-900 for the one
+// accent: a burnt orange in the light theme and an orange in the dark. Each
+// role takes the step Geist names for it: background-100 the ground and
+// background-200 the frame and the wells, gray-100 to 300 a control's rest,
+// hover, and press, gray-400 and 500 its edges, gray-900 the secondary
+// words and gray-1000 the primary. A status ink is its scale's 900, Geist's
+// accessible text step. Attention shares the accent, as copper's did, and so
+// does a start, which copper drew in a yellow Geist has no scale for; work
+// under way is Geist's blue, as it was copper's.
 //
-// Note that words on the dark fill are gray-1000, since white reads on that
-// orange at under 2:1, and attention's fill and its words are the accent's,
-// so one orange means the same in every place it is drawn.
-const GEIST_AMBER = {
-  LIGHT: { AMBER_900: "#a64f00", ON: "#ffffff" },
-  DARK: { AMBER_900: "#ff9900", ON: "#171717" },
-};
+// Note that words on the dark fill are the light theme's gray-1000, since
+// white reads on that orange at under 2:1, and attention's fill and its
+// words are the accent's, so one orange means the same in every place it is
+// drawn.
+const GEIST_LIGHT = geistTheme("LIGHT");
+const GEIST_DARK = geistTheme("DARK");
 
 const BRAND_PALETTES = {
   COPPER: {
@@ -131,72 +131,72 @@ const BRAND_PALETTES = {
   },
   GEIST: {
     LIGHT: {
-      GROUND: "#ffffff",
-      SURFACE: "#ffffff",
-      OVERLAY: "#ffffff",
-      SIDEBAR: "#fafafa",
-      SIDEBAR_INK: "#4d4d4d",
-      WELL: "#fafafa",
-      CODE_GROUND: "#fafafa",
-      CHIP: "#ffffff",
-      CHIP_HOVER: "#f2f2f2",
-      CHIP_SELECTED: "#ebebeb",
-      CHIP_EDGE: "#ebebeb",
-      CHIP_EDGE_STRONG: "#c9c9c9",
-      INK: "#000000",
-      TEXT: "#171717",
-      TEXT_BODY: "#171717",
-      TEXT_MUTED: "#4d4d4d",
-      ACCENT: GEIST_AMBER.LIGHT.AMBER_900,
-      ON_ACCENT: GEIST_AMBER.LIGHT.ON,
-      ON_ACCENT_MUTED: GEIST_AMBER.LIGHT.ON,
-      ACCENT_TEXT: GEIST_AMBER.LIGHT.AMBER_900,
-      FOCUS_RING: GEIST_AMBER.LIGHT.AMBER_900,
-      SWITCH_ON: GEIST_AMBER.LIGHT.AMBER_900,
-      DANGER: "#d60020",
-      DANGER_TEXT: "#d60020",
-      DANGER_FILL: "#d60020",
-      ATTENTION: GEIST_AMBER.LIGHT.AMBER_900,
-      ATTENTION_FILL: GEIST_AMBER.LIGHT.AMBER_900,
-      WORKING: "#0064e2",
-      STARTING: GEIST_AMBER.LIGHT.AMBER_900,
-      COMPLETE: "#107d32",
-      MERGED: "#7c00c9",
+      GROUND: GEIST_LIGHT.BACKGROUND[100],
+      SURFACE: GEIST_LIGHT.BACKGROUND[100],
+      OVERLAY: GEIST_LIGHT.BACKGROUND[100],
+      SIDEBAR: GEIST_LIGHT.BACKGROUND[200],
+      SIDEBAR_INK: GEIST_LIGHT.GRAY[900],
+      WELL: GEIST_LIGHT.BACKGROUND[200],
+      CODE_GROUND: GEIST_LIGHT.BACKGROUND[200],
+      CHIP: GEIST_LIGHT.BACKGROUND[100],
+      CHIP_HOVER: GEIST_LIGHT.GRAY[100],
+      CHIP_SELECTED: GEIST_LIGHT.GRAY[200],
+      CHIP_EDGE: GEIST_LIGHT.GRAY[400],
+      CHIP_EDGE_STRONG: GEIST_LIGHT.GRAY[500],
+      INK: GEIST_BLACK,
+      TEXT: GEIST_LIGHT.GRAY[1000],
+      TEXT_BODY: GEIST_LIGHT.GRAY[1000],
+      TEXT_MUTED: GEIST_LIGHT.GRAY[900],
+      ACCENT: GEIST_LIGHT.AMBER[900],
+      ON_ACCENT: GEIST_WHITE,
+      ON_ACCENT_MUTED: GEIST_WHITE,
+      ACCENT_TEXT: GEIST_LIGHT.AMBER[900],
+      FOCUS_RING: GEIST_LIGHT.AMBER[900],
+      SWITCH_ON: GEIST_LIGHT.AMBER[900],
+      DANGER: GEIST_LIGHT.RED[900],
+      DANGER_TEXT: GEIST_LIGHT.RED[900],
+      DANGER_FILL: GEIST_LIGHT.RED[900],
+      ATTENTION: GEIST_LIGHT.AMBER[900],
+      ATTENTION_FILL: GEIST_LIGHT.AMBER[900],
+      WORKING: GEIST_LIGHT.BLUE[900],
+      STARTING: GEIST_LIGHT.AMBER[900],
+      COMPLETE: GEIST_LIGHT.GREEN[900],
+      MERGED: GEIST_LIGHT.PURPLE[900],
       AVATAR_TILE: AVATAR.TILE,
       AVATAR_INK: AVATAR.INK,
     },
     DARK: {
-      GROUND: "#0a0a0a",
-      SURFACE: "#0a0a0a",
-      OVERLAY: "#1a1a1a",
-      SIDEBAR: "#000000",
-      SIDEBAR_INK: "#a1a1a1",
-      WELL: "#000000",
-      CODE_GROUND: "#000000",
-      CHIP: "#1a1a1a",
-      CHIP_HOVER: "#1f1f1f",
-      CHIP_SELECTED: "#292929",
-      CHIP_EDGE: "#2e2e2e",
-      CHIP_EDGE_STRONG: "#454545",
-      INK: "#ffffff",
-      TEXT: "#ededed",
-      TEXT_BODY: "#ededed",
-      TEXT_MUTED: "#a1a1a1",
-      ACCENT: GEIST_AMBER.DARK.AMBER_900,
-      ON_ACCENT: GEIST_AMBER.DARK.ON,
-      ON_ACCENT_MUTED: GEIST_AMBER.DARK.ON,
-      ACCENT_TEXT: GEIST_AMBER.DARK.AMBER_900,
-      FOCUS_RING: GEIST_AMBER.DARK.AMBER_900,
-      SWITCH_ON: GEIST_AMBER.DARK.AMBER_900,
-      DANGER: "#ff5e63",
-      DANGER_TEXT: "#ff5e63",
-      DANGER_FILL: "#e2162a",
-      ATTENTION: GEIST_AMBER.DARK.AMBER_900,
-      ATTENTION_FILL: GEIST_AMBER.DARK.AMBER_900,
-      WORKING: "#50a8ff",
-      STARTING: GEIST_AMBER.DARK.AMBER_900,
-      COMPLETE: "#00ca52",
-      MERGED: "#c472fb",
+      GROUND: GEIST_DARK.BACKGROUND[100],
+      SURFACE: GEIST_DARK.BACKGROUND[100],
+      OVERLAY: GEIST_DARK.GRAY[100],
+      SIDEBAR: GEIST_DARK.BACKGROUND[200],
+      SIDEBAR_INK: GEIST_DARK.GRAY[900],
+      WELL: GEIST_DARK.BACKGROUND[200],
+      CODE_GROUND: GEIST_DARK.BACKGROUND[200],
+      CHIP: GEIST_DARK.GRAY[100],
+      CHIP_HOVER: GEIST_DARK.GRAY[200],
+      CHIP_SELECTED: GEIST_DARK.GRAY[300],
+      CHIP_EDGE: GEIST_DARK.GRAY[400],
+      CHIP_EDGE_STRONG: GEIST_DARK.GRAY[500],
+      INK: GEIST_WHITE,
+      TEXT: GEIST_DARK.GRAY[1000],
+      TEXT_BODY: GEIST_DARK.GRAY[1000],
+      TEXT_MUTED: GEIST_DARK.GRAY[900],
+      ACCENT: GEIST_DARK.AMBER[900],
+      ON_ACCENT: GEIST_LIGHT.GRAY[1000],
+      ON_ACCENT_MUTED: GEIST_LIGHT.GRAY[1000],
+      ACCENT_TEXT: GEIST_DARK.AMBER[900],
+      FOCUS_RING: GEIST_DARK.AMBER[900],
+      SWITCH_ON: GEIST_DARK.AMBER[900],
+      DANGER: GEIST_DARK.RED[900],
+      DANGER_TEXT: GEIST_DARK.RED[900],
+      DANGER_FILL: GEIST_DARK.RED[800],
+      ATTENTION: GEIST_DARK.AMBER[900],
+      ATTENTION_FILL: GEIST_DARK.AMBER[900],
+      WORKING: GEIST_DARK.BLUE[900],
+      STARTING: GEIST_DARK.AMBER[900],
+      COMPLETE: GEIST_DARK.GREEN[900],
+      MERGED: GEIST_DARK.PURPLE[900],
       AVATAR_TILE: AVATAR.TILE,
       AVATAR_INK: AVATAR.INK,
     },

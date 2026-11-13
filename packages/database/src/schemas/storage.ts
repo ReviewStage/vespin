@@ -148,6 +148,23 @@ export function turnlessUserLine(table: {
 }
 
 /**
+ * That a row of `messages` is a line said on a call that no delegation has
+ * handed to a turn: it names the call it was said on and no turn took or
+ * awaits it. Such a row is the conversation's record of what was said, never
+ * a line awaiting its turn or one already sent, so those reads leave it out;
+ * a delegation that adopts the caller's line (`writer.ts`'s `claimLine`) has
+ * it await the turn its hand-over opens, and those reads take it from then
+ * on.
+ */
+export function recordedSpokenLine(table: {
+  readonly metadata: SQLWrapper;
+  readonly turnId: SQLWrapper;
+  readonly awaitsTurnId: SQLWrapper;
+}): SQL {
+  return sql`(${table.metadata} ->> 'voice_session_id' is not null and ${table.turnId} is null and ${table.awaitsTurnId} is null)`;
+}
+
+/**
  * That a row of `messages` is no developer's line its hand-over withdrew
  * and no turn took since: every read that shows a line reads it through
  * this. A turn's own row stands whatever its stamp says, because a release

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { EmptyState } from "./empty-state.js";
+import { GLYPH } from "./glyph.js";
 import { Screen } from "./screen.js";
 
 /** What the failure says, and its one act. */
@@ -34,7 +35,7 @@ export function ScreenFailure({
     <Screen>
       <EmptyState
         title={FAILURE_WORDS.TITLE}
-        symbol="exclamationmark.triangle"
+        symbol={GLYPH.FAILED}
         description={FAILURE_WORDS.DESCRIPTION}
         action={{ label: FAILURE_WORDS.RETRY, onPress: () => void retry() }}
       />

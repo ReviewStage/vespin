@@ -91,6 +91,8 @@ const GITHUB_EVENT_WORDS = {
   [GITHUB_TRIGGER_EVENT.ISSUE_LABELED]: { what: "an issue", happens: "is labeled" },
   [GITHUB_TRIGGER_EVENT.CHECK_FAILED]: { what: "a check", happens: "fails" },
   [GITHUB_TRIGGER_EVENT.PUSH]: { what: "commits", happens: "are pushed" },
+  [GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED]: { what: "a pull request", happens: "is merged" },
+  [GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED]: { what: "a release", happens: "is published" },
 } as const satisfies Record<GitHubTriggerEvent, { what: string; happens: string }>;
 
 /** Whose events a GitHub trigger hears, as its sentence names them after "by". */
@@ -107,11 +109,12 @@ const PULL_REQUEST_MOMENT_WORDS = {
   [PULL_REQUEST_MOMENT.PUSHED]: "pushed to",
 } as const satisfies Record<PullRequestMoment, string>;
 
-/** The events a draft or a fork's pull request may be, which a trigger's drafts and forks settings speak to. */
+/** The events a draft or a fork's pull request may be, which a trigger's drafts and forks settings speak to; a merged pull request is never a draft. */
 const PULL_REQUEST_EVENTS: ReadonlySet<GitHubTriggerEvent> = new Set([
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_OPENED,
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_LABELED,
   GITHUB_TRIGGER_EVENT.PULL_REQUEST_UPDATED,
+  GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED,
 ]);
 
 /** What fired a run, as its row's title says it while its agent has no title of its own. */
@@ -288,7 +291,7 @@ export function automationGroups(
 /**
  * A trigger as one sentence, as a row and the editor say what fires it: a
  * schedule in words, a GitHub event with the repositories it is heard in and
- * the labels and branches it keeps to, the default branch named first, a webhook's call, and an
+ * the labels, branches, and tags it keeps to, the default branch named first, a webhook's call, and an
  * integration's event with the provider it comes from.
  */
 export function automationTriggerText(
@@ -323,9 +326,13 @@ export function automationTriggerText(
 
       const pullRequest = PULL_REQUEST_EVENTS.has(trigger.event);
 
+      const merged = trigger.event === GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED;
+      const release = trigger.event === GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED;
+
       const included = [
-        ...(pullRequest && trigger.drafts === true ? ["drafts"] : []),
+        ...(pullRequest && !merged && trigger.drafts === true ? ["drafts"] : []),
         ...(pullRequest && trigger.forks === true ? ["forks"] : []),
+        ...(release && trigger.prereleases === true ? ["prereleases"] : []),
       ];
 
       const also = included.length === 0 ? "" : `, ${andList(included)} included`;
@@ -337,10 +344,12 @@ export function automationTriggerText(
         ...(trigger.branches ?? []),
       ];
 
+      const tags = trigger.tags ?? [];
       const labeled = labels.length === 0 ? "" : ` labeled ${orList(labels)}`;
       const on = branches.length === 0 ? "" : ` on ${orList(branches)}`;
+      const tagged = tags.length === 0 ? "" : ` tagged ${orList(tags)}`;
 
-      return `When ${words.what}${by} ${happens}${where}${labeled}${on}${also}`;
+      return `When ${words.what}${by} ${happens}${where}${labeled}${on}${tagged}${also}`;
     }
 
     case AUTOMATION_TRIGGER.WEBHOOK:

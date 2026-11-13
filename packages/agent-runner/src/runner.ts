@@ -521,7 +521,11 @@ const handToCli = Effect.fn("agent-runner/handToCli")(function* (
   // The checkout is recorded before the CLI can touch it; a line a running turn takes in opens no turn to rewind to.
   const snapshot = running ? undefined : yield* launch.snapshot(uuid);
 
-  if (!running) yield* Ref.set(launch.opening, snapshot?.commit);
+  // Note that a turn waiting on a wakeup or a background command keeps the opening no IDLE has read yet, because the message joins the agent's turn that began there.
+  if (!running && (yield* Ref.get(launch.opening)) === undefined) {
+    yield* Ref.set(launch.opening, snapshot?.commit);
+  }
+
   yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
   // Posted ahead of the hand-off, so it is numbered before anything the CLI says of the message.
   yield* launch.sink.emit({

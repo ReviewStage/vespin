@@ -107,6 +107,9 @@ interface DrawnNode {
   readonly children?: readonly DrawnNode[];
 }
 
+/** An address written as raw HTML in a guide, `href="…"` or `href='…'`. */
+const HTML_HREF = /\bhref\s*=\s*["']([^"']*)["']/gi;
+
 const SUBHEADINGS: ReadonlySet<string> = new Set(["h2", "h3", "h4", "h5", "h6"]);
 
 /** The words a drawn node holds, its children's run together. */
@@ -117,12 +120,12 @@ function drawnText(node: DrawnNode): string {
 /**
  * The step that gives every heading under the page's own the id GitHub gives
  * it (lower-case words, punctuation dropped, each space a hyphen, a repeat
- * numbered within the document), so `other-guide.md#a-section` opens that
+ * numbered past every id the document already holds), so `other-guide.md#a-section` opens that
  * section on the page as it does on GitHub.
  */
 function headingIds() {
   return (tree: DrawnNode): void => {
-    const seen = new Map<string, number>();
+    const emitted = new Set<string>();
 
     const visit = (node: DrawnNode): void => {
       if (node.tagName !== undefined && SUBHEADINGS.has(node.tagName) && node.properties) {
@@ -132,10 +135,12 @@ function headingIds() {
           .replace(/[^\p{L}\p{M}\p{N}\p{Pc} -]/gu, "")
           .replaceAll(" ", "-");
 
-        const count = seen.get(base) ?? 0;
+        // Note that a repeat takes the next number no heading holds yet, because `Setup-1` may be written too.
+        let id = base;
 
-        seen.set(base, count + 1);
-        node.properties.id = count === 0 ? base : `${base}-${count}`;
+        for (let count = 1; emitted.has(id); count += 1) id = `${base}-${count}`;
+        emitted.add(id);
+        node.properties.id = id;
       }
 
       for (const child of node.children ?? []) visit(child);
@@ -148,17 +153,19 @@ function headingIds() {
 /** The steps a guide's tree takes: its own HTML parsed, then its headings given ids. */
 const GUIDE_STEPS = [MARKDOWN_HTML_STEP.PARSE, headingIds];
 
-/** The guides a guide's Markdown links to by file, each slug once. */
+/** The guides a guide's Markdown links to by file, its raw HTML's anchors included, each slug once. */
 function linkedGuides(markdown: string): readonly string[] {
   const slugs = (nodes: readonly Nodes[]): string[] =>
     nodes.flatMap((node) => {
-      const own =
+      const urls =
         node.type === "link" || node.type === "definition"
-          ? GUIDE_LINK.exec(node.url)?.[1]
-          : undefined;
+          ? [node.url]
+          : node.type === "html"
+            ? [...node.value.matchAll(HTML_HREF)].map((match) => match[1] ?? "")
+            : [];
 
       return [
-        ...(own === undefined ? [] : [own]),
+        ...urls.flatMap((url) => GUIDE_LINK.exec(url)?.[1] ?? []),
         ...("children" in node ? slugs(node.children) : []),
       ];
     });

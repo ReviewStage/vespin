@@ -1056,6 +1056,169 @@ it.layer(SUITE)("the GitHub App's webhook", (it) => {
       }),
   );
   it.effect(
+    "a pull request merged into the default branch queues a run read by whose pull request it is, while one closed unmerged, an agent's own, or one merged elsewhere queues none",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        yield* connectAgentApiKeys(owner);
+        const repositoryName = `Acme/merged-${randomUUID()}`;
+        const task = yield* startTask(owner, { name: "Merges", repository: repositoryName });
+
+        const made = Option.getOrThrow(
+          yield* createAutomation(owner, {
+            organizationId: task.workspaceId,
+            repositories: [repositoryName],
+            name: "Write the changelog",
+            trigger: {
+              kind: AUTOMATION_TRIGGER.GITHUB,
+              event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED,
+              defaultBranch: true,
+            },
+            action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Note this merge in the changelog." },
+            guards: AUTOMATION_DEFAULT_GUARDS,
+            nextRunAt: null,
+            webhookSecretHash: null,
+          }),
+        );
+
+        const github = githubReaching([]);
+
+        // The merge queue's bot merges it; the person who opened it is whom it is read by.
+        const closed = (options: { merged: boolean; head?: string; base?: string }) => ({
+          action: "closed",
+          repository: { full_name: repositoryName, default_branch: "trunk" },
+          sender: { type: "Bot", login: "github-merge-queue[bot]" },
+          pull_request: {
+            number: 9,
+            title: "Teammate invitations",
+            html_url: `https://github.com/${repositoryName}/pull/9`,
+            labels: [],
+            base: { ref: options.base ?? "trunk" },
+            head: { ref: options.head ?? "ada/invitations", repo: { full_name: repositoryName } },
+            draft: false,
+            merged: options.merged,
+            user: { type: "User", login: "ada" },
+          },
+        });
+
+        const queued = (payload: WireBoundaryInput) =>
+          Effect.map(answer(github, SECRET, delivery("pull_request", payload)), (got) => got.body);
+
+        assert.deepEqual(
+          [
+            yield* queued(closed({ merged: true })),
+            yield* queued(closed({ merged: false })),
+            yield* queued(closed({ merged: true, head: "agent/invitations" })),
+            yield* queued(closed({ merged: true, base: "release" })),
+          ],
+          [1, 0, 0, 0].map((count) => ({ read: 0, queued: count, told: 0 })),
+        );
+        assert.deepEqual(
+          (yield* listAutomationRuns(owner, made.id)).map((run) => run.firing),
+          [
+            {
+              kind: AUTOMATION_FIRING.GITHUB,
+              event: GITHUB_TRIGGER_EVENT.PULL_REQUEST_MERGED,
+              repository: repositoryName,
+              number: 9,
+              title: "Teammate invitations",
+              branch: "trunk",
+              url: `https://github.com/${repositoryName}/pull/9`,
+            },
+          ],
+        );
+      }),
+  );
+
+  it.effect(
+    "a release published queues a run with its tag, name, and address, for a tag the trigger names, and a prerelease only where the trigger includes them",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+        yield* connectAgentApiKeys(owner);
+        const repositoryName = `Acme/releases-${randomUUID()}`;
+        const task = yield* startTask(owner, { name: "Releases", repository: repositoryName });
+
+        const listening = (trigger: AutomationTrigger) =>
+          Effect.map(
+            createAutomation(owner, {
+              organizationId: task.workspaceId,
+              repositories: [repositoryName],
+              name: "Announce the release",
+              trigger,
+              action: { kind: AUTOMATION_ACTION.AGENT, prompt: "Announce this release." },
+              guards: AUTOMATION_DEFAULT_GUARDS,
+              nextRunAt: null,
+              webhookSecretHash: null,
+            }),
+            Option.getOrThrow,
+          );
+
+        const stable = yield* listening({
+          kind: AUTOMATION_TRIGGER.GITHUB,
+          event: GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED,
+          tags: ["v2.0.0"],
+        });
+
+        const everyRelease = yield* listening({
+          kind: AUTOMATION_TRIGGER.GITHUB,
+          event: GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED,
+          prereleases: true,
+        });
+
+        const github = githubReaching([]);
+
+        const release = (action: string, tag: string, prerelease: boolean) => ({
+          action,
+          repository: { full_name: repositoryName },
+          sender: { type: "User", login: "ada" },
+          release: {
+            tag_name: tag,
+            name: `Release ${tag}`,
+            html_url: `https://github.com/${repositoryName}/releases/tag/${tag}`,
+            prerelease,
+            body: "Never read by the webhook.",
+          },
+        });
+
+        const runsOf = (automation: { readonly id: string }) =>
+          Effect.map(listAutomationRuns(owner, automation.id), (runs) => runs.length);
+
+        const counts = [];
+
+        for (const payload of [
+          release("published", "v2.0.0", false),
+          release("published", "v2.1.0-beta.1", true),
+          release("published", "v2.0.1", false),
+          release("created", "v2.0.0", false),
+        ]) {
+          yield* answer(github, SECRET, delivery("release", payload));
+          counts.push([yield* runsOf(stable), yield* runsOf(everyRelease)]);
+        }
+
+        assert.deepEqual(counts, [
+          [1, 1], // the tag the first names: both
+          [1, 2], // a prerelease: only the trigger that includes them
+          [1, 3], // another tag: only the trigger that names none
+          [1, 3], // created, not published: neither
+        ]);
+        assert.deepEqual(
+          (yield* listAutomationRuns(owner, stable.id)).map((run) => run.firing),
+          [
+            {
+              kind: AUTOMATION_FIRING.GITHUB,
+              event: GITHUB_TRIGGER_EVENT.RELEASE_PUBLISHED,
+              repository: repositoryName,
+              title: "Release v2.0.0",
+              tag: "v2.0.0",
+              url: `https://github.com/${repositoryName}/releases/tag/v2.0.0`,
+            },
+          ],
+        );
+      }),
+  );
+
+  it.effect(
     "a person's review on an agent's branch wakes the agent through its harness acting for its owner",
     () =>
       Effect.gen(function* () {

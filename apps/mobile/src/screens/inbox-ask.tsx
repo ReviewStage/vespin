@@ -42,6 +42,7 @@ import {
   type ChoiceMedia,
   Composer,
   ComposerFoot,
+  GLYPH,
   StepList,
 } from "@repo/ui-native";
 import { Predicate } from "effect";
@@ -50,7 +51,7 @@ import type { ThreadAnswer } from "../inbox/use-thread-answer.js";
 import { REMIND_ME } from "./inbox-remind.js";
 
 /** The ⋯ menu a thread's bar holds. */
-const THREAD_MORE = { label: "More", symbol: "ellipsis" } as const;
+const THREAD_MORE = { label: "More", symbol: GLYPH.MORE } as const;
 
 /** Each field type an answer ask names, as the card draws it. */
 const FIELD_KIND = {
@@ -185,7 +186,7 @@ export function OpenAskCard({
     return (
       <>
         <AskActs
-          acts={[{ label: INBOX_BOX_WORDS.GOT_IT, symbol: "checkmark", onPress: acknowledge }]}
+          acts={[{ label: INBOX_BOX_WORDS.GOT_IT, symbol: GLYPH.CHECK, onPress: acknowledge }]}
         />
         {said}
       </>
@@ -236,10 +237,10 @@ export function OpenAskCard({
           ticked={ticked}
           onToggle={(at) => onDraft(withStep(ask, draft, at))}
           acts={[
-            { label: ASK_PRESS.DONE, symbol: "checkmark", onPress: () => press(INBOX_REPLY.DONE) },
+            { label: ASK_PRESS.DONE, symbol: GLYPH.CHECK, onPress: () => press(INBOX_REPLY.DONE) },
             {
               label: ASK_PRESS.NOT_DONE,
-              symbol: "arrow.uturn.backward",
+              symbol: GLYPH.UNDO,
               onPress: () => press(INBOX_REPLY.NOT_DONE),
             },
           ]}
@@ -343,12 +344,18 @@ const NEW_THREAD = "New thread";
 export function threadMenu(item: InboxItem, answer: ThreadAnswer, onRemind: () => void): BarMenu {
   const resolve =
     item.status === INBOX_STATUS.OPEN
-      ? [{ label: RESOLVE, symbol: "checkmark.circle", onPress: answer.resolve } as const]
+      ? [{ label: RESOLVE, symbol: GLYPH.RESOLVED, onPress: answer.resolve } as const]
       : [];
 
   const newThread = answer.asNew
     ? []
-    : [{ label: NEW_THREAD, symbol: "plus.bubble", onPress: () => answer.setAsNew(true) } as const];
+    : [
+        {
+          label: NEW_THREAD,
+          symbol: GLYPH.NEW_THREAD,
+          onPress: () => answer.setAsNew(true),
+        } as const,
+      ];
 
   return {
     ...THREAD_MORE,
