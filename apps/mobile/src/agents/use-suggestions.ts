@@ -18,6 +18,7 @@ import {
   type ReplyButtonPressParams,
 } from "@repo/features/agent-view";
 import { iosAgentRoute } from "@repo/features/ios-app-links";
+import { LINK_DESTINATION, linkOf, linkWorkspaceStep } from "@repo/features/link-grammar";
 import {
   REPLY_BUTTON_ACTION,
   type ReplyButtonLink,
@@ -32,7 +33,7 @@ import {
 } from "@repo/features/suggestion-model";
 import { unreachedAs } from "@repo/features/unreached";
 import { ACT_KIND } from "@repo/host/acts";
-import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
+import { selectWorkspaceExperiment, selectWorkspaces } from "@repo/host/app-state-reads";
 import { EXPERIMENT } from "@repo/settings";
 import {
   markdownReplyButtons,
@@ -111,6 +112,26 @@ function buttonQuery(
 }
 
 /**
+ * The address of an agent whose suggestion a line in the workspace's
+ * transcripts was sent from, which the line's head opens, as the panel's
+ * Suggested by chip does; none until the workspace is read.
+ */
+export function useSuggestionAddress(
+  workspaceId: string | undefined,
+): (agentId: string) => string | undefined {
+  const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
+  const step = workspaces === undefined ? undefined : linkWorkspaceStep(workspaceId, workspaces);
+
+  const address = useCallback(
+    (agentId: string) =>
+      step === undefined ? undefined : linkOf({ kind: LINK_DESTINATION.AGENT, agentId }, step),
+    [step],
+  );
+
+  return address;
+}
+
+/**
  * How each suggestion an agent's words hold stands, as the transcript draws
  * it: none while the workspace has Suggestions off or the button is unread,
  * which leaves the plain link; the pill a press opens filled in while it
@@ -173,6 +194,9 @@ export function useSuggestionLooks(
         onPress: () => router.push(iosAgentRoute(reached.id)),
       };
     }
+
+    // Note that a message's suggestion to an agent the reader can't see opens nowhere, so it stands as its plain link.
+    if (action.kind === REPLY_BUTTON_ACTION.SEND && view.sendTo === null) return undefined;
 
     const params = { suggestedBy: link.agentId, button: link.buttonId };
 

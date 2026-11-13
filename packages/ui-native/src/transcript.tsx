@@ -390,23 +390,25 @@ function CallRow({
 /** What a webhook call's body is called, folded under the prompt it rode in with, and its block's title, as the panel names them. */
 const WEBHOOK_BODY = { LABEL: "Webhook body", KIND: "body" } as const;
 
-/** What a part of an automation's sender line that opens somewhere is offered to VoiceOver as, and the name its action goes by before its place in the line. */
+/** What a part of a sender line that opens somewhere is offered to VoiceOver as, and the name its action goes by before its place in the line. */
 const OPEN_WORD = "Open";
 const OPEN_ACTION = "open-";
 
 /**
- * Who sent an automation's prompt, as the panel's sender line names it: the
- * automation, then what its run was about and who asked for it, joined by
- * " · ". A part with an address opens it in Safari, as an underlined word in
- * the ink, and is offered to VoiceOver as one of the line's actions, since a
- * word inside a line is never an element of its own on iOS.
+ * Who sent a line, as the panel's sender line names it: an automation's
+ * prompt by the automation, then what its run was about and who asked for
+ * it; a line sent from a suggestion by the agent that suggested it, after
+ * its lead; each joined by " · ". A part with an address opens it as a link
+ * does, as an underlined word in the ink, and is offered to VoiceOver as one
+ * of the line's actions, since a word inside a line is never an element of
+ * its own on iOS.
  */
 function OriginFrom({
   parts,
-  onOpenAddress,
+  onOpenLink,
 }: {
   readonly parts: readonly OriginPart[];
-  readonly onOpenAddress: (address: string) => void;
+  readonly onOpenLink: (address: string) => void;
 }) {
   const colors = useColors();
 
@@ -428,17 +430,18 @@ function OriginFrom({
               ({ name }) => name === event.nativeEvent.actionName,
             )?.address;
 
-            if (address !== undefined) onOpenAddress(address);
+            if (address !== undefined) onOpenLink(address);
           },
         };
 
   return (
     <Text {...actions} style={{ fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
-      {parts.map(({ words, address }, at) => (
+      {parts.map(({ lead, words, after, address }, at) => (
         <Fragment key={at}>
           {at === 0 ? null : " · "}
+          {lead === undefined ? null : `${lead} `}
           <Text
-            onPress={address === undefined ? undefined : () => onOpenAddress(address)}
+            onPress={address === undefined ? undefined : () => onOpenLink(address)}
             style={{
               color: at === 0 || address !== undefined ? colors.TEXT : undefined,
               fontWeight: at === 0 ? "600" : undefined,
@@ -447,6 +450,7 @@ function OriginFrom({
           >
             {words}
           </Text>
+          {after}
         </Fragment>
       ))}
     </Text>
@@ -579,7 +583,7 @@ function TranscriptRow({
       return (
         <View style={[styles.row, styles.saidRow]}>
           {item.from === undefined ? null : (
-            <OriginFrom parts={item.from} onOpenAddress={drawing.onOpenAddress} />
+            <OriginFrom parts={item.from} onOpenLink={drawing.onOpenLink} />
           )}
           {item.sender === undefined ? null : (
             <Text style={{ fontSize: TEXT_SIZE.FOOTNOTE, fontWeight: "600", color: colors.TEXT }}>

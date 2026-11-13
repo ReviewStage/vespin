@@ -96,6 +96,7 @@ import { useAgentServers } from "../agents/use-agent-servers.js";
 import {
   type OpenedSuggestion,
   useOpenedSuggestion,
+  useSuggestionAddress,
   useSuggestionLooks,
   useSuggestionSender,
 } from "../agents/use-suggestions.js";
@@ -470,6 +471,7 @@ export function AgentScreen() {
   const automated = shown?.automationId !== undefined || shown?.automationName !== undefined;
   const run = useAgentOrigin(id, automated);
   const automationAddress = useAutomationAddress(shown?.automationId, shown?.workspaceId);
+  const suggestionAddress = useSuggestionAddress(shown?.workspaceId);
 
   // Note that the run's card stands on the transcript's first line, so it waits until no older page is left to read.
   const origin = useMemo(
@@ -502,8 +504,9 @@ export function AgentScreen() {
         pullRequests,
         wholePart: whole.read,
         origin,
+        suggestionAddress,
       }),
-    [messages, status, readerId, toggles, pullRequests, whole.read, origin],
+    [messages, status, readerId, toggles, pullRequests, whole.read, origin, suggestionAddress],
   );
 
   // A call opened on an answer its page carried cut reads it whole.
