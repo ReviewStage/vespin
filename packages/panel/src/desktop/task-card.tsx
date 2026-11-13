@@ -4,9 +4,14 @@ import { subTaskCount, subTasksOf, TASK_ORDER, taskTime } from "@repo/features/t
 import {
   NO_ASSIGNEE_WORDS,
   TASK_PRIORITY_WORDS,
+  TASK_RELATION_WORDS,
   TASK_STATUS_WORDS,
 } from "@repo/features/task-standing-words";
-import type { TaskPullRequestLine, TaskSummary } from "@repo/features/task-wire";
+import {
+  TASK_RELATION_KIND,
+  type TaskPullRequestLine,
+  type TaskSummary,
+} from "@repo/features/task-wire";
 import { repositoryPageUrl } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import {
@@ -32,6 +37,7 @@ import {
   TIME_LOOK,
   Time,
   Tooltip,
+  VisuallyHidden,
 } from "@repo/ui";
 import { ACTOR_KIND, actorName, SOMEONE_REASON } from "@repo/ui/actor-model";
 import { GLYPH } from "@repo/ui/icons";
@@ -43,6 +49,7 @@ import { agentName, pullRequestNumberLabel } from "../tasks/agent-model.js";
 import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { AgentGlyph, agentEndMark } from "../tasks/tab-look.js";
+import { TaskRelationIcon } from "../tasks/task-relation-menu.js";
 import { TaskKey } from "../tasks/task-standing.js";
 import { useOpenLink } from "../tasks/use-open-link.js";
 import { useTaskMaker } from "../tasks/use-task-origin.js";
@@ -262,25 +269,38 @@ export function PullRequestLine({
 /** The tasks a card reads its relations from where none are handed. */
 const NO_TASKS: readonly TaskSummary[] = [];
 
-/** One task of the card's relations, as a row: its status's mark, its name, and its key, which opens it. */
+/**
+ * One task of the card's relations, as a row: its status's mark, its name,
+ * and its key, which opens it. The task's parent leads with the Parent
+ * relation's glyph instead, as the relation menu draws it, its word read to
+ * a screen reader alone, so the name keeps the row's room.
+ */
 function RelatedTaskLine({
   task,
   workspaceName,
-  prefix,
+  parent = false,
   onOpen,
 }: {
   task: TaskSummary;
   workspaceName: string | undefined;
-  /** What the row says before the name, muted: "Part of". */
-  prefix?: string | undefined;
+  /** Whether the row names the task's parent. */
+  parent?: boolean;
   onOpen: (() => void) | undefined;
 }): React.JSX.Element {
   return (
     <HoverCardRow
-      glyph={<TaskStatusMark status={statusOf(task)} />}
+      glyph={
+        parent ? (
+          <TaskRelationIcon kind={TASK_RELATION_KIND.PARENT} />
+        ) : (
+          <TaskStatusMark status={statusOf(task)} />
+        )
+      }
       label={
         <>
-          {prefix === undefined ? null : <span className="text-muted-foreground">{prefix} </span>}
+          {parent ? (
+            <VisuallyHidden>{`${TASK_RELATION_WORDS[TASK_RELATION_KIND.PARENT]}: `}</VisuallyHidden>
+          ) : null}
           {task.name}
         </>
       }
@@ -321,7 +341,7 @@ function TaskRelations({
           <RelatedTaskLine
             task={parent}
             workspaceName={workspaceName}
-            prefix="Part of"
+            parent
             onOpen={onOpenTask === undefined ? undefined : () => onOpenTask(parent.id)}
           />
         </div>

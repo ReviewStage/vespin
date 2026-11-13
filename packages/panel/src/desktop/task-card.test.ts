@@ -119,7 +119,7 @@ test("a task's card names the task it is part of and its sub-tasks, counts those
 
   const card = drawn(child, [parent, done, open], (taskId) => opened.push(taskId));
   const words = (selector: string) => card.querySelector(selector)?.textContent;
-  assert.equal(words("[data-task-card-parent]"), "Part of Ship invitationsACME-1");
+  assert.equal(words("[data-task-card-parent]"), "Parent: Ship invitationsACME-1");
   assert.deepEqual(
     [...card.querySelectorAll("[data-task-card-sub-task]")].map((each) => each.textContent),
     ["Write the emailACME-43", "Send the emailACME-44"],
