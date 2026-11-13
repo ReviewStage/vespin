@@ -23,6 +23,7 @@ import {
 } from "@repo/settings/settings-views";
 import {
   AccountRow,
+  GLYPH,
   ListSection,
   PUSH_ROW_GOES,
   PushRow,
@@ -136,11 +137,13 @@ export default function SettingsScreen() {
               />
               <PushRow
                 label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.ENVIRONMENT]}
+                symbol={GLYPH.CLOUD_ENVIRONMENT}
                 goes={PUSH_ROW_GOES.OUT}
                 onPress={openCloudEnvironment}
               />
               <PushRow
                 label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.MEMORY]}
+                symbol={GLYPH.MEMORY}
                 goes={PUSH_ROW_GOES.PAGE}
                 onPress={() => router.push(SETTINGS_ROUTE.MEMORY)}
               />
@@ -151,6 +154,7 @@ export default function SettingsScreen() {
             {notificationsShown ? (
               <PushRow
                 label={PUSH_NOTIFICATIONS_TITLE}
+                symbol={GLYPH.NOTIFICATIONS}
                 detail={notificationsDetail}
                 goes={PUSH_ROW_GOES.PAGE}
                 onPress={() => router.push(SETTINGS_ROUTE.NOTIFICATIONS)}
@@ -159,27 +163,32 @@ export default function SettingsScreen() {
             ) : null}
             <PushRow
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.AGENTS]}
+              symbol={GLYPH.AGENT}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.AGENTS)}
             />
             <PushRow
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.HOSTS]}
+              symbol={GLYPH.HOST}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.MACHINES)}
             />
             <PushRow
               label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.INTEGRATIONS]}
+              symbol={GLYPH.PLUG}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.INTEGRATIONS)}
             />
             <PushRow
               label={MCP_CLIENTS_WORDS.TITLE}
+              symbol={GLYPH.MCP_CLIENTS}
               goes={PUSH_ROW_GOES.PAGE}
               onPress={() => router.push(SETTINGS_ROUTE.MCP)}
             />
             {chosen === undefined ? null : (
               <PushRow
                 label={SETTINGS_PAGE_TITLE[SETTINGS_VIEW.SKILLS]}
+                symbol={GLYPH.SKILL}
                 goes={PUSH_ROW_GOES.PAGE}
                 onPress={() => router.push(SETTINGS_ROUTE.SKILLS)}
               />
