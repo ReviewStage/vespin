@@ -449,4 +449,37 @@ describe("GitHub", () => {
       }).pipe(Effect.provide(layer));
     },
   );
+
+  it.effect("hands a byte read its body as it streams, never waiting on the whole of it", () => {
+    const first = new Uint8Array([0x1f, 0x8b]);
+
+    const { layer } = harness(
+      () =>
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start: (controller) => controller.enqueue(first),
+            // Note that the rest never comes, as a large archive's has not yet when its first bytes are read.
+            pull: () => new Promise<void>(() => {}),
+          }),
+          { headers: { "content-type": "application/x-gzip" } },
+        ),
+    );
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+
+      const answer = yield* github
+        .asMember(Redacted.make("gho_member"))
+        .request("GET /repos/{owner}/{repo}/tarball/{ref}", {
+          ...REPOSITORY,
+          ref: "main",
+          parseSuccessResponseBody: false,
+        });
+
+      const body = Schema.decodeUnknownSync(Schema.instanceOf(ReadableStream))(answer.data);
+      const read = yield* Effect.promise(() => body.getReader().read());
+
+      assert.deepStrictEqual(read.value, first);
+    }).pipe(Effect.provide(layer));
+  });
 });
