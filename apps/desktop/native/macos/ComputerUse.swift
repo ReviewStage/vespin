@@ -868,6 +868,14 @@ private final class CursorTrack: @unchecked Sendable {
         shownUntil = now + CURSOR_GLIDE_SECONDS + CURSOR_HOLD_SECONDS + CURSOR_GLIDE_SECONDS
     }
 
+    /// The cursor kept where it stands for a hold more from the instant given, as a read while it shows keeps it; nothing where it shows nowhere.
+    func hold(at now: TimeInterval) {
+        lock.lock()
+        defer { lock.unlock() }
+        guard to != nil, now < shownUntil else { return }
+        shownUntil = max(shownUntil, now + CURSOR_HOLD_SECONDS + CURSOR_GLIDE_SECONDS)
+    }
+
     /// The cursor shown nowhere from the instant given, as the agent's turn ends.
     func release(at now: TimeInterval) {
         lock.lock()
@@ -930,7 +938,6 @@ private final class AgentCursor {
             still: NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
         let height = NSScreen.screens.first?.frame.height ?? 0
         let origin = CGPoint(x: point.x - CURSOR_TIP.x, y: height - point.y - CURSOR_BOX.height + CURSOR_TIP.y)
-        fade?.cancel()
         if !panel.isVisible || panel.alphaValue < 1 {
             panel.setFrameOrigin(origin)
             panel.alphaValue = 1
@@ -952,17 +959,24 @@ private final class AgentCursor {
                 }
             }
         }
+        fadeAfter(CURSOR_GLIDE_SECONDS + CURSOR_HOLD_SECONDS)
+    }
+
+    /// The cursor brought in resting at a point, with no press, where it shows nowhere yet, as an app's first read brings it; where it already stands, it stays there for a hold more, so an agent that only reads keeps it.
+    func appear(at point: CGPoint) {
+        guard let panel, panel.isVisible, panel.alphaValue > 0 else { return glide(to: point) }
+        cursorTrack.hold(at: ProcessInfo.processInfo.systemUptime)
+        fadeAfter(CURSOR_HOLD_SECONDS)
+    }
+
+    /// The cursor put away once it has stood the seconds given with nothing keeping it, the hold before it called off.
+    private func fadeAfter(_ seconds: TimeInterval) {
+        fade?.cancel()
         fade = Task { @MainActor [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64((CURSOR_GLIDE_SECONDS + CURSOR_HOLD_SECONDS) * 1_000_000_000))
+            try? await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
             guard !Task.isCancelled else { return }
             self?.hide()
         }
-    }
-
-    /// The cursor brought in resting at a point, with no press, where it shows nowhere yet, as an app's first read brings it; where it already stands, it stays.
-    func appear(at point: CGPoint) {
-        if let panel, panel.isVisible, panel.alphaValue > 0 { return }
-        glide(to: point)
     }
 
     /// The cursor put away at once, as the agent's turn ends: it fades where it stands, and a recording stops drawing it.
