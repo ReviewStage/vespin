@@ -87,7 +87,8 @@
   .ui-settings-row:not(
     [data-density="compact"],
     [data-labels-control="true"],
-    [data-controls="beside"]
+    [data-controls="beside"],
+    [data-controls="beside-until-narrow"]
   ) .ui-settings-row-main {
     flex-wrap: wrap;
     gap: var(--ui-space-8) var(--ui-space-12);
@@ -97,7 +98,8 @@
   .ui-settings-row:not(
       [data-density="compact"],
       [data-labels-control="true"],
-      [data-controls="beside"]
+      [data-controls="beside"],
+      [data-controls="beside-until-narrow"]
     )
     .ui-settings-row-subject {
     flex: 1 1 calc(var(--ui-settings-row-words-inset) + var(--ui-space-96) + var(--ui-space-24));
@@ -107,7 +109,8 @@
   .ui-settings-row:not(
       [data-density="compact"],
       [data-labels-control="true"],
-      [data-controls="beside"]
+      [data-controls="beside"],
+      [data-controls="beside-until-narrow"]
     )
     .ui-settings-row-controls {
     justify-content: flex-start;
@@ -116,7 +119,8 @@
   /* Note that a row that keeps its controls beside its words keeps them
      whole, because the words are what give way there, wrapping in their
      column. */
-  .ui-settings-row[data-controls="beside"] .ui-settings-row-controls {
+  .ui-settings-row:is([data-controls="beside"], [data-controls="beside-until-narrow"])
+  .ui-settings-row-controls {
     flex: none;
   }
 
@@ -130,6 +134,36 @@
      legible stretch beside it, as at any width. */
   /* off-scale: 380px, where a row's control and words stop fitting on one line (tokens/profiles.css) */
   @container ui-settings-row (width < 380px) {
+    /* Note that a row keeping its controls beside its words only while it
+       is wide, so a list's ends line up, drops them below its words here as
+       every card's row does, so its name is not cut to a few letters beside
+       them. */
+    .ui-settings-row[data-controls="beside-until-narrow"]:not(
+        [data-density="compact"],
+        [data-labels-control="true"]
+      ) .ui-settings-row-main {
+      flex-wrap: wrap;
+      gap: var(--ui-space-8) var(--ui-space-12);
+      padding-inline-start: var(--ui-settings-row-drop-inset);
+    }
+
+    .ui-settings-row[data-controls="beside-until-narrow"]:not(
+        [data-density="compact"],
+        [data-labels-control="true"]
+      )
+      .ui-settings-row-subject {
+      flex: 1 1 calc(var(--ui-settings-row-words-inset) + var(--ui-space-96) + var(--ui-space-24));
+      margin-inline-start: calc(-1 * var(--ui-settings-row-drop-inset));
+    }
+
+    .ui-settings-row[data-controls="beside-until-narrow"]:not(
+        [data-density="compact"],
+        [data-labels-control="true"]
+      )
+      .ui-settings-row-controls {
+      justify-content: flex-start;
+    }
+
     .ui-settings-row:not([data-density="compact"], [data-labels-control="true"])
       .ui-settings-row-title {
       flex-wrap: nowrap;
