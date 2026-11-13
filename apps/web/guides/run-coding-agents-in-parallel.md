@@ -27,7 +27,7 @@ git worktree add ../app-fix-login -b fix-login
 git worktree add ../app-search -b add-search
 ```
 
-Start `claude` or `codex` in each folder. When an agent finishes, push its branch, open a pull request, and clean up with `git worktree remove ../app-fix-login`.
+Start `claude` or `codex` in each folder. When an agent finishes, push its branch, open a pull request, and remove its folder, such as `git worktree remove ../app-fix-login` once the login fix is in.
 
 That's enough for two agents. Past three or four, the hard part is no longer the code but knowing which terminal is waiting on you, and that's the problem every tool below is trying to solve.
 
@@ -47,7 +47,7 @@ Anthropic, OpenAI, GitHub, Cursor, and Cognition each run their own agent in the
 
 ## Clouds that run more than one vendor's agent
 
-[Warp](https://docs.warp.dev/agent-platform/cloud-agents/overview) runs its own agent, [Claude Code, and Codex](https://docs.warp.dev/agent-platform/cloud-agents/harnesses) in its cloud, and you can start them from Slack, Linear, GitHub, or Warp itself. [Its free plan](https://www.warp.dev/pricing) includes a limited number of cloud agents, so you can try it before you pay. Vespin is the other tool in this group, and we cover it at the end.
+[Warp](https://docs.warp.dev/agent-platform/cloud-agents/overview) runs its own agent, [Claude Code, and Codex](https://docs.warp.dev/agent-platform/cloud-agents/harnesses) in its cloud, and you can start them from Slack, Linear, GitHub, or Warp itself. [Its free plan](https://www.warp.dev/pricing) includes a limited number of cloud agents, so you can try it before you pay. Paradev's Team plan, from the section above, also runs agents in cloud workspaces. Vespin is in this group too, and we cover it at the end.
 
 ## The tools side by side
 
