@@ -36,10 +36,12 @@
    `geist.mjs`) wherever Geist has one: the fills and edges are its
    gray-alpha steps (100 a hover, 200 a strong fill, 300 a chosen one, 500 a
    press; 400 the border, 500 the strong edge, 600 the chosen edge), and the
-   chart's series its teal, purple, green, pink, and gray, none of them the
-   accent's amber. A literal here is a color Geist has no step for: a
-   shadow, a scrim, a veil, the tooltip's pill, find's yellows, the code's
-   own words, and the switch's and scrollbar's alphas. */
+   web's fields its background-100. A literal here is a color Geist has no
+   step for: a shadow, a scrim, a veil, the tooltip's pill, find's yellows,
+   the code's own words, and the switch's and scrollbar's alphas; and the
+   chart's series, Geist's light teal, purple, green, pink, and gray held in
+   either theme so a series reads as the same color in both, and none of
+   them the accent's amber. */
 
 [data-ui-theme="dark"] {
   color-scheme: dark;
@@ -137,11 +139,11 @@
   /* A chart's series, in the order a chart takes them: each mark holds 3:1
      on either ground, so a stack of them reads apart by hue alone, and none
      is the accent's amber, so no series reads as attention beside a badge. */
-  --ui-color-chart-1: var(--geist-teal-800);
-  --ui-color-chart-2: var(--geist-purple-700);
-  --ui-color-chart-3: var(--geist-green-800);
-  --ui-color-chart-4: var(--geist-pink-800);
-  --ui-color-chart-5: var(--geist-gray-700);
+  --ui-color-chart-1: #008d7d;
+  --ui-color-chart-2: #9f00f4;
+  --ui-color-chart-3: #279141;
+  --ui-color-chart-4: #e4106e;
+  --ui-color-chart-5: #8f8f8f;
 }
 
 /* The site's light theme, drawn in the brand's light colors (`brand.css`).
@@ -209,11 +211,11 @@
 
   /* A chart's series, in the order a chart takes them: each mark holds 3:1
      on either ground, so a stack of them reads apart by hue alone. */
-  --ui-color-chart-1: var(--geist-teal-800);
-  --ui-color-chart-2: var(--geist-purple-700);
-  --ui-color-chart-3: var(--geist-green-800);
-  --ui-color-chart-4: var(--geist-pink-800);
-  --ui-color-chart-5: var(--geist-gray-700);
+  --ui-color-chart-1: #008d7d;
+  --ui-color-chart-2: #9f00f4;
+  --ui-color-chart-3: #279141;
+  --ui-color-chart-4: #e4106e;
+  --ui-color-chart-5: #8f8f8f;
 }
 
 /* The site's dark ground, worn where the account's Theme setting (or the
@@ -277,9 +279,9 @@
   /* The chart series on the dark ground: the light's own five, which hold
      3:1 on the dark card as well, so none needs a
      step of its own here. */
-  --ui-color-chart-1: var(--geist-teal-800);
-  --ui-color-chart-2: var(--geist-purple-700);
-  --ui-color-chart-3: var(--geist-green-800);
-  --ui-color-chart-4: var(--geist-pink-800);
-  --ui-color-chart-5: var(--geist-gray-700);
+  --ui-color-chart-1: #008d7d;
+  --ui-color-chart-2: #9f00f4;
+  --ui-color-chart-3: #279141;
+  --ui-color-chart-4: #e4106e;
+  --ui-color-chart-5: #8f8f8f;
 }
