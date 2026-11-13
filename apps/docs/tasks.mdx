@@ -1,0 +1,95 @@
+---
+title: "Tasks"
+description: "A task's description, sub-tasks, agents, pages, and each agent's browser"
+---
+
+A task is one piece of work, from the sentence that starts it to its merged pull requests. It keeps the work's description, its agents and their pull requests, its pages, and its threads in your Inbox together.
+
+## Start a task
+
+Press <kbd>⌘N</kbd> (<kbd>⌥⌘N</kbd> in a browser), pick a repository, describe the work, and click **Start agent**. To make a task with no agent, press <kbd>⌘⏎</kbd> with the box empty.
+
+A task starts as **Todo** and moves to **In progress** when an agent first starts on it. For a first walkthrough, see [Your first task](/quickstart).
+
+## The Overview
+
+Click the task's name at the top of the task to open its **Overview**. Click **Agents** to go back to the agents' tabs.
+
+In the **Overview**, click the name to rename the task. Set **Status**, **Priority**, and **Assignee** under it, or press <kbd>S</kbd> to set the status.
+
+## The description
+
+The description is the task's spec, kept current: what to build, the decisions made, and the questions still open. You and the task's agents write it together, and agents never record progress there.
+
+Task descriptions are an experiment. An owner or admin turns on **Task descriptions** for the whole workspace in **Settings › Experimental**.
+
+An agent you start gets your words as its prompt, and reads the description before it edits it. An agent started by another agent with no prompt gets the description as its first message.
+
+### Edit it
+
+Click into the words to edit them, and press <kbd>Esc</kbd> when you're done. It saves a second after you stop typing. Your edits merge with what agents write at the same time. Type <kbd>/</kbd> to add a **Diagram**, **Table**, **Picture**, or **Mention**, or drop pictures onto the text.
+
+### Comment
+
+1. Select words in the description, or point at a block.
+2. Click **Comment**, or press <kbd>⇧⌘M</kbd>.
+3. Write your comment. Type <kbd>@</kbd> and an agent's name to send it to that agent.
+
+A comment reaches an agent only if you mention it, or if the agent is already in the thread. An agent answers in the thread, and anyone can **Reply**, **Resolve**, or **Reopen** it.
+
+To see every thread in a list, click the comment count under the task's name.
+
+### Version history
+
+To see the description's versions, click **Edited** under the task's name, or press <kbd>⌥⇧⌘H</kbd>.
+
+To go back, open a version and click **Restore this version**. A restore is itself a version, and its toast's **Undo** puts back the one before it.
+
+## Sub-tasks and relations
+
+Split a large task into sub-tasks. Each is a task of its own, with its own agents, and works in its parent's repository.
+
+- Click **New sub-task** on the **Sub-tasks** group, type its name, and press <kbd>⏎</kbd>. It starts with no agent.
+- Click **Link existing task** to make an existing task a sub-task.
+- Click **Add task relation**, then **Mark as blocked by…** or **Mark as blocking…**, to say which task waits on which.
+
+A block is advice: nothing stops a blocked task's agents from starting. To change or remove a relation, use **Change relation** or **Remove relation** on its row.
+
+## Agents
+
+Click a row in the **Agents** group to open that agent. Each row shows the agent's pull request and how many threads it has waiting on you.
+
+To start another agent on the task, click **+** in the agents' tab row, or press <kbd>⌘T</kbd>. It works in the task's repository.
+
+## Pages
+
+An agent can show you a page: an interactive HTML page such as a chart, a table, or a mockup. Click a page in the **Pages** group to open it in the side panel.
+
+To ask the agent for changes, click **Comment on the page**, then click an element, or choose **Whole page**. Each comment goes to the agent that wrote the page. To send several at once, click **Start a review**, add your comments, and send them from **Review**.
+
+## The agent's browser {#the-agents-browser}
+
+A cloud agent has its own browser, a Chromium in its sandbox. The agent uses it to check pages it built, show you a flow, or reach a site you sign in to. An agent running on your Mac has none.
+
+Screenshots and recordings the agent takes in its browser appear in its conversation, which every member who can open the task can see.
+
+### Watch it work
+
+1. In the task's side panel (<kbd>⌥⌘B</kbd>), click **+**.
+2. Under **Browser**, pick one of the agent's tabs, listed by page title.
+
+A tab the agent opens doesn't appear in your side panel until you open it from **+**.
+
+### Take over
+
+Click **Take over** to drive the tab yourself. Your clicks, scrolling, and keys go to the page, and the agent can't act on that tab until you click **Hand back**. A takeover also ends 60 seconds after your last input.
+
+If the agent runs on its starter's own GitHub token, only whoever started it can take over.
+
+### Sign in for the agent
+
+1. Click **+**, then **New browser tab**. With more than one cloud agent, pick whose browser to open it in.
+2. Type the site's address and press <kbd>⏎</kbd>. A tab you open is yours to drive.
+3. Sign in, then click **Hand back**.
+
+The agent sees which tabs you opened and uses them once you hand them back. Cookies and logins stay in that agent's sandbox for as long as the sandbox lasts, through a stop and a resume. No other agent gets them.

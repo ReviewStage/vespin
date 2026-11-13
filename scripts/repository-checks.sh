@@ -158,6 +158,7 @@ pnpm --dir "$APP_REPO_ROOT/apps/web" exec tsx scripts/function-rewrites.ts --che
 # table, as the Mac app's own Keyboard shortcuts page lists it; --check fails
 # if a shortcut changed without the page.
 pnpm --dir "$APP_REPO_ROOT/packages/settings" exec tsx scripts/shortcuts-docs.ts --check
+node "$APP_REPO_ROOT/apps/docs/scripts/style-check.mjs"
 
 # The brand's colors are written from packages/brand's one table into
 # @repo/ui's roles, the plain values, and @repo/ui-native's tokens, and the
