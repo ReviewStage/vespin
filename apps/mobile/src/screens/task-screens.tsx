@@ -102,6 +102,7 @@ import {
   TaskPreview,
   TaskRow,
   UNDER_SPLIT_SCREEN,
+  useAfterFirstFrame,
   useColors,
   WordsRow,
 } from "@repo/ui-native";
@@ -1701,6 +1702,9 @@ function OverviewPage({
     select: selectWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS),
   });
 
+  // Note that the description draws a frame after the rest, as it does while it loads, because its Markdown and pictures were most of what a tap on a task row waited on before the push could start.
+  const drawn = useAfterFirstFrame();
+
   const related = new Set(overview.tasks.map((each) => each.id));
   const agents = new Set(overview.agents.map(({ agent }) => agent.id));
 
@@ -1723,7 +1727,7 @@ function OverviewPage({
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
-      ) : document === undefined || document.document.body.trim() === "" ? null : (
+      ) : !drawn || document === undefined || document.document.body.trim() === "" ? null : (
         <OverviewDescription overview={overview} body={document.document.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}

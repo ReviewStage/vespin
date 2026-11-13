@@ -4,6 +4,8 @@ export { useAnnounced } from "./accessibility.js";
 
 export { AccountBarItem, AccountButton, type BarAccount } from "./account-button.js";
 
+export { useAfterFirstFrame } from "./after-first-frame.js";
+
 export {
   ANSWER_FIELD,
   type AnswerField,
