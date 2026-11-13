@@ -31,6 +31,7 @@ import {
   machineCommandResultSchema,
 } from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
 import {
   Clock,
@@ -509,6 +510,15 @@ const RECORDING_UNSENT: MachineCommandRefusal = {
     "stop_recording again.",
 };
 
+/** What a stop answers where this Mac holds no recording of the conversation that asks: none runs, as the helper says where none ever did. */
+const NO_RECORDING: MachineCommandResult = { computer: { unrecorded: RECORDING_FAILURE.NONE } };
+
+/** Who a recording is: the account and the agent's conversation that started it, which alone may stop it and receive its video. */
+interface RecordingOwner {
+  readonly userId: string;
+  readonly conversationId: string;
+}
+
 /** The bytes a base64 text spells: three for every four characters, less its padding. */
 function base64Bytes(base64: string): number {
   const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
@@ -561,6 +571,13 @@ export function composeMachineCommands(
     const allowedOnce = new Map<string, Set<string>>();
     /** The apps allowed without asking as last read, so an app taken off that list loses every grant it was allowed once beside it. */
     let alwaysAllowed: readonly string[] = [];
+    /**
+     * Who started the recording the helper holds, running or kept until the
+     * next: the one conversation whose stop reaches it, since the helper keeps
+     * one recording for the whole Mac and would hand it to any stop. Note that
+     * it is forgotten as the gate moves, so another account never receives it.
+     */
+    let recordingOwner: RecordingOwner | undefined;
     /** The asks waiting on the developer, by the command's id, the earliest asked first, each with the account it was claimed for. */
 
     const asks = new Map<
@@ -816,6 +833,17 @@ export function composeMachineCommands(
           Duration.toMillis(Duration.seconds(command.timeoutSeconds));
 
         const { action } = command;
+        const owner: RecordingOwner = { userId, conversationId: command.conversationId };
+
+        // Note that a stop from any conversation but the one that recorded is answered as no recording, before the helper is asked, so a video never reaches another agent or account.
+        if (
+          action.op === COMPUTER_ACTION.STOP_RECORDING &&
+          (recordingOwner?.userId !== owner.userId ||
+            recordingOwner.conversationId !== owner.conversationId)
+        ) {
+          return yield* settled(command.id, NO_RECORDING);
+        }
+
         const missing = yield* lacking(computer, action.op);
 
         if (missing !== undefined) return yield* settled(command.id, missing);
@@ -848,6 +876,14 @@ export function composeMachineCommands(
 
         if ("recording" in answer)
           return yield* settled(command.id, yield* posted(command.id, answer.recording));
+
+        if (
+          action.op === COMPUTER_ACTION.RECORD &&
+          "outcome" in answer &&
+          "done" in answer.outcome
+        ) {
+          recordingOwner = owner;
+        }
 
         yield* settled(command.id, sendable(computerResult(answer, app)));
       });
@@ -1206,6 +1242,7 @@ export function composeMachineCommands(
         if (moves !== clearedAt) {
           clearedAt = moves;
           allowedOnce.clear();
+          recordingOwner = undefined;
           yield* FiberSet.clear(running);
 
           // Note that the clear waits out any claim under way, during which the gate may have moved again, so the next turn starts from where it stands now.
