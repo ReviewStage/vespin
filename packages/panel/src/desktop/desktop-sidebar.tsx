@@ -2420,9 +2420,12 @@ function SidebarColumn({
 
       {/* One scroller for the pages' rows and both sections, so neither the
           rows nor the pinned tasks hold the column above the rest: on an
-          iPad's or a short window's column they left the tasks a strip. */}
+          iPad's or a short window's column they left the tasks a strip. It
+          reaches the column's end edge and its body pads the rows back in,
+          so the strip its fade keeps whole for the scroll bar stands in the
+          column's inset rather than over the rows' ends. */}
       <ReplayUnmask>
-        <Fill className="sidebar-section -m-ring-reach">
+        <Fill className="sidebar-section -my-ring-reach -ms-ring-reach -me-column-inset">
           <ScrollArea ref={scroller} fade={SCROLL_FADE.BOTH}>
             <ListMotion root={body}>
               <ChosenTasksContext.Provider value={selection.chosenOf}>
@@ -2436,7 +2439,7 @@ function SidebarColumn({
                   <div
                     {...roving}
                     ref={bodyRef}
-                    className="sidebar-section-body flex min-h-list-held flex-col p-ring-reach [&_.sidebar-group+.sidebar-group]:mt-section-gap"
+                    className="sidebar-section-body flex min-h-list-held flex-col p-ring-reach pe-column-inset [&_.sidebar-group+.sidebar-group]:mt-section-gap"
                     {...motionRows()}
                   >
                     {places}
