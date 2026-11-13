@@ -331,6 +331,7 @@ import {
   ThreadLineHead,
   TranscriptAgent,
 } from "./line-cards.js";
+import { MachineRefusalCard } from "./machine-refusal-card.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, linkChip } from "./mention-chip.js";
 import {
   agentMessagePlace,
@@ -800,6 +801,7 @@ function ToolCallView({
       />
       {inBody ? null : <CallPictures tool={part.tool} input={part.input} output={part.output} />}
       <ComputerPermissionNote tool={part.tool} output={part.output} />
+      <MachineRefusalCard tool={part.tool} output={part.output} />
       {limit === undefined ? null : (
         <UsageLimitNotice notice={limit} look={USAGE_LIMIT_NOTICE_LOOK.TITLE} />
       )}
