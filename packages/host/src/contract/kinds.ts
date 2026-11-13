@@ -120,6 +120,12 @@ export const ACCOUNT_ASK_ACT_KIND = {
    */
   DICTATION_TRANSCRIBE: "dictation.transcribe",
   /**
+   * A voice call into an agent opened from the panel that carries its audio:
+   * the panel's SDP offer out, the call's id and GPT-Live's SDP answer back.
+   * Nothing on the way keeps either.
+   */
+  VOICE_OPEN: "voice.open",
+  /**
    * The member used this window just now: a key, a press, or a move of the
    * pointer, told at most once every `PRESENCE.BEAT_EVERY_MS`, which the
    * service stamps so their phone holds its pushes (`presence-wire.ts`).
@@ -909,6 +915,14 @@ export const WINDOW_SURFACE_ACT_KIND = {
    * member's iPhone as the phone's own screen for it would.
    */
   WINDOW_HANDOFF: "window.handoff",
+  /**
+   * The voice call the asking panel holds, told whenever its card would
+   * change, or none once it ends, so the floating call window draws it while
+   * no window of the app is in front.
+   */
+  WINDOW_VOICE_CALL: "window.voiceCall",
+  /** A press on the floating call window's card, which the Mac hands to the panel holding the call, or answers itself for the way back to the call's agent. */
+  VOICE_CALL_PRESS: "window.voiceCallPress",
   FEEDBACK_SEND: "feedback.send",
 } as const;
 
@@ -1010,6 +1024,7 @@ export const PORT_ACT_USE = {
   SOUND_REMOVE: ACT_USE.WRITE,
   SOUND_CHOOSE: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
+  VOICE_OPEN: ACT_USE.WRITE,
   ACCOUNT_ACTIVE: ACT_USE.WRITE,
   PUSH_DEVICE_REGISTER: ACT_USE.WRITE,
   PUSH_DEVICE_UNREGISTER: ACT_USE.WRITE,
@@ -1246,6 +1261,8 @@ export const PORT_ACT_USE = {
   WINDOW_UNSAVED_WORK: ACT_USE.WRITE,
   WINDOW_MENU_OFFERS: ACT_USE.WRITE,
   WINDOW_HANDOFF: ACT_USE.WRITE,
+  WINDOW_VOICE_CALL: ACT_USE.WRITE,
+  VOICE_CALL_PRESS: ACT_USE.WRITE,
   FEEDBACK_SEND: ACT_USE.WRITE,
 
   WORKSPACE_CREATE: ACT_USE.WRITE,

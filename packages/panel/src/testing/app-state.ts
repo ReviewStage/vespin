@@ -247,6 +247,7 @@ function idleDocument(experiments: ExperimentChoices): AppStateSnapshot {
     sessionReplay: { permitted: false, halted: false },
     portForwarding: null,
     mirrors: {},
+    voiceCall: null,
     network: { online: true, reachable: true },
     window: { fullScreen: false },
   };
