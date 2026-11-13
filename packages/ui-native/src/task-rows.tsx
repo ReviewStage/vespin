@@ -37,6 +37,7 @@ import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dropLink } from "./interactions.js";
@@ -115,14 +116,27 @@ function LeadGlyph({
   return <Image {...glyphImage(symbol)} color={ink} modifiers={[font({ textStyle })]} />;
 }
 
-/** A row's 13 pt line under its title, set in to the title's words. */
+/**
+ * A row's 13 pt line under its title, set in to the title's words, which
+ * start past the lead's column as it grows with the reader's text. At an
+ * accessibility size each fact stands on a line of its own, as Mail's rows
+ * stack, since side by side they broke mid-word.
+ */
 function RowLine({ children }: { readonly children: ReactNode }) {
+  const stacked = useAccessibilitySize();
+  const lead = useScaledSize(MARK_SIZE.LEAD);
+  const inset = padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING + lead - MARK_SIZE.LEAD });
+
+  if (stacked) {
+    return (
+      <VStack alignment="leading" spacing={2} modifiers={[inset]}>
+        {children}
+      </VStack>
+    );
+  }
+
   return (
-    <HStack
-      spacing={SPACE.TIGHT + 1}
-      alignment="center"
-      modifiers={[padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING })]}
-    >
+    <HStack spacing={SPACE.TIGHT + 1} alignment="center" modifiers={[inset]}>
       {children}
       <Spacer />
     </HStack>
@@ -277,13 +291,15 @@ export function AgentRow(props: AgentRowProps) {
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
+  const stacked = useAccessibilitySize();
+  const tile = useScaledSize(MARK_SIZE.LEAD);
 
   const row: ReactElement = (
     <VStack alignment="leading" spacing={2}>
       <RowHead
         unread={false}
         faded={false}
-        lead={<AgentTile name={name} harness={harness} size={MARK_SIZE.LEAD} />}
+        lead={<AgentTile name={name} harness={harness} size={tile} />}
         title={name}
         ink={colors.TEXT}
         end={<EndWords words={runsOn} />}
@@ -299,7 +315,7 @@ export function AgentRow(props: AgentRowProps) {
                 foregroundStyle(colors.ACCENT_TEXT),
               ]}
             >
-              {`${told ? LINE_PART : ""}${needsYouWords(waiting)}`}
+              {`${told && !stacked ? LINE_PART : ""}${needsYouWords(waiting)}`}
             </Text>
           )}
         </RowLine>
