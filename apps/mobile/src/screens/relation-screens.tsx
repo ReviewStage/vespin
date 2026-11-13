@@ -16,11 +16,9 @@ import {
   type TaskRelationKind,
   type TaskSummary,
 } from "@repo/features/task-wire";
-import { readingWords } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
-  BAR_TITLE,
   EmptyState,
   GLYPH,
   type Glyph,
@@ -31,9 +29,9 @@ import {
   RowList,
   Screen,
   SettingsForm,
-  useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { Schema } from "effect";
 import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
@@ -68,17 +66,32 @@ export function useOpenRelation(): OpenRelation {
     });
 }
 
-/** What the sheet says while the task's document, which holds its blocks, is first read. */
-const READING_TASK = readingWords("the task");
-
-/** Whether a kind is a block, which the open task's document judges, since the list carries no blocks. */
-function blockKind(kind: TaskRelationKind): boolean {
-  return kind === TASK_RELATION_KIND.BLOCKED_BY || kind === TASK_RELATION_KIND.BLOCKS;
-}
-
 /** Whether a route's word names one of the four kinds. */
 export function isRelationKind(word: string | undefined): word is TaskRelationKind {
   return TASK_RELATION_ORDER.some((kind) => kind === word);
+}
+
+/** A route's params where they name one of the four kinds. */
+const RelationParamsSchema = Schema.Struct({
+  kind: Schema.Literals([
+    TASK_RELATION_KIND.SUB_TASK,
+    TASK_RELATION_KIND.PARENT,
+    TASK_RELATION_KIND.BLOCKED_BY,
+    TASK_RELATION_KIND.BLOCKS,
+  ]),
+});
+
+/** Reads a route's params as the kind they name, none where they name none of the four. */
+export const decodeRelationParams = Schema.decodeUnknownOption(RelationParamsSchema);
+
+/**
+ * The sheet's title for `kind`, as the panel's menu heads its search
+ * (`TASK_RELATION_VERBS`' head), or Task relation over the four kinds.
+ * Note that the root layout sets it from the route, since the sheet's own
+ * options never reached its bar.
+ */
+export function relationSheetTitle(kind: TaskRelationKind | undefined): string {
+  return kind === undefined ? TASK_RELATION_MENU : TASK_RELATION_VERBS[kind].head;
 }
 
 /** A task offered for a kind: the task, its key, and why it cannot take the kind, where it cannot. */
@@ -150,42 +163,30 @@ function KindRows({ onKind }: { readonly onKind: (kind: TaskRelationKind) => voi
  */
 export function TaskRelationScreen({
   taskId,
-  kind: opened,
+  kind,
 }: {
   readonly taskId: string;
   readonly kind?: TaskRelationKind | undefined;
 }) {
   const router = useRouter();
-  const colors = useColors();
   const overview = useTaskOverview(taskId);
   const writes = useTaskRelationWrites();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
-  const [chosen, setChosen] = useState<TaskRelationKind | undefined>(opened);
   const [search, setSearch] = useState("");
-  const kind = chosen;
 
+  // Note that the title, the bar's ink and the ground are the root layout's, read from the route's kind, so a kind chosen here goes into the route.
   const bar = (
     <>
-      <Stack.Screen
-        options={{
-          headerShown: true,
-          title: kind === undefined ? TASK_RELATION_MENU : TASK_RELATION_VERBS[kind].head,
-          headerTintColor: colors.TEXT,
-          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
-          headerShadowVisible: false,
-          // Note that the kinds stand as a grouped card on the form's ground, and the tasks to pick from as a plain list on the sheet's.
-          contentStyle: { backgroundColor: kind === undefined ? colors.GROUPED : colors.SIDEBAR },
-        }}
-      >
-        {kind === undefined ? null : (
+      {kind === undefined ? null : (
+        <Stack.Screen>
           <Stack.SearchBar
             placeholder={TASK_RELATION_SEARCH[kind].find}
             hideWhenScrolling={false}
             onChangeText={(event) => setSearch(event.nativeEvent.text)}
             onCancelButtonPress={() => setSearch("")}
           />
-        )}
-      </Stack.Screen>
+        </Stack.Screen>
+      )}
       <Stack.Toolbar placement="left">
         <Stack.Toolbar.Button onPress={() => router.back()}>{WORDS.CANCEL}</Stack.Toolbar.Button>
       </Stack.Toolbar>
@@ -208,7 +209,7 @@ export function TaskRelationScreen({
       <>
         {bar}
         <Screen>
-          <KindRows onKind={setChosen} />
+          <KindRows onKind={(chosen) => router.setParams({ kind: chosen })} />
         </Screen>
       </>
     );
@@ -216,18 +217,7 @@ export function TaskRelationScreen({
 
   const { document } = overview;
 
-  // Note that the open task's blocks are its document's, which the list does not carry, so a block's tasks wait for it rather than be judged against none.
-  if (blockKind(kind) && document === undefined) {
-    return (
-      <>
-        {bar}
-        <Screen>
-          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
-        </Screen>
-      </>
-    );
-  }
-
+  // Note that the list carries no blocks, so a block is judged against the open task's document once it is read, and against none until then, as the panel's row menu judges one.
   const subject: TaskRelationSubject = {
     ...overview.task,
     ...(document?.blockedBy === undefined ? undefined : { blockedBy: document.blockedBy }),

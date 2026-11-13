@@ -3,8 +3,9 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
+import { BAR_TITLE, FailureNoticeProvider, KeepingProvider, useColors } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
+import { Option } from "effect";
 import { Stack } from "expo-router";
 import { hide as hideSplash } from "expo-splash-screen";
 import { useEffect } from "react";
@@ -18,6 +19,7 @@ import { useLiveActivity } from "../live-activity/use-live-activity.js";
 import { MenuCommands } from "../menu-commands/menu-commands.js";
 import { useInboxNotifications } from "../notifications.js";
 import { usePushRegistration } from "../push-device.js";
+import { decodeRelationParams, relationSheetTitle } from "../screens/relation-screens.js";
 import { useShareSheet } from "../share-sheet.js";
 import { useSystemActivity } from "../system-activity/use-system-activity.js";
 import { useWindowSizeClass } from "../use-window-size-class.js";
@@ -79,6 +81,7 @@ function GuardedScreens() {
 
   // Note that every sheet opens as a form sheet in a regular window, centered over the split view as iPad's own apps open theirs (Mail's compose, Reminders' new list), rather than across the whole screen, and as the modal sheet in a compact one.
   const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
+  const colors = useColors();
   const sheetPresentation = regular ? "formSheet" : "modal";
 
   // Note that a short sheet, a list to pick from or a few rows, opens at half height with its grabber in a compact window, and pulls up to full, as Maps' and Mail's short sheets do; a regular window's form sheet keeps its own size.
@@ -93,7 +96,15 @@ function GuardedScreens() {
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
-      <Stack screenOptions={{ headerShown: false }}>
+      {/* Note that a sheet's bar takes the ink here, since an option a sheet sets itself never reached its bar: its title stood in the system's black on the dark ground. */}
+      <Stack
+        screenOptions={{
+          headerShown: false,
+          headerTintColor: colors.TEXT,
+          headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+          headerShadowVisible: false,
+        }}
+      >
         <Stack.Protected guard={signedIn && !updateNeeded}>
           <Stack.Screen name="index" />
           <Stack.Screen name="(tabs)" />
@@ -112,9 +123,21 @@ function GuardedScreens() {
           />
           <Stack.Screen name="agent-model" options={{ ...shortSheet, title: "Options" }} />
           <Stack.Screen name="agent-ports" options={{ ...shortSheet, title: "Ports" }} />
+          {/* Note that the Task relation sheet is titled for the kind its route names, as the panel heads its search, its kinds standing as a card on the form's ground and its tasks as a list on the sheet's. */}
           <Stack.Screen
             name="task-relation"
-            options={{ presentation: sheetPresentation, title: "Task relation" }}
+            options={({ route }) => {
+              const kind = Option.getOrUndefined(decodeRelationParams(route.params))?.kind;
+
+              return {
+                presentation: sheetPresentation,
+                headerShown: true,
+                title: relationSheetTitle(kind),
+                contentStyle: {
+                  backgroundColor: kind === undefined ? colors.GROUPED : colors.SIDEBAR,
+                },
+              };
+            }}
           />
           <Stack.Screen name="move-task" options={{ ...shortSheet, title: "Move to workspace" }} />
           <Stack.Screen name="task-following" options={{ ...shortSheet, title: "Followers" }} />
