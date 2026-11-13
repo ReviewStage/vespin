@@ -472,9 +472,7 @@ workspace drives, which nothing reads or writes any more. A sandbox's own
 disk is discarded when it stops, so only its drive outlives it; a sandbox made
 before that changed keeps a snapshot of its disk instead.
 We use encryption in transit (TLS), encrypt saved credentials as described
-above, and keep the tokens agents use outside their sandboxes, adding them at
-the sandbox's network firewall, except a ChatGPT plan's access token, which a
-Codex agent holds inside its sandbox to sign in. Transcripts, descriptions, and other content are not
+above. Transcripts, descriptions, and other content are not
 end-to-end encrypted.
 
 While we strive to protect your information, no method of electronic storage
