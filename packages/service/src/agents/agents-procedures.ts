@@ -742,13 +742,23 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       if (sessionId === undefined) return yield* Effect.fail(HOSTED_REFUSAL.AGENT_NOT_READY);
       const { title } = input.body;
 
+      const sandboxName = agentSandboxName(sessionId);
+      const terminalId = randomUUID();
+
+      // Note that the tab holds the sandbox before its shell starts, so a stop as a turn ends never takes the sandbox from under it.
+      yield* recordedTerminalOpened(sandboxName, terminalId);
+
       const opened = yield* inSandbox(
         Effect.gen(function* () {
           const sandbox = yield* AgentSandbox;
-          const started = yield* sandboxOrUpstream(sandbox.start(sessionId, randomUUID(), title));
+          const started = yield* sandboxOrUpstream(sandbox.start(sessionId, terminalId, title));
 
-          if (Result.isFailure(started)) return yield* Effect.fail(shellRefusal(started.failure));
-          yield* recordedTerminalOpened(agentSandboxName(sessionId), started.success.id);
+          // Note that a refused start started nothing, so it lets go; one the sandbox did not answer may have started, so a later list's prune decides.
+          if (Result.isFailure(started)) {
+            yield* recordedTerminalEnded(sandboxName, terminalId);
+
+            return yield* Effect.fail(shellRefusal(started.failure));
+          }
 
           return { terminal: started.success };
         }),
