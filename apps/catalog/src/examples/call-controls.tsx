@@ -1,5 +1,5 @@
 /**
- * call-controls.tsx -- Talk at rest and with no OpenAI API key; each mute round and square, off and on, Stop, and the one red End call; a box's call status connecting, live, muted, and ending; a call bar at a card's width and at its narrowest, connecting, idle, while the agent thinks and works, and muted; and the call card at the sidebar's foot, narrow, and in the floating window, its agent's chip over its task.
+ * call-controls.tsx -- Talk at rest and with no OpenAI API key; each mute round and square, off and on, and ringed as its voice speaks, Stop, and the one red End call; a box's call status connecting, live, muted, and ending; a call bar at a card's width and at its narrowest, connecting, idle, while the agent thinks and works, and muted; and the call card at the sidebar's foot, narrow, and in the floating window, its agent's chip over its task.
  */
 
 import { MODEL_PROVIDER } from "@repo/features/models-wire";
@@ -15,6 +15,7 @@ import {
   CallBar,
   CallCard,
   type CallDevice,
+  type CallLevels,
   CallLive,
   CallMute,
   type CallStatus,
@@ -127,15 +128,24 @@ function OwnedCard({
   );
 }
 
-/** One mute that toggles, at the corners given, on from the start where `on`. */
+/** The levels a still frame of a call holds: the voice speaking loud, and the caller at half. */
+const SPEAKING: CallLevels = (draw) => {
+  draw({ you: 0.5, voice: 1 });
+
+  return () => undefined;
+};
+
+/** One mute that toggles, at the corners given, on from the start where `on`, ringed by `levels` where handed them. */
 function OwnedMute({
   device,
   corners,
   on = false,
+  levels,
 }: {
   device: CallDevice;
   corners: ButtonCorners;
   on?: boolean;
+  levels?: CallLevels;
 }): React.JSX.Element {
   const [muted, setMuted] = useState(on);
 
@@ -144,6 +154,7 @@ function OwnedMute({
       device={device}
       muted={muted}
       corners={corners}
+      levels={levels}
       onPress={() => setMuted((was) => !was)}
     />
   );
@@ -171,6 +182,39 @@ function CallControls(): React.JSX.Element {
           <OwnedMute device={CALL_DEVICE.MICROPHONE} corners={BUTTON_CORNERS.ROUND} on />
           <StopAgentButton onPress={stay} />
           <EndCallButton onPress={stay} />
+        </Inline>
+      </CatalogSection>
+      <CatalogSection
+        id="call-rings"
+        title="Mutes ringed as each voice speaks: the voice loud, the caller at half, square, and a muted microphone, which rings for nobody"
+      >
+        <Inline gap={GAP.CONTROL}>
+          <OwnedMute
+            device={CALL_DEVICE.SPEAKER}
+            corners={BUTTON_CORNERS.ROUND}
+            levels={SPEAKING}
+          />
+          <OwnedMute
+            device={CALL_DEVICE.MICROPHONE}
+            corners={BUTTON_CORNERS.ROUND}
+            levels={SPEAKING}
+          />
+          <OwnedMute
+            device={CALL_DEVICE.SPEAKER}
+            corners={BUTTON_CORNERS.SQUARE}
+            levels={SPEAKING}
+          />
+          <OwnedMute
+            device={CALL_DEVICE.MICROPHONE}
+            corners={BUTTON_CORNERS.SQUARE}
+            levels={SPEAKING}
+          />
+          <OwnedMute
+            device={CALL_DEVICE.MICROPHONE}
+            corners={BUTTON_CORNERS.ROUND}
+            levels={SPEAKING}
+            on
+          />
         </Inline>
       </CatalogSection>
       <CatalogSection

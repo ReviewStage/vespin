@@ -14,7 +14,7 @@ import { INLINE_REF_LOOK, InlineRef } from "../inline-ref/inline-ref.js";
 import { KeepFocus } from "../keep-focus/keep-focus.js";
 import { OneLine } from "../one-line/one-line.js";
 import { TEXT_TONE, TEXT_VARIANT, Text } from "../text/text.js";
-import { CallBar, type CallMuteState, type CallStatus } from "./call-controls.js";
+import { CallBar, type CallLevels, type CallMuteState, type CallStatus } from "./call-controls.js";
 
 /** What the card is named for a reader. */
 const CALL_CARD_LABEL = "Call";
@@ -106,6 +106,7 @@ export function CallCard({
   status,
   microphone,
   speaker,
+  levels,
   surface,
   onReturn,
   onStop,
@@ -120,6 +121,8 @@ export function CallCard({
   status: CallStatus | undefined;
   microphone: CallMuteState;
   speaker: CallMuteState;
+  /** The call's levels, which ring the mutes as each voice speaks; none draws them still, as the floating window, which holds no audio, does. */
+  levels?: CallLevels | undefined;
   surface: CallCardSurface;
   /** Opens the call's agent, the chip's press. */
   onReturn: () => void;
@@ -145,6 +148,7 @@ export function CallCard({
           status={status}
           microphone={microphone}
           speaker={speaker}
+          levels={levels}
           onStop={onStop}
           onEnd={onEnd}
           titled={inWindow}
