@@ -267,11 +267,15 @@ onFlowComplete:
 - takeScreenshot: task-delete-ask
 - tapOn: "Cancel"
 - waitForAnimationToEnd
-# New sub-task under its Sub-tasks opens New task as a sub-task of it, its
-# repository the task's own; Cancel on a sheet with nothing typed closes it.
+# Sub-tasks' + offers New sub-task and Link existing task; New sub-task
+# opens New task as a sub-task of it, its repository the task's own; Cancel
+# on a sheet with nothing typed closes it.
 - scrollUntilVisible:
-    element: "New sub-task"
+    element: "Add sub-task"
     direction: DOWN
+- tapOn: "Add sub-task"
+- assertVisible: "Link existing task"
+- takeScreenshot: task-sub-task-add
 - tapOn: "New sub-task"
 - assertVisible: "Describe the task"
 - assertVisible: "Relation, Sub-task of"

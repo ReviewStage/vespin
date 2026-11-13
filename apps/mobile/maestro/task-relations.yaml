@@ -1,4 +1,4 @@
-# task-relations.yaml -- a task row's long press holding Task relation, Move to section, and its repository; a task's Task relations group with Add task relation, opening the Task relation sheet on its four kinds; and Mark as blocked by…, which lists the workspace's other tasks under a search, a task that cannot take the relation dimmed with why.
+# task-relations.yaml -- a task row's long press holding Task relation, Move to section, and its repository; a task's ⋯ holding Task relation, opening the Task relation sheet on its four kinds, as its Task relations group's + does while it holds a row; and Mark as blocked by…, which lists the workspace's other tasks under a search, a task that cannot take the relation dimmed with why.
 #
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
@@ -25,15 +25,14 @@ appId: dev.vespin.ios
 - assertVisible: "Mark as blocked by"
 - tapOn: "Cancel"
 - waitForAnimationToEnd
-# The task's page lists its relations with Add task relation, which opens the
-# sheet on the four kinds.
+# The task's ⋯ holds Task relation, the four kinds under it, which open the
+# sheet; its Task relations group, with the same + at its header's end,
+# stands only while it holds a row.
 - tapOn: "Weekly digest email"
-- scrollUntilVisible:
-    element: "Add task relation"
-    direction: DOWN
 - waitForAnimationToEnd
 - takeScreenshot: task-relations-page
-- tapOn: "Add task relation"
+- tapOn: "More"
+- tapOn: "Task relation"
 - assertVisible: "Set parent…"
 - takeScreenshot: task-relations-kinds
 - tapOn: "Mark as blocked by…"

@@ -21,6 +21,7 @@ import {
   CHANGE_REPOSITORY,
   CHOOSE_REPOSITORY,
   NO_REPOSITORY,
+  subTaskCount,
   subTasksOf,
   taskFinished,
 } from "@repo/features/task-list-model";
@@ -1051,19 +1052,27 @@ function relationSwipes(
   ];
 }
 
-/** The page's own words for its relation rows. */
+/** The page's own words for its sections' adds. */
 const RELATION_WORDS = {
+  ADD_SUB_TASK: "Add sub-task",
   LINK_SUB_TASK: "Link existing task",
   ADD_RELATION: "Add task relation",
 } as const;
 
+/** What the Sub-tasks count says in its figures' place. */
+function subTasksFinishedWords(finished: number, total: number): string {
+  return `${finished} of ${total} sub-tasks finished`;
+}
+
 /**
- * The task's relations as the panel's two groups list them: its sub-tasks,
- * then New sub-task, which opens New task for one, and Link existing task,
- * which opens the Task relation sheet on Add sub-task; and its parent and the
- * tasks it waits on and holds up, then Add task relation, which opens the
- * sheet on the four kinds. Each related row's swipe and long press change
- * its kind or take it away (`relationSwipes`).
+ * The task's relations as the panel's two groups list them (`plan-relations.tsx`):
+ * its sub-tasks, counted finished of all of them, its header's + offering
+ * New sub-task, which opens New task for one, and Link existing task, which
+ * opens the Task relation sheet on Add sub-task; and, only while it holds a
+ * row, its parent and the tasks it waits on and holds up, each saying how it
+ * stands, its header's + offering the four kinds, which ⋯'s Task relation
+ * offers too while it holds none. Each related row's swipe and long press
+ * change its kind or take it away (`relationSwipes`).
  */
 function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const newSubTask = useNewSubTask();
@@ -1071,6 +1080,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
   const { task, document, tasks, relations } = overview;
   const byId = new Map(tasks.map((each) => [each.id, each]));
   const subTasks = subTasksOf(tasks, task.id);
+  const finished = subTaskCount(subTasks);
 
   // Note that each side is listed apart, since one task may both wait on this one and hold it up.
   const sides = [
@@ -1082,16 +1092,39 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
     { kind: TASK_RELATION_KIND.BLOCKS, ids: document?.blocks ?? [] },
   ] as const;
 
+  const related = sides.reduce((sum, { ids }) => sum + ids.length, 0);
+
   return (
     <>
-      <ListSection title={WORDS.SUB_TASKS} count={subTasks.length}>
+      <ListSection
+        title={WORDS.SUB_TASKS}
+        progress={
+          finished.total === 0
+            ? undefined
+            : {
+                done: finished.finished,
+                total: finished.total,
+                heard: subTasksFinishedWords(finished.finished, finished.total),
+              }
+        }
+        add={{
+          label: RELATION_WORDS.ADD_SUB_TASK,
+          acts: [
+            { label: WORDS.NEW_SUB_TASK, symbol: GLYPH.ADD, onPress: () => newSubTask(task) },
+            {
+              label: RELATION_WORDS.LINK_SUB_TASK,
+              symbol: GLYPH.LINK,
+              onPress: () => openRelation(task.id, TASK_RELATION_KIND.SUB_TASK),
+            },
+          ],
+        }}
+      >
         {subTasks.map((sub) => (
           <RelationRow
             key={sub.id}
             id={sub.id}
             name={sub.name}
             status={sub.status}
-            relation={TASK_RELATION_WORDS[TASK_RELATION_KIND.SUB_TASK]}
             trailingActions={relationSwipes(
               task.id,
               sub.id,
@@ -1100,39 +1133,38 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
             )}
           />
         ))}
-        <LinkRow symbol={GLYPH.ADD} label={WORDS.NEW_SUB_TASK} onPress={() => newSubTask(task)} />
-        <LinkRow
-          symbol={GLYPH.LINK}
-          label={RELATION_WORDS.LINK_SUB_TASK}
-          onPress={() => openRelation(task.id, TASK_RELATION_KIND.SUB_TASK)}
-        />
       </ListSection>
-      <ListSection
-        title={WORDS.TASK_RELATIONS}
-        count={sides.reduce((sum, { ids }) => sum + ids.length, 0)}
-      >
-        {sides.map(({ kind, ids }) =>
-          ids.map((id) => {
-            const other = byId.get(id);
+      {related === 0 ? null : (
+        <ListSection
+          title={WORDS.TASK_RELATIONS}
+          count={related}
+          add={{
+            label: RELATION_WORDS.ADD_RELATION,
+            acts: (relationSubmenu(task, openRelation).actions ?? []).map((action) => ({
+              label: action.label,
+              symbol: action.symbol,
+              onPress: action.onPress,
+            })),
+          }}
+        >
+          {sides.map(({ kind, ids }) =>
+            ids.map((id) => {
+              const other = byId.get(id);
 
-            return (
-              <RelationRow
-                key={id}
-                id={id}
-                name={other?.name ?? WORDS.UNLISTED_TASK}
-                status={other?.status}
-                relation={TASK_RELATION_WORDS[kind]}
-                trailingActions={relationSwipes(task.id, id, kind, relations)}
-              />
-            );
-          }),
-        )}
-        <LinkRow
-          symbol={GLYPH.ADD}
-          label={RELATION_WORDS.ADD_RELATION}
-          onPress={() => openRelation(task.id)}
-        />
-      </ListSection>
+              return (
+                <RelationRow
+                  key={id}
+                  id={id}
+                  name={other?.name ?? WORDS.UNLISTED_TASK}
+                  status={other?.status}
+                  relation={TASK_RELATION_WORDS[kind]}
+                  trailingActions={relationSwipes(task.id, id, kind, relations)}
+                />
+              );
+            }),
+          )}
+        </ListSection>
+      )}
     </>
   );
 }
@@ -1283,7 +1315,7 @@ export function TaskAgentRow({
   );
 }
 
-/** The task's agents as the panel's Agents group lists them, New agent after them, which opens its sheet, and the line of its threads that need you. */
+/** The task's agents as the panel's Agents group lists them, counted while it has any, its header's + New agent, which opens its sheet, and the line of its threads that need you. */
 function OverviewAgents({
   overview,
   onArchiveAgent,
@@ -1295,15 +1327,23 @@ function OverviewAgents({
   const { task } = overview;
 
   return (
-    <ListSection title={WORDS.AGENTS} count={overview.agents.length}>
+    <ListSection
+      title={WORDS.AGENTS}
+      count={overview.agents.length === 0 ? undefined : overview.agents.length}
+      add={{
+        label: WORDS.NEW_AGENT,
+        acts: [
+          {
+            label: WORDS.NEW_AGENT,
+            symbol: GLYPH.ADD,
+            onPress: () => router.push({ pathname: "/start-agent", params: { task: task.id } }),
+          },
+        ],
+      }}
+    >
       {overview.agents.map((line) => (
         <TaskAgentRow key={line.agent.id} line={line} task={task} onArchive={onArchiveAgent} />
       ))}
-      <LinkRow
-        symbol={GLYPH.ADD}
-        label={WORDS.NEW_AGENT}
-        onPress={() => router.push({ pathname: "/start-agent", params: { task: task.id } })}
-      />
       {overview.waitingElsewhere === 0 ? null : (
         <LinkRow
           symbol={GLYPH.INBOX}

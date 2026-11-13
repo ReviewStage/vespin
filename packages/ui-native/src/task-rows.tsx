@@ -313,8 +313,8 @@ type RelationRowProps = {
   readonly id: string;
   readonly name: string;
   readonly status: TaskStatus | undefined;
-  /** How the task stands to this one: "Sub-task", "Blocked by", "Blocks"; or, in a picker, its key or why it cannot be picked. */
-  readonly relation: string;
+  /** How the task stands to this one: "Blocked by", "Blocks"; or, in a picker, its key or why it cannot be picked; none where its section says it, as a task's Sub-tasks does. */
+  readonly relation?: string | undefined;
   /** Whether it cannot be picked, which mutes its words, as a picker dims a task that cannot take the relation. */
   readonly faded?: boolean | undefined;
   /** What a swipe from the trailing edge reveals, such as Remove relation. */
@@ -348,7 +348,7 @@ export function RelationRow({
       }
       title={name}
       ink={faded ? colors.TEXT_MUTED : colors.TEXT_BODY}
-      end={<EndWords words={relation} />}
+      end={relation === undefined ? undefined : <EndWords words={relation} />}
     />
   );
 
