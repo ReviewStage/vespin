@@ -6,9 +6,10 @@ import type { ListedAgent } from "@repo/features/agent-wire";
 import { taskLinkStep } from "@repo/features/link-grammar";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { IDLE_TASKS_VIEW, type TasksView } from "@repo/features/tasks-view";
+import { taskListFollowing } from "@repo/host/task-list-following";
 import { createElement, type ReactElement, type ReactNode } from "react";
 import type { HistoryRows } from "../places/history-rows.js";
-import { TaskListCollectionsProvider, taskListFollowing } from "../task-list-collections.js";
+import { TaskListCollectionsProvider } from "../task-list-collections.js";
 
 /** The rows of `tasks` and `agents` by id, each task among them the only ones ever listed: for a name read once, where no task is deleted between reads. */
 export function listedRows(

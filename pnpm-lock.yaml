@@ -501,6 +501,9 @@ importers:
       '@sentry/react-native':
         specifier: 8.28.0
         version: 8.28.0(patch_hash=36b8f59785f409f30a3092710dfe5ee36af61e2a35e82694f6ba3bbb77052a48)(@babel/core@7.29.7)(@expo/config-types@58.0.3)(@expo/config@58.0.11)(@expo/env@2.5.4)(dotenv@17.4.2)(expo-router@58.0.30)(expo@58.0.23)(metro-config@0.87.3)(metro-resolver@0.87.3)(metro@0.87.3)(open@8.4.2)(promise@8.3.0)(react-native@0.88.1)(react@19.3.0)(rollup@4.62.4)
+      '@tanstack/react-db':
+        specifier: 1.0.0-rc.1.5
+        version: 1.0.0-rc.1.5(react@19.3.0)(typescript@7.0.2)
       '@tanstack/react-query':
         specifier: 5.106.1
         version: 5.106.1(@types/react@19.3.0)(react@19.3.0)
@@ -14185,6 +14188,13 @@ snapshots:
     dependencies:
       '@tanstack/db': 1.0.0-rc.1.5(typescript@7.0.2)
       react: 19.2.8
+    transitivePeerDependencies:
+      - typescript
+
+  '@tanstack/react-db@1.0.0-rc.1.5(react@19.3.0)(typescript@7.0.2)':
+    dependencies:
+      '@tanstack/db': 1.0.0-rc.1.5(typescript@7.0.2)
+      react: 19.3.0
     transitivePeerDependencies:
       - typescript
 
