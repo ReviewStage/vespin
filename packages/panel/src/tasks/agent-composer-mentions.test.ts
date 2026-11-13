@@ -2226,10 +2226,12 @@ test("an @ narrowed to machines offers the reader's own first, said as You, then
   typeInComposer(container, "Run it on @machines:");
   await settle();
   const narrowed = crumb(container);
+
   const rows = [...container.querySelectorAll('.mention-menu [role="option"]')].map((row) => [
     row.querySelector(".ui-combobox-option-label")?.textContent ?? "",
     row.querySelector(".ui-combobox-option-detail")?.textContent ?? "",
   ]);
+
   typeInComposer(container, "build");
   await settle();
   pressInComposer(container, "Enter");
