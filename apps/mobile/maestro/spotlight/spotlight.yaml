@@ -26,6 +26,17 @@ appId: dev.vespin.ios
     env:
       TAB: Tasks
 - assertVisible: "Weekly digest email"
+# The flow then waits on the Tasks tab for 100 seconds, so the search comes
+# about 110 seconds after the launch. Note that the wait is for the
+# simulator's Spotlight daemon, not the app: the app's items are written
+# within half a second of being answered, about 28 seconds after the launch,
+# but searchd made fresh items searchable only some 70 to 90 seconds after
+# the launch, and a search before then found none. Maestro has no plain wait,
+# so it waits for words that never stand, and lets that wait run out.
+- extendedWaitUntil:
+    visible: "Spotlight has indexed the app"
+    timeout: 100000
+    optional: true
 - pressKey: Home
 - waitForAnimationToEnd
 # The Home Screen's Search, over the Dock, opens Spotlight's search.
@@ -44,7 +55,7 @@ appId: dev.vespin.ios
 - scrollUntilVisible:
     element: "Weekly digest email, .*"
     direction: DOWN
-    timeout: 30000
+    timeout: 60000
 - waitForAnimationToEnd
 - takeScreenshot: spotlight-results
 - tapOn: "Weekly digest email, .*"
