@@ -152,20 +152,23 @@ function removalQuestion(name: string): DialogQuestion {
  */
 function useFollowerRemoval(taskId: string, followers: readonly TaskFollowerWire[]) {
   const staged = useQuery({ ...appStateQuery, select: selectFixtureStaged }).data === true;
-  const [asked, setAsked] = useState<{ userId: string; name: string } | undefined>(undefined);
+  const [asked, setAsked] = useState<{ taskId: string; userId: string; name: string } | undefined>(
+    undefined,
+  );
   const mutation = useMutation(actMutation(ACT_KIND.TASKS_REMOVE_FOLLOWER));
 
   const act = useConfirmAct(mutation, {
     send: () =>
       staged || asked === undefined
         ? Promise.resolve()
-        : mutation.mutateAsync({ taskId, userId: asked.userId }),
+        : mutation.mutateAsync({ taskId: asked.taskId, userId: asked.userId }),
     answered: removalAnswer,
     failed: (error) => ({ status: ACTION_RESULT_STATUS.REJECTED, reason: error.message }),
   });
 
-  // Note that the question goes once its follower does, as one removed elsewhere would leave it asking after no one.
-  const following = asked !== undefined && followers.some((each) => each.userId === asked.userId);
+  // Note that the question goes once its follower or its task does, as one asked on another task would remove someone there.
+  const here = asked !== undefined && asked.taskId === taskId;
+  const following = here && followers.some((each) => each.userId === asked.userId);
 
   const confirm = useConfirmDialog(
     { subject: following || mutation.isPending, surfaceOpen: true },
@@ -175,12 +178,12 @@ function useFollowerRemoval(taskId: string, followers: readonly TaskFollowerWire
 
   return {
     ask: (userId: string, name: string) => {
-      setAsked({ userId, name });
+      setAsked({ taskId, userId, name });
       confirm.ask();
     },
     dialog: (
       <ConfirmDialog
-        open={asked !== undefined}
+        open={here}
         confirm={confirm}
         question={removalQuestion(asked?.name ?? UNNAMED)}
       />
