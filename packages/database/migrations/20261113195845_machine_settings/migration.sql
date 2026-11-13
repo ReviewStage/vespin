@@ -2,8 +2,9 @@ DROP TRIGGER IF EXISTS "app_sync_update" ON "device";
 --> statement-breakpoint
 DROP TRIGGER IF EXISTS "app_sync_write" ON "device";
 --> statement-breakpoint
-ALTER TABLE "device" ADD COLUMN "computer_use" boolean;--> statement-breakpoint
-ALTER TABLE "device" ADD COLUMN "commands_away_at" timestamp with time zone;--> statement-breakpoint
+-- Note that the columns are added only where missing, because a preview database already took them under this migration's earlier name.
+ALTER TABLE "device" ADD COLUMN IF NOT EXISTS "computer_use" boolean;--> statement-breakpoint
+ALTER TABLE "device" ADD COLUMN IF NOT EXISTS "commands_away_at" timestamp with time zone;--> statement-breakpoint
 -- A machine that joined but has not listened lately reads away from its commands until its next listen clears the mark, as every join leaves one from now on.
 UPDATE "device" SET "commands_away_at" = now()
 WHERE "command_mode" IS NOT NULL
