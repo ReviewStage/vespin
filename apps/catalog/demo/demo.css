@@ -1,0 +1,73 @@
+/* demo.css -- THROWAWAY: the computer preview demo's page. */
+@layer base, components;
+
+@import "@repo/ui/tokens.css";
+@import "@repo/ui/styles.css";
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities) source(none);
+@import "@repo/ui/tailwind/sources.css";
+@import "@repo/ui/tailwind/theme.css";
+@source "../src/examples/computer-preview-options.tsx";
+@source "../src/examples/computer-preview-demo.tsx";
+
+@theme {
+  --spacing-cpo-wide: 320px;
+  --spacing-cpo-tall: 200px;
+  --spacing-cpo-narrow: 240px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+.demo-stage {
+  padding: var(--ui-space-16);
+  border: 1px solid var(--ui-color-border);
+  border-radius: var(--ui-radius-10);
+  background: var(--ui-color-ground);
+  color: var(--ui-color-text);
+  font-family: var(--ui-font-sans);
+  font-size: var(--ui-type-body-size);
+  line-height: var(--ui-type-body-leading);
+}
+
+.demo-room {
+  display: flex;
+  width: 100%;
+  max-width: 560px;
+  min-height: 460px;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: var(--ui-space-8);
+  padding: var(--ui-space-16);
+  border: 1px dashed var(--ui-color-border-strong);
+  border-radius: var(--ui-radius-8);
+}
+
+.demo-narrow {
+  max-width: 390px;
+}
+
+.demo-over {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.demo-over-end {
+  align-items: flex-end;
+}
+
+.demo-over > .ui-chip {
+  align-self: flex-end;
+}
+
+.catalog-composer {
+  padding: var(--ui-space-12);
+}

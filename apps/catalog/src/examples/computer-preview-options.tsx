@@ -68,7 +68,7 @@ const PHONE = `data:image/svg+xml,${encodeURIComponent(
 )}`;
 
 /** One app the agent used, as the preview draws it. */
-interface App {
+export interface App {
   readonly name: string;
   readonly icon: string;
   readonly window: string;
@@ -76,7 +76,13 @@ interface App {
   readonly height: number;
 }
 
-const XCODE: App = { name: "Xcode", icon: XCODE_ICON, window: EDITOR, width: 640, height: 400 };
+export const XCODE: App = {
+  name: "Xcode",
+  icon: XCODE_ICON,
+  window: EDITOR,
+  width: 640,
+  height: 400,
+};
 
 const SIMULATOR: App = {
   name: "Simulator",
@@ -92,7 +98,7 @@ const BROWSER = `data:image/svg+xml,${encodeURIComponent(
 
 const SAFARI: App = { name: "Safari", icon: SAFARI_ICON, window: BROWSER, width: 640, height: 440 };
 
-const APPS = [XCODE, SIMULATOR, SAFARI] as const;
+export const APPS = [XCODE, SIMULATOR, SAFARI] as const;
 
 /** Where a scene is seen: the agent working or done, on the Mac it uses or elsewhere, wide or narrow. */
 interface Seen {
@@ -102,7 +108,7 @@ interface Seen {
 }
 
 /** The newest window, at its own shape on a quiet ground, a press enlarging it. */
-function Window({ app, narrow }: { app: App; narrow: boolean }): React.JSX.Element {
+export function Window({ app, narrow }: { app: App; narrow: boolean }): React.JSX.Element {
   return (
     <span className={`flex justify-center bg-muted ${narrow ? "w-full" : ""}`}>
       <PictureTile name={app.name} onOpen={ignore}>
@@ -119,7 +125,7 @@ function Window({ app, narrow }: { app: App; narrow: boolean }): React.JSX.Eleme
 }
 
 /** "Using Xcode" while the agent's newest call is on it, "Used Xcode" once it is done. */
-function usingWords(app: App, working: boolean): string {
+export function usingWords(app: App, working: boolean): string {
   return `${working ? "Using" : "Used"} ${app.name}`;
 }
 
@@ -627,7 +633,7 @@ function OptionD(): React.JSX.Element {
 // Several apps in one turn, as each option shows them.
 
 /** What the agent last did in each app, as the apps' menu says it. */
-const LAST_DONE = new Map<App, string>([
+export const LAST_DONE = new Map<App, string>([
   [XCODE, "Clicked Build"],
   [SIMULATOR, "Looked at the app"],
   [SAFARI, "Opened localhost:3000"],
