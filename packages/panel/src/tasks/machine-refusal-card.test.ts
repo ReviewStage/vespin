@@ -102,7 +102,7 @@ test("a press on a machine a refused call offers makes it the agent's default, t
   await settle();
 
   const use = [...document.querySelectorAll("button")].find((button) =>
-    button.textContent?.endsWith("Use Laptop"),
+    button.textContent?.endsWith("Laptop"),
   );
 
   act(() => use?.click());
