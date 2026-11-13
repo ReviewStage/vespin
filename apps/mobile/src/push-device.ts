@@ -262,6 +262,9 @@ let picksMade = 0;
 /** The pick `notifyConfirmed` stands for, so an older answer, a read or a write, never replaces a newer one. */
 let confirmedPick = 0;
 
+/** How many choices are still being written, so a read never answers for one the service may not hold yet. */
+let writesPending = 0;
+
 const standingListeners = new Set<() => void>();
 
 function subscribeStanding(listener: () => void): () => void {
@@ -286,14 +289,15 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): UsePushDe
   useEffect(() => {
     if (key === undefined) return undefined;
     let live = true;
-    // Note that a read answers for the choices made before it began, so a pick made while it ran stands over it.
+    // Note that a read answers only where no choice was being written as it began and none was made while it ran, so it never stands over a pick.
     const readAt = picksMade;
+    const settledAtRead = writesPending === 0;
     registeredPushDevice(acts, key)
       .then(() => acts[ACT_KIND.PUSH_DEVICE_STATUS](key))
       .then(
         (answer) => {
           // A phone the service does not hold yet, or a read it did not answer, draws no standing.
-          if (!live || readAt !== picksMade) return;
+          if (!live || !settledAtRead || readAt !== picksMade) return;
           confirmedPick = readAt;
           notifyConfirmed = "failure" in answer ? undefined : answer.notify;
           holdStanding("failure" in answer ? undefined : answer);
@@ -322,10 +326,13 @@ export function usePushDeviceStanding(key: PushDeviceKey | undefined): UsePushDe
         }
       };
 
+      writesPending += 1;
       write(() => acts[ACT_KIND.PUSH_DEVICE_NOTIFY]({ ...key, notify }), {
         // Note that a pick offers no Try again, which could replay an older choice over a newer one; picking again is the retry.
         refused: (answer) => ("failure" in answer ? PUSH_NOTIFY_REFUSED : undefined),
       }).then((went) => {
+        writesPending -= 1;
+
         if (went && pick > confirmedPick) {
           confirmedPick = pick;
           notifyConfirmed = notify;
