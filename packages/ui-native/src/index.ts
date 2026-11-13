@@ -197,7 +197,11 @@ export {
   type BarPath,
   type BarSearch,
   type ColumnBar,
+  KeptColumns,
+  type KeptView,
+  SplitOverTabs,
   SplitView,
+  UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 
 export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";

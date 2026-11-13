@@ -12,9 +12,11 @@ import {
   ZStack,
 } from "@expo/ui/swift-ui";
 import {
+  accessibilityHidden,
   buttonStyle,
   containerBackground,
   disabled,
+  hidden,
   type ModifierConfig,
   menuIndicator,
   menuStyle,
@@ -24,7 +26,8 @@ import {
   searchable,
 } from "@expo/ui/swift-ui/modifiers";
 import type { TaskStatus } from "@repo/features/task-wire";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect } from "react";
+import { StyleSheet, View } from "react-native";
 import type { Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
@@ -33,6 +36,25 @@ import { useColors } from "./tokens/colors.js";
 
 /** What the first column holds, so it is drawn afresh as that changes. */
 const FIRST_COLUMN = { APP_SIDEBAR: "app-sidebar", LIST: "list" } as const;
+
+/** Where the split view stands against the tabs' screens: over a tab's root, or behind the page a tab pushed over it. */
+const LAYER = { FRONT: 1, BEHIND: 0 } as const;
+
+/**
+ * A tab root's stack options while the split view stands over it: no bar,
+ * and no ground of its own, so the split view behind shows through it while
+ * a pushed page slides in over it or is swiped back off it.
+ */
+export const UNDER_SPLIT_SCREEN = {
+  headerShown: false,
+  contentStyle: { backgroundColor: "transparent" },
+} as const;
+
+const layers = StyleSheet.create({
+  stand: { flex: 1 },
+  tabs: { flex: 1 },
+  split: { ...StyleSheet.absoluteFill },
+});
 
 /**
  * A bar menu's trigger as its glyph alone, with no button of its own, so the
@@ -113,6 +135,8 @@ type SplitViewProps = {
   /** The selected row's page, or an `EmptyState` before one is picked. */
   readonly detail: ReactNode;
   readonly detailBar?: ColumnBar | undefined;
+  /** Names whose search the list's bar holds, such as the place the app sidebar picked, so the field takes that list's own query as it changes. */
+  readonly searchKey?: string | undefined;
   /** Whether the sidebar stands beside the other columns; hidden, the system's own button in the next column's bar brings it back. */
   readonly sidebarShown: boolean;
   /** Called as a person shows or hides the sidebar, with the system's button, a swipe, or a drag. */
@@ -193,14 +217,23 @@ function Column({
   view,
   bar = {},
   sidebar = false,
+  searchKey,
 }: {
   readonly view: ReactNode;
   readonly bar?: ColumnBar | undefined;
   /** Whether it is the sidebar, whose search the system stands in the sidebar's own place. */
   readonly sidebar?: boolean | undefined;
+  /** Names whose search the bar holds; the field takes that one's query as it changes, and keeps what is typed otherwise. */
+  readonly searchKey?: string | undefined;
 }) {
   const colors = useColors();
   const text = useNativeState(bar.search?.text ?? "");
+  const query = bar.search?.text ?? "";
+
+  // Note that the field is handed a query only as its search changes hands, so typing never fights its own echo.
+  useEffect(() => {
+    text.set(query);
+  }, [searchKey]);
 
   const stacked = (
     <ZStack
@@ -283,6 +316,7 @@ export function SplitView({
   contentBar,
   detail,
   detailBar,
+  searchKey,
   sidebarShown,
   onSidebarShownChange,
 }: SplitViewProps) {
@@ -311,12 +345,77 @@ export function SplitView({
       </NavigationSplitView.Sidebar>
       {content === undefined ? null : (
         <NavigationSplitView.Content>
-          <Column view={content} bar={contentBar} />
+          <Column view={content} bar={contentBar} searchKey={searchKey} />
         </NavigationSplitView.Content>
       )}
       <NavigationSplitView.Detail>
         <Column view={detail} bar={detailBar} />
       </NavigationSplitView.Detail>
     </NavigationSplitView>
+  );
+}
+
+/** One of the views a column keeps, by the name it is shown under. */
+export type KeptView = { readonly key: string; readonly view: ReactNode };
+
+/**
+ * A column's views, one shown and the rest kept drawn behind it, hidden and
+ * out of VoiceOver's reach, as the iPad's Mail keeps each mailbox's list
+ * scrolled where it was left: so the list a person comes back to stands as
+ * they left it, scrolled, its rows folded or not, rather than drawn anew.
+ */
+export function KeptColumns({
+  shown,
+  views,
+}: {
+  readonly shown: string;
+  readonly views: readonly KeptView[];
+}) {
+  return (
+    <ZStack>
+      {views.map(({ key, view }) => (
+        <ZStack key={key} modifiers={[hidden(key !== shown), accessibilityHidden(key !== shown)]}>
+          {view}
+        </ZStack>
+      ))}
+    </ZStack>
+  );
+}
+
+/**
+ * The tabs' screens with one split view standing over them, as a window
+ * wide enough for three columns stands its app sidebar, so a tab's switch
+ * changes only the list and the detail beside a sidebar that stays where it
+ * is. The split view stands in front while a tab's root stands, and behind
+ * the tabs while a tab has pushed a page over its root, which slides in over
+ * the split view, since the root under it draws nothing of its own; behind,
+ * it takes no touch and VoiceOver passes over it. With no
+ * split view, the tabs stand alone in the same place, so a rotation across
+ * the line keeps every tab's stack.
+ */
+export function SplitOverTabs({
+  tabs,
+  split,
+  front,
+}: {
+  readonly tabs: ReactNode;
+  readonly split?: ReactNode | undefined;
+  readonly front: boolean;
+}) {
+  const layer = front ? LAYER.FRONT : LAYER.BEHIND;
+
+  return (
+    <View style={layers.stand}>
+      <View style={[layers.tabs, { zIndex: LAYER.FRONT - layer }]}>{tabs}</View>
+      {split === undefined ? null : (
+        <View
+          style={[layers.split, { zIndex: layer }]}
+          pointerEvents={front ? "auto" : "none"}
+          accessibilityElementsHidden={!front}
+        >
+          {split}
+        </View>
+      )}
+    </View>
   );
 }
