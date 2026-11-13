@@ -72,6 +72,73 @@ Vespin is an inbox for all your coding agents. These are its notable changes,
 newest first. Each heading is a released version and the date its release was
 published.
 
+## 0.34.1 — 2026-11-13
+
+### Improvements
+
+- A cloud agent's Cloud chip opens Where this agent works, with a Default
+  machine row choosing which of your machines its terminal commands run on, and
+  each command's row ends in the chip of the machine it ran on
+  ([#9043](https://github.com/ReviewStage/vespin/pull/9043),
+  [#9157](https://github.com/ReviewStage/vespin/pull/9157))
+- A command an agent could not run on a machine says why under its row, such as
+  the machine being offline, and offers each other machine that could take it,
+  making the one you pick the agent's default and asking the agent to try again
+  there ([#9110](https://github.com/ReviewStage/vespin/pull/9110),
+  [#9123](https://github.com/ReviewStage/vespin/pull/9123))
+- The @ list in a message box offers your workspace's machines under Machines,
+  or alone after @machines:, each with its online dot, and tells the agent which
+  machine you named ([#9120](https://github.com/ReviewStage/vespin/pull/9120))
+- Each pull request in the split bar docked over an agent's box hangs its card
+  on hover, as a lone pull request's row does
+  ([#9176](https://github.com/ReviewStage/vespin/pull/9176))
+- Clearing a saved setup script in Settings › Cloud environment turns its Save
+  into Delete script, which asks before it deletes
+  ([#9074](https://github.com/ReviewStage/vespin/pull/9074),
+  [#9078](https://github.com/ReviewStage/vespin/pull/9078))
+- Cards, sheets, the chosen tab, and the open row stand on Geist's card shadow,
+  edged in one solid gray that reads the same on every background
+  ([#9081](https://github.com/ReviewStage/vespin/pull/9081),
+  [#9083](https://github.com/ReviewStage/vespin/pull/9083),
+  [#9111](https://github.com/ReviewStage/vespin/pull/9111))
+- Vespin spends less of your Mac's time keeping an account with many pull
+  requests and tasks up to date
+  ([#9126](https://github.com/ReviewStage/vespin/pull/9126),
+  [#9130](https://github.com/ReviewStage/vespin/pull/9130))
+
+### Fixes
+
+- Fixed every Mac on 0.33.0 or 0.34.0 refusing to start a local agent, saying
+  the Mac was offline, because Vespin's host crashed each time it launched
+  ([#9177](https://github.com/ReviewStage/vespin/pull/9177))
+- Fixed a new task's page drawing a placeholder conversation while its agent
+  started, where it now says Starting…
+  ([#9107](https://github.com/ReviewStage/vespin/pull/9107))
+- Fixed the working line under a message you sent appearing, vanishing, and
+  starting its count over
+  ([#9155](https://github.com/ReviewStage/vespin/pull/9155))
+- Fixed a queued message's words staying in the box after a saved edit sent it
+  at once ([#9092](https://github.com/ReviewStage/vespin/pull/9092))
+- Fixed a pasted picture's card left standing in the window's top-left corner
+  ([#9051](https://github.com/ReviewStage/vespin/pull/9051))
+- Fixed a spinner flickering over each file named in a message while it sent
+  ([#9076](https://github.com/ReviewStage/vespin/pull/9076))
+- Fixed a video playing in the file viewer or a transcript drawing over its
+  frame's rounded corners
+  ([#9098](https://github.com/ReviewStage/vespin/pull/9098))
+- Fixed the transcript rail's bubble lighting the rail's whole height during a
+  fast scroll ([#9072](https://github.com/ReviewStage/vespin/pull/9072))
+- Fixed the open task's card in the sidebar keeping a solid square at its end
+  where the list fades out
+  ([#9068](https://github.com/ReviewStage/vespin/pull/9068))
+
+### Misc
+
+- Moved moving an agent between the cloud, your Macs, and your hosts behind
+  Settings › Experimental as Move agents: until you turn it on, an agent's Move
+  to › and its place chip's menu of places are hidden, while Move to cloud stays
+  ([#9104](https://github.com/ReviewStage/vespin/pull/9104))
+
 ## 0.34.0 — 2026-11-13
 
 ### Run actions
