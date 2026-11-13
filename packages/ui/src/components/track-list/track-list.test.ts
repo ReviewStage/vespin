@@ -40,7 +40,7 @@ test("a track is a list named by its label whose rows read by their titles in or
         children: [
           createElement(TrackRow, {
             key: "checking",
-            node: { tone: STATUS_TONE.WORKING, pulse: true },
+            node: { tone: STATUS_TONE.WORKING },
             title: "Rename the billing job",
             onPress: () => pressed.push("checking"),
           }),

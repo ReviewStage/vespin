@@ -19,8 +19,7 @@ import { CatalogSection } from "../section";
 
 /**
  * queue-lines.tsx -- a line of things waiting their turn, as a merge queue
- * stands it: a track, a rail with one node per row, a waiting row's hollow
- * and a checking row's pulsing.
+ * stands it: a track, a rail with one node per row, a waiting row's hollow.
  * Merge front takes the front off, and the line glides up under `ListMotion`.
  * Synthetic pull requests throughout.
  */
@@ -91,7 +90,6 @@ function QueueLines(): React.JSX.Element {
                   node={{
                     tone: each.tone,
                     look: each.tone === undefined ? TRACK_NODE_LOOK.HOLLOW : TRACK_NODE_LOOK.FILLED,
-                    pulse: each.tone === STATUS_TONE.WORKING,
                   }}
                   leading={<Avatar name={each.author} size={AVATAR_SIZE.ROW} decorative />}
                   title={each.title}

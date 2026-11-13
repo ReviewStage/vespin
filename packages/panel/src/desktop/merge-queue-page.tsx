@@ -4,7 +4,7 @@
  * Each repository stands on a card of its own, headed by GitHub's mark, its
  * name, how many it holds, and a way to its queue on GitHub, over its line
  * on a track (`TrackList`), front first, each node in its stage's tone, a
- * waiting one's hollow and a checking one's pulsing. Every row says who
+ * waiting one's hollow. Every row says who
  * opened the pull request, its title, its number, its task's name, and how
  * long it has been queued, and its stage at its end as words led by a dot
  * in its tone (`mergeQueueStage`). A
@@ -154,12 +154,11 @@ function RowFacts({ entry }: { entry: MergeQueueEntry }): React.JSX.Element {
   );
 }
 
-/** A pull request's node on the track, in its stage's tone: hollow while it waits, pulsing while its checks run. */
+/** A pull request's node on the track, in its stage's tone: hollow while it waits. */
 function nodeOf(stage: MergeQueueStage): TrackNode {
   return {
     tone: STAGE_TONE[stage],
     look: stage === MERGE_QUEUE_STAGE.WAITING ? TRACK_NODE_LOOK.HOLLOW : TRACK_NODE_LOOK.FILLED,
-    pulse: stage === MERGE_QUEUE_STAGE.CHECKING,
   };
 }
 

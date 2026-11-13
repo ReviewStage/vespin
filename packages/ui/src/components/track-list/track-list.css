@@ -4,10 +4,7 @@
    hairline of the border's ink, each row carrying the stretch from its node
    to the next row's, so the rail passes through every node's middle and
    ends on the first and the last. A node stands over the rail on the ground,
-   filled with its tone's ink or ringed in it; one that pulses widens a
-   ring of its tone's ink as it fades, on `transform` and `opacity` alone,
-   its duration a literal as an endless loop with no end of its own may
-   have, held still by `--ui-loop-motion`. */
+   filled with its tone's ink or ringed in it. */
 
 @layer components {
   /* Each row carries the rail from its own node, at its middle, down to the next row's, past the gap between them, at the rows' own inset where the node stands as the first mark of the leading slot; the last row carries none, so the rail ends on its node. */
@@ -50,27 +47,5 @@
   .ui-track-node[data-look="hollow"] {
     border: var(--ui-space-2) solid var(--ui-track-node-ink);
     background: var(--ui-color-ground);
-  }
-
-  .ui-track-node[data-pulse]::after {
-    content: "";
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    background: var(--ui-track-node-ink);
-    animation: ui-track-node-pulse 1.6s ease-out infinite;
-    animation-play-state: var(--ui-loop-motion);
-  }
-
-  @keyframes ui-track-node-pulse {
-    from {
-      transform: scale(1);
-      opacity: 0.5;
-    }
-
-    to {
-      transform: scale(2.5);
-      opacity: 0;
-    }
   }
 }
