@@ -66,10 +66,10 @@ jobs:
       fail-fast: false
       matrix:
         simulator: ${{ fromJSON(needs.simulators.outputs.list) }}
-    # Note that one simulator takes over an hour and a half (a 20-minute
-    # build, then every flow in light and dark), so a quicker look names
-    # fewer simulators or flows.
-    timeout-minutes: 240
+    # Note that one simulator takes up to five hours (a 30-minute build, then
+    # every flow in light and dark), near GitHub's six-hour job cap, so a
+    # quicker look names fewer simulators or flows.
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
@@ -88,7 +88,7 @@ jobs:
       # outgrows it still uploads the screenshots it took, because a job
       # canceled at its own limit skips even an `always()` step.
       - name: Run the Maestro flows
-        timeout-minutes: 200
+        timeout-minutes: 290
         env:
           SIMULATOR: ${{ matrix.simulator.name }}
           FLOWS: ${{ inputs.flows }}
