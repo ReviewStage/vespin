@@ -46,6 +46,7 @@ import { and, asc, eq, inArray, lte, sql } from "drizzle-orm";
 import { Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { agentTable } from "../schemas/agent.js";
 import { agentBootTable } from "../schemas/agent-boot.js";
 import { queuedMessage } from "../schemas/agent-queue.js";
 import {
@@ -219,6 +220,45 @@ const findLapsed = SqlSchema.findAll({
     ),
 });
 
+/** A boot waiting on its workspace's drive, with what resuming it reads: its agent's account, its attempt, and the repository its agent starts in. */
+export interface BuildingAgentBoot {
+  readonly agentId: string;
+  readonly userId: string;
+  readonly attempt: number;
+  readonly repository: string | null;
+}
+
+const BuildingBootSchema = Schema.Struct({
+  agentId: Schema.String,
+  userId: Schema.String,
+  attempt: Schema.Number,
+  repository: Schema.NullOr(Schema.String),
+});
+
+const findBuilding = SqlSchema.findAll({
+  Request: Schema.String,
+  Result: BuildingBootSchema,
+  execute: (organizationId) =>
+    Database.use((db) =>
+      db
+        .select({
+          agentId: agentBootTable.agentId,
+          userId: agentTable.userId,
+          attempt: agentBootTable.attempt,
+          repository: agentTable.repository,
+        })
+        .from(agentBootTable)
+        .innerJoin(agentTable, eq(agentTable.id, agentBootTable.agentId))
+        .where(
+          and(
+            eq(agentTable.organizationId, organizationId),
+            eq(agentBootTable.phase, BOOT_PHASE.BUILDING),
+          ),
+        )
+        .orderBy(asc(agentBootTable.phaseAt)),
+    ),
+});
+
 /** One phase move, answered as the boot it moved, none where the boot stood elsewhere. */
 function moved(
   agentId: string,
@@ -384,6 +424,13 @@ export function agentBootBuilt(
     }),
     () => false,
   );
+}
+
+/** The workspace's boots waiting on its drive (BUILDING), the longest waiting first. */
+export function buildingAgentBootsOf(
+  organizationId: string,
+): AgentBootEffect<readonly BuildingAgentBoot[]> {
+  return findBuilding(organizationId);
 }
 
 /** The queue's head handed off to the agent's runner (HANDING_OFF -> READY). */

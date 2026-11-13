@@ -12,10 +12,12 @@
  * machine that could not come up fails the boot with why and pauses its
  * queue, the messages kept for Retry (`retryBoot`). A boot that never says
  * either way is failed by the minute sweep past its deadline
- * (`reconcile.ts`).
+ * (`reconcile.ts`). A boot held while its workspace's drive is built is
+ * booted once the build is done (`builtBootResumed`), as Retry boots one.
  */
 
 import {
+  agentBootBuilt,
   agentBootRunnerUp,
   beginAgentBoot,
   failAgentBoot,
@@ -135,6 +137,25 @@ const machineCameUp = (
   );
 
 /**
+ * The agent's machine booted under `attempt`, its boot just moved to
+ * STARTING: failed at once where the machine could not even be asked for,
+ * and else its session claimed and the machine's open left past the answer.
+ */
+const machineBootedUnder = (agent: Agent, attempt: number, sessionsFor: QueueSessions) =>
+  Effect.gen(function* () {
+    const boot = yield* booted(yield* sessionsFor(agent.userId), agent);
+
+    if (boot === undefined || boot.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) {
+      yield* hostedStoreOrUnavailable(bootFailed(agent, BOOT_FAILURE.MACHINE_UNAVAILABLE, attempt));
+
+      return;
+    }
+
+    yield* claimedFor(agent, boot.sessionId);
+    yield* machineCameUp(agent, boot.up, attempt, sessionsFor);
+  });
+
+/**
  * The agent's first launch begun: its boot written with its first message
  * queued, then its machine booted through the Start's sessions. Answers how
  * the boot's start went, as an open answers, none where its runtime could
@@ -176,15 +197,27 @@ export const retryBoot = Effect.fn("web/retryBoot")(function* (userId: string, a
   );
 
   if (Option.isNone(rebooted)) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
-  const { attempt } = rebooted.value;
-  const boot = yield* booted(yield* routedSessions(agent.userId), agent);
+  yield* machineBootedUnder(agent, rebooted.value.attempt, routedSessions);
+});
 
-  if (boot === undefined || boot.outcome !== SESSION_SEND_OUTCOME.ACCEPTED) {
-    yield* hostedStoreOrUnavailable(bootFailed(agent, BOOT_FAILURE.MACHINE_UNAVAILABLE, attempt));
+/**
+ * A boot that waited on its workspace's drive moved on once the build is
+ * done (`agentBootBuilt`), and its machine booted as Retry boots one, under
+ * the attempt the boot was building under. Nothing where the boot no longer
+ * stands building under it: the sweep failed it meanwhile, or another
+ * delivery already moved it. The machine opens from a fork of the drive
+ * where the drive now holds its repository, and from the image with a clone
+ * where it does not, as any open does.
+ */
+export const builtBootResumed = Effect.fn("web/builtBootResumed")(function* (
+  agent: Agent,
+  attempt: number,
+  sessionsFor: QueueSessions = routedSessions,
+) {
+  const moved = yield* hostedStoreOrUnavailable(
+    agentBootBuilt(agent.id, yield* DateTime.nowAsDate, attempt),
+  );
 
-    return;
-  }
-
-  yield* claimedFor(agent, boot.sessionId);
-  yield* machineCameUp(agent, boot.up, attempt, routedSessions);
+  if (Option.isNone(moved)) return;
+  yield* machineBootedUnder(agent, attempt, sessionsFor);
 });
