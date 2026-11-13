@@ -526,6 +526,8 @@ export interface AppThisMacHost {
   needsApproval?: boolean;
   /** Whether the app could not start its host as asked, and is trying again; absent reads as not. */
   setupFailed?: boolean;
+  /** Whether its host dies each time launchd starts it, as a bundle that cannot load does; absent reads as not. */
+  wontStart?: boolean;
 }
 
 /** This Mac as the host last read it, by the account signed in: the one key the host holds, none while nobody is signed in. */

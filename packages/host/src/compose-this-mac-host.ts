@@ -32,6 +32,7 @@ import type { AGENT_ACTS } from "./contract/index.js";
 import { appHostCommandLinked, COMMAND_LINK_OUTCOME } from "./daemon/app-host-command.js";
 import { HOST_LEAVE_OUTCOME } from "./daemon/host-leave.js";
 import { uninstallBundledHost } from "./daemon/host-uninstall.js";
+import { keepsQuitting, type LaunchdJob } from "./daemon/launchd-job.js";
 import { Reporter, THIS_MAC_AGENT_STATUS, ThisMacHost } from "./effect/seams.js";
 import type { HostActTable } from "./host-acts.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
@@ -95,7 +96,11 @@ import type { RunMode } from "./run-mode.js";
  * where another version of the app registered it, since an update replaces
  * the bundle under a running daemon and `register()` does not start an agent
  * already registered. An agent macOS holds for the member's approval is
- * left for them, the windows told (`needsApproval`). A record the service refused, the host removed from Settings ›
+ * left for them, the windows told (`needsApproval`). An agent launchd
+ * starts again and again, each run failing, as a bundle that cannot load
+ * does, is told the windows (`wontStart`) and reported once, as its run
+ * count read every `QUIT_READ_EVERY` says, since a host that dies before it
+ * runs any code can say nothing itself. A record the service refused, the host removed from Settings ›
  * Machines anywhere, has its agent unregistered and the host removed, its
  * agents' folders kept, as the account install removes itself, since a
  * bundled host rests rather than removing itself. Once the agent is
@@ -136,6 +141,9 @@ const SETTLE = Duration.millis(200);
 
 /** How often an agent macOS holds for the member's approval has its status read again, since nothing tells the app it was allowed. */
 const APPROVAL_READ_EVERY = Duration.seconds(3);
+
+/** How often launchd's run count for the agent is read, to tell one that dies each time it starts (`keepsQuitting`); the agent's throttle starts it again at most once a minute. */
+const QUIT_READ_EVERY = Duration.minutes(5);
 
 /** How soon a step that failed is tried again: from `FIRST`, twice as long each time, never longer than `LONGEST`. */
 const RETRY_AFTER = {
@@ -180,7 +188,8 @@ const sameThisMac = (one: AppThisMacHost, other: AppThisMacHost) =>
   one.enrolled === other.enrolled &&
   one.agentFolders === other.agentFolders &&
   one.needsApproval === other.needsApproval &&
-  one.setupFailed === other.setupFailed;
+  one.setupFailed === other.setupFailed &&
+  one.wontStart === other.wontStart;
 
 /** What turning This Mac on or off answers: done, or that it could not be. */
 const DONE = { done: true } as const satisfies ThisMacHostSetAnswerView;
@@ -267,10 +276,13 @@ export function composeThisMacHost(
     /** Whether the last try at keeping the host running failed starting it, until one lands. */
     const keepFailed = MutableRef.make(false);
 
+    /** Whether the agent kept quitting as launchd started it, as of the last two reads of its run count. */
+    const quitting = MutableRef.make(false);
+
     /** Whether the try under way reached a step that starts the host, past the reads before it. */
     const starting = MutableRef.make(false);
 
-    /** This Mac as the windows draw it: which machine it is, the device its record names, where it was enrolled with this app's service, whether it stands unrefused, how many agents' folders its host made, whether its agent waits on the member's approval, and whether the app could not start its host. */
+    /** This Mac as the windows draw it: which machine it is, the device its record names, where it was enrolled with this app's service, whether it stands unrefused, how many agents' folders its host made, whether its agent waits on the member's approval, whether the app could not start its host, and whether the host dies as it starts. */
     const read = Effect.map(
       Effect.all([ownServiceRecord, machineId, ownedAgents(host.stateRoot), host.status]),
       ([record, id, folders, status]): AppThisMacHost => ({
@@ -280,6 +292,7 @@ export function composeThisMacHost(
         agentFolders: folders.length,
         needsApproval: status === THIS_MAC_AGENT_STATUS.REQUIRES_APPROVAL,
         setupFailed: MutableRef.get(keepFailed),
+        wontStart: MutableRef.get(quitting),
       }),
     );
 
@@ -660,6 +673,39 @@ export function composeThisMacHost(
       Effect.ignore(handKeepAwake(host.stateRoot, choice)),
     );
 
+    /**
+     * launchd's run count for the agent read every `QUIT_READ_EVERY`, the
+     * windows told where it starts or stops quitting and a start reported
+     * once. Note that only a build that registers the agent has launchd run
+     * it, and that a read that finds no job forgets the last, so a count
+     * never spans an unregister.
+     */
+    const quitsWatched = Effect.gen(function* () {
+      let before: LaunchdJob | undefined;
+
+      yield* Stream.tick(QUIT_READ_EVERY).pipe(
+        Stream.mapEffect(() => host.job),
+        Stream.runForEach((job) =>
+          Effect.gen(function* () {
+            const now = Option.getOrUndefined(job);
+            const next = before !== undefined && now !== undefined && keepsQuitting(before, now);
+            before = now;
+
+            if (next === MutableRef.get(quitting)) return;
+            MutableRef.set(quitting, next);
+
+            if (next && now !== undefined) {
+              report("this Mac's host keeps quitting as launchd starts it", {
+                reason: `last exit code ${now.lastExit}`,
+              });
+            }
+
+            yield* tellThisMac;
+          }),
+        ),
+      );
+    });
+
     // Note that the in-process changes are subscribed before the first read, so one that lands while it reads is read again after it.
     // A change interrupts the keep under way, but for an enroll begun, which runs whole; This Mac is told on every pass.
     const lifetime = Effect.gen(function* () {
@@ -674,6 +720,8 @@ export function composeThisMacHost(
       const awaitingApproval = Stream.tick(APPROVAL_READ_EVERY).pipe(
         Stream.filter(() => told?.thisMac.needsApproval === true),
       );
+
+      if (host.registers) yield* Effect.forkScoped(Effect.provideContext(quitsWatched, services));
 
       const changed = Stream.mergeAll([settingsTold, turnedOnOrOff, stateMoved, awaitingApproval], {
         concurrency: "unbounded",

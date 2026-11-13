@@ -28,6 +28,7 @@ import { systemError } from "effect/PlatformError";
 import { TestClock } from "effect/testing";
 import type { AppThisMacHost, AppThisMacHosts } from "./app-state.js";
 import { composeThisMacHost } from "./compose-this-mac-host.js";
+import type { LaunchdJob } from "./daemon/launchd-job.js";
 import {
   type ReportAttributes,
   reporterLayer,
@@ -141,6 +142,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
     let status = options.status ?? THIS_MAC_AGENT_STATUS.NOT_REGISTERED;
     let registeredHere = options.registeredHere ?? true;
     let loaded = false;
+    let job: Option.Option<LaunchdJob> = Option.none();
     const scripts: string[] = [];
     const settingsTold = yield* PubSub.unbounded<void>();
     const listed = new Set(options.listed ?? []);
@@ -240,6 +242,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
             }),
             status: Effect.sync(() => status),
             registeredHere: Effect.sync(() => registeredHere),
+            job: Effect.sync(() => job),
             register: Effect.sync(() => {
               asked.push("register");
 
@@ -298,6 +301,11 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
       status = THIS_MAC_AGENT_STATUS.ENABLED;
     };
 
+    /** launchd's job for the agent as `launchctl print` would state it now. */
+    const launchd = (now: LaunchdJob) => {
+      job = Option.some(now);
+    };
+
     /** Keep this Mac awake chosen, and the settings told again, as its menu in Settings does. */
     const keepAwakeChosen = (choice: KeepAwake) =>
       Effect.suspend(() => {
@@ -322,6 +330,7 @@ const thisMac = (stateRoot: string, options: MacOptions = {}) =>
       held,
       turn,
       allow,
+      launchd,
       keepAwakeChosen,
       signOut,
     };
@@ -367,6 +376,7 @@ const UNENROLLED = {
   agentFolders: 0,
   needsApproval: false,
   setupFailed: false,
+  wontStart: false,
 } as const;
 
 it.effect.each([
@@ -571,6 +581,45 @@ it.effect(
         mac.allow();
         yield* until(() => mac.held()?.needsApproval === false);
         assert.deepEqual(mac.asked, ["enroll", "register"]);
+      }).pipe(Effect.provide(FILES)),
+    ),
+);
+
+it.effect(
+  "an agent launchd starts again and again, each run failing, is told the windows as one that won't start and reported once, until it stays up",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const stateRoot = yield* recorded(STANDING);
+        const mac = yield* thisMac(stateRoot, {
+          listed: [KEPT_ID],
+          status: THIS_MAC_AGENT_STATUS.ENABLED,
+        });
+        const quitLine = (line: string) => line.includes("keeps quitting");
+        mac.launchd({ runs: 1, lastExit: undefined });
+        yield* until(() => mac.held() !== undefined);
+        yield* nudged(Duration.minutes(1));
+
+        // Note that launchd starts a dead agent again once a minute, its throttle, so five minutes hold five more failed runs.
+        mac.launchd({ runs: 6, lastExit: 1 });
+        yield* until(() => mac.held()?.wontStart === true);
+        mac.launchd({ runs: 11, lastExit: 1 });
+        yield* nudged(Duration.minutes(5));
+        assert.equal(mac.held()?.wontStart, true);
+        assert.deepEqual(
+          mac.attributed.filter(({ line }) => quitLine(line)),
+          [
+            {
+              line: "this Mac's host keeps quitting as launchd starts it",
+              reason: "last exit code 1",
+            },
+          ],
+        );
+
+        // A fixed bundle runs, so launchd starts it once more and no more.
+        mac.launchd({ runs: 12, lastExit: 1 });
+        yield* until(() => mac.held()?.wontStart === false);
+        assert.equal(mac.reported.filter(quitLine).length, 1);
       }).pipe(Effect.provide(FILES)),
     ),
 );

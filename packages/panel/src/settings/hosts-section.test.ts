@@ -385,6 +385,14 @@ test("a Mac turned on whose host the service does not list yet reads setting up 
   assert.ok(row.includes("This MacSetting up…"), row);
 });
 
+test("a Mac turned on whose host quits as launchd starts it reads won't start on This Mac's row, and says agents can't run here", async () => {
+  await machinesWithThisMac([], { machineId: MACHINE_ID, enrolled: true, wontStart: true });
+  const page = document.body.textContent ?? "";
+
+  assert.ok(page.includes("This MacWon't start"), page);
+  assert.ok(page.includes("Agents can't run here"), page);
+});
+
 test("a Mac turned on whose host macOS holds for approval says so, and opens Login Items to allow it", async () => {
   let opened = 0;
   await machinesWithThisMac(
