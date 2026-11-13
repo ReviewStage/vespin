@@ -1,4 +1,8 @@
 #8937 at 1fbdf7a98 (JS bundle on Nov 12's native app: layout and behavior only.)
-hide8937f, landscape 27.2 iPad light: PASS. Sidebar really hides, hard assert 'Pinned' not visible passed, 'Inbox' title fits beside toggle/filter/⋯, ⋯ opens Select / Mark all as read (pr-8937/jjs/8937-ipad27-light-{1,2,3}-*)
-Note: no switcher in the list bar while the sidebar is hidden; owner 2ed7e6df says intended (Mail's way).
-hide8937f, landscape 26.5 iPad: NOT VERIFIED. DISK STOP at 10:00:46 ET erased I26 mid-run; its 'fails 0' is false. The 8937-ipad26-light-{1,2}-inbox-sidebar-* files are from older flows hide8937c/d, not this run. 26.5-only rerun queued (p8937h, cutoff 10:13 ET).
+27.2 landscape iPad (hide8937f): PASS.
+26.5 landscape iPad (hide8937f, rerun 10:09 ET after two disk-stop wipes): PASS. Shots pr-8937/jjs/8937-ipad26-light-{1-inbox-picked-sidebar-shown,2-sidebar-hidden-bar,3-sidebar-hidden-more-open}.jpg
+- Sidebar shown: Inbox picked, list title "Inbox" leading, no fold in the bar.
+- Sidebar hidden: sidebar and Pinned gone; bar reads toggle, "Inbox", filter, ⋯ on one line with no fold or second ⋯; no switcher with the sidebar hidden (intended, Mail's way).
+- ⋯ opens its menu: Select, Mark all as read.
+Note: Experiments' sidebar row draws no glyph on Nov 12's native app (known artifact of that app, not this PR).
+Older ipad26 files (1-inbox-sidebar-shown, 2-inbox-sidebar-hidden) are from hide8937c/d, not this head.
