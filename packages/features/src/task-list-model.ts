@@ -137,9 +137,11 @@ function grouped<K>(
   return groups;
 }
 
-/** The latest time among a group's tasks. */
+/** The latest time among a group's tasks, newest active first: its first's. */
 function latest(tasks: readonly TaskSummary[]): number {
-  return Math.max(...tasks.map(activityTime));
+  const [first] = tasks;
+
+  return first === undefined ? 0 : activityTime(first);
 }
 
 /** What every surface calls the state of naming no repository: a task's, a group's, a filter's, a pick's. */
@@ -174,12 +176,16 @@ function nameOf(repository: string): string {
 /**
  * The tasks grouped by their repository, newest updated first: the group
  * holding the latest task first, and the tasks with none last whatever
- * their age.
+ * their age. Note that `ordered` comes newest active first (`orderTasks`,
+ * or a live query ordered the same way), so each group keeps that order and
+ * nothing here sorts a task, because the sidebar regroups on every delivery
+ * and a sort of every task by its time is what that cost.
  */
-export function repositoryGroups(tasks: readonly TaskSummary[]): readonly RepositoryGroup[] {
-  const groups = [...grouped(orderTasks(tasks), (task) => task.repository)].map(
-    ([repository, members]) => ({ repository, tasks: members }),
-  );
+export function repositoryGroups(ordered: readonly TaskSummary[]): readonly RepositoryGroup[] {
+  const groups = [...grouped(ordered, (task) => task.repository)].map(([repository, members]) => ({
+    repository,
+    tasks: members,
+  }));
 
   return groups.sort((a, b) => {
     if (a.repository === null || b.repository === null) {
@@ -591,21 +597,21 @@ export type TaskSections =
   | { readonly grouping: typeof TASK_GROUPING.NONE; readonly tasks: readonly TaskSummary[] };
 
 /**
- * The tasks under Tasks as the view groups them, newest updated first.
- * Grouped by repository, the pinned repositories' groups stand above the
+ * The tasks under Tasks as the view groups them, `ordered` handed newest
+ * active first (`repositoryGroups`). Grouped by repository, the pinned repositories' groups stand above the
  * rest in the order `pinnedRepositories` names them, newest pinned first,
  * and the rest keep the order's.
  */
 export function taskSections(
-  tasks: readonly TaskSummary[],
+  ordered: readonly TaskSummary[],
   grouping: TaskSections["grouping"],
   pinnedRepositories: readonly string[],
 ): TaskSections {
   if (grouping === TASK_GROUPING.NONE) {
-    return { grouping, tasks: orderTasks(tasks) };
+    return { grouping, tasks: ordered };
   }
 
-  const grouped = repositoryGroups(tasks);
+  const grouped = repositoryGroups(ordered);
 
   const pinnedAt = (group: RepositoryGroup) =>
     group.repository === null ? -1 : pinnedRepositories.indexOf(group.repository);
