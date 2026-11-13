@@ -3,68 +3,74 @@
  *
  * GitHub renders each task item (`- [ ]`, `- [x]`) of a comment as a
  * checkbox, in the order they are written, and ticking one rewrites that
- * item's marker in the comment's words. The tab names a box by that order,
- * so the words are read line by line here as GitHub's own task-list script
- * reads them: an item's marker is a list marker, after any quote markers,
- * then `[ ]`, `[x]`, or `[X]` and a space or the line's end, and nothing in
- * a fenced code block is an item.
+ * item's mark in the comment's words. The tab names a box by that order and
+ * says how many boxes it drew, so the words are read here as GitHub's
+ * dialect parses them (`markdownTree`), whose task items are the boxes
+ * GitHub renders, never a line in a code block, and a tick on words whose
+ * items no longer number what the reader saw is refused rather than landing
+ * on another item.
  */
 
-/** What ticking an item came to: the words with it ticked, the item already standing as asked, or no item at that place. */
+import { markdownTree } from "@repo/features/markdown-tree";
+
+/** What ticking an item came to: the words with it ticked, the item already standing as asked, or the words' items not those the reader saw. */
 export const TASK_TICK = {
   TICKED: "ticked",
   ALREADY: "already",
-  MISSING: "missing",
+  CHANGED: "changed",
 } as const;
 
 export type TaskTick =
   | { readonly kind: typeof TASK_TICK.TICKED; readonly body: string }
   | { readonly kind: typeof TASK_TICK.ALREADY }
-  | { readonly kind: typeof TASK_TICK.MISSING };
+  | { readonly kind: typeof TASK_TICK.CHANGED };
 
-/** A task item's line: its quote and list markers, then its box, whose mark is the second group. */
-const TASK_ITEM = /^((?:[ \t]*>)*[ \t]*(?:[-+*]|\d{1,9}[.)])[ \t]+\[)([ xX])(?=\](?:[ \t]|$))/u;
+/** A node of the parsed words, as the walk reads it. */
+type TreeNode = ReturnType<typeof markdownTree>["children"][number];
 
-/** A fence's opening or closing line, after any quote markers: three or more backticks or tildes. */
-const FENCE = /^(?:[ \t]*>)*[ \t]{0,3}(`{3,}|~{3,})/u;
+/** An item's opening as written, from its list marker to its box's mark, which is the first group. */
+const ITEM_BOX = /^(?:[-+*]|\d{1,9}[.)])[ \t]+\[([ xX])\]/u;
+
+/** Where each task item's mark stands in the words, in order, and whether it is ticked. */
+function taskMarks(body: string): readonly { readonly at: number; readonly ticked: boolean }[] {
+  const marks: { at: number; ticked: boolean }[] = [];
+
+  const walk = (node: TreeNode): void => {
+    const start = node.position?.start.offset;
+
+    const ticked = node.type === "listItem" ? node.checked : undefined;
+
+    if ((ticked === true || ticked === false) && start !== undefined) {
+      const box = ITEM_BOX.exec(body.slice(start));
+
+      // Note that the mark is the one character before the box's closing bracket.
+      if (box !== null) marks.push({ at: start + box[0].length - 2, ticked });
+    }
+
+    if ("children" in node) for (const child of node.children) walk(child);
+  };
+
+  for (const node of markdownTree(body).children) walk(node);
+
+  return marks;
+}
 
 /**
  * The words with the task item at `index` among them, the first 0, ticked
- * where `checked` asks or cleared. Line endings stand as written, so the
- * words change by that one mark alone.
+ * where `checked` asks or cleared, where they hold the `count` items the
+ * reader saw. The words change by that one mark alone.
  */
-export function tickTaskItem(body: string, index: number, checked: boolean): TaskTick {
-  const lines = body.split(/(?<=\n)/u);
-  // The fence the words are inside, by its run of marks; none outside one.
-  let fence: string | undefined;
-  let counted = 0;
+export function tickTaskItem(
+  body: string,
+  tick: { readonly index: number; readonly count: number; readonly checked: boolean },
+): TaskTick {
+  const marks = taskMarks(body);
+  const mark = marks[tick.index];
 
-  for (const [at, line] of lines.entries()) {
-    const fenced = FENCE.exec(line)?.[1];
+  if (marks.length !== tick.count || mark === undefined) return { kind: TASK_TICK.CHANGED };
 
-    if (fenced !== undefined) {
-      // A fence closes on a run of its own mark at least as long, and opens otherwise.
-      if (fence === undefined) fence = fenced;
-      else if (fenced[0] === fence[0] && fenced.length >= fence.length) fence = undefined;
-      continue;
-    }
+  if (mark.ticked === tick.checked) return { kind: TASK_TICK.ALREADY };
+  const written = `${body.slice(0, mark.at)}${tick.checked ? "x" : " "}${body.slice(mark.at + 1)}`;
 
-    const item = fence === undefined ? TASK_ITEM.exec(line) : null;
-
-    if (item === null) continue;
-
-    if (counted < index) {
-      counted += 1;
-      continue;
-    }
-
-    const [, lead = "", mark = " "] = item;
-
-    if ((mark !== " ") === checked) return { kind: TASK_TICK.ALREADY };
-    lines[at] = `${lead}${checked ? "x" : " "}${line.slice(lead.length + 1)}`;
-
-    return { kind: TASK_TICK.TICKED, body: lines.join("") };
-  }
-
-  return { kind: TASK_TICK.MISSING };
+  return { kind: TASK_TICK.TICKED, body: written };
 }

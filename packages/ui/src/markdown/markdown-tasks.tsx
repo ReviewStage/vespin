@@ -12,10 +12,16 @@ import { MARKDOWN_CLASS } from "./markdown-class.js";
 /** The class the box a reader can tick stands in, in the bullet's gutter (`prose.css`), the description's editor's box alike. */
 const TASK_BOX_CLASS = MARKDOWN_CLASS.TASK_BOX;
 
-/** A task item's checkbox as drawn: the offset its item starts at in the words, where they say it, its place among the words' boxes, and the item's own words, which name it. */
+/** The boxes counted in one tree of words, read once the step has walked it whole. */
+interface CountedBoxes {
+  boxes: number;
+}
+
+/** A task item's checkbox as drawn: the offset its item starts at in the words, where they say it, its place among the words' boxes and the count it is among, and the item's own words, which name it. */
 interface TaskItem {
   readonly at: number | undefined;
   readonly index: number;
+  readonly counted: CountedBoxes;
   readonly label: string;
 }
 
@@ -38,9 +44,10 @@ export interface TaskBoxItem {
   readonly checked: boolean;
 }
 
-/** A task item a reader can tick by its place among the words' boxes, the first 0, as words drawn from HTML are, whose items say no offset: its words, which name it, and whether the words tick it. */
+/** A task item a reader can tick by its place among the words' boxes, the first 0, as words drawn from HTML are, whose items say no offset: how many boxes the words draw, its words, which name it, and whether the words tick it. */
 export interface TaskBoxOrdinal {
   readonly index: number;
+  readonly count: number;
   readonly label: string;
   readonly checked: boolean;
 }
@@ -80,7 +87,7 @@ function itemWords(node: ElementContent): string {
 function placeTasks(
   parent: Root | Element,
   item: Element | undefined,
-  counted: { boxes: number },
+  counted: CountedBoxes,
 ): void {
   for (const child of parent.children) {
     if (child.type !== "element") continue;
@@ -89,7 +96,7 @@ function placeTasks(
 
     if (child.tagName === "input" && child.properties.type === "checkbox" && own) {
       const label = own.children.map(itemWords).join("").trim();
-      TASK_ITEMS.set(child, { at, index: counted.boxes, label });
+      TASK_ITEMS.set(child, { at, index: counted.boxes, counted, label });
       counted.boxes += 1;
     }
 
@@ -185,7 +192,7 @@ export function orderedTaskInput(drawBox: MarkdownTaskTick): NonNullable<Compone
 
     return (
       <Fragment key={String(checked)}>
-        {drawBox({ index: item.index, label: item.label, checked })}
+        {drawBox({ index: item.index, count: item.counted.boxes, label: item.label, checked })}
       </Fragment>
     );
   };

@@ -989,13 +989,14 @@ const TICK_MUTATIONS: ReadonlyMap<string, string> = new Map([
   ],
 ]);
 
-/** What the member is told where the words hold no task item at the place named, as where they changed on GitHub since they were read. */
-const TASK_GONE = "That task item changed on GitHub. Reload to see it as it stands.";
+/** What the member is told where the words' task items are no longer those they saw, as where an item was added or taken out on GitHub since. */
+const TASK_GONE = "Those task items changed on GitHub. Reload to see them as they stand.";
 
-/** A tick as the tab asks it: what it is on, by its GraphQL id, the item's place among its task items, and whether it is ticked. */
+/** A tick as the tab asks it: what it is on, by its GraphQL id, the item's place among its task items, how many the reader saw, and whether it is ticked. */
 export interface TaskTickRequest {
   readonly subject: string;
   readonly index: number;
+  readonly count: number;
   readonly checked: boolean;
 }
 
@@ -1006,7 +1007,9 @@ export interface TaskTickRequest {
  * comment, are read and written again with that one item's mark changed
  * (`tickTaskItem`), so nothing else on GitHub is edited through this one's
  * tab, and GitHub refuses it in its own words where the member may not
- * edit them. An item already standing as asked writes nothing. Note that
+ * edit them. Words whose task items no longer number those the reader saw
+ * are refused, so a tick never lands on another item; an item already
+ * standing as asked writes nothing. Note that
  * GitHub offers no write conditional on a comment's words, so an edit
  * landing between the read and the write is still written over, as it is
  * on GitHub's own page.
@@ -1031,9 +1034,9 @@ export const tickTask = /* @__PURE__ */ Effect.fn("web/tickTask")(function* (
     return yield* refusalOf([NOT_THIS_SUBJECT]);
   }
 
-  const ticked = tickTaskItem(node.body ?? "", tick.index, tick.checked);
+  const ticked = tickTaskItem(node.body ?? "", tick);
 
-  if (ticked.kind === TASK_TICK.MISSING) return yield* refusalOf([TASK_GONE]);
+  if (ticked.kind === TASK_TICK.CHANGED) return yield* refusalOf([TASK_GONE]);
 
   if (ticked.kind === TASK_TICK.ALREADY) return;
   yield* githubWrite(token, mutation, { id: tick.subject, body: ticked.body }, Schema.Unknown);

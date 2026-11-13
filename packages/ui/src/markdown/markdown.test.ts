@@ -195,35 +195,40 @@ test("a task box a reader cannot tick is the shared box, named by its item, tick
   assert.equal(first.getAttribute("aria-checked"), "true", "a press changes nothing");
 });
 
-test("words drawn from HTML ask a task box's tick by its place among the words' boxes", async () => {
-  const asked: number[] = [];
+test("words drawn from HTML ask a task box's tick by its place among the words' boxes and their count", async () => {
+  const asked: [number, number][] = [];
 
   const { container } = drawn({
     look: MARKDOWN_LOOK.TRANSCRIPT,
     words:
       '<ul><li><input type="checkbox" disabled> Trigger review</li><li><input type="checkbox" disabled> Autofix</li></ul>',
-    taskTick: ({ index, label, checked }) =>
+    taskTick: ({ index, count, label, checked }) =>
       createElement(TaskBox, {
         label,
         checked,
-        write: { run: () => asked.push(index), asked: undefined },
+        write: { run: () => asked.push([index, count]), asked: undefined },
       }),
   });
 
   const second = container.querySelector<HTMLElement>('[role="checkbox"][aria-label="Autofix"]');
   assert.ok(second !== null, "each task item draws a box");
   await act(async () => second.click());
-  assert.deepEqual(asked, [1]);
+  assert.deepEqual(asked, [[1, 2]]);
 });
 
 test("a quote opening on an alert's marker reads as that alert, its marker taken out, in a note and a transcript", () => {
   for (const look of [MARKDOWN_LOOK.NOTE, MARKDOWN_LOOK.TRANSCRIPT]) {
-    const { container } = drawn({ look, words: "> [!WARNING]\n> Mind the gap.\n\n> Plain quote." });
+    const { container } = drawn({
+      look,
+      words:
+        "> [!WARNING]\n> Mind the gap.\n\n> Plain quote.\n\n> [!NOTE] **not alone** on its line",
+    });
+
     assert.deepEqual(
       [...container.querySelectorAll("[data-kind], blockquote")].map((quote) =>
         quote.textContent?.replaceAll(/\s+/gu, " ").trim(),
       ),
-      ["Warning Mind the gap.", "Plain quote."],
+      ["Warning Mind the gap.", "Plain quote.", "[!NOTE] not alone on its line"],
       look,
     );
   }

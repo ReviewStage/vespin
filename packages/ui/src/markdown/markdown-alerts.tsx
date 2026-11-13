@@ -65,6 +65,15 @@ function empty(node: ElementContent): boolean {
   return node.type === "element" && node.tagName === "br";
 }
 
+/** Whether a line ends where a node stands: at the paragraph's end, a line break, or words opening on a new line. */
+function lineEndsAt(node: ElementContent | undefined): boolean {
+  if (node === undefined) return true;
+
+  if (node.type === "text") return node.value.startsWith("\n");
+
+  return node.type === "element" && node.tagName === "br";
+}
+
 /**
  * The kind a quote's first paragraph names, with the marker taken out of it,
  * and the paragraph taken out where it held the marker alone; none where the
@@ -81,6 +90,9 @@ function takeMarker(quote: Element): AlertKind | undefined {
   const kind = marker?.[1]?.toLowerCase();
 
   if (marker === null || kind === undefined || !isAlertKind(kind)) return undefined;
+
+  // Note that a marker matched up to its words' own end stands alone only where nothing follows it on its line.
+  if (!marker[0].endsWith("\n") && !lineEndsAt(first.children[1])) return undefined;
   words.value = words.value.slice(marker[0].length);
 
   // Note that a line break left after the marker would open the alert's words on an empty line.

@@ -8,8 +8,10 @@
  * that item in the words GitHub holds (`PULL_REQUEST_ACTION.TICK_TASK`),
  * which is how a bot that offers a box to tick (a review bot's "Trigger
  * review") hears it ticked. The box stands as pressed while the write is
- * out and until the words are read again, and as the words have it where
- * GitHub refused, whose words stand under the words they were on.
+ * out and until the words are read again, then as the words have it, and
+ * where GitHub refused, its words stand under the words they were on. The
+ * write names how many boxes the reader saw, which the service holds the
+ * words to, so a tick on words changed since never lands on another item.
  * Outside a tab, or where the read named no id for what they are on, the
  * boxes stand read-only.
  */
@@ -24,7 +26,7 @@ import {
   usePullRequestWrites,
 } from "./pull-request-writes.js";
 
-/** One task item's box the member can tick, standing as pressed while its write is out and once GitHub took it. */
+/** One task item's box the member can tick, standing as pressed while its write and the read after it are out, then as the words read again have it. */
 function TickedTaskBox({
   item,
   subject,
@@ -42,9 +44,11 @@ function TickedTaskBox({
       action: PULL_REQUEST_ACTION.TICK_TASK,
       subject,
       index: item.index,
+      count: item.count,
       checked: ticked,
-    }).then((outcome) => {
-      if (!outcome.done) setAsked(undefined);
+    }).then(() => {
+      // Note that the write settles once the words are read again, so the box then stands as GitHub has it, as where a bot clears its own box at once.
+      setAsked(undefined);
     });
   };
 
