@@ -45,8 +45,9 @@ import {
   type MachineCommandResult,
   type MachineDeviceJoinRequest,
 } from "@repo/features/machine-command-wire";
+import { MP4_TYPE } from "@repo/features/video-signature";
 import { unparsedWire } from "@repo/wire";
-import { pngBytes } from "@repo/wire/testing";
+import { mp4Bytes, pngBytes } from "@repo/wire/testing";
 import { Clock, type Context, Effect, Fiber, Layer, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
@@ -60,6 +61,7 @@ import { machineCommandsProcedures } from "./machine-commands-procedures.js";
 
 const ORIGIN = "https://app.test";
 const MACHINE_COMMANDS = "/api/mac-commands";
+const MACHINE_COMMAND_RECORDING = "/api/mac-commands/recording";
 const CLAIM = "/api/mac-commands/claim";
 const LISTENING = "/api/mac-commands/listening";
 const DEVICE = "/api/mac-commands/device";
@@ -617,6 +619,101 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
               "kept beside the transcript",
             );
           }
+        }),
+      ),
+  );
+  it.effect(
+    "a stopped recording's video, posted through the route before its result, is kept beside the transcript as the MP4 it is and saved where the agent can post it",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* account("user-recording");
+          const db = yield* Database;
+
+          const [row] = yield* db
+            .insert(conversations)
+            .values({ userId: "user-recording", kind: CONVERSATION_KIND.AGENT })
+            .returning({ id: conversations.id });
+
+          assert.ok(row);
+          const target = { userId: "user-recording", conversationId: row.id };
+          yield* markMachineListening("user-recording");
+          const video = mp4Bytes(603, 1311);
+          const saved: { name: string; contents: Uint8Array }[] = [];
+
+          const door = () =>
+            Promise.resolve({
+              readFile: () => Promise.resolve(null),
+              writeFile: (file: { readonly name: string; readonly contents: Uint8Array }) => {
+                saved.push(file);
+
+                return Promise.resolve(`/workspace/.agent/attachments/${file.name}`);
+              },
+            });
+
+          const call = yield* wokenOnHub(
+            runComputerTool(
+              target,
+              { action: "stop_recording", caption: "Signing in on the phone" },
+              door,
+            ),
+            Effect.gen(function* () {
+              const [claimed] = yield* claimMachineCommands("user-recording", new Date(0), [
+                MACHINE_COMMAND_KIND.COMPUTER,
+              ]);
+
+              assert.ok(claimed !== undefined);
+
+              const post = (mp4: Uint8Array) =>
+                bytes(
+                  request({
+                    method: "POST",
+                    userId: "user-recording",
+                    path: MACHINE_COMMAND_RECORDING,
+                    body: JSON.stringify({
+                      id: claimed.id,
+                      mp4: Buffer.from(mp4).toString("base64"),
+                    }),
+                  }),
+                );
+
+              const refused = yield* post(mp4Bytes(603, 1311, true));
+              assert.equal(
+                refused.status,
+                HOSTED_HTTP_STATUS.BAD_REQUEST,
+                "an MP4 no player streams is refused",
+              );
+              assert.equal((yield* post(video)).status, HOSTED_HTTP_STATUS.OK);
+
+              yield* settleMachineCommand("user-recording", claimed.id, {
+                computer: {
+                  recorded: { seconds: 10, width: 603, height: 1311, byteCount: video.byteLength },
+                },
+              });
+            }),
+          );
+
+          const answer = Schema.decodeUnknownSync(
+            Schema.Struct({
+              status: Schema.Literal(MACHINE_COMMAND_STATUS.RAN),
+              seconds: Schema.Number,
+              caption: Schema.String,
+              path: Schema.String,
+              picture: Schema.Struct({ id: Schema.String, mediaType: Schema.String }),
+            }),
+          )(call.answered);
+
+          assert.equal(answer.caption, "Signing in on the phone");
+          assert.equal(answer.picture.mediaType, MP4_TYPE);
+          assert.deepEqual(
+            saved.map((file) => file.contents),
+            [video],
+            "saved as it came",
+          );
+          assert.equal(answer.path, `/workspace/.agent/attachments/${saved[0]?.name}`);
+          const kept = yield* readConversationPicture(row.id, answer.picture.id);
+          assert.ok(Option.isSome(kept), "kept beside the transcript");
+          assert.deepEqual(kept.value.bytes, video);
         }),
       ),
   );

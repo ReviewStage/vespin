@@ -23,8 +23,12 @@ export const SLASH_COMMAND = {
 
 export type SlashCommand = (typeof SLASH_COMMAND)[keyof typeof SLASH_COMMAND];
 
-/** The line that clears an agent's goal, as both harnesses' `/goal` takes it. */
-export const GOAL_CLEAR_LINE = "/goal clear";
+/** The lines that change an agent's goal from its row: clear it, which both harnesses' `/goal` takes, and pause or resume it, which Codex's alone does. */
+export const GOAL_LINE = {
+  CLEAR: "/goal clear",
+  PAUSE: "/goal pause",
+  RESUME: "/goal resume",
+} as const;
 
 /** A message's leading command: its name, without the slash, and the words after it. */
 export interface LeadingCommand {

@@ -10,6 +10,7 @@ import {
   RUNNER_HARNESS,
 } from "@repo/agent-runner/protocol";
 import { Database } from "@repo/database/core/query";
+import { writeAccountPreferences } from "@repo/database/models/account-store";
 import { readAgentRunnerRecord } from "@repo/database/models/agent-runner-record";
 import {
   type Agent,
@@ -56,6 +57,7 @@ import {
 import type { Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
+import { EXPERIMENT } from "@repo/settings";
 import type { WireRecord } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
@@ -926,6 +928,40 @@ it.layer(SUITE)("a coding agent's sessions on Codex", (it) => {
         assert.deepEqual(yield* sessions.send(opened.sessionId, message(agent, "Hello?")), {
           outcome: SESSION_SEND_OUTCOME.RETIRED,
         });
+      }),
+  );
+
+  it.effect(
+    "a /goal runs Codex's goal only for a starter with the Goals experiment on, and goes as words otherwise",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+        yield* signIn(userId, 60);
+        const sessions = yield* sessionsFor(userId).pipe(Effect.provide(services(api)));
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+        yield* sessions.send(opened.sessionId, message(agent, "/goal every test passes"));
+        yield* writeAccountPreferences(userId, { experiments: { [EXPERIMENT.GOALS]: true } });
+        yield* sessions.send(opened.sessionId, message(agent, "/goal every test passes"));
+
+        const [off, on] = (yield* launchRead(api.commands[0], readCodexConfig)).lines.filter(
+          (line): line is Extract<InputLine, { type: "message" }> =>
+            line.type === INPUT_LINE.MESSAGE &&
+            line.content.some((block) => block.type === "text" && block.text.startsWith("/goal")),
+        );
+
+        // Off, it goes as words behind the turn's own, as any message does.
+        assert.equal(off?.goal, undefined);
+        assert.equal(off?.content.length, 2);
+        assert.deepEqual(on?.goal, true);
+        assert.deepEqual(on?.content, [{ type: "text", text: "/goal every test passes" }]);
       }),
   );
 

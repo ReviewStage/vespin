@@ -1,5 +1,7 @@
 import { Effect, Schema as EffectSchema, Option } from "effect";
 import { DEVICE_ARCH, DEVICE_PLATFORM, deviceMachineFields } from "./device-agent-wire.js";
+import { RECORDING_FAILURE, RECORDING_LIMITS } from "./recording-wire.js";
+import { MAX_REQUEST_DATA_URL_BYTES } from "./request-body-limit.js";
 import { wireUuidSchema } from "./service-wire.js";
 
 /**
@@ -109,6 +111,10 @@ export const COMPUTER_ACTION = {
   DRAG: "drag",
   SET_VALUE: "set_value",
   PERFORM_SECONDARY_ACTION: "perform_secondary_action",
+  /** Starts recording the app's window as a video, the agent's cursor drawn over it. */
+  RECORD: "record",
+  /** Stops the recording and hands its video up (`machineCommandRecordingRequestSchema`). */
+  STOP_RECORDING: "stop_recording",
 } as const;
 
 export type ComputerAction = (typeof COMPUTER_ACTION)[keyof typeof COMPUTER_ACTION];
@@ -157,6 +163,25 @@ export const COMPUTER_BOUNDS = {
   MAX_ELEMENTS_CHARS: 200_000,
   /** The most apps a list carries. */
   MAX_APPS: 200,
+  /**
+   * The most base64 characters of every icon one post of a machine's
+   * allowed apps carries together, under `MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES`
+   * with the names beside them; an app past it is posted by its name alone.
+   */
+  MAX_LOOKS_ICON_CHARS: 3_000_000,
+} as const;
+
+/**
+ * What a recording of an app on the Mac is held to: the shared limits
+ * (`recording-wire.ts`), and a video small enough that its base64 goes up
+ * in one request a function takes, apart from the result, whose own bound
+ * a window's read already fills.
+ */
+export const COMPUTER_RECORDING_BOUNDS = {
+  MAX_SECONDS: RECORDING_LIMITS.MAX_SECONDS,
+  MAX_BYTES: MAX_REQUEST_DATA_URL_BYTES,
+  /** The base64 characters a video at that bound is spelled in: four for every three bytes. */
+  MAX_BASE64_CHARS: 4 * Math.ceil(MAX_REQUEST_DATA_URL_BYTES / 3),
 } as const;
 
 const appName = EffectSchema.String.check(
@@ -267,6 +292,17 @@ export const macComputerActionSchema = EffectSchema.Union([
     element_index: elementIndex,
     action: keyName,
   }),
+  EffectSchema.Struct({
+    op: EffectSchema.Literal(COMPUTER_ACTION.RECORD),
+    app: appName,
+    max_seconds: EffectSchema.Int.check(
+      EffectSchema.isBetween({ minimum: 1, maximum: COMPUTER_RECORDING_BOUNDS.MAX_SECONDS }),
+    ),
+    max_bytes: EffectSchema.Int.check(
+      EffectSchema.isBetween({ minimum: 1, maximum: COMPUTER_RECORDING_BOUNDS.MAX_BYTES }),
+    ),
+  }),
+  EffectSchema.Struct({ op: EffectSchema.Literal(COMPUTER_ACTION.STOP_RECORDING) }),
 ]);
 
 export type MacComputerAction = typeof macComputerActionSchema.Type;
@@ -469,7 +505,23 @@ const computerShotSchema = EffectSchema.Struct({
 
 export type ComputerShot = typeof computerShotSchema.Type;
 
-/** What an action came to: the apps listed, an app's window read, or the action done on its app. */
+/**
+ * A recording stopped: how long it ran, the size of its video, and its
+ * bytes, which went up apart from the result
+ * (`machineCommandRecordingRequestSchema`).
+ */
+const computerRecordedSchema = EffectSchema.Struct({
+  seconds: EffectSchema.Finite.check(
+    EffectSchema.isBetween({ minimum: 0, maximum: COMPUTER_RECORDING_BOUNDS.MAX_SECONDS + 1 }),
+  ),
+  width: pixels,
+  height: pixels,
+  byteCount: EffectSchema.Int.check(
+    EffectSchema.isBetween({ minimum: 1, maximum: COMPUTER_RECORDING_BOUNDS.MAX_BYTES }),
+  ),
+});
+
+/** What an action came to: the apps listed, an app's window read, the action done on its app, or a recording stopped, or why it came to no video. */
 const computerOutcomeSchema = EffectSchema.Union([
   EffectSchema.Struct({
     apps: EffectSchema.Array(computerAppSchema).check(
@@ -495,6 +547,8 @@ const computerOutcomeSchema = EffectSchema.Union([
   }),
   // Note that an action names the app it acted on, as the Mac described it before asking, so its row wears the app's icon.
   EffectSchema.Struct({ done: keyName, app: EffectSchema.optionalKey(computerAppSchema) }),
+  EffectSchema.Struct({ recorded: computerRecordedSchema }),
+  EffectSchema.Struct({ unrecorded: EffectSchema.Literals(Object.values(RECORDING_FAILURE)) }),
 ]);
 
 export type ComputerOutcome = typeof computerOutcomeSchema.Type;
@@ -517,6 +571,24 @@ export type MachineCommandResult = typeof machineCommandResultSchema.Type;
 export const machineCommandSettleRequestSchema = EffectSchema.Struct({
   id: wireUuidSchema,
   result: machineCommandResultSchema,
+});
+
+/**
+ * A stopped recording's video, posted by the Mac that claimed its command
+ * before it posts the result (POST): an H.264 MP4 whose index stands ahead
+ * of its media, as base64, kept beside the command until its call reads it.
+ */
+export const machineCommandRecordingRequestSchema = EffectSchema.Struct({
+  id: wireUuidSchema,
+  mp4: EffectSchema.String.check(
+    EffectSchema.isMinLength(1),
+    EffectSchema.isMaxLength(COMPUTER_RECORDING_BOUNDS.MAX_BASE64_CHARS),
+  ),
+});
+
+/** A video the service kept (POST). */
+export const machineCommandRecordingAnswerSchema = EffectSchema.Struct({
+  kept: EffectSchema.Literal(true),
 });
 
 /** A result the service kept (POST). */
@@ -611,6 +683,34 @@ export const machineDeviceJoinAnswerSchema = EffectSchema.Struct({
 export const machineDeviceSettingsRequestSchema = EffectSchema.Struct({
   deviceId: wireUuidSchema,
   settings: machineDeviceSettingsSchema,
+});
+
+/**
+ * An app a machine always allows, as the machine names and draws it: by the
+ * bundle id it is allowed by, or its name where it has none, its display
+ * name, and its icon as a 64px PNG in base64 where the machine drew one.
+ */
+export const allowedAppLookSchema = EffectSchema.Struct({
+  app: appName,
+  name: appName,
+  iconPng: EffectSchema.optionalKey(
+    EffectSchema.String.check(EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_ICON_CHARS)),
+  ),
+});
+
+export type AllowedAppLook = typeof allowedAppLookSchema.Type;
+
+/**
+ * How the device names and draws the apps it always allows, as it holds
+ * them now (POST), so a window off the machine lists them by name and icon;
+ * `not-found` where the account holds no such device. Each post stands for
+ * every app the device allows, so one it no longer allows goes with it.
+ */
+export const machineDeviceAppLooksRequestSchema = EffectSchema.Struct({
+  deviceId: wireUuidSchema,
+  looks: EffectSchema.Array(allowedAppLookSchema).check(
+    EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_APPS),
+  ),
 });
 
 /** That the service keeps the device's settings as written (POST). */

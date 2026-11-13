@@ -1007,7 +1007,7 @@ test("an automation's toolbar too narrow for its acts' words beside its name fol
     });
 
   // A 760 window's toolbar, past the traffic lights.
-  const narrow = layContainersAt({ "automation-toolbar": 570 });
+  const narrow = layContainersAt({ "automation-toolbar": 570 }, { only: ["./desktop.css"] });
 
   try {
     act(() => relayout());
@@ -1019,7 +1019,7 @@ test("an automation's toolbar too narrow for its acts' words beside its name fol
     narrow.remove();
   }
 
-  const wide = layContainersAt({ "automation-toolbar": 1100 });
+  const wide = layContainersAt({ "automation-toolbar": 1100 }, { only: ["./desktop.css"] });
 
   try {
     act(() => relayout());

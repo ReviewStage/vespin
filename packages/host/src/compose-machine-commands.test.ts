@@ -5,11 +5,13 @@ import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { LIVE_POLL_URL, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import type { MachineCommandsLiveAnswer } from "@repo/features/machine-command-live";
 import {
+  type AllowedAppLook,
   COMPUTER_ACTION,
   COMPUTER_PERMISSION,
   type ComputerApp,
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
+  type MacComputerAction,
   type MachineCommand,
   type MachineCommandKind,
   type MachineCommandMode,
@@ -108,6 +110,9 @@ const computerCommand = (id: string, conversationId: string, app: string): Machi
   timeoutSeconds: 60,
 });
 
+/** A recording the helper stopped: ten seconds of a phone's screen, its MP4 six bytes in base64. */
+const RECORDED = { seconds: 10, width: 603, height: 1311, mp4: "AAECAwQF" };
+
 /** Both of the Mac's grants, as a Mac set up for computer use holds them. */
 const GRANTED: ComputerPermissions = { screenRecording: true, accessibility: true };
 
@@ -129,6 +134,8 @@ function scriptedHelper(apps: readonly ComputerApp[], permissions = GRANTED) {
         if (request.op === COMPUTER_HELPER_OP.PERMISSIONS) {
           return { permissions };
         }
+
+        if (request.op === COMPUTER_ACTION.STOP_RECORDING) return { recording: RECORDED };
 
         if (request.op !== COMPUTER_HELPER_OP.DESCRIBE_APP) return { outcome: { done: "pressed" } };
         const app = apps.find((each) => each.name === request.app || each.bundleId === request.app);
@@ -162,6 +169,8 @@ function scriptedService(
     readonly duringClaim?: Effect.Effect<void>;
     /** The settings the service keeps for a device that joins, where it keeps any; none keeps what the join carries. */
     readonly deviceSettings?: MachineDeviceSettings;
+    /** Whether a recording's video never reaches the service, as a network fault loses one. */
+    readonly recordingUnsent?: boolean;
   } = {},
 ) {
   let unanswered = options.unansweredClaims ?? 0;
@@ -174,7 +183,10 @@ function scriptedService(
   const named: { readonly by: string; readonly device: string | undefined }[] = [];
   const joins: MachineDeviceJoinRequest[] = [];
   const savedSettings: MachineDeviceSettings[] = [];
+  const postedLooks: (readonly AllowedAppLook[])[] = [];
   const settledResults = new Map<string, MachineCommandResult>();
+  /** Each recording's video posted up, by its command's id, as base64. */
+  const postedRecordings = new Map<string, string>();
 
   const answer = (rows: boolean): MachineCommandsLiveAnswer => ({
     url: LIVE_POLL_URL,
@@ -270,11 +282,27 @@ function scriptedService(
 
         return { saved: true } as const;
       }),
+    saveDeviceAppLooks: (_deviceId, looks) =>
+      Effect.sync(() => {
+        postedLooks.push(looks);
+
+        return { saved: true } as const;
+      }),
     settle: (id, result) =>
       Effect.sync(() => {
         settledResults.set(id, result);
 
         return { settled: true } as const;
+      }),
+    postRecording: (id, mp4) =>
+      Effect.sync(() => {
+        if (options.recordingUnsent === true)
+          return { failure: MACHINE_COMMAND_CALL_FAILURE.UNANSWERED };
+        // A video posted after its result is one no call reads, so it is held to come first.
+        assert.equal(settledResults.has(id), false, "the video goes up before the result");
+        postedRecordings.set(id, mp4);
+
+        return { kept: true } as const;
       }),
   };
 
@@ -286,7 +314,9 @@ function scriptedService(
     named,
     joins,
     savedSettings,
+    postedLooks,
     settledResults,
+    postedRecordings,
     /** A command queued for the account, as an agent's call queues it. */
     queue: (command: MachineCommand, queuedAt: number) => {
       waiting.push({ ...command, queuedAt });
@@ -569,6 +599,157 @@ it.effect(
       assert.deepEqual(service.savedSettings, [
         { commandMode: MACHINE_COMMAND_MODE.NEVER, alwaysAllowedApps: ["com.apple.Notes"] },
       ]);
+    }),
+);
+
+it.effect(
+  "a joined Mac with Computer use on posts the names and icons of the apps it always allows once, and again only once they change",
+  () =>
+    Effect.gen(function* () {
+      const simulator = { ...SIMULATOR, iconPng: "iVBORw0KGgo=" };
+      const scripted = scriptedHelper([simulator]);
+      const service = scriptedService();
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        computer: { helper: scripted.helper, enabled: true, allowed: [] },
+        device: { id: "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13", apps: [SIMULATOR.bundleId ?? ""] },
+      };
+
+      const { composer, moved } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        gate,
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* TestClock.adjust("15 seconds");
+          yield* settled;
+
+          gate.device?.apps.push("com.example.Gone");
+          yield* moved;
+          yield* settled;
+        }),
+      );
+
+      assert.deepEqual(service.postedLooks, [
+        [{ app: SIMULATOR.bundleId, name: SIMULATOR.name, iconPng: "iVBORw0KGgo=" }],
+        [
+          { app: SIMULATOR.bundleId, name: SIMULATOR.name, iconPng: "iVBORw0KGgo=" },
+          { app: "com.example.Gone", name: "com.example.Gone" },
+        ],
+      ]);
+    }),
+);
+
+it.effect(
+  "an app the helper was too busy to name is posted by its bundle id, and named again at the next look once it answers",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+      let busy = true;
+
+      // The first naming answers that the helper was busy, as one queued behind a long action does.
+      const helper: ComputerUseHelperSeam = {
+        ask: (request, within, stillLet) => {
+          if (busy && request.op === COMPUTER_HELPER_OP.DESCRIBE_APP) {
+            busy = false;
+
+            return Effect.succeed({ failure: COMPUTER_HELPER_FAILURE.FAILED, message: "Busy." });
+          }
+
+          return scripted.helper.ask(request, within, stillLet);
+        },
+      };
+
+      const service = scriptedService();
+      const bundleId = SIMULATOR.bundleId ?? "";
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        computer: { helper, enabled: true, allowed: [] },
+        device: { id: "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13", apps: [bundleId] },
+      };
+
+      const { composer } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        gate,
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* TestClock.adjust("15 seconds");
+          yield* settled;
+          yield* TestClock.adjust("15 seconds");
+          yield* settled;
+        }),
+      );
+
+      assert.deepEqual(service.postedLooks, [
+        [{ app: bundleId, name: bundleId }],
+        [{ app: bundleId, name: SIMULATOR.name, iconPng: SIMULATOR.iconPng }],
+      ]);
+    }),
+);
+
+it.effect(
+  "after an upload with an app the helper could not name, putting the apps back as they were posts them again",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+      const bundleId = SIMULATOR.bundleId ?? "";
+      const flaky = "com.example.Flaky";
+
+      // The helper is always too busy to name the flaky app.
+      const helper: ComputerUseHelperSeam = {
+        ask: (request, within, stillLet) =>
+          request.op === COMPUTER_HELPER_OP.DESCRIBE_APP && request.app === flaky
+            ? Effect.succeed({ failure: COMPUTER_HELPER_FAILURE.FAILED, message: "Busy." })
+            : scripted.helper.ask(request, within, stillLet),
+      };
+
+      const service = scriptedService();
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        computer: { helper, enabled: true, allowed: [] },
+        device: { id: "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13", apps: [bundleId] },
+      };
+
+      const { composer, moved } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        gate,
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+
+          if (gate.device !== undefined) gate.device.apps = [bundleId, flaky];
+          yield* moved;
+          yield* settled;
+
+          if (gate.device !== undefined) gate.device.apps = [bundleId];
+          yield* moved;
+          yield* settled;
+        }),
+      );
+
+      assert.deepEqual(
+        service.postedLooks.map((looks) => looks.map((look) => look.app)),
+        [[bundleId], [bundleId, flaky], [bundleId]],
+      );
     }),
 );
 
@@ -1176,6 +1357,86 @@ it.effect(
           "no action reached the helper",
         );
       }
+    }),
+);
+
+it.effect.each([false, true])(
+  "a stopped recording's video goes up before its result, which names its length and size, and reaches only the conversation that recorded it (unsent: %s)",
+  (unsent) =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+      const service = scriptedService({ recordingUnsent: unsent });
+
+      const computer = (
+        id: string,
+        conversationId: string,
+        action: MacComputerAction,
+      ): MachineCommand => ({
+        id,
+        kind: MACHINE_COMMAND_KIND.COMPUTER,
+        conversationId,
+        action,
+        timeoutSeconds: 60,
+      });
+
+      const record = computer(COMMAND.id, AGENT, {
+        op: COMPUTER_ACTION.RECORD,
+        app: "Simulator",
+        max_seconds: 120,
+        max_bytes: 3_300_000,
+      });
+
+      const stop = computer(SECOND.id, AGENT, { op: COMPUTER_ACTION.STOP_RECORDING });
+      const otherStop = computer(THIRD_ID, OTHER_AGENT, { op: COMPUTER_ACTION.STOP_RECORDING });
+      service.queue(record, NOW);
+
+      const { composer } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        {
+          mode: MACHINE_COMMAND_MODE.ASK,
+          signedIn: true,
+          computer: {
+            helper: scripted.helper,
+            enabled: true,
+            allowed: ["com.apple.iphonesimulator"],
+          },
+        },
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          service.queue(otherStop, NOW);
+          service.queue(stop, NOW);
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+        }),
+      );
+
+      assert.deepEqual(
+        service.settledResults.get(otherStop.id),
+        { computer: { unrecorded: "none" } },
+        "another conversation's stop reaches no recording",
+      );
+      assert.equal(service.postedRecordings.has(otherStop.id), false);
+      const result = service.settledResults.get(stop.id);
+
+      if (unsent) {
+        assert.ok(
+          result !== undefined && "refused" in result,
+          "a video never sent is no recording",
+        );
+        assert.match(result.refused, /stop_recording again/u);
+
+        return;
+      }
+
+      assert.equal(service.postedRecordings.get(stop.id), RECORDED.mp4);
+      assert.deepEqual(result, {
+        computer: { recorded: { seconds: 10, width: 603, height: 1311, byteCount: 6 } },
+      });
     }),
 );
 

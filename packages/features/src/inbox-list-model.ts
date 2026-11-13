@@ -17,7 +17,7 @@
 
 import { Predicate } from "effect";
 import { ATTACHMENT_VIEW, attachmentView } from "./attachment-model.js";
-import { CONVERSATION_MEDIA_TYPE } from "./conversation-picture-wire.js";
+import { isVideoType } from "./conversation-picture-wire.js";
 import { fileMarker, fileMarkers, isPictureName, markersAsNames } from "./file-marker.js";
 import { fillInWords, WRITE_AN_ANSWER } from "./inbox-ask-words.js";
 import {
@@ -1391,7 +1391,7 @@ export function inboxCommentFiles(
 ): InboxCommentFiles {
   const picture = (file: InboxMessageFile) =>
     attachmentView({ name: file.name, mediaType: file.mediaType, url: "" }) ===
-      ATTACHMENT_VIEW.IMAGE || file.mediaType === CONVERSATION_MEDIA_TYPE.WEBM;
+      ATTACHMENT_VIEW.IMAGE || isVideoType(file.mediaType);
 
   const drawn = new Set(
     words === undefined ? [] : picturesDrawn(words, itemId).map((each) => each.attachmentId),

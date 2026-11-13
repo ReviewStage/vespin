@@ -1,7 +1,9 @@
 /**
  * machine-commands.ts -- the commands an account's agents queued for its Mac (`machine-command-wire.ts`): the held read that takes them, and each result posted back.
  *
- * Both procedures share the one public path, told apart by method. The
+ * Both procedures share the one public path, told apart by method. A Mac
+ * that stopped a recording of an app posts its video on a path of its own
+ * before the result, since the result's bound has no room for it. The
  * held read names the kinds its Mac runs beyond `shell` in its `kinds`
  * query, as text (`machineCommandKindsQuery`); an older Mac's read names none,
  * which is `shell` alone. A Mac that follows its commands live
@@ -20,13 +22,17 @@ import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import {
+  COMPUTER_RECORDING_BOUNDS,
   MACHINE_COMMAND_BOUNDS,
   machineCommandClaimAnswerSchema,
   machineCommandClaimRequestSchema,
   machineCommandListeningAnswerSchema,
+  machineCommandRecordingAnswerSchema,
+  machineCommandRecordingRequestSchema,
   machineCommandSettledAnswerSchema,
   machineCommandSettleRequestSchema,
   machineCommandsAnswerSchema,
+  machineDeviceAppLooksRequestSchema,
   machineDeviceJoinAnswerSchema,
   machineDeviceJoinRequestSchema,
   machineDeviceSettingsAnswerSchema,
@@ -48,8 +54,14 @@ const listeningInput = EffectSchema.Struct({
 /** A claim's body: one id, and room to spare. */
 const CLAIM_BODY_BYTES = 1_024;
 
+/** A recording's base64 at its bound, and room for its id and keys. */
+const RECORDING_BODY_BYTES = COMPUTER_RECORDING_BOUNDS.MAX_BASE64_CHARS + 1_024;
+
 /** A device's settings at their bound, and room for the rest of the body. */
 const DEVICE_BODY_BYTES = 64 * 1_024;
+
+/** A device's allowed apps' names and icons: at most every icon's characters, with the names and room to spare. */
+const APP_LOOKS_BODY_BYTES = MACHINE_COMMAND_BOUNDS.MAX_RESULT_BYTES;
 
 export const machineCommandsContract = {
   waiting: declaredProcedure
@@ -62,6 +74,14 @@ export const machineCommandsContract = {
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_COMMANDS }))
     .input(exactInput(machineCommandSettleRequestSchema))
     .output(EffectSchema.flip(machineCommandSettledAnswerSchema)),
+  recording: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND, HOSTED_API_ERROR.INVALID_REQUEST))
+    .meta(bodyCap(RECORDING_BODY_BYTES))
+    .meta(
+      openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MACHINE_COMMAND_RECORDING }),
+    )
+    .input(exactInput(machineCommandRecordingRequestSchema))
+    .output(EffectSchema.flip(machineCommandRecordingAnswerSchema)),
   claim: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
     .meta(bodyCap(CLAIM_BODY_BYTES))
@@ -91,5 +111,16 @@ export const machineCommandsContract = {
       }),
     )
     .input(exactInput(machineDeviceSettingsRequestSchema))
+    .output(EffectSchema.flip(machineDeviceSettingsAnswerSchema)),
+  saveDeviceAppLooks: declaredProcedure
+    .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
+    .meta(bodyCap(APP_LOOKS_BODY_BYTES))
+    .meta(
+      openapi({
+        method: HTTP_METHOD.POST,
+        path: HOSTED_SERVICE_PATH.MACHINE_COMMAND_DEVICE_APP_LOOKS,
+      }),
+    )
+    .input(exactInput(machineDeviceAppLooksRequestSchema))
     .output(EffectSchema.flip(machineDeviceSettingsAnswerSchema)),
 };

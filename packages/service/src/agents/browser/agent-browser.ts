@@ -42,6 +42,7 @@ import {
   type CdpSession,
   type PageTarget,
 } from "@repo/features/browser-cdp";
+import { RECORDING_FAILURE, type RecordingFailure } from "@repo/features/recording-wire";
 import {
   ptyLinesOf,
   SANDBOX_STATUS,
@@ -83,8 +84,6 @@ import {
   startBrowser,
 } from "./sandbox-browser.js";
 import {
-  RECORDING_FAILURE,
-  type RecordingFailure,
   type RecordingStart,
   readRecording,
   recordingBytesOf,

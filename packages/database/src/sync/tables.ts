@@ -272,7 +272,9 @@ export const userSync = defineSyncTable(user, {
  * its enrolling, which writes its version, and its removal. Note that every other column is
  * ignored, because the device beats and registers again often, rewriting
  * when it was last seen and what it runs, and no view the capture wakes
- * reads them: a window judges a device by its own presence read.
+ * reads them: a window judges a device by its own presence read. Its
+ * allowed apps' names and icons are ignored too, since they are read only
+ * as an `@` list asks for them (`hosts.allowedApps`).
  */
 export const deviceSync = defineSyncTable(device, {
   topics: [
@@ -296,6 +298,7 @@ export const deviceSync = defineSyncTable(device, {
     device.updateFailure,
     device.secretHash,
     device.lastSeenAt,
+    device.allowedAppLooks,
   ],
   log: LOG.EVERY,
 });
@@ -420,10 +423,13 @@ export const taskReadSync = defineSyncTable(taskRead, {
  * which the Mac's read of the commands it may claim is woken on. Note that
  * the account's and each device's listener rows (`machine_command_listener`,
  * `machine_command_device_listener`), which every such read rewrites, are not
- * captured: no read waits on them.
+ * captured: no read waits on them. A stopped recording's video is ignored
+ * too, since its call reads it only once the result it comes before
+ * notifies, and an update comparing it would weigh its bytes.
  */
 export const machineCommandSync = defineSyncTable(machineCommand, {
   topics: [{ kind: TOPIC.ACCOUNT, column: machineCommand.userId }],
+  ignore: [machineCommand.recording],
 });
 
 /**

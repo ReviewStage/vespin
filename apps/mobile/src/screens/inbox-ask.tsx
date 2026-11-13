@@ -1,5 +1,6 @@
 // inbox-ask.tsx -- a thread's open ask as its card, the box under the thread, and its ⋯ menu: a decide's options, a do's steps with Mark done and Couldn't do it, an answer's fields, a notice's Got it, the composer that sends them with a note, replies, or starts a new thread with the agent, and Remind me, New thread, and Resolve.
 
+import { isVideoType } from "@repo/features/conversation-picture-wire";
 import { ASK_PRESS, askHeadWords, INBOX_BOX_WORDS, RESOLVE } from "@repo/features/inbox-ask-words";
 import {
   fieldValueOf,
@@ -14,7 +15,6 @@ import { knownAsk, RECOMMENDED } from "@repo/features/inbox-list-model";
 import {
   INBOX_ASK,
   INBOX_FIELD,
-  INBOX_FILE_TYPE,
   INBOX_OPTION_MEDIA,
   INBOX_REPLY,
   INBOX_STATUS,
@@ -99,7 +99,7 @@ const RECORDING_WORD = "Recording";
 function cardMedia(piece: InboxOptionMedia, doors: OptionMediaDoors): ChoiceMedia {
   switch (piece.type) {
     case INBOX_OPTION_MEDIA.FILE: {
-      const recording = piece.mediaType === INBOX_FILE_TYPE.WEBM;
+      const recording = isVideoType(piece.mediaType);
 
       return {
         kind: recording ? CHOICE_MEDIA.VIDEO : CHOICE_MEDIA.PICTURE,

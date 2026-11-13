@@ -180,7 +180,21 @@ component, or add the component or variant there.
   `show_image`'s pictures are (`packages/service/src/agents/computer-tool.ts`),
   shown to the members who can open the task and deleted with the
   conversation; session replay masks the transcript's screenshots, and none
-  of it ever goes into a trace, a counted event, or a fixture. And Sentry's SDKs run
+  of it ever goes into a trace, a counted event, or a fixture. And an app's
+  window on a member's own Mac may be recorded as a video by the `computer`
+  tool's `record` and `stop_recording`, only for an app the member allowed:
+  the signed helper on that Mac writes it, the agent's cursor drawn over it,
+  to that Mac's disk until the next recording replaces it; the stop posts it
+  to the service (`POST /api/mac-commands/recording`), which holds it beside
+  its command's row until the call reads it and the row goes, then keeps it
+  beside the transcript the call is written to as `show_image`'s pictures
+  are (`packages/service/src/agents/computer-tool.ts`), shown to the members
+  who can open the task and deleted with the conversation, and saves a copy
+  on the agent's own machine, its sandbox or its starter's Mac, from which it
+  may be posted to a thread or added to its task's plan on the terms above.
+  The model is never handed it, session replay masks its address so its
+  player records empty (`packages/panel/src/session-replay.ts`), and none of
+  it goes into a trace, a counted event, or a fixture. And Sentry's SDKs run
   with their default data collection, but that the service's
   leaves out model inputs and outputs and request bodies
   (`packages/service/src/observability/sentry.ts`, the desktop's

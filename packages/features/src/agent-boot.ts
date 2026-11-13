@@ -18,6 +18,9 @@ import { TURN_DEADLINE } from "./turn-deadline.js";
  *
  *   STARTING         the machine boots: a sandbox opening, a Mac's launch
  *                    claimed or not yet
+ *   BUILDING         the start waits on its workspace's drive being built,
+ *                    before its machine boots; the service's alone, which
+ *                    the wire says as STARTING with `building` beside it
  *   HANDING_OFF      the runner is up and the queue's head is on its way, so
  *                    nothing sent now overtakes the first message
  *   READY            the first message went
@@ -28,12 +31,37 @@ import { TURN_DEADLINE } from "./turn-deadline.js";
 /** Where an agent's first launch stands. */
 export const BOOT_PHASE = {
   STARTING: "starting",
+  BUILDING: "building",
   HANDING_OFF: "handing-off",
   READY: "ready",
   FAILED: "failed",
 } as const;
 
 export type BootPhase = (typeof BOOT_PHASE)[keyof typeof BOOT_PHASE];
+
+/**
+ * The phases the wire carries: every one but BUILDING, which is said as
+ * STARTING with `building: true` beside it (`wireBootOf`), since released
+ * desktop and iOS apps decode the phase strictly and would refuse a new one.
+ */
+export const WIRE_BOOT_PHASES = [
+  BOOT_PHASE.STARTING,
+  BOOT_PHASE.HANDING_OFF,
+  BOOT_PHASE.READY,
+  BOOT_PHASE.FAILED,
+] as const satisfies readonly BootPhase[];
+
+export type WireBootPhase = (typeof WIRE_BOOT_PHASES)[number];
+
+/** A stored phase as the wire says it, and whether it stands building. */
+export function wireBootOf(phase: BootPhase): {
+  readonly phase: WireBootPhase;
+  readonly building: boolean;
+} {
+  return phase === BOOT_PHASE.BUILDING
+    ? { phase: BOOT_PHASE.STARTING, building: true }
+    : { phase, building: false };
+}
 
 /** Why a boot failed, one word of this set, never free text, so nothing a machine printed rides with it. */
 export const BOOT_FAILURE = {
@@ -67,6 +95,7 @@ export type BootHold = (typeof BOOT_HOLD)[keyof typeof BOOT_HOLD];
 
 const HOLD_OF_PHASE = {
   [BOOT_PHASE.STARTING]: BOOT_HOLD.DIVERT_AND_WAIT,
+  [BOOT_PHASE.BUILDING]: BOOT_HOLD.DIVERT_AND_WAIT,
   [BOOT_PHASE.FAILED]: BOOT_HOLD.DIVERT_AND_WAIT,
   [BOOT_PHASE.HANDING_OFF]: BOOT_HOLD.DIVERT,
   [BOOT_PHASE.READY]: BOOT_HOLD.NONE,
@@ -89,19 +118,26 @@ export function bootHolds(phase: BootPhase | null | undefined): boolean {
 /** The phases a boot is still under way in, which its deadline bounds. */
 export const BOOTING_PHASES: readonly BootPhase[] = [BOOT_PHASE.STARTING];
 
-/** How long a boot may stand under way before the minute sweep fails it: as long as a queued turn awaits its runner today. */
+/**
+ * How long a boot may stand under way before the minute sweep fails it: as
+ * long as a queued turn awaits its runner today, and longer while its
+ * workspace's drive is built, which a sweep fails only where the build's
+ * function died.
+ */
 export const BOOT_BOUNDS = {
   DEADLINE_MS: TURN_DEADLINE.PICKUP_MS,
+  BUILDING_DEADLINE_MS: 15 * 60 * 1000,
 } as const;
 
 /**
  * An agent's first launch as its transcript reads it: its phase and when it
- * entered it, which the transcript counts from, and why it failed, where it
- * did.
+ * entered it, which the transcript counts from, whether it waits on its
+ * workspace's drive being built, and why it failed, where it did.
  */
 export const agentBootSchema = EffectSchema.Struct({
-  phase: EffectSchema.Literals(Object.values(BOOT_PHASE)),
+  phase: EffectSchema.Literals(WIRE_BOOT_PHASES),
   since: countedNumber,
+  building: EffectSchema.optionalKey(EffectSchema.Literal(true)),
   failure: EffectSchema.optionalKey(EffectSchema.Literals(Object.values(BOOT_FAILURE))),
 });
 

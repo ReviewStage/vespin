@@ -59,7 +59,13 @@ import {
   WorkingMark,
 } from "./marks.js";
 import { RowOpenContext, RowSelectedContext } from "./row-open.js";
-import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
+import {
+  type BrandColors,
+  STATUS_TONE,
+  type StatusTone,
+  toneColor,
+  useColors,
+} from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
@@ -117,10 +123,12 @@ export type RowAction = {
   readonly onPress: () => void;
 };
 
-/** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark. */
+/** A choice of a menu, checked where it stands, beside its glyph where it has one, such as a status's mark, in its tone where it has one. */
 export type MenuChoice = {
   readonly label: string;
   readonly symbol?: Glyph | undefined;
+  /** The tone the glyph is drawn in, as a status's mark is in the panel's menu; the menu's own ink where none is given. */
+  readonly tone?: StatusTone | undefined;
   readonly on: boolean;
   readonly onPress: () => void;
 };
@@ -222,6 +230,11 @@ export function actionButton(action: RowAction, colors: BrandColors) {
   );
 }
 
+/** A menu choice's glyph's color: its tone's ink, where it has a tone. */
+export function choiceColor(choice: MenuChoice, colors: BrandColors): string | undefined {
+  return choice.tone === undefined ? undefined : toneColor(colors, choice.tone);
+}
+
 /** A submenu of a row's long press menu as SwiftUI's: each choice a toggle the system checks, then its acts. */
 function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
   return (
@@ -233,7 +246,7 @@ function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
       {submenu.choices.map((choice) => (
         <Toggle
           key={choice.label}
-          {...actContent(choice.label, choice.symbol)}
+          {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />

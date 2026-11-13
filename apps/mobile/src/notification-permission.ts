@@ -39,6 +39,9 @@ export const NOTIFICATION_STANDING = {
 export type NotificationStanding =
   (typeof NOTIFICATION_STANDING)[keyof typeof NOTIFICATION_STANDING];
 
+/** Every mounted read of the permission, so an answer to the system's prompt, whichever screen asked, is read by all of them at once. */
+const readers = new Set<() => void>();
+
 /** The standing a permission's answer reads as: a refusal is one iOS will not ask again, which only its Settings undoes. */
 function standingOf(answer: NotificationPermissionsStatus): NotificationStanding {
   if (answer.granted) return NOTIFICATION_STANDING.ALLOWED;
@@ -66,13 +69,17 @@ export function useNotificationPermission(): UseNotificationPermissionResult {
 
   useEffect(() => {
     read();
+    readers.add(read);
 
     // Note that a person may change it in iOS's Settings and come back, so it is read again then.
     const subscription = AppState.addEventListener("change", (state) => {
       if (state === "active") read();
     });
 
-    return () => subscription.remove();
+    return () => {
+      readers.delete(read);
+      subscription.remove();
+    };
   }, [read]);
 
   const allow = () => {
@@ -83,7 +90,9 @@ export function useNotificationPermission(): UseNotificationPermissionResult {
     }
 
     requestPermissionsAsync().then(
-      (answer) => setStanding(standingOf(answer)),
+      () => {
+        for (const reader of readers) reader();
+      },
       (cause: unknown) => console.error("The notification permission was not asked.", cause),
     );
   };

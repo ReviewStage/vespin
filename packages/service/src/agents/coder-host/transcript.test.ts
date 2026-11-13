@@ -1,7 +1,11 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
-import { beginAgentBoot, failAgentBoot } from "@repo/database/models/agent-boot-store";
+import {
+  agentBootBuilding,
+  beginAgentBoot,
+  failAgentBoot,
+} from "@repo/database/models/agent-boot-store";
 import { createAgent } from "@repo/database/models/agent-store";
 import { createTask } from "@repo/database/models/task-store";
 import { storeWriter } from "@repo/database/models/writer";
@@ -28,7 +32,7 @@ import {
 import { modelCatalogOf } from "../../providers/model-catalog.js";
 import { openGithubUser } from "../../testing/github-app-fake.js";
 import { CODER_TOOL_SET } from "./tool-set.js";
-import { CURSOR_START, transcriptPast } from "./transcript.js";
+import { CURSOR_START, transcriptNow, transcriptPast } from "./transcript.js";
 
 /**
  * transcript.test.ts -- an agent's transcript reads every call it ever made, those of tools no agent is offered now among them.
@@ -169,6 +173,41 @@ it.layer(getTestDB())("a coding agent's transcript", (it) => {
           [bootFailed.status, bootFailed.failureReason, bootFailed.boot?.phase],
           [AGENT_STATUS.FAILED, undefined, BOOT_PHASE.FAILED],
         );
+      }),
+  );
+
+  it.effect(
+    "a first launch waiting on its workspace's drive reads starting with building beside it",
+    () =>
+      Effect.gen(function* () {
+        const owner = yield* openGithubUser();
+
+        const started = yield* createAgent(owner, {
+          taskId: (yield* createTask(owner, { organizationId: yield* openWorkspace(owner) })).id,
+          descriptionSnapshot: null,
+          prompt: "Fix the tile.",
+          idempotencyKey: randomUUID(),
+          model: "anthropic/claude-opus-5.5",
+          effort: "high",
+          repository: null,
+          runtime: CONVERSATION_RUNTIME.CLAUDE_CODE,
+          payer: AGENT_PAYER.CLAUDE_SUBSCRIPTION,
+        });
+
+        const agent = Option.getOrThrow(started).agent;
+        const target = { userId: owner, conversationId: agent.conversationId };
+        yield* beginAgentBoot(agent.id, new Date(0), undefined);
+        yield* agentBootBuilding(agent.id, new Date(0));
+
+        const { page } = yield* transcriptNow(
+          target,
+          CODER_TOOL_SET,
+          CURSOR_START,
+          { createdAt: new Date(0), blank: false },
+          agent,
+        ).pipe(Effect.provide(modelCatalogOf(CATALOG)));
+
+        assert.deepEqual(page.boot, { phase: BOOT_PHASE.STARTING, since: 0, building: true });
       }),
   );
 });

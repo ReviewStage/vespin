@@ -401,10 +401,12 @@ export const MEMBER_MCP_EXCLUSIONS = {
   machineCommands: {
     waiting: INTERNAL,
     settle: INTERNAL,
+    recording: INTERNAL,
     claim: INTERNAL,
     listening: INTERNAL,
     join: INTERNAL,
     saveDeviceSettings: INTERNAL,
+    saveDeviceAppLooks: INTERNAL,
   },
   pullRequests: { reviewOptions: SCREEN_ONLY },
   pushDevices: { register: INTERNAL, unregister: INTERNAL, status: INTERNAL, notify: INTERNAL },

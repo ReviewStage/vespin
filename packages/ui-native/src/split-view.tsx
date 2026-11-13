@@ -27,7 +27,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactNode } from "react";
 import type { Glyph } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
-import type { MenuChoice } from "./list-row.js";
+import { choiceColor, type MenuChoice } from "./list-row.js";
 import { PathTitle } from "./thread-page.js";
 import { useColors } from "./tokens/colors.js";
 
@@ -128,12 +128,14 @@ export function BarMenuButton({
   /** How the menu's trigger is drawn where it stands, such as in a bar; a submenu takes none. */
   readonly modifiers?: readonly ModifierConfig[] | undefined;
 }) {
+  const colors = useColors();
+
   return (
     <Menu label={menuLabel(menu.label, menu.symbol)} modifiers={[...modifiers]}>
       {menu.choices.map((choice) => (
         <Toggle
           key={choice.label}
-          {...actContent(choice.label, choice.symbol)}
+          {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />
