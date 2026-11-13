@@ -900,7 +900,8 @@ function listedTask(
 
 /**
  * The account's tasks that hold no item, which fill out its Tasks list as
- * the sidebar stands it: a sub-task under the reference journey's, a task
+ * the sidebar stands it: a sub-task under the reference journey's, which
+ * the launch's checklist waits on, a task
  * in a second repository, so the list draws its repositories' headings,
  * one the account keeps in a section of its own, a teammate's it
  * follows, which the list draws under Following, and one filed for later
@@ -913,6 +914,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     number: 44,
     updatedAt: LANDED - 3 * HOUR,
     parentTaskId: TASK.INVITES,
+    blocks: [LISTED.LAUNCH],
   }),
   listedTask(LISTED.ALERTS, "Usage alerts", {
     repository: "ada/ledger",
@@ -926,6 +928,8 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     status: TASK_STATUS.IN_PROGRESS,
     number: 46,
     updatedAt: LANDED - 7 * HOUR,
+    blocked: true,
+    blockedBy: [LISTED.COPY],
   }),
   // Note that the account follows a teammate's task, which the Tasks list draws under Following.
   listedTask(LISTED.BILLING, "Billing export", {
