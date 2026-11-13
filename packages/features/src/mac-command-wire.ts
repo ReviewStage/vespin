@@ -30,6 +30,12 @@ export const MAC_COMMAND_BOUNDS = {
   MAX_COMMAND_CHARS: 100_000,
   /** The most characters of stdout or stderr a result carries; the Mac cuts each to this. */
   MAX_OUTPUT_CHARS: 20_000,
+  /**
+   * The most bytes of one result's posted body: an app's window read at
+   * every bound (`COMPUTER_BOUNDS`), under the 4.5 MB a function takes. A
+   * Mac answers a result past it as not run rather than post it.
+   */
+  MAX_RESULT_BYTES: 4_000_000,
 } as const;
 
 /**
@@ -135,8 +141,15 @@ export const COMPUTER_BOUNDS = {
   /** A screenshot's longest edge, in pixels, at the least and the most. */
   MIN_SHOT_EDGE: 64,
   MAX_SHOT_EDGE: 4_096,
-  /** The most base64 characters of one screenshot: a 1.5 MB JPEG. */
-  MAX_SHOT_CHARS: 2_100_000,
+  /**
+   * The most base64 characters of one screenshot: a 1.2 MB JPEG, which the
+   * helper keeps a window under by stepping its quality, then its size, down.
+   * Note that two at this bound, with the elements, the window's title, and
+   * the icon at theirs, three bytes to a character where they are not
+   * base64, come to under 3.9 MB, so a read at every bound posts under
+   * `MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES`.
+   */
+  MAX_SHOT_CHARS: 1_600_000,
   /** The most base64 characters of an app's icon: a 64px PNG. */
   MAX_ICON_CHARS: 60_000,
   /** The most characters of a state's numbered elements. */

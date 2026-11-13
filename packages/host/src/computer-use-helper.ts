@@ -57,8 +57,18 @@ export const COMPUTER_HELPER_OP = {
   REQUEST_PERMISSIONS: "request_permissions",
 } as const;
 
+/**
+ * The app the developer allowed, pinned to an action on it so the helper
+ * acts on that app alone: by its bundle id, or by its process where it has
+ * none. The helper refuses an action whose app it finds no longer matches.
+ */
+export interface ComputerAppPin {
+  readonly pin_bundle_id?: string;
+  readonly pin_pid?: number;
+}
+
 export type ComputerHelperRequest =
-  | MacComputerAction
+  | (MacComputerAction & ComputerAppPin)
   | { readonly op: typeof COMPUTER_HELPER_OP.DESCRIBE_APP; readonly app: string }
   | {
       readonly op:
@@ -75,7 +85,7 @@ export interface ComputerPermissions {
 /** What one request came to: what the action did, the app described, or why the helper did nothing. */
 export type ComputerHelperAnswer =
   | { readonly outcome: ComputerOutcome }
-  | { readonly described: ComputerApp }
+  | { readonly described: ComputerApp; readonly pid?: number }
   | { readonly permissions: ComputerPermissions }
   | { readonly failure: string; readonly message: string };
 
@@ -90,6 +100,7 @@ export interface ComputerUseHelperSeam {
 /** How the helper names one app. */
 const helperAppSchema = Schema.Struct({
   name: Schema.String,
+  pid: Schema.optionalKey(Schema.Int),
   bundle_id: Schema.optionalKey(Schema.String),
   icon_png: Schema.optionalKey(Schema.String),
   refused: Schema.Boolean,
@@ -166,7 +177,11 @@ function answerOf(line: HelperLine): ComputerHelperAnswer {
     return { outcome: { app: wireApp(app), window, elements, truncated, shots } };
   }
 
-  if ("app" in line) return { described: wireApp(line.app) };
+  if ("app" in line) {
+    const { pid } = line.app;
+
+    return { described: wireApp(line.app), ...(pid === undefined ? undefined : { pid }) };
+  }
 
   if ("screen_recording" in line) {
     return {

@@ -133,6 +133,28 @@ function usedApp(call: ReadCall): string | undefined {
 }
 
 /**
+ * The name each app came to, by the spelling a call asked for it in and by
+ * the name the Mac answered, each folded to lower case, read off the calls
+ * the Mac answered, so a call still running, which names its app only as
+ * the agent spelled it, counts as the app it will turn out to be.
+ */
+function answeredNames(calls: readonly ReadCall[]): ReadonlyMap<string, string> {
+  const names = new Map<string, string>();
+
+  for (const call of calls) {
+    const answered = computerAppName(undefined, call.output);
+
+    if (call.tool !== AGENT_TOOL.COMPUTER || answered === undefined) continue;
+    names.set(answered.toLowerCase(), answered);
+    const asked = computerAppName(call.input, undefined);
+
+    if (asked !== undefined) names.set(asked.toLowerCase(), answered);
+  }
+
+  return names;
+}
+
+/**
  * The apps the agent used this turn while it works, each once, the one it
  * used last first, each with its icon and newest window from the newest of
  * its calls that kept them; nothing while it works in none, or once it is
@@ -145,12 +167,22 @@ export function appsInUse(
   working: boolean,
 ): AppsInUse | undefined {
   if (!working) return undefined;
-  const found = new Map<string, UsedApp>();
-  let newest: ReadCall | undefined;
+  const calls = [...turnCallsNewestFirst(messages)];
+  const names = answeredNames(calls);
 
-  for (const call of turnCallsNewestFirst(messages)) {
-    newest ??= call;
+  const appOf = (call: ReadCall): string | undefined => {
     const app = usedApp(call);
+
+    return app === undefined || call.output !== undefined
+      ? app
+      : (names.get(app.toLowerCase()) ?? app);
+  };
+
+  const found = new Map<string, UsedApp>();
+  const newest = calls[0];
+
+  for (const call of calls) {
+    const app = appOf(call);
 
     if (app === undefined) continue;
     const held = found.get(app);
@@ -165,7 +197,7 @@ export function appsInUse(
   const top = apps[0];
 
   if (top === undefined || newest === undefined) return undefined;
-  const using = usedApp(newest) === top.app;
+  const using = appOf(newest) === top.app;
 
   return { apps, using };
 }

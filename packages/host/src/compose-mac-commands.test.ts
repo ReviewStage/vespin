@@ -92,6 +92,9 @@ const SIMULATOR: ComputerApp = {
 const TERMINAL: ComputerApp = { name: "Terminal", bundleId: "com.apple.Terminal", refused: true };
 
 /** An action an agent asks of an app, as the service queues it. */
+/** A third command's id, for a case that queues one past `COMMAND` and `SECOND`. */
+const THIRD_ID = "4b8e2d61-3c7a-4f95-9e0d-1a6b5c8f7e24";
+
 const computerCommand = (id: string, conversationId: string, app: string): MacCommand => ({
   id,
   kind: MAC_COMMAND_KIND.COMPUTER,
@@ -849,7 +852,7 @@ it.effect(
 );
 
 it.effect(
-  "an action on an app not yet allowed is asked about by the app, Always allow adds the app and runs the action, and another agent's action on it then asks nothing; every read names computer too",
+  "an action on an app not yet allowed is asked about by the app, Always allow adds the app and runs the action, another agent's action on it then asks nothing, and once it is removed the first agent is asked again; every read names computer too",
   () =>
     Effect.gen(function* () {
       const scripted = scriptedHelper([SIMULATOR]);
@@ -897,6 +900,17 @@ it.effect(
           assert.deepEqual(service.settledResults.get(second.id), {
             computer: { done: "pressed", app: SIMULATOR },
           });
+
+          gate.computer?.allowed.splice(0);
+          const third = computerCommand(THIRD_ID, AGENT, "Simulator");
+          service.queue(third, NOW);
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+          assert.deepEqual(
+            asks(),
+            [{ id: third.id, app: "Simulator" }],
+            "a Remove takes the Always allow back",
+          );
         }),
       );
 
@@ -936,6 +950,48 @@ it.effect(
           "no action reached the helper",
         );
       }
+    }),
+);
+
+it.effect(
+  "under Never with apps on, an action still runs on the app allowed, pinned to it, while a shell command is answered not run",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+      const action = computerCommand(SECOND.id, AGENT, "Simulator");
+      service.queue(COMMAND, NOW);
+      service.queue(action, NOW);
+
+      const { composer, told } = yield* subject(service, spawner, {
+        mode: MAC_COMMAND_MODE.NEVER,
+        signedIn: true,
+        computer: {
+          helper: scripted.helper,
+          enabled: true,
+          allowed: ["com.apple.iphonesimulator"],
+        },
+      });
+
+      yield* Effect.scoped(Effect.andThen(composer.lifetime, settled));
+
+      assert.deepEqual(service.settledResults.get(action.id), {
+        computer: { done: "pressed", app: SIMULATOR },
+      });
+      assert.ok(
+        scripted.asked.some(
+          (request) =>
+            request.op === COMPUTER_ACTION.CLICK &&
+            request.app === "com.apple.iphonesimulator" &&
+            request.pin_bundle_id === "com.apple.iphonesimulator",
+        ),
+        "the click names the app allowed by its bundle id, pinned to it",
+      );
+      const shell = service.settledResults.get(COMMAND.id);
+      assert.ok(shell !== undefined && "refused" in shell, "a shell command is not run");
+      assert.deepEqual(spawner.spawned, []);
+      assert.deepEqual(told, [], "nothing was asked");
     }),
 );
 

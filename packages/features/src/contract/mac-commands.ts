@@ -17,6 +17,7 @@ import { openapi } from "@orpc/openapi";
 import { HTTP_METHOD } from "@repo/wire";
 import { Schema as EffectSchema } from "effect";
 import {
+  MAC_COMMAND_BOUNDS,
   macCommandClaimAnswerSchema,
   macCommandClaimRequestSchema,
   macCommandListeningAnswerSchema,
@@ -39,9 +40,6 @@ const listeningInput = EffectSchema.Struct({
 /** A claim's body: one id, and room to spare. */
 const CLAIM_BODY_BYTES = 1_024;
 
-/** Two outputs at their bound, and room for the rest of the body. */
-const RESULT_BODY_BYTES = 256 * 1_024;
-
 export const macCommandsContract = {
   waiting: declaredProcedure
     .meta(openapi({ method: HTTP_METHOD.GET, path: HOSTED_SERVICE_PATH.MAC_COMMANDS }))
@@ -49,7 +47,7 @@ export const macCommandsContract = {
     .output(EffectSchema.flip(macCommandsAnswerSchema)),
   settle: declaredProcedure
     .errors(refuses(HOSTED_API_ERROR.NOT_FOUND))
-    .meta(bodyCap(RESULT_BODY_BYTES))
+    .meta(bodyCap(MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES))
     .meta(openapi({ method: HTTP_METHOD.POST, path: HOSTED_SERVICE_PATH.MAC_COMMANDS }))
     .input(exactInput(macCommandSettleRequestSchema))
     .output(EffectSchema.flip(macCommandSettledAnswerSchema)),
