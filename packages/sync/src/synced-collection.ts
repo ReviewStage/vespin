@@ -62,7 +62,7 @@ const readRows = new WeakMap<object, object>();
 
 /**
  * A row as the collection holds it, without the virtual fields TanStack
- * reads it out with (`$synced`, `$origin`, and the rest) and without a key a
+ * reads it out with (`$hasPendingWrites`, `$origin`, `$key`, and `$collectionId`) and without a key a
  * whole-row change left undefined, so it is the row as the read answered it.
  * Note that a row read again while it stands is the very object read
  * before, so a reader of a row that did not move holds the same object.
