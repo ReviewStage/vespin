@@ -32,8 +32,8 @@ import { workspaceToolsQuery } from "../live-reads.js";
 import { useThisMac } from "../machine-name.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { showToast } from "../toast.js";
-import { MachineGlyph } from "./agent-machines.js";
 import { TranscriptAgent } from "./line-cards.js";
+import { MachineGlyph } from "./workspace-machines.js";
 
 /**
  * machine-refusal-card.tsx -- why a terminal command or an action on an app reached no machine, said under its row, with each machine that could take it offered as the agent's new default.
@@ -235,7 +235,9 @@ export function MachineRefusalCard({
             variant={BUTTON_VARIANT.OUTLINE}
             icon={
               <MachineGlyph
-                online={listing?.find((listed) => listed.id === machine.id)?.online ?? true}
+                machine={{
+                  online: listing?.find((listed) => listed.id === machine.id)?.online ?? true,
+                }}
               />
             }
             {...(pressed?.id === machine.id && !pressed.moved
