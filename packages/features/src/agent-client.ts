@@ -119,6 +119,7 @@ import {
   AGENT_LIST_QUERY,
   AGENT_WORKSPACE_QUERY,
   type AgentArchiveRequest,
+  type AgentChatHold,
   type AgentMessageRequest,
   type AgentNewestAnswer,
   type AgentOlderAnswer,
@@ -1362,9 +1363,12 @@ export class HostedAgentClient {
     );
   }
 
-  /** Keeps one agent on screen warm for the next message (`agentWarmAnswerSchema`). */
-  warm(agentId: string): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
-    return hostedCall(this.#hosted.agents.warm, { id: agentId });
+  /** Keeps one agent warm for the next message, its chat's hold beaten while it is shown and let go as it is hidden (`agentWarmAnswerSchema`). */
+  warm(
+    agentId: string,
+    hold?: AgentChatHold,
+  ): Effect.Effect<AgentWarmAnswerView, never, HttpClient.HttpClient> {
+    return hostedCall(this.#hosted.agents.warm, { id: agentId, ...hold });
   }
 
   /** One button in an agent's reply as the window draws it, or why it is not drawn. */

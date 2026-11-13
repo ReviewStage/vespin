@@ -623,9 +623,14 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
 
       return { agent: yield* summaryOf(userId, agent) };
     }),
-    /** The agent on screen kept warm (`agent-lifecycle.ts`): answered at once, its runner launched past the answer where none runs. */
+    /** The agent whose chat is shown kept warm and its sandbox held, or its chat's hold let go as it is hidden (`agent-lifecycle.ts`): answered at once, its runner launched past the answer where none runs. */
     warm: signedIn.warm.effect(function* ({ input, context }) {
-      yield* warmedAgent(context.userId, input.id);
+      const { id, chat, holder } = input;
+      yield* warmedAgent(
+        context.userId,
+        id,
+        chat === undefined || holder === undefined ? undefined : { chat, holder },
+      );
 
       return { warm: true as const };
     }),

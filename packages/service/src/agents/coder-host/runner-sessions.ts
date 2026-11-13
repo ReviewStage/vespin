@@ -69,7 +69,8 @@
  * bearer and throws the place away. Nothing here streams: the runner posts its
  * events to the service itself.
  *
- * `warm`, for an agent a client has on screen, touches its running sandbox,
+ * `warm`, for an agent whose chat a client shows, which holds its sandbox
+ * meanwhile (`agent-lifecycle.ts`'s `warmedAgent`), touches its running sandbox,
  * writes a runner that runs a `warm` line, which runs its warm window again
  * from now, or launches the runner with no message where none runs, past its
  * answer, so the next message goes into the running session as a line. A
@@ -2556,9 +2557,9 @@ export const runnerSessions = <
       });
 
     /**
-     * An agent on screen kept warm, under its runner lease, where none of its
+     * An agent whose chat is shown kept warm, under its runner lease, where none of its
      * turns runs: its running sandbox touched (`@repo/sandbox`'s `touch`),
-     * since nothing else keeps it up between turns, a runner that runs is
+     * as its chat's hold keeps it up between turns, a runner that runs is
      * written a `warm` line, which runs its
      * warm window again from now, and where none runs, the runner is launched
      * with no message (`launchedWithoutMessage`), warm from its start, for the
