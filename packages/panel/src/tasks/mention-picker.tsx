@@ -132,7 +132,12 @@ import {
 import { fileFolder } from "./file-ref-model.js";
 import { InboxItemChipCard } from "./inbox-item-chip.js";
 import { inboxItemGlyph } from "./inbox-item-parts.js";
-import { type MachineAllowedApps, useAllowedApps, useMacApps } from "./mac-apps.js";
+import {
+  type MachineAllowedApps,
+  useAllowedApps,
+  useMacApps,
+  useMacAppsReadable,
+} from "./mac-apps.js";
 import { PageCard } from "./page-card.js";
 import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
@@ -2053,17 +2058,21 @@ export function useMentionPicker({
       ? undefined
       : taskKey(tasksWorkspace.name, planNumber);
 
-  // The apps offered are this Mac's where the window is the Mac the agent uses, else those the reader's own machines always allow, each read while the list stands open (`mac-apps.ts`).
-  const onThatMac = useOnThatMac();
-  const apps = useMacApps(open && macApps && onThatMac);
-  const allowedApps = useAllowedApps(open && macApps && !onThatMac);
+  // The apps offered are this Mac's where the window is the Mac the agent uses, else those the reader's own machines always allow, each read while the list stands open (`mac-apps.ts`), and none until it is known which.
+  // Note that the agent's machine is read only where this Mac's apps could be offered, so a list with Computer use off waits on nothing.
+  const appsReadable = useMacAppsReadable();
+  const appsAsked = open && macApps && appsReadable;
+  const onThatMac = useOnThatMac(appsAsked ? self : undefined);
+  const apps = useMacApps(open && macApps && onThatMac === true);
+  const allowedApps = useAllowedApps(open && macApps && onThatMac === false);
   const keptApps = useKeptApps();
 
-  const appRowsOffered = !open
-    ? []
-    : onThatMac
-      ? appRows(apps.apps)
-      : allowedAppRows(allowedApps.machines, keptApps);
+  const appRowsOffered =
+    !open || onThatMac === undefined
+      ? []
+      : onThatMac
+        ? appRows(apps.apps)
+        : allowedAppRows(allowedApps.machines, keptApps);
 
   // The list is narrowed to the kind a key opened or whose word was typed, and searched by the words after it.
   const kinds = open
@@ -2200,6 +2209,7 @@ export function useMentionPicker({
       (skills !== undefined && skills.known === undefined && !skills.unread) ||
       (threadsAsked && feed.isPending) ||
       (automationsAsked && automationsRead === undefined) ||
+      (appsAsked && onThatMac === undefined) ||
       apps.reading ||
       allowedApps.reading);
 

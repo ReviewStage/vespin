@@ -12,7 +12,6 @@ import {
   ActivityIndicator,
   Image,
   Modal,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -41,6 +40,7 @@ import {
   type MarkdownSuggestion,
   markdownBlocks,
 } from "./markdown-model.js";
+import { Press } from "./press.js";
 import {
   SUGGESTION_LOOK,
   SUGGESTION_SENT_WORDS,
@@ -307,7 +307,7 @@ function MentionChip({
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
-      <Pressable
+      <Press
         onPress={onPress}
         disabled={onPress === undefined}
         accessibilityRole={onPress === undefined ? "text" : "link"}
@@ -337,7 +337,7 @@ function MentionChip({
             {standing.state}
           </Text>
         )}
-      </Pressable>
+      </Press>
     </View>
   );
 }
@@ -364,7 +364,7 @@ function SuggestionChip({
 
   return (
     <View style={{ transform: [{ translateY: PROSE_SIZE * CHIP_DROP * fontScale }] }}>
-      <Pressable
+      <Press
         onPress={look.onPress}
         accessibilityRole="button"
         accessibilityLabel={suggestionHeard(look)}
@@ -400,7 +400,7 @@ function SuggestionChip({
             </Text>
           </>
         )}
-      </Pressable>
+      </Press>
     </View>
   );
 }
@@ -990,7 +990,7 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
   return (
     <>
       <HeldMenu acts={acts}>
-        <Pressable
+        <Press
           onPress={() => setFull(true)}
           accessibilityRole="imagebutton"
           accessibilityLabel={heard}
@@ -1006,7 +1006,7 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
             }}
             style={well}
           />
-        </Pressable>
+        </Press>
       </HeldMenu>
       <Modal
         visible={full}
@@ -1031,7 +1031,7 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
               style={{ width, height }}
             />
           </ScrollView>
-          <Pressable
+          <Press
             onPress={() => setFull(false)}
             accessibilityRole="button"
             accessibilityLabel="Done"
@@ -1041,7 +1041,7 @@ export function Picture({ source, alt, tileAspect }: PictureProps) {
             <Text style={{ fontSize: TEXT_SIZE.BODY, fontWeight: "600", color: "white" }}>
               Done
             </Text>
-          </Pressable>
+          </Press>
           <View
             style={[
               styles.viewerKeep,
