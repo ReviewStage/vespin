@@ -1,4 +1,6 @@
+import { signedInAccountId } from "@repo/credentials/snapshot";
 import { DEVICE_STANDING } from "@repo/features/agent-wire";
+import { machineLetsAgents } from "@repo/features/machine-live";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import {
   FOLLOWING_FACES,
@@ -20,6 +22,7 @@ import {
   HoverCardRow,
   MENU_ROW_WHY,
   type MenuRow,
+  POPOVER_WIDTH,
   STATUS_TONE,
   TEXT_ELEMENT,
   TEXT_TONE,
@@ -36,11 +39,12 @@ import { useState } from "react";
 import { askAct, type Unreached, unreachedAs } from "../act.js";
 import { actMutation } from "../act-mutations.js";
 import { ACTOR_SIZE, ActorHead, ActorMark, ActorStack } from "../actor-ref.js";
+import { machinesQuery } from "../live-reads.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { memberRows } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { useToast } from "../toast.js";
-import { appStateQuery, selectFixtureStaged } from "../use-app-state.js";
+import { appStateQuery, selectAccount, selectFixtureStaged } from "../use-app-state.js";
 import { DeviceStandingGlyph, STANDING_WORDS } from "./runs-on.js";
 
 /**
@@ -220,6 +224,7 @@ function RowEnd({ follower }: { follower: TaskFollowerWire }): React.JSX.Element
 function footRows(
   reader: TaskFollowerWire | undefined,
   writes: ReturnType<typeof useFollowerWrites>,
+  noneSetUp: boolean,
 ): readonly FootRow[] {
   if (reader === undefined) {
     return [
@@ -237,6 +242,8 @@ function footRows(
       id: "machines",
       label: FOLLOWING_WORDS.MACHINES,
       icon: <GLYPH.DESKTOP aria-hidden="true" />,
+      // Note that the switch lets agents reach only machines that themselves allow them, so where none does it says so.
+      ...(noneSetUp ? { detail: FOLLOWING_WORDS.NONE_SET_UP } : undefined),
       toggle: { on: reader.machines, onToggle: () => writes.setMachines(!reader.machines) },
     },
   ];
@@ -285,6 +292,10 @@ function FollowingShown({
   const { members, readerId } = useMemberDirectory();
   const view = followersView(followers, readerId);
   const actors = useFollowerActors(view.followers, task.assignee);
+  const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
+  const machines = useQuery(machinesQuery(view.reader !== undefined ? accountId : undefined));
+  // Note that nothing is said until the machines are read, so a switch never flashes None set up.
+  const noneSetUp = machines.data !== undefined && !machines.data.some(machineLetsAgents);
   const writes = useFollowerWrites(task.id);
   // The list as the visit's first press found it, which holds its rows in place until the popover closes.
   const [visit, setVisit] = useState<readonly string[] | undefined>(undefined);
@@ -365,7 +376,9 @@ function FollowingShown({
         noMatch: FOLLOWING_WORDS.NO_MATCH,
         onPick: toggle,
         onClosed: () => setVisit(undefined),
-        foot: footRows(view.reader, writes),
+        foot: footRows(view.reader, writes, noneSetUp),
+        // Note that the switch's words and None set up together need more room than the names above them.
+        ...(noneSetUp ? { width: POPOVER_WIDTH.WIDE } : undefined),
       }
     : { rows, noMatch: FOLLOWING_WORDS.NO_FOLLOWERS };
 
