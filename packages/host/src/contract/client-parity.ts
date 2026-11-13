@@ -115,6 +115,9 @@ const IOS = {
   CHANGELOG: byDesign("iOS opens the changelog in its own Safari sheet (Settings › What's new)"),
   CONTACT_MAIL: byDesign("iOS writes the contact mail itself through openURL (Settings › Email)"),
   LINKS: byDesign("iOS opens a link through the system itself (openURL)"),
+  MACHINE_SETTINGS: notYet(
+    "iOS's Machines page lists the hosts; each machine's own settings for agents' commands and apps are the desktop's and the web's for now",
+  ),
   HOSTS_STANDING: byDesign(
     "iOS reads where a machine stands from the hosts read (hostStanding), as the panel's Machines page does",
   ),
@@ -245,6 +248,10 @@ export const CLIENT_PARITY = {
   [PORT_ACT_KIND.HOSTS_PRESENCE_FOLLOW]: panel(IOS.HOSTS_STANDING),
   [PORT_ACT_KIND.HOSTS_PRESENCE_REFRESH]: panel(IOS.HOSTS_STANDING),
   [PORT_ACT_KIND.HOSTS_REMOVE]: EVERYWHERE,
+  [PORT_ACT_KIND.MACHINES_FOLLOW]: panel(IOS.MACHINE_SETTINGS),
+  [PORT_ACT_KIND.MACHINES_RETRY]: panel(IOS.MACHINE_SETTINGS),
+  [PORT_ACT_KIND.MACHINES_CHANGE]: panel(IOS.MACHINE_SETTINGS),
+  [PORT_ACT_KIND.MACHINES_REMOVE]: panel(IOS.MACHINE_SETTINGS),
   [PORT_ACT_KIND.HOSTS_THIS_MAC_SET]: desktopOnly(
     byDesign("Runs agents on the Mac the app is on, which a tab is not"),
     byDesign("Runs agents on the Mac the app is on, which a phone is not"),

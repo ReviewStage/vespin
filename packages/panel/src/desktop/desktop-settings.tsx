@@ -3,6 +3,7 @@ import { PRODUCT_SURFACE_EVENT } from "@repo/features/analytics";
 import { integrationNamed } from "@repo/features/integration-search";
 import { INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
+import { PRODUCT_NAME } from "@repo/features/product-name";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { type HostCapability, NO_EXPERIMENTS, SETTINGS_VIEW_COUNTED_AS } from "@repo/settings";
 import {
@@ -42,6 +43,7 @@ import { appPlatform } from "../app-platform.js";
 import { CallCardDock } from "../call/standing-call.js";
 import { useListEdge, useScreenRef, useScreenSplit } from "../column-split.js";
 import { LinkWorkspaceProvider, useLinkItems, useOpenInTab } from "../copy-link-item.js";
+import { SettingsPageLink } from "../open-settings.js";
 import type { NavigationHistory } from "../places/window-history.js";
 import { revealWithin, scrollerOf } from "../scroll-within.js";
 import {
@@ -95,8 +97,9 @@ export interface SettingsStep {
  * The line under the title of the pages that connect something: one short
  * sentence saying what the page is for, since its name alone may not. Agents
  * says once, for both harnesses' lists, the order their credentials are
- * tried in. The MCP & CLI page has none, since each of its two sections
- * says under its own heading what it is for. No other page has one.
+ * tried in. This Mac's says where what agents may do on it is set. The MCP
+ * & CLI page has none, since each of its two sections says under its own
+ * heading what it is for. No other page has one.
  */
 function pageDescription(view: SettingsView): ReactNode {
   switch (view) {
@@ -108,6 +111,13 @@ function pageDescription(view: SettingsView): ReactNode {
       return (
         <ReplayUnmask>
           Run agents on your own Mac or Linux server instead of the cloud.
+        </ReplayUnmask>
+      );
+    case SETTINGS_VIEW.THIS_MAC:
+      return (
+        <ReplayUnmask>
+          How {PRODUCT_NAME} runs on this Mac. What agents may do here is set on{" "}
+          <SettingsPageLink page={SETTINGS_VIEW.HOSTS} />.
         </ReplayUnmask>
       );
     default:

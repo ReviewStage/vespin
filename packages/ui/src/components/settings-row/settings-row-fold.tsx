@@ -127,12 +127,16 @@ export function SettingsFoldRow({
  * pressed: `head` draws the row, handed the chevron (named `label`) to
  * stand last in the row's `end`, or, where there are no `rows` to fold, the
  * chevron's room alone, so the controls of every row in the card end in one
- * column whether it folds or not.
+ * column whether it folds or not. A head that stands its chevron among its
+ * controls, before its ⋯, rather than last asks for no room (`room` false),
+ * since its ⋯ already ends the row's column, and is handed nothing where it
+ * folds nothing.
  */
 export function SettingsRowsFold({
   label,
   head,
   rows,
+  room = true,
 }: {
   /** The chevron's name, which a sighted reader has from the head row ("GitHub's accounts"). */
   label: string;
@@ -140,6 +144,8 @@ export function SettingsRowsFold({
   head: (chevron: ReactNode) => ReactNode;
   /** The rows the fold owns, or nothing where it owns none now. */
   rows?: ReactNode;
+  /** Whether a head that folds nothing is handed the chevron's room, as one whose chevron stands last is; false where it stands before the row's ⋯. */
+  room?: boolean | undefined;
 }): React.JSX.Element {
   const [open, setOpen] = useState(false);
   const folds = rows !== undefined && rows !== null && rows !== false;
@@ -154,9 +160,9 @@ export function SettingsRowsFold({
             aria-expanded={open}
             onClick={() => setOpen(!open)}
           />
-        ) : (
+        ) : room ? (
           <SettingsRowActSlot />
-        ),
+        ) : null,
       )}
       {folds ? (
         <div className="ui-settings-rows-fold" hidden={!open}>

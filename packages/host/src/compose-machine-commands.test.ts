@@ -731,6 +731,93 @@ it.effect(
 );
 
 it.effect(
+  "a change heard elsewhere that Settings refuses is written again after a rest, and never reversed by the Mac's own",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+      const studio = "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13";
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        device: { id: studio, apps: ["com.apple.Notes"] },
+      };
+
+      const { composer } = yield* subject(service, spawner, gate);
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+
+          if (gate.device !== undefined) gate.device.applyFails = 1;
+
+          yield* service.changeElsewhere(studio, {
+            commandMode: MACHINE_COMMAND_MODE.NEVER,
+            alwaysAllowedApps: [],
+          });
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+          yield* TestClock.adjust("30 seconds");
+          yield* settled;
+        }),
+      );
+
+      assert.equal(
+        gate.mode,
+        MACHINE_COMMAND_MODE.NEVER,
+        "the service's change is kept here at last",
+      );
+      assert.deepEqual(gate.device?.apps, []);
+      assert.deepEqual(service.savedSettings, [], "the Mac's old settings never go up over it");
+    }),
+);
+
+it.effect(
+  "a change heard for an account no longer signed in is not written over this Mac's settings",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+      const studio = "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13";
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        device: { id: studio, apps: ["com.apple.Notes"] },
+      };
+
+      const { composer } = yield* subject(service, spawner, gate);
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+
+          // Another account signs in, not yet able to join, as a switch stands before its capabilities are read.
+          gate.account = "user-other";
+          gate.signedIn = false;
+
+          yield* service.changeElsewhere(studio, {
+            commandMode: MACHINE_COMMAND_MODE.NEVER,
+            alwaysAllowedApps: [],
+          });
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+        }),
+      );
+
+      assert.equal(gate.mode, MACHINE_COMMAND_MODE.ASK);
+      assert.deepEqual(gate.device?.apps, ["com.apple.Notes"]);
+    }),
+);
+
+it.effect(
   "a joined Mac with Computer use on posts the names and icons of the apps it always allows once, and again only once they change",
   () =>
     Effect.gen(function* () {

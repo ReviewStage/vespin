@@ -42,7 +42,7 @@ import { failureFactsSchema } from "./failure-facts.js";
 import { GITHUB_IMAGE_BOUNDS, GITHUB_IMAGE_TYPE } from "./github-image.js";
 import { githubPullRequestNumberSchema } from "./github-repositories-wire.js";
 import { githubTokenSaveRequestSchema } from "./github-token-wire.js";
-import { hostIdRequestSchema } from "./host-wire.js";
+import { hostIdRequestSchema, machineChangeRequestSchema } from "./host-wire.js";
 import { answerView, failureSetOf, HOSTED_CALL_FAILURE } from "./hosted-failure.js";
 import {
   inboxAcknowledgeRequestSchema,
@@ -423,6 +423,11 @@ export type HostDoneAnswerView = typeof hostDoneAnswerViewSchema.Type;
 
 /** What removing a host names: its id. */
 export const hostIdParamsSchema = hostIdRequestSchema;
+
+/** What changing one of the account's machines names: its id, and each setting changed, or an app taken back from those it always allows. */
+export const machineChangeParamsSchema = machineChangeRequestSchema;
+
+export type MachineChangeParams = typeof machineChangeParamsSchema.Type;
 
 /**
  * What turning Run agents on this Mac on or off answers: done, with what of

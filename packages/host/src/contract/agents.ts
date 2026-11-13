@@ -69,6 +69,7 @@ import {
   hostDoneAnswerViewSchema,
   hostIdParamsSchema,
   machineAllowedAppsAnswerViewSchema,
+  machineChangeParamsSchema,
   pullRequestPartParamsSchema,
   replyButtonAnswerViewSchema,
   replyButtonParamsSchema,
@@ -156,6 +157,22 @@ export const AGENT_ACTS = declaredActs({
     input: hostIdParamsSchema,
     output: hostDoneAnswerViewSchema,
     refusal: "Could not remove the host on this system.",
+    panelOnly: true,
+    door: ACT.ROW_WRITE,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  MACHINES_CHANGE: hostAct({
+    input: machineChangeParamsSchema,
+    output: hostDoneAnswerViewSchema,
+    refusal: "Could not change the machine on this system.",
+    panelOnly: true,
+    door: ACT.ROW_WRITE,
+    unanswered: AGENT_UNANSWERED,
+  }),
+  MACHINES_REMOVE: hostAct({
+    input: hostIdParamsSchema,
+    output: hostDoneAnswerViewSchema,
+    refusal: "Could not remove the machine on this system.",
     panelOnly: true,
     door: ACT.ROW_WRITE,
     unanswered: AGENT_UNANSWERED,
@@ -504,7 +521,7 @@ export const AGENT_ACTS = declaredActs({
   }),
 });
 
-/** The agents' live reads the host follows for the windows: the account's hosts, the run that started an agent, the models, the devices' beats, a transcript, a pull request's parts, and an agent's own tools. */
+/** The agents' live reads the host follows for the windows: the account's hosts and machines, the run that started an agent, the models, the devices' beats, a transcript, a pull request's parts, and an agent's own tools. */
 export const AGENT_FOLLOWS = liveFollows({
   HOSTS_FOLLOW: liveFollow({
     slice: LIVE_READ.HOSTS,
@@ -512,6 +529,16 @@ export const AGENT_FOLLOWS = liveFollows({
     refusal: "Could not follow your hosts on this system.",
     panelOnly: true,
     retry: { name: "HOSTS_RETRY", refusal: "Could not read your hosts again on this system." },
+  }),
+  MACHINES_FOLLOW: liveFollow({
+    slice: LIVE_READ.MACHINES,
+    hold: HOLD.ACCOUNT,
+    refusal: "Could not follow your machines on this system.",
+    panelOnly: true,
+    retry: {
+      name: "MACHINES_RETRY",
+      refusal: "Could not read your machines again on this system.",
+    },
   }),
   AGENTS_ORIGIN_FOLLOW: liveFollow({
     slice: LIVE_READ.AGENT_ORIGINS,
