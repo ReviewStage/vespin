@@ -99,7 +99,7 @@ function writeSearch(search: Readonly<Record<string, WireBoundaryInput>>): strin
 }
 
 /** What every route reads from the router's `context`: the window's one TanStack Query client (`query-client.tsx`), and the access its gates read (`route-gates.ts`), which `PanelRouterProvider` hands it as it moves. */
-interface PanelRouterContext {
+export interface PanelRouterContext {
   readonly queryClient: QueryClient;
   readonly access: RouteAccess;
 }

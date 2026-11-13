@@ -43,6 +43,9 @@ catalogs:
     '@orpc/server':
       specifier: 2.0.0-beta.44
       version: 2.0.0-beta.44
+    '@orpc/shared':
+      specifier: 2.0.0-beta.44
+      version: 2.0.0-beta.44
     '@tanstack/react-router':
       specifier: 1.170.46
       version: 1.170.46
@@ -1346,6 +1349,9 @@ importers:
       '@orpc/server':
         specifier: 'catalog:'
         version: 2.0.0-beta.44(crossws@0.4.12)
+      '@orpc/shared':
+        specifier: 'catalog:'
+        version: 2.0.0-beta.44
       '@repo/agent-runner':
         specifier: workspace:*
         version: link:../agent-runner
