@@ -290,5 +290,6 @@ export function initialAppState(
     sessionReplay: { permitted: runMode.sendsNetwork, halted: false },
     portForwarding: null,
     mirrors: {},
+    voiceCall: null,
   };
 }
