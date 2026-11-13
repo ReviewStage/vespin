@@ -31,9 +31,9 @@ private final class Preview: NSObject, QLPreviewControllerDataSource, QLPreviewC
   let item: PreviewItem
   let from: CGRect?
   weak var window: UIWindow?
-  let onDismiss: () -> Void
+  let onDismiss: (Preview) -> Void
 
-  init(item: PreviewItem, from: CGRect?, window: UIWindow?, onDismiss: @escaping () -> Void) {
+  init(item: PreviewItem, from: CGRect?, window: UIWindow?, onDismiss: @escaping (Preview) -> Void) {
     self.item = item
     self.from = from
     self.window = window
@@ -57,7 +57,7 @@ private final class Preview: NSObject, QLPreviewControllerDataSource, QLPreviewC
   }
 
   func previewControllerDidDismiss(_ controller: QLPreviewController) {
-    onDismiss()
+    onDismiss(self)
   }
 }
 
@@ -77,8 +77,9 @@ private func topmost(_ window: UIWindow) -> UIViewController? {
 }
 
 public final class QuickLookModule: Module {
-  /// The preview standing now, held until it closes, since Quick Look holds its data source weakly.
-  private var shown: Preview?
+  /// Every preview standing now, each held until its own controller closes, since Quick Look holds its data source weakly.
+  /// Note that a second preview can open over the first, when two downloads land while one stands, so one slot isn't enough.
+  private var shown: [Preview] = []
 
   public func definition() -> ModuleDefinition {
     Name("QuickLook")
@@ -93,13 +94,13 @@ public final class QuickLookModule: Module {
       let frame = from.flatMap { rect in
         rect.count == 4 ? CGRect(x: rect[0], y: rect[1], width: rect[2], height: rect[3]) : nil
       }
-      let preview = Preview(item: item, from: frame, window: window) { [weak self] in
-        self?.shown = nil
+      let preview = Preview(item: item, from: frame, window: window) { [weak self] closed in
+        self?.shown.removeAll { $0 === closed }
       }
       let controller = QLPreviewController()
       controller.dataSource = preview
       controller.delegate = preview
-      shown = preview
+      shown.append(preview)
       presenter.present(controller, animated: true)
       return true
     }.runOnQueue(.main)
