@@ -96,6 +96,7 @@ export type AccountAsksClient = Pick<
   | "removeSound"
   | "chooseSound"
   | "transcribeDictation"
+  | "openVoiceSession"
   | "markActive"
   | "registerPushDevice"
   | "unregisterPushDevice"
@@ -545,6 +546,8 @@ function actsOf(
     SOUND_CHOOSE: (choice) => asked(client.chooseSound(choice)),
     // Note that the clip passes through once and is noted nowhere, because its words are the developer's voice.
     DICTATION_TRANSCRIBE: (clip) => asked(client.transcribeDictation(clip)),
+    // Note that the offer and the answer pass through once and are noted nowhere, as the call's audio never touches the host.
+    VOICE_OPEN: (offer) => asked(client.openVoiceSession(offer)),
     // Note that the beat carries nothing and its answer is read by no one, so a signed-out window's is dropped at the gate.
     ACCOUNT_ACTIVE: () => Effect.asVoid(asked(client.markActive())),
     // Note that a phone's token passes through once and is noted nowhere, as the service keeps it alone.

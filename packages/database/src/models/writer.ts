@@ -451,11 +451,14 @@ interface AwaitingLineWrite {
 }
 
 /**
- * One line of a call as the window holding the call records it: the key its
- * client minted for it, which it is written under once and grown in place
- * under after; the call it was said on; who said it, the caller's as a user
- * row the member sent and the voice's as an assistant row the voice model
- * wrote; and its words as they now stand.
+ * One line of a call as the holder of the call records it: the key minted
+ * for it, which it is written under once and grown in place under after;
+ * the call it was said on; who said it, the caller's as a user row the
+ * member sent and the voice's as an assistant row the voice model wrote; its
+ * words as they now stand; where the session named them, the span of the
+ * session's clock they were said over, which only ever widens; and the
+ * session's event whose words it took last, which the call's next holder
+ * resumes after.
  */
 export interface VoiceLineWrite {
   readonly key: string;
@@ -463,6 +466,9 @@ export interface VoiceLineWrite {
   readonly speaker: VoiceSpeaker;
   readonly text: string;
   readonly sender: LineSender;
+  readonly fromMs?: number | undefined;
+  readonly toMs?: number | undefined;
+  readonly eventId?: string | undefined;
 }
 
 /** What recording a line of a call did: written or grown, with the transaction where a row was inserted, or found as it stood; or a refusal. */
@@ -2455,12 +2461,51 @@ function callLineAuthor(line: VoiceLineWrite) {
     : MESSAGE_AUTHOR.VOICE_MODEL;
 }
 
-/** The metadata a line of a call is written with: its speaker's, on the voice channel, naming its call. */
-function callLineMetadata(line: VoiceLineWrite): StoredMessageMetadata {
+/** The wider of two ends of a span, by the pick given; whichever is known where only one is. */
+function widerEnd(
+  pick: (a: number, b: number) => number,
+  standing: number | undefined,
+  given: number | undefined,
+): number | undefined {
+  if (standing === undefined) return given;
+
+  if (given === undefined) return standing;
+
+  return pick(standing, given);
+}
+
+/** The span the standing metadata holds, where it holds one. */
+function spanOf(metadata: StoredMessageMetadata | null) {
+  return metadata !== null && "to_ms" in metadata
+    ? { fromMs: metadata.from_ms, toMs: metadata.to_ms }
+    : { fromMs: undefined, toMs: undefined };
+}
+
+/**
+ * The metadata a line of a call is written with: its speaker's, on the voice
+ * channel, naming its call, over the span its words were said in, widened
+ * from the span it stood over, never narrowed, the event it took last, and
+ * the key it was recorded under; a line grown keeps what else it already names, such as the delegation that
+ * adopted it.
+ */
+function callLineMetadata(
+  line: VoiceLineWrite,
+  standing: StoredMessageMetadata | null,
+): StoredMessageMetadata {
+  const stood = spanOf(standing);
+  const fromMs = widerEnd(Math.min, stood.fromMs, line.fromMs);
+  const toMs = widerEnd(Math.max, stood.toMs, line.toMs);
+
   return {
-    author: callLineAuthor(line),
-    channel: MESSAGE_CHANNEL.VOICE,
-    voice_session_id: line.callId,
+    ...(standing ?? {
+      author: callLineAuthor(line),
+      channel: MESSAGE_CHANNEL.VOICE,
+      voice_session_id: line.callId,
+      line_key: line.key,
+    }),
+    // Note that a span is written whole or not at all, as the metadata's schema holds it.
+    ...(fromMs === undefined || toMs === undefined ? undefined : { from_ms: fromMs, to_ms: toMs }),
+    ...(line.eventId === undefined ? undefined : { event_id: line.eventId }),
   };
 }
 
@@ -2506,11 +2551,7 @@ const recordVoiceLine = /* @__PURE__ */ Effect.fn("web/recordVoiceLine")(functio
     return Result.fail(LINE_KEY_TAKEN);
   }
 
-  // A line grown keeps what it already names, such as the delegation that adopted it.
-  const metadata =
-    Option.isSome(standing) && standing.value.metadata !== null
-      ? standing.value.metadata
-      : callLineMetadata(line);
+  const metadata = callLineMetadata(line, Option.isSome(standing) ? standing.value.metadata : null);
 
   const read = yield* admitted(context, {
     id: clientId,

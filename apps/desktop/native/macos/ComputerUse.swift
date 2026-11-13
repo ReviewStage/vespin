@@ -47,11 +47,14 @@ import UniformTypeIdentifiers
 /// in no screenshot, since a read captures the app's window alone.
 ///
 /// Note that input is never posted to the system's event stream: an element
-/// is pressed through Accessibility, and a point is clicked by an event posted
-/// to the app's own process aimed at its window, so the developer keeps the
-/// cursor and whatever app they are typing into. Terminals, password
-/// managers, System Settings, the login and security prompts, and the app
-/// itself are refused whatever the request says.
+/// is pressed through Accessibility, as is a point on a page's control, and
+/// any other point is clicked by an event posted to the app's own process
+/// aimed at its window, so the developer keeps the cursor and whatever app
+/// they are typing into. A press answers pressed only once the window's
+/// elements changed after it, and pressed_unconfirmed where they did not,
+/// since a browser may answer a press it never acts on.
+/// Terminals, password managers, System Settings, the login and security
+/// prompts, and the app itself are refused whatever the request says.
 
 private let MAX_ELEMENTS = 600
 private let MAX_DEPTH = 40
@@ -62,6 +65,27 @@ private let LINES_PER_PAGE = 12
 private let MAX_CLICKS = 3
 /// How many ancestors up the agent's cursor looks for a place to stand where an element has none.
 private let MAX_CURSOR_ANCESTORS = 4
+/// How many ancestors up a point on a page looks for the control that takes its press, as text inside a link.
+private let MAX_PRESS_ANCESTORS = 4
+/// The roles of a page's controls whose press does what a click anywhere on them would, so a click at a point on one may be pressed instead. Note that a field, a canvas, or a map is left out, since where on it the click lands matters.
+private let PRESSED_ROLES: Set<String> = [
+    "AXButton", "AXLink", "AXCheckBox", "AXRadioButton", "AXMenuItem", "AXMenuButton", "AXPopUpButton",
+    "AXDisclosureTriangle",
+]
+/// The attribute Chromium and Electron read as a request to build their pages' Accessibility tree in full, as they do for a screen reader. An app that does not know it refuses it, and nothing else changes.
+private let MANUAL_ACCESSIBILITY = "AXManualAccessibility"
+/// The role of a page's root in a browser's tree, Chromium's and WebKit's alike.
+private let WEB_AREA_ROLE = "AXWebArea"
+/// How long an app is given to build its pages' tree the first time it is asked to.
+private let WEB_TREE_WAIT_SECONDS = 0.5
+/// The modifiers a menu item's shortcut names (`AXMenuItemCmdModifiers`), as the menu manager numbers them: ⌘ is meant unless `noCommand` is set.
+private let MENU_MODIFIER = (shift: 1, option: 2, control: 4, noCommand: 8)
+/// How deep into an app's menus, and through how many of their elements, a shortcut's item is looked for.
+private let MAX_MENU_DEPTH = 6
+private let MAX_MENU_ELEMENTS = 3000
+/// How long a press is given to show in the window's elements, and how often they are read again in that time.
+private let PRESS_SETTLE_SECONDS = 1.5
+private let PRESS_LOOK_SECONDS = 0.3
 private let MAX_PAGES = 20.0
 /// The most base64 characters of one screenshot, as the wire bounds it (`COMPUTER_BOUNDS.MAX_SHOT_CHARS`).
 private let MAX_SHOT_CHARS = 1_600_000
@@ -392,6 +416,13 @@ private func children(_ element: AXUIElement) -> [AXUIElement] {
     (attribute(element, kAXChildrenAttribute) as? [AXUIElement]) ?? []
 }
 
+/// An element by an attribute that names one, such as its parent or its window, where it does.
+private func elementAttribute(_ element: AXUIElement, _ name: String) -> AXUIElement? {
+    guard let found = attribute(element, name), CFGetTypeID(found) == AXUIElementGetTypeID() else { return nil }
+    // SAFETY: the type id was checked just above.
+    return (found as! AXUIElement)
+}
+
 private func actions(_ element: AXUIElement) -> [String] {
     var names: CFArray?
     guard AXUIElementCopyActionNames(element, &names) == .success else { return [] }
@@ -455,12 +486,6 @@ private struct TreeWalk {
     }
 }
 
-/// One of an app's windows by an attribute that names one, where it does.
-private func windowAttribute(_ app: AXUIElement, _ name: String) -> AXUIElement? {
-    guard let window = attribute(app, name), CFGetTypeID(window) == AXUIElementGetTypeID() else { return nil }
-    return (window as! AXUIElement)
-}
-
 /// Whether a window is in the Dock, which no capture reads without bringing it back, and bringing it back takes the developer's screen.
 private func minimized(_ window: AXUIElement) -> Bool {
     (attribute(window, kAXMinimizedAttribute) as? Bool) == true
@@ -475,7 +500,7 @@ private func minimized(_ window: AXUIElement) -> Bool {
  */
 private func focusedWindow(_ app: NSRunningApplication) throws -> AXUIElement? {
     let element = AXUIElementCreateApplication(app.processIdentifier)
-    let named = [kAXFocusedWindowAttribute, kAXMainWindowAttribute].compactMap { windowAttribute(element, $0) }
+    let named = [kAXFocusedWindowAttribute, kAXMainWindowAttribute].compactMap { elementAttribute(element, $0) }
     let candidates = named + ((attribute(element, kAXWindowsAttribute) as? [AXUIElement]) ?? [])
     if let shown = candidates.first(where: { !minimized($0) }) { return shown }
     guard candidates.isEmpty else {
@@ -634,16 +659,34 @@ private struct AppSession {
         guard var element = try? element(index) else { return nil }
         for _ in 0...MAX_CURSOR_ANCESTORS {
             if let bounds = frame(element) { return CGPoint(x: bounds.midX, y: bounds.midY) }
-            guard let parent = attribute(element, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID()
-            else { return nil }
-            // SAFETY: the type id was checked just above.
-            element = parent as! AXUIElement
+            guard let parent = elementAttribute(element, kAXParentAttribute) else { return nil }
+            element = parent
         }
         return nil
     }
 }
 
 private var sessions: [pid_t: AppSession] = [:]
+
+/// The processes already asked to build their pages' tree, which are given no time to build it again.
+private var webTreesAsked: Set<pid_t> = []
+
+/**
+ Asks an app to build its pages' Accessibility tree in full, and gives it a
+ moment to the first time. Note that Chromium and Electron build that tree
+ in full only for a screen reader, or once this attribute asks them to, and
+ until then may list a page's buttons yet answer a press on one without
+ acting on it. It is asked of every app on every read, since an app that
+ does not know the attribute refuses it and nothing else changes, and so no
+ browser is named.
+ */
+private func askForWebTree(_ app: NSRunningApplication) async {
+    let pid = app.processIdentifier
+    let element = AXUIElementCreateApplication(pid)
+    let asked = AXUIElementSetAttributeValue(element, MANUAL_ACCESSIBILITY as CFString, kCFBooleanTrue)
+    guard asked == .success, webTreesAsked.insert(pid).inserted else { return }
+    try? await Task.sleep(nanoseconds: UInt64(WEB_TREE_WAIT_SECONDS * 1_000_000_000))
+}
 
 private func session(_ app: NSRunningApplication) throws -> AppSession {
     guard let found = sessions[app.processIdentifier] else {
@@ -658,6 +701,7 @@ private func getAppState(_ request: [String: Any]) async throws -> [String: Any]
     let app = try await resolveApp(try string(request, "app"))
     try requirePinned(request, app)
     let pid = app.processIdentifier
+    await askForWebTree(app)
     let axWindow = try focusedWindow(app)
     let title = axWindow.flatMap { text($0, kAXTitleAttribute) }
     // Note that a window whose elements are numbered and that has no frame is refused too, since no capture could be paired with it.
@@ -974,25 +1018,92 @@ private func clickPoint(_ point: CGPoint, session: AppSession, button: String, c
     }
 }
 
+/// The numbered lines of the window an agent reads of an app, as they stand now; none where it has no window.
+private func windowLines(_ app: NSRunningApplication) -> String {
+    guard let window = try? focusedWindow(app) else { return "" }
+    var walk = TreeWalk()
+    walk.walk(window, depth: 0)
+    return walk.lines.joined(separator: "\n")
+}
+
+/**
+ Presses an element through Accessibility, which needs no point and no
+ focus, and answers pressed once the window's elements read differently from
+ how they read just before the press, after the cursor has glided, so a page
+ that changes by itself meanwhile is not read as the press. Note that a press
+ answered as taken is not proof it acted, since a browser may answer one it never acts on, so a
+ window that reads the same for `PRESS_SETTLE_SECONDS` answers
+ pressed_unconfirmed. That is never an error, since many a press that acted
+ changes nothing in its window, as a Send or one opening another window, and
+ an agent told it failed would press again. Nothing where the element offers
+ no press, so its caller clicks it instead; a press macOS refused may have
+ pressed it already, so it is answered rather than pressed twice.
+ */
+private func confirmedPress(
+    _ element: AXUIElement, of app: NSRunningApplication, named name: String
+) async throws -> [String: Any]? {
+    let before = windowLines(app)
+    let result = AXUIElementPerformAction(element, kAXPressAction as CFString)
+    if result == .actionUnsupported { return nil }
+    guard result == .success else {
+        throw HelperError(
+            kind: ERROR_KIND.failed,
+            message: "\(name) did not confirm its press (\(result.rawValue)); read the app again to see whether it took it.")
+    }
+    let deadline = Date().addingTimeInterval(PRESS_SETTLE_SECONDS)
+    while Date() < deadline {
+        try await Task.sleep(nanoseconds: UInt64(PRESS_LOOK_SECONDS * 1_000_000_000))
+        if windowLines(app) != before { return ["done": "pressed"] }
+    }
+    return ["done": "pressed_unconfirmed"]
+}
+
+/**
+ The control of a page under `point` that takes a press, where the point
+ lands on a page in the window the session numbered: the element itself, or
+ the nearest of `MAX_PRESS_ANCESTORS` above it, of a role in `PRESSED_ROLES`
+ that offers a press. Note that a browser in the background may drop a click
+ posted at a point, or come forward for it, where it takes a press through
+ Accessibility as it stands, so a click on a page's control goes that way.
+ Nothing where the point is on no page or on no such control, as on a field,
+ a canvas, or a map, which is clicked at the point as before.
+ */
+private func pagePressTarget(at point: CGPoint, of app: NSRunningApplication, session: AppSession) -> AXUIElement? {
+    var hit: AXUIElement?
+    let found = AXUIElementCopyElementAtPosition(
+        AXUIElementCreateApplication(app.processIdentifier), Float(point.x), Float(point.y), &hit)
+    guard found == .success, let hit,
+        let window = elementAttribute(hit, kAXWindowAttribute), let place = frame(window),
+        sameFrame(place, session.windowFrame)
+    else { return nil }
+    var element = hit
+    var control: AXUIElement?
+    for depth in 0..<MAX_DEPTH {
+        let role = text(element, kAXRoleAttribute) ?? ""
+        if role == WEB_AREA_ROLE { return control }
+        if control == nil, depth <= MAX_PRESS_ANCESTORS, PRESSED_ROLES.contains(role),
+            actions(element).contains(kAXPressAction as String)
+        {
+            control = element
+        }
+        guard let parent = elementAttribute(element, kAXParentAttribute) else { return nil }
+        element = parent
+    }
+    return nil
+}
+
 private func click(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
     let app = try actedApp(request)
     let current = try session(app)
     let button = (request["mouse_button"] as? String) ?? BUTTON.left
     let count = min(max(integer(request, "click_count") ?? 1, 1), MAX_CLICKS)
+    let plain = button == BUTTON.left && count == 1
     if let index = integer(request, "element_index") {
         let element = try current.element(index)
         if let point = current.cursorPoint(index) { await cursorTo(point) }
-        // Note that a plain press goes through Accessibility, which needs no point and no focus, before an event is aimed at the element's center.
-        if button == BUTTON.left, count == 1 {
-            let pressed = AXUIElementPerformAction(element, kAXPressAction as CFString)
-            if pressed == .success { return ["done": "pressed"] }
-            // Note that only an element that offers no press is clicked at its center instead; any other failure may have pressed it already, so it is answered rather than pressed twice.
-            guard pressed == .actionUnsupported else {
-                throw HelperError(
-                    kind: ERROR_KIND.failed,
-                    message: "Element \(index) did not confirm its press (\(pressed.rawValue)); read the app again to see whether it took it.")
-            }
+        if plain, let answer = try await confirmedPress(element, of: app, named: "Element \(index)") {
+            return answer
         }
         clickPoint(try current.center(index), session: current, button: button, count: count)
         return ["done": "clicked"]
@@ -1001,7 +1112,13 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
         throw HelperError(kind: ERROR_KIND.badRequest, message: "Give an element_index, or x and y.")
     }
     let point = current.point(x: x, y: y)
+    let target = plain ? pagePressTarget(at: point, of: app, session: current) : nil
     await cursorTo(point)
+    if let target,
+        let answer = try await confirmedPress(target, of: app, named: "The page's element at \(Int(x)), \(Int(y))")
+    {
+        return answer
+    }
     clickPoint(point, session: current, button: button, count: count)
     return ["done": "clicked"]
 }
@@ -1058,17 +1175,63 @@ private func chord(_ name: String) throws -> (key: CGKeyCode, flags: CGEventFlag
     return (key, flags)
 }
 
+/**
+ The enabled item of the app's own menus whose shortcut is `key` with
+ `flags`, where the chord holds ⌘ and names one character; nothing where
+ none does. Note that the menu bar's first menu is the system's own, whose
+ items, such as Log Out, are never the app's to press, so it is passed over.
+ */
+private func menuItem(for key: String, flags: CGEventFlags, of app: NSRunningApplication) -> AXUIElement? {
+    guard flags.contains(.maskCommand), !flags.contains(.maskSecondaryFn), key.count == 1,
+        let bar = elementAttribute(AXUIElementCreateApplication(app.processIdentifier), kAXMenuBarAttribute)
+    else { return nil }
+    var modifiers = 0
+    if flags.contains(.maskShift) { modifiers |= MENU_MODIFIER.shift }
+    if flags.contains(.maskAlternate) { modifiers |= MENU_MODIFIER.option }
+    if flags.contains(.maskControl) { modifiers |= MENU_MODIFIER.control }
+    var pending = children(bar).dropFirst().map { (element: $0, depth: 0) }
+    var next = 0
+    while next < pending.count, next < MAX_MENU_ELEMENTS {
+        let found = pending[next]
+        next += 1
+        if text(found.element, kAXMenuItemCmdCharAttribute)?.uppercased() == key.uppercased(),
+            (attribute(found.element, kAXMenuItemCmdModifiersAttribute) as? Int) == modifiers,
+            (attribute(found.element, kAXEnabledAttribute) as? Bool) != false
+        {
+            return found.element
+        }
+        if found.depth < MAX_MENU_DEPTH {
+            pending += children(found.element).map { (element: $0, depth: found.depth + 1) }
+        }
+    }
+    return nil
+}
+
+/**
+ Presses a chord. Note that a ⌘ shortcut the app's menus hold is pressed
+ through its menu item, answered as any press is, since an app in the
+ background has no key window for a posted ⌘ key to reach, and pressing the
+ item keeps the app behind. Any other chord is posted to the app's window and
+ answers sent, since nothing tells whether the app took it.
+ */
 private func pressKey(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
     let app = try actedApp(request)
     let current = try session(app)
-    let pressed = try chord(try string(request, "key"))
+    let name = try string(request, "key")
+    let pressed = try chord(name)
+    let key = name.split(separator: "+").last.map { $0.lowercased() } ?? ""
+    if let item = menuItem(for: key, flags: pressed.flags, of: app),
+        let answer = try await confirmedPress(item, of: app, named: "The menu item for \(name)")
+    {
+        return answer
+    }
     for down in [true, false] {
         let event = CGEvent(keyboardEventSource: source, virtualKey: pressed.key, keyDown: down)
         event?.flags = pressed.flags
         post(event, to: current)
     }
-    return ["done": "pressed"]
+    return ["done": "sent"]
 }
 
 private let DIRECTION = (up: "up", down: "down", left: "left", right: "right")

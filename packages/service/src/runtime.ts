@@ -38,6 +38,7 @@ import { apnsHttp2Transport } from "./push/apns-http2.js";
 import { slackBotFromEnvironment } from "./slack/slack-bot.js";
 import { syncFromEnvironment } from "./sync/hub.js";
 import { sentryAppFromEnvironment } from "./triggers/sentry/sentry-app-config.js";
+import { voiceCallLeasesFromEnvironment } from "./voice/voice-call-lease.js";
 
 /**
  * The deployment's own environment, read as these services are built rather
@@ -190,6 +191,7 @@ export const webServices = Layer.mergeAll(
   agentWakeupsFromEnvironment,
   workspaceDriveBuildsFromEnvironment,
   githubDeliveryReadsFromEnvironment,
+  voiceCallLeasesFromEnvironment,
   modelCatalogLayer.pipe(Layer.provide(Layer.merge(FetchHttpClient.layer, hostedEnvironment))),
   pullRequestLinksLayer,
   productAnalyticsFromEnvironment.pipe(

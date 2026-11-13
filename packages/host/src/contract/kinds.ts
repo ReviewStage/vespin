@@ -120,6 +120,12 @@ export const ACCOUNT_ASK_ACT_KIND = {
    */
   DICTATION_TRANSCRIBE: "dictation.transcribe",
   /**
+   * A voice call into an agent opened from the panel that carries its audio:
+   * the panel's SDP offer out, the call's id and GPT-Live's SDP answer back.
+   * Nothing on the way keeps either.
+   */
+  VOICE_OPEN: "voice.open",
+  /**
    * The member used this window just now: a key, a press, or a move of the
    * pointer, told at most once every `PRESENCE.BEAT_EVERY_MS`, which the
    * service stamps so their phone holds its pushes (`presence-wire.ts`).
@@ -1010,6 +1016,7 @@ export const PORT_ACT_USE = {
   SOUND_REMOVE: ACT_USE.WRITE,
   SOUND_CHOOSE: ACT_USE.WRITE,
   DICTATION_TRANSCRIBE: ACT_USE.FETCH,
+  VOICE_OPEN: ACT_USE.WRITE,
   ACCOUNT_ACTIVE: ACT_USE.WRITE,
   PUSH_DEVICE_REGISTER: ACT_USE.WRITE,
   PUSH_DEVICE_UNREGISTER: ACT_USE.WRITE,
