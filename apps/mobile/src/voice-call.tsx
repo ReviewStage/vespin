@@ -68,6 +68,7 @@ import { createContext, type ReactNode, useContext, useEffect, useMemo, useState
 import { type MediaStream, mediaDevices, RTCPeerConnection } from "react-native-webrtc";
 import { appStateQuery } from "./host/app-state-query.js";
 import { useHostActs, useHostFollow } from "./host/host-provider.js";
+import { voiceAudioModule } from "./voice-audio-module.js";
 
 /** Why a call stopped short, in the words the notice says, as the panel's toast says them but where the phone's settings differ. */
 const VOICE_CALL_NOTE = {
@@ -139,9 +140,12 @@ async function openMicrophone(): Promise<
  * The phone's peer over the microphone: its track out, the voice played as
  * its track arrives, and the events channel, heard by `events`. Note that
  * react-native-webrtc plays a remote audio track by itself, so the speaker's
- * mute silences that track on this phone alone.
+ * mute silences that track on this phone alone, and the voice plays from the
+ * speaker, as ChatGPT's voice mode does, rather than the earpiece WebRTC's
+ * own audio session picks, or from headphones while any are connected.
  */
 async function connect(events: VoiceCallPeerEvents): Promise<VoiceCallConnected> {
+  voiceAudioModule?.preferSpeaker();
   const opened = await openMicrophone();
 
   if ("refused" in opened) return opened;

@@ -828,9 +828,10 @@ const baseConfig = (_context?: ConfigContext): ExpoConfig =>
       // The member's running agents stand in a Live Activity the service
       // starts and updates by push (`live-activity/`).
       // A call into an agent keeps on with the screen locked or another app
-      // in front (`audio`): WebRTC's own audio session, for voice chat,
-      // holds the microphone and the voice while the call stands, and none
-      // once it ends, so the app is kept running for a call alone.
+      // in front (`audio`): WebRTC's audio session, for voice chat with the
+      // voice on the speaker (`modules/voice-audio/`), holds the microphone
+      // and the voice while the call stands, and none once it ends, so the
+      // app is kept running for a call alone.
       infoPlist: {
         ITSAppUsesNonExemptEncryption: false,
         UIBackgroundModes: ["remote-notification", "audio"],
