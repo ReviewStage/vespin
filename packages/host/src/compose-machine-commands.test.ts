@@ -11,6 +11,7 @@ import {
   type ComputerApp,
   MACHINE_COMMAND_KIND,
   MACHINE_COMMAND_MODE,
+  type MacComputerAction,
   type MachineCommand,
   type MachineCommandKind,
   type MachineCommandMode,
@@ -1360,36 +1361,67 @@ it.effect(
 );
 
 it.effect.each([false, true])(
-  "a stopped recording's video goes up before its result, which names its length and size, asking about no app (unsent: %s)",
+  "a stopped recording's video goes up before its result, which names its length and size, and reaches only the conversation that recorded it (unsent: %s)",
   (unsent) =>
     Effect.gen(function* () {
       const scripted = scriptedHelper([SIMULATOR]);
       const service = scriptedService({ recordingUnsent: unsent });
 
-      const stop: MachineCommand = {
-        id: SECOND.id,
+      const computer = (
+        id: string,
+        conversationId: string,
+        action: MacComputerAction,
+      ): MachineCommand => ({
+        id,
         kind: MACHINE_COMMAND_KIND.COMPUTER,
-        conversationId: AGENT,
-        action: { op: COMPUTER_ACTION.STOP_RECORDING },
+        conversationId,
+        action,
         timeoutSeconds: 60,
-      };
+      });
 
-      service.queue(stop, NOW);
+      const record = computer(COMMAND.id, AGENT, {
+        op: COMPUTER_ACTION.RECORD,
+        app: "Simulator",
+        max_seconds: 120,
+        max_bytes: 3_300_000,
+      });
 
-      const { composer, told } = yield* subject(
+      const stop = computer(SECOND.id, AGENT, { op: COMPUTER_ACTION.STOP_RECORDING });
+      const otherStop = computer(THIRD_ID, OTHER_AGENT, { op: COMPUTER_ACTION.STOP_RECORDING });
+      service.queue(record, NOW);
+
+      const { composer } = yield* subject(
         service,
         scriptedSpawner(() => ({ exitCode: 0 })),
         {
           mode: MACHINE_COMMAND_MODE.ASK,
           signedIn: true,
-          computer: { helper: scripted.helper, enabled: true, allowed: [] },
+          computer: {
+            helper: scripted.helper,
+            enabled: true,
+            allowed: ["com.apple.iphonesimulator"],
+          },
         },
       );
 
-      yield* Effect.scoped(Effect.andThen(composer.lifetime, settled));
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          service.queue(otherStop, NOW);
+          service.queue(stop, NOW);
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+        }),
+      );
 
+      assert.deepEqual(
+        service.settledResults.get(otherStop.id),
+        { computer: { unrecorded: "none" } },
+        "another conversation's stop reaches no recording",
+      );
+      assert.equal(service.postedRecordings.has(otherStop.id), false);
       const result = service.settledResults.get(stop.id);
-      assert.deepEqual(told, [], "a stop names no app, so nothing is asked");
 
       if (unsent) {
         assert.ok(
