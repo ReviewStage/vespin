@@ -293,7 +293,7 @@ function FollowingShown({
   const view = followersView(followers, readerId);
   const actors = useFollowerActors(view.followers, task.assignee);
   const accountId = signedInAccountId(useQuery({ ...appStateQuery, select: selectAccount }).data);
-  const machines = useQuery(machinesQuery(on && view.reader !== undefined ? accountId : undefined));
+  const machines = useQuery(machinesQuery(view.reader !== undefined ? accountId : undefined));
   // Note that nothing is said until the machines are read, so a switch never flashes None set up.
   const noneSetUp = machines.data !== undefined && !machines.data.some(machineLetsAgents);
   const writes = useFollowerWrites(task.id);
