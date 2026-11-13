@@ -260,8 +260,20 @@ const MEMBERS: readonly WorkspaceMember[] = [
 
 /** The workspace's machines as its members' machines read answers them: a teammate's, then the reader's, by name. */
 const MACHINES: readonly WorkspaceMachine[] = [
-  { id: "m-build", name: "Build box", platform: DEVICE_PLATFORM.LINUX, userId: DANA_ID },
-  { id: "m-studio", name: "Studio", platform: DEVICE_PLATFORM.DARWIN, userId: READER_ID },
+  {
+    id: "m-build",
+    name: "Build box",
+    platform: DEVICE_PLATFORM.LINUX,
+    userId: DANA_ID,
+    online: true,
+  },
+  {
+    id: "m-studio",
+    name: "Studio",
+    platform: DEVICE_PLATFORM.DARWIN,
+    userId: READER_ID,
+    online: true,
+  },
 ];
 
 /** Every act the panel told the main process, in order. */
@@ -2220,7 +2232,7 @@ test("an @ among the workspace's members offers its people, the reader first as 
   assert.equal(card?.querySelector(".ui-hover-card-name")?.textContent, "Dana Reyes");
 });
 
-test("an @ narrowed to machines offers the reader's own first, said as You, then a teammate's by their name, and a pick is sent as the machine's link by its id alone", async () => {
+test("an @ narrowed to machines offers the reader's own first, then a teammate's wearing their face before its name, and a pick is sent as the machine's link by its id alone", async () => {
   const { container, sent } = await memberBox();
 
   typeInComposer(container, "Run it on @machines:");
@@ -2229,7 +2241,7 @@ test("an @ narrowed to machines offers the reader's own first, said as You, then
 
   const rows = [...container.querySelectorAll('.mention-menu [role="option"]')].map((row) => [
     row.querySelector(".ui-combobox-option-label")?.textContent ?? "",
-    row.querySelector(".ui-combobox-option-detail")?.textContent ?? "",
+    row.querySelector(".ui-combobox-option-before .actor-mark")?.getAttribute("data-kind") ?? null,
   ]);
 
   typeInComposer(container, "build");
@@ -2244,8 +2256,8 @@ test("an @ narrowed to machines offers the reader's own first, said as You, then
     [
       "Machines",
       [
-        ["Studio", "You"],
-        ["Build box", "Dana Reyes"],
+        ["Studio", null],
+        ["Build box", ACTOR_KIND.PERSON],
       ],
     ],
   );

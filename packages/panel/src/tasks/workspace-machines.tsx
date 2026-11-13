@@ -1,4 +1,5 @@
 import { signedInAccountId } from "@repo/credentials/snapshot";
+import { DEVICE_STANDING } from "@repo/features/agent-wire";
 import { DEVICE_PLATFORM_NAME } from "@repo/features/device-platform";
 import { ENTITY_KIND } from "@repo/features/entity-kind";
 import { type WorkspaceMachine, workspaceOfSlug } from "@repo/features/workspace-wire";
@@ -14,24 +15,25 @@ import { EntityGlyph } from "../entities/entity-glyph.js";
 import { useMemberDirectory } from "../member-directory.js";
 import { QUERY_ROOT } from "../query-keys.js";
 import { appStateQuery, selectAccount, selectWorkspaces } from "../use-app-state.js";
-import { DeviceGlyph } from "./runs-on.js";
+import { DeviceGlyph, DeviceStandingGlyph } from "./runs-on.js";
 
 /**
- * workspace-machines.tsx -- the machines of a workspace's members, as the `@` list offers them and a machine's chip draws one: its platform's glyph, its name, its owner's face, and its card.
+ * workspace-machines.tsx -- the machines of a workspace's members, as the `@` list offers them and a machine's chip draws one: its platform's glyph wearing its online dot, its owner's face, its name, and its card.
  *
  * A machine is mentioned by its id alone (`@repo/features/mention-link`),
  * so what its chip draws beside the name it was written with, its
- * platform and whose it is, is read here, once per workspace and shared by
- * every chip and list that draws one (`ACT_KIND.WORKSPACE_MACHINES_READ`).
- * Its platform's glyph is the one a device wears wherever the window lists
- * one (`runs-on.tsx`'s `DeviceGlyph`), a Mac's while the read is out, and
- * only a teammate's machine wears its owner's face, as the agent's
- * Default machine menu draws it (`agent-machines.tsx`), since the reader's
- * own needs no saying whose it is.
+ * platform, whose it is, and whether it is online, is read here, once per
+ * workspace and shared by every chip and list that draws one
+ * (`ACT_KIND.WORKSPACE_MACHINES_READ`). A machine is drawn as the agent's
+ * Default machine menu draws one (`agent-machines.tsx`): its platform's
+ * glyph wearing the online or offline dot of every list of places
+ * (`runs-on.tsx`'s `DeviceStandingGlyph`), a bare Mac's while the read is
+ * out, and, before its name, its owner's face where it is a teammate's,
+ * since the reader's own needs no saying whose it is.
  */
 
-/** How long a workspace's machines read stands before a place drawing them reads it again: machines are added and renamed rarely. */
-const FRESH_FOR = Duration.minutes(5);
+/** How long a workspace's machines read stands before a place drawing them reads it again: about as long as a machine stays online once its app stops listening, so a dot is never long out of date. */
+const FRESH_FOR = Duration.seconds(30);
 
 /** What a machine's card says where the workspace's machines read names it not: removed, or of someone who left. */
 const UNLISTED_WORDS = "No longer one of the workspace's machines";
@@ -118,14 +120,28 @@ export function MachineOwnerFace({ userId }: { userId: string }): ReactNode {
   );
 }
 
-/** A machine's chip's mark: its platform's glyph, a Mac's while its platform is unread. */
+/** A machine as every list of places draws it: its platform's glyph wearing its online or offline dot. */
+export function MachineGlyph({ machine }: { machine: WorkspaceMachine }): React.JSX.Element {
+  return (
+    <DeviceStandingGlyph
+      device={machine}
+      standing={machine.online ? DEVICE_STANDING.ONLINE : DEVICE_STANDING.OFFLINE}
+    />
+  );
+}
+
+/** A machine's chip's mark: its glyph wearing its dot, a bare Mac's while the machine is unread. */
 export function MachineMark({ machineId, workspace }: { machineId: string; workspace: string }) {
   const { machine } = useMachine(machineId, workspace);
 
-  return <DeviceGlyph device={machine} />;
+  return machine === undefined ? (
+    <DeviceGlyph device={undefined} />
+  ) : (
+    <MachineGlyph machine={machine} />
+  );
 }
 
-/** What stands after a machine's chip's name: its owner's face, where it is a teammate's. */
+/** What stands before a machine's chip's name: its owner's face, where it is a teammate's. */
 export function MachineChipOwner({
   machineId,
   workspace,
@@ -171,7 +187,7 @@ export function MachineChipCard({
           machine === undefined ? (
             <EntityGlyph kind={ENTITY_KIND.MACHINE} />
           ) : (
-            <DeviceGlyph device={machine} />
+            <MachineGlyph machine={machine} />
           )
         }
         name={name}

@@ -45,7 +45,7 @@ import { Clock, Duration, Effect, Option } from "effect";
 import { experimentOnIn } from "./workspace-experiment-on.js";
 
 /** How lately a machine must have listened to count as online: one held read, and room for the next to arrive, as `machine-command.ts` counts an account. */
-const ONLINE_WITHIN = Duration.seconds(45);
+export const ONLINE_WITHIN = Duration.seconds(45);
 
 export const MACHINE_ROUTE = {
   /** The call goes to one machine, queued for it alone. */

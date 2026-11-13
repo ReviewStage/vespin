@@ -20,6 +20,7 @@ import type { InboxItemPlace } from "@repo/features/inbox-attachment-link";
 import type { InboxItem } from "@repo/features/inbox-wire";
 import { INTEGRATION_PROVIDER, type IntegrationProvider } from "@repo/features/integration-wire";
 import { LINK_DESTINATION, linkOf } from "@repo/features/link-grammar";
+import { machineName, type ThisMac } from "@repo/features/machine-name";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import {
   encodeMention,
@@ -115,6 +116,7 @@ import { entityMark } from "../entities/entity-mark.js";
 import { unreadShown } from "../failure-report.js";
 import { type IntegrationToolsReads, useIntegrationTools } from "../integration-tools.js";
 import { inboxItemsQuery, inboxItemsRetryMutation } from "../live-reads.js";
+import { useThisMac } from "../machine-name.js";
 import { useWorkspaceDirectory } from "../member-directory.js";
 import { memberRows, YOU_WORD } from "../member-rows.js";
 import { QUERY_ROOT } from "../query-keys.js";
@@ -145,7 +147,7 @@ import { PullRequestMark } from "./pull-request-mark.js";
 import { skillOption } from "./skill-ref.js";
 import { TaskKey } from "./task-standing.js";
 import { useKnownNames } from "./use-known-names.js";
-import { MachineOwnerFace, useWorkspaceMachines } from "./workspace-machines.js";
+import { MachineGlyph, MachineOwnerFace, useWorkspaceMachines } from "./workspace-machines.js";
 
 /**
  * mention-picker.tsx -- the list an `@` opens: the workspace's agents, tasks, and people, the description and its sections, and the repository's files and folders, grouped by kind, narrowed as the word is typed, the pick written as its mention.
@@ -470,7 +472,7 @@ type MentionRow = {
   /** A person's picture, which their row wears; none for any other row. */
   readonly actor?: Actor | undefined;
   /** An agent's row as every agent menu draws it (`agent-menu-row.tsx`), or a skill's as the `/` list does (`skill-ref.tsx`): its glyph, its end, and its card; none for any other row. */
-  readonly look?: Pick<MenuRow, "icon" | "end" | "card"> | undefined;
+  readonly look?: Pick<MenuRow, "icon" | "before" | "end" | "card"> | undefined;
   /** The card a page's, a person's, a thread's, or an automation's row hangs beside it; none for any other row, whose chip's card is drawn as its row is (`comboboxGroups`). */
   readonly card?: React.ReactNode | undefined;
   /** A pull request, whose mark its row wears for where it stands; none for any other row. */
@@ -963,20 +965,26 @@ function allowedAppRows(
 
 /**
  * Each of the workspace's machines' rows, the reader's own first, then
- * the task's followers', then everyone else's, each by name as read: by
- * its name, wearing its platform's glyph (`MentionRowMark`), said by whose
- * it is, a teammate's wearing their face at its end, found by its name and
- * its owner's. A pick names the machine by its id, which an agent passes
- * as `run_on_mac`'s and `computer`'s `machine`.
+ * the task's followers', then everyone else's, each by name as read, drawn
+ * as the agent's Default machine menu draws a machine
+ * (`agent-machines.tsx`): its platform's glyph wearing its online dot, a
+ * teammate's face before its name, and its name as every list of machines
+ * calls it (`machineName`, This Mac for the one the window runs on), found
+ * by its name and its owner's. A pick is written with the machine's own
+ * name and names it by its id, which an agent passes as `run_on_mac`'s and
+ * `computer`'s `machine`.
  */
 function machineRows(
   machines: readonly WorkspaceMachine[],
   readerId: string | undefined,
   followerIds: ReadonlySet<string>,
   people: readonly MentionablePerson[],
+  thisMac: ThisMac,
 ): MentionRow[] {
   const rank = (machine: WorkspaceMachine) =>
     machine.userId === readerId ? 0 : followerIds.has(machine.userId) ? 1 : 2;
+
+  const listed = machines.map((machine) => ({ deviceId: machine.id, name: machine.name }));
 
   return machines
     .map((machine, at) => ({ machine, at }))
@@ -987,10 +995,14 @@ function machineRows(
 
       return {
         mention: { kind: MENTION_KIND.MACHINE, machineId: machine.id },
-        name: machine.name,
-        detail: yours ? YOU_WORD : owner,
+        name: machineName({ deviceId: machine.id, name: machine.name }, listed, thisMac),
+        written: machine.name,
+        detail: undefined,
         terms: `${machine.name} ${owner} ${DEVICE_PLATFORM_NAME[machine.platform]}`,
-        look: { end: yours ? undefined : <MachineOwnerFace userId={machine.userId} /> },
+        look: {
+          icon: <MachineGlyph machine={machine} />,
+          before: yours ? undefined : <MachineOwnerFace userId={machine.userId} />,
+        },
       };
     });
 }
@@ -1566,6 +1578,7 @@ function comboboxGroups(
       words: row.name,
       // A group's foot keeps the glyph's room empty, so its words stand in line with the rows above.
       icon: isShowMore(row) ? null : (row.look?.icon ?? rowGlyph(row)),
+      before: row.look?.before,
       hint:
         row === highlighted && opens(row) && !("from" in row)
           ? WALK_INTO_HINT
@@ -2135,11 +2148,12 @@ export function useMentionPicker({
   // The machines offered are the workspace's members', read while the list stands open, the task's followers' after the reader's own.
   const machinesAsked = open && tasksWorkspace !== undefined;
   const machines = useWorkspaceMachines(tasksWorkspace?.id, machinesAsked);
+  const thisMac = useThisMac();
   const followers = listed.tasks.find((task) => task.id === taskId)?.followers;
   const followerIds = new Set((followers ?? []).map((follower) => follower.userId));
 
   const machineRowsOffered = machinesAsked
-    ? machineRows(machines.machines, readerId, followerIds, people)
+    ? machineRows(machines.machines, readerId, followerIds, people, thisMac)
     : [];
 
   // The list is narrowed to the kind a key opened or whose word was typed, and searched by the words after it.

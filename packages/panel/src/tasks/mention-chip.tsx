@@ -139,9 +139,10 @@ import { MachineChipOwner } from "./workspace-machines.js";
  * their picture and hangs their card, their email and role, or grayed as
  * having left, as the workspace's members around the chip say
  * (`../member-directory.tsx`), and opens their page in the workspace. A
- * machine of the workspace wears its platform's glyph, and after its name
- * its owner's face where it is a teammate's, and hangs whose it is and what
- * it is (`workspace-machines.tsx`); it opens nothing. A
+ * machine of the workspace wears its platform's glyph with its online dot,
+ * and before its name its owner's face where it is a teammate's, as the
+ * agent's Default machine menu draws it, and hangs whose it is and what it
+ * is (`workspace-machines.tsx`); it opens nothing. A
  * link to any other place in the app, an Inbox item, an
  * automation, an agent's message (`@repo/features/link-grammar`), is drawn as
  * the same chip, wearing the place's glyph and named as the window already
@@ -678,7 +679,8 @@ function MentionChip({
       kind={entityWordHeard(entityOfMention(mention).kind, label)}
       label={label}
       name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
-      state={told ?? standing?.state ?? ownerOf(mention, target, doors)}
+      before={ownerOf(mention, target, doors)}
+      state={told ?? standing?.state}
       gone={state === MENTION_STATE.GONE}
       onPress={
         press === undefined
@@ -700,7 +702,7 @@ function MentionChip({
   );
 }
 
-/** What stands after a machine's chip's name: its owner's face, where it is a teammate's; nothing for any other mention. */
+/** What stands before a machine's chip's name: its owner's face, where it is a teammate's; nothing for any other mention. */
 function ownerOf(mention: Mention, target: string, doors: MentionDoors): ReactNode {
   if (mention.kind !== MENTION_KIND.MACHINE) return undefined;
 

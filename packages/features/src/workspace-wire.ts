@@ -420,9 +420,10 @@ export const workspaceMachinesRequestSchema = EffectSchema.Struct({
 /**
  * The machines of a workspace's members, by name (GET), as any member of it
  * sees them: each one's id, which a mention and a call name it by, its name
- * and platform, and whose it is. Nothing else of a machine is said, neither
- * its settings nor whether agents may use it, which is its owner's and the
- * task's.
+ * and platform, whose it is, and whether it is there now, its app having
+ * listened for commands lately or its host beating. Nothing else of a
+ * machine is said, neither its settings nor whether agents may use it,
+ * which is its owner's and the task's.
  */
 export const workspaceMachinesAnswerSchema = EffectSchema.Struct({
   machines: EffectSchema.Array(
@@ -431,6 +432,7 @@ export const workspaceMachinesAnswerSchema = EffectSchema.Struct({
       name: EffectSchema.String,
       platform: EffectSchema.Literals(Object.values(DEVICE_PLATFORM)),
       userId: EffectSchema.String,
+      online: EffectSchema.Boolean,
     }),
   ),
 });

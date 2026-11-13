@@ -23,6 +23,7 @@ import {
   workspaceMachinesOf,
 } from "../device-store.js";
 import { enrollOwnDevice, hostsOf, removeHost } from "../host-store.js";
+import { markMachineListening } from "../machine-command-store.js";
 
 /**
  * An account's Macs, over a real dialect: a Mac is registered, beaten, and
@@ -32,7 +33,7 @@ import { enrollOwnDevice, hostsOf, removeHost } from "../host-store.js";
  * A Mac joining for its commands carries its own settings up once, and the
  * apps each machine always allows are read by its own account alone. A
  * workspace's machines are read by its members alone, and name only those of
- * its members.
+ * its members, each online while it beats as a host or its app listened lately.
  * Synthetic accounts and Macs throughout.
  */
 
@@ -66,20 +67,51 @@ it.layer(getTestDB())("the device store", (it) => {
         yield* registerDevice(owner, { id: laptop, name: "Laptop", ...DEVICE_LAYOUT });
         yield* registerDevice(outsider, { id: theirs, name: "Outside", ...DEVICE_LAYOUT });
         const darwin = DEVICE_PLATFORM.DARWIN;
+        const since = new Date(0);
 
-        assert.deepEqual(yield* workspaceMachinesOf(owner, shared), [
-          { id: laptop, name: "Laptop", platform: darwin, userId: owner },
-          { id: studio, name: "Studio", platform: darwin, userId: other },
+        assert.deepEqual(yield* workspaceMachinesOf(owner, shared, since), [
+          { id: laptop, name: "Laptop", platform: darwin, userId: owner, online: true },
+          { id: studio, name: "Studio", platform: darwin, userId: other, online: true },
         ]);
-        assert.deepEqual(yield* workspaceMachinesOf(owner, shared, other), [
-          { id: studio, name: "Studio", platform: darwin, userId: other },
+        assert.deepEqual(yield* workspaceMachinesOf(owner, shared, since, other), [
+          { id: studio, name: "Studio", platform: darwin, userId: other, online: true },
         ]);
-        assert.deepEqual(yield* workspaceMachinesOf(outsider, shared), [], "not a member");
+        assert.deepEqual(yield* workspaceMachinesOf(outsider, shared, since), [], "not a member");
         assert.deepEqual(
-          yield* workspaceMachinesOf(outsider, elsewhere, other),
+          yield* workspaceMachinesOf(outsider, elsewhere, since, other),
           [],
           "a workspace the member is not in",
         );
+      }),
+  );
+
+  it.effect(
+    "a machine that runs no agents reads online only while its app listened since the instant asked",
+    () =>
+      Effect.gen(function* () {
+        const { owner } = yield* openAccounts;
+        const shared = yield* openWorkspace(owner);
+        const deviceId = randomUUID();
+
+        yield* joinCommandDevice(owner, {
+          deviceId,
+          name: "Laptop",
+          platform: DEVICE_PLATFORM.DARWIN,
+          arch: DEVICE_ARCH.ARM64,
+          settings: { commandMode: MACHINE_COMMAND_MODE.ASK, alwaysAllowedApps: [] },
+        });
+
+        const online = (since: number) =>
+          Effect.map(workspaceMachinesOf(owner, shared, new Date(since)), (machines) =>
+            machines.map((machine) => machine.online),
+          );
+
+        assert.deepEqual(yield* online(0), [false], "never listened");
+        yield* TestClock.adjust("10 seconds");
+        yield* markMachineListening(owner, deviceId);
+
+        assert.deepEqual(yield* online(10_000), [true], "listened at the instant asked");
+        assert.deepEqual(yield* online(10_001), [false], "listened before it");
       }),
   );
 

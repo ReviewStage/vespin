@@ -34,12 +34,13 @@ import {
   machineCommandModeSchema,
   machineDeviceSettingsSchema,
 } from "@repo/features/machine-command-wire";
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
+import { and, asc, desc, eq, exists, gte, inArray, isNotNull, isNull, lt, sql } from "drizzle-orm";
 import { DateTime, Effect, Option, Schema } from "effect";
 import { SqlSchema } from "effect/sql";
-import { Database, type DatabaseServices, type StoreFailure } from "../core/query.js";
+import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { member } from "../schemas/auth.js";
 import { device } from "../schemas/device.js";
+import { machineCommandDeviceListener } from "../schemas/machine-command.js";
 import { workspaceReachableBy } from "./workspace-store.js";
 
 type DeviceEffect<A> = Effect.Effect<A, StoreFailure, DatabaseServices>;
@@ -464,19 +465,42 @@ const findAllowedApps = SqlSchema.findAll({
     ),
 });
 
+/**
+ * Whether a machine is there now: its app listened for commands as the
+ * device at or after the instant given, as routing reads a machine
+ * reachable, or it runs agents as a host and still beats (`away_at`).
+ */
+function machineOnline(listenedSince: Date) {
+  const listened = exists(
+    queryBuilder
+      .select({ one: sql`1` })
+      .from(machineCommandDeviceListener)
+      .where(
+        and(
+          eq(machineCommandDeviceListener.deviceId, device.id),
+          gte(machineCommandDeviceListener.seenAt, listenedSince),
+        ),
+      ),
+  );
+
+  return sql<boolean>`(${listened} or (${device.home} is not null and ${device.awayAt} is null))`;
+}
+
 const findWorkspaceMachines = SqlSchema.findAll({
   Request: Schema.Struct({
     readerId: Schema.String,
     workspaceId: Schema.String,
     memberId: Schema.NullOr(Schema.String),
+    listenedSince: Schema.Date,
   }),
   Result: Schema.Struct({
     id: Schema.String,
     name: Schema.String,
     platform: Schema.Literals(Object.values(DEVICE_PLATFORM)),
     userId: Schema.String,
+    online: Schema.Boolean,
   }),
-  execute: ({ readerId, workspaceId, memberId }) =>
+  execute: ({ readerId, workspaceId, memberId, listenedSince }) =>
     Database.use((db) =>
       db
         .select({
@@ -484,6 +508,7 @@ const findWorkspaceMachines = SqlSchema.findAll({
           name: device.name,
           platform: device.platform,
           userId: device.userId,
+          online: machineOnline(listenedSince),
         })
         .from(device)
         .innerJoin(
@@ -690,12 +715,13 @@ export function saveCommandDeviceSettings(
   return Effect.map(writeSettings({ userId, id, ...settings }), (rows) => rows.length > 0);
 }
 
-/** A machine of a workspace's member as the workspace's members see it: its id, name, platform, and whose it is. */
+/** A machine of a workspace's member as the workspace's members see it: its id, name, platform, whose it is, and whether it is there now. */
 export interface WorkspaceMachine {
   readonly id: string;
   readonly name: string;
   readonly platform: DevicePlatform;
   readonly userId: string;
+  readonly online: boolean;
 }
 
 /**
@@ -703,14 +729,21 @@ export interface WorkspaceMachine {
  * member of it sees them: none unless the reader stands in the workspace,
  * and only those of an owner who stands in it too, so a reader never reads
  * the machines of someone who shares no workspace with them; one member's
- * alone where `memberId` names one. Note that it selects no secret,
- * setting, or folder, since a teammate is shown only what each machine is
- * and whose.
+ * alone where `memberId` names one; each online where its app listened at
+ * or after `listenedSince` or it beats as a host (`machineOnline`). Note
+ * that it selects no secret, setting, or folder, since a teammate is shown
+ * only what each machine is, whose, and whether it is there.
  */
 export function workspaceMachinesOf(
   readerId: string,
   workspaceId: string,
+  listenedSince: Date,
   memberId?: string,
 ): DeviceEffect<readonly WorkspaceMachine[]> {
-  return findWorkspaceMachines({ readerId, workspaceId, memberId: memberId ?? null });
+  return findWorkspaceMachines({
+    readerId,
+    workspaceId,
+    memberId: memberId ?? null,
+    listenedSince,
+  });
 }
