@@ -21,6 +21,7 @@ import {
   machineCommandKindsRead,
   storedMachineCommandText,
 } from "@repo/features/machine-command-wire";
+import { MACHINES_READ, type MachinesLiveAnswer } from "@repo/features/machine-live";
 import { GATEWAY_EVENT, type GatewayEventKind } from "@repo/gateway";
 import { isRecord, type WireValue } from "@repo/wire";
 import { noNetwork } from "@repo/wire/testing";
@@ -206,6 +207,44 @@ function scriptedService(
   /** Each recording's video posted up, by its command's id, as base64. */
   const postedRecordings = new Map<string, string>();
 
+  /** The settings the service keeps for each device that joined, by its id, as joins, writes, and changes made elsewhere leave them. */
+  const kept = new Map<string, MachineDeviceSettings>();
+  let machinesVersion = 0;
+
+  const keep = (deviceId: string, settings: MachineDeviceSettings) => {
+    kept.set(deviceId, settings);
+    machinesVersion += 1;
+  };
+
+  /** The account's machines as the service answers them, each device that joined with the settings kept for it. */
+  const machines = (rows: boolean): MachinesLiveAnswer => ({
+    url: LIVE_POLL_URL,
+    queries: {
+      machines: {
+        capability: "",
+        queryFingerprint: "",
+        expiresAt: NOW,
+        digest: String(machinesVersion),
+        ...(rows
+          ? {
+              rows: [...kept].map(([id, settings]) => ({
+                id,
+                name: "Studio",
+                platform: DEVICE_PLATFORM.DARWIN,
+                machineId: null,
+                model: null,
+                host: false,
+                listening: true,
+                commandMode: settings.commandMode,
+                computerUse: settings.computerUse ?? null,
+                alwaysAllowedApps: settings.alwaysAllowedApps,
+              })),
+            }
+          : undefined),
+      },
+    },
+  });
+
   const answer = (rows: boolean): MachineCommandsLiveAnswer => ({
     url: LIVE_POLL_URL,
     queries: {
@@ -232,7 +271,7 @@ function scriptedService(
   });
 
   const client: MachineCommandClient = {
-    // SAFETY: the Mac's commands are the one live read the client is asked for, answering the script's rows.
+    // SAFETY: the Mac's commands and the account's machines are the live reads the client is asked for, each answering the script's rows.
     liveRead: (<Read>(
       _read: Read,
       {
@@ -244,6 +283,16 @@ function scriptedService(
     ) =>
       Effect.gen(function* () {
         const after = poll?.after;
+
+        // The account's machines are followed beside the commands, held as the service holds them.
+        if (_read === MACHINES_READ) {
+          for (let held = 0; after === String(machinesVersion) && held < 25; held += 1) {
+            yield* Effect.sleep(HOLD_LOOK);
+          }
+
+          return machines(after !== String(machinesVersion));
+        }
+
         reads.push({ userId, kinds: machineCommandKindsRead(kinds) });
         named.push({ by: "read", device });
 
@@ -291,12 +340,15 @@ function scriptedService(
     join: (request) =>
       Effect.sync(() => {
         joins.push(request);
+        const settings = options.deviceSettings ?? request.settings;
+        keep(request.deviceId, settings);
 
-        return { settings: options.deviceSettings ?? request.settings };
+        return { settings };
       }),
-    saveDeviceSettings: (_deviceId, settings) =>
+    saveDeviceSettings: (deviceId, settings) =>
       Effect.sync(() => {
         savedSettings.push(settings);
+        keep(deviceId, settings);
 
         return { saved: true } as const;
       }),
@@ -335,6 +387,9 @@ function scriptedService(
     postedLooks,
     settledResults,
     postedRecordings,
+    /** The device's settings changed on another device or the web, as Settings › Machines changes them. */
+    changeElsewhere: (deviceId: string, settings: MachineDeviceSettings) =>
+      Effect.sync(() => keep(deviceId, settings)),
     /** A command queued for the account, as an agent's call queues it. */
     queue: (command: MachineCommand, queuedAt: number) => {
       waiting.push({ ...command, queuedAt });
@@ -633,6 +688,45 @@ it.effect(
         [studio],
         "the windows are told the device once it joined",
       );
+    }),
+);
+
+it.effect(
+  "a change made to a joined Mac's settings elsewhere is written over its own as it lands, and not written back",
+  () =>
+    Effect.gen(function* () {
+      const spawner = scriptedSpawner(() => ({ exitCode: 0 }));
+      const service = scriptedService();
+      const studio = "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13";
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        device: { id: studio, apps: ["com.apple.Notes"] },
+      };
+
+      const { composer } = yield* subject(service, spawner, gate);
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+
+          yield* service.changeElsewhere(studio, {
+            commandMode: MACHINE_COMMAND_MODE.NEVER,
+            alwaysAllowedApps: [],
+          });
+          yield* TestClock.adjust("2 seconds");
+          yield* settled;
+        }),
+      );
+
+      assert.equal(service.joins.length, 1, "the change reaches the Mac without joining again");
+      assert.equal(gate.mode, MACHINE_COMMAND_MODE.NEVER);
+      assert.deepEqual(gate.device?.apps, []);
+      assert.deepEqual(service.savedSettings, [], "a change heard is not written back");
     }),
 );
 

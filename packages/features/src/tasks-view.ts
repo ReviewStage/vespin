@@ -767,6 +767,14 @@ export const tasksFindAnswerSchema = EffectSchema.Union([
   EffectSchema.Struct({ failure: EffectSchema.Literal(TASK_CALL_FAILURE.UNANSWERED) }),
 ]);
 
+/** The most characters a task search sends the service. */
+export const TASK_SEARCH_QUERY_MAX_CHARS = 200;
+
+/** A search of the account's tasks the window asks the host to read past the list it holds: the words typed. */
+export const tasksSearchParamsSchema = EffectSchema.Struct({
+  query: EffectSchema.NonEmptyString.check(EffectSchema.isMaxLength(TASK_SEARCH_QUERY_MAX_CHARS)),
+});
+
 /** Where a page of a workspace's settled tasks ends, which the next page reads past (`SettledPageCursor`). */
 const settledPageCursorSchema = EffectSchema.Struct({
   finishedAt: EffectSchema.Finite,

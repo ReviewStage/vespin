@@ -109,7 +109,7 @@ const route = (
 
 it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
   it.effect(
-    "a call goes to the machine whose id it names, else the agent's default, else the owner's that listened; one that cannot take it, or a default that is gone, is refused listing the ids of the ones that can",
+    "a call goes to the machine whose id it names, else the agent's default, else the owner's that listened; one that cannot take it, its apps switched off for an action on an app among them, or a default that is gone, is refused listing the ids of the ones that can",
     () =>
       Effect.gen(function* () {
         const { owner, agentId, target } = yield* openPeople;
@@ -136,6 +136,31 @@ it.layer(getTestDB())("which machine an agent's call goes to", (it) => {
           machine: { id: studio, name: "Studio", owner: ana },
         });
         assert.deepEqual(yield* route(target, { machineId: laptop }), toLaptop, "by its id");
+
+        yield* Database.use((db) =>
+          db.update(device).set({ computerUse: false }).where(eq(device.id, laptop)),
+        );
+
+        const appsOff = yield* route(target, {
+          kind: MACHINE_COMMAND_KIND.COMPUTER,
+          machineId: laptop,
+        });
+
+        assert.match(
+          appsOff.kind === MACHINE_ROUTE.REFUSED ? appsOff.reason : "",
+          /^Not run: Laptop doesn't let agents use its apps \(Let agents use its apps is off for it in Settings › Machines\)\./u,
+          "an action on an app is refused where the machine's apps switch is off",
+        );
+        assert.equal(
+          appsOff.kind === MACHINE_ROUTE.REFUSED ? appsOff.why : undefined,
+          MACHINE_UNREACHED.APPS_OFF,
+          "and says why as data, for the card",
+        );
+        assert.deepEqual(
+          yield* route(target, { machineId: laptop }),
+          toLaptop,
+          "a shell command still goes",
+        );
         assert.deepEqual(yield* route(target, { machineId: "Laptop" }), {
           kind: MACHINE_ROUTE.REFUSED,
           reason: `Not run: no machine this task's agents may use has the id "Laptop". It can go to Laptop (Ana), id "${laptop}": pass one's id in \`machine\`.`,

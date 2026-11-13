@@ -340,6 +340,9 @@ export const MEMBER_MCP_EXCLUSIONS = {
     // The apps a member's machines always allow are offered in an agent's `@` list; a member's agent reads its own machine's with `computer`.
     allowedApps: SCREEN_ONLY,
     remove: INTERNAL,
+    // How far agents may reach into a member's machine is the member's own choice in the app, never an agent's.
+    changeMachine: MEMBER_ONLY,
+    removeMachine: INTERNAL,
     readPairing: INTERNAL,
     approvePairing: INTERNAL,
     denyPairing: INTERNAL,
@@ -365,6 +368,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     agentBrowserTabs: SCREEN_ONLY,
     tasks: SCREEN_ONLY,
     taskRows: SCREEN_ONLY,
+    taskSearch: SCREEN_ONLY,
     taskPage: SCREEN_ONLY,
     automations: SCREEN_ONLY,
     automationWorkspaceRuns: SCREEN_ONLY,
@@ -378,6 +382,7 @@ export const MEMBER_MCP_EXCLUSIONS = {
     workspaceMembers: SCREEN_ONLY,
     workspaceInvitations: SCREEN_ONLY,
     hosts: SCREEN_ONLY,
+    machines: SCREEN_ONLY,
     workspaceMemories: SCREEN_ONLY,
     installedSkills: SCREEN_ONLY,
     workspaceIntegrations: SCREEN_ONLY,

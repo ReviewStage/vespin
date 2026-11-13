@@ -81,6 +81,8 @@ Run button over an agent's tabs, from ⌘K, or with ⌥⌘R, in a cloud agent's
 sandbox or on the Mac a local agent runs on, for every workspace.
 ([#8962](https://github.com/ReviewStage/vespin/pull/8962))
 
+![The Run button over an agent's tabs reads Dev server, and its menu is open on acme/relay's run actions: Dev server, pnpm dev, marked Default with ⌥⌘R; Members tests, pnpm test src/members; Seed pending invites, pnpm db:seed --invites; Email previews, pnpm email:dev; and Edit run actions…](apps/web/public/changelog/0.34.0/run-actions.png)
+
 ### Automations once, and on merges and releases
 
 An automation can run once, at a date and time, and pauses itself after its
@@ -98,13 +100,7 @@ working on that pull request. Vespin reacts with 👀 and posts the agent's firs
 answer back as a comment with a link to it.
 ([#8898](https://github.com/ReviewStage/vespin/pull/8898))
 
-### Find any line sent to an agent
-
-A rail down an agent's transcript marks every line sent into it, by you,
-teammates, other agents, GitHub, or automations, with the lines in view held in
-a bubble. Hovering it lists each line with its sender, and pressing one jumps
-there; on a phone, the rail opens the same list as a sheet.
-([#8485](https://github.com/ReviewStage/vespin/pull/8485))
+![Two GitHub comments: danamoreno, a member, asks the vespin-agent bot to make an expired invite link read “This invite is no longer valid” and offer a new invite, her comment wearing a 👀 reaction; the vespin-agent bot answers that it opened #232 with Ask for a new invite and a passing test, ending in Open in Vespin](apps/web/public/changelog/0.34.0/mention-vespin-on-github.png)
 
 ### Copy and paste pictures and files
 
@@ -115,6 +111,8 @@ pictures, and a description's picture pastes into a message box too.
 
 ### Improvements
 
+- A rail down an agent's transcript marks every line sent into it, and lists
+  each with its sender to jump to ([#8485](https://github.com/ReviewStage/vespin/pull/8485))
 - The first time you open Automations, the Inbox, or an agent's Browser tab, a
   card says what the page is for, with Learn more and Got it
   ([#8875](https://github.com/ReviewStage/vespin/pull/8875),

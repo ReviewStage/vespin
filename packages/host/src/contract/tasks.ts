@@ -74,6 +74,7 @@ import {
   tasksRevisionParamsSchema,
   tasksRevisionsAnswerSchema,
   tasksRevisionsParamsSchema,
+  tasksSearchParamsSchema,
   tasksSetFollowerMachinesParamsSchema,
   tasksSetParentAnswerSchema,
   tasksSetParentParamsSchema,
@@ -402,6 +403,14 @@ export const TASKS_ACTS = declaredActs({
     panelOnly: true,
     door: ACT.READ,
     unanswered: UNANSWERED,
+  }),
+  TASKS_SEARCH: hostAct({
+    input: tasksSearchParamsSchema,
+    output: EffectSchema.Void,
+    refusal: "Could not search your tasks on this system.",
+    panelOnly: true,
+    door: ACT.READ,
+    unanswered: undefined,
   }),
   TASKS_SETTLED_PAGE: hostAct({
     input: tasksSettledPageParamsSchema,
