@@ -123,7 +123,7 @@ export function EmptyState({
 /**
  * What a detail column says before a row is picked: its words alone in the
  * muted ink, centered, as Mail stands "No Message Selected". Note that it
- * draws no glyph and no bold title, because nothing is wrong or empty; the
+ * draws no glyph and no bold title, a step under a column's own title, because nothing is wrong or empty; the
  * column only waits for a pick.
  */
 export function NoSelection({ title }: { readonly title: string }) {
@@ -139,7 +139,7 @@ export function NoSelection({ title }: { readonly title: string }) {
     >
       <Text
         modifiers={[
-          font({ textStyle: "title2", weight: "semibold" }),
+          font({ textStyle: "title3" }),
           foregroundStyle(colors.TEXT_MUTED),
           multilineTextAlignment("center"),
         ]}
