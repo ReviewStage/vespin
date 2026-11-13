@@ -190,6 +190,8 @@ export const HOSTED_SERVICE_PATH = {
   LIVE_AGENT_INBOX: "/api/live/agent-inbox",
   /** The task list sealed for following over Neon Realtime (GET): its tasks and every agent of them, or `unavailable`. `task-list-live.ts` declares the answer. */
   LIVE_TASKS: "/api/live/tasks",
+  /** One task and every agent of it, by the task or the agent under `?id=`, as the task list answers them, with `?poll=true` their rows inline: none for one the account does not reach. `task-list-live.ts` declares the answer. */
+  LIVE_TASK_ROWS: "/api/live/task-rows",
   /** A workspace's automations under `?workspaceId=`, sealed for following over Neon Realtime (GET), or `unavailable`. `automation-live.ts` declares the answer. */
   LIVE_AUTOMATIONS: "/api/live/automations",
   /** One automation's runs under `?id=`, sealed for following over Neon Realtime (GET), or `not-found` or `unavailable`. */
@@ -313,7 +315,7 @@ export const HOSTED_SERVICE_PATH = {
    * (GET), or start one (POST) with its name and, where one is chosen, the
    * GitHub repository it is about. `task-wire.ts` declares both.
    */
-  TASKS: "/api/plans",
+  TASKS: "/api/tasks",
   /**
    * The repositories the account pinned in the sidebar: read them, newest
    * pinned first (GET), or pin or unpin one (PUT), answered with them all as
@@ -507,6 +509,8 @@ export const HOSTED_SERVICE_PATH = {
   WORKSPACES_EXPERIMENT_SET: "/api/workspaces/experiment/set",
   /** One workspace's members, to a member of it (GET), the workspace named in `workspace-wire.ts`'s `WORKSPACE_MEMBERS_QUERY`. */
   WORKSPACES_MEMBERS: "/api/workspaces/members",
+  /** The machines of a workspace's members, to a member of it (GET), the workspace, and a member where it is theirs alone, named in its query (`workspace-wire.ts`'s `workspaceMachinesRequestSchema`). */
+  WORKSPACES_MACHINES: "/api/workspaces/machines",
   /** The owner removes an admin or a member, and an admin a member (POST), answered with those who remain. */
   WORKSPACES_MEMBERS_REMOVE: "/api/workspaces/members/remove",
   /** The owner makes another member an admin or an admin a member (POST), answered with the members as they then stand. */

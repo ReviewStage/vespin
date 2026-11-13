@@ -10,6 +10,7 @@ import { Data, Effect, Predicate } from "effect";
 import { appBridge } from "./app-bridge.js";
 import { QUERY_ROOT } from "./query-keys.js";
 import { rendererPromise } from "./renderer-runtime.js";
+import { type TaskListCollections, taskListFollowing } from "./task-list-collections.js";
 import { onFixtureMoved } from "./tasks/fixture-moves.js";
 import {
   handFixtureClient,
@@ -134,10 +135,12 @@ function heard(): AppStateBridgeReads | undefined {
   }
 }
 
-/** A window's following of `app:state` into its Query client: its first whole read written, and how it stops. */
+/** A window's following of `app:state` into its Query client: its first whole read written, the task list's collections it feeds beside it, and how it stops. */
 export interface AppStateFollowing {
   /** Settles once the first whole read is written into the client, and fails where the bridge refused it. */
   readonly written: Promise<void>;
+  /** The task list's rows as collections, written from the very documents the client is (`task-list-collections.tsx`). */
+  readonly taskList: TaskListCollections;
   readonly stop: () => void;
 }
 
@@ -156,15 +159,27 @@ export interface AppStateFollowing {
  * so its writes queue behind one another; one that throws is reported and
  * passed over. The client is handed to the fixture while it is written
  * into, whose staged acts read the run from it (`act.ts`).
+ *
+ * Every document written into the client is handed on to the task list's
+ * collections in the same breath, the list it lists from (`selectListedTasks`)
+ * under its version, so they and the client never disagree and the bridge
+ * is still heard once; a staging that throws leaves their rows standing and
+ * says so on them.
  */
 export function followAppState(client: QueryClient): AppStateFollowing {
   let following = true;
   let staging: Promise<void> | undefined;
+  const taskList = taskListFollowing();
+
+  const shown = (state: AppStateSnapshot): void => {
+    client.setQueryData(appStateQuery.queryKey, state);
+    taskList.write(state.version, selectListedTasks(state));
+  };
 
   // Answers the staging the state waits on in a fixture run, and nothing where it is written at once.
   const write = (state: AppStateSnapshot): Promise<void> | undefined => {
     if (!state.run.fixtureMode && staging === undefined) {
-      client.setQueryData(appStateQuery.queryKey, state);
+      shown(state);
 
       return undefined;
     }
@@ -173,11 +188,12 @@ export function followAppState(client: QueryClient): AppStateFollowing {
     const next = (staging ?? Promise.resolve())
       .then(() => staged(state))
       .then(
-        (shown) => {
-          if (following) client.setQueryData(appStateQuery.queryKey, shown);
+        (stagedState) => {
+          if (following) shown(stagedState);
         },
         (cause: unknown) => {
           console.error("A fixture run's document could not be staged.", cause);
+          taskList.trouble(cause);
         },
       )
       .then(() => {
@@ -207,11 +223,13 @@ export function followAppState(client: QueryClient): AppStateFollowing {
 
   return {
     written: followed?.written ?? Promise.resolve(),
+    taskList: taskList.collections,
     stop: () => {
       following = false;
       followed?.stop();
       stopMoves();
       takeBack();
+      taskList.stop();
     },
   };
 }

@@ -174,9 +174,10 @@
    opening the text moves no block: the same type, inset, colors, and gaps.
    Note that the header stays put while long lines scroll sideways under it. */
 .description-document-text .description-code-block {
-  border: 1px solid var(--ui-color-border);
+  border: 1px solid var(--ui-color-card-edge);
   border-radius: var(--ui-control-radius);
   background: var(--ui-color-code-ground);
+  box-shadow: var(--ui-shadow-card);
 }
 
 /* Note that the frame clips nothing, as the drawn card does, so the language
@@ -587,12 +588,12 @@
    events. It stands at the agent's point, scaled onto the page by the
    component, and glides to each new one over --ui-duration-fast on
    --ui-spring-fast, about the beat its action waits; a still pointer jumps.
-   While the agent is active it rocks about its tip, and fades once it is
+   While the agent is active it sways about its tip, and fades once it is
    not. A click presses it once it has arrived, with a ripple at the point;
    typing bobs it, with a glow of its amber under it. It is a compact
    arrowhead in the accent, the dark mode's brighter amber over a dark page,
    with a white edge and a small shadow, so it reads on any page, an accent
-   button included. The rock and the bob are endless loops held by
+   button included. The sway and the bob are endless loops held by
    --ui-loop-motion, so their periods may be literals (docs/DESIGN.md). */
 .cloud-browser-cursor {
   position: absolute;
@@ -614,26 +615,28 @@
   transition: opacity var(--ui-duration-quick) var(--ui-motion-exit);
 }
 
-.cloud-browser-cursor-rock {
+.cloud-browser-cursor-sway {
   transform-origin: 0 0;
 }
 
 /* Near the page's right or bottom edge the arrow is mirrored about its tip,
-   so its body stays on the page; the rock turns it with `rotate` alone. */
-.cloud-browser-cursor[data-flip-x] .cloud-browser-cursor-rock {
+   so its body stays on the page; the sway turns it with `rotate` alone. */
+.cloud-browser-cursor[data-flip-x] .cloud-browser-cursor-sway {
   scale: -1 1;
 }
 
-.cloud-browser-cursor[data-flip-y] .cloud-browser-cursor-rock {
+.cloud-browser-cursor[data-flip-y] .cloud-browser-cursor-sway {
   scale: 1 -1;
 }
 
-.cloud-browser-cursor[data-flip-x][data-flip-y] .cloud-browser-cursor-rock {
+.cloud-browser-cursor[data-flip-x][data-flip-y] .cloud-browser-cursor-sway {
   scale: -1 -1;
 }
 
-.cloud-browser-cursor[data-shown]:not([data-still]) .cloud-browser-cursor-rock {
-  animation: cloud-browser-cursor-rock 1.2s ease-in-out infinite;
+.cloud-browser-cursor[data-shown]:not([data-still]) .cloud-browser-cursor-sway {
+  /* One smooth sway there and back each 2s, starting upright midway through
+     its first leg, as the agent's cursor on a Mac sways (ComputerUse.swift). */
+  animation: cloud-browser-cursor-sway 1s ease-in-out -0.5s infinite alternate;
   animation-play-state: var(--ui-loop-motion);
 }
 
@@ -707,16 +710,12 @@
     var(--ui-duration-fast) backwards;
 }
 
-@keyframes cloud-browser-cursor-rock {
-  0%,
-  100% {
-    rotate: 0deg;
+@keyframes cloud-browser-cursor-sway {
+  from {
+    rotate: 4.5deg;
   }
-  25% {
-    rotate: -6deg;
-  }
-  75% {
-    rotate: 6deg;
+  to {
+    rotate: -4.5deg;
   }
 }
 
@@ -2927,13 +2926,15 @@ blockquote.comment-quote {
   margin-bottom: var(--ui-control-gap);
 }
 
-/* The apps' windows an agent is using float over the end of what docks
-   over its box, above every dock's row, over the transcript's foot, as a
-   picture in a picture does (`computer-dock.tsx`), and while they do the
-   transcript's end makes room for the tallest stack of them, so its newest
-   line stands clear of them. */
+/* The apps an agent is using float over the end of what docks over its
+   box, above every dock's row, over the transcript's foot, as a picture in
+   a picture does (`computer-dock.tsx`); the transcript's end makes room for
+   them as they say how much they take (`Conversation`'s `overEnd`), so its
+   newest line stands clear of them. Under 480px of the foot's room the
+   stack stands across the column rather than at its end. */
 .agent-tab-foot {
   position: relative;
+  container: agent-tab-foot / inline-size;
 }
 .agent-computer-float {
   position: absolute;
@@ -2942,12 +2943,9 @@ blockquote.comment-quote {
   inset-inline-end: var(--ui-space-16);
   margin-block-end: var(--ui-space-8);
 }
-.agent-tab:has(.agent-computer-float) .agent-log-over-composer {
-  padding-bottom: calc(
-    var(--ui-scroll-fade) +
-    var(--ui-space-4) +
-    var(--spacing-app-window-tall) +
-    var(--spacing-app-window-peek-twice) +
-    var(--ui-space-8)
-  );
+@container agent-tab-foot (width < 480px) {
+  .agent-computer-float {
+    inset-inline-start: var(--ui-space-16);
+    --ui-app-window-width: 100%;
+  }
 }

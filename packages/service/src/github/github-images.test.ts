@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
 import { GITHUB_IMAGE_BOUNDS, GITHUB_IMAGE_TYPE, githubImageOf } from "@repo/features/github-image";
 import { Effect, Option, Redacted } from "effect";
-import { fakeGitHub, type SentToGitHub } from "../testing/github-app-fake.js";
+import { fakeGitHub, fixtureBearer, type SentToGitHub } from "../testing/github-app-fake.js";
 import { githubImage } from "./github-images.js";
 
 /**
@@ -47,7 +47,10 @@ const read = (address: string, answer: (sent: SentToGitHub) => Response) =>
     const named = githubImageOf(address);
     assert.ok(named !== undefined, "the address names an image the window draws");
     const github = fakeGitHub(answer);
-    const result = yield* githubImage(TOKEN, REPOSITORY, named).pipe(Effect.provide(github.layer));
+
+    const result = yield* Effect.flatMap(fixtureBearer(TOKEN), (bearer) =>
+      githubImage(bearer, REPOSITORY, named),
+    ).pipe(Effect.provide(github.layer));
 
     return { result, sent: github.sent };
   });
@@ -153,7 +156,7 @@ it.effect(
       const [contents] = sent;
       assert.equal(
         contents?.url,
-        "https://api.github.com/repos/acme/relay/contents/pr-42/before%20and%20after.png?ref=pr-assets",
+        "https://api.github.com/repos/acme/relay/contents/pr-42%2Fbefore%20and%20after.png?ref=pr-assets",
       );
       assert.equal(contents?.headers.get("accept"), "application/vnd.github.raw");
       assert.equal(contents?.headers.get("authorization"), "Bearer ghs_fixture_installation_token");

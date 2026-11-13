@@ -51,7 +51,7 @@ import {
 import { BOOT_PHASE, type WireBootPhase } from "@repo/features/agent-boot";
 import { SANDBOX_STATE, type SandboxState } from "@repo/features/agent-sandbox-wire";
 import { AGENT_BRIEF, type AgentFailure } from "@repo/features/agent-wire";
-import { NO_TASK_OWNER, TASK_LIST_READ } from "@repo/features/task-list-live";
+import { NO_TASK_OWNER, TASK_LIST_READ, TASK_ROWS_READ } from "@repo/features/task-list-live";
 import { TASK_BLOCK_RELATION } from "@repo/features/task-wire";
 import { SANDBOX_IDLE } from "@repo/sandbox";
 import { EXPERIMENT } from "@repo/settings";
@@ -442,6 +442,32 @@ function movedAgents(moved: SyncMoved): SQL {
   );
 }
 
+/** Every table the task list's statements read, which a write to wakes them. */
+const TASK_LIST_TABLES = [
+  taskSync,
+  taskBlockSync,
+  taskFollowerSync,
+  taskPinSync,
+  taskReadSync,
+  agentSync,
+  agentPinSync,
+  agentPullRequestSync,
+  agentApprovalSync,
+  agentSandboxSync,
+  agentBootSync,
+  automationSync,
+  automationRunSync,
+  userSync,
+  turnsSync,
+  messagesSync,
+  conversationsSync,
+  deviceSync,
+  memberSync,
+  githubPersonalTokenSync,
+  githubRepositoryReadSync,
+  workspaceExperimentSync,
+];
+
 /**
  * The account's task list (`tasks`): the tasks it reaches and every agent
  * of them, each with the account's pin, the names it
@@ -463,30 +489,7 @@ function movedAgents(moved: SyncMoved): SQL {
  * write to its account's membership or GitHub access answers it whole.
  */
 export const tasksRead = bindLiveRead(TASK_LIST_READ, {
-  reads: [
-    taskSync,
-    taskBlockSync,
-    taskFollowerSync,
-    taskPinSync,
-    taskReadSync,
-    agentSync,
-    agentPinSync,
-    agentPullRequestSync,
-    agentApprovalSync,
-    agentSandboxSync,
-    agentBootSync,
-    automationSync,
-    automationRunSync,
-    userSync,
-    turnsSync,
-    messagesSync,
-    conversationsSync,
-    deviceSync,
-    memberSync,
-    githubPersonalTokenSync,
-    githubRepositoryReadSync,
-    workspaceExperimentSync,
-  ],
+  reads: TASK_LIST_TABLES,
   topics: ({ userId }) => readerAndWorkspaceTopics(userId),
   statements: ({ userId }) => ({
     plans: tasksStatement(userId),
@@ -502,5 +505,43 @@ export const tasksRead = bindLiveRead(TASK_LIST_READ, {
       agents: agentsStatement(userId, movedAgents(moved)),
       issues: issuesStatement(),
     }),
+  },
+});
+
+/**
+ * The task `id` names, or the task of the agent it names, as one statement
+ * of the list's: the task itself where `id` is one, or the agent's own
+ * task. Note that an agent on no task names no task, so it reads none.
+ */
+function taskNamedBy(id: string): SQL {
+  const ofAgent = queryBuilder
+    .select({ taskId: agentTable.taskId })
+    .from(agentTable)
+    .where(eq(agentTable.id, id));
+
+  return or(eq(task.id, id), sql`${task.id} in (${ofAgent})`) ?? sql`false`;
+}
+
+/**
+ * One task outside the list a window holds (`taskRows`), by the task or the
+ * agent its `id` names: the list's own statements narrowed to that task and
+ * every agent of it, or to the agent alone where it stands on no task, on
+ * the list's rule of who reads them, so one the account does not reach
+ * reads no row. It is read once, as a window opens it, and never followed,
+ * so it wakes as the list does.
+ */
+export const taskRowsRead = bindLiveRead(TASK_ROWS_READ, {
+  reads: TASK_LIST_TABLES,
+  topics: ({ userId }) => readerAndWorkspaceTopics(userId),
+  statements: ({ userId, id }) => {
+    const ofTask = queryBuilder.select({ id: task.id }).from(task).where(taskNamedBy(id));
+
+    return {
+      plans: tasksStatement(userId, taskNamedBy(id)),
+      agents: agentsStatement(
+        userId,
+        or(eq(agentTable.id, id), sql`${agentTable.taskId} in (${ofTask})`) ?? sql`false`,
+      ),
+    };
   },
 });

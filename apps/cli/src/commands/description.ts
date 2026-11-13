@@ -3,11 +3,11 @@
  *
  * A description is one Markdown text (`description-edit.ts`). `edit` writes it
  * through the procedure the app's description editor saves with,
- * `plans.editDescription`, naming the text it read just before as the base, so a write
+ * `tasks.editDescription`, naming the text it read just before as the base, so a write
  * an agent made in between is kept where the two do not touch the same
  * lines, and is refused as a conflict where they do, with nothing changed.
  * `history`, `show --revision`, and `restore` ask the procedures the app's
- * History tab asks (`plans.descriptionRevisions`, `descriptionRevision`,
+ * History tab asks (`tasks.descriptionRevisions`, `descriptionRevision`,
  * `restoreDescription`), so a restore is the member's own save, kept as a
  * revision naming the one it brought back.
  */
@@ -33,9 +33,9 @@ export function writeDescription(taskId: string, base: string, value: string) {
   return Effect.gen(function* () {
     const { hosted } = yield* session;
 
-    const saved = yield* askService(hosted.plans.editDescription, {
+    const saved = yield* askService(hosted.tasks.editDescription, {
       params: { id: taskId },
-      body: { document: { base, value } },
+      body: { description: { base, value } },
     });
 
     if ("plan" in saved) return saved.plan;
@@ -91,13 +91,13 @@ const showCommand = Command.make(
         const seq = revision.value;
 
         const read = yield* askService(
-          hosted.plans.descriptionRevision,
+          hosted.tasks.descriptionRevision,
           { id, seq: String(seq) },
           HOSTED_DEADLINE.USUAL,
           NO_REVISION_WORDS,
         );
 
-        const { body } = read.revision.document;
+        const { body } = read.revision.description;
         yield* answer({
           json: { id, revision: seq, body },
           lines: [withoutTrailingNewlines(body)],
@@ -107,11 +107,11 @@ const showCommand = Command.make(
         return;
       }
 
-      const { plan } = yield* askService(hosted.plans.open, { id });
+      const { plan } = yield* askService(hosted.tasks.open, { id });
       yield* answer({
-        json: { id: plan.id, name: plan.name, body: plan.document.body },
+        json: { id: plan.id, name: plan.name, body: plan.description.body },
         // Note that the closing line break is dropped, since each line printed ends in one.
-        lines: [withoutTrailingNewlines(plan.document.body)],
+        lines: [withoutTrailingNewlines(plan.description.body)],
         ids: [plan.id],
       });
     }),
@@ -144,10 +144,10 @@ const editCommand = Command.make(
       const value = yield* readInput(file);
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
-      const { plan } = yield* askService(hosted.plans.open, { id });
-      const saved = yield* writeDescription(id, plan.document.body, value);
+      const { plan } = yield* askService(hosted.tasks.open, { id });
+      const saved = yield* writeDescription(id, plan.description.body, value);
       yield* answer({
-        json: { id: saved.id, name: saved.name, body: saved.document.body },
+        json: { id: saved.id, name: saved.name, body: saved.description.body },
         lines: [`Saved the description of ${saved.name}.`],
         ids: [saved.id],
       });
@@ -189,7 +189,7 @@ const historyCommand = Command.make(
       const id = yield* resolveTaskId(task);
       const { hosted } = yield* session;
 
-      const page = yield* askService(hosted.plans.descriptionRevisions, {
+      const page = yield* askService(hosted.tasks.descriptionRevisions, {
         id,
         ...(Option.isSome(before) ? { before: String(before.value) } : undefined),
       });
@@ -236,14 +236,14 @@ const restoreCommand = Command.make(
       const { hosted } = yield* session;
 
       const { plan } = yield* askService(
-        hosted.plans.restoreDescription,
+        hosted.tasks.restoreDescription,
         { id, seq: String(revision) },
         HOSTED_DEADLINE.USUAL,
         NO_REVISION_WORDS,
       );
 
       yield* answer({
-        json: { id: plan.id, name: plan.name, restored: revision, body: plan.document.body },
+        json: { id: plan.id, name: plan.name, restored: revision, body: plan.description.body },
         lines: [`Restored revision ${revision} of the description of ${plan.name}.`],
         ids: [plan.id],
       });

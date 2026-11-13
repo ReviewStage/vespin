@@ -3,6 +3,7 @@ import { cn } from "../../cn.js";
 import { isReported, type ShownError } from "../../reported-failure.js";
 import { said } from "../../said.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, ButtonLink } from "../button/button.js";
+import { CARD_CORNER, CARD_ELEMENT, CARD_PADDING, Card } from "../card/card.js";
 import { FailureCopy } from "../failure-copy/failure-copy.js";
 
 /**
@@ -94,8 +95,11 @@ export function AuthPage({
         exit === undefined ? undefined : "py-auth-exit-clearance",
       )}
     >
-      <section
-        className="ui-auth-card flex flex-col items-center w-full max-w-auth-card box-border border border-border rounded-dialog bg-surface shadow-auth-card text-foreground font-ui text-body text-center wrap-anywhere"
+      <Card
+        as={CARD_ELEMENT.SECTION}
+        corner={CARD_CORNER.DIALOG}
+        padding={CARD_PADDING.NONE}
+        className="ui-auth-card flex flex-col items-center w-full max-w-auth-card box-border text-foreground font-ui text-body text-center wrap-anywhere"
         aria-labelledby={titleId}
       >
         {said(mark) ? (
@@ -146,7 +150,7 @@ export function AuthPage({
             {footnote}
           </p>
         ) : null}
-      </section>
+      </Card>
       {exit === undefined ? null : (
         <div className="ui-auth-exit absolute top-ui-8 end-column-inset">
           <Button variant={BUTTON_VARIANT.QUIET} onClick={exit.onPress}>

@@ -1,4 +1,4 @@
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
 import { sectionAnchors } from "@repo/features/mention-link";
 import type { PagePlace } from "@repo/features/page-wire";
 import { type Workspace, workspaceOfSlug } from "@repo/features/workspace-wire";
@@ -99,7 +99,7 @@ export function useSectionHeading(taskId: string | undefined, anchor: string): s
       : page?.holder?.taskId === taskId
         ? page?.text()
         : held !== undefined && "task" in held
-          ? held.task.document.body
+          ? held.task.description.body
           : undefined;
 
   if (text === undefined) return undefined;
