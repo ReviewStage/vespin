@@ -24,7 +24,6 @@ import {
   IconButton,
   Inline,
   JUSTIFY,
-  MENU_ITEM_MARK,
   Menu,
   PICTURE_TILE_FACE,
   PictureTile,
@@ -49,8 +48,9 @@ import { APPS, type App, LAST_DONE, XCODE } from "./computer-preview-options";
 
 const ignore = () => undefined;
 
-const DESIGN = { STACKED: "stacked", MENU: "menu" } as const;
-type Design = (typeof DESIGN)[keyof typeof DESIGN];
+/** How the apps past the two behind the front window stand: their own pile behind one title, or every app behind in one pile. */
+const OVERFLOW = { REST: "rest", ALL: "all" } as const;
+type Overflow = (typeof OVERFLOW)[keyof typeof OVERFLOW];
 
 const THEME = { LIGHT: "light", DARK: "dark" } as const;
 type Theme = (typeof THEME)[keyof typeof THEME];
@@ -110,30 +110,33 @@ function AppName({ app, live }: { app: App; live: Live }): React.JSX.Element {
   );
 }
 
-/** The front window's title bar: "Using" and the mark only on the app in use, the app's name, and Minimize. */
-function TitleBar({
-  live,
-  middle,
-  onMinimize,
-}: {
-  live: Live;
-  middle?: ReactNode;
-  onMinimize: () => void;
-}): React.JSX.Element {
+/** App icons as a pile, each overlapping the one before it and ringed by the card's ground, the first on top. */
+function IconPile({ apps }: { apps: readonly App[] }): React.JSX.Element {
+  return (
+    <span className="inline-flex items-center" aria-hidden="true">
+      {apps.map((app, at) => (
+        <span
+          key={app.name}
+          className={`relative inline-flex ${at === 0 ? "" : "-ms-actor-overlap"}`}
+          style={{ zIndex: apps.length - at }}
+        >
+          <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** The front window's title bar: the app's chip, the working mark on the app the agent is in, and Minimize. */
+function TitleBar({ live, onMinimize }: { live: Live; onMinimize: () => void }): React.JSX.Element {
   const { shown } = live;
   const using = live.working && shown === live.inUse;
 
   return (
-    <div className="flex min-w-0 items-center gap-ui-4 border-b border-border py-ui-4 ps-ui-8 pe-ui-4">
-      {using || !live.working ? (
-        <Text variant={TEXT_VARIANT.LABEL} tone={TEXT_TONE.MUTED}>
-          {live.working ? "Using" : "Used"}
-        </Text>
-      ) : null}
+    <div className="flex min-w-0 items-center gap-ui-4 border-b border-border py-ui-4 ps-ui-4 pe-ui-4">
       <AppName app={shown} live={live} />
       {using ? <WorkingMark /> : null}
       <span className="flex-1" />
-      {middle}
       <IconButton
         icon={<MinusIcon />}
         label="Minimize"
@@ -144,7 +147,7 @@ function TitleBar({
   );
 }
 
-/** The front window's card, as wide as its window at the preview's height, or the column where it is narrow. */
+/** The front window's card, its frame one size whatever the window's shape. */
 function FrontCard({ live, children }: { live: Live; children: ReactNode }): React.JSX.Element {
   const { shown } = live;
 
@@ -174,7 +177,22 @@ function FrontCard({ live, children }: { live: Live; children: ReactNode }): Rea
   );
 }
 
-/** An app behind the front window, its title peeking out above it, the whole strip a press that brings it forward. */
+/** A card peeking out above the one in front of it, stepping in from the edge the deeper it stands. */
+function Behind({ depth, children }: { depth: number; children: ReactNode }): React.JSX.Element {
+  return (
+    <Card
+      look={CARD_LOOK.SURFACE}
+      corner={CARD_CORNER.CONTROL}
+      padding={CARD_PADDING.NONE}
+      shadow={CARD_SHADOW.SOFT}
+      className={`relative -mb-ui-8 ${depth === 1 ? "mx-ui-8" : "mx-ui-16"}`}
+    >
+      {children}
+    </Card>
+  );
+}
+
+/** An app behind the front window: its icon and name, as the front's chip says them, and the mark where the agent is in it; a press brings it forward. */
 function BehindTitle({
   app,
   live,
@@ -189,48 +207,44 @@ function BehindTitle({
   const using = live.working && app === live.inUse;
 
   return (
-    <Card
-      look={CARD_LOOK.SURFACE}
-      corner={CARD_CORNER.CONTROL}
-      padding={CARD_PADDING.NONE}
-      shadow={CARD_SHADOW.SOFT}
-      className={`relative -mb-ui-8 ${depth === 1 ? "mx-ui-8" : "mx-ui-16"}`}
-    >
-      <CardPress label={`Show ${app.name}`} onPress={() => onPick(app)}>
+    <Behind depth={depth}>
+      <CardPress label={`Bring ${app.name} forward`} onPress={() => onPick(app)}>
         <span className="flex min-w-0 items-center gap-ui-6 pt-ui-4 pb-ui-12 ps-ui-8 pe-ui-8">
           <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />
           <Text variant={TEXT_VARIANT.LABEL} tone={using ? undefined : TEXT_TONE.MUTED} truncate>
-            {using ? `Using ${app.name}` : app.name}
+            {app.name}
           </Text>
           {using ? <WorkingMark /> : null}
-          {using ? null : (
-            <Text variant={TEXT_VARIANT.CAPTION} tone={TEXT_TONE.MUTED} truncate>
-              {LAST_DONE.get(app) ?? "Looked at the window"}
-            </Text>
-          )}
         </span>
       </CardPress>
-    </Card>
+    </Behind>
   );
 }
 
-/** "+N", a menu of the apps the stack has no room to show, each choice bringing it forward. */
-function MoreApps({
+/** The apps behind as one pile of icons, a press listing them, a choice bringing one forward. */
+function PileTitle({
   apps,
   live,
+  depth,
   onPick,
 }: {
   apps: readonly App[];
   live: Live;
+  depth: number;
   onPick: (app: App) => void;
 }): React.JSX.Element {
   const menu = useMenu(true);
+  const using = live.working && apps.includes(live.inUse);
 
   return (
-    <>
-      <Chip look={CHIP_LOOK.TOOLBAR} size={CHIP_SIZE.COMPACT} chevron {...menu.trigger()}>
-        <ChipName>{`+${String(apps.length)}`}</ChipName>
-      </Chip>
+    <Behind depth={depth}>
+      <span className="flex items-center gap-ui-6 pt-ui-4 pb-ui-12 ps-ui-4 pe-ui-4">
+        <Chip look={CHIP_LOOK.TOOLBAR} size={CHIP_SIZE.COMPACT} chevron {...menu.trigger()}>
+          <IconPile apps={apps.slice(0, 4)} />
+          <ChipName>{`${String(apps.length)} more apps`}</ChipName>
+        </Chip>
+        {using ? <WorkingMark /> : null}
+      </span>
       {menu.drawn && (
         <Menu
           label="More apps this turn"
@@ -239,113 +253,71 @@ function MoreApps({
             apps.map((app) => ({
               label: app.name,
               icon: <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />,
-              detail:
-                live.working && app === live.inUse
-                  ? "Using now"
-                  : (LAST_DONE.get(app) ?? "Looked at the window"),
+              tag: live.working && app === live.inUse ? <WorkingMark /> : undefined,
               onSelect: () => onPick(app),
             })),
           ]}
           onClose={menu.close}
         />
       )}
-    </>
+    </Behind>
   );
 }
 
-/** The stacked preview: every other app behind, deepest first, then the front window. */
+/** The stacked preview: the apps behind, deepest first, then the front window. */
 function Stacked({
   live,
+  overflow,
   onPick,
   onMinimize,
 }: {
   live: Live;
+  overflow: Overflow;
   onPick: (app: App) => void;
   onMinimize: () => void;
 }): React.JSX.Element {
   const others = live.used.filter((app) => app !== live.shown);
-  const behind = others.slice(0, MOST_BEHIND);
-  const counted = others.length - behind.length;
+  // Note that past two apps behind, the deepest card holds the rest as a pile, or, piled throughout, every app behind does.
+  const piled = overflow === OVERFLOW.ALL ? others.length > 1 : others.length > MOST_BEHIND;
+  const titled = piled ? (overflow === OVERFLOW.ALL ? [] : others.slice(0, 1)) : others;
+  const pile = piled ? others.slice(titled.length) : [];
 
   return (
     <div className={`flex flex-col ${live.narrow ? "w-full" : "w-cpo-wide"}`}>
-      {behind.toReversed().map((app, at) => (
+      {pile.length > 0 ? (
+        <PileTitle apps={pile} live={live} depth={titled.length + 1} onPick={onPick} />
+      ) : null}
+      {titled.toReversed().map((app, at) => (
         <BehindTitle
           key={app.name}
           app={app}
           live={live}
-          depth={behind.length - at}
+          depth={titled.length - at}
           onPick={onPick}
         />
       ))}
       <div className="relative">
         <FrontCard live={live}>
-          <TitleBar
-            live={live}
-            middle={
-              counted > 0 ? (
-                <MoreApps apps={others.slice(MOST_BEHIND)} live={live} onPick={onPick} />
-              ) : null
-            }
-            onMinimize={onMinimize}
-          />
+          <TitleBar live={live} onMinimize={onMinimize} />
         </FrontCard>
       </div>
     </div>
   );
 }
 
-/** A's "+N", a menu of every app this turn, the one shown checked, a choice showing it. */
-function AppsMenu({ live, onPick }: { live: Live; onPick: (app: App) => void }): ReactNode {
-  const menu = useMenu(true);
-
-  if (live.used.length < 2) return null;
-
-  return (
-    <>
-      <Chip look={CHIP_LOOK.TOOLBAR} size={CHIP_SIZE.COMPACT} chevron {...menu.trigger()}>
-        <ChipName>{`+${String(live.used.length - 1)}`}</ChipName>
-      </Chip>
-      {menu.drawn && (
-        <Menu
-          label="Apps this turn"
-          menu={menu.drawn}
-          groups={[
-            live.used.map((app) => ({
-              label: app.name,
-              icon: <AppIcon src={app.icon} size={APP_ICON_SIZE.LINE} />,
-              detail:
-                live.working && app === live.inUse
-                  ? "Using now"
-                  : (LAST_DONE.get(app) ?? "Looked at the window"),
-              checked: app === live.shown,
-              mark: MENU_ITEM_MARK.CHECK,
-              onSelect: () => onPick(app),
-            })),
-          ]}
-          onClose={menu.close}
-        />
-      )}
-    </>
-  );
-}
-
-/** The minimized preview: the app in use and what it is doing, or how many apps the turn used. */
+/** The minimized preview: the apps as a pile, the one the agent is in first and named, with the mark; or how many the turn used. */
 function Pill({ live, onRestore }: { live: Live; onRestore: () => void }): React.JSX.Element {
-  const others = live.used.length - 1;
+  const pile = [live.inUse, ...live.used.filter((app) => app !== live.inUse)].slice(0, 3);
 
   return (
-    <Chip look={CHIP_LOOK.PILL} aria-label="Show the preview" onClick={onRestore}>
-      <AppIcon src={live.inUse.icon} size={APP_ICON_SIZE.LINE} />
+    <Chip look={CHIP_LOOK.PILL} aria-label="Show the apps' windows" onClick={onRestore}>
+      <IconPile apps={pile} />
       <ChipName>
-        {live.working
-          ? `Using ${live.inUse.name}`
-          : live.used.length === 1
-            ? `Used ${live.inUse.name}`
-            : `Used ${String(live.used.length)} apps`}
+        {live.working || live.used.length === 1
+          ? live.inUse.name
+          : `${String(live.used.length)} apps`}
       </ChipName>
       {live.working ? <WorkingMark /> : null}
-      {live.working && others > 0 ? <ChipName>{`+${String(others)}`}</ChipName> : null}
     </Chip>
   );
 }
@@ -434,7 +406,7 @@ const ALL_APPS: readonly App[] = [
 ];
 
 export function ComputerPreviewDemo(): React.JSX.Element {
-  const [design, setDesign] = useState<Design>(DESIGN.STACKED);
+  const [overflow, setOverflow] = useState<Overflow>(OVERFLOW.REST);
   const [theme, setTheme] = useState<Theme>(openingTheme);
   const [width, setWidth] = useState<Width>(WIDTH.WIDE);
   const [mac, setMac] = useState<Mac>(MAC.THAT);
@@ -504,16 +476,13 @@ export function ComputerPreviewDemo(): React.JSX.Element {
   const preview =
     used.length === 0 ? null : minimized ? (
       <Pill live={live} onRestore={() => setMinimized(false)} />
-    ) : design === DESIGN.STACKED ? (
-      <Stacked live={live} onPick={setShown} onMinimize={() => setMinimized(true)} />
     ) : (
-      <FrontCard live={live}>
-        <TitleBar
-          live={live}
-          middle={<AppsMenu live={live} onPick={setShown} />}
-          onMinimize={() => setMinimized(true)}
-        />
-      </FrontCard>
+      <Stacked
+        live={live}
+        overflow={overflow}
+        onPick={setShown}
+        onMinimize={() => setMinimized(true)}
+      />
     );
 
   return (
@@ -521,12 +490,12 @@ export function ComputerPreviewDemo(): React.JSX.Element {
       <Stack gap={GAP.FIELD}>
         <Inline gap={GAP.CONTROL} wrap>
           <Control
-            label="Design"
-            value={design}
-            onChange={setDesign}
+            label="Apps past two"
+            value={overflow}
+            onChange={setOverflow}
             items={[
-              { value: DESIGN.STACKED, label: "Stacked" },
-              { value: DESIGN.MENU, label: "A: +N menu" },
+              { value: OVERFLOW.REST, label: "Pile behind one title" },
+              { value: OVERFLOW.ALL, label: "All behind in one pile" },
             ]}
           />
           <Control
