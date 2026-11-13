@@ -1,6 +1,6 @@
 #8944 at da25cc644 (JS bundle on Nov 12's native app: layout and behavior only.)
 jjs-r1 keyboard ride (kbd8944b), IPH light+dark: PASS (pr-8944/jjs/*kbd*)
 AX3 (ax8944), IPH light: PASS on rings, ask glyph, unread dot, composer (pr-8944/jjs/*-ax-*)
-AX3 retake r (ax8944b): INCONCLUSIVE. Tap at 88% landed ~24 pt left of the Sub-tasks + glyph (outside a 44 pt target's 22 pt reach), shots r-1 and r-2 byte-identical. Account row below the fold of the half-height switcher sheet, so the workspace row was tapped and the Inbox, not Settings, came back (pr-8944/jjs/*-r-*)
-AX3 retake r3 (ax8944c: tap 89% = ~20 pt, sheet dragged full first): running at 15:05 UTC, verdict follows.
-Side note: at AX3 the switcher's 'Workspace settings' wraps with 'settings' under the gear, not under 'Workspace' (#9020's area).
+AX3 account row -> Settings (r3, sheet dragged full): PASS. Account row stands last in its own card; Settings root wraps cleanly at AX3 (r3-3, r3-4).
+Section + 44 pt target: FAIL at this head alone. A tap ~20 pt left of the Sub-tasks + glyph (inside a trailing 44 pt frame) did nothing: r3-1 and r3-2 byte-identical. Code agrees: row-list.tsx's SectionAddButton puts frame(44x44) and contentShape on the Button, not its label, the class #8934 fixed; a borderless button answers only where its label is hit, so only the glyph takes a press. #8935 (open, unarmed) moves both onto the glyph. Pass once #8935 lands or #8944 carries the same move; one retake of the 20 pt tap confirms.
+Side notes: at AX3 the switcher's 'Workspace settings' wraps with 'settings' under the gear (#9020's area); the email hyphenates as ada@exam-ple.com.
