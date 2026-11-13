@@ -37,6 +37,7 @@ import { COMMENTS_EXAMPLE } from "./examples/comments";
 import { COMPLETION_SOUNDS_EXAMPLE } from "./examples/completion-sounds";
 import { COMPOSER_FOOTS_EXAMPLE } from "./examples/composer-foots";
 import { COMPOSER_FRAMES_EXAMPLE } from "./examples/composer-frames";
+import { COMPUTER_PREVIEW_OPTIONS_EXAMPLE } from "./examples/computer-preview-options";
 import { CONFIRM_DIALOGS_EXAMPLE } from "./examples/confirm-dialogs";
 import { COPY_BUTTONS_EXAMPLE } from "./examples/copy-buttons";
 import { CORNER_COUNTS_EXAMPLE } from "./examples/corner-counts";
@@ -219,6 +220,7 @@ export const EXAMPLES: readonly Example[] = [
   COPY_BUTTONS_EXAMPLE,
   CODE_CARDS_EXAMPLE,
   COMMAND_ASK_EXAMPLE,
+  COMPUTER_PREVIEW_OPTIONS_EXAMPLE,
   APP_ASK_EXAMPLE,
   COMMAND_DIALOG_EXAMPLE,
   COMMENTS_EXAMPLE,

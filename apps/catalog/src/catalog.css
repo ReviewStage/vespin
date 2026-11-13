@@ -1179,3 +1179,72 @@ body {
 .catalog-transcript-fold .ui-disclosure-summary:hover {
   color: var(--ui-color-text);
 }
+
+/* THROWAWAY: computer preview options (`examples/computer-preview-options.tsx`). */
+@source "./examples/computer-preview-options.tsx";
+@theme {
+  --spacing-cpo-wide: 320px;
+  --spacing-cpo-tall: 200px;
+  --spacing-cpo-narrow: 240px;
+}
+
+.cpo-options {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-48);
+}
+
+.cpo-row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-24);
+  padding: var(--ui-space-12);
+  background: var(--ui-color-ground);
+}
+
+.cpo-line {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--ui-space-24);
+  padding: var(--ui-space-12);
+  background: var(--ui-color-ground);
+}
+
+.cpo-scene {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-8);
+  margin: 0;
+}
+
+.cpo-wide {
+  width: 560px;
+}
+
+.cpo-narrow {
+  width: 390px;
+}
+
+.cpo-room {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ui-space-8);
+  padding: var(--ui-space-16);
+  border: 1px dashed var(--ui-color-border-strong);
+  border-radius: var(--ui-radius-8);
+}
+
+.cpo-over {
+  display: flex;
+  min-height: 40px;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.cpo-over-end {
+  align-items: flex-end;
+}
+
+.cpo-over > .ui-chip {
+  align-self: flex-end;
+}
