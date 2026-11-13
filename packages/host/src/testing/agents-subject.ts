@@ -24,6 +24,7 @@ import {
   AGENT_STATUS,
   type AgentNewestAnswer,
   type AgentPage,
+  type AgentQueueChange,
   type AgentSummary,
   CHANGED_FILE_STATUS,
   CHECK_SUMMARY,
@@ -275,6 +276,8 @@ type CommittedIn = { readonly txid?: string };
 /** The service as a script, writing down every ask in the order it was made. */
 function fakeService() {
   const asked: string[] = [];
+  /** Each change of a queue the service was asked, as it was asked. */
+  const queueChanges: AgentQueueChange[] = [];
   let scope: typeof LIVE_ANSWERED | { readonly failure: "not-found" } | undefined;
   let cursor = AGENT_CURSOR_START;
 
@@ -647,6 +650,7 @@ function fakeService() {
         Effect.suspend(() => queueGate),
         Effect.sync(() => {
           asked.push(`queue:${agentId}:${change.change}`);
+          queueChanges.push(change);
 
           return queueAnswer;
         }),
@@ -1022,6 +1026,7 @@ function fakeService() {
   return {
     client,
     asked,
+    queueChanges,
     live,
     /** Whether the service answers a transcript's live read, or that the account reaches no such agent; none answers unanswered. */
     sealTranscript: (
@@ -1424,6 +1429,7 @@ export function subject(
       held: (transcript?: { readonly agentId: string; readonly callId?: string }) =>
         transcripts(transcript).map((each) => each.rows),
       asked: service.asked,
+      queueChanges: service.queueChanges,
       startCommits: service.startCommits,
       leaveStartsUnanswered: service.leaveStartsUnanswered,
       answerRemoves: service.answerRemoves,

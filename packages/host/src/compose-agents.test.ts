@@ -832,10 +832,10 @@ it.effect(
   "a message sent while the agent's machine boots stands in its queue from the moment it is sent, where the service puts it, and never in the transcript",
   () =>
     Effect.gen(function* () {
-      const { acts, held, answerMessage } = yield* queueFollowed(undefined, {
-        phase: BOOT_PHASE.STARTING,
-        since: NOW,
-      });
+      const { acts, held, answerMessage, answerQueue, queueChanges } = yield* queueFollowed(
+        undefined,
+        { phase: BOOT_PHASE.STARTING, since: NOW },
+      );
 
       const from = held().length;
       const answered = yield* Deferred.make<void>();
@@ -862,6 +862,14 @@ it.effect(
       yield* settled;
 
       assert.deepEqual(placesIn(placesOf(held, from, SENT.text)), ["queued"]);
+
+      // An edit asked under the key it was drawn by reaches the row the service stored it under.
+      answerQueue({ queue: { messages: queueOf("Run the tests", 1).messages, revision: 3 } });
+      yield* acts.AGENTS_QUEUE({
+        agentId: AGENT_ID,
+        change: { change: QUEUE_CHANGE.DELETE, messageId: SENT_KEY },
+      });
+      assert.deepEqual(queueChanges.at(-1), { change: QUEUE_CHANGE.DELETE, messageId: queued.id });
     }),
 );
 

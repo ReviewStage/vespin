@@ -152,6 +152,15 @@ function filesOf(
   };
 }
 
+/**
+ * Whether `id` names the queued message: its own id, or the send key of one
+ * sent while the agent's machine booted, which is drawn under that key until
+ * the service answers the id it stored it under.
+ */
+function names(message: QueuedMessage, id: string): boolean {
+  return message.id === id || message.sendKey === id;
+}
+
 /** The queue with the message `id` names as `changed` leaves it; as it is where it lists none. */
 function withMessage(
   queue: AgentQueue,
@@ -160,8 +169,23 @@ function withMessage(
 ): AgentQueue {
   return {
     ...queue,
-    messages: queue.messages.map((message) => (message.id === id ? changed(message) : message)),
+    messages: queue.messages.map((message) => (names(message, id) ? changed(message) : message)),
   };
+}
+
+/** A change of the queue addressed to the ids the service stores its messages under, as `storedId` names each. */
+function addressed(change: AgentQueueChange, storedId: (id: string) => string): AgentQueueChange {
+  switch (change.change) {
+    case QUEUE_CHANGE.EDIT:
+    case QUEUE_CHANGE.HOLD:
+    case QUEUE_CHANGE.DELETE:
+    case QUEUE_CHANGE.STEER:
+      return { ...change, messageId: storedId(change.messageId) };
+    case QUEUE_CHANGE.REORDER:
+      return { ...change, order: change.order.map(storedId) };
+    default:
+      return change;
+  }
 }
 
 /** The messages sending with `message` the newest, where none under its id stands already. */
@@ -242,11 +266,15 @@ function drawnChange({ change, pictures, queuedBy }: QueueWrite, sentAt: number)
     case QUEUE_CHANGE.DELETE:
       return queueChanged((queue) => ({
         ...queue,
-        messages: queue.messages.filter((message) => message.id !== change.messageId),
+        messages: queue.messages.filter((message) => !names(message, change.messageId)),
       }));
     case QUEUE_CHANGE.REORDER: {
       const at = new Map(change.order.map((id, index) => [id, index]));
-      const placed = (message: QueuedMessage) => at.get(message.id) ?? change.order.length;
+
+      const placed = (message: QueuedMessage) =>
+        at.get(message.id) ??
+        (message.sendKey === undefined ? undefined : at.get(message.sendKey)) ??
+        change.order.length;
 
       return queueChanged((queue) => ({
         ...queue,
@@ -258,14 +286,14 @@ function drawnChange({ change, pictures, queuedBy }: QueueWrite, sentAt: number)
       return queueChanged(({ paused: _paused, ...queue }) => queue);
     case QUEUE_CHANGE.STEER:
       return (outbox) => {
-        const message = outbox.queue.messages.find((each) => each.id === change.messageId);
+        const message = outbox.queue.messages.find((each) => names(each, change.messageId));
 
         if (message === undefined) return outbox;
 
         return {
           queue: {
             ...outbox.queue,
-            messages: outbox.queue.messages.filter((each) => each.id !== change.messageId),
+            messages: outbox.queue.messages.filter((each) => each !== message),
           },
           sending: sendingWith(
             outbox.sending,
@@ -438,6 +466,18 @@ export function agentQueues(
     const standing = MutableHashMap.empty<string, Standing>();
     /** Whether each followed agent's first launch holds its lines while its machine boots, as its newest page said. */
     const booting = MutableHashMap.empty<string, boolean>();
+    /** The id the service stored each message sent while a machine booted under, by its send key, as its answers and pages said. */
+    const stored = MutableHashMap.empty<string, string>();
+
+    /** Notes the ids a queue the service said stores its boot-held messages under. */
+    const storedIn = (queue: AgentQueue) => {
+      for (const { id, sendKey } of queue.messages) {
+        if (sendKey !== undefined && sendKey !== id) MutableHashMap.set(stored, sendKey, id);
+      }
+    };
+
+    /** The id the service stores the message `id` names under; `id` itself where it said no other. */
+    const storedId = (id: string) => Option.getOrElse(MutableHashMap.get(stored, id), () => id);
 
     /**
      * Whether the agent's first launch holds the lines sent to it now, so the
@@ -544,8 +584,11 @@ export function agentQueues(
         /** A page's queue taken as the agent's, at its revision, and every change it carries let stand down. */
         const taken = (queue: AgentQueue) =>
           Effect.andThen(
-            outboxes.answer([{ agentId, queue, sending: [] }], { at: BigInt(queue.revision) }),
-            waits.queue.answered,
+            Effect.sync(() => storedIn(queue)),
+            Effect.andThen(
+              outboxes.answer([{ agentId, queue, sending: [] }], { at: BigInt(queue.revision) }),
+              waits.queue.answered,
+            ),
           );
 
         // Note that a transcript held again takes the queue and the boot it was left with, so a change still standing is drawn over it before the next page lands.
@@ -631,7 +674,8 @@ export function agentQueues(
           // A change waiting behind another while its member signed out never goes under the next account's sign-in.
           input.queuedBy === "" || input.queuedBy !== accountId()
             ? Effect.succeed<AgentQueueAnswerView>({ failure: AGENT_CALL_FAILURE.UNANSWERED })
-            : sends.queue(input.agentId, input.change),
+            : // Note that the change is addressed as it goes, after any send ahead of it was answered the id it stored.
+              sends.queue(input.agentId, addressed(input.change, storedId)),
           (answer): Written<OutboxChange, AgentQueueAnswerView> | Refused<AgentQueueAnswerView> => {
             if (!("queue" in answer)) return { refused: answer };
             const { agentId, change } = input;
@@ -727,6 +771,18 @@ export function agentQueues(
             }
           }
 
+          // The account signed in may have changed while the rewind went, so the sender is asked again.
+          if (sender !== accountId()) {
+            yield* refusedChanged(sender, agentId, (was) => [
+              ...without(line.id)(was),
+              { ...line, refused: { failure: AGENT_CALL_FAILURE.UNANSWERED } },
+            ]);
+
+            return {
+              refused: { failure: AGENT_CALL_FAILURE.UNANSWERED },
+            } satisfies Refused<AgentAgentAnswer>;
+          }
+
           const answer = yield* sends.message(agentId, request);
 
           if ("failure" in answer) {
@@ -745,6 +801,7 @@ export function agentQueues(
 
           // A message the agent's first launch holds stands as the queue it waits in, which the service answered, in the line's place.
           if (answer.queued !== undefined) {
+            storedIn(answer.queued);
             const taken = { agentId, step: queueAnswered(answer.queued) };
 
             return {
@@ -791,7 +848,7 @@ export function agentQueues(
 
       const message = pool
         .row(AGENT_OUTBOX, write.agentId)
-        ?.queue.messages.find((each) => each.id === change.messageId);
+        ?.queue.messages.find((each) => names(each, change.messageId));
 
       return message === undefined
         ? { ...write, sentAt }
