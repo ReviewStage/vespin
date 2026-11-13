@@ -317,7 +317,31 @@ function MessageView({
   const { writer } = message;
   const moment = now ?? Date.now();
 
-  // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from run to run, that a message after its run's head is a container labeled who and when, so VoiceOver says it on entering the message as Messages reads the sender on every bubble, while the message's lines, links and files stay elements of their own, and that a long press on the message offers Copy message, a picture's, a recording's, or a file's own menu standing over it.
+  const name = (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
+        foregroundStyle(colors.TEXT),
+        lineLimit(large ? 3 : 1),
+      ]}
+    >
+      {writer.name}
+    </Text>
+  );
+
+  const time = (
+    <Text
+      modifiers={[
+        font({ textStyle: TYPE_ROLE.TIME }),
+        monospacedDigit(),
+        foregroundStyle(colors.TEXT_MUTED),
+      ]}
+    >
+      {sinceText(message.at, moment)}
+    </Text>
+  );
+
+  // Note that the writer's line is heard as one heading, who and when, so VoiceOver's Headings rotor steps from run to run, that a message after its run's head is a container labeled who and when, so VoiceOver says it on entering the message as Messages reads the sender on every bubble, while the message's lines, links and files stay elements of their own, and that past the accessibility sizes the time stands under the name rather than beside it, as Mail's and Settings' do, so a long name keeps its width, and that a long press on the message offers Copy message, a picture's, a recording's, or a file's own menu standing over it.
   return (
     <CopyWordsSwiftMenu words={message.words}>
       <VStack
@@ -347,24 +371,17 @@ function MessageView({
             ) : (
               <Avatar name={writer.name} picture={writer.picture} size={MARK_SIZE.WRITER} />
             )}
-            <Text
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.ROW_LINE, weight: "semibold" }),
-                foregroundStyle(colors.TEXT),
-                lineLimit(large ? 2 : 1),
-              ]}
-            >
-              {writer.name}
-            </Text>
-            <Text
-              modifiers={[
-                font({ textStyle: TYPE_ROLE.TIME }),
-                monospacedDigit(),
-                foregroundStyle(colors.TEXT_MUTED),
-              ]}
-            >
-              {sinceText(message.at, moment)}
-            </Text>
+            {large ? (
+              <VStack alignment="leading" spacing={2}>
+                {name}
+                {time}
+              </VStack>
+            ) : (
+              <>
+                {name}
+                {time}
+              </>
+            )}
             <Spacer />
           </HStack>
         ) : null}
