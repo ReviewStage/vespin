@@ -23,7 +23,7 @@ import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { FileTypeIcon } from "../tasks/file-type-icon.js";
 import { InboxItemChipGlyph } from "../tasks/inbox-item-chip.js";
 import { IssueMark } from "../tasks/issue-mark.js";
-import { useMacAppIcon } from "../tasks/mac-apps.js";
+import { useAllowedAppIcon, useMacAppIcon } from "../tasks/mac-apps.js";
 import { ReadAgentModel } from "../tasks/mentioned-agent-card.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { SkillMark } from "../tasks/skill-ref.js";
@@ -194,11 +194,14 @@ function WorkspaceMark({ slug }: { slug: string }): React.JSX.Element {
 
 /**
  * An app on the developer's Mac by its icon, as this Mac draws it; off the
- * Mac, or where it drew none, the icon a `computer` call kept for the app in
- * the conversation; a screen's glyph where there is neither.
+ * Mac, as a machine of the reader's that always allows it posted it, else
+ * the icon a `computer` call kept for the app in the conversation; a
+ * screen's glyph where there is none.
  */
 function MacAppMark({ app }: { app: string }): React.JSX.Element {
-  const own = useMacAppIcon(app);
+  const onMac = useMacAppIcon(app);
+  const posted = useAllowedAppIcon(app);
+  const own = onMac ?? posted;
   const kept = useKeptApps().get(app)?.icon;
 
   return own === undefined && kept !== undefined ? (

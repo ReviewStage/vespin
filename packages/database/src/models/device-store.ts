@@ -23,6 +23,8 @@ import {
   hostUpdateSchema,
 } from "@repo/features/device-agent-wire";
 import {
+  type AllowedAppLook,
+  allowedAppLookSchema,
   type MachineCommandMode,
   type MachineDeviceJoinRequest,
   type MachineDeviceSettings,
@@ -395,6 +397,22 @@ const joinDevice = SqlSchema.findAll({
     ),
 });
 
+const writeAppLooks = SqlSchema.findAll({
+  Request: Schema.Struct({
+    ...DeviceKeySchema.fields,
+    looks: Schema.Array(allowedAppLookSchema),
+  }),
+  Result: Schema.Struct({ id: Schema.String }),
+  execute: ({ userId, id, looks }) =>
+    Database.use((db) =>
+      db
+        .update(device)
+        .set({ allowedAppLooks: looks })
+        .where(and(eq(device.id, id), eq(device.userId, userId)))
+        .returning({ id: device.id }),
+    ),
+});
+
 const writeSettings = SqlSchema.findAll({
   Request: Schema.Struct({
     ...DeviceKeySchema.fields,
@@ -418,6 +436,7 @@ const findAllowedApps = SqlSchema.findAll({
     id: Schema.String,
     name: Schema.String,
     alwaysAllowedApps: Schema.Array(Schema.String),
+    allowedAppLooks: Schema.NullOr(Schema.Array(allowedAppLookSchema)),
   }),
   execute: ({ userId }) =>
     Database.use((db) =>
@@ -426,6 +445,7 @@ const findAllowedApps = SqlSchema.findAll({
           id: device.id,
           name: device.name,
           alwaysAllowedApps: sql<readonly string[]>`${device.alwaysAllowedApps}`,
+          allowedAppLooks: device.allowedAppLooks,
         })
         .from(device)
         .where(
@@ -576,16 +596,17 @@ export function joinCommandDevice(
   );
 }
 
-/** One of the account's machines by its id and name, and the apps on it the member always allows, by bundle id. */
+/** One of the account's machines by its id and name, the apps on it the member always allows, by bundle id, and how the machine names and draws each it posted a look for. */
 export interface MachineAllowedApps {
   readonly deviceId: string;
   readonly name: string;
   readonly apps: readonly string[];
+  readonly looks: readonly AllowedAppLook[];
 }
 
 /**
  * The account's own machines that always allow an app, each with those
- * apps, by the machine's name; a machine removed, or one that allows none
+ * apps and the looks it posted for them, by the machine's name; a machine removed, or one that allows none
  * or never carried its list up, is left out. Note that the read is keyed by
  * the account, so a teammate's machines are never among them.
  */
@@ -594,9 +615,28 @@ export function allowedAppsOf(userId: string): DeviceEffect<readonly MachineAllo
     rows.flatMap((row) =>
       row.alwaysAllowedApps.length === 0
         ? []
-        : [{ deviceId: row.id, name: row.name, apps: row.alwaysAllowedApps }],
+        : [
+            {
+              deviceId: row.id,
+              name: row.name,
+              apps: row.alwaysAllowedApps,
+              // Note that a look of an app the machine no longer allows is left out, as one posted before a change the service took from elsewhere.
+              looks: (row.allowedAppLooks ?? []).filter((look) =>
+                row.alwaysAllowedApps.includes(look.app),
+              ),
+            },
+          ],
     ),
   );
+}
+
+/** Keeps how the account's device names and draws the apps it always allows, in place of what it posted before; false where the account holds no such device. */
+export function saveDeviceAppLooks(
+  userId: string,
+  id: string,
+  looks: readonly AllowedAppLook[],
+): DeviceEffect<boolean> {
+  return Effect.map(writeAppLooks({ userId, id, looks }), (rows) => rows.length > 0);
 }
 
 /** Keeps the settings the member gave the account's device; false where the account holds no such device. */

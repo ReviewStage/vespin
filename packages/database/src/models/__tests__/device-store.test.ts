@@ -19,6 +19,7 @@ import {
   markAwayDevices,
   registerDevice,
   saveCommandDeviceSettings,
+  saveDeviceAppLooks,
 } from "../device-store.js";
 import { enrollOwnDevice, hostsOf, removeHost } from "../host-store.js";
 
@@ -112,41 +113,51 @@ it.layer(getTestDB())("the device store", (it) => {
       }),
   );
 
-  it.effect("an account reads the apps its own machines always allow, never another's", () =>
-    Effect.gen(function* () {
-      const { owner, other } = yield* openAccounts;
-      const machine = { platform: DEVICE_PLATFORM.DARWIN, arch: DEVICE_ARCH.ARM64 };
-      const ask = MACHINE_COMMAND_MODE.ASK;
-      const studio = randomUUID();
+  it.effect(
+    "an account reads the apps its own machines always allow and their looks, never another's",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other } = yield* openAccounts;
+        const machine = { platform: DEVICE_PLATFORM.DARWIN, arch: DEVICE_ARCH.ARM64 };
+        const ask = MACHINE_COMMAND_MODE.ASK;
+        const studio = randomUUID();
 
-      yield* joinCommandDevice(owner, {
-        ...machine,
-        deviceId: studio,
-        name: "Studio",
-        settings: { commandMode: ask, alwaysAllowedApps: ["com.apple.Notes"] },
-      });
-      yield* joinCommandDevice(owner, {
-        ...machine,
-        deviceId: randomUUID(),
-        name: "Laptop",
-        settings: { commandMode: ask, alwaysAllowedApps: [] },
-      });
-      yield* joinCommandDevice(other, {
-        ...machine,
-        deviceId: randomUUID(),
-        name: "Teammate's",
-        settings: { commandMode: ask, alwaysAllowedApps: ["com.tinyspeck.slackmacgap"] },
-      });
+        yield* joinCommandDevice(owner, {
+          ...machine,
+          deviceId: studio,
+          name: "Studio",
+          settings: { commandMode: ask, alwaysAllowedApps: ["com.apple.Notes"] },
+        });
+        yield* joinCommandDevice(owner, {
+          ...machine,
+          deviceId: randomUUID(),
+          name: "Laptop",
+          settings: { commandMode: ask, alwaysAllowedApps: [] },
+        });
+        yield* joinCommandDevice(other, {
+          ...machine,
+          deviceId: randomUUID(),
+          name: "Teammate's",
+          settings: { commandMode: ask, alwaysAllowedApps: ["com.tinyspeck.slackmacgap"] },
+        });
 
-      assert.deepEqual(yield* allowedAppsOf(owner), [
-        { deviceId: studio, name: "Studio", apps: ["com.apple.Notes"] },
-      ]);
-      assert.deepEqual(
-        (yield* allowedAppsOf(other)).map((each) => each.name),
-        ["Teammate's"],
-        "each account reads its own machine alone",
-      );
-    }),
+        const notes = { app: "com.apple.Notes", name: "Notes", iconPng: "iVBORw0KGgo=" };
+        // Note that a look of an app the machine no longer allows is kept as posted but never read.
+        const gone = { app: "com.apple.Safari", name: "Safari" };
+        const savedByOther = yield* saveDeviceAppLooks(other, studio, [gone]);
+        const saved = yield* saveDeviceAppLooks(owner, studio, [notes, gone]);
+
+        assert.equal(savedByOther, false, "another account posts no looks for the owner's machine");
+        assert.equal(saved, true);
+        assert.deepEqual(yield* allowedAppsOf(owner), [
+          { deviceId: studio, name: "Studio", apps: ["com.apple.Notes"], looks: [notes] },
+        ]);
+        assert.deepEqual(
+          (yield* allowedAppsOf(other)).map((each) => each.name),
+          ["Teammate's"],
+          "each account reads its own machine alone",
+        );
+      }),
   );
 
   it.effect(

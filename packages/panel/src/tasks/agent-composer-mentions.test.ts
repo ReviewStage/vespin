@@ -289,12 +289,13 @@ const MAC_APPS = [
   { name: "Notes", bundleId: "com.apple.Notes", running: false, allowed: true },
 ];
 
-/** The reader's own machines that always allow an app, as the service answers them: Notes on both, Slack on one. */
+/** The reader's own machines that always allow an app, as the service answers them: Notes on both, Slack on one, which named it. */
 const ALLOWED_MACHINES = [
   {
     deviceId: "00000000-0000-4000-8000-000000000001",
     name: "Studio",
     apps: ["com.apple.Notes", "com.tinyspeck.slackmacgap"],
+    looks: [{ app: "com.tinyspeck.slackmacgap", name: "Slack" }],
   },
   { deviceId: "00000000-0000-4000-8000-000000000002", name: "Laptop", apps: ["com.apple.Notes"] },
 ];
@@ -854,7 +855,7 @@ test("with Computer use on, an @ in the box offers the apps on this Mac, a pick 
   ]);
 });
 
-test("off a Mac that runs its commands, an @ in the box offers the apps the reader's machines always allow, each saying the machines it is allowed on, a pick sent as the app's mention by its bundle id", async () => {
+test("off a Mac that runs its commands, an @ in the box offers the apps the reader's machines always allow, each by the name its machine posted and saying the machines it is allowed on, a pick sent as the app's mention by its bundle id", async () => {
   const sent: string[] = [];
 
   const sender: MessageSender = (_agentId, { text }) => {
@@ -905,10 +906,10 @@ test("off a Mac that runs its commands, an @ in the box offers the apps the read
   assert.deepEqual(rows, [
     ["Computer", ""],
     ["Notes", "Always allowed on Studio, Laptop"],
-    ["Slackmacgap", "Always allowed on Studio"],
+    ["Slack", "Always allowed on Studio"],
   ]);
   assert.deepEqual(sent, [
-    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.tinyspeck.slackmacgap" }, "Slackmacgap", PLACE)}`,
+    `Check ${mentionMarkdown({ kind: MENTION_KIND.MAC_APP, app: "com.tinyspeck.slackmacgap" }, "Slack", PLACE)}`,
   ]);
 });
 

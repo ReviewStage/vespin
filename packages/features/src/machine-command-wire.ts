@@ -157,6 +157,12 @@ export const COMPUTER_BOUNDS = {
   MAX_ELEMENTS_CHARS: 200_000,
   /** The most apps a list carries. */
   MAX_APPS: 200,
+  /**
+   * The most base64 characters of every icon one post of a machine's
+   * allowed apps carries together, under `MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES`
+   * with the names beside them; an app past it is posted by its name alone.
+   */
+  MAX_LOOKS_ICON_CHARS: 3_000_000,
 } as const;
 
 const appName = EffectSchema.String.check(
@@ -611,6 +617,34 @@ export const machineDeviceJoinAnswerSchema = EffectSchema.Struct({
 export const machineDeviceSettingsRequestSchema = EffectSchema.Struct({
   deviceId: wireUuidSchema,
   settings: machineDeviceSettingsSchema,
+});
+
+/**
+ * An app a machine always allows, as the machine names and draws it: by the
+ * bundle id it is allowed by, or its name where it has none, its display
+ * name, and its icon as a 64px PNG in base64 where the machine drew one.
+ */
+export const allowedAppLookSchema = EffectSchema.Struct({
+  app: appName,
+  name: appName,
+  iconPng: EffectSchema.optionalKey(
+    EffectSchema.String.check(EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_ICON_CHARS)),
+  ),
+});
+
+export type AllowedAppLook = typeof allowedAppLookSchema.Type;
+
+/**
+ * How the device names and draws the apps it always allows, as it holds
+ * them now (POST), so a window off the machine lists them by name and icon;
+ * `not-found` where the account holds no such device. Each post stands for
+ * every app the device allows, so one it no longer allows goes with it.
+ */
+export const machineDeviceAppLooksRequestSchema = EffectSchema.Struct({
+  deviceId: wireUuidSchema,
+  looks: EffectSchema.Array(allowedAppLookSchema).check(
+    EffectSchema.isMaxLength(COMPUTER_BOUNDS.MAX_APPS),
+  ),
 });
 
 /** That the service keeps the device's settings as written (POST). */

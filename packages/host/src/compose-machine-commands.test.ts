@@ -5,6 +5,7 @@ import { DEVICE_ARCH, DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import { LIVE_POLL_URL, LIVE_SIGNED_OUT } from "@repo/features/live-wire";
 import type { MachineCommandsLiveAnswer } from "@repo/features/machine-command-live";
 import {
+  type AllowedAppLook,
   COMPUTER_ACTION,
   COMPUTER_PERMISSION,
   type ComputerApp,
@@ -174,6 +175,7 @@ function scriptedService(
   const named: { readonly by: string; readonly device: string | undefined }[] = [];
   const joins: MachineDeviceJoinRequest[] = [];
   const savedSettings: MachineDeviceSettings[] = [];
+  const postedLooks: (readonly AllowedAppLook[])[] = [];
   const settledResults = new Map<string, MachineCommandResult>();
 
   const answer = (rows: boolean): MachineCommandsLiveAnswer => ({
@@ -270,6 +272,12 @@ function scriptedService(
 
         return { saved: true } as const;
       }),
+    saveDeviceAppLooks: (_deviceId, looks) =>
+      Effect.sync(() => {
+        postedLooks.push(looks);
+
+        return { saved: true } as const;
+      }),
     settle: (id, result) =>
       Effect.sync(() => {
         settledResults.set(id, result);
@@ -286,6 +294,7 @@ function scriptedService(
     named,
     joins,
     savedSettings,
+    postedLooks,
     settledResults,
     /** A command queued for the account, as an agent's call queues it. */
     queue: (command: MachineCommand, queuedAt: number) => {
@@ -568,6 +577,104 @@ it.effect(
       );
       assert.deepEqual(service.savedSettings, [
         { commandMode: MACHINE_COMMAND_MODE.NEVER, alwaysAllowedApps: ["com.apple.Notes"] },
+      ]);
+    }),
+);
+
+it.effect(
+  "a joined Mac with Computer use on posts the names and icons of the apps it always allows once, and again only once they change",
+  () =>
+    Effect.gen(function* () {
+      const simulator = { ...SIMULATOR, iconPng: "iVBORw0KGgo=" };
+      const scripted = scriptedHelper([simulator]);
+      const service = scriptedService();
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        computer: { helper: scripted.helper, enabled: true, allowed: [] },
+        device: { id: "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13", apps: [SIMULATOR.bundleId ?? ""] },
+      };
+
+      const { composer, moved } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        gate,
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* TestClock.adjust("15 seconds");
+          yield* settled;
+
+          gate.device?.apps.push("com.example.Gone");
+          yield* moved;
+          yield* settled;
+        }),
+      );
+
+      assert.deepEqual(service.postedLooks, [
+        [{ app: SIMULATOR.bundleId, name: SIMULATOR.name, iconPng: "iVBORw0KGgo=" }],
+        [
+          { app: SIMULATOR.bundleId, name: SIMULATOR.name, iconPng: "iVBORw0KGgo=" },
+          { app: "com.example.Gone", name: "com.example.Gone" },
+        ],
+      ]);
+    }),
+);
+
+it.effect(
+  "an app the helper was too busy to name is posted by its bundle id, and named again at the next look once it answers",
+  () =>
+    Effect.gen(function* () {
+      const scripted = scriptedHelper([SIMULATOR]);
+      let busy = true;
+
+      // The first naming answers that the helper was busy, as one queued behind a long action does.
+      const helper: ComputerUseHelperSeam = {
+        ask: (request, within, stillLet) => {
+          if (busy && request.op === COMPUTER_HELPER_OP.DESCRIBE_APP) {
+            busy = false;
+
+            return Effect.succeed({ failure: COMPUTER_HELPER_FAILURE.FAILED, message: "Busy." });
+          }
+
+          return scripted.helper.ask(request, within, stillLet);
+        },
+      };
+
+      const service = scriptedService();
+      const bundleId = SIMULATOR.bundleId ?? "";
+
+      const gate: Gate = {
+        mode: MACHINE_COMMAND_MODE.ASK,
+        signedIn: true,
+        computer: { helper, enabled: true, allowed: [] },
+        device: { id: "6f1c2a8e-3b7d-4e9a-9c1f-2d4b6a8e0c13", apps: [bundleId] },
+      };
+
+      const { composer } = yield* subject(
+        service,
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        gate,
+      );
+
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          yield* composer.lifetime;
+          yield* settled;
+          yield* TestClock.adjust("15 seconds");
+          yield* settled;
+          yield* TestClock.adjust("15 seconds");
+          yield* settled;
+        }),
+      );
+
+      assert.deepEqual(service.postedLooks, [
+        [{ app: bundleId, name: bundleId }],
+        [{ app: bundleId, name: SIMULATOR.name, iconPng: SIMULATOR.iconPng }],
       ]);
     }),
 );

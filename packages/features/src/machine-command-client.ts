@@ -5,6 +5,7 @@ import { failureSetOf } from "./hosted-failure.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
 import {
+  type AllowedAppLook,
   type MachineCommandKind,
   type MachineCommandResult,
   type MachineDeviceJoinRequest,
@@ -96,5 +97,10 @@ export class HostedMachineCommandClient {
   /** The device's settings written, as the member changed them on this Mac. */
   saveDeviceSettings(deviceId: string, settings: MachineDeviceSettings) {
     return hostedCall(this.#hosted.machineCommands.saveDeviceSettings, { deviceId, settings });
+  }
+
+  /** How the device names and draws the apps it always allows, as this Mac holds them now. */
+  saveDeviceAppLooks(deviceId: string, looks: readonly AllowedAppLook[]) {
+    return hostedCall(this.#hosted.machineCommands.saveDeviceAppLooks, { deviceId, looks });
   }
 }
