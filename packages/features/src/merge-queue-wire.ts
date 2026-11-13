@@ -65,6 +65,15 @@ const mergeQueueTaskSchema = EffectSchema.Struct({
 });
 
 /** Who opened the pull request, as GitHub names them; none for a deleted account. */
+/** How the queue's checks stand on the commit it builds for an entry: how many it reports, how many passed, and the names of those that failed, in GitHub's order. */
+const mergeQueueChecksSchema = EffectSchema.Struct({
+  total: countedNumber,
+  passed: countedNumber,
+  failed: EffectSchema.Array(EffectSchema.String),
+});
+
+export type MergeQueueChecks = typeof mergeQueueChecksSchema.Type;
+
 const mergeQueueAuthorSchema = EffectSchema.Struct({
   login: EffectSchema.String,
   avatarUrl: EffectSchema.String,
@@ -81,6 +90,10 @@ export const mergeQueueEntrySchema = EffectSchema.Struct({
   ),
   /** When it joined the queue, in milliseconds since the epoch. */
   enqueuedAt: countedNumber,
+  /** When GitHub estimates it merges, in milliseconds since the epoch; none where GitHub gives no estimate, and left out by a service from before it was read. */
+  estimatedMergeAt: EffectSchema.optionalKey(EffectSchema.NullOr(countedNumber)),
+  /** How the queue's checks stand on the commit it builds for it; none before it builds one, and left out by a service from before it was read. */
+  checks: EffectSchema.optionalKey(EffectSchema.NullOr(mergeQueueChecksSchema)),
   pullRequest: EffectSchema.Struct({
     number: countedNumber,
     title: EffectSchema.String,

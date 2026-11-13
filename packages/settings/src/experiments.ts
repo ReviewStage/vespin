@@ -132,7 +132,7 @@ export const EXPERIMENTS = [
     listed: true,
     name: "Merge queue",
     detail:
-      "See every pull request waiting in GitHub's merge queues across your workspace's repositories, with the task each belongs to.",
+      "See every pull request waiting in GitHub's merge queues across your workspace's repositories, how its checks stand, and when it should merge.",
     owner: "Charles",
     since: "2026-11-12",
   },

@@ -1,5 +1,5 @@
 /**
- * merge-queue.test.ts -- a workspace's merge queues join each queued pull request to the task whose agent opened it, and refuse a member of another workspace.
+ * merge-queue.test.ts -- a workspace's merge queues join each queued pull request to the task whose agent opened it, carry GitHub's estimate and how its merge group's checks stand, and refuse a member of another workspace.
  *
  * Over the real `GitHubApp`, a GitHub the test scripts, and the account,
  * workspace, task, and agent rows on a real dialect.
@@ -34,7 +34,7 @@ import { readWorkspaceMergeQueue } from "./merge-queue.js";
 
 const RELAY = "acme/relay";
 
-/** `acme/relay`'s queue as GitHub's GraphQL answers it: pull request 42, which an agent opened, ahead of 43, which a person did. */
+/** `acme/relay`'s queue as GitHub's GraphQL answers it: pull request 42, which an agent opened, its merge group's checks passed, failed, and running, ahead of 43, which a person did, with no merge group or estimate yet. */
 function relayQueue(sent: { readonly url: string; readonly method: string }): Response | undefined {
   if (new URL(sent.url).pathname !== "/graphql" || sent.method !== "POST") return undefined;
 
@@ -49,6 +49,8 @@ function relayQueue(sent: { readonly url: string; readonly method: string }): Re
                 position: 2,
                 state: "QUEUED",
                 enqueuedAt: "2026-11-12T10:05:00Z",
+                estimatedTimeToMerge: null,
+                headCommit: null,
                 pullRequest: {
                   number: 43,
                   title: "Bump the linter",
@@ -60,6 +62,21 @@ function relayQueue(sent: { readonly url: string; readonly method: string }): Re
                 position: 1,
                 state: "AWAITING_CHECKS",
                 enqueuedAt: "2026-11-12T10:00:00Z",
+                estimatedTimeToMerge: 240,
+                headCommit: {
+                  statusCheckRollup: {
+                    contexts: {
+                      totalCount: 5,
+                      nodes: [
+                        { __typename: "CheckRun", name: "Tests", conclusion: "SUCCESS" },
+                        { __typename: "CheckRun", name: "Lint", conclusion: "FAILURE" },
+                        { __typename: "CheckRun", name: "Build", conclusion: null },
+                        { __typename: "StatusContext", context: "deploy", state: "ERROR" },
+                        { __typename: "StatusContext", context: "license", state: "SUCCESS" },
+                      ],
+                    },
+                  },
+                },
                 pullRequest: {
                   number: 42,
                   title: "Send invitations in batches",
@@ -154,37 +171,49 @@ const REFUSALS = [
 ];
 
 it.layer(getTestDB())("a workspace's merge queues", (it) => {
-  it.effect("join a queued pull request to the task whose agent opened it", () =>
-    Effect.gen(function* () {
-      const { github, member, workspace, task } = yield* openQueuedWorkspace(7811);
+  it.effect(
+    "join a queued pull request to its task, its estimate, and its merge group's checks",
+    () =>
+      Effect.gen(function* () {
+        const { github, member, workspace, task } = yield* openQueuedWorkspace(7811);
 
-      const answer = yield* readWorkspaceMergeQueue(member, workspace).pipe(
-        Effect.provide(github.layer),
-      );
+        const answer = yield* readWorkspaceMergeQueue(member, workspace).pipe(
+          Effect.provide(github.layer),
+        );
 
-      assert.deepEqual(
-        answer.repositories.map((queue) => ({
-          repository: queue.repository,
-          url: queue.url,
-          entries: queue.entries.map((entry) => [
-            entry.position,
-            entry.state,
-            entry.pullRequest.number,
-            entry.task?.id ?? null,
-          ]),
-        })),
-        [
-          {
-            repository: RELAY,
-            url: "https://github.com/acme/relay/queue/main",
-            entries: [
-              [1, MERGE_QUEUE_ENTRY_STATE.AWAITING_CHECKS, 42, task.id],
-              [2, MERGE_QUEUE_ENTRY_STATE.QUEUED, 43, null],
-            ],
-          },
-        ],
-      );
-    }),
+        assert.deepEqual(
+          answer.repositories.map((queue) => ({
+            repository: queue.repository,
+            url: queue.url,
+            entries: queue.entries.map((entry) => [
+              entry.position,
+              entry.state,
+              entry.pullRequest.number,
+              entry.task?.id ?? null,
+              entry.estimatedMergeAt,
+              entry.checks,
+            ]),
+          })),
+          [
+            {
+              repository: RELAY,
+              url: "https://github.com/acme/relay/queue/main",
+              entries: [
+                // Note that the test clock stands at the epoch, so the estimate's 240 seconds land at 240,000 ms.
+                [
+                  1,
+                  MERGE_QUEUE_ENTRY_STATE.AWAITING_CHECKS,
+                  42,
+                  task.id,
+                  240_000,
+                  { total: 5, passed: 2, failed: ["Lint", "deploy"] },
+                ],
+                [2, MERGE_QUEUE_ENTRY_STATE.QUEUED, 43, null, null, null],
+              ],
+            },
+          ],
+        );
+      }),
   );
 
   it.effect("refuse a member of another workspace as not found, asking GitHub nothing", () =>

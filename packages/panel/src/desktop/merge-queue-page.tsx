@@ -3,12 +3,14 @@
  *
  * Each repository is a section of the page, as a task's Overview draws its
  * own: a section's head (`GROUP_LOOK.SECTION`) with GitHub's mark, its name,
- * how many it holds, and a way to its queue on GitHub, over its line on a
- * track (`TrackList`), front first, each node in its stage's tone, a waiting
- * one's hollow. Every row says who opened the pull request, its title, its
- * number, its task's name, and how long it has been queued, and its stage at
- * its end in words (`mergeQueueStage`), the node alone carrying its tone so
- * no row draws its stage twice. A
+ * and a way to its queue on GitHub, over its line on a track (`TrackList`),
+ * front first, each node in its stage's tone (`mergeQueueStage`), a waiting
+ * one's hollow. Every spot in a row holds one kind of thing or nothing, so
+ * no row says a thing twice: who opened the pull request, its title, under
+ * it its number and how the queue's checks stand on it (how many passed, or
+ * which failed), and at its end when GitHub estimates it merges. The stage
+ * is drawn by the node alone, and spoken before the number for a reader the
+ * node, which is decoration, says nothing to. A
  * row opens its pull request as the window opens a GitHub address
  * (`useOpenLink`): in its agent's Pull request tab where a listed task's
  * agent opened it, else on GitHub. The pull request the page was opened for,
@@ -25,6 +27,7 @@
 
 import type {
   MergeQueueAnswer,
+  MergeQueueChecks,
   MergeQueueEntry,
   MergeQueueRepository,
 } from "@repo/features/merge-queue-wire";
@@ -63,6 +66,7 @@ import {
   TrackList,
   type TrackNode,
   TrackRow,
+  VisuallyHidden,
 } from "@repo/ui";
 import { GLYPH } from "@repo/ui/icons";
 import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
@@ -81,7 +85,6 @@ const WORDS = {
   READING: "Reading the merge queues…",
   EMPTY: "Nothing is queued.",
   UNREAD: "The merge queues could not be read.",
-  QUEUED: "queued",
   OPEN_ON_GITHUB: "Open on GitHub",
 } as const;
 
@@ -129,17 +132,36 @@ function AuthorFace({
   );
 }
 
-/** What a row says under its title: its number, its task's name where it has one, and how long it has been queued. */
+/** How the queue's checks stand on a pull request: the first that failed and how many more did, else how many passed; none before it reports any. */
+function checksWords(checks: MergeQueueChecks | null | undefined): string | undefined {
+  if (checks === null || checks === undefined) return undefined;
+
+  const [first, ...more] = checks.failed;
+
+  if (first !== undefined)
+    return more.length === 0 ? `${first} failed` : `${first} failed +${more.length}`;
+
+  return `${checks.passed} of ${checks.total} ${checks.total === 1 ? "check" : "checks"} passed`;
+}
+
+/** What a row says under its title: its stage, spoken only, its number, and how its checks stand where it has any. */
 function RowFacts({ entry }: { entry: MergeQueueEntry }): React.JSX.Element {
-  const number = `#${entry.pullRequest.number}`;
+  const checks = checksWords(entry.checks);
 
   return (
     <>
-      {entry.task === null ? number : `${number} · ${entry.task.name}`}
-      {" · "}
-      <Time at={entry.enqueuedAt} look={TIME_LOOK.SINCE} />
+      <VisuallyHidden>{`${MERGE_QUEUE_STAGE_LABEL[mergeQueueStage(entry.state)]}, `}</VisuallyHidden>
+      {`#${entry.pullRequest.number}`}
+      {checks === undefined ? null : ` · ${checks}`}
     </>
   );
+}
+
+/** When GitHub estimates the pull request merges, counted down; nothing where it gives no estimate. */
+function MergeEstimate({ entry }: { entry: MergeQueueEntry }): React.JSX.Element | null {
+  const at = entry.estimatedMergeAt;
+
+  return at === null || at === undefined ? null : <Time at={at} look={TIME_LOOK.UNTIL} />;
 }
 
 /** A pull request's node on the track, in its stage's tone: hollow while it waits. */
@@ -167,7 +189,6 @@ function RepositoryQueue({
         look={GROUP_LOOK.SECTION}
         glyph={<ProviderMark provider={MARK_PROVIDER.GITHUB} />}
         label={<ReplayMask>{queue.repository}</ReplayMask>}
-        count={{ value: queue.entries.length, noun: WORDS.QUEUED }}
         actionsShown={GROUP_ACTIONS.AT_REST}
         actions={
           <Tooltip label={WORDS.OPEN_ON_GITHUB}>
@@ -192,7 +213,7 @@ function RepositoryQueue({
               titleReplayMasked
               description={<RowFacts entry={entry} />}
               descriptionReplayMasked
-              meta={MERGE_QUEUE_STAGE_LABEL[mergeQueueStage(entry.state)]}
+              meta={<MergeEstimate entry={entry} />}
               current={entry.pullRequest.url === marked ? LIST_ROW_CURRENT.ITEM : undefined}
               linkHref={entry.pullRequest.url}
               onPress={() => onOpen(entry.pullRequest.url)}
