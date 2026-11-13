@@ -3,5 +3,19 @@
   "compilerOptions": {
     "types": ["vite/client", "node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "vitest.config.ts"],
+  "references": [
+    {
+      "path": "../../packages/features"
+    },
+    {
+      "path": "../../packages/settings"
+    },
+    {
+      "path": "../../packages/ui"
+    },
+    {
+      "path": "../../packages/wire"
+    }
+  ]
 }

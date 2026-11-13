@@ -10,16 +10,15 @@
  * command mode is not Never. A Mac's switch for apps stays on the Mac
  * itself, so an action on an app may go to a machine that then refuses it.
  *
- * The machine a call goes to is the one it names, by name or id; else the
+ * The machine a call goes to is the one it names by id; else the
  * agent's default machine (`agent.target_device_id`); else the machine the
  * agent itself runs on, where it is reachable; else the owner's machine
  * that listened last. A default that cannot take the call, or is gone,
  * refuses it, rather than moving it to another machine without a word, and
- * the refusal names the machines that could; so does a name two machines
- * share. A Mac from before machines
- * claimed commands listens as its account alone, so where none of the
- * owner's machines listens as a device but the account does, the call is
- * queued for the account, as it was before.
+ * the refusal lists the machines that could, each by its id. A Mac from
+ * before machines claimed commands listens as its account alone, so where
+ * none of the owner's machines listens as a device but the account does,
+ * the call is queued for the account, as it was before.
  */
 
 import {
@@ -105,9 +104,9 @@ function routed(machine: CommandMachine): RoutedMachine {
   };
 }
 
-/** A machine as a refusal lists it: its name, and its owner's where it is not the caller's own. */
+/** A machine as a refusal lists it: its name, its owner's, and the id a call names it by. */
 function listed(machine: CommandMachine): string {
-  return `${machine.name} (${machine.ownerName})`;
+  return `${machine.name} (${machine.ownerName}), id "${machine.id}"`;
 }
 
 /** The machines that could take the call, as a refusal ends: named, with how to choose one; a note that there are none otherwise. */
@@ -116,7 +115,7 @@ function others(reachable: readonly CommandMachine[], refused?: CommandMachine):
 
   if (rest.length === 0) return " No other machine can take it now.";
 
-  return ` It can go to ${rest.map(listed).join(", ")}: name one in \`machine\`.`;
+  return ` It can go to ${rest.map(listed).join("; ")}: pass one's id in \`machine\`.`;
 }
 
 /** Why the machine given cannot take a call of the kind given; none where it can. */
@@ -139,20 +138,10 @@ function whyNot(
   return undefined;
 }
 
-/** The machines a call names: the one with its id, or else every one so named, whatever its case. */
-function named(candidates: readonly Candidate[], name: string): readonly Candidate[] {
-  const wanted = name.trim();
-  const byId = candidates.filter((machine) => machine.id === wanted);
-
-  if (byId.length > 0) return byId;
-
-  return candidates.filter((machine) => machine.name.toLowerCase() === wanted.toLowerCase());
-}
-
 /** How a call is routed: its kind, the machine it names, whether a Mac of an account listens as its account alone, as one from before machines claimed does, and why it went nowhere where none of the owner's machines could take it. */
 export interface RouteAsk {
   readonly kind: MachineCommandKind;
-  readonly name?: string | undefined;
+  readonly machineId?: string | undefined;
   readonly accountListening: (userId: string) => TaskStoreEffect<boolean>;
   readonly noMachine: string;
 }
@@ -163,7 +152,7 @@ export interface RouteAsk {
  */
 export function routeOf(
   target: ConversationTarget,
-  { kind, name, accountListening, noMachine }: RouteAsk,
+  { kind, machineId, accountListening, noMachine }: RouteAsk,
 ): TaskStoreEffect<MachineRoute> {
   return Effect.gen(function* () {
     const routing = yield* machineRoutingOf(target);
@@ -195,23 +184,13 @@ export function routeOf(
           };
     };
 
-    if (name !== undefined) {
-      const [machine, ...more] = named(candidates, name);
+    if (machineId !== undefined) {
+      const machine = candidates.find((each) => each.id === machineId);
 
       if (machine === undefined) {
         return {
           kind: MACHINE_ROUTE.REFUSED,
-          reason: `Not run: no machine this task's agents may use is named ${JSON.stringify(name)}.${others(reachable)}`,
-        };
-      }
-
-      // Note that a name two machines share refuses, since either could take one call and the next could go to the other.
-      if (more.length > 0) {
-        const ids = [machine, ...more].map((each) => `${listed(each)}: ${each.id}`);
-
-        return {
-          kind: MACHINE_ROUTE.REFUSED,
-          reason: `Not run: more than one machine is named ${JSON.stringify(name)}; name one in \`machine\` by its id (${ids.join(", ")}).`,
+          reason: `Not run: no machine this task's agents may use has the id ${JSON.stringify(machineId)}.${others(reachable)}`,
         };
       }
 

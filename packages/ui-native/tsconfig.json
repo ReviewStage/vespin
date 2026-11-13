@@ -1,10 +1,18 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../tsconfig.package.json",
   "compilerOptions": {
     "customConditions": ["react-native"],
     "module": "preserve",
     "moduleDetection": "force",
     "types": []
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "vitest.config.ts"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "vitest.config.ts"],
+  "references": [
+    {
+      "path": "../features"
+    },
+    {
+      "path": "../wire"
+    }
+  ]
 }

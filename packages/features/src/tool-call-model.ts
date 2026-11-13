@@ -224,6 +224,11 @@ export function computerPermissionsMissing(
   return reason === undefined || permissions.length === 0 ? undefined : { reason, permissions };
 }
 
+/** The id of the machine a `run_on_mac` or `computer` call's answer names as the one it went to; none where it names none, as an answer from before machines, or one routed to an account's Macs, does not. */
+export function machineCommandMachineId(output: WireValue | undefined): string | undefined {
+  return isRecord(output) ? stringAt(output.machine, "id") : undefined;
+}
+
 /** The bundle id a computer call's answer names its app by, as the Mac answered it; none where it named none, as an app with no bundle answers. */
 export function computerAppBundleId(output: WireValue | undefined): string | undefined {
   return isRecord(output) ? stringAt(output.app, "bundleId") : undefined;
