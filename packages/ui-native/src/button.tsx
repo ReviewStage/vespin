@@ -32,13 +32,13 @@ import {
   tag,
   tint,
 } from "@expo/ui/swift-ui/modifiers";
-import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
-import type { TaskStatus } from "@repo/features/task-wire";
+import { TASK_PRIORITY_WORDS, TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
+import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactNode } from "react";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { choiceColor, type MenuChoice } from "./list-row.js";
-import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
+import { choiceContent, type MenuChoice } from "./list-row.js";
+import { Avatar, type Face, TaskPriorityMark, TaskStatusMark, ToneGlyph } from "./marks.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -291,6 +291,8 @@ type FieldChipProps = {
   readonly label: string;
   /** A task's status, whose ring leads the chip. */
   readonly status?: TaskStatus | undefined;
+  /** A task's priority, whose bars lead the chip. */
+  readonly priority?: TaskPriority | undefined;
   /** A person, whose face leads the chip, their picture where one is known. */
   readonly face?: Face | undefined;
   /** A glyph leading the chip where neither does, in the muted ink. */
@@ -311,6 +313,8 @@ export type FieldMenu = {
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
 function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
+
+  if (props.priority !== undefined) return <TaskPriorityMark priority={props.priority} />;
 
   if (props.face !== undefined) {
     return <Avatar name={props.face.name} picture={props.face.picture} size={MARK_SIZE.FACE} />;
@@ -375,7 +379,7 @@ export function FieldChip(props: FieldChipProps) {
         <Toggle
           // Note that a choice is keyed by its place, since two members may share a name.
           key={at}
-          {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
+          {...choiceContent(choice, colors)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />
@@ -393,6 +397,17 @@ export function StatusChip({
   readonly menu?: FieldMenu | undefined;
 }) {
   return <FieldChip label={TASK_STATUS_WORDS[status]} status={status} menu={menu} />;
+}
+
+/** A task's priority as a field's chip, its bars leading its name, as the panel's chip draws it. */
+export function PriorityChip({
+  priority,
+  menu,
+}: {
+  readonly priority: TaskPriority;
+  readonly menu?: FieldMenu | undefined;
+}) {
+  return <FieldChip label={TASK_PRIORITY_WORDS[priority]} priority={priority} menu={menu} />;
 }
 
 /** How far each face of a face pile tucks under the one after it, in points. */

@@ -28,6 +28,7 @@ export {
   Chip,
   FieldChip,
   FollowingChip,
+  PriorityChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
@@ -229,7 +230,11 @@ export {
   UNDER_SPLIT_SCREEN,
 } from "./split-view.js";
 
-export { STATUS_MARK_SYMBOL } from "./status-mark-model.js";
+export {
+  PRIORITY_MARK_SYMBOL,
+  PRIORITY_MARK_TONE,
+  STATUS_MARK_SYMBOL,
+} from "./status-mark-model.js";
 
 export { SUGGESTION_LOOK, type SuggestionLook } from "./suggestion-look.js";
 

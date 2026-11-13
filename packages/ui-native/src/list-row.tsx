@@ -130,6 +130,8 @@ export type MenuChoice = {
   readonly symbol?: Glyph | undefined;
   /** The tone the glyph is drawn in, as a status's mark is in the panel's menu; the menu's own ink where none is given. */
   readonly tone?: StatusTone | undefined;
+  /** A person's photo, as a file on this device, drawn round in the glyph's place, as the panel's assignee menu leads each member with their face. */
+  readonly photo?: string | undefined;
   readonly on: boolean;
   readonly onPress: () => void;
 };
@@ -236,6 +238,17 @@ export function choiceColor(choice: MenuChoice, colors: BrandColors): string | u
   return choice.tone === undefined ? undefined : toneColor(colors, choice.tone);
 }
 
+/** What a menu's choice holds: its words beside its photo, or its glyph in its tone, or its words alone. */
+export function choiceContent(choice: MenuChoice, colors: BrandColors) {
+  return actContent(
+    choice.label,
+    choice.symbol,
+    undefined,
+    choiceColor(choice, colors),
+    choice.photo,
+  );
+}
+
 /** A submenu of a row's long press menu as SwiftUI's: each choice a toggle the system checks, then its acts. */
 function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
   return (
@@ -247,7 +260,7 @@ function rowSubmenu(submenu: RowSubmenu, colors: BrandColors, ink?: string) {
       {submenu.choices.map((choice) => (
         <Toggle
           key={choice.label}
-          {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
+          {...choiceContent(choice, colors)}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />

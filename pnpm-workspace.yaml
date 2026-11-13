@@ -181,8 +181,12 @@ patchedDependencies:
 # in the menu's ink; so the Status menu's marks lost the status tones the
 # panel's menu draws them in. The patch adds `originalColor`, which tints the
 # symbol's own image (`withTintColor`, rendering kept original), as Mail's Flag
-# menu hands its colored flags to the menu. Delete it when an `@expo/ui`
-# release offers a tinted image a menu keeps.
+# menu hands its colored flags to the menu; `originalSecondaryOpacity`, which
+# paints a layered symbol as a palette of that color and a faint one, as the
+# panel draws a priority's unlit bars; and `photoSize`, which draws a `file://`
+# `uiImage` round at a menu glyph's size with its rendering kept original, so
+# the Assignee menu leads each member with their face. Delete it when an
+# `@expo/ui` release offers a tinted image and a photo a menu keeps.
   "@expo/ui@58.0.27": patches/@expo__ui@58.0.27.patch
 #
 # `@sentry/react-native` 8.28.0's native start (`RNSentrySDK.start`, which the

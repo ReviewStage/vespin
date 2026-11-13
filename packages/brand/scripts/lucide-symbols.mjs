@@ -639,11 +639,17 @@ function pathData(commands, centerX) {
   return commands.map(({ command, points }) => [command, ...points.map(place)].join(" ")).join(" ");
 }
 
-function weightGroup(name, paths, weight) {
+// A path's layer class, as SF Symbols' templates name a layer's place in the monochrome and hierarchical renderings; none for a one-layer symbol.
+const layerAttribute = (layerClass) => (layerClass === undefined ? "" : ` class="${layerClass}"`);
+
+function weightGroup(name, paths, weight, layerClasses) {
   return {
     pathCommands: paths.map((commands) => commands.map(({ command }) => command).join("")),
     svg: `<g id="${name}-S">${paths
-      .map((commands) => `<path d="${pathData(commands, WEIGHT_CENTER[weight])}"/>`)
+      .map(
+        (commands, index) =>
+          `<path${layerAttribute(layerClasses[index])} d="${pathData(commands, WEIGHT_CENTER[weight])}"/>`,
+      )
       .join("")}</g>`,
   };
 }
@@ -663,10 +669,14 @@ const WEIGHTS = [
   ["Black", "BLACK"],
 ];
 
-/** A template's three weights, each the outlines `outlinesAt` draws at that weight's half stroke, as an SF Symbols custom symbol template. */
-function templateOf(outlinesAt) {
+/**
+ * A template's three weights, each the outlines `outlinesAt` draws at that
+ * weight's half stroke, as an SF Symbols custom symbol template; each outline
+ * stands on the layer `layerClasses` names at its place, where it names one.
+ */
+function templateOf(outlinesAt, layerClasses = []) {
   const weights = WEIGHTS.map(([name, weight]) =>
-    weightGroup(name, outlinesAt(STROKE[weight] / 2, weight), weight),
+    weightGroup(name, outlinesAt(STROKE[weight] / 2, weight), weight, layerClasses),
   );
 
   const [ultralight, regular, black] = weights.map(({ pathCommands }) => pathCommands.join("|"));
@@ -913,6 +923,9 @@ function markOutline(parts, half, grow, { roles, elements }) {
       outline.push(discOutline(center, part.r + grow));
     } else if (part.role === roles.FILL && part.element === elements.PATH) {
       outline.push(...fillOutlines(part.d).map((commands) => wound(commands, forward)));
+    } else if (part.role === roles.FILL && part.element === elements.RECT) {
+      const data = rectData((name) => part[name], part);
+      outline.push(...fillOutlines(data).map((commands) => wound(commands, forward)));
     } else if (part.role === roles.CUT && part.element === elements.PATH) {
       cuts.push(...cutPolylines(part.d));
     } else {
@@ -939,18 +952,34 @@ const scaledOutline = (commands, scale) =>
     points: points.map((point) => times(point, scale)),
   }));
 
+/** The classes SF Symbols' templates give a symbol's first and second layers: the hierarchical rendering's primary and secondary, which a palette paints its first and second colors. */
+const LAYER_CLASSES = [
+  "monochrome-0 hierarchical-0:primary",
+  "monochrome-1 hierarchical-1:secondary",
+];
+
 /**
- * A task's status mark (`task-status-marks.mjs`) as an SF Symbols custom
- * symbol template, its parts one outline, so a cut leaves a hole, and its
- * line weighed at each weight as Lucide's stroke is.
+ * A task's status or priority mark (`task-status-marks.mjs`) as an SF
+ * Symbols custom symbol template, its parts one outline, so a cut leaves a
+ * hole, and its line weighed at each weight as Lucide's stroke is. Where
+ * `layers` is given and the mark has unlit parts, they stand as a second
+ * outline on the symbol's secondary layer, and the rest on its primary.
  */
-export function markTemplate(parts, { box, lineWidth, roles, elements }) {
+export function markTemplate(parts, { box, lineWidth, roles, elements, layers }) {
   const scale = BOX / box;
+  const unlit = layers === undefined ? [] : parts.filter(({ layer }) => layer === layers.UNLIT);
+  const groups =
+    unlit.length === 0 ? [parts] : [parts.filter((part) => !unlit.includes(part)), unlit];
 
-  return templateOf((_, weight) => {
-    const half = (lineWidth / 2) * (STROKE[weight] / STROKE.REGULAR);
-    const grow = half - lineWidth / 2;
+  return templateOf(
+    (_, weight) => {
+      const half = (lineWidth / 2) * (STROKE[weight] / STROKE.REGULAR);
+      const grow = half - lineWidth / 2;
 
-    return [scaledOutline(markOutline(parts, half, grow, { roles, elements }), scale)];
-  });
+      return groups.map((group) =>
+        scaledOutline(markOutline(group, half, grow, { roles, elements }), scale),
+      );
+    },
+    groups.length === 1 ? [] : LAYER_CLASSES,
+  );
 }

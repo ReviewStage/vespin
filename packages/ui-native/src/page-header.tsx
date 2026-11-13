@@ -7,9 +7,9 @@ import {
   foregroundStyle,
   padding,
 } from "@expo/ui/swift-ui/modifiers";
-import type { TaskStatus } from "@repo/features/task-wire";
+import type { TaskPriority, TaskStatus } from "@repo/features/task-wire";
 import { useAccessibilitySize } from "./accessibility.js";
-import { FieldChip, type FieldMenu, FollowingChip, StatusChip } from "./button.js";
+import { FieldChip, type FieldMenu, FollowingChip, PriorityChip, StatusChip } from "./button.js";
 import { GLYPH } from "./glyph.js";
 import type { Face } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
@@ -23,7 +23,7 @@ type PageHeaderProps = {
   /** A task's status, drawn as its chip under the title. */
   readonly status?: TaskStatus | undefined;
   /** A task's priority, drawn as a chip after its status. */
-  readonly priority?: string | undefined;
+  readonly priority?: TaskPriority | undefined;
   /** Who a task is assigned to, drawn as a chip with their face, or the words for no one beside an empty face. */
   readonly assignee?: (Face & { readonly nobody: boolean }) | undefined;
   /** Who follows a task, drawn as a chip under its fields that opens them; none while its workspace has Following off. */
@@ -70,7 +70,7 @@ export function PageHeader(props: PageHeaderProps) {
   const chipRow = (
     <>
       {status === undefined ? null : <StatusChip status={status} menu={menus?.status} />}
-      {priority === undefined ? null : <FieldChip label={priority} menu={menus?.priority} />}
+      {priority === undefined ? null : <PriorityChip priority={priority} menu={menus?.priority} />}
       {assignee === undefined ? null : assignee.nobody ? (
         <FieldChip label={assignee.name} symbol={GLYPH.UNASSIGNED} menu={menus?.assignee} />
       ) : (

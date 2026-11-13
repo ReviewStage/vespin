@@ -84,6 +84,8 @@ import {
   type ListLook,
   ListSection,
   PATH_PART,
+  PRIORITY_MARK_SYMBOL,
+  PRIORITY_MARK_TONE,
   RelationRow,
   ROW_ACTION_TONE,
   type RowAction,
@@ -113,6 +115,7 @@ import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { type ListedMember, useListedMembers, useMemberPictures } from "../member-pictures.js";
+import { useMenuPhotos } from "../menu-photos.js";
 import { openInSafari, useOpenLink } from "../open-link.js";
 import { useHandColumns } from "../place-columns.js";
 import { useRefilledSearchField } from "../search-field.js";
@@ -1060,7 +1063,11 @@ function agentState(status: AgentStatus): AgentRowState {
  * most pressing first; and its assignee, the workspace's members, the reader
  * first, then No assignee; each with the one it holds checked.
  */
-function standingMenus(overview: TaskOverview, members: readonly ListedMember[]): StandingMenus {
+function standingMenus(
+  overview: TaskOverview,
+  members: readonly ListedMember[],
+  photoOf: (userId: string) => string | undefined,
+): StandingMenus {
   const { task } = overview;
   const assigneeId = task.assignee?.userId;
 
@@ -1070,6 +1077,8 @@ function standingMenus(overview: TaskOverview, members: readonly ListedMember[])
       label: WORDS.PRIORITY,
       choices: TASK_PRIORITY_ORDER.map((priority) => ({
         label: TASK_PRIORITY_WORDS[priority],
+        symbol: PRIORITY_MARK_SYMBOL[priority],
+        tone: PRIORITY_MARK_TONE[priority],
         on: task.priority === priority,
         onPress: () => overview.setPriority(task.id, priority),
       })),
@@ -1079,6 +1088,8 @@ function standingMenus(overview: TaskOverview, members: readonly ListedMember[])
       choices: [
         ...members.map((member) => ({
           label: member.name,
+          symbol: GLYPH.PERSON,
+          photo: photoOf(member.userId),
           on: member.userId === assigneeId,
           onPress: () => overview.setAssignee(task.id, member),
         })),
@@ -1100,11 +1111,16 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const following = useFollowingChip(task.id);
   const members = useListedMembers(task.workspaceId);
 
+  const photoOf = useMenuPhotos(
+    pictureOf,
+    useMemo(() => members.map(({ userId }) => userId), [members]),
+  );
+
   return (
     <TaskHead
       name={task.name}
       status={task.status}
-      priority={task.priority === undefined ? undefined : TASK_PRIORITY_WORDS[task.priority]}
+      priority={task.priority}
       assignee={
         task.assignee === undefined || task.assignee === null
           ? { name: NO_ASSIGNEE_WORDS, nobody: true }
@@ -1115,7 +1131,7 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
             }
       }
       following={following}
-      menus={standingMenus(overview, members)}
+      menus={standingMenus(overview, members, photoOf)}
       createdBy={
         task.createdBy === undefined
           ? undefined

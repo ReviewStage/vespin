@@ -9,7 +9,11 @@ import {
 import type { SfSymbol } from "./sf-symbol.js";
 import type { StatusTone } from "./tokens/colors.js";
 import { LUCIDE_SYMBOL } from "./tokens/lucide-symbols.js";
-import { TASK_STATUS_SYMBOL } from "./tokens/task-status-symbols.js";
+import {
+  TASK_PRIORITY_SYMBOL,
+  TASK_PRIORITY_UNLIT_OPACITY,
+  TASK_STATUS_SYMBOL,
+} from "./tokens/task-status-symbols.js";
 
 declare const GLYPH_NAME: unique symbol;
 
@@ -33,6 +37,12 @@ const lucide = (name: LucideSymbol): Glyph => name as Glyph;
 // SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
 const statusMark = (name: (typeof TASK_STATUS_SYMBOL)[keyof typeof TASK_STATUS_SYMBOL]): Glyph =>
   name as Glyph;
+
+/** A task's priority as the panel marks it, cut from the same table, its unlit bars a second layer. */
+// SAFETY: a symbol set's name is a glyph's name; this table is where glyphs are minted.
+const priorityMark = (
+  name: (typeof TASK_PRIORITY_SYMBOL)[keyof typeof TASK_PRIORITY_SYMBOL],
+): Glyph => name as Glyph;
 
 /** An SF Symbol, kept where iOS draws the thing its own way, or where the panel draws a mark of its own rather than a Lucide glyph. */
 // SAFETY: an SF Symbol's name is a glyph's name; this table is where glyphs are minted.
@@ -188,6 +198,11 @@ export const GLYPH = {
   STATUS_IN_PROGRESS: statusMark(TASK_STATUS_SYMBOL.IN_PROGRESS),
   STATUS_DONE: statusMark(TASK_STATUS_SYMBOL.DONE),
   STATUS_CANCELED: statusMark(TASK_STATUS_SYMBOL.CANCELED),
+  PRIORITY_NONE: priorityMark(TASK_PRIORITY_SYMBOL.NONE),
+  PRIORITY_URGENT: priorityMark(TASK_PRIORITY_SYMBOL.URGENT),
+  PRIORITY_HIGH: priorityMark(TASK_PRIORITY_SYMBOL.HIGH),
+  PRIORITY_MEDIUM: priorityMark(TASK_PRIORITY_SYMBOL.MEDIUM),
+  PRIORITY_LOW: priorityMark(TASK_PRIORITY_SYMBOL.LOW),
   // The panel's own marks, which no Lucide glyph draws: a check box and a radio, a check still running, a face and the app's,
   // an MCP server and its tool, the apps that reach the service over MCP (the
   // panel's product mark), and an unassigned task.
@@ -239,16 +254,30 @@ export function sectionGlyph(icon: TaskSectionIcon | undefined): Glyph {
   return isSectionGlyph(icon.glyph) ? SECTION_GLYPH[icon.glyph] : GLYPH.FOLDER;
 }
 
-/** The glyphs the asset catalog holds, Lucide's and the task status marks, rather than the system's symbols. */
+/** The glyphs whose symbols draw a second layer, a priority's unlit bars, which the panel draws faint. */
+const LAYERED_SYMBOLS: ReadonlySet<string> = new Set(Object.values(TASK_PRIORITY_SYMBOL));
+
+/** The glyphs the asset catalog holds, Lucide's and the task status and priority marks, rather than the system's symbols. */
 const CATALOG_SYMBOLS: ReadonlySet<string> = new Set([
   ...Object.values(LUCIDE_SYMBOL),
   ...Object.values(TASK_STATUS_SYMBOL),
+  ...LAYERED_SYMBOLS,
 ]);
 
-/** A glyph as `@expo/ui`'s `Image` draws it: a custom symbol by its asset's name, an SF Symbol by its own. */
+/**
+ * A glyph as `@expo/ui`'s `Image` draws it: a custom symbol by its asset's
+ * name, an SF Symbol by its own. A layered mark also names how faint its
+ * second layer stands, which the app's `@expo/ui` patch paints beside an
+ * `originalColor` (`originalSecondaryOpacity`).
+ */
 export function glyphImage(
   glyph: Glyph,
-): { readonly assetName: string } | { readonly systemName: SfSymbol } {
+):
+  | { readonly assetName: string; readonly originalSecondaryOpacity?: number }
+  | { readonly systemName: SfSymbol } {
+  if (LAYERED_SYMBOLS.has(glyph))
+    return { assetName: glyph, originalSecondaryOpacity: TASK_PRIORITY_UNLIT_OPACITY };
+
   // SAFETY: a glyph the asset catalog doesn't hold was minted by `system` from an SF Symbol's name.
   return CATALOG_SYMBOLS.has(glyph) ? { assetName: glyph } : { systemName: glyph as SfSymbol };
 }
