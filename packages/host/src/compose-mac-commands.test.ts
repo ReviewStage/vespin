@@ -37,6 +37,7 @@ import {
   type ComputerUseHelperSeam,
 } from "./computer-use-helper.js";
 import { Environment, reporterLayer } from "./effect/seams.js";
+import { ActRefused } from "./host-acts.js";
 import { MAC_COMMAND_DECISION, type MacCommandDecision } from "./mac-command-ask.js";
 import { scriptedSpawner } from "./testing/scripted-spawner.js";
 
@@ -1330,6 +1331,35 @@ it.effect(
           { bundleId: "com.example.Gone", name: "com.example.Gone" },
         ],
       });
+    }),
+);
+
+it.effect(
+  "an ask for the grants that the helper could not put to macOS is refused, never answered as both off",
+  () =>
+    Effect.gen(function* () {
+      const helper: ComputerUseHelperSeam = {
+        ask: (request) =>
+          Effect.succeed(
+            request.op === COMPUTER_HELPER_OP.REQUEST_PERMISSIONS
+              ? { failure: COMPUTER_HELPER_FAILURE.FAILED, message: "The helper stopped." }
+              : { permissions: { screenRecording: false, accessibility: false } },
+          ),
+      };
+
+      const { composer } = yield* subject(
+        scriptedService(),
+        scriptedSpawner(() => ({ exitCode: 0 })),
+        {
+          mode: MAC_COMMAND_MODE.ASK,
+          signedIn: true,
+          computer: { helper, enabled: true, allowed: [] },
+        },
+      );
+
+      const refused = yield* Effect.flip(composer.acts.COMPUTER_USE_ASK_PERMISSIONS({}));
+
+      assert.ok(refused instanceof ActRefused);
     }),
 );
 

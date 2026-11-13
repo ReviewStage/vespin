@@ -58,7 +58,7 @@ import {
 } from "./computer-use-helper.js";
 import type { MAC_COMMAND_ACTS, MacApp } from "./contract/index.js";
 import { Environment, Reporter } from "./effect/seams.js";
-import type { HostActTable } from "./host-acts.js";
+import { ActRefused, type HostActTable } from "./host-acts.js";
 import type { HOST_PLATFORM_CONCERN, PlatformConcernMethods } from "./host-concerns.js";
 import type { HostKernel } from "./host-kernel.js";
 import { decodedLiveRows, LIVE_RESTART, waitOrRegained } from "./live-follow.js";
@@ -1153,6 +1153,19 @@ export function composeMacCommands(
       );
     };
 
+    /** The Mac's two grants once the helper asked macOS for them; refused where there is no helper or it could not ask, so an ask that never reached macOS is never answered as one that did. */
+    const permissionsAsked = (): Effect.Effect<ComputerPermissions, ActRefused> => {
+      if (computer === undefined) return Effect.fail(new ActRefused({}));
+
+      return Effect.flatMap(
+        computer.helper.ask({ op: COMPUTER_HELPER_OP.REQUEST_PERMISSIONS }, DESCRIBE_WITHIN),
+        (answer) =>
+          "permissions" in answer
+            ? Effect.succeed(answer.permissions)
+            : Effect.fail(new ActRefused({})),
+      );
+    };
+
     /** macOS asked for the grants the Mac lacks, by its own prompts and the pane of the first missing; nothing where it has both. */
     const grantsAsked = Effect.flatMap(
       permissionsRead(COMPUTER_HELPER_OP.PERMISSIONS),
@@ -1257,8 +1270,8 @@ export function composeMacCommands(
       /** One app's icon, for a row of the @ list that names an app installed but not running. */
       COMPUTER_USE_APP_ICON: ({ app }) =>
         computer === undefined ? Effect.succeed({}) : appIcon(computer, app),
-      /** macOS asked for the grants it lacks, by its own prompts, and the grants as they stand once it was asked. */
-      COMPUTER_USE_ASK_PERMISSIONS: () => permissionsRead(COMPUTER_HELPER_OP.REQUEST_PERMISSIONS),
+      /** macOS asked for the grants it lacks, by its own prompts, and the grants as they stand once it was asked; refused where it could not be asked. */
+      COMPUTER_USE_ASK_PERMISSIONS: permissionsAsked,
     };
 
     return { methods, acts, lifetime } satisfies MacCommandsComposer;
