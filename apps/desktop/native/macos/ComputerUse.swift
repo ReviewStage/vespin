@@ -1208,11 +1208,13 @@ private func menuItem(for key: String, flags: CGEventFlags, of app: NSRunningApp
 }
 
 /**
- Presses a chord. Note that a ⌘ shortcut the app's menus hold is pressed
- through its menu item, answered as any press is, since an app in the
- background has no key window for a posted ⌘ key to reach, and pressing the
- item keeps the app behind. Any other chord is posted to the app's window and
- answers sent, since nothing tells whether the app took it.
+ Presses a chord. Note that a ⌘ shortcut the menus of an app in the
+ background hold is pressed through its menu item, answered as any press is,
+ since such an app has no key window for a posted ⌘ key to reach, and
+ pressing the item keeps it behind. An app in front is posted the key, so its
+ focused page sees it first, as it would a person's, rather than the app's
+ menu taking it. Any other chord is posted to the app's window and answers
+ sent, since nothing tells whether the app took it.
  */
 private func pressKey(_ request: [String: Any]) async throws -> [String: Any] {
     try requireAccessibility()
@@ -1221,7 +1223,7 @@ private func pressKey(_ request: [String: Any]) async throws -> [String: Any] {
     let name = try string(request, "key")
     let pressed = try chord(name)
     let key = name.split(separator: "+").last.map { $0.lowercased() } ?? ""
-    if let item = menuItem(for: key, flags: pressed.flags, of: app),
+    if !app.isActive, let item = menuItem(for: key, flags: pressed.flags, of: app),
         let answer = try await confirmedPress(item, of: app, named: "The menu item for \(name)")
     {
         return answer
