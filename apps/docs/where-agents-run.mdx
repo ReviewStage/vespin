@@ -1,51 +1,39 @@
 ---
 title: "Where Vespin agents run: cloud or your Mac"
-description: "When to run an agent in a cloud sandbox and when on your own Mac or server"
+description: "Run an agent in a cloud sandbox or on your own machine"
 ---
 
-A Vespin agent runs in one of two places: **Cloud**, a sandbox Vespin starts for that agent, or one of your own machines, such as **This Mac** or a Linux server you add. You pick the place when you start the agent.
+An agent runs either in the cloud, in a sandbox of its own, or on a machine of yours: **This Mac** or a Linux server or Mac you add. Pick with the **Runs on** chip under the message box when you start a task.
 
-## Which to pick
+## Differences
 
-Pick **Cloud** unless the work needs something only your machine has.
-
-| | Cloud | Your Mac or server |
+| | Cloud | Your machine |
 | --- | --- | --- |
-| Runs while your laptop is closed | Yes | Only on a machine that stays on. A Mac runs agents only while it's awake and you're logged in. |
-| Isolated from your files and accounts | Yes. See [How Vespin isolates coding agents](/agent-isolation). | No. Full access to everything that machine's user can reach. |
-| Model plan or key | The one saved in **Settings › Agents** | The Claude Code or Codex login on that machine |
-| GitHub access | Your workspace's GitHub App or your token, scoped to the agent's repositories | The `gh` login, Git credentials, and SSH keys on that machine, with every repository they reach |
-| Checkout | Its own, in the sandbox | A Git worktree of its own under `~/.vespin`, never your own checkout |
-| Workspace environment variables and **Cloud environment** scripts | Yes | No |
-| Browser, shared ports, `run_on_mac` | Yes | No. The agent uses that machine's shell instead. |
-| Automations | Always run in the cloud | Not available |
+| Runs with your laptop closed | Yes | Only if the machine stays on and logged in |
+| Access | Its sandbox. See [How Vespin isolates coding agents](/agent-isolation). | Everything the machine's user can reach |
+| Model login | The plan or key in **Settings › Agents** | Claude Code or Codex as signed in on the machine |
+| GitHub | Your workspace's GitHub App or your token | The machine's `gh` login, Git credentials, and SSH keys |
+| Checkout | In the sandbox | A worktree under `~/.vespin` |
+| **Cloud environment** variables and scripts | Yes | No |
+| Browser, shared ports, `run_on_mac` | Yes | No |
+| Automations | Yes | No |
 
-Run an agent on your machine when it needs:
+Use your machine for work that needs something only it has, such as Xcode, a simulator, or a local database.
 
-- Hardware, a simulator, or an app only that machine has, such as Xcode.
-- Local services, databases, or files that aren't in the repository.
-- A tool or login you'd rather not hand to a cloud sandbox.
+## Move an agent
 
-A cloud agent can still reach your Mac for a single command with `run_on_mac`, as your Mac's **Let agents run commands on this Mac** setting allows. That's often enough, without moving the whole agent.
-
-## Choose where an agent runs
-
-In **New task**, click the **Runs on** chip under the message box, which reads **Cloud** until you pick a machine, and pick **Cloud** or one of your machines. A machine that is **Offline**, **Setting up**, or **Failed** can't be picked. The chip remembers your last pick.
-
-Each agent runs where it started. To move it, open the agent's menu and choose **Move to**. Moving starts a continued agent at the new place and stops the old one. From the cloud, uncommitted work comes along. From your machine, only pushed work does.
-
-A machine runs only your own agents. A teammate can't start one on it.
+Choose **Move to** in the agent's menu. Vespin stops the agent and continues it in the new place. Moving from the cloud brings uncommitted work. Moving from your machine brings only pushed work.
 
 ## Run agents on this Mac
 
-In the Mac app, open **Settings › Machines** and turn on **Run agents on this Mac**. macOS may ask you to allow Vespin in **System Settings › General › Login Items**.
+Turn on **Run agents on this Mac** in **Settings › Machines**. If macOS asks, allow Vespin in **System Settings › General › Login Items**.
 
-Agents on this Mac run only while you're logged in. To keep it from sleeping while they work, set **Keep this Mac awake** in **Settings › This Mac** to **While agents work** (the default) or **While plugged in**. Closing the lid still sleeps it. If the Mac goes offline mid-turn, the agent's messages wait, and the turn carries on by itself if the Mac returns within an hour.
+To stop the Mac sleeping while agents work, set **Keep this Mac awake** in **Settings › This Mac**. Closing the lid still sleeps it.
 
-## Add a Linux server or another Mac
+## Add a machine
 
-1. Open **Settings › Machines › Add a machine**.
-2. Run the install command it shows on the machine.
-3. Open the link the command prints and approve its code.
+1. In **Settings › Machines**, open **Add a machine**.
+2. Run the install command on the machine.
+3. Open the link it prints and approve the code.
 
-The machine appears under **Your machines**. Sign in to Claude Code or Codex, and to GitHub with `gh auth login` or SSH, on that machine before starting an agent there. To remove it, click **Remove** on its row, or run `vespin-host uninstall` on the machine.
+Before starting an agent there, sign in to Claude Code or Codex, and to GitHub with `gh auth login` or SSH, on that machine. A machine runs only its owner's agents.

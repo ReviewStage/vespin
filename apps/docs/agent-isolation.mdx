@@ -1,52 +1,43 @@
 ---
 title: "How Vespin isolates coding agents"
-description: "What a cloud agent's sandbox holds, what it can reach, and how its work reaches your repository"
+description: "What a cloud agent's sandbox holds and can reach"
 ---
 
-Every cloud agent in Vespin runs in a sandbox of its own: a Linux machine in [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox), with its own checkout of your repository. The agent's work reaches your repository only as commits it pushes to a branch and a pull request it opens. Your saved credentials stay outside the sandbox, with the exceptions listed below.
+Each cloud agent runs in its own [Vercel Sandbox](https://vercel.com/docs/vercel-sandbox), with its own checkout of the repository. Agents on your own machines aren't isolated; see [Where agents run](/where-agents-run).
 
-This page covers agents that run in the cloud. An agent on your Mac or another machine of yours has none of this isolation. See [Where agents run](/where-agents-run).
+## The sandbox
 
-## One sandbox per agent
+- One sandbox per agent. Workers an agent starts share its sandbox.
+- The checkout is on the sandbox's own drive, beside the default branch of every repository your workspace connects.
+- The agent has `sudo`. To approve each tool call, set **Default permissions** in **Settings › Agents** to **Ask for approval** (Claude Code only).
 
-- **Its own machine.** No two agents share a sandbox. A worker an agent hands a job to runs inside that agent's sandbox.
-- **Its own checkout.** The agent's checkout of the repository sits on a drive of its own. Your local checkout is never touched.
-- **Your workspace's other repositories.** The sandbox also holds the default branch of every repository your workspace connects, so an agent can read code across them.
-- **Full control inside.** The agent can run any command and install packages with `sudo`. The sandbox is the boundary, not a permission inside it. To approve each tool call, set **Default permissions** in **Settings › Agents** to **Ask for approval** (Claude Code agents only).
+## Branches and pull requests
 
-## How changes reach your repository
+Agents are told to push to an `agent/…` branch, open a pull request, and not merge unless asked. Vespin doesn't enforce this, and an agent's GitHub access can write to the repository. To require a pull request, protect your default branch on GitHub.
 
-The agent commits on its own branch, pushes it, and opens a pull request as you. Vespin tells agents to work on an `agent/…` branch, never to push your default branch, and never to merge unless you ask. Those are instructions to the model. Vespin's code doesn't enforce them.
+## Credentials
 
-The agent's GitHub access can write to the repository, so to make "only through a pull request" a rule, protect your default branch on GitHub: require a pull request and an approving review before merging.
-
-## What credentials the sandbox holds
-
-| Credential | In the sandbox? |
+| Credential | In the sandbox |
 | --- | --- |
-| GitHub, through Vespin's GitHub App | No. Added to requests to GitHub at the sandbox's network firewall. Limited to the agent's repositories, with write access to contents and pull requests, and read access to checks where the App has it. Expires within an hour. |
-| GitHub, through your personal access token | No. Added at the firewall, and only to requests for the task's repository. Removed between turns. |
-| Your GitHub sign-in to Vespin | No. Never sent to the sandbox. |
-| Claude plan token or Anthropic API key | No. The sandbox holds a placeholder, swapped for the real value at the firewall on requests to Anthropic. |
-| OpenAI API key | No. Swapped at the firewall the same way. |
-| ChatGPT plan | **Yes.** Codex needs the plan's access token inside the sandbox to sign in. |
-| Workspace environment variables | **Yes.** Set as environment variables, readable by the agent. |
-| Integrations (Linear, Sentry, Slack, and others) | No. The agent reaches them through Vespin. It can read and change whatever your grant allows. |
+| GitHub App token | No. Added at the sandbox's firewall to requests to GitHub. Scoped to the agent's repositories: contents and pull requests (write), checks (read). Expires within an hour. |
+| GitHub personal access token | No. Added at the firewall, only for the task's repository. |
+| Your Vespin sign-in | No |
+| Claude plan token, Anthropic or OpenAI API key | No. A placeholder, replaced at the firewall. |
+| ChatGPT plan token | Yes |
+| Workspace environment variables | Yes |
+| Integrations | No. Reached through Vespin, with whatever access you granted. |
 
-A placeholder is worthless outside its sandbox. Anything the agent can read, it can print, so a workspace environment variable may reach the model and the agent's transcript.
+The agent can read anything in the sandbox, so it can reach the model and the transcript.
 
-## What the sandbox can reach
+## Network
 
-- **The internet: yes.** The sandbox's network is open. Its firewall adds credentials to requests; it doesn't block hosts.
-- **Your Mac: only through `run_on_mac`.** An agent can run a command on the Mac of its task's assignee, as that Mac's **Let agents run commands on this Mac** setting allows: **Never**, **Ask every time** (the default), or **Always allow**.
-- **Other agents' sandboxes: no.**
-- **Your saved credentials: only as the table says.**
+The sandbox can reach the internet. The firewall adds credentials; it doesn't block hosts.
 
-Members of the workspace who can see an agent can message it, open a terminal in its sandbox, and open a port it shares, after signing in. An agent working on your own GitHub token is reachable by you alone.
+An agent can run a command on its task assignee's Mac with `run_on_mac`, as that Mac's **Let agents run commands on this Mac** setting allows. The default is **Ask every time**.
 
-## How long a sandbox lives
+Workspace members who can see an agent can message it, open a terminal in its sandbox, and open ports it shares. For an agent using your own GitHub token, only you can.
 
-- It stops after 5 minutes with no agent turn, no open terminal, and the agent not open in a focused window. A single run lasts at most 24 hours.
-- Stopping keeps its disk, and the agent's next turn starts it again with its work in place.
-- A sandbox unused for 7 days is deleted, with its drive. Push work you want to keep.
-- Deleting an agent or its task deletes its sandbox. Archiving an agent doesn't.
+## Lifetime
+
+- A sandbox stops after 5 idle minutes and keeps its disk.
+- It's deleted after 7 days unused, or when you delete its agent or task. Archiving doesn't delete it.
