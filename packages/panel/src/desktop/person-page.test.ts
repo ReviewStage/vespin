@@ -13,6 +13,7 @@ import {
   type AutomationScope,
   type AutomationSummary,
 } from "@repo/features/automation-wire";
+import { DEVICE_PLATFORM } from "@repo/features/device-agent-wire";
 import {
   INBOX_ASK,
   INBOX_ASK_STATUS,
@@ -22,7 +23,11 @@ import {
   type InboxItem,
 } from "@repo/features/inbox-wire";
 import { TASK_STATUS, type TaskSummary } from "@repo/features/task-wire";
-import { WORKSPACE_ROLE, type WorkspaceMember } from "@repo/features/workspace-wire";
+import {
+  WORKSPACE_ROLE,
+  type WorkspaceMachine,
+  type WorkspaceMember,
+} from "@repo/features/workspace-wire";
 import { ACT_KIND } from "@repo/host/acts";
 import {
   type AppHostRead,
@@ -282,6 +287,9 @@ let membersHeld = false;
 /** Whether the read of the workspace's people is refused, as a read that failed is. */
 let membersRefused = false;
 
+/** The machines each member's profile lists, by their id; none for anyone else. */
+let machinesOf: ReadonlyMap<string, readonly WorkspaceMachine[]> = new Map();
+
 /** Lays the held-back people on the document, the fixture's members and who left. */
 let answerMembers: () => void = () => undefined;
 
@@ -296,6 +304,7 @@ beforeEach(() => {
   automationsHeld = false;
   membersHeld = false;
   membersRefused = false;
+  machinesOf = new Map();
   copied = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   window.localStorage.clear();
@@ -368,6 +377,8 @@ function holdPeople(deliver: HostReadsHanded["deliverMembers"]): void {
   });
   fakeActPort({
     ...fakeActPortCalls(),
+    [ACT_KIND.WORKSPACE_MACHINES_READ]: ({ userId }) =>
+      Promise.resolve({ machines: machinesOf.get(userId ?? "") ?? [] }),
     [ACT_KIND.WORKSPACE_MEMBERS_RETRY]: ({ workspaceId }) => {
       deliver({ [workspaceId]: people() });
 
@@ -589,6 +600,38 @@ test("a member with nothing here yet is named, and the page says there is nothin
   assert.deepEqual(head(page), ["Sam Ortiz", "Member · sam@example.com"]);
   assert.deepEqual(sections(page), {});
   assert.match(page.textContent ?? "", /Nothing of theirs here yet\./u);
+});
+
+test("a member's machines are listed by name, each saying what it is and, to a reader, whether it is online, and the page is not called empty", async () => {
+  machinesOf = new Map([
+    [
+      "user-sam",
+      [
+        {
+          id: "machine-1",
+          name: "Studio",
+          platform: DEVICE_PLATFORM.DARWIN,
+          userId: "user-sam",
+          online: true,
+        },
+        {
+          id: "machine-2",
+          name: "build-box",
+          platform: DEVICE_PLATFORM.LINUX,
+          userId: "user-sam",
+          online: false,
+        },
+      ],
+    ],
+  ]);
+
+  const { page } = mount("user-sam");
+  await settle();
+
+  assert.deepEqual(sections(page), { Machines: ["Studio", "build-box"] });
+  assert.match(page.textContent ?? "", /Mac, Online/u);
+  assert.match(page.textContent ?? "", /Linux server, Offline/u);
+  assert.doesNotMatch(page.textContent ?? "", /Nothing of theirs here yet\./u);
 });
 
 test("each row opens what it names: an agent its tab, an item the Inbox on it, and a task the task", async () => {

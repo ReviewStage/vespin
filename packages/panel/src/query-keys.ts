@@ -41,6 +41,8 @@ export const QUERY_ROOT = {
   COMPUTER_USE_APP_ICON: "computer-use-app-icon",
   /** A task's followers' machines, with where each stands, as a follower's card lists them (`tasks/following-chip.tsx`). */
   FOLLOWER_MACHINES: "follower-machines",
+  /** One member's machines as their profile lists them, by the workspace and the member (`desktop/person-page.tsx`). */
+  MEMBER_MACHINES: "member-machines",
   /** The apps the account's own machines always allow, as an agent's `@` lists them off the agent's Mac. */
   MACHINE_ALLOWED_APPS: "machine-allowed-apps",
   INSTALLED_SKILL: "installed-skill",
