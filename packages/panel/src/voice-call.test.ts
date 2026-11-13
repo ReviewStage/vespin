@@ -13,7 +13,7 @@ import { act, createElement, Fragment } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { fakeActPort } from "./testing/app-bridge.js";
-import { handState, withExperiments } from "./testing/app-state.js";
+import { handState, withExperiments, writeExperiments } from "./testing/app-state.js";
 import { settleQueries } from "./testing/copy-feedback.js";
 import { ToastHost } from "./toast.js";
 import { useVoiceCall, type VoiceCall, VoiceCallProvider } from "./voice-call.js";
@@ -244,6 +244,20 @@ test("a second call ends the first", async () => {
   assert.ok(first.closed, "the first call's peer is dropped");
   assert.notEqual(first, second);
   assert.equal(call.call?.stage, "connecting");
+});
+
+test("turning the Voice experiment off ends a call under way, its session closed and the microphone let go", async () => {
+  await mounted();
+  const peer = await called();
+  act(() => peer.channel.started());
+
+  writeExperiments({});
+  await settleQueries();
+
+  assert.deepEqual(peer.channel.told(), [said("session.close")]);
+  assert.equal(call.call, undefined);
+  assert.ok(peer.closed, "the peer is dropped");
+  assert.ok(microphone.stopped, "the microphone is let go");
 });
 
 test("nothing calls while the Voice experiment is off", async () => {
