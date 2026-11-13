@@ -34,7 +34,7 @@ import { readWorkspaceMergeQueue } from "./merge-queue.js";
 
 const RELAY = "acme/relay";
 
-/** `acme/relay`'s queue as GitHub's GraphQL answers it: pull request 42, which an agent opened, its merge group's checks passed, failed, and running, ahead of 43, which a person did, with no merge group or estimate yet. */
+/** `acme/relay`'s queue as GitHub's GraphQL answers it: pull request 42, which an agent opened, its merge group's checks passed, failed, and running, more of them tallied than named, ahead of 43, which a person did, with no merge group or estimate yet. */
 function relayQueue(sent: { readonly url: string; readonly method: string }): Response | undefined {
   if (new URL(sent.url).pathname !== "/graphql" || sent.method !== "POST") return undefined;
 
@@ -66,7 +66,16 @@ function relayQueue(sent: { readonly url: string; readonly method: string }): Re
                 headCommit: {
                   statusCheckRollup: {
                     contexts: {
-                      totalCount: 5,
+                      totalCount: 8,
+                      checkRunCountsByState: [
+                        { state: "SUCCESS", count: 3 },
+                        { state: "FAILURE", count: 2 },
+                        { state: "IN_PROGRESS", count: 1 },
+                      ],
+                      statusContextCountsByState: [
+                        { state: "ERROR", count: 1 },
+                        { state: "SUCCESS", count: 1 },
+                      ],
                       nodes: [
                         { __typename: "CheckRun", name: "Tests", conclusion: "SUCCESS" },
                         { __typename: "CheckRun", name: "Lint", conclusion: "FAILURE" },
@@ -206,7 +215,8 @@ it.layer(getTestDB())("a workspace's merge queues", (it) => {
                   42,
                   task.id,
                   240_000,
-                  { total: 5, passed: 2, failed: ["Lint", "deploy"] },
+                  // Note that a third failure past the first page is counted from the tallies, though only the two on it are named.
+                  { total: 8, passed: 4, failedCount: 3, failed: ["Lint", "deploy"] },
                 ],
                 [2, MERGE_QUEUE_ENTRY_STATE.QUEUED, 43, null, null, null],
               ],

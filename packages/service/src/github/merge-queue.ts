@@ -14,8 +14,8 @@
  * out rather than failing the rest. Each entry carries GitHub's estimate of
  * when it merges and how the checks stand on the commit the queue builds for
  * it (`headCommit`, the merge group's, never the pull request's own head),
- * whose rollup is read to its first `MAX_CHECKS` checks and counted from
- * them, with its whole count beside. Each entry's pull request is joined to
+ * counted whole from GitHub's tallies by state, with the names of those that
+ * failed among its first `MAX_CHECKS` checks. Each entry's pull request is joined to
  * a task through the pull requests the service records for agents
  * (`agent_pull_request`). The read stands behind the account's Merge queue
  * experiment.
@@ -47,7 +47,7 @@ import { GitHubApp, type GitHubBearer } from "./github-app.js";
 import { githubReadOrRefusal } from "./github-refusal.js";
 import type { WorkspaceRepositoriesServices } from "./workspace-repositories.js";
 
-/** The most checks read of one entry's merge group, which its whole count still stands beside. */
+/** The most checks named of one entry's merge group; its counts are GitHub's tallies of every check, however many it has. */
 const MAX_CHECKS = 50;
 
 /**
@@ -86,6 +86,8 @@ const QUEUE_FIELDS = `mergeQueue {
             statusCheckRollup {
               contexts(first: ${MAX_CHECKS}) {
                 totalCount
+                checkRunCountsByState { state count }
+                statusContextCountsByState { state count }
                 nodes {
                   __typename
                   ... on CheckRun { name conclusion }
@@ -118,6 +120,9 @@ const CheckContextSchema = Schema.Union([
   }),
 ]);
 
+/** How many of a rollup's checks of one kind stand in one state. */
+const StateCountSchema = Schema.Struct({ state: Schema.String, count: Schema.Number });
+
 const QueueEntrySchema = Schema.Struct({
   position: Schema.Number,
   state: Schema.String,
@@ -129,6 +134,8 @@ const QueueEntrySchema = Schema.Struct({
         Schema.Struct({
           contexts: Schema.Struct({
             totalCount: Schema.Number,
+            checkRunCountsByState: Schema.Array(StateCountSchema),
+            statusContextCountsByState: Schema.Array(StateCountSchema),
             nodes: Schema.Array(Schema.NullOr(CheckContextSchema)),
           }),
         }),
@@ -216,29 +223,47 @@ function queuesRequest(repositories: readonly GitHubRepository[]) {
   };
 }
 
-/** How the checks stand on an entry's merge group; none before the queue builds one or reports any check on it. */
+/** How many of the tallied checks stand in any of `states`. */
+function countIn(
+  tallies: readonly { readonly state: string; readonly count: number }[],
+  states: ReadonlySet<string>,
+): number {
+  return tallies.reduce((sum, tally) => (states.has(tally.state) ? sum + tally.count : sum), 0);
+}
+
+/**
+ * How the checks stand on an entry's merge group; none before the queue
+ * builds one or reports any check on it. Note that the counts are GitHub's
+ * tallies of every check, because the checks named are only the first
+ * `MAX_CHECKS`, so a failure past them is counted though it is not named.
+ */
 function checksOf(read: QueueEntryRead): MergeQueueChecks | null {
   const contexts = read.headCommit?.statusCheckRollup?.contexts;
 
   if (contexts === undefined || contexts.totalCount === 0) return null;
 
-  let passed = 0;
-  const failed: string[] = [];
+  const failed = contexts.nodes.flatMap((check) => {
+    if (check === null) return [];
 
-  for (const check of contexts.nodes) {
-    if (check === null) continue;
+    return check.__typename === CHECK_KIND.CHECK_RUN
+      ? CHECK_RUN_FAILED.has(check.conclusion ?? "")
+        ? [check.name]
+        : []
+      : STATUS_FAILED.has(check.state)
+        ? [check.context]
+        : [];
+  });
 
-    const [name, outcome, passes, fails] =
-      check.__typename === CHECK_KIND.CHECK_RUN
-        ? [check.name, check.conclusion ?? "", CHECK_RUN_PASSED, CHECK_RUN_FAILED]
-        : [check.context, check.state, STATUS_PASSED, STATUS_FAILED];
-
-    if (passes.has(outcome)) passed += 1;
-
-    if (fails.has(outcome)) failed.push(name);
-  }
-
-  return { total: contexts.totalCount, passed, failed };
+  return {
+    total: contexts.totalCount,
+    passed:
+      countIn(contexts.checkRunCountsByState, CHECK_RUN_PASSED) +
+      countIn(contexts.statusContextCountsByState, STATUS_PASSED),
+    failedCount:
+      countIn(contexts.checkRunCountsByState, CHECK_RUN_FAILED) +
+      countIn(contexts.statusContextCountsByState, STATUS_FAILED),
+    failed,
+  };
 }
 
 /** One entry as the wire carries it, read at `now`, its task left for the join; none for one whose pull request GitHub did not answer. */

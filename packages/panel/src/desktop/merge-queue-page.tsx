@@ -132,14 +132,18 @@ function AuthorFace({
   );
 }
 
-/** How the queue's checks stand on a pull request: the first that failed and how many more did, else how many passed; none before it reports any. */
+/** How the queue's checks stand on a pull request: the first named failure and how many more failed, or how many failed where none is named, else how many passed; none before it reports any. */
 function checksWords(checks: MergeQueueChecks | null | undefined): string | undefined {
   if (checks === null || checks === undefined) return undefined;
 
-  const [first, ...more] = checks.failed;
+  const [first] = checks.failed;
+  const more = checks.failedCount - 1;
 
-  if (first !== undefined)
-    return more.length === 0 ? `${first} failed` : `${first} failed +${more.length}`;
+  if (first !== undefined) return more > 0 ? `${first} failed +${more}` : `${first} failed`;
+
+  if (checks.failedCount > 0) {
+    return `${checks.failedCount} ${checks.failedCount === 1 ? "check" : "checks"} failed`;
+  }
 
   return `${checks.passed} of ${checks.total} ${checks.total === 1 ? "check" : "checks"} passed`;
 }

@@ -65,10 +65,11 @@ const mergeQueueTaskSchema = EffectSchema.Struct({
 });
 
 /** Who opened the pull request, as GitHub names them; none for a deleted account. */
-/** How the queue's checks stand on the commit it builds for an entry: how many it reports, how many passed, and the names of those that failed, in GitHub's order. */
+/** How the queue's checks stand on the commit it builds for an entry: how many it reports, how many passed, how many failed, and the names of those failed among the first the service reads, in GitHub's order. */
 const mergeQueueChecksSchema = EffectSchema.Struct({
   total: countedNumber,
   passed: countedNumber,
+  failedCount: countedNumber,
   failed: EffectSchema.Array(EffectSchema.String),
 });
 
