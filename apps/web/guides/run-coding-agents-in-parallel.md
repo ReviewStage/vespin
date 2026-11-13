@@ -5,60 +5,51 @@ published: 2026-11-12
 updated: 2026-11-13
 faq:
   - q: Can I run Claude Code and Codex at the same time?
-    a: Yes. Most local worktree apps run both. In the cloud, Warp and Vespin run both, and GitHub Copilot can hand a task to either in preview. Claude Code on the web and Codex cloud run only their own agent.
+    a: Yes. Most of the local apps on this page run both, each in its own worktree. In the cloud, Warp and Vespin run both, and GitHub Copilot can hand a task to either while that feature is in preview. Claude Code on the web and Codex cloud run only their own agent.
   - q: Do I need a Mac?
-    a: No. Every cloud tool here starts agents from a browser. Of the local apps, Conductor is Mac-only, Sculptor runs on Macs and Linux, and Emdash and Nimbalyst also run on Windows.
+    a: No. Every cloud tool here starts agents from a browser. Of the local apps, Conductor runs only on a Mac, Sculptor runs on Macs and Linux, and Emdash and Nimbalyst also run on Windows.
   - q: What do 10 agents in parallel cost?
-    a: Mostly the model. Ten agents use up a Claude or ChatGPT plan's limits ten times as fast, so you'll likely need a higher plan or an API key. Some cloud plans also cap parallel sessions. [Devin](https://devin.ai/pricing) lists its cap per plan.
+    a: Mostly the model. Ten agents use up a Claude or ChatGPT plan's limits ten times as fast as one, so you'll likely need a higher plan or an API key. Some cloud plans also cap how many sessions run at once, and [Devin](https://devin.ai/pricing) lists its cap for each plan.
   - q: Is there a free, open-source option?
-    a: Claude Squad, Vibe Kanban, Sculptor, Nimbalyst, Paradev, and Emdash are open source and run locally. Vespin is open source and runs agents in the cloud. All of them are free; you pay for the model.
+    a: Yes. Claude Squad, Vibe Kanban, Sculptor, Nimbalyst, Paradev, and Emdash are open source and run on your machine. Vespin is open source too and runs agents in the cloud. You still pay for the model.
 ---
 
-There are three kinds of tool for running coding agents in parallel: local worktree apps, the agent vendors' own cloud agents, and agent-neutral cloud workspaces. Local apps run agents on your machine, so they stop when it sleeps. Vendor cloud agents keep running with your laptop closed, but most run only their vendor's agent. Agent-neutral workspaces run Claude Code, Codex, and others in the cloud.
+There are three kinds of tool for running coding agents in parallel: local worktree apps, the agent vendors' own cloud agents, and agent-neutral cloud workspaces. Local apps run agents on your machine, so they stop when it sleeps. Vendor cloud agents keep going with your laptop closed, but most of them run only their vendor's agent. Agent-neutral workspaces run Claude Code, Codex, and others in the cloud, side by side.
 
-## Doing it by hand
+We build Vespin, one of the agent-neutral workspaces, so we have a stake in this. Every claim on this page about another product links to that product's own page, and we say where another tool does something better than ours. We also wrote these guides the way this page describes: seven agents ran in parallel, one per page, each with its own pull request, and a person read and approved every page before it went up.
 
-Each agent needs its own checkout, or two agents will edit the same files. `git worktree` gives you one per branch:
+## Start with git worktree
+
+Two agents in one checkout will edit the same files and undo each other's work. Each one needs its own folder on its own branch, and `git worktree` gives you that without cloning the repository again:
 
 ```sh
 git worktree add ../app-fix-login -b fix-login
 git worktree add ../app-search -b add-search
 ```
 
-Start `claude` or `codex` in each folder. When an agent finishes, push its branch, open a pull request, and run `git worktree remove ../app-fix-login`.
+Start `claude` or `codex` in each folder. When an agent finishes, push its branch, open a pull request, and clean up with `git worktree remove ../app-fix-login`.
 
-Past three or four agents, it gets hard to tell which terminal is waiting on you.
+That's enough for two agents. Past three or four, the hard part is no longer the code but knowing which terminal is waiting on you, and that's the problem every tool below is trying to solve.
 
-## Local worktree apps
+## Apps that run agents on your machine
 
-These give each agent a worktree and show them all in one window.
+These apps make the worktrees for you and show every agent in one window. [Conductor](https://conductor.build) runs Claude Code, Codex, Cursor, and OpenCode on a Mac, and it's [free for now](https://www.conductor.build/docs/faq). It's also [joining Meta](https://www.conductor.build/announcement). If you'd rather stay in the terminal, [Claude Squad](https://github.com/smtg-ai/claude-squad) runs each agent in its own tmux session. [Paradev](https://paradev.com/), which used to be called Superset, runs most CLI agents, and its [Team plan](https://paradev.com/pricing) adds cloud workspaces.
 
-- [Conductor](https://conductor.build) runs Claude Code, Codex, Cursor, and OpenCode on a Mac, and is [free for now](https://www.conductor.build/docs/faq). It's [joining Meta](https://www.conductor.build/announcement).
-- [Claude Squad](https://github.com/smtg-ai/claude-squad) runs each agent in its own tmux session, in the terminal.
-- [Paradev](https://paradev.com/), formerly Superset, runs most CLI agents. Its [Team plan](https://paradev.com/pricing) adds cloud workspaces.
-- [Emdash](https://github.com/generalaction/emdash) runs on Windows too, and can run agents on another machine over SSH.
-- [Nimbalyst](https://nimbalyst.com), formerly Crystal, runs on macOS, Windows, and Linux.
-- [Sculptor](https://imbue.com/product/sculptor), from Imbue, is a research preview for Claude Code.
-- [Vibe Kanban](https://github.com/BloopAI/vibe-kanban) lays tasks out on a kanban board. [Its company shut down](https://www.vibekanban.com/blog/shutdown) in April 2026, and its community maintains it now.
+Two of them run on Windows as well as macOS and Linux: [Emdash](https://github.com/generalaction/emdash), which can also run agents on another machine over SSH, and [Nimbalyst](https://nimbalyst.com), which was called Crystal. [Sculptor](https://imbue.com/product/sculptor), from Imbue, is a research preview built around Claude Code. [Vibe Kanban](https://github.com/BloopAI/vibe-kanban) puts your tasks on a kanban board. [Its company shut down](https://www.vibekanban.com/blog/shutdown) in April 2026, but its community still maintains the project.
 
-Cursor's editor also [runs its own agent in local worktrees](https://cursor.com/docs/configuration/worktrees).
+If you already work in Cursor, its editor [runs its own agent in local worktrees](https://cursor.com/docs/configuration/worktrees) too.
 
-## Vendor cloud agents
+## Each vendor's own cloud agent
 
-You start a task in the browser, it runs on the vendor's servers, and you get a pull request back. Parallel tasks draw on your plan's usage limits.
+Anthropic, OpenAI, GitHub, Cursor, and Cognition each run their own agent in the cloud. You start a task in the browser, it runs on their servers, and a pull request comes back. Nothing on your end has to stay awake, which is the one thing a local app can't give you. Parallel tasks still draw on your plan's usage limits.
 
-- [Claude Code on the web](https://code.claude.com/docs/en/claude-code-on-the-web) comes with [Claude's paid plans](https://claude.com/pricing).
-- [Codex cloud](https://learn.chatgpt.com/docs/cloud) comes with [ChatGPT's paid plans](https://learn.chatgpt.com/docs/pricing).
-- [GitHub Copilot's coding agent](https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent) turns an issue into a pull request. It can also [hand the task to Claude or Codex](https://docs.github.com/en/copilot/concepts/agents/about-third-party-agents), in public preview.
-- [Cursor's cloud agents](https://cursor.com/docs/cloud-agent) need a [paid Cursor plan](https://cursor.com/pricing).
-- [Devin](https://devin.ai/pricing) caps parallel sessions by plan.
+[Claude Code on the web](https://code.claude.com/docs/en/claude-code-on-the-web) comes with [Claude's paid plans](https://claude.com/pricing), and [Codex cloud](https://learn.chatgpt.com/docs/cloud) comes with [ChatGPT's paid plans](https://learn.chatgpt.com/docs/pricing). If you already pay for one of those and use only that agent, start there, because it costs you nothing extra. [GitHub Copilot's coding agent](https://docs.github.com/en/copilot/concepts/agents/coding-agent/about-coding-agent) turns an issue into a pull request, and while the feature is in public preview it can also [hand the task to Claude or Codex](https://docs.github.com/en/copilot/concepts/agents/about-third-party-agents). [Cursor's cloud agents](https://cursor.com/docs/cloud-agent) need a [paid Cursor plan](https://cursor.com/pricing). [Devin](https://devin.ai/pricing) runs Cognition's own agent and caps how many sessions each plan runs at once.
 
-## Agent-neutral cloud workspaces
+## Clouds that run more than one vendor's agent
 
-- [Warp](https://docs.warp.dev/agent-platform/cloud-agents/overview) runs its own agent, [Claude Code, and Codex](https://docs.warp.dev/agent-platform/cloud-agents/harnesses) in its cloud. You start them from Slack, Linear, GitHub, or Warp. [Its free plan](https://www.warp.dev/pricing) includes a few cloud agents.
-- [Vespin](https://vespin.dev) runs Claude Code and Codex in cloud sandboxes or on your own machine.
+[Warp](https://docs.warp.dev/agent-platform/cloud-agents/overview) runs its own agent, [Claude Code, and Codex](https://docs.warp.dev/agent-platform/cloud-agents/harnesses) in its cloud, and you can start them from Slack, Linear, GitHub, or Warp itself. [Its free plan](https://www.warp.dev/pricing) includes a limited number of cloud agents, so you can try it before you pay. Vespin is the other tool in this group, and we cover it at the end.
 
-## Comparison table
+## The tools side by side
 
 | Tool | Runs on | Agents | Teams | Price | License |
 | --- | --- | --- | --- | --- | --- |
@@ -77,16 +68,16 @@ You start a task in the browser, it runs on the vendor's servers, and you get a 
 | Warp | Warp's cloud | Warp's agent, Claude Code, Codex | Yes | Free tier; from $20/mo | Hosted service |
 | Vespin | Cloud, your Mac, or Linux | Claude Code, Codex | Yes | Free | Apache-2.0 |
 
-Prices are for the tool, checked November 12, 2026. The model is billed separately unless the vendor's plan includes it.
+We checked these prices on November 12, 2026. They're for the tool alone, and the model is billed on top unless the vendor's plan includes it.
 
-## Which to choose
+## Picking a kind of tool
 
-- One agent you already pay for: that vendor's cloud agent. Copilot can also hand tasks to Claude or Codex, in preview.
-- A few agents at your desk, for free: a local worktree app.
-- Claude Code and Codex together in the cloud, or a team watching each other's agents: an agent-neutral workspace.
+If you use one agent and already pay for its plan, use that vendor's cloud agent. If you want a few agents at your desk and don't want to pay for the tool, a local app is enough. You need an agent-neutral workspace when you want Claude Code and Codex running in the cloud together, or when a team wants to see everyone's agents in one place.
 
-## Where Vespin fits
+## What Vespin does, and what it doesn't
 
-Vespin runs Claude Code and Codex in cloud sandboxes, on your Mac, or on a Linux machine you add. Agents post to one inbox when they need a decision or a review, and can split a task and start other agents on the parts. Your team shares a workspace, and the Slack bot can start agents and send you the inbox.
+Vespin runs Claude Code and Codex in cloud sandboxes, on your Mac, or on a Linux machine you add. The center of it is an inbox: an agent posts there only when it needs a decision or a review, so you aren't checking terminals to find out. Agents can also split a task into sub-tasks and start other agents on them. Your team shares a workspace, and our Slack bot can start agents and send you inbox threads as DMs.
 
-It's free and open source under Apache-2.0, and agents run on your own Claude or ChatGPT plan or API key. There's a Mac app for Apple silicon and a [web app](https://vespin.dev/app). It doesn't run Gemini, Amp, or other agents; Emdash and Paradev do.
+It's free and open source under Apache-2.0. Agents run on your own Claude or ChatGPT plan or API key, so we never bill you for model usage. There's a Mac app for Apple silicon and a [web app](https://vespin.dev/app) you can open on your phone.
+
+We run only Claude Code and Codex. If you want Gemini, Amp, or Aider, use one of the local apps instead: Paradev runs Gemini, Emdash runs Amp, and Claude Squad runs Aider. And if you only ever run one agent, its vendor's own cloud agent is simpler than adding us.
