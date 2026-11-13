@@ -1,4 +1,4 @@
-import { CHECKOUT_DIFF_SCRIPT, checkoutDiffEnv } from "@repo/features/checkout-diff";
+import { CHECKOUT_DIFF_SCRIPT, checkoutDiffEnv } from "@repo/agent-runner/checkout-diff";
 import {
   DEVICE_AGENT_BOUNDS,
   DEVICE_AGENT_REQUEST_KIND,
@@ -165,7 +165,7 @@ const answeredRead = (
 
 /**
  * A diff asked: the one diff script both machines run
- * (`@repo/features/checkout-diff`), run in the agent's worktree as the
+ * (`@repo/agent-runner/checkout-diff`), run in the agent's worktree as the
  * agent on the box with the two sides in its variables, answered with its
  * exit and what it printed; exit 1 and nothing printed where it could not
  * run, ran past its deadline, or its arguments could not be read. Note that

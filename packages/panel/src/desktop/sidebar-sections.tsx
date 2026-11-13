@@ -46,6 +46,8 @@ import {
   NOTE_LINE_LOOK,
   NoteLine,
   nextRowOrHead,
+  Skeleton,
+  SkeletonRegion,
   Stack,
   TEXT_TONE,
   TEXT_VARIANT,
@@ -845,9 +847,47 @@ function SectionRows({
   );
 }
 
-/** What a section draws in place of its rows while the view leaves none standing: a word that tasks are dragged in; nothing while it draws rows. */
-function SectionFoot({ drawn }: { drawn: DrawnSection }): React.JSX.Element | null {
-  if (drawn.tasks.length > 0) return null;
+/** The widths of the tasks' names while the list is first read, uneven as names are. */
+export const LIST_SKELETON = ["72%", "54%", "64%", "46%"] as const;
+
+/** A section's rows while the list is first read: one row's room, since how many it holds is not known yet. */
+const SECTION_SKELETON = LIST_SKELETON.slice(0, 1);
+
+/**
+ * Task rows while the list is first read, the sidebar's list and each of
+ * its sections alike: a task row's room and its name's type for each block,
+ * one line as a row's name is, so the rows land where the blocks stood.
+ */
+export function TaskRowsSkeleton({ widths }: { widths: readonly string[] }): React.JSX.Element {
+  return (
+    <SkeletonRegion label="Reading your tasks…">
+      <div className="sidebar-skeleton">
+        {widths.map((width) => (
+          <div key={width} className="sidebar-skeleton-row">
+            <Skeleton width={width} />
+          </div>
+        ))}
+      </div>
+    </SkeletonRegion>
+  );
+}
+
+/**
+ * What a section draws in place of its rows while the view leaves none
+ * standing: a row's skeleton while the list is first read, nothing where it
+ * could not be read, which the list's own line says, and once read a word
+ * that tasks are dragged in; nothing while it draws rows.
+ */
+function SectionFoot({
+  drawn,
+  tasks,
+}: {
+  drawn: DrawnSection;
+  tasks: TasksControl;
+}): React.JSX.Element | null {
+  if (drawn.tasks.length > 0 || tasks.listFailed) return null;
+
+  if (!tasks.listRead) return <TaskRowsSkeleton widths={SECTION_SKELETON} />;
 
   return (
     <div className={SIDEBAR_SECTION_SLOT}>
@@ -951,7 +991,7 @@ function SidebarSection({
         {drawn.tasks.length === 0 ? null : (
           <SectionRows drawn={drawn} context={context} tasks={drawn.tasks} folded={false} />
         )}
-        <SectionFoot drawn={drawn} />
+        <SectionFoot drawn={drawn} tasks={context.tasks} />
       </GroupHeader>
       {menu.drawn === undefined ? null : (
         <ActionMenu

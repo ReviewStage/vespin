@@ -68,6 +68,14 @@ export function copyRichThroughShell(rich: {
   return appPlatform().copyRich(rich);
 }
 
+/** A picture copied alone from words, the one at `url` once read, put on the shell's clipboard beside the words its copy wrote, so it pastes as the picture where a field takes only pictures; a refusal rejecting. */
+export function copyPictureWithWordsThroughShell(
+  words: { readonly html: string; readonly text: string },
+  url: Promise<string>,
+): Promise<void> {
+  return appPlatform().copyRich({ ...words, png: url.then(pngBase64Of) });
+}
+
 /** The copy act a `@repo/ui` copy button is handed for a picture: the one at `url` on the shell's clipboard, a refusal rejecting. */
 export function copyImageThroughShell(url: string): Promise<void> {
   return appPlatform().copyImage(pngBase64Of(url));

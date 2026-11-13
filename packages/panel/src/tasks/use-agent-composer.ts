@@ -10,18 +10,13 @@ import {
 } from "@repo/features/agent-wire";
 import { type Failure, remedyLabel } from "@repo/features/failure-remedy";
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
+import type { DraftSuggestion, SuggestionSendResult } from "@repo/features/suggestion-model";
 import { STATUS_TONE } from "@repo/ui";
 import { sentLineId } from "@repo/wire/host-ids";
 import { useSelector } from "@tanstack/react-store";
 import { useEffect, useRef, useState } from "react";
 import type { AgentActAnswer } from "../act.js";
-import {
-  DRAFT_PLACE,
-  type Draft,
-  type DraftSuggestion,
-  EMPTY_DRAFT,
-  useDraft,
-} from "../composer-drafts.js";
+import { DRAFT_PLACE, type Draft, EMPTY_DRAFT, useDraft } from "../composer-drafts.js";
 import { useSendQueue } from "../send-queue.js";
 import { useToast } from "../toast.js";
 import {
@@ -35,7 +30,6 @@ import {
 } from "./agent-model.js";
 import { type FailedLine, failedLines as failedLinesHeld, failedLinesOf } from "./failed-lines.js";
 import type { HeldUpdate } from "./refused-send.js";
-import type { SuggestionSendResult } from "./suggestion-send.js";
 
 /**
  * use-agent-composer.ts -- the message box under an agent's transcript as one control: the words being written, the messages on their way, the ones that did not go, and the lines sent that the transcript has not read back.

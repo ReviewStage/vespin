@@ -3,8 +3,9 @@
  *
  * Every turn row names the model it was resolved to and the effort it ran
  * at where its session named one, and once it settles, the tokens its steps
- * summed and how it ended; and whether Anthropic refused a fast step of it,
- * which then ran at standard speed. A tab draws those on the card its "Worked for"
+ * summed and how it ended; whether Anthropic refused a fast step of it,
+ * which then ran at standard speed; and the files it changed, as its runner
+ * diffed them when it ended (`turn-files-wire.ts`). A tab draws those on the card its "Worked for"
  * line hangs, so the reads that answer a tab's turns carry them beside the
  * turn's span: a coding agent's journals, read by the service's page and by
  * the host from the transcript's live window alike. A leaf over the row
@@ -21,6 +22,7 @@ import {
   type TurnTokens,
 } from "./agent-wire.js";
 import { catalogIdOf } from "./model-label.js";
+import { TurnFilesSummarySchema, type TurnFilesSummaryView } from "./turn-files-wire.js";
 import { TURN_FAILURE } from "./turn-run/requests.js";
 
 /** The row's fields a record is read from. */
@@ -31,6 +33,8 @@ export interface RecordedTurn {
   readonly usage: unknown;
   readonly failure: string | null;
   readonly fastRefused: boolean;
+  /** The turn's `files` column, where the read selects it. */
+  readonly files?: unknown;
 }
 
 /** The counts of a turn's `usage` column a record reads; the column carries more beside them. */
@@ -42,6 +46,8 @@ const RecordedUsageSchema = Schema.Struct({
 });
 
 const decodeUsage = Schema.decodeUnknownOption(RecordedUsageSchema);
+
+const decodeFiles = Schema.decodeUnknownOption(TurnFilesSummarySchema);
 
 /** A recorded name the wire carries: one it bounds, and nothing for an empty or overlong one. */
 function choiceOf(recorded: string | null): string | undefined {
@@ -75,12 +81,20 @@ function tokensOf(turn: RecordedTurn): TurnTokens | undefined {
   };
 }
 
-/** What the turn ran on and spent, each as far as its row recorded it. */
+/** The files the turn changed as its row kept them, or nothing where it kept none or a shape this build cannot read. */
+function changedFilesOf(turn: RecordedTurn): TurnFilesSummaryView | undefined {
+  return turn.files === undefined || turn.files === null
+    ? undefined
+    : Option.getOrUndefined(decodeFiles(turn.files));
+}
+
+/** What the turn ran on, spent, and changed, each as far as its row recorded it. */
 export function turnRecordOf(turn: RecordedTurn): TurnRecord {
   const model = choiceOf(turn.model === null ? null : catalogIdOf(turn.model));
   const effort = choiceOf(turn.reasoningEffort);
   const tokens = tokensOf(turn);
   const ending = endingOf(turn);
+  const changedFiles = changedFilesOf(turn);
 
   return {
     ...(model === undefined ? undefined : { model }),
@@ -88,5 +102,6 @@ export function turnRecordOf(turn: RecordedTurn): TurnRecord {
     ...(tokens === undefined ? undefined : { tokens }),
     ...(ending === undefined ? undefined : { ending }),
     ...(turn.fastRefused ? { fastRefused: true } : undefined),
+    ...(changedFiles === undefined ? undefined : { changedFiles }),
   };
 }

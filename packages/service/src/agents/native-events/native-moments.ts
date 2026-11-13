@@ -1,5 +1,6 @@
 import type { CheckoutSnapshot } from "@repo/agent-runner/protocol";
 import { PROVIDER_KEY_STATUS } from "@repo/features/provider-key-wire";
+import type { TurnFilesSummaryView } from "@repo/features/turn-files-wire";
 import type { RunUsage, ToolCallSettlement } from "@repo/features/turn-run";
 import type { UnparsedWireValue, WireValue } from "@repo/wire";
 import type { CompactedNotice } from "@repo/wire/ui-messages";
@@ -205,6 +206,8 @@ export type NativeMoment =
       readonly detail?: string;
       /** Whether the launch stays warm past the turn's end, as an IDLE says, rather than ending with it. */
       readonly warm?: boolean;
+      /** The files the turn changed, as the runner's IDLE or END carries them. */
+      readonly files?: TurnFilesSummaryView;
       /**
        * Whether the runner said the harness or the launch failed, rather than
        * that its input closed: such an end before the launch's first turn

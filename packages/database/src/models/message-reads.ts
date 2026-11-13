@@ -1285,6 +1285,7 @@ const TURN_FIELDS = {
   failure: turns.failure,
   cancelRequestedAt: turns.cancelRequestedAt,
   fastRefused: turns.fastRefused,
+  files: turns.files,
 };
 
 const TurnRowSchema = Schema.Struct({
@@ -1308,6 +1309,8 @@ const TurnRowSchema = Schema.Struct({
   cancelRequestedAt: Schema.NullOr(InstantColumnSchema),
   /** Whether a step of the turn ran at standard speed because Anthropic refused it Fast. */
   fastRefused: Schema.Boolean,
+  /** The files the turn changed, as its runner diffed them when it ended; read as the record reads it (`turn-record.ts`). */
+  files: Schema.NullOr(WireValueSchema),
 });
 
 export type StoredTurnRecord = typeof TurnRowSchema.Type;

@@ -84,7 +84,7 @@ export type StartAnswer =
   | { readonly refused: string };
 
 /** What a refused agent Start says, by why, naming the device that would not take it where the service said, as the panel's note says it. */
-function startRefusalWords(refused: RefusedCall): string {
+export function startRefusalWords(refused: RefusedCall): string {
   if (refused.failure === AGENT_CALL_FAILURE.LOCAL_AGENT_REFUSED) {
     return localAgentRefusalWords(refused.localAgentRefusal, refused.refusedDevice);
   }
@@ -159,14 +159,16 @@ function useModelsRead(): AppHostRead<ModelsAnswer> | undefined {
  * The models the account may start an agent on, followed while the sheet
  * stands, and the model and effort picked among them: the account's default
  * until a pick is made, and on a change of model the effort the panel's
- * menu keeps (`effortFor`).
+ * menu keeps (`effortFor`). A sheet opened from a suggestion starts on the
+ * suggestion's model and effort (`seed`), as the panel's draft lays them on
+ * its chip.
  */
-export function useModelPick(): ModelPick {
+export function useModelPick(seed?: ModelChoice): ModelPick {
   const acts = useHostActs();
   const held = useModelsRead();
   const read = held?.rows;
   const { data: fallback } = useQuery({ ...appStateQuery, select: selectAgentDefault });
-  const [picked, setPicked] = useState<ModelChoice | undefined>(undefined);
+  const [picked, setPicked] = useState<ModelChoice | undefined>(seed);
   const catalog = read?.models ?? NO_MODELS;
   const shown = picked ?? fallback;
   const models = useMemo(() => modelOptions(catalog), [catalog]);

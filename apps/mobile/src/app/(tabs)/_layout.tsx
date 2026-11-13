@@ -60,6 +60,7 @@ export default function TabsLayout() {
       sidebarAdaptable={!appSidebar && !(Platform.OS === "ios" && Platform.isPad)}
       tintColor={colors.ACCENT}
       badgeBackgroundColor={colors.ATTENTION_FILL}
+      badgeTextColor={colors.ON_ACCENT}
     >
       <NativeTabs.Trigger name="inbox" accessibilityLabel="Inbox">
         <NativeTabs.Trigger.Icon sf="tray" />

@@ -1279,13 +1279,19 @@ const STAGED_INTEGRATIONS: AppIntegrations = {
  * own integrations, and Acme's Slack channels, and the staged workspace's
  * memories and skills held. The members are held under every profile rather
  * than only the signed-in ones, because ⌘K's People, a task's assignee and
- * creator faces, and the person page read them wherever the window stands.
+ * creator faces, and the person page read them wherever the window stands;
+ * so are the staged experiments, because a task's agent draws its turns'
+ * files and offers its files back on Rewind by the reader's own choice.
  * Each slice laid over is one object across deliveries, but the settings,
  * which carry main's own, so a delivery that moves nothing of them draws
  * nothing again.
  */
 export function settingsAppState(profile: string, state: AppStateSnapshot): AppStateSnapshot {
-  const held = { ...state, [LIVE_READ.WORKSPACE_MEMBERS]: HELD_MEMBERS };
+  const held = {
+    ...state,
+    [LIVE_READ.WORKSPACE_MEMBERS]: HELD_MEMBERS,
+    ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
+  };
 
   if (!SIGNED_IN_PROFILES.has(profile)) return held;
 
@@ -1310,7 +1316,6 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
     [LIVE_READ.TOKEN_REPOSITORIES]: STAGED_TOKEN_REPOSITORIES,
     [LIVE_READ.MCP_CLIENTS]: STAGED_MCP_CLIENTS,
     [LIVE_READ.REPOSITORY_LISTS]: STAGED_REPOSITORIES,
-    ...(state.settings === undefined ? undefined : { settings: stagedSettings(state.settings) }),
   };
 }
 

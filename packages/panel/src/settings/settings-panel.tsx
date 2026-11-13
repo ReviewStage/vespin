@@ -1,7 +1,12 @@
 import type { AccountSnapshot } from "@repo/credentials/snapshot";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { SIGNED_OUT_WORDS } from "@repo/features/words";
-import { EXPERIMENTS, HOST_CAPABILITY, type HostCapability, NO_EXPERIMENTS } from "@repo/settings";
+import {
+  HOST_CAPABILITY,
+  type HostCapability,
+  LISTED_EXPERIMENTS,
+  NO_EXPERIMENTS,
+} from "@repo/settings";
 import type {
   MicrophoneControl,
   NotificationsControl,
@@ -194,7 +199,7 @@ export function SettingsPanel({
 
       {view === SETTINGS_VIEW.EXPERIMENTAL ? (
         <ExperimentalPage
-          entries={EXPERIMENTS}
+          entries={LISTED_EXPERIMENTS}
           experiments={experiments}
           signedIn={signedIn}
           workspace={workspace ? shownWorkspace(workspace) : undefined}

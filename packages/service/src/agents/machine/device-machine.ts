@@ -63,6 +63,7 @@
  */
 
 import { randomUUID } from "node:crypto";
+import { CHECKOUT_DIFF_EXIT } from "@repo/agent-runner/checkout-diff";
 import type { DatabaseServices } from "@repo/database/core/query";
 import { hasRepository, readAgent } from "@repo/database/models/agent-store";
 import {
@@ -83,7 +84,6 @@ import { hostRemoved } from "@repo/database/models/host-store";
 import { parseKeyRing, sealMacLaunchSecrets } from "@repo/database/models/provider-key-seal";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { AGENT_MACHINE, MAC_PRESENCE } from "@repo/features/agent-wire";
-import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
 import { CHECKOUT_RESTORE_EXIT } from "@repo/features/checkout-restore";
 import {
   DEVICE_AGENT_BOUNDS,

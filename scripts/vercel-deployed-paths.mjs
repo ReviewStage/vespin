@@ -13,17 +13,26 @@ const DEPENDENCY_FIELDS = [
 
 const WORKSPACE_PROTOCOL = "workspace:";
 
+const DOCUMENTS = "**/*.md";
+
 // What a workspace holds that no build reads: its documents, its tests, and
 // their fixtures and goldens. Note that `testing/` is not among them, because
 // a service's build may import from it.
 const UNSHIPPED = [
-  "**/*.md",
+  DOCUMENTS,
   "**/*.test.*",
   "**/__tests__/**",
   "**/__fixtures__/**",
   "fixtures/**",
   "tests/**",
 ];
+
+// The Markdown a workspace's build reads, as folders of it under the
+// workspace: the web app prerenders each guide (`apps/web/guides/`), so a
+// guide's edit must deploy. Note that git cannot take a path back once an
+// exclude matches it, so a workspace named here has its documents excluded
+// folder by folder, every folder but these.
+const SHIPPED_DOCUMENTS = new Map([["apps/web", ["guides"]]]);
 
 /** The `packages:` globs of `pnpm-workspace.yaml`, read as the one flat list it is. */
 function workspaceGlobs(root) {
@@ -111,6 +120,24 @@ function deployedWorkspaces(root) {
   return [...reached].sort();
 }
 
+/**
+ * What no build reads in a workspace, as globs under it: `UNSHIPPED`, with
+ * its documents left in the folders `SHIPPED_DOCUMENTS` names, by excluding
+ * them from the workspace's own files and every other folder instead.
+ */
+function unshippedPatterns(root, dir) {
+  const shipped = SHIPPED_DOCUMENTS.get(dir);
+
+  if (shipped === undefined) return UNSHIPPED;
+
+  const folders = readdirSync(join(root, dir), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && !shipped.includes(entry.name))
+    .map((entry) => `${entry.name}/${DOCUMENTS}`)
+    .sort();
+
+  return [...UNSHIPPED.filter((pattern) => pattern !== DOCUMENTS), "*.md", ...folders];
+}
+
 // Note that a tree this cannot read says why on one line and exits 1, which
 // the ignore step reads as a doubt and builds.
 const root = process.argv[2] ?? process.cwd();
@@ -118,7 +145,7 @@ const root = process.argv[2] ?? process.cwd();
 try {
   const paths = deployedWorkspaces(root).flatMap((dir) => [
     `:/${dir}`,
-    ...UNSHIPPED.map((pattern) => `:(top,exclude,glob)${dir}/${pattern}`),
+    ...unshippedPatterns(root, dir).map((pattern) => `:(top,exclude,glob)${dir}/${pattern}`),
   ]);
 
   process.stdout.write(`${paths.join("\n")}\n`);

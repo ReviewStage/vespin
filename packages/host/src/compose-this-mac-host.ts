@@ -152,6 +152,18 @@ function failedWords(cause: Cause.Cause<unknown>): string {
   return failure instanceof Error ? failure.message : String(failure);
 }
 
+/**
+ * A step of the host's setup that failed: what it was, in our own
+ * words; why, where its seam said so in our own words too, which is
+ * reported as an attribute beside the line; and what a command or a file
+ * printed, which only ever follows the line's own words.
+ */
+interface FailedStep {
+  readonly step: string;
+  readonly reason?: string;
+  readonly printed?: string;
+}
+
 /** What the app keeps This Mac's host at for the account signed in, running, and how many times it was turned on; stopped, with no account, where nobody is signed in; none where it keeps it at nothing, and leaves it as it stands. */
 type Kept = { readonly userId: string; readonly turns: number } | typeof SIGNED_OUT | undefined;
 
@@ -222,6 +234,17 @@ export function composeThisMacHost(
 ): Effect.Effect<ThisMacHostComposer, never, ThisMacHostServices> {
   return Effect.gen(function* () {
     const { report } = yield* Reporter;
+
+    /** A step that failed, reported as one line naming it, its ending after it, with why as an attribute beside the line and what was printed after its words. */
+    const reportFailed = (failed: FailedStep, ending = "") => {
+      const line = `this Mac's host: could not ${failed.step}${ending}`;
+
+      report(
+        failed.printed === undefined ? line : `${line}: ${failed.printed}`,
+        failed.reason === undefined ? undefined : { reason: failed.reason },
+      );
+    };
+
     const host = yield* ThisMacHost;
     const services = yield* Effect.context<ThisMacHostServices>();
     const { kernel, account, client } = dependencies;
@@ -281,7 +304,8 @@ export function composeThisMacHost(
     /** Whether the record's device is the account's, as the service lists its hosts; the answer kept as read here. */
     const accountOwns = (record: HostDevice) =>
       Effect.flatMap(dependencies.hostListed(record.deviceId), (listed) => {
-        if (Option.isNone(listed)) return Effect.fail("read the account's hosts");
+        if (Option.isNone(listed))
+          return Effect.fail<FailedStep>({ step: "read the account's hosts" });
         MutableRef.set(ownedHere, listed.value ? record.deviceId : undefined);
 
         return Effect.succeed(listed.value);
@@ -309,14 +333,14 @@ export function composeThisMacHost(
         if ("failure" in outcome) {
           if (outcome.failure === OWN_ENROLL_FAILURE.NOT_FOUND) return false;
 
-          return yield* Effect.fail("enroll it");
+          return yield* Effect.fail<FailedStep>({ step: "enroll it" });
         }
 
         yield* writeHostDevice(host.stateRoot, {
           deviceId,
           deviceSecret: outcome.deviceSecret,
           serviceOrigin,
-        }).pipe(Effect.mapError(() => "save its record"));
+        }).pipe(Effect.mapError((): FailedStep => ({ step: "save its record" })));
         report("this Mac's host was enrolled");
         yield* tellThisMac;
 
@@ -341,7 +365,8 @@ export function composeThisMacHost(
     const registered = Effect.gen(function* () {
       const done = yield* host.register;
 
-      if (Result.isFailure(done)) return yield* Effect.fail(`register it: ${done.failure}`);
+      if (Result.isFailure(done))
+        return yield* Effect.fail<FailedStep>({ step: "register it", reason: done.failure });
       report("this Mac's host was registered");
       yield* commandLinked;
       // Note that macOS may hold the agent for the member's approval, which nothing else would tell the windows.
@@ -352,7 +377,8 @@ export function composeThisMacHost(
     const unregistered = Effect.gen(function* () {
       const done = yield* host.unregister;
 
-      if (Result.isFailure(done)) return yield* Effect.fail(`unregister it: ${done.failure}`);
+      if (Result.isFailure(done))
+        return yield* Effect.fail<FailedStep>({ step: "unregister it", reason: done.failure });
     });
 
     /** The account install's host removed by its own `vespin-host uninstall`, and the record removed where no install was there to remove it. */
@@ -387,7 +413,10 @@ export function composeThisMacHost(
       const exit = yield* removed(false);
 
       if (Exit.isFailure(exit)) {
-        return yield* Effect.fail(`remove it: ${failedWords(exit.cause)}`);
+        return yield* Effect.fail<FailedStep>({
+          step: "remove it",
+          printed: failedWords(exit.cause),
+        });
       }
 
       report("this Mac's host was removed, as the service refused it");
@@ -418,12 +447,13 @@ export function composeThisMacHost(
       ).pipe(
         Effect.flatMap(HttpClientResponse.filterStatusOk),
         Effect.flatMap((response) => response.text),
-        Effect.mapError(() => "read its install script"),
+        Effect.mapError((): FailedStep => ({ step: "read its install script" })),
       );
 
       const ran = yield* host.install(script);
 
-      if (Result.isFailure(ran)) return yield* Effect.fail(`install it: ${ran.failure}`);
+      if (Result.isFailure(ran))
+        return yield* Effect.fail<FailedStep>({ step: "install it", printed: ran.failure });
       report("this Mac's host was installed and started");
     });
 
@@ -484,9 +514,9 @@ export function composeThisMacHost(
         return DONE;
       }),
     ).pipe(
-      Effect.catch((step) =>
+      Effect.catch((failed) =>
         Effect.sync(() => {
-          report(`this Mac's host: could not ${step}`);
+          reportFailed(failed);
 
           return UNDONE;
         }),
@@ -536,9 +566,9 @@ export function composeThisMacHost(
           return { ...DONE, folderLeft: words };
         }),
       ).pipe(
-        Effect.catch((step) =>
+        Effect.catch((failed) =>
           Effect.sync(() => {
-            report(`this Mac's host: could not ${step}`);
+            reportFailed(failed);
 
             return UNDONE;
           }),
@@ -591,10 +621,10 @@ export function composeThisMacHost(
       kept === undefined
         ? Effect.void
         : (kept.userId === undefined ? stoppedSignedOut : keepRunning).pipe(
-            Effect.tapError((step) =>
+            Effect.tapError((failed) =>
               Effect.andThen(
                 Effect.sync(() => {
-                  report(`this Mac's host: could not ${step}, so it is tried again`);
+                  reportFailed(failed, ", so it is tried again");
                   MutableRef.set(keepFailed, kept.userId !== undefined && MutableRef.get(starting));
                 }),
                 tellThisMac,

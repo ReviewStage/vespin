@@ -40,6 +40,7 @@
 
 import { AGENT_MACHINE, AGENT_PAYER } from "@repo/features/agent-wire";
 import { TURN_DEADLINE } from "@repo/features/turn-deadline";
+import { TurnFilesSummarySchema, type TurnFilesSummaryView } from "@repo/features/turn-files-wire";
 import {
   TURN_OPEN,
   TURN_ORIGIN,
@@ -261,6 +262,7 @@ const endOpen = SqlSchema.findAll({
     failureDetail: Schema.NullOr(Schema.String),
     usage: Schema.NullOr(TurnUsageColumnSchema),
     responseIds: Schema.Array(Schema.String),
+    files: Schema.NullOr(TurnFilesSummarySchema),
   }),
   Result: IdSchema,
   execute: (row) =>
@@ -274,6 +276,7 @@ const endOpen = SqlSchema.findAll({
           failureDetail: row.failureDetail,
           usage: row.usage,
           responseIds: [...row.responseIds],
+          files: row.files,
         })
         .where(
           and(
@@ -974,6 +977,8 @@ export interface TurnEnd {
   readonly failureDetail: string | null;
   readonly usage: typeof TurnUsageColumnSchema.Type | null;
   readonly responseIds: readonly string[];
+  /** The files the turn changed, as its runner diffed its checkout when it ended; null where it changed none or none was read. */
+  readonly files: TurnFilesSummaryView | null;
 }
 
 /**

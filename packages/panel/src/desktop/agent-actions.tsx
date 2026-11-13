@@ -6,6 +6,7 @@ import {
   type AgentSummary,
 } from "@repo/features/agent-wire";
 import type { ModelChoice } from "@repo/features/models-wire";
+import type { DraftSuggestion } from "@repo/features/suggestion-model";
 import { TERMINAL_ASK } from "@repo/features/terminal-entry";
 import {
   agentTranscript,
@@ -21,7 +22,6 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { pressMutation } from "../act-mutations.js";
 import { appPlatform } from "../app-platform.js";
 import { commandAction, PANEL_COMMAND } from "../command-items.js";
-import type { DraftSuggestion } from "../composer-drafts.js";
 import { agentPlace, useLinkItems, useOpenInTab } from "../copy-link-item.js";
 import { useThisMac } from "../machine-name.js";
 import { renameWrite } from "../rename-write.js";

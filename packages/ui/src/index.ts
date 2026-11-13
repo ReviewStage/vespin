@@ -14,6 +14,8 @@ export * from "./components/app-ask/app-ask.js";
 
 export * from "./components/app-icon/app-icon.js";
 
+export * from "./components/app-window-stack/app-window-stack.js";
+
 export * from "./components/approval-actions/approval-actions.js";
 
 export * from "./components/arrival/arrival.js";
@@ -277,6 +279,8 @@ export * from "./components/picture-tile/picture-tile.js";
 export * from "./components/popover-icon-button/popover-icon-button.js";
 
 export * from "./components/popover-panel/popover-panel.js";
+
+export * from "./components/port-table/port-table.js";
 
 export * from "./components/portal-fence/portal-fence.js";
 

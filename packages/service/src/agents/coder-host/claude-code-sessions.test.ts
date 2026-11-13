@@ -92,7 +92,7 @@ import { SANDBOX_IDLE, Sandbox } from "@repo/sandbox";
 import { memorySandbox } from "@repo/sandbox/testing";
 import { fixtureToken, vercelSandboxOver } from "@repo/sandbox/vercel/testing";
 import { EXPERIMENT } from "@repo/settings";
-import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
+import { MESSAGE_CHANNEL, MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { sentLineId } from "@repo/wire/host-ids";
 import { temporaryDirectory } from "@repo/wire/testing";
 import { eq, sql } from "drizzle-orm";
@@ -394,25 +394,33 @@ const runnerLetGo = (api: ReturnType<typeof runnerSandboxApi>, userId: string, s
     });
   });
 
-const message = (agent: Agent, text: string, lineId?: string) => ({
+const message = (agent: Agent, text: string, lineId?: string, spoken = false) => ({
   conversationId: agent.conversationId,
   turn: "typed" as const,
   message: text,
+  ...(spoken ? { spoken } : undefined),
   ...(lineId === undefined ? undefined : { lineId }),
 });
 
 /** A message written as the line awaiting the turn its send queues or joins, as a Start's first line and a steer are (`start.ts`'s `openingLine`, `steer.ts`), and handed on under its line id. */
-const writtenLine = (agent: Agent, text: string) =>
+const writtenLine = (agent: Agent, text: string, spoken = false) =>
   Effect.gen(function* () {
     const clientKey = randomUUID();
     const writer = yield* storeWriter({ tools: CODER_TOOL_SET });
     yield* writer.writeAwaitingLine(
       { userId: agent.userId, conversationId: agent.conversationId },
-      { text, clientKey, sender: { kind: MESSAGE_SENDER.APP } },
+      {
+        text,
+        clientKey,
+        sender: { kind: MESSAGE_SENDER.APP },
+        ...(spoken
+          ? { metadata: { author: MESSAGE_AUTHOR.DEVELOPER, channel: MESSAGE_CHANNEL.VOICE } }
+          : undefined),
+      },
       Effect.succeed(true),
     );
 
-    return message(agent, text, sentLineId(clientKey));
+    return message(agent, text, sentLineId(clientKey), spoken);
   });
 
 /**
@@ -4019,6 +4027,39 @@ it.layer(SUITE)("a coding agent's sessions on Claude Code", (it) => {
           typedAfter?.[0] ?? "",
         );
         assert.deepEqual(typedAfter?.slice(1), ["Also the docs."]);
+      }),
+  );
+
+  it.effect(
+    "a message spoken on a call opens its turn with the words for a reply read aloud, and a typed one's turn does not",
+    () =>
+      Effect.gen(function* () {
+        vi.stubEnv("VERCEL_OIDC_TOKEN", fixtureToken());
+        const api = runnerSandboxApi();
+        const { userId, agent } = yield* openAgent;
+
+        const sessions = yield* sessionsFor(userId, { next: 0 }).pipe(
+          Effect.provide(services(api)),
+        );
+
+        const opened = yield* deliveredOpen(
+          sessions,
+          yield* writtenLine(agent, "Fix the invitations."),
+        );
+
+        assert.ok(opened.outcome === SESSION_SEND_OUTCOME.ACCEPTED);
+
+        const spoken = yield* sessions.send(
+          opened.sessionId,
+          yield* writtenLine(agent, "Is it done?", true),
+        );
+
+        assert.equal(spoken.outcome, SESSION_SEND_OUTCOME.ACCEPTED);
+        const [typed, voice] = yield* textsOf(api.commands[0]);
+        assert.ok(!typed?.join("\n").includes("This turn is spoken"), typed?.join("\n") ?? "");
+        assert.ok(voice?.[0]?.startsWith("## This turn is spoken"), voice?.[0] ?? "");
+        assert.ok(voice?.[0]?.includes("no Markdown"), voice?.[0] ?? "");
+        assert.deepEqual(voice?.slice(1), ["Is it done?"]);
       }),
   );
 
