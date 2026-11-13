@@ -163,8 +163,7 @@ navigation, tab bar, swipes, menus, sheets and glass.
   Notion's, holds each workspace by its own tile or photo with the chosen one
   checked in copper, then New workspace and Workspace settings, in the panel's
   groups and words (`workspaceMenuGroups`), and last the account by its photo
-  and name opening Settings, left out where the window stands Settings
-  itself, as a landscape iPad's sidebar does at its foot, in
+  and name opening Settings, in every window, in
   a popover over the button in a regular window and a sheet with the medium
   and large detents in a compact one (`SWITCHER_PRESENTATION`), never the
   system's menu, which draws a row's image as a one-ink template; the account's
