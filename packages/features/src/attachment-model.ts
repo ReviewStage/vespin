@@ -18,6 +18,8 @@ export interface FileChip {
   readonly name: string;
   readonly mediaType: string;
   readonly url: string;
+  /** A picture's words for a reader who cannot see it, where they are more than its name says; never drawn as its title. */
+  readonly alt?: string | undefined;
 }
 
 /** How the viewer shows a file: as a picture, played as a video, as a PDF's pages, drawn as its Mermaid diagram, as its lines, or by its icon and name with a way to save it. */

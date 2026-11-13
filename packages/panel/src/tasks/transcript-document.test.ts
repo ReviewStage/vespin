@@ -107,11 +107,22 @@ const LINKS = [
   LINEAR,
 ].join("\n\n");
 
-/** The words of a message with a before and an after written next to each other. */
+/** The words of a message with a before and an after written next to each other, each with a sentence for its alt text and a short caption. */
 const PAIR = [
   "Here is the change:",
-  `![Before](${pictureOf(ITEM_ID, BEFORE)} "Before") ![After](${pictureOf(ITEM_ID, AFTER)} "After")`,
+  `![The page before the fix](${pictureOf(ITEM_ID, BEFORE)} "Before") ![The page after the fix](${pictureOf(ITEM_ID, AFTER)} "After")`,
 ].join("\n\n");
+
+/** What the window's viewer stands titled by, and what its picture says to a reader who cannot see it. */
+function viewerTitleAndAlt(): readonly (string | undefined)[] {
+  const card = document.querySelector<HTMLElement>('[role="dialog"]');
+  assert.ok(card, "the viewer is open");
+
+  return [
+    card.querySelector(".attachment-viewer-title")?.textContent ?? undefined,
+    card.querySelector<HTMLImageElement>(".ui-zoom-image")?.alt,
+  ];
+}
 
 declare global {
   var IS_REACT_ACT_ENVIRONMENT: boolean | undefined;
@@ -263,7 +274,7 @@ test("drawn as a document, pictures written next to each other stand side by sid
   await vi.waitFor(() =>
     assert.deepEqual(
       [...(rows()[0]?.querySelectorAll("img") ?? [])].map((image) => image.alt),
-      ["Before", "After"],
+      ["The page before the fix", "The page after the fix"],
     ),
   );
   assert.equal(rows().length, 1, "the two pictures stand in one row");
@@ -271,10 +282,15 @@ test("drawn as a document, pictures written next to each other stand side by sid
     [...(rows()[0]?.querySelectorAll(".picture-caption") ?? [])].map((said) => said.textContent),
     ["Before", "After"],
   );
-  const press = container.querySelector<HTMLButtonElement>('button[aria-label="Enlarge After"]');
+
+  const press = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Enlarge The page after the fix"]',
+  );
+
   assert.ok(press, "a picture is pressed to enlarge it");
   act(() => press.click());
-  assert.equal(document.querySelector<HTMLImageElement>(".ui-zoom-image")?.alt, "After.png");
+  // The viewer is titled by the caption, and its alt text stays the picture's own.
+  assert.deepEqual(viewerTitleAndAlt(), ["After.png", "The page after the fix"]);
 });
 
 test("a picture of an item opens a viewer the arrow keys walk across the item's pictures in the order they are drawn, one still read or drawn later joining once held and one whose read failed left out, and none of another item's", async () => {
@@ -283,8 +299,8 @@ test("a picture of an item opens a viewer the arrow keys walk across the item's 
 
   let text = [
     PAIR,
-    `![Third](${pictureOf(ITEM_ID, third)})`,
-    `![Broken](${pictureOf(ITEM_ID, broken)})`,
+    `![Third](${pictureOf(ITEM_ID, third)} "Third")`,
+    `![Broken](${pictureOf(ITEM_ID, broken)} "Broken")`,
   ].join("\n\n");
 
   const otherText = `![Another's](${pictureOf(OTHER_ITEM_ID, BEFORE)})`;
@@ -321,22 +337,23 @@ test("a picture of an item opens a viewer the arrow keys walk across the item's 
     assert.equal(container.querySelectorAll('button[aria-label="Enlarge Another\'s"]').length, 1),
   );
   await vi.waitFor(() =>
-    assert.equal(container.querySelector('button[aria-label="Enlarge After"]') === null, false),
+    assert.equal(
+      container.querySelector('button[aria-label="Enlarge The page after the fix"]') === null,
+      false,
+    ),
   );
 
-  const press = container.querySelector<HTMLButtonElement>('button[aria-label="Enlarge After"]');
+  const press = container.querySelector<HTMLButtonElement>(
+    'button[aria-label="Enlarge The page after the fix"]',
+  );
+
   assert.ok(press, "a picture is pressed to enlarge it");
   act(() => press.click());
 
-  const viewer = () => {
-    const card = document.querySelector<HTMLElement>('[role="dialog"]');
-    assert.ok(card, "the viewer is open");
-
-    return [
-      card.querySelector<HTMLImageElement>(".ui-zoom-image")?.alt,
-      viewerPlace(card) ?? "alone",
-    ];
-  };
+  const viewer = () => [
+    viewerTitleAndAlt()[0],
+    viewerPlace(document.querySelector('[role="dialog"]') ?? document) ?? "alone",
+  ];
 
   const key = (name: string) =>
     act(() =>
@@ -365,7 +382,7 @@ test("a picture of an item opens a viewer the arrow keys walk across the item's 
   assert.deepEqual(viewer(), ["Third.png", "3 of 3"]);
 
   // A picture drawn while the viewer stands, as a newer read of the item adds one, joins the walk.
-  text = `${text}\n\n![Fourth](${pictureOf(ITEM_ID, fourth)})`;
+  text = `${text}\n\n![Fourth](${pictureOf(ITEM_ID, fourth)} "Fourth")`;
   act(() => root.render(withQueryClient(draw())));
   await vi.waitFor(() => assert.deepEqual(viewer(), ["Third.png", "3 of 4"]));
   key("ArrowRight");
