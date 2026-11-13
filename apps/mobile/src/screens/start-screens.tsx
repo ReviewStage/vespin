@@ -411,6 +411,8 @@ export function NewAgentScreen({
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
+  // Note that a picked or dropped picture is held only once it is fitted, so nothing starts until it is in, and the agent never starts without it.
+  const settled = !pictures.reading;
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
   const skills = useSkillOffer(prompt, setPrompt, { planId: taskId });
@@ -431,7 +433,8 @@ export function NewAgentScreen({
       : { refused: result.failure.text };
   };
 
-  const start = () =>
+  const start = () => {
+    if (!drafted || !settled) return;
     go(
       () =>
         opened === undefined
@@ -444,12 +447,13 @@ export function NewAgentScreen({
           : startSuggested(opened.suggestion),
       pictures.refusal,
     );
+  };
 
   return (
     <>
       <SheetBar
         title={WORDS.NEW_AGENT}
-        ready={drafted && placed && !starting}
+        ready={drafted && settled && placed && !starting}
         onStart={start}
         kept={kept}
       />
@@ -686,9 +690,9 @@ export function NewTaskScreen({
   const fileTask = useFileTask(workspaceId);
   const [note, setNote] = useState<string | undefined>(undefined);
   const pictures = useAttachedPictures(setNote, draft?.pictures);
-  // Note that a share draft's pictures are read as the sheet opens, and a picked or dropped picture as it is fitted, and nothing starts or files until they are in, so its words never go without them.
+  // Note that a share draft's pictures are read as the sheet opens, and a picked or dropped picture as it is fitted, and nothing starts or files until they are in, so its words never go without them; the words stay kept from a discard meanwhile.
   const settled = !pictures.opening && !pictures.reading;
-  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files) && settled;
+  const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const filed = pictures.files === undefined && settled ? filedTaskOf(prompt) : undefined;
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
@@ -716,7 +720,7 @@ export function NewTaskScreen({
   const related = relationMenu(relation);
 
   const start = () => {
-    if (!drafted) return;
+    if (!drafted || !settled) return;
     go(
       () =>
         startTask({
@@ -738,7 +742,7 @@ export function NewTaskScreen({
     <>
       <SheetBar
         title={WORDS.NEW_TASK}
-        ready={drafted && placed && !starting}
+        ready={drafted && settled && placed && !starting}
         onStart={start}
         file={{ ready: filed !== undefined && placed && !starting, onFile: file }}
         kept={kept}
