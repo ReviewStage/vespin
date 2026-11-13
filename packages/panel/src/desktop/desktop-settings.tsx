@@ -230,17 +230,21 @@ function PageGroup({
   children: ReactNode;
 }): React.JSX.Element {
   const workspace = group === SETTINGS_PAGE_GROUP.WORKSPACE ? listed : undefined;
+  const heading = settingsGroupHeadingOf(group, capabilities);
+
+  // Note that the unheaded group stands apart by its gap alone, because a heading would claim its pages for one scope.
+  if (workspace === undefined && heading === undefined) {
+    return (
+      <section className="settings-nav-group [.settings-nav-group+&]:mt-section-gap">
+        {children}
+      </section>
+    );
+  }
 
   return (
     <section className="settings-nav-group [.settings-nav-group+&]:mt-section-gap">
       <GroupHeader
-        label={
-          workspace === undefined ? (
-            settingsGroupHeadingOf(group, capabilities)
-          ) : (
-            <ReplayMask>{workspace.name}</ReplayMask>
-          )
-        }
+        label={workspace === undefined ? heading : <ReplayMask>{workspace.name}</ReplayMask>}
         glyph={
           workspace === undefined ? undefined : (
             <ReplayMask>
@@ -264,7 +268,8 @@ function PageGroup({
  * under three headings, as Linear and Notion group theirs: the workspace the
  * tasks' sidebar lists, by its tile and name, over its Members and GitHub;
  * Account, over what is the account's whichever workspace is listed; and
- * This Mac. Settings opens on Profile, Account's first page, with the caret
+ * This Mac; and Experimental stands alone under them, under no heading, since
+ * it holds the workspace's experiments and the account's alike. Settings opens on Profile, Account's first page, with the caret
  * in the search. The page is a document: its title heads its column, under
  * the page's bar (`SettingsPage`), which picks up the title once it scrolls
  * away, and a page's reset ends the title's line. The Workspace page's title is
