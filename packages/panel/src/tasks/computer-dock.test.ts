@@ -76,8 +76,8 @@ test("every app used this turn stands once, the one used last first, each with i
 
   assert.deepEqual(appsInUse(messages, true), {
     apps: [
-      { app: "Simulator", bundleId: "com.example.simulator", icon: ICON.id, window: WINDOW },
-      { app: "Xcode", bundleId: "com.example.xcode", icon: ICON.id, window: OTHER_WINDOW },
+      { name: "Simulator", bundleId: "com.example.simulator", icon: ICON.id, window: WINDOW },
+      { name: "Xcode", bundleId: "com.example.xcode", icon: ICON.id, window: OTHER_WINDOW },
     ],
     using: true,
   });
@@ -93,7 +93,7 @@ test("the app used last is no longer in use once another tool is called, or once
 
   assert.equal(appsInUse(movedOn, true)?.using, false);
   assert.deepEqual(
-    appsInUse(using, false)?.apps.map((each) => each.app),
+    appsInUse(using, false)?.apps.map((each) => each.name),
     ["Simulator"],
   );
   assert.equal(appsInUse(using, false)?.using, false);
@@ -120,7 +120,7 @@ test("a line sent while the turn runs steers it and keeps the apps used before i
   const closed = [asked("ask-1"), { ...running, finishedAt: 1_000 }, asked("ask-2")];
 
   assert.deepEqual(
-    appsInUse(steered, true)?.apps.map((each) => each.app),
+    appsInUse(steered, true)?.apps.map((each) => each.name),
     ["Simulator"],
   );
   assert.equal(appsInUse(closed, true), undefined);

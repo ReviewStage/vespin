@@ -1,13 +1,14 @@
 import assert from "node:assert/strict";
 import { MESSAGE_ROLE, type WireRecord } from "@repo/wire";
 import { test } from "vitest";
-import { computerIconsByCall } from "./agent-parts.js";
+import { computerAppNamed, computerAppsOf } from "./agent-parts.js";
 import type { AgentTranscriptMessage } from "./agent-wire.js";
 
 /**
- * agent-parts.test.ts -- a computer call's row wears its app's real icon
- * even where its own answer kept none, borrowed from an earlier call on the
- * same app. Synthetic words.
+ * agent-parts.test.ts -- the apps a conversation's computer calls used, each
+ * named once: a call's row wears its app's real icon even where its own
+ * answer kept none, and every spelling of an app finds the same one.
+ * Synthetic words.
  */
 
 const ICON = {
@@ -20,6 +21,11 @@ const ICON = {
 
 function computer(callId: string, input: WireRecord, output: WireRecord): WireRecord {
   return { type: "tool-computer", toolCallId: callId, state: "output-available", input, output };
+}
+
+/** Each call's app's icon, by its call, as its row wears it. */
+function iconsByCall(messages: readonly AgentTranscriptMessage[]): [string, string | undefined][] {
+  return [...computerAppsOf(messages).byCall].map(([callId, app]) => [callId, app.icon]);
 }
 
 function turn(id: string, parts: readonly WireRecord[]): AgentTranscriptMessage {
@@ -49,16 +55,14 @@ test("a computer call that kept no icon wears the one an earlier call on its app
     ]),
   ];
 
-  assert.deepEqual(
-    [...computerIconsByCall(messages)],
-    [
-      ["read-1", ICON.id],
-      ["click-1", ICON.id],
-    ],
-  );
+  assert.deepEqual(iconsByCall(messages), [
+    ["read-1", ICON.id],
+    ["click-1", ICON.id],
+    ["click-2", undefined],
+  ]);
 });
 
-test("a computer call still running wears its app's icon at once, however its input spells the app: the Mac's name in any case, or its bundle id", () => {
+test("an app is one however a call spells it, the Mac's name in any case or its bundle id, so a call still running wears its icon at once and a mention by its bundle id finds the Mac's name", () => {
   const running = (callId: string, app: string): WireRecord => ({
     type: "tool-computer",
     toolCallId: callId,
@@ -85,12 +89,13 @@ test("a computer call still running wears its app's icon at once, however its in
     turn("turn-2", [running("click-1", "calculator"), running("click-2", "com.apple.calculator")]),
   ];
 
-  assert.deepEqual(
-    [...computerIconsByCall(messages)],
-    [
-      ["read-1", ICON.id],
-      ["click-1", ICON.id],
-      ["click-2", ICON.id],
-    ],
-  );
+  const apps = computerAppsOf(messages);
+
+  assert.deepEqual(iconsByCall(messages), [
+    ["read-1", ICON.id],
+    ["click-1", ICON.id],
+    ["click-2", ICON.id],
+  ]);
+  assert.equal(new Set(apps.byCall.values()).size, 1);
+  assert.equal(computerAppNamed(apps, "COM.APPLE.CALCULATOR")?.name, "Calculator");
 });
