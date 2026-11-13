@@ -1439,20 +1439,12 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
     if (listed === undefined) return task;
     const { agents: _agents, ...row } = listed;
-    const {
-      updatedAt,
-      description: document,
-      agentEdits,
-      lastEdit,
-      sectionEdits,
-      blockedBy,
-      blocks,
-    } = task;
+    const { updatedAt, description, agentEdits, lastEdit, sectionEdits, blockedBy, blocks } = task;
 
     return {
       ...row,
       updatedAt,
-      description: document,
+      description,
       ...(agentEdits === undefined ? undefined : { agentEdits }),
       ...(lastEdit === undefined ? undefined : { lastEdit }),
       ...(sectionEdits === undefined ? undefined : { sectionEdits }),

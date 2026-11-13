@@ -1437,11 +1437,13 @@ export function fakeService(tasks: Task[]): FakeService {
         const found = service.tasks.find((candidate) => candidate.id === taskId);
 
         if (found === undefined) return { ok: false, failure: WRITE_UNTAKEN.REFUSED };
+
         const renamed = {
           ...found,
           name,
           description: { ...found.description, body: `# ${name}` },
         };
+
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? renamed : candidate,
         );
