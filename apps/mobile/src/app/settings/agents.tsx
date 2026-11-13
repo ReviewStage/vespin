@@ -1,6 +1,7 @@
 // agents.tsx -- Settings' Agents page: the model, effort, and speed a new agent starts on, and the rest of how agents work for the account (default permissions, follow-up behavior, commit author), drawn from the panel's own settings rows.
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
+import { DEFAULT_SAVE_FAILED_NOTE } from "@repo/features/agent-refusal-words";
 import {
   choiceOn,
   effortFor,
@@ -36,6 +37,7 @@ import {
   settingFromOption,
   settingRowsForPage,
 } from "@repo/settings";
+import { settingUpdateRefusal } from "@repo/settings/wire";
 import {
   ListSection,
   MenuPickRow,
@@ -152,7 +154,10 @@ export default function AgentsScreen() {
     // Note that the model, effort and speed write the one default, so they follow each other as one row's writes.
     void write
       .run(ACT_KIND.AGENTS_DEFAULT_WRITE, choice, () =>
-        acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined),
+        // Note that a refusal comes back in the answer rather than thrown, as the panel reads it (`choiceRefused`).
+        acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then((answer) =>
+          "failure" in answer ? DEFAULT_SAVE_FAILED_NOTE : undefined,
+        ),
       )
       .then((landed) => {
         if (!landed) setDefaultRound((round) => round + 1);
@@ -172,7 +177,7 @@ export default function AgentsScreen() {
     const value = settingFromOption(field, token, view);
     void setting
       .run(field, token, () =>
-        acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(() => undefined),
+        acts[ACT_KIND.SETTING_UPDATE]({ field, value }).then(settingUpdateRefusal),
       )
       .then((landed) => {
         if (!landed) setSettingRound((round) => round + 1);

@@ -12,6 +12,7 @@ import {
   selectWorkspaces,
   supportAccessStanding,
 } from "@repo/host/app-state-reads";
+import { settingUpdateRefusal } from "@repo/settings/wire";
 import {
   AccountHead,
   ActionRow,
@@ -122,6 +123,8 @@ export default function AccountScreen() {
                       return write(
                         () => acts[ACT_KIND.SETTING_UPDATE]({ field: "usageData", value: on }),
                         {
+                          // Note that a refusal comes back in the answer rather than thrown, so it is read from it.
+                          refused: settingUpdateRefusal,
                           inPlace: (words) => {
                             said.words = words;
                           },

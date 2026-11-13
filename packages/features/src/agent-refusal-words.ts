@@ -22,6 +22,9 @@ const START_NEEDS_REPOSITORY = "Choose a repository";
 /** What a call refused for a repository out of the workspace's reach says, wherever it is refused. */
 export const REPOSITORY_UNREACHED_NOTE = `${PRODUCT_NAME} cannot reach this task's repository on GitHub.`;
 
+/** What a write of the account's default model, effort, or speed the service refused says, on every client's Agents settings. */
+export const DEFAULT_SAVE_FAILED_NOTE = "The default could not be saved. Try again.";
+
 /** What a message no answer came back for says, which may have reached the agent all the same. */
 export const NOT_HEARD_BACK = "No answer came back.";
 

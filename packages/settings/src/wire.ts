@@ -81,6 +81,13 @@ export type SettingsUpdateResult = ActionResult & {
   reason?: string;
 };
 
+/** Why a settings write did not land, in the store's or the service's words; none where it did. */
+export function settingUpdateRefusal(
+  result: ActionResult & { reason?: string },
+): string | undefined {
+  return result.status === ACTION_RESULT_STATUS.ACCEPTED ? undefined : result.reason;
+}
+
 /**
  * A settings document as a settings write's answer carries it: read for its
  * two halves and passed on whole, as that answer always crossed. Each
