@@ -224,6 +224,7 @@ const SAMPLE_VALUE = {
   turnNotifications: true,
   // Unanswered is the default, so answers given in setup's survey are the state that has to survive a reopen.
   onboardingSurvey: '{"referral":"other","referralOther":"A meetup","role":"founder"}',
+  introsSeen: '["inbox"]',
   // Each diff setting away from its default, the look a review tool's reader picked.
   lineNumbers: false,
   wordWrap: false,

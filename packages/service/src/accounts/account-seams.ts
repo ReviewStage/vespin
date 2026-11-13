@@ -11,6 +11,7 @@
 
 import {
   readAccountAccess,
+  readAccountCreatedAt,
   readAccountPreferences,
   writeAccountPreferences,
 } from "@repo/database/models/account-store";
@@ -23,6 +24,7 @@ export function accountProcedureSeams(): AccountProcedureSeams {
   return {
     resolveUserId: resolveHostedUserId,
     readPreferences: readAccountPreferences,
+    readCreatedAt: readAccountCreatedAt,
     readAccess: readAccountAccess,
     accountFastOffer,
     writePreferences: writeAccountPreferences,

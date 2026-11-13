@@ -117,6 +117,14 @@ export const accountPreference = pgTable("account_preference", {
    */
   onboardingSurvey: text("onboarding_survey"),
   /**
+   * Which one-card intros the account has seen, as the JSON list of their
+   * ids (`@repo/settings`'s `INTRO`), so a card dismissed on one device never
+   * stands again on another; null until it dismisses one. A write stores the
+   * union of what stood and what it sends, since a dismissal is never taken
+   * back. A part of the snapshot of its own, as the link choice is.
+   */
+  introsSeen: text("intros_seen"),
+  /**
    * The model and effort a coding agent starts on when Start is clicked, as
    * AI Gateway's catalog names them (`packages/service/src/providers/model-catalog.ts`); null on both
    * means the account has never chosen and starts on the catalog's default.

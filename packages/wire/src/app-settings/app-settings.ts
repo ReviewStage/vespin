@@ -62,6 +62,7 @@ export const APP_SETTING_ID = {
   SETUP_FINISHED: "setup_finished",
   SETUP_PLACE: "setup_place",
   ONBOARDING_SURVEY: "onboarding_survey",
+  INTROS_SEEN: "intros_seen",
   SOUND_WHEN: "sound_when",
   COMPLETION_SOUND: "completion_sound",
   ASK_SOUND: "ask_sound",
