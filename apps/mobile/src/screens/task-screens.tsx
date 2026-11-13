@@ -269,6 +269,30 @@ function statusSubmenu(
 }
 
 /**
+ * A task row's trailing swipe, as the panel's row offers it: Mark done while
+ * it isn't, which a full swipe runs, then Status. Note that `setStatus` is
+ * the one that asks before Done stops a working agent.
+ */
+function settleSwipes(
+  task: TaskSummary,
+  setStatus: (taskId: string, status: TaskStatus) => void,
+): readonly RowSwipe[] {
+  const markDone: readonly RowSwipe[] =
+    task.status === TASK_STATUS.DONE
+      ? []
+      : [
+          {
+            label: WORDS.MARK_DONE,
+            symbol: GLYPH.CHECK,
+            tone: ROW_ACTION_TONE.NEUTRAL,
+            onPress: () => setStatus(task.id, TASK_STATUS.DONE),
+          },
+        ];
+
+  return [...markDone, statusSubmenu(task, setStatus)];
+}
+
+/**
  * A task's Move to section as a menu, as the panel's offers it: the member's
  * sections of its workspace, the one it stands in checked, a press putting it
  * on top of another, and Remove from section under them while it stands in
@@ -423,20 +447,8 @@ function rowActs(
 ): RowActsResult {
   const pinned = task.pinnedAt !== undefined;
 
-  const markDone: readonly RowSwipe[] =
-    task.status === TASK_STATUS.DONE
-      ? []
-      : [
-          {
-            label: WORDS.MARK_DONE,
-            symbol: GLYPH.CHECK,
-            tone: ROW_ACTION_TONE.NEUTRAL,
-            onPress: () => listing.setStatus(task.id, TASK_STATUS.DONE),
-          },
-        ];
-
   return {
-    trailingActions: [...markDone, statusSubmenu(task, listing.setStatus)],
+    trailingActions: settleSwipes(task, listing.setStatus),
     leadingActions: [
       {
         label: pinned ? WORDS.UNPIN : WORDS.PIN,
@@ -1231,12 +1243,12 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
             id={sub.id}
             name={sub.name}
             status={sub.status}
-            trailingActions={relationSwipes(
-              task.id,
-              sub.id,
-              TASK_RELATION_KIND.SUB_TASK,
-              relations,
-            )}
+            faded={taskFinished(sub)}
+            // Note that a sub-task is settled in place, as Reminders' subtasks are and the panel's related rows' Status is, before its relation is changed.
+            trailingActions={[
+              ...settleSwipes(sub, overview.setStatus),
+              ...relationSwipes(task.id, sub.id, TASK_RELATION_KIND.SUB_TASK, relations),
+            ]}
           />
         ))}
       </ListSection>
@@ -1266,6 +1278,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
                   id={id}
                   name={other?.name ?? WORDS.UNLISTED_TASK}
                   status={other?.status}
+                  faded={other !== undefined && taskFinished(other)}
                   relation={TASK_RELATION_WORDS[kind]}
                   trailingActions={relationSwipes(task.id, id, kind, relations)}
                 />
