@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import type { TaskSummary } from "@repo/features/task-wire";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import type { AppStateDelivery, AppStateSnapshot } from "@repo/host/app-state";
-import { act } from "react";
+import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test, vi } from "vitest";
 import { fakeAppBridge, fakeAppBridgeCalls } from "../testing/app-bridge.js";
@@ -14,9 +14,11 @@ import { drawnSidebar, sidebarProps } from "../testing/desktop-sidebar.js";
 import { restOn } from "../testing/hint-rest.js";
 import { relayout } from "../testing/resize-observer.js";
 import { tasksControl } from "../testing/tasks-control.js";
+import { windowRouter } from "../testing/window-router.js";
+import { DesktopSidebar } from "./desktop-sidebar.js";
 
 /**
- * sidebar-task-name.test.ts -- a sidebar task's name held to its row's one line: fading out where the row cuts it, never ending hard, and named whole by the row's hint while it is cut; and a rename delivered redrawing that row's words alone. Synthetic.
+ * sidebar-task-name.test.ts -- a sidebar task's name held to its row's one line: fading out where the row cuts it, never ending hard, and named whole by the row's hint while it is cut; a rename delivered redrawing that row's words alone; and an unpin delivered moving its row out of Pinned, drawn once throughout. Synthetic.
  */
 
 const WORKSPACE: Workspace = {
@@ -156,6 +158,34 @@ function handTasks(
   };
 }
 
+/**
+ * The sidebar listing `tasks`, over the task collections the window's own
+ * follow feeds from the bridge (`withQueryClient`), as the window draws it,
+ * rather than collections standing on the tab handed (`drawnSidebar`).
+ */
+function sidebarOverFollow(tasks: readonly TaskSummary[]): ReactElement {
+  const props = sidebarProps(
+    tasksControl({ tasks, workspaces: [WORKSPACE], workspace: WORKSPACE }),
+  );
+
+  return withQueryClient(windowRouter().provide(createElement(DesktopSidebar, props)));
+}
+
+/** Lets the follow's read and the live queries over it land. */
+function settle(): Promise<void> {
+  return act(async () => {
+    for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
+  });
+}
+
+/** The words of each row the sidebar draws, in order, and whether it stands under Pinned. */
+function drawnNames(container: HTMLElement): { name: string; pinned: boolean }[] {
+  return [...container.querySelectorAll<HTMLElement>(".sidebar-tasks > li")].map((row) => ({
+    name: row.querySelector(".ui-list-row-title .ui-one-line")?.textContent ?? "",
+    pinned: row.closest('nav[aria-label="Pinned"]') !== null,
+  }));
+}
+
 test("a delivery renaming one task changes that row's words alone, the other rows standing as they were", async () => {
   const first = task("0a1b2c3d-0000-4000-8000-100000000001", "Ship the importer", 30);
   const second = task("0a1b2c3d-0000-4000-8000-100000000002", "Retry webhooks", 20);
@@ -165,19 +195,7 @@ test("a delivery renaming one task changes that row's words alone, the other row
   const root = createRoot(container);
   roots.push(root);
 
-  const draw = (tasks: readonly TaskSummary[]) =>
-    root.render(
-      withQueryClient(
-        drawnSidebar(
-          sidebarProps(tasksControl({ tasks, workspaces: [WORKSPACE], workspace: WORKSPACE })),
-        ),
-      ),
-    );
-
-  const settle = () =>
-    act(async () => {
-      for (let tick = 0; tick < 12; tick += 1) await Promise.resolve();
-    });
+  const draw = (tasks: readonly TaskSummary[]) => root.render(sidebarOverFollow(tasks));
 
   act(() => draw([first, second, third]));
   await settle();
@@ -201,4 +219,50 @@ test("a delivery renaming one task changes that row's words alone, the other row
   assert.equal(after[0], before[0]);
   assert.equal(after[2], before[2]);
   assert.equal(after[0]?.innerHTML, before[0]?.innerHTML);
+});
+
+test("a delivery unpinning one task moves its row out of Pinned into Tasks, never left out on the way, the other rows standing as they were", async () => {
+  const first = task("0a1b2c3d-0000-4000-8000-100000000001", "Ship the importer", 30);
+  const second = task("0a1b2c3d-0000-4000-8000-100000000002", "Retry webhooks", 20);
+  const third = task("0a1b2c3d-0000-4000-8000-100000000003", "Audit the cache", 10);
+  const pinned = { ...third, pinnedAt: 40 };
+  const deliver = handTasks([first, second, pinned]);
+  const container = document.body.appendChild(document.createElement("div"));
+  const root = createRoot(container);
+  roots.push(root);
+
+  act(() => root.render(sidebarOverFollow([first, second, pinned])));
+  await settle();
+
+  const unpinnedRows = () =>
+    [...container.querySelectorAll<HTMLElement>(".sidebar-tasks > li")].filter(
+      (row) => row.closest('nav[aria-label="Pinned"]') === null,
+    );
+
+  const before = unpinnedRows();
+  assert.deepEqual(drawnNames(container), [
+    { name: "Audit the cache", pinned: true },
+    { name: "Ship the importer", pinned: false },
+    { name: "Retry webhooks", pinned: false },
+  ]);
+
+  // Note that the tab is handed the unpin before the collections hear it, as the window's Query client and its collections are told on ticks of their own, so Pinned and Tasks must read one of them or the row stands in neither.
+  act(() => root.render(sidebarOverFollow([first, second, third])));
+  assert.deepEqual(
+    drawnNames(container).map(({ name }) => name),
+    ["Audit the cache", "Ship the importer", "Retry webhooks"],
+    "the task being unpinned is drawn once",
+  );
+
+  act(() => deliver(2, [first, second, third]));
+  await settle();
+
+  assert.deepEqual(drawnNames(container), [
+    { name: "Ship the importer", pinned: false },
+    { name: "Retry webhooks", pinned: false },
+    { name: "Audit the cache", pinned: false },
+  ]);
+  const after = unpinnedRows();
+  assert.equal(after[0], before[0]);
+  assert.equal(after[1], before[1]);
 });

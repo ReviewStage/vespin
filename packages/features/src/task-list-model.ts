@@ -344,8 +344,8 @@ interface TaskNode {
   readonly children: readonly TaskNode[];
 }
 
-/** Every task of the workspace by its id, those no list draws among them, through which a task's ancestors are walked. */
-export type TasksById = ReadonlyMap<string, TaskSummary>;
+/** Every task of the workspace by its id, those no list draws among them, through which a task's ancestors are walked: a map, or a collection keyed by task id. */
+export type TasksById = Pick<ReadonlyMap<string, TaskSummary>, "get">;
 
 /** Every task of `tasks` by its id. */
 export function tasksById(tasks: readonly TaskSummary[]): TasksById {
