@@ -538,7 +538,9 @@ export const steerAgentWritten = /* @__PURE__ */ Effect.fn("web/steerAgent")(fun
   if (Option.isNone(workspace)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
   if (delivery === STEER_DELIVERY.HELD_WHILE_BOOTING) {
-    const queued = yield* heldWhileBooting(userId, agent, line);
+    // Note that a held delegation waits under the send's own key, never its newest line's, because an edit in the
+    // queue drops the lines it names, and the edit's words would then find that line's row and go as a repeat.
+    const queued = yield* heldWhileBooting(userId, agent, asked);
 
     if (queued !== undefined) return queued;
   }
