@@ -38,7 +38,9 @@
  * or removing repositories from it (`github-webhook-app.ts`), and a member
  * removing a repository added on their token (`workspace-repositories.ts`).
  * The prune syncs nothing; it deletes the folder of every repository the
- * workspace no longer reaches, then forgets their rows. The drive and its
+ * workspace no longer reaches, then forgets their rows. Once a day the
+ * cleanup prunes the same way the repositories no agent of the workspace
+ * started in for a while (`workspace-drive-cleanup.ts`). The drive and its
  * rows are deleted with the workspace (`workspace-deletion.ts`). The fill's
  * sandbox writes its firewall under the workspace's first owner.
  *
@@ -430,18 +432,17 @@ export const fillWorkspaceDrive = Effect.fn("web/fillWorkspaceDrive")(function* 
 });
 
 /**
- * The workspace's drive pruned as a repository leaves the workspace, from
- * the image given: every folder of a repository it no longer reaches
- * deleted, nothing synced, then those repositories forgotten as the
- * drive's. Answers whether this call pruned it: false where another fill
- * holds it.
+ * The workspace's drive pruned to the folders given, from the image given:
+ * every other folder deleted, nothing synced, then every other repository
+ * forgotten as the drive's. Answers whether this call pruned it: false
+ * where another fill holds it.
  */
-export const pruneWorkspaceDrive = Effect.fn("web/pruneWorkspaceDrive")(function* (
+export const pruneWorkspaceDriveTo = Effect.fn("web/pruneWorkspaceDriveTo")(function* (
   run: SandboxRunner,
   image: string,
   workspace: BaseDriveWorkspace,
+  keep: readonly string[],
 ) {
-  const keep = (yield* heldRepositories(workspace)).map((held) => workspaceFolderOf(held.fullName));
   const kept = new Set(keep);
 
   return yield* lockedFill(
@@ -456,6 +457,23 @@ export const pruneWorkspaceDrive = Effect.fn("web/pruneWorkspaceDrive")(function
       ),
     ),
   );
+});
+
+/**
+ * The workspace's drive pruned as a repository leaves the workspace, from
+ * the image given: every folder of a repository it no longer reaches
+ * deleted, nothing synced, then those repositories forgotten as the
+ * drive's. Answers whether this call pruned it: false where another fill
+ * holds it.
+ */
+export const pruneWorkspaceDrive = Effect.fn("web/pruneWorkspaceDrive")(function* (
+  run: SandboxRunner,
+  image: string,
+  workspace: BaseDriveWorkspace,
+) {
+  const keep = (yield* heldRepositories(workspace)).map((held) => workspaceFolderOf(held.fullName));
+
+  return yield* pruneWorkspaceDriveTo(run, image, workspace, keep);
 });
 
 /** The workspace's drive pruned past the answer, where the function fills drives; its GitHub reads in the background lane, since no member waits on them. */
