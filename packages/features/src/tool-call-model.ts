@@ -36,7 +36,12 @@ import {
   integrationRemoteCallSchema,
 } from "./integration-wire.js";
 import { LINK_DESTINATION, type LinkDestination, linkOf } from "./link-grammar.js";
-import { COMPUTER_PERMISSION, type ComputerPermission } from "./machine-command-wire.js";
+import {
+  COMPUTER_PERMISSION,
+  type ComputerPermission,
+  MACHINE_UNREACHED,
+  type MachineUnreached,
+} from "./machine-command-wire.js";
 import type { MentionHolder } from "./mention-holder.js";
 import type { ModelChoice } from "./models-wire.js";
 import { cardTitle } from "./plain-words.js";
@@ -224,6 +229,34 @@ export function computerPermissionsMissing(
   const reason = stringAt(output, "reason");
 
   return reason === undefined || permissions.length === 0 ? undefined : { reason, permissions };
+}
+
+const isMachineUnreached = Schema.is(Schema.Literals(Object.values(MACHINE_UNREACHED)));
+
+/** Why a terminal command or an action on an app reached no machine, the machine it was meant for where it was meant for one, and the machines that could take it now. */
+export interface MachineRefusal {
+  readonly why: MachineUnreached;
+  readonly machine: CallMachine | undefined;
+  readonly others: readonly CallMachine[];
+}
+
+/** Why a `run_on_mac` or `computer` call's answer says it reached no machine, as data beside the model's words; none for any other answer, as one the Mac itself refused. Note that a machine the answer names unreadably is passed over. */
+export function machineRefusalOf(output: WireValue | undefined): MachineRefusal | undefined {
+  if (stringAt(output, "status") !== MACHINE_COMMAND_NOT_RUN || !isRecord(output)) return undefined;
+  const { why, others } = output;
+
+  if (!isMachineUnreached(why)) return undefined;
+  const listed = others !== undefined && isWireArray(others) ? others : [];
+
+  return {
+    why,
+    machine: callMachineOf(output),
+    others: listed.flatMap((other) => {
+      const machine = callMachineOf({ machine: other });
+
+      return machine === undefined ? [] : [machine];
+    }),
+  };
 }
 
 /** The id of the machine a `run_on_mac` or `computer` call's answer names as the one it went to; none where it names none, as an answer from before machines, or one routed to an account's Macs, does not. */

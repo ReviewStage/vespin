@@ -619,6 +619,29 @@ export const MACHINE_COMMAND_MODE_LIST: readonly MachineCommandMode[] =
 export const machineCommandModeSchema = EffectSchema.Literals(MACHINE_COMMAND_MODE_LIST);
 
 /**
+ * Why a call reached no machine, as its refusal names it beside the words
+ * the model reads (`why`), so the transcript can say it in its own words
+ * and offer the machines that could take it (`others`). Note that a
+ * refusal the Mac itself answers, as a developer's Deny, names none.
+ */
+export const MACHINE_UNREACHED = {
+  /** The machine has not listened lately: off, asleep, or not running the app. */
+  OFFLINE: "offline",
+  /** The machine's owner does not let this task's agents use their machines. */
+  NOT_LET: "not-let",
+  /** The machine is set to Never, so it runs no terminal command. */
+  COMMANDS_NEVER: "commands-never",
+  /** The agent's default machine was removed, or its owner no longer lets the task's agents use it. */
+  DEFAULT_GONE: "default-gone",
+  /** The call named a machine this task's agents may not use. */
+  UNKNOWN_MACHINE: "unknown-machine",
+  /** No default was set and none of the owner's machines could take it. */
+  NO_MACHINE: "no-machine",
+} as const;
+
+export type MachineUnreached = (typeof MACHINE_UNREACHED)[keyof typeof MACHINE_UNREACHED];
+
+/**
  * One command the Mac heard of over Realtime, claimed by its id (POST), as
  * the device it joined as, where it did: a device claims what was queued
  * for it or for none, a Mac naming none only what was queued for none.
