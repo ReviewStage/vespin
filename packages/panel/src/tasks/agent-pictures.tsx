@@ -13,7 +13,15 @@ import type { FileChip } from "@repo/features/attachment-model";
 import { isVideoType, type KeptPicture } from "@repo/features/conversation-picture-wire";
 import { formatBytes } from "@repo/features/number-format";
 import { ACT_KIND } from "@repo/host/acts";
-import { AppIcon, isVideoDataUrl, PICTURE_SET_SHOWN, PictureSet, PictureSetTile } from "@repo/ui";
+import {
+  APP_ICON_SIZE,
+  AppIcon,
+  type AppIconSize,
+  isVideoDataUrl,
+  PICTURE_SET_SHOWN,
+  PictureSet,
+  PictureSetTile,
+} from "@repo/ui";
 import {
   PICTURE_STATE,
   type PictureState,
@@ -149,7 +157,7 @@ interface ViewedPicture {
 }
 
 /** The viewer a set or a call's chips open: how one is opened over its pictures, and the viewer while it stands. */
-interface PictureViewer {
+export interface PictureViewer {
   readonly open: (items: readonly ViewedPicture[], id: string) => void;
   readonly viewer: ReactNode;
 }
@@ -452,11 +460,30 @@ function notKeptWords(byteCount: number): string {
  * under them as a `show_image` call's would.
  */
 /** An app's icon a call kept beside the transcript, read through the transcript's door, in a call row's glyph seat; a screen's glyph stands there until it lands. */
-export function KeptAppIcon({ id }: { id: string }): ReactNode {
+export function KeptAppIcon({
+  id,
+  size = APP_ICON_SIZE.LINE,
+}: {
+  id: string;
+  size?: AppIconSize | undefined;
+}): ReactNode {
   const door = useContext(AgentPicturesContext);
   const state = usePicture(pictureQuery(door?.owner ?? "", id, door?.read), pictureUnread);
 
-  return <AppIcon src={state.kind === PICTURE_STATE.READY ? state.url : undefined} />;
+  return <AppIcon src={state.kind === PICTURE_STATE.READY ? state.url : undefined} size={size} />;
+}
+
+/** A picture a call kept, read through the transcript's door: its state while it is read, and its bytes once they land; none is read for no id. */
+export function useKeptPicture(id: string | undefined): PictureState {
+  const door = useContext(AgentPicturesContext);
+  const read = id === undefined ? undefined : door?.read;
+
+  return usePicture(pictureQuery(door?.owner ?? "", id ?? "", read), pictureUnread);
+}
+
+/** The viewer over pictures the calls kept, opened from one of them, and the viewer while it stands; nothing opens outside the transcript's door. */
+export function useKeptPictureViewer(): PictureViewer {
+  return useViewer(useContext(AgentPicturesContext));
 }
 
 export function CallPictures({

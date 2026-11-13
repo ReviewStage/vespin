@@ -14,6 +14,8 @@ export * from "./components/app-ask/app-ask.js";
 
 export * from "./components/app-icon/app-icon.js";
 
+export * from "./components/app-window-stack/app-window-stack.js";
+
 export * from "./components/approval-actions/approval-actions.js";
 
 export * from "./components/arrival/arrival.js";
