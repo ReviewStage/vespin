@@ -43,7 +43,7 @@ const loaded = (userId: string, conversationId: string, key: typeof MAIN | typeo
   loadSessionEntries(userId, conversationId, key).pipe(Effect.map(Option.getOrElse(() => [])));
 
 /** A key's transcript read page by page from its first, each page's entries in its own list. */
-const paged = (userId: string, conversationId: string, key: typeof MAIN) =>
+const paged = (userId: string, conversationId: string, key: typeof MAIN | typeof SUBAGENT) =>
   Effect.gen(function* () {
     const pages: Array<ReadonlyArray<unknown>> = [];
     let after: number | null = null;
@@ -99,6 +99,10 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
         entry("c"),
       ]);
       assert.deepEqual(yield* loaded(userId, conversationId, SUBAGENT), [entry("s")]);
+      assert.deepEqual(yield* paged(userId, conversationId, MAIN), [
+        [entry("a"), entry("b"), entry("c")],
+      ]);
+      assert.deepEqual(yield* paged(userId, conversationId, SUBAGENT), [[entry("s")]]);
       assert.deepEqual(
         (yield* listSessionEntrySessions(userId, conversationId, PROJECT)).map(
           (listed) => listed.sessionId,
