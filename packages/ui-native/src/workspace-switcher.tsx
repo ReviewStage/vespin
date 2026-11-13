@@ -32,7 +32,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { WORKSPACE_SWITCHER_WORDS } from "@repo/features/workspace-tile";
 import { type ReactNode, useState } from "react";
-import { useScaledSize } from "./accessibility.js";
+import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar } from "./marks.js";
 import { ActionRow, SettingsForm } from "./settings-form.js";
@@ -60,6 +60,12 @@ export const SWITCHER_LOOK = {
 } as const;
 
 export type SwitcherLook = (typeof SWITCHER_LOOK)[keyof typeof SWITCHER_LOOK];
+
+/** The heights the switcher's sheet stands at: half the screen first, then the whole, or the whole alone. */
+const SHEET_DETENTS = {
+  HALF_THEN_WHOLE: ["medium", "large"],
+  WHOLE: ["large"],
+} as const;
 
 /** How the switcher's list opens: a popover over its button, in a regular window such as an iPad's, or a sheet from the screen's foot, in a compact one such as an iPhone's, as Notion's switcher opens on each. Note that `@expo/ui`'s popover keeps itself a popover in a compact window too, so the caller says which the window takes. */
 export const SWITCHER_PRESENTATION = {
@@ -177,6 +183,8 @@ function SwitcherRow({
 }) {
   const colors = useColors();
   const checkSize = useScaledSize(CHECK_SIZE);
+  // Note that at an accessibility size a name and its line wrap rather than cut, as the package's rows do, since a cut name can't tell two workspaces apart.
+  const lines = useAccessibilitySize() ? [] : [lineLimit(1)];
 
   return (
     <SwiftUIButton
@@ -194,13 +202,13 @@ function SwitcherRow({
       >
         {mark}
         <VStack alignment="leading" spacing={1}>
-          <Text modifiers={[foregroundStyle(colors.TEXT), lineLimit(1)]}>{name}</Text>
+          <Text modifiers={[foregroundStyle(colors.TEXT), ...lines]}>{name}</Text>
           {line === undefined ? null : (
             <Text
               modifiers={[
                 font({ textStyle: TYPE_ROLE.ROW_LINE }),
                 foregroundStyle(colors.TEXT_MUTED),
-                lineLimit(1),
+                ...lines,
               ]}
             >
               {line}
@@ -365,6 +373,8 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
   } = props;
 
   const colors = useColors();
+  // Note that at an accessibility size the sheet opens at its full height, since at its half height the account's row, the way into Settings, stood below the fold.
+  const detents = useAccessibilitySize() ? SHEET_DETENTS.WHOLE : SHEET_DETENTS.HALF_THEN_WHOLE;
 
   const [presented, setPresented] = useState(false);
   // Note that the popover's list mounts on its first open and stays, since a closed popover's content stays mounted, every workspace's photo with it, and a list mounted anew on each open would draw each photo's letter tile again.
@@ -408,7 +418,7 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
       >
         <Group
           modifiers={[
-            presentationDetents(["medium", "large"]),
+            presentationDetents([...detents]),
             presentationDragIndicator("visible"),
             presentationBackground(colors.GROUPED),
           ]}
