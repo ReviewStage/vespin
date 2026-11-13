@@ -49,9 +49,12 @@ import { SwitchRow } from "./switch-row.js";
 /**
  * experimental-page.tsx -- Settings › Experimental: the features not yet finished, in two groups that each say whom a switch reaches and who may flip it, or the empty state between them.
  *
- * The first group is the workspace Settings shows: Task descriptions and
- * Memory, which its owners and admins choose for every member and agent
- * in it (Dean, 2026-11-06). Each row says, under what the experiment
+ * Each group lists its experiments alphabetically by name, sorted here so
+ * the page never depends on the order the registry keeps.
+ *
+ * The first group is the workspace Settings shows: the experiments its
+ * owners and admins choose for every member and agent in it (Dean,
+ * 2026-11-06). Each row says, under what the experiment
  * brings, who last turned it on or off and when, the person as their chip;
  * the switch says whether it is on, so no word or dot says it again. A
  * member who is no owner or admin sees the same switches locked, the reason
@@ -61,8 +64,8 @@ import { SwitchRow } from "./switch-row.js";
  * choice is drawn as the act is sent (`ACT_KIND.WORKSPACE_EXPERIMENT_SET`)
  * and stands once the workspace's live row agrees.
  *
- * The second group is the account's own, Skills,
- * which change the app only for the reader, in every workspace: a row's
+ * The second group is the account's own experiments, which change the app
+ * only for the reader, in every workspace: a row's
  * switch writes the account's choice at once, as every Settings switch
  * writes, and a write the service refused puts it back and is said in a
  * toast.
@@ -92,6 +95,12 @@ const WORDS = {
 
 /** What turning each workspace experiment on or off changes for everyone in `workspace`, as its question says it. */
 const FLIP_WORDS = {
+  [EXPERIMENT.FOLLOWING]: {
+    on: (workspace: string) =>
+      `Shows who follows each task to everyone in ${workspace}, and lets each follower choose whether the task's agents may use their machines.`,
+    off: (workspace: string) =>
+      `Hides who follows each task for everyone in ${workspace}, and stops agents from reading followers.`,
+  },
   [EXPERIMENT.REPLY_BUTTONS]: {
     on: (workspace: string) =>
       `Lets agents in ${workspace} put suggestions in their replies, each of a new agent or a message to a running one, which someone opens filled in, edits, and sends.`,
@@ -287,6 +296,11 @@ function AccountExperimentRow({
   );
 }
 
+/** Two entries by name, alphabetically: the order each group lists them in. */
+function byName(one: ExperimentEntry, other: ExperimentEntry): number {
+  return one.name.localeCompare(other.name, "en");
+}
+
 /** Whether an entry is a workspace experiment's, which narrows its key to one. */
 function isWorkspaceEntry(
   entry: ExperimentEntry,
@@ -302,7 +316,7 @@ export function ExperimentalPage({
   workspace,
   readerId,
 }: {
-  /** The experiments standing, newest first: `EXPERIMENTS`, as the registry lists them. */
+  /** The experiments standing, in any order: `EXPERIMENTS`, which each group lists alphabetically by name. */
   entries: readonly ExperimentEntry[];
   /** The account's own choices, as the settings carry them. */
   experiments: ExperimentChoices;
@@ -328,8 +342,11 @@ export function ExperimentalPage({
     );
   }
 
-  const workspaceEntries = entries.filter(isWorkspaceEntry);
-  const accountEntries = entries.filter((entry) => !isWorkspaceExperiment(entry.key));
+  const workspaceEntries = entries.filter(isWorkspaceEntry).toSorted(byName);
+
+  const accountEntries = entries
+    .filter((entry) => !isWorkspaceExperiment(entry.key))
+    .toSorted(byName);
 
   return (
     <>

@@ -5,6 +5,9 @@ import { accessibilityIdentifier, accessibilityLabel } from "@expo/ui/swift-ui/m
 import type { DraftCopy } from "@repo/features/draft-text";
 import { createContext, type ReactElement, type ReactNode, useContext } from "react";
 import { StyleSheet } from "react-native";
+import { type Glyph, glyphImage } from "./glyph.js";
+import { actContent } from "./glyph-label.js";
+import { InlineHost } from "./inline-host.js";
 import {
   KEEP_ACT,
   KEEP_SYMBOL,
@@ -13,7 +16,6 @@ import {
   type Kept,
   keepActs,
 } from "./keep-model.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { MARK_SIZE } from "./tokens/space.js";
 
 /** What a message's own Copy is called, as the panel's Copy under a message names it. */
@@ -30,7 +32,7 @@ const styles = StyleSheet.create({
 /** One act of a held thing's menu: its words, its glyph, and what a press does. */
 export interface HeldAct {
   readonly label: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly onPress: () => void;
 }
 
@@ -96,7 +98,7 @@ export function useKeeping(): Keeping | undefined {
 
 function HeldActButtons({ acts }: { readonly acts: readonly HeldAct[] }) {
   return acts.map((act) => (
-    <Button key={act.label} label={act.label} systemImage={act.symbol} onPress={act.onPress} />
+    <Button key={act.label} {...actContent(act.label, act.symbol)} onPress={act.onPress} />
   ));
 }
 
@@ -140,11 +142,11 @@ export function HeldMenu({
   if (acts.length === 0) return children;
 
   return (
-    <Host matchContents={{ vertical: true }} style={styles.host}>
+    <InlineHost matchContents={{ vertical: true }} style={styles.host}>
       <HeldSwiftMenu acts={acts}>
         <RNHostView matchContents={{ vertical: true }}>{children}</RNHostView>
       </HeldSwiftMenu>
-    </Host>
+    </InlineHost>
   );
 }
 
@@ -156,7 +158,11 @@ export function HeldActsButton({ acts }: { readonly acts: readonly HeldAct[] }) 
     <Host matchContents>
       <Menu
         label={
-          <Image systemName={KEEP_SYMBOL[KEEP_ACT.SHARE]} size={MARK_SIZE.LEAD + 4} color="white" />
+          <Image
+            {...glyphImage(KEEP_SYMBOL[KEEP_ACT.SHARE])}
+            size={MARK_SIZE.LEAD + 4}
+            color="white"
+          />
         }
         modifiers={[accessibilityLabel(SHARE_LABEL), accessibilityIdentifier("viewer-share")]}
       >

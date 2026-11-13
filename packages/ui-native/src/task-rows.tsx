@@ -30,12 +30,14 @@ import {
 import type { PullRequestState } from "@repo/features/agent-wire";
 import { GLYPH_STATE, GLYPH_STATE_WORDS } from "@repo/features/glyph-state";
 import { needsYouWords } from "@repo/features/inbox-list-model";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import type { ModelProvider } from "@repo/features/models-wire";
 import { pullRequestMarkLabel, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import {
@@ -56,8 +58,7 @@ import {
   ToneGlyph,
   WorkingMark,
 } from "./marks.js";
-import { PageHeader } from "./page-header.js";
-import type { SfSymbol } from "./sf-symbol.js";
+import { type PageFollowing, PageHeader } from "./page-header.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -102,9 +103,13 @@ function EndWords({ words, ink }: { readonly words: string; readonly ink?: strin
 }
 
 /** A row's lead glyph in an ink, at the title's size, so it grows with Dynamic Type beside it. */
-function LeadGlyph({ symbol, ink }: { readonly symbol: SfSymbol; readonly ink: string }) {
+function LeadGlyph({ symbol, ink }: { readonly symbol: Glyph; readonly ink: string }) {
   return (
-    <Image systemName={symbol} color={ink} modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE })]} />
+    <Image
+      {...glyphImage(symbol)}
+      color={ink}
+      modifiers={[font({ textStyle: TYPE_ROLE.ROW_LINE })]}
+    />
   );
 }
 
@@ -131,14 +136,19 @@ type TaskHeadProps = {
   readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */
   readonly createdBy?: string | undefined;
+  /** Who follows it, as a chip under its fields; none while its workspace has Following off. */
+  readonly following?: PageFollowing | undefined;
 };
 
 /**
  * A task's head as the first row of its page: its name as the page's
- * heading, its status, priority and assignee as small chips, and who
- * created it. Its path stands in the bar above.
+ * heading, its status, priority and assignee as small chips, who follows
+ * it as a chip that opens them, and who created it. Its path stands in the
+ * bar above.
  */
-export function TaskHead({ name, status, priority, assignee, createdBy }: TaskHeadProps) {
+export function TaskHead(props: TaskHeadProps) {
+  const { name, status, priority, assignee, createdBy, following } = props;
+
   return (
     <VStack
       alignment="leading"
@@ -154,6 +164,7 @@ export function TaskHead({ name, status, priority, assignee, createdBy }: TaskHe
         status={status}
         priority={priority}
         assignee={assignee}
+        following={following}
         summary={createdBy}
       />
     </VStack>
@@ -328,7 +339,7 @@ export function RelationRow({
       faded={faded}
       lead={
         status === undefined ? (
-          <ToneGlyph glyph="doc.text" tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} />
+          <ToneGlyph glyph={GLYPH.TASK} tone={STATUS_TONE.NEUTRAL} textStyle={TYPE_ROLE.ROW_LINE} />
         ) : (
           <TaskStatusMark status={status} />
         )
@@ -354,7 +365,7 @@ export function RelationRow({
 }
 
 type LinkRowProps = {
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly label: string;
   /** Words at the line's end in the muted ink, such as a page's age. */
   readonly detail?: string | undefined;
@@ -408,7 +419,7 @@ type GroupRowProps = {
   /** The row's id, which its list's `onSelect` is called with. */
   readonly id: string;
   readonly title: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   /** How many it holds, such as the Inbox's threads waiting on you; no count where none is given. */
   readonly count?: number | undefined;
   /** What a flow finds the row by, such as the Search tab's id where the sidebar stands for the tab bar. */
@@ -467,6 +478,8 @@ type WordsRowProps = {
   readonly pictureSource?: ((written: string) => string | null | undefined) | undefined;
   /** The video a picture's address names, played in its place; none where none is given. */
   readonly videoAt?: ((written: string) => MarkdownVideo | undefined) | undefined;
+  /** What GitHub holds of a pull request or issue a chip in the words names, by its page, which the chip says where it stands. */
+  readonly linkStanding?: ((page: string) => LinkStanding | undefined) | undefined;
 };
 
 /** The count of a block's open comment threads at its trailing edge, as a document's margin marks them, opening them on a press. */
@@ -479,7 +492,11 @@ function CommentCount({ comments }: { readonly comments: WordsComments }) {
       modifiers={[buttonStyle("borderless"), accessibilityLabel(comments.heard)]}
     >
       <HStack spacing={SPACE.TIGHT}>
-        <Image systemName="text.bubble" size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />
+        <Image
+          {...glyphImage(GLYPH.COMMENT)}
+          size={MARK_SIZE.GLYPH - 2}
+          color={colors.TEXT_MUTED}
+        />
         <Text
           modifiers={[
             font({ textStyle: TYPE_ROLE.TIME }),
@@ -511,6 +528,7 @@ export function WordsRow({
   last = true,
   pictureSource,
   videoAt,
+  linkStanding,
 }: WordsRowProps) {
   const colors = useColors();
 
@@ -523,6 +541,7 @@ export function WordsRow({
           onOpenLink={onOpenLink}
           pictureSource={pictureSource}
           videoAt={videoAt}
+          linkStanding={linkStanding}
           headings
         />
       </View>

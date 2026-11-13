@@ -4,12 +4,12 @@
 
 import assert from "node:assert/strict";
 import { it } from "@effect/vitest";
-import { getTestDB } from "@repo/database/testing";
 import {
   CHECKOUT_DIFF_EXIT,
   CHECKOUT_DIFF_SCRIPT,
   checkoutDiffEnv,
-} from "@repo/features/checkout-diff";
+} from "@repo/agent-runner/checkout-diff";
+import { getTestDB } from "@repo/database/testing";
 import {
   CHECKOUT_RESTORE_EXIT,
   CHECKOUT_RESTORE_SCRIPT,

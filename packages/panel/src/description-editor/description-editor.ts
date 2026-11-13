@@ -17,23 +17,26 @@ import { TableKit } from "@tiptap/extension-table";
 import { Placeholder } from "@tiptap/extensions";
 import { Markdown } from "@tiptap/markdown";
 import type { Node as PmNode } from "@tiptap/pm/model";
-import { Selection, TextSelection } from "@tiptap/pm/state";
+import { NodeSelection, Selection, TextSelection } from "@tiptap/pm/state";
 import StarterKit from "@tiptap/starter-kit";
 import { Predicate } from "effect";
 import { enterSends, modEnterSends } from "../enter-sends.js";
 import { withCodeHeaders } from "./code-block-view.js";
 import { anchorsLaidIn, anchorsOf, commentAnchorMark, spanIn } from "./comment-anchors.js";
 import {
+  type CodeColorer,
   type CodeHeaderDrawer,
   DESCRIPTION_PLACEHOLDER,
   type DescriptionEditorHandle,
   type DescriptionEditorPictures,
   type DescriptionEditorPlacement,
   type DescriptionEditorProps,
+  type DiagramDrawer,
   type EditorAria,
   type EditorSpan,
   FINISH,
   type MentionDrawer,
+  type PlacedPicture,
   type PlacedWords,
   rootAria,
   sameAria,
@@ -41,7 +44,6 @@ import {
 } from "./contract.js";
 import { descriptionMentions } from "./description-mentions.js";
 import { descriptionSlash } from "./description-slash.js";
-import { diagramPreview } from "./diagram-preview.js";
 import { dividerLines } from "./divider-lines.js";
 import {
   BLANK_ENDS,
@@ -56,18 +58,23 @@ import {
   withLf,
   withLineEnding,
 } from "./document-source.js";
+import { historyOf, historyStepped, historyTakenUp } from "./kept-history.js";
 import { mentionNode, pastedMention } from "./mention-node.js";
 import {
   copiedPictures,
+  drawnAsPicture,
   droppedPictures,
   LIST_ITEMS,
   laidInPictures,
   pastedPictures,
+  pictureKeyDown,
   pictureNode,
+  pictureTyped,
   removedPicture,
   settledPicture,
 } from "./picture-node.js";
 import { quoteNode } from "./quote-node.js";
+import { SoftBreak } from "./soft-break.js";
 import { editorFormatting, formatReports } from "./writing-format.js";
 import { blockRulesOutOfCells, withoutTipTapChords, writingKeys } from "./writing-keys.js";
 
@@ -77,7 +84,7 @@ import { blockRulesOutOfCells, withoutTipTapChords, writingKeys } from "./writin
  * What the text may hold, and every Markdown rule for writing it, is
  * TipTap's own: StarterKit, `@tiptap/markdown`, task lists, tables, and
  * pictures (`./picture-node.ts`), each inline in a paragraph even where it
- * stands alone on its line; its chords are the writing vocabulary's
+ * stands alone on its line, which the caret then treats as a block; its chords are the writing vocabulary's
  * (`./writing-keys.ts`), in place of TipTap's, and neither a chord nor a
  * Markdown rule lays a block into a table's cell;
  * underline alone is left out, because Markdown cannot store it and the
@@ -89,8 +96,8 @@ import { blockRulesOutOfCells, withoutTipTapChords, writingKeys } from "./writin
  * selection and acts on it (`./writing-format.ts`), and a `/` at a line's
  * start or after a space opens the panel's block menu (`./description-slash.ts`),
  * which an empty line under the caret offers in its placeholder, as an empty
- * heading names its level. A Mermaid code block stays code, its diagram
- * previewed under it where the panel draws one (`./diagram-preview.ts`).
+ * heading names its level. A Mermaid code block stands in its diagram's
+ * card where the panel draws one, its code shown in place (`./diagram-card.ts`).
  * A document's own `/` blocks lay in the Markdown they name. Esc and the
  * send finish, naming the section the caret stood in, the send ⌘↩ in a
  * document and Enter in a message box's text (`sendsOnEnter`); ↑ on the text's first line
@@ -443,6 +450,8 @@ export function markdownExtensions(
   pictures?: DescriptionEditorPictures | undefined,
   drawTaskBox?: TaskBoxDrawer | undefined,
   drawCodeHeader?: CodeHeaderDrawer | undefined,
+  colorCode?: CodeColorer | undefined,
+  drawDiagram?: DiagramDrawer | undefined,
 ): AnyExtension[] {
   const kit = StarterKit.configure({
     blockquote: false,
@@ -456,7 +465,9 @@ export function markdownExtensions(
   });
 
   return [
-    blockRulesOutOfCells(withoutTipTapChords(withCodeHeaders(kit, drawCodeHeader))),
+    blockRulesOutOfCells(
+      withoutTipTapChords(withCodeHeaders(kit, drawCodeHeader, colorCode, drawDiagram)),
+    ),
     withoutTipTapChords(DocumentCode),
     blockRulesOutOfCells(quoteNode(false)),
     withoutTipTapChords(DocumentParagraph),
@@ -469,6 +480,7 @@ export function markdownExtensions(
     pictureNode(pictures),
     RawBlock,
     mentionNode(drawMention),
+    SoftBreak,
     linkLook(namesChip),
     writingKeys,
     dividerLines,
@@ -615,15 +627,43 @@ function caretWords(editor: Editor): PlacedWords | undefined {
 }
 
 /**
- * Where the caret goes as the editor opens on the words a click landed on,
- * where it finds them, the words its press selected selected again where it
- * finds where they start too; none where it does not find the words.
+ * The picture a click landed on in the drawn text, found as the drawn text
+ * counts its pictures: in the same section, as many of the description's
+ * pictures in; none where the section holds no such picture.
+ */
+function pictureAtPress(doc: PmNode, picture: PlacedPicture): Selection | undefined {
+  const blocks = sectionBlocks(doc, picture.section);
+
+  if (blocks === undefined) return undefined;
+  let seen = 0;
+  let found: number | undefined;
+  doc.forEach((block, offset, index) => {
+    if (found !== undefined || index < blocks.first || index >= blocks.next) return;
+    block.descendants((node, pos) => {
+      if (found !== undefined || !drawnAsPicture(node)) return;
+
+      if (seen === picture.occurrence) found = offset + 1 + pos;
+      seen += 1;
+    });
+  });
+
+  return found === undefined ? undefined : NodeSelection.create(doc, found);
+}
+
+/**
+ * Where the caret goes as the editor opens on the picture or the words a
+ * click landed on, where it finds them, the picture selected, or the words
+ * its press selected selected again where it finds where they start too;
+ * none where it does not find the picture or the words.
  */
 function placedOnWords(
   editor: Editor,
   placement: DescriptionEditorPlacement | undefined,
 ): Selection | undefined {
   const click = placement !== undefined && "x" in placement ? placement : undefined;
+
+  // A press on a picture opens the editor with that picture selected, as a press on it in the editor does.
+  if (click?.picture !== undefined) return pictureAtPress(editor.state.doc, click.picture);
   const at = click?.words === undefined ? undefined : wordsAt(editor, click.words);
 
   if (at === undefined) return undefined;
@@ -704,10 +744,12 @@ export function mountDescriptionEditor(
     drawDiagram,
     drawTaskBox,
     drawCodeHeader,
+    colorCode,
     pictures,
     anchors,
     format,
     blocks,
+    history,
   } = props;
 
   const extensions = markdownExtensions(
@@ -716,6 +758,8 @@ export function mountDescriptionEditor(
     pictures,
     drawTaskBox,
     drawCodeHeader,
+    colorCode,
+    drawDiagram,
   );
 
   const manager = documentManager(extensions);
@@ -741,7 +785,7 @@ export function mountDescriptionEditor(
   const written = () =>
     withLineEnding(documentMarkdown(manager, editor.state.doc, held, ends), ending);
 
-  const opened = documentOpened(manager, source);
+  const opened = documentOpened(manager, source, mentions?.namesChip);
   held = { sources: new Map(), lead: opened.lead, ending: opened.ending };
   // The threads the editor carries marks for, and whether they are being laid on, which hands over no draft.
   let carried: readonly string[] = [];
@@ -759,7 +803,6 @@ export function mountDescriptionEditor(
       ...extensions,
       Placeholder.configure({ placeholder: placeholderOf(placeholder, blocks !== undefined) }),
       commentAnchorMark,
-      ...(drawDiagram === undefined ? [] : [diagramPreview(drawDiagram)]),
       ...formatReports(format),
     ],
     content: opened.content,
@@ -779,6 +822,9 @@ export function mountDescriptionEditor(
       },
       handleDrop: (view, event, _slice, moved) =>
         pictures === undefined ? false : droppedPictures(view, event, moved, pictures),
+      // Note that words typed over a selected picture start a line below it, where they would replace it.
+      handleTextInput: (view, _from, _to, words) =>
+        pictures !== undefined && pictureTyped(view, words),
       transformPasted: (slice) =>
         pictures === undefined ? slice : copiedPictures(slice, pictures),
       handleKeyDown: (view, event) => {
@@ -818,12 +864,16 @@ export function mountDescriptionEditor(
           return true;
         }
 
+        // A picture alone on its line takes the arrows, Enter, and the deletes as a block of its own.
+        if (pictures !== undefined && pictureKeyDown(view, event)) return true;
+
         const { selection } = view.state;
-        const first = selection.empty && selection.$from.index(0) === 0;
+        const picked = selection instanceof NodeSelection;
+        const first = (selection.empty || picked) && selection.$from.index(0) === 0;
 
         if (onLeaveUp === undefined || event.key !== "ArrowUp" || !first) return false;
 
-        if (!view.endOfTextblock("up")) return false;
+        if (!picked && !view.endOfTextblock("up")) return false;
         onLeaveUp();
 
         return true;
@@ -853,8 +903,20 @@ export function mountDescriptionEditor(
 
   if (slash !== undefined) editor.registerPlugin(slash.plugin);
   held = sourcesOf(editor.state.doc, opened);
+  // An earlier editor's history on this very document is taken up, its blocks' sources with it, so a block it brings back writes as it was written.
+  const historySources = historyTakenUp(editor.view, history);
+
+  if (historySources !== undefined) {
+    held = { ...held, sources: new Map([...historySources, ...held.sources]) };
+  }
+
   const onWords = placedOnWords(editor, placement);
   editor.view.dispatch(editor.state.tr.setSelection(onWords ?? placed(editor, placement)));
+
+  // Note that the step is taken once the caret is placed, so the caret stands where the step left it.
+  const stepped = historySources !== undefined && history?.step !== undefined;
+
+  if (stepped) historyStepped(editor.view, history);
 
   // Files dropped on the text are laid in at the caret the drop put, whether it opened the editor or moved its caret.
   const laidInDropped = (at: DescriptionEditorPlacement | undefined) => {
@@ -868,16 +930,25 @@ export function mountDescriptionEditor(
   laidInDropped(placement);
 
   // The text and caret as the editor opened on the words a click landed on,
+  // or on the change a step through its history took back or put back,
   // which stand for those words only until either changes: a merged answer
   // laid in, a word typed, or the caret moved.
-  let onWordsAs = onWords === undefined ? undefined : editor.state;
+  let onWordsAs = onWords === undefined && !stepped ? undefined : editor.state;
 
   if (focus) editor.view.focus();
 
   return {
     ...editorFormatting(editor),
     take: (sent, merged) => {
-      const answer = documentTook(editor, manager, held, withLf(sent), withLf(merged));
+      const answer = documentTook(
+        editor,
+        manager,
+        held,
+        withLf(sent),
+        withLf(merged),
+        mentions?.namesChip,
+      );
+
       held = answer.held;
 
       return { base: withLineEnding(answer.base, ending), text: written() };
@@ -953,6 +1024,7 @@ export function mountDescriptionEditor(
 
       return editorSpan(editor, written(), resolved.before(1), resolved.after(1));
     },
+    history: () => historyOf(editor.state, written(), held.sources),
     destroy: () => editor.destroy(),
   };
 }

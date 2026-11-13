@@ -9,7 +9,7 @@
 // the site palette's own (`@repo/ui`'s `palettes.css`), which a test holds
 // this file to.
 (() => {
-  const GROUND = { light: "#fffcfa", dark: "#0f0d0b" };
+  const GROUND = { light: "#ffffff", dark: "#0a0a0a" };
   let chosen = null;
 
   try {

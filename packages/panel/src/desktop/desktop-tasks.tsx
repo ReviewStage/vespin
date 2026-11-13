@@ -663,7 +663,7 @@ function DescriptionDocument({
     [phone, leaveDetailsDoor],
   );
 
-  // The panel opened over the task's details, as its toggle opens it, goes back to the agents,
+  // The panel opened over the task's details, as a file a mention names opens it, goes back to the agents,
   // beside which the panel stands, since the details take the panel's room too.
   const detailsOver = isOverviewTab(tab) && !phone;
   const panelWasOpen = useRef(sidePanel.open);
@@ -804,11 +804,11 @@ function DescriptionDocument({
     onPressTab({ kind: TAB_PRESS.PANEL, tab: turnChangesTab(agentId, messageId) });
   });
 
-  const { onFork: forkDoor, onContinue: continueDoor } = useAgentDraftDoors(
-    agents,
-    false,
-    (draft) => openColumnTab(draftTab(draft)),
-  );
+  const {
+    onFork: forkDoor,
+    onContinue: continueDoor,
+    onSuggest: suggestDoor,
+  } = useAgentDraftDoors(agents, false, (draft) => openColumnTab(draftTab(draft)));
 
   const showHistory = useSteadyDoor((save: number | undefined) => {
     if (opened !== undefined) tasks.onOpenHistory(opened.id, save);
@@ -1664,6 +1664,7 @@ function DescriptionDocument({
                                 cards={cards}
                                 onFork={forkDoor}
                                 onContinue={continueDoor}
+                                onSuggest={suggestDoor}
                                 threads={threads}
                                 hidden={agentThreadsView !== undefined}
                               />

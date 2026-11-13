@@ -6,7 +6,7 @@
  * snapshot to the next turn's, or to the checkout as it stands for the last
  * turn recorded (`@repo/database`'s `readTurnCheckoutRange`). The diff is
  * run where the checkout is, by the one script both machines run
- * (`@repo/features/checkout-diff`), through the agent's machine
+ * (`@repo/agent-runner/checkout-diff`), through the agent's machine
  * (`../machine/agent-machines.ts`), and read into the files the Changes view
  * draws. Nothing is stored: the files are read afresh on each ask. The read
  * stands behind the asking account's Turn changes experiment, as the row

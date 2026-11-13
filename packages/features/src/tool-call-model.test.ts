@@ -109,6 +109,39 @@ test("a browser call says what it did and in which tab, by the title its answer 
   });
 });
 
+test("a computer call says what it did to which app, by the name the Mac gave it, wears the icon its answer kept, and says it ran on the Mac; while it runs it names the app as asked", () => {
+  const done = toolCallView({
+    tool: "computer",
+    input: { action: "click", app: "simulator", element_index: 3 },
+    output: {
+      status: "ran",
+      done: "pressed",
+      app: { name: "Simulator", refused: false, icon: { picture: { id: "icon-1" } } },
+    },
+  });
+
+  assert.deepEqual(callLine(done.kind, done.subject, done.description), {
+    verb: "Clicked in",
+    subject: "Simulator",
+    code: false,
+  });
+  assert.equal(done.appIcon, "icon-1");
+  assert.equal(callPlace(done.kind), "On your Mac");
+
+  const running = toolCallView({
+    tool: "computer",
+    input: { action: "get_app_state", app: "simulator" },
+    output: undefined,
+  });
+
+  assert.deepEqual(callLine(running.kind, running.subject, running.description), {
+    verb: "Looked at",
+    subject: "simulator",
+    code: false,
+  });
+  assert.equal(running.appIcon, undefined);
+});
+
 test("a command run on the Mac is the command it ran, described as a command is, and its answer says how it ended: its exit, its timeout, or why it was not run", () => {
   const ran = (output: Record<string, string | number | boolean | null>) =>
     toolCallView({

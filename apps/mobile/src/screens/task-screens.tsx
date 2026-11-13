@@ -13,6 +13,7 @@ import {
   linkOf,
   readLink,
   taskLinkStep,
+  taskNumberOf,
 } from "@repo/features/link-grammar";
 import { agentName, modelLabel, providerOf } from "@repo/features/model-label";
 import { agentRunsOnWords, agentStillWriting } from "@repo/features/task-agents-model";
@@ -53,10 +54,10 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { provenanceText } from "@repo/features/time-format";
-import { countWords, readingWords, TERM, VERB } from "@repo/features/words";
+import { countWords, readFailedWords, readingWords, TERM, VERB } from "@repo/features/words";
 import { taskKey } from "@repo/features/workspace-key";
 import type { Workspace } from "@repo/features/workspace-wire";
-import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
+import { selectWorkspaceExperiment, selectWorkspaces } from "@repo/host/app-state-reads";
 import { EXPERIMENT } from "@repo/settings";
 import {
   AGENT_ROW_STATE,
@@ -68,6 +69,8 @@ import {
   type BarMenu,
   ConfirmAsk,
   EmptyState,
+  GLYPH,
+  glyphSymbol,
   LINK_ROW_TONE,
   LIST_LOOK,
   LinkRow,
@@ -94,8 +97,8 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { type ReactElement, useMemo, useState } from "react";
-import { useAgentRowActs, useFollowedAgent, useHeldAgentStep } from "../agents/use-agent.js";
-import { archiveQuestion } from "../agents/use-agent-actions.js";
+import { useAgentRowActs, useHeldAgentStep } from "../agents/use-agent.js";
+import { useArchiveAsk } from "../agents/use-agent-actions.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
@@ -110,8 +113,11 @@ import {
   threadOpen,
   threadsOnBlocks,
   useTaskComments,
+  useTaskCommentsRetry,
 } from "../tasks/use-comments.js";
 import { useDescriptionPictures } from "../tasks/use-description-pictures.js";
+import { useFoundTask } from "../tasks/use-found-task.js";
+import { useLinkStandings } from "../tasks/use-link-standings.js";
 import type { TaskRelationWrites } from "../tasks/use-relations.js";
 import {
   type StatusQuestion,
@@ -132,6 +138,7 @@ import { useWindowSizeClass } from "../use-window-size-class.js";
 import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 import { SIDEBAR_PLACE, type SidebarTasks, useAppSidebar } from "./app-sidebar.js";
+import { useFollowingChip } from "./following-screens.js";
 import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
 import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./relation-screens.js";
@@ -164,12 +171,14 @@ const WORDS = {
   SUB_TASKS: "Sub-tasks",
   TASK_RELATIONS: "Task relations",
   STATUS: "Status",
-  MORE: { label: "More", symbol: "ellipsis" },
+  MORE: { label: "More", symbol: GLYPH.MORE },
   COPY_LINK: "Copy link",
   RENAME: "Rename",
   RENAME_TASK: "Rename task",
   NEW_SUB_TASK: "New sub-task",
   COMMENTS: "Comments",
+  DESCRIPTION_UNREAD: readFailedWords("the description"),
+  COMMENTS_UNREAD: readFailedWords("the comments"),
   DELETE: "Permanently delete",
   NO_TASKS: "No tasks",
   UNLISTED_TASK: "Task",
@@ -231,7 +240,7 @@ function statusSubmenu(
 ): RowSubmenu {
   return {
     label: WORDS.STATUS,
-    symbol: "circle.dashed",
+    symbol: GLYPH.STATUS,
     choices: STATUS_ORDER.map((status) => ({
       label: TASK_STATUS_WORDS[status],
       on: task.status === status,
@@ -253,7 +262,7 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
 
   return {
     label: MOVE_TO_SECTION,
-    symbol: "folder",
+    symbol: GLYPH.MOVE,
     choices: placing.sections.map((section) => ({
       label: section.title,
       on: section.id === standing,
@@ -267,7 +276,7 @@ function sectionSubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu | u
         : [
             {
               label: REMOVE_FROM_SECTION,
-              symbol: "folder.badge.minus",
+              symbol: GLYPH.REMOVE_FROM_SECTION,
               tone: ROW_ACTION_TONE.NEUTRAL,
               onPress: () => placing.moveToSection(task.id, null),
             },
@@ -294,7 +303,7 @@ function repositorySubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu 
 
   return {
     label: current === null ? CHOOSE_REPOSITORY : CHANGE_REPOSITORY,
-    symbol: "chevron.left.forwardslash.chevron.right",
+    symbol: GLYPH.REPOSITORY,
     choices: listed.map((repository) => ({
       label: repository,
       on: repository === current,
@@ -308,7 +317,7 @@ function repositorySubmenu(task: TaskSummary, placing: TaskPlacing): RowSubmenu 
         : [
             {
               label: NO_REPOSITORY,
-              symbol: "xmark.circle",
+              symbol: GLYPH.NO_REPOSITORY,
               tone: ROW_ACTION_TONE.NEUTRAL,
               onPress: () => placing.setRepository(task.id, null),
             },
@@ -342,7 +351,7 @@ function barSubmenu(submenu: RowSubmenu): BarMenu {
 function relationSubmenu(task: TaskSummary, openRelation: OpenRelation): RowSubmenu {
   return {
     label: TASK_RELATION_MENU,
-    symbol: "point.3.connected.trianglepath.dotted",
+    symbol: GLYPH.RELATIONS,
     choices: [],
     actions: TASK_RELATION_ORDER.map((kind) => ({
       label: TASK_RELATION_VERBS[kind].choose,
@@ -360,7 +369,7 @@ function removeParentActs(task: TaskSummary, relations: TaskRelationWrites): rea
   return [
     {
       label: REMOVE_PARENT,
-      symbol: "arrow.up.left.and.arrow.down.right",
+      symbol: GLYPH.UNLINK,
       tone: ROW_ACTION_TONE.NEUTRAL,
       onPress: () => relations.removeParent(task.id),
     },
@@ -400,7 +409,7 @@ function rowActs(
       : [
           {
             label: WORDS.MARK_DONE,
-            symbol: "checkmark.circle",
+            symbol: GLYPH.CHECK,
             tone: ROW_ACTION_TONE.NEUTRAL,
             onPress: () => listing.setStatus(task.id, TASK_STATUS.DONE),
           },
@@ -411,7 +420,7 @@ function rowActs(
     leadingActions: [
       {
         label: pinned ? WORDS.UNPIN : WORDS.PIN,
-        symbol: pinned ? "pin.slash" : "pin",
+        symbol: pinned ? GLYPH.UNPIN : GLYPH.PIN,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => listing.pin(task.id, !pinned),
       },
@@ -421,32 +430,32 @@ function rowActs(
       ...removeParentActs(task, listing.relations),
       {
         label: WORDS.COPY_LINK,
-        symbol: "link",
+        symbol: GLYPH.LINK,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => shareTaskLink(task, listing.workspace),
       },
       {
         label: WORDS.RENAME,
-        symbol: "pencil",
+        symbol: GLYPH.RENAME,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => askRename(task, listing.rename),
       },
       {
         label: unread ? INBOX_READ_MARK.READ : INBOX_READ_MARK.UNREAD,
-        symbol: unread ? "envelope.open" : "envelope.badge",
+        symbol: unread ? GLYPH.MARK_READ : GLYPH.MARK_UNREAD,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => listing.markRead(task.id, !unread),
       },
       {
         label: VERB.OPEN_IN_BROWSER,
-        symbol: "safari",
+        symbol: GLYPH.OPEN_EXTERNALLY,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () =>
           openOnWeb({ kind: LINK_DESTINATION.TASK, planId: task.id }, listing.workspace),
       },
       {
         label: WORDS.DELETE,
-        symbol: "trash",
+        symbol: GLYPH.DELETE,
         tone: ROW_ACTION_TONE.DESTRUCTIVE,
         onPress: () => listing.askDelete(task),
       },
@@ -506,17 +515,25 @@ function taskPath(task: TaskSummary, workspace: Workspace | undefined): readonly
   );
 }
 
-/** One task's row, set in by how deep it stands and led by its sub-tasks' fold where it has any: the one row every list of tasks draws, the Search tab's among them. */
+/**
+ * One task's row, set in by how deep it stands and led by its sub-tasks' fold
+ * where it has any: the one row every list of tasks draws, the Search tab's
+ * among them. Its key ends the line only where `keyed` asks, as a search's
+ * finds do; a regular window's sidebar and list column leave it out, as the
+ * panel's sidebar does, since it took the title's room and wrapped there.
+ */
 export function TaskListRow({
   task,
   listing,
   depth = 0,
   fold,
+  keyed,
 }: {
   readonly task: TaskSummary;
   readonly listing: TasksListing;
   readonly depth?: number;
   readonly fold?: TaskFold | undefined;
+  readonly keyed: boolean;
 }) {
   const look = listing.lookOf(task);
   const openRelation = useOpenRelation();
@@ -530,7 +547,7 @@ export function TaskListRow({
       finished={taskFinished(task)}
       needsYou={look.needsYou}
       agents={look.agents}
-      taskKey={keyOf(task, listing.workspace)}
+      taskKey={keyed ? keyOf(task, listing.workspace) : undefined}
       depth={depth}
       {...rowActs(task, look.unread, listing, openRelation)}
       preview={taskPreview(task, listing)}
@@ -557,7 +574,7 @@ export function TaskRows({
 }) {
   return (
     <RowForEach data={tasks} keyOf={(task) => task.id}>
-      {(task) => <TaskListRow task={task} listing={listing} />}
+      {(task) => <TaskListRow task={task} listing={listing} keyed />}
     </RowForEach>
   );
 }
@@ -570,6 +587,7 @@ function droppedTask(tree: TaskTree, url: string): TaskSummary | undefined {
 
   const listed = [
     ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
     ...tree.sections,
     ...tree.tasks,
   ]
@@ -607,9 +625,16 @@ function countDrop(taskId: string): (landed: boolean) => boolean {
  * repository group it leaves its section, each unpinning it once the move
  * is taken. A refused move leaves the task where it stood, and a drop's
  * pin or unpin is skipped where a newer drop of the same task has landed
- * first, while a refused newer one leaves the older to finish.
+ * first, while a refused newer one leaves the older to finish. Nothing is
+ * dropped onto Following, which holds what the reader follows rather than
+ * where they put it.
  */
-function placeIn(group: TaskTreeGroup, listing: TasksListing): (task: TaskSummary) => void {
+function placeIn(
+  group: TaskTreeGroup,
+  listing: TasksListing,
+): ((task: TaskSummary) => void) | undefined {
+  if (group.kind === TASK_TREE_GROUP.FOLLOWING) return undefined;
+
   if (group.kind === TASK_TREE_GROUP.PINNED) {
     return (task) => {
       const newest = countDrop(task.id);
@@ -637,9 +662,9 @@ function placeIn(group: TaskTreeGroup, listing: TasksListing): (task: TaskSummar
 }
 
 /**
- * One group of the tree as its section: Pinned, a section of the member's,
- * or a repository, folding under its header and count; My tasks heads a
- * repository group the tree draws no heading for. A task's row dragged onto
+ * One group of the tree as its section: Pinned, Following, a section of the
+ * member's, or a repository, folding under its header and count; My tasks
+ * heads a repository group the tree draws no heading for. A task's row dragged onto
  * its header, as an iPad drags, moves the task there (`placeIn`).
  */
 function GroupSection({
@@ -650,6 +675,7 @@ function GroupSection({
   readonly listing: TasksListing;
 }) {
   const place = placeIn(group, listing);
+  const keyed = useWindowSizeClass() === WINDOW_SIZE_CLASS.COMPACT;
 
   // Note that the section holds which parents stand open, rather than each row, since a recycled row draws another task once scrolled past.
   const [opened, setOpened] = useState<ReadonlySet<string>>(NONE_OPEN);
@@ -673,11 +699,15 @@ function GroupSection({
       title={group.title ?? listing.tree.tasksHead}
       count={group.rows.length}
       foldable
-      onDropLink={(url) => {
-        const task = droppedTask(listing.tree, url);
+      onDropLink={
+        place === undefined
+          ? undefined
+          : (url) => {
+              const task = droppedTask(listing.tree, url);
 
-        if (task !== undefined) place(task);
-      }}
+              if (task !== undefined) place(task);
+            }
+      }
     >
       <RowForEach data={rows} keyOf={(row) => row.task.id}>
         {(row) => (
@@ -685,6 +715,7 @@ function GroupSection({
             task={row.task}
             listing={listing}
             depth={row.depth}
+            keyed={keyed}
             fold={
               row.open === undefined
                 ? undefined
@@ -701,6 +732,7 @@ function GroupSection({
 function treeEmpty(tree: TaskTree): boolean {
   return [
     ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
     ...tree.sections,
     ...tree.tasks,
   ].every((group) => group.rows.length === 0);
@@ -717,9 +749,9 @@ type TasksTreeProps = {
 };
 
 /**
- * The Tasks list as the panel's phone Tasks draws it: Pinned, the member's
- * sections, and the repository groups, each folding under its header and
- * count, a task's sub-tasks folded under it; or, while a search is typed,
+ * The Tasks list as the panel's phone Tasks draws it: Pinned, Following,
+ * the member's sections, and the repository groups, each folding under its
+ * header and count, a task's sub-tasks folded under it; or, while a search is typed,
  * every task of the workspace it finds. A pull reads it again.
  */
 function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: TasksTreeProps) {
@@ -727,7 +759,7 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
 
   if (search.trim() !== "") {
     if (found.length === 0) {
-      return <EmptyState title={noMatchWords(search.trim())} symbol="magnifyingglass" />;
+      return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
     }
 
     return (
@@ -740,11 +772,14 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
   }
 
   // Note that an empty workspace draws the system's empty view, as the Inbox's does, rather than a bare list.
-  if (treeEmpty(tree)) return <EmptyState title={WORDS.NO_TASKS} symbol="checklist" />;
+  if (treeEmpty(tree)) return <EmptyState title={WORDS.NO_TASKS} symbol={GLYPH.TASK} />;
 
   return (
     <RowList look={look} selected={selected} onSelect={onSelect} onRefresh={onRefresh}>
       {tree.pinned === undefined ? null : <GroupSection group={tree.pinned} listing={listing} />}
+      {tree.following === undefined ? null : (
+        <GroupSection group={tree.following} listing={listing} />
+      )}
       {tree.sections.map((group) => (
         <GroupSection key={group.key} group={group} listing={listing} />
       ))}
@@ -757,13 +792,18 @@ function TasksTree({ listing, look, search, selected, onSelect, onRefresh }: Tas
 
 /**
  * The member's tasks a regular window's app sidebar lists under its places:
- * Pinned and each of their sections, each folding under its header and
- * count, every row acting as the Tasks tab's does.
+ * Pinned, Following, and each of their sections, each folding under its
+ * header and count, every row acting as the Tasks tab's does.
  */
 export function useSidebarTasks(): SidebarTasks {
   const { listing, status, deletion } = useListingAsks(useTasksListing(""));
   const { tree } = listing;
-  const groups = [...(tree.pinned === undefined ? [] : [tree.pinned]), ...tree.sections];
+
+  const groups = [
+    ...(tree.pinned === undefined ? [] : [tree.pinned]),
+    ...(tree.following === undefined ? [] : [tree.following]),
+    ...tree.sections,
+  ];
 
   return {
     sections: groups.map((group) => (
@@ -800,7 +840,7 @@ function historyActions(
   return [
     {
       label: VERSION_HISTORY_WORDS.TITLE,
-      symbol: "clock.arrow.circlepath",
+      symbol: GLYPH.HISTORY,
       onPress: () => open(task),
     },
   ];
@@ -810,7 +850,7 @@ function historyActions(
 function moveActions(open: (() => void) | undefined): BarMenu["actions"] {
   return open === undefined
     ? []
-    : [{ label: TASK_MOVE_WORDS.TITLE, symbol: "folder", onPress: open }];
+    : [{ label: TASK_MOVE_WORDS.TITLE, symbol: GLYPH.MOVE, onPress: open }];
 }
 
 /**
@@ -830,14 +870,18 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
     actions: [
       {
         label: WORDS.COPY_LINK,
-        symbol: "link",
+        symbol: GLYPH.LINK,
         onPress: () => shareTaskLink(task, overview.workspace),
       },
-      { label: WORDS.RENAME, symbol: "pencil", onPress: () => askRename(task, overview.rename) },
+      {
+        label: WORDS.RENAME,
+        symbol: GLYPH.RENAME,
+        onPress: () => askRename(task, overview.rename),
+      },
       ...historyActions(task, doors.history),
       {
         label: WORDS.NEW_SUB_TASK,
-        symbol: "plus.square.on.square",
+        symbol: GLYPH.ADD,
         onPress: () => doors.newSubTask(task),
       },
       ...moveActions(doors.moveDoor(task)),
@@ -848,13 +892,13 @@ function taskMenu(overview: TaskOverview, doors: TaskMenuDoors): BarMenu {
       })),
       {
         label: VERB.OPEN_IN_BROWSER,
-        symbol: "safari",
+        symbol: GLYPH.OPEN_EXTERNALLY,
         onPress: () =>
           openOnWeb({ kind: LINK_DESTINATION.TASK, planId: task.id }, overview.workspace),
       },
       {
         label: WORDS.DELETE,
-        symbol: "trash",
+        symbol: GLYPH.DELETE,
         destructive: true,
         onPress: () => doors.askDelete(task),
       },
@@ -899,10 +943,11 @@ function agentState(status: AgentStatus): AgentRowState {
   return status === AGENT_STATUS.FAILED ? AGENT_ROW_STATE.FAILED : AGENT_ROW_STATE.REST;
 }
 
-/** The task's head: its name, its chips, and who created it and when. */
+/** The task's head: its name, its chips, who follows it, and who created it and when. */
 function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
   const { task } = overview;
   const pictureOf = useMemberPictures();
+  const following = useFollowingChip(task.id);
 
   return (
     <TaskHead
@@ -918,6 +963,7 @@ function OverviewHead({ overview }: { readonly overview: TaskOverview }) {
               nobody: false,
             }
       }
+      following={following}
       createdBy={
         task.createdBy === undefined
           ? undefined
@@ -943,7 +989,7 @@ function relationSwipes(
   return [
     {
       label: CHANGE_RELATION,
-      symbol: "arrow.left.arrow.right",
+      symbol: GLYPH.RELATIONS,
       choices: TASK_RELATION_ORDER.map((to) => ({
         label: TASK_RELATION_WORDS[to],
         on: to === kind,
@@ -952,7 +998,7 @@ function relationSwipes(
     },
     {
       label: REMOVE_RELATION,
-      symbol: "xmark.circle",
+      symbol: GLYPH.REMOVE,
       tone: ROW_ACTION_TONE.NEUTRAL,
       onPress: () => relations.remove(taskId, kind, otherId),
     },
@@ -1008,9 +1054,9 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
             )}
           />
         ))}
-        <LinkRow symbol="plus" label={WORDS.NEW_SUB_TASK} onPress={() => newSubTask(task)} />
+        <LinkRow symbol={GLYPH.ADD} label={WORDS.NEW_SUB_TASK} onPress={() => newSubTask(task)} />
         <LinkRow
-          symbol="link"
+          symbol={GLYPH.LINK}
           label={RELATION_WORDS.LINK_SUB_TASK}
           onPress={() => openRelation(task.id, TASK_RELATION_KIND.SUB_TASK)}
         />
@@ -1036,7 +1082,7 @@ function OverviewRelations({ overview }: { readonly overview: TaskOverview }) {
           }),
         )}
         <LinkRow
-          symbol="plus"
+          symbol={GLYPH.ADD}
           label={RELATION_WORDS.ADD_RELATION}
           onPress={() => openRelation(task.id)}
         />
@@ -1060,7 +1106,7 @@ function agentSwipes(
     return [
       {
         label: WORDS.STOP,
-        symbol: "stop.circle",
+        symbol: GLYPH.STOP,
         tone: ROW_ACTION_TONE.NEUTRAL,
         onPress: () => acts.stop(agent.id),
       },
@@ -1072,7 +1118,7 @@ function agentSwipes(
   return [
     {
       label: WORDS.ARCHIVE,
-      symbol: "archivebox",
+      symbol: GLYPH.ARCHIVE,
       tone: ROW_ACTION_TONE.DESTRUCTIVE,
       onPress: () => onArchive(agent.id),
     },
@@ -1089,18 +1135,24 @@ type UseAgentArchiveAskResult = {
  * an agent, and `ask` is the system's alert that asks it, which the screen
  * stands beside its `<Screen>`, as every list's questions stand. Note that
  * the question reads where the agent stands now, as the agent page's menu
- * asks (`archiveQuestion`), because one that starts working while the alert
- * is up would otherwise be stopped and archived without a word of it.
+ * asks (`useArchiveAsk`), read afresh as it's raised and checked again as
+ * its act is pressed, because one that starts working while the alert is up
+ * would otherwise be stopped and archived without a word of it.
  */
 export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
   const acts = useAgentRowActs();
   const [asked, setAsked] = useState<{ readonly agentId: string; readonly presented: boolean }>();
-  const agent = useFollowedAgent(asked?.agentId ?? "");
-  const question = archiveQuestion(agent !== undefined && agentStillWriting(agent.status));
+  const { question, ask: readAfresh, answered } = useArchiveAsk(asked?.agentId ?? "");
   const letGo = () => setAsked((was) => (was === undefined ? was : { ...was, presented: false }));
 
   return {
-    archive: (agentId) => setAsked({ agentId, presented: true }),
+    archive: (agentId) => {
+      // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
+      letGo();
+      void readAfresh(agentId).then((stands) => {
+        if (stands) setAsked({ agentId, presented: true });
+      });
+    },
     ask: (
       <ConfirmAsk
         title={question.title}
@@ -1110,8 +1162,12 @@ export function useAgentArchiveAsk(): UseAgentArchiveAskResult {
         presented={asked?.presented === true}
         onAct={() => {
           if (asked === undefined || !asked.presented) return;
+          const { agentId } = asked;
           letGo();
-          acts.archive(asked.agentId);
+          answered(
+            () => acts.archive(agentId),
+            () => setAsked({ agentId, presented: true }),
+          );
         }}
         onDismiss={letGo}
       />
@@ -1198,13 +1254,13 @@ function OverviewAgents({
         <TaskAgentRow key={line.agent.id} line={line} task={task} onArchive={onArchiveAgent} />
       ))}
       <LinkRow
-        symbol="plus"
+        symbol={GLYPH.ADD}
         label={WORDS.NEW_AGENT}
         onPress={() => router.push({ pathname: "/start-agent", params: { task: task.id } })}
       />
       {overview.waitingElsewhere === 0 ? null : (
         <LinkRow
-          symbol="tray"
+          symbol={GLYPH.INBOX}
           label={threadsWaitingWords(overview.waitingElsewhere)}
           tone={LINK_ROW_TONE.ATTENTION}
           onPress={() => router.navigate("/inbox")}
@@ -1226,7 +1282,7 @@ function OverviewPages({ overview }: { readonly overview: TaskOverview }) {
       {pages.map((page) => (
         <LinkRow
           key={page.id}
-          symbol="doc.richtext"
+          symbol={GLYPH.PAGE}
           label={page.title}
           detail={provenanceText(page.at, Date.now())}
           onPress={() =>
@@ -1275,6 +1331,14 @@ function OverviewDescription({
   const blocks = useMemo(() => descriptionBlocks(body), [body]);
   const onBlocks = threadsOnBlocks(threads, blocks);
   const { pictureSource, videoAt } = useDescriptionPictures(body);
+  const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
+
+  // Note that a chip's pull request is read through the task's own workspace, as the panel's is, whichever one the phone works in.
+  const linkStanding = useLinkStandings(
+    useMemo(() => [body], [body]),
+    task.repository,
+    workspaces.find((each) => each.id === task.workspaceId),
+  );
 
   const openThread = (threadId: string) =>
     router.push({ pathname: "/tasks/comments/[id]", params: { id: threadId, task: task.id } });
@@ -1288,6 +1352,7 @@ function OverviewDescription({
           onOpenLink={openLink}
           pictureSource={pictureSource}
           videoAt={videoAt}
+          linkStanding={linkStanding}
         />
       </ListSection>
     );
@@ -1307,6 +1372,7 @@ function OverviewDescription({
             onOpenLink={openLink}
             pictureSource={pictureSource}
             videoAt={videoAt}
+            linkStanding={linkStanding}
             last={index === blocks.length - 1}
             menuActions={
               block.quote === undefined
@@ -1314,7 +1380,7 @@ function OverviewDescription({
                 : [
                     {
                       label: COMMENT_WORDS.COMMENT,
-                      symbol: "text.bubble",
+                      symbol: GLYPH.COMMENT,
                       tone: ROW_ACTION_TONE.NEUTRAL,
                       onPress: () =>
                         router.push({
@@ -1345,6 +1411,25 @@ function OverviewDescription({
   );
 }
 
+/** A read of the page's that failed, said in the panel's words, which a press reads again. */
+function ReadFailedRow({
+  words,
+  onRetry,
+}: {
+  readonly words: string;
+  readonly onRetry: () => void;
+}) {
+  return (
+    <LinkRow
+      symbol={GLYPH.FAILED}
+      label={words}
+      detail={VERB.RETRY}
+      tone={LINK_ROW_TONE.ATTENTION}
+      onPress={onRetry}
+    />
+  );
+}
+
 /**
  * The description's comment threads that still stand open, as the panel's
  * comments list holds them, the oldest started first: each its first
@@ -1355,6 +1440,15 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
   const router = useRouter();
   const { task } = overview;
   const open = useTaskComments(task.id).filter(threadOpen);
+  const retry = useTaskCommentsRetry(task.id);
+
+  if (retry !== undefined) {
+    return (
+      <ListSection title={WORDS.COMMENTS}>
+        <ReadFailedRow words={WORDS.COMMENTS_UNREAD} onRetry={retry} />
+      </ListSection>
+    );
+  }
 
   if (open.length === 0) return null;
 
@@ -1363,7 +1457,7 @@ function OverviewComments({ overview }: { readonly overview: TaskOverview }) {
       {open.map((thread) => (
         <LinkRow
           key={thread.id}
-          symbol="text.bubble"
+          symbol={GLYPH.COMMENT}
           label={threadComments(thread)[0]?.words ?? thread.quote}
           detail={provenanceText(thread.updatedAt, Date.now())}
           onPress={() =>
@@ -1421,7 +1515,11 @@ function OverviewPage({
       <OverviewRelations overview={overview} />
       <OverviewAgents overview={overview} onArchiveAgent={onArchiveAgent} />
       <OverviewPages overview={overview} />
-      {!descriptions || document === undefined || document.document.body.trim() === "" ? null : (
+      {!descriptions ? null : overview.documentRetry !== undefined ? (
+        <ListSection title={WORDS.DESCRIPTION}>
+          <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
+        </ListSection>
+      ) : document === undefined || document.document.body.trim() === "" ? null : (
         <OverviewDescription overview={overview} body={document.document.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
@@ -1500,6 +1598,7 @@ function TasksSplitScreen({
   const newSubTask = useNewSubTask();
   const openRelation = useOpenRelation();
   const moveDoor = useMoveTaskDoor();
+  const found = useFoundTask(selected, undefined);
   const held = useTaskOverview(selected);
   const overview = held === undefined ? undefined : { ...held, setStatus: listing.setStatus };
   const history = useHistoryDoor(overview?.task.workspaceId);
@@ -1538,10 +1637,12 @@ function TasksSplitScreen({
                 onRefresh={refreshTasks}
                 onArchiveAgent={archiveAsk.archive}
               />
-            ) : selected !== undefined && read ? (
-              <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
+            ) : selected === undefined ? (
+              <EmptyState title={SELECT_A_TASK} symbol={GLYPH.TASK} />
+            ) : read && !found.seeking ? (
+              <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
             ) : (
-              <EmptyState title={SELECT_A_TASK} symbol="checklist" />
+              <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
             )
           }
           detailBar={
@@ -1584,12 +1685,28 @@ export function TasksListScreen() {
   );
 }
 
-/** The Tasks tab's pushed screen: one task's Overview, named by the route's `id`, its path small in the bar and its ⋯ beside it, read as it opens; Task not found where the read list holds no such task, and the reading state while it is still read. */
+/** Whether a route names its task by number in the workspace its link names, which the task's screen finds before the split view is handed it. */
+function numberedIn(id: string, workspace: string | undefined): boolean {
+  return (
+    workspace !== undefined &&
+    taskNumberOf({ kind: LINK_DESTINATION.TASK, planId: id }) !== undefined
+  );
+}
+
+/**
+ * The Tasks tab's pushed screen: one task's Overview, named by the route's
+ * `id`, its path small in the bar and its ⋯ beside it, read as it opens. A
+ * number a link names in its `workspace` that the list doesn't hold is found
+ * on the service first, and a task the list doesn't hold opens from its own
+ * read (`useFoundTask`); Task not found once neither finds it, and the
+ * reading state while either is still read.
+ */
 export function TaskScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, workspace } = useLocalSearchParams<{ id: string; workspace?: string }>();
   const router = useRouter();
   const colors = useColors();
-  const held = useTaskOverview(id);
+  const found = useFoundTask(id, workspace);
+  const held = useTaskOverview(found.taskId);
 
   const { setStatus, question } = useStatusAsk(
     held ?? { setStatus: () => undefined, agentsWorking: () => false },
@@ -1618,7 +1735,9 @@ export function TaskScreen() {
           moveDoor,
         });
 
-  const handed = useHandToSplit(SPLIT_TAB.TASKS, id);
+  // Note that a number a link names in its workspace is handed to the split view only once found, as the task's id, since the split view's selection names no workspace; one not found stays here to say so.
+  const handing = numberedIn(id, workspace) ? found.taskId : id;
+  const handed = useHandToSplit(SPLIT_TAB.TASKS, handing) && handing !== undefined;
   useSurfaceOpen(handed ? undefined : PRODUCT_SURFACE.TASK, id);
   useTaskReadOnOpen(handed ? undefined : overview?.task.id);
 
@@ -1638,9 +1757,13 @@ export function TaskScreen() {
       />
       {menu === undefined ? null : (
         <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Menu icon={menu.symbol} accessibilityLabel={menu.label}>
+          <Stack.Toolbar.Menu icon={glyphSymbol(menu.symbol)} accessibilityLabel={menu.label}>
             {(menu.submenus ?? []).map((submenu) => (
-              <Stack.Toolbar.Menu key={submenu.label} title={submenu.label} icon={submenu.symbol}>
+              <Stack.Toolbar.Menu
+                key={submenu.label}
+                title={submenu.label}
+                icon={glyphSymbol(submenu.symbol)}
+              >
                 {submenu.choices.map((choice) => (
                   <Stack.Toolbar.MenuAction
                     key={choice.label}
@@ -1653,7 +1776,7 @@ export function TaskScreen() {
                 {submenu.actions.map((action) => (
                   <Stack.Toolbar.MenuAction
                     key={action.label}
-                    icon={action.symbol}
+                    icon={glyphSymbol(action.symbol)}
                     destructive={action.destructive === true}
                     onPress={action.onPress}
                   >
@@ -1665,7 +1788,7 @@ export function TaskScreen() {
             {menu.actions.map((action) => (
               <Stack.Toolbar.MenuAction
                 key={action.label}
-                icon={action.symbol}
+                icon={glyphSymbol(action.symbol)}
                 destructive={action.destructive === true}
                 onPress={action.onPress}
               >
@@ -1682,10 +1805,10 @@ export function TaskScreen() {
             onRefresh={refreshTasks}
             onArchiveAgent={archiveAsk.archive}
           />
-        ) : read ? (
-          <EmptyState title={TASK_NOT_FOUND} symbol="questionmark.folder" />
+        ) : read && !found.seeking ? (
+          <EmptyState title={TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         ) : (
-          <EmptyState title={READING_TASK} symbol="checklist" />
+          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
         )}
       </Screen>
       <StatusQuestionAsk question={question} />

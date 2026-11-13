@@ -13,8 +13,8 @@ import {
   pageSizeSchema,
 } from "@repo/features/page-size";
 import type { PagePlace } from "@repo/features/page-wire";
+import { replyOf } from "@repo/features/reply-quote";
 import { PAGE_EMBED_HEIGHT, PageEmbed, type PageEmbedHeight, usePressAway } from "@repo/ui";
-import { replyOf } from "@repo/ui/reply-quote";
 import { Option, Schema } from "effect";
 import { type ReactNode, type RefObject, useEffect, useReducer, useRef, useState } from "react";
 import { appPlatform } from "../app-platform.js";

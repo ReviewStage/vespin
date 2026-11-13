@@ -19,10 +19,13 @@ import {
   useState,
 } from "react";
 import { askAct } from "../act.js";
+import { useCoarsePointer } from "../coarse-pointer.js";
 import { pictureUnread } from "../failure-report.js";
 import type { PictureDrawer } from "../markdown-message.js";
 import { OUTSIDE_GLYPH_CLASS, PictureBlock } from "../picture-block.js";
 import { type PictureReader, pictureNow, pictureQuery } from "../picture-query.js";
+import { SHELL_ROOM } from "../shell-room.js";
+import { ShellRoomContext } from "../stage-room.js";
 import { TextLink } from "../text-link.js";
 import { AttachmentViewer } from "./attachment-viewer.js";
 import { useOpenLink } from "./use-open-link.js";
@@ -35,7 +38,9 @@ import { useOpenLink } from "./use-open-link.js";
  * page or one of its versions, stands `DescriptionPictures` around its words, and
  * every `MarkdownMessage` under it draws a picture through the drawer
  * `useDescriptionPictureDrawer` hands. A press on a picture opens the window's file
- * viewer (`attachment-viewer.tsx`) on it, its arrows walking the description's
+ * viewer (`attachment-viewer.tsx`) on it, but a mouse's in a description the
+ * reader may edit, which opens the text there with the picture selected, as a
+ * press on its words opens it at them. The viewer's arrows walk the description's
  * other pictures that have been read, in the order the text names them. A
  * place that knows who last changed each section hands `sectionNote`, and
  * the viewer's header says it of the section the picture shown stands in,
@@ -60,6 +65,8 @@ export interface DescriptionPicturesDoor {
   readonly open: (id: string) => void;
   /** Remembers the alt text a picture is drawn with, which the viewer names it by. */
   readonly name: (id: string, alt: string) => void;
+  /** Whether a mouse's press on a picture edits the text there, the picture selected, as in a description the reader may edit, rather than opening it. */
+  readonly pressEdits: boolean;
 }
 
 const DescriptionPicturesContext = createContext<DescriptionPicturesDoor | undefined>(undefined);
@@ -103,11 +110,14 @@ export function DescriptionPictures({
   taskId,
   text,
   sectionNote,
+  editable = false,
   children,
 }: {
   taskId: string;
   text: string;
   sectionNote?: ((heading: string) => ReactNode) | undefined;
+  /** Whether the reader may edit the text, where a mouse's press on a picture edits it there. */
+  editable?: boolean | undefined;
   children: ReactNode;
 }): React.JSX.Element {
   const queryClient = useQueryClient();
@@ -129,6 +139,7 @@ export function DescriptionPictures({
     () => ({
       taskId,
       read,
+      pressEdits: editable,
       name: (id, alt) => names.current.set(id, alt),
       // Note that the viewer walks the pictures read by the press, since one still being read has nothing to show.
       open: (id) => {
@@ -153,7 +164,7 @@ export function DescriptionPictures({
         }
       },
     }),
-    [taskId, read, queryClient],
+    [taskId, read, queryClient, editable],
   );
 
   const shownId = viewing?.ids[viewing.at];
@@ -192,6 +203,9 @@ function DescriptionPicture({
   const state = usePicture(pictureQuery(owner, id, door.read), pictureUnread);
   door.name(id, alt);
   const own = owner === door.taskId;
+  // Note that a finger's press, or one in a phone's narrow room, still opens the picture, as a diagram's does, where a mouse's edits the text there.
+  const coarse = useCoarsePointer();
+  const narrow = useContext(ShellRoomContext) === SHELL_ROOM.NARROW;
 
   return (
     <PictureBlock
@@ -199,6 +213,7 @@ function DescriptionPicture({
       alt={alt}
       caption={caption}
       onOpen={own ? () => door.open(id) : undefined}
+      pointerOpens={!door.pressEdits || coarse || narrow}
     />
   );
 }

@@ -61,6 +61,59 @@ entry in `knip.json`, a runtime edge that runs its Effects, or a
 deployment or test-support file.
 Review places a module and a component alike under this rule.
 
+Lint holds the UI half of this (`vespin/no-raw-press-outside-ui`): outside
+`packages/ui`, every app, test, and the catalog included, an intrinsic
+(lowercase) JSX element is never a control. A raw `button`, `input` (bar
+`type="hidden"`), `select`, `textarea`, or `summary`, a pressable `role`
+(`button`, `tab`, `option`, `menuitem*`, `radio`, `checkbox`, `switch`,
+`slider`, `link` off an `<a>`, or one that is no literal), and a press event (`onClick`, `onDoubleClick`,
+`onAuxClick`, `onContextMenu`, `onMouseDown`/`Up`, `onPointerDown`/`Up`,
+`onTouchStart`/`End`, and their `Capture` forms) are errors, as is
+`onKeyDown`/`onKeyUp` on an element with `tabIndex` or `contentEditable`.
+Hover, drag and drop, focus, wheel, scroll, and clipboard events, keys on a
+container that takes no focus, and a spread from a ui helper
+(`menu.contextMenu()`) stay allowed. There is no escape hatch: `pnpm lint` runs
+`tools/oxlint/vespin/press-guard-check.ts`, which fails on a disable comment that
+would silence the rule and on an `.oxlintrc.json` that weakens it. Where it
+fires, use a `@repo/ui` component, or add the component or variant there.
+
+A loading skeleton draws through the components its loaded state draws with,
+never a copy of their boxes, and takes its counts, order, and sizes from the
+declaration the loaded surface reads, never literals of its own. Lint holds
+the first half (`vespin/skeleton-through-components`, under the same
+no-suppression check): `Skeleton` and `SkeletonRegion` are drawn only by a
+component named `*Skeleton`, in which an intrinsic element's class must be a
+literal naming itself a skeleton's (`…-skeleton…`); every other box is a
+component, factored out of the surface where it builds the box by hand.
+
+What a row does lives in its row component, never in the page that draws
+it: its menu, its rename, its selection, and its muted and unread states
+are built inside the one component every list of that kind draws
+(`TaskListRow`, `AgentListRow`), so a list that draws the row gets all of
+it, and no page hands a shared row a menu, an editor, or a selection of its
+own. `[check: vespin/row-behavior-in-row]`, under the same no-suppression
+check: outside the row components `tools/oxlint/vespin/row-behavior.json` names,
+each with its reason, handing `@repo/ui`'s `TaskRow` its `menu`, `editor`,
+`note`, `choosable`, `settled`, or `unread`, or `TaskListRow` or
+`AgentListRow` a `menu`, `editor`, or `note`, is an error, as is a spread
+onto one. `ListRow` is not held: it is the row of many kinds, each drawn
+where it is listed. A menu shows a shortcut exactly where pressing it would act on the
+menu's subject, so a key it prints always works and one it leaves out does
+not act there. `[check: vespin/no-shortcut-flag]`, under the same
+no-suppression check: `commandAction` and its siblings take the menu's
+subject, and the place offering a key says what it acts on
+(`useShortcutTarget`, `packages/panel/src/shortcut-target.ts`); a literal
+`true` or `false`, a negation, a comparison, `&&` or `||`, or a condition
+choosing between the subject and nothing where they take it is an error.
+
+Lint holds the iOS half too (`vespin/no-raw-press-outside-ui-native`,
+under the same no-suppression check): outside `packages/ui-native`, an
+import of React Native's `Pressable`, `TextInput`, `Switch`, `Button`, or a
+touchable, a press prop (`onPress`, `onPressIn`, `onPressOut`,
+`onLongPress`) on a React Native primitive, and an import of `@expo/ui` or
+`expo-glass-effect` are errors. Where it fires, use a `@repo/ui-native`
+component, or add the component or variant there.
+
 ## Never
 
 - Never let a credential or account secret enter a Gateway answer or event, a
@@ -85,7 +138,7 @@ Review places a module and a component alike under this rule.
   @Vespin mention or a DM), with the earlier messages of the Slack thread it
   stands in, may reach the agent it starts or is sent to: that agent's task,
   transcript and traces. And an automation webhook secret may be shown once, in the window that
-  minted it, at creation or rotation; never anywhere else. And an agent's cloud
+  minted it, at creation or rotation; never anywhere else. And a voice call's audio goes only between the caller's panel and the GPT-Live session the service opens on the caller's own OpenAI key, which never leaves the service, and is never stored. What the caller and the voice said is kept as text in the agent's conversation, one message to each utterance: the caller's words reach the agent as its messages, transcript, and traces, as a typed line does, and the voice's words stand in that transcript but are never handed to the agent's model. Nothing else of a call is stored but its seconds on the member's day, a counted event carries only its length, and none of it goes into a fixture. And an agent's cloud
   browser, a
   Chromium in that agent's own Vercel Sandbox, shows its pages, their live-view
   frames, address, title, screenshots, and text snapshots to that agent and its
@@ -120,7 +173,14 @@ Review places a module and a component alike under this rule.
   (`packages/database/src/models/plan-attachments.ts`), shown to the members
   who can open the task and deleted with the plan; `look_at_picture` refuses
   it (`packages/service/src/tasks/picture-look.ts`), so no model is handed it,
-  and none of it goes into a trace, a counted event, or a fixture. And Sentry's SDKs run
+  and none of it goes into a trace, a counted event, or a fixture. And a window on a member's own Mac,
+  which an agent's `computer` tool reads only for an app the member allowed,
+  reaches the model as a bounded copy, and its full-size copy and the app's
+  icon are kept beside the transcript the call is written to, as
+  `show_image`'s pictures are (`packages/service/src/agents/computer-tool.ts`),
+  shown to the members who can open the task and deleted with the
+  conversation; session replay masks the transcript's screenshots, and none
+  of it ever goes into a trace, a counted event, or a fixture. And Sentry's SDKs run
   with their default data collection, but that the service's
   leaves out model inputs and outputs and request bodies
   (`packages/service/src/observability/sentry.ts`, the desktop's
@@ -194,8 +254,8 @@ pnpm check:affected                      # what changed since origin/main, from 
   flags, variants, sizes, themes) are one case, not a matrix.
 - `[review]` A test you wrote to explore the code while working is deleted
   before the push unless it passes this section.
-- `[review]` Reach for the cheapest guard that holds: a type, then a lint rule,
-  then a test. A rule about source text, such as a
+- `[check: vespin/no-source-read-in-test]` `[review]` Reach for the cheapest guard that holds: a type, then a lint rule
+  in `tools/oxlint/vespin/`, then a test. A rule about source text, such as a
   banned class or import, is a lint rule, never a test that reads source
   files.
 
@@ -217,7 +277,7 @@ pnpm check:affected                      # what changed since origin/main, from 
 
 ### How a test is written
 
-- `[review]` Tests run on vitest.
+- `[check: vespin/no-node-test]` Tests run on vitest.
 - `[review]` A test owns its world: one process, a temp directory it created
   (`temporaryDirectory` from `@repo/runtime/testing`), its own database
   (`getTestDB()` from `@repo/database/testing`), and `TestClock` for time. It
@@ -245,7 +305,7 @@ pnpm check:affected                      # what changed since origin/main, from 
 
 ### Changing and removing tests
 
-- `[review]` Never make a test pass by weakening it: no `.only`, `.skip`,
+- `[check: vespin/no-focused-or-skipped-test]` `[review]` Never make a test pass by weakening it: no `.only`, `.skip`,
   `.todo`, or `it.flakyTest`, no looser assertion, and no longer timeout or
   extra retry without evidence of what was slow. A flaky test is fixed or
   deleted.

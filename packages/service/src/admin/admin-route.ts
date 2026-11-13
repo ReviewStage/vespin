@@ -2,6 +2,7 @@ import { PROVIDER_KEY_ENCRYPTION_ENVIRONMENT } from "@repo/database/models/provi
 import { INTEGRATION_PROVIDER_LIST } from "@repo/features/integration-wire";
 import { Effect } from "effect";
 import {
+  AUTH_DEPLOYMENT_ENVIRONMENT,
   AUTH_SECRET_ENVIRONMENT,
   authSecrets,
   GITHUB_APP_ENVIRONMENT,
@@ -18,6 +19,7 @@ import {
 } from "../providers/posthog.js";
 import type { AdminViewer } from "./admin-access.js";
 import { readAdminAccountSource } from "./admin-account-queries.js";
+import { buildAdminCatalog } from "./admin-catalog.js";
 import { readAdminCost } from "./admin-cost-queries.js";
 import { buildAdminDayDetail } from "./admin-day.js";
 import { readAdminDaySource } from "./admin-day-queries.js";
@@ -140,6 +142,10 @@ export function hostedAdminSeams(api: AdminSessionApi): AdminProcedureSeams {
 
   return {
     resolveViewer: sessionViewer(api),
+    readCatalog: (now) =>
+      Effect.sync(() =>
+        buildAdminCatalog(now, process.env[AUTH_DEPLOYMENT_ENVIRONMENT.ENVIRONMENT]),
+      ),
     readMetrics: (now, scope, windowDays) =>
       Effect.map(readAdminDashboardSources({ now, scope, windowDays }), (sources) => ({
         ...buildAdminMetrics(sources.metrics, now, windowDays),

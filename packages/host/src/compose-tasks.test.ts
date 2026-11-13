@@ -2800,7 +2800,8 @@ it.effect(
       yield* call("TASKS_REFRESH", undefined);
       yield* settled;
       assert.equal(last()?.listStatus, TASKS_READ.FAILED);
-      assert.equal(last()?.live, HOST_LIVE.OFFLINE, "a service that answers no read is offline");
+      // A read that failed leaves whether the service answers to the network watch, since a refused read was still answered.
+      assert.equal(last()?.live, undefined);
 
       service.live.list.refuse(undefined);
       yield* TestClock.adjust(Duration.seconds(5));

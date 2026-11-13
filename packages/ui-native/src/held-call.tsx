@@ -13,6 +13,7 @@ import { APPROVAL_ANSWER } from "@repo/features/agent-approval-wire";
 import { useAccessibilitySize, useAnnounced } from "./accessibility.js";
 import { AskNote } from "./ask-card.js";
 import { BUTTON_LOOK, Button } from "./button.js";
+import { GLYPH, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -151,7 +152,7 @@ export function HeldCallBanner({
     <VStack alignment="leading" spacing={SPACE.TIGHT * 2}>
       <HStack spacing={SPACE.ROW}>
         <Image
-          systemName="hand.raised"
+          {...glyphImage(GLYPH.ASK_FIRST)}
           size={MARK_SIZE.GLYPH}
           color={colors.ATTENTION}
           modifiers={[accessibilityHidden()]}

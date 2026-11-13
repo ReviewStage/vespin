@@ -756,8 +756,9 @@ function DraftedInboxPane({
 /**
  * What an item's box starts a new thread with instead of a reply: a thread
  * with the item's agent, its words and files sent under the key the box
- * minted, opened through `onStarted` once the service took it, or the words
- * of why it did not, a send no answer came back for among them. An agent's
+ * minted, opened through `onStarted` once the service took it, or why it
+ * did not, and whether it was a send no answer came back for, which may
+ * have started the thread all the same. An agent's
  * card offers the same (`agent-threads.tsx`).
  */
 export function startedThreads(
@@ -778,7 +779,13 @@ export function startedThreads(
           }),
         )
         .then((answer) => {
-          if ("failure" in answer) return messageFailureWords(answer.failure);
+          if ("failure" in answer) {
+            return {
+              words: messageFailureWords(answer.failure),
+              unheard: answer.failure === AGENT_CALL_FAILURE.UNANSWERED,
+            };
+          }
+
           onStarted(item, answer.item.id);
 
           return undefined;

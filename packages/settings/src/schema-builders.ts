@@ -181,12 +181,12 @@ export function accountToggleSetting<Field extends string, Id extends AppSetting
 }
 
 /**
- * A stored value the account carries (`ACCOUNT_PREFERENCE_FIELDS`) that no
- * row draws, written only by the flow it belongs to. Nothing stored is kept
- * as nothing, as an account toggle's is, and it describes nothing, so the
- * settings search never finds it.
+ * A stored value that no row draws, written only by the flow it belongs to:
+ * the account's where `ACCOUNT_PREFERENCE_FIELDS` names it, this device's
+ * otherwise. Nothing stored is kept as nothing, as an account toggle's is,
+ * and it describes nothing, so the settings search never finds it.
  */
-export function accountHiddenSetting<
+export function hiddenSetting<
   Field extends string,
   Value extends string,
   Id extends AppSettingId,

@@ -79,7 +79,7 @@
   /* An area out of the tab order is focused by script alone, so its keys
      scroll it, and draws no ring; one in the tab order keeps the app's. It
      stays here, under utilities, because it hides the window's ring, which
-     no vendored utility may. */
+     no vendored utility may (`vespin/no-shadcn-focus-ring`). */
   .ui-scroll-area[tabindex="-1"] {
     outline: none;
   }

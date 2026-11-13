@@ -7,6 +7,7 @@ import type {
   AdminWorkspaceDetail,
   AdminWorkspaceList,
 } from "@repo/features/admin-answer-wire";
+import type { AdminCatalog } from "@repo/features/admin-catalog-wire";
 import type { AdminCost } from "@repo/features/admin-cost-wire";
 import type {
   AdminDayQuery,
@@ -45,6 +46,7 @@ export class AdminReadRefused extends Error {
  * failure. The write answers whether it landed and never rejects.
  */
 export interface AdminReads {
+  readonly catalog: (signal: AbortSignal) => Promise<AdminCatalog>;
   readonly metrics: (query: AdminWindowedQuery, signal: AbortSignal) => Promise<AdminMetrics>;
   readonly cost: (query: AdminWindowedQuery, signal: AbortSignal) => Promise<AdminCost>;
   readonly reliability: (

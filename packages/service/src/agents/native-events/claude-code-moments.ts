@@ -20,6 +20,7 @@ import {
   runnerMoments,
   toolAnswerSettlement,
   usageLimitSettlement,
+  workspaceAnswerText,
 } from "./runner-moments.js";
 
 /**
@@ -440,8 +441,10 @@ function answerText(content: string | readonly WireValue[] | undefined, pictures
  * flagged is a refusal carrying the text, and any other answer is available,
  * kept as the text a CLI tool answered, or read as the JSON a tool of our
  * MCP server answers, so its status word counts as the retired runtime's relay counted it.
- * A CLI tool's pictures stand in as `[image]`; our tools' pictures are left
- * out, as the retired runtime's relay left out a look's picture, so its JSON still reads.
+ * A CLI tool's pictures stand in as `[image]`; our tool's answer is its
+ * first text block alone (`workspaceAnswerText`), its pictures and the words
+ * the CLI adds where it saved one left out, as the retired runtime's relay
+ * left out a look's picture, so its JSON still reads.
  */
 function settlementOf(
   storedName: string,
@@ -451,7 +454,11 @@ function settlementOf(
   const workspaceTool =
     !CLI_TOOL_NAMES.has(storedName) && integrationOfRemoteTool(storedName) === undefined;
 
-  const text = answerText(content, !workspaceTool);
+  const text = !workspaceTool
+    ? answerText(content, true)
+    : Predicate.isString(content)
+      ? content
+      : workspaceAnswerText(content ?? []);
 
   return workspaceTool
     ? toolAnswerSettlement({ workspaceTool: true, text }, isError)

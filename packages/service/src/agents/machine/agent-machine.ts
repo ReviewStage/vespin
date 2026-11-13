@@ -35,6 +35,7 @@
  * a machine that did not answer.
  */
 
+import type { CheckoutDiffRange } from "@repo/agent-runner/checkout-diff";
 import type { LaunchPath } from "@repo/agent-runner/protocol";
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import type { Agent } from "@repo/database/models/agent-store";
@@ -42,7 +43,6 @@ import type { TurnCheckoutSnapshot } from "@repo/database/models/turn-state";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import type { AgentPermissionMode } from "@repo/features/agent-approval-wire";
 import type { AgentMachineKind } from "@repo/features/agent-wire";
-import type { CheckoutDiffRange } from "@repo/features/checkout-diff";
 import type { CommandExit, SandboxError, SandboxFile } from "@repo/sandbox";
 import {
   type Brand,
@@ -518,7 +518,7 @@ export interface AgentMachineService {
   /**
    * The diff of the session's checkout between two snapshots its runner
    * recorded, or one and the working tree, by the one diff script both
-   * machines run (`@repo/features/checkout-diff`): in a sandbox, woken where
+   * machines run (`@repo/agent-runner/checkout-diff`): in a sandbox, woken where
    * it stopped; on a Mac, asked of its host. Refused (`LaunchRefused`) where
    * the Mac is away or removed, as a line to it is. A sandbox's diff is a
    * use of it, recorded in the store (`../sandbox-use.ts`).

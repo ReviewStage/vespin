@@ -1,6 +1,6 @@
 import { linkTarget } from "@repo/features/link-grammar";
+import { keptBlankLines } from "@repo/features/reply-quote";
 import { withoutTrailingNewlines } from "@repo/features/trailing-newlines";
-import { keptBlankLines } from "@repo/ui/reply-quote";
 import { type ReactNode, useCallback } from "react";
 
 /**

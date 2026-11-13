@@ -20,6 +20,8 @@ import { selectAccount, selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   ConfirmAsk,
   EmptyState,
+  GLYPH,
+  glyphSymbol,
   ListSection,
   NoteRow,
   Screen,
@@ -39,7 +41,7 @@ import { useWrite } from "../../use-write.js";
 export { ScreenBoundary as ErrorBoundary } from "../../screen-boundary.js";
 
 /** The glyph a page of skills stands under, the panel's book. */
-const SKILLS_SYMBOL = "book.closed";
+const SKILLS_SYMBOL = GLYPH.SKILL;
 
 /** What the page says while it reads the skills, as the panel names it. */
 const READING = readingWords("your skills");
@@ -129,7 +131,7 @@ function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
       held?.skills?.failed === true ? (
         <EmptyState
           title={SKILLS_LINE.READ_FAILED}
-          symbol="exclamationmark.triangle"
+          symbol={GLYPH.FAILED}
           action={{
             label: VERB.RETRY,
             onPress: () =>
@@ -154,7 +156,7 @@ function SkillsPage({ workspace }: { readonly workspace: Workspace }) {
     <>
       <Stack.Toolbar placement="right">
         <Stack.Toolbar.Button
-          icon="plus"
+          icon={glyphSymbol(GLYPH.ADD)}
           tintColor={colors.TEXT}
           accessibilityLabel={SKILLS_LINE.ADD_SKILL}
           onPress={() => router.push(SETTINGS_ROUTE.SKILL_ADD)}

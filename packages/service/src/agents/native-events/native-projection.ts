@@ -699,6 +699,7 @@ class Fold {
         ? { usageByModel: [{ model, ...turn.usage }] }
         : undefined),
       responseIds: [],
+      ...(moment.files === undefined ? undefined : { files: moment.files }),
       at: this.#context.now,
       attempt: this.#context.attempt,
     });

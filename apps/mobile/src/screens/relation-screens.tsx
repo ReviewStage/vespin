@@ -22,13 +22,14 @@ import { selectWorkspaces } from "@repo/host/app-state-reads";
 import {
   BAR_TITLE,
   EmptyState,
+  GLYPH,
+  type Glyph,
   LIST_LOOK,
   LinkRow,
   ListSection,
   RelationRow,
   RowList,
   Screen,
-  type SfSymbol,
   useColors,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
@@ -46,11 +47,11 @@ const WORDS = {
 
 /** Each kind's glyph, the SF Symbol nearest the panel's icon for it, which leads its row among the kinds and in a task's Task relation menu. */
 export const RELATION_KIND_SYMBOL = {
-  [TASK_RELATION_KIND.SUB_TASK]: "list.bullet.indent",
-  [TASK_RELATION_KIND.PARENT]: "arrow.turn.left.up",
-  [TASK_RELATION_KIND.BLOCKED_BY]: "minus.circle",
-  [TASK_RELATION_KIND.BLOCKS]: "hand.raised",
-} as const satisfies Record<TaskRelationKind, SfSymbol>;
+  [TASK_RELATION_KIND.SUB_TASK]: GLYPH.SUB_TASK,
+  [TASK_RELATION_KIND.PARENT]: GLYPH.PARENT_TASK,
+  [TASK_RELATION_KIND.BLOCKED_BY]: GLYPH.BLOCKED_BY,
+  [TASK_RELATION_KIND.BLOCKS]: GLYPH.BLOCKS,
+} as const satisfies Record<TaskRelationKind, Glyph>;
 
 /** Opens the Task relation sheet over a task, on `kind`, or on the four kinds where none is named. */
 export type OpenRelation = (taskId: string, kind?: TaskRelationKind) => void;
@@ -194,7 +195,7 @@ export function TaskRelationScreen({
       <>
         {bar}
         <Screen>
-          <EmptyState title={WORDS.TASK_NOT_FOUND} symbol="questionmark.folder" />
+          <EmptyState title={WORDS.TASK_NOT_FOUND} symbol={GLYPH.NOT_FOUND} />
         </Screen>
       </>
     );
@@ -219,7 +220,7 @@ export function TaskRelationScreen({
       <>
         {bar}
         <Screen>
-          <EmptyState title={READING_TASK} symbol="checklist" />
+          <EmptyState title={READING_TASK} symbol={GLYPH.TASK} />
         </Screen>
       </>
     );
@@ -246,7 +247,7 @@ export function TaskRelationScreen({
   const newSubTask =
     kind === TASK_RELATION_KIND.SUB_TASK ? (
       <LinkRow
-        symbol="plus"
+        symbol={GLYPH.ADD}
         label={TASK_RELATION_SEARCH[kind].create}
         onPress={() => router.replace({ pathname: "/start-task", params: { parent: subject.id } })}
       />
@@ -257,7 +258,7 @@ export function TaskRelationScreen({
       {bar}
       <Screen>
         {candidates.length === 0 && newSubTask === null ? (
-          <EmptyState title={NO_TASKS_MATCH} symbol="magnifyingglass" />
+          <EmptyState title={NO_TASKS_MATCH} symbol={GLYPH.NOT_FOUND} />
         ) : (
           <RowList look={LIST_LOOK.PLAIN} onSelect={pick}>
             <ListSection>

@@ -10,4 +10,4 @@ export { jsonStateFile } from "./json-state-file.js";
 
 export { mirrorPlatform } from "./open-on-mac.js";
 
-export { reportToStderr, tolerateClosedStderr } from "./stderr-report.js";
+export { reportedLine, reportToStderr, tolerateClosedStderr } from "./stderr-report.js";

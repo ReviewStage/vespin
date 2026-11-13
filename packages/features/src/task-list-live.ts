@@ -126,6 +126,17 @@ const taskLiveRowSchema = EffectSchema.Struct({
   blocked: EffectSchema.optionalKey(EffectSchema.Boolean),
   /** Whether an automation's run made it for itself alone; absent from a service before it. */
   madeByRun: EffectSchema.optionalKey(EffectSchema.Boolean),
+  /**
+   * The followers' account ids, the earliest to follow first, and each one's
+   * machines switch in the same order; null while the task's workspace has
+   * Following off, and absent from a service before it.
+   */
+  followerIds: EffectSchema.optionalKey(
+    EffectSchema.NullOr(EffectSchema.Array(EffectSchema.String)),
+  ),
+  followerMachines: EffectSchema.optionalKey(
+    EffectSchema.NullOr(EffectSchema.Array(EffectSchema.Boolean)),
+  ),
 });
 
 /** Who archived an agent as its row holds it. */
@@ -444,6 +455,22 @@ function originOf(row: TaskLiveRow): Origin {
   };
 }
 
+/** The task's followers as its row names them, each the assignee where the row's assignee is them; none while its workspace has Following off. */
+function followersOf(row: TaskLiveRow): Pick<TaskSummary, "followers"> | undefined {
+  const ids = row.followerIds;
+
+  if (ids === undefined || ids === null) return undefined;
+  const machines = row.followerMachines ?? [];
+
+  return {
+    followers: ids.map((userId, index) => ({
+      userId,
+      assignee: userId === row.assigneeId,
+      machines: machines[index] === true,
+    })),
+  };
+}
+
 /** One plan as the list's row says it, its agents in brief where it has any. */
 function taskSummaryOf(row: TaskLiveRow, agents: AgentGroup | undefined, now: number): TaskSummary {
   return {
@@ -479,6 +506,7 @@ function taskSummaryOf(row: TaskLiveRow, agents: AgentGroup | undefined, now: nu
     ...(row.mode === undefined ? undefined : { mode: row.mode }),
     ...(row.blocked === true ? { blocked: true } : undefined),
     ...(row.madeByRun === true ? { madeByRun: true } : undefined),
+    ...followersOf(row),
     ...(agents === undefined ? undefined : { agents: agentsSummaryOf(agents, now) }),
   };
 }

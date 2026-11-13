@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
+import { VOICE_SPEAKER, type VoiceSpeaker } from "@repo/features/agent-wire";
 import { type AutomationFiring, FIRING_HANDS_OUTSIDE_WORDS } from "@repo/features/automation-wire";
 import {
   RUN_EVENT,
@@ -30,6 +31,7 @@ import {
   type SchemaPath,
   type SchemaRefusal,
   type SlackLineMetadata,
+  type SpokenAskMetadata,
   type StartLineMetadata,
   type StoredMessageMetadata,
   type SuggestionLineMetadata,
@@ -66,7 +68,7 @@ import {
   type UIMessage,
   type UITools,
 } from "ai";
-import { and, asc, eq, gt, isNotNull, isNull, lt, notExists, sql } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNotNull, isNull, lt, not, notExists, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import {
   Cause,
@@ -84,7 +86,13 @@ import {
 import { SqlClient, SqlSchema } from "effect/sql";
 import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from "../core/query.js";
 import { CURRENT_TXID } from "../core/txid.js";
-import { conversations, messages, turnlessUserLine, turns } from "../schemas/storage.js";
+import {
+  conversations,
+  messages,
+  recordedSpokenLine,
+  turnlessUserLine,
+  turns,
+} from "../schemas/storage.js";
 import { CONVERSATION_KIND, MESSAGE_SENDER, messageSenderSchema } from "../storage-vocabulary.js";
 import { expireTurnApprovals } from "./agent-approvals.js";
 import { type HandedFile, lineParts, receivedPartsOf } from "./attached-file-parts.js";
@@ -305,6 +313,8 @@ export const STORE_WRITE_REFUSAL = {
   BUSY: "busy",
   /** The turn stands open under another attempt than the move named, or its runner moved it on since a reap read it lapsed. */
   FENCED: "fenced",
+  /** The client id a line of a call names stands for another row: another speaker's, another call's, or no line of a call. */
+  TAKEN: "taken",
 } as const;
 
 type StoreWriteRefusal = (typeof STORE_WRITE_REFUSAL)[keyof typeof STORE_WRITE_REFUSAL];
@@ -324,6 +334,10 @@ const NO_CONVERSATION: Refused<typeof STORE_WRITE_REFUSAL.NO_CONVERSATION> = {
 
 const NO_TURN: Refused<typeof STORE_WRITE_REFUSAL.NO_TURN> = {
   refusal: STORE_WRITE_REFUSAL.NO_TURN,
+};
+
+const LINE_KEY_TAKEN: Refused<typeof STORE_WRITE_REFUSAL.TAKEN> = {
+  refusal: STORE_WRITE_REFUSAL.TAKEN,
 };
 
 /** Another hand-over's dispatch claim stood on the conversation past the bound this write waits for it (`dispatch-claim.ts`); nothing was written. */
@@ -414,7 +428,7 @@ export function senderNameOf(sender: LineSender | undefined): string | null {
  * write it: its words, the files attached to it, each image with what was
  * kept of it, the client's key for the send, what sent it, and what the row
  * says carried it: the developer's typed ask where it names nothing else,
- * or another coding agent's message, a thread, a description comment, a Start's
+ * the developer's spoken ask on a call, or another coding agent's message, a thread, a description comment, a Start's
  * brief, GitHub, the brain, or an
  * automation's run.
  */
@@ -426,11 +440,40 @@ interface AwaitingLineWrite {
   readonly mentioned?: string | undefined;
   readonly sender: LineSender;
   readonly metadata?: AwaitingLineMetadata | undefined;
+  /**
+   * The caller's lines of a call this line is, by the keys they were
+   * recorded under (`recordVoiceLine`), oldest first: a delegation's, whose
+   * newest line, the one `clientKey` names, it takes as its row in place of
+   * writing the words again, and whose every line takes the delegation.
+   */
+  readonly adopts?: readonly string[] | undefined;
 }
+
+/**
+ * One line of a call as the window holding the call records it: the key its
+ * client minted for it, which it is written under once and grown in place
+ * under after; the call it was said on; who said it, the caller's as a user
+ * row the member sent and the voice's as an assistant row the voice model
+ * wrote; and its words as they now stand.
+ */
+export interface VoiceLineWrite {
+  readonly key: string;
+  readonly callId: string;
+  readonly speaker: VoiceSpeaker;
+  readonly text: string;
+  readonly sender: LineSender;
+}
+
+/** What recording a line of a call did: written or grown, with the transaction where a row was inserted, or found as it stood; or a refusal. */
+type VoiceLineWritten = Result.Result<
+  { readonly effect: StoreWriteEffect; readonly txid?: string },
+  typeof NO_CONVERSATION | MessageRefused | typeof LINE_KEY_TAKEN
+>;
 
 /** What an awaiting line says carried it. */
 export type AwaitingLineMetadata =
   | TypedAskMetadata
+  | SpokenAskMetadata
   | AgentMessageMetadata
   | ThreadLineMetadata
   | CommentLineMetadata
@@ -575,6 +618,17 @@ export interface StoreWriter {
    */
   takeAwaitingLine(target: ConversationTarget, take: AwaitingLineTake): Write<AwaitingLineTaken>;
   /**
+   * One line of a call as it now stands (`VoiceLineWrite`): inserted under
+   * its key on first sight, at the end of the conversation, so the lines
+   * stand in the order they began; its words grown in place after, what it
+   * already names (a delegation) kept; and found as it stood where its words
+   * are those standing. A line opens no turn and awaits none
+   * (`recordedSpokenLine`) until a delegation adopts the caller's
+   * (`AwaitingLineWrite`'s `adopts`). A key standing for another speaker's
+   * line, another call's, or no line of a call is refused.
+   */
+  recordVoiceLine(target: ConversationTarget, line: VoiceLineWrite): Write<VoiceLineWritten>;
+  /**
    * Hands the runtime again, one at a time in the order written, the
    * developer's lines the agent's failed turn never took (`findLostLines`),
    * each under the conversation's dispatch claim as `writeAwaitingLine` hands
@@ -718,14 +772,6 @@ const RowIdSchema = Schema.Struct({ id: Schema.String });
 
 /** A message row as its insert answers it: its id, and the transaction that wrote it, which Neon Realtime names the change by. */
 const InsertedRowSchema = Schema.Struct({ id: Schema.String, txid: Schema.String });
-
-/**
- * The `jsonb` field a stored spoken line is told apart by, which the builder
- * has no operator for: the call it was said on, which an earlier version
- * wrote on its own metadata. One fragment, named once, so the key's
- * spelling stands in a single place.
- */
-const SPOKEN_VOICE_SESSION_ID = sql`${messages.metadata} ->> 'voice_session_id'`;
 
 const ConversationTargetSchema = Schema.Struct({
   userId: Schema.String,
@@ -992,6 +1038,113 @@ const completeMessage = SqlSchema.void({
           revision: landedRevision(bumped),
         })
         .where(eq(messages.id, row.id)),
+    );
+  },
+});
+
+/** A row as a line of a call is read under its client id: what it is, its words, and whether a turn took or awaits it. */
+const findCallLine = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String, clientId: Schema.String }),
+  Result: Schema.Struct({
+    id: Schema.String,
+    role: MessageRoleSchema,
+    parts: StoredPartsColumnSchema,
+    metadata: Schema.NullOr(MessageMetadataColumnSchema),
+  }),
+  execute: (request) =>
+    Database.use((db) =>
+      db
+        .select({
+          id: messages.id,
+          role: messages.role,
+          parts: messages.parts,
+          metadata: messages.metadata,
+        })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.conversationId, request.conversationId),
+            eq(messages.clientId, request.clientId),
+          ),
+        ),
+    ),
+});
+
+/** The caller's lines of a call under the client ids given that no delegation has handed on yet (`recordedSpokenLine`), oldest first. */
+const findRecordedCallerLines = SqlSchema.findAll({
+  Request: Schema.Struct({ conversationId: Schema.String, clientIds: Schema.Array(Schema.String) }),
+  Result: Schema.Struct({
+    id: Schema.String,
+    clientId: Schema.String,
+    metadata: Schema.NullOr(MessageMetadataColumnSchema),
+  }),
+  execute: (request) =>
+    Database.use((db) =>
+      db
+        .select({ id: messages.id, clientId: messages.clientId, metadata: messages.metadata })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.conversationId, request.conversationId),
+            inArray(messages.clientId, [...request.clientIds]),
+            eq(messages.role, MESSAGE_ROLE.USER),
+            isNull(messages.withdrawnAt),
+            recordedSpokenLine(messages),
+          ),
+        )
+        .orderBy(asc(messages.seq)),
+    ),
+});
+
+/** A caller's line a delegation adopted: the delegation on its metadata, and for the delegation's own row the turn it awaits; answers the transaction. */
+const adoptCallerLine = SqlSchema.findOneOption({
+  Request: Schema.Struct({
+    id: Schema.String,
+    conversationId: Schema.String,
+    metadata: MessageMetadataColumnSchema,
+    awaitsTurnId: Schema.NullOr(Schema.String),
+  }),
+  Result: Schema.Struct({ txid: Schema.String }),
+  execute: (row) => {
+    const bumped = bumpedRevision(row.conversationId);
+
+    return Database.use((db) =>
+      db
+        .with(bumped)
+        .update(messages)
+        .set({
+          metadata: row.metadata,
+          awaitsTurnId: row.awaitsTurnId,
+          revision: landedRevision(bumped),
+        })
+        .where(eq(messages.id, row.id))
+        .returning({ txid: CURRENT_TXID }),
+    );
+  },
+});
+
+/** The caller's lines a delegation adopted, given back where its hand-over was not taken: no delegation named and no turn awaited, recorded lines again, unless a turn took one all the same. */
+const releaseCallerLines = SqlSchema.void({
+  Request: Schema.Struct({ conversationId: Schema.String, ids: Schema.Array(Schema.String) }),
+  execute: (request) => {
+    const bumped = bumpedRevision(request.conversationId);
+
+    return Database.use((db) =>
+      db
+        .with(bumped)
+        .update(messages)
+        .set({
+          metadata: sql`${messages.metadata} - 'delegation_id'`,
+          awaitsTurnId: null,
+          revision: landedRevision(bumped),
+        })
+        .where(
+          and(
+            eq(messages.conversationId, request.conversationId),
+            inArray(messages.id, [...request.ids]),
+            isNull(messages.turnId),
+          ),
+        ),
     );
   },
 });
@@ -1460,6 +1613,7 @@ const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
           },
     ),
     responseIds: event.responseIds,
+    files: nullable(event.files),
   });
 
   if (!ended) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FENCED });
@@ -2081,8 +2235,9 @@ const findAwaitingLines = SqlSchema.findAll({
             eq(conversations.kind, CONVERSATION_KIND.AGENT),
             eq(messages.role, MESSAGE_ROLE.USER),
             isNull(messages.turnId),
-            // A line typed into a call is its ask's, taken in by the ask's id and never by its words.
-            sql`${SPOKEN_VOICE_SESSION_ID} is null`,
+            // A line said on a call awaits a turn only once a delegation adopted it, and an earlier
+            // version's line typed into a call is its ask's, taken in by the ask's id and never by its words.
+            not(recordedSpokenLine(messages)),
             noReceiptOfLine(),
           ),
         )
@@ -2212,6 +2367,8 @@ type LineClaimed = Result.Result<
       readonly claim: string;
       /** The turn queued for the line, which goes with it where its hand-over answers that it was not taken; none where it joined an open turn. */
       readonly queuedTurnId: string | undefined;
+      /** The caller's lines of a call a delegation adopted in place of writing a row, which an untaken hand-over gives back rather than withdrawing. */
+      readonly adopted?: readonly string[];
     }
   | { readonly id: string; readonly effect: typeof STORE_WRITE_EFFECT.REPEATED },
   typeof NO_CONVERSATION | typeof CONVERSATION_BUSY | MessageRefused
@@ -2244,6 +2401,14 @@ const claimLine = /* @__PURE__ */ Effect.fnUntraced(function* (
     conversationId: context.target.conversationId,
     before: new Date(context.now.getTime() - WITHDRAWN_LINE_KEEP_MS),
   });
+
+  // A delegation starts its turn on the caller's lines already recorded, which it adopts rather than writing the words again.
+  if (line.adopts !== undefined) {
+    const adopted = yield* adoptedLines(context, { ...line, adopts: line.adopts }, clientId, place);
+
+    if (adopted !== undefined) return adopted;
+  }
+
   // A line already under the key is the send a lost answer was for: the runtime has it, and hears nothing again.
   const standing = yield* messageByClientId(context, clientId);
 
@@ -2277,6 +2442,174 @@ const claimLine = /* @__PURE__ */ Effect.fnUntraced(function* (
     txid,
     claim,
     queuedTurnId: awaited?.queued === true ? awaited.turnId : undefined,
+  });
+});
+
+/** Who wrote a line of a call, as its row's metadata says: the developer's own words, or the voice model's. */
+function callLineAuthor(line: VoiceLineWrite) {
+  return line.speaker === VOICE_SPEAKER.CALLER
+    ? MESSAGE_AUTHOR.DEVELOPER
+    : MESSAGE_AUTHOR.VOICE_MODEL;
+}
+
+/** The metadata a line of a call is written with: its speaker's, on the voice channel, naming its call. */
+function callLineMetadata(line: VoiceLineWrite): StoredMessageMetadata {
+  return {
+    author: callLineAuthor(line),
+    channel: MESSAGE_CHANNEL.VOICE,
+    voice_session_id: line.callId,
+  };
+}
+
+/** Whether a line's standing words already run past the words given, which they begin with. */
+function grownPast(parts: Parts, text: string): boolean {
+  const [part] = parts;
+
+  return (
+    parts.length === 1 &&
+    part?.type === UI_PART_TYPE.TEXT &&
+    part.text.length > text.length &&
+    part.text.startsWith(text)
+  );
+}
+
+/** Whether a standing row is the same speaker's line of the same call. */
+function sameCallLine(
+  standing: { readonly role: string; readonly metadata: StoredMessageMetadata | null },
+  line: VoiceLineWrite,
+): boolean {
+  const role = line.speaker === VOICE_SPEAKER.CALLER ? MESSAGE_ROLE.USER : MESSAGE_ROLE.ASSISTANT;
+  const { metadata } = standing;
+
+  return (
+    standing.role === role &&
+    metadata !== null &&
+    "voice_session_id" in metadata &&
+    metadata.voice_session_id === line.callId &&
+    "author" in metadata &&
+    metadata.author === callLineAuthor(line)
+  );
+}
+
+const recordVoiceLine = /* @__PURE__ */ Effect.fn("web/recordVoiceLine")(function* (
+  context: WriterContext,
+  line: VoiceLineWrite,
+): Effect.fn.Return<VoiceLineWritten, StoreFailure, DatabaseServices> {
+  const clientId = sentLineId(line.key);
+  const standing = yield* findCallLine({ conversationId: context.target.conversationId, clientId });
+  const parts = [{ type: UI_PART_TYPE.TEXT, text: line.text, state: UI_PART_STATE.DONE }];
+
+  if (Option.isSome(standing) && !sameCallLine(standing.value, line)) {
+    return Result.fail(LINE_KEY_TAKEN);
+  }
+
+  // A line grown keeps what it already names, such as the delegation that adopted it.
+  const metadata =
+    Option.isSome(standing) && standing.value.metadata !== null
+      ? standing.value.metadata
+      : callLineMetadata(line);
+
+  const read = yield* admitted(context, {
+    id: clientId,
+    role: line.speaker === VOICE_SPEAKER.CALLER ? MESSAGE_ROLE.USER : MESSAGE_ROLE.ASSISTANT,
+    metadata,
+    parts,
+  });
+
+  if (Result.isFailure(read)) return Result.fail(read.failure);
+
+  if (Option.isNone(standing)) {
+    const { txid } = yield* insertMessage(context, {
+      clientId,
+      turnId: undefined,
+      message: read.success,
+      finishedAt: context.now,
+      ...(line.speaker === VOICE_SPEAKER.CALLER ? { sender: line.sender } : undefined),
+    });
+
+    return Result.succeed({ effect: STORE_WRITE_EFFECT.WRITTEN, txid });
+  }
+
+  // Note that words the line already holds, or a shorter start of them, are a repeat, because a record that
+  // arrives after a later one of the same line, out of order or retried, must never cut the line back.
+  if (
+    isDeepStrictEqual(standing.value.parts, read.success.parts) ||
+    grownPast(standing.value.parts, line.text)
+  ) {
+    return Result.succeed({ effect: STORE_WRITE_EFFECT.REPEATED });
+  }
+
+  yield* completeMessage({
+    id: standing.value.id,
+    conversationId: context.target.conversationId,
+    parts: read.success.parts,
+    metadata,
+    finishedAt: context.now,
+  });
+
+  return Result.succeed({ effect: STORE_WRITE_EFFECT.WRITTEN });
+});
+
+/**
+ * The caller's lines a delegation adopts, in place of writing its words
+ * again (`AwaitingLineWrite`'s `adopts`): each line it names that no
+ * delegation has handed on yet takes the delegation, and the newest, the
+ * one its key names, awaits the turn its hand-over opens and holds the
+ * conversation's dispatch claim, as a line written does (`claimLine`). None
+ * where that newest line is not one standing so, which the write then reads
+ * as any line's: a repeat where it stands handed on already, a line of its
+ * own where it does not stand.
+ */
+const adoptedLines = /* @__PURE__ */ Effect.fnUntraced(function* (
+  context: WriterContext,
+  line: AwaitingLineWrite & { readonly adopts: readonly string[] },
+  clientId: string,
+  place: number,
+): Effect.fn.Return<LineClaimed | undefined, StoreFailure, DatabaseServices> {
+  const recorded = yield* findRecordedCallerLines({
+    conversationId: context.target.conversationId,
+    clientIds: line.adopts.map(sentLineId),
+  });
+
+  const newest = recorded.find((row) => row.clientId === clientId);
+
+  if (newest === undefined) return undefined;
+
+  const delegationId =
+    line.metadata !== undefined && "delegation_id" in line.metadata
+      ? line.metadata.delegation_id
+      : undefined;
+
+  const awaited = yield* awaitedTurnOf(context);
+  let txid: string | undefined;
+
+  for (const row of recorded) {
+    const metadata =
+      row.metadata === null || delegationId === undefined
+        ? row.metadata
+        : { ...row.metadata, delegation_id: delegationId };
+
+    if (metadata === null) continue;
+
+    const adopted = yield* adoptCallerLine({
+      id: row.id,
+      conversationId: context.target.conversationId,
+      metadata,
+      awaitsTurnId: row.id === newest.id ? (awaited?.turnId ?? null) : null,
+    });
+
+    if (row.id === newest.id) txid = Option.getOrUndefined(adopted)?.txid;
+  }
+
+  const claim = yield* takeDispatchClaim(context.target.conversationId, place, newest.id);
+  const written = yield* required(Option.fromUndefinedOr(txid), "the adopted line answered no row");
+
+  return Result.succeed({
+    id: newest.id,
+    txid: written,
+    claim,
+    queuedTurnId: awaited?.queued === true ? awaited.turnId : undefined,
+    adopted: recorded.map((row) => row.id),
   });
 });
 
@@ -2386,6 +2719,7 @@ function recordedLine(
     readonly id: string;
     readonly claim: string;
     readonly queuedTurnId: string | undefined;
+    readonly adopted?: readonly string[];
   },
   taken: boolean,
 ): Effect.Effect<void, StoreFailure, DatabaseServices> {
@@ -2397,14 +2731,22 @@ function recordedLine(
 
           if (taken) return;
 
-          const removed = yield* withdrawUntakenLine({
-            conversationId: target.conversationId,
-            id: claimed.id,
-            now: yield* DateTime.nowAsDate,
-          });
+          // The caller's lines a delegation adopted were said whatever became of the hand-over, so they stand as recorded again rather than withdrawn.
+          if (claimed.adopted !== undefined) {
+            yield* releaseCallerLines({
+              conversationId: target.conversationId,
+              ids: claimed.adopted,
+            });
+          } else {
+            const removed = yield* withdrawUntakenLine({
+              conversationId: target.conversationId,
+              id: claimed.id,
+              now: yield* DateTime.nowAsDate,
+            });
 
-          if (removed.length > 0)
-            yield* markLineWithdrawn({ conversationId: target.conversationId });
+            if (removed.length > 0)
+              yield* markLineWithdrawn({ conversationId: target.conversationId });
+          }
 
           // The send failed and its sender was told, so the turn queued for its line goes with it, unless another line joined it meanwhile.
           if (claimed.queuedTurnId !== undefined) {
@@ -2570,7 +2912,7 @@ const findLostLines = SqlSchema.findAll({
             eq(messages.role, MESSAGE_ROLE.USER),
             isNull(messages.turnId),
             isNull(messages.withdrawnAt),
-            sql`${SPOKEN_VOICE_SESSION_ID} is null`,
+            not(recordedSpokenLine(messages)),
             noReceiptOfLine(),
             notExists(
               queryBuilder
@@ -3130,6 +3472,8 @@ export function storeWriter({ tools }: StoreWriterOptions): Effect.Effect<StoreW
       Effect.uninterruptible(dispatchedLine(target, line, dispatch)),
     takeAwaitingLine: (target, take) =>
       underConversation(target, (context) => takeAwaitingLine(context, take)),
+    recordVoiceLine: (target, line) =>
+      underConversation(target, (context) => recordVoiceLine(context, line)),
     resendLostLines: (target, dispatch) => Effect.uninterruptible(resentLines(target, dispatch)),
     requeueLine: (target, lineId) =>
       underConversation(target, (context) => requeueLine(context, lineId)),

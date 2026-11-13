@@ -19,28 +19,38 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database } from "@repo/database/core/query";
+import { readConversationPicture } from "@repo/database/models/conversation-pictures";
 import {
   claimMacCommands,
   macCommandResult,
   macCommandsWaiting,
   macListeningSince,
+  markMacListening,
   queueMacCommand,
   settleMacCommand,
 } from "@repo/database/models/mac-command-store";
 import { user } from "@repo/database/schemas/auth";
+import { conversations } from "@repo/database/schemas/storage";
+import { CONVERSATION_KIND } from "@repo/database/storage-vocabulary";
 import { getTestDB } from "@repo/database/testing";
 import {
+  COMPUTER_ACTION,
+  COMPUTER_BOUNDS,
+  MAC_COMMAND_BOUNDS,
   MAC_COMMAND_KIND,
   type MacCommand,
   type MacCommandResult,
 } from "@repo/features/mac-command-wire";
-import { Clock, type Context, Effect, Fiber, Layer, Option } from "effect";
+import { unparsedWire } from "@repo/wire";
+import { pngBytes } from "@repo/wire/testing";
+import { Clock, type Context, Effect, Fiber, Layer, Option, Schema } from "effect";
 import { SqlClient } from "effect/sql";
 import { TestClock } from "effect/testing";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
 import { hostedFetch } from "../orpc/handler.js";
 import type { WebServices } from "../runtime.js";
 import { wokenOnHub } from "../testing/sync-woken.js";
+import { computerScreenshot, runComputerTool, storedComputerOutput } from "./computer-tool.js";
 import { askMac, MAC_COMMAND_STATUS, macCommandsFor } from "./mac-command.js";
 import { macCommandsProcedures } from "./mac-commands-procedures.js";
 
@@ -313,13 +323,68 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
         refused(HOSTED_HTTP_STATUS.BAD_REQUEST, "invalid-request"),
       );
       assert.deepEqual(
-        yield* post(JSON.stringify(settle), 256 * 1_024 + 1),
+        yield* post(JSON.stringify(settle), MAC_COMMAND_BOUNDS.MAX_RESULT_BYTES + 1),
         refused(HOSTED_HTTP_STATUS.PAYLOAD_TOO_LARGE, "request-too-large"),
       );
       assert.deepEqual(
         yield* bytes(request({ method: "PUT", userId: "user-refused" })),
         refused(HOSTED_HTTP_STATUS.METHOD_NOT_ALLOWED, "method-not-allowed"),
       );
+    }),
+  );
+
+  it.effect("a window read at every bound the wire allows is taken and kept", () =>
+    Effect.gen(function* () {
+      yield* account("user-largest");
+
+      const read: MacCommand = {
+        id: randomUUID(),
+        kind: MAC_COMMAND_KIND.COMPUTER,
+        conversationId: randomUUID(),
+        action: {
+          op: COMPUTER_ACTION.GET_APP_STATE,
+          app: "Simulator",
+          shots: [{ edge: COMPUTER_BOUNDS.MAX_SHOT_EDGE, quality: 1 }],
+        },
+        timeoutSeconds: 60,
+      };
+
+      yield* queueMacCommand("user-largest", read);
+      yield* claimMacCommands("user-largest", new Date(0), [MAC_COMMAND_KIND.COMPUTER]);
+      // Note that every word but base64 is a character UTF-8 spells in three bytes, the most a character the helper writes takes.
+      const wide = (chars: number) => "…".repeat(chars);
+
+      const shot = {
+        width: COMPUTER_BOUNDS.MAX_SHOT_EDGE,
+        height: COMPUTER_BOUNDS.MAX_SHOT_EDGE,
+        jpeg: "A".repeat(COMPUTER_BOUNDS.MAX_SHOT_CHARS),
+      };
+
+      const largest: MacCommandResult = {
+        computer: {
+          app: {
+            name: wide(COMPUTER_BOUNDS.MAX_APP_CHARS),
+            bundleId: wide(COMPUTER_BOUNDS.MAX_APP_CHARS),
+            iconPng: "A".repeat(COMPUTER_BOUNDS.MAX_ICON_CHARS),
+            refused: false,
+          },
+          window: { title: wide(COMPUTER_BOUNDS.MAX_TEXT_CHARS), x: 0, y: 0, width: 1, height: 1 },
+          elements: wide(COMPUTER_BOUNDS.MAX_ELEMENTS_CHARS),
+          truncated: true,
+          shots: [shot, shot],
+        },
+      };
+
+      const posted = yield* bytes(
+        request({
+          method: "POST",
+          userId: "user-largest",
+          body: JSON.stringify({ id: read.id, result: largest }),
+        }),
+      );
+
+      assert.equal(posted.text, '{"settled":true}');
+      assert.deepEqual(yield* macCommandResult("user-largest", read.id), Option.some(largest));
     }),
   );
 
@@ -412,6 +477,93 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
 
           assert.deepEqual(read.answered, [queued]);
           assert.deepEqual(call.answered, { status: MAC_COMMAND_STATUS.RAN, ...RESULT });
+        }),
+      ),
+  );
+  it.effect(
+    "a computer read keeps the window's full copy and the app's icon beside the transcript, hands the model its own copy, and stores neither base64",
+    () =>
+      Effect.scoped(
+        Effect.gen(function* () {
+          yield* account("user-computer");
+          const db = yield* Database;
+
+          const [row] = yield* db
+            .insert(conversations)
+            .values({ userId: "user-computer", kind: CONVERSATION_KIND.AGENT })
+            .returning({ id: conversations.id });
+
+          assert.ok(row);
+          const target = { userId: "user-computer", conversationId: row.id };
+          yield* markMacListening("user-computer");
+          const shown = Buffer.from(pngBytes(640, 400, 1)).toString("base64");
+          const full = Buffer.from(pngBytes(1280, 800, 2)).toString("base64");
+          const icon = Buffer.from(pngBytes(64, 64, 3)).toString("base64");
+
+          const call = yield* wokenOnHub(
+            runComputerTool(target, { action: "get_app_state", app: "Simulator" }),
+            Effect.gen(function* () {
+              const [claimed] = yield* claimMacCommands("user-computer", new Date(0), [
+                MAC_COMMAND_KIND.COMPUTER,
+              ]);
+
+              assert.ok(claimed !== undefined && claimed.kind === MAC_COMMAND_KIND.COMPUTER);
+              assert.equal(
+                claimed.conversationId,
+                row.id,
+                "the command names the conversation that asked",
+              );
+              yield* settleMacCommand("user-computer", claimed.id, {
+                computer: {
+                  app: {
+                    name: "Simulator",
+                    bundleId: "com.apple.iphonesimulator",
+                    iconPng: icon,
+                    refused: false,
+                  },
+                  window: { title: "iPhone 18 Pro", x: 0, y: 0, width: 640, height: 400 },
+                  elements: '[0] AXWindow "iPhone 18 Pro"',
+                  truncated: false,
+                  shots: [
+                    { width: 640, height: 400, jpeg: shown },
+                    { width: 1280, height: 800, jpeg: full },
+                  ],
+                },
+              });
+            }),
+          );
+
+          const answer = unparsedWire(call.answered);
+          assert.equal(computerScreenshot(answer)?.data, shown, "the model is handed its own copy");
+          const stored = JSON.stringify(storedComputerOutput(answer));
+
+          for (const base64 of [shown, full, icon]) {
+            assert.equal(
+              stored.includes(base64),
+              false,
+              "no picture is spelled out in what is stored",
+            );
+          }
+
+          const read = Schema.decodeUnknownSync(
+            Schema.Struct({
+              app: Schema.Struct({
+                icon: Schema.Struct({ picture: Schema.Struct({ id: Schema.String }) }),
+              }),
+              kept: Schema.Struct({
+                picture: Schema.Struct({ id: Schema.String, width: Schema.Number }),
+              }),
+            }),
+          )(answer);
+
+          assert.equal(read.kept.picture.width, 1280);
+
+          for (const id of [read.kept.picture.id, read.app.icon.picture.id]) {
+            assert.ok(
+              Option.isSome(yield* readConversationPicture(row.id, id)),
+              "kept beside the transcript",
+            );
+          }
         }),
       ),
   );

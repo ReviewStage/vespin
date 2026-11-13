@@ -1,4 +1,4 @@
-// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
+// settings-form.tsx -- the app's Settings as SwiftUI's own Form: its sections' rows on the brand's surface over the sidebar's ground, an account's face and address, a value, a switch, a row that goes to a page or out of the app, a choice among a few, workspaces, or people, an act, a note such as a memory, a row whose press opens a menu of acts, and a connection such as an integration.
 
 import {
   ContextMenu,
@@ -34,23 +34,24 @@ import {
 import type { ReactElement, ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
 import { BUTTON_LOOK, Button } from "./button.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { actContent } from "./glyph-label.js";
 import { Avatar } from "./marks.js";
-import type { SfSymbol } from "./sf-symbol.js";
 import { useColors } from "./tokens/colors.js";
 import { SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
-import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-switcher.js";
+import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 
 /** An account's face in its row, larger than a list's. */
 const ACCOUNT_FACE_SIZE = 36;
 
-/** Where a `PushRow` goes, and the mark at its end that says so, as iOS's own Settings marks them. */
+/** Where a `PushRow` goes, and the mark at its end that says so, where iOS's own Settings marks them, in the panel's glyphs. */
 export const PUSH_ROW_GOES = {
-  /** A page of Settings, pushed over this one: the system's chevron. */
-  PAGE: "chevron.right",
-  /** Out of the app, to Safari or iOS's own Settings: the arrow out. */
-  OUT: "arrow.up.right",
-} as const satisfies Record<string, SfSymbol>;
+  /** A page of Settings, pushed over this one: the panel's chevron. */
+  PAGE: GLYPH.FOLDED,
+  /** Out of the app, to Safari or iOS's own Settings: the panel's arrow out. */
+  OUT: GLYPH.OPEN_EXTERNALLY,
+} as const satisfies Record<string, Glyph>;
 
 export type PushRowGoes = (typeof PUSH_ROW_GOES)[keyof typeof PUSH_ROW_GOES];
 
@@ -64,7 +65,7 @@ const GOES_MARK_SIZE = 13;
 function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
   const colors = useColors();
 
-  return <Image systemName={goes} size={GOES_MARK_SIZE} color={colors.TEXT_MUTED} />;
+  return <Image {...glyphImage(goes)} size={GOES_MARK_SIZE} color={colors.TEXT_MUTED} />;
 }
 
 /** The row's other words, joined as VoiceOver reads a value after its label; none where there are none. */
@@ -261,8 +262,8 @@ export function WorkspaceRow({
 
 type PushRowProps = {
   readonly label: string;
-  /** The glyph before the words, an SF Symbol in the muted ink. */
-  readonly symbol?: SfSymbol | undefined;
+  /** The glyph before the words, in the muted ink. */
+  readonly symbol?: Glyph | undefined;
   /** Where the row stands, at its end before the mark, such as a page's current choice. */
   readonly detail?: string | undefined;
   readonly goes: PushRowGoes;
@@ -286,7 +287,7 @@ export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRo
         modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
       >
         {symbol === undefined ? null : (
-          <Image systemName={symbol} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
+          <Image {...glyphImage(symbol)} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
         )}
         <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
         <Spacer />
@@ -368,32 +369,73 @@ export function CodeRow({ code, testId }: { readonly code: string; readonly test
 
 type ActionRowProps = {
   readonly label: string;
-  readonly symbol?: SfSymbol | undefined;
+  readonly symbol?: Glyph | undefined;
   /** Whether the act ends something, such as Sign out, which the system draws red. */
   readonly destructive?: boolean | undefined;
   /** Whether it takes no press, such as while another act on the page is out. */
   readonly disabled?: boolean | undefined;
+  /** What the row is heard as, where its words alone would be heard as another row's, such as a workspace's Settings… beside the account's; its words where none is given. */
+  readonly heard?: string | undefined;
+  /** A line under its name in the muted ink, such as why it takes no press; none for none. */
+  readonly detail?: string | undefined;
   readonly onPress: () => void;
 };
 
-/** A row a person presses to act, in the accent, or the system's red where it ends something. */
+/**
+ * A row a person presses to act, in the accent, or the system's red where it
+ * ends something; dimmed where it takes no press, with a line under its
+ * name where one is given, such as why Unfollow is out for a task's
+ * assignee.
+ */
 export function ActionRow({
   label,
   symbol,
   destructive = false,
   disabled: off = false,
+  heard = label,
+  detail,
   onPress,
 }: ActionRowProps) {
   const colors = useColors();
+  const role = destructive ? "destructive" : "default";
+
+  if (detail === undefined) {
+    return (
+      <SwiftUIButton
+        {...actContent(label, symbol)}
+        role={role}
+        onPress={onPress}
+        modifiers={[accessibilityLabel(heard), listRowBackground(colors.SURFACE), disabled(off)]}
+      />
+    );
+  }
 
   return (
     <SwiftUIButton
-      label={label}
-      {...(symbol === undefined ? {} : { systemImage: symbol })}
-      role={destructive ? "destructive" : "default"}
+      role={role}
       onPress={onPress}
-      modifiers={[listRowBackground(colors.SURFACE), disabled(off)]}
-    />
+      modifiers={[
+        listRowBackground(colors.SURFACE),
+        disabled(off),
+        accessibilityLabel(heard),
+        accessibilityValue(detail),
+      ]}
+    >
+      <HStack spacing={SPACE.ROW}>
+        {symbol === undefined ? null : <Image {...glyphImage(symbol)} />}
+        <VStack alignment="leading" spacing={1}>
+          <Text>{label}</Text>
+          <Text
+            modifiers={[
+              font({ textStyle: TYPE_ROLE.ROW_LINE }),
+              foregroundStyle(colors.TEXT_MUTED),
+            ]}
+          >
+            {detail}
+          </Text>
+        </VStack>
+      </HStack>
+    </SwiftUIButton>
   );
 }
 
@@ -407,7 +449,7 @@ type PickRowsProps = {
 };
 
 /** The picked row's check, as iOS's own Settings draws it at a row's end. */
-const PICKED_MARK = "checkmark";
+const PICKED_MARK = GLYPH.CHECK;
 
 /** The check's size, as small and heavy as the system's own. */
 const PICKED_MARK_SIZE = 15;
@@ -444,7 +486,7 @@ export function PickRows({ options, picked, onPick }: PickRowsProps) {
             <Spacer />
             {option.id === picked ? (
               <Image
-                systemName={PICKED_MARK}
+                {...glyphImage(PICKED_MARK)}
                 size={markSize}
                 color={colors.ACCENT}
                 modifiers={[font({ size: markSize, weight: "semibold" })]}
@@ -520,7 +562,7 @@ export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRows
             <Spacer />
             {workspace.id === picked ? (
               <Image
-                systemName={PICKED_MARK}
+                {...glyphImage(PICKED_MARK)}
                 size={markSize}
                 color={colors.ACCENT}
                 modifiers={[font({ size: markSize, weight: "semibold" })]}
@@ -533,10 +575,77 @@ export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRows
   );
 }
 
+/** A person a `PersonPickRows` picks among: who they are, the line under their name, and whether they may be picked. */
+export type PersonPickOption = {
+  /** Their account's id, which a pick is told. */
+  readonly id: string;
+  readonly name: string;
+  readonly picture?: string | undefined;
+  /** Their address, or why they cannot be picked, such as Following. */
+  readonly line: string | undefined;
+  readonly disabled: boolean;
+};
+
+type PersonPickRowsProps = {
+  readonly options: readonly PersonPickOption[];
+  readonly onPick: (id: string) => void;
+};
+
+/**
+ * A choice among people, each a row with their photo or letters, their name,
+ * and their line under it, a press picking them at once, as a contact
+ * picker does; one that may not be picked stands dimmed, its line saying
+ * why, such as a member who already follows a task.
+ */
+export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
+  const colors = useColors();
+
+  return (
+    <>
+      {options.map(({ id, name, picture, line, disabled: off }) => (
+        <SwiftUIButton
+          key={id}
+          onPress={() => onPick(id)}
+          modifiers={[
+            buttonStyle("plain"),
+            accessibilityLabel(name),
+            ...(line === undefined ? [] : [accessibilityValue(line)]),
+            disabled(off),
+            listRowBackground(colors.SURFACE),
+          ]}
+        >
+          <HStack
+            spacing={SPACE.ROW}
+            modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
+          >
+            <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
+            <VStack alignment="leading" spacing={1}>
+              <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
+                {name}
+              </Text>
+              {line === undefined ? null : (
+                <Text
+                  modifiers={[
+                    font({ textStyle: TYPE_ROLE.ROW_LINE }),
+                    foregroundStyle(colors.TEXT_MUTED),
+                  ]}
+                >
+                  {line}
+                </Text>
+              )}
+            </VStack>
+            <Spacer />
+          </HStack>
+        </SwiftUIButton>
+      ))}
+    </>
+  );
+}
+
 /** One thing a row's menu does, such as a member's Remove from workspace or a port's Share. */
 export interface MenuRowAct {
   readonly label: string;
-  readonly symbol?: SfSymbol | undefined;
+  readonly symbol?: Glyph | undefined;
   /** Whether it takes something away, such as Remove from workspace, which the system draws red. */
   readonly destructive?: boolean | undefined;
   readonly onPress: () => void;
@@ -604,13 +713,55 @@ export function MemberRow({ name, email, picture, role, badge, acts }: MemberRow
   );
 }
 
+type FollowerRowProps = {
+  /** Their name, or You for the reader. */
+  readonly name: string;
+  readonly picture?: string | undefined;
+  /** The muted word after their name, such as Assignee; none for none. */
+  readonly role?: string | undefined;
+  /** Whether the task's agents may use their machines, which a laptop at the row's end says. */
+  readonly machines: boolean;
+  /** What VoiceOver hears after their name and role: what agents may do on their machines. */
+  readonly heard: string;
+};
+
+/**
+ * One person following a task: their face, their name with a muted role
+ * after it, such as Assignee, and a laptop at the row's end where the task's
+ * agents may use their machines, nothing where they may not. It takes no
+ * press. VoiceOver hears it as one element, its name then its role and what
+ * agents may do there, since the laptop alone says that on screen.
+ */
+export function FollowerRow({ name, picture, role, machines, heard }: FollowerRowProps) {
+  const colors = useColors();
+
+  return (
+    <HStack
+      spacing={SPACE.ROW}
+      modifiers={[
+        listRowBackground(colors.SURFACE),
+        accessibilityElement("ignore"),
+        accessibilityLabel(name),
+        ...spokenValue(role, heard),
+      ]}
+    >
+      <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
+      <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
+      {role === undefined ? null : (
+        <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
+      )}
+      <Spacer />
+      {machines ? <Image {...glyphImage(GLYPH.MAC)} color={colors.TEXT_MUTED} /> : null}
+    </HStack>
+  );
+}
+
 /** A row menu's acts, each the system's button, red where it takes something away. */
 function RowActs({ acts }: { readonly acts: readonly MenuRowAct[] }) {
   return acts.map((act) => (
     <SwiftUIButton
       key={act.label}
-      label={act.label}
-      {...(act.symbol === undefined ? {} : { systemImage: act.symbol })}
+      {...actContent(act.label, act.symbol)}
       role={act.destructive === true ? "destructive" : "default"}
       onPress={act.onPress}
     />
@@ -620,7 +771,7 @@ function RowActs({ acts }: { readonly acts: readonly MenuRowAct[] }) {
 type MenuRowProps = {
   readonly label: string;
   /** The glyph leading it, in the muted ink. */
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   /** The line under its name in the muted ink, such as what serves a port; none for none. */
   readonly detail?: string | undefined;
   /** What stands at its end in the muted ink, such as Sharing; none for none. */
@@ -642,7 +793,7 @@ export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
 
   const face = (
     <HStack spacing={SPACE.ROW}>
-      <Image systemName={symbol} size={glyphSize} color={colors.TEXT_MUTED} />
+      <Image {...glyphImage(symbol)} size={glyphSize} color={colors.TEXT_MUTED} />
       <VStack alignment="leading" spacing={1}>
         <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
         {detail === undefined ? null : (
@@ -677,17 +828,17 @@ export function MenuRow({ label, symbol, detail, value, acts }: MenuRowProps) {
 }
 
 /** The act that takes a note away, as the system draws one: its glyph, and its role, in red. */
-const NOTE_REMOVE = { SYMBOL: "trash", ROLE: "destructive" } as const;
+const NOTE_REMOVE = { SYMBOL: GLYPH.DELETE, ROLE: "destructive" } as const;
 
 /** The glyph of the act that opens a note's words to be changed, as Notes' Edit draws it. */
-const NOTE_EDIT_SYMBOL = "pencil";
+const NOTE_EDIT_SYMBOL = GLYPH.RENAME;
 
 /** One act of a note's: its words and what a press does. */
 type NoteAct = { readonly label: string; readonly onPress: () => void };
 
 type NoteRowProps = {
-  /** The glyph before the words, an SF Symbol in the muted ink, such as a machine's kind. */
-  readonly symbol?: SfSymbol | undefined;
+  /** The glyph before the words, in the muted ink, such as a machine's kind. */
+  readonly symbol?: Glyph | undefined;
   /** The note's own words, such as a memory's, drawn whole however many lines they take. */
   readonly words: string;
   /** What it is, under its words in the body's ink, such as a skill's description. */
@@ -741,7 +892,7 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
     >
       {symbol === undefined ? null : (
-        <Image systemName={symbol} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
+        <Image {...glyphImage(symbol)} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
       )}
       {lines}
       <Spacer />
@@ -775,8 +926,7 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
   const removeAct =
     remove === undefined ? undefined : (
       <SwiftUIButton
-        label={remove.label}
-        systemImage={NOTE_REMOVE.SYMBOL}
+        {...actContent(remove.label, NOTE_REMOVE.SYMBOL)}
         role={NOTE_REMOVE.ROLE}
         onPress={remove.onPress}
       />
@@ -786,7 +936,7 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
     <ContextMenu>
       <ContextMenu.Items>
         {edit === undefined ? null : (
-          <SwiftUIButton label={edit.label} systemImage={NOTE_EDIT_SYMBOL} onPress={edit.onPress} />
+          <SwiftUIButton {...actContent(edit.label, NOTE_EDIT_SYMBOL)} onPress={edit.onPress} />
         )}
         {removeAct}
       </ContextMenu.Items>

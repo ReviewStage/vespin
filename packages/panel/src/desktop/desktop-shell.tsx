@@ -9,6 +9,7 @@ import {
   BackButton,
   COLLECTION_STATE,
   CollectionPage,
+  DetailPage,
   DrawerScrim,
   IconButton,
   NOT_FOUND_THING,
@@ -47,6 +48,8 @@ import type { AdminView } from "../admin/routing.js";
 import { useAppCommand } from "../app-commands.js";
 import { appPlatform } from "../app-platform.js";
 import { useCoarsePointer } from "../coarse-pointer.js";
+import { MERGE_QUEUE_WORDS } from "../history-titles.js";
+import { useMergeQueueOn } from "../merge-queue-route.js";
 import { NewWorkspaceSteps } from "../onboarding/new-workspace-steps.js";
 import { SETUP_GATE } from "../onboarding/setup-model.js";
 import { SetupSteps, useSetupGate } from "../onboarding/setup-steps.js";
@@ -56,6 +59,7 @@ import {
   useAutomationsDoor,
   useBoardDoor,
   useInboxDoor,
+  useMergeQueueDoor,
   usePersonDoor,
   useVersionHistoryDoor,
 } from "../places/routed-doors.js";
@@ -67,6 +71,7 @@ import { SignInGate } from "../sign-in-gate.js";
 import { ChipCards, type TaskFocus } from "../tasks/chip-cards.js";
 import { MentionedAgents } from "../tasks/mentioned-place.js";
 import { NewTaskDialog } from "../tasks/new-task-dialog.js";
+import { isOverviewTab } from "../tasks/use-main-tabs.js";
 import { useTaskLooks } from "../tasks/use-task-looks.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { appStateQuery, selectAdminAccess, selectAdminAccessPending } from "../use-app-state.js";
@@ -90,7 +95,7 @@ import { NewTaskButton } from "./new-task-button.js";
 import { NewWorkspaceOpener, useNewWorkspace } from "./new-workspace.js";
 import { OfflineMark } from "./offline-mark.js";
 import { PaneGlide } from "./pane-motion.js";
-import { PersonPageSkeleton } from "./person-frame.js";
+import { PersonPageSkeleton, RowsSkeleton } from "./person-frame.js";
 import { PhoneAccount } from "./phone-account.js";
 import { PhoneHead, phoneBar } from "./phone-head.js";
 import { PLACE_LIST, PLACE_PAGE, PLACE_SPLIT } from "./place-columns.js";
@@ -162,6 +167,9 @@ function PersonLoading({
 
   return <PersonPageSkeleton name={name} />;
 }
+
+/** What the Merge queue page's frame says it is reading while its chunk loads, as the page says it while its first read does. */
+const READING_MERGE_QUEUES = "Reading the merge queues…";
 
 /** Where Settings' way out leads where no step stands behind it, as a hint names it. */
 const TASKS_EXIT_PLACE = "tasks";
@@ -564,6 +572,8 @@ function usePlaceCommands(
   const board = useBoardDoor(tasks);
   const admin = useAdminDoor(tasks);
   const automations = useAutomationsDoor(tasks);
+  const mergeQueue = useMergeQueueDoor(tasks);
+  const mergeQueueOn = useMergeQueueOn();
   const inbox = useInboxDoor(tasks);
 
   // A chord's door moves the window first and the Tasks tab is brought forward once it lands, so the one move a page's
@@ -610,6 +620,11 @@ function usePlaceCommands(
   useAppCommand(
     APP_COMMAND.AUTOMATIONS,
     pastGate && tasks.signedIn ? () => automations.open() : undefined,
+  );
+  // The Merge queue page stands behind the account's experiment, so ⌘K offers it only while that is on.
+  useAppCommand(
+    APP_COMMAND.MERGE_QUEUE,
+    pastGate && tasks.signedIn && mergeQueueOn ? () => mergeQueue.open() : undefined,
   );
   const { onReopenClosedTab } = tasks;
   useAppCommand(
@@ -665,6 +680,10 @@ function titleSubject(
 
   if (place === ROUTED_PLACE.BOARD) {
     return { signedIn, subject: "Tasks", workspace: tasks.workspace };
+  }
+
+  if (place === ROUTED_PLACE.MERGE_QUEUE) {
+    return { signedIn, subject: MERGE_QUEUE_WORDS, workspace: tasks.workspace };
   }
 
   // A workspace not there for the reader names none, the listed one least of all.
@@ -889,6 +908,7 @@ export function DesktopShell({
     place === ROUTED_PLACE.PERSON ||
     inAutomations ||
     place === ROUTED_PLACE.BOARD ||
+    place === ROUTED_PLACE.MERGE_QUEUE ||
     place === ROUTED_PLACE.ADMIN ||
     place === ROUTED_PLACE.UNKNOWN_WORKSPACE;
 
@@ -958,8 +978,11 @@ export function DesktopShell({
   // toolbar beneath it leaves the toggle room then and only then. The
   // Automations page stands in the plan's place, so it draws
   // no panel to toggle; an agent's page draws the agent's own, and the Inbox
-  // the chosen item's task's.
-  const descriptionToggle = tasks.page === TASKS_PAGE.DOCUMENT && !standingIn;
+  // the chosen item's task's. The task's details take the panel's room too,
+  // so while they stand there is no panel to toggle either; but a panel left
+  // filling the window over them hides them too, and its toggle is the way out.
+  const detailsShown = isOverviewTab(tasks.mainTabs.tab) && !tasks.sidePanel.fullScreen;
+  const descriptionToggle = tasks.page === TASKS_PAGE.DOCUMENT && !standingIn && !detailsShown;
   // A phone's task leads its own row with the way back to the page it was opened from, named for it (`task-pane-switcher.tsx`).
   const awayLabel = awayBack(history.away, history.onLeave).label;
   const { onLeave } = history;
@@ -1339,6 +1362,15 @@ export function AutomationsRouteLoading(): React.JSX.Element {
   const automations = useAutomationsDoor(tasks);
 
   return <AutomationsLoading onExit={automations.close} room={room} />;
+}
+
+/** The Merge queue page's frame while its chunk loads. */
+export function MergeQueueRouteLoading(): React.JSX.Element {
+  return (
+    <DetailPage frame={PAGE_FRAME.PAGE} title={MERGE_QUEUE_WORDS}>
+      <RowsSkeleton label={READING_MERGE_QUEUES} />
+    </DetailPage>
+  );
 }
 
 /** A person's page's frame while its chunk loads. */

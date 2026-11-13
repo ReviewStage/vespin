@@ -77,6 +77,7 @@ export const FAILURE_SURFACE = {
   AGENT_QUEUE_CHANGE: "agent_queue.change",
   AGENT_QUEUE_DELETE: "agent_queue.delete",
   AGENT_RENAME: "agent.rename",
+  AGENT_REPLY_BUTTON_PRESS: "agent_reply_button.press",
   AGENT_REWIND: "agent.rewind",
   /** A `/clear` the service did not take: the agent's harness was not started on a fresh session. */
   AGENT_CLEAR: "agent.clear",
@@ -107,6 +108,7 @@ export const FAILURE_SURFACE = {
   BROWSER_OPEN: "browser.open",
   BUNDLE_LOAD: "bundle.load",
   CLI_INSTALL: "cli.install",
+  COMPUTER_USE_READ: "computer_use.read",
   COPY: "copy",
   DICTATION: "dictation",
   DIFF_READ: "diff.read",
@@ -141,6 +143,7 @@ export const FAILURE_SURFACE = {
   MEMORY_FORGET: "memory.forget",
   MEMORY_SAVE: "memory.save",
   MENTIONS_READ: "mentions.read",
+  MERGE_QUEUE_READ: "merge_queue.read",
   MESSAGE_EDIT: "message.edit",
   MESSAGE_REVEAL: "message.reveal",
   MODELS_READ: "models.read",
@@ -191,6 +194,8 @@ export const FAILURE_SURFACE = {
   TASKS_READ: "tasks.read",
   TASKS_REFRESH: "tasks.refresh",
   TASK_BLOCK: "task.block",
+  /** The reader's own follow of a task, unfollow, or machines switch, from its Following chip (`following-chip.tsx`). */
+  TASK_FOLLOW: "task.follow",
   TASK_PARENT: "task.parent",
   TASK_RELATION: "task.relation",
   TASK_DELETE: "task.delete",

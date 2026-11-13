@@ -37,7 +37,7 @@ import { Predicate } from "effect";
 import { Fragment, type ReactNode } from "react";
 import { useAnnounced } from "./accessibility.js";
 import { Chip } from "./button.js";
-import type { SfSymbol } from "./sf-symbol.js";
+import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -82,7 +82,7 @@ export type AnswerField = {
 /** One act under the card, such as Mark done: its words and its glyph. */
 export type AskAct = {
   readonly label: string;
-  readonly symbol: SfSymbol;
+  readonly symbol: Glyph;
   readonly onPress: () => void;
 };
 
@@ -181,7 +181,7 @@ function StepRow({
         ]}
       >
         <Image
-          systemName={ticked ? "checkmark.circle.fill" : "circle"}
+          {...glyphImage(ticked ? GLYPH.ROUND_BOX_TICKED : GLYPH.ROUND_BOX)}
           size={MARK_SIZE.LEAD}
           color={ticked ? colors.ACCENT : colors.TEXT_MUTED}
         />

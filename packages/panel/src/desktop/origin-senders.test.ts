@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import {
+  AGENT_BRIEF,
   AGENT_STATUS,
   type AgentSummary,
   type AgentTranscriptMessage,
@@ -9,7 +10,7 @@ import {
 import type { Task } from "@repo/features/task-wire";
 import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { agentTab, subagentTab } from "@repo/ui/tab-strip-model";
-import { MESSAGE_ROLE } from "@repo/wire";
+import { MESSAGE_CHANNEL, MESSAGE_ROLE, START_LINE_BRIEF } from "@repo/wire";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, test } from "vitest";
@@ -82,11 +83,15 @@ async function mount(input: {
   reader: string;
   main: MainTab | undefined;
   side?: SidePanelTab | undefined;
+  /** The agent's own transcript; its description alone where unsaid. */
+  messages?: readonly AgentTranscriptMessage[];
+  /** The agent the tab draws; the one started on the task's description where unsaid. */
+  agent?: AgentSummary;
 }): Promise<{ container: HTMLElement; chosen: (MainTab | SidePanelTab)[] }> {
   const chosen: (MainTab | SidePanelTab)[] = [];
   pushedTranscripts((transcript) => [
     {
-      messages: transcript.callId === undefined ? [BRIEF] : [],
+      messages: transcript.callId === undefined ? (input.messages ?? [BRIEF]) : [],
       cursor: "1:0",
       status: AGENT_STATUS.COMPLETED,
       title: null,
@@ -113,7 +118,7 @@ async function mount(input: {
       onChoose: (tab) => chosen.push(tab),
     },
     agents: agentsControl({
-      agents: [AGENT],
+      agents: [input.agent ?? AGENT],
       agentIds: [AGENT.id],
       me: input.reader,
     }),
@@ -173,6 +178,81 @@ test("a task's agent opens on its description sent by the task, which opens the 
   act(() => task.click());
 
   assert.deepEqual(chosen, [MAIN_TAB.OVERVIEW]);
+});
+
+test("an agent started from a suggestion opens on its card, which draws the files sent from the suggestion's draft, a file named in its words as the file's chip", async () => {
+  const started: AgentTranscriptMessage = {
+    id: "suggested",
+    role: MESSAGE_ROLE.USER,
+    parts: [
+      {
+        type: "text",
+        text: "Suggested by [@Invite flow](https://app.test/agent/a):\n\nSend the invite email as [File: flow.png] draws it.",
+      },
+      {
+        type: "file",
+        mediaType: "image/png",
+        filename: "flow.png",
+        url: "data:image/png;base64,AAAA",
+      },
+    ],
+    metadata: {
+      channel: MESSAGE_CHANNEL.START,
+      brief: START_LINE_BRIEF.PROMPT,
+      suggested_by: { agent_id: "agent-a", name: "Invite flow", button_id: "button-1" },
+    },
+    sentAt: BRIEF_SENT_AT,
+  };
+
+  const { container } = await mount({
+    reader: CHARLES.userId,
+    main: agentTab(AGENT.id),
+    messages: [started],
+    agent: { ...AGENT, brief: AGENT_BRIEF.PROMPT },
+  });
+
+  const card = container.querySelector(".agent-origin") ?? assert.fail("it opens on a card");
+
+  const words =
+    card.querySelector("[data-origin-description]") ?? assert.fail("the card has words");
+
+  // The card opens folded under its title, so its words are drawn once it is opened.
+  act(() => words.querySelector<HTMLElement>(":scope > summary")?.click());
+  await settleQueries();
+  assert.equal(words.querySelectorAll('[aria-label="Open flow.png"]').length, 1);
+  assert.ok(!words.textContent?.includes("[File: flow.png]"), "the marker is the file's chip");
+});
+
+test("an agent started blank whose first line a suggestion sent opens on that line, headed by who suggested it, never a card", async () => {
+  const sent: AgentTranscriptMessage = {
+    id: "sent",
+    role: MESSAGE_ROLE.USER,
+    parts: [
+      {
+        type: "text",
+        text: "Suggested by [@Invite flow](https://app.test/agent/a):\n\nCount invites apart.",
+      },
+    ],
+    metadata: {
+      channel: MESSAGE_CHANNEL.SUGGESTION,
+      suggested_by: { agent_id: "agent-a", name: "Invite flow", button_id: "button-2" },
+    },
+    sentAt: BRIEF_SENT_AT,
+  };
+
+  const { container } = await mount({
+    reader: CHARLES.userId,
+    main: agentTab(AGENT.id),
+    messages: [sent],
+    agent: { ...AGENT, brief: AGENT_BRIEF.BLANK },
+  });
+
+  assert.equal(container.querySelector(".agent-origin"), null);
+  assert.ok(
+    container
+      .querySelector('[data-message-id="sent"]')
+      ?.textContent?.includes("Count invites apart."),
+  );
 });
 
 test("the reader's own agent opens on its description sent by the task alone, never by them", async () => {

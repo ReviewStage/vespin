@@ -13,7 +13,15 @@ import type { FileChip } from "@repo/features/attachment-model";
 import { isVideoType, type KeptPicture } from "@repo/features/conversation-picture-wire";
 import { formatBytes } from "@repo/features/number-format";
 import { ACT_KIND } from "@repo/host/acts";
-import { isVideoDataUrl, PICTURE_SET_SHOWN, PictureSet, PictureSetTile } from "@repo/ui";
+import {
+  APP_ICON_SIZE,
+  AppIcon,
+  type AppIconSize,
+  isVideoDataUrl,
+  PICTURE_SET_SHOWN,
+  PictureSet,
+  PictureSetTile,
+} from "@repo/ui";
 import {
   PICTURE_STATE,
   type PictureState,
@@ -73,6 +81,16 @@ const AgentPicturesContext = createContext<AgentPictureDoor | undefined>(undefin
 
 /** Hands the transcript under it the door its pictures are read through. */
 export const AgentPicturesProvider = AgentPicturesContext.Provider;
+
+const ComputerIconsContext = createContext<ReadonlyMap<string, string>>(new Map());
+
+/** Hands the transcript under it the icon each of its `computer` calls wears, by its call (`computerIconsByCall`). */
+export const ComputerIconsProvider = ComputerIconsContext.Provider;
+
+/** The icon a `computer` call's row wears: the one the transcript's earlier calls lend it, or its own; none where neither kept one. */
+export function useComputerIcon(callId: string, own: string | undefined): string | undefined {
+  return useContext(ComputerIconsContext).get(callId) ?? own;
+}
 
 /**
  * The door to an agent's pictures, or a worker's where `callId` names the
@@ -149,7 +167,7 @@ interface ViewedPicture {
 }
 
 /** The viewer a set or a call's chips open: how one is opened over its pictures, and the viewer while it stands. */
-interface PictureViewer {
+export interface PictureViewer {
   readonly open: (items: readonly ViewedPicture[], id: string) => void;
   readonly viewer: ReactNode;
 }
@@ -435,6 +453,17 @@ function ShownStills({
   );
 }
 
+/**
+ * Where a call's pictures stand: under its row, open or closed, as an
+ * integration's and a browser call's do; or in its body under its answer,
+ * seen once the row is opened, as a computer call's window is, since the
+ * agent reads a window at nearly every step and shows the developer what
+ * matters itself.
+ */
+export const CALL_PICTURES_PLACE = { UNDER_ROW: "under-row", IN_BODY: "in-body" } as const;
+
+export type CallPicturesPlace = (typeof CALL_PICTURES_PLACE)[keyof typeof CALL_PICTURES_PLACE];
+
 /** What a set the agent showed is named, and what the pictures under a call's row are. */
 const SHOWN_LABEL = "Pictures the agent showed";
 const CALLED_LABEL = "Pictures the call answered";
@@ -451,14 +480,42 @@ function notKeptWords(byteCount: number): string {
  * model saw it all the same. The videos a browser call recorded stand
  * under them as a `show_image` call's would.
  */
+/** An app's icon a call kept beside the transcript, read through the transcript's door, in a call row's glyph seat; a screen's glyph stands there until it lands, and for good where no icon was kept. */
+export function KeptAppIcon({
+  id,
+  size = APP_ICON_SIZE.LINE,
+}: {
+  id: string | undefined;
+  size?: AppIconSize | undefined;
+}): ReactNode {
+  const state = useKeptPicture(id);
+
+  return <AppIcon src={state.kind === PICTURE_STATE.READY ? state.url : undefined} size={size} />;
+}
+
+/** A picture a call kept, read through the transcript's door: its state while it is read, and its bytes once they land; none is read for no id. */
+export function useKeptPicture(id: string | undefined): PictureState {
+  const door = useContext(AgentPicturesContext);
+  const read = id === undefined ? undefined : door?.read;
+
+  return usePicture(pictureQuery(door?.owner ?? "", id ?? "", read), pictureUnread);
+}
+
+/** The viewer over pictures the calls kept, opened from one of them, and the viewer while it stands; nothing opens outside the transcript's door. */
+export function useKeptPictureViewer(): PictureViewer {
+  return useViewer(useContext(AgentPicturesContext));
+}
+
 export function CallPictures({
   tool,
   input,
   output,
+  place = CALL_PICTURES_PLACE.UNDER_ROW,
 }: {
   tool: string;
   input: Parameters<typeof calledPicturesOf>[1];
   output: Parameters<typeof calledPicturesOf>[2];
+  place?: CallPicturesPlace | undefined;
 }): ReactNode {
   const door = useContext(AgentPicturesContext);
   const { open, viewer } = useViewer(door);
@@ -479,7 +536,13 @@ export function CallPictures({
   // Note that a call's set draws every picture it answered, never six and a count, because one not kept says why only on its own tile and the viewer walks none of those.
   return (
     <>
-      <div className="mt-list-gap mr-0 mb-item-gap ml-transcript-gutter">
+      <div
+        className={
+          place === CALL_PICTURES_PLACE.IN_BODY
+            ? undefined
+            : "mt-list-gap mr-0 mb-item-gap ml-transcript-gutter"
+        }
+      >
         <PictureSet label={CALLED_LABEL} count={called.length} thumbnails>
           {called.map((each, index) =>
             each.kept ? (
@@ -619,19 +682,23 @@ function useKeptChips(files: readonly MessageFileChip[]): FileChip[] {
  * (`SentWords`), and to its files' row, which leaves those out; a press opens
  * a file over the window, walking the files in the order the words name
  * them. A line whose words name none of its files, as every line sent before
- * markers, draws as it did.
+ * markers, draws as it did. While the line is on its way, its files wear the
+ * upload's cover.
  */
 export function MessageFiles({
   message,
   words,
+  sending = false,
   children,
 }: {
   message: AgentTranscriptMessage;
   words: string;
+  /** Whether the line is still on its way, its row not yet read back. */
+  sending?: boolean;
   children: ReactNode;
 }): ReactNode {
   return (
-    <WordFilesOf files={messageFileChips(message)} words={words}>
+    <WordFilesOf files={messageFileChips(message)} words={words} sending={sending}>
       {children}
     </WordFilesOf>
   );
@@ -646,13 +713,16 @@ export function MessageFiles({
 export function WordFilesOf({
   files,
   words,
+  sending = false,
   children,
 }: {
   files: readonly MessageFileChip[];
   words: string;
+  /** Whether the line is still on its way, its files going up with it. */
+  sending?: boolean;
   children: ReactNode;
 }): ReactNode {
-  const shown = useWordFiles(useKeptChips(files), words);
+  const shown = useWordFiles(useKeptChips(files), words, sending);
 
   if (shown.named === undefined) return children;
 

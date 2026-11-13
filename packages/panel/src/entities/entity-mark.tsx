@@ -7,8 +7,9 @@ import {
   type EntityOf,
   type KnownNames,
 } from "@repo/features/entity-kind";
+import type { LinkStanding } from "@repo/features/link-standing-model";
 import { workspaceOfSlug } from "@repo/features/workspace-wire";
-import { ProviderMark } from "@repo/ui";
+import { AppIcon, ProviderMark } from "@repo/ui";
 import { ACTOR_KIND, ACTOR_STATE, type Actor, APP_ACTOR } from "@repo/ui/actor-model";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
@@ -21,12 +22,12 @@ import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { FileTypeIcon } from "../tasks/file-type-icon.js";
 import { InboxItemChipGlyph } from "../tasks/inbox-item-chip.js";
 import { IssueMark } from "../tasks/issue-mark.js";
+import { useMacAppIcon } from "../tasks/mac-apps.js";
 import { ReadAgentModel } from "../tasks/mentioned-agent-card.js";
 import { PullRequestMark } from "../tasks/pull-request-mark.js";
 import { SkillMark } from "../tasks/skill-ref.js";
 import { AgentGlyph, AgentMark, PlanGlyph } from "../tasks/tab-look.js";
 import { useAgentStatus, useTaskStatus } from "../tasks/use-known-names.js";
-import type { LinkStanding } from "../tasks/use-link-standing.js";
 import { appStateQuery, selectWorkspaces } from "../use-app-state.js";
 import { EntityGlyph } from "./entity-glyph.js";
 
@@ -190,6 +191,11 @@ function WorkspaceMark({ slug }: { slug: string }): React.JSX.Element {
   return <WorkspaceTile workspace={listed ?? { id: slug, name: slug }} size={TILE_SIZE.INLINE} />;
 }
 
+/** An app on the developer's Mac by its icon, as this Mac draws it; a screen's glyph where the window reads none. */
+function MacAppMark({ app }: { app: string }): React.JSX.Element {
+  return <AppIcon src={useMacAppIcon(app)} />;
+}
+
 /** An automation's mark, or one of its runs': the automation's tile. */
 const AUTOMATION_MARK: EntityMark<
   EntityOf<typeof ENTITY_KIND.AUTOMATION | typeof ENTITY_KIND.AUTOMATION_RUN>
@@ -250,6 +256,7 @@ const ENTITY_MARK: EntityMarks = {
   [ENTITY_KIND.REPOSITORY]: () => <EntityGlyph kind={ENTITY_KIND.REPOSITORY} />,
   [ENTITY_KIND.WORKSPACE]: (workspace) => <WorkspaceMark slug={workspace.workspace} />,
   [ENTITY_KIND.DATE]: () => <EntityGlyph kind={ENTITY_KIND.DATE} />,
+  [ENTITY_KIND.MAC_APP]: (macApp) => <MacAppMark app={macApp.app} />,
 };
 
 /** An entity's mark drawn through its kind's own entry. */

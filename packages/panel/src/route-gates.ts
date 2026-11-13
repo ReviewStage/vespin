@@ -184,6 +184,13 @@ export function versionHistoryRouteStands(access: RouteAccess, workspace: string
   );
 }
 
+/** Whether the Merge queue page stands: under one of the reader's workspaces, while the account's Merge queue experiment is on, which waits on its settings while they are unread. */
+export function mergeQueueRouteStands(workspace: string, access: RouteAccess): boolean {
+  if (!workspaceRouteStands(workspace, access)) return false;
+
+  return !access.experimentsRead || experimentOn(access.experiments, EXPERIMENT.MERGE_QUEUE);
+}
+
 /** The same path under the workspace whose address step is `workspace`, in place of the step it names first. */
 export function pathUnder(pathname: string, workspace: string): string {
   const [, , ...rest] = pathname.split("/");

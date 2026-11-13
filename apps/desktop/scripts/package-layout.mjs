@@ -20,6 +20,17 @@ export const NATIVE_HELPERS = [
     binary: "open-login-items",
     frameworks: ["ServiceManagement"],
   },
+  {
+    source: "ComputerUse.swift",
+    binary: "mac-computer-use",
+    frameworks: [
+      "AppKit",
+      "ApplicationServices",
+      "ImageIO",
+      "ScreenCaptureKit",
+      "UniformTypeIdentifiers",
+    ],
+  },
 ];
 
 /**

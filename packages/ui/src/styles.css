@@ -51,6 +51,7 @@
 @import "./components/hold-press/hold-press.css";
 @import "./components/inline-ref/inline-ref.css";
 @import "./components/rolling-number/rolling-number.css";
+@import "./components/port-table/port-table.css";
 @import "./components/prose/prose.css";
 @import "./marks/harness-mark.css";
 @import "./marks/product-mark.css";
@@ -60,10 +61,12 @@
 @import "./components/public-page/public-page.css";
 @import "./components/saved-tick/saved-tick.css";
 @import "./components/pdf-pages/pdf-pages.css";
+@import "./components/upload-cover/upload-cover.css";
 @import "./components/video-player/video-player.css";
 @import "./components/time/time.css";
 @import "./components/toast/toast.css";
 @import "./components/toolbar/toolbar.css";
+@import "./components/track-list/track-list.css";
 @import "./components/checkbox/checkbox.css";
 @import "./components/choice-list/choice-list.css";
 @import "./components/readable-controls/readable-controls.css";

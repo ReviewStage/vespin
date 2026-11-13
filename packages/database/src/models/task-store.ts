@@ -33,7 +33,7 @@ import {
   UNKNOWN_AGENT_LABEL,
   UNTITLED_TASK_NAME,
 } from "@repo/features/task-wire";
-import { and, desc, eq, gte, inArray, isNull, type SQL, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, isNull, type SQL, sql } from "drizzle-orm";
 import { Data, DateTime, Effect, Option, Schema } from "effect";
 import { SqlClient, SqlSchema } from "effect/sql";
 import {
@@ -65,6 +65,7 @@ import {
   readTaskBlocks,
   taskBlockedFor,
 } from "./task-block-store.js";
+import { followReassignedTask, followStartedTask } from "./task-follower-store.js";
 import { forwardTaskNumber } from "./task-number-store.js";
 import {
   isWorkspaceMember,
@@ -1337,6 +1338,8 @@ export function createTaskCommitted(
           Effect.catchTag("NoSuchElementError", (missing) => Effect.die(missing)),
         );
 
+        yield* followStartedTask({ taskId: row.id, starterId: userId, assigneeId: row.assigneeId });
+
         return { task: yield* storedTaskOf(userId, row), txid };
       }),
     ),
@@ -1379,6 +1382,11 @@ export function createTaskCommittedOnce(
 
         if (Option.isSome(inserted)) {
           const { txid, ...row } = inserted.value;
+          yield* followStartedTask({
+            taskId: row.id,
+            starterId: userId,
+            assigneeId: row.assigneeId,
+          });
 
           return { task: yield* storedTaskOf(userId, row), txid, made: true };
         }
@@ -1405,13 +1413,22 @@ export function createTaskOnce(
   userId: string,
   started: NewTask & { readonly id: string; readonly text: string },
 ): Effect.Effect<Option.Option<Task>, TaskStoreFailure | TaskAssigneeNotMember, DatabaseServices> {
-  return Effect.gen(function* () {
-    yield* assigneeAdmitted(started.assigneeId, started.organizationId);
-    const values = yield* insertOf(userId, started);
-    const row = yield* insertTaskOnce(values);
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.gen(function* () {
+        yield* assigneeAdmitted(started.assigneeId, started.organizationId);
+        const values = yield* insertOf(userId, started);
+        const row = yield* insertTaskOnce(values);
 
-    return yield* Effect.transposeOption(Option.map(row, (made) => taskOf(userId, made)));
-  });
+        if (Option.isSome(row)) {
+          const { id: taskId, assigneeId } = row.value;
+          yield* followStartedTask({ taskId, starterId: userId, assigneeId });
+        }
+
+        return yield* Effect.transposeOption(Option.map(row, (made) => taskOf(userId, made)));
+      }),
+    ),
+  );
 }
 
 /**
@@ -2113,6 +2130,15 @@ export function updateTaskCommitted<E = never, R = never, RA = never>(
         const txid =
           written ?? Option.getOrUndefined(pinned)?.txid ?? Option.getOrUndefined(marked)?.txid;
 
+        // A new assignee follows the task with their machines on; the one before keeps following with theirs off.
+        if (columns.assigneeId !== undefined) {
+          yield* followReassignedTask({
+            taskId,
+            assigneeId: columns.assigneeId,
+            previousAssigneeId: locked.value.assigneeId,
+          });
+        }
+
         // A task moved to another workspace takes its agents and items with it, and leaves its sections and blocks.
         const followed = Effect.gen(function* () {
           if (changes.organizationId === undefined) return;
@@ -2278,7 +2304,15 @@ export function assignUnassignedTaskCommitted(
   userId: string,
   taskId: string,
 ): TaskStoreEffect<Option.Option<{ readonly txid: string }>> {
-  return assignUnassigned({ userId, taskId });
+  return Effect.flatMap(SqlClient.SqlClient, (client) =>
+    client.withTransaction(
+      Effect.tap(assignUnassigned({ userId, taskId }), (assigned) =>
+        Option.isNone(assigned)
+          ? Effect.void
+          : followReassignedTask({ taskId, assigneeId: userId, previousAssigneeId: null }),
+      ),
+    ),
+  );
 }
 
 /**
@@ -2447,5 +2481,47 @@ export function deleteTaskCommitted(
         return Option.some({ txid: removed.value.txid });
       }),
     ),
+  );
+}
+
+/**
+ * The repositories the workspace's tasks work in that the account sees, each
+ * once whatever its case, the one a task changed most recently first, at
+ * most as many as asked: what a read across the workspace's repositories,
+ * such as their merge queues, asks GitHub about.
+ */
+const findWorkspaceTaskRepositories = SqlSchema.findAll({
+  Request: Schema.Struct({
+    userId: Schema.String,
+    workspaceId: Schema.String,
+    limit: Schema.Number,
+  }),
+  Result: Schema.Struct({ repository: Schema.String }),
+  execute: ({ userId, workspaceId, limit }) =>
+    Database.use((db) =>
+      db
+        .select({ repository: sql<string>`min(${task.repository})` })
+        .from(task)
+        .where(
+          and(
+            eq(task.organizationId, workspaceId),
+            taskReachableBy(userId),
+            isNotNull(task.repository),
+          ),
+        )
+        .groupBy(sql`lower(${task.repository})`)
+        .orderBy(desc(sql`max(${task.updatedAt})`))
+        .limit(limit),
+    ),
+});
+
+/** The repositories the workspace's tasks the account sees work in, most recently changed first, at most `limit`; none for a workspace the account is not in. */
+export function readWorkspaceTaskRepositories(
+  userId: string,
+  workspaceId: string,
+  limit: number,
+): TaskStoreEffect<readonly string[]> {
+  return Effect.map(findWorkspaceTaskRepositories({ userId, workspaceId, limit }), (rows) =>
+    rows.map((row) => row.repository),
   );
 }

@@ -10,7 +10,7 @@ import { MARKDOWN_LOOK, Markdown, type MarkdownProps, markdownStep, TaskBox } fr
 
 /**
  * markdown.test.ts -- the one renderer as a place meets it: a note draws its
- * headings as paragraphs, its pictures as their words, and raw HTML as text;
+ * headings as paragraphs, its pictures as their words, and raw HTML as text, a block of it its own paragraph;
  * a document draws real headings and no root of its own; a line draws its
  * inline Markdown and its blocks' words as one run with no root; a
  * transcript's line draws its blocks' words on one line; a step a place
@@ -62,15 +62,16 @@ function stamp(answer: () => string) {
   };
 }
 
-test("a note draws its headings as paragraphs at their level, its pictures as their words, and raw HTML as text", () => {
+test("a note draws its headings as paragraphs at their level, its pictures as their words, and raw HTML as text, a block of it a paragraph of its own", () => {
   const html = markup({
     look: MARKDOWN_LOOK.NOTE,
-    words: "## Goal\n\n![a plan](https://example.com/a.png) and <b>bold</b>",
+    words:
+      "## Goal\n\n![a plan](https://example.com/a.png) and <b>bold</b>\n\n<details>More</details>",
   });
 
   assert.equal(
     html,
-    '<div class="ui-markdown ui-markdown-flow ui-prose"><p class="ui-markdown-heading" data-level="2">Goal</p>\n<p>a plan and &lt;b&gt;bold&lt;/b&gt;</p></div>',
+    '<div class="ui-markdown ui-markdown-flow ui-prose"><p class="ui-markdown-heading" data-level="2">Goal</p>\n<p>a plan and &lt;b&gt;bold&lt;/b&gt;</p>\n<p>&lt;details&gt;More&lt;/details&gt;</p></div>',
   );
 });
 

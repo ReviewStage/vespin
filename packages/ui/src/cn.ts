@@ -282,7 +282,7 @@ const PANEL_INBOX = {
 /**
  * The names the chips and media block of the theme adds (attachment chip,
  * picture set and tile, page thumb, video player, provider button, composer
- * frame), by the group tailwind-merge reads each in.
+ * frame, call bar), by the group tailwind-merge reads each in.
  */
 const CHIPS_MEDIA = {
   text: ["label-inline"],
@@ -295,6 +295,7 @@ const CHIPS_MEDIA = {
     "attachment-chip-remove",
     "attachment-chip-remove-out",
     "attachment-chip-thumb",
+    "call-row",
     "icon-12",
     "icon-16",
     "page-thumb-row",

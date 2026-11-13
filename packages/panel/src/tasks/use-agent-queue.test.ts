@@ -17,6 +17,7 @@ import { afterEach, beforeEach, test, vi } from "vitest";
 import { pictureNow } from "../picture-query.js";
 import { fakeActPort, fakeAppBridge } from "../testing/app-bridge.js";
 import { testQueryClientNow, withQueryClient } from "../testing/copy-feedback.js";
+import { outboxed, resetOutbox, unsendOutbox, useOutbox } from "../testing/outbox.js";
 import { STANDING_TOAST } from "../testing/toast.js";
 import { ToastHost } from "../toast.js";
 import { useAgentPictureDoor } from "./agent-pictures.js";
@@ -27,6 +28,9 @@ import {
   useAgentQueue,
   useQueueEditing,
 } from "./use-agent-queue.js";
+
+// Each test's host starts with no message on its way.
+beforeEach(resetOutbox);
 
 /**
  * An agent's queue as its tab changes it; the host draws each change over
@@ -64,10 +68,12 @@ function Tab(): ReactNode {
   const [page, setPage] = useState<AgentQueue | undefined>();
 
   const composer = useAgentComposer({
+    sending: useOutbox("agent-1"),
+    unsend: unsendOutbox,
     agentId: "agent-1",
     taskId: "plan-1",
     messages: [],
-    send: () => new Promise(ignore),
+    send: outboxed(() => new Promise(ignore)),
   });
 
   const queue = useAgentQueue("agent-1", page);

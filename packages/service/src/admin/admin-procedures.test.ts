@@ -23,6 +23,7 @@ import type {
   AdminWorkspaceDetail,
   AdminWorkspaceList,
 } from "@repo/features/admin-answer-wire";
+import type { AdminCatalog } from "@repo/features/admin-catalog-wire";
 import type { AdminCost } from "@repo/features/admin-cost-wire";
 import { ADMIN_ERROR, ADMIN_USERS_SEARCH_MAX_LENGTH } from "@repo/features/admin-wire";
 import { type Context, Effect, Layer, Logger } from "effect";
@@ -51,6 +52,7 @@ function answerOf<Answer>(marker: { readonly generatedAt: number }): Answer {
   return marker as Answer;
 }
 
+const CATALOG = answerOf<AdminCatalog>({ generatedAt: 7 });
 const METRICS = answerOf<AdminMetrics>({ generatedAt: 1 });
 const COST = answerOf<AdminCost>({ generatedAt: 2 });
 const RELIABILITY = answerOf<AdminReliability>({ generatedAt: 3 });
@@ -72,6 +74,7 @@ function seams(asked: string[], viewer: AdminViewer | null = ADMIN): AdminProced
 
   return {
     resolveViewer: () => Effect.succeed(viewer ?? undefined),
+    readCatalog: () => record("catalog", CATALOG),
     readMetrics: (_now, scope, windowDays) => record(`metrics ${scope} ${windowDays}`, METRICS),
     readCost: (_now, scope, windowDays) => record(`cost ${scope} ${windowDays}`, COST),
     readUsers: (now, scope, viewerId, windowDays, search) =>
@@ -204,6 +207,7 @@ it.effect("nothing behind the gate runs for a caller it refuses, a write include
     const asked: string[] = [];
 
     for (const path of [
+      "/api/admin/catalog",
       "/api/admin/metrics",
       "/api/admin/cost",
       "/api/admin/reliability",

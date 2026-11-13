@@ -72,7 +72,8 @@ struct InboxWidgetView: View {
     case .systemMedium: MediumInbox(snapshot: snapshot)
     case .accessoryCircular: CircularInbox(snapshot: snapshot)
     case .accessoryRectangular: RectangularInbox(snapshot: snapshot)
-    case .accessoryInline: Label(snapshot?.countText ?? "Vespin", systemImage: "tray")
+    case .accessoryInline:
+      Label { Text(snapshot?.countText ?? "Vespin") } icon: { Image("Inbox") }
     default: SmallInbox(snapshot: snapshot)
     }
   }
@@ -159,7 +160,7 @@ struct CircularInbox: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      Image(systemName: "tray").font(.caption)
+      Image("Inbox").font(.caption)
       Text(snapshot.map { "\($0.waiting)" } ?? "–")
         .font(.title2.weight(.semibold))
         .monospacedDigit()
@@ -177,7 +178,7 @@ struct RectangularInbox: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 1) {
-      Label(snapshot?.countText ?? "Vespin", systemImage: "tray")
+      Label { Text(snapshot?.countText ?? "Vespin") } icon: { Image("Inbox") }
         .font(.headline)
         .widgetAccentable()
         .lineLimit(1)
@@ -203,7 +204,7 @@ struct InboxHeading: View {
       ? AnyLayout(HStackLayout(alignment: .firstTextBaseline, spacing: 6))
       : AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
     layout {
-      Label("Inbox", systemImage: "tray")
+      Label { Text("Inbox") } icon: { Image("Inbox") }
         .font(.subheadline.weight(.semibold))
         .foregroundStyle(Color("Text"))
         .lineLimit(1)
@@ -261,8 +262,8 @@ struct AskGlyph: View {
     Group {
       switch ask {
       case "decide": Image("Split")
-      case "do": Image(systemName: "checkmark.square")
-      case "answer": Image(systemName: "pencil.line")
+      case "do": Image("SquareCheck")
+      case "answer": Image("PenLine")
       default: Color.clear.frame(width: 1, height: 1)
       }
     }

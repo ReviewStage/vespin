@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { LUCIDE_SYMBOL_TEMPLATES } from "@repo/brand/lucide-symbols";
 import { BRAND_PALETTE } from "@repo/brand/palette";
 import { CLAWD_PATH, GITHUB_PATH, GOOGLE_MARK_LAYERS } from "@repo/brand/provider-marks";
+import { TASK_STATUS_SYMBOL_TEMPLATES } from "@repo/brand/task-status-symbols";
 import type { SentryEnvironment } from "@repo/host/sentry-environment";
 import { Predicate } from "effect";
 import type { ConfigContext, ExpoConfig } from "expo/config";
@@ -204,8 +205,9 @@ const STOP_AGENT_INTENT: ExtensionFile = { FROM: "live-activity", NAME: "StopAge
 // The widget extension that draws the member's running agents as a Live
 // Activity, and the Inbox widget from the snapshot the app keeps in the App
 // Group. Its attributes are the app's module's own file, since ActivityKit
-// matches the app's activity to the widget's by the type's name. The Inbox
-// widget leads a decide with Lucide's Split, as the app's Inbox row does.
+// matches the app's activity to the widget's by the type's name. Its glyphs
+// are the panel's own Lucide ones, as the app's are: the Inbox's, and the
+// asks' Split, SquareCheck and PenLine, as the app's Inbox row leads them.
 const LIVE_ACTIVITY: AppExtension = {
   TARGET: "AgentsLiveActivity",
   BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.AgentsLiveActivity`,
@@ -225,13 +227,15 @@ const LIVE_ACTIVITY: AppExtension = {
     Text: "TEXT",
     TextMuted: "TEXT_MUTED",
   },
-  SYMBOLS: ["Split"],
+  SYMBOLS: ["Inbox", "Split", "SquareCheck", "PenLine"],
   ENTITLEMENTS: APP_GROUP_ENTITLEMENTS,
 };
 
 // The share extension: the system's share sheet offers the app for text and
 // a web link, and its sheet keeps what was shared as New task's draft
-// (`share-extension/`), named in the share sheet as the app is.
+// (`share-extension/`), named in the share sheet as the app is. A started
+// task wears Lucide's CircleCheck and a picture's remove its X, as the
+// panel draws them.
 const SHARE_EXTENSION: AppExtension = {
   TARGET: "ShareExtension",
   BUNDLE_IDENTIFIER: `${BUNDLE_IDENTIFIER}.ShareExtension`,
@@ -255,6 +259,7 @@ const SHARE_EXTENSION: AppExtension = {
     },
   },
   COLORS: { AccentColor: "ACCENT" },
+  SYMBOLS: ["CircleCheck", "X"],
   ENTITLEMENTS: {
     ...APP_GROUP_ENTITLEMENTS,
     [KEYCHAIN_GROUPS_ENTITLEMENT]: [SHARE_KEYCHAIN_GROUP],
@@ -302,9 +307,10 @@ const SENTRY_LAUNCH_ENVIRONMENT: SentryEnvironment = SENTRY.RELEASED ? "producti
 // starts the native half again on its own options, and off for a fixture run.
 // Note that the JavaScript filters cannot reach this window, so it sends only
 // what a native crash report holds, with no request breadcrumbs. A build
-// without a DSN, a local or simulator one, still starts the native half, so
-// it runs the launch TestFlight's does, but sends nothing: `enabled` is off,
-// and were the empty DSN refused, the start's fallback would hold no DSN.
+// without a DSN, a local or simulator one, starts nothing natively: the empty
+// DSN is refused, and so is the start's `{}` fallback, which left the SDK
+// starting on no options at all and faulting at launch, so the patched
+// `RNSentrySDK` returns instead (`pnpm-workspace.yaml`'s patch for it).
 const SENTRY_LAUNCH_OPTIONS = {
   dsn: SENTRY.DSN,
   enabled: SENTRY.DSN !== "",
@@ -535,6 +541,16 @@ const withAppExtension = (config: ExpoConfig, extension: AppExtension): ExpoConf
     (extension.SYMBOLS ?? []).includes(name),
   );
 
+  // Note that a name with no template would leave the Swift's `Image(name)` blank on a device, so the prebuild refuses it.
+  const missing = (extension.SYMBOLS ?? []).filter(
+    (name) => !symbols.some((symbol) => symbol.name === name),
+  );
+
+  if (missing.length > 0)
+    throw new Error(
+      `${extension.TARGET} names Lucide symbols with no template: ${missing.join(", ")}`,
+    );
+
   const catalogued = colors.length > 0 || symbols.length > 0;
 
   const written = withDangerousMod(config, [
@@ -749,7 +765,8 @@ const withImageSets = (config: ExpoConfig): ExpoConfig =>
         writeFileSync(join(imageSet, "Contents.json"), `${JSON.stringify(contents, null, 2)}\n`);
       }
 
-      for (const { name, svg } of LUCIDE_SYMBOL_TEMPLATES) writeSymbolSet(catalog, name, svg);
+      for (const { name, svg } of [...LUCIDE_SYMBOL_TEMPLATES, ...TASK_STATUS_SYMBOL_TEMPLATES])
+        writeSymbolSet(catalog, name, svg);
 
       return modConfig;
     },

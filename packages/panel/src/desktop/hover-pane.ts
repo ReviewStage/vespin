@@ -30,6 +30,18 @@ const alwaysFloats = () => true;
 /** The layers that answer their own Escape before a floating pane is put away. */
 export const KEY_LAYERS = '[role="menu"], [role="dialog"], [role="alertdialog"]';
 
+/**
+ * A control whose popup stands open: a popover's or a menu's button, which
+ * says so while the layer it raised stands. A fold's header says it is
+ * expanded too, but raises no popup.
+ */
+const POPUP_OPEN = '[aria-haspopup]:not([aria-haspopup="false"])[aria-expanded="true"]';
+
+/** Whether a popup raised from a control in `pane` still stands open. */
+function raisesPopup(pane: HTMLElement): boolean {
+  return pane.querySelector(POPUP_OPEN) !== null;
+}
+
 /** A pane's float as its owner holds it. */
 export interface FloatState {
   readonly state: PaneFloat;
@@ -54,7 +66,11 @@ export interface HoverPane {
 /**
  * The floating pane's doors: the pointer leaving a peek puts it away, though
  * not for the box `stays` names, where its toggle stands, nor for a menu or
- * a dialog it raised, and Escape puts it away while no menu in it took the
+ * a dialog it raised, nor while a popup raised from it stands open, since a
+ * popup holds what it was raised from: the peek goes once that popup does,
+ * unless the pointer is back over it, so a popup never hangs from a pane
+ * gone from under it, wherever the pointer left for, another app's window
+ * among them. Escape puts it away while no menu in it took the
  * key first, wherever the keyboard stands, a peek leaving it in the work
  * under it. Nothing keeps a pane floating past those: a press in a peek
  * leaves it a peek, as Linear's sidebar is. Opened from away, or from a peek
@@ -128,6 +144,51 @@ export function useHoverPane(
     focusAt(held)?.focus();
   }, [state, focusAt, ref]);
   useEffect(() => () => onState(PANE_FLOAT.CLOSED), [onState]);
+  // A peek whose popup goes while the pointer is away from it goes too,
+  // wherever the pointer went meanwhile: into the popup, which React counts
+  // as inside the pane and so tells it no leave, or out of the window. Note
+  // that the popup's own control says when it goes, its button's
+  // `aria-expanded`, or by leaving the pane altogether, so the pane's own
+  // attributes and children are all that is watched. Where the pointer
+  // stands is the last element it came over, none once it left the window.
+  useEffect(() => {
+    const held = ref.current;
+
+    if (state !== PANE_FLOAT.PEEK || held === null) return;
+    let over = false;
+    let raised = raisesPopup(held);
+
+    const came = (event: PointerEvent) => {
+      over = event.target instanceof Node && held.contains(event.target);
+    };
+
+    const left = (event: PointerEvent) => {
+      if (event.relatedTarget === null) over = false;
+    };
+
+    const settle = () => {
+      const was = raised;
+      raised = raisesPopup(held);
+
+      if (was && !raised && !over) onState(PANE_FLOAT.CLOSED);
+    };
+
+    const watch = new MutationObserver(settle);
+    watch.observe(held, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["aria-expanded"],
+    });
+    document.addEventListener("pointerover", came);
+    document.addEventListener("pointerout", left);
+
+    return () => {
+      watch.disconnect();
+      document.removeEventListener("pointerover", came);
+      document.removeEventListener("pointerout", left);
+    };
+  }, [state, onState, ref]);
   // Note that only Tab is held, the keyboard walking out of the pane brought
   // back to its start once it has landed outside, since a focus moved back
   // while it is still leaving is overtaken by the one in flight; a focus the
@@ -216,6 +277,10 @@ export function useHoverPane(
 
       // A menu or a dialog the pane raised stands outside it, and is no way out either.
       if (to instanceof Element && (to.closest(stays) ?? to.closest(KEY_LAYERS)) !== null) return;
+      // A popup raised from it holds it, until that popup goes.
+      const held = ref.current;
+
+      if (held !== null && raisesPopup(held)) return;
       onState(PANE_FLOAT.CLOSED);
     },
     onKeyDown: (event) => {

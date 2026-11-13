@@ -502,11 +502,11 @@ function closing(mark: InlineMark): string {
 
 type CodeFencesResult = { fence: string; pad: string };
 
-/** Code's words between fences longer than any run of backticks in them, padded where they start or end in a backtick or stand between spaces. */
+/** Code's words between fences longer than any run of backticks in them, padded where they hold a backtick, as `prosemirror-markdown` writes them, or stand between spaces. */
 function codeFences(words: string): CodeFencesResult {
   const longest = Math.max(0, ...(words.match(TICK_RUNS) ?? []).map((run) => run.length));
   const between = words.startsWith(SPACE) && words.endsWith(SPACE) && words.trim() !== "";
-  const pad = words.startsWith(TICK) || words.endsWith(TICK) || between ? SPACE : "";
+  const pad = longest > 0 || between ? SPACE : "";
 
   return { fence: TICK.repeat(longest + 1), pad };
 }

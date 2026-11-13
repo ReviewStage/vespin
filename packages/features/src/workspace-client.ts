@@ -15,6 +15,7 @@ import { spelledFailure } from "./hosted-failure.js";
 import { type HostedClient, hostedClient } from "./hosted-link.js";
 import { type ImageBody, imageBodyOf, imageBodyUnread } from "./image-body.js";
 import type { AnyLiveRead, LiveReadAsked } from "./live-read.js";
+import type { MergeQueueAnswer } from "./merge-queue-wire.js";
 import {
   type WorkspaceSentry,
   workspaceSentryDisconnectRequestSchema,
@@ -48,7 +49,6 @@ import {
   workspaceInviteRequestSchema,
 } from "./workspace-invitation-wire.js";
 import {
-  type RepositoryScriptKind,
   type RunActionPut,
   type WorkspaceSandboxSetupAnswer,
   workspaceInstallScriptPutRequestSchema,
@@ -520,6 +520,16 @@ export class HostedWorkspaceClient {
     );
   }
 
+  /** Every pull request GitHub's merge queues hold across the workspace's repositories, to a member with the Merge queue experiment on. */
+  mergeQueue(
+    workspaceId: string,
+  ): Effect.Effect<WorkspaceCallResult<MergeQueueAnswer>, never, HttpClient.HttpClient> {
+    return resultOf(
+      hostedCall(this.#hosted.workspaceMergeQueue.read, { workspaceId }),
+      (answer) => answer,
+    );
+  }
+
   /** The workspace's cloud sandbox setup, its install script and each repository's setup script, as any member reads it. */
   sandboxSetup(
     workspaceId: string,
@@ -547,19 +557,17 @@ export class HostedWorkspaceClient {
     );
   }
 
-  /** A repository's setup script, or its archive script where `kind` names it, saved by an owner or admin, an empty one removing it, answering the setup as it then stands; a script the service would refuse by shape never travels. */
+  /** A repository's setup script saved by an owner or admin, an empty one removing it, answering the setup as it then stands; a script the service would refuse by shape never travels. */
   putRepositorySetup(
     workspaceId: string,
     repository: string,
     script: string,
-    kind?: RepositoryScriptKind,
   ): Effect.Effect<WorkspaceCallResult<WorkspaceSandboxSetupAnswer>, never, HttpClient.HttpClient> {
     const admitted = Result.getOrUndefined(
       readEither(workspaceRepositorySetupPutRequestSchema)({
         workspaceId,
         repository,
         script,
-        ...(kind === undefined ? undefined : { kind }),
       }),
     );
 

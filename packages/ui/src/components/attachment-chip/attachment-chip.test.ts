@@ -13,7 +13,8 @@ import { ATTACHMENT_CHIP_STATE, AttachmentChip } from "./attachment-chip.js";
  * pointer or keyboard and refuses while unavailable, a reader hears each
  * control by the file's name, and a file still read or failed opens nothing.
  * A file on its way up is heard as uploading, at its share where one is
- * known, and opens nothing until it is up.
+ * known, and opens nothing until it is up; one whose upload failed and may
+ * go again is its Retry, hanging why.
  */
 
 const PICTURE = "data:image/png;base64,iVBORw0KGgo=";
@@ -250,6 +251,30 @@ test("a file going up with no share known is an indeterminate meter", () => {
   assert.equal(meter.getAttribute("aria-label"), "Uploading shot.png");
   assert.equal(meter.hasAttribute("aria-valuenow"), false);
   assert.equal(list.querySelector("img")?.getAttribute("alt"), "shot.png");
+});
+
+test("an upload that failed and may go again is its Retry, taken off from its corner, and opens nothing", () => {
+  const pressed: string[] = [];
+
+  const list = drawn({
+    name: "spec.pdf",
+    detail: "12 KB",
+    state: ATTACHMENT_CHIP_STATE.FAILED,
+    failure: "The PDF could not be uploaded.",
+    onOpen: () => assert.fail("a failed chip opens nothing"),
+    onRetry: () => pressed.push("retry"),
+    onRemove: () => pressed.push("remove"),
+  });
+
+  assert.deepEqual(buttonNames(list), ["Retry spec.pdf", "Remove spec.pdf"]);
+  pressByKeyboard(button(list, "Retry spec.pdf"));
+  act(() => button(list, "Remove spec.pdf").click());
+  assert.deepEqual(pressed, ["retry", "remove"]);
+  hover(list.querySelector("li") ?? assert.fail("a chip"));
+  assert.equal(
+    document.querySelector("[role=tooltip]")?.textContent,
+    "The PDF could not be uploaded.",
+  );
 });
 
 test("a file that lands while drawn opens", () => {

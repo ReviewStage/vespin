@@ -75,7 +75,10 @@ builds a control of its own.
   request an agent opened stands under its call as `PullRequestCard`, as the
   task list holds it now. A page an agent showed is `SealedPage`, the app's
   one web view, handed the page's HTML sealed by `@repo/features/sealed-page`. `Pressable`,
-  `TextInput`, and the rest of React Native's controls appear only here.
+  `TextInput`, and the rest of React Native's controls appear only here. SwiftUI standing inside those views, such as a message's long press
+  menu, a call's glyph, or a pull request card in a transcript, stands in
+  `InlineHost`, which ignores the window's safe area, so a row scrolled
+  under the bar or over the keyboard draws where the row is.
 - **Markdown** is drawn by `Markdown` in React Native views, and a page of
   it by `MarkdownPage`, which hosts them in SwiftUI's scroller through
   `RNHostView`. Its words are parsed by `@repo/features/markdown-tree`, the
@@ -84,7 +87,10 @@ builds a control of its own.
   (`linkMention`, `readLink`): a `vespin.dev` place goes to the screen's
   `onOpenPlace`, any other web address to Safari.
 - **This is the one workspace that imports `@expo/ui` or `expo-glass-effect`,
-  or builds a control from React Native's pieces.** When a screen needs a piece this package lacks, add
+  or builds a control from React Native's pieces.** Everywhere else
+  `vespin/no-raw-press-outside-ui-native` refuses them, and a press prop
+  on a React Native primitive, with no disable comment allowed (root
+  `AGENTS.md`'s Layout). When a screen needs a piece this package lacks, add
   the component or an `as const` variant here, named for what it does.
 - **Colors come from `@repo/brand`.** `src/tokens/brand-colors.ts` is written
   by `packages/brand/scripts/generate-surface-shared.mjs` from the brand's one
@@ -101,16 +107,27 @@ builds a control of its own.
   it asks, then the task's name), `TaskRow` a task on one line (its status
   ring, its name, and at its end a thread that needs you, a failed agent,
   one at work, or its pull request, then its key), and `AgentRow` an agent
-  on a task's page; an avatar stands only where the panel's row has one. A
-  glyph is the SF Symbol closest to the panel's Lucide glyph for the same
-  thing (`inbox-line-model.ts`, `status-mark-model.ts`), except a mark of ours that
-  SF Symbols has no drawing of (a pull request in each state, a branch, a
-  decide ask), which is Lucide's own (`glyph.ts`'s `Glyph`, drawn by
-  `ToneGlyph`): `@repo/brand`'s generator outlines it, at the `lucide-react`
-  `@repo/ui` pins, into a custom symbol template, and the app's config writes
-  it into the asset catalog as a symbol set, so it sizes with Dynamic Type
-  and weighs with its words as an SF Symbol does. Tabs, menus, swipe
-  actions, and every generic glyph stay SF Symbols.
+  on a task's page; an avatar stands only where the panel's row has one.
+- **Every glyph is the panel's own Lucide glyph for the same place** (the
+  developer, Nov 12, 2026), named once in `glyph.ts`'s `GLYPH`, by what it
+  marks: a tab, a row's and a status's mark, a menu's item, a toolbar's
+  button, and a composer's button alike. `@repo/brand`'s generator outlines
+  each, at the `lucide-react` `@repo/ui` pins, into a custom symbol template
+  the app's config writes into the asset catalog as a symbol set, so it
+  sizes with Dynamic Type and weighs with its words as an SF Symbol does. A
+  glyph is a branded `Glyph`, minted only in that table, so no component
+  takes a bare SF Symbol's name; `apps/mobile`'s tab icons and toolbar
+  items, which expo-router types as plain names, take `GLYPH.X` too
+  (`glyphSymbol` where a symbol's name is asked for). SF Symbols stay only
+  where iOS draws the thing its own way (Share) or where the panel draws a
+  mark of its own rather than a Lucide glyph (a check box, a face, an MCP
+  server, the panel's product mark). A task's status ring is the panel's own
+  mark, cut into the asset catalog from `@repo/brand`'s table
+  (`task-status-marks.mjs`) that `@repo/ui`'s `TaskStatusMark` draws too. A SwiftUI button or menu
+  holding a glyph takes it as its label's icon (`glyph-label.tsx`), since
+  `systemImage` reads an SF Symbol alone, and a React Native view through
+  `expo-symbols`' `SymbolView`, which the app's patch reads from the asset
+  catalog too, so a glyph costs no SwiftUI host of its own.
 
 ## Vespin's look
 
@@ -139,9 +156,13 @@ navigation, tab bar, swipes, menus, sheets and glass.
   button is the chevron alone. One button leads every tab's root bar, as
   Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile alone
   at the photo's size in the bar's round glass, `SWITCHER_LOOK.TILE`, so the
-  screen's title keeps its place beside it, as the App Store's photo does), whose menu holds the workspaces, the account by its
-  name opening Settings, New workspace, and Settings… in a section under the
-  chosen workspace's name; the account's
+  screen's title keeps its place beside it, as the App Store's photo does), whose list, as
+  Notion's, holds each workspace by its own tile or photo with the chosen one
+  checked in copper, the account by its photo and name opening Settings, New
+  workspace, and Settings… in a section under the chosen workspace's name, in
+  a popover over the button in a regular window and a sheet with the medium
+  and large detents in a compact one (`SWITCHER_PRESENTATION`), never the
+  system's menu, which draws a row's image as a one-ink template; the account's
   photo (`AccountButton`) only before the workspaces are read, opening
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. A landscape iPad's sidebar heads its
@@ -151,7 +172,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from
   `ROW_INSET.TEXT`, and a hairline in `CHIP_EDGE` that starts under the
-  words.
+  words. An Inbox thread stands roomier, as Mail's message rows do
+  (`ROW_INSET.THREAD_VERTICAL` above and below, `THREAD_LINE_GAP` between
+  its lines), while a task's row keeps the list's tighter inset.
 - **Group headers** (`ListSection`) are small and muted with a count; a
   `foldable` one folds in place on a press, its chevron on the left.
 - **Color.** Glyphs stand in the muted ink. Copper is only for what wants
@@ -184,8 +207,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   same model (`@repo/features/pull-request-model`): its state as a chip in
   GitHub's color, the merge queue's in the attention ink with its place
   ("Queued #2"), its branches, and GitHub's sentence of whether it merges;
-  its checks and reviewers as rows, each glyph the SF Symbol closest to the
-  panel's (`pull-request-look.ts`); and its acts in the bar, an act that
+  its checks and reviewers as rows, each glyph the panel's own
+  (`pull-request-look.ts`); and its acts in the bar, an act that
   asks first asking in `ConfirmAsk`, but for the merge's press in a regular
   window, whose bar folds it into More: it stands under the checks as a
   large button (`MergeActRow`), as GitHub's own app draws Merge.
