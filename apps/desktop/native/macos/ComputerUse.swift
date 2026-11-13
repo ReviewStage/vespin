@@ -841,9 +841,15 @@ private func click(_ request: [String: Any]) async throws -> [String: Any] {
         let element = try current.element(index)
         if let center = try? current.center(index) { await cursorTo(center) }
         // Note that a plain press goes through Accessibility, which needs no point and no focus, before an event is aimed at the element's center.
-        if button == BUTTON.left, count == 1,
-           AXUIElementPerformAction(element, kAXPressAction as CFString) == .success {
-            return ["done": "pressed"]
+        if button == BUTTON.left, count == 1 {
+            let pressed = AXUIElementPerformAction(element, kAXPressAction as CFString)
+            if pressed == .success { return ["done": "pressed"] }
+            // Note that only an element that offers no press is clicked at its center instead; any other failure may have pressed it already, so it is answered rather than pressed twice.
+            guard pressed == .actionUnsupported else {
+                throw HelperError(
+                    kind: ERROR_KIND.failed,
+                    message: "Element \(index) did not confirm its press (\(pressed.rawValue)); read the app again to see whether it took it.")
+            }
         }
         clickPoint(try current.center(index), session: current, button: button, count: count)
         return ["done": "clicked"]

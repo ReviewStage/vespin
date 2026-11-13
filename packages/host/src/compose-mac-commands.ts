@@ -535,8 +535,8 @@ export function composeMacCommands(
         if (how === MAC_COMMAND_MODE.NEVER && isMacShellCommand(command)) {
           return yield* settled(command.id, COMMANDS_NEVER);
         }
-        // Note that a kind this Mac cannot run is refused without asking, since nothing would run.
 
+        // Note that a kind this Mac cannot run is refused without asking, since nothing would run.
         if (how !== MAC_COMMAND_MODE.ASK || !isMacShellCommand(command)) {
           return yield* run(command);
         }
@@ -705,8 +705,8 @@ export function composeMacCommands(
         const left = deadline - (yield* Clock.currentTimeMillis);
 
         if (left < 1000) return yield* settled(command.id, APP_UNANSWERED);
-        // Note that the switch is read again here, since the developer may have switched apps off while the app was asked about.
 
+        // Note that the switch is read again here, since the developer may have switched apps off while the app was asked about.
         if (!(yield* computer.enabled)) return yield* settled(command.id, APPS_SWITCHED_OFF);
         const answer = yield* computer.helper.ask(request, Duration.millis(left));
         yield* settled(command.id, sendable(computerResult(answer, app)));
