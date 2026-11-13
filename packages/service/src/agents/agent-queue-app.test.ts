@@ -1263,6 +1263,48 @@ it.layer(SUITE)("an agent's queue", (it) => {
   );
 
   it.effect(
+    "a teammate who unfollows the task after their queued message went stays unfollowed when it is queued again, and a new message makes them follow with their machines off",
+    () =>
+      Effect.gen(function* () {
+        const agentSessions = fakeAgentSessions();
+        const kept = keptAfterResponse();
+        const opened = yield* messagedAgent(agentSessions, { running: false }, undefined, kept);
+        yield* joinWorkspace(opened.task.workspaceId, opened.other);
+        const { agent, ask, owner, other, task } = opened;
+        const sent = { change: QUEUE_CHANGE.ADD, text: "Also the docs.", id: randomUUID() };
+
+        /** One add of the teammate's, as their browser sends it. */
+        const teammateAdds = (add: WireBoundaryInput) =>
+          ask(
+            request(AGENT_QUEUE, undefined, {
+              method: "POST",
+              id: agent.id,
+              cookie: sessionCookieOf(other),
+              body: add,
+            }),
+          );
+
+        /** Each follower of the task and their switch. */
+        const followers = () =>
+          Effect.map(listTaskFollowers(owner, task.id), (listed) =>
+            Object.fromEntries(
+              Option.getOrThrow(listed).map((follower) => [follower.userId, follower.machines]),
+            ),
+          );
+
+        assert.equal((yield* teammateAdds(sent)).status, HOSTED_HTTP_STATUS.OK);
+        yield* kept.run;
+        assert.equal(handedCount(agentSessions, "Also the docs."), 1);
+        yield* unfollowTask(other, task.id);
+        assert.equal((yield* teammateAdds(sent)).status, HOSTED_HTTP_STATUS.OK);
+        assert.deepEqual(yield* followers(), { [owner]: true });
+
+        yield* teammateAdds({ change: QUEUE_CHANGE.ADD, text: "And the tests.", id: randomUUID() });
+        assert.deepEqual(yield* followers(), { [owner]: true, [other]: false });
+      }),
+  );
+
+  it.effect(
     "a turn's end that lands while the Stop's cancel is out finds the queue already paused, and sends nothing",
     () =>
       Effect.gen(function* () {

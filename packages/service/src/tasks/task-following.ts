@@ -12,8 +12,10 @@
  * that turns Following on finds its followers already there.
  *
  * A member follows by hand with their machines off, and by messaging one of
- * the task's agents with them on where they did not follow it yet; a follower
- * keeps their switch otherwise, which only they flip. Mentioning someone,
+ * the task's agents with them on where they did not follow it yet, but off
+ * where they unfollowed it before; a follower keeps their switch otherwise,
+ * which only they flip. A message makes its sender follow once, when the
+ * service first takes it: a repeat of it, however late, makes no one follow. Mentioning someone,
  * and anything an agent, an automation, GitHub, or a webhook sends, makes no
  * one follow: none of those reaches this module.
  */
@@ -21,6 +23,7 @@
 import type { DatabaseServices, StoreFailure } from "@repo/database/core/query";
 import {
   followTask,
+  followTaskAsMessaged,
   listTasksFollowersNamed,
   setFollowerMachines,
   type TaskFollower,
@@ -150,8 +153,9 @@ export function setFollowerMachinesAsked(
 
 /**
  * A member's own words to one of the task's agents make them follow it, with
- * their machines on, where they did not follow it yet; a follower's row
- * stands as it is. Whatever the experiment, so the followers are there
+ * their machines on, where they did not follow it yet, but off where they
+ * unfollowed it before; a follower's row stands as it is. Its callers make
+ * a message's sender follow once, when it is new, never on a repeat. Whatever the experiment, so the followers are there
  * once it is on. It never fails the message it follows: a write the store
  * could not make is logged for the operator and the message goes on.
  */
@@ -159,7 +163,7 @@ export function followAsMessaged(
   userId: string,
   taskId: string,
 ): Effect.Effect<void, never, DatabaseServices> {
-  return followTask(userId, { taskId, followerId: userId, machines: true }).pipe(
+  return followTaskAsMessaged(userId, taskId).pipe(
     Effect.tapError(logStoreFailure),
     Effect.orElseSucceed(() => Option.none()),
     Effect.asVoid,

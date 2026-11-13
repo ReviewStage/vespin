@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
 import { Database, type DatabaseServices } from "@repo/database/core/query";
 import { settleRunnerLostTurns } from "@repo/database/models/abandoned-turns";
+import { beginAgentBoot, endAgentBoot } from "@repo/database/models/agent-boot-store";
 import {
   latestTurnsOfReached,
   pinAgent,
@@ -18,7 +19,7 @@ import { MENTIONED_HEADING } from "@repo/database/models/attached-file-parts";
 import { createAutomation } from "@repo/database/models/automation-store";
 import { readConversationPicture } from "@repo/database/models/conversation-pictures";
 import { sentLineStands } from "@repo/database/models/message-reads";
-import { listTaskFollowers } from "@repo/database/models/task-follower-store";
+import { listTaskFollowers, unfollowTask } from "@repo/database/models/task-follower-store";
 import { writePage } from "@repo/database/models/task-pages";
 import { createTask, readTask } from "@repo/database/models/task-store";
 import { agentPin } from "@repo/database/schemas";
@@ -1058,6 +1059,38 @@ it.layer(SUITE)("messaging a coding agent", (it) => {
         assert.deepEqual(
           Object.fromEntries(followers.map((follower) => [follower.userId, follower.machines])),
           { [owner]: true, [other]: true },
+        );
+      }),
+  );
+
+  it.effect(
+    "a member who unfollows the task after messaging its booting agent stays unfollowed when that message is sent again",
+    () =>
+      Effect.gen(function* () {
+        const { owner, other, task, agent, ask } = yield* messagedAgent(fakeAgentSessions(), {
+          running: false,
+        });
+
+        yield* joinWorkspace(task.workspaceId, other);
+        // The agent boots again, as a cold start does once its first launch ended.
+        yield* endAgentBoot(agent.id);
+        yield* beginAgentBoot(agent.id, new Date(), undefined);
+        const words = { text: "Also the docs.", clientKey: randomUUID() };
+
+        assert.equal(
+          (yield* ask(messageAs(other, agent.id, words))).status,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+        );
+        yield* unfollowTask(other, task.id);
+        assert.equal(
+          (yield* ask(messageAs(other, agent.id, words))).status,
+          HOSTED_HTTP_STATUS.ACCEPTED,
+        );
+        const followers = Option.getOrThrow(yield* listTaskFollowers(owner, task.id));
+
+        assert.deepEqual(
+          followers.map((follower) => follower.userId),
+          [owner],
         );
       }),
   );

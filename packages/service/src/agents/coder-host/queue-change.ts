@@ -28,9 +28,11 @@ import {
   takeQueuedMessage,
 } from "@repo/database/models/agent-queue-store";
 import type { Agent } from "@repo/database/models/agent-store";
+import { sentLineStands } from "@repo/database/models/message-reads";
 import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { bootHolds } from "@repo/features/agent-boot";
 import { type AgentQueueChange, QUEUE_CHANGE } from "@repo/features/agent-wire";
+import { sentLineId } from "@repo/wire/host-ids";
 import { DateTime, Effect, Option } from "effect";
 import { afterResponse } from "../../http/after-response.js";
 import { HOSTED_REFUSAL, hostedStoreOrUnavailable } from "../../http/http-effect.js";
@@ -76,9 +78,10 @@ const found = <A>(effect: Effect.Effect<Option.Option<A>, StoreFailure, Database
 /**
  * The change made, or refused as the procedure answers it: a full queue or a
  * bad order as invalid, a message no longer queued as not found. A message
- * queued anew makes the member follow the task, as one sent does; one
- * queued again under its id, a retry, wrote nothing new and makes no one
- * follow, so a member who unfollowed since stays unfollowed.
+ * new to the service makes the member follow the task, as one sent does; a
+ * retry under its id makes no one follow, whether its message still waits
+ * in the queue or already went into the transcript, so a member who
+ * unfollowed since stays unfollowed.
  */
 const applyChange = Effect.fn("web/applyQueueChange")(function* (
   userId: string,
@@ -98,7 +101,13 @@ const applyChange = Effect.fn("web/applyQueueChange")(function* (
 
       if (outcome === QUEUE_OUTCOME.FULL) return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
 
-      if (outcome === QUEUE_OUTCOME.QUEUED) yield* followAsMessaged(userId, agent.taskId);
+      if (outcome !== QUEUE_OUTCOME.QUEUED) return;
+
+      const went = yield* hostedStoreOrUnavailable(
+        sentLineStands(agent.userId, agent.conversationId, sentLineId(body.id)),
+      );
+
+      if (!went) yield* followAsMessaged(userId, agent.taskId);
 
       return;
     }

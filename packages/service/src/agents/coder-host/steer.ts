@@ -420,6 +420,8 @@ export interface SteerWritten {
   readonly txid?: string;
   /** What a line this send wrote found: the runtime that answers the agent and whether a turn of its was running; none for a repeat. */
   readonly sent?: { readonly runtime: ConversationRuntime; readonly turnRunning: boolean };
+  /** A line queued while the agent boots that already waited there under its key: answered as queued, but nothing new. */
+  readonly heldAgain?: true;
 }
 
 /**
@@ -453,6 +455,10 @@ const heldWhileBooting = Effect.fnUntraced(function* (
 
   if (queued.value === QUEUE_OUTCOME.FULL)
     return yield* Effect.fail(HOSTED_REFUSAL.INVALID_REQUEST);
+
+  if (queued.value === QUEUE_OUTCOME.REPEATED) {
+    return { outcome: STEER_OUTCOME.QUEUED, heldAgain: true } satisfies SteerWritten;
+  }
 
   return { outcome: STEER_OUTCOME.QUEUED } satisfies SteerWritten;
 });
@@ -1018,8 +1024,11 @@ export const steerMemberWords = /* @__PURE__ */ Effect.fn("web/steerMemberWords"
     sender: { kind: MESSAGE_SENDER.MEMBER, userId },
   });
 
-  // A member who messages one of the task's agents follows the task, with their machines on where they did not yet; a repeat wrote nothing new.
-  if (written.outcome !== STEER_OUTCOME.REPEATED) yield* followAsMessaged(userId, agent.taskId);
+  // A member who messages one of the task's agents follows the task (`followAsMessaged`); a repeat, sent or held while
+  // the agent boots, wrote nothing new and makes no one follow.
+  if (written.outcome !== STEER_OUTCOME.REPEATED && written.heldAgain !== true) {
+    yield* followAsMessaged(userId, agent.taskId);
+  }
 
   if (written.sent !== undefined) {
     yield* recordServerEvent(

@@ -5,7 +5,7 @@ import { Database, type DatabaseServices, queryBuilder, type StoreFailure } from
 import { CURRENT_TXID, TxidRowSchema } from "../core/txid.js";
 import { member, user } from "../schemas/auth.js";
 import { task } from "../schemas/task.js";
-import { taskFollower } from "../schemas/task-follower.js";
+import { taskFollower, taskUnfollow } from "../schemas/task-follower.js";
 import { InstantColumnSchema } from "./columns.js";
 import { reachableTask, taskReachableBy } from "./workspace-store.js";
 
@@ -23,7 +23,8 @@ import { reachableTask, taskReachableBy } from "./workspace-store.js";
  * unfollows for themself alone, the task's assignee never while assigned.
  * Following again keeps the row as it stands, its switch among it, but for
  * an assignment, which turns the new assignee's switch on and the previous
- * assignee's off. Each write answers the task's followers as they then
+ * assignee's off. An unfollow is kept beside the rows (`taskUnfollow`), so a
+ * member's message after it makes them follow with their switch off. Each write answers the task's followers as they then
  * stand and the transaction it committed in, none where it changed no row.
  * Every function is an effect over the ambient `SqlClient` and names no
  * database of its own.
@@ -218,6 +219,35 @@ const insertFollower = SqlSchema.findOneOption({
     ),
 });
 
+/** Whether the member ever unfollowed the task. */
+const findUnfollow = SqlSchema.findOneOption({
+  Request: KeySchema,
+  Result: Schema.Struct({ unfollowedAt: InstantColumnSchema }),
+  execute: ({ taskId, userId }) =>
+    Database.use((db) =>
+      db
+        .select({ unfollowedAt: taskUnfollow.unfollowedAt })
+        .from(taskUnfollow)
+        .where(and(eq(taskUnfollow.taskId, taskId), eq(taskUnfollow.userId, userId)))
+        .limit(1),
+    ),
+});
+
+/** The member's unfollow of the task kept at `now`, an earlier one moved on to it. */
+const upsertUnfollow = SqlSchema.void({
+  Request: Schema.Struct({ ...KeySchema.fields, now: Schema.Date }),
+  execute: ({ taskId, userId, now }) =>
+    Database.use((db) =>
+      db
+        .insert(taskUnfollow)
+        .values({ taskId, userId, unfollowedAt: now })
+        .onConflictDoUpdate({
+          target: [taskUnfollow.taskId, taskUnfollow.userId],
+          set: { unfollowedAt: now },
+        }),
+    ),
+});
+
 /** A follower's row written with its switch on, an existing row's switch turned on, as an assignment does. */
 const upsertFollowerMachinesOn = SqlSchema.void({
   Request: Schema.Struct({ ...KeySchema.fields, now: Schema.Date }),
@@ -374,10 +404,44 @@ export function followTask(
 }
 
 /**
+ * Makes the account follow the task as its own message to one of the task's
+ * agents does, and answers the task's followers as they then stand: with its
+ * machines on, but off where it unfollowed the task before, so a message
+ * never turns back on what an unfollow turned off. A follower already
+ * following keeps their row as it was. Nothing where the account does not
+ * reach the task or is no member of its workspace.
+ */
+export function followTaskAsMessaged(
+  userId: string,
+  taskId: string,
+): TaskFollowerEffect<Option.Option<TaskFollowersWritten>> {
+  return transaction(
+    Effect.gen(function* () {
+      const followable = yield* findFollowableTask({ taskId, userId, followerId: userId });
+
+      if (Option.isNone(followable)) return Option.none();
+      const unfollowed = yield* findUnfollow({ taskId, userId });
+      const now = yield* DateTime.nowAsDate;
+
+      const written = yield* insertFollower({
+        taskId,
+        userId,
+        machines: Option.isNone(unfollowed),
+        now,
+      });
+
+      return Option.some(yield* writtenOf(taskId, written));
+    }),
+  );
+}
+
+/**
  * Stops the account following the task, and answers the task's followers
- * as they then stand; one not following stays so. Nothing where the account
- * does not reach the task; its assignee is refused with
- * `TaskFollowerIsAssignee`, since they follow it while assigned.
+ * as they then stand; one not following stays so. An unfollow is kept
+ * (`taskUnfollow`), so its later messages make it follow with its machines
+ * off. Nothing where the account does not reach the task; its assignee is
+ * refused with `TaskFollowerIsAssignee`, since they follow it while
+ * assigned.
  */
 export function unfollowTask(
   userId: string,
@@ -391,6 +455,10 @@ export function unfollowTask(
 
       if (reached.value.assigneeId === userId) return yield* new TaskFollowerIsAssignee();
       const written = yield* deleteFollower({ taskId, userId });
+
+      if (Option.isSome(written)) {
+        yield* upsertUnfollow({ taskId, userId, now: yield* DateTime.nowAsDate });
+      }
 
       return Option.some(yield* writtenOf(taskId, written));
     }),

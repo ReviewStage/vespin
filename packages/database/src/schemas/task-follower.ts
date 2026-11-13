@@ -1,5 +1,5 @@
 import { boolean, index, pgTable, primaryKey, text, uuid } from "drizzle-orm/pg-core";
-import { createdAt } from "./_helpers.js";
+import { createdAt, timestamptz } from "./_helpers.js";
 import { user } from "./auth.js";
 import { task } from "./task.js";
 
@@ -32,5 +32,32 @@ export const taskFollower = pgTable(
     primaryKey({ columns: [table.taskId, table.userId] }),
     // The tasks a member follows, and their account's delete taking each of those rows.
     index("task_follower_user").on(table.userId),
+  ],
+);
+
+/**
+ * A member's last unfollow of a task, and when: kept after their follower
+ * row went, so a message of theirs read later never turns their machines
+ * back on. A message the service had seen before the unfollow makes them
+ * follow no more, and a new one makes them follow with `machines` off,
+ * which they turn on themselves. Unfollowing again moves the instant on.
+ * Each row leaves with its member or its task, whichever goes first.
+ */
+export const taskUnfollow = pgTable(
+  "task_unfollow",
+  {
+    taskId: uuid("task_id")
+      .notNull()
+      .references(() => task.id, { onDelete: "cascade" }),
+    userId: text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    unfollowedAt: timestamptz("unfollowed_at").notNull(),
+  },
+  (table) => [
+    // A member's unfollow of a task, read by the task, which leads the key.
+    primaryKey({ columns: [table.taskId, table.userId] }),
+    // Their account's delete taking each of their rows.
+    index("task_unfollow_user").on(table.userId),
   ],
 );
