@@ -1151,8 +1151,8 @@ function PinnedSection({
 /**
  * The Following group, under Pinned and above the Tasks head: the tasks the
  * reader follows that no other list holds (`followingTasks`), a teammate's
- * they keep up with, newest active first, each naming its repository as a
- * row in one run does, since the group gathers repositories. It stands only
+ * they keep up with, newest active first, its rows naming no repository, as
+ * Pinned's and a section's do not. It stands only
  * while it holds a task, so a task followed lands in it at once and one
  * unfollowed leaves it, as the live list moves. Its head folds it as
  * Pinned's does, kept across launches, the open task still standing under
@@ -1163,12 +1163,10 @@ function PinnedSection({
 function FollowingSection({
   tasks,
   folds,
-  repositoryOf,
   context,
 }: {
   tasks: readonly TaskSummary[];
   folds: FoldedGroups;
-  repositoryOf: (task: TaskSummary) => React.ReactNode;
   context: RowContext;
 }): React.JSX.Element {
   const folded = folds.followingFolded;
@@ -1201,12 +1199,10 @@ function FollowingSection({
           )
         }
         standing={
-          standing.length === 0 ? undefined : (
-            <TaskRows tasks={standing} context={context} repository={repositoryOf} />
-          )
+          standing.length === 0 ? undefined : <TaskRows tasks={standing} context={context} />
         }
       >
-        <TaskRows tasks={tasks} context={context} repository={repositoryOf} />
+        <TaskRows tasks={tasks} context={context} />
       </GroupHeader>
       {menu.drawn === undefined ? null : (
         <ActionMenu
@@ -2551,7 +2547,6 @@ function SidebarColumn({
                           key={key}
                           tasks={homedFollowing}
                           folds={folds}
-                          repositoryOf={repositoryOf}
                           context={context}
                         />
                       )}
