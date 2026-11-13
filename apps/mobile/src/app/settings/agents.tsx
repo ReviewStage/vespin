@@ -45,7 +45,7 @@ import {
   ToggleRow,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import { appStateQuery } from "../../host/app-state-query.js";
 import { useHostActs } from "../../host/host-provider.js";
 import { effortOptions, modelOptions, useModelCatalog } from "../../tasks/use-start.js";
@@ -125,6 +125,9 @@ export default function AgentsScreen() {
   // Note that SwiftUI's pickers and switch keep the pick a person made, so a write that was refused redraws its section, which reads the stored choice again.
   const [defaultRound, setDefaultRound] = useState(0);
   const [settingRound, setSettingRound] = useState(0);
+  // Note that the newest choice sent stands until it is answered, so a pick made before the host's draw of an earlier one reaches the screen, such as an effort right after a model, builds on it rather than on the default drawn.
+  const pending = useRef<ModelChoice | undefined>(undefined);
+  const latest = (): ModelChoice | undefined => pending.current ?? current;
   const standard = current === undefined ? undefined : standardModelIdOf(current.model);
   const speeds = standard === undefined ? [] : speedsOffered(catalog, standard);
   const speed = current === undefined ? MODEL_SPEED.STANDARD : modelSpeedOf(current.model);
@@ -146,18 +149,24 @@ export default function AgentsScreen() {
     }
 
     // Note that the model, effort and speed write the one default, so they follow each other as one row's writes.
+    pending.current = choice;
     void write
       .run(ACT_KIND.AGENTS_DEFAULT_WRITE, () =>
         acts[ACT_KIND.AGENTS_DEFAULT_WRITE](choice).then(() => undefined),
       )
       .then((landed) => {
+        // Note that an answered choice hands back to the drawn default, which holds it once it landed and the stored one once it was refused.
+        if (pending.current === choice) pending.current = undefined;
+
         if (!landed) setDefaultRound((round) => round + 1);
       });
   };
 
   const atSpeed = (next: ModelSpeed) => {
-    if (current === undefined || standard === undefined) return;
-    choose(choiceAt(catalog, modelIdAtSpeed(standard, next), current));
+    const now = latest();
+
+    if (now === undefined) return;
+    choose(choiceAt(catalog, modelIdAtSpeed(standardModelIdOf(now.model), next), now));
   };
 
   const store = (field: AppSettingField, token: string) => {
@@ -218,7 +227,11 @@ export default function AgentsScreen() {
                   options={modelOptions(catalog)}
                   picked={standard}
                   onPick={(id) => {
-                    if (id !== standard) choose(modelPicked(catalog, id, current));
+                    const now = latest();
+
+                    if (now !== undefined && id !== standardModelIdOf(now.model)) {
+                      choose(modelPicked(catalog, id, now));
+                    }
                   }}
                 />
                 {effortOptions(catalog, current.model).length <= 1 ? null : (
@@ -227,13 +240,19 @@ export default function AgentsScreen() {
                     options={effortOptions(catalog, current.model)}
                     picked={current.effort}
                     onPick={(effort) => {
-                      if (effort === current.effort) return;
+                      const now = latest();
+
+                      if (now === undefined) return;
+                      // Note that the efforts drawn are the drawn model's, so one picked while a newer model waits is fitted to that model's, as a model pick fits its effort.
+                      const fitted = effortFor(effortsOf(catalog, now.model), effort);
+
+                      if (fitted === undefined || fitted === now.effort) return;
                       choose({
-                        model: current.model,
-                        effort,
-                        ...(current.contextWindow === undefined
+                        model: now.model,
+                        effort: fitted,
+                        ...(now.contextWindow === undefined
                           ? undefined
-                          : { contextWindow: current.contextWindow }),
+                          : { contextWindow: now.contextWindow }),
                       });
                     }}
                   />
