@@ -42,6 +42,7 @@ import {
   RepositoryPicture,
   SETTINGS_ORDER_HANDLE,
   SETTINGS_ROW_CONTROLS,
+  SETTINGS_SECTION_FRAME,
   SETTINGS_SKELETON_CONTROL,
   SettingsLine,
   SettingsOrderedRows,
@@ -50,6 +51,7 @@ import {
   type SettingsRowSkeletonLayout,
   SettingsRowsSkeleton,
   SettingsSection,
+  Stack,
   TEXT_ELEMENT,
   TEXT_TONE,
   TEXT_VARIANT,
@@ -542,9 +544,9 @@ function AddRepositoryButton({
   onPick,
 }: {
   workspaceId: string;
-  /** The press's words: Add script, Add action. */
+  /** The press's words: Add script, Add repository. */
   label: string;
-  /** The repositories the menu leaves out: those with a setup script saved or being added. */
+  /** The repositories the menu leaves out: those already listed, saved or being added. */
   taken: readonly string[];
   onPick: (repository: string) => void;
 }): React.JSX.Element {
@@ -1193,12 +1195,13 @@ interface AddedRunAction {
 }
 
 /**
- * Each repository's run actions: a row
- * for the repository with its Add action, and its actions under it in their
- * order, each edited in place. An owner or admin adds one from Add action,
- * to a repository already listed or one picked in the repository menu,
- * drags one by its grip to another place or moves it from its ⋯, and makes
- * one the default or removes it there; every change saves the repository's whole list.
+ * Each repository's run actions, a card for each, as Agents draws a card for
+ * each provider's subscriptions: the repository's row, its Add action, over
+ * its actions in their order, each edited in place. An owner or admin adds
+ * one from a card's Add action, or to a repository not yet listed from the
+ * head's Add repository, drags one by its grip to another place or moves it
+ * from its ⋯, and makes one the default or removes it there; every change
+ * saves the repository's whole list.
  */
 function RunActionsSection({
   workspaceId,
@@ -1245,11 +1248,6 @@ function RunActionsSection({
       ),
   ];
 
-  // A repository whose list is full is left out of Add action's menu, as its own row's Add action stands still, so no row opens on a save the service would refuse.
-  const full = repositories.filter(
-    (repository) => countOf(repository) >= WORKSPACE_SANDBOX_SETUP_BOUNDS.MAX_RUN_ACTIONS,
-  );
-
   return (
     <SettingsSection
       {...settingsSectionHead(SECTION.ENVIRONMENT_RUN_ACTIONS)}
@@ -1258,16 +1256,20 @@ function RunActionsSection({
         manages ? (
           <AddRepositoryButton
             workspaceId={workspaceId}
-            label="Add action"
-            taken={full}
+            label="Add repository"
+            taken={repositories}
             onPick={add}
           />
         ) : undefined
       }
+      frame={SETTINGS_SECTION_FRAME.NONE}
     >
-      {read ?? (
-        <>
-          {repositories.length === 0 ? <SettingsLine>No run actions yet.</SettingsLine> : null}
+      {read !== undefined || repositories.length === 0 ? (
+        <SettingsSection>
+          {read ?? <SettingsLine>No run actions yet.</SettingsLine>}
+        </SettingsSection>
+      ) : (
+        <Stack gap={GAP.SECTION}>
           {repositories.map((repository) => (
             <RunActionsOfRepository
               key={repository.toLowerCase()}
@@ -1282,7 +1284,7 @@ function RunActionsSection({
               onLetGo={letGo}
             />
           ))}
-        </>
+        </Stack>
       )}
     </SettingsSection>
   );
@@ -1293,7 +1295,7 @@ function runActionsOf(lists: RunActionLists, repository: string): readonly RunAc
   return lists.find((each) => sameRepository(each.repository, repository))?.actions ?? [];
 }
 
-/** One repository's row, its saved run actions under it, dragged by their grips, and those added to it not yet saved after them. */
+/** One repository's card: its row and Add action, its saved run actions under it, dragged by their grips, and those added to it not yet saved after them. */
 function RunActionsOfRepository({
   saving,
   repository,
@@ -1327,22 +1329,10 @@ function RunActionsOfRepository({
   const refused = saving.variables?.repository === repository ? saving.error : null;
 
   return (
-    <>
+    <SettingsSection>
       <MenuRow
         thing={repository}
-        alone
-        actions={
-          manages
-            ? [
-                {
-                  label: "Add action",
-                  icon: <PlusIcon />,
-                  disabled: full,
-                  onSelect: onAdd,
-                },
-              ]
-            : []
-        }
+        actions={[]}
         row={{
           // Note that the owner's picture leads the row in its mark column, as each action's icon does, so the picture centers over their icons and the name starts where their labels do.
           leading: (
@@ -1358,6 +1348,18 @@ function RunActionsOfRepository({
           ),
           label: <ReplayMask>{repository}</ReplayMask>,
           error: saveRefusal(refused),
+          controls: SETTINGS_ROW_CONTROLS.BESIDE_UNTIL_NARROW,
+          control: manages ? (
+            <Button
+              variant={BUTTON_VARIANT.OUTLINE}
+              icon={<PlusIcon />}
+              label={`Add action to ${repository}`}
+              disabled={full}
+              onClick={onAdd}
+            >
+              Add action
+            </Button>
+          ) : undefined,
         }}
       />
       {order.ordered.length === 0 ? null : (
@@ -1399,7 +1401,7 @@ function RunActionsOfRepository({
           }))}
         />
       )}
-    </>
+    </SettingsSection>
   );
 }
 
