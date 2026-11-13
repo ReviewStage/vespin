@@ -403,6 +403,7 @@ function uiGeistCss() {
   );
 
   const block = (value) => steps.map(([name, colors]) => `  ${name}: ${value(colors)};`).join("\n");
+
   const pair = (colors) =>
     colors.LIGHT === colors.DARK ? colors.LIGHT : `light-dark(${colors.LIGHT}, ${colors.DARK})`;
 
