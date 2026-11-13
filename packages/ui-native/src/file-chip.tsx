@@ -1,11 +1,12 @@
 // file-chip.tsx -- a file a message carried that is neither a picture nor a video, such as a PDF: its chip after the message's words, naming it and its size, which opens the file full screen in the system's Quick Look, and whose long press offers Share and, for a text file, Copy.
 
 import { SymbolView } from "expo-symbols";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useAccessibilitySize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphSymbol } from "./glyph.js";
 import { HeldMenu, useKeptActs, useQuickLook } from "./held-menu.js";
 import { KEPT_KIND, type Kept } from "./keep-model.js";
+import { Press } from "./press.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE } from "./tokens/type.js";
@@ -101,7 +102,7 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
 
   return (
     <HeldMenu acts={acts}>
-      <Pressable
+      <Press
         ref={mark}
         onPress={open}
         disabled={open === undefined}
@@ -134,7 +135,7 @@ export function FileChip({ name, mediaType, source, size }: FileChipProps) {
             {size === undefined ? null : <Text style={fact}>{size}</Text>}
           </View>
         </View>
-      </Pressable>
+      </Press>
     </HeldMenu>
   );
 }

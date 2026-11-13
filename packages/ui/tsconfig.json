@@ -1,9 +1,22 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../tsconfig.package.json",
   "compilerOptions": {
     "jsx": "react-jsx",
-    "types": ["node"],
-    "noEmit": true
+    "types": ["node"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx"]
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "references": [
+    {
+      "path": "../brand"
+    },
+    {
+      "path": "../features"
+    },
+    {
+      "path": "../settings"
+    },
+    {
+      "path": "../wire"
+    }
+  ]
 }
