@@ -1322,29 +1322,24 @@
   --pull-request-page-measure: 1040px; /* off-scale: detail-page.css's web measure */
 }
 
-/* A section's heading that folds it, and the comment box's, stuck to the
-   scroller's top while its section is in view, on the panel's own ground so
-   nothing shows through; the next section's heading pushes it off, since a
-   sticky box stands only inside its own section. It is held at the
-   scroller's band (`SCROLL_FADE_INSET.BAND`), because the fade begins
-   beneath that band: taller,
-   it would slice what passes under its foot, and shorter, it would fade
-   its own. The whole row presses as a `DisclosureSummary` does: the chevron
-   leading at its inset and the row filled under the pointer; what stands at
-   its end stands beside it (`DisclosureFrame`), on the same band. */
-.pull-request-section-fold > .ui-disclosure-summary,
-.pull-request-page .pull-request-comment-box > .pull-request-heading {
+/* A section's heading that folds it, stuck to the scroller's top while its
+   section is in view, on the panel's own ground so nothing shows through;
+   the next section's heading pushes it off, since a sticky box stands only
+   inside its own section. It is held at the scroller's band
+   (`SCROLL_FADE_INSET.BAND`), because the fade begins beneath that band:
+   taller, it would slice what passes under its foot, and shorter, it would
+   fade its own. The whole row presses as a `DisclosureSummary` does, the
+   chevron leading at its inset, but draws no fill of its own under the
+   pointer: its words light instead, so the heading stands on the page's
+   ground like the words under it. What stands at its end stands beside it
+   (`DisclosureFrame`), on the same band. */
+.pull-request-section-fold > .ui-disclosure-summary {
   position: sticky;
   top: 0;
   z-index: 1;
   box-sizing: border-box;
   height: var(--ui-scroll-band);
   background: var(--ui-color-ground);
-}
-
-.pull-request-page .pull-request-comment-box > .pull-request-heading {
-  align-items: center;
-  margin: 0;
 }
 
 .pull-request-section-fold > .ui-disclosure-summary {
@@ -1355,27 +1350,6 @@
   padding-inline: var(--ui-tight-gap);
   color: var(--ui-color-text-muted);
   white-space: nowrap;
-}
-
-/* The fill under the pointer, a disclosure row's (disclosure.css) at the
-   control's height and corner, drawn inside the band rather than on it, so
-   the band stays opaque to its corners while what scrolls passes under it.
-   Note that it sits under the row's words, the band being a stacking
-   context of its own, and lights only while the pointer is on the row,
-   since what stands at its end stands beside it. */
-.pull-request-section-fold > .ui-disclosure-summary::before {
-  position: absolute;
-  z-index: -1;
-  inset: calc((var(--ui-scroll-band) - var(--ui-control-height)) / 2) 0;
-  border-radius: var(--ui-control-radius);
-  content: "";
-  transition: background-color var(--ui-duration-hover) var(--ui-motion-exit);
-}
-
-@media (hover: hover) {
-  .pull-request-section-fold > .ui-disclosure-summary:hover::before {
-    background: var(--ui-color-fill-strong);
-  }
 }
 
 .pull-request-section-fold > .ui-disclosure-summary > .pull-request-heading {
