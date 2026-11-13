@@ -1351,9 +1351,14 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
                   : sealed,
             ),
       // Note that an answer's read standing rides the list it draws, so a window is told both at once.
-      take: (rows, standing) =>
+      take: (rows, standing, taskWorkspaces) =>
         Effect.gen(function* () {
-          view = { ...view, listStatus: TASKS_READ.READY, live: HOST_LIVE.LIVE };
+          view = {
+            ...view,
+            listStatus: TASKS_READ.READY,
+            live: HOST_LIVE.LIVE,
+            ...(taskWorkspaces === undefined ? undefined : { taskWorkspaces }),
+          };
           const entities = dependencies.entities();
           const { collections } = taskList;
           const moved = yield* collections.answer(rows, standing);
@@ -1365,7 +1370,14 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
 
           // Note that only an answer read at a sync id is kept, since the follow reads past it at the next launch, and one that moved no row is written only beside the next that did, or as the store closes.
           if (entities !== undefined && standing !== undefined) {
-            const kept = { rows: collections.synced(), at: standing.next };
+            const kept = {
+              rows: collections.synced(),
+              at: standing.next,
+              ...(view.taskWorkspaces === undefined
+                ? undefined
+                : { taskWorkspaces: view.taskWorkspaces }),
+            };
+
             yield* moved
               ? entities.keep(KEPT_READ.TASK_LIST, kept)
               : entities.keepUnmoved(KEPT_READ.TASK_LIST, kept);
@@ -1508,7 +1520,13 @@ export const composeTasks = /* @__PURE__ */ Effect.fn("host/composeTasks")(funct
     if (list !== undefined && view.listStatus !== TASKS_READ.READY) {
       listKeptAt = list.at;
       // Note that a list drawn from disk is not said to be behind: the follow's first answer, or its failure, says where it stands.
-      view = { ...view, listStatus: TASKS_READ.READY };
+      view = {
+        ...view,
+        listStatus: TASKS_READ.READY,
+        ...(list.taskWorkspaces === undefined
+          ? undefined
+          : { taskWorkspaces: list.taskWorkspaces }),
+      };
       yield* taskList.collections.answer(list.rows, { past: undefined, next: list.at, gone: [] });
     }
 
