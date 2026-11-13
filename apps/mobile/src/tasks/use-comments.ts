@@ -243,18 +243,23 @@ export function threadsOnBlocks(
   return on;
 }
 
-/** A new thread's field on a block: its words, whether they may go, what a send that did not land said, and the send, which answers the thread's id once it is posted. */
+/** A new thread's field on a block: its words, whether they may go, what a send that was refused said, and the send, which answers the thread's id at once, before the service has. */
 export interface CommentStart {
   readonly words: string;
   readonly onWords: (words: string) => void;
   readonly sendable: boolean;
-  readonly send: () => Promise<string | undefined>;
+  readonly send: (refused: (start: RefusedStart) => void) => string | undefined;
   readonly note: string | undefined;
 }
 
 /** A start sent and not yet answered as posted: its words, the key it went under, and the thread's id it named. */
-interface SentStart extends SentReply {
+export interface SentStart extends SentReply {
   readonly threadId: string;
+}
+
+/** A start the service refused or never answered: what was sent, and why it did not go. */
+export interface RefusedStart extends SentStart {
+  readonly note: string;
 }
 
 /**
@@ -262,27 +267,28 @@ interface SentStart extends SentReply {
  * comment starts one (`TASKS_COMMENT_START`): its first comment's words, the
  * block's quote and span, and the description's text the span is measured
  * in, which the service carries over to the text as it stands. It goes
- * under an id minted here, so the host draws the thread at once, and a key
- * kept for as long as the words stand, so the same words sent again after a
- * lost answer start one thread; a refusal keeps the words with why.
+ * under an id minted here, so the host draws the thread at once and the
+ * send answers that id before the service does, and under a key kept for as
+ * long as the words stand, so the same words sent again after a lost answer
+ * start one thread. A refusal is handed to `refused` with the words, key and
+ * id it went under, which a field opened again on them (`again`) keeps.
  */
 export function useCommentStart(
   taskId: string,
   text: string,
   block: DescriptionBlock | undefined,
+  again?: RefusedStart,
 ): CommentStart {
   const acts = useHostActs();
   const write = useWrite();
-  const [words, setWords] = useState("");
-  const [sent, setSent] = useState<SentStart | undefined>(undefined);
-  const [sending, setSending] = useState(false);
-  const [note, setNote] = useState<string | undefined>(undefined);
-  // Note that a second tap before the next render reads no `sending` yet, so the send in flight is held here too, or two taps would start two threads.
+  const [words, setWords] = useState(again?.words ?? "");
+  const [sent, setSent] = useState<SentStart | undefined>(again);
+  // Note that a second tap before the screen has gone would start the thread twice, so the send is held here.
   const inFlight = useRef(false);
   const quote = block?.quote;
 
   return useMemo(() => {
-    const send = async (): Promise<string | undefined> => {
+    const send = (refused: (start: RefusedStart) => void): string | undefined => {
       const kept = words.trim();
 
       if (kept === "" || inFlight.current || block === undefined || quote === undefined) {
@@ -290,20 +296,23 @@ export function useCommentStart(
       }
 
       inFlight.current = true;
-      const again = sent?.words === kept ? sent : undefined;
-      const key = again?.key ?? randomUUID();
-      const threadId = again?.threadId ?? randomUUID();
-      setSent({ words: kept, key, threadId });
-      setSending(true);
-      setNote(undefined);
+      const repeated = sent?.words === kept ? sent : undefined;
 
-      const went = await write(
+      const start: SentStart = {
+        words: kept,
+        key: repeated?.key ?? randomUUID(),
+        threadId: repeated?.threadId ?? randomUUID(),
+      };
+
+      setSent(start);
+
+      void write(
         () =>
           acts[ACT_KIND.TASKS_COMMENT_START]({
             planId: taskId,
             start: {
-              id: threadId,
-              clientKey: key,
+              id: start.threadId,
+              clientKey: start.key,
               scope: DESCRIPTION_COMMENT_SCOPE.BLOCK,
               quote,
               anchor: { from: block.from, to: block.to },
@@ -320,27 +329,22 @@ export function useCommentStart(
                 ? commentRefusalNote(answer.refused)
                 : COMMENT_NOTE.NOT_POSTED,
           unanswered: COMMENT_NOTE.NOT_POSTED,
-          inPlace: setNote,
+          inPlace: (note) => refused({ ...start, note }),
           went: BUZZ.SUCCESS,
         },
       ).finally(() => {
         inFlight.current = false;
-        setSending(false);
       });
 
-      if (!went) return undefined;
-      setSent(undefined);
-      setWords("");
-
-      return threadId;
+      return start.threadId;
     };
 
     return {
       words,
       onWords: setWords,
-      sendable: words.trim() !== "" && !sending && quote !== undefined,
+      sendable: words.trim() !== "" && quote !== undefined,
       send,
-      note,
+      note: again?.note,
     };
-  }, [acts, write, taskId, text, block, quote, words, sent, sending, note]);
+  }, [acts, write, taskId, text, block, quote, words, sent, again]);
 }
