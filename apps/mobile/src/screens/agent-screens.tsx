@@ -646,10 +646,12 @@ export function AgentScreen() {
 
   return (
     <>
+      {/* Note that the bar's edge over the transcript is set soft, as every other page's stands, since over React Native's list the system's automatic edge drew a hard cut and a hairline. */}
       <Stack.Screen
         options={{
           title,
           headerTitleStyle: { ...BAR_TITLE.SCREEN, color: colors.TEXT },
+          scrollEdgeEffects: { top: "soft" },
         }}
       />
       <Stack.Toolbar placement="right">
