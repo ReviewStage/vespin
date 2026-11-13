@@ -1013,14 +1013,6 @@ export function TasksBoard({
       }),
   );
 
-  // Note that a view drawing no row a settled task may stand in has no run to come to its end, so it tells the paging so, which reads on until one draws or the last is read (`use-settled-pages.ts`).
-  const drawsSettled = settledRowsDrawn(columns);
-  const onDrawn = frame.settledPages?.onDrawn;
-
-  useEffect(() => {
-    onDrawn?.(drawsSettled);
-  }, [drawsSettled, columns, onDrawn]);
-
   // Note that every door a card is handed stands across draws, so a card held while what it is handed does (`memo`) holds.
   const standingDoor = useStandingDoor(tasks);
   const setStanding = useSteadyDoor(standingDoor.set);
@@ -1048,6 +1040,14 @@ export function TasksBoard({
   const drawnColumns = narrow
     ? columns.filter((column) => columnValue(column.head) === shown)
     : columns;
+
+  // Note that a view drawing no row a settled task may stand in has no run to come to its end, a narrow board's one column alone counted,, so it tells the paging so, which reads on until one draws or the last is read (`use-settled-pages.ts`).
+  const drawsSettled = settledRowsDrawn(drawnColumns);
+  const onDrawn = frame.settledPages?.onDrawn;
+
+  useEffect(() => {
+    onDrawn?.(drawsSettled);
+  }, [drawsSettled, drawnColumns, onDrawn]);
 
   // Each drawn column's tasks, in the order drawn down it, those its run leaves undrawn among them.
   const order = drawnColumns.map((column) => column.tasks.map(taskIdOf));

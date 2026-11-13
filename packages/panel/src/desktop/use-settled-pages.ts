@@ -99,6 +99,14 @@ export function useSettledPages(workspaceId: string | undefined, shown: boolean)
     read(held);
   });
 
+  // Note that a page let go stops paging, so an answer landing after it reads no page more.
+  useEffect(
+    () => () => {
+      paging.current = undefined;
+    },
+    [],
+  );
+
   // Note that both doors stand across draws, so a view that tells what it draws as its groups move tells it only as they do.
   const onRunEnd = useCallback(
     (atEnd: boolean) => {
