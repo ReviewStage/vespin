@@ -525,6 +525,7 @@ const handToCli = Effect.fn("agent-runner/handToCli")(function* (
   if (!running && (yield* Ref.get(launch.opening)) === undefined) {
     yield* Ref.set(launch.opening, snapshot?.commit);
   }
+
   yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
   // Posted ahead of the hand-off, so it is numbered before anything the CLI says of the message.
   yield* launch.sink.emit({

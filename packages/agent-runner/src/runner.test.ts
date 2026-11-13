@@ -737,6 +737,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const service = fakeService();
+
       const { write, run } = yield* launch(
         [...WAKEUP_WAIT.slice(0, -1), ...WARM_TURNS.slice(-4)],
         service,
@@ -746,6 +747,7 @@ it.effect(
         fakeProbe(),
         true,
       );
+
       const first = "6f1c2a4e-3b7d-4c8e-9a0b-1d2e3f405162";
       yield* write(WARM_CONFIG);
       yield* write({ ...FIRST_MESSAGE, uuid: first });
