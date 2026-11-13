@@ -18,6 +18,7 @@ import {
   accessibilityLabel,
   accessibilityValue,
   alignmentGuide,
+  background,
   buttonStyle,
   fixedSize,
   font,
@@ -306,6 +307,12 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
  * Note that a selected row stands on the `SELECTED` gray, as iOS's own
  * selection does, since a clear row ground leaves the system no fill to draw,
  * so an iPad's selected row showed only the keyboard focus's black outline.
+ * Note that the row's insets are its own padding and the gray is drawn
+ * behind that padding, never as the list's row background, because a list
+ * draws a row's background across the whole column, and on iPadOS 26 a
+ * split view's list column runs on under the floating sidebar, so the gray
+ * stood under the sidebar's glass to the window's edge. A row's own view
+ * stays inside the column's safe area, as Mail's rows do.
  */
 export function rowPlacement(
   colors: BrandColors,
@@ -313,15 +320,12 @@ export function rowPlacement(
   vertical: number = ROW_INSET.VERTICAL,
 ) {
   return [
-    listRowBackground(selected ? colors.SELECTED : "clear"),
-    listRowInsets({
-      leading: ROW_INSET.LEADING,
-      trailing: SPACE.EDGE,
-      top: vertical,
-      bottom: vertical,
-    }),
+    listRowBackground("clear"),
+    listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
+    padding({ leading: ROW_INSET.LEADING, trailing: SPACE.EDGE, top: vertical, bottom: vertical }),
+    ...(selected ? [background(colors.SELECTED)] : []),
     listRowSeparatorTint(colors.CHIP_EDGE),
-    alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT - ROW_INSET.LEADING),
+    alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT),
   ];
 }
 
