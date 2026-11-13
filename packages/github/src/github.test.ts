@@ -284,4 +284,25 @@ describe("GitHub", () => {
       );
     }).pipe(Effect.provide(layer));
   });
+
+  it.effect(
+    "fails a listing that still names a next page at its bound, rather than answering part of it",
+    () => {
+      const { layer } = harness((request) =>
+        Response.json([{ name: "main" }], {
+          headers: { link: `<${request.url.split("?")[0]}?page=9>; rel="next"` },
+        }),
+      );
+
+      return Effect.gen(function* () {
+        const github = yield* GitHub;
+        const listed = yield* github
+          .asMember(Redacted.make("gho_member"))
+          .paginate("GET /repos/{owner}/{repo}/branches", REPOSITORY, { maxPages: 2 })
+          .pipe(Effect.flip);
+
+        assert.strictEqual(listed._tag, "GitHubUnreadable");
+      }).pipe(Effect.provide(layer));
+    },
+  );
 });

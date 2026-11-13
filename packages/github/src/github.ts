@@ -99,6 +99,9 @@ const GRAPHQL_ERROR = {
 const RATE_LIMIT_WORDS = /rate limit/iu;
 const SECONDARY_LIMIT_WORDS = /\bsecondary rate\b/iu;
 
+/** A `link` header naming a next page (https://docs.github.com/en/rest/using-the-rest-api/using-pagination-in-the-rest-api). */
+const NEXT_PAGE = /rel="next"/u;
+
 const GRAPHQL_RESOURCE = "graphql";
 const CORE_RESOURCE = "core";
 
@@ -164,17 +167,28 @@ export type GitHubPageItem<R extends keyof PaginatingEndpoints> =
       ? Item
       : never;
 
+/** How far a listing is read: never past `maxPages`, and no further than the items read are `enough`. */
+export interface GitHubPaging<Item> {
+  readonly maxPages: number;
+  readonly enough?: (items: ReadonlyArray<Item>) => boolean;
+}
+
 /** One identity's requests to GitHub. Answers are typed by Octokit's route table and decoded by the caller. */
 export interface GitHubClient {
   readonly request: <R extends keyof Endpoints>(
     route: R,
     parameters?: Endpoints[R]["parameters"],
   ) => Effect.Effect<Endpoints[R]["response"], GitHubFailure>;
-  /** Every item of a listing, following GitHub's `link` headers, up to `maxPages` pages. */
+  /**
+   * Every item of a listing, following GitHub's `link` headers, or as many
+   * as are `enough` for the caller. A listing whose `link` still names a next
+   * page after `maxPages` did not end, and fails as unreadable rather than
+   * answering the part of it read.
+   */
   readonly paginate: <R extends keyof PaginatingEndpoints>(
     route: R,
     parameters: PaginatingEndpoints[R]["parameters"],
-    options: { readonly maxPages: number },
+    options: GitHubPaging<GitHubPageItem<R>>,
   ) => Effect.Effect<ReadonlyArray<GitHubPageItem<R>>, GitHubFailure>;
   /** A GraphQL document's `data`, decoded by `schema`. */
   readonly graphql: <A>(
@@ -595,21 +609,33 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
 
         return send(route, { ...parameters, request });
       }),
-    paginate: (route, parameters, { maxPages }) =>
-      called(state, async (request) => {
-        const items: Array<GitHubPageItem<typeof route>> = [];
-        let pages = 0;
+    paginate: (route, parameters, { maxPages, enough }) =>
+      Effect.flatMap(
+        called(state, async (request) => {
+          const items: Array<GitHubPageItem<typeof route>> = [];
+          let pages = 0;
 
-        for await (const page of octokit.paginate.iterator(route, { ...parameters, request })) {
-          // SAFETY: the paginator answers every page's data as the listing's one array of items, a wrapped page's included.
-          items.push(...(page.data as ReadonlyArray<GitHubPageItem<typeof route>>));
-          pages += 1;
+          for await (const page of octokit.paginate.iterator(route, { ...parameters, request })) {
+            // SAFETY: the paginator answers every page's data as the listing's one array of items, a wrapped page's included.
+            items.push(...(page.data as ReadonlyArray<GitHubPageItem<typeof route>>));
+            pages += 1;
 
-          if (pages >= maxPages) break;
-        }
+            if (enough?.(items) === true) return { items, ended: true };
 
-        return items;
-      }),
+            if (pages >= maxPages) {
+              return { items, ended: !NEXT_PAGE.test(String(page.headers.link ?? "")) };
+            }
+          }
+
+          return { items, ended: true };
+        }),
+        ({ items, ended }) =>
+          ended
+            ? Effect.succeed(items)
+            : Effect.fail(
+                new GitHubUnreadable({ message: `the listing ran past ${maxPages} pages` }),
+              ),
+      ),
     graphql: (document, variables, schema) =>
       Effect.flatMap(
         called(state, (request) => octokit.graphql<unknown>(document, { ...variables, request })),
