@@ -138,6 +138,17 @@ function linesOf(listing: PullRequestListing): ReadonlyMap<string, AgentPullRequ
   return lines;
 }
 
+/** The address of each agent's pull request the list names, the first line naming the agent where several do. */
+function agentUrlsOf(listing: PullRequestListing): ReadonlyMap<string, string> {
+  const agentUrls = new Map<string, string>();
+
+  for (const { agentId, pullRequest } of listing.pullRequests) {
+    if (!agentUrls.has(agentId)) agentUrls.set(agentId, pullRequest.url);
+  }
+
+  return agentUrls;
+}
+
 type Moved = {
   readonly agents: ReadonlySet<string>;
   readonly opened: ReadonlySet<string>;
@@ -145,8 +156,12 @@ type Moved = {
   readonly heads: ReadonlySet<string>;
 };
 
-/** What moved from one drawing of the list to the next: the agents whose status moved, those the list names a pull request of anew, the addresses of the pull requests whose line moved or left, and of those whose head moved or left among them. */
-function movedOf(before: PullRequestListing, after: PullRequestListing): Moved {
+/** What moved from one drawing of the list to the next, `beforeUrls` being `before`'s `agentUrlsOf`: the agents whose status moved, those the list names a pull request of anew, the addresses of the pull requests whose line moved or left, and of those whose head moved or left among them. */
+function movedOf(
+  before: PullRequestListing,
+  beforeUrls: ReadonlyMap<string, string>,
+  after: PullRequestListing,
+): Moved {
   const agents = new Set<string>();
 
   for (const [agentId, status] of before.statuses) {
@@ -156,9 +171,7 @@ function movedOf(before: PullRequestListing, after: PullRequestListing): Moved {
   const opened = new Set<string>();
 
   for (const { agentId, pullRequest } of after.pullRequests) {
-    const was = before.pullRequests.find((listed) => listed.agentId === agentId);
-
-    if (was?.pullRequest.url !== pullRequest.url) opened.add(agentId);
+    if (beforeUrls.get(agentId) !== pullRequest.url) opened.add(agentId);
   }
 
   const urls = new Set<string>();
@@ -270,11 +283,12 @@ export function pullRequestParts(
     const moving: readonly PartFetch[] = [pullRequest, checks, conversation, published];
 
     /** The address a key's pull request is listed by: its pull request or published part's answer, or for the agent's own, the pull request the list says it published. */
-    const urlOf = (key: PullRequestKey, listing: PullRequestListing): string | undefined =>
+    const urlOf = (
+      key: PullRequestKey,
+      agentUrls: ReadonlyMap<string, string>,
+    ): string | undefined =>
       Option.getOrUndefined(MutableHashMap.get(urls, key)) ??
-      (key.number === undefined
-        ? listing.pullRequests.find((listed) => listed.agentId === key.agentId)?.pullRequest.url
-        : undefined);
+      (key.number === undefined ? agentUrls.get(key.agentId) : undefined);
 
     // Note that the first drawing asks nothing, since nothing moved yet that a part was read before.
     let before: PullRequestListing | undefined;
@@ -285,7 +299,8 @@ export function pullRequestParts(
         before = listing;
 
         if (was === undefined) return Effect.void;
-        const moved = movedOf(was, listing);
+        const wasUrls = agentUrlsOf(was);
+        const moved = movedOf(was, wasUrls, listing);
 
         if (moved.agents.size === 0 && moved.opened.size === 0 && moved.urls.size === 0) {
           return Effect.void;
@@ -295,13 +310,13 @@ export function pullRequestParts(
           if (moved.agents.has(key.agentId)) return true;
 
           if (key.number === undefined && moved.opened.has(key.agentId)) return true;
-          const url = urlOf(key, was);
+          const url = urlOf(key, wasUrls);
 
           return url !== undefined && moved.urls.has(url);
         };
 
         const pushed = (key: PullRequestKey) => {
-          const url = urlOf(key, was);
+          const url = urlOf(key, wasUrls);
 
           return url !== undefined && moved.heads.has(url);
         };
