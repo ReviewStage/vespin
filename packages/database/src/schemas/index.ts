@@ -54,6 +54,8 @@ export * from "./github-install-intent.js";
 
 export * from "./github-installation.js";
 
+export * from "./github-mention.js";
+
 export * from "./github-personal-token.js";
 
 export * from "./github-rate-hold.js";

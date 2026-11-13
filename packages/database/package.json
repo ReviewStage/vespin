@@ -66,6 +66,7 @@
     "./models/github-rate-holds": "./src/models/github-rate-holds.js",
     "./models/github-repositories": "./src/models/github-repositories.js",
     "./models/github-repository-reads": "./src/models/github-repository-reads.js",
+    "./models/github-mention-store": "./src/models/github-mention-store.js",
     "./models/github-token-store": "./src/models/github-token-store.js",
     "./models/pull-request-chapters-store": "./src/models/pull-request-chapters-store.js",
     "./models/push-device-store": "./src/models/push-device-store.js",

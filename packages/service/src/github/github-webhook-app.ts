@@ -57,6 +57,7 @@ import { agentWakeOf, checksCompletedWakeOf, wakeAgents } from "./agent-wakes.js
 import { clearRevokedAuthorization, GitHubApp } from "./github-app.js";
 import { GITHUB_DELIVERY_READ } from "./github-delivery-read-bounds.js";
 import { setInstallationStatus } from "./github-installations.js";
+import { actOnGitHubMention, githubMentionOf, type MentionServices } from "./github-mentions.js";
 import { GitHubBackground } from "./github-rate-gate.js";
 
 /**
@@ -126,7 +127,10 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * (`packages/service/src/automations/automation-github.ts`): a pull request or issue opened or
  * labeled, a check suite that failed, or a push queues a run, under the
  * delivery's own id, for each automation listing the repository that
- * listens for it, which the automation-runs queue's consumer starts. And a
+ * listens for it, which the automation-runs queue's consumer starts. A
+ * comment that mentions the App's bot, by a person with write access,
+ * starts an agent as its writer or reaches the agent whose pull request it
+ * is (`github-mentions.ts`). And a
  * review, a comment on a pull request, or a check that failed on an
  * agent's branch is told to the agents on that pull request as a message
  * from GitHub (`agent-wakes.ts`), and so is every check on an agent's head
@@ -505,14 +509,23 @@ interface DeliveryReadCounts {
   readonly told: number;
 }
 
-type DeliveryReadServices = DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox;
+type DeliveryReadServices =
+  | DatabaseServices
+  | HttpClient.HttpClient
+  | GitHubApp
+  | Sandbox
+  | MentionServices;
 
 const NOTHING_READ: DeliveryReadCounts = { read: 0, told: 0 };
 
 /**
- * A delivery's reads of GitHub: what the agents on its branches published
- * read again, then the agents its review, comment, failure, or finished
- * checks concern told, in the background lane, since no member waits on it.
+ * A delivery's reads of GitHub: a comment that mentions the App's bot acted
+ * on as its writer (`github-mentions.ts`), what the agents on its branches
+ * published read again, then the agents its review, comment, failure, or
+ * finished checks concern told, in the background lane, since no member
+ * waits on it. Note that a comment the mention took is told no agent as
+ * GitHub's own, because the mention sent it to the agent that holds the
+ * pull request as its writer's message, and the agent hears it once.
  */
 const deliveryReads = /* @__PURE__ */ Effect.fn("web/githubDeliveryReads")(
   function* ({
@@ -522,12 +535,19 @@ const deliveryReads = /* @__PURE__ */ Effect.fn("web/githubDeliveryReads")(
   }: DeliveryToRead): Effect.fn.Return<DeliveryReadCounts, HostedRefusal, DeliveryReadServices> {
     // A deployment with no App configured knows no bot of its own, so every bot is another's.
     const agentLogin = yield* Effect.orElseSucceed((yield* GitHubApp).botLogin, () => undefined);
+    const mention = githubMentionOf(event, payload, agentLogin);
+    const taken = mention === undefined ? false : yield* actOnGitHubMention(mention);
     const target = deliveryTarget(event, payload);
     const read = target === undefined ? 0 : yield* readAgainOnBranches(target);
     const now = yield* Clock.currentTimeMillis;
+
     // Note that the checks finishing are read after the agents' pull requests were read again above,
     // because a wake tells only the agents whose row keeps the finished commit as their head.
-    const wakes = [agentWakeOf(event, payload, now), checksCompletedWakeOf(event, payload, now)];
+    const wakes = [
+      taken ? undefined : agentWakeOf(event, payload, now),
+      checksCompletedWakeOf(event, payload, now),
+    ];
+
     // Each agent's sessions as the deployment acting for its owner, as an automation's run reaches them.
     const sessionsForAccount: SessionsForAccount = routedSessions;
 
@@ -637,12 +657,7 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
   function* (): Effect.fn.Return<
     HttpServerResponse.HttpServerResponse,
     HostedRefusal,
-    | HttpServerRequest.HttpServerRequest
-    | HostedEnvironment
-    | DatabaseServices
-    | HttpClient.HttpClient
-    | GitHubApp
-    | Sandbox
+    HttpServerRequest.HttpServerRequest | HostedEnvironment | DeliveryReadServices
   > {
     const request = yield* HttpServerRequest.HttpServerRequest;
 
@@ -718,9 +733,7 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
 );
 
 /** The group: the one delivery path, and the hosted vocabulary's own refusal for any other. */
-export function githubWebhookApp(): WebRoutes<
-  HostedEnvironment | DatabaseServices | HttpClient.HttpClient | GitHubApp | Sandbox
-> {
+export function githubWebhookApp(): WebRoutes<DeliveryReadServices> {
   return Layer.mergeAll(
     HttpRouter.add(ANY_METHOD, GITHUB_WEBHOOK_PATH, hostedRefusing(deliveryEndpoint())),
     hostedNotFoundRoute,

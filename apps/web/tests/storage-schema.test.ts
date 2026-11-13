@@ -69,6 +69,7 @@ const DECLARED_TABLES = [
   "github_connect_intent",
   "github_install_intent",
   "github_installation",
+  "github_mention_agent",
   "github_personal_token",
   "github_rate_hold",
   "github_repository",

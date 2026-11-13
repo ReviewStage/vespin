@@ -123,6 +123,7 @@ it.effect(
         repositorySelection: GITHUB_REPOSITORY_SELECTION.SELECTED,
         ciReadable: false,
         issuesReadable: false,
+        issuesWritable: false,
         suspended: false,
       });
       assert.equal(Option.isNone(missing), true);
