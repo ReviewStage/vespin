@@ -26,6 +26,7 @@ import { Checkbox as ShadcnCheckbox } from "../../shadcn/checkbox.js";
 import type { StatusTone } from "../../status-tone.js";
 import { useClipped } from "../../use-clipped.js";
 import { BUTTON_SIZE } from "../button/button.js";
+import { CARD_CORNER, CARD_PADDING, CARD_SHADOW, Card } from "../card/card.js";
 import { motionKey, motionRows } from "../list-motion/list-motion.js";
 import { withContextMenu } from "../menu/context-menu.js";
 import { useLinkAddress } from "../menu/link-address.js";
@@ -356,8 +357,22 @@ export type ListRowInk = (typeof LIST_ROW_INK)[keyof typeof LIST_ROW_INK];
  * `ui-list-row-*` class, which that sheet, the panel's, and the tests find
  * it by.
  */
-const LIST_CLASS =
-  "ui-list flex list-none flex-col gap-list-gap p-0 data-[variant=card]:gap-0 data-[variant=card]:overflow-hidden data-[variant=card]:rounded-control data-[variant=card]:border data-[variant=card]:border-border data-[variant=card]:has-[>li.ui-list-row[data-menu-open=true]:only-of-type]:border-border-menu-open data-[variant=card]:bg-surface data-[variant=card]:shadow-card";
+const LIST_CLASS = "ui-list flex list-none flex-col gap-list-gap p-0 data-[variant=card]:gap-0";
+
+/**
+ * A list drawn as a card (`LIST_VARIANT.CARD`) stands in a `Card` at a
+ * control's corner, its rows edge to edge on the card's ground and clipped
+ * at its corner, on Geist's card shadow; any other list stands bare.
+ */
+function framed(variant: ListVariant, list: React.JSX.Element): React.JSX.Element {
+  if (variant !== LIST_VARIANT.CARD) return list;
+
+  return (
+    <Card corner={CARD_CORNER.CONTROL} padding={CARD_PADDING.FLUSH} shadow={CARD_SHADOW.CARD}>
+      {list}
+    </Card>
+  );
+}
 
 /** The row: a grid of five tracks, its parts centered on its middle, in the text's ink, in by a nest for each level it stands nested at. */
 const ROW_CLASS =
@@ -577,38 +592,42 @@ export function List({
 
   if (run !== undefined) {
     return contexts(
-      <VirtualRows
-        scroller={run.scroller}
-        shiftedBy={run.shiftedBy}
-        keys={run.keys}
-        estimate={run.estimate}
-        gap={run.gap ?? 0}
-        overscan={run.overscan}
-        anchor={VIRTUAL_ROWS_ANCHOR.START}
-        listItems
-        moves={moves}
-        holdsFocus
-        className={LIST_CLASS}
-        aria-label={label}
-        onPointerDown={onPointerDown}
-        handle={handle}
-        block={{
-          ...(!joinsWalk && roving),
-          id,
-          onKeyDown,
-          ...selectionRoot(),
-          "data-variant": variant,
-          "data-density": density,
-          "data-inset": inset,
-          "data-finger-tall": fingerTall ? "true" : undefined,
-        }}
-      >
-        {run.row}
-      </VirtualRows>,
+      framed(
+        variant,
+        <VirtualRows
+          scroller={run.scroller}
+          shiftedBy={run.shiftedBy}
+          keys={run.keys}
+          estimate={run.estimate}
+          gap={run.gap ?? 0}
+          overscan={run.overscan}
+          anchor={VIRTUAL_ROWS_ANCHOR.START}
+          listItems
+          moves={moves}
+          holdsFocus
+          className={LIST_CLASS}
+          aria-label={label}
+          onPointerDown={onPointerDown}
+          handle={handle}
+          block={{
+            ...(!joinsWalk && roving),
+            id,
+            onKeyDown,
+            ...selectionRoot(),
+            "data-variant": variant,
+            "data-density": density,
+            "data-inset": inset,
+            "data-finger-tall": fingerTall ? "true" : undefined,
+          }}
+        >
+          {run.row}
+        </VirtualRows>,
+      ),
     );
   }
 
-  return (
+  return framed(
+    variant,
     <ul
       {...(joinsWalk ? {} : roving)}
       onKeyDown={onKeyDown}
@@ -624,7 +643,7 @@ export function List({
       {...(moves ? motionRows() : {})}
     >
       {contexts(children)}
-    </ul>
+    </ul>,
   );
 }
 

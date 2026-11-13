@@ -64,11 +64,13 @@ export const CARD_LOOK = {
 
 export type CardLook = (typeof CARD_LOOK)[keyof typeof CARD_LOOK];
 
-/** A card's corner: a page's card's; a control's, for a card set among lines rather than on a page; or a menu's, for a card that stands over the page as a menu does. Note that a raised card wears the control's unless it wears the menu's. */
+/** A card's corner: a page's card's; a control's, for a card set among lines rather than on a page; a menu's, for a card that stands over the page as a menu does; or a dialog's, for a card standing over the whole window. Note that a raised card wears the control's unless it wears the menu's or the dialog's. */
 export const CARD_CORNER = {
   CARD: "card",
   CONTROL: "control",
   MENU: "menu",
+  /** A dialog's, which a raised card standing over the whole window wears whatever its look. */
+  DIALOG: "dialog",
 } as const;
 
 export type CardCorner = (typeof CARD_CORNER)[keyof typeof CARD_CORNER];
@@ -81,6 +83,8 @@ export const CARD_ELEMENT = {
   LI: "li",
   SECTION: "section",
   SPAN: "span",
+  /** A card its foot's submit sends, as a message box is: a form the browser never checks, so no browser bubble is drawn over it and its owner says what is wrong. */
+  FORM: "form",
 } as const;
 
 export type CardElement = (typeof CARD_ELEMENT)[keyof typeof CARD_ELEMENT];
@@ -89,7 +93,11 @@ export type CardElement = (typeof CARD_ELEMENT)[keyof typeof CARD_ELEMENT];
 export const CARD_SHADOW = {
   NONE: "none",
   SOFT: "soft",
+  /** Geist's card shadow (`--ui-shadow-card`), standing a card off the page as a message box does. */
+  CARD: "card",
   MENU: "menu",
+  /** A dialog's, standing over the dimmed window. */
+  DIALOG: "dialog",
 } as const;
 
 export type CardShadow = (typeof CARD_SHADOW)[keyof typeof CARD_SHADOW];
@@ -138,7 +146,9 @@ const LOOK_CLASS: Record<CardLook, string> = {
 const SHADOW_CLASS: Record<CardShadow, string> = {
   [CARD_SHADOW.NONE]: "",
   [CARD_SHADOW.SOFT]: "shadow-card-soft",
+  [CARD_SHADOW.CARD]: "shadow-card",
   [CARD_SHADOW.MENU]: "shadow-menu",
+  [CARD_SHADOW.DIALOG]: "shadow-dialog",
 };
 
 /**
@@ -156,13 +166,28 @@ const HOVER_CLASS: Record<CardHover, string> = {
     "hover:not-data-[drop-target=true]:border-border-strong data-[lit=true]:not-data-[drop-target=true]:border-border-strong hover:shadow-card-lift data-[lit=true]:shadow-card-lift",
 };
 
+/**
+ * A card set inside a card whose edge shows: its own edge and shadow drop,
+ * its fill kept, so two edges never stand one inside the other. Note that a
+ * well's edge is unseen, so a card in a well keeps its own, and a drop
+ * target keeps its ring.
+ */
+const NESTED_CLASS =
+  "in-[.ui-card:not([data-look=well])]:not-data-[drop-target=true]:border-transparent in-[.ui-card:not([data-look=well])]:shadow-none";
+
+/** The edge while what it holds stops its form, shaken and in the danger ink, as a text field's is. */
+const INVALID_CLASS =
+  "data-[invalid=true]:animate-field-shake data-[invalid=true]:border-destructive";
+
 /** The card a dragged row is carried over, ringed and washed, so it reads as the one the row will land in. */
 const DROP_TARGET_CLASS =
   "data-[drop-target=true]:border-card-drop data-[drop-target=true]:bg-[linear-gradient(var(--color-muted),var(--color-muted))]";
 
-/** A card's corner: a menu's where asked, else a raised card's smaller one, else the corner asked for. */
+/** A card's corner: a menu's or a dialog's where asked, else a raised card's smaller one, else the corner asked for. */
 function cornerClass(look: CardLook, corner: CardCorner): string {
   if (corner === CARD_CORNER.MENU) return "rounded-menu";
+
+  if (corner === CARD_CORNER.DIALOG) return "rounded-dialog";
 
   if (look === CARD_LOOK.RAISED) return "rounded-card-raised";
 
@@ -212,6 +237,8 @@ function frameClass(
     dashed ? "border-dashed" : "",
     SHADOW_CLASS[shadow],
     HOVER_CLASS[hover],
+    NESTED_CLASS,
+    INVALID_CLASS,
     DROP_TARGET_CLASS,
     transitionClass(look, hover),
     className ?? "",
@@ -230,6 +257,7 @@ export function Card({
   hover = CARD_HOVER.NONE,
   lit = false,
   dashed = false,
+  invalid = false,
   className,
   ref,
   children,
@@ -246,6 +274,8 @@ export function Card({
   lit?: boolean | undefined;
   /** Whether its edge is dashed, as the frame of what is missing is. */
   dashed?: boolean | undefined;
+  /** Whether what it holds stops its form, which shakes it and edges it in the danger ink. */
+  invalid?: boolean | undefined;
   /** The owner's own class, which names and places it and sets nothing of its frame. */
   className?: string | undefined;
   /** The card's element, for what measures against it. */
@@ -265,6 +295,8 @@ export function Card({
       data-hover={hover === CARD_HOVER.NONE ? undefined : hover}
       data-lit={lit ? "true" : undefined}
       data-dashed={dashed ? "true" : undefined}
+      data-invalid={invalid ? "true" : undefined}
+      noValidate={Element === CARD_ELEMENT.FORM ? true : undefined}
     >
       {children}
     </ShadcnCard>
