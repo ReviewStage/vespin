@@ -9,8 +9,9 @@ import { macAppProcedures } from "./mac-app-acts";
 
 /**
  * An app an agent uses brought forward as main carries it: a panel's press
- * brings the app it names to the front, and any other window is refused,
- * since a page must not open apps on the Mac. Synthetic names throughout.
+ * brings the app it names to the front, one that could not open is refused
+ * so the press says so, and any other window is refused, since a page must
+ * not open apps on the Mac. Synthetic names throughout.
  */
 
 /** Every act port a fixture opened, closed once its test is done. */
@@ -26,17 +27,28 @@ const panelOf = (): ActSender<WebContents> => ({
   panel: true,
 });
 
-it.effect("a panel brings the app it names forward, and any other window is refused", () =>
-  Effect.gen(function* () {
-    const shown: string[] = [];
-    const actPort = testActPort(macAppProcedures({ showApp: (id) => void shown.push(id) }));
-    ports.push(actPort);
-    const show = { kind: ACT_KIND.MAC_APP_SHOW, payload: { bundleId: "com.example.notes" } };
+it.effect(
+  "a panel brings the app it names forward, one that could not open is refused, and any other window is refused",
+  () =>
+    Effect.gen(function* () {
+      const shown: string[] = [];
 
-    const other = yield* actPort.perform(show, { ...panelOf(), panel: false });
-    assert.ok("refused" in other);
-    yield* actPort.perform(show, panelOf());
+      const showApp = async (id: string) => {
+        if (id === "com.example.gone") throw new Error("Unable to find application");
+        shown.push(id);
+      };
 
-    assert.deepEqual(shown, ["com.example.notes"]);
-  }),
+      const actPort = testActPort(macAppProcedures({ showApp }));
+      ports.push(actPort);
+      const show = { kind: ACT_KIND.MAC_APP_SHOW, payload: { bundleId: "com.example.notes" } };
+      const gone = { kind: ACT_KIND.MAC_APP_SHOW, payload: { bundleId: "com.example.gone" } };
+
+      const other = yield* actPort.perform(show, { ...panelOf(), panel: false });
+      assert.ok("refused" in other);
+      const missing = yield* actPort.perform(gone, panelOf());
+      assert.ok("refused" in missing);
+      yield* actPort.perform(show, panelOf());
+
+      assert.deepEqual(shown, ["com.example.notes"]);
+    }),
 );
