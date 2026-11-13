@@ -2,7 +2,7 @@ import { AGENT_STATUS } from "@repo/features/agent-wire";
 import { IDLE_TASKS_VIEW } from "@repo/features/tasks-view";
 import { describe, expect, it } from "vitest";
 import type { AppStateSnapshot } from "./app-state.js";
-import { selectAgentNames, shareAppState } from "./app-state-reads.js";
+import { answerKeeper, selectAgentNames, shareAppState } from "./app-state-reads.js";
 import { initialAppState } from "./client/app-state-store.js";
 import { runModeFor } from "./run-mode.js";
 
@@ -30,6 +30,19 @@ describe("shareAppState", () => {
     expect(shared).toEqual(write);
     expect(shared.tasks[0]).toBe(kept);
     expect(shared.tasks[1]).toBe(changed);
+  });
+});
+
+describe("answerKeeper", () => {
+  it("answers the last answer again while a new one equals it, and the new one once it moves", () => {
+    const keep = answerKeeper<{ readonly rows: readonly { readonly id: string }[] }>();
+    const first = keep({ rows: [{ id: "a" }, { id: "b" }] });
+    const same = keep({ rows: [{ id: "a" }, { id: "b" }] });
+    const moved = keep({ rows: [{ id: "a" }, { id: "c" }] });
+
+    expect(same).toBe(first);
+    expect(moved.rows.map(({ id }) => id)).toEqual(["a", "c"]);
+    expect(moved.rows[0]).toBe(first.rows[0]);
   });
 });
 

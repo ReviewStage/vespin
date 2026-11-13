@@ -15,7 +15,6 @@ import {
   Image,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
-  Pressable,
   ScrollView,
   StyleSheet,
   Text,
@@ -38,6 +37,7 @@ import { CopyWordsMenu } from "./held-menu.js";
 import { InlineHost } from "./inline-host.js";
 import { Markdown, Picture } from "./markdown.js";
 import { HARNESS_MARK_ASSET } from "./marks.js";
+import { Press } from "./press.js";
 import { type PullRequestAct, PullRequestCard } from "./pull-request-card.js";
 import type { SuggestionLook } from "./suggestion-look.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -292,7 +292,7 @@ function CallRow({
 
   return (
     <View style={[styles.row, inset(item.depth)]}>
-      <Pressable
+      <Press
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
@@ -356,7 +356,7 @@ function CallRow({
           running={item.standing === CALL_STANDING.RUNNING && held?.waiting !== true}
           failed={item.standing === CALL_STANDING.FAILED}
         />
-      </Pressable>
+      </Press>
       {held === undefined ? null : (
         <View style={styles.body}>
           {/* Note that the presses are SwiftUI's, hosted in the row at the height they draw. */}
@@ -453,7 +453,7 @@ function OriginBody({ body }: { readonly body: string }) {
 
   return (
     <View style={styles.originBody}>
-      <Pressable
+      <Press
         onPress={() => setOpen((was) => !was)}
         accessibilityRole="button"
         accessibilityState={{ expanded: open }}
@@ -471,7 +471,7 @@ function OriginBody({ body }: { readonly body: string }) {
         <Text style={{ flex: 1, fontSize: TEXT_SIZE.FOOTNOTE, color: colors.TEXT_MUTED }}>
           {WEBHOOK_BODY.LABEL}
         </Text>
-      </Pressable>
+      </Press>
       {open ? <BodyBlock title={WEBHOOK_BODY.KIND} text={body} colors={colors} /> : null}
     </View>
   );
@@ -495,7 +495,7 @@ function FoldRow({
 
   return (
     <View style={[styles.row, inset(item.depth)]}>
-      <Pressable
+      <Press
         onPress={() => onToggle(item)}
         accessibilityRole="button"
         accessibilityState={{ expanded: item.open }}
@@ -519,7 +519,7 @@ function FoldRow({
           {item.summary}
         </Text>
         <StandingMark running={item.running} failed={false} />
-      </Pressable>
+      </Press>
     </View>
   );
 }
@@ -671,7 +671,7 @@ function TranscriptRow({
     case TRANSCRIPT_ITEM.PAGE:
       return (
         <View style={[styles.row, inset(item.depth)]}>
-          <Pressable
+          <Press
             onPress={() => drawing.onOpenPage(item)}
             accessibilityRole="button"
             accessibilityLabel={`${item.title}, ${PAGE_WORD}`}
@@ -704,7 +704,7 @@ function TranscriptRow({
               tintColor={colors.TEXT_MUTED}
               accessibilityElementsHidden
             />
-          </Pressable>
+          </Press>
         </View>
       );
     case TRANSCRIPT_ITEM.PULL_REQUEST:
@@ -790,7 +790,7 @@ export function AgentHead({ model, harness, status, onModel }: AgentHeadProps) {
         <Text style={ink}>{pressed && words !== undefined ? `${said} ·` : said}</Text>
       )}
       {pressed ? (
-        <Pressable
+        <Press
           onPress={onModel}
           accessibilityRole="button"
           accessibilityLabel={`${CHANGE_MODEL}, ${model}`}
@@ -813,7 +813,7 @@ export function AgentHead({ model, harness, status, onModel }: AgentHeadProps) {
             tintColor={colors.TEXT_MUTED}
             accessibilityElementsHidden
           />
-        </Pressable>
+        </Press>
       ) : null}
     </View>
   );
@@ -848,7 +848,7 @@ function JumpToLatest({
   );
 
   return (
-    <Pressable
+    <Press
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={JUMP_TO_LATEST}
@@ -873,7 +873,7 @@ function JumpToLatest({
           {arrow}
         </GlassView>
       )}
-    </Pressable>
+    </Press>
   );
 }
 
