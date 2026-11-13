@@ -36,6 +36,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { useDetailStack } from "../detail-stack.js";
 import { useInboxActs } from "../inbox/use-inbox.js";
 import { useMemberPictures } from "../member-pictures.js";
 import { useHandColumns } from "../place-columns.js";
@@ -96,10 +97,11 @@ const SEARCH_PICK = {
   AGENT: "agent",
 } as const;
 
-/** A row a wide window's Search picked, by its kind and its id. */
+/** A row a wide window's Search picked, by its kind and its id, with the route its own tab opens it on, which a narrower window pushes in its place; none for a thread a pick's box started. */
 type SearchPick = {
   readonly kind: (typeof SEARCH_PICK)[keyof typeof SEARCH_PICK];
   readonly id: string;
+  readonly route: string | undefined;
 };
 
 /** The row a wide window's Search stands beside its results, and how a press picks another. */
@@ -111,11 +113,17 @@ type SearchPicking = {
 
 /** The pick a row found makes, by its id: a task, a thread, or an agent; none for an id the query no longer finds. */
 function foundPick(found: SearchFound, id: string): SearchPick | undefined {
-  if (found.tasks.some((task) => task.id === id)) return { kind: SEARCH_PICK.TASK, id };
+  const route = foundRoutes(found).get(id);
 
-  if (found.inbox.some(({ item }) => item.id === id)) return { kind: SEARCH_PICK.THREAD, id };
+  if (found.tasks.some((task) => task.id === id)) return { kind: SEARCH_PICK.TASK, id, route };
 
-  if (found.agents.some(({ agent }) => agent.id === id)) return { kind: SEARCH_PICK.AGENT, id };
+  if (found.inbox.some(({ item }) => item.id === id)) {
+    return { kind: SEARCH_PICK.THREAD, id, route };
+  }
+
+  if (found.agents.some(({ agent }) => agent.id === id)) {
+    return { kind: SEARCH_PICK.AGENT, id, route };
+  }
 
   return undefined;
 }
@@ -371,7 +379,7 @@ function useSearchDetail(
             key={picked.id}
             id={picked.id}
             onRemind={onRemind}
-            onOpen={(id) => choose({ kind: SEARCH_PICK.THREAD, id })}
+            onOpen={(id) => choose({ kind: SEARCH_PICK.THREAD, id, route: undefined })}
           />
         ),
         asks: null,
@@ -443,14 +451,45 @@ function SearchSplitScreen({
   );
 }
 
+/**
+ * Keeps Search's pick in front as the window narrows past three columns,
+ * where Search's results stand alone with no detail beside them: the pick
+ * is pushed as its own tab's route on Search's stack, and let go, so a
+ * wider window again opens on the results. Note that a pick with a page
+ * pushed over it is left to `useStackToRoutes`, which pushes that page.
+ */
+function usePickToRoute(threeColumns: boolean, { picked, choose }: SearchPicking): void {
+  const router = useRouter();
+  const onTab = useOnTab();
+  const stack = useDetailStack(SIDEBAR_PLACE.SEARCH);
+  const was = useRef(threeColumns);
+  // Note that the pick and its stack are read through a ref the commit writes, before the layout lets the stack go.
+  const held = useRef({ picked, stacked: false });
+  useEffect(() => {
+    held.current = { picked, stacked: stack.pages.length > 0 };
+  }, [picked, stack]);
+
+  useEffect(() => {
+    const before = was.current;
+    was.current = threeColumns;
+    const { picked: shown, stacked } = held.current;
+
+    if (!before || threeColumns || stacked || shown?.route === undefined) return;
+    router.push(onTab(shown.route));
+    choose(undefined);
+  }, [threeColumns, router, onTab, choose]);
+}
+
 /** The Search tab's root screen: beside the app sidebar in a window wide enough for three columns, under the Stack's bar otherwise, the query and its scope held here so a rotation across the line keeps them. */
 export function SearchScreen() {
   const [query, setQuery] = useState("");
   const [scope, setScope] = useState<SearchScope>(SEARCH_SCOPE.ALL);
   const [picked, choose] = useState<SearchPick | undefined>(undefined);
   const words = { query, setQuery, scope, setScope };
+  const threeColumns = useThreeColumns();
+  usePickToRoute(threeColumns, { picked, choose });
 
-  return useThreeColumns() ? (
+  return threeColumns ? (
     <SearchSplitScreen {...words} picking={{ picked, choose }} />
   ) : (
     <SearchStackScreen {...words} />
