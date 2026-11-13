@@ -4,6 +4,7 @@ import { it } from "@effect/vitest";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LINK_OPEN } from "@repo/features/link-open";
+import { LIVE_VOICE } from "@repo/features/voices";
 import { AGENT_ENTER, COMMIT_AUTHOR, EXPERIMENT, SOUND_WHEN } from "@repo/settings";
 import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { eq, sql } from "drizzle-orm";
@@ -158,6 +159,7 @@ it.layer(getTestDB())("the account store's own-part choices and setup", (it) => 
         yield* writeAccountPreferences(userId, { soundWhen: SOUND_WHEN.BACKGROUND });
         yield* writeAccountPreferences(userId, { completionSound: COMPLETION_SOUND.QUACK });
         yield* writeAccountPreferences(userId, { askSound: COMPLETION_SOUND.QUESTION });
+        yield* writeAccountPreferences(userId, { voice: LIVE_VOICE.CEDAR });
         yield* writeAccountPreferences(userId, { turnNotifications: true });
         yield* writeAccountPreferences(userId, { onboardingSurvey: ONBOARDING_SURVEY });
 
@@ -173,6 +175,7 @@ it.layer(getTestDB())("the account store's own-part choices and setup", (it) => 
           soundWhen: SOUND_WHEN.BACKGROUND,
           completionSound: COMPLETION_SOUND.QUACK,
           askSound: COMPLETION_SOUND.QUESTION,
+          voice: LIVE_VOICE.CEDAR,
           turnNotifications: true,
           onboardingSurvey: ONBOARDING_SURVEY,
         });

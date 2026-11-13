@@ -297,10 +297,13 @@ export const APP_SETTING_SCHEMA = {
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
   /*
-   * The voice a call speaks with, kept on this device as it always was, and
-   * read when a call opens its session: GPT-Live fixes a voice at creation,
-   * so a new choice is heard on the next call. The Voice page is the
-   * experiment's, so its one row stands only while the experiment is on.
+   * The voice a call speaks with, the account's so a call on the web, on a
+   * Mac, or on a phone speaks alike, and read when a call opens its session:
+   * GPT-Live fixes a voice at creation, so a new choice is heard on the next
+   * call. It rides the preferences snapshot as a part of its own, as the
+   * sounds' choices do, and stands under the harnesses on Agents, since a
+   * call runs on the account's OpenAI key kept there, only while the Voice
+   * experiment is on.
    */
   voice: choiceSetting({
     field: "voice",
@@ -315,11 +318,13 @@ export const APP_SETTING_SCHEMA = {
     search: "Search voices",
     guard: (value: UnparsedWireValue) => optional(value, isLiveVoice),
     default: DEFAULT_LIVE_VOICE,
-    page: SETTINGS_PAGE.VOICE,
-    section: SETTING_SECTION.CONVERSATION,
+    page: SETTINGS_PAGE.AGENTS,
+    section: SETTING_SECTION.VOICE,
     order: 30,
+    // Nothing to run per write: a call reads the choice as it opens its session.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
-    visible: (view) => experimentOn(view.settings.experiments, EXPERIMENT.VOICE),
+    visible: (view) =>
+      view.accountDrawn && experimentOn(view.settings.experiments, EXPERIMENT.VOICE),
   }),
   /*
    * Where an app link opened in a browser goes: it stays on the web, or the

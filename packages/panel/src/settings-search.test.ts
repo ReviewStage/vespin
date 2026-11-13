@@ -309,19 +309,12 @@ test("skills and rename each find the row the page draws", () => {
   assert.deepEqual(labelsFound("rename"), ["Rename workspace"]);
 });
 
-test("voice finds the Voice page's rows only while the Voice experiment is on", () => {
+test("voice finds Agents' Voice row only while the Voice experiment is on", () => {
   const voiceFound = (experiments = NO_EXPERIMENTS) =>
-    (
-      searchSettings(
-        settingsSearchCorpus({ ...FULL_INPUT, settings: settingsView({ experiments }) }),
-        "voice",
-      )?.groups ?? []
-    )
-      .filter((group) => group.page === SETTINGS_VIEW.VOICE)
-      .flatMap((group) => group.items.map((entry) => entry.label));
+    labelsFound("voice", { ...FULL_INPUT, settings: settingsView({ experiments }) });
 
-  assert.deepEqual(voiceFound(), []);
-  assert.deepEqual(voiceFound(experimentsOn(EXPERIMENT.VOICE)), ["Voice", "OpenAI key"]);
+  assert.ok(!voiceFound().includes("Voice"));
+  assert.ok(voiceFound(experimentsOn(EXPERIMENT.VOICE)).includes("Voice"));
 });
 
 test("mcp finds the Vespin MCP & CLI page's rows and none of the integrations", () => {

@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { AGENT_PERMISSION_MODE } from "@repo/features/agent-approval-wire";
 import { LINK_OPEN } from "@repo/features/link-open";
+import { LIVE_VOICE } from "@repo/features/voices";
 import { COMPLETION_SOUND } from "@repo/wire/app-settings";
 import { test } from "vitest";
 import { AGENT_ENTER } from "./agent-enter.js";
@@ -94,6 +95,7 @@ test("the snapshot's preferences part carries only the keys v0.18.0 reads, whate
     soundWhen: SOUND_WHEN.BACKGROUND,
     completionSound: COMPLETION_SOUND.QUACK,
     askSound: COMPLETION_SOUND.QUESTION,
+    voice: LIVE_VOICE.CEDAR,
     turnNotifications: true,
     onboardingSurvey: '{"referral":"other","referralOther":"A meetup","role":"founder"}',
   } satisfies Required<AccountPreferences>;

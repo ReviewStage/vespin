@@ -10,8 +10,6 @@ export const SETTINGS_PAGE = {
   ACCOUNT: "account",
   /** How the app works for the account wherever it signs in: where links and new tasks open, how agents send and commit, and how a finished agent tells the account. */
   PREFERENCES: "preferences",
-  /** The voice a call speaks with, under a pointer to Settings › Agents, where the OpenAI key a call runs on is kept; drawn while the Voice experiment is on. */
-  VOICE: "voice",
   APPEARANCE: "appearance",
   /** The window's own shortcuts, listed to be found rather than changed. */
   SHORTCUTS: "shortcuts",
@@ -65,8 +63,8 @@ export const SETTING_SECTION = {
   PRIVACY: "privacy",
   /** Whether the app opens as this Mac starts, a group of its own on This Mac, under its own rows. */
   STARTUP: "startup",
-  /** How a voice call sounds, the Voice page's one group of controls, under its OpenAI key row. */
-  CONVERSATION: "conversation",
+  /** The voice a call speaks with, a card of its own on Agents under the harnesses' cards, drawn while the Voice experiment is on. */
+  VOICE: "voice",
   /** The microphone dictation listens on, a group of its own on This Mac, under the permission that lets the app listen. */
   MICROPHONE: "microphone",
   /** How an agent's message box sends while its turn runs, and who authors its commits, a group of its own on Preferences, under General. */

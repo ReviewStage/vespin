@@ -13,6 +13,7 @@ import { CHAPTERS_MODEL } from "@repo/features/chapters-model-choice";
 import { LINK_OPEN } from "@repo/features/link-open";
 import { type CatalogModel, MODEL_PROVIDER } from "@repo/features/models-wire";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
+import { LIVE_VOICE } from "@repo/features/voices";
 import { EXPERIMENT, SOUND_WHEN } from "@repo/settings";
 import {
   HTTP_METHOD,
@@ -278,20 +279,24 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
       assert.equal(partOf(yield* ask(request(owner)), "soundWhen"), undefined);
       assert.equal(partOf(yield* ask(request(owner)), "completionSound"), undefined);
       assert.equal(partOf(yield* ask(request(owner)), "askSound"), undefined);
+      assert.equal(partOf(yield* ask(request(owner)), "voice"), undefined);
       assert.equal(partOf(yield* ask(request(owner)), "turnNotifications"), undefined);
 
       yield* ask(request(owner, { soundWhen: SOUND_WHEN.BACKGROUND }));
       yield* ask(request(owner, { completionSound: COMPLETION_SOUND.QUACK }));
       yield* ask(request(owner, { askSound: COMPLETION_SOUND.QUESTION }));
+      yield* ask(request(owner, { voice: LIVE_VOICE.CEDAR }));
       const chosen = yield* ask(request(owner, { turnNotifications: true }));
       assert.equal(partOf(chosen, "soundWhen"), SOUND_WHEN.BACKGROUND);
       assert.equal(partOf(chosen, "completionSound"), COMPLETION_SOUND.QUACK);
       assert.equal(partOf(chosen, "askSound"), COMPLETION_SOUND.QUESTION);
+      assert.equal(partOf(chosen, "voice"), LIVE_VOICE.CEDAR);
       assert.equal(partOf(chosen, "turnNotifications"), true);
       assert.equal(partOf(chosen, "updatedAt"), undefined);
       assert.equal(partOf(yield* ask(request(other)), "soundWhen"), undefined);
       assert.equal(partOf(yield* ask(request(other)), "completionSound"), undefined);
       assert.equal(partOf(yield* ask(request(other)), "askSound"), undefined);
+      assert.equal(partOf(yield* ask(request(other)), "voice"), undefined);
       assert.equal(partOf(yield* ask(request(other)), "turnNotifications"), undefined);
     }),
   );
@@ -304,6 +309,7 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
           soundWhen: SOUND_WHEN.ALWAYS,
           completionSound: COMPLETION_SOUND.BELL,
           askSound: COMPLETION_SOUND.QUESTION,
+          voice: LIVE_VOICE.CEDAR,
           turnNotifications: true,
         }),
       );
@@ -312,6 +318,7 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
         { soundWhen: "sometimes" },
         { completionSound: "kazoo" },
         { askSound: "kazoo" },
+        { voice: "kazoo" },
         { turnNotifications: "yes" },
       ]) {
         assert.deepEqual(yield* ask(request(owner, refused)), {
@@ -324,6 +331,7 @@ it.layer(getTestDB())("the preferences snapshot's sound and notification parts",
       assert.equal(partOf(kept, "soundWhen"), SOUND_WHEN.ALWAYS);
       assert.equal(partOf(kept, "completionSound"), COMPLETION_SOUND.BELL);
       assert.equal(partOf(kept, "askSound"), COMPLETION_SOUND.QUESTION);
+      assert.equal(partOf(kept, "voice"), LIVE_VOICE.CEDAR);
       assert.equal(partOf(kept, "turnNotifications"), true);
     }),
   );
