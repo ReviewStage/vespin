@@ -31,8 +31,9 @@ import { OneLine } from "../one-line/one-line.js";
  *
  * The pointer on the rail stacks the lines round the one under it beside
  * the rail, each its own pill (`MenuSurface`'s toolbar): its sender's face,
- * name, and words, the line under the pointer in front and those either
- * side fainter, the stack gliding on the app's spring as the
+ * name, and words, the line under the pointer in front and the words of
+ * those either side fainter on pills that stay solid, so none shows the
+ * conversation through it, the stack gliding on the app's spring as the
  * pointer moves; a press asks the caller to go to the line under it
  * (`onJump`). The pointer may cross onto the stack, which then holds still,
  * and press any pill shown in it, the pill under it standing at full
@@ -89,47 +90,42 @@ const FEWEST = 2;
 /** How far the bubble stands out past the lines it wraps, above the first and below the last, in pixels. */
 const BUBBLE_PAD = 2;
 
-/** The rail's column at the conversation's leading edge, taking the pointer only on its lines and its open list. */
+/** The rail's column at the conversation's leading edge, inside the log's leading inset so it never meets the words however narrow the log stands, taking the pointer only on its lines and its open stack; a phone's rail stands in the same column. */
 const COLUMN =
-  "ui-transcript-rail pointer-events-none absolute inset-y-0 left-0 z-1 flex w-ui-24 items-center";
+  "ui-transcript-rail pointer-events-none absolute inset-y-0 left-0 z-1 flex w-ui-16 items-center";
 
 /** The rail's one press: its lines, centered down the column, each at most a pitch tall and shrinking to a hairline's pitch where more stand than its height holds. */
 const PRESS =
   "pointer-events-auto flex max-h-full w-full cursor-default appearance-none flex-col border-0 bg-transparent p-0 py-ui-12";
 
-const LINE_SLOT = "flex h-ui-8 min-h-ui-2 w-full shrink items-center pl-ui-6";
+const LINE_SLOT = "flex h-ui-8 min-h-ui-2 w-full shrink items-center pl-ui-4";
 
-const LINE = "block h-ui-2 w-ui-12 rounded-ui-full bg-muted-foreground opacity-60";
+/** A line, as both rails draw it. */
+const LINE = "block h-ui-2 w-ui-8 rounded-ui-full bg-muted-foreground opacity-60";
 
 /** The bubble round the lines in view: the column's whole height, clipped to them, so it glides on its clip rather than its size. */
 const BUBBLE =
-  "pointer-events-none absolute inset-y-0 bg-secondary transition-[clip-path,opacity] duration-(--ui-duration-pane) ease-pane";
+  "pointer-events-none absolute inset-y-0 left-0 w-ui-16 bg-secondary transition-[clip-path,opacity] duration-(--ui-duration-pane) ease-pane";
 
 /** How many pills stand either side of the line in front. */
 const STACK_REACH = 3;
 
-/** How much fainter each pill stands for each line it is from the one in front, so one just past the stack's ends is gone. */
-const STACK_FADE = 1 / (STACK_REACH + 1);
-
 /** The stack beside the rail, its middle moved to the line in front; only its shown pills take the pointer. */
 const STACK =
-  "pointer-events-none absolute top-0 left-ui-24 transition-transform duration-(--ui-duration-pane) ease-spring";
+  "pointer-events-none absolute top-0 left-ui-16 transition-transform duration-(--ui-duration-pane) ease-spring";
 
-/** A pill's place in the stack, gliding on the app's spring and fading at once; its padding is the gap to the next pill, so the pointer crosses from one to the next without leaving the stack. */
+/** A pill's place in the stack, gliding on the app's spring, shown or hidden at once; its padding is the gap to the next pill and to the rail, so the pointer crosses from the rail to a pill and from one pill to the next without leaving the stack, and the pill stands at the words' edge. */
 const PILL_PLACE =
-  "pointer-events-none absolute top-0 left-0 origin-left cursor-press py-ui-2 transition-transform duration-(--ui-duration-pane) ease-spring";
+  "group/pill pointer-events-none absolute top-0 left-0 cursor-press py-ui-2 pl-ui-4 transition-transform duration-(--ui-duration-pane) ease-spring";
 
-const PILL_WORDS = "flex max-w-popover-wide items-center gap-ui-6 px-ui-4 text-caption";
-
-/** A phone's rail: one press down the gutter, its lines a glance, opening the list of lines. */
-const NARROW_COLUMN =
-  "ui-transcript-rail pointer-events-none absolute inset-y-0 left-0 z-1 flex w-ui-16 items-center";
+/** A pill's face, name, and words, fainter by its line's distance from the one in front (`data-far`) on a pill that stays solid, so no pill shows the words behind it. */
+const PILL_WORDS =
+  "flex max-w-popover-wide items-center gap-ui-6 px-ui-4 text-caption group-data-[far=1]/pill:opacity-80 group-data-[far=2]/pill:opacity-60 group-data-[far=3]/pill:opacity-40";
 
 const NARROW_PRESS =
   "pointer-events-auto flex max-h-full w-full cursor-press appearance-none flex-col items-start overflow-hidden border-0 bg-transparent p-0 py-ui-8 pl-ui-4";
 
 const NARROW_SLOT = "flex h-ui-6 min-h-ui-2 shrink items-center";
-const NARROW_LINE = "block h-ui-2 w-ui-8 rounded-ui-full bg-muted-foreground opacity-60";
 
 /** Where the bubble stands down the column, in pixels from its top and its bottom. */
 interface BubbleClip {
@@ -238,18 +234,14 @@ function useBubble(
   return { clip, shown: first !== undefined };
 }
 
-/** The bubble round the lines in view, placed across its column by `inset`, its corners a small round's. */
-function Bubble({ bubble, inset }: { bubble: BubbleState; inset: string }): React.JSX.Element {
+/** The bubble round the lines in view, its corners a small round's. */
+function Bubble({ bubble }: { bubble: BubbleState }): React.JSX.Element {
   const { clip } = bubble;
 
   return (
     <span
       aria-hidden
-      className={cn(
-        BUBBLE,
-        inset,
-        bubble.shown && clip !== undefined ? "opacity-100" : "opacity-0",
-      )}
+      className={cn(BUBBLE, bubble.shown && clip !== undefined ? "opacity-100" : "opacity-0")}
       style={
         clip === undefined
           ? undefined
@@ -273,8 +265,8 @@ function NarrowRail({
   const bubble = useBubble(column, slots, marks);
 
   return (
-    <div ref={column} className={NARROW_COLUMN}>
-      <Bubble bubble={bubble} inset="left-0 w-ui-16" />
+    <div ref={column} className={COLUMN}>
+      <Bubble bubble={bubble} />
       <button
         type="button"
         aria-label={RAIL_LABEL}
@@ -289,7 +281,7 @@ function NarrowRail({
             }}
             className={NARROW_SLOT}
           >
-            <span className={NARROW_LINE} />
+            <span className={LINE} />
           </span>
         ))}
       </button>
@@ -326,9 +318,9 @@ const StackPill = memo(function StackPill({
   );
 });
 
-/** How strong a line's pill stands with the line in front at `active`: full in front, fainter by each line away. */
-function pillFade(index: number, active: number): number {
-  return Math.max(0, 1 - Math.abs(index - active) * STACK_FADE);
+/** How many lines a line's pill stands from the one in front at `active`, which its words are fainter by (`PILL_WORDS`). */
+function pillFar(index: number, active: number): string {
+  return String(Math.abs(index - active));
 }
 
 /** How many lines from the one in front a line stands, held to just past the stack's ends, so a pill past the stack waits there and slides in from there rather than across the column. */
@@ -338,10 +330,11 @@ function stackPlace(index: number, active: number): number {
 
 /**
  * Moves the pills near the line in front, and those near where it was, to
- * where it stands now: each to its place in the stack, fainter by its
- * distance, taking the pointer only while it shows. Note that only these are
- * written, as their own transform, opacity, and pointer, so the pointer
- * crossing a line restyles a few pills rather than the rail.
+ * where it stands now: each to its place in the stack, its words fainter by
+ * its distance, shown and taking the pointer only within the stack's reach.
+ * Note that only these are written, as their own transform, opacity,
+ * pointer, and distance, so the pointer crossing a line restyles a few pills
+ * rather than the rail.
  */
 function placeStack(
   pills: readonly (HTMLElement | null)[],
@@ -359,11 +352,12 @@ function placeStack(
     const element = pills[index];
 
     if (element == null) continue;
-    const fade = open ? pillFade(index, to) : 0;
+    const shown = open && Math.abs(index - to) <= STACK_REACH;
 
     element.style.transform = `translateY(${at * pill - pill / 2}px)`;
-    element.style.opacity = String(fade);
-    element.style.pointerEvents = fade > 0 ? "auto" : "none";
+    element.style.opacity = shown ? "1" : "0";
+    element.style.pointerEvents = shown ? "auto" : "none";
+    element.dataset.far = pillFar(index, to);
   }
 }
 
@@ -553,12 +547,12 @@ function WideRail({
     },
   });
 
-  // Note that a pill under the pointer stands at full strength until the pointer leaves it or the stack moves.
+  // Note that a pill's words under the pointer stand at full strength until the pointer leaves it or the stack moves.
   const hover = useCallback((index: number, on: boolean) => {
     const element = pills.current[index];
 
     if (element == null || !opened.current) return;
-    element.style.opacity = String(on ? 1 : pillFade(index, placed.current));
+    element.dataset.far = on ? pillFar(index, index) : pillFar(index, placed.current);
   }, []);
 
   const selected = open && focused ? active : -1;
@@ -613,7 +607,7 @@ function WideRail({
       }}
       onPointerLeave={() => setPointed(false)}
     >
-      <Bubble bubble={bubble} inset="left-ui-2 w-ui-20" />
+      <Bubble bubble={bubble} />
       <button
         type="button"
         aria-label={PRESS_LABEL}
