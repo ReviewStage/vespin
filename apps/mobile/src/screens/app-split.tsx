@@ -1,9 +1,18 @@
 // app-split.tsx -- the one split view a window wide enough for three columns stands over the tabs: the app sidebar, drawn once for every tab, beside the list and the page the tab standing hands it, each tab's kept where it was left.
 
 import { KeptColumns, type KeptView, Screen, SplitView } from "@repo/ui-native";
+import { useEffect, useState } from "react";
 import { InFrontProvider, type PlaceColumns, usePlaceColumns } from "../place-columns.js";
-import { SIDEBAR_PLACE, type SidebarPlace, useAppSidebar } from "./app-sidebar.js";
+import {
+  SIDEBAR_PLACE,
+  type SidebarPick,
+  type SidebarPlace,
+  useAppSidebar,
+} from "./app-sidebar.js";
 import { useSidebarTasks } from "./task-screens.js";
+
+/** A sidebar pick, and the place the route stood in when it was made. */
+type HeldPick = SidebarPick & { readonly over: SidebarPlace | undefined };
 
 /** The places, in the order their columns stand kept. */
 const PLACES = [SIDEBAR_PLACE.INBOX, SIDEBAR_PLACE.TASKS, SIDEBAR_PLACE.SEARCH] as const;
@@ -43,7 +52,10 @@ function keptViews(
  * them away, since a split view that loses its middle column is a different
  * view and is drawn anew. Its detail stands in front only while the split
  * view does (`front`), so a pushed page's Handoff activity wins while it
- * stands and the detail's comes back as it goes.
+ * stands and the detail's comes back as it goes. Note that a sidebar pick
+ * stands at once, its place's columns and its row selected, until the route
+ * moves, because the tab's route answers a few renders after the press,
+ * which iPadOS 26 drew as most of a second.
  */
 export function AppSplit({
   place,
@@ -52,7 +64,6 @@ export function AppSplit({
   readonly place: SidebarPlace | undefined;
   readonly front: boolean;
 }) {
-  const standing = place ?? SIDEBAR_PLACE.INBOX;
   const inbox = usePlaceColumns(SIDEBAR_PLACE.INBOX);
   const tasks = usePlaceColumns(SIDEBAR_PLACE.TASKS);
   const search = usePlaceColumns(SIDEBAR_PLACE.SEARCH);
@@ -63,20 +74,29 @@ export function AppSplit({
     [SIDEBAR_PLACE.SEARCH, search],
   ] as const;
 
-  const held = new Map<SidebarPlace, PlaceColumns>(
+  const kept = new Map<SidebarPlace, PlaceColumns>(
     handed.flatMap(([each, columns]) => (columns === undefined ? [] : [[each, columns] as const])),
   );
 
-  const columns = held.get(standing);
+  const routedTask = place === undefined ? undefined : kept.get(place)?.openTask;
+  const [held, hold] = useState<HeldPick | undefined>(undefined);
+  // Note that a moved route, or a task picked in the list instead, drops the hold outright, so the route's own selection stands from then on.
+  useEffect(() => hold(undefined), [place, routedTask]);
+  const pick = held !== undefined && held.over === place ? held : undefined;
+  const standing = pick?.place ?? place ?? SIDEBAR_PLACE.INBOX;
+  const columns = kept.get(standing);
   const sidebarTasks = useSidebarTasks();
-  const sidebar = useAppSidebar(standing, sidebarTasks, columns?.openTask);
+
+  const sidebar = useAppSidebar(standing, sidebarTasks, pick?.task ?? columns?.openTask, (picked) =>
+    hold({ ...picked, over: place }),
+  );
 
   return (
     <>
       <Screen>
         <SplitView
           {...sidebar}
-          content={<KeptColumns shown={standing} views={keptViews(held, standing, front)} />}
+          content={<KeptColumns shown={standing} views={keptViews(kept, standing, front)} />}
           contentBar={columns?.contentBar}
           detail={<InFrontProvider value={front}>{columns?.detail}</InFrontProvider>}
           detailBar={columns?.detailBar}

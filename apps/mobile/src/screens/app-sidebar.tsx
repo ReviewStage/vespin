@@ -89,6 +89,9 @@ type FirstColumn = SidebarVisibility & {
   readonly sidebarBar: ColumnBar;
 };
 
+/** What a sidebar row picks: a place, or a task on the Tasks tab. */
+export type SidebarPick = { readonly place: SidebarPlace; readonly task?: string | undefined };
+
 /** Whether a picked row's id names one of the places rather than a task. */
 function placeOf(id: string): (typeof PLACES)[number] | undefined {
   return PLACES.find((place) => place.id === id);
@@ -142,12 +145,15 @@ export function useListColumn(list: ListColumn): FirstColumn {
  * sidebar's list rather than its bar, as Notion's iPad sidebar names its
  * workspace, because a second leading item folds into the bar's overflow
  * beside the sidebar's own button. Note that the tabs' layout draws it once,
- * for every tab, so a tab's switch moves its selection and nothing else.
+ * for every tab, so a tab's switch moves its selection and nothing else, and
+ * that it tells `onPick` what a row picks before it navigates there, so the
+ * split view can stand the pick at once.
  */
 export function useAppSidebar(
   place: SidebarPlace,
   tasks: SidebarTasks,
-  openTask?: string | undefined,
+  openTask: string | undefined,
+  onPick: (picked: SidebarPick) => void,
 ): FirstColumn {
   const router = useRouter();
   const waiting = useInboxBadge();
@@ -159,6 +165,8 @@ export function useAppSidebar(
 
   const pick = (id: string) => {
     const picked = placeOf(id);
+
+    onPick(picked === undefined ? { place: SIDEBAR_PLACE.TASKS, task: id } : { place: picked.id });
 
     if (picked !== undefined) router.navigate(picked.route);
     else router.navigate({ pathname: "/tasks", params: { selected: id } });
