@@ -54,6 +54,8 @@ const ENTITY_GLYPH: Readonly<Record<EntityKind, () => React.JSX.Element>> = {
   [ENTITY_KIND.DATE]: GLYPH.DATE,
   // Note that an app on a Mac whose icon is not known wears the screen an app's icon stands in for.
   [ENTITY_KIND.MAC_APP]: () => <AppIcon />,
+  // Note that the Mac itself wears the same screen, which is what an app's icon stands in for.
+  [ENTITY_KIND.COMPUTER]: () => <AppIcon />,
 };
 
 /** The glyph of an entity of `kind` where nothing more of it is known. */

@@ -121,6 +121,8 @@ import { DESCRIPTION_SECTION_BOUNDS } from "./task-wire.js";
  * too: `mention://mac-app/<app>`, the app by its bundle id, or by its name
  * where it has none, and its label its name. It points an agent at the app
  * for the `computer` tool, on whichever of the developer's Macs serves it.
+ * The Mac itself, any app on it, is `mention://computer/`, labeled
+ * Computer.
  *
  * A date has no page of its own either, so it takes the `mention:` form too:
  * `mention://date/<start>`, and `mention://date/<start>/<end>` for a range, each
@@ -155,6 +157,8 @@ export const MENTION_KIND = {
   DATE: "date",
   /** An app on the developer's Mac, which the agent may use through `computer`. */
   MAC_APP: "mac-app",
+  /** The developer's Mac as a whole, any app on which the agent may use through `computer`. */
+  COMPUTER: "computer",
 } as const;
 
 const MENTION_BOUNDS = {
@@ -373,6 +377,8 @@ const mentionSchema = EffectSchema.Union([
       EffectSchema.isMaxLength(MENTION_BOUNDS.MAX_APP_CHARS),
     ),
   }),
+  // Note that routing's R3 adds the Mac here too, a `machine`, once a command can name the Mac it runs on.
+  EffectSchema.Struct({ kind: EffectSchema.Literal(MENTION_KIND.COMPUTER) }),
   EffectSchema.Struct({
     kind: EffectSchema.Literal(MENTION_KIND.DATE),
     start: dateMomentSchema,
@@ -402,6 +408,9 @@ export type PersonMention = Extract<Mention, { readonly kind: typeof MENTION_KIN
 
 /** A mention of an app on the developer's Mac. */
 export type MacAppMention = Extract<Mention, { readonly kind: typeof MENTION_KIND.MAC_APP }>;
+
+/** A mention of the developer's Mac as a whole. */
+export type ComputerMention = Extract<Mention, { readonly kind: typeof MENTION_KIND.COMPUTER }>;
 
 /** A mention of an MCP server or one of its tools, or a page of its provider's. */
 export type ServerMention = Extract<Mention, { readonly provider: string }>;
@@ -502,6 +511,11 @@ function schemeFields({ host, steps, hash, search }: SchemeLink) {
 
       return { kind: MENTION_KIND.MAC_APP, app: decodedStep(app ?? "") };
     }
+
+    case SCHEME_LINK_HOST.COMPUTER:
+      return steps.join("") === "" && hash === "" && search === ""
+        ? { kind: MENTION_KIND.COMPUTER }
+        : undefined;
 
     case SCHEME_LINK_HOST.PLAN: {
       const taskId = decodedStep(steps.join("/"));
@@ -910,6 +924,8 @@ export function encodeMention(mention: Mention, place: MentionPlace): string {
     // An app on a Mac has no page of its own, so it keeps the app's own form.
     case MENTION_KIND.MAC_APP:
       return schemeLinkOf(SCHEME_LINK_HOST.MAC_APP, encodedStep(mention.app));
+    case MENTION_KIND.COMPUTER:
+      return schemeLinkOf(SCHEME_LINK_HOST.COMPUTER, "");
     // A date has no page of its own, so it keeps the app's own form; its ends spell nothing a target must encode.
     case MENTION_KIND.DATE:
       return schemeLinkOf(
@@ -1005,6 +1021,7 @@ const BARE_NAME = {
   AGENT: "Agent",
   PERSON: "Person",
   APP: PRODUCT_NAME,
+  COMPUTER: "Computer",
 } as const;
 
 /** A file's lines as a chip names them, `app.ts:12–20`, as a mention of them picked from a File tab is named. */
@@ -1052,6 +1069,8 @@ function bareName(mention: Mention): string {
       return dateLabel(mention);
     case MENTION_KIND.MAC_APP:
       return mention.app;
+    case MENTION_KIND.COMPUTER:
+      return BARE_NAME.COMPUTER;
   }
 }
 
