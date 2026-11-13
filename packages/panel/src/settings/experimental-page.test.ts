@@ -140,7 +140,6 @@ test("the workspace's experiments and the account's own stand in two groups, eac
     [
       "Following",
       "Memory",
-      "Run actions",
       "Suggestions",
       "Task descriptions",
       "Computer use",
@@ -226,7 +225,6 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
   assert.deepEqual(feedbackAbout, [
     EXPERIMENT.FOLLOWING,
     EXPERIMENT.MEMORY,
-    EXPERIMENT.RUN_ACTIONS,
     EXPERIMENT.REPLY_BUTTONS,
     EXPERIMENT.DESCRIPTIONS,
     EXPERIMENT.COMPUTER_USE,

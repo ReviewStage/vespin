@@ -292,10 +292,13 @@ function Column({
     <ZStack
       modifiers={[
         ...(sidebar ? [] : [containerBackground(colors.GROUND, "navigationSplitView")]),
-        // Note that a list's title stands bold at its bar's leading edge, as Mail names the mailbox over its list, rather than small in its middle.
+        // Note that a list beside the app sidebar names itself bold at its bar's leading edge, as Mail names the mailbox over its list; a list standing first, as a portrait iPad's, keeps its title small in the middle, because its 320 pt bar also holds the switcher, compose, ⋯ and the sidebar button, and a leading title folds them into an overflow.
         ...(bar.title === undefined
           ? []
-          : [navigationTitle(bar.title), toolbarTitleDisplayMode("inlineLarge")]),
+          : [
+              navigationTitle(bar.title),
+              toolbarTitleDisplayMode(sidebar ? "inline" : "inlineLarge"),
+            ]),
       ]}
     >
       {view}
