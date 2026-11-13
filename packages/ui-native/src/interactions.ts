@@ -1,4 +1,4 @@
-// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): an iPad pointer's hover effect, a view dragged out as its link, and pictures or a link dropped on a view.
+// interactions.ts -- the modifiers @expo/ui lacks, which the app's native module registers (`apps/mobile/modules/native-interactions`): a view dragged out as its link, and pictures or a link dropped on a view.
 
 import {
   createModifier,
@@ -9,24 +9,10 @@ import { flow, Option, Schema } from "effect";
 
 /** The names the native module registers each modifier under, which its Swift names too. */
 const MODIFIER = {
-  HOVER_EFFECT: "vespinHoverEffect",
   DRAG_LINK: "vespinDragLink",
   DROP_PICTURES: "vespinDropPictures",
   DROP_LINK: "vespinDropLink",
 } as const;
-
-/** How the pointer meets a view on an iPad: a highlight behind it, as a row or a bar's button takes it, or the view lifted under it, as a small capsule takes it. */
-export const HOVER_EFFECT = {
-  HIGHLIGHT: "highlight",
-  LIFT: "lift",
-} as const;
-
-export type HoverEffect = (typeof HOVER_EFFECT)[keyof typeof HOVER_EFFECT];
-
-/** The pointer's hover over a view, which also shapes the pointer to it. */
-export function hoverEffect(effect: HoverEffect): ModifierConfig {
-  return createModifier(MODIFIER.HOVER_EFFECT, { effect });
-}
 
 /** A view dragged out as its link: another app takes it as a URL, and a place here that takes a link reads it back. */
 export function dragLink(url: string): ModifierConfig {

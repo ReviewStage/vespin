@@ -13,7 +13,7 @@ builds a control of its own.
   first, and in its long press menu, which lifts the row's preview
   (`ThreadPreview`, `TaskPreview`, `AgentPreview`) and leads with Open,
   and a row's link, which an iPad drags out of it (`interactions.ts`, the
-  hover, drag, and drop modifiers the app's native module registers), a
+  drag and drop modifiers the app's native module registers), a
   task page's rows (`TaskHead`, `AgentRow`, `RelationRow`, `LinkRow`, and
   `WordsRow` for its description), `GroupRow` (a place a regular window's
   sidebar opens, such as the Inbox with its count), `SplitView` (the app's
@@ -167,7 +167,12 @@ navigation, tab bar, swipes, menus, sheets and glass.
   Settings, which the system stands in the same round glass, the photo
   clipped to a circle inside. A landscape iPad's sidebar heads its
   list with the switcher, its tile and its name, and stands Settings at its foot. Nothing draws a
-  copy of glass.
+  copy of glass, and glass is one layer: a bar's own, or one glass view
+  (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest). A
+  glass that holds buttons takes no press of its own (not `interactive`),
+  so only the button under a finger or the pointer reacts, and no button
+  is handed a hover effect: the system draws its own on each style, where
+  an added highlight drew a second platter on iPadOS 26.
 - **Rows** stand plain and edge to edge on `GROUND`, never as cards: the
   unread dot in the margin, a 14 pt leading mark in an 18 pt column (the
   status ring, or the ask's glyph on an agent's own thread), the words from

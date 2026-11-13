@@ -183,7 +183,7 @@ export function GlassBar({
   const bar = solid ? (
     <SolidBar>{content}</SolidBar>
   ) : (
-    <GlassView glassEffectStyle="regular" isInteractive style={styles.bar}>
+    <GlassView glassEffectStyle="regular" style={styles.bar}>
       {content}
     </GlassView>
   );

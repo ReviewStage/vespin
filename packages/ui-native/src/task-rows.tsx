@@ -39,7 +39,6 @@ import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import {
   actionButton,
   type RowAction,
@@ -221,7 +220,6 @@ function PullRequestLink({
       onPress={pullRequest.onPress}
       modifiers={[
         buttonStyle("borderless"),
-        hoverEffect(HOVER_EFFECT.HIGHLIGHT),
         accessibilityValue(pullRequestMarkLabel(pullRequest)),
         accessibilityHint(OPENS_PULL_REQUEST),
       ]}

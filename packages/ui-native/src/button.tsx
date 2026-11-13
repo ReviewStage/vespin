@@ -28,7 +28,6 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactNode } from "react";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { HOVER_EFFECT, hoverEffect } from "./interactions.js";
 import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -197,7 +196,6 @@ export function Chip({ label, symbol, count, selected = false, hint, onPress }: 
         controlSize("small"),
         tint(colors.TEXT),
         ...(selected ? [foregroundStyle(colors.GROUND)] : []),
-        hoverEffect(HOVER_EFFECT.LIFT),
         ...(selected ? [accessibilityAddTraits(["isSelected"])] : []),
         ...(hint === undefined ? [] : [accessibilityHint(hint)]),
       ]}
@@ -370,7 +368,6 @@ export function FollowingChip({ label, faces, more, hint, heard, onPress }: Foll
       onPress={onPress}
       modifiers={[
         buttonStyle("borderless"),
-        hoverEffect(HOVER_EFFECT.LIFT),
         accessibilityLabel(label),
         accessibilityValue(heard),
         accessibilityHint(hint),

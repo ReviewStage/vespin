@@ -204,8 +204,7 @@ the Home Screen's search; Handoff shows only between real devices.
 
 ## The native interactions module
 
-What `@expo/ui` has no modifier for, an iPad pointer's hover effect and drag
-and drop, is the app's own native module, autolinked from
+What `@expo/ui` has no modifier for, drag and drop, is the app's own native module, autolinked from
 `modules/native-interactions/`: its Swift registers each modifier with
 `@expo/ui`'s registry (`ViewModifierRegistry`) as the module is made, and
 `@repo/ui-native` hands them to its views (`src/interactions.ts`), so no
@@ -213,8 +212,10 @@ screen names one. A row drags out as its vespin.dev link, a task's onto a
 group's header, in the Tasks list or the iPad's sidebar, moves it there, and pictures dropped on
 an agent's composer or a sheet that starts work are kept as JPEGs and
 attached. A view handed a modifier the build does not register draws as it
-would without it. No Maestro flow can drag or hover, so these are checked by
-hand on an iPad with a trackpad.
+would without it. A pointer's hover is the system's own on each button, with
+none added, since an added highlight drew a second platter of glass over a
+button's own on iPadOS 26. No Maestro flow can drag or hover, so these are
+checked by hand on an iPad with a trackpad.
 
 ## The photo scaler
 
