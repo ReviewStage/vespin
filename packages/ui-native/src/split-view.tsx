@@ -28,6 +28,7 @@ import {
 import type { TaskStatus } from "@repo/features/task-wire";
 import { type ReactNode, useEffect } from "react";
 import { StyleSheet, View } from "react-native";
+import { BarContent } from "./bar-content.js";
 import type { Glyph } from "./glyph.js";
 import { actContent, menuActContent, menuLabel } from "./glyph-label.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
@@ -267,7 +268,7 @@ function Column({
   ) : (
     <Toolbar>
       {stacked}
-      <Toolbar.Content>
+      <BarContent>
         {bar.leading === undefined ? null : (
           <ToolbarItem placement="topBarLeading">{bar.leading}</ToolbarItem>
         )}
@@ -276,14 +277,14 @@ function Column({
             <PathTitle path={bar.path.path} status={bar.path.status} />
           </ToolbarItem>
         )}
-        {bar.menu === undefined ? null : (
-          <ToolbarItem placement="topBarTrailing">
-            <BarMenuItem menu={bar.menu} />
-          </ToolbarItem>
-        )}
         {bar.action === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
             <BarActionButton action={bar.action} />
+          </ToolbarItem>
+        )}
+        {bar.menu === undefined ? null : (
+          <ToolbarItem placement="topBarTrailing">
+            <BarMenuItem menu={bar.menu} />
           </ToolbarItem>
         )}
         {(bar.foot ?? []).map((item) => (
@@ -291,7 +292,7 @@ function Column({
             {isBarMenu(item) ? <BarMenuItem menu={item} /> : <BarActionButton action={item} />}
           </ToolbarItem>
         ))}
-      </Toolbar.Content>
+      </BarContent>
     </Toolbar>
   );
 
