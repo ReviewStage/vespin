@@ -278,11 +278,27 @@ export function agentParts(message: AgentTranscriptMessage): readonly AgentPart[
 }
 
 /**
+ * Every way a `computer` call names its app, folded to one case: as its
+ * input spelled it, and as its answer named it, by name and by bundle id.
+ */
+function appSpellings(input: WireValue | undefined, output: WireValue | undefined): string[] {
+  return [
+    computerAppName(input, undefined),
+    computerAppName(undefined, output),
+    computerAppBundleId(output),
+  ].flatMap((spelled) => (spelled === undefined ? [] : [spelled.toLowerCase()]));
+}
+
+/**
  * The icon each `computer` call's row wears, by its call: the one its answer
  * kept, or, where it kept none, the one the newest call before it on the
  * same app kept, as a call the Mac answered as text or with no icon does; a
  * call no call on its app kept an icon for by then is left out, and wears
- * the placeholder.
+ * the placeholder. Note that an app is matched by any of its spellings in
+ * any case (`appSpellings`), because a call still running names its app only
+ * as the agent typed it ("calculator", or its bundle id), and its row would
+ * otherwise wear the placeholder until its answer lands, though an earlier
+ * row already draws the icon.
  */
 export function computerIconsByCall(
   messages: readonly AgentTranscriptMessage[],
@@ -293,11 +309,13 @@ export function computerIconsByCall(
   for (const message of messages) {
     for (const part of agentParts(message)) {
       if (part.kind !== AGENT_PART.TOOL || part.tool !== AGENT_TOOL.COMPUTER) continue;
-      const app = computerAppName(part.input, part.output);
+      const spellings = appSpellings(part.input, part.output);
       const kept = computerAppIcon(part.output);
 
-      if (app !== undefined && kept !== undefined) byApp.set(app, kept);
-      const icon = kept ?? (app === undefined ? undefined : byApp.get(app));
+      if (kept !== undefined) for (const spelled of spellings) byApp.set(spelled, kept);
+
+      const icon =
+        kept ?? spellings.map((spelled) => byApp.get(spelled)).find((lent) => lent !== undefined);
 
       if (icon !== undefined) byCall.set(part.callId, icon);
     }

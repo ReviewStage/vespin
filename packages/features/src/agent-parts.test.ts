@@ -57,3 +57,40 @@ test("a computer call that kept no icon wears the one an earlier call on its app
     ],
   );
 });
+
+test("a computer call still running wears its app's icon at once, however its input spells the app: the Mac's name in any case, or its bundle id", () => {
+  const running = (callId: string, app: string): WireRecord => ({
+    type: "tool-computer",
+    toolCallId: callId,
+    state: "input-available",
+    input: { action: "click", app, element_index: 7 },
+  });
+
+  const messages = [
+    turn("turn-1", [
+      computer(
+        "read-1",
+        { action: "get_app_state", app: "Calculator" },
+        {
+          status: "ran",
+          app: {
+            name: "Calculator",
+            bundleId: "com.apple.calculator",
+            refused: false,
+            icon: { picture: ICON },
+          },
+        },
+      ),
+    ]),
+    turn("turn-2", [running("click-1", "calculator"), running("click-2", "com.apple.calculator")]),
+  ];
+
+  assert.deepEqual(
+    [...computerIconsByCall(messages)],
+    [
+      ["read-1", ICON.id],
+      ["click-1", ICON.id],
+      ["click-2", ICON.id],
+    ],
+  );
+});
