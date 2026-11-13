@@ -90,9 +90,11 @@ for (const { path, page, marked } of PAGES) {
 test("the landing offers the web app beside the download, and nothing in its scenes to press", () => {
   const body = drawn(App).querySelector("main");
 
-  // A scene's controls are a picture of the app: none of them may take the keyboard.
+  // A scene's controls are a picture of the app: none of them may take the keyboard. The hero's app alone is live, a region the reader clicks through.
   const pressable = Array.from(body?.querySelectorAll("button, [tabindex]") ?? []).filter(
-    (control) => control.closest("[inert]") === null,
+    (control) =>
+      control.closest("[inert]") === null &&
+      control.closest('[aria-label="The Mac app, live: click through it"]') === null,
   );
 
   assert.deepEqual(

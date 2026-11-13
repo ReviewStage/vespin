@@ -1,5 +1,5 @@
 import { TASK_STATUS, type TaskStatus } from "@repo/features/task-wire";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
 import { cssCustomProperties } from "../../css.js";
 import {
   CheckCheckIcon,
@@ -411,6 +411,25 @@ function useAppFit() {
   }, []);
 
   return { ref, scale, style: cssCustomProperties({ "--ui-hero-app-fit": scale }) };
+}
+
+/**
+ * Scrolls the element `ref` names to its end each time `count`, how many
+ * lines it holds, grows, so a message the reader sends stands in view
+ * rather than under the scroll's edge; the first draw keeps its place.
+ */
+function useScrollToEnd(ref: RefObject<HTMLDivElement | null>, count: number): void {
+  const seen = useRef(count);
+  useEffect(() => {
+    const log = ref.current;
+    const grew = count > seen.current;
+
+    seen.current = count;
+
+    if (log === null || !grew) return;
+
+    log.scrollTo({ top: log.scrollHeight, behavior: "smooth" });
+  }, [ref, count]);
 }
 
 /** A composer's field: its words, as they change, sent with Return. */
@@ -897,6 +916,9 @@ function TaskPage({
 }): React.JSX.Element {
   const started = task.lines.length > 0;
   const agents = task.agents.length > 0 ? task.agents : ["New agent"];
+  const log = useRef<HTMLDivElement>(null);
+
+  useScrollToEnd(log, task.lines.length);
 
   return (
     <div className="ui-hero-page ui-hero-task">
@@ -932,7 +954,7 @@ function TaskPage({
         />
       </div>
       <section className="ui-hero-sheet ui-hero-agent" aria-label={task.name}>
-        <div className="ui-hero-log">
+        <div ref={log} className="ui-hero-log">
           {started ? (
             task.lines.map((line) => <TranscriptLine key={line.id} line={line} />)
           ) : (
@@ -1018,6 +1040,9 @@ export function LandingHeroApp(): React.JSX.Element {
   const [drafts, setDrafts] = useState<ReadonlyMap<string, string>>(new Map());
   const [replies, setReplies] = useState<ReadonlyMap<string, readonly Said[]>>(new Map());
   const nextId = useRef(0);
+  const thread = useRef<HTMLDivElement>(null);
+
+  useScrollToEnd(thread, (replies.get(openItem)?.length ?? 0) + (answer.sent ? 1 : 0));
 
   const draft = (key: string) => drafts.get(key) ?? "";
 
@@ -1155,7 +1180,7 @@ export function LandingHeroApp(): React.JSX.Element {
               actions={<MoreButton thing="thread" onClick={still} />}
             />
           </div>
-          <div className="ui-hero-inbox-item-body">
+          <div ref={thread} className="ui-hero-inbox-item-body">
             {item === undefined ? null : (
               <InboxThread
                 key={item.id}
