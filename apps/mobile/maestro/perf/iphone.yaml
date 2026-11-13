@@ -1,0 +1,164 @@
+# iphone.yaml -- MEASUREMENT ONLY: each tap path five times on the Inbox fixture, each timed tap labeled "T:<path>".
+appId: dev.vespin.ios
+onFlowComplete:
+  - setOrientation: PORTRAIT
+---
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- assertVisible: "Recorded the invite flow"
+- waitForAnimationToEnd:
+    timeout: 5000
+# Inbox row to its thread.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "Recorded the invite flow"
+          retryTapIfNoChange: false
+          label: "T:inbox-row"
+      - assertVisible: ".*walked the invite flow.*"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "BackButton"
+          retryTapIfNoChange: false
+          label: "T:back-from-thread"
+      - assertVisible: "Recorded the invite flow"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# The ⋯ menu.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "More"
+          retryTapIfNoChange: false
+          label: "T:more-menu"
+      - assertVisible: "Mark all as read"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          point: "50%, 90%"
+          retryTapIfNoChange: false
+      - waitForAnimationToEnd:
+          timeout: 3000
+# New task.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "New task"
+          retryTapIfNoChange: false
+          label: "T:new-task"
+      - assertVisible: "Describe the task"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Cancel"
+          retryTapIfNoChange: false
+          label: "T:new-task-cancel"
+      - assertVisible: "Recorded the invite flow"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# Tab switches.
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "Tasks"
+          retryTapIfNoChange: false
+          label: "T:tab-tasks"
+      - assertVisible: "Teammate invitations"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Inbox"
+          retryTapIfNoChange: false
+          label: "T:tab-inbox"
+      - assertVisible: "Recorded the invite flow"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# Tasks row to its task, and its Status chip.
+- tapOn: "Tasks"
+- assertVisible: "Teammate invitations"
+- waitForAnimationToEnd:
+    timeout: 3000
+- repeat:
+    times: 5
+    commands:
+      - tapOn:
+          text: "Teammate invitations"
+          retryTapIfNoChange: false
+          label: "T:tasks-row"
+      - assertVisible: "Created by .*"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          id: "BackButton"
+          retryTapIfNoChange: false
+          label: "T:back-from-task"
+      - assertVisible: "Teammate invitations"
+      - waitForAnimationToEnd:
+          timeout: 3000
+- tapOn: "Teammate invitations"
+- assertVisible: "Created by .*"
+- waitForAnimationToEnd:
+    timeout: 3000
+- repeat:
+    times: 3
+    commands:
+      - tapOn:
+          text: "Status, .*"
+          retryTapIfNoChange: false
+          label: "T:status-chip-open"
+      - assertVisible: "Backlog"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Todo"
+          retryTapIfNoChange: false
+          label: "T:status-pick"
+      - assertVisible: "Status, Todo"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Status, .*"
+          retryTapIfNoChange: false
+          label: "T:status-chip-open"
+      - waitForAnimationToEnd:
+          timeout: 3000
+      - tapOn:
+          text: "Backlog"
+          retryTapIfNoChange: false
+          label: "T:status-pick"
+      - assertVisible: "Status, Backlog"
+      - waitForAnimationToEnd:
+          timeout: 3000
+# Send on an agent's page, whose turn runs, so each wait is capped.
+- launchApp:
+    arguments:
+      fixture: inbox
+      agent: 5ebf7192-3a6c-4d84-8fac-6b7c8d9eafb5
+- assertVisible: "Stop"
+- waitForAnimationToEnd:
+    timeout: 3000
+- repeat:
+    times: 3
+    commands:
+      - tapOn:
+          id: "composer-field"
+      - inputText: "Show the expiry too."
+      - assertVisible: "Send"
+      - waitForAnimationToEnd:
+          timeout: 2000
+      - tapOn:
+          text: "Send"
+          retryTapIfNoChange: false
+          label: "T:send"
+      - extendedWaitUntil:
+          visible: "Stop"
+          timeout: 5000
+      - waitForAnimationToEnd:
+          timeout: 2000
