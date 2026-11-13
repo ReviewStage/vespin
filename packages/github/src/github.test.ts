@@ -229,6 +229,21 @@ describe("GitHub", () => {
     },
   );
 
+  it.effect("hands out an installation token, reusing it while it has time left", () => {
+    const { sent, layer } = harness(() => json({ full_name: "octo/hello" }));
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+      const first = yield* github.installationToken(installation(3));
+      const again = yield* github.installationToken(installation(3));
+
+      assert.strictEqual(Redacted.value(first.token), "ghs_installation_3");
+      assert.strictEqual(Redacted.value(again.token), "ghs_installation_3");
+      assert.strictEqual(first.expiresAt.toISOString(), "2099-01-01T00:00:00.000Z");
+      assert.strictEqual(sent.length, 1);
+    }).pipe(Effect.provide(layer));
+  });
+
   it.effect("asks again conditionally, and answers a 304 from the kept body", () => {
     const { reads, layer } = harness((request) =>
       request.headers.get("if-none-match") === '"v1"'

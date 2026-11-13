@@ -102,13 +102,32 @@ const SECONDARY_LIMIT_WORDS = /\bsecondary rate\b/iu;
 const GRAPHQL_RESOURCE = "graphql";
 const CORE_RESOURCE = "core";
 
-const MintedToken = Schema.Struct({ token: Schema.String });
+const MintedToken = Schema.Struct({ token: Schema.String, expiresAt: Schema.String });
 
 /** The App the layer acts as. `userAgent` names the deployment to GitHub, as GitHub asks every client to. */
 export interface GitHubAppOptions {
   readonly appId: number | string;
   readonly privateKey: Redacted.Redacted<string>;
   readonly userAgent: string;
+  /**
+   * The throttle's spacing groups, where they are not the plugin's own: the
+   * plugin's documented `write`, `search`, and `notifications` options. A test
+   * hands groups with no `minTime`, since the plugin spaces on real time.
+   */
+  readonly throttleGroups?: GitHubThrottleGroups;
+}
+
+/** The throttle's spacing groups, as `@octokit/plugin-throttling` takes them. */
+export interface GitHubThrottleGroups {
+  readonly write?: Bottleneck.Group;
+  readonly search?: Bottleneck.Group;
+  readonly notifications?: Bottleneck.Group;
+}
+
+/** An installation token to hand to something outside the module, such as `git`, and when GitHub expires it. */
+export interface InstallationToken {
+  readonly token: Redacted.Redacted<string>;
+  readonly expiresAt: Date;
 }
 
 /** An installation token's reach: the installation, and the repositories and permissions it is minted for, all of them where left out. */
@@ -425,12 +444,8 @@ function memberIdentity(identities: Identities, digest: string): IdentityState {
   return state;
 }
 
-/**
- * The installation auth strategy: each request carries a token for the
- * grant, minted and cached by the App's own `auth-app`, whose mint is sent
- * as the App, through the App's Octokit.
- */
-function installationAuth(app: GitHubOctokitInstance, grant: InstallationGrant) {
+/** What `auth-app` is asked for a grant's token. */
+function mintingFor(grant: InstallationGrant): InstallationAuthOptions {
   const minting: InstallationAuthOptions = {
     type: "installation",
     installationId: grant.installationId,
@@ -443,8 +458,21 @@ function installationAuth(app: GitHubOctokitInstance, grant: InstallationGrant) 
 
   if (grant.permissions !== undefined) minting.permissions = { ...grant.permissions };
 
-  const authenticate = async () =>
-    Schema.decodeUnknownSync(MintedToken)(await app.auth({ ...minting }));
+  return minting;
+}
+
+/** A token for the grant from the App's `auth-app`: its cached one while it has time left, else one minted as the App. */
+async function minted(app: GitHubOctokitInstance, grant: InstallationGrant) {
+  return Schema.decodeUnknownSync(MintedToken)(await app.auth(mintingFor(grant)));
+}
+
+/**
+ * The installation auth strategy: each request carries a token for the
+ * grant, minted and cached by the App's own `auth-app`, whose mint is sent
+ * as the App, through the App's Octokit.
+ */
+function installationAuth(app: GitHubOctokitInstance, grant: InstallationGrant) {
+  const authenticate = () => minted(app, grant);
 
   const hook = async (request: RequestInterface, endpoint: EndpointOptions) => {
     const { token } = await authenticate();
@@ -505,6 +533,16 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
           () => false,
         ),
     };
+
+    // Note that a group left out is the plugin's own, so its default spacing stands.
+    if (options.throttleGroups?.write !== undefined) throttle.write = options.throttleGroups.write;
+
+    if (options.throttleGroups?.search !== undefined)
+      throttle.search = options.throttleGroups.search;
+
+    if (options.throttleGroups?.notifications !== undefined) {
+      throttle.notifications = options.throttleGroups.notifications;
+    }
 
     return throttle;
   };
@@ -598,6 +636,11 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
         octokitFor(state, { authStrategy: installationAuth(appOctokit, grant) }),
       );
     },
+    installationToken: (grant) =>
+      Effect.map(
+        called(identities.app, () => minted(appOctokit, grant)),
+        ({ token, expiresAt }) => ({ token: Redacted.make(token), expiresAt: new Date(expiresAt) }),
+      ),
     asMember: (token) => {
       const digest = createHash("sha256").update(Redacted.value(token)).digest("hex");
       const state = memberIdentity(identities, digest);
@@ -617,6 +660,14 @@ export class GitHub extends Context.Service<
     readonly asInstallation: (grant: InstallationGrant) => GitHubClient;
     /** As a member, by the token the caller hands in. */
     readonly asMember: (token: Redacted.Redacted<string>) => GitHubClient;
+    /**
+     * A token for the grant to hand outside the module: the one `asInstallation`
+     * signs with, reused while it has time left, else minted as the App under
+     * the App's hold and throttle.
+     */
+    readonly installationToken: (
+      grant: InstallationGrant,
+    ) => Effect.Effect<InstallationToken, GitHubFailure>;
   }
 >()("@repo/github/GitHub") {
   /** The service for one App, built once per instance over the instance's `HttpClient` and the shared holds. */
