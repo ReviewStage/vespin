@@ -155,7 +155,7 @@ export function scriptedHarnessLayer(
 }
 
 /** One launch or message a harness took, and the account it acted for. */
-interface HeardCall {
+export interface HeardCall {
   readonly call: "open" | "send";
   readonly account: string;
 }

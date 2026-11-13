@@ -38,6 +38,7 @@ export {
   selectInbox,
   selectInboxTasks,
   selectInboxWaiting,
+  selectMachineCommandDevice,
   selectMachineCommands,
   selectMirrors,
   selectNetwork,
