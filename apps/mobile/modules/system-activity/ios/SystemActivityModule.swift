@@ -135,6 +135,9 @@ public final class SystemActivityModule: Module {
   /// Where the index's answers are said in the device log.
   private static let log = Logger(subsystem: "dev.vespin.ios", category: "spotlight")
 
+  /// The queue every Spotlight call runs on, apart from Expo's one shared async queue.
+  private static let calls = DispatchQueue(label: "dev.vespin.spotlight.calls")
+
   private lazy var index = CSSearchableIndex(name: Self.indexName, protectionClass: .complete)
   // Note that the activity is read and written on the main thread alone.
   private var current: NSUserActivity?
@@ -169,7 +172,7 @@ public final class SystemActivityModule: Module {
       self.withdraw(webpageUrl)
     }.runOnQueue(.main)
 
-    // Note that each Spotlight call is handed to the index on Expo's async queue, which is serial, so the system takes them in the order JavaScript made them, and each is answered by its own completion alone. No call waits on the answer to the one before, because the system was seen never to answer a delete-all on an index it held nothing of, and every call awaiting it then never reached the index.
+    // Note that each Spotlight call runs on the module's own serial queue (`calls`), so the system takes them in the order JavaScript made them while no call holds Expo's one shared async queue, which every other module's calls wait on. Each is answered by its own completion alone, and none waits on the answer to the one before, because the system was seen never to answer a delete-all on an index it held nothing of, and every call awaiting it then never reached the index.
     // Note that a refused delete-all refuses the whole call (`Replacement`), so the index is never taken as holding the lists alone while an earlier account's items may stand in it.
     AsyncFunction("replaceAll") { (items: [SpotlightRecord], promise: Promise) in
       let replacement = Replacement(Self.answer(promise))
@@ -182,19 +185,19 @@ public final class SystemActivityModule: Module {
         replacement.emptied(error)
       }
       self.index.indexSearchableItems(items.map(Self.searchableItem), completionHandler: replacement.added)
-    }
+    }.runOnQueue(Self.calls)
 
     AsyncFunction("index") { (items: [SpotlightRecord], promise: Promise) in
       self.index.indexSearchableItems(items.map(Self.searchableItem), completionHandler: Self.answer(promise))
-    }
+    }.runOnQueue(Self.calls)
 
     AsyncFunction("remove") { (ids: [String], promise: Promise) in
       self.index.deleteSearchableItems(withIdentifiers: ids, completionHandler: Self.answer(promise))
-    }
+    }.runOnQueue(Self.calls)
 
     AsyncFunction("removeAll") { (promise: Promise) in
       self.index.deleteAllSearchableItems(completionHandler: Self.answer(promise))
-    }
+    }.runOnQueue(Self.calls)
   }
 
   /// What the system handed back, as JavaScript reads it: the link, and a pull request's number; none for an activity that is not ours.
@@ -224,6 +227,8 @@ public final class SystemActivityModule: Module {
   private static func searchableItem(_ record: SpotlightRecord) -> CSSearchableItem {
     let attributes = CSSearchableItemAttributeSet(contentType: .text)
     attributes.title = record.title
+    // Note that the name is the title too, because Spotlight has matched a query against an item's display name alone since iOS 17, so an item with a title alone is held but never found.
+    attributes.displayName = record.title
     attributes.contentDescription = record.summary
     return CSSearchableItem(
       uniqueIdentifier: record.id, domainIdentifier: record.domain, attributeSet: attributes)

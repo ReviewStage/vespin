@@ -31,6 +31,7 @@ import {
   machineCommandResultSchema,
 } from "@repo/features/machine-command-wire";
 import { PRODUCT_NAME } from "@repo/features/product-name";
+import { RECORDING_FAILURE } from "@repo/features/recording-wire";
 import { carried, GATEWAY_EVENT } from "@repo/gateway";
 import {
   Clock,
@@ -55,6 +56,7 @@ import {
   COMPUTER_HELPER_OP,
   type ComputerAppPin,
   type ComputerHelperAnswer,
+  type ComputerHelperRecording,
   type ComputerHelperRequest,
   type ComputerPermissions,
   type ComputerUseHelperSeam,
@@ -186,6 +188,7 @@ export type MachineCommandClient = Pick<
   | "claim"
   | "listening"
   | "settle"
+  | "postRecording"
   | "join"
   | "saveDeviceSettings"
   | "saveDeviceAppLooks"
@@ -391,8 +394,9 @@ function neverOffered(app: string): MachineCommandRefusal {
 /**
  * The grants each action needs before the helper is asked to take it:
  * reading a window needs both, since it walks the app's elements and
- * captures its window; every other action on an app needs Accessibility to
- * press, type, and post input; listing the apps needs neither.
+ * captures its window; recording one needs Screen Recording alone; every
+ * other action on an app needs Accessibility to press, type, and post
+ * input; listing the apps and stopping a recording need neither.
  */
 const ACTION_NEEDS = {
   [COMPUTER_ACTION.LIST_APPS]: [],
@@ -407,6 +411,8 @@ const ACTION_NEEDS = {
   [COMPUTER_ACTION.DRAG]: [COMPUTER_PERMISSION.ACCESSIBILITY],
   [COMPUTER_ACTION.SET_VALUE]: [COMPUTER_PERMISSION.ACCESSIBILITY],
   [COMPUTER_ACTION.PERFORM_SECONDARY_ACTION]: [COMPUTER_PERMISSION.ACCESSIBILITY],
+  [COMPUTER_ACTION.RECORD]: [COMPUTER_PERMISSION.SCREEN_RECORDING],
+  [COMPUTER_ACTION.STOP_RECORDING]: [],
 } as const satisfies Record<ComputerAction, readonly ComputerPermission[]>;
 
 /** Whether the Mac holds one grant, as the helper read them. */
@@ -497,6 +503,32 @@ function computerResult(answer: ComputerHelperAnswer, app?: ComputerApp): Machin
   return UNEXPECTED_ANSWER;
 }
 
+/** What a stop answers where its video could not be posted up, which the helper keeps until the next recording, so a stop asked again posts it again. */
+const RECORDING_UNSENT: MachineCommandRefusal = {
+  refused:
+    "Not run: the recording could not be sent up from the developer's Mac just now; call " +
+    "stop_recording again.",
+};
+
+/** What a stop answers where this Mac holds no recording of the conversation that asks: none runs, as the helper says where none ever did. */
+const NO_RECORDING: MachineCommandResult = { computer: { unrecorded: RECORDING_FAILURE.NONE } };
+
+/** Why a stop is refused as its turn comes, where a record taken ahead of it made another conversation the recording's owner. */
+const NOT_OWNER_WORDS = "no recording of this conversation runs: start one with record.";
+
+/** Who a recording is: the account and the agent's conversation that started it, which alone may stop it and receive its video. */
+interface RecordingOwner {
+  readonly userId: string;
+  readonly conversationId: string;
+}
+
+/** The bytes a base64 text spells: three for every four characters, less its padding. */
+function base64Bytes(base64: string): number {
+  const padding = base64.endsWith("==") ? 2 : base64.endsWith("=") ? 1 : 0;
+
+  return (base64.length / 4) * 3 - padding;
+}
+
 /** What a command of a kind this Mac cannot run answers, such as one a newer service queued. */
 const CANNOT_RUN: MachineCommandRefusal = {
   refused:
@@ -542,6 +574,13 @@ export function composeMachineCommands(
     const allowedOnce = new Map<string, Set<string>>();
     /** The apps allowed without asking as last read, so an app taken off that list loses every grant it was allowed once beside it. */
     let alwaysAllowed: readonly string[] = [];
+    /**
+     * Who started the recording the helper holds, running or kept until the
+     * next: the one conversation whose stop reaches it, since the helper keeps
+     * one recording for the whole Mac and would hand it to any stop. Note that
+     * it is forgotten as the gate moves, so another account never receives it.
+     */
+    let recordingOwner: RecordingOwner | undefined;
     /** The asks waiting on the developer, by the command's id, the earliest asked first, each with the account it was claimed for. */
 
     const asks = new Map<
@@ -797,13 +836,24 @@ export function composeMachineCommands(
           Duration.toMillis(Duration.seconds(command.timeoutSeconds));
 
         const { action } = command;
+        const owner: RecordingOwner = { userId, conversationId: command.conversationId };
+        const stops = action.op === COMPUTER_ACTION.STOP_RECORDING;
+
+        const owns = () =>
+          recordingOwner?.userId === owner.userId &&
+          recordingOwner.conversationId === owner.conversationId;
+
+        // Note that a stop from any conversation but the one that recorded is answered as no recording, before the helper is asked, so a video never reaches another agent or account.
+        if (stops && !owns()) return yield* settled(command.id, NO_RECORDING);
+
         const missing = yield* lacking(computer, action.op);
 
         if (missing !== undefined) return yield* settled(command.id, missing);
         let app: ComputerApp | undefined;
         let request: ComputerHelperRequest = action;
 
-        if (action.op !== COMPUTER_ACTION.LIST_APPS) {
+        // Note that only an action that names an app asks about it, since listing the apps and stopping a recording act on none.
+        if ("app" in action) {
           const allowed = yield* appAllowed(computer, { ...command, action }, userId, deadline);
 
           if ("refused" in allowed) return yield* settled(command.id, allowed);
@@ -819,14 +869,42 @@ export function composeMachineCommands(
         // Note that the switch is read again here, since the developer may have switched apps off while the app was asked about.
         if (!(yield* computer.enabled)) return yield* settled(command.id, APPS_SWITCHED_OFF);
 
-        // Note that the switch is read once more as the helper's turn comes, since the action may wait behind another first.
-        const answer = yield* computer.helper.ask(
-          request,
-          Duration.millis(left),
-          Effect.map(computer.enabled, (on) => (on ? undefined : APPS_OFF_WORDS)),
-        );
+        // Note that the switch, and a stop's owner, are read once more as the helper's turn comes, since the action may wait behind another first, a record that makes another conversation the owner among them.
+        const stillLet = Effect.map(computer.enabled, (on) => {
+          if (!on) return APPS_OFF_WORDS;
+
+          return stops && !owns() ? NOT_OWNER_WORDS : undefined;
+        });
+
+        const answer = yield* computer.helper.ask(request, Duration.millis(left), stillLet);
+
+        if ("recording" in answer)
+          return yield* settled(command.id, yield* posted(command.id, answer.recording));
+
+        if (
+          action.op === COMPUTER_ACTION.RECORD &&
+          "outcome" in answer &&
+          "done" in answer.outcome
+        ) {
+          recordingOwner = owner;
+        }
 
         yield* settled(command.id, sendable(computerResult(answer, app)));
+      });
+
+    /**
+     * A stopped recording's video posted up for its command, and what the
+     * command came to once it was: the recording, named by its length and
+     * size, or that it could not be sent, which a stop asked again sends.
+     */
+    const posted = (id: string, recording: ComputerHelperRecording) =>
+      Effect.map(asked(client.postRecording(id, recording.mp4)), (answer): MachineCommandResult => {
+        if ("failure" in answer) return RECORDING_UNSENT;
+        const { seconds, width, height } = recording;
+
+        return {
+          computer: { recorded: { seconds, width, height, byteCount: base64Bytes(recording.mp4) } },
+        };
       });
 
     /**
@@ -1080,15 +1158,19 @@ export function composeMachineCommands(
 
         if (standing.looks !== undefined && sameApps(standing.looks, apps)) return;
         const named = yield* Effect.forEach(apps, (bundleId) => appNamed(use, bundleId));
+
+        // Note that Computer use is read again once the helper has named them, since it may have been turned off meanwhile.
+        if (!(yield* use.offered)) return;
         const looks = postedLooks(named.map(({ app }) => app));
         const saved = yield* asked(client.saveDeviceAppLooks(standing.deviceId, looks));
 
-        // Note that an app the helper failed to name leaves the looks unheld, so the next look names it again once the helper answers.
-        if ("failure" in saved || !named.every(({ stands }) => stands)) return;
+        if ("failure" in saved) return;
+        // Note that an app the helper failed to name holds no looks as posted, so the next look names it again once the helper answers, whatever list it then holds.
+        const held = named.every(({ stands }) => stands) ? apps : undefined;
 
         // Note that the looks are held only for the standing they were posted for, so a join or a write meanwhile posts them again.
         yield* SubscriptionRef.update(joined, (now) =>
-          now === standing ? { ...standing, looks: apps } : now,
+          now === standing ? { ...standing, looks: held } : now,
         );
       });
 
@@ -1164,6 +1246,7 @@ export function composeMachineCommands(
         if (moves !== clearedAt) {
           clearedAt = moves;
           allowedOnce.clear();
+          recordingOwner = undefined;
           yield* FiberSet.clear(running);
 
           // Note that the clear waits out any claim under way, during which the gate may have moved again, so the next turn starts from where it stands now.

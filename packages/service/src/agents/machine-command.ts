@@ -3,6 +3,7 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import {
   claimMachineCommand,
   claimMachineCommands,
+  machineCommandRecording,
   machineCommandResult,
   machineCommandsWaiting,
   machineOwnerOf,
@@ -269,7 +270,35 @@ export function askMac(
   userId: string,
   ask: MachineCommandAsk,
 ): Effect.Effect<MachineCommandAnswer, never, DatabaseServices> {
+  return Effect.map(askMacHeard(userId, ask), ({ answer }) => answer);
+}
+
+/** What a call heard back: what the command came to, and a stopped recording's video, where the Mac posted one. */
+export interface MachineCommandHeard {
+  readonly answer: MachineCommandAnswer;
+  readonly recording?: Uint8Array;
+}
+
+/** Whether a result says a recording stopped, whose video the Mac posted before it. */
+function isRecorded(result: MachineCommandResult): boolean {
+  return "computer" in result && "recorded" in result.computer;
+}
+
+/**
+ * Runs one command as `askMac` does, and answers what it came to with the
+ * video of a recording it stopped, read before the row is withdrawn, since
+ * the video goes with it; a result that says a recording stopped whose
+ * video never arrived answers that result alone.
+ */
+export function askMacHeard(
+  userId: string,
+  ask: MachineCommandAsk,
+): Effect.Effect<MachineCommandHeard, never, DatabaseServices> {
   const refusal = MACHINE_COMMAND_KIND_REFUSAL[ask.kind];
+
+  const notRun = (reason: string): MachineCommandHeard => ({
+    answer: machineCommandNotRun(reason),
+  });
 
   const asked = readMachineCommand({
     ...ask,
@@ -278,25 +307,32 @@ export function askMac(
   });
 
   // A command the Mac's read would refuse is refused here, before it is queued where it would spoil that read.
-  if (Result.isFailure(asked)) return Effect.succeed(machineCommandNotRun(refusal.UNREADABLE));
+  if (Result.isFailure(asked)) return Effect.succeed(notRun(refusal.UNREADABLE));
   const queued = asked.success;
 
   const run = Effect.gen(function* () {
-    if (!(yield* macListening(userId))) return machineCommandNotRun(refusal.NO_MAC);
+    if (!(yield* macListening(userId))) return notRun(refusal.NO_MAC);
 
-    const result = yield* queueMachineCommand(userId, queued).pipe(
+    const heard = yield* queueMachineCommand(userId, queued).pipe(
       Effect.andThen(awaitedResult(userId, queued)),
+      Effect.flatMap((result) =>
+        Option.isSome(result) && isRecorded(result.value)
+          ? Effect.map(machineCommandRecording(userId, queued.id), (recording) =>
+              Option.some({ result: result.value, recording: Option.getOrUndefined(recording) }),
+            )
+          : Effect.succeed(Option.map(result, (each) => ({ result: each, recording: undefined }))),
+      ),
       Effect.ensuring(Effect.ignore(withdrawMachineCommand(userId, queued.id))),
     );
 
-    if (Option.isNone(result)) return machineCommandNotRun(MACHINE_COMMAND_REFUSAL.NO_ANSWER);
+    if (Option.isNone(heard)) return notRun(MACHINE_COMMAND_REFUSAL.NO_ANSWER);
+    const { result, recording } = heard.value;
+    const answer = answered(result);
 
-    return answered(result.value);
+    return recording === undefined ? { answer } : { answer, recording };
   });
 
-  return Effect.catch(run, () =>
-    Effect.succeed(machineCommandNotRun(MACHINE_COMMAND_REFUSAL.UNAVAILABLE)),
-  );
+  return Effect.catch(run, () => Effect.succeed(notRun(MACHINE_COMMAND_REFUSAL.UNAVAILABLE)));
 }
 
 /**

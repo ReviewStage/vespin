@@ -21,7 +21,8 @@ import {
  * read fresh per attempt and a 401 is renewed and retried once. The Mac
  * asks for the unclaimed commands of its kinds sealed (or, polling, inline
  * and held until they move) for the account it started for, claims each it
- * hears of by its id, and says it listens. No call fails: a read refused as
+ * hears of by its id, and says it listens; a stopped recording's video goes
+ * up on a path of its own before its result. No call fails: a read refused as
  * signed out is `LIVE_SIGNED_OUT` and any other unanswered a failure the
  * caller asks again, and a claim, a presence, and a result answer what the
  * service said or how the call failed (`hostedCall`): a claim or a result
@@ -60,6 +61,11 @@ export class HostedMachineCommandClient {
   /** One command's result posted back. */
   settle(id: string, result: MachineCommandResult) {
     return hostedCall(this.#hosted.machineCommands.settle, { id, result });
+  }
+
+  /** A stopped recording's video, as base64, posted before its command's result, which it is kept beside until the call reads it. */
+  postRecording(id: string, mp4: string) {
+    return hostedCall(this.#hosted.machineCommands.recording, { id, mp4 });
   }
 
   /** A declared live read sealed for following, or polled where `poll` asks (`askLiveRead`). */

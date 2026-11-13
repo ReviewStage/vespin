@@ -161,7 +161,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
-  button is the chevron alone. One button leads every tab's root bar, as
+  button is the chevron alone, and a column's ⋯ is its glyph alone
+  (`BarMenuItem`), never a menu's own button inside the bar's glass. One button leads every tab's root bar, as
   Notion's does: the workspace switcher (`WorkspaceSwitcher`, the tile alone
   at the photo's size in the bar's round glass, `SWITCHER_LOOK.TILE`, so the
   screen's title keeps its place beside it, as the App Store's photo does), whose list, as

@@ -13,9 +13,13 @@ import {
 } from "@expo/ui/swift-ui";
 import {
   accessibilityHidden,
+  buttonStyle,
   containerBackground,
   disabled,
   hidden,
+  type ModifierConfig,
+  menuIndicator,
+  menuStyle,
   navigationBarTitleDisplayMode,
   navigationSplitViewStyle,
   navigationTitle,
@@ -51,6 +55,15 @@ const layers = StyleSheet.create({
   tabs: { flex: 1 },
   split: { ...StyleSheet.absoluteFill },
 });
+
+/**
+ * A bar menu's trigger as its glyph alone, with no button of its own, so the
+ * bar's glass is the one layer around it. Note that `@expo/ui` hands a
+ * `ToolbarItem` its menu inside a view of its own, so SwiftUI doesn't place
+ * the menu as a bar item and draws its own round button inside the bar's
+ * glass, where Mail's ⋯ stands in the bar's glass alone.
+ */
+const BAR_ITEM_MENU = [menuStyle("button"), buttonStyle("plain"), menuIndicator("hidden")];
 
 /** An act a bar holds by its symbol alone, such as Settings. */
 export type BarAction = {
@@ -131,11 +144,18 @@ type SplitViewProps = {
 };
 
 /** A bar's menu as SwiftUI's: each choice a toggle the system checks, then a rule, then each act. */
-export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
+export function BarMenuButton({
+  menu,
+  modifiers = [],
+}: {
+  readonly menu: BarMenu;
+  /** How the menu's trigger is drawn where it stands, such as in a bar; a submenu takes none. */
+  readonly modifiers?: readonly ModifierConfig[] | undefined;
+}) {
   const colors = useColors();
 
   return (
-    <Menu label={menuLabel(menu.label, menu.symbol)}>
+    <Menu label={menuLabel(menu.label, menu.symbol)} modifiers={[...modifiers]}>
       {menu.choices.map((choice) => (
         <Toggle
           key={choice.label}
@@ -159,6 +179,11 @@ export function BarMenuButton({ menu }: { readonly menu: BarMenu }) {
       ))}
     </Menu>
   );
+}
+
+/** A bar's menu standing in its bar, such as a column's ⋯, its glyph alone in the bar's glass. */
+export function BarMenuItem({ menu }: { readonly menu: BarMenu }) {
+  return <BarMenuButton menu={menu} modifiers={BAR_ITEM_MENU} />;
 }
 
 /** A bar act as SwiftUI's button, its symbol alone, heard by its words. */
@@ -239,7 +264,7 @@ function Column({
         )}
         {bar.menu === undefined ? null : (
           <ToolbarItem placement="topBarTrailing">
-            <BarMenuButton menu={bar.menu} />
+            <BarMenuItem menu={bar.menu} />
           </ToolbarItem>
         )}
         {bar.action === undefined ? null : (

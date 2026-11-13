@@ -176,7 +176,9 @@ export function useAllowedAppIcon(app: string): string | undefined {
   const icon = useQuery({
     ...allowedAppsQuery(reads),
     select: (machines) =>
-      machines.flatMap((machine) => machine.looks ?? []).find((look) => look.app === app)?.iconPng,
+      machines
+        .flatMap((machine) => machine.looks ?? [])
+        .find((look) => look.app === app && look.iconPng !== undefined)?.iconPng,
   }).data;
 
   // Note that a read let go keeps its answer in the cache, so it is drawn only while it may be read.
