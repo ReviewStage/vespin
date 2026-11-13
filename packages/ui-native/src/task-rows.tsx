@@ -17,6 +17,7 @@ import {
   accessibilityValue,
   buttonStyle,
   disabled,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -37,7 +38,7 @@ import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
-import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
+import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dropLink } from "./interactions.js";
@@ -445,51 +446,37 @@ type GroupRowProps = {
 export function GroupRow({ id, title, symbol, count: held, testId, onDropLink }: GroupRowProps) {
   const colors = useColors();
   const count = held === 0 ? undefined : held;
-  const stacked = useAccessibilitySize();
   const leadWidth = useScaledSize(MARK_SIZE.SIDEBAR_LEAD);
 
-  const name = (
-    <Text
-      modifiers={[
-        font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE }),
-        foregroundStyle(colors.TEXT),
-        lineLimit(stacked ? 2 : 1),
-      ]}
-    >
-      {title}
-    </Text>
-  );
-
-  const counted =
-    count === undefined ? null : (
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.SIDEBAR_COUNT }),
-          monospacedDigit(),
-          foregroundStyle(colors.TEXT_MUTED),
-          lineLimit(1),
-        ]}
-      >
-        {String(count)}
-      </Text>
-    );
-
-  // Note that at an accessibility size the count stands under the name rather than beside it, as the list's rows stack their end, so a long name keeps the row's width.
+  // Note that the name keeps one line at every text size and is cut short, and the count holds the line's end at its own width, as Mail's mailboxes stand, so a large size never breaks a name mid-word or drops the count under it.
   const row: ReactElement = (
-    <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
+    <HStack spacing={SPACE.ROW} alignment="center">
       <HStack modifiers={[frame({ width: leadWidth })]}>
         <LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.SIDEBAR_GLYPH} />
       </HStack>
-      {stacked ? (
-        <VStack alignment="leading" spacing={2}>
-          {name}
-          {counted}
-        </VStack>
-      ) : (
-        name
-      )}
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE }),
+          foregroundStyle(colors.TEXT),
+          lineLimit(1),
+        ]}
+      >
+        {title}
+      </Text>
       <Spacer />
-      {stacked ? null : counted}
+      {count === undefined ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.SIDEBAR_COUNT }),
+            monospacedDigit(),
+            foregroundStyle(colors.TEXT_MUTED),
+            lineLimit(1),
+            fixedSize(),
+          ]}
+        >
+          {String(count)}
+        </Text>
+      )}
     </HStack>
   );
 

@@ -38,7 +38,7 @@ import { Avatar } from "./marks.js";
 import { ActionRow, SettingsForm } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
-import { TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
+import { TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 
 /** The tile in a bar, beside the workspace's name. */
@@ -304,7 +304,11 @@ function SwitcherFace({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+  const tile = useScaledSize(BAR_TILE_SIZE);
+  const chevron = useScaledSize(CHEVRON_SIZE);
+  const nameWidth = useScaledSize(NAME_MAX_WIDTH);
 
+  // Note that the named face heads the sidebar's list rather than a bar, so it grows with Dynamic Type as the rows under it do.
   return (
     <SwiftUIButton
       onPress={onPress}
@@ -321,20 +325,20 @@ function SwitcherFace({
           spacing={SPACE.TIGHT + 2}
           modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
         >
-          <WorkspaceTile workspace={chosen} size={BAR_TILE_SIZE} />
+          <WorkspaceTile workspace={chosen} size={tile} />
           <Text
             modifiers={[
-              font({ size: TEXT_SIZE.HEADLINE, weight: "semibold" }),
+              font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE, weight: "semibold" }),
               foregroundStyle(colors.TEXT),
               lineLimit(1),
-              frame({ maxWidth: NAME_MAX_WIDTH, alignment: "leading" }),
+              frame({ maxWidth: nameWidth, alignment: "leading" }),
             ]}
           >
             {chosen.name}
           </Text>
           <Image
             {...glyphImage(GLYPH.UNFOLDED)}
-            size={CHEVRON_SIZE}
+            size={chevron}
             color={colors.TEXT_BODY}
             modifiers={[accessibilityHidden()]}
           />

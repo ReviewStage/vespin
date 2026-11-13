@@ -521,9 +521,9 @@ export function RowHead({
     </Text>
   );
 
-  // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line.
+  // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line, and the dot stands on the title's first line rather than centered on the whole stack.
   return (
-    <HStack spacing={SPACE.TIGHT} alignment="center">
+    <HStack spacing={SPACE.TIGHT} alignment={stacked ? "firstTextBaseline" : "center"}>
       <UnreadDot unread={unread} faded={faded} />
       <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
         <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
