@@ -16,8 +16,11 @@
  * The input is read as a Matroska file through the file protocol alone,
  * whatever its path spells, and encoded at ever smaller sizes until one
  * fits the bound, the movie's index moved ahead of its media
- * (`+faststart`) so the phone plays it as it arrives. The run prints it as
- * base64 on one line, as the machine's other reads do.
+ * (`+faststart`) so the phone plays it as it arrives. A recording's first
+ * sound track, where it has one, as a clip an agent made to be heard does,
+ * goes into the copy as AAC; a screen recording has none, and its copy none
+ * either. The run prints it as base64 on one line, as the machine's other
+ * reads do.
  */
 
 import { PHONE_VIDEO_BOUNDS, streamableMp4 } from "@repo/features/video-signature";
@@ -30,6 +33,9 @@ export const PHONE_VIDEO_EXIT = {
   ENCODER: 5,
   TOO_LARGE: 6,
 } as const;
+
+/** The bit rate a recording's sound is kept at in the copy, AAC's, which iOS's player plays. */
+const AUDIO_BITRATE = "64k";
 
 /** The name the script runs under, as `$0`. */
 const PHONE_VIDEO_SCRIPT_NAME = "phone-video";
@@ -61,7 +67,7 @@ const PHONE_VIDEO_SCRIPT = [
   "out=$(mktemp -d) || exit 1",
   "trap 'rm -rf \"$out\"' EXIT",
   ...ENCODINGS.flatMap(({ crf, scale }) => [
-    `timeout ${ENCODE_SECONDS} ffmpeg -nostdin -loglevel error -protocol_whitelist file -f matroska -i "file:$src" -an -map 0:v:0 -c:v libx264 -preset veryfast -crf ${crf} -pix_fmt yuv420p -vf "scale=${scale}" -movflags +faststart -f mp4 -y "$out/copy.mp4" || exit ${PHONE_VIDEO_EXIT.ENCODER}`,
+    `timeout ${ENCODE_SECONDS} ffmpeg -nostdin -loglevel error -protocol_whitelist file -f matroska -i "file:$src" -map 0:v:0 -map "0:a:0?" -c:v libx264 -preset veryfast -crf ${crf} -pix_fmt yuv420p -vf "scale=${scale}" -c:a aac -b:a ${AUDIO_BITRATE} -movflags +faststart -f mp4 -y "$out/copy.mp4" || exit ${PHONE_VIDEO_EXIT.ENCODER}`,
     '[ "$(stat -c %s "$out/copy.mp4")" -le "$max" ] && { base64 -w 0 <"$out/copy.mp4"; exit 0; }',
   ]),
   `exit ${PHONE_VIDEO_EXIT.TOO_LARGE}`,
