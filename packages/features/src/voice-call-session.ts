@@ -231,8 +231,11 @@ export function voiceCallSession(seams: VoiceCallSessionSeams): VoiceCallSession
     const held = attempt;
     attempt = undefined;
 
-    if (held !== undefined && abandon) held.abandoned = true;
-    else held?.made?.release();
+    // Note that a peer kept to close its session sends nothing of the microphone meanwhile, since the caller has ended the call.
+    if (held !== undefined && abandon) {
+      held.abandoned = true;
+      held.made?.silenceMicrophone(true);
+    } else held?.made?.release();
     change(undefined);
   };
 

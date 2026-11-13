@@ -31,6 +31,7 @@ function harness() {
   let channelOpen = false;
   let released = 0;
   let speakerSilenced = false;
+  let microphoneSilenced = false;
   let call: VoiceCallState | undefined;
 
   const session = voiceCallSession({
@@ -46,7 +47,9 @@ function harness() {
           closeChannel: () => {
             channelOpen = false;
           },
-          silenceMicrophone: () => undefined,
+          silenceMicrophone: (muted) => {
+            microphoneSilenced = muted;
+          },
           silenceSpeaker: (muted) => {
             speakerSilenced = muted;
           },
@@ -86,6 +89,7 @@ function harness() {
     call: () => call,
     released: () => released,
     speakerSilenced: () => speakerSilenced,
+    microphoneSilenced: () => microphoneSilenced,
   };
 }
 
@@ -142,6 +146,7 @@ describe("a voice call session", () => {
     test.session.end();
 
     expect(test.call()).toBeUndefined();
+    expect(test.microphoneSilenced()).toBe(true);
     test.answer.settle({ callId: "call-1", sdp: "answer" });
     await test.settled();
     test.openChannel();
