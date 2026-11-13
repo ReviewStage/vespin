@@ -264,11 +264,16 @@
       calc(100% - var(--ui-scroll-fade)) 100%;
   }
 
+  /* A row's cells stand on one baseline, so a cell whose first line a
+     picture makes taller, a bot's raised glyph beside a name (Vercel's
+     `<sup><img></sup>`), holds its words level with its neighbors' rather
+     than below them, and a cell of several lines still opens at its row's
+     first line. */
   :is(.ui-markdown-flow, .ui-prose-document) :is(th, td) {
     padding: 0.3em 0.7em 0.3em 0;
     /* A site document sets no Markdown tints, so its rules are the page's own. */
     border-bottom: 1px solid var(--ui-markdown-edge, var(--ui-color-border-strong));
-    vertical-align: top;
+    vertical-align: baseline;
   }
 
   /* A cell keeps each word whole, so a table too wide for the column scrolls
