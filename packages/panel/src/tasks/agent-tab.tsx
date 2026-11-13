@@ -54,7 +54,7 @@ import { threadLineWords } from "@repo/features/inbox-wire";
 import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import type { MentionHolder } from "@repo/features/mention-holder";
 import type { CatalogModel, ModelChoice, ModelProvider } from "@repo/features/models-wire";
-import { cardTitle } from "@repo/features/plain-words";
+import { cardTitle, plainWords } from "@repo/features/plain-words";
 import { briefAgent, replayOpening } from "@repo/features/replay-card-model";
 import { suggestionWords } from "@repo/features/reply-button-wire";
 import {
@@ -279,6 +279,7 @@ import {
 } from "./agent-pictures.js";
 import { PublishedBar, type PublishedDoors } from "./agent-published.js";
 import { AgentQueueDock } from "./agent-queue-dock.js";
+import { AgentRail, type RailLine } from "./agent-rail.js";
 import { SendingAgent } from "./agent-ref.js";
 import type { HeldTranscript } from "./agent-tab-card.js";
 import { AgentTabFoot, AgentTabFrame } from "./agent-tab-frame.js";
@@ -318,6 +319,7 @@ import { type MoveCarry, useMoveToCloud } from "./move-agent.js";
 import { ReplayCard, type ReplayPlace, replayPlace } from "./replay-card.js";
 import { REPLY_SCOPE, ReplyDoorProvider, ReplyToSelection } from "./reply-to-selection.js";
 import { REWIND_ACTION, RewindProvider, rewindPoints, useMessageEdit } from "./rewind-action.js";
+import { type SentLine as RailSentLine, sentLineOf } from "./sent-lines.js";
 import { MentionedServers, SentToAgent } from "./server-card.js";
 import { ShownPage } from "./shown-page.js";
 import { SentWords, useSkill } from "./skill-chip.js";
@@ -2399,6 +2401,46 @@ function heldElsewhere(row: PlacedRow, messageId: string): boolean {
   return row.arrived.some((line) => line.id === messageId);
 }
 
+/** What a transcript's first line is drawn as: the description's card, or the task the agent was handed as a prompt. */
+interface OpeningLines {
+  readonly description: AgentTranscriptMessage | undefined;
+  readonly task: AgentTranscriptMessage | undefined;
+}
+
+/**
+ * Which of the transcript's first line is drawn as what: the description's
+ * card, or the task the agent was handed as a prompt, or neither for an
+ * agent started blank, whose first line is a line as any other is.
+ */
+function openingLinesOf(
+  brief: AgentBrief | undefined,
+  origin: TranscriptOrigin | undefined,
+  first: AgentTranscriptMessage | undefined,
+): OpeningLines {
+  const blank = brief === AGENT_BRIEF.BLANK && origin === undefined;
+  const carded = !blank && (brief !== AGENT_BRIEF.PROMPT || origin !== undefined);
+
+  return { description: carded ? first : undefined, task: carded || blank ? undefined : first };
+}
+
+/**
+ * The lines sent into the agent, in the order the log draws them, each by
+ * the row drawing it: a row's own line, then each line that reached its turn
+ * while it ran, which the turn draws among its work (`entryDraws`). Each
+ * message is read as the lines its row draws for it (`readOf`).
+ */
+function railLinesOf(
+  entries: readonly LogEntry[],
+  readOf: (message: AgentTranscriptMessage) => readonly RailSentLine[],
+): readonly RailLine[] {
+  return entries.flatMap((entry) => {
+    const { row } = entry;
+    const drawn = [row.message, ...row.arrived].filter((message) => entryDraws(entry, message.id));
+
+    return drawn.flatMap((message) => readOf(message).map((line) => ({ rowKey: entry.key, line })));
+  });
+}
+
 /** Each piece's own words as a find counts them, kept by the piece. */
 const pieceWords = new WeakMap<TurnPiece, Omit<FindRow, "key">>();
 
@@ -2868,25 +2910,81 @@ function AgentTranscriptView({
     findable: rowKeys.length > 0,
     details: findsDetails,
   });
-  useLayoutEffect(() => {
-    if (bringIn === undefined) return;
-    bringIn.current = (messageId, then) => {
-      const entry = entries.find((each) => entryDraws(each, messageId));
+  const { first: firstLine, opening: replayOpened } = placing;
+
+  // An agent a member started from a suggestion opens on the suggestion's card, which its first line alone says.
+  const drawnOrigin = useMemo(
+    () =>
+      origin ??
+      suggestionOrigin(
+        firstLine,
+        firstLine === undefined ? undefined : messageSender(firstLine, readerId, members, former),
+      ),
+    [origin, firstLine, readerId, members, former],
+  );
+
+  // Brings the row drawing a message into view, handing it to `then` once it is drawn there; a continue's note is drawn in its first line's row.
+  const bringMessage = useCallback(
+    (messageId: string, then: (row: HTMLElement) => void) => {
+      const note = replayOpened?.note;
+      const held = note !== undefined && messageId === note.id ? firstLine?.id : messageId;
+      const entry = held === undefined ? undefined : entries.find((each) => entryDraws(each, held));
 
       return entry !== undefined && rowsHandle.current?.bringIn(entry.key, then) === true;
-    };
+    },
+    [entries, firstLine, replayOpened],
+  );
+
+  useLayoutEffect(() => {
+    if (bringIn === undefined) return;
+    bringIn.current = bringMessage;
   });
+
+  // The lines sent into the agent, which the rail beside the log marks, each read as the log draws it: a continued or forked agent's first line as its opening's brief, then its note, and the task the agent was handed, as the note is, under whoever handed it.
+  const railLines = useMemo(() => {
+    const { description, task } = openingLinesOf(brief, drawnOrigin, firstLine);
+
+    // Note that the description's card says what its origin hands it where it hands words, an automation's prompt, rather than the line's own.
+    const read = (message: AgentTranscriptMessage, opening: AgentTranscriptMessage) => {
+      const line = sentLineOf(message, readerId, members, former);
+
+      if (line === undefined) return [];
+
+      const said =
+        opening === description && drawnOrigin?.text !== undefined
+          ? { ...line, words: plainWords(drawnOrigin.text) }
+          : line;
+
+      return [opening === task ? { ...said, sender: briefSender } : said];
+    };
+
+    const readOf = (message: AgentTranscriptMessage): readonly RailSentLine[] => {
+      if (message !== firstLine || replayOpened === undefined) return read(message, message);
+      const note = replayOpened.note;
+
+      return [
+        ...read(replayOpened.brief, message),
+        ...(note === undefined
+          ? []
+          : read(note, note).map((line) => ({ ...line, sender: briefSender }))),
+      ];
+    };
+
+    return railLinesOf(entries, readOf);
+  }, [
+    entries,
+    brief,
+    drawnOrigin,
+    briefSender,
+    firstLine,
+    replayOpened,
+    readerId,
+    members,
+    former,
+  ]);
 
   if (!holding && messages.length > 0) {
     const { todos, first, opening, placed, writing } = placing;
-
-    // An agent a member started from a suggestion opens on the suggestion's card, which its first line alone says.
-    const drawnOrigin =
-      origin ??
-      suggestionOrigin(
-        first,
-        first === undefined ? undefined : messageSender(first, readerId, members, former),
-      );
 
     // The description is the first of the developer's messages, unless the agent
     // was handed a prompt in its place, which is the developer's message as
@@ -2894,10 +2992,7 @@ function AgentTranscriptView({
     // that sender's card; the rest the developer sent since. An agent
     // started blank was handed nothing, so its first line, typed or spoken,
     // is a line as any other is, under whoever sent it.
-    const blank = brief === AGENT_BRIEF.BLANK && drawnOrigin === undefined;
-    const carded = !blank && (brief !== AGENT_BRIEF.PROMPT || drawnOrigin !== undefined);
-    const description = carded ? first : undefined;
-    const task = carded || blank ? undefined : first;
+    const { description, task } = openingLinesOf(brief, drawnOrigin, first);
     // What stands after the messages is drawn inside the last of them, which grows as TanStack's streaming reply does, so the virtualizer measures it with the row and the log holds nothing past its rows.
     // Note that an ask no drawn call holds stands at the foot after the turn too, settled there as it settled.
     const loose = approvals === undefined ? [] : looseApprovals(approvals.asks, callIds);
@@ -3071,6 +3166,7 @@ function AgentTranscriptView({
                   }}
                 </ConversationRows>
               </ConversationContent>
+              <AgentRail lines={railLines} list={log} rows={rowsHandle} bringIn={bringMessage} />
               <ConversationScrollButton />
             </Conversation>
           </ConnectionNames>

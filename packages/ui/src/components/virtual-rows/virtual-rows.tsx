@@ -116,6 +116,13 @@ import { type RovingReach, reachedKey, rovingItemIn } from "../roving-keys/rovin
 export const VIRTUAL_ROW_KEY_ATTRIBUTE = "data-row-key";
 
 /** What a caller asks of the run once drawn. */
+/** Where one row stands in its scroller: its top and its height, in pixels, measured where it was drawn and estimated where it never was. */
+export interface VirtualRowSpan {
+  readonly key: string;
+  readonly start: number;
+  readonly size: number;
+}
+
 export interface VirtualRowsHandle {
   /**
    * Scrolls the row with `key` into the middle of the view, drawing it, and
@@ -133,6 +140,8 @@ export interface VirtualRowsHandle {
   readonly scrollToEnd: () => void;
   /** Scrolls the scroller by `delta` pixels (`scrollBy()`), as the virtualizer does, so none of its own scrolls is undone by a write beside it. */
   readonly scrollBy: (delta: number) => void;
+  /** Where every row stands in the scroller, in order, those left undrawn among them, as a map of the list beside it reads them. */
+  readonly rowSpans: () => readonly VirtualRowSpan[];
 }
 
 /** Each run's handle by its block, so a row found in the page reaches the run that draws it (`runHolding`). */
@@ -578,6 +587,12 @@ export function VirtualRows({
       keys: () => latestKeys.current,
       scrollToEnd: () => virtualizer.scrollToEnd(),
       scrollBy: (delta) => virtualizer.scrollBy(delta),
+      rowSpans: () =>
+        virtualizer.measurementsCache.map((row) => ({
+          key: String(row.key),
+          start: row.start,
+          size: row.size,
+        })),
     }),
     [virtualizer, rowElement],
   );

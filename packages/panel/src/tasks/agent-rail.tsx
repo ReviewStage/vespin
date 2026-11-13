@@ -1,0 +1,276 @@
+/**
+ * agent-rail.tsx -- the rail beside an agent's transcript: a mark for each line sent into it, the reader's own standing out, each hanging its line as a comment and going to it on a press.
+ *
+ * A long run buries the reader's own asks among what teammates, other
+ * agents, GitHub, and automations send the agent, so the transcript wears
+ * `@repo/ui`'s `TranscriptRail` down its leading edge, a mark for each line
+ * sent in (`sent-lines.ts`). A mark's card is its line as a comment pin's
+ * card draws one, in the reader's own design language: the sender's face,
+ * their name, and how long ago, over the line's words, the reader's own
+ * under their own face. A press goes to the line as a link to a message
+ * does, bringing its row in where the log has not drawn it and lighting it
+ * once it lands (`message-links.tsx`).
+ *
+ * A mark is lit while its line stands in the view, read off where the log's
+ * rows stand (`rowSpans`) and, among the rows drawn, where the line itself
+ * stands, as the log scrolls or it or its rows change size, the rail drawn
+ * again only when which lines stand there changes.
+ */
+
+import {
+  Comment,
+  HoverCard,
+  HoverCardNote,
+  QuietWords,
+  TIME_LOOK,
+  Time,
+  TranscriptRail,
+  type TranscriptRailMark,
+} from "@repo/ui";
+import { ACTOR_KIND, type Actor, actorName } from "@repo/ui/actor-model";
+import { land } from "@repo/ui/landed";
+import type { VirtualRowsHandle } from "@repo/ui/virtual-rows";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import {
+  ACTOR_SIZE,
+  ActorMark,
+  ActorRef,
+  BotBadge,
+  commentAuthor,
+  YouBadge,
+} from "../actor-ref.js";
+import { useMemberDirectory, usePerson } from "../member-directory.js";
+import { usePhoneRoom } from "../stage-room.js";
+import { messageElement } from "./message-links.js";
+import type { SentLine } from "./sent-lines.js";
+
+/** What the rail names the reader by where their own name is not known. */
+const READER_NAME = "You";
+
+/** A line sent in, and the key of the log's row that draws it. */
+export interface RailLine {
+  readonly rowKey: string;
+  readonly line: SentLine;
+}
+
+/** Whether two lists of keys hold the same keys in the same order. */
+function sameKeys(one: readonly string[], other: readonly string[]): boolean {
+  return one.length === other.length && one.every((key, at) => key === other[at]);
+}
+
+/** Whether `element` stands, in part, within `view`. */
+function standsIn(element: HTMLElement, view: DOMRect): boolean {
+  const box = element.getBoundingClientRect();
+
+  return box.bottom > view.top && box.top < view.bottom;
+}
+
+/**
+ * The messages of `lines` standing in `box`'s view: those whose row stands
+ * there, by where `rows` says it stands, and, where the row is drawn, whose
+ * own element stands there too, since a line that reached a turn while it
+ * ran shares the turn's row and may stand far from the turn's part on screen.
+ */
+function linesInView(
+  box: HTMLElement,
+  rows: VirtualRowsHandle,
+  lines: readonly RailLine[],
+): readonly string[] {
+  const top = box.scrollTop;
+  const bottom = top + box.clientHeight;
+
+  const rowsShown = new Set(
+    rows
+      .rowSpans()
+      .filter((span) => span.start < bottom && span.start + span.size > top)
+      .map((span) => span.key),
+  );
+
+  const view = box.getBoundingClientRect();
+
+  return lines.flatMap(({ rowKey, line }) => {
+    if (!rowsShown.has(rowKey)) return [];
+    const element = messageElement(box, line.messageId);
+
+    return element === undefined || standsIn(element, view) ? [line.messageId] : [];
+  });
+}
+
+/**
+ * The messages of `lines` standing in the log's view, read again once a
+ * frame as it scrolls, as it or its rows change size, a row measured anew
+ * among them, and as the lines change.
+ */
+function useLinesInView(
+  list: RefObject<HTMLDivElement | null>,
+  rows: RefObject<VirtualRowsHandle | null>,
+  lines: readonly RailLine[],
+): ReadonlySet<string> {
+  const [inView, setInView] = useState<readonly string[]>([]);
+  // Note that the lines a read takes are those the log last drew, kept once drawn, never a render's that may not be.
+  const latest = useRef(lines);
+  useLayoutEffect(() => {
+    latest.current = lines;
+  }, [lines]);
+
+  const read = useCallback(() => {
+    const box = list.current;
+    const handle = rows.current;
+
+    if (box === null || handle === null) return;
+    const next = linesInView(box, handle, latest.current);
+    setInView((was) => (sameKeys(was, next) ? was : next));
+  }, [list, rows]);
+
+  useEffect(() => {
+    const box = list.current;
+
+    if (box === null) return;
+    let frame = 0;
+
+    // Note that a scroll is read once a frame, however many it fires, since the rail's lights need no more.
+    const soon = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(read);
+    };
+
+    box.addEventListener("scroll", soon, { passive: true });
+    // Note that what the log holds is watched beside the log itself, since a row measured anew moves the rows under it without a scroll.
+    const sized = new ResizeObserver(soon);
+    sized.observe(box);
+
+    for (const held of box.children) sized.observe(held);
+
+    return () => {
+      box.removeEventListener("scroll", soon);
+      sized.disconnect();
+      cancelAnimationFrame(frame);
+    };
+  }, [list, read]);
+  // Note that new lines may move every row's place without a scroll, so they are read again as they land.
+  useEffect(read, [lines, read]);
+
+  return useMemo(() => new Set(inView), [inView]);
+}
+
+/** Scrolls the log by `rows` so `element` stands in the middle of `box`'s view. */
+function centerIn(box: HTMLElement, rows: VirtualRowsHandle, element: HTMLElement): void {
+  const view = box.getBoundingClientRect();
+  const at = element.getBoundingClientRect();
+  rows.scrollBy(at.top + at.height / 2 - (view.top + view.height / 2));
+}
+
+/** A line's card: as a comment pin's card draws a comment, its sender's face, name, and age over its words. */
+function SentLineCard({ line, sender }: { line: SentLine; sender: Actor }): React.JSX.Element {
+  return (
+    <HoverCard data-sent-line-card="">
+      <Comment
+        author={commentAuthor(sender)}
+        nameRef={<ActorRef actor={sender} nameOnly />}
+        at={line.sentAt}
+      >
+        <HoverCardNote>{line.words}</HoverCardNote>
+      </Comment>
+    </HoverCard>
+  );
+}
+
+/**
+ * What stands beside a line's sender in a phone's list, as a comment's head
+ * says it: the reader's own badge on their line where it is named by their
+ * name, a GitHub App's on its, then how long ago it was sent.
+ */
+function SheetTag({
+  sender,
+  badged,
+  sentAt,
+}: {
+  sender: Actor | undefined;
+  /** Whether the reader's own line wears their badge, which one named "You" already says. */
+  badged: boolean;
+  sentAt: number | undefined;
+}): React.JSX.Element {
+  return (
+    <>
+      {sender !== undefined ? <BotBadge actor={sender} /> : badged ? <YouBadge /> : null}
+      {sentAt === undefined ? null : (
+        <QuietWords>
+          <Time at={sentAt} look={TIME_LOOK.SINCE} hint={false} />
+        </QuietWords>
+      )}
+    </>
+  );
+}
+
+/** The rail of the lines sent into an agent, beside its log `list`, whose rows `rows` holds; `bringIn` brings a message's row into view. */
+export function AgentRail({
+  lines,
+  list,
+  rows,
+  bringIn,
+}: {
+  lines: readonly RailLine[];
+  list: RefObject<HTMLDivElement | null>;
+  rows: RefObject<VirtualRowsHandle | null>;
+  bringIn: (messageId: string, then: (row: HTMLElement) => void) => boolean;
+}): React.JSX.Element | null {
+  const { readerId } = useMemberDirectory();
+  const reader = usePerson(readerId === undefined ? undefined : { userId: readerId, name: "" });
+  // Note that the reader's own lines are named by their name, their badge saying they are theirs, as a person card names them.
+  const readerName = reader.kind === ACTOR_KIND.PERSON ? reader.name : READER_NAME;
+  const inView = useLinesInView(list, rows, lines);
+  const narrow = usePhoneRoom();
+
+  const byMessage = useMemo(
+    () => new Map(lines.map((each) => [each.line.messageId, each.line])),
+    [lines],
+  );
+
+  const marks = lines.map(
+    ({ line }): TranscriptRailMark => ({
+      key: line.messageId,
+      own: line.sender === undefined,
+      sender: line.sender === undefined ? readerName : actorName(line.sender),
+      words: line.words,
+      face: <ActorMark actor={line.sender ?? reader} size={ACTOR_SIZE.INLINE} />,
+      tag: (
+        <SheetTag sender={line.sender} badged={readerName !== READER_NAME} sentAt={line.sentAt} />
+      ),
+      shown: inView.has(line.messageId),
+    }),
+  );
+
+  const cardOf = (messageId: string) => {
+    const line = byMessage.get(messageId);
+
+    return line === undefined ? null : <SentLineCard line={line} sender={line.sender ?? reader} />;
+  };
+
+  // A press goes to the line as a link to it does: its row brought in, then the line lit where it lands.
+  const onJump = (messageId: string) => {
+    bringIn(messageId, (row) => {
+      const element = messageElement(row, messageId);
+      // Note that the row is centered by the log's own virtualizer, so a line within a long turn's row is centered after it, on the frame after.
+      requestAnimationFrame(() => {
+        const box = list.current;
+        const handle = rows.current;
+
+        if (element !== undefined && box !== null && handle !== null) {
+          centerIn(box, handle, element);
+        }
+
+        land(element ?? row);
+      });
+    });
+  };
+
+  return <TranscriptRail marks={marks} narrow={narrow} cardOf={cardOf} onJump={onJump} />;
+}

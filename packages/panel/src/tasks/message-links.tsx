@@ -85,7 +85,7 @@ export const MessageRevealProvider = MessageRevealContext.Provider;
  * standing for the tab's Retry.
  */
 /** The element under `root` drawing the message with `messageId`, where it is drawn. */
-function messageElement(root: ParentNode, messageId: string): HTMLElement | undefined {
+export function messageElement(root: ParentNode, messageId: string): HTMLElement | undefined {
   return [...root.querySelectorAll<HTMLElement>(`[${MESSAGE_ID_ATTRIBUTE}]`)].find(
     (each) => each.getAttribute(MESSAGE_ID_ATTRIBUTE) === messageId,
   );
