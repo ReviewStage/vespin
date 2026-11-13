@@ -61,6 +61,12 @@ export const STOP_FAILED = "The agent could not be stopped. Try again.";
 /** What an agent's archive the service refused says, wherever it was pressed. */
 export const ARCHIVE_FAILED = "The agent could not be archived.";
 
+/** What an agent's pin or unpin the service refused says, wherever it was pressed. */
+export const PIN_FAILED = {
+  PIN: "The agent could not be pinned.",
+  UNPIN: "The agent could not be unpinned.",
+} as const;
+
 /** What a refused archive or delete says of an agent still starting, or with a message awaiting its turn, which has no turn to stop yet. */
 export const ARCHIVE_NOT_READY = "The agent is still starting its turn. Try again in a moment.";
 
