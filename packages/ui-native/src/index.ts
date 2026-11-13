@@ -224,6 +224,7 @@ export {
   type ColumnBar,
   KeptColumns,
   type KeptView,
+  menuWithout,
   SplitOverTabs,
   SplitView,
   UNDER_SPLIT_SCREEN,

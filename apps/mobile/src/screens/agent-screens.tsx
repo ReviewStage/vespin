@@ -115,6 +115,8 @@ import { usePullRequestsRead, usePullRequestWrites } from "../pull-requests/use-
 import { useSurfaceOpen } from "../surface-open.js";
 import { useScreenActivity } from "../system-activity/use-system-activity.js";
 import { useOnOwnTab } from "../tab-route.js";
+import { useWindowSizeClass } from "../use-window-size-class.js";
+import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 import { PageScreen } from "./page-screens.js";
 
 /** What an agent is called where neither the task list nor its transcript names it, as the panel's tab names one it cannot find. */
@@ -638,6 +640,17 @@ export function AgentScreen() {
 
   const addMenu = agentAddMenu(composer, mode, pick, openOptions);
 
+  // Note that a regular window's bar stands Pin and Archive as glyphs before ⋯, as Mail stands its acts, and ⋯ keeps the rest; a compact window keeps them all in ⋯.
+  const barActs = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR && agent !== undefined;
+
+  // Archive asks first. Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
+  const askArchive = () => {
+    setArchiving(false);
+    void actions.archiveAsk.ask(id).then((stands) => {
+      if (stands) setArchiving(true);
+    });
+  };
+
   const openPage = (item: Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.PAGE }>) =>
     router.push({
       pathname: onOwnTab("/tasks/agent/[id]/page"),
@@ -691,12 +704,14 @@ export function AgentScreen() {
               >
                 {MENU_WORDS.RENAME}
               </Stack.Toolbar.MenuAction>
-              <Stack.Toolbar.MenuAction
-                icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
-                onPress={actions.pin}
-              >
-                {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
-              </Stack.Toolbar.MenuAction>
+              {barActs ? null : (
+                <Stack.Toolbar.MenuAction
+                  icon={glyphSymbol(actions.pinned ? GLYPH.UNPIN : GLYPH.PIN)}
+                  onPress={actions.pin}
+                >
+                  {actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+                </Stack.Toolbar.MenuAction>
+              )}
             </Stack.Toolbar.Menu>
           )}
           {openOptions === undefined ? null : (
@@ -725,18 +740,12 @@ export function AgentScreen() {
               )}
             </Stack.Toolbar.Menu>
           )}
-          {agent === undefined ? null : (
+          {agent === undefined || barActs ? null : (
             <Stack.Toolbar.Menu inline>
               <Stack.Toolbar.MenuAction
                 icon={glyphSymbol(GLYPH.ARCHIVE)}
                 destructive
-                onPress={() => {
-                  // Note that the question is let go first, so one a dismissal swallowed never leaves Archive asking nothing.
-                  setArchiving(false);
-                  void actions.archiveAsk.ask(id).then((stands) => {
-                    if (stands) setArchiving(true);
-                  });
-                }}
+                onPress={askArchive}
               >
                 {MENU_WORDS.ARCHIVE}
               </Stack.Toolbar.MenuAction>
@@ -754,6 +763,23 @@ export function AgentScreen() {
             </Stack.Toolbar.Menu>
           )}
         </Stack.Toolbar.Menu>
+        {/* Note that a right bar's first item stands at its edge, so the ⋯ leads the list and Archive then Pin stand before it, as Mail stands its acts before More. */}
+        {barActs ? (
+          <Stack.Toolbar.Button accessibilityLabel={MENU_WORDS.ARCHIVE} onPress={askArchive}>
+            <Stack.Toolbar.Icon xcasset={GLYPH.ARCHIVE} renderingMode="template" />
+          </Stack.Toolbar.Button>
+        ) : null}
+        {barActs ? (
+          <Stack.Toolbar.Button
+            accessibilityLabel={actions.pinned ? MENU_WORDS.UNPIN : MENU_WORDS.PIN}
+            onPress={actions.pin}
+          >
+            <Stack.Toolbar.Icon
+              xcasset={actions.pinned ? GLYPH.UNPIN : GLYPH.PIN}
+              renderingMode="template"
+            />
+          </Stack.Toolbar.Button>
+        ) : null}
       </Stack.Toolbar>
       {/* Note that the transcript stands as the screen's root rather than in its SwiftUI host, since the list is React Native's own and sizes itself to the screen; the composer floats over its foot. */}
       <GlassDock

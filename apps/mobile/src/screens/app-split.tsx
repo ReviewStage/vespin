@@ -1,6 +1,13 @@
 // app-split.tsx -- the one split view a window wide enough for three columns stands over the tabs: the app sidebar, drawn once for every tab, beside the list and the page the tab standing hands it, each tab's kept where it was left.
 
-import { KeptColumns, type KeptView, Screen, SplitView } from "@repo/ui-native";
+import {
+  type BarAction,
+  GLYPH,
+  KeptColumns,
+  type KeptView,
+  Screen,
+  SplitView,
+} from "@repo/ui-native";
 import { useEffect, useState } from "react";
 import { InFrontProvider, type PlaceColumns, usePlaceColumns } from "../place-columns.js";
 import {
@@ -13,6 +20,9 @@ import { useSidebarTasks } from "./task-screens.js";
 
 /** A sidebar pick's place, and the place the route stood in when it was made. */
 type HeldPick = { readonly place: SidebarPlace; readonly over: SidebarPlace | undefined };
+
+/** What Mail's expand button is heard as, standing the page alone across the window and bringing the columns back. */
+const EXPAND_WORDS = { EXPAND: "Expand", COLLAPSE: "Collapse" } as const;
 
 /** The places, in the order their columns stand kept. */
 const PLACES = [SIDEBAR_PLACE.INBOX, SIDEBAR_PLACE.TASKS, SIDEBAR_PLACE.SEARCH] as const;
@@ -54,7 +64,9 @@ function keptViews(
  * stands and the detail's comes back as it goes. Note that a sidebar pick
  * stands at once, its place's columns and its row selected, until the route
  * moves, because the tab's route answers a few renders after the press,
- * which iPadOS 26 drew as most of a second.
+ * which iPadOS 26 drew as most of a second. The detail's bar leads with
+ * Mail's expand button, which stands the page alone across the window and
+ * back, and the page's main acts stand in the same bar.
  */
 export function AppSplit({
   place,
@@ -84,6 +96,12 @@ export function AppSplit({
   const standing = pick?.place ?? place ?? SIDEBAR_PLACE.INBOX;
   const columns = kept.get(standing);
   const compose = useComposeAction();
+  // Note that the page stands alone until a person brings the columns back, by this button or the system's sidebar button, as Mail's expand holds.
+  const [detailOnly, setDetailOnly] = useState(false);
+
+  const expand: BarAction = detailOnly
+    ? { label: EXPAND_WORDS.COLLAPSE, symbol: GLYPH.COLLAPSE, onPress: () => setDetailOnly(false) }
+    : { label: EXPAND_WORDS.EXPAND, symbol: GLYPH.EXPAND, onPress: () => setDetailOnly(true) };
 
   const sidebar = useAppSidebar(standing, useSidebarTasks(), (picked) =>
     hold({ place: picked, over: place }),
@@ -96,8 +114,10 @@ export function AppSplit({
         content={<KeptColumns shown={standing} views={keptViews(kept, standing, front)} />}
         contentBar={{ ...columns?.contentBar, action: compose }}
         detail={<InFrontProvider value={front}>{columns?.detail}</InFrontProvider>}
-        detailBar={columns?.detailBar}
+        detailBar={{ ...columns?.detailBar, expand }}
         searchKey={standing}
+        detailOnly={detailOnly}
+        onDetailOnlyChange={setDetailOnly}
       />
     </Screen>
   );

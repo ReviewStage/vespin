@@ -181,6 +181,9 @@ export const GLYPH = {
   UNFOLDED: lucide(LUCIDE_SYMBOL.CHEVRON_DOWN),
   // iOS's own: Share is the system's act, and the composer's Stop is the panel's filled square.
   SHARE: system("square.and.arrow.up"),
+  // A split view's expand, which stands the page alone across the window and back, is the system's own, as Mail draws it.
+  EXPAND: system("arrow.up.left.and.arrow.down.right"),
+  COLLAPSE: system("arrow.down.right.and.arrow.up.left"),
   STOP_TURN: system("stop.fill"),
   // A task's status ring, the panel's own mark.
   STATUS_BACKLOG: statusMark(TASK_STATUS_SYMBOL.BACKLOG),
