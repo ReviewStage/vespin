@@ -30,6 +30,7 @@ import {
   scrollContentBackground,
   scrollDismissesKeyboard,
   tint,
+  useScrollGeometryChange,
 } from "@expo/ui/swift-ui/modifiers";
 import type { ReactElement, ReactNode } from "react";
 import { useScaledSize } from "./accessibility.js";
@@ -125,12 +126,26 @@ function PressedRow({
  * once, as a composing sheet's words otherwise keep it standing over the
  * rows below them, with no key of the keyboard's own that lowers it.
  */
-export function SettingsForm({ children }: { readonly children: ReactNode }) {
+export function SettingsForm({
+  onContentHeight,
+  children,
+}: {
+  /** Told the height its rows stand in, as they lay out, for a popover that fits it; none where the form fills its place. */
+  readonly onContentHeight?: ((height: number) => void) | undefined;
+  readonly children: ReactNode;
+}) {
   const colors = useColors();
+
+  const measured = useScrollGeometryChange(
+    onContentHeight === undefined
+      ? undefined
+      : (geometry) => onContentHeight(geometry.contentHeight),
+  );
 
   return (
     <Form
       modifiers={[
+        ...(measured === null ? [] : [measured]),
         scrollContentBackground("hidden"),
         scrollDismissesKeyboard("immediately"),
         background(colors.SIDEBAR),
