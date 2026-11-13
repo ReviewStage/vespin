@@ -192,7 +192,15 @@ export function registerDesktopIpc(services: DesktopServices): void {
         await promisify(execFile)(nativeHelperPath("open-login-items"));
       },
       copyText: (words) => clipboard.writeText(words),
-      copyRich: ({ html, text }) => clipboard.write({ html, text }),
+      // Note that a PNG that draws no picture leaves the words to go alone, as they went before.
+      copyRich: ({ html, text, png }) => {
+        const image =
+          png === undefined ? undefined : nativeImage.createFromBuffer(Buffer.from(png, "base64"));
+
+        clipboard.write(
+          image === undefined || image.isEmpty() ? { html, text } : { html, text, image },
+        );
+      },
       copyImage: (png) => {
         const image = nativeImage.createFromBuffer(Buffer.from(png, "base64"));
 

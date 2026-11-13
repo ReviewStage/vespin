@@ -30,6 +30,7 @@ import type { FileSystem } from "effect/FileSystem";
 import type { HttpClient } from "effect/http/HttpClient";
 import type { ChildProcessSpawner } from "effect/process";
 import type { AccountSourceSeam } from "../account-source.js";
+import type { ComputerUseHelperSeam } from "../computer-use-helper.js";
 import type { RunMode as RunModeFacts } from "../run-mode.js";
 import type { SecretCipher as SecretCipherSeam } from "../settings-store.js";
 
@@ -359,6 +360,16 @@ export interface ThisMacHostSeam {
 
 export class ThisMacHost extends Context.Service<ThisMacHost, ThisMacHostSeam>()(
   "@repo/host/ThisMacHost",
+) {}
+
+/**
+ * The Mac's computer-use helper, where this process ships one: the desktop,
+ * which spawns it as its own child so the Mac's Screen Recording and
+ * Accessibility grants are the app's (`computer-use-helper.ts`). Optional,
+ * so the Mac's commands stand without it and take no action on an app.
+ */
+export class ComputerUseHelper extends Context.Service<ComputerUseHelper, ComputerUseHelperSeam>()(
+  "@repo/host/ComputerUseHelper",
 ) {}
 
 /**

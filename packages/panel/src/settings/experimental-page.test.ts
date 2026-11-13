@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { WORKSPACE_ROLE, type Workspace } from "@repo/features/workspace-wire";
 import { SETTINGS_ACT_KIND, WORKSPACE_ACT_KIND } from "@repo/host/contract";
-import { EXPERIMENT, EXPERIMENTS, type Experiment, NO_EXPERIMENTS } from "@repo/settings";
+import { EXPERIMENT, type Experiment, LISTED_EXPERIMENTS, NO_EXPERIMENTS } from "@repo/settings";
 import { appSettingsWire, experimentsOn, settingsView } from "@repo/settings/testing";
 import { ACTION_RESULT_STATUS } from "@repo/wire";
 import { act, createElement } from "react";
@@ -88,7 +88,7 @@ function draw(props: Partial<Parameters<typeof ExperimentalPage>[0]>): HTMLEleme
           OpenFeedbackProvider,
           { value: (about: Experiment) => feedbackAbout.push(about) },
           createElement(ExperimentalPage, {
-            entries: EXPERIMENTS,
+            entries: LISTED_EXPERIMENTS,
             experiments: NO_EXPERIMENTS,
             signedIn: true,
             workspace: ACME,
@@ -138,6 +138,7 @@ test("the workspace's experiments and the account's own stand in two groups, eac
   assert.deepEqual(
     [...page.querySelectorAll('[role="switch"]')].map((each) => each.getAttribute("aria-label")),
     [
+      "Following",
       "Suggestions",
       "Run actions",
       "Task descriptions",
@@ -145,6 +146,7 @@ test("the workspace's experiments and the account's own stand in two groups, eac
       "Turn changes",
       "Rewind restores files",
       "Done and follow-ups",
+      "Computer use",
       "Skills",
     ],
   );
@@ -220,6 +222,7 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
     for (const button of feedback) button.click();
   });
   assert.deepEqual(feedbackAbout, [
+    EXPERIMENT.FOLLOWING,
     EXPERIMENT.REPLY_BUTTONS,
     EXPERIMENT.RUN_ACTIONS,
     EXPERIMENT.DESCRIPTIONS,
@@ -227,6 +230,7 @@ test("an experiment's Send feedback opens the dialog about that experiment", () 
     EXPERIMENT.TURN_CHANGES,
     EXPERIMENT.REWIND_FILES,
     EXPERIMENT.TURN_END,
+    EXPERIMENT.COMPUTER_USE,
     EXPERIMENT.SKILLS,
   ]);
 });

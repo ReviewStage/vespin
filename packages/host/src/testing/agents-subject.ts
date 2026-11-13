@@ -682,6 +682,8 @@ function fakeService() {
 
         return { agent: { ...AGENT, status: AGENT_STATUS.STARTING } };
       }),
+    replyButton: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
+    pressReplyButton: () => Effect.succeed({ failure: AGENT_CALL_FAILURE.UNANSWERED }),
     delete: (agentId) =>
       Effect.map(changeGate, () => {
         asked.push(`delete:${agentId}`);

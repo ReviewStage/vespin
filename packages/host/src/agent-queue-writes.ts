@@ -446,6 +446,10 @@ export interface AgentQueues {
   ) => WriteDeclaration<OutboxRow, OutboxChange, MessageWrite, AgentAgentAnswer>;
   /** A message the service refused let go, its line drawn no more. */
   readonly unsend: (params: AgentUnsendParams) => Effect.Effect<void>;
+  /** A write of the agent's that draws nothing but goes after every write asked of it before, as a suggestion sent to it from a reply does. */
+  readonly inTurn: <Input extends { readonly agentId: string }, Answer extends object>(
+    send: (input: Input) => Effect.Effect<Answer>,
+  ) => WriteDeclaration<OutboxRow, OutboxChange, Input, Answer>;
   /** An agent taken back to just before a line, after every write asked of it before. */
   readonly rewind: (
     sends: OutboxSends,
@@ -841,6 +845,18 @@ export function agentQueues(
         ),
     });
 
+    const inTurn = <Input extends { readonly agentId: string }, Answer extends object>(
+      send: (input: Input) => Effect.Effect<Answer>,
+    ): WriteDeclaration<OutboxRow, OutboxChange, Input, Answer> => ({
+      kind: AGENT_OUTBOX,
+      keys: ({ agentId }) => [agentId],
+      change: ({ agentId }) => ({ agentId, step: unchanged }),
+      send: (input) =>
+        Effect.map(send(input), (answer): Written<OutboxChange, Answer> | Refused<Answer> =>
+          "failure" in answer ? { refused: answer } : { answer, txid: undefined, settled: true },
+        ),
+    });
+
     const queuedWrite = (write: QueueWrite, sentAt: number): QueuedWrite => {
       const { change } = write;
 
@@ -862,6 +878,6 @@ export function agentQueues(
     const unsend = ({ agentId, lineId }: AgentUnsendParams) =>
       refusedChanged(accountId(), agentId, without(lineId));
 
-    return { held, queuedWrite, queue, message, rewind, unsend };
+    return { held, queuedWrite, queue, message, inTurn, rewind, unsend };
   });
 }

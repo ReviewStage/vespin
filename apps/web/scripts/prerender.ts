@@ -10,8 +10,10 @@ import { withPageHead } from "../src/page-head";
  * server builds, over the pages `src/entry-server.tsx` names. A page written
  * from another page's template (every changelog page and release, from
  * `changelog.html`) gets its route's own head too, its share image at the
- * size the image's own file says. The changelog's RSS feed is written beside
- * its pages, and the site's sitemap at the build's root.
+ * size the image's own file says, and the guides' pages (from `guides.html`)
+ * likewise. The changelog's RSS feed is written beside its pages, every
+ * guide's Markdown copy beside its page, and the site's sitemap and
+ * `llms.txt` at the build's root.
  */
 const DIST = join(import.meta.dirname, "..", "dist");
 
@@ -23,9 +25,8 @@ const ROOT_TAG = '<div id="root"></div>';
 
 // SAFETY: dist-server/entry-server.js is the SSR build of src/entry-server.tsx, written by the
 // build step that runs immediately before this script, so its exports are that module's.
-const { renderChangelogFeed, renderPrerenderedPages, renderSitemap } = (await import(
-  SERVER_ENTRY
-)) as typeof import("../src/entry-server");
+const { renderChangelogFeed, renderPrerenderedPages, renderSitemap, renderTextFiles } =
+  (await import(SERVER_ENTRY)) as typeof import("../src/entry-server");
 
 /** A PNG's size, read from its IHDR chunk: width and height are the 4-byte integers at 16 and 20. */
 async function pngSize(path: string): Promise<{ width: number; height: number } | undefined> {
@@ -83,6 +84,13 @@ await writeFile(join(DIST, feed.file), feed.xml);
 
 // biome-ignore lint/suspicious/noConsole: a build script's output is its log — what it wrote, and how much of it.
 console.log(`wrote ${feed.file} (${feed.xml.length} chars)`);
+
+for (const { file, text } of renderTextFiles()) {
+  await mkdir(dirname(join(DIST, file)), { recursive: true });
+  await writeFile(join(DIST, file), text);
+  // biome-ignore lint/suspicious/noConsole: a build script's output is its log — what it wrote, and how much of it.
+  console.log(`wrote ${file} (${text.length} chars)`);
+}
 
 const sitemap = renderSitemap();
 

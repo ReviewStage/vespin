@@ -30,8 +30,10 @@ import {
   type SchemaPath,
   type SchemaRefusal,
   type SlackLineMetadata,
+  type SpokenAskMetadata,
   type StartLineMetadata,
   type StoredMessageMetadata,
+  type SuggestionLineMetadata,
   type ThreadLineMetadata,
   TURN_ORIGIN,
   TURN_STATUS,
@@ -413,7 +415,7 @@ export function senderNameOf(sender: LineSender | undefined): string | null {
  * write it: its words, the files attached to it, each image with what was
  * kept of it, the client's key for the send, what sent it, and what the row
  * says carried it: the developer's typed ask where it names nothing else,
- * or another coding agent's message, a thread, a description comment, a Start's
+ * the developer's spoken ask on a call, or another coding agent's message, a thread, a description comment, a Start's
  * brief, GitHub, the brain, or an
  * automation's run.
  */
@@ -430,6 +432,7 @@ interface AwaitingLineWrite {
 /** What an awaiting line says carried it. */
 export type AwaitingLineMetadata =
   | TypedAskMetadata
+  | SpokenAskMetadata
   | AgentMessageMetadata
   | ThreadLineMetadata
   | CommentLineMetadata
@@ -438,7 +441,8 @@ export type AwaitingLineMetadata =
   | AppLineMetadata
   | CarryOnLineMetadata
   | AutomationLineMetadata
-  | SlackLineMetadata;
+  | SlackLineMetadata
+  | SuggestionLineMetadata;
 
 /** An awaiting line naming no channel is the developer's typed ask. */
 const TYPED_LINE_METADATA: TypedAskMetadata = {
@@ -1458,6 +1462,7 @@ const turnEnded = /* @__PURE__ */ Effect.fnUntraced(function* (
           },
     ),
     responseIds: event.responseIds,
+    files: nullable(event.files),
   });
 
   if (!ended) return Result.fail({ refusal: STORE_WRITE_REFUSAL.FENCED });

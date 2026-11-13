@@ -25,6 +25,7 @@ import {
   COMMIT_AUTHOR_LIST,
   isCommitAuthor,
 } from "./commit-author.js";
+import { COMPUTER_USE_DETAIL, COMPUTER_USE_LABEL, isComputerUseAppsJson } from "./computer-use.js";
 import {
   DIFF_FONT,
   DIFF_FONT_LABEL,
@@ -39,6 +40,7 @@ import {
   INLINE_DIFF,
   INLINE_DIFF_LABEL,
 } from "./diff-view.js";
+import { EXPERIMENT, experimentOn } from "./experiments.js";
 import {
   isKeepAwake,
   KEEP_AWAKE_DEFAULT,
@@ -69,10 +71,10 @@ import {
   PULL_REQUEST_OPEN_LIST,
 } from "./pull-request-open.js";
 import {
-  accountHiddenSetting,
   accountToggleSetting,
   buildToggleSetting,
   choiceSetting,
+  hiddenSetting,
   optional,
   toggleSetting,
 } from "./schema-builders.js";
@@ -238,6 +240,34 @@ export const APP_SETTING_SCHEMA = {
     order: 2,
     // Nothing to run per write: the host reads the setting before each read for commands and as each command is about to run.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
+  }),
+  computerUse: toggleSetting({
+    field: "computerUse",
+    id: APP_SETTING_ID.COMPUTER_USE,
+    label: COMPUTER_USE_LABEL,
+    detail: COMPUTER_USE_DETAIL,
+    default: true,
+    page: SETTINGS_PAGE.THIS_MAC,
+    order: 3,
+    // Note that the switch stands only where Computer use is on, as every gated feature's row does.
+    visible: (view) => experimentOn(view.settings.experiments, EXPERIMENT.COMPUTER_USE),
+    // Nothing to run per write: the host reads the switch as each action on an app arrives.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+  }),
+  /*
+   * The apps the developer answered Always allow for, by bundle id, as JSON
+   * (`computer-use.ts`). This Mac's own, since its apps are, and drawn by no
+   * schema row, since only the prompt's Always allow and the apps' list
+   * write it.
+   */
+  computerUseApps: hiddenSetting({
+    field: "computerUseApps",
+    id: APP_SETTING_ID.COMPUTER_USE_APPS,
+    page: SETTINGS_PAGE.THIS_MAC,
+    order: 4,
+    // Nothing to run per write: the host reads the apps as each action on an app arrives.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    guard: isComputerUseAppsJson,
   }),
   /*
    * Whether This Mac's host keeps the Mac awake for its agents. Kept on
@@ -536,7 +566,7 @@ export const APP_SETTING_SCHEMA = {
    * preference riding a part of the snapshot of its own, as setup finished
    * does; drawn nowhere, since only setup's steps write it.
    */
-  setupPlace: accountHiddenSetting({
+  setupPlace: hiddenSetting({
     field: "setupPlace",
     id: APP_SETTING_ID.SETUP_PLACE,
     page: SETTINGS_PAGE.ACCOUNT,
@@ -551,7 +581,7 @@ export const APP_SETTING_SCHEMA = {
    * from. An account preference riding a part of the snapshot of its own, as
    * setup's place does; drawn nowhere, since only setup's survey writes it.
    */
-  onboardingSurvey: accountHiddenSetting({
+  onboardingSurvey: hiddenSetting({
     field: "onboardingSurvey",
     id: APP_SETTING_ID.ONBOARDING_SURVEY,
     page: SETTINGS_PAGE.ACCOUNT,

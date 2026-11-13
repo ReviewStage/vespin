@@ -99,8 +99,8 @@ function offerStanding(device: MacOffer, book: PresenceBook): DeviceStanding {
   );
 }
 
-/** What each standing is called. */
-const STANDING_WORDS = {
+/** What each standing is called, as a list of places and a follower's card say it. */
+export const STANDING_WORDS = {
   [DEVICE_STANDING.ONLINE]: RUNS_ON_WORDS.ONLINE,
   [DEVICE_STANDING.OFFLINE]: RUNS_ON_WORDS.OFFLINE,
   [DEVICE_STANDING.UNKNOWN]: RUNS_ON_WORDS.UNKNOWN,

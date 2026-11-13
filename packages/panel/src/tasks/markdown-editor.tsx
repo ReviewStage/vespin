@@ -1,7 +1,7 @@
 import { linkChipOf } from "@repo/features/mention-link";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
 import { ANNOUNCE, Checkbox } from "@repo/ui";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   type ReactNode,
   type RefObject,
@@ -13,7 +13,8 @@ import {
 import { createPortal } from "react-dom";
 import { useAppCommand } from "../app-commands.js";
 import { useSideBundles } from "../bundle-loader.js";
-import { DiagramPreview } from "../description-diagram.js";
+import { heldColoring } from "../code-coloring.js";
+import { EditorDiagramCard } from "../description-diagram.js";
 import {
   type DescriptionEditorHandle,
   type DescriptionEditorModule,
@@ -24,11 +25,13 @@ import {
   type EditorCodeBlock,
   type EditorDiagram,
   type EditorDrawing,
+  type EditorHistory,
   type EditorTaskBox,
   type Finish,
   type HeadingsChange,
   type MentionNode,
   type MentionNodeDoors,
+  type OpenedHistory,
   SLASH_INSERT,
   type SlashBlock,
 } from "../description-editor/contract.js";
@@ -66,13 +69,20 @@ import { useNumberedTaskIdOf } from "./use-link-standing.js";
  * dropped. The `/` menu stands aside while the `@` list stands, as the
  * toolbar stands aside for either. The editor stands in a room of its own
  * that the toolbar and the menus float in; focus leaving the room for anywhere
- * but its own toolbar and menus is the document's to hear (`onLeave`). A
+ * but its own toolbar and menus, or a dialog over the window, is the
+ * document's to hear (`onLeave`). A
  * finish or a leaving waits for a picture still being kept, since only the
  * open editor can lay in its address; it goes once none is.
  */
 
+/** A dialog standing over the window, which focus moving into does not leave the text. */
+const MODAL_SELECTOR = '[aria-modal="true"]';
+
 /** What every editor's room wears: the box the toolbar and the menus over its words are placed in. */
 const ROOM_CLASS = "markdown-editor relative";
+
+/** What a dialog's card is, which focus may go into from the room. */
+const DIALOG = '[role="dialog"]';
 
 /** What the room says while the editor's bundle could not be loaded. */
 const EDITOR_LOAD_FAILED = "The editor could not be loaded.";
@@ -147,6 +157,10 @@ export interface MarkdownEditorProps {
   readonly ownBlocks?: readonly OwnBlock[] | undefined;
   /** The `/` menu's blocks that do not apply to the document, which it does not offer. */
   readonly droppedBlocks?: ReadonlySet<SlashBlock> | undefined;
+  /** The undo history an earlier editor left on this text, which the editor takes up, and the step it takes through it as it opens; none where it opens with a history of its own. */
+  readonly history?: OpenedHistory | undefined;
+  /** Hears the editor's undo history as it is taken down, for an editor opened later on the same text; none where the document keeps none. */
+  readonly onClosed?: ((history: EditorHistory) => void) | undefined;
 }
 
 /** The bundle's editor mounted in place, built once, on the text it opened with; its handle kept for its document. */
@@ -154,17 +168,22 @@ function MountedEditor({
   module,
   props,
   handle,
+  onClosed,
 }: {
   module: DescriptionEditorModule;
   props: DescriptionEditorProps;
   handle: RefObject<DescriptionEditorHandle | undefined>;
+  onClosed: ((history: EditorHistory) => void) | undefined;
 }): React.JSX.Element {
   const host = useRef<HTMLDivElement>(null);
   const latest = useRef(props);
   latest.current = props;
+  // Note that who hears the history is the one drawn as the editor mounted, so a history is only ever handed to the document it was written in.
+  const closedTo = useRef(onClosed);
   useLayoutEffect(() => {
     if (host.current === null) return;
     const { mentions } = latest.current;
+    const closed = closedTo.current;
 
     const mounted = module.mount(host.current, {
       ...latest.current,
@@ -185,11 +204,6 @@ function MountedEditor({
               pasted: (words) => latest.current.mentions?.pasted(words),
               namesChip: (target) => latest.current.mentions?.namesChip(target) ?? false,
             },
-      drawDiagram:
-        latest.current.drawDiagram === undefined
-          ? undefined
-          : (element, diagram) =>
-              latest.current.drawDiagram?.(element, diagram) ?? (() => undefined),
       drawTaskBox:
         latest.current.drawTaskBox === undefined
           ? undefined
@@ -214,6 +228,7 @@ function MountedEditor({
 
     return () => {
       handle.current = undefined;
+      closed?.(mounted.history());
       mounted.destroy();
     };
   }, [module, handle]);
@@ -247,6 +262,8 @@ export function MarkdownEditor({
   diagrams = false,
   ownBlocks,
   droppedBlocks,
+  history,
+  onClosed,
 }: MarkdownEditorProps): React.JSX.Element {
   const ownHandle = useRef<DescriptionEditorHandle | undefined>(undefined);
   const handle = givenHandle ?? ownHandle;
@@ -254,12 +271,15 @@ export function MarkdownEditor({
   const room = givenRoom ?? ownRoom;
   const module = useQuery(useSideBundles().descriptionEditor);
   const chips = useEditorDrawings<DrawnMention>();
-  const previews = useEditorDrawings<EditorDiagram>();
+  const diagramCards = useEditorDrawings<EditorDiagram>();
   const taskBoxes = useEditorDrawings<EditorTaskBox>();
   const codeHeaders = useEditorDrawings<EditorCodeBlock>();
+  const queryClient = useQueryClient();
   // Note that a finish or a leaving waits for a picture still being kept, since only the open editor can lay in its address; it goes once none is.
   const held = useRef<(() => void) | undefined>(undefined);
   const sending = pictures?.sending === true;
+  // A leaving into a dialog, which stays where the dialog's focus reaches the room as its own.
+  const leaving = useRef<{ stays: boolean } | undefined>(undefined);
 
   const once = (close: () => void) => {
     if (sending) held.current = close;
@@ -357,12 +377,14 @@ export function MarkdownEditor({
             namesChip: (target) =>
               linkChipOf(target, target, mentions.doors.place.repository) !== undefined,
           },
-    drawDiagram: diagrams ? previews.draw : undefined,
+    drawDiagram: diagrams ? diagramCards.keep : undefined,
     drawTaskBox: taskBoxes.draw,
     drawCodeHeader: codeHeaders.keep,
+    colorCode: (language, code) => heldColoring(queryClient, language, code),
     pictures: pictures?.pictures,
     format: toolbar.doors,
     blocks: { onTrigger: blocks.onTrigger, onKey: blocks.onKey },
+    history,
   };
 
   return (
@@ -370,17 +392,41 @@ export function MarkdownEditor({
       ref={room}
       className={roomClass}
       aria-label={roomLabel}
+      onFocus={() => {
+        if (leaving.current !== undefined) leaving.current.stays = true;
+      }}
       onBlur={(event) => {
         const into = event.relatedTarget;
+        // Note that a dialog over the window, a picture enlarged from the text say, is not a leaving: the text stays open beneath it and takes the focus back as it closes.
+        const over = into instanceof Element && into.closest(MODAL_SELECTOR) !== null;
 
-        if (onLeave === undefined || event.currentTarget.contains(into) || toolbar.holds(into)) {
+        if (
+          onLeave === undefined ||
+          over ||
+          event.currentTarget.contains(into) ||
+          toolbar.holds(into)
+        ) {
+          return;
+        }
+
+        // Note that focus going into a dialog waits to hear whether the dialog is the room's own, a
+        // diagram's Full screen, since a portal's focus reaches the room as its own after the blur.
+        if (into instanceof Element && into.closest(DIALOG) !== null) {
+          const leave = { stays: false };
+          leaving.current = leave;
+          queueMicrotask(() => {
+            if (leaving.current === leave) leaving.current = undefined;
+
+            if (!leave.stays) once(onLeave);
+          });
+
           return;
         }
 
         once(onLeave);
       }}
     >
-      <MountedEditor module={module.data} props={props} handle={handle} />
+      <MountedEditor module={module.data} props={props} handle={handle} onClosed={onClosed} />
       {toolbar.drawn}
       {blocks.menu}
       {children}
@@ -399,12 +445,8 @@ export function MarkdownEditor({
               each.key,
             ),
           )}
-      {previews.drawn.map((each) =>
-        createPortal(
-          <DiagramPreview code={each.what.code} previous={each.what.previous} />,
-          each.element,
-          each.key,
-        ),
+      {diagramCards.drawn.map((each) =>
+        createPortal(<EditorDiagramCard diagram={each.what} />, each.element, each.key),
       )}
       {codeHeaders.drawn.map((each) =>
         createPortal(<EditorCodeHeader block={each.what} />, each.element, each.key),

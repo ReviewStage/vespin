@@ -499,8 +499,10 @@ export class AccountSessionManager {
    * `invalid_request` rather than a 401, and a read taking that as a token
    * still good would leave a dead one standing on every call after it.
    *
-   * A refusal that signs out starts the sign-out and does not wait on it,
-   * because a renewal's caller may hold a lock the sign-out's capability stop
+   * Two refusals sign the account out: the grant's own `invalid_grant`, and
+   * a 401 on the token the grant just answered, read once as the account's
+   * identity is. A refusal that signs out starts the sign-out and does not
+   * wait on it, because a renewal's caller may hold a lock the sign-out's capability stop
    * needs: the Plans read holds the tasks lock while it waits here, and
    * `tasks.reset` waits on that lock, so waiting would deadlock both.
    */
@@ -514,38 +516,66 @@ export class AccountSessionManager {
       const renewed = yield* Effect.result(this.#options.client.refresh(stored.refreshToken));
 
       if (Result.isFailure(renewed)) {
-        if (
-          accountFailureAction(renewed.failure) === ACCOUNT_FAILURE_ACTION.SIGN_OUT &&
-          this.#isCurrent(generation) &&
-          this.#lifecycle.kind !== ACCOUNT_LIFECYCLE.SIGNING_OUT
-        ) {
-          // Note that the trip standing is ended here rather than by the
-          // sign-out's own clearing, because the sign-out stands in its place
-          // from now on and nothing starts while it does.
-          this.#endTrip();
-          const fiber = yield* Effect.forkDetach(this.#settling(this.signOut()));
-          this.#move({ kind: ACCOUNT_LIFECYCLE.SIGNING_OUT, fiber, presses: { withdrawn: false } });
+        if (accountFailureAction(renewed.failure) === ACCOUNT_FAILURE_ACTION.SIGN_OUT) {
+          yield* this.#signOutRefused(generation);
         }
 
         return;
       }
 
-      const tokens = renewed.success;
+      const renewedAccount = { ...stored, ...renewed.success };
+
       // The renewed tokens are already stored by the time the identity read
       // below is made, so a read that fails leaves the account signed in on
       // them rather than undoing the renewal; it is written down, not held.
-      yield* reportingFailure(
-        Effect.gen({ self: this }, function* () {
-          if (!(yield* this.#storeCurrent(generation, { ...stored, ...tokens }))) return;
-          const next = yield* this.#options.client.userInfo(tokens.accessToken, stored.provider);
-          const merged = mergedIdentity({ ...stored, ...tokens }, next);
+      if (!(yield* this.#storeCurrent(generation, renewedAccount))) return;
 
-          if (!(yield* this.#storeCurrent(generation, merged))) return;
-          yield* this.#publishChange();
-        }),
+      const next = yield* Effect.result(
+        this.#options.client.userInfo(renewedAccount.accessToken, stored.provider),
+      );
+
+      if (Result.isSuccess(next)) {
+        if (!(yield* this.#storeCurrent(generation, mergedIdentity(renewedAccount, next.success))))
+          return;
+        yield* this.#publishChange();
+
+        return;
+      }
+
+      // Note that a token the service refuses the moment it minted it means
+      // the grant stands on nothing the service still takes, so the account
+      // signs out as a refused grant does, rather than renewing again on
+      // every call while each fresh token is refused in turn.
+      if (accessTokenNeedsRefresh(next.failure)) {
+        yield* this.#signOutRefused(generation);
+
+        return;
+      }
+
+      yield* reportingFailure(
+        Effect.fail(next.failure),
         "Renewed account identity read failed",
         this.#options.report,
       );
+    });
+  }
+
+  /**
+   * The sign-out a refused renewal starts, for the account it was asked for
+   * and only where none stands already, not waited on (`#renew`). Note that
+   * the trip standing is ended here rather than by the sign-out's own
+   * clearing, because the sign-out stands in its place from now on and
+   * nothing starts while it does.
+   */
+  #signOutRefused(generation: number): Effect.Effect<void> {
+    return Effect.gen({ self: this }, function* () {
+      if (!this.#isCurrent(generation) || this.#lifecycle.kind === ACCOUNT_LIFECYCLE.SIGNING_OUT) {
+        return;
+      }
+
+      this.#endTrip();
+      const fiber = yield* Effect.forkDetach(this.#settling(this.signOut()));
+      this.#move({ kind: ACCOUNT_LIFECYCLE.SIGNING_OUT, fiber, presses: { withdrawn: false } });
     });
   }
 

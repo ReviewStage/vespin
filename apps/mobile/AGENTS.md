@@ -216,6 +216,16 @@ attached. A view handed a modifier the build does not register draws as it
 would without it. No Maestro flow can drag or hover, so these are checked by
 hand on an iPad with a trackpad.
 
+## The photo scaler
+
+A workspace's photo is picked in the system's photo picker, cropped there to
+a square, and drawn at the panel's size (`WORKSPACE_PHOTO_EDGE`) as a JPEG
+within the service's bound by the app's own native module, autolinked from
+`modules/photo-scale/`, through ImageIO as the share extension scales a
+shared picture, so a HEIC from the library is read and no metadata goes with
+it (`src/workspace-photo.ts`). A build without the module says the photo
+could not be read rather than sending one at full size.
+
 ## The share extension
 
 Vespin stands in the system's share sheet for text, a web link and up to
@@ -271,7 +281,8 @@ pull request with UI shows its screenshots to the developer in a thread.
 - **Every control comes from `@repo/ui-native`**, the app's design system
   (`packages/ui-native/AGENTS.md`), as the web's come from `@repo/ui`. A
   screen composes its components and imports neither `@expo/ui` nor
-  `expo-glass-effect`; the app still declares both,
+  `expo-glass-effect`, which lint refuses
+  (`vespin/no-raw-press-outside-ui-native`); the app still declares both,
   since Expo links a native module from the app's own dependencies.
 - **The app is a shell.** A module whose imports name no Expo, React Native,
   or expo-router API is logic and belongs in a package. A relative import ends

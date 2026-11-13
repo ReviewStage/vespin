@@ -21,7 +21,9 @@ import { rewindConversation } from "@repo/database/models/conversation-rewind";
 import { registerDevice } from "@repo/database/models/device-store";
 import { childConversationId } from "@repo/database/models/ids";
 import { sentLineStands } from "@repo/database/models/message-reads";
+import { makeReplyButton } from "@repo/database/models/reply-buttons";
 import { writePage } from "@repo/database/models/task-pages";
+import { setWorkspaceExperiment } from "@repo/database/models/workspace-experiment-store";
 import { ensurePersonalWorkspace } from "@repo/database/models/workspace-store";
 import { storeWriter } from "@repo/database/models/writer";
 import { agentTable } from "@repo/database/schemas/agent";
@@ -62,12 +64,14 @@ import { MENTION_KIND, mentionMarkdown } from "@repo/features/mention-link";
 import { AGENT_DEFAULT_CHOICE } from "@repo/features/models-wire";
 import { PAGE_SHOWER, taskPageOwner } from "@repo/features/page-wire";
 import { PULL_REQUEST_ACTION } from "@repo/features/pull-request-write-wire";
+import { REPLY_BUTTON_ACTION, replyButtonViewSchema } from "@repo/features/reply-button-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import {
   heldTaskListAnswerSchema,
   TASK_STATUS,
   taskStartAnswerSchema,
 } from "@repo/features/task-wire";
+import { EXPERIMENT } from "@repo/settings";
 import { TURN_STATUS, type WireBoundaryInput } from "@repo/wire";
 import { and, eq, sql } from "drizzle-orm";
 import { DateTime, Duration, Effect, Option } from "effect";
@@ -1286,6 +1290,45 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           new Uint8Array(yield* Effect.promise(() => served.arrayBuffer())),
           SCRIPTED_SVG,
         );
+      }),
+  );
+
+  it.effect(
+    "a suggestion sent from its draft over the route starts its agent, its path's button read apart from the body",
+    () =>
+      Effect.gen(function* () {
+        const { owner, task, ask } = yield* openTask();
+        const { agent } = yield* startedAgent(owner, task.id, ask);
+
+        const buttonId = yield* makeReplyButton(
+          agent.id,
+          "Wire up the invite email",
+          { kind: REPLY_BUTTON_ACTION.START, prompt: "Send the invite email." },
+          yield* DateTime.nowAsDate,
+        );
+
+        yield* setWorkspaceExperiment({
+          organizationId: task.workspaceId,
+          experiment: EXPERIMENT.REPLY_BUTTONS,
+          on: true,
+          by: owner,
+        });
+
+        const pressed = readAnswer(
+          replyButtonViewSchema,
+          HOSTED_HTTP_STATUS.OK,
+          yield* ask(
+            request(`/api/agents/{id}/buttons/${buttonId}/press`, owner, {
+              method: "POST",
+              id: agent.id,
+              body: { words: "Send the invite email, then the reminder." },
+            }),
+          ),
+        );
+
+        assert.equal(pressed.pressed?.byReader, true);
+        assert.notEqual(pressed.pressed?.agent?.id, undefined);
+        assert.notEqual(pressed.pressed?.agent?.id, agent.id);
       }),
   );
 });

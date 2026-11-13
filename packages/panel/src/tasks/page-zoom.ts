@@ -24,7 +24,7 @@ const readZoom = Schema.decodeUnknownOption(pageZoomAnswerSchema);
 
 type UsePageZoomResult = {
   readonly zoom: number;
-  readonly press: (key: PageZoomKey) => void;
+  readonly zoomBy: (key: PageZoomKey) => void;
 };
 
 /** The page's size in `frame`, and a step of it the menu takes. */
@@ -58,5 +58,5 @@ export function usePageZoom(frame: RefObject<HTMLIFrameElement | null>): UsePage
     return () => window.removeEventListener("message", hear);
   }, [frame]);
 
-  return { zoom, press: (key) => setZoom((was) => pageZoomAfter(was, key)) };
+  return { zoom, zoomBy: (key) => setZoom((was) => pageZoomAfter(was, key)) };
 }

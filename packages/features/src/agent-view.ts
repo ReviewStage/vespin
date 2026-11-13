@@ -76,6 +76,7 @@ import {
   pushDeviceRegisterRequestSchema,
   pushDeviceUnregisterRequestSchema,
 } from "./push-device-wire.js";
+import { replyButtonSentSchema } from "./reply-button-wire.js";
 import { repositoryUnreachedSchema } from "./repository-reach-wire.js";
 import { countedNumber, HOSTED_API_ERROR, wireUuidSchema } from "./service-wire.js";
 import {
@@ -323,6 +324,9 @@ export const AGENT_CALL_FAILURE = {
 export type AgentCallFailure = (typeof AGENT_CALL_FAILURE)[keyof typeof AGENT_CALL_FAILURE];
 
 const failureSchema = EffectSchema.Literals(Object.values(AGENT_CALL_FAILURE));
+
+/** Whether a failure is one an agent call names, which its words say (`agent-refusal-words.ts`). */
+export const isAgentCallFailure = EffectSchema.is(failureSchema);
 
 /** A failed call, as every answer below spells one, with the facts of what failed beneath it where the host caught it (`failure-facts.ts`), which the window reports and never draws. */
 const failed = EffectSchema.Struct({
@@ -802,6 +806,32 @@ export type AgentRunActionAnswerView = typeof agentRunActionAnswerViewSchema.Typ
 export const agentRunActionStopAnswerViewSchema = answerView(agentsContract.stopRunAction);
 
 export type AgentRunActionStopAnswerView = typeof agentRunActionStopAnswerViewSchema.Type;
+
+/** A button in an agent's reply read, as the window hears it: the button, or why it is not drawn. */
+export const replyButtonAnswerViewSchema = answerView(agentsContract.readButton);
+
+export type ReplyButtonAnswerView = typeof replyButtonAnswerViewSchema.Type;
+
+/** A button in an agent's reply pressed, as the window hears it: the button as its press then stands, or why the press was refused. */
+export const replyButtonPressAnswerViewSchema = answerView(agentsContract.pressButton);
+
+export type ReplyButtonPressAnswerView = typeof replyButtonPressAnswerViewSchema.Type;
+
+/** The button in an agent's reply an act names: the agent whose reply holds it, and the button. */
+export const replyButtonParamsSchema = EffectSchema.Struct({
+  agentId: EffectSchema.String,
+  buttonId: EffectSchema.String,
+});
+
+export type ReplyButtonParams = typeof replyButtonParamsSchema.Type;
+
+/** A suggestion in an agent's reply sent from its draft: the button, and what the member sent. */
+export const replyButtonPressParamsSchema = EffectSchema.Struct({
+  ...replyButtonParamsSchema.fields,
+  sent: replyButtonSentSchema,
+});
+
+export type ReplyButtonPressParams = typeof replyButtonPressParamsSchema.Type;
 
 /** One agent's transcript past a cursor, as the window asks it: the agent, and where the window stands; or, naming the delegation call that started one, a worker's transcript under the agent. */
 export const agentMessagesParamsSchema = EffectSchema.Struct({

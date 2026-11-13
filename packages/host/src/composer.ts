@@ -42,9 +42,7 @@ export class DuplicateHostAct extends Data.TaggedError("DuplicateHostAct")<{
 export type ActClaims = Partial<Record<keyof typeof HOST_ACTS, ClaimedHandler>>;
 
 /** A handler a composer claims an act by: a declared act's function, or a live follow's hold (`LiveFollowHandler`). */
-type ClaimedHandler =
-  | ((...args: never[]) => void)
-  | { readonly hold: (...args: never[]) => void };
+type ClaimedHandler = ((...args: never[]) => void) | { readonly hold: (...args: never[]) => void };
 
 /** The tables merged into one, as the intersection their keys are disjoint for. */
 export type Folded<Tables extends readonly object[]> = Tables extends readonly [

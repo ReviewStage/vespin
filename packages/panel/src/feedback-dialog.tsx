@@ -51,6 +51,7 @@ import { ACT_KIND } from "@repo/host/acts";
 import { EXPERIMENTS, type Experiment } from "@repo/settings";
 import {
   ALIGN,
+  ATTACHMENT_CHIP_STATE,
   AttachmentChip,
   CHOICE_BAR_LOOK,
   Checkbox,
@@ -167,6 +168,10 @@ function FeedbackImageRow({
           motionKey={key}
           name={image.name}
           image={feedbackImageUrl(image)}
+          // Note that the screenshots go up inside the one request the report is sent in, so each is drawn going up while it is out.
+          state={busy ? ATTACHMENT_CHIP_STATE.UPLOADING : ATTACHMENT_CHIP_STATE.READY}
+          // Note that a refused report leaves its screenshots standing, so none takes a check as the send ends.
+          lands={false}
           removeDisabled={busy || leaving}
           onRemove={() => onRemove(image)}
         />

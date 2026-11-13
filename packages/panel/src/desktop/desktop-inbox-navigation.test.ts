@@ -44,6 +44,7 @@ import {
   noticeOf,
   ON_THRESHOLD,
   pagerOf,
+  pickOnUndelivered,
   pressKey,
   pushAgain,
   READER,
@@ -56,6 +57,7 @@ import {
   standKeymap,
   TEAMMATE,
   THRESHOLD,
+  undeliveredWords,
   wayBack,
   world,
 } from "../testing/desktop-inbox.js";
@@ -901,15 +903,20 @@ test("words written in the box while its new thread starts stay in it once the t
   assert.equal(composerEditor(itemPane(page)).textContent, "And the footer.");
 });
 
-test("a new thread refused comes back into the box ahead of the words written while it was out", async () => {
+test("a new thread that did not go stands on the thread it was started from marked Not delivered, the words written meanwhile left as they are, and Retry starts it again under its key", async () => {
   world.listedWorkspace = ACME;
   world.inboxes = new Map([[BILLING.id, [noticeOf(THRESHOLD)]]]);
-  const answer = Promise.withResolvers<FakeActAnswer>();
+  const starts: AgentInboxStartParams[] = [];
+  const answers: ((answer: FakeActAnswer) => void)[] = [];
   const previous = fakeActsAnswer();
   fakeActs({
     ...appBridge(),
-    act: (request: AnyAct): Promise<FakeActAnswer> =>
-      request.kind === ACT_KIND.AGENTS_INBOX_START ? answer.promise : previous(request),
+    act: (request: AnyAct): Promise<FakeActAnswer> => {
+      if (request.kind !== ACT_KIND.AGENTS_INBOX_START) return previous(request);
+      starts.push(request.payload);
+
+      return new Promise((resolve) => answers.push(resolve));
+    },
   });
   const { page } = mount({ chosen: ON_THRESHOLD });
   await settle();
@@ -929,12 +936,21 @@ test("a new thread refused comes back into the box ahead of the words written wh
     ).click(),
   );
   typeInComposer(pane, "And the footer.");
-  await act(async () => answer.resolve({ status: FAKE_ANSWER.REFUSED, reason: "Unreachable" }));
+  await vi.waitFor(() => assert.equal(answers.length, 1, "the start is out"));
+  await act(async () => answers[0]?.({ status: FAKE_ANSWER.REFUSED, reason: "Unreachable" }));
   await settle();
 
+  assert.deepEqual(undeliveredWords(page), ["Draft the annual plan's line too."]);
+  assert.equal(composerEditor(itemPane(page)).textContent, "And the footer.");
+
+  await pickOnUndelivered(page, "Draft the annual plan's line too.", "Retry");
   assert.deepEqual(
-    [...composerEditor(itemPane(page)).querySelectorAll("p")].map((line) => line.textContent),
-    ["Draft the annual plan's line too.", "And the footer."],
+    starts.map(({ text, clientKey }) => ({ text, clientKey })),
+    [
+      { text: "Draft the annual plan's line too.", clientKey: starts[0]?.clientKey },
+      { text: "Draft the annual plan's line too.", clientKey: starts[0]?.clientKey },
+    ],
+    "Retry starts it again under the key it went under",
   );
 });
 

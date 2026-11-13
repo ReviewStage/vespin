@@ -1398,7 +1398,7 @@ function routedAt(place: Place): string | undefined {
   return place === PLACE.VERSION_HISTORY ? SHELL_AT.VERSION_HISTORY : undefined;
 }
 
-test("the side panel's toggle stands on a plan, and nowhere else the plan's place is taken, an agent's page among them", async () => {
+test("the side panel's toggle stands beside a task's agents, and neither over the task's details, which take the panel's room, nor anywhere else the plan's place is taken, an agent's page among them", async () => {
   await handBridge();
   const container = document.createElement("div");
   document.body.append(container);
@@ -1419,7 +1419,8 @@ test("the side panel's toggle stands on a plan, and nowhere else the plan's plac
 
   assert.deepEqual(toggled, {
     [PLACE.HOME]: false,
-    [PLACE.OTHER_TASK]: true,
+    // Note that the task stands on its details.
+    [PLACE.OTHER_TASK]: false,
     [PLACE.INBOX]: false,
     [PLACE.AGENT_PAGE]: false,
     [PLACE.PERSON_PAGE]: false,
@@ -1428,6 +1429,25 @@ test("the side panel's toggle stands on a plan, and nowhere else the plan's plac
     [PLACE.SETTINGS]: false,
     [PLACE.VERSION_HISTORY]: false,
   });
+});
+
+test("the side panel's toggle stands over a task's details while the panel is left filling the window, which hides the details too", async () => {
+  await handBridge();
+  const container = document.createElement("div");
+  document.body.append(container);
+  root = createRoot(container);
+  const sidePanel = { ...tasksControl().sidePanel, open: true, fullScreen: true };
+  const shell = createElement(PlacedShell, { place: PLACE.OTHER_TASK, patch: { sidePanel } });
+  act(() => root?.render(withQueryClient(underRouter(shell, SHELL_AT.TASK))));
+  await settle();
+
+  const toggled = [...container.querySelectorAll("button")].some((button) =>
+    ["Show panel", "Hide panel"].includes(button.getAttribute("aria-label") ?? ""),
+  );
+
+  act(() => root?.unmount());
+  container.remove();
+  assert.ok(toggled, "the toggle is the way out");
 });
 
 test("the side panel's toggle stands for the Inbox's chosen item", async () => {

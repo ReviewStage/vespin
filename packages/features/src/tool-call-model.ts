@@ -46,6 +46,7 @@ import {
   CALL_KIND,
   type CallKind,
   commandDescription,
+  computerCallWords,
   pageName,
 } from "./turn-rows.js";
 
@@ -91,6 +92,8 @@ export interface ToolCallView {
   readonly output: ToolBlock | undefined;
   /** For a call of an integration's own tool, the integration, whose mark its row wears in its kind's icon's place. */
   readonly provider?: IntegrationProvider;
+  /** For a call on an app on the developer's Mac, the picture its icon was kept as beside the transcript, which its row wears in its kind's icon's place. */
+  readonly appIcon?: string;
   /** For a call of an MCP server's tool, or a search of its tools, the server's name as its card gives it, which the row says it ran on. */
   readonly server?: string;
   /** For the same calls, the connection they ran on, which the window names by the account's own name where it holds more than one (`connection-names.tsx`); `server` stands where it does not know it. */
@@ -186,6 +189,23 @@ function pathsSubject(paths: readonly string[]): string {
 /** The string under a key of a record, or nothing where the record has none. */
 function stringAt(value: WireValue | undefined, key: string): string | undefined {
   return isRecord(value) && isWireString(value[key]) ? value[key] : undefined;
+}
+
+/** The app a computer call's answer names, as the Mac named it; while it runs, or where it answered none, as the call named it. */
+export function computerAppName(
+  input: WireValue | undefined,
+  output: WireValue | undefined,
+): string | undefined {
+  const named = isRecord(output) ? stringAt(output.app, "name") : undefined;
+
+  return named ?? stringAt(input, "app");
+}
+
+/** The picture a computer call's answer kept its app's icon as, by id; none where it kept none. */
+export function computerAppIcon(output: WireValue | undefined): string | undefined {
+  if (!isRecord(output) || !isRecord(output.app) || !isRecord(output.app.icon)) return undefined;
+
+  return stringAt(output.app.icon.picture, "id");
 }
 
 /** The one file a call's `filePath` names, as a list; none where it names none. */
@@ -774,6 +794,33 @@ function namedCall(
   };
 }
 
+/** The status `look_at_picture` answers with when it wrote a description's PDF into the agent's machine. */
+const LOOK_WRITTEN = "written";
+
+/**
+ * A `look_at_picture` call as its row reads it: a picture in a thread or in
+ * the description, or, where the answer says it wrote a PDF into the agent's
+ * machine, a read of that PDF named by its file's name, the last part of the
+ * path the answer gives. A refusal stays a look, its reason in its answer.
+ */
+function lookCall(input: WireValue | undefined, output: WireValue | undefined): ToolCallView {
+  if (stringAt(output, "status") === LOOK_WRITTEN) {
+    const name = stringAt(output, "path")?.split("/").at(-1);
+
+    return {
+      ...namedCall(CALL_KIND.READ_DESCRIPTION_PDF, input, output, undefined),
+      subject: name ?? "",
+    };
+  }
+
+  const kind =
+    threadPictureOf(input) === undefined
+      ? CALL_KIND.LOOK_AT_PICTURE
+      : CALL_KIND.LOOK_AT_THREAD_PICTURE;
+
+  return namedCall(kind, input, output, undefined);
+}
+
 /** A call about one agent named by the agent's title its answer gives, as the agent's tab names it; nothing before the answer, whose input holds only an id. */
 function answeredAgentCall(
   kind: CallKind,
@@ -1130,15 +1177,7 @@ const SEARCH_MEMORY_CALL: ToolReader = ({ input, output }) => {
  * reaches here (`native-tool-calls.ts`).
  */
 const AGENT_TOOL_VIEWS = {
-  [AGENT_TOOL.LOOK_AT_PICTURE]: ({ input, output }) =>
-    namedCall(
-      threadPictureOf(input) === undefined
-        ? CALL_KIND.LOOK_AT_PICTURE
-        : CALL_KIND.LOOK_AT_THREAD_PICTURE,
-      input,
-      output,
-      undefined,
-    ),
+  [AGENT_TOOL.LOOK_AT_PICTURE]: ({ input, output }) => lookCall(input, output),
   [AGENT_TOOL.LIST_AGENTS]: ({ input, output }) =>
     namedCall(CALL_KIND.LIST_AGENTS, input, output, undefined),
   [AGENT_TOOL.READ_AGENT]: ({ input, output }) =>
@@ -1209,6 +1248,19 @@ const AGENT_TOOL_VIEWS = {
       ...(description === undefined ? undefined : { description }),
       input: { kind: TOOL_BLOCK.COMMAND, text: command },
       output: output === undefined ? undefined : macCommandOutput(output),
+    };
+  },
+  [AGENT_TOOL.COMPUTER]: ({ input, output }) => {
+    const description = computerCallWords(stringAt(input, "action"));
+    const icon = computerAppIcon(output);
+
+    return {
+      kind: CALL_KIND.COMPUTER,
+      subject: computerAppName(input, output) ?? "",
+      ...(description === undefined ? undefined : { description }),
+      ...(icon === undefined ? undefined : { appIcon: icon }),
+      input: jsonBlock(input ?? {}),
+      output: output === undefined ? undefined : jsonBlock(output),
     };
   },
   [AGENT_TOOL.BROWSER]: ({ input, output }) => {

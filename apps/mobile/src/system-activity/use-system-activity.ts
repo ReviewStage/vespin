@@ -19,7 +19,7 @@ import {
   type IosActivity,
   iosContinuedRouteOf,
   type SpotlightItem,
-  spotlightChanges,
+  spotlightIndexKeeper,
   spotlightItems,
 } from "@repo/features/ios-system-activity";
 import { OPENABLE_LINK, openableLinkOf } from "@repo/features/link-grammar";
@@ -32,7 +32,7 @@ import {
 } from "@repo/host/app-state-reads";
 import { useQuery } from "@tanstack/react-query";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { openInSafari } from "../open-link.js";
 import { useTasksWorkspace } from "../tasks/use-tasks.js";
@@ -98,45 +98,17 @@ function useSpotlightItems(): readonly SpotlightItem[] {
   }, [workspace, tasks, groups, readerId]);
 }
 
+/** The keeper of the app's Spotlight index for this launch, or none in a build without the module. */
+const spotlightIndex =
+  systemActivityModule === null
+    ? null
+    : spotlightIndexKeeper(systemActivityModule, refused("The Spotlight index"));
+
 /** Holds the app's Spotlight index to the chosen workspace's lists while an account is signed in, and empties it once none is. */
 function useSpotlightIndex(signedIn: boolean): void {
   const items = useSpotlightItems();
-  // What the index holds as far as this launch knows: none until it is first made anew, and null once emptied for no account.
-  const indexed = useRef<Map<string, SpotlightItem> | null | undefined>(undefined);
-  // Note that each change waits on the last, so an item removed is never added back by a change sent before it.
-  const sent = useRef<Promise<void>>(Promise.resolve());
   useEffect(() => {
-    const module = systemActivityModule;
-
-    if (module === null) return;
-
-    const send = (change: () => Promise<void>) => {
-      sent.current = sent.current.then(change).catch(refused("The Spotlight index"));
-    };
-
-    // Note that a launch with no account empties the index too, since one signed out while the app was closed left its items.
-    if (!signedIn) {
-      if (indexed.current === null) return;
-      indexed.current = null;
-      send(() => module.removeAll());
-
-      return;
-    }
-
-    const held = indexed.current;
-    indexed.current = new Map(items.map((item) => [item.id, item]));
-
-    if (held === undefined || held === null) {
-      send(() => module.removeAll().then(() => module.index(items)));
-
-      return;
-    }
-
-    const { index, remove } = spotlightChanges(held, items);
-
-    if (remove.length > 0) send(() => module.remove(remove));
-
-    if (index.length > 0) send(() => module.index(index));
+    spotlightIndex?.(signedIn, items);
   }, [signedIn, items]);
 }
 

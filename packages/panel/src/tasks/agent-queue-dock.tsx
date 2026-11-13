@@ -33,6 +33,7 @@ import { confirmFailure } from "../failure-report.js";
 import { type Directory, useMemberDirectory } from "../member-directory.js";
 import { COMPOSER_DOCK_CLASS } from "./agent-composer.js";
 import { KeptFileChips, WordFilesOf } from "./agent-pictures.js";
+import { filesBesideWords } from "./file-chips.js";
 import { SentWords } from "./skill-chip.js";
 
 /**
@@ -132,7 +133,8 @@ export function AgentQueueDock({
   onMove: (from: number, to: number) => void;
   /** Steers a queued message into the turn under way or as the next; none while the agent's first launch boots, which takes no line until its machine is up. */
   onSteer: ((message: QueuedMessage) => void) | undefined;
-  onEdit: (message: QueuedMessage) => void;
+  /** Opens a queued message in the box to be written again; none while the box holds what its words must not join, such as a suggestion's draft. */
+  onEdit: ((message: QueuedMessage) => void) | undefined;
   /** Deletes the message once the dialog's Delete is pressed, answering how that went. */
   onDelete: (message: QueuedMessage) => Promise<ActionResult>;
   onResume: () => void;
@@ -190,6 +192,9 @@ export function AgentQueueDock({
           {messages.map((message) => {
             const edited = message.id === editing || message.editing === true;
             const queuer = queuerOf(message, directory);
+            const files = queuedFileChips(message);
+            // Note that the files the words name stand in them, so a row whose words name every file draws no line of files over them.
+            const beside = filesBesideWords(files, message.text);
 
             return (
               <ListRow
@@ -204,19 +209,15 @@ export function AgentQueueDock({
                   </span>
                 }
                 title={
-                  <WordFilesOf files={queuedFileChips(message)} words={message.text}>
+                  <WordFilesOf files={files} words={message.text}>
                     <OneLine words={message.text}>
                       <SentWords text={message.text} line />
                     </OneLine>
                   </WordFilesOf>
                 }
                 attachments={
-                  message.files === undefined ? undefined : (
-                    // Note that the row holds the files the words do not name: one sent before markers, or named in code.
-                    <WordFilesOf files={queuedFileChips(message)} words={message.text}>
-                      <KeptFileChips files={queuedFileChips(message)} />
-                    </WordFilesOf>
-                  )
+                  // Note that the row holds the files the words do not name: one sent before markers, or named in code.
+                  beside.length === 0 ? undefined : <KeptFileChips files={beside} />
                 }
                 attachmentsOpen
                 meta={queuer === undefined ? undefined : <ActorRef actor={queuer} faceOnly />}
@@ -244,13 +245,16 @@ export function AgentQueueDock({
                           {QUEUE_WORDS.STEER}
                         </Button>
                       )}
+                      {onEdit === undefined ? null : (
+                        <IconButton
+                          size={BUTTON_SIZE.COMPACT}
+                          label={QUEUE_WORDS.EDIT}
+                          icon={<GLYPH.RENAME />}
+                          onClick={() => onEdit(message)}
+                        />
+                      )}
                       <IconButton
-                        size={BUTTON_SIZE.COMPACT}
-                        label={QUEUE_WORDS.EDIT}
-                        icon={<GLYPH.RENAME />}
-                        onClick={() => onEdit(message)}
-                      />
-                      <IconButton
+                        variant={BUTTON_VARIANT.DANGER_QUIET}
                         size={BUTTON_SIZE.COMPACT}
                         label={QUEUE_WORDS.DELETE}
                         icon={<GLYPH.DELETE />}

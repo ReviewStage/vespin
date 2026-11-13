@@ -19,6 +19,12 @@ import { cardTitle } from "@repo/features/plain-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { TERMINAL_ASK, TERMINAL_TARGET, terminalTarget } from "@repo/features/terminal-entry";
 import { TOOL_TARGET, type ToolTarget } from "@repo/features/tool-call-model";
+import {
+  agentTranscript,
+  readWholeTranscript,
+  TRANSCRIPT_COPY,
+  type TranscriptCopy,
+} from "@repo/features/transcript-copy";
 import { readingWords } from "@repo/features/words";
 import { HOST_CAPABILITY } from "@repo/settings";
 import { APP_COMMAND } from "@repo/settings/shortcuts";
@@ -167,12 +173,6 @@ import {
 import { useOpenTerminal } from "../tasks/terminal-commands.js";
 import { TERMINAL_KIND, type TerminalKind } from "../tasks/terminal-session.js";
 import { TerminalCount, TerminalTab } from "../tasks/terminal-tab.js";
-import {
-  agentTranscript,
-  readWholeTranscript,
-  TRANSCRIPT_COPY,
-  type TranscriptCopy,
-} from "../tasks/transcript-copy.js";
 import type { AgentsControl, HeldPeople } from "../tasks/use-agents.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { OnLeavingHere, PullRequestsOnGitHub } from "../tasks/use-open-link.js";
@@ -2492,8 +2492,9 @@ function TabContent({
  * beside the document, full screen, or still sliding, so a press lands on
  * it however fast the presses come. Where the room holds the panel only full
  * screen, a narrow one's, it reads Close panel while the panel is open, since the
- * panel covers everything else. It stands on every task's page, so it
- * is also what offers the panel's shortcut. ⌘T is the task's page's, which hands it to the column
+ * panel covers everything else. It stands on every task's page but its
+ * details, which take the panel's room, so it is also what offers the
+ * panel's shortcut. ⌘T is the task's page's, which hands it to the column
  * holding the window's focus (desktop-tasks.tsx). While the task is not
  * drawn there is no panel to show, so it is disabled and offers none. On a
  * task's page it stands at the end of the agents' tabs' row instead, with the

@@ -2,8 +2,6 @@ import { type AgentBoot, bootHolds } from "@repo/features/agent-boot";
 import type { AgentQueue } from "@repo/features/agent-queue-wire";
 import type { SendingMessage } from "@repo/features/agent-view";
 import {
-  type AgentMessagesAnswerView,
-  type AgentMessagesParams,
   type AgentTranscriptKey,
   type AgentTranscriptOlderAnswer,
   type AgentTranscriptOlderParams,
@@ -54,9 +52,6 @@ import type { AgentRun } from "./agent-model.js";
  * (`panel-spans.ts`), each told whether the transcript already stood as the
  * hold was taken, which draws with no round trip.
  */
-
-/** How one read is asked at once: the agent, the cursor to read past, and the worker's call where it is a worker's, answered as the view hears it. Copy transcript reads this way. */
-export type TranscriptReader = (params: AgentMessagesParams) => Promise<AgentMessagesAnswerView>;
 
 /** How the page below the oldest message held is read and laid: the transcript and where to read below, answered with whether it landed. */
 export type TranscriptOlderReader = (

@@ -37,7 +37,7 @@ describe("a vespin.dev link", () => {
     ["/acme/inbox/item-1", "/inbox/item-1"],
     ["/acme/task/task-1/inbox/item-1", "/inbox/item-1"],
     ["/acme/tasks", "/tasks"],
-    ["/acme/task/42", "/tasks/42"],
+    ["/acme/task/42", "/tasks/42?workspace=acme"],
     ["/acme/task/task-1/page/page-1", undefined],
     ["/acme/agent/agent-1", "/tasks/agent/agent-1"],
     ["/acme/task/task-1/agent/agent-1", "/tasks/agent/agent-1"],
@@ -46,7 +46,7 @@ describe("a vespin.dev link", () => {
     ["/acme/settings", undefined],
   ])("%s opens in the app at %s, and only then", (path, route) => {
     const read = readLink(`https://vespin.dev${path}`);
-    expect(read === undefined ? undefined : iosAppRouteOf(read.place)).toBe(route);
+    expect(read === undefined ? undefined : iosAppRouteOf(read.place, read.workspace)).toBe(route);
     expect(claimed(path)).toBe(route !== undefined);
   });
 });
@@ -76,7 +76,9 @@ describe("a pull request's address", () => {
   });
 
   it("names a vespin.dev place by the route its link opens", () => {
-    expect(iosAppRouteOfAddress("https://vespin.dev/acme/task/42", opened)).toBe("/tasks/42");
+    expect(iosAppRouteOfAddress("https://vespin.dev/acme/task/42", opened)).toBe(
+      "/tasks/42?workspace=acme",
+    );
   });
 });
 

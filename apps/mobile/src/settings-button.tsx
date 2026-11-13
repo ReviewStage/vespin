@@ -1,4 +1,4 @@
-// settings-button.tsx -- the one way Settings opens, and what leads each tab's root bar: the workspace switcher, whose menu opens it, where the tab names its workspace, else the signed-in account's photo, the button that opens it.
+// settings-button.tsx -- the one way Settings opens, and what leads each tab's root bar: the workspace switcher, whose list opens it, where the tab names its workspace, else the signed-in account's photo, the button that opens it.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { selectAccount } from "@repo/host/app-state-reads";
@@ -20,6 +20,7 @@ export const SETTINGS_ROUTE = {
   MACHINES: "/settings/machines",
   /** A machine's pairing, approved or denied by the `code` its link named. */
   MACHINE_CONNECT: "/settings/machine-connect",
+  MCP: "/settings/mcp",
   MEMORY: "/settings/memory",
   /** A memory's words, written anew or edited (`?memory=` its id), as Settings › Memory opens it. */
   MEMORY_EDIT: "/settings/memory-edit",
@@ -66,7 +67,7 @@ export function useSettingsAccount(): BarAccount | undefined {
 /**
  * The one item at the leading edge of a tab's root bar, in a stack's own
  * header: a compact window's, and a regular one's where the tab stands no
- * split view: the workspace switcher, whose menu holds the account and
+ * split view: the workspace switcher, whose list holds the account and
  * opens Settings, as Notion's one workspace button does, on every tab, since
  * each acts on the chosen workspace; the account's photo, opening Settings,
  * only before the account's workspaces are read. A split view

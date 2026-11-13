@@ -39,7 +39,7 @@ import type { AgentThreads } from "./threads-dock.js";
  * words, and the row the service writes for it lands in the line's place,
  * drawn once, whichever of the row and the send's answer comes first; a
  * message refused stays where it went, marked Not delivered, whether its tab
- * stood as it landed or not, its alert offering Retry and Edit; the working line stands from the
+ * stood as it landed or not, or the window reloaded since, its alert offering Retry and Edit; the working line stands from the
  * press, before the service takes the line. Synthetic throughout.
  */
 

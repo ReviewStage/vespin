@@ -35,6 +35,7 @@ import {
   agentPinParamsSchema,
   agentRenameParamsSchema,
   agentStartParamsSchema,
+  type ReplyButtonPressParams,
 } from "@repo/features/agent-view";
 import { AGENT_ARCHIVER, type AgentSummary, CONTEXT_WINDOW } from "@repo/features/agent-wire";
 import { GATE_CLOSED_BY } from "@repo/features/failure-facts";
@@ -238,6 +239,8 @@ export type AgentClient = Pick<
   | "runAction"
   | "stopRunAction"
   | "boot"
+  | "replyButton"
+  | "pressReplyButton"
   | "delete"
   | "agent"
   | "pullRequest"
@@ -795,6 +798,11 @@ function composed(
   /** A rewind, sent after every write of the agent's asked before it. */
   const rewound = queues.rewind(outboxSends);
 
+  /** A suggestion in an agent's reply sent from its draft, after every write of the agent's asked before it, so the agent takes the lines in the order they were sent. */
+  const pressed = queues.inTurn((params: ReplyButtonPressParams) =>
+    asked(client.pressReplyButton(params)),
+  );
+
   /**
    * An agent deleted once its question was answered, drawn gone from the
    * list at once and kept once the list carries it; a refusal puts it back.
@@ -1126,6 +1134,9 @@ function composed(
     AGENTS_BOOT: ({ agentId }) => asked(client.boot(agentId)),
     AGENTS_WARM: ({ agentId }) => asked(client.warm(agentId)),
     AGENTS_UNSEND: (params) => queues.unsend(params),
+    // Note that a button in a reply is asked of the service on each act and held nowhere here, since its press is the service's to keep.
+    AGENTS_REPLY_BUTTON: (params) => asked(client.replyButton(params)),
+    AGENTS_REPLY_BUTTON_PRESS: declaredWrite(dependencies.pool, pressed),
     // Note that an agent's ports and its link are asked of the service on each act and held nowhere here, because the plug reads them again while its menu stands open.
     AGENTS_PORTS: ({ agentId }) => asked(dependencies.ports.list(agentId)),
     AGENTS_PORT_SHARED: ({ agentId }) => asked(dependencies.ports.shared(agentId)),

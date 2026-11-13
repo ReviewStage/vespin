@@ -65,6 +65,42 @@ export function useTaskComments(taskId: string | undefined): readonly Descriptio
   return threads;
 }
 
+/** Says on the console a comments read asked again that did not go; the page still says the read failed. */
+function commentsRetryLost(cause: unknown): void {
+  console.error("Reading the comments again did not go.", cause);
+}
+
+/**
+ * Reads a task's description threads again, as the panel's Try again does
+ * (`TASKS_COMMENTS_RETRY`), where their read failed and none are held; none
+ * otherwise, or while `taskId` names no task.
+ */
+export function useTaskCommentsRetry(taskId: string | undefined): (() => void) | undefined {
+  const acts = useHostActs();
+
+  const { data: failed = false } = useQuery({
+    ...appStateQuery,
+    select: (state) => {
+      const held =
+        taskId === undefined
+          ? undefined
+          : state[LIVE_READ.DESCRIPTION_COMMENTS][COMMENT_SUBJECT.DESCRIPTION][taskId];
+
+      return held?.failed === true && held.rows === undefined;
+    },
+  });
+
+  return useMemo(
+    () =>
+      !failed || taskId === undefined
+        ? undefined
+        : () => {
+            acts[ACT_KIND.TASKS_COMMENTS_RETRY]({ taskId }).catch(commentsRetryLost);
+          },
+    [failed, taskId, acts],
+  );
+}
+
 /** A thread's comments, its words and the lines of what happened to it left out. */
 export function threadComments(
   thread: DescriptionCommentThread,

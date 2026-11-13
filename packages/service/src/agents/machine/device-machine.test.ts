@@ -7,6 +7,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import { it } from "@effect/vitest";
+import { CHECKOUT_DIFF_EXIT } from "@repo/agent-runner/checkout-diff";
 import { Database } from "@repo/database/core/query";
 import { RUNNER_LOST_DETAIL } from "@repo/database/models/abandoned-turns";
 import {
@@ -36,7 +37,6 @@ import { MESSAGE_SENDER } from "@repo/database/storage-vocabulary";
 import { type SyncTopic, TOPIC } from "@repo/database/sync/notification";
 import { DEVICE_LAYOUT, expectTopicsFire, getTestDB } from "@repo/database/testing";
 import { AGENT_FAILURE } from "@repo/features/agent-wire";
-import { CHECKOUT_DIFF_EXIT } from "@repo/features/checkout-diff";
 import { CHECKOUT_RESTORE_EXIT } from "@repo/features/checkout-restore";
 import {
   DEVICE_AGENT_LINE_KIND,
@@ -86,6 +86,7 @@ import {
   deviceAgentRequestsFor,
   settledDeviceAgentLine,
 } from "../device-agent.js";
+import { AgentSandbox, type AgentSandboxService } from "../terminal/agent-sandbox.js";
 import { CHECKOUT_DIFF_OUTCOME, LaunchRefused, RESTORE_OUTCOME } from "./agent-machine.js";
 import { deviceMachine, MAC_MACHINE } from "./device-machine.js";
 
@@ -164,8 +165,13 @@ const untilQueued = (userId: string, deviceId: string) =>
     return Option.getOrThrow(Option.fromNullishOr(line));
   });
 
-/** GitHub unreached, and sandboxes kept in memory, which a Mac's agent never reaches. */
-const NO_REACH = Layer.merge(NO_GITHUB, memorySandbox().layer);
+/** GitHub unreached, and sandboxes kept in memory, which a Mac's agent never reaches, nor the Terminal's wake of one. */
+const NO_REACH = Layer.mergeAll(
+  NO_GITHUB,
+  memorySandbox().layer,
+  // SAFETY: a Mac's agent has no sandbox to wake, so no call of it is ever made.
+  Layer.succeed(AgentSandbox, {} as AgentSandboxService),
+);
 
 it.layer(Layer.mergeAll(getTestDB(), Layer.succeed(HostedEnvironment, ENVIRONMENT), NO_REACH))(
   "a local agent's machine",

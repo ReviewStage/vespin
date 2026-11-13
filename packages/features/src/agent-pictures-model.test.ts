@@ -117,6 +117,23 @@ test("a browser call's screenshots are named by their place among its steps, eac
   assert.deepEqual(calledPicturesOf("browser", {}, { status: "not-run", reason: "No." }), []);
 });
 
+test("a computer call's window is named by its app as the transcript kept it, and an action that read no window names none", () => {
+  const read = {
+    status: "ran",
+    app: { name: "Simulator", refused: false },
+    elements: "[0] AXWindow",
+    kept: { picture: MEMBERS },
+  };
+
+  assert.deepEqual(calledPicturesOf("computer", { action: "get_app_state" }, read), [
+    { kept: true, picture: MEMBERS, name: "Simulator" },
+  ]);
+  assert.deepEqual(
+    calledPicturesOf("computer", { action: "click" }, { status: "ran", done: "pressed" }),
+    [],
+  );
+});
+
 test("a call whose answer is no list of blocks, or whose blocks carry no picture, names none", () => {
   assert.deepEqual(calledPicturesOf("bash", { command: "ls" }, { stdout: "a.png\n" }), []);
   assert.deepEqual(

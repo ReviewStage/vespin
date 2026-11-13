@@ -43,12 +43,14 @@ import {
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import type { SendingMessage } from "@repo/features/agent-view";
 import {
+  type AgentOrigin,
   type AgentPullRequest,
   type AgentTranscriptMessage,
   PULL_REQUEST_STATE,
 } from "@repo/features/agent-wire";
 import { fileName } from "@repo/features/code-ref-words";
 import { isVideoType } from "@repo/features/conversation-picture-wire";
+import { INTEGRATION_NAME } from "@repo/features/integration-wire";
 import { type PullRequestMarkState, pullRequestMarkState } from "@repo/features/pull-request-model";
 import { callHeading, WORKING_LINE, workedForText } from "@repo/features/time-format";
 import {
@@ -146,12 +148,36 @@ export interface ShownMedia {
   readonly video: boolean;
 }
 
+/** One part of the line naming who sent an automation's prompt: its words, and the address a press opens, where it has one. */
+export interface OriginPart {
+  readonly words: string;
+  readonly address: string | undefined;
+}
+
+/**
+ * What an automation's agent's transcript opens on, as the panel's card
+ * draws it: the automation's prompt alone, in place of the first line's
+ * words, which carry the lines we add of the firing; who sent it, the
+ * automation, then what its run was about and who asked for it; and a
+ * webhook call's body, folded under it.
+ */
+export interface TranscriptOrigin {
+  /** The automation's prompt alone; none until the run is read, when the first line's own words stand. */
+  readonly prompt: string | undefined;
+  readonly from: readonly OriginPart[];
+  readonly body: string | undefined;
+}
+
 export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: number } & (
   | {
       readonly kind: typeof TRANSCRIPT_ITEM.SAID;
       readonly words: string;
       /** Who sent it, where the reader did not. */
       readonly sender: string | undefined;
+      /** Who sent an automation's prompt, part by part, where the line is one; it stands in the sender's place. */
+      readonly from?: readonly OriginPart[] | undefined;
+      /** A webhook call's body, which rode in with an automation's prompt. */
+      readonly body?: string | undefined;
       /** When it was sent, as a call's header says the day and the time; none where the row kept no time. */
       readonly sent: string | undefined;
     }
@@ -224,7 +250,17 @@ export interface TranscriptReading {
   readonly pullRequests: readonly AgentPullRequest[];
   /** How the whole read of a part its page carried cut stands, where it was asked; none where it was not yet. */
   readonly wholePart?: ((cut: AgentPartCut) => WholePartRead | undefined) | undefined;
+  /** What the transcript opens on where an automation's run started the agent, drawn on its first line; none for any other agent, or while older pages are still unread. */
+  readonly origin?: TranscriptOrigin | undefined;
 }
+
+/** What an automation is called where it can't be named: by the panel's words (`namedAutomationActor`). */
+const ORIGIN_WORDS = {
+  AUTOMATION: "Automation",
+  DELETED: "(deleted)",
+  RUN_BY: "Run by",
+  ISSUE: "issue",
+} as const;
 
 /** How many lines of a call's block its card draws, as the panel's card cuts one. */
 const BLOCK_LINES = 40;
@@ -334,6 +370,81 @@ function saidItem(
     words: messageWords(line),
     sender,
     sent: line.sentAt === undefined ? undefined : callHeading(line.sentAt, reading.now),
+  };
+}
+
+/** An automation's prompt as its agent's first line, in place of the line's own words and sender. */
+function originItem(
+  line: AgentTranscriptMessage,
+  base: ItemBase,
+  reading: TranscriptReading,
+  origin: TranscriptOrigin,
+): TranscriptItem {
+  return {
+    ...base,
+    kind: TRANSCRIPT_ITEM.SAID,
+    words: origin.prompt ?? messageWords(line),
+    sender: undefined,
+    sent: line.sentAt === undefined ? undefined : callHeading(line.sentAt, reading.now),
+    from: origin.from,
+    body: origin.body,
+  };
+}
+
+/**
+ * What an automation's agent's transcript opens on, from the run that
+ * started it (`AGENTS_ORIGIN_FOLLOW`), as the panel's `AutomationSender`
+ * names it: the automation, opening `automationAddress` where it still
+ * stands, "Name (deleted)" once it's gone, and "Automation" where no name
+ * was kept; then the issue or pull request its GitHub event named, or the
+ * issue its integration's event was about, each opening its address; and
+ * who asked for a run now. None of the run is known while it's unread.
+ */
+export function transcriptOriginOf(input: {
+  readonly automationId: string | undefined;
+  readonly automationName: string | undefined;
+  readonly automationAddress: string | undefined;
+  readonly run: AgentOrigin | undefined;
+}): TranscriptOrigin {
+  const { automationId, automationName, run } = input;
+
+  const automation =
+    automationId === undefined && automationName !== undefined
+      ? `${automationName} ${ORIGIN_WORDS.DELETED}`
+      : (automationName ?? ORIGIN_WORDS.AUTOMATION);
+
+  const subject = run?.subject;
+  const issue = run?.issue;
+
+  const from: readonly (OriginPart | undefined)[] = [
+    {
+      words: automation,
+      address: automationId === undefined ? undefined : input.automationAddress,
+    },
+    subject === undefined
+      ? undefined
+      : {
+          words:
+            subject.title === undefined
+              ? `#${subject.number}`
+              : `#${subject.number} ${subject.title}`,
+          address: subject.url,
+        },
+    issue === undefined
+      ? undefined
+      : {
+          words: issue.title ?? `${INTEGRATION_NAME[issue.provider]} ${ORIGIN_WORDS.ISSUE}`,
+          address: issue.url,
+        },
+    run?.runBy === undefined
+      ? undefined
+      : { words: `${ORIGIN_WORDS.RUN_BY} ${run.runBy.name}`, address: undefined },
+  ];
+
+  return {
+    prompt: run?.prompt,
+    from: from.filter((part) => part !== undefined),
+    body: run?.body,
   };
 }
 
@@ -637,10 +748,23 @@ export function transcriptItems(
   reading: TranscriptReading,
 ): readonly TranscriptItem[] {
   const placed = placedMessages(messages);
+  const { origin } = reading;
+
+  // Note that an automation's prompt is the first line anyone sent, which the run's card stands in place of.
+  const head =
+    origin === undefined
+      ? undefined
+      : placed.find(({ message }) => message.role === MESSAGE_ROLE.USER)?.message.id;
 
   const items = placed.flatMap(({ message, arrived }, at): readonly TranscriptItem[] => {
     if (message.role === MESSAGE_ROLE.USER) {
-      return [saidItem(message, { place: linePlace(message.id, message.id), depth: 0 }, reading)];
+      const base = { place: linePlace(message.id, message.id), depth: 0 };
+
+      return [
+        origin !== undefined && message.id === head
+          ? originItem(message, base, reading, origin)
+          : saidItem(message, base, reading),
+      ];
     }
 
     const moving = reading.writing && at === placed.length - 1;

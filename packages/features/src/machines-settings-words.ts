@@ -43,7 +43,7 @@ export function removeMachineQuestion(label: string) {
   return {
     title: `Remove ${label}?`,
     body: `It stops taking agents now, and ${PRODUCT_NAME} removes itself from the machine, keeping its agents' folders in ~/.vespin/agents. Their tasks and transcripts stay in ${PRODUCT_NAME}.`,
-    verb: MACHINES_WORDS.REMOVE,
+    verb: "Remove machine",
     running: "Removing",
   } as const;
 }

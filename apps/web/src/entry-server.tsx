@@ -9,6 +9,8 @@ import {
   changelogRoutes,
   type PageHead,
 } from "./changelog-releases";
+import { GUIDES, GuidesPage } from "./GuidesPage";
+import { type GuideText, guideMarkdown, guideRoutes, LLMS_TEXT_FILE, llmsText } from "./guides";
 import { NotFoundPage } from "./NotFoundPage";
 import { PrivacyPage } from "./PrivacyPage";
 import { SITE_PAGE } from "./SiteChrome";
@@ -17,7 +19,8 @@ import { SITE_PAGE } from "./SiteChrome";
  * The pages a crawler should be able to read without running JavaScript,
  * keyed by the HTML file Vite emits for each. The changelog is not one of them
  * but many: every page of releases and every release on its own, each
- * written from the one `changelog.html` Vite emits. Sign-in, consent, and admin
+ * written from the one `changelog.html` Vite emits; and so are the guides, the
+ * index and every guide written from `guides.html`. Sign-in, consent, and admin
  * are app surfaces rather than documents, so they stay client-rendered: a
  * static render of them would only ever describe a form.
  */
@@ -64,7 +67,24 @@ export function renderPrerenderedPages(): readonly PrerenderedPage[] {
     }),
   );
 
-  return [...pages, ...changelog];
+  const guides = guideRoutes(GUIDES).map(
+    (route): PrerenderedPage => ({
+      file: route.file,
+      template: "guides.html",
+      markup: renderToString(<GuidesPage view={route.view} />),
+      head: route.head,
+    }),
+  );
+
+  return [...pages, ...changelog, ...guides];
+}
+
+/**
+ * The text files the build writes beside the pages, each relative to the
+ * build's root: every guide's Markdown copy, and the site's `llms.txt`.
+ */
+export function renderTextFiles(): readonly GuideText[] {
+  return [...GUIDES.map(guideMarkdown), { file: LLMS_TEXT_FILE, text: llmsText(GUIDES) }];
 }
 
 /** The changelog's RSS feed, and the built file it is written to, relative to the build's root. */
@@ -77,17 +97,23 @@ const SITEMAP_FILE = "sitemap.xml";
 
 /**
  * The site's sitemap, and the built file it is written to: every page the
- * site's chrome links to and every changelog page and release, each once,
- * from the same routes the prerender writes, so a new release is listed by
- * the build that publishes it.
+ * site's chrome links to, every changelog page and release, and the guides'
+ * index and every guide, each once, from the same routes the prerender
+ * writes, so a new release or guide is listed by the build that publishes
+ * it. A guide carries the day its words last changed as its `lastmod`.
  */
 export function renderSitemap() {
-  const paths = new Set([
-    ...Object.values(SITE_PAGE),
-    ...changelogRoutes(RELEASES).map((route) => route.path),
+  const updated = new Map<string, string | undefined>([
+    ...Object.values(SITE_PAGE).map((path) => [path, undefined] as const),
+    ...changelogRoutes(RELEASES).map((route) => [route.path, undefined] as const),
+    ...guideRoutes(GUIDES).map((route) => [route.path, route.updated] as const),
   ]);
 
-  const urls = [...paths].map((path) => `  <url><loc>${LINK_ORIGIN}${path}</loc></url>`);
+  const urls = [...updated].map(([path, day]) =>
+    day === undefined
+      ? `  <url><loc>${LINK_ORIGIN}${path}</loc></url>`
+      : `  <url><loc>${LINK_ORIGIN}${path}</loc><lastmod>${day}</lastmod></url>`,
+  );
 
   const xml = [
     '<?xml version="1.0" encoding="UTF-8"?>',

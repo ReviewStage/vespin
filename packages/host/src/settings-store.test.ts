@@ -199,6 +199,10 @@ const SAMPLE_VALUE = {
   keepAwake: KEEP_AWAKE.PLUGGED_IN,
   // Steer is the default, so Queue is the choice that has to survive a reopen.
   agentEnter: AGENT_ENTER.QUEUE,
+  // On is the default, so agents kept off this Mac's apps is the choice that has to survive a reopen.
+  computerUse: false,
+  // No app is the default, so an app answered Always allow for is the state that has to survive a reopen.
+  computerUseApps: '["com.apple.iphonesimulator"]',
   // You with our bot as co-author is the default, so the bot alone is the choice that has to survive a reopen.
   commitAuthor: COMMIT_AUTHOR.APP,
   // Full access is the default, so Ask for approval is the choice that has to survive a reopen.

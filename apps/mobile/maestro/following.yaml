@@ -1,0 +1,42 @@
+# following.yaml -- the Tasks tab's Following group holding a teammate's task the account follows, and a task's Following chip opening the Followers sheet: the account first as You and its assignee, a teammate who lets agents use their machines, the account's switch, and Unfollow, dimmed for the assignee and pressable on a task it only follows.
+#
+# The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
+# which `scripts/simulator-screenshots.sh` names per device and appearance.
+appId: dev.vespin.ios
+---
+# Launched on the host's Inbox fixture, whose digest task is followed by the
+# account and both teammates, and whose billing export, a teammate's, the
+# account follows (`@repo/host/fixture-inbox`); nothing here is written, since
+# the fixture stages no follower write.
+- launchApp:
+    clearState: true
+    arguments:
+      fixture: inbox
+- tapOn: "Tasks"
+- assertVisible: "Following, [0-9]+"
+- assertVisible: "Billing export"
+- waitForAnimationToEnd
+- takeScreenshot: following-group
+# The digest's page draws its followers as a chip under its fields, which
+# opens the Followers sheet; the account is its assignee, so Unfollow stands
+# dimmed with why.
+- tapOn: "Weekly digest email"
+- assertVisible: "Following"
+- waitForAnimationToEnd
+- takeScreenshot: following-chip
+- tapOn: "Following"
+- assertVisible: "Let agents here use my machines"
+- assertVisible: "You're the assignee"
+- waitForAnimationToEnd
+- takeScreenshot: following-sheet-assignee
+- tapOn: "Done"
+- waitForAnimationToEnd
+# The billing export is a teammate's, so the account may unfollow it.
+- tapOn: "Tasks"
+- tapOn: "Billing export"
+- tapOn: "Following"
+- assertVisible: "Unfollow"
+- assertNotVisible: "You're the assignee"
+- waitForAnimationToEnd
+- takeScreenshot: following-sheet-follower
+- tapOn: "Done"
