@@ -161,6 +161,12 @@ import { HISTORY_ROUTE } from "./history-screens.js";
 import { useMoveTaskDoor } from "./move-screens.js";
 import { type OpenRelation, RELATION_KIND_SYMBOL, useOpenRelation } from "./relation-screens.js";
 
+/** What a task's page hears of a start on its route: a New task start refused, which takes the page back. */
+const ROUTE_HEARS = [START_LANDED.REFUSED] as const;
+
+/** What the overview every layout draws hears of a start: its agent started, or a New agent start refused. */
+const OVERVIEW_HEARS = [START_LANDED.AGENT, START_LANDED.AGENT_REFUSED] as const;
+
 /** The Tasks tab's name, at its head and on its back button. */
 const TASKS_TITLE = "Tasks";
 
@@ -1736,6 +1742,16 @@ function OverviewPage({
   const { task, document } = overview;
   useScreenActivity((workspaces) => taskActivity(task, workspaces));
 
+  const navigation = useNavigation();
+
+  // Note that New task and New agent sheets give way to this page before the service answers, so the overview every layout draws, the iPad's split detail among them, opens the started agent while the page stands in front, and opens New agent again on the words of one refused.
+  useStartLanded(task.id, OVERVIEW_HEARS, (landed) => {
+    if (!navigation.isFocused()) return;
+
+    if (landed.kind === START_LANDED.AGENT) router.push(onTab(iosAgentRoute(landed.agentId)));
+    else router.push({ pathname: "/start-agent", params: { task: task.id } });
+  });
+
   const { data: descriptions = false } = useQuery({
     ...appStateQuery,
     select: selectWorkspaceExperiment(task.workspaceId, EXPERIMENT.DESCRIPTIONS),
@@ -1975,21 +1991,12 @@ export function TaskScreen() {
   const { id, workspace } = useLocalSearchParams<{ id: string; workspace?: string }>();
   const router = useRouter();
   const navigation = useNavigation();
-  const onTab = useOnTab();
   const colors = useColors();
-  // Note that a page New task opened before its task was made hears what the start came to: its agent opens while the page still stands in front, and a refused start takes the page back, at once or as soon as it stands in front again.
+  // Note that a page New task opened before its task was made hears a refused start on its route, which takes the page back, at once or as soon as it stands in front again; its agent opening is the overview's (`OVERVIEW_HEARS`).
   const [gone, setGone] = useState(false);
 
-  useStartLanded(id, (landed) => {
-    const shown = navigation.isFocused();
-
-    if (landed.kind === START_LANDED.AGENT) {
-      if (shown) router.push(onTab(iosAgentRoute(landed.agentId)));
-
-      return;
-    }
-
-    if (shown) router.back();
+  useStartLanded(id, ROUTE_HEARS, () => {
+    if (navigation.isFocused()) router.back();
     else setGone(true);
   });
 

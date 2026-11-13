@@ -6,16 +6,20 @@
  * (`AGENTS_PORTS`, `AGENTS_PORT_SHARED`) every few seconds while the sheet
  * stands, never waking a stopped sandbox. A shared port's link opens in
  * Safari or is copied. A share or its close
- * (`AGENTS_PORT_SHARE`, `AGENTS_PORT_UNSHARE`) lays its answer over the link
- * read, and one that did not go says why under the list, in the panel's
- * words. A phone reaches no port of the sandbox itself, so a port opens in
- * Safari by its shared link alone.
+ * (`AGENTS_PORT_SHARE`, `AGENTS_PORT_UNSHARE`) draws at once, the port
+ * standing shared with only Stop sharing until the service mints its link,
+ * then lays its answer over the link read; one that did not go rolls back to
+ * what the service holds and says why under the list, in the panel's words.
+ * A phone reaches no port of the sandbox itself, so a port opens in Safari by
+ * its shared link alone.
  */
 
 import { signedInAccountId } from "@repo/credentials/snapshot";
 import {
   AGENT_PORTS_WORDS,
+  type HostedPorts,
   hostedPorts,
+  PORT_ACT,
   PORTS_LOOK_EVERY_MS,
   type PortRow,
   portRows,
@@ -63,14 +67,40 @@ export interface AgentPorts {
 /** What a copy of a link that did not go says. */
 const NOT_COPIED = "The link could not be copied.";
 
+/** The link a port shared at once stands with until the service mints its own, which offers no Open or Copy. */
+const LINK_UNMINTED = "";
+
+/** A share or its close drawn before the service answers: the port picked, or `null` for none shared. */
+interface PickedShare {
+  readonly port: number | null;
+}
+
+/** The ports as the service holds them, with the pick not yet answered laid over them. */
+function pickedView(view: HostedPorts, picked: PickedShare | undefined): HostedPorts {
+  if (picked === undefined) return view;
+
+  if (picked.port === null) return { ...view, shared: undefined, linkRead: true };
+
+  return { ...view, shared: { port: picked.port, url: LINK_UNMINTED }, linkRead: true };
+}
+
+/** A row as the sheet draws it: a port shared at once offers only Stop sharing until its link is minted. */
+function drawnRow(row: PortRow): PortRow {
+  if (row.url !== LINK_UNMINTED) return row;
+
+  return { ...row, acts: row.acts.filter((act) => act === PORT_ACT.STOP_SHARING) };
+}
+
 /** The ports of the agent `agentId` names, read every few seconds while the sheet stands. */
 export function useAgentPorts(agentId: string): AgentPorts {
   const acts = useHostActs();
   const write = useWrite();
   const queries = useQueryClient();
   const [note, setNote] = useState<string | undefined>(undefined);
-  // Note that a share or its close under way holds the next, so two never race to say which port is shared.
-  const sharing = useRef(false);
+  const [picked, setPicked] = useState<PickedShare | undefined>(undefined);
+  // Note that picks go to the service one after another, so two never race to say which port is shared; a pick a newer one replaced before it went is never sent.
+  const queue = useRef<Promise<void>>(Promise.resolve());
+  const newest = useRef(0);
 
   // Note that the reads are kept under the account signed in, so another account's never draws from them.
   const { data: accountId } = useQuery({
@@ -94,7 +124,7 @@ export function useAgentPorts(agentId: string): AgentPorts {
     queryFn: () => acts[ACT_KIND.AGENTS_PORT_SHARED]({ agentId }),
   });
 
-  const view = hostedPorts(listed, linked);
+  const view = pickedView(hostedPorts(listed, linked), picked);
 
   /** Lays what the service now shares over the link read, a read still out let go first so it never lands over it. */
   const laid = (shared: AgentSharedPortAnswerView) =>
@@ -102,17 +132,10 @@ export function useAgentPorts(agentId: string): AgentPorts {
       .cancelQueries({ queryKey: sharedKey })
       .then(() => queries.setQueryData(sharedKey, shared));
 
-  const share = (port: number | null) => {
-    if (sharing.current) return;
-    sharing.current = true;
-    setNote(undefined);
-
-    const settled = () => {
-      sharing.current = false;
-    };
-
+  /** Sends one pick, laying the service's answer over the link read; whether it landed. */
+  const sent = (port: number | null): Promise<boolean> => {
     if (port === null) {
-      void write(
+      return write(
         () =>
           acts[ACT_KIND.AGENTS_PORT_UNSHARE]({ agentId }).then(async (answer) => {
             if ("shared" in answer) await laid(answer);
@@ -125,12 +148,10 @@ export function useAgentPorts(agentId: string): AgentPorts {
           inPlace: setNote,
           went: BUZZ.SUCCESS,
         },
-      ).finally(settled);
-
-      return;
+      );
     }
 
-    void write(
+    return write(
       () =>
         acts[ACT_KIND.AGENTS_PORT_SHARE]({ agentId, port }).then(async (answer) => {
           if ("url" in answer) await laid({ shared: { port, url: answer.url } });
@@ -143,7 +164,22 @@ export function useAgentPorts(agentId: string): AgentPorts {
         inPlace: setNote,
         went: BUZZ.SUCCESS,
       },
-    ).finally(settled);
+    );
+  };
+
+  // Note that the pick draws at once and the newest one is what stands; once it is answered, landed or not, the overlay goes, so the service's own read draws.
+  const share = (port: number | null) => {
+    newest.current += 1;
+    const turn = newest.current;
+    setNote(undefined);
+    setPicked({ port });
+
+    queue.current = queue.current.then(async () => {
+      if (turn !== newest.current) return;
+      await sent(port);
+
+      if (turn === newest.current) setPicked(undefined);
+    });
   };
 
   const copy = (url: string) => {
@@ -157,7 +193,7 @@ export function useAgentPorts(agentId: string): AgentPorts {
   };
 
   return {
-    rows: portRows(view),
+    rows: portRows(view).map(drawnRow),
     none: view.none,
     linkNote: view.linkFailed ? AGENT_PORTS_WORDS.LINK_NOT_READ : undefined,
     share,

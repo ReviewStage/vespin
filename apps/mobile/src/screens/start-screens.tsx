@@ -53,22 +53,26 @@ import {
   forgetRefusedStart,
   heldRefusedStart,
   inTree,
+  keepRefusedAgentStart,
   keepRefusedStart,
   type ModelPick,
+  type RefusedAgentStart,
   type RefusedStart,
   type RepositoryPick,
   runsOnOptions,
   START_LANDED,
   type StartAnswer,
+  type StartAsk,
   startLanded,
   startRefusalWords,
+  takeRefusedAgentStart,
   useFileTask,
   useModelPick,
   useRepositoryPick,
   useStartAgent,
   useStartTask,
 } from "../tasks/use-start.js";
-import { useAttachedPictures } from "../use-attached-pictures.js";
+import { type AttachedPictures, useAttachedPictures } from "../use-attached-pictures.js";
 import { DISCARD_WORDS, type KeptWords, useKeptWords } from "../use-kept-words.js";
 import { type SkillsOffered, useSkillOffer } from "../use-skill-offer.js";
 import { useWrite } from "../use-write.js";
@@ -449,6 +453,78 @@ function useSheetStart(
   return { starting, go };
 }
 
+/** What New agent's at-once start keeps of its sheet beyond the start itself, for a refusal to open it again on. */
+type AgentSheetHeld = Pick<RefusedAgentStart, "prompt" | "picked" | "runsOn">;
+
+type UseStartAtOnceResult = {
+  readonly go: (ask: StartAsk, held: AgentSheetHeld) => void;
+};
+
+/**
+ * New agent's own start, which never waits on the service: the sheet gives
+ * way to the task's page at once and the start goes on behind it, its agent's
+ * page pushed once the service names it while the task's page still stands
+ * (`useStartLanded`); a refusal says why in the failure notice and opens the
+ * sheet again with its words, pictures, model and place, or keeps them for
+ * the task's next New agent where its page no longer stands. Note that this
+ * stands apart from `useSheetStart`, whose New task and File for later mint
+ * the task's id on the phone, since an agent's id comes only from the
+ * service.
+ */
+function useStartAtOnce(
+  taskId: string,
+  kept: KeptWords,
+  pictures: AttachedPictures,
+  setNote: (note: string | undefined) => void,
+): UseStartAtOnceResult {
+  const router = useRouter();
+  const write = useWrite();
+  const startAgent = useStartAgent(taskId);
+
+  const go = (ask: StartAsk, sheet: AgentSheetHeld) => {
+    if (pictures.refusal !== undefined) {
+      setNote(pictures.refusal);
+      buzz(BUZZ.WARNING);
+
+      return;
+    }
+
+    const held = pictures.take();
+    const started: Started = {};
+    awaitStart(taskId);
+    kept.release();
+    router.dismiss();
+
+    void write(
+      () =>
+        startAgent(ask).then((answer) => {
+          started.answer = answer;
+
+          return answer;
+        }),
+      {
+        refused: (answer) => ("refused" in answer ? answer.refused : undefined),
+        went: BUZZ.SUCCESS,
+      },
+    ).then(() => {
+      const answer = started.answer;
+
+      if (answer !== undefined && "refused" in answer) {
+        keepRefusedAgentStart(taskId, { ...sheet, pictures: held, note: answer.refused });
+        startLanded(taskId, { kind: START_LANDED.AGENT_REFUSED });
+
+        return;
+      }
+
+      if (answer?.agentId !== undefined) {
+        startLanded(taskId, { kind: START_LANDED.AGENT, agentId: answer.agentId });
+      }
+    });
+  };
+
+  return { go };
+}
+
 /** The skills a `/` offers, as the compose sheet takes them. */
 function offered(skills: SkillsOffered | undefined) {
   return skills === undefined
@@ -473,21 +549,34 @@ export function NewAgentScreen({
 }) {
   const action = opened?.view.action;
   const brief = action?.kind === REPLY_BUTTON_ACTION.START ? action.prompt : "";
-  const [prompt, setPrompt] = useState(brief);
-  const [runsOn, setRunsOn] = useState(CLOUD);
-  const pick = useModelPick(action === undefined ? undefined : suggestedChoice(action));
-  const startAgent = useStartAgent(taskId);
+
+  // Note that a sheet opened again after a refused start stands as it was sent, its refusal said under its words.
+  const [draft] = useState(() =>
+    opened === undefined ? takeRefusedAgentStart(taskId) : undefined,
+  );
+
+  const [prompt, setPrompt] = useState(draft?.prompt ?? brief);
+  const [runsOn, setRunsOn] = useState(draft?.runsOn ?? CLOUD);
+  const pick = useModelPick(action === undefined ? draft?.picked : suggestedChoice(action));
   const sendSuggestion = useSuggestionSender();
   const suggester = useShownAgent(opened?.suggestion.agentId ?? "");
   // Note that a suggestion's agent starts on its suggester's task, as the service starts it, so Start waits until that task is read.
   const suggestedTask = suggester?.planId;
   const placed = opened === undefined || suggestedTask !== undefined;
-  const [note, setNote] = useState<string | undefined>(undefined);
+  const [note, setNote] = useState<string | undefined>(draft?.note);
   const pictures = useAttachedPictures(setNote);
   const drafted = hasWordsOrFiles(prompt.trim(), pictures.files);
   const kept = useKeptWords(drafted);
   const { starting, go } = useSheetStart(kept, setNote);
+  const atOnce = useStartAtOnce(taskId, kept, pictures, setNote);
   const skills = useSkillOffer(prompt, setPrompt, { planId: taskId });
+  // The refused draft's pictures, put back once as the sheet first draws.
+  const [restored, setRestored] = useState(draft === undefined);
+
+  if (!restored && draft !== undefined) {
+    setRestored(true);
+    pictures.putBack(draft.pictures);
+  }
 
   // Note that a suggestion's start sends its own title and branch beside the words, files, and model the sheet holds.
   const startSuggested = async (
@@ -505,19 +594,14 @@ export function NewAgentScreen({
       : { refused: result.failure.text };
   };
 
+  // Note that a suggestion's start keeps the sheet up until the service answers, since it goes through the suggestion once, as the panel's draft sends one.
   const start = () =>
-    go(
-      () =>
-        opened === undefined
-          ? startAgent({
-              prompt: prompt.trim(),
-              attachments: pictures.files,
-              picked: pick.picked,
-              runsOn,
-            })
-          : startSuggested(opened.suggestion),
-      pictures.refusal,
-    );
+    opened === undefined
+      ? atOnce.go(
+          { prompt: prompt.trim(), attachments: pictures.files, picked: pick.picked, runsOn },
+          { prompt, picked: pick.picked, runsOn },
+        )
+      : go(() => startSuggested(opened.suggestion), pictures.refusal);
 
   return (
     <>
