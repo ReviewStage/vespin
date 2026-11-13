@@ -1017,7 +1017,19 @@ it.effect(
         { threadId: THREAD, origin: "user", objective: OBJECTIVE, status: "active" },
       ]);
       assert.deepEqual(received(process, "turn/start"), []);
-      assert.deepEqual(acceptedLines(service.applied), [LINE.FIRST]);
+      // The goal line opened the agent's turn, so its ACCEPTED carries the checkout as it stood before the turn app-server started.
+      assert.deepEqual(
+        service.applied.flatMap(({ message: posted }) =>
+          "type" in posted && posted.type === RUNNER_EVENT.ACCEPTED ? [posted] : [],
+        ),
+        [
+          {
+            type: RUNNER_EVENT.ACCEPTED,
+            uuid: LINE.FIRST,
+            snapshot: fakeSnapshotOf(CONFIG.cwd, LINE.FIRST),
+          },
+        ],
+      );
       // Only the goal's moves are posted as its events, not each change of its token count.
       assert.deepEqual(
         service.applied.flatMap(({ message: posted }) =>

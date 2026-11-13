@@ -801,6 +801,11 @@ export function ListRow({
     [],
   );
 
+  // Note that a row that opens nothing hangs its hint from its words, whose parent, the item, is the row its card stands beside.
+  const wordsRef = useCallback((element: HTMLDivElement | null) => {
+    rowElement.current = element?.parentElement ?? null;
+  }, []);
+
   const pressRef = useCallback(
     (element: HTMLButtonElement | null) => {
       pressElement.current = element;
@@ -1067,7 +1072,7 @@ export function ListRow({
         ) : (
           // Note that a row that opens nothing still hangs its hint, from its words, which take the focus so the keyboard reaches the hint too.
           <hint.Hint label={hint.label} row={rowElement}>
-            <div className={MAIN_CLASS} aria-current={current} tabIndex={0}>
+            <div ref={wordsRef} className={MAIN_CLASS} aria-current={current} tabIndex={0}>
               {face}
             </div>
           </hint.Hint>

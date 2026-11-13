@@ -1473,6 +1473,8 @@ const startTurn = Effect.fn("agent-runner/startTurn")(function* (
   }
 
   launch.state = { kind: LAUNCH_STATE.TURN, id: answer.value.turn.id, stopping: false };
+  // Note that a turn a message started ends any wait on the goal's own, so a stalled wait's late signal ends nothing.
+  launch.goalWait = false;
   launch.sent.set(outgoing.clientId, outgoing);
   yield* accepted(launch, outgoing);
 });
@@ -1866,8 +1868,22 @@ const askGoal = Effect.fn("agent-runner/codex/askGoal")(function* (
 ) {
   const text = content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
   const waited = launch.goalWait;
+  const ask = goalAskOf(text) ?? { kind: GOAL_ASK.NONE };
+  const first = outgoing.lines[0];
 
-  const answer = yield* goalAsked(launch, goalAskOf(text) ?? { kind: GOAL_ASK.NONE }).pipe(
+  // Note that a goal set or resumed may open the agent's turn, which app-server starts of its own, so the checkout is recorded before the ask, as `startTurn` records it before a turn.
+  const opens =
+    (ask.kind === GOAL_ASK.SET || ask.kind === GOAL_ASK.RESUME) &&
+    launch.state.kind === LAUNCH_STATE.IDLE &&
+    !launch.open &&
+    launch.opening === undefined &&
+    first !== undefined;
+
+  const snapshot = opens ? yield* launch.snapshot(first) : undefined;
+
+  if (snapshot !== undefined) launch.opening = snapshot.commit;
+
+  const answer = yield* goalAsked(launch, ask).pipe(
     // Note that we log the method and code alone, since a refusal may quote the objective, the developer's words.
     Effect.catch((error) =>
       Effect.as(
@@ -1879,7 +1895,7 @@ const askGoal = Effect.fn("agent-runner/codex/askGoal")(function* (
     ),
   );
 
-  yield* accepted(launch, outgoing);
+  yield* accepted(launch, { ...outgoing, snapshot });
 
   // Note that app-server says the goal its answer said once more, after updates it queued before the ask, so those are awaited past.
   if (answer !== undefined) launch.awaitedGoal = { goal: answer.goal ?? undefined };
