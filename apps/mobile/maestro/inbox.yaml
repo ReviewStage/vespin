@@ -135,8 +135,12 @@ appId: dev.vespin.ios
     duration: 400
 - waitForAnimationToEnd
 - assertNotVisible: "Pick a date and time…"
-# Back on the list, from the thread.
-- tapOn: "Inbox"
+# Back on the list, from the thread, by its bar's back button, since a pushed
+# thread hides the tab bar; a regular window stands the thread beside the
+# list with no back button, so the press is optional.
+- tapOn:
+    id: "BackButton"
+    optional: true
 - waitForAnimationToEnd
 # A swipe from the leading edge reveals Mark as read or unread, which a full
 # swipe would press at once, so the flow swipes partway across "Recorded the
