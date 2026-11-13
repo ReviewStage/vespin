@@ -278,12 +278,13 @@ export function RowTime({ at, now }: { readonly at: number; readonly now: number
 function RowDue({ due, now }: { readonly due: number; readonly now: number | undefined }) {
   const colors = useColors();
   const words = dueText(due, now ?? Date.now());
+  const clock = useScaledSize(MARK_SIZE.GLYPH - 4);
 
   return (
     <HStack spacing={SPACE.TIGHT}>
       <Image
         {...glyphImage(GLYPH.TIME)}
-        size={MARK_SIZE.GLYPH - 4}
+        size={clock}
         color={colors.ACCENT_TEXT}
         modifiers={[accessibilityHidden(true)]}
       />

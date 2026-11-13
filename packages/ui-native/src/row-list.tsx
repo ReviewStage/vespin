@@ -32,7 +32,7 @@ import { dropLink } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
 import { RowOpenContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, READING_WIDTH, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** Whether a foldable section stands open, in VoiceOver's own words for a disclosure. */
@@ -44,8 +44,8 @@ const FOLD_HINT = "Shows or hides the rows it holds";
 /** The fold chevron's size, a little under the header's words. */
 const CHEVRON_SIZE = MARK_SIZE.GLYPH - 4;
 
-/** The least a section's + answers a press across, in points, wider than it draws so a finger finds it beside the header's small words. */
-const ADD_TARGET = { WIDTH: 36, HEIGHT: 28 } as const;
+/** The least a section's + answers a press across, in points: Apple's least target, wider than it draws so a finger finds it beside the header's small words. */
+const ADD_TARGET = { WIDTH: PRESS_SIZE, HEIGHT: PRESS_SIZE } as const;
 
 /**
  * How a list stands: plain rows on a screen of its own, as the panel's lists

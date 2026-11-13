@@ -35,6 +35,7 @@ import {
 import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactNode } from "react";
+import { useScaledSize } from "./accessibility.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { choiceColor, type MenuChoice } from "./list-row.js";
@@ -309,7 +310,7 @@ export type FieldMenu = {
 };
 
 /** The mark a field's chip leads with: a status ring, a face, a muted glyph, or none. */
-function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
+function fieldMark(props: FieldChipProps, colors: BrandColors, glyphSize: number): ReactNode {
   if (props.status !== undefined) return <TaskStatusMark status={props.status} />;
 
   if (props.face !== undefined) {
@@ -317,9 +318,7 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
   }
 
   if (props.symbol !== undefined) {
-    return (
-      <Image {...glyphImage(props.symbol)} size={MARK_SIZE.GLYPH - 2} color={colors.TEXT_MUTED} />
-    );
+    return <Image {...glyphImage(props.symbol)} size={glyphSize} color={colors.TEXT_MUTED} />;
   }
 
   if (props.mark !== undefined) {
@@ -342,6 +341,7 @@ function fieldMark(props: FieldChipProps, colors: BrandColors): ReactNode {
  */
 export function FieldChip(props: FieldChipProps) {
   const colors = useColors();
+  const glyphSize = useScaledSize(MARK_SIZE.GLYPH - 2);
   const { menu } = props;
 
   const capsule = (
@@ -354,7 +354,7 @@ export function FieldChip(props: FieldChipProps) {
           : []),
       ]}
     >
-      {fieldMark(props, colors)}
+      {fieldMark(props, colors, glyphSize)}
       <CapsuleWords label={props.label} ink={colors.TEXT_BODY} countInk={colors.TEXT_MUTED} />
     </HStack>
   );

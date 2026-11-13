@@ -10,6 +10,7 @@ import {
   Text,
   VStack,
 } from "@expo/ui/swift-ui";
+import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHint,
   accessibilityIdentifier,
@@ -60,7 +61,7 @@ import {
 } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What parts the pieces of an agent's line. */
@@ -498,7 +499,14 @@ function CommentCount({ comments }: { readonly comments: WordsComments }) {
       onPress={comments.onOpen}
       modifiers={[buttonStyle("borderless"), accessibilityLabel(comments.heard)]}
     >
-      <HStack spacing={SPACE.TIGHT}>
+      {/* Note that the count stands in Apple's least target, the shape on that frame rather than on the button, since a borderless button takes a press only where its label is hit. */}
+      <HStack
+        spacing={SPACE.TIGHT}
+        modifiers={[
+          frame({ minWidth: PRESS_SIZE, minHeight: PRESS_SIZE }),
+          SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+        ]}
+      >
         <Image
           {...glyphImage(GLYPH.COMMENT)}
           size={MARK_SIZE.GLYPH - 2}

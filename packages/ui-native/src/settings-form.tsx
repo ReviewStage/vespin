@@ -46,6 +46,9 @@ import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
 /** An account's face in its row, larger than a list's. */
 const ACCOUNT_FACE_SIZE = 36;
 
+/** A face or tile a picking or member row leads with, in points, before Dynamic Type scales it: smaller than the account's, since the row is a plain one. */
+const ROW_FACE_SIZE = ACCOUNT_FACE_SIZE - 8;
+
 /** Where a `PushRow` goes, and the mark at its end that says so, where iOS's own Settings marks them, in the panel's glyphs. */
 export const PUSH_ROW_GOES = {
   /** A page of Settings, pushed over this one: the panel's chevron. */
@@ -65,8 +68,9 @@ const GOES_MARK_SIZE = 13;
 /** The mark at a row's end that says where a press goes, in the muted ink. */
 function GoesMark({ goes }: { readonly goes: PushRowGoes }) {
   const colors = useColors();
+  const size = useScaledSize(GOES_MARK_SIZE);
 
-  return <Image {...glyphImage(goes)} size={GOES_MARK_SIZE} color={colors.TEXT_MUTED} />;
+  return <Image {...glyphImage(goes)} size={size} color={colors.TEXT_MUTED} />;
 }
 
 /** The row's other words, joined as VoiceOver reads a value after its label; none where there are none. */
@@ -243,9 +247,11 @@ type AccountRowProps = {
  * as the account heads iOS's own Settings.
  */
 export function AccountRow({ name, email, picture, detail, onPress }: AccountRowProps) {
+  const faceSize = useScaledSize(ACCOUNT_FACE_SIZE);
+
   return (
     <HeadRow
-      face={<Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE} />}
+      face={<Avatar name={name} picture={picture} size={faceSize} />}
       name={name}
       line={email}
       detail={detail}
@@ -274,9 +280,11 @@ export function WorkspaceRow({
   readonly onPress?: (() => void) | undefined;
   readonly testId?: string | undefined;
 }) {
+  const faceSize = useScaledSize(ACCOUNT_FACE_SIZE);
+
   return (
     <HeadRow
-      face={<WorkspaceTile workspace={workspace} size={ACCOUNT_FACE_SIZE} />}
+      face={<WorkspaceTile workspace={workspace} size={faceSize} />}
       name={workspace.name}
       line={role}
       onPress={onPress}
@@ -304,6 +312,7 @@ type PushRowProps = {
  */
 export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRowProps) {
   const colors = useColors();
+  const glyphSize = useScaledSize(GOES_MARK_SIZE + 4);
 
   return (
     <PressedRow label={label} value={[detail]} onPress={onPress} testId={testId}>
@@ -312,7 +321,7 @@ export function PushRow({ label, symbol, detail, goes, onPress, testId }: PushRo
         modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
       >
         {symbol === undefined ? null : (
-          <Image {...glyphImage(symbol)} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
+          <Image {...glyphImage(symbol)} size={glyphSize} color={colors.TEXT_MUTED} />
         )}
         <Text modifiers={[foregroundStyle(colors.TEXT)]}>{label}</Text>
         <Spacer />
@@ -547,6 +556,7 @@ type WorkspacePickRowsProps = {
  */
 export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRowsProps) {
   const colors = useColors();
+  const faceSize = useScaledSize(ROW_FACE_SIZE);
   const markSize = useScaledSize(PICKED_MARK_SIZE);
 
   return (
@@ -568,7 +578,7 @@ export function WorkspacePickRows({ options, picked, onPick }: WorkspacePickRows
             spacing={SPACE.ROW}
             modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
           >
-            <WorkspaceTile workspace={workspace} size={ACCOUNT_FACE_SIZE - 8} />
+            <WorkspaceTile workspace={workspace} size={faceSize} />
             <VStack alignment="leading" spacing={1}>
               <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
                 {workspace.name}
@@ -624,6 +634,7 @@ type PersonPickRowsProps = {
  */
 export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
   const colors = useColors();
+  const faceSize = useScaledSize(ROW_FACE_SIZE);
 
   return (
     <>
@@ -643,7 +654,7 @@ export function PersonPickRows({ options, onPick }: PersonPickRowsProps) {
             spacing={SPACE.ROW}
             modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
           >
-            <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
+            <Avatar name={name} picture={picture} size={faceSize} />
             <VStack alignment="leading" spacing={1}>
               <Text modifiers={[foregroundStyle(off ? colors.TEXT_MUTED : colors.TEXT)]}>
                 {name}
@@ -699,10 +710,11 @@ type MemberRowProps = {
  */
 export function MemberRow({ name, email, picture, role, badge, acts }: MemberRowProps) {
   const colors = useColors();
+  const faceSize = useScaledSize(ROW_FACE_SIZE);
 
   const face = (
     <HStack spacing={SPACE.ROW}>
-      <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
+      <Avatar name={name} picture={picture} size={faceSize} />
       <VStack alignment="leading" spacing={1}>
         <Text modifiers={[foregroundStyle(colors.TEXT)]}>
           {badge === undefined ? name : `${name} · ${badge}`}
@@ -759,6 +771,7 @@ type FollowerRowProps = {
  */
 export function FollowerRow({ name, picture, role, machines, heard }: FollowerRowProps) {
   const colors = useColors();
+  const faceSize = useScaledSize(ROW_FACE_SIZE);
 
   return (
     <HStack
@@ -770,7 +783,7 @@ export function FollowerRow({ name, picture, role, machines, heard }: FollowerRo
         ...spokenValue(role, heard),
       ]}
     >
-      <Avatar name={name} picture={picture} size={ACCOUNT_FACE_SIZE - 8} />
+      <Avatar name={name} picture={picture} size={faceSize} />
       <Text modifiers={[foregroundStyle(colors.TEXT)]}>{name}</Text>
       {role === undefined ? null : (
         <Text modifiers={[foregroundStyle(colors.TEXT_MUTED)]}>{role}</Text>
@@ -892,6 +905,7 @@ type NoteRowProps = {
  */
 export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: NoteRowProps) {
   const colors = useColors();
+  const glyphSize = useScaledSize(GOES_MARK_SIZE + 4);
 
   const lines = (
     <VStack alignment="leading" spacing={SPACE.TIGHT}>
@@ -917,7 +931,7 @@ export function NoteRow({ symbol, words, detail, line, onPress, edit, remove }: 
       modifiers={[SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle())]}
     >
       {symbol === undefined ? null : (
-        <Image {...glyphImage(symbol)} size={GOES_MARK_SIZE + 4} color={colors.TEXT_MUTED} />
+        <Image {...glyphImage(symbol)} size={glyphSize} color={colors.TEXT_MUTED} />
       )}
       {lines}
       <Spacer />
