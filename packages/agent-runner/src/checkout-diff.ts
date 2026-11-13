@@ -17,7 +17,7 @@
  * bundle may hold it.
  */
 
-import { TURN_FILES_BOUNDS, type TurnFile, type TurnFilesSummary } from "./protocol.js";
+import type { TurnFilesSummary } from "./protocol.js";
 
 /** The variables the script reads the two sides from: the commit before the turn, and the commit after it, empty for the working tree as it stands. */
 export const CHECKOUT_DIFF_VARIABLE = {
@@ -146,14 +146,11 @@ function countOf(field: string): number {
 
 /**
  * The turn's summary read off the script's counts (`CHECKOUT_DIFF_FORMAT.NUMSTAT`):
- * each file's path, where a rename names it where it moved to, and its lines
- * added and removed, the first `TURN_FILES_BOUNDS.MAX_FILES` kept, with how
- * many files and lines the turn changed over all of them. None where the
- * turn changed no file.
+ * how many files the turn changed, a rename counted once, and the lines it
+ * added and removed over all of them. None where the turn changed no file.
  */
 export function turnFilesSummary(output: string): TurnFilesSummary | undefined {
   const fields = output.split("\0");
-  const files: TurnFile[] = [];
   let total = 0;
   let additions = 0;
   let deletions = 0;
@@ -170,13 +167,10 @@ export function turnFilesSummary(output: string): TurnFilesSummary | undefined {
     if (named === "") at += 2;
 
     if (path === undefined || path === "") continue;
-    const file = { path, additions: countOf(added), deletions: countOf(removed) };
     total += 1;
-    additions += file.additions;
-    deletions += file.deletions;
-
-    if (files.length < TURN_FILES_BOUNDS.MAX_FILES) files.push(file);
+    additions += countOf(added);
+    deletions += countOf(removed);
   }
 
-  return total === 0 ? undefined : { files, total, additions, deletions };
+  return total === 0 ? undefined : { total, additions, deletions };
 }

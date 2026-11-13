@@ -11,7 +11,7 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-      refuseWrites: true
+      refuseWrites: "true"
 - tapOn: "Tasks"
 - assertVisible: "Weekly digest email"
 - waitForAnimationToEnd

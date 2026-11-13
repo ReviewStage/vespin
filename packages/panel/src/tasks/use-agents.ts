@@ -136,7 +136,7 @@ type StartFailure = Failure & { readonly cause?: unknown };
 const agentUnreached = unreachedAs(AGENT_CALL_FAILURE.UNANSWERED);
 
 /** An agent's rename as a mutation asks it: the agent, and the title already trimmed and changed. */
-interface AgentRenameAsk {
+export interface AgentRenameAsk {
   readonly agentId: string;
   readonly title: string;
 }
@@ -292,12 +292,12 @@ const MODELS_READ_BOUND_MS = 15_000;
  */
 
 /** How an archive was pressed: whether a question was asked first, which keeps it off ⌘Z. */
-interface ArchivePress {
+export interface ArchivePress {
   readonly asked?: true;
 }
 
 /** An agent archived or brought back, as a mutation asks it, and whether a question was asked first. */
-interface ArchiveAsk extends ArchivePress {
+export interface ArchiveAsk extends ArchivePress {
   readonly agentId: string;
   readonly archived: boolean;
 }
@@ -311,7 +311,7 @@ export function agentArchiveMutation(run: (asked: ArchiveAsk) => Promise<ActedRe
 type AgentArchiveMutation = ReturnType<typeof agentArchiveMutation>;
 
 /** Several agents archived or brought back at once, as a selection asks it, and whether a question was asked first. */
-interface ArchiveManyAsk extends ArchivePress {
+export interface ArchiveManyAsk extends ArchivePress {
   readonly agentIds: readonly string[];
   readonly archived: boolean;
 }
@@ -635,7 +635,7 @@ function taskDraft(
 }
 
 /** What New task hands a task it started whose agent was refused: the key that start carried, the prompt, its files, the choice picked on its chip, none where the chip was left on the account's default, which the draft's tab then reads afresh, the servers its + menu switched off, the mode its Permissions row picked, none where left on the default, and why. */
-interface HandedDraft {
+export interface HandedDraft {
   readonly id: string;
   readonly prompt: string;
   readonly attachments: readonly AgentAttachment[];
@@ -675,7 +675,7 @@ function runsOnOf(runsOn: AgentRunsOnRequest | undefined): {
 const NOTHING_CARRIED: Pick<Draft, "text" | "attachments"> = { text: "", attachments: [] };
 
 /** The agent a Start is still making: the key its press minted, which its tab stands under until the service answers, and the model it was chosen on, none for the account's default. */
-interface StartingAgent {
+export interface StartingAgent {
   readonly key: string;
   readonly model: string | undefined;
 }
