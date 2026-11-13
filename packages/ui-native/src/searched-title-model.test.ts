@@ -10,6 +10,10 @@ describe("a searched title", () => {
     );
   });
 
+  it("bolds the word typed even after a letter that lowercases longer, such as İ", () => {
+    expect(searchedTitleMarkdown("İstanbul Invite", ["invite"])).toBe("İstanbul **Invite**");
+  });
+
   it("is none where no word typed stands in the title, or only punctuation matched", () => {
     expect(searchedTitleMarkdown("Invite flow", ["ledger"])).toBeUndefined();
     expect(searchedTitleMarkdown("Invite (flow)", ["("])).toBeUndefined();

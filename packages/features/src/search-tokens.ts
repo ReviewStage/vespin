@@ -31,18 +31,48 @@ export interface MatchRange {
 }
 
 /**
+ * A line lowercased, with where each of its code units came from in the line.
+ * Note that we lowercase one character at a time, because a character can
+ * lowercase longer (`İ` becomes `i` and a combining dot), and an offset in
+ * the lowered line would then fall short of the character it names.
+ */
+function loweredWithOrigins(text: string) {
+  let lowered = "";
+  const starts: number[] = [];
+  const ends: number[] = [];
+  let at = 0;
+
+  for (const character of text) {
+    const low = character.toLowerCase();
+    lowered += low;
+
+    for (let unit = 0; unit < low.length; unit += 1) {
+      starts.push(at);
+      ends.push(at + character.length);
+    }
+
+    at += character.length;
+  }
+
+  return { lowered, starts, ends };
+}
+
+/**
  * Where a query's words sit in one drawn line, so the line can show why it
  * matched. Every occurrence of every word is taken and overlapping stretches
  * are merged, because two words landing on one stretch of text should read as
- * one mark rather than nested ones.
+ * one mark rather than nested ones. A stretch is given in the line's own
+ * offsets, whole characters, whatever lowercasing did to their length.
  */
 export function matchRanges(text: string, tokens: readonly string[]): readonly MatchRange[] {
-  const lowered = text.toLowerCase();
+  const { lowered, starts, ends } = loweredWithOrigins(text);
   const found: MatchRange[] = [];
 
   for (const token of tokens) {
+    if (token.length === 0) continue;
+
     for (let from = lowered.indexOf(token); from !== -1; from = lowered.indexOf(token, from + 1)) {
-      found.push({ start: from, end: from + token.length });
+      found.push({ start: starts[from] ?? 0, end: ends[from + token.length - 1] ?? text.length });
     }
   }
 
