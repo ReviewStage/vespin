@@ -4,6 +4,5 @@
   "packages/ui/src/components/landing/landing.css": 3,
   "packages/ui/src/components/list-row/list-row.tsx": 1,
   "packages/ui/src/components/photo-pick/photo-pick.tsx": 1,
-  "packages/ui/src/components/tabs/tabs.tsx": 1,
-  "packages/ui/src/shadcn/popover.tsx": 1
+  "packages/ui/src/components/tabs/tabs.tsx": 1
 }
