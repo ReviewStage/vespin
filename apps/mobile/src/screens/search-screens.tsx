@@ -21,6 +21,7 @@ import {
   glyphSymbol,
   LIST_LOOK,
   ListSection,
+  NoSelection,
   RowList,
   ScopePicker,
   Screen,
@@ -299,7 +300,7 @@ function SearchSplitScreen(words: SearchWords) {
       title: SEARCH_TITLE,
       search: { placeholder, text: query, onChange: setQuery },
     },
-    detail: <EmptyState title={CHOOSE_AN_ITEM_WORDS} symbol={GLYPH.SEARCH} />,
+    detail: <NoSelection title={CHOOSE_AN_ITEM_WORDS} />,
   });
 
   return (

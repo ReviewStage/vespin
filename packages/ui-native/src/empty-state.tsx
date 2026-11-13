@@ -111,3 +111,33 @@ export function EmptyState({
     </Fragment>
   );
 }
+
+/**
+ * What a detail column says before a row is picked: its words alone in the
+ * muted ink, centered, as Mail stands "No Message Selected". Note that it
+ * draws no glyph and no bold title, because nothing is wrong or empty; the
+ * column only waits for a pick.
+ */
+export function NoSelection({ title }: { readonly title: string }) {
+  const colors = useColors();
+
+  return (
+    <VStack
+      key={title}
+      modifiers={[
+        padding({ all: EMPTY_SPACING * 2 }),
+        frame({ maxWidth: Number.POSITIVE_INFINITY, maxHeight: Number.POSITIVE_INFINITY }),
+      ]}
+    >
+      <Text
+        modifiers={[
+          font({ textStyle: "title2", weight: "semibold" }),
+          foregroundStyle(colors.TEXT_MUTED),
+          multilineTextAlignment("center"),
+        ]}
+      >
+        {title}
+      </Text>
+    </VStack>
+  );
+}

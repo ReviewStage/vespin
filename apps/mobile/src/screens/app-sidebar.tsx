@@ -7,7 +7,6 @@ import {
   GLYPH,
   GroupRow,
   LIST_LOOK,
-  type ListLook,
   ListSection,
   MARK_SIZE,
   RowList,
@@ -20,7 +19,6 @@ import { useInboxBadge } from "../inbox/use-inbox.js";
 import { useSettingsAccount } from "../settings-button.js";
 import { keepSidebarPlace, keepTasksCollection, useTasksCollection } from "../sidebar-pick.js";
 import { useSidebarShown } from "../sidebar-shown.js";
-import { useThreeColumns } from "../use-window-size-class.js";
 import { useWorkspaceSwitcher } from "../workspace-switcher.js";
 
 /** The places the sidebar's first rows open, each a tab's root. */
@@ -232,9 +230,4 @@ export function useAppSidebar(
     sidebarShown: shown,
     onSidebarShownChange: setShown,
   };
-}
-
-/** How a tab's list stands: plain beside the app sidebar, in the sidebar's look where it stands first. */
-export function useListLook(): ListLook {
-  return useThreeColumns() ? LIST_LOOK.PLAIN : LIST_LOOK.SIDEBAR;
 }

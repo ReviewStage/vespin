@@ -298,19 +298,24 @@ function barHolds(bar: ColumnBar): boolean {
  * half its height. The list and detail columns stand on the brand's
  * `GROUND`, as their lists do, so what isn't a list (a page, an empty state,
  * a scope picker over its list) never shows the system's own column color.
- * The sidebar paints nothing, so it stands on the system's floating glass
- * pane, as Mail's and Notes' do.
+ * The app's sidebar paints nothing, so it stands on the system's floating
+ * glass pane, as Mail's and Notes' do; a list standing first in two columns,
+ * as a portrait iPad's, paints its ground, as Mail's message list stands
+ * solid beside the message.
  */
 function Column({
   view,
   bar = {},
   sidebar = false,
+  clear = false,
   searchKey,
 }: {
   readonly view: ReactNode;
   readonly bar?: ColumnBar | undefined;
   /** Whether it is the sidebar, whose search the system stands in the sidebar's own place. */
   readonly sidebar?: boolean | undefined;
+  /** Whether it paints nothing, so it stands on the system's floating glass pane, as the app's own sidebar does. */
+  readonly clear?: boolean | undefined;
   /** Names whose search the bar holds; the field takes that one's query as it changes, and keeps what is typed otherwise. */
   readonly searchKey?: string | undefined;
 }) {
@@ -320,10 +325,10 @@ function Column({
   const stacked = (
     <ZStack
       modifiers={[
-        ...(sidebar ? [] : [containerBackground(colors.GROUND, "navigationSplitView")]),
-        // Note that a list's title stands bold at its bar's leading edge, as Mail names the mailbox over its list, rather than small in its middle.
+        ...(clear ? [] : [containerBackground(colors.GROUND, "navigationSplitView")]),
+        // Note that a list's title stands bold at its bar's leading edge, as Mail names the mailbox over its list, rather than small in its middle; a column with no title, such as a page under its path, keeps its bar inline, because iPadOS 26 otherwise holds an empty large-title band under it.
         ...(bar.title === undefined
-          ? []
+          ? [toolbarTitleDisplayMode("inline")]
           : [navigationTitle(bar.title), toolbarTitleDisplayMode("inlineLarge")]),
       ]}
     >
@@ -461,6 +466,7 @@ export function SplitView({
           view={sidebar}
           bar={sidebarBar}
           sidebar
+          clear={content !== undefined}
         />
       </NavigationSplitView.Sidebar>
       {content === undefined ? null : (

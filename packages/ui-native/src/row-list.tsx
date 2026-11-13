@@ -355,12 +355,14 @@ export function ListSection({
   children,
 }: ListSectionProps) {
   const [folded, setFolded] = useState(false);
+  // Note that a header holding none shows no count, as Mail's groups stand, rather than a 0 beside its title.
+  const shown = count === 0 ? undefined : count;
 
   const label =
     title === undefined ? undefined : (
       <GroupHeader
         title={title}
-        count={count}
+        count={shown}
         progress={progress}
         mark={mark}
         folded={foldable ? folded : undefined}
@@ -376,7 +378,7 @@ export function ListSection({
         modifiers={[
           buttonStyle("plain"),
           accessibilityAddTraits(["isHeader"]),
-          accessibilityLabel(`${title}${count === undefined ? "" : `, ${count}`}`),
+          accessibilityLabel(`${title}${shown === undefined ? "" : `, ${shown}`}`),
           accessibilityValue(folded ? FOLD_HEARD.SHUT : FOLD_HEARD.OPEN),
           accessibilityHint(FOLD_HINT),
         ]}
