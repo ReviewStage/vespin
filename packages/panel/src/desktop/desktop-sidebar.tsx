@@ -50,7 +50,6 @@ import {
   type TaskSummary,
 } from "@repo/features/task-wire";
 import { renamedTasks, repositoryPageUrl, TASK_MARK } from "@repo/features/tasks-model";
-import { EXPERIMENT } from "@repo/settings";
 import type { UpdateControl } from "@repo/settings/settings-controls";
 import { APP_COMMAND, APP_SHORTCUTS } from "@repo/settings/shortcuts";
 import {
@@ -183,7 +182,6 @@ import { useReadMark, useUnreadTasks } from "../tasks/use-task-looks.js";
 import { useListedTaskPullRequests } from "../tasks/use-task-work.js";
 import type { TasksControl } from "../tasks/use-tasks-tab.js";
 import { IDLE_TIMEOUT_MS, useWhenIdle } from "../use-when-idle.js";
-import { useWorkspaceExperiment } from "../workspace-experiments.js";
 import { ActionMenu, type MenuAction, type MenuEntry } from "./action-menu.js";
 import { runningRuns } from "./automation-runs-tab.js";
 import { useFailedRunsMark } from "./failed-runs.js";
@@ -2152,15 +2150,7 @@ function SidebarColumn({
   // Only a workspace somebody shares has people to filter by, so one nobody shares lists every task.
   const { memberCount } = tasks.workspace ?? {};
   const shared = memberCount === undefined ? (reader.members?.length ?? 0) > 1 : memberCount > 1;
-  // Following stands while the workspace has it on; a list kept narrowed to the tasks followed reads as the reader's own while it is off.
-  const followingOn = useWorkspaceExperiment(tasks.workspace?.id, EXPERIMENT.FOLLOWING);
-  const kept = taskView.view.assignedTo;
-
-  const assignedTo: AssignedTo = !shared
-    ? { kind: ASSIGNED_TO.ANYONE }
-    : kept.kind === ASSIGNED_TO.FOLLOWING && !followingOn
-      ? { kind: ASSIGNED_TO.ME }
-      : kept;
+  const assignedTo: AssignedTo = shared ? taskView.view.assignedTo : { kind: ASSIGNED_TO.ANYONE };
 
   useTaskViewCommands({
     offered: tasks.signedIn && tasks.workspace !== undefined,
@@ -2402,9 +2392,7 @@ function SidebarColumn({
   const pinnedOwn = pinnedHeld(pinnedSection);
 
   // The tasks the reader follows that no list above holds stand under Following, a task drawn in one place (`followingTasks`).
-  const followed = followingOn
-    ? followingTasks(unpinnedTasks, statusTasks, taskView.view, tasks.me)
-    : [];
+  const followed = followingTasks(unpinnedTasks, statusTasks, taskView.view, tasks.me);
 
   const homed = homedTaskRows(
     [
@@ -2715,7 +2703,6 @@ function SidebarColumn({
                                 shown={tasks.shown && overlay.inSight}
                                 control={taskView}
                                 shared={shared}
-                                following={followingOn}
                                 filtered={shared && assignedTo.kind !== mine.kind}
                               />
                             </>

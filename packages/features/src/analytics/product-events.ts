@@ -326,6 +326,7 @@ export const PRODUCT_EXPERIMENT = {
   MERGE_QUEUE: "merge-queue",
   TURN_CHANGES: "turn-changes",
   REPLY_BUTTONS: "reply-buttons",
+  /** Graduated, so no build sends it now; kept because an older Mac's batch still may, and one unread value refuses the batch. */
   FOLLOWING: "following",
   COMPUTER_USE: "computer-use",
   VOICE: "voice",

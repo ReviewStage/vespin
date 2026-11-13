@@ -21,6 +21,7 @@ import {
 import { devicesNamed, registerDevice } from "@repo/database/models/device-store";
 import { claimRuntimeSession } from "@repo/database/models/recorded-session";
 import { addTaskBlock } from "@repo/database/models/task-block-store";
+import { listTasksFollowersNamed } from "@repo/database/models/task-follower-store";
 import {
   assignUnassignedTaskCommitted,
   beginTaskWorkCommitted,
@@ -324,11 +325,23 @@ function countedOf(plan: HeldTaskSummary): TaskSummary {
   return { ...rest, agents: counts };
 }
 
+/** The held list with each plan's followers as the store reads them, which the held read leaves to the live one. */
 const heldList = (userId: string) =>
   Effect.gen(function* () {
     const tasks = yield* listTasks(userId);
+    const ids = tasks.map((each) => each.id);
+    const followers = yield* listTasksFollowersNamed(userId, ids);
 
-    return { plans: (yield* withTaskAgents(userId, tasks)).map(countedOf) };
+    return {
+      plans: (yield* withTaskAgents(userId, tasks)).map((plan) => ({
+        ...countedOf(plan),
+        followers: (followers.get(plan.id) ?? []).map(({ userId, assignee, machines }) => ({
+          userId,
+          assignee,
+          machines,
+        })),
+      })),
+    };
   });
 
 const PUBLISHED = {
