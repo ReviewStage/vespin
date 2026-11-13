@@ -199,6 +199,7 @@ it.layer(getTestDB())("an agent's stored CLI transcript", (it) => {
           const [page] = yield* plansOf(
             loadSessionEntryPage(`user-${randomUUID()}`, randomUUID(), key, null),
           );
+
           const plan = page?.plan ?? "";
 
           assert.doesNotMatch(plan, /Filter: .*subpath/);
