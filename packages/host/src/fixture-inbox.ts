@@ -952,6 +952,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     repository: "ada/relay",
     status: TASK_STATUS.CANCELED,
     number: 49,
+    createdAt: LANDED - 8 * DAY,
     updatedAt: LANDED - 5 * DAY,
     completedAt: LANDED - 5 * DAY,
   }),
