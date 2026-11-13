@@ -140,8 +140,13 @@ set_appearance() {
 # notifications out of what it hands its pinned applesimutils, so `simctl
 # push` is refused ("Source is not authorized"). Its applesimutils, or one on
 # the path, is called here instead.
+#
+# Note that Maestro unpacks its applesimutils under ~/.maestro/deps only as
+# its command line starts, so a run of the notification flow alone, with no
+# other flow before it, starts Maestro once here for it.
 allow_notifications() {
     local applesimutils="$HOME/.maestro/deps/applesimutils"
+    [[ -x "$applesimutils" ]] || maestro --version >/dev/null
     [[ -x "$applesimutils" ]] || applesimutils=$(command -v applesimutils) || {
         echo "error: no applesimutils to let the app notify; Maestro's install keeps one under ~/.maestro/deps" >&2
         return 1
