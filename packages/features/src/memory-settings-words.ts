@@ -161,7 +161,7 @@ export function unusedWords(count: number) {
 export const MEMORY_VIEW_EMPTY = {
   [MEMORY_VIEW.ALL]: MEMORY_PAGE_WORDS.EMPTY,
   [MEMORY_VIEW.NEW]: `No memories kept in the last ${MEMORY_NEW_DAYS} days.`,
-  [MEMORY_VIEW.UNUSED]: `Every memory was recalled in the last ${MEMORY_RECALL_WINDOW_DAYS} days.`,
+  [MEMORY_VIEW.UNUSED]: `Every memory older than ${MEMORY_RECALL_WINDOW_DAYS} days was recalled in the last ${MEMORY_RECALL_WINDOW_DAYS}.`,
 } as const satisfies Record<MemoryView, string>;
 
 /** What Delete asks, of `count` memories, and what it says of the `left` the reader may not delete. */

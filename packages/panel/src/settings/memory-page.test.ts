@@ -463,6 +463,24 @@ test("the search keeps the memories whose words or keeper hold it", async () => 
   assert.deepEqual(words(page), [TESTS.text]);
 });
 
+test("a view the search leaves empty, while another view holds its match, says what the view holds rather than that the search missed", async () => {
+  const { page } = await mount();
+
+  await searchFor(page, "vercel");
+
+  const newTab =
+    [...page.querySelectorAll<HTMLElement>('[role="tab"]')].find((tab) =>
+      tab.textContent?.startsWith("New"),
+    ) ?? assert.fail("no New tab");
+
+  act(() => newTab.click());
+  await settle();
+
+  assert.deepEqual(words(page), []);
+  assert.match(page.textContent ?? "", /No memories kept in the last 7 days\./u);
+  assert.doesNotMatch(page.textContent ?? "", /No memories match/u);
+});
+
 test("a memory the reader may not delete offers Delete unavailable, saying who may", async () => {
   const { page } = await mount();
 

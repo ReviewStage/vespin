@@ -1234,8 +1234,25 @@ const STAGED_TOKEN_REPOSITORIES: AppTokenRepositories = {
   [WORKSPACE.PERSONAL]: { rows: [] },
 };
 
-/** The staged workspace's memories, as the host holds them for Settings › Memory; one object across deliveries. */
-const STAGED_MEMORIES: AppMemories = { [WORKSPACE.ACME]: { rows: MEMORIES } };
+/** The staged workspace's memories, as the host holds them for Settings › Memory, aged on the window's clock as staging begins; one object across deliveries. */
+let stagedMemories: AppMemories | undefined;
+
+function memoriesStaged(): AppMemories {
+  if (stagedMemories !== undefined) return stagedMemories;
+  // Note that New and Unused are read against the window's own clock, which no staged instant stands still for, so every instant moves by how far it stands past the fixture's, as the hosts' beats are aged.
+  const shift = Date.now() - NOW;
+
+  const rows = MEMORIES.map((each) => ({
+    ...each,
+    createdAt: each.createdAt + shift,
+    updatedAt: each.updatedAt + shift,
+    lastRecalledAt: each.lastRecalledAt === null ? null : each.lastRecalledAt + shift,
+  }));
+
+  stagedMemories = { [WORKSPACE.ACME]: { rows } };
+
+  return stagedMemories;
+}
 
 /** The staged workspace's skills and the account's own, as the host holds them for Settings › Skills; one object across deliveries. */
 const STAGED_SKILLS: AppInstalledSkills = { [WORKSPACE.ACME]: { rows: skills(WORKSPACE.ACME) } };
@@ -1339,7 +1356,7 @@ export function settingsAppState(profile: string, state: AppStateSnapshot): AppS
     [LIVE_READ.INTEGRATIONS]: STAGED_INTEGRATIONS,
     [LIVE_READ.WORKSPACE_INVITATIONS]: HELD_INVITATIONS,
     [LIVE_READ.INTEGRATION_TOOLS]: STAGED_TOOLS,
-    [LIVE_READ.MEMORIES]: STAGED_MEMORIES,
+    [LIVE_READ.MEMORIES]: memoriesStaged(),
     [LIVE_READ.MODELS]: STAGED_MODELS,
     [LIVE_READ.WORKSPACE_INTEGRATIONS]: STAGED_WORKSPACE_INTEGRATIONS,
     [LIVE_READ.SLACK_CHANNELS]: STAGED_SLACK_CHANNELS,

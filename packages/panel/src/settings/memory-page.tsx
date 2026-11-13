@@ -250,6 +250,13 @@ function wordsIn(node: WordsNode): string {
   return (node.children ?? []).map((child) => wordsIn(child)).join("");
 }
 
+/** A memory's words as plain text, its paragraphs and items a space apart rather than run together. */
+function plainWords(text: string): string {
+  return markdownTree(text)
+    .children.map((block) => wordsIn({ children: [block] }))
+    .join(" ");
+}
+
 /** Whom the Kept by filter files a memory under: its keeper, or everyone who left as one. */
 function keeperKey(memory: MemorySummary, actor: Actor): string {
   if (memory.keptBy === null || actor.kind !== ACTOR_KIND.PERSON) return FORMER_KEY;
@@ -728,7 +735,7 @@ function MemoryWords({
   whole: boolean;
 }): React.JSX.Element {
   return (
-    <Tooltip label={whole ? wordsIn(markdownTree(text)) : undefined}>
+    <Tooltip label={whole ? plainWords(text) : undefined}>
       <div className="memory-words">
         {/* A memory's words stand inside its row, so they stay words going nowhere, links among them. */}
         <MarkdownMessage words={text} className="memory-text" found={found} link={null} />
@@ -1154,7 +1161,8 @@ function MemoryList({
             ) : null}
             {listed.length === 0 ? (
               <NothingShown
-                narrowed={found.length > 0 || kept.size > 0}
+                // Note that a view the search and the filter leave empty while another holds their matches says so as the view, not as a search that missed.
+                narrowed={narrowed.length === 0 && (found.length > 0 || kept.size > 0)}
                 empty={MEMORY_VIEW_EMPTY[memories.length === 0 ? MEMORY_VIEW.ALL : view]}
                 onClear={clear}
               />
