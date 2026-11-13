@@ -1051,6 +1051,11 @@
   --container-auth-card: 430px; /* off-scale: the OAuth pages' card */
   --shadow-auth-card: 0 24px 80px var(--ui-color-shadow-soft);
   --spacing-auth-ring: 56px; /* off-scale: the artwork's ring */
+  /* The page's block inset while a way out stands at its top: past the way out, and never less than the page's own. */
+  --spacing-auth-exit-clearance: max(
+    var(--ui-page-inset),
+    calc(2 * var(--ui-space-8) + var(--ui-control-height))
+  );
   --shadow-auth-badge: 0 0 0 3px var(--ui-color-surface);
   --color-auth-badge-danger: var(--ui-color-danger-fill);
   --color-auth-badge-on-danger: var(--ui-color-on-danger);

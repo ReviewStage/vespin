@@ -1,4 +1,5 @@
 import { Children, type MouseEvent, type ReactNode, useId } from "react";
+import { cn } from "../../cn.js";
 import { isReported, type ShownError } from "../../reported-failure.js";
 import { said } from "../../said.js";
 import { BUTTON_SIZE, BUTTON_VARIANT, Button, ButtonLink } from "../button/button.js";
@@ -14,7 +15,10 @@ import { FailureCopy } from "../failure-copy/failure-copy.js";
  * way out of the flow, such as setup's Sign out, stands off the card in the
  * page's top-right corner, where a toolbar's last button would, so it never
  * competes with the step's own presses and stays clear of the desktop
- * window's traffic lights at the other end of its title bar. The page
+ * window's traffic lights at the other end of its title bar. While one
+ * stands, the page insets its top and bottom alike past it, so a card taller
+ * than the window starts under the way out rather than running beneath it,
+ * and a shorter one stays centered. The page
  * owns every length between them and the card's own width, which gives way
  * to a narrow window rather than overflowing it: its inset narrows under a
  * phone's width, and what it holds stretches to the card's inner width, so a
@@ -84,7 +88,12 @@ export function AuthPage({
   const titleId = `${useId()}title`;
 
   return (
-    <main className="ui-auth-page @container relative grid grid-cols-1 place-items-center min-h-dvh p-page-inset box-border">
+    <main
+      className={cn(
+        "ui-auth-page @container relative grid grid-cols-1 place-items-center min-h-dvh p-page-inset box-border",
+        exit === undefined ? undefined : "py-auth-exit-clearance",
+      )}
+    >
       <section
         className="ui-auth-card flex flex-col items-center w-full max-w-auth-card box-border border border-border rounded-dialog bg-surface shadow-auth-card text-foreground font-ui text-body text-center wrap-anywhere"
         aria-labelledby={titleId}
