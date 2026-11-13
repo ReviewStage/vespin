@@ -290,6 +290,9 @@ let membersRefused = false;
 /** The machines each member's profile lists, by their id; none for anyone else. */
 let machinesOf: ReadonlyMap<string, readonly WorkspaceMachine[]> = new Map();
 
+/** Whether the read of a member's machines is refused, as a read that failed is. */
+let machinesRefused = false;
+
 /** Lays the held-back people on the document, the fixture's members and who left. */
 let answerMembers: () => void = () => undefined;
 
@@ -305,6 +308,7 @@ beforeEach(() => {
   membersHeld = false;
   membersRefused = false;
   machinesOf = new Map();
+  machinesRefused = false;
   copied = [];
   fakeAppPlatform({ ...QUIET_PANEL, ...copyingInto(copied) });
   window.localStorage.clear();
@@ -378,7 +382,9 @@ function holdPeople(deliver: HostReadsHanded["deliverMembers"]): void {
   fakeActPort({
     ...fakeActPortCalls(),
     [ACT_KIND.WORKSPACE_MACHINES_READ]: ({ userId }) =>
-      Promise.resolve({ machines: machinesOf.get(userId ?? "") ?? [] }),
+      machinesRefused
+        ? Promise.reject(new Error("The machines read was refused."))
+        : Promise.resolve({ machines: machinesOf.get(userId ?? "") ?? [] }),
     [ACT_KIND.WORKSPACE_MEMBERS_RETRY]: ({ workspaceId }) => {
       deliver({ [workspaceId]: people() });
 
@@ -632,6 +638,36 @@ test("a member's machines are listed by name, each saying what it is and, to a r
   assert.match(page.textContent ?? "", /Mac, Online/u);
   assert.match(page.textContent ?? "", /Linux server, Offline/u);
   assert.doesNotMatch(page.textContent ?? "", /Nothing of theirs here yet\./u);
+});
+
+test("machines read again that could not be read say so and offer Retry, their last answer still drawn", async () => {
+  vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+  onTestFinished(() => vi.useRealTimers());
+  machinesOf = new Map([
+    [
+      "user-sam",
+      [
+        {
+          id: "machine-1",
+          name: "Studio",
+          platform: DEVICE_PLATFORM.DARWIN,
+          userId: "user-sam",
+          online: true,
+        },
+      ],
+    ],
+  ]);
+
+  const { page } = mount("user-sam");
+  await settle();
+  assert.doesNotMatch(page.textContent ?? "", /could not be read/u);
+
+  machinesRefused = true;
+  await act(() => vi.advanceTimersByTimeAsync(30_000));
+  await settle();
+
+  assert.deepEqual(sections(page), { Machines: ["Studio"] });
+  assert.match(page.textContent ?? "", /Their machines could not be read\./u);
 });
 
 test("each row opens what it names: an agent its tab, an item the Inbox on it, and a task the task", async () => {

@@ -657,7 +657,7 @@ const MACHINE_NOUN = { one: "machine", many: "machines" } as const satisfies Nou
 /** How often their machines are read again while the page stands, since where each stands moves by the minute. */
 const MACHINES_READ_EVERY = Duration.seconds(30);
 
-/** Their machines as the page draws them, none while they are read or where they could not be, which the page says rather than pass for a person with none. */
+/** Their machines as the page draws them, none while they are first read or where they never could be, and whether the latest read failed, which the page says rather than pass a stale or missing answer for a fresh one. */
 interface PersonMachines {
   readonly machines: readonly WorkspaceMachine[];
   readonly reading: boolean;
@@ -683,7 +683,10 @@ function usePersonMachines(workspaceId: string | undefined, userId: string): Per
 
   if (workspaceId === undefined) return none;
 
-  if (read.data !== undefined) return { ...none, machines: read.data.machines };
+  // Note that a poll that failed keeps its last answer drawn and still says it failed, so a stale dot never passes for a fresh one.
+  if (read.data !== undefined) {
+    return { ...none, machines: read.data.machines, failed: read.isError };
+  }
 
   return read.isError ? { ...none, failed: true } : { ...none, reading: true };
 }
