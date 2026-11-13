@@ -97,7 +97,6 @@ import { useRepositoryChooser } from "../tasks/task-repository-menus.js";
 import type { TaskRepositoryDoor, TaskStandingDoor } from "../tasks/task-standing.js";
 import { MAIN_TAB, PULL_REQUEST_VIEW } from "../tasks/task-tab-model.js";
 import { TerminalCommands } from "../tasks/terminal-commands.js";
-import { askTurnFileReveal } from "../tasks/turn-file-reveal.js";
 import { useDescriptionComments } from "../tasks/use-description-comments.js";
 import { useInboxWaitingTasks } from "../tasks/use-inbox-slices.js";
 import { isOverviewTab, type MainTab } from "../tasks/use-main-tabs.js";
@@ -802,9 +801,8 @@ function DescriptionDocument({
   const pullRequestCardDoor = useSteadyDoor(pullRequestCard);
   const openMentionedFileDoor = useSteadyDoor(openMentionedFile);
 
-  // A turn's files row opens the turn's Changes tab standing on the file pressed (`turn-file-reveal.ts`).
-  const openTurnChangesDoor = useSteadyDoor((agentId: string, messageId: string, path: string) => {
-    askTurnFileReveal(agentId, messageId, path);
+  // A turn's count of files opens the turn's Changes tab.
+  const openTurnChangesDoor = useSteadyDoor((agentId: string, messageId: string) => {
     onPressTab({ kind: TAB_PRESS.PANEL, tab: turnChangesTab(agentId, messageId) });
   });
 

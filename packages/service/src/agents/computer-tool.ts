@@ -1,6 +1,5 @@
 import type { DatabaseServices } from "@repo/database/core/query";
 import { keepConversationPicture } from "@repo/database/models/conversation-pictures";
-import { machineOwnerOf } from "@repo/database/models/machine-command-store";
 import type { ConversationTarget } from "@repo/database/models/writer";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import {
@@ -37,10 +36,12 @@ import { logStoreFailure } from "../http/store-failure.js";
 import type { InboxSandboxDoor } from "./coder-host/inbox-image.js";
 import { COMMAND_DESCRIPTION } from "./command-description.js";
 import {
-  askMacHeard,
+  askMachine,
   MACHINE_COMMAND_STATUS,
+  MACHINE_INPUT,
   type MachineCommandAnswer,
   machineCommandNotRun,
+  routedCall,
 } from "./machine-command.js";
 import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-keep.js";
 
@@ -48,9 +49,10 @@ import { keepRecording, RECORDING_WORDS, recordingTooLarge } from "./recording-k
  * computer-tool.ts -- the `computer` tool: an agent sees and uses one app on the developer's own Mac at a time, in the background, through the Mac's computer-use helper.
  *
  * Every agent may call it, the brain, a coding agent, and either's workers,
- * wherever it runs, since the Mac it reaches is the task's assignee's
- * (`machineOwnerOf`), as `run_on_mac`'s is. One call is one action, queued as a
- * computer command (`machine-command.ts`'s `askMac`): the Mac asks the developer
+ * wherever it runs, since the Mac it reaches is routed as `run_on_mac`'s is
+ * (`machine-routing.ts`): the machine the call names, or else the agent's
+ * default. One call is one action, queued as a computer command for that
+ * machine (`machine-command.ts`'s `askMachine`): the Mac asks the developer
  * about the app the first time it is used, and the call waits for that
  * answer and the action within `COMPUTER_TOOL_TIMEOUT_SECONDS`.
  *
@@ -174,6 +176,7 @@ const COMPUTER_INPUT = Schema.Struct({
   ),
   caption: Schema.optionalKey(recordingCaptionSchema),
   description: COMMAND_DESCRIPTION,
+  machine: Schema.optionalKey(MACHINE_INPUT),
 });
 
 type ComputerInput = typeof COMPUTER_INPUT.Type;
@@ -217,7 +220,8 @@ export const COMPUTER_TOOL = {
     "drove in an app, the iOS Simulator above all, record it: record starts a video of the " +
     "app's window, your cursor drawn over it while it records, " +
     `up to ${COMPUTER_RECORDING_BOUNDS.MAX_SECONDS} seconds and across calls, and ` +
-    "stop_recording, with a caption, stops it and keeps it in your transcript, where it plays; " +
+    "stop_recording, with a caption and the machine's id its record answered in machine, stops " +
+    "it on the machine it runs on and keeps it in your transcript, where it plays; " +
     "it stops by itself once its time runs out, and stop_recording still keeps it then. Its " +
     "answer names the path the video stays at in your sandbox until your next recording, by " +
     "which you can post it to a thread, or says why it has none.",
@@ -226,7 +230,14 @@ export const COMPUTER_TOOL = {
 
 /** The action the input names, as the Mac's helper reads it; nothing where its fields do not make one. */
 function actionOf(input: ComputerInput): MacComputerAction | undefined {
-  const { action, secondary_action, caption, description: _description, ...fields } = input;
+  const {
+    action,
+    secondary_action,
+    caption,
+    description: _description,
+    machine: _machine,
+    ...fields
+  } = input;
 
   // Note that a caption is the service's to keep, never the Mac's, so only a stop may name one.
   if (caption !== undefined && action !== COMPUTER_ACTION.STOP_RECORDING) return undefined;
@@ -374,6 +385,20 @@ const COMPUTER_RECORDING_REFUSAL = {
   [RECORDING_FAILURE.TOO_LARGE]: recordingTooLarge(COMPUTER_RECORDING_BOUNDS.MAX_BYTES),
 } as const satisfies Record<RecordingFailure | "UNKEPT", string>;
 
+/** How the agent stops a recording that started on the machine given: by its id, which no other machine shares and a rename leaves as it is. */
+function stopOn(machine: { readonly id: string; readonly name: string }): string {
+  return `Stop it with stop_recording and machine "${machine.id}" (${machine.name}), where it runs.`;
+}
+
+/** What a machine with no recording of the conversation answers, naming it, so a stop that went to the wrong machine is sent again to the right one. */
+function noRecordingOn(machine: { readonly name: string }): string {
+  return (
+    `no recording of this conversation runs on ${machine.name}: if you started one on another ` +
+    "machine, call stop_recording again with the id its record answered in machine; otherwise " +
+    "start one with record"
+  );
+}
+
 /** A recording's refusal as the call answers it. */
 function recordingNotRun(words: string): MachineCommandAnswer {
   return machineCommandNotRun(`Not run: ${words}.`);
@@ -458,7 +483,7 @@ function keptMacRecording(
 /**
  * One `computer` call made in the conversation, whichever agent made it: its
  * input read against the tool's schema and made one action, then run on the
- * Mac of its task's assignee (`machineOwnerOf`) as `askMac` runs a command;
+ * machine it is routed to (`routedCall`) as `askMachine` runs a command;
  * a stopped recording kept, and saved through the agent's sandbox door,
  * where it has one, for posting. It never fails: what the Mac would not
  * run, or never answered, answers `not-run` with why.
@@ -473,15 +498,15 @@ export function runComputerTool(
 
   if (action === undefined || Result.isFailure(read))
     return Effect.succeed(machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNREADABLE));
-  const { caption } = read.success;
+  const { caption, machine } = read.success;
 
   return Effect.gen(function* () {
-    const owner = yield* Effect.result(machineOwnerOf(target));
+    const route = yield* Effect.result(routedCall(target, MACHINE_COMMAND_KIND.COMPUTER, machine));
 
     // Note that a read that fails refuses, because an action on a guess could land on the wrong Mac.
-    if (Result.isFailure(owner)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
+    if (Result.isFailure(route)) return machineCommandNotRun(COMPUTER_TOOL_REFUSAL.UNAVAILABLE);
 
-    const { answer, recording } = yield* askMacHeard(owner.success, {
+    const { answer, recording } = yield* askMachine(route.success, {
       kind: MACHINE_COMMAND_KIND.COMPUTER,
       conversationId: target.conversationId,
       action,
@@ -491,15 +516,34 @@ export function runComputerTool(
     if (!("computer" in answer)) return answer;
     const outcome = answer.computer;
 
+    const named = <T extends object>(ran: T) =>
+      answer.machine === undefined ? ran : { ...ran, machine: answer.machine };
+
     if ("unrecorded" in outcome) {
-      return recordingNotRun(COMPUTER_RECORDING_REFUSAL[outcome.unrecorded]);
+      const words =
+        outcome.unrecorded === RECORDING_FAILURE.NONE && answer.machine !== undefined
+          ? noRecordingOn(answer.machine)
+          : COMPUTER_RECORDING_REFUSAL[outcome.unrecorded];
+
+      return named(recordingNotRun(words));
     }
 
     if ("recorded" in outcome) {
-      return yield* keptMacRecording(target, outcome.recorded, recording, caption, sandbox);
+      return named(yield* keptMacRecording(target, outcome.recorded, recording, caption, sandbox));
     }
 
-    return yield* answeredOutcome(target, outcome);
+    const ran = named(yield* answeredOutcome(target, outcome));
+
+    // Note that a recording names the machine it runs on for its stop, since the agent's default may move while it runs.
+    if (
+      "done" in outcome &&
+      outcome.done === COMPUTER_ACTION.RECORD &&
+      answer.machine !== undefined
+    ) {
+      return { ...ran, stop: stopOn(answer.machine) };
+    }
+
+    return ran;
   });
 }
 
