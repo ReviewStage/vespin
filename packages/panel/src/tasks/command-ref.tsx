@@ -57,17 +57,22 @@ const COMMANDS = {
   },
 } as const satisfies Record<SlashCommand, CommandEntry>;
 
-/** Every name a command chip stands for in the box, its alias among them, each acting on the agent's session; `/model` opens its menu as it is chosen, so it never stands there as a chip. */
-export const COMMAND_NAMES: ReadonlySet<string> = new Set([
+/** The names a command chip stands for in a box on a session with the Goals experiment off, its alias among them; `/model` opens its menu as it is chosen, so it never stands there as a chip. */
+export const SESSION_NAMES: ReadonlySet<string> = new Set([
   SLASH_COMMAND.COMPACT,
   SLASH_COMMAND.CLEAR,
   SLASH_COMMAND.NEW,
-  SLASH_COMMAND.GOAL,
 ]);
 
-/** The commands a sent message carries as its first word, which its bubble draws as their chip: the others run in the box and never go. */
+/** Every name a command chip stands for in a box on a session, `/goal` among them, while the Goals experiment is on. */
+export const COMMAND_NAMES: ReadonlySet<string> = new Set([...SESSION_NAMES, SLASH_COMMAND.GOAL]);
+
+/** The commands a sent message carries as its first word, which its bubble draws as their chip while the Goals experiment is off: the others run in the box and never go. */
+export const SENT_SESSION_COMMANDS: ReadonlySet<string> = new Set([SLASH_COMMAND.COMPACT]);
+
+/** The commands a sent message's bubble draws as their chip while the Goals experiment is on. */
 export const SENT_COMMANDS: ReadonlySet<string> = new Set([
-  SLASH_COMMAND.COMPACT,
+  ...SENT_SESSION_COMMANDS,
   SLASH_COMMAND.GOAL,
 ]);
 
