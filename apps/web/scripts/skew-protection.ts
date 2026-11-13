@@ -14,6 +14,13 @@
  * named. Note that the query is added after the names are hashed, so a
  * chunk's name still moves only with its contents.
  *
+ * Vite's preload helper, which loads a lazy chunk's stylesheets before the
+ * chunk, tells a stylesheet by its address ending in `.css`, which no address
+ * with the query does, so it would preload the sheet as a script and draw the
+ * page without it. The helper is rewritten to read the address's path, and a
+ * Vite whose helper no longer reads as this expects fails the build rather
+ * than shipping pages without their styles.
+ *
  * A build with no id, anywhere but a Vercel build with Skew Protection on,
  * writes its addresses as it would without this.
  */
@@ -22,6 +29,13 @@ import type { Plugin } from "vite";
 
 /** The query Vercel reads a deployment's id from. */
 const DEPLOYMENT_QUERY = "dpl";
+
+/** Vite's preload helper's module, and how it tells a stylesheet from a chunk. */
+const PRELOAD_HELPER = "\0vite/preload-helper.js";
+const HELPER_STYLESHEET_TEST = 'dep.endsWith(".css")';
+
+// Note that the helper has made `dep` absolute by then, so it parses alone.
+const PATH_STYLESHEET_TEST = 'new URL(dep).pathname.endsWith(".css")';
 
 /** A string written in a chunk: its quote, and its words. */
 const QUOTED = /(["'`])(\.\/[^"'`\s]+?\.js)\1/g;
@@ -62,6 +76,14 @@ export function skewProtection(id: string | undefined): Plugin {
             type === "asset" ? `/${fileName}${query}` : undefined,
         },
       };
+    },
+    transform(code, id) {
+      if (query === "" || id !== PRELOAD_HELPER) return undefined;
+
+      if (!code.includes(HELPER_STYLESHEET_TEST))
+        throw new Error(`Vite's preload helper no longer tests ${HELPER_STYLESHEET_TEST}`);
+
+      return { code: code.replaceAll(HELPER_STYLESHEET_TEST, PATH_STYLESHEET_TEST), map: null };
     },
     // Note that this runs after Vite's own pass, which reads these imports to list each chunk's preloads.
     generateBundle: {
