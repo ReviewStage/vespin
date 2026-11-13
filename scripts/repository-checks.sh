@@ -217,7 +217,7 @@ untyped_flow_arguments=$(awk '
         indent = match($0, /[^ ]/)
         next
     }
-    inside && /^[[:space:]]*$/ { next }
+    inside && /^[[:space:]]*(#.*)?$/ { next }
     inside {
         if (match($0, /[^ ]/) <= indent || $0 ~ /^[[:space:]]*-/) {
             inside = 0
