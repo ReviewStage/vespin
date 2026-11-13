@@ -3,7 +3,7 @@ import { AGENT_CHAT, type AgentChat, type AgentSummary } from "@repo/features/ag
 import { ACT_KIND } from "@repo/host/acts";
 import { Duration, Effect, Schedule } from "effect";
 import { useEffect } from "react";
-import { tellAct } from "../act.js";
+import { askAct, tellAct } from "../act.js";
 import { rendererFork } from "../renderer-runtime.js";
 import { usePageVisible } from "../use-page-visible.js";
 
@@ -32,9 +32,19 @@ const WARM_EVERY = Duration.millis(AGENT_WARM_EVERY_MS);
 /** This page's own id as a chat's holder, so each window holds and lets go of its own. */
 const HOLDER = crypto.randomUUID();
 
-/** Says the agent's chat stands as `chat` in this window. */
+/** This window's last word on a chat, which the next waits on. */
+let saying: Promise<unknown> = Promise.resolve();
+
+/**
+ * Says the agent's chat stands as `chat` in this window. Note that each
+ * word goes only once the one before it was answered, because a hidden
+ * that overtook a newer shown would let go of the hold the shown just
+ * beat; a word that fails is let go, and the next minute's tries again.
+ */
 function said(agentId: string, chat: AgentChat): void {
-  tellAct(ACT_KIND.AGENTS_WARM, { agentId, chat, holder: HOLDER });
+  saying = saying
+    .then(() => askAct(ACT_KIND.AGENTS_WARM, { agentId, chat, holder: HOLDER }))
+    .catch(() => undefined);
 }
 
 /** Holds `agent`'s sandbox while its chat is shown in a visible page, said at once and every minute, and lets go as it stops being; nothing for none. */

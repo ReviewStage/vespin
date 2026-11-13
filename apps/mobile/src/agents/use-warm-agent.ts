@@ -26,6 +26,9 @@ import { useFollowedAgent } from "./use-agent.js";
 /** This launch of the app's own id as a chat's holder. */
 const HOLDER = randomUUID();
 
+/** This launch's last word on a chat, which the next waits on, so a hidden never overtakes a newer shown and lets go of the hold it just beat. */
+let saying: Promise<unknown> = Promise.resolve();
+
 /** Hears the app come to the foreground or go behind. */
 function onAppStateChanged(listener: () => void): () => void {
   const subscription = AppState.addEventListener("change", listener);
@@ -52,11 +55,11 @@ export function useWarmAgent(agentId: string): void {
     if (warmId === undefined) return undefined;
 
     const said = (chat: AgentChat) => {
-      acts[ACT_KIND.AGENTS_WARM]({ agentId: warmId, chat, holder: HOLDER }).catch(
-        (cause: unknown) => {
+      saying = saying
+        .then(() => acts[ACT_KIND.AGENTS_WARM]({ agentId: warmId, chat, holder: HOLDER }))
+        .catch((cause: unknown) => {
           console.warn("The agent's chat was not said to the service.", cause);
-        },
-      );
+        });
     };
 
     said(AGENT_CHAT.SHOWN);
