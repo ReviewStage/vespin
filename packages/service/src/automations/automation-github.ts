@@ -256,10 +256,8 @@ function pullRequestSender(
   fork: boolean,
 ): GitHubSender {
   const merged = isMerge(read);
-  const sender = senderOf(
-    merged ? (read.pull_request.user ?? read.sender) : read.sender,
-    agentLogin,
-  );
+  const actor = merged ? (read.pull_request.user ?? read.sender) : read.sender;
+  const sender = senderOf(actor, agentLogin);
   const head = read.pull_request.head?.ref;
   const agentBranch = head !== undefined && isAgentBranch(head);
   const agentOpened = !fork && agentBranch && (merged || AGENT_OPENING_ACTIONS.has(read.action));
