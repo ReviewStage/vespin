@@ -587,3 +587,31 @@ test("a Mac that only runs the app stands after the hosts, and its Remove remove
 
   assert.deepEqual(sent, [{ id: LAPTOP.id }]);
 });
+
+test("an account with no host whose machines' settings could not be read says so, rather than that it has no machines", async () => {
+  handBeats({});
+  holdHosts(() => []);
+  const handed = fakeAppBridgeCalls().requestAppState;
+
+  fakeAppBridge({
+    ...fakeAppBridgeCalls(),
+    requestAppState: async () => {
+      const snapshot = await (handed ?? assert.fail("the beats hand a document"))();
+      const { account } = snapshot;
+
+      if (account.status !== ACCOUNT_STATUS.SIGNED_IN || account.id === undefined) {
+        assert.fail("the window is signed in");
+      }
+
+      return { ...snapshot, [LIVE_READ.MACHINES]: { [account.id]: { failed: true } } };
+    },
+  });
+
+  drawHosts();
+  await settle();
+
+  await vi.waitFor(() =>
+    assert.ok(pageText().includes("Each machine's settings could not be read."), pageText()),
+  );
+  assert.equal(pageText().includes("No machines yet."), false);
+});

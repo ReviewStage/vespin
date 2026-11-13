@@ -671,7 +671,13 @@ export function HostsSection({ signedIn }: { signedIn: boolean }): React.JSX.Ele
   );
 
   const named = [...listed, ...commandOnly.map(machineListedOf)];
-  const empty = others.length === 0 && thisMac === undefined && commandOnly.length === 0;
+
+  // Note that a list whose machines' settings could not be read is never said to be empty, since a Mac that only runs the app is listed by that read alone; it says why instead.
+  const empty =
+    others.length === 0 &&
+    thisMac === undefined &&
+    commandOnly.length === 0 &&
+    !machineSettings.failed;
 
   /** The machine of the id with its own settings, where its app joined. */
   const machineOfId = (id: string | undefined) =>
