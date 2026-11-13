@@ -5,7 +5,6 @@ import type { ActPortClient } from "@repo/host/contract";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Effect } from "effect";
 import Constants from "expo-constants";
-import { hide as hideSplash } from "expo-splash-screen";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.js";
 import { HostFailedScreen, HostStartingScreen } from "../screens/host-failed.js";
@@ -118,13 +117,11 @@ function launchOptions(): MobileHostStartOptions {
  * the console, reported to Sentry, and shown in the screens' place with Try again, which starts it
  * again, rather than drawing an empty Inbox over nothing; a host that stands
  * but refuses its first read is said on the console too, and the screens
- * draw over the empty client, which the next delivery fills. The splash, its
- * mark on the brand's ground, stays up until the host stands or fails, and
- * the brand's ground stands under it meanwhile, so no frame shows the
- * window's own black in dark mode, as an empty tree once did. Note that the
- * splash comes down here rather than as the root first draws, which left a
- * frame with no mark. The host is drained as the tree unmounts, which on a
- * device is the app ending.
+ * draw over the empty client, which the next delivery fills. Until the host
+ * stands, the brand's ground stands in the screens' place, under the splash,
+ * so no frame shows the window's own black in dark mode, as an empty tree
+ * once did. The host is drained as the tree
+ * unmounts, which on a device is the app ending.
  */
 export function HostProvider({ children }: { readonly children: ReactNode }) {
   const [standing, setStanding] = useState<Standing | undefined>(undefined);
@@ -174,10 +171,6 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
       void started?.close();
     };
   }, [attempt]);
-  // Note that a hide with no splash standing does nothing, so a retried start hides nothing twice.
-  useEffect(() => {
-    if (standing !== undefined) hideSplash();
-  }, [standing]);
 
   if (standing === undefined) return <HostStartingScreen />;
 
