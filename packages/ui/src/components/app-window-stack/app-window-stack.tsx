@@ -69,8 +69,9 @@ const PILE_PLACE = [
 /** Each card behind the front window, by its depth from it: stepping in from the edge, the deeper the further. */
 const BEHIND_INSET = ["mx-app-window-peek", "mx-app-window-peek-twice"] as const;
 
-/** An app in the stack: its name, its icon's address, and its newest window, where the agent read one. */
+/** An app in the stack: what tells it apart from every other, such as its bundle id, its name, its icon's address, and its newest window, where the agent read one. Note that two apps may share a name, so the stack knows each by its id and only shows its name. */
 export interface StackedApp {
+  readonly id: string;
   readonly name: string;
   readonly iconSrc?: string | undefined;
   readonly window?:
@@ -83,7 +84,7 @@ function IconPile({ apps }: { apps: readonly StackedApp[] }): React.JSX.Element 
   return (
     <span className="ui-app-icon-pile inline-flex items-center" aria-hidden="true">
       {apps.slice(0, PILE_PLACE.length).map((app, at) => (
-        <span key={app.name} className={`relative inline-flex ${PILE_PLACE[at] ?? ""}`}>
+        <span key={app.id} className={`relative inline-flex ${PILE_PLACE[at] ?? ""}`}>
           <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />
         </span>
       ))}
@@ -131,7 +132,7 @@ function AppName({
   onShowApp,
 }: {
   app: StackedApp;
-  onShowApp: ((name: string) => void) | undefined;
+  onShowApp: ((id: string) => void) | undefined;
 }): React.JSX.Element {
   const face = (
     <>
@@ -153,7 +154,7 @@ function AppName({
       look={CHIP_LOOK.TOOLBAR}
       size={CHIP_SIZE.COMPACT}
       aria-label={WORDS.SHOW_ON_MAC(app.name)}
-      onClick={() => onShowApp(app.name)}
+      onClick={() => onShowApp(app.id)}
     >
       {face}
     </Chip>
@@ -191,11 +192,11 @@ function BehindTitle({
   app: StackedApp;
   using: boolean;
   depth: number;
-  onPick: (name: string) => void;
+  onPick: (id: string) => void;
 }): React.JSX.Element {
   return (
     <Behind depth={depth}>
-      <CardPress label={WORDS.FORWARD(app.name)} onPress={() => onPick(app.name)}>
+      <CardPress label={WORDS.FORWARD(app.name)} onPress={() => onPick(app.id)}>
         <span className="flex min-w-0 items-center gap-ui-6 pt-ui-4 pb-ui-12 ps-ui-8 pe-ui-8">
           <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />
           <Text
@@ -222,7 +223,7 @@ function BehindPile({
   apps: readonly StackedApp[];
   using: string | undefined;
   depth: number;
-  onPick: (name: string) => void;
+  onPick: (id: string) => void;
 }): React.JSX.Element {
   const menu = useMenu(true);
 
@@ -233,7 +234,7 @@ function BehindPile({
           <IconPile apps={apps} />
           <ChipName>{WORDS.MORE_COUNT(apps.length)}</ChipName>
         </Chip>
-        {apps.some((app) => app.name === using) ? <WorkingMark /> : null}
+        {apps.some((app) => app.id === using) ? <WorkingMark /> : null}
       </span>
       {menu.drawn === undefined ? null : (
         <Menu
@@ -241,11 +242,11 @@ function BehindPile({
           menu={menu.drawn}
           groups={[
             apps.map((app) => ({
-              key: app.name,
+              key: app.id,
               label: app.name,
               icon: <AppIcon src={app.iconSrc} size={APP_ICON_SIZE.LINE} />,
-              tag: app.name === using ? <WorkingMark /> : undefined,
-              onSelect: () => onPick(app.name),
+              tag: app.id === using ? <WorkingMark /> : undefined,
+              onSelect: () => onPick(app.id),
             })),
           ]}
           onClose={menu.close}
@@ -270,22 +271,22 @@ export function AppWindowStack({
   label: string;
   /** The apps, the one used last first; nothing is drawn for none. */
   apps: readonly StackedApp[];
-  /** The app in front, by its name; the one used last where it names none of them. */
+  /** The app in front, by its id; the one used last where it names none of them. */
   shown?: string | undefined;
-  /** The app the agent is in now, by its name; none while it is in none, or done. */
+  /** The app the agent is in now, by its id; none while it is in none, or done. */
   using?: string | undefined;
-  /** Brings an app forward, by its name. */
-  onPick: (name: string) => void;
+  /** Brings an app forward, by its id. */
+  onPick: (id: string) => void;
   /** Opens the window in front full size. */
   onOpen: () => void;
   /** Puts the stack down to its pill. */
   onMinimize: () => void;
-  /** Brings an app's own window forward on the Mac, by its name; none where the reader is not at that Mac. */
-  onShowApp?: ((name: string) => void) | undefined;
+  /** Brings an app's own window forward on the Mac, by its id; none where the reader is not at that Mac. */
+  onShowApp?: ((id: string) => void) | undefined;
   /** Its owner's class, to place it and nothing else. */
   className?: string | undefined;
 }): React.JSX.Element | null {
-  const front = apps.find((app) => app.name === shown) ?? apps[0];
+  const front = apps.find((app) => app.id === shown) ?? apps[0];
 
   if (front === undefined) return null;
   const others = apps.filter((app) => app !== front);
@@ -305,9 +306,9 @@ export function AppWindowStack({
       )}
       {titled.toReversed().map((app, at) => (
         <BehindTitle
-          key={app.name}
+          key={app.id}
           app={app}
-          using={app.name === using}
+          using={app.id === using}
           depth={titled.length - 1 - at}
           onPick={onPick}
         />
@@ -321,7 +322,7 @@ export function AppWindowStack({
       >
         <div className="flex min-w-0 items-center gap-ui-4 border-b border-border p-ui-4">
           <AppName app={front} onShowApp={onShowApp} />
-          {front.name === using ? <WorkingMark /> : null}
+          {front.id === using ? <WorkingMark /> : null}
           <span className="flex-1" />
           <IconButton
             icon={<MinimizeIcon />}
@@ -357,13 +358,13 @@ export function AppStackPill({
 }: {
   /** The apps, the one used last first; nothing is drawn for none. */
   apps: readonly StackedApp[];
-  /** The app the agent is in now, by its name; none while it is in none, or done. */
+  /** The app the agent is in now, by its id; none while it is in none, or done. */
   using?: string | undefined;
   onRestore: () => void;
   /** Its owner's class, to place it and nothing else. */
   className?: string | undefined;
 }): React.JSX.Element | null {
-  const named = apps.find((app) => app.name === using) ?? apps[0];
+  const named = apps.find((app) => app.id === using) ?? apps[0];
 
   if (named === undefined) return null;
   const pile = [named, ...apps.filter((app) => app !== named)];

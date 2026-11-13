@@ -1,3 +1,4 @@
+import { computerAppNamed } from "@repo/features/agent-parts";
 import { CHECK_SUMMARY } from "@repo/features/agent-wire";
 import { fileName } from "@repo/features/code-ref-words";
 import {
@@ -18,7 +19,7 @@ import { useAutomation } from "../automation-directory.js";
 import { TILE_SIZE, WorkspaceTile } from "../desktop/workspace-tile.js";
 import { usePerson } from "../member-directory.js";
 import { providerOf } from "../tasks/agent-model.js";
-import { KeptAppIcon, useKeptApps } from "../tasks/agent-pictures.js";
+import { KeptAppIcon, useComputerApps } from "../tasks/agent-pictures.js";
 import { WorkspaceDirectory } from "../tasks/chip-cards.js";
 import { FileTypeIcon } from "../tasks/file-type-icon.js";
 import { InboxItemChipGlyph } from "../tasks/inbox-item-chip.js";
@@ -203,7 +204,7 @@ function MacAppMark({ app }: { app: string }): React.JSX.Element {
   const onMac = useMacAppIcon(app);
   const posted = useAllowedAppIcon(app);
   const own = onMac ?? posted;
-  const kept = useKeptApps().get(app)?.icon;
+  const kept = computerAppNamed(useComputerApps(), app)?.icon;
 
   return own === undefined && kept !== undefined ? (
     <KeptAppIcon id={kept} />
