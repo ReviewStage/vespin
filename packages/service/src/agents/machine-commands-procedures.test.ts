@@ -769,7 +769,7 @@ it.layer(getTestDB())("a command run on the developer's Mac", (it) => {
 
           const started = yield* answeredOn(
             laptop,
-            { action: COMPUTER_ACTION.RECORD, app: "Simulator", machine: "Laptop" },
+            { action: COMPUTER_ACTION.RECORD, app: "Simulator", machine: laptop },
             { done: COMPUTER_ACTION.RECORD },
           );
 

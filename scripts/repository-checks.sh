@@ -159,6 +159,11 @@ pnpm --dir "$APP_REPO_ROOT/apps/web" exec tsx scripts/function-rewrites.ts --che
 # if a shortcut changed without the page.
 pnpm --dir "$APP_REPO_ROOT/packages/settings" exec tsx scripts/shortcuts-docs.ts --check
 
+# Each workspace's TypeScript project references are written from the
+# workspaces its package.json names; --check fails where one no longer
+# matches, since a missing reference reads that package's source again.
+node "$APP_REPO_ROOT/scripts/tsconfig-references.mjs" --check
+
 # The brand's colors are written from packages/brand's one table into
 # @repo/ui's roles, the plain values, and @repo/ui-native's tokens, and the
 # motion tokens beside them; --check fails if a copy no longer matches.
@@ -217,6 +222,7 @@ untyped_flow_arguments=$(awk '
         indent = match($0, /[^ ]/)
         next
     }
+    inside && /^[[:space:]]*(#.*)?$/ { next }
     inside {
         if (match($0, /[^ ]/) <= indent || $0 ~ /^[[:space:]]*-/) {
             inside = 0
