@@ -1,13 +1,19 @@
 import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
-// biome-ignore lint/correctness/noUnusedImports: the declaration this file emits for `auth` names this type, which the compiler reaches only through a package's re-export, by an import this file makes itself.
-import type { SchemaCheck as _AuthContextSchemaCheck } from "@better-auth/core/db/internal";
 import { electron } from "@better-auth/electron";
 import { oauthProvider } from "@better-auth/oauth-provider";
 import { PRODUCT_NAME } from "@repo/features/product-name";
 import { betterAuth } from "better-auth";
 import { APIError, createAuthMiddleware } from "better-auth/api";
-import { admin, bearer, jwt, lastLoginMethod, oAuthProxy, organization } from "better-auth/plugins";
+import {
+  admin,
+  bearer,
+  type DefaultOrganizationPlugin,
+  jwt,
+  lastLoginMethod,
+  oAuthProxy,
+  organization,
+} from "better-auth/plugins";
 import { Redacted } from "effect";
 import { accountDeletionSteps, workspaceDeletionSteps } from "../accounts/deletion-hooks.js";
 import { authDatabaseHooks, authOrganizationHooks } from "./auth-counts.js";
@@ -92,6 +98,96 @@ export function socialProviders(registered: Pick<AuthSecrets, "google" | "github
   };
 }
 
+const OAUTH_PROXY_OPTIONS = {
+  productionURL: deployment.productionURL,
+  secret: deployment.proxySecret,
+};
+
+const LAST_LOGIN_METHOD_OPTIONS = { storeInDatabase: true };
+
+/** The OAuth provider the desktop, the CLI, the iOS app, and outside MCP clients sign in through. */
+const OAUTH_PROVIDER_OPTIONS = {
+  loginPage: LOGIN_PAGE,
+  consentPage: "/consent",
+  // An outside MCP client registers itself at `/oauth2/register`, or
+  // is discovered from its metadata document by the plugin below, under
+  // the member MCP server's scopes alone (`oauthClientRegistration`).
+  ...oauthClientRegistration(),
+  clientPrivileges: denyOAuthClientPrivileges,
+  cachedTrustedClients: new Set([
+    DESKTOP_OAUTH_CLIENT.id,
+    CLI_OAUTH_CLIENT.id,
+    IOS_OAUTH_CLIENT.id,
+  ]),
+  accessTokenExpiresIn: 60 * 60,
+  scopes: [...OAUTH_PROVIDER_SCOPES],
+  // The member MCP server is the one resource (RFC 8707) the provider
+  // mints tokens for, its row written by the deployment's seeder at
+  // build (`apps/web/server/seed-clients.ts`) rather than by the
+  // plugin's own `resources`, whose seed runs a query as this module
+  // loads, which every function bundle must do with nothing configured.
+  // Any client may name it; its row allows only the scopes a client
+  // registered above holds, and the desktop's client holds none of them.
+  resourcePrivileges: denyOAuthResourcePrivileges,
+};
+
+/** The organization plugin's options: a workspace's hooks beside the shared ones. */
+const ORGANIZATION_PLUGIN_OPTIONS = {
+  ...ORGANIZATION_OPTIONS,
+  organizationHooks: { ...authOrganizationHooks, ...workspaceDeletion(workspaceDeletionSteps) },
+};
+
+/**
+ * Better Auth's plugins as `auth` installs them, in its order. Note that the
+ * tuple is named, each plugin by its own factory's type, because the
+ * declaration this package emits for `auth` would otherwise spell out every
+ * endpoint each plugin declares, down to zod's and Better Auth's internal
+ * types, which no import of this package can name.
+ */
+type AuthPlugins = [
+  ReturnType<typeof oAuthProxy<typeof OAUTH_PROXY_OPTIONS>>,
+  ReturnType<typeof jwt<typeof JWT_KEY_STORAGE>>,
+  ReturnType<typeof lastLoginMethod<typeof LAST_LOGIN_METHOD_OPTIONS>>,
+  ReturnType<typeof oauthProvider<typeof OAUTH_PROVIDER_OPTIONS>>,
+  ReturnType<typeof offlineTokensOutliveSession>,
+  ReturnType<typeof cimd>,
+  DefaultOrganizationPlugin<typeof ORGANIZATION_PLUGIN_OPTIONS>,
+  ReturnType<typeof electron>,
+  ReturnType<typeof bearer>,
+  ReturnType<typeof admin<typeof ADMIN_OPTIONS>>,
+  ReturnType<typeof supportAccess>,
+];
+
+const AUTH_PLUGINS: AuthPlugins = [
+  // Better Auth's OAuth proxy as its docs configure it: a Preview signs in
+  // through production's registered callback, and the provider plugin resumes
+  // the desktop's authorization on the session the proxy lands.
+  oAuthProxy(OAUTH_PROXY_OPTIONS),
+  jwt(JWT_KEY_STORAGE),
+  lastLoginMethod(LAST_LOGIN_METHOD_OPTIONS),
+  oauthProvider(OAUTH_PROVIDER_OPTIONS),
+  // An `offline_access` sign-in's refreshed tokens are unbound from the
+  // browser session that consented, which the provider's own token checks
+  // read and its refresh grant never does, so they live on their own.
+  offlineTokensOutliveSession(),
+  // A client named by the URL of its Client ID Metadata Document, as the
+  // MCP clients of 2026 name themselves: its document fetched through the
+  // package's own Node transport, with its host resolved once and pinned.
+  cimd(memberMcpClientDiscovery(fetchClientMetadataResource)),
+  // A workspace is an organization: its members plan together.
+  organization(ORGANIZATION_PLUGIN_OPTIONS),
+  // The Mac's own session beside its OAuth token, so the organization
+  // endpoints that take a session answer it: minted from the signed-in
+  // browser by the Electron plugin, carried as a signed bearer token.
+  electron(DESKTOP_SESSION),
+  bearer(SESSION_BEARER),
+  // A maintainer signs in as an account for an hour on the web, only
+  // while its member has granted support access, and that sign-in passes
+  // none of the doors above that would make it outlast its hour.
+  admin(ADMIN_OPTIONS),
+  supportAccess(),
+];
+
 export const auth = betterAuth({
   appName: PRODUCT_NAME,
   baseURL: deployment.baseURL,
@@ -110,59 +206,5 @@ export const auth = betterAuth({
   advanced: { ipAddress: { ipAddressHeaders: [...CLIENT_ADDRESS_HEADERS] } },
   disabledPaths: [...DISABLED_AUTH_PATHS],
   socialProviders: socialProviders(secrets),
-  plugins: [
-    // Better Auth's OAuth proxy as its docs configure it: a Preview signs in
-    // through production's registered callback, and the provider plugin resumes
-    // the desktop's authorization on the session the proxy lands.
-    oAuthProxy({ productionURL: deployment.productionURL, secret: deployment.proxySecret }),
-    jwt(JWT_KEY_STORAGE),
-    lastLoginMethod({ storeInDatabase: true }),
-    oauthProvider({
-      loginPage: LOGIN_PAGE,
-      consentPage: "/consent",
-      // An outside MCP client registers itself at `/oauth2/register`, or
-      // is discovered from its metadata document by the plugin below, under
-      // the member MCP server's scopes alone (`oauthClientRegistration`).
-      ...oauthClientRegistration(),
-      clientPrivileges: denyOAuthClientPrivileges,
-      cachedTrustedClients: new Set([
-        DESKTOP_OAUTH_CLIENT.id,
-        CLI_OAUTH_CLIENT.id,
-        IOS_OAUTH_CLIENT.id,
-      ]),
-      accessTokenExpiresIn: 60 * 60,
-      scopes: [...OAUTH_PROVIDER_SCOPES],
-      // The member MCP server is the one resource (RFC 8707) the provider
-      // mints tokens for, its row written by the deployment's seeder at
-      // build (`apps/web/server/seed-clients.ts`) rather than by the
-      // plugin's own `resources`, whose seed runs a query as this module
-      // loads, which every function bundle must do with nothing configured.
-      // Any client may name it; its row allows only the scopes a client
-      // registered above holds, and the desktop's client holds none of them.
-      resourcePrivileges: denyOAuthResourcePrivileges,
-    }),
-    // An `offline_access` sign-in's refreshed tokens are unbound from the
-    // browser session that consented, which the provider's own token checks
-    // read and its refresh grant never does, so they live on their own.
-    offlineTokensOutliveSession(),
-    // A client named by the URL of its Client ID Metadata Document, as the
-    // MCP clients of 2026 name themselves: its document fetched through the
-    // package's own Node transport, with its host resolved once and pinned.
-    cimd(memberMcpClientDiscovery(fetchClientMetadataResource)),
-    // A workspace is an organization: its members plan together.
-    organization({
-      ...ORGANIZATION_OPTIONS,
-      organizationHooks: { ...authOrganizationHooks, ...workspaceDeletion(workspaceDeletionSteps) },
-    }),
-    // The Mac's own session beside its OAuth token, so the organization
-    // endpoints that take a session answer it: minted from the signed-in
-    // browser by the Electron plugin, carried as a signed bearer token.
-    electron(DESKTOP_SESSION),
-    bearer(SESSION_BEARER),
-    // A maintainer signs in as an account for an hour on the web, only
-    // while its member has granted support access, and that sign-in passes
-    // none of the doors above that would make it outlast its hour.
-    admin(ADMIN_OPTIONS),
-    supportAccess(),
-  ],
+  plugins: AUTH_PLUGINS,
 });
