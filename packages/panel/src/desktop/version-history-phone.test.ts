@@ -138,7 +138,7 @@ const VIEWING_2: Partial<VersionHistoryControl> = {
     current: false,
     read: {
       kind: HISTORY_READ.READY,
-      document: { body: "## Rollout\n\nShip it.\n", assumptions: [] },
+      description: { body: "## Rollout\n\nShip it.\n", assumptions: [] },
       previous: null,
     },
   },

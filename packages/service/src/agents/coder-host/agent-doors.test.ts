@@ -33,7 +33,7 @@ import {
   DESCRIPTION_COMMENT_SCOPE,
   DESCRIPTION_COMMENT_STATUS,
 } from "@repo/features/description-comment-wire";
-import { descriptionSections } from "@repo/features/description-document";
+import { descriptionSections } from "@repo/features/description-sections";
 import { inboxAttachmentAddress } from "@repo/features/inbox-attachment-link";
 import { LINK_DESTINATION } from "@repo/features/link-grammar";
 import { PICTURE_TYPE } from "@repo/features/picture-wire";
@@ -250,7 +250,7 @@ it.layer(getTestDB())("a coding agent's tool doors", (it) => {
           ),
         );
         assert.ok(sectionText("Approach").endsWith("\n\n- Invites expire after 7 days."));
-        assert.equal(stored.task.document.body, stored.text);
+        assert.equal(stored.task.description.body, stored.text);
         // The save is journaled as the agent's, with the notes that were taken and the agent named as its tab names it.
         const at = yield* Clock.currentTimeMillis;
         assert.deepEqual(stored.task.agentEdits, [

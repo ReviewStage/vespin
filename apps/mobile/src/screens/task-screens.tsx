@@ -1758,8 +1758,8 @@ function OverviewPage({
         <ListSection title={WORDS.DESCRIPTION}>
           <ReadFailedRow words={WORDS.DESCRIPTION_UNREAD} onRetry={overview.documentRetry} />
         </ListSection>
-      ) : document === undefined || document.document.body.trim() === "" ? null : (
-        <OverviewDescription overview={overview} body={document.document.body} />
+      ) : document === undefined || document.description.body.trim() === "" ? null : (
+        <OverviewDescription overview={overview} body={document.description.body} />
       )}
       {descriptions ? <OverviewComments overview={overview} /> : null}
     </RowList>

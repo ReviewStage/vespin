@@ -136,7 +136,7 @@ export function task(id: string, name: string, body: string, updatedAt: number):
     createdAt: 1_000,
     updatedAt,
     repository: null,
-    document: {
+    description: {
       body,
       assumptions: [{ text: "An invite expires after 7 days." }],
     },
@@ -727,7 +727,7 @@ export function fakeService(tasks: Task[]): FakeService {
 
         const restored: Task = {
           ...found,
-          document: revision.document,
+          description: revision.description,
           updatedAt: found.updatedAt + 1,
           lastEdit: {
             actor: DESCRIPTION_ACTOR.DEVELOPER,
@@ -1193,9 +1193,9 @@ export function fakeService(tasks: Task[]): FakeService {
         const edited = {
           ...found,
           updatedAt: EDITED_AT,
-          document: {
-            ...found.document,
-            body: edit.document.value,
+          description: {
+            ...found.description,
+            body: edit.description.value,
           },
           lastEdit: { actor: DESCRIPTION_ACTOR.DEVELOPER, at: EDITED_AT, duringCall: false },
         };
@@ -1466,7 +1466,13 @@ export function fakeService(tasks: Task[]): FakeService {
         const found = service.tasks.find((candidate) => candidate.id === taskId);
 
         if (found === undefined) return { ok: false, failure: WRITE_UNTAKEN.REFUSED };
-        const renamed = { ...found, name, document: { ...found.document, body: `# ${name}` } };
+
+        const renamed = {
+          ...found,
+          name,
+          description: { ...found.description, body: `# ${name}` },
+        };
+
         service.tasks = service.tasks.map((candidate) =>
           candidate.id === taskId ? renamed : candidate,
         );

@@ -112,7 +112,10 @@ const DECLARED: readonly {
     name: "TASKS_CHANGE_RELATION",
     payload: { ...TASK, relation: { taskId: "task-2", from: "blocked-by", to: "blocks" } },
   },
-  { name: "TASKS_EDIT", payload: { ...TASK, edit: { document: { base: "", value: "Expire." } } } },
+  {
+    name: "TASKS_EDIT",
+    payload: { ...TASK, edit: { description: { base: "", value: "Expire." } } },
+  },
   {
     name: "ADMIN_READ",
     payload: { procedure: ADMIN_READ.USERS, query: { [ADMIN_QUERY.WINDOW]: "7" } },

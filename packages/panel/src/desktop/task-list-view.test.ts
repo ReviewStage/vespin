@@ -127,7 +127,7 @@ function keepAnyone(workspace: Workspace = ACME): void {
   );
 }
 
-/** The sidebar listing `plans` in `workspace`, read by Dean. */
+/** The sidebar listing `plans` in `workspace`, each task standing in it, read by Dean. */
 function mountSidebar(workspace: Workspace, tasks: readonly TaskSummary[] = TASKS): HTMLElement {
   const container = document.createElement("div");
   document.body.append(container);
@@ -136,7 +136,7 @@ function mountSidebar(workspace: Workspace, tasks: readonly TaskSummary[] = TASK
   sidebarRouter = windowRouter();
 
   const control = tasksControl({
-    tasks: [...tasks],
+    tasks: tasks.map((each) => ({ ...each, workspaceId: workspace.id })),
     workspace,
     workspaces: [workspace],
     me: DEAN,

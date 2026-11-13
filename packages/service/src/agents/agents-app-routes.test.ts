@@ -452,7 +452,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
 
         assert.equal(txid, written?.xmin, "the start answers its last write, the task's standing");
         assert.equal(plan.repository, RELAY_FULL_NAME);
-        assert.equal(plan.document.body, "");
+        assert.equal(plan.description.body, "");
         assert.equal(
           plan.status,
           TASK_STATUS.IN_PROGRESS,
@@ -953,7 +953,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
             taskId: task.id,
             seq: 1_000,
             actor: sql`'a-later-writer'`,
-            document: SAVED,
+            description: SAVED,
             changes: 1,
             startedAt: now,
             at: now,

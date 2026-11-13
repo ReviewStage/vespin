@@ -40,7 +40,7 @@ const TASK: Task = {
   createdAt: 1,
   updatedAt: 2,
   repository: null,
-  document: { body: "", assumptions: [] },
+  description: { body: "", assumptions: [] },
 };
 
 /** An agent of the task, whose tab the column shows on the Agents view. */
