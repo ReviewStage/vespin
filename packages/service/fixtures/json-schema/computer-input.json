@@ -12,15 +12,17 @@
         "scroll",
         "drag",
         "set_value",
-        "perform_secondary_action"
+        "perform_secondary_action",
+        "record",
+        "stop_recording"
       ],
-      "description": "What to do: list_apps, get_app_state to read an app's window, or click, type_text, press_key, scroll, drag, set_value, or perform_secondary_action on it."
+      "description": "What to do: list_apps, get_app_state to read an app's window, or click, type_text, press_key, scroll, drag, set_value, or perform_secondary_action on it; record its window as a video, and stop_recording to stop and keep it."
     },
     "app": {
       "type": "string",
       "minLength": 1,
       "maxLength": 255,
-      "description": "The app, by its name or bundle id, such as \"Simulator\" or \"com.apple.iphonesimulator\". Every action but list_apps names one."
+      "description": "The app, by its name or bundle id, such as \"Simulator\" or \"com.apple.iphonesimulator\". Every action but list_apps and stop_recording names one."
     },
     "element_index": {
       "type": "integer",
@@ -96,6 +98,12 @@
       "type": "string",
       "maxLength": 64,
       "description": "Which of the element's secondary actions perform_secondary_action performs, as its state names them, such as \"AXShowMenu\"."
+    },
+    "caption": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "description": "What the recording shows, in one line, which the transcript shows under it."
     },
     "description": {
       "type": "string",
