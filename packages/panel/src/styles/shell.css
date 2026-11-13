@@ -403,7 +403,7 @@
   > .desktop-main
   .desktop-task
   > .side-panel::before {
-  background: var(--ui-color-well);
+  background: var(--side-panel-ground);
 }
 
 :where(:root):not([data-ui-room="narrow"])

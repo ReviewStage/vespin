@@ -976,7 +976,7 @@
   z-index: 1;
   inset-block: 0;
   left: 0;
-  background: var(--ui-color-well);
+  background: var(--side-panel-ground);
 }
 
 /* Note that the rail hidden beside the chapter is hidden only where it can
@@ -1263,7 +1263,7 @@
 
 .pull-request-tab[data-header-fold] > .pull-request-header {
   z-index: 3;
-  background: var(--ui-color-well);
+  background: var(--side-panel-ground);
   clip-path: inset(var(--pull-request-fold, 0px) -100vmax -100vmax);
 }
 
@@ -1274,7 +1274,7 @@
   z-index: 2;
   margin-bottom: calc(-1 * var(--pull-request-fold-room, 0px));
   background: linear-gradient(var(--ui-color-fill-hover), var(--ui-color-fill-hover))
-    var(--ui-color-well);
+    var(--side-panel-ground);
 }
 
 /* The room stands at the top of what the shown view's scroller holds where
@@ -1307,7 +1307,7 @@
   inset-inline: 0;
   bottom: 0;
   padding-block: var(--ui-item-gap);
-  background: var(--ui-color-well);
+  background: var(--side-panel-ground);
   opacity: var(--pull-request-fold-title, 0);
   pointer-events: none;
 }
@@ -1345,7 +1345,7 @@
   z-index: 1;
   box-sizing: border-box;
   height: var(--ui-scroll-band);
-  background: var(--ui-color-ground);
+  background: var(--side-panel-ground);
 }
 
 .pull-request-section-fold > .ui-disclosure-summary {
@@ -1381,7 +1381,7 @@
   height: var(--ui-scroll-band);
   align-self: start;
   padding-inline-end: var(--ui-tight-gap);
-  background: var(--ui-color-ground);
+  background: var(--side-panel-ground);
 }
 
 /* A tab's page (a `DetailPage` at the tabs' inset) opens its own gap under
