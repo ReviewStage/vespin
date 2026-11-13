@@ -1080,15 +1080,19 @@ export function composeMachineCommands(
 
         if (standing.looks !== undefined && sameApps(standing.looks, apps)) return;
         const named = yield* Effect.forEach(apps, (bundleId) => appNamed(use, bundleId));
+
+        // Note that Computer use is read again once the helper has named them, since it may have been turned off meanwhile.
+        if (!(yield* use.offered)) return;
         const looks = postedLooks(named.map(({ app }) => app));
         const saved = yield* asked(client.saveDeviceAppLooks(standing.deviceId, looks));
 
-        // Note that an app the helper failed to name leaves the looks unheld, so the next look names it again once the helper answers.
-        if ("failure" in saved || !named.every(({ stands }) => stands)) return;
+        if ("failure" in saved) return;
+        // Note that an app the helper failed to name holds no looks as posted, so the next look names it again once the helper answers, whatever list it then holds.
+        const held = named.every(({ stands }) => stands) ? apps : undefined;
 
         // Note that the looks are held only for the standing they were posted for, so a join or a write meanwhile posts them again.
         yield* SubscriptionRef.update(joined, (now) =>
-          now === standing ? { ...standing, looks: apps } : now,
+          now === standing ? { ...standing, looks: held } : now,
         );
       });
 
