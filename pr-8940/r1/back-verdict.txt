@@ -1,0 +1,3 @@
+back8940.yaml, R1 bundle 77ed6fd8c (main 32a4961f0, which has #8940 merged), landscape 27.2 iPad, light, 0 failed steps (pr-8940/r1/).
+(a) Launched straight onto the agent with the agent: launch argument, nothing under it: no Back, as expected.
+(b) From a task's Agents row: the tap meant for "Build teammate invitations" landed on the row's #128 chip, so the pushed page is pull request #128 rather than the agent page. It opens full screen with a Back chevron at the top left, and a tap there returns to Tasks with Teammate invitations picked in the split view. So a page pushed from a task does show a working Back. The agent page itself was not reached this way; one retake on the agent row's name would close that.
