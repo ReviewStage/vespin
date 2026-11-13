@@ -495,6 +495,7 @@ export function tasksControl(overrides: Partial<TasksControl> = {}): TasksContro
     signedIn: true,
     me: undefined,
     tasks: [],
+    typedNames: new Map(),
     listed: {
       tasks: overrides.tasks ?? [],
     },

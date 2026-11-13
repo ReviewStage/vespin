@@ -30,10 +30,12 @@ import { fakeAppBridge, fakeAppBridgeCalls } from "../testing/app-bridge.js";
 import { copyingInto, fakeAppPlatform, QUIET_PANEL } from "../testing/app-platform.js";
 import { deliveryOf, handState, stateWith, withExperiments } from "../testing/app-state.js";
 import { DOCUMENT_TASK } from "../testing/document-task.js";
+import { standingTaskList } from "../testing/history-rows.js";
 import { tasksControl } from "../testing/tasks-control.js";
 import { type TestWindowRouter, windowRouter } from "../testing/window-router.js";
 import { useVersionHistoryRoute, type VersionHistoryRoute } from "../version-history-route.js";
 import { useHomeRoute } from "../workspace-routes.js";
+import { useHistoryRows } from "./history-rows.js";
 import { useNarrowBacks } from "./narrow-backs.js";
 import { PLACE_BINDING, usePlaceBinding } from "./place-binding.js";
 import { usePlaceLeave } from "./place-leave.js";
@@ -126,8 +128,7 @@ function tasksTab(
     region: onTask
       ? { kind: DOCUMENT_REGION.READY, task: { ...DOCUMENT_TASK, workspaceId: ACME.id } }
       : base.region,
-    // Note that the task is listed in Acme, as the Inbox's item of it is listed there.
-    tasks: [{ ...DOCUMENT_TASK, workspaceId: ACME.id }],
+    tasks: LISTED_TASKS,
     workspaces: [ACME],
     workspace: ACME,
     sidePanel: {
@@ -208,6 +209,9 @@ function unmountAll(): void {
 afterEach(unmountAll);
 
 /** The window standing as `start` says in a room, under a router over a memory history, or over the history given, and its addresses written from its Copy link, as the root wires them. */
+/** The tasks the window lists. Note that the task is listed in Acme, as the Inbox's item of it is listed there. */
+const LISTED_TASKS = [{ ...DOCUMENT_TASK, workspaceId: ACME.id }];
+
 function mount(
   room: ShellRoom,
   start: Standing,
@@ -302,6 +306,7 @@ function mount(
       versionHistory: versions,
       inbox,
       room,
+      rows: useHistoryRows(),
       tasks,
     });
     // Home and the task bound follow each other, as the window's root keeps them.
@@ -344,7 +349,14 @@ function mount(
   roots.push(root);
   act(() =>
     root.render(
-      held.provide(withExperiments(experimentsOn(EXPERIMENT.DESCRIPTIONS), createElement(Probe))),
+      held.provide(
+        withExperiments(
+          experimentsOn(EXPERIMENT.DESCRIPTIONS),
+          standingTaskList({ tasks: LISTED_TASKS, taskAgents: undefined }).provide(
+            createElement(Probe),
+          ),
+        ),
+      ),
     ),
   );
 

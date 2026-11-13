@@ -335,6 +335,8 @@ export interface TasksControl {
   me: string | undefined;
   /** Every task of every workspace, in the sidebar's order: the pinned ones first, newest pinned first, then the rest, newest started first; what the palette, the inbox, and the history find a task in. */
   tasks: TasksView["tasks"];
+  /** The names being typed for tasks, which `tasks` draws over their listed names (`renamedView`), for a surface that reads a task by its id rather than from `tasks`; empty while none is typed. */
+  typedNames: TaskNames;
   /** The chosen workspace's share of `plans`, which alone the sidebar lists; everything while no workspace is chosen. */
   listed: {
     tasks: TasksView["tasks"];
@@ -3455,6 +3457,7 @@ export function useTasksTab(input: {
     // Note that a fixture's invented tasks are nobody's, but those of a profile that signs in its own reader.
     me: fixture === undefined ? input.accountId : tasksFixture?.fixtureReader(input.run),
     tasks: sidebar,
+    typedNames: drafts,
     listed: {
       tasks: listedSidebar,
     },
