@@ -783,6 +783,60 @@ private final class AgentCursorView: NSView {
     }
 }
 
+/**
+ Where the agent's cursor stands, as a recording draws it into its frames:
+ the glide it is on, the last press, and whether it shows. The cursor's
+ window is no part of a recording of one window, so a recording draws the
+ pointer itself, as the browser's draws it into the page
+ (`recording-cursor.ts`). Note that the main actor writes it and a
+ recording's frame queue reads it, so every touch holds the lock.
+ */
+private final class CursorTrack: @unchecked Sendable {
+    private let lock = NSLock()
+    private var from: CGPoint?
+    private var to: CGPoint?
+    private var glidedAt: TimeInterval = 0
+    private var pressedAt: TimeInterval?
+    private var shownUntil: TimeInterval = 0
+
+    /// Where the cursor stands at the instant given, on the window server's points, its top left the main display's, with how long since its last press; nothing where it shows nowhere.
+    func at(_ now: TimeInterval) -> (point: CGPoint, sincePress: TimeInterval?)? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let to, now < shownUntil else { return nil }
+        let start = from ?? to
+        let share = min(max((now - glidedAt) / CURSOR_GLIDE_SECONDS, 0), 1)
+        let point = CGPoint(x: start.x + (to.x - start.x) * share, y: start.y + (to.y - start.y) * share)
+        return (point, pressedAt.map { now - $0 })
+    }
+
+    func glide(to point: CGPoint, at now: TimeInterval) {
+        lock.lock()
+        defer { lock.unlock() }
+        let showing = to != nil && now < shownUntil
+        from = showing ? at(unlocked: now) : point
+        to = point
+        glidedAt = now
+        shownUntil = now + CURSOR_GLIDE_SECONDS + CURSOR_REST_SECONDS + CURSOR_GLIDE_SECONDS
+    }
+
+    func press(at now: TimeInterval) {
+        lock.lock()
+        defer { lock.unlock() }
+        pressedAt = now
+    }
+
+    /// Where the glide stands at the instant given, for a caller already holding the lock.
+    private func at(unlocked now: TimeInterval) -> CGPoint? {
+        guard let to else { return nil }
+        let start = from ?? to
+        let share = min(max((now - glidedAt) / CURSOR_GLIDE_SECONDS, 0), 1)
+        return CGPoint(x: start.x + (to.x - start.x) * share, y: start.y + (to.y - start.y) * share)
+    }
+}
+
+private let cursorTrack = CursorTrack()
+
 /// The window the agent's cursor stands in: borderless, clear, over every app, taking no clicks, on every space.
 @MainActor
 private final class AgentCursor {
@@ -809,18 +863,12 @@ private final class AgentCursor {
     /// The press landing where the cursor stands, its ring rippling out.
     func press() {
         (panel?.contentView as? AgentCursorView)?.ripple()
-    }
-
-    /// The cursor's window ordered in, unseen where it stands nowhere yet, so a recording of the helper's windows finds it among them from the start.
-    func standBy() {
-        let panel = made()
-        guard !panel.isVisible else { return }
-        panel.alphaValue = 0
-        panel.orderFrontRegardless()
+        cursorTrack.press(at: ProcessInfo.processInfo.systemUptime)
     }
 
     func glide(to point: CGPoint) {
         let panel = made()
+        cursorTrack.glide(to: point, at: ProcessInfo.processInfo.systemUptime)
         let height = NSScreen.screens.first?.frame.height ?? 0
         let origin = CGPoint(x: point.x - CURSOR_TIP.x, y: height - point.y - CURSOR_BOX.height + CURSOR_TIP.y)
         fade?.cancel()
@@ -1164,6 +1212,77 @@ private func isDrawnFrame(_ buffer: CMSampleBuffer) -> Bool {
     return status == .complete
 }
 
+/// The window's bounds now, on the window server's points, its top left the main display's; nothing where it is gone.
+private func windowBounds(_ windowID: CGWindowID) -> CGRect? {
+    guard
+        let listed = CGWindowListCopyWindowInfo([.optionIncludingWindow], windowID) as? [[String: Any]],
+        let bounds = listed.first?[kCGWindowBounds as String] as? NSDictionary,
+        let rect = CGRect(dictionaryRepresentation: bounds)
+    else { return nil }
+    return rect
+}
+
+/// How long a press's ring takes to ripple out, as the cursor's window draws it.
+private let RIPPLE_SECONDS = CURSOR_GLIDE_SECONDS * 1.6
+
+/**
+ The agent's cursor drawn into a frame of the window, where it stands over
+ the window: the browser pointer's arrow and, just after a press, its ring.
+ The window fills the frame at its own shape, scaled to fit and centered,
+ so a point on the window is placed by the window's bounds now, which follow
+ it as it moves or resizes. Nothing is drawn where the cursor shows nowhere,
+ or off the window.
+ */
+private func drawCursor(into pixels: CVPixelBuffer, window: CGRect, color: CGColor, at now: TimeInterval) {
+    guard let cursor = cursorTrack.at(now), window.width > 0, window.height > 0 else { return }
+    let width = CGFloat(CVPixelBufferGetWidth(pixels))
+    let height = CGFloat(CVPixelBufferGetHeight(pixels))
+    let scale = min(width / window.width, height / window.height)
+    let origin = CGPoint(x: (width - window.width * scale) / 2, y: (height - window.height * scale) / 2)
+    let tip = CGPoint(
+        x: origin.x + (cursor.point.x - window.minX) * scale, y: origin.y + (cursor.point.y - window.minY) * scale)
+    guard tip.x >= 0, tip.y >= 0, tip.x <= width, tip.y <= height else { return }
+    CVPixelBufferLockBaseAddress(pixels, [])
+    defer { CVPixelBufferUnlockBaseAddress(pixels, []) }
+    guard
+        let context = CGContext(
+            data: CVPixelBufferGetBaseAddress(pixels), width: Int(width), height: Int(height), bitsPerComponent: 8,
+            bytesPerRow: CVPixelBufferGetBytesPerRow(pixels), space: CGColorSpaceCreateDeviceRGB(),
+            bitmapInfo: CGImageAlphaInfo.premultipliedFirst.rawValue | CGBitmapInfo.byteOrder32Little.rawValue)
+    else { return }
+    // Note that the frame's rows run top down, so the context is flipped to place points as the window server does.
+    context.translateBy(x: 0, y: height)
+    context.scaleBy(x: 1, y: -1)
+    context.translateBy(x: tip.x, y: tip.y)
+    context.scaleBy(x: scale, y: scale)
+    if let since = cursor.sincePress, since < RIPPLE_SECONDS {
+        let share = since / RIPPLE_SECONDS
+        let radius = 12 * (0.4 + share)
+        context.setStrokeColor(color.copy(alpha: 1 - share) ?? color)
+        context.setLineWidth(1.5)
+        context.strokeEllipse(in: CGRect(x: -radius, y: -radius, width: radius * 2, height: radius * 2))
+    }
+    let arrow = CGMutablePath()
+    arrow.move(to: CGPoint(x: 0, y: 0))
+    arrow.addLine(to: CGPoint(x: 12.07, y: 4.16))
+    arrow.addCurve(to: CGPoint(x: 12.56, y: 5.58), control1: CGPoint(x: 13.49, y: 4.65), control2: CGPoint(x: 13.65, y: 5.12))
+    arrow.addLine(to: CGPoint(x: 7.64, y: 7.64))
+    arrow.addLine(to: CGPoint(x: 5.58, y: 12.56))
+    arrow.addCurve(to: CGPoint(x: 4.16, y: 12.07), control1: CGPoint(x: 5.12, y: 13.65), control2: CGPoint(x: 4.65, y: 13.49))
+    arrow.closeSubpath()
+    context.setLineJoin(.round)
+    context.setLineWidth(2.4)
+    // Note that a shadow's offset ignores the flip, so it falls a point down as the cursor's window draws it.
+    context.setShadow(offset: CGSize(width: 0, height: -1), blur: 1.5, color: CGColor(gray: 0, alpha: 0.35))
+    context.setStrokeColor(CGColor(gray: 1, alpha: 1))
+    context.addPath(arrow)
+    context.strokePath()
+    context.setShadow(offset: .zero, blur: 0, color: nil)
+    context.setFillColor(color)
+    context.addPath(arrow)
+    context.fillPath()
+}
+
 /// How a capture ended: the seconds it ran, or why it came to no video.
 private enum CaptureEnd {
     case ran(Double)
@@ -1172,15 +1291,18 @@ private enum CaptureEnd {
 }
 
 /**
- One recording as it runs: a stream of the display the window stands on,
- holding only the app's windows and the helper's own, which the agent's
- cursor stands in, cropped to the window, written frame by frame into an
- H.264 MP4. Note that every frame is handled on its own queue, which the
- end reads through, so a frame never lands in a writer being finished.
+ One recording as it runs: a stream of the one window alone, as a read
+ captures it, so no other window, the app's own among them, is ever in its
+ frames, with the agent's cursor drawn into each, written frame by frame
+ into an H.264 MP4. Note that every frame is handled on its own queue,
+ which the end reads through, so a frame never lands in a writer being
+ finished.
  */
 private final class WindowRecorder: NSObject, SCStreamOutput {
     let width: Int
     let height: Int
+    private let windowID: CGWindowID
+    private let pointer: CGColor
     private let stream: SCStream
     private let writer: AVAssetWriter
     private let input: AVAssetWriterInput
@@ -1191,9 +1313,11 @@ private final class WindowRecorder: NSObject, SCStreamOutput {
     private var firstUptime: TimeInterval?
     private var ended = false
 
-    init(filter: SCContentFilter, configuration: SCStreamConfiguration) throws {
+    init(window: SCWindow, configuration: SCStreamConfiguration, pointer: CGColor) throws {
         width = configuration.width
         height = configuration.height
+        windowID = window.windowID
+        self.pointer = pointer
         writer = try AVAssetWriter(outputURL: CAPTURED_URL, fileType: .mp4)
         writer.shouldOptimizeForNetworkUse = true
         input = AVAssetWriterInput(
@@ -1203,7 +1327,8 @@ private final class WindowRecorder: NSObject, SCStreamOutput {
             throw HelperError(kind: ERROR_KIND.recordingEncoder, message: "The recording could not be encoded.")
         }
         writer.add(input)
-        stream = SCStream(filter: filter, configuration: configuration, delegate: nil)
+        stream = SCStream(
+            filter: SCContentFilter(desktopIndependentWindow: window), configuration: configuration, delegate: nil)
         super.init()
         try stream.addStreamOutput(self, type: .screen, sampleHandlerQueue: frames)
     }
@@ -1217,6 +1342,9 @@ private final class WindowRecorder: NSObject, SCStreamOutput {
 
     func stream(_ stream: SCStream, didOutputSampleBuffer buffer: CMSampleBuffer, of type: SCStreamOutputType) {
         guard type == .screen, !ended, buffer.isValid, isDrawnFrame(buffer) else { return }
+        if let pixels = buffer.imageBuffer, let bounds = windowBounds(windowID) {
+            drawCursor(into: pixels, window: bounds, color: pointer, at: ProcessInfo.processInfo.systemUptime)
+        }
         let at = buffer.presentationTimeStamp
         if first == nil {
             writer.startSession(atSourceTime: at)
@@ -1434,12 +1562,12 @@ private func recordedWindow(_ app: NSRunningApplication, in content: SCShareable
 }
 
 /**
- Starts recording the app's window: the display it stands on, holding the
- app's windows and the helper's own, so its menus and sheets and the
- agent's cursor are in the video while the developer's other windows and
- their own pointer never are, cropped to the window as it stood at the
- start. A recording that runs is left to run, and refused, as the browser's
- is.
+ Starts recording the app's window: that one window alone, as a read
+ captures it, following it as it moves or resizes, with the agent's cursor
+ drawn in. No other window is ever in the video, the developer's or the
+ app's own, so a menu or popover the app opens as a window of its own is
+ not either; the developer's pointer never is. A recording that runs is
+ left to run, and refused, as the browser's is.
  */
 private func record(_ request: [String: Any]) async throws -> [String: Any] {
     let app = try await resolveApp(try string(request, "app"))
@@ -1455,29 +1583,19 @@ private func record(_ request: [String: Any]) async throws -> [String: Any] {
     }
     let maxSeconds = Double(min(max(integer(request, "max_seconds") ?? 120, 1), 120))
     let maxBytes = max(integer(request, "max_bytes") ?? 0, 1)
-    await MainActor.run { agentCursor.standBy() }
-    // Note that every window is listed, not those on screen alone, so the helper is found by its cursor's window however it stands.
-    let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: false)
+    let content = try await SCShareableContent.excludingDesktopWindows(true, onScreenWindowsOnly: true)
     let window = try recordedWindow(app, in: content)
-    guard
-        let display = content.displays.max(by: {
-            $0.frame.intersection(window.frame).width * $0.frame.intersection(window.frame).height
-                < $1.frame.intersection(window.frame).width * $1.frame.intersection(window.frame).height
-        }), display.frame.intersects(window.frame)
-    else {
-        throw HelperError(kind: ERROR_KIND.noWindow, message: "\(appName(app))'s window stands on no display.")
-    }
-    let own = getpid()
-    let included = content.applications.filter { $0.processID == app.processIdentifier || $0.processID == own }
-    let filter = SCContentFilter(display: display, including: included, exceptingWindows: [])
-    let crop = window.frame.intersection(display.frame).offsetBy(dx: -display.frame.minX, dy: -display.frame.minY)
-    let scale = Double(filter.pointPixelScale)
-    let size = evenSize(width: crop.width * scale, height: crop.height * scale, edge: RECORDING_EDGE)
+    let scale = Double(SCContentFilter(desktopIndependentWindow: window).pointPixelScale)
+    let size = evenSize(width: window.frame.width * scale, height: window.frame.height * scale, edge: RECORDING_EDGE)
+    let pointer = await MainActor.run { pointerColor().cgColor }
     let configuration = SCStreamConfiguration()
-    configuration.sourceRect = crop
     configuration.width = size.width
     configuration.height = size.height
-    configuration.pixelFormat = kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange
+    configuration.scalesToFit = true
+    configuration.preservesAspectRatio = true
+    configuration.ignoreShadowsSingleWindow = true
+    // Note that the frames are BGRA, rather than the encoder's own 4:2:0, so the cursor can be drawn into them.
+    configuration.pixelFormat = kCVPixelFormatType_32BGRA
     configuration.minimumFrameInterval = CMTime(value: 1, timescale: CMTimeScale(RECORDING_FPS))
     configuration.showsCursor = false
     configuration.queueDepth = 6
@@ -1485,7 +1603,7 @@ private func record(_ request: [String: Any]) async throws -> [String: Any] {
     try? FileManager.default.removeItem(at: RECORDING_FOLDER)
     try FileManager.default.createDirectory(
         at: RECORDING_FOLDER, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
-    let recorder = try WindowRecorder(filter: filter, configuration: configuration)
+    let recorder = try WindowRecorder(window: window, configuration: configuration, pointer: pointer)
     try await recorder.start()
     await recordings.begin(recorder, maxSeconds: maxSeconds, maxBytes: maxBytes)
     return ["done": "record"]

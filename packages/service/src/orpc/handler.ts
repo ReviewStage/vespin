@@ -43,7 +43,7 @@ import type { HostedContext } from "./base.js";
 import { encodeHostedError, HOSTED_ERROR_STATUS, hostedRefusalWrap } from "./errors.js";
 
 /** A hosted router, whatever its contract: every procedure taking the hosted context. */
-type HostedRouter = Router<HostedContext>;
+export type HostedRouter = Router<HostedContext>;
 
 /** One request answered, with the web runtime's services it runs on. */
 export type HostedFetch = (

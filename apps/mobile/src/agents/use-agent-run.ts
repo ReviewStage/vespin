@@ -2,8 +2,8 @@
  * use-agent-run.ts -- an agent's run actions as its page's ⋯ offers them: its repository's commands, each run in the agent's sandbox or stopped while it runs, as the panel's Run › offers them on a narrow window.
  *
  * Which are offered, which run, and their words are the panel's
- * (`@repo/features/run-actions-model`): only where the agent's workspace has
- * the Run actions experiment on, the agent runs in the cloud, never on a
+ * (`@repo/features/run-actions-model`): only where the agent runs in the
+ * cloud, never on a
  * member's own Mac, whose actions run only through that Mac's host, and its
  * repository keeps any that may run in the cloud (`runActionsIn`, as the
  * panel filters by the agent's machine) (`WORKSPACE_SANDBOX_SETUP_READ`). Which run is read off the agent's
@@ -33,12 +33,10 @@ import {
   runActionsIn,
 } from "@repo/features/workspace-sandbox-setup-wire";
 import { ACT_KIND } from "@repo/host/acts";
-import { selectWorkspaceExperiment } from "@repo/host/app-state-reads";
-import { EXPERIMENT } from "@repo/settings";
 import { BUZZ } from "@repo/ui-native";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useIsFocused } from "expo-router";
-import { useMemo, useRef } from "react";
+import { useRef } from "react";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -66,13 +64,6 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
   const agent = useFollowedAgent(agentId);
   const workspaceId = agent?.workspaceId;
 
-  const experimentSelect = useMemo(
-    () => selectWorkspaceExperiment(workspaceId, EXPERIMENT.RUN_ACTIONS),
-    [workspaceId],
-  );
-
-  const { data: experiment = false } = useQuery({ ...appStateQuery, select: experimentSelect });
-
   // Note that the reads are kept under the account signed in, so another account's never draws from them.
   const { data: accountId } = useQuery({
     ...appStateQuery,
@@ -82,7 +73,7 @@ export function useAgentRun(agentId: string): readonly OfferedRunAction[] {
   const asks =
     agent !== undefined &&
     workspaceId !== undefined &&
-    runActionsAsked({ experiment, machine: agent.machine, repository: agent.repository });
+    runActionsAsked({ machine: agent.machine, repository: agent.repository });
 
   const { data: setup } = useQuery({
     queryKey: [QUERY_ROOT.SETUP, accountId, workspaceId],

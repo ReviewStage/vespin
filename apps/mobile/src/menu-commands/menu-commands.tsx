@@ -277,7 +277,8 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
 
   const toggled = [
     ...subject.toggled,
-    ...(sidebarStands && !sidebar.shown ? [MENU_COMMAND.SIDEBAR] : []),
+    // Note that a detail standing alone hides the sidebar whatever its own choice, so the menu offers Show Sidebar then.
+    ...(sidebarStands && (!sidebar.shown || detailOnly.alone) ? [MENU_COMMAND.SIDEBAR] : []),
     ...(detailStands && detailOnly.alone ? [MENU_COMMAND.DETAIL_ONLY] : []),
   ];
 
@@ -371,6 +372,13 @@ export function MenuCommands({ signedIn }: { readonly signedIn: boolean }) {
       case MENU_COMMAND.SEARCH:
         return router.navigate("/search");
       case MENU_COMMAND.SIDEBAR:
+        // Note that Show Sidebar over a detail standing alone brings the columns back with the sidebar, as the system's sidebar button does.
+        if (detailOnly.alone) {
+          detailOnly.setAlone(false);
+
+          return sidebar.setShown(true);
+        }
+
         return sidebar.toggle();
       case MENU_COMMAND.DETAIL_ONLY:
         return detailOnly.toggle();

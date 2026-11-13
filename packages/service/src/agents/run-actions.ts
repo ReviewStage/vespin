@@ -1,5 +1,5 @@
 /**
- * run-actions.ts -- the run action a call names, as one of an agent's repository's, found only for a cloud agent with a repository in a workspace with the Run actions experiment on, where the action may run in the cloud, and that action run or stopped in the agent's sandbox.
+ * run-actions.ts -- the run action a call names, as one of an agent's repository's, found only for a cloud agent with a repository, where the action may run in the cloud, and that action run or stopped in the agent's sandbox.
  *
  * A repository's run actions are kept with its cloud setup
  * (`workspace-sandbox-setup-wire.ts`), and a member runs one in a cloud
@@ -24,7 +24,6 @@ import {
   type RunAction,
   runActionRunsIn,
 } from "@repo/features/workspace-sandbox-setup-wire";
-import { EXPERIMENT } from "@repo/settings";
 import { Effect, Result } from "effect";
 import {
   HOSTED_REFUSAL,
@@ -39,7 +38,6 @@ import {
   sandboxOrUpstream,
   shellRefusal,
 } from "./terminal/sandbox-reach.js";
-import { experimentOnIn } from "./workspace-experiment-on.js";
 
 /** What of an agent names its run actions: where it runs, its workspace, and its repository. */
 interface RunActionAgent {
@@ -48,15 +46,11 @@ interface RunActionAgent {
   readonly repository: string | null;
 }
 
-/** The agent's repository, where it has run actions at all: a cloud agent with one, in a workspace with the experiment on; not found otherwise. */
+/** The agent's repository, where it has run actions at all: a cloud agent with one; not found otherwise. */
 const runActionRepositoryOf = /* @__PURE__ */ Effect.fnUntraced(function* (agent: RunActionAgent) {
   const repository = agent.repository;
 
   if (agent.machine === AGENT_MACHINE.DEVICE || repository === null) {
-    return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
-  }
-
-  if (!(yield* experimentOnIn(agent.organizationId, EXPERIMENT.RUN_ACTIONS))) {
     return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   }
 
