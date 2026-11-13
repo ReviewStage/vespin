@@ -59,7 +59,6 @@ export const CALL_CONTROL_LABEL = {
   MUTE_SPEAKER: "Mute speaker",
   UNMUTE_SPEAKER: "Unmute speaker",
   STOP_AGENT: "Stop",
-  STOPPING_AGENT: "Stopping",
   END_CALL: "End call",
 } as const;
 
@@ -112,12 +111,6 @@ const MUTE = {
 export interface CallStatus {
   readonly voiceWord: string;
   readonly agent: { readonly action: string | undefined } | undefined;
-}
-
-/** Stop as its owner hands it: its press, and whether the stop it asked for is still out. */
-export interface CallStopState {
-  readonly onPress: () => void;
-  readonly busy: boolean;
 }
 
 /** A mute as its owner hands it: whether it is on, and its press. */
@@ -193,30 +186,19 @@ export function CallMute({
 }
 
 /**
- * Stop: stops the agent's turn, the call staying up; quiet, round in the
- * call bar and square in an agent's composer row, wearing Stop's glyph, and
- * busy while the stop it asked for is out.
+ * Stop: stops the agent's turn, the call staying up; quiet and round,
+ * wearing Stop's glyph. Only the call bar draws it, since an agent's
+ * composer has its own Stop in Send's place.
  */
-export function StopAgentButton({
-  onPress,
-  busy = false,
-  corners = BUTTON_CORNERS.ROUND,
-}: {
-  onPress: () => void;
-  busy?: boolean | undefined;
-  corners?: ButtonCorners | undefined;
-}): React.JSX.Element {
-  const busyProps = busy ? { busy: true, busyLabel: CALL_CONTROL_LABEL.STOPPING_AGENT } : {};
-
+export function StopAgentButton({ onPress }: { onPress: () => void }): React.JSX.Element {
   return (
-    <Tooltip label={busy ? CALL_CONTROL_LABEL.STOPPING_AGENT : CALL_CONTROL_LABEL.STOP_AGENT}>
+    <Tooltip label={CALL_CONTROL_LABEL.STOP_AGENT}>
       <IconButton
         variant={BUTTON_VARIANT.QUIET}
-        corners={corners}
+        corners={BUTTON_CORNERS.ROUND}
         icon={<GLYPH.STOP />}
         label={CALL_CONTROL_LABEL.STOP_AGENT}
         onClick={onPress}
-        {...busyProps}
       />
     </Tooltip>
   );
@@ -336,22 +318,19 @@ export function CallLive(props: CallLiveProps): React.JSX.Element {
 
 /**
  * The call's place in an agent's composer row, beside Send, while a call
- * into the agent stands: its status where `live` is given, Stop where the
- * agent's turn can be stopped, then the speaker and the microphone, square,
- * each struck through and lit while muted, and End call apart from them on
- * its red disc, so muting never hangs up.
+ * into the agent stands: its status where `live` is given, then the
+ * speaker and the microphone, square, each struck through and lit while
+ * muted, and End call apart from them on its red disc, so muting never
+ * hangs up.
  */
 export function CallComposerControls({
   live,
-  stop,
   microphone,
   speaker,
   onEnd,
 }: {
-  /** The call's status; none draws the presses alone, as an agent's composer does, which keeps its row uncrowded. */
+  /** The call's status; none draws the three presses alone, as an agent's composer does, which keeps its row uncrowded. */
   live?: CallLiveProps | undefined;
-  /** Stop, where the agent's turn can be stopped; none draws no Stop. */
-  stop?: CallStopState | undefined;
   microphone: CallMuteState;
   speaker: CallMuteState;
   onEnd: () => void;
@@ -362,9 +341,6 @@ export function CallComposerControls({
       aria-label={CALL_CONTROLS_LABEL}
     >
       {live === undefined ? null : <CallLive {...live} />}
-      {stop === undefined ? null : (
-        <StopAgentButton onPress={stop.onPress} busy={stop.busy} corners={BUTTON_CORNERS.SQUARE} />
-      )}
       <CallMute
         device={CALL_DEVICE.SPEAKER}
         corners={BUTTON_CORNERS.SQUARE}

@@ -103,7 +103,6 @@ function InCall(): React.JSX.Element {
   return (
     <CallComposerControls
       live={{ stage: CALL_STAGE.LIVE, startedAt: CALL_STARTED_AT, muted: false, now: CALL_NOW }}
-      stop={{ onPress: ignore, busy: false }}
       microphone={{ muted: false, onPress: ignore }}
       speaker={{ muted: false, onPress: ignore }}
       onEnd={ignore}

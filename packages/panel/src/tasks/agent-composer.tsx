@@ -532,18 +532,9 @@ export function AgentComposer({
     keystrokeSpan: answer === undefined ? undefined : PANEL_SPAN.KEYSTROKE_INBOX_ANSWER,
   });
 
-  const stop = () => {
-    setStopping(true);
-    onStop().then(
-      (took) => setStopping(took),
-      () => setStopping(false),
-    );
-  };
-
   const talk = useAgentTalk(
     agentId === undefined || talksIn === undefined ? undefined : { agentId, taskId: talksIn },
     box.dictation,
-    stoppable ? { onPress: stop, busy: stopping } : undefined,
   );
 
   const { editor, room, frame, files } = box;
@@ -558,10 +549,7 @@ export function AgentComposer({
         !hasWordsOrFiles(composer.draft.trim(), composer.attachments)
       : !answer.sendable;
 
-  // Note that on a call the call's own Stop stands beside End call, so Send's place offers none.
-  const showsStop =
-    empty && stoppable && !composer.sending && !editingQueued && talk?.onCall !== true;
-
+  const showsStop = empty && stoppable && !composer.sending && !editingQueued;
   // While a turn runs and the box holds a message it may go two ways; holding ⌘ says on Send which a send takes.
   const queues = queueing?.working && !empty && !held && !files.reading && !editingQueued;
   const modifierHeld = useModifierHeld(queues || editingQueued);
@@ -669,6 +657,14 @@ export function AgentComposer({
   useMentionBox(
     answer === undefined ? (mention) => editor.current?.insertMention(mention) : undefined,
   );
+
+  const stop = () => {
+    setStopping(true);
+    onStop().then(
+      (took) => setStopping(took),
+      () => setStopping(false),
+    );
+  };
 
   /**
    * The box's message gone the way `go` takes it: sent, queued behind the
