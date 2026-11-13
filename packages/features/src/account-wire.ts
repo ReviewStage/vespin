@@ -31,6 +31,7 @@ export const accountPreferencesAnswerSchema = EffectSchema.Struct({
   voice: EffectSchema.optionalKey(EffectSchema.Unknown),
   turnNotifications: EffectSchema.optionalKey(EffectSchema.Unknown),
   onboardingSurvey: EffectSchema.optionalKey(EffectSchema.Unknown),
+  introsSeen: EffectSchema.optionalKey(EffectSchema.Unknown),
   agent: EffectSchema.optionalKey(EffectSchema.Unknown),
   chaptersModel: EffectSchema.optionalKey(EffectSchema.Unknown),
   experiments: EffectSchema.optionalKey(
@@ -60,6 +61,7 @@ export const accountPreferencesWriteSchema = EffectSchema.Struct({
   voice: EffectSchema.optionalKey(EffectSchema.Unknown),
   turnNotifications: EffectSchema.optionalKey(EffectSchema.Unknown),
   onboardingSurvey: EffectSchema.optionalKey(EffectSchema.Unknown),
+  introsSeen: EffectSchema.optionalKey(EffectSchema.Unknown),
   agent: EffectSchema.optionalKey(EffectSchema.Unknown),
   chaptersModel: EffectSchema.optionalKey(EffectSchema.Unknown),
   experiments: EffectSchema.optionalKey(EffectSchema.Unknown),

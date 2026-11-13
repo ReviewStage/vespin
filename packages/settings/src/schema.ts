@@ -43,6 +43,7 @@ import {
   INLINE_DIFF_LABEL,
 } from "./diff-view.js";
 import { EXPERIMENT, experimentOn } from "./experiments.js";
+import { isIntrosSeenJson } from "./intros.js";
 import {
   isKeepAwake,
   KEEP_AWAKE_DEFAULT,
@@ -622,6 +623,22 @@ export const APP_SETTING_SCHEMA = {
     // Nothing to run per write: setup reads it as it draws the survey.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     guard: isOnboardingSurveyJson,
+  }),
+  /*
+   * Which one-card intros the account has seen, as the JSON list of their
+   * ids (`intros.ts`), so a card dismissed on one device never stands again
+   * on another. An account preference riding a part of the snapshot of its
+   * own, as setup's place does; drawn nowhere, since only a card's Got it
+   * writes it.
+   */
+  introsSeen: hiddenSetting({
+    field: "introsSeen",
+    id: APP_SETTING_ID.INTROS_SEEN,
+    page: SETTINGS_PAGE.ACCOUNT,
+    order: 930,
+    // Nothing to run per write: each page reads it as it draws its intro.
+    sideEffect: SETTING_SIDE_EFFECT.NONE,
+    guard: isIntrosSeenJson,
   }),
   lineNumbers: toggleSetting({
     field: "lineNumbers",

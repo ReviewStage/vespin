@@ -162,6 +162,7 @@ it.layer(getTestDB())("the account store's own-part choices and setup", (it) => 
         yield* writeAccountPreferences(userId, { voice: LIVE_VOICE.CEDAR });
         yield* writeAccountPreferences(userId, { turnNotifications: true });
         yield* writeAccountPreferences(userId, { onboardingSurvey: ONBOARDING_SURVEY });
+        yield* writeAccountPreferences(userId, { introsSeen: '["inbox"]' });
 
         yield* writeAccountPreferences(userId, { preferences: {} });
         const read = yield* readAccountPreferences(userId);
@@ -178,11 +179,32 @@ it.layer(getTestDB())("the account store's own-part choices and setup", (it) => 
           voice: LIVE_VOICE.CEDAR,
           turnNotifications: true,
           onboardingSurvey: ONBOARDING_SURVEY,
+          introsSeen: '["inbox"]',
         });
         assert.deepEqual(
           (yield* readAccountPreferences(yield* openAccount))?.preferences,
           undefined,
         );
+      }),
+  );
+});
+
+it.layer(getTestDB())("the account store's intros seen", (it) => {
+  it.effect(
+    "a write keeps the union of what stood and what it sends, so no dismissal is lost",
+    () =>
+      Effect.gen(function* () {
+        const userId = yield* openAccount;
+        yield* writeAccountPreferences(userId, { introsSeen: '["inbox"]' });
+        // Note that a second device, which never read the first's dismissal, sends only its own.
+        const written = yield* writeAccountPreferences(userId, {
+          introsSeen: '["automations","inbox"]',
+        });
+
+        assert.equal(written.preferences.introsSeen, '["automations","inbox"]');
+        yield* writeAccountPreferences(userId, { introsSeen: '["browser"]' });
+        const read = yield* readAccountPreferences(userId);
+        assert.equal(read?.preferences.introsSeen, '["automations","browser","inbox"]');
       }),
   );
 });
