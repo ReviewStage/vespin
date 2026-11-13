@@ -130,6 +130,11 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
   );
 }
 
+/** What an attached picture's × is heard as, naming the picture it takes off, as Messages' attachment ✕ is. */
+function detachName(name: string): string {
+  return `Remove ${name}`;
+}
+
 /** What a press on an attached picture is heard to do, since its × alone says so on screen. */
 const DETACH_HINT = "Removes it from the message";
 
@@ -189,7 +194,7 @@ function AttachedThumb({
         onPress={onDetach}
         modifiers={[
           buttonStyle("plain"),
-          accessibilityLabel(picture.name),
+          accessibilityLabel(detachName(picture.name)),
           accessibilityHint(DETACH_HINT),
         ]}
       >
