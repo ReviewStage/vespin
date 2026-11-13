@@ -708,6 +708,8 @@
   --radius-card-raised: var(--ui-radius-8);
   --shadow-card-soft: 0 1px 2px var(--ui-color-shadow-soft);
   --shadow-card-lift: 0 2px 6px var(--ui-color-shadow-soft);
+  /* A card's lift off the ground (`--ui-shadow-card`): a list drawn as a card. */
+  --shadow-card: var(--ui-shadow-card);
 
   /* The panel window's own (`@repo/panel`'s desktop surfaces, which every
      client mounts): the profile's spacing roles its layout reads beside the
@@ -954,10 +956,9 @@
   --text-label-inline: var(--ui-type-label-size);
   --color-provider-last-used: color-mix(in srgb, var(--ui-color-ground) 16%, var(--ui-color-text));
   --color-provider-last-used-ink: color-mix(in srgb, var(--ui-color-ground) 72%, transparent);
-  /* A composer's card (`components/composer-frame/`), lifted by a soft
-     shadow rather than ringed by a dark edge. */
-  --shadow-composer:
-    0 1px 2px var(--ui-color-shadow-soft), 0 12px 32px -16px var(--ui-color-shadow);
+  /* A composer's card (`components/composer-frame/`), lifted as every card
+     is, by Geist's card shadow under its border. */
+  --shadow-composer: var(--ui-shadow-card);
   /* A call's bar (`components/call/`), as tall as its two lines; and a
      caption's small glyph. */
   --spacing-call-row: calc(
