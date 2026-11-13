@@ -127,13 +127,22 @@ export function useColors(elevated?: boolean): BrandColors {
 }
 
 /**
- * What stands in a form sheet or popover over a regular window, an iPad's
- * or the open Duo's, drawn on the lifted ground in dark (`ELEVATED_DARK`).
- * A full sheet on an iPhone stands over nothing it must be told apart from,
- * so it keeps the plain ground and is never wrapped.
+ * What stands in a sheet or popover, drawn on the lifted ground in dark
+ * (`ELEVATED_DARK`) while `lifted`: while it stands as a form sheet or
+ * popover over a regular window, an iPad's or the open Duo's. A full sheet
+ * on an iPhone stands over nothing it must be told apart from, so it keeps
+ * the plain ground. Note that a sheet stays wrapped whichever it is, so a
+ * window crossing the size classes changes the value alone and never
+ * remounts what the sheet holds, words typed in it among them.
  */
-export function ElevatedGround({ children }: { readonly children: ReactNode }) {
-  return createElement(ElevatedContext.Provider, { value: true }, children);
+export function ElevatedGround({
+  lifted,
+  children,
+}: {
+  readonly lifted: boolean;
+  readonly children: ReactNode;
+}) {
+  return createElement(ElevatedContext.Provider, { value: lifted }, children);
 }
 
 /** The ink a tone is drawn in. */

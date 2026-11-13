@@ -437,7 +437,7 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
           ]}
         >
           {opened || presented ? (
-            <ElevatedGround>
+            <ElevatedGround lifted>
               <SwitcherList props={props} closed={closed} onContentHeight={setMeasured} />
             </ElevatedGround>
           ) : null}

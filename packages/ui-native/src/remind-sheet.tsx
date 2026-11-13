@@ -191,7 +191,7 @@ export function RemindSheet({
               font({ textStyle: TYPE_ROLE.ROW_TITLE }),
             ]}
           >
-            {elevated ? <ElevatedGround>{faces}</ElevatedGround> : faces}
+            <ElevatedGround lifted={elevated}>{faces}</ElevatedGround>
           </Form>
         </Group>
       </BottomSheet>

@@ -115,8 +115,8 @@ function GuardedScreens() {
     route: { name: string };
     children: ReactElement;
   }): ReactElement =>
-    regular && LIFTED_SHEETS.has(route.name) ? (
-      <ElevatedGround>{children}</ElevatedGround>
+    LIFTED_SHEETS.has(route.name) ? (
+      <ElevatedGround lifted={regular}>{children}</ElevatedGround>
     ) : (
       children
     );
