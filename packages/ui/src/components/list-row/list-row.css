@@ -86,7 +86,7 @@
 
   /* Note that a card's only row draws no ring of its own, because the card
      takes the ring's ink on its own hairline instead (`list-row.tsx`'s
-     `LIST_CLASS`): a ring inside that hairline would stand as a second edge,
+     `ONLY_ROW_MENU_OPEN`): a ring inside that hairline would stand as a second edge,
      its corners off the card's. */
   .ui-list[data-variant="card"] > li.ui-list-row[data-menu-open="true"]:only-of-type {
     box-shadow: none;
