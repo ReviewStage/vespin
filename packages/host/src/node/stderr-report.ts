@@ -16,14 +16,19 @@ function writeLine(message: string): void {
   }
 }
 
-/** The reporter every caller holds: the line, and why and which try it was after it where it says. */
-export function reportToStderr(message: string, attributes?: ReportAttributes): void {
+/** A reported line as a log keeps it: the line, and why and which try it was after it where it says. */
+export function reportedLine(message: string, attributes?: ReportAttributes): string {
   const said = [
     attributes?.reason,
     attributes?.attempt === undefined ? undefined : `attempt ${attributes.attempt}`,
   ].filter((part) => part !== undefined);
 
-  writeLine(said.length === 0 ? message : `${message} (${said.join(", ")})`);
+  return said.length === 0 ? message : `${message} (${said.join(", ")})`;
+}
+
+/** The reporter every caller holds: the line as `reportedLine` writes it. */
+export function reportToStderr(message: string, attributes?: ReportAttributes): void {
+  writeLine(reportedLine(message, attributes));
 }
 
 /**

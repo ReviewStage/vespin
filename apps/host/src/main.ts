@@ -116,7 +116,7 @@ import {
   type SetupStatus,
 } from "@repo/host/daemon";
 import { Environment, type ReportAttributes, reporterLayer } from "@repo/host/effect";
-import { armedWatchLayer, reportToStderr } from "@repo/host/node";
+import { armedWatchLayer, reportedLine, reportToStderr } from "@repo/host/node";
 import { sendLineToSentry } from "@repo/host/sentry-line";
 import * as Sentry from "@sentry/node";
 import { ConfigProvider, Duration, Effect, Exit, Layer, Option } from "effect";
@@ -292,7 +292,7 @@ function logToFile(message: string): void {
 /** A line the daemon reports: to stderr, to its log file where it keeps one, and to Sentry as `sendLineToSentry` sends it, so an error's or a tool's words after its own stay in the log. */
 function reportEverywhere(message: string, attributes?: ReportAttributes): void {
   reportToStderr(message, attributes);
-  logToFile(message);
+  logToFile(reportedLine(message, attributes));
 
   if (SENTRY_DSN === "") return;
   sendLineToSentry(Sentry, message, attributes);
