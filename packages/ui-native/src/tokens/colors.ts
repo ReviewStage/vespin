@@ -1,5 +1,6 @@
 // colors.ts -- the brand's colors for the window's color scheme, and the six status tones in them.
 
+import { createContext, createElement, type ReactNode, useContext } from "react";
 import { useColorScheme } from "react-native";
 import { useIncreaseContrast } from "../accessibility.js";
 import { BRAND_COLOR } from "./brand-colors.js";
@@ -90,18 +91,49 @@ const STRONGER = {
 } as const;
 
 /**
+ * The dark theme of a sheet or popover standing over a regular window, lifted
+ * as iOS lifts presented content in dark: the panel's dialog fill
+ * (`SURFACE`) as its ground, and its rows on the hairline's lighter gray, so
+ * it stands above the dimmed window behind it rather than as a black hole in
+ * it. Light is unchanged, since its sheet already reads above the window.
+ */
+const ELEVATED_DARK = {
+  ...THEME.DARK,
+  GROUPED: BRAND_COLOR.DARK.SURFACE,
+  RAISED: BRAND_COLOR.DARK.CHIP_EDGE,
+} as const;
+
+const ELEVATED_STRONGER_DARK = strongerContrast(ELEVATED_DARK);
+
+/** Whether what is drawn stands in a sheet or popover lifted over a regular window. */
+const ElevatedContext = createContext(false);
+
+/**
  * The brand's colors in the window's color scheme, and stronger where the
  * reader turned on Increase Contrast. Note that SwiftUI is handed plain
  * values rather than a dynamic color, so a component reads these on each
  * render and a change of scheme or of contrast draws it again.
  */
-export function useColors(): BrandColors {
+export function useColors(elevated?: boolean): BrandColors {
   const dark = useColorScheme() === "dark";
   const stronger = useIncreaseContrast();
+  const lifted = useContext(ElevatedContext) || elevated === true;
+
+  if (dark && lifted) return stronger ? ELEVATED_STRONGER_DARK : ELEVATED_DARK;
 
   if (stronger) return dark ? STRONGER.DARK : STRONGER.LIGHT;
 
   return dark ? THEME.DARK : THEME.LIGHT;
+}
+
+/**
+ * What stands in a form sheet or popover over a regular window, an iPad's
+ * or the open Duo's, drawn on the lifted ground in dark (`ELEVATED_DARK`).
+ * A full sheet on an iPhone stands over nothing it must be told apart from,
+ * so it keeps the plain ground and is never wrapped.
+ */
+export function ElevatedGround({ children }: { readonly children: ReactNode }) {
+  return createElement(ElevatedContext.Provider, { value: true }, children);
 }
 
 /** The ink a tone is drawn in. */

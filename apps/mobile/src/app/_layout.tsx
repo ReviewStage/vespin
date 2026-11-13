@@ -3,11 +3,11 @@
 // What Hermes lacks is filled in before anything of the host loads.
 import "../host/polyfills.js";
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
-import { FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
+import { ElevatedGround, FailureNoticeProvider, KeepingProvider } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
 import { Stack } from "expo-router";
 import { hide as hideSplash } from "expo-splash-screen";
-import { useEffect } from "react";
+import { type ReactElement, useEffect } from "react";
 import { useCrashReportAccount } from "../crash-reports.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { HostProvider } from "../host/host-provider.js";
@@ -28,6 +28,23 @@ export { RootBoundary as ErrorBoundary } from "../screen-boundary.js";
 
 /** A short sheet's heights in a compact window, as fractions of the screen: UIKit's medium, then its large. */
 const SHORT_SHEET_DETENTS = [0.5, 1];
+
+/** The routes the root stack presents as sheets over the app. */
+const SHEET_ROUTE = {
+  SETTINGS: "settings",
+  START_TASK: "start-task",
+  START_AGENT: "start-agent",
+  AGENT_MODEL: "agent-model",
+  AGENT_PORTS: "agent-ports",
+  TASK_RELATION: "task-relation",
+  MOVE_TASK: "move-task",
+  TASK_FOLLOWING: "task-following",
+  ADD_FOLLOWER: "add-follower",
+  NEW_WORKSPACE: "new-workspace",
+} as const;
+
+/** The sheets drawn lifted when they stand as form sheets over a regular window. */
+const LIFTED_SHEETS: ReadonlySet<string> = new Set(Object.values(SHEET_ROUTE));
 
 /**
  * The screens, each behind the account's standing: the tabs, Settings, and
@@ -90,40 +107,66 @@ function GuardedScreens() {
         sheetGrabberVisible: true,
       };
 
+  // Note that a sheet over a regular window is a form sheet standing above the dimmed window, so in dark it draws on the lifted ground, as iOS lifts presented content; the app's own pages and an iPhone's full sheets keep the plain ground.
+  const sheetLayout = ({
+    route,
+    children,
+  }: {
+    route: { name: string };
+    children: ReactElement;
+  }): ReactElement =>
+    regular && LIFTED_SHEETS.has(route.name) ? (
+      <ElevatedGround>{children}</ElevatedGround>
+    ) : (
+      children
+    );
+
   return (
     <>
       <MenuCommands signedIn={signedIn && !updateNeeded} />
-      <Stack screenOptions={{ headerShown: false }}>
+      <Stack screenOptions={{ headerShown: false }} screenLayout={sheetLayout}>
         <Stack.Protected guard={signedIn && !updateNeeded}>
           <Stack.Screen name="index" />
           <Stack.Screen name="(tabs)" />
           {/* Note that each sheet's title is named here as well as on its screen, so it never reads the route's name, which New task has kept when opened from the tab bar's round +. */}
           <Stack.Screen
-            name="settings"
+            name={SHEET_ROUTE.SETTINGS}
             options={{ presentation: sheetPresentation, title: "Settings" }}
           />
           <Stack.Screen
-            name="start-task"
+            name={SHEET_ROUTE.START_TASK}
             options={{ presentation: sheetPresentation, title: "New task" }}
           />
           <Stack.Screen
-            name="start-agent"
+            name={SHEET_ROUTE.START_AGENT}
             options={{ presentation: sheetPresentation, title: "New agent" }}
           />
-          <Stack.Screen name="agent-model" options={{ ...shortSheet, title: "Options" }} />
-          <Stack.Screen name="agent-ports" options={{ ...shortSheet, title: "Ports" }} />
           <Stack.Screen
-            name="task-relation"
+            name={SHEET_ROUTE.AGENT_MODEL}
+            options={{ ...shortSheet, title: "Options" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.AGENT_PORTS}
+            options={{ ...shortSheet, title: "Ports" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.TASK_RELATION}
             options={{ presentation: sheetPresentation, title: "Task relation" }}
           />
-          <Stack.Screen name="move-task" options={{ ...shortSheet, title: "Move to workspace" }} />
-          <Stack.Screen name="task-following" options={{ ...shortSheet, title: "Followers" }} />
           <Stack.Screen
-            name="add-follower"
+            name={SHEET_ROUTE.MOVE_TASK}
+            options={{ ...shortSheet, title: "Move to workspace" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.TASK_FOLLOWING}
+            options={{ ...shortSheet, title: "Followers" }}
+          />
+          <Stack.Screen
+            name={SHEET_ROUTE.ADD_FOLLOWER}
             options={{ presentation: sheetPresentation, title: "Add a follower" }}
           />
           <Stack.Screen
-            name="new-workspace"
+            name={SHEET_ROUTE.NEW_WORKSPACE}
             options={{ presentation: sheetPresentation, title: "New workspace" }}
           />
         </Stack.Protected>

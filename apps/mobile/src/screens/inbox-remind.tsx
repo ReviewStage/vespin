@@ -11,6 +11,8 @@ import type { InboxItem } from "@repo/features/inbox-wire";
 import { GLYPH, RemindSheet } from "@repo/ui-native";
 import { type ReactNode, useState } from "react";
 import { useInboxActs } from "../inbox/use-inbox.js";
+import { useWindowSizeClass } from "../use-window-size-class.js";
+import { WINDOW_SIZE_CLASS } from "../window-size-class.js";
 
 /** What Remind me is called and drawn with, wherever it stands: a row's swipe and long press, and a thread's ⋯ menu. */
 export const REMIND_ME = { label: REMIND_WORDS.REMIND_ME, symbol: GLYPH.TIME } as const;
@@ -60,6 +62,8 @@ export function useRemindSheet(): UseRemindSheetResult {
   };
 
   const openedAt = held?.at ?? Date.now();
+  // Note that a regular window stands the sheet as a form sheet over it, which draws it lifted in dark.
+  const regular = useWindowSizeClass() === WINDOW_SIZE_CLASS.REGULAR;
 
   const sheet = (
     <RemindSheet
@@ -73,6 +77,7 @@ export function useRemindSheet(): UseRemindSheetResult {
       onPick={set}
       onClear={held?.items.some(hasReminder) === true ? () => set(null) : undefined}
       onDismiss={close}
+      elevated={regular}
     />
   );
 

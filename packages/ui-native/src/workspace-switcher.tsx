@@ -36,7 +36,7 @@ import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { Avatar } from "./marks.js";
 import { ActionRow, SettingsForm } from "./settings-form.js";
-import { useColors } from "./tokens/colors.js";
+import { ElevatedGround, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
 import { TEXT_SIZE, TYPE_ROLE } from "./tokens/type.js";
 import { type SwitcherWorkspace, WorkspaceTile } from "./workspace-tile.js";
@@ -365,6 +365,8 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
   } = props;
 
   const colors = useColors();
+  // Note that the popover stands over a regular window, so it draws on the lifted ground, its list with it.
+  const lifted = useColors(true);
 
   const [presented, setPresented] = useState(false);
   // Note that the popover's list mounts on its first open and stays, since a closed popover's content stays mounted, every workspace's photo with it, and a list mounted anew on each open would draw each photo's letter tile again.
@@ -430,12 +432,14 @@ export function WorkspaceSwitcherItem(props: WorkspaceSwitcherProps) {
               height: Math.min(Math.max(measured ?? 0, popoverHeight(props)), POPOVER_TALLEST),
             }),
             // Note that the popover stands on the list's own ground, its arrow and rim too, rather than the system's glass around a solid list.
-            presentationBackground(colors.GROUPED),
+            presentationBackground(lifted.GROUPED),
             onDisappear(gone),
           ]}
         >
           {opened || presented ? (
-            <SwitcherList props={props} closed={closed} onContentHeight={setMeasured} />
+            <ElevatedGround>
+              <SwitcherList props={props} closed={closed} onContentHeight={setMeasured} />
+            </ElevatedGround>
           ) : null}
         </Group>
       </Popover.Content>

@@ -29,7 +29,7 @@ import { REMIND_WORDS } from "@repo/features/inbox-remind-times";
 import { useState } from "react";
 import { GLYPH } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { useColors } from "./tokens/colors.js";
+import { ElevatedGround, useColors } from "./tokens/colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** Which of its two faces the sheet shows: the times, or the picker for a time of the reader's own. */
@@ -56,6 +56,8 @@ type RemindSheetProps = {
   readonly onClear?: (() => void) | undefined;
   /** Called as the sheet goes, by a choice or by a drag down. */
   readonly onDismiss: () => void;
+  /** Whether the sheet stands as a form sheet over a regular window, which draws it on the lifted ground in dark. */
+  readonly elevated?: boolean | undefined;
 };
 
 /** A time's row: its words, and at its end when it comes due in the muted ink, the whole row pressed. */
@@ -132,9 +134,37 @@ export function RemindSheet({
   onPick,
   onClear,
   onDismiss,
+  elevated = false,
 }: RemindSheetProps) {
-  const colors = useColors();
+  const colors = useColors(elevated);
   const [stage, setStage] = useState<RemindStage>(REMIND_STAGE.TIMES);
+
+  const faces =
+    stage === REMIND_STAGE.PICK ? (
+      <PickFace pick={pick} onPick={onPick} />
+    ) : (
+      <>
+        <Section title={REMIND_WORDS.REMIND_ME}>
+          {times.map((time) => (
+            <TimeRow key={time.label} time={time} />
+          ))}
+          <SwiftUIButton
+            {...actContent(REMIND_WORDS.PICK, GLYPH.TIME)}
+            onPress={() => setStage(REMIND_STAGE.PICK)}
+            modifiers={[listRowBackground(colors.RAISED)]}
+          />
+        </Section>
+        {onClear === undefined ? null : (
+          <Section>
+            <SwiftUIButton
+              {...actContent(REMIND_WORDS.CLEAR, GLYPH.INBOX)}
+              onPress={onClear}
+              modifiers={[listRowBackground(colors.RAISED)]}
+            />
+          </Section>
+        )}
+      </>
+    );
 
   return (
     <Host matchContents style={{ position: "absolute" }}>
@@ -161,31 +191,7 @@ export function RemindSheet({
               font({ textStyle: TYPE_ROLE.ROW_TITLE }),
             ]}
           >
-            {stage === REMIND_STAGE.PICK ? (
-              <PickFace pick={pick} onPick={onPick} />
-            ) : (
-              <>
-                <Section title={REMIND_WORDS.REMIND_ME}>
-                  {times.map((time) => (
-                    <TimeRow key={time.label} time={time} />
-                  ))}
-                  <SwiftUIButton
-                    {...actContent(REMIND_WORDS.PICK, GLYPH.TIME)}
-                    onPress={() => setStage(REMIND_STAGE.PICK)}
-                    modifiers={[listRowBackground(colors.RAISED)]}
-                  />
-                </Section>
-                {onClear === undefined ? null : (
-                  <Section>
-                    <SwiftUIButton
-                      {...actContent(REMIND_WORDS.CLEAR, GLYPH.INBOX)}
-                      onPress={onClear}
-                      modifiers={[listRowBackground(colors.RAISED)]}
-                    />
-                  </Section>
-                )}
-              </>
-            )}
+            {elevated ? <ElevatedGround>{faces}</ElevatedGround> : faces}
           </Form>
         </Group>
       </BottomSheet>
