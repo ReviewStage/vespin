@@ -512,9 +512,15 @@ function ThreadDetail({
   const navigation = useNavigation();
   const inFront = useInFront();
 
+  // Whether this thread stands in front now, read when a start answers rather than when it was sent, since the reader may have switched tabs meanwhile.
+  const front = useRef(inFront);
+  useEffect(() => {
+    front.current = inFront;
+  }, [inFront]);
+
   // A thread the box started opens in this one's place, as the panel opens it, while this one still stands in front: a stack's screen covered by another stays mounted, as a wide window's split view keeps each tab's thread drawn behind the one shown.
   const openStarted = (id: string) => {
-    if (!shown.current || !navigation.isFocused() || !inFront) return;
+    if (!shown.current || !navigation.isFocused() || !front.current) return;
 
     if (place.inStack) router.replace(`/inbox/${encodeURIComponent(id)}`);
     else place.onOpen(id);
