@@ -8,6 +8,7 @@ import {
   type InboxReplyKind,
   inboxFormValueSchema,
 } from "@repo/features/inbox-wire";
+import { type DraftSuggestion, draftSuggestionSchema } from "@repo/features/suggestion-model";
 import { createWait, type Wait } from "@repo/ui";
 import { createStore, type ReadonlyStore, Store, useSelector } from "@tanstack/react-store";
 import { Duration, Effect, Equal, Schema, SchemaTransformation } from "effect";
@@ -98,23 +99,6 @@ const descriptionCommentKind = Schema.Literals([
     }),
   ),
 );
-
-/**
- * The suggestion in another agent's reply a draft was opened from: the agent
- * whose reply holds it, the button, its label, and, for a new agent, the
- * title and branch it named, which the draft sends as they were since no
- * chip edits them (`reply-button-link.tsx`). Its send goes through the
- * suggestion, once, rather than starting or sending afresh.
- */
-const draftSuggestionSchema = Schema.Struct({
-  agentId: Schema.String,
-  buttonId: Schema.String,
-  label: Schema.String,
-  title: Schema.optionalKey(Schema.String),
-  branch: Schema.optionalKey(Schema.String),
-});
-
-export type DraftSuggestion = typeof draftSuggestionSchema.Type;
 
 const draftPlaceSchema = Schema.Union([
   Schema.Struct({

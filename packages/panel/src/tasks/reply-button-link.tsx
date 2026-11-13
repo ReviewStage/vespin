@@ -4,6 +4,11 @@ import {
   type ReplyButtonLink as ReadButtonLink,
   type ReplyButtonView,
 } from "@repo/features/reply-button-wire";
+import {
+  draftSuggestionOf,
+  suggestedChoice,
+  suggestedWords,
+} from "@repo/features/suggestion-model";
 import { EXPERIMENT } from "@repo/settings";
 import {
   AVATAR_SIZE,
@@ -19,7 +24,7 @@ import { ReplayMask, ReplayUnmask } from "@repo/ui/session-replay-marks";
 import { useQuery } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useOfferedModels } from "../account-choices.js";
-import { DRAFT_PLACE, type DraftSuggestion, useDraftWriter } from "../composer-drafts.js";
+import { DRAFT_PLACE, useDraftWriter } from "../composer-drafts.js";
 import { HarnessMark } from "../harness-marks.js";
 import { useRepositoryPictures } from "../repository-pictures.js";
 import { useWorkspaceExperiment } from "../workspace-experiments.js";
@@ -49,11 +54,6 @@ import { useOpenPlace } from "./use-open-link.js";
  * hanging its card, with Started or Sent after it. Off, or unread, it is the
  * plain link it is written as, to the agent whose reply holds it.
  */
-
-/** What a draft's words become as a suggestion is laid in: those already written, a blank line, and the suggestion's. */
-function joinedWords(written: string, suggested: string): string {
-  return [written.trim(), suggested].filter((each) => each !== "").join("\n\n");
-}
 
 /** Where a new agent would run, as an agent's card says it: its repository with its owner's picture, its branch, and its model with its harness's mark, each a row. */
 function WhereRows({ view }: { view: ReplyButtonView }): ReactNode {
@@ -144,17 +144,7 @@ export function ReplyButtonLink({
     return linkChip(href, reached.title, doors, undefined, after) ?? plain(href);
   }
 
-  const suggestion: DraftSuggestion = {
-    agentId,
-    buttonId,
-    label,
-    ...(action.kind === REPLY_BUTTON_ACTION.START && action.title !== undefined
-      ? { title: action.title }
-      : undefined),
-    ...(action.kind === REPLY_BUTTON_ACTION.START && action.branch !== undefined
-      ? { branch: action.branch }
-      : undefined),
-  };
+  const suggestion = draftSuggestionOf(link, action, label);
 
   // Note that a press only fills a draft in and opens it, never sends: a new agent's in the task's draft, where this tab opens one, and a message's in its agent's own box.
   const open = () => {
@@ -165,12 +155,7 @@ export function ReplyButtonLink({
         return;
       }
 
-      const choice =
-        action.model === undefined || action.effort === undefined
-          ? undefined
-          : { model: action.model, effort: action.effort };
-
-      suggestDoor(suggestion, action.prompt, choice);
+      suggestDoor(suggestion, action.prompt, suggestedChoice(action));
 
       return;
     }
@@ -181,7 +166,7 @@ export function ReplyButtonLink({
     writer.update({ kind: DRAFT_PLACE.AGENT, planId: to.taskId, agentId: to.id }, (was) =>
       was.suggestion?.buttonId === buttonId
         ? was
-        : { ...was, text: joinedWords(was.text, action.text), suggestion },
+        : { ...was, text: suggestedWords(was.text, action.text), suggestion },
     );
     openPlace?.({ kind: LINK_DESTINATION.AGENT, planId: to.taskId, agentId: to.id });
   };
