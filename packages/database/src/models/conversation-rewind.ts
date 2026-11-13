@@ -390,6 +390,29 @@ const findLineAfter = SqlSchema.findOneOption({
     ),
 });
 
+/** The first line past a place in the conversation that opened a turn, where one stands: a turn took it, and not under way. */
+const findOpeningLineAfter = SqlSchema.findOneOption({
+  Request: Schema.Struct({ conversationId: Schema.String, seq: Schema.Number }),
+  Result: Schema.Struct({ clientId: Schema.String }),
+  execute: ({ conversationId, seq }) =>
+    Database.use((db) =>
+      db
+        .select({ clientId: messages.clientId })
+        .from(messages)
+        .where(
+          and(
+            eq(messages.conversationId, conversationId),
+            eq(messages.role, MESSAGE_ROLE.USER),
+            gt(messages.seq, seq),
+            isNotNull(messages.turnId),
+            isNull(messages.takenAfterStep),
+          ),
+        )
+        .orderBy(asc(messages.seq))
+        .limit(1),
+    ),
+});
+
 /** Where a cut at the line named starts: its row and the instant the turns it drops were queued from; refused where it stands inside a turn. */
 const cutPoint = (conversationId: string, messageId: string) =>
   Effect.gen(function* () {
@@ -420,7 +443,8 @@ const cutPoint = (conversationId: string, messageId: string) =>
  * Where the harness's session is cut for a cut at a line: before the line
  * where a turn took it; else before the next line a turn opened on, since
  * that turn goes with the cut, as it does past a line said on a call that
- * no turn took; else the line, unheard, for an earlier cut to stand over.
+ * no turn took or a line withdrawn; else the line, unheard, for an earlier
+ * cut to stand over.
  */
 const harnessCut = (
   conversationId: string,
@@ -428,15 +452,13 @@ const harnessCut = (
 ) =>
   Effect.gen(function* () {
     if (line.heard) return { clientId: line.clientId, heard: true };
-    const next = yield* findLineAfter({ conversationId, seq: line.seq });
+    // Note that a line withdrawn or still queued may stand between, so the next opening line is looked for past them.
+    const next = yield* findOpeningLineAfter({ conversationId, seq: line.seq });
 
-    return Option.match(
-      Option.filter(next, (after) => after.turnId !== null && after.takenAfterStep === null),
-      {
-        onNone: () => ({ clientId: line.clientId, heard: false }),
-        onSome: (after) => ({ clientId: after.clientId, heard: true }),
-      },
-    );
+    return Option.match(next, {
+      onNone: () => ({ clientId: line.clientId, heard: false }),
+      onSome: (after) => ({ clientId: after.clientId, heard: true }),
+    });
   });
 
 /** The cut, under the conversation's row lock and with no hand-over under way, answering what it cut or why it could not. */

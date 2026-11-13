@@ -483,14 +483,20 @@ it.layer(getTestDB())("rewinding a coding agent's conversation", (it) => {
           })
           .where(eq(messages.id, smallTalk));
         const second = yield* turnAt(target, 2_000);
-        yield* rowAt(target, 4, MESSAGE_ROLE.USER, second, 2_000);
-        yield* rowAt(target, 5, MESSAGE_ROLE.ASSISTANT, second, 2_001);
+        yield* rowAt(target, 5, MESSAGE_ROLE.USER, second, 2_000);
+        yield* rowAt(target, 6, MESSAGE_ROLE.ASSISTANT, second, 2_001);
 
         const forked = yield* readForkCut(target, answer);
+        // A typed line its hand-over withdrew, standing between the small talk and the next ask.
+        const withdrawn = yield* rowAt(target, 4, MESSAGE_ROLE.USER, null, 1_600);
+        yield* (yield* Database)
+          .update(messages)
+          .set({ withdrawnAt: new Date(1_700) })
+          .where(eq(messages.id, withdrawn));
         yield* rewindConversation(target, smallTalk);
 
-        assert.deepEqual(forked, Result.succeed("client-4"));
-        assert.deepEqual(yield* readNativeRewind(target), Option.some("client-4"));
+        assert.deepEqual(forked, Result.succeed("client-5"));
+        assert.deepEqual(yield* readNativeRewind(target), Option.some("client-5"));
       }),
   );
 
