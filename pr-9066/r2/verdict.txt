@@ -1,0 +1,4 @@
+#9066 round 2, iPhone lane (iPhone 18 Pro, light; #9066 at 8d5cac158). PASS. wrap-pull-request.yaml 0 fails.
+- It reaches from-chip: the agent page's #128 chip opens "Invite a teammate by email #128", Open, Ready to merge, with Squash and merge in copper.
+- On the way: the merge ask (Squash and merge / Cancel), merged (#128 Merged), queued (#126 Queued #2, Remove from queue), the dequeue ask and the dequeued state (Merge when ready), failing (#127 with test ✗ and Changes requested), ⋯ (Copy GitHub link, Open on GitHub, Refresh), and Open on GitHub landing in Safari.
+- The landscape 27.2 iPad lane (light) follows in this round.

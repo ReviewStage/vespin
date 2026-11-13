@@ -1,0 +1,5 @@
+#8977 round 2, iPhone lane (iPhone 18 Pro, light and dark; #8977 at 157f0db50). PASS. wrap-task-relations.yaml 0 fails in both.
+- Mark as blocked by lists every task at once on open (Teammate invitations through Daily digest email, each with its status mark and key), with no empty or loading frame shot.
+- Its title "Mark as blocked by" is in ink (black in light, white in dark), with Cancel in the bar and "Find the task this waits on" at the foot. The sheet's ground is the brand's in both looks.
+- Task relation ▸ (Add sub-task…, Set parent…, Mark as blocked by…, Mark as blocking…) opens from the row's long-press menu and from the task page's ⋯. In dark, the menu rows behind it, Move to workspace among them, read clearly in their dimmed state.
+- The iPad lane follows in this round.

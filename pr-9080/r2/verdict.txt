@@ -1,0 +1,4 @@
+#9080 round 2, iPhone lane (iPhone 18 Pro, light and dark; #9080 at b18b2728d). PASS. wrap-markdown.yaml and wrap-description-comment.yaml 0 fails in both looks.
+- Markdown: headings, bullets, the code block, the table, Links with their chips (Task, Pull request, File, Date), the Checks with their boxes, and the picture, opened full screen with Done, all draw.
+- Description: blocks, the block's long-press Comment, and a new comment on "Goal" with its composer and Send.
+- The iPad lane, which carries #8991's scroll fix, follows in this round.
