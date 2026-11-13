@@ -5643,7 +5643,13 @@ const environmentAsMember = <R>(
     const workspaceId = callerWorkspaceId(caller);
 
     return run(callerUserId(caller), workspaceId).pipe(
-      Effect.map((answer): WireRecord => ({ workspaceId, variables: answer.variables })),
+      // Note that a config's value is left out of every answer, a write's too, so none reaches the model through a tool.
+      Effect.map(
+        (answer): WireRecord => ({
+          workspaceId,
+          variables: answer.variables.map(({ value: _value, ...variable }) => variable),
+        }),
+      ),
       Effect.catch((refusal) =>
         Effect.succeed(agentToolRejected(environmentRefusalWords(refusal, verb))),
       ),

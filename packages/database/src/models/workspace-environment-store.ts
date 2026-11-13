@@ -79,31 +79,35 @@ export interface SetWorkspaceVariable {
   readonly sealed: SealedWorkspaceVariable;
 }
 
-/** What an edit changes: a new name, with the value sealed under it, a new value, and a config turned secret. */
+/** What an edit changes: a new name, a new value, and a config turned secret. */
 export interface WorkspaceVariableEdit {
   /** The new name, where it is renamed. */
   readonly name?: string | undefined;
-  /** The value sealed under the name it ends with, where its value or its name changes. */
+  /** A new value, sealed under the name it ends with. */
   readonly sealed?: SealedWorkspaceVariable | undefined;
+  /**
+   * The value it holds, sealed again under its new name, where it is renamed
+   * and keeps its value: handed the value as the row holds it under the
+   * edit's lock, so no write between a read and the rename is undone, and
+   * answering none where it cannot be opened.
+   */
+  readonly resealed?:
+    | ((stored: SealedWorkspaceVariable) => SealedWorkspaceVariable | undefined)
+    | undefined;
   /** True turns a config into a secret; a secret stays one either way. */
   readonly secret?: true | undefined;
 }
 
-/** How an edit went: done, no such variable, or its new name another's. */
+/** How an edit went: done, no such variable, its new name another's, or a value it keeps that could not be opened. */
 export const WORKSPACE_VARIABLE_EDIT = {
   EDITED: "edited",
   MISSING: "missing",
   NAME_TAKEN: "name-taken",
+  UNREADABLE: "unreadable",
 } as const;
 
 export type WorkspaceVariableEditOutcome =
   (typeof WORKSPACE_VARIABLE_EDIT)[keyof typeof WORKSPACE_VARIABLE_EDIT];
-
-/** One stored variable as an edit reads it: whether it is a secret, and its value sealed. */
-export interface StoredWorkspaceVariable {
-  readonly secret: boolean;
-  readonly sealed: SealedWorkspaceVariable;
-}
 
 const SealedSchema = Schema.Struct({ name: Schema.String, ...SealedFieldsSchema.fields });
 
@@ -160,6 +164,20 @@ const findOne = SqlSchema.findOneOption({
         .select({ secret: variable.secret, ...sealedColumns })
         .from(variable)
         .where(and(eq(variable.organizationId, organizationId), eq(variable.name, name))),
+    ),
+});
+
+/** One variable's sealed value, its row locked until the transaction it is read in ends. */
+const findLocked = SqlSchema.findOneOption({
+  Request: Schema.Struct({ organizationId: Schema.String, name: Schema.String }),
+  Result: SealedFieldsSchema,
+  execute: ({ organizationId, name }) =>
+    Database.use((db) =>
+      db
+        .select(sealedColumns)
+        .from(variable)
+        .where(and(eq(variable.organizationId, organizationId), eq(variable.name, name)))
+        .for("update"),
     ),
 });
 
@@ -267,17 +285,6 @@ export function listWorkspaceVariables(
   );
 }
 
-/** One variable of the workspace as an edit reads it; none where no variable of that name stands. */
-export function readWorkspaceVariable(
-  organizationId: string,
-  name: string,
-): EnvironmentEffect<Option.Option<StoredWorkspaceVariable>> {
-  return Effect.map(
-    findOne({ organizationId, name }),
-    Option.map(({ secret, ...sealed }) => ({ secret, sealed })),
-  );
-}
-
 /**
  * The variables set to their sealed values by one member, all or none,
  * each replacing the value of one of its name. A new variable is a secret
@@ -302,7 +309,12 @@ export function setWorkspaceVariables(
   );
 }
 
-/** One variable edited by one member: renamed, given a new sealed value, or turned secret; refused where it stands not, or where its new name is another's. */
+/**
+ * One variable edited by one member: renamed, given a new value, or turned
+ * secret, its row locked from the read of its value to the write; refused
+ * where it stands not, where its new name is another's, or where a value a
+ * rename keeps cannot be opened.
+ */
 export function editWorkspaceVariable(
   organizationId: string,
   name: string,
@@ -313,6 +325,9 @@ export function editWorkspaceVariable(
   return Effect.flatMap(SqlClient.SqlClient, (client) =>
     client.withTransaction(
       Effect.gen(function* () {
+        const stored = yield* findLocked({ organizationId, name });
+
+        if (Option.isNone(stored)) return WORKSPACE_VARIABLE_EDIT.MISSING;
         const rename = edit.name === undefined || edit.name === name ? undefined : edit.name;
 
         if (rename !== undefined) {
@@ -321,17 +336,15 @@ export function editWorkspaceVariable(
           if (Option.isSome(taken)) return WORKSPACE_VARIABLE_EDIT.NAME_TAKEN;
         }
 
-        const rows = yield* updateRow({
-          organizationId,
-          name,
-          rename,
-          sealed: edit.sealed,
-          secret: edit.secret,
-          by,
-          now,
-        });
+        const sealed = edit.sealed ?? edit.resealed?.(stored.value);
 
-        return rows.length === 0 ? WORKSPACE_VARIABLE_EDIT.MISSING : WORKSPACE_VARIABLE_EDIT.EDITED;
+        if (edit.sealed === undefined && edit.resealed !== undefined && sealed === undefined) {
+          return WORKSPACE_VARIABLE_EDIT.UNREADABLE;
+        }
+
+        yield* updateRow({ organizationId, name, rename, sealed, secret: edit.secret, by, now });
+
+        return WORKSPACE_VARIABLE_EDIT.EDITED;
       }),
     ),
   );

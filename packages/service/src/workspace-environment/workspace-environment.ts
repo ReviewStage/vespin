@@ -17,13 +17,13 @@ import type { DatabaseServices } from "@repo/database/core/query";
 import {
   type KeyRing,
   openWorkspaceVariable,
+  type SealedWorkspaceVariable,
   sealWorkspaceVariable,
 } from "@repo/database/models/provider-key-seal";
 import {
   editWorkspaceVariable as editStoredVariable,
   type ListedWorkspaceVariable,
   listWorkspaceVariables,
-  readWorkspaceVariable,
   removeWorkspaceVariable,
   setWorkspaceVariables,
   WORKSPACE_VARIABLE_EDIT,
@@ -34,7 +34,7 @@ import type {
   WorkspaceVariableEditRequest,
   WorkspaceVariablesSaveRequest,
 } from "@repo/features/workspace-environment-wire";
-import { DateTime, Effect, Option, Redacted, Result, type Types } from "effect";
+import { DateTime, Effect, Redacted, Result, type Types } from "effect";
 import { answeredWorkspace, managedWorkspace } from "../accounts/workspace-access.js";
 import {
   HOSTED_REFUSAL,
@@ -156,9 +156,10 @@ export const saveWorkspaceVariables = Effect.fn("web/saveWorkspaceVariables")(fu
  * One variable edited by an owner or admin: renamed, given a new value, or
  * turned secret. A value is sealed under the name it ends with, so a
  * rename that keeps the value opens it under the old name and seals it
- * again under the new; a value the ring cannot open is refused as
- * unavailable rather than lost. A variable that stands not is not found,
- * and a rename onto one that stands is refused as taken.
+ * again under the new, inside the store's lock on the row; a value the
+ * ring cannot open is refused as unavailable rather than lost. A variable
+ * that stands not is not found, and a rename onto one that stands is
+ * refused as taken.
  */
 export const editWorkspaceVariable = Effect.fn("web/editWorkspaceVariable")(function* (
   ring: KeyRing,
@@ -168,31 +169,25 @@ export const editWorkspaceVariable = Effect.fn("web/editWorkspaceVariable")(func
   const workspace = yield* managedWorkspace(userId, request.workspaceId);
   const organizationId = workspace.id;
 
-  const stored = yield* hostedStoreOrUnavailable(
-    readWorkspaceVariable(organizationId, request.name),
-  );
-
-  if (Option.isNone(stored)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
   const name = request.rename ?? request.name;
-  const renamed = name !== request.name;
-
-  const value =
-    request.value === undefined
-      ? renamed
-        ? Result.getOrUndefined(
-            openWorkspaceVariable(
-              ring,
-              { organizationId, name: request.name },
-              stored.value.sealed,
-            ),
-          )
-        : undefined
-      : Redacted.make(request.value);
-
-  if (renamed && value === undefined) return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
+  const owner = { organizationId, name };
 
   const sealed =
-    value === undefined ? undefined : sealWorkspaceVariable(ring, { organizationId, name }, value);
+    request.value === undefined
+      ? undefined
+      : sealWorkspaceVariable(ring, owner, Redacted.make(request.value));
+
+  // Note that a rename keeping its value opens it as the row holds it under the edit's lock, so a save between a read and the rename is never undone.
+  const resealed =
+    sealed === undefined && name !== request.name
+      ? (stored: SealedWorkspaceVariable) => {
+          const value = openWorkspaceVariable(ring, { organizationId, name: request.name }, stored);
+
+          return Result.isSuccess(value)
+            ? sealWorkspaceVariable(ring, owner, value.success)
+            : undefined;
+        }
+      : undefined;
 
   const now = yield* DateTime.nowAsDate;
 
@@ -200,7 +195,7 @@ export const editWorkspaceVariable = Effect.fn("web/editWorkspaceVariable")(func
     editStoredVariable(
       organizationId,
       request.name,
-      { name, sealed, secret: request.secret },
+      { name, sealed, resealed, secret: request.secret },
       userId,
       now,
     ),
@@ -212,6 +207,10 @@ export const editWorkspaceVariable = Effect.fn("web/editWorkspaceVariable")(func
 
   if (outcome === WORKSPACE_VARIABLE_EDIT.NAME_TAKEN) {
     return yield* Effect.fail(HOSTED_REFUSAL.VARIABLE_NAME_TAKEN);
+  }
+
+  if (outcome === WORKSPACE_VARIABLE_EDIT.UNREADABLE) {
+    return yield* Effect.fail(HOSTED_REFUSAL.UNAVAILABLE);
   }
 
   return yield* environmentAnswer(ring, organizationId);
