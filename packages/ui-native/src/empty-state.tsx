@@ -11,7 +11,7 @@ import {
   tint,
 } from "@expo/ui/swift-ui/modifiers";
 import { Fragment } from "react";
-import { Button } from "./button.js";
+import { BUTTON_LOOK, Button, type ButtonLook } from "./button.js";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { useColors } from "./tokens/colors.js";
 import { TYPE_ROLE } from "./tokens/type.js";
@@ -23,8 +23,10 @@ export type EmptyStateProps = {
   readonly title: string;
   readonly symbol: Glyph;
   readonly description?: string | undefined;
-  /** The one act that fills the screen, such as Sign in. */
-  readonly action?: { readonly label: string; readonly onPress: () => void } | undefined;
+  /** The one act that fills the screen, such as Sign in, filled unless it names a quieter look, as a failure's Try again does. */
+  readonly action?:
+    | { readonly label: string; readonly onPress: () => void; readonly look?: ButtonLook }
+    | undefined;
   /** Whether what the screen shows is still read, which stands the system's spinner over the title in the symbol's place, so a read under way never looks like nothing to show. */
   readonly loading?: boolean | undefined;
 };
@@ -106,7 +108,13 @@ export function EmptyState({
             {description}
           </Text>
         )}
-        {action === undefined ? null : <Button label={action.label} onPress={action.onPress} />}
+        {action === undefined ? null : (
+          <Button
+            label={action.label}
+            onPress={action.onPress}
+            look={action.look ?? BUTTON_LOOK.PROMINENT}
+          />
+        )}
       </VStack>
     </Fragment>
   );

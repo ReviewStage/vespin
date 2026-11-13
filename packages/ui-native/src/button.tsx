@@ -37,7 +37,7 @@ import type { TaskStatus } from "@repo/features/task-wire";
 import { Fragment, type ReactNode } from "react";
 import { type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import type { MenuChoice } from "./list-row.js";
+import { choiceColor, type MenuChoice } from "./list-row.js";
 import { Avatar, type Face, TaskStatusMark, ToneGlyph } from "./marks.js";
 import { type BrandColors, type StatusTone, useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -375,7 +375,7 @@ export function FieldChip(props: FieldChipProps) {
         <Toggle
           // Note that a choice is keyed by its place, since two members may share a name.
           key={at}
-          {...actContent(choice.label, choice.symbol)}
+          {...actContent(choice.label, choice.symbol, undefined, choiceColor(choice, colors))}
           isOn={choice.on}
           onIsOnChange={() => choice.onPress()}
         />

@@ -1196,6 +1196,7 @@ function relationSwipes(
       symbol: GLYPH.RELATIONS,
       choices: TASK_RELATION_ORDER.map((to) => ({
         label: TASK_RELATION_WORDS[to],
+        symbol: RELATION_KIND_SYMBOL[to],
         on: to === kind,
         onPress: () => relations.change(taskId, otherId, kind, to),
       })),

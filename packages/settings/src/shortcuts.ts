@@ -727,7 +727,6 @@ export const APP_SHORTCUTS = {
   [APP_COMMAND.RUN_ACTION]: {
     label: "Run",
     chord: { key: SHORTCUT_KEY.R, option: true },
-    experiment: EXPERIMENT.RUN_ACTIONS,
     capability: HOST_CAPABILITY.DESKTOP_APP,
   },
   [APP_COMMAND.INSERT_PICTURE]: {

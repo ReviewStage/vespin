@@ -203,6 +203,41 @@ if [[ -n "$extensionless_imports" ]]; then
     exit 1
 fi
 
+# A Maestro flow hands each `launchApp` argument to the iOS app as a launch
+# argument, which the app reads as a string from its defaults. Maestro passes
+# a value YAML reads as a boolean as a bare flag with no dash, so
+# `refuseWrites: true` never reached the fixture and a flow chased an app bug
+# that wasn't there (Nov 12). A value YAML reads as a number or null takes the
+# same untyped path. So a flow's argument is a string, quoted wherever YAML
+# would read it as anything else: `refuseWrites: "true"`.
+untyped_flow_arguments=$(awk '
+    FNR == 1 { inside = 0 }
+    /^[[:space:]]*arguments:[[:space:]]*$/ {
+        inside = 1
+        indent = match($0, /[^ ]/)
+        next
+    }
+    inside && /^[[:space:]]*(#.*)?$/ { next }
+    inside {
+        if (match($0, /[^ ]/) <= indent || $0 ~ /^[[:space:]]*-/) {
+            inside = 0
+            next
+        }
+        value = $0
+        sub(/^[^:]*:[[:space:]]*/, "", value)
+        sub(/[[:space:]]+#.*$/, "", value)
+        if (tolower(value) ~ /^(true|false|yes|no|on|off|y|n|null|~|[-+]?[0-9][0-9_]*(\.[0-9]*)?([eE][-+]?[0-9]+)?|0x[0-9a-f]+|[-+]?\.inf|\.nan)$/) {
+            print FILENAME ":" FNR ": " $0
+        }
+    }
+' $(find "$APP_REPO_ROOT/apps/mobile/maestro" -name '*.yaml' | sort) |
+    sed "s#^$APP_REPO_ROOT/##")
+if [[ -n "$untyped_flow_arguments" ]]; then
+    printf 'error: a Maestro flow passes a launchApp argument YAML reads as a boolean, number, or null, which Maestro does not hand to the app as written; quote it as a string:\n%s\n' \
+        "$untyped_flow_arguments" >&2
+    exit 1
+fi
+
 # The web functions are bundled from server/routes/ and server/orpc-route.ts
 # into dist-functions/ and
 # the Build Output tree with every workspace package inlined, so a bare

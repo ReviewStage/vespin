@@ -381,6 +381,7 @@ function agentAddMenu(
               symbol: MODE_SYMBOL[mode.mode],
               choices: mode.modes.map((option) => ({
                 label: option.label,
+                symbol: MODE_SYMBOL[option.id],
                 on: option.id === mode.mode,
                 onPress: () => mode.choose(option.id),
               })),
@@ -999,7 +1000,7 @@ export function AgentConversation({
             </Stack.Toolbar.Menu>
           )}
           <Stack.Toolbar.Menu inline>
-            <Stack.Toolbar.Menu icon="doc.on.doc" title={COPY_TRANSCRIPT_WORDS.COPY}>
+            <Stack.Toolbar.Menu icon={glyphSymbol(GLYPH.COPY)} title={COPY_TRANSCRIPT_WORDS.COPY}>
               <Stack.Toolbar.MenuAction onPress={() => copyTranscript(TRANSCRIPT_COPY.CONCISE)}>
                 {COPY_TRANSCRIPT_WORDS.CONCISE}
               </Stack.Toolbar.MenuAction>

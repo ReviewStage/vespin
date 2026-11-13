@@ -10,13 +10,16 @@ import {
   listFollowedTasks,
   listTaskFollowers,
   setFollowerMachines,
+  TaskFollowerIsAssignee,
+  unfollowTask,
 } from "../task-follower-store.js";
 import { createTask, updateTask } from "../task-store.js";
 
 /**
  * The members following a task, read and written through the store's public
  * functions over a real dialect: following again keeps a follower's switch,
- * and a task's followers are read and written only by a member of its
+ * a member takes another follower away but never the assignee, and a task's
+ * followers are read and written only by a member of its
  * workspace, and only ever name its members.
  *
  * Synthetic accounts, workspaces, and tasks throughout.
@@ -85,6 +88,21 @@ it.layer(getTestDB())("the members following a task", (it) => {
 
         assert.deepEqual(yield* followersOf(dean, taskId), { [dean]: false, [charles]: true });
       }),
+  );
+
+  it.effect("a member takes another follower away, but never the task's assignee", () =>
+    Effect.gen(function* () {
+      const { dean, charles, mallory, taskId } = yield* openWorkspaces;
+      yield* updateTask(dean, taskId, { assigneeId: dean });
+      yield* followTask(dean, { taskId, followerId: charles, machines: true });
+
+      assert.deepEqual(yield* unfollowTask(mallory, taskId, charles), Option.none());
+      const refused = yield* Effect.flip(unfollowTask(charles, taskId, dean));
+      assert.ok(refused instanceof TaskFollowerIsAssignee);
+
+      yield* unfollowTask(dean, taskId, charles);
+      assert.deepEqual(yield* followersOf(dean, taskId), { [dean]: true });
+    }),
   );
 
   it.effect(
