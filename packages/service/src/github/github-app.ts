@@ -81,10 +81,9 @@
  * `GitHubBearer`, the module's client for the identity the token is beside
  * the token itself, so a caller's request is queued, spaced, and held under
  * the identity GitHub counts it against, and fails with the module's
- * `GitHubFailure`, read by its tag. GitHub's OAuth endpoints, the code
- * exchange, the refresh, and the revocation, go through the module's
- * `oauth` under the App's client credentials too, and fail here as this
- * module's `GitHubUnavailable`, the kind alone. The rows are
+ * `GitHubFailure`, read by its tag. Only GitHub's OAuth endpoints, the code
+ * exchange, the refresh, and the revocation, are sent on the ambient
+ * `HttpClient`, and fail with this module's `GitHubUnavailable`. The rows are
  * read on the ambient `SqlClient`, so a test stands a fake at the GitHub
  * boundary and a throwaway database beneath it. A token leaves only as a
  * `Redacted`, and a failure carries a kind and never the request that
@@ -117,12 +116,9 @@ import {
   type RepositoryUnreached,
 } from "@repo/features/repository-reach-wire";
 import {
-  AUTHORIZATION_PART,
-  type AuthorizationPart,
   type CheckedMemberToken,
   checkMemberToken,
   GitHub,
-  type GitHubAnswer,
   type GitHubClient,
   type GitHubFailure,
   type GitHubHoldStore,
@@ -165,7 +161,9 @@ import {
   Schema,
   type Scope,
 } from "effect";
-import type * as HttpClient from "effect/http/HttpClient";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import * as HttpClientResponse from "effect/http/HttpClientResponse";
 import { SqlClient, SqlSchema } from "effect/sql";
 import { AUTH_SECRET_ENVIRONMENT, GITHUB_APP_ENVIRONMENT } from "../auth/auth-deployment.js";
 import { type GitHubRepository, text } from "../core.js";
@@ -177,12 +175,20 @@ import {
 } from "./github-installations.js";
 import { memberTokensOver } from "./github-token.js";
 
+const GITHUB_API = "https://api.github.com";
+const GITHUB_TOKEN_ENDPOINT = "https://github.com/login/oauth/access_token";
 const GITHUB_AUTHORIZE_ENDPOINT = "https://github.com/login/oauth/authorize";
 const GITHUB_APPS = "https://github.com/apps";
 const GITHUB_WEB = "https://github.com";
 
 /** The client this service names itself to GitHub as. */
 export const GITHUB_USER_AGENT = `${PRODUCT_NAME.toLowerCase()}-github-app`;
+
+const GITHUB_HEADERS = {
+  accept: "application/vnd.github+json",
+  "x-github-api-version": "2022-11-28",
+  "user-agent": GITHUB_USER_AGENT,
+} as const;
 
 /** Better Auth's id for the GitHub social provider, which is the `provider_id` of the account row. */
 export const GITHUB_PROVIDER_ID = "github";
@@ -205,6 +211,8 @@ const APP_JWT = {
  * mid-flight.
  */
 export const USER_TOKEN_REFRESH_MARGIN_MS = 60_000;
+
+const GRANT_TYPE = { REFRESH_TOKEN: "refresh_token" } as const;
 
 /** An account row's id as Better Auth makes one: 32 letters and digits. */
 const ACCOUNT_ID_LENGTH = 32;
@@ -311,6 +319,16 @@ export interface GitHubBearer {
   readonly token: Redacted.Redacted;
 }
 
+/**
+ * What GitHub revokes of a user's authorization of the App, as the path of
+ * its endpoint names it
+ * (https://docs.github.com/en/rest/apps/oauth-applications): one access
+ * token, or the whole grant with every token the App holds for the user.
+ */
+const USER_AUTHORIZATION_PART = { TOKEN: "token", GRANT: "grant" } as const;
+
+type UserAuthorizationPart = (typeof USER_AUTHORIZATION_PART)[keyof typeof USER_AUTHORIZATION_PART];
+
 /** The domain of the address GitHub links to an account while keeping the account's own private. */
 const GITHUB_NOREPLY_DOMAIN = "users.noreply.github.com";
 
@@ -406,9 +424,9 @@ type GitHubOAuthFailure = (typeof GITHUB_FAILURE)[keyof typeof GITHUB_FAILURE];
 
 /**
  * GitHub's OAuth endpoints, the code exchange, the refresh, and the
- * revocation, not answering as asked: what `@repo/github`'s `oauth` failed
- * with, or answered off its schema, read as its kind alone, since the
- * request carried the App's client secret.
+ * revocation, not answering as asked: the one failure of GitHub this module
+ * makes itself, since every request to the API fails with `@repo/github`'s
+ * `GitHubFailure`.
  */
 export class GitHubUnavailable extends Data.TaggedError("GitHubUnavailable")<{
   readonly reason: GitHubOAuthFailure;
@@ -1239,23 +1257,28 @@ export function repositoryParts(fullName: string): RepositoryParts {
 
 /** An OAuth endpoint's answer, read whole under its schema; any failure the kind alone, since the request carries a secret. */
 function oauthAnswer<A>(
-  answer: Effect.Effect<GitHubAnswer, GitHubFailure>,
-  schema: Schema.Decoder<A>,
-): Effect.Effect<A, GitHubUnavailable> {
-  return answer.pipe(
-    Effect.mapError(() => new GitHubUnavailable({ reason: GITHUB_FAILURE.TRANSPORT })),
-    Effect.flatMap((answered) =>
-      Effect.mapError(
-        Schema.decodeUnknownEffect(schema)(answered.data),
-        () => new GitHubUnavailable({ reason: GITHUB_FAILURE.UNREADABLE }),
+  request: HttpClientRequest.HttpClientRequest,
+  schema: Schema.Codec<A, unknown>,
+): Effect.Effect<A, GitHubUnavailable, HttpClient.HttpClient> {
+  return Effect.scoped(
+    Effect.flatMap(HttpClient.HttpClient, (client) =>
+      client.execute(request).pipe(
+        Effect.flatMap(HttpClientResponse.filterStatusOk),
+        Effect.mapError(() => new GitHubUnavailable({ reason: GITHUB_FAILURE.TRANSPORT })),
+        Effect.flatMap((ok) =>
+          Effect.mapError(
+            HttpClientResponse.schemaBodyJson(schema)(ok),
+            () => new GitHubUnavailable({ reason: GITHUB_FAILURE.UNREADABLE }),
+          ),
+        ),
       ),
     ),
   );
 }
 
-/** The App's OAuth endpoints, on `@repo/github` under the App's client credentials. */
-function oauthOf(settings: ReadySettings, module: GitHub["Service"]) {
-  return module.oauth({ clientId: settings.clientId, clientSecret: settings.clientSecret });
+/** An answer of GitHub's, as far as its body: what `@repo/github` hands back, or a listing's items gathered. */
+interface GitHubAnswer {
+  readonly data: unknown;
 }
 
 /** What GitHub answered, read under its schema; an answer off the schema is unreadable. */
@@ -1379,13 +1402,23 @@ function seal(token: string, secret: Redacted.Redacted): Effect.Effect<string> {
  */
 const refreshTokens = /* @__PURE__ */ Effect.fn("web/githubRefreshTokens")(function* (
   settings: ReadySettings,
-  module: GitHub["Service"],
-  refreshToken: Redacted.Redacted<string>,
-): Effect.fn.Return<typeof RefreshedTokensSchema.Type, GitHubUnavailable | GitHubSignInRequired> {
-  const answer = yield* oauthAnswer(
-    oauthOf(settings, module).refreshToken(refreshToken),
-    RefreshAnswerSchema,
+  refreshToken: Redacted.Redacted,
+): Effect.fn.Return<
+  typeof RefreshedTokensSchema.Type,
+  GitHubUnavailable | GitHubSignInRequired,
+  HttpClient.HttpClient
+> {
+  const request = HttpClientRequest.post(GITHUB_TOKEN_ENDPOINT).pipe(
+    HttpClientRequest.acceptJson,
+    HttpClientRequest.bodyUrlParams({
+      client_id: settings.clientId,
+      client_secret: Redacted.value(settings.clientSecret),
+      grant_type: GRANT_TYPE.REFRESH_TOKEN,
+      refresh_token: Redacted.value(refreshToken),
+    }),
   );
+
+  const answer = yield* oauthAnswer(request, RefreshAnswerSchema);
 
   if ("error" in answer) {
     return yield* new GitHubSignInRequired({ reason: SIGN_IN_REQUIRED.REFRESH_REFUSED });
@@ -1400,12 +1433,11 @@ const refreshTokens = /* @__PURE__ */ Effect.fn("web/githubRefreshTokens")(funct
  */
 const tokenOfRow = /* @__PURE__ */ Effect.fn("web/githubTokenOfRow")(function* (
   settings: ReadySettings,
-  module: GitHub["Service"],
   row: AccountTokenRow,
 ): Effect.fn.Return<
   Redacted.Redacted,
   GitHubUnavailable | GitHubSignInRequired | StoreFailure,
-  DatabaseServices
+  HttpClient.HttpClient | DatabaseServices
 > {
   // A row without an access token is one whose authorization was revoked.
   if (row.accessToken === null) {
@@ -1428,7 +1460,7 @@ const tokenOfRow = /* @__PURE__ */ Effect.fn("web/githubTokenOfRow")(function* (
   }
 
   const refreshToken = yield* unseal(row.refreshToken, settings.sessionSecret);
-  const fresh = yield* refreshTokens(settings, module, refreshToken);
+  const fresh = yield* refreshTokens(settings, refreshToken);
   const written = yield* Clock.currentTimeMillis;
   yield* writeSealedTokens({
     id: row.id,
@@ -1575,7 +1607,6 @@ function githubAppServiceOver(
   const userToken = (userId: string) =>
     Effect.gen(function* () {
       const app = yield* ready;
-      const module = yield* githubModule;
       const client = yield* SqlClient.SqlClient;
 
       const token = yield* client.withTransaction(
@@ -1586,7 +1617,7 @@ function githubAppServiceOver(
             return yield* new GitHubSignInRequired({ reason: SIGN_IN_REQUIRED.NO_GITHUB_ACCOUNT });
           }
 
-          return yield* tokenOfRow(app, module, row.value);
+          return yield* tokenOfRow(app, row.value);
         }),
       );
 
@@ -1949,16 +1980,18 @@ function githubAppServiceOver(
    */
   const exchangeCode = (app: ReadySettings, returned: GitHubAuthorizeReturn) =>
     Effect.gen(function* () {
-      const module = yield* githubModule;
-
-      const answer = yield* oauthAnswer(
-        oauthOf(app, module).exchangeCode({
+      const request = HttpClientRequest.post(GITHUB_TOKEN_ENDPOINT).pipe(
+        HttpClientRequest.acceptJson,
+        HttpClientRequest.bodyUrlParams({
+          client_id: app.clientId,
+          client_secret: Redacted.value(app.clientSecret),
           code: returned.code,
-          redirectUrl: returned.redirectUri,
-          codeVerifier: returned.codeVerifier,
+          redirect_uri: returned.redirectUri,
+          code_verifier: returned.codeVerifier,
         }),
-        ExchangeAnswerSchema,
       );
+
+      const answer = yield* oauthAnswer(request, ExchangeAnswerSchema);
 
       return "error" in answer ? Option.none() : Option.some(answer);
     });
@@ -1966,13 +1999,25 @@ function githubAppServiceOver(
   /** The user access token alone, or the whole authorization it names, revoked under the App's client credentials. */
   const revokeAuthorization = (
     app: ReadySettings,
-    token: Redacted.Redacted<string>,
-    revoked: AuthorizationPart,
+    token: Redacted.Redacted,
+    revoked: UserAuthorizationPart,
   ) =>
-    Effect.flatMap(githubModule, (module) =>
-      oauthOf(app, module)
-        .revoke(token, revoked)
-        .pipe(Effect.mapError(() => new GitHubUnavailable({ reason: GITHUB_FAILURE.TRANSPORT }))),
+    Effect.scoped(
+      Effect.flatMap(HttpClient.HttpClient, (client) =>
+        client
+          .execute(
+            HttpClientRequest.delete(`${GITHUB_API}/applications/${app.clientId}/${revoked}`).pipe(
+              HttpClientRequest.basicAuth(app.clientId, Redacted.value(app.clientSecret)),
+              HttpClientRequest.setHeaders(GITHUB_HEADERS),
+              HttpClientRequest.bodyJsonUnsafe({ access_token: Redacted.value(token) }),
+            ),
+          )
+          .pipe(
+            Effect.flatMap(HttpClientResponse.filterStatusOk),
+            Effect.mapError(() => new GitHubUnavailable({ reason: GITHUB_FAILURE.TRANSPORT })),
+            Effect.asVoid,
+          ),
+      ),
     );
 
   /**
@@ -2185,7 +2230,7 @@ function githubAppServiceOver(
               ? yield* keepInstallerTokens(app, installerBearer.client, installer.value, tokens)
               : false;
 
-          if (!kept) yield* revokeAuthorization(app, token, AUTHORIZATION_PART.TOKEN);
+          if (!kept) yield* revokeAuthorization(app, token, USER_AUTHORIZATION_PART.TOKEN);
 
           return Option.some(installations);
         }),
@@ -2346,7 +2391,9 @@ function githubAppServiceOver(
         Effect.map(githubRead(bearer.client.request("GET /user"), UserSchema), userOf),
       userToken,
       revokeUserGrant: (token) =>
-        Effect.flatMap(ready, (app) => revokeAuthorization(app, token, AUTHORIZATION_PART.GRANT)),
+        Effect.flatMap(ready, (app) =>
+          revokeAuthorization(app, token, USER_AUTHORIZATION_PART.GRANT),
+        ),
     };
 
     return service;

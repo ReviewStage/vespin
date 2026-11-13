@@ -450,15 +450,6 @@ export function openGitHubToken(
   return token === undefined ? Result.fail(PROVIDER_KEY_UNREADABLE) : Result.succeed(token);
 }
 
-/** Whether the GitHub token a row seals opens for this member, the token itself left sealed: what Settings shows of it. */
-export function githubTokenOpens(
-  ring: KeyRing,
-  userId: string,
-  sealed: SealedGitHubToken,
-): boolean {
-  return Result.isSuccess(openGitHubToken(ring, userId, sealed));
-}
-
 /** The row's data key wrapped again under the ring's current version, the token's seal untouched; unreadable where its wrap does not open. */
 export function rewrapGitHubToken(
   ring: KeyRing,
