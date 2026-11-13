@@ -38,6 +38,7 @@ import { TASK_STATUS_WORDS } from "@repo/features/task-standing-words";
 import type { TaskStatus } from "@repo/features/task-wire";
 import type { ReactElement, ReactNode } from "react";
 import { View } from "react-native";
+import { useAccessibilitySize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { PULL_REQUEST_LOOK } from "./inbox-line-model.js";
 import { dropLink } from "./interactions.js";
@@ -116,8 +117,27 @@ function LeadGlyph({
   return <Image {...glyphImage(symbol)} color={ink} modifiers={[font({ textStyle })]} />;
 }
 
-/** A row's 13 pt line under its title, set in to the title's words. */
+/**
+ * A row's 13 pt line under its title, set in to the title's words: its facts
+ * side by side, or at the accessibility sizes one under another, as Settings
+ * and Mail stack a row's details, since side by side each fact broke
+ * mid-word ("Work / ing", "#1 / 28").
+ */
 function RowLine({ children }: { readonly children: ReactNode }) {
+  const stacked = useAccessibilitySize();
+
+  if (stacked) {
+    return (
+      <VStack
+        alignment="leading"
+        spacing={2}
+        modifiers={[padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING })]}
+      >
+        {children}
+      </VStack>
+    );
+  }
+
   return (
     <HStack
       spacing={SPACE.TIGHT + 1}
@@ -278,6 +298,8 @@ export function AgentRow(props: AgentRowProps) {
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
+  // Note that the facts stand one to a line at the accessibility sizes (`RowLine`), where the needs-you count leads its own line with no separator.
+  const stacked = useAccessibilitySize();
 
   const row: ReactElement = (
     <VStack alignment="leading" spacing={2}>
@@ -300,7 +322,7 @@ export function AgentRow(props: AgentRowProps) {
                 foregroundStyle(colors.ACCENT_TEXT),
               ]}
             >
-              {`${told ? LINE_PART : ""}${needsYouWords(waiting)}`}
+              {`${told && !stacked ? LINE_PART : ""}${needsYouWords(waiting)}`}
             </Text>
           )}
         </RowLine>
