@@ -75,12 +75,13 @@ function drawn(item: CallItem): string {
   return item.folded ? `${item.message.id} folded` : item.message.id;
 }
 
-/** The rows as the tab draws them: placed (`placedMessages`), then with the calls among them. */
-function drawing(script: Script): readonly string[] {
+/** The rows as the tab draws them: placed (`placedMessages`), then with the calls among them, those `standing` still under way. */
+function drawing(script: Script, standing: readonly string[]): readonly string[] {
   const placed = placedMessages(script);
   const arrived = new Map(placed.map((row) => [row.message.id, row.arrived]));
+  const calls = standing.map((callId) => ({ callId, callerId: "ada", startedAt: 0 }));
 
-  return callItemsOf(placed).map((item) => {
+  return callItemsOf(placed, calls).map((item) => {
     const lines = item.kind === CALL_ITEM.ROW ? (arrived.get(item.message.id) ?? []) : [];
 
     return lines.length === 0
@@ -89,7 +90,12 @@ function drawing(script: Script): readonly string[] {
   });
 }
 
-test.each<{ readonly case: string; readonly script: Script; readonly drawn: readonly string[] }>([
+test.each<{
+  readonly case: string;
+  readonly script: Script;
+  readonly standing?: readonly string[];
+  readonly drawn: readonly string[];
+}>([
   {
     case: "a plain exchange: the ask handed on, the turn, and the voice retelling it, the turn folded",
     script: [caller("ask", true), voice("ack"), turn("work"), voice("retell")],
@@ -239,6 +245,18 @@ test.each<{ readonly case: string; readonly script: Script; readonly drawn: read
       "end call-2",
     ],
   },
-])("$case", ({ script, drawn: expected }) => {
-  assert.deepEqual(drawing(script), expected);
+  {
+    case: "a call just opened, before anyone speaks: its start after every row, and no end",
+    script: [typed("typed"), turn("work")],
+    standing: ["call-1"],
+    drawn: ["typed", "work", "start call-1"],
+  },
+  {
+    case: "a call still standing once spoken on: its start before its first line, and no end",
+    script: [typed("typed"), turn("work"), caller("hello"), voice("hi")],
+    standing: ["call-1"],
+    drawn: ["typed", "work", "start call-1", "hello", "hi"],
+  },
+])("$case", ({ script, standing = [], drawn: expected }) => {
+  assert.deepEqual(drawing(script, standing), expected);
 });

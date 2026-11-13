@@ -17,9 +17,7 @@ import {
 import { GITHUB_TOKEN_STATUS } from "@repo/features/github-token-wire";
 import { REPOSITORY_UNREACHED } from "@repo/features/repository-reach-wire";
 import { generateCodeChallenge } from "better-auth/oauth2";
-import { Clock, Duration, Effect, Fiber, Layer, Option, Predicate, Redacted, Result } from "effect";
-import * as HttpClient from "effect/http/HttpClient";
-import * as HttpClientRequest from "effect/http/HttpClientRequest";
+import { Clock, Effect, Layer, Option, Predicate, Redacted, Result } from "effect";
 import { TestClock } from "effect/testing";
 import { afterEach, beforeEach, vi } from "vitest";
 import { AUTH_SECRET_ENVIRONMENT, GITHUB_APP_ENVIRONMENT } from "../auth/auth-deployment.js";
@@ -50,7 +48,6 @@ import {
   mendInstallationStatus,
   setInstallationStatus,
 } from "./github-installations.js";
-import { GitHubBackground, githubRateGate } from "./github-rate-gate.js";
 
 /**
  * Our GitHub App's server client with GitHub a fake behind the
@@ -132,7 +129,7 @@ it.effect(
       const [read] = fake.sent;
       assert.ok(read);
       assert.equal(read.url, `https://api.github.com/app/installations/${INSTALLATION_ID}`);
-      assert.equal(read.headers.get("accept"), "application/vnd.github+json");
+      assert.equal(read.headers.get("accept"), "application/vnd.github.v3+json");
       assert.equal(read.headers.get("x-github-api-version"), "2022-11-28");
       assert.ok(read.headers.get("user-agent"));
       const bearer = read.headers.get("authorization") ?? "";
@@ -233,8 +230,11 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         assert.ok(Option.isSome(minted));
         assert.equal(minted.value.repository.fullName, "octo-org/relay");
         assert.equal(minted.value.repository.defaultBranch, "trunk");
-        assert.equal(Redacted.value(minted.value.token), GITHUB_FIXTURE_INSTALLATION_TOKEN);
-        assert.equal(String(minted.value.token).includes(GITHUB_FIXTURE_INSTALLATION_TOKEN), false);
+        assert.equal(Redacted.value(minted.value.bearer.token), GITHUB_FIXTURE_INSTALLATION_TOKEN);
+        assert.equal(
+          String(minted.value.bearer.token).includes(GITHUB_FIXTURE_INSTALLATION_TOKEN),
+          false,
+        );
         assert.ok(Option.isNone(missing));
         assert.ok(Option.isNone(elsewhere));
 
@@ -259,7 +259,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
       }).pipe(Effect.provide(overNoGitHub(fixtureGitHubApp(GITHUB_APP_SETTINGS)))),
   );
 
-  it.effect("a mint GitHub refuses is unavailable by status, never a token", () =>
+  it.effect("a mint GitHub refuses fails as its refusal, never a token", () =>
     Effect.gen(function* () {
       const relay = relayInstallation(6);
 
@@ -278,8 +278,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         .repositoryReadToken(workspace, "octo-org/relay", undefined)
         .pipe(Effect.provide(refusing.layer), Effect.flip);
 
-      assert.ok(Predicate.isTagged(failure, "GitHubUnavailable"));
-      assert.equal(failure.status, 403);
+      assert.ok(Predicate.isTagged(failure, "GitHubForbidden"));
     }).pipe(Effect.provide(overNoGitHub(fixtureGitHubApp(GITHUB_APP_SETTINGS)))),
   );
 
@@ -807,7 +806,7 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         );
 
         assert.ok(Option.isSome(first) && Option.isSome(again) && Option.isSome(read));
-        assert.equal(Redacted.value(again.value.token), GITHUB_FIXTURE_INSTALLATION_TOKEN);
+        assert.equal(Redacted.value(again.value.bearer.token), GITHUB_FIXTURE_INSTALLATION_TOKEN);
         assert.ok(Option.isNone(elsewhere));
         assert.deepEqual(repositoryMints(fake.sent), [
           { contents: "read", pull_requests: "read" },
@@ -928,67 +927,6 @@ it.layer(getTestDB())("a workspace's repositories through its installation", (it
         assert.equal(repositoryMints(fake.sent).length, 4);
       }).pipe(Effect.provide(overNoGitHub(fixtureGitHubApp(GITHUB_APP_SETTINGS)))),
   );
-
-  it.effect(
-    "a member's token is minted while background work holds the background lane, though a background ask reached the repository first",
-    () =>
-      Effect.gen(function* () {
-        const relay = relayInstallation(214);
-        const busyOut = Promise.withResolvers<void>();
-        const busyAnswered = Promise.withResolvers<void>();
-
-        // The one background request that holds the background lane until the member's token is in hand.
-        const fake = githubReaching([relay], undefined, {}, async (sent) => {
-          if (!sent.url.endsWith("/pulls/1")) return undefined;
-          busyOut.resolve();
-          await busyAnswered.promise;
-
-          return Response.json({});
-        });
-
-        const gated = Layer.provide(Layer.fresh(githubRateGate), fake.layer);
-        const workspace = yield* openWorkspace(yield* openGithubUser());
-        yield* connectWorkspaceGitHub(workspace, relay);
-        const app = yield* GitHubApp.pipe(Effect.provide(fake.layer));
-        const inBackground = Effect.provideService(GitHubBackground, true);
-
-        const minted = yield* Effect.gen(function* () {
-          const client = yield* HttpClient.HttpClient;
-
-          const busy = yield* client
-            .execute(
-              HttpClientRequest.get("https://api.github.com/repos/octo-org/relay/pulls/1").pipe(
-                HttpClientRequest.bearerToken(GITHUB_FIXTURE_INSTALLATION_TOKEN),
-              ),
-            )
-            .pipe(inBackground, Effect.forkChild);
-
-          yield* Effect.promise(() => busyOut.promise);
-
-          yield* app
-            .repositoryReadToken(workspace, "octo-org/relay", undefined)
-            .pipe(inBackground, Effect.forkChild);
-
-          // Note that the background ask is let reach the repository's kept reach before the member asks.
-          for (let turn = 0; turn < 20; turn += 1) yield* Effect.yieldNow;
-
-          // Note that the clock is moved on so the gate's second between mints passes; the busy request waits on no clock.
-          const ticking = yield* Effect.forkChild(
-            Effect.forever(Effect.andThen(TestClock.adjust(Duration.seconds(1)), Effect.yieldNow)),
-          );
-
-          // Note that this never settles while the reach waits behind the busy request, so the case fails on its timeout.
-          const token = yield* app.repositoryWriteToken(workspace, "octo-org/relay", undefined);
-          yield* Fiber.interrupt(ticking);
-          busyAnswered.resolve();
-          yield* Fiber.join(busy);
-
-          return token;
-        }).pipe(Effect.provide(gated));
-
-        assert.ok(Option.isSome(minted));
-      }).pipe(Effect.provide(overNoGitHub(fixtureGitHubApp(GITHUB_APP_SETTINGS)))),
-  );
 });
 
 /** A repository the member's own token reads, and whether it may push there. */
@@ -1056,7 +994,7 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
 
         assert.equal(Result.getOrUndefined(reach)?.access, GITHUB_ACCESS.APP);
         assert.ok(Option.isSome(write));
-        assert.equal(Redacted.value(write.value.token), GITHUB_FIXTURE_INSTALLATION_TOKEN);
+        assert.equal(Redacted.value(write.value.bearer.token), GITHUB_FIXTURE_INSTALLATION_TOKEN);
         assert.deepEqual(write.value.access, { kind: GITHUB_ACCESS.APP });
         assert.equal(askedOnToken(fake.sent), false);
       }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
@@ -1094,7 +1032,7 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
           Result.succeed([GITHUB_ACCESS.TOKEN, "octo-member/side"]),
         );
         assert.ok(Option.isSome(write));
-        assert.equal(Redacted.value(write.value.token), GITHUB_FIXTURE_MEMBER.TOKEN);
+        assert.equal(Redacted.value(write.value.bearer.token), GITHUB_FIXTURE_MEMBER.TOKEN);
 
         const { kind, githubLogin, githubUserId } =
           write.value.access.kind === GITHUB_ACCESS.TOKEN
@@ -1115,7 +1053,7 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
         assert.equal(reason(noToken), REPOSITORY_UNREACHED.NOT_CONNECTED);
         const read = fake.sent.find((one) => one.url.endsWith("/repos/Octo-Member/Side"));
         assert.ok(read);
-        assert.equal(read.headers.get("accept"), "application/vnd.github+json");
+        assert.equal(read.headers.get("accept"), "application/vnd.github.v3+json");
         assert.equal(read.headers.get("x-github-api-version"), "2022-11-28");
       }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
@@ -1177,7 +1115,7 @@ it.layer(getTestDB())("a repository on a member's own token", (it) => {
         assert.ok(Option.isSome(before) && Option.isSome(after));
         assert.equal(before.value.access.kind, GITHUB_ACCESS.TOKEN);
         assert.deepEqual(after.value.access, { kind: GITHUB_ACCESS.APP });
-        assert.equal(Redacted.value(after.value.token), GITHUB_FIXTURE_INSTALLATION_TOKEN);
+        assert.equal(Redacted.value(after.value.bearer.token), GITHUB_FIXTURE_INSTALLATION_TOKEN);
       }).pipe(Effect.provide(overNoGitHub(GITHUB_APP_WITH_TOKENS))),
   );
 

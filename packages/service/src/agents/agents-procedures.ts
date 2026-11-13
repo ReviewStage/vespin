@@ -45,6 +45,7 @@ import {
   listWorkspaceAgentLines,
   nativeRouteOfReached,
   readVisibleAgentWorkspace,
+  updateAgentTargetDevice,
 } from "@repo/database/models/agent-store";
 import { devicesNamed } from "@repo/database/models/device-store";
 import { readTaskWorkspace } from "@repo/database/models/task-store";
@@ -61,10 +62,11 @@ import {
 } from "@repo/features/agent-wire";
 import { AGENT_START_STATUS } from "@repo/features/contract";
 import type { Sandbox } from "@repo/sandbox";
-import { Clock, Effect, type Layer, Option, type Redacted, Result } from "effect";
+import { Clock, Effect, type Layer, Option, Result } from "effect";
 import type { HttpClient } from "effect/http";
 import { HostedEnvironment } from "../environment.js";
 import { recordServerEventIn, SERVER_AGENT_TOOL, SERVER_EVENT } from "../events/server-events.js";
+import type { GitHubBearer } from "../github/github-app.js";
 import { changesPeople, namedReviewOptions } from "../github/github-people.js";
 import {
   pullRequestByNumber,
@@ -90,7 +92,7 @@ import {
   rewoundAgentById,
   warmedAgent,
 } from "./agent-lifecycle.js";
-import { controlsAgent, reachedAgentById } from "./agent-reach.js";
+import { admitsPlanWriter, controlsAgent, reachedAgentById } from "./agent-reach.js";
 import {
   askedPullRequest,
   githubReadRefusal,
@@ -137,7 +139,7 @@ import {
   shellRefusal,
 } from "./terminal/sandbox-reach.js";
 import { listedPage } from "./workspace-agents.js";
-import { runOnMacStanding } from "./workspace-tools.js";
+import { defaultMachineChoices, runOnMacStanding } from "./workspace-tools.js";
 
 export interface AgentsProcedureSeams extends PublishedReach, SandboxDeleteReach {
   resolveUserId: UserIdResolver;
@@ -218,7 +220,7 @@ const reachedSession = (userId: string, id: string) =>
  * its repository (`github/repository-pull-request.ts`).
  */
 export const pullRequestChangesRead = (
-  token: Redacted.Redacted,
+  bearer: GitHubBearer,
   subject: PullRequestSubject,
   pullRequest: AgentPullRequest,
 ) =>
@@ -226,17 +228,17 @@ export const pullRequestChangesRead = (
     // Note that the pull request itself is read beside its files for its head and base, which its changed files are read whole at; a read that does not land names neither.
     const [files, people, whole] = yield* Effect.all(
       [
-        pullRequestFiles(token, subject.repository, pullRequest),
-        changesPeople(token, subject, pullRequest.number),
+        pullRequestFiles(bearer, subject.repository, pullRequest),
+        changesPeople(bearer, subject, pullRequest.number),
         Effect.orElseSucceed(
-          pullRequestByNumber(token, subject.repository, pullRequest.number),
+          pullRequestByNumber(bearer, subject.repository, pullRequest.number),
           () => Option.none(),
         ),
       ],
       { concurrency: "unbounded" },
     );
 
-    const commits = yield* readCommits(token, subject.repository, whole, files.files);
+    const commits = yield* readCommits(bearer, subject.repository, whole, files.files);
 
     return {
       url: pullRequest.url,
@@ -264,9 +266,9 @@ export const agentChangesOf = (
 
     const changes = yield* githubReadRefusal(
       Effect.gen(function* () {
-        const { token } = yield* agentPullRequestReach(userId, agent);
+        const { bearer } = yield* agentPullRequestReach(userId, agent);
 
-        return yield* pullRequestChangesRead(token, agent, pullRequest);
+        return yield* pullRequestChangesRead(bearer, agent, pullRequest);
       }),
     );
 
@@ -306,7 +308,7 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     },
   });
 
-  // Whose Mac the agent's `run_on_mac` runs on, and whether it would run there now.
+  // Whose Mac the agent's `run_on_mac` runs on, whether it would run there now, and the machines its default may be set to.
   const workspaceToolsOf = (userId: string, agentId: string) =>
     Effect.gen(function* () {
       const { agent, target } = yield* reachedAgentById(userId, agentId);
@@ -316,7 +318,9 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
       if (Option.isNone(visible)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
       const runOnMac = yield* hostedStoreOrUnavailable(runOnMacStanding(agent, target));
 
-      return runOnMac === undefined ? {} : { runOnMac };
+      if (runOnMac === undefined) return {};
+
+      return { runOnMac, machines: yield* hostedStoreOrUnavailable(defaultMachineChoices(target)) };
     });
 
   return {
@@ -669,11 +673,11 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
 
       return yield* githubReadRefusal(
         Effect.gen(function* () {
-          const { token } = yield* agentPullRequestReach(userId, agent);
+          const { bearer } = yield* agentPullRequestReach(userId, agent);
 
           return yield* namedReviewOptions(
             agent,
-            yield* pullRequestReviewOptions(token, agent.repository),
+            yield* pullRequestReviewOptions(bearer, agent.repository),
           );
         }),
       );
@@ -681,6 +685,29 @@ export function agentsProcedures(seams: AgentsProcedureSeams) {
     /** Which of our own tools the agent is offered, and whether its `run_on_mac` would run now. */
     workspaceTools: signedIn.workspaceTools.effect(function* ({ input, context }) {
       return yield* workspaceToolsOf(context.userId, input.id);
+    }),
+    /**
+     * The agent's default machine set, where its terminal commands and
+     * computer use go when a call names none, by a member who may message it,
+     * and only to a machine of someone who lets the task's agents use theirs
+     * (`defaultMachineChoices`), online or not; answering its tools as they
+     * then stand.
+     */
+    setDefaultMachine: signedIn.setDefaultMachine.effect(function* ({ input, context }) {
+      const { userId, agent, target } = yield* reachedAgentById(context.userId, input.params.id);
+
+      if (!controlsAgent(userId, agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+      yield* admitsPlanWriter(userId, agent);
+      const { machineId } = input.body;
+      const choices = yield* hostedStoreOrUnavailable(defaultMachineChoices(target));
+
+      if (!choices.some((machine) => machine.id === machineId)) {
+        return yield* Effect.fail(HOSTED_REFUSAL.NOT_PERMITTED);
+      }
+
+      yield* hostedStoreOrUnavailable(updateAgentTargetDevice(userId, agent.id, machineId));
+
+      return yield* workspaceToolsOf(userId, agent.id);
     }),
     /** The agent's sandbox resumed from its snapshot (`agent-lifecycle.ts`), the developer's click and nothing else, answering where it stands after. */
     sandboxResume: signedIn.sandboxResume.effect(function* ({ input, context }) {

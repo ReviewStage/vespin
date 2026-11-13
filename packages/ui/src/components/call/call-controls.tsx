@@ -1,5 +1,5 @@
 /**
- * call-controls.tsx -- a call's controls: Talk, which starts one; its two mutes; the one red End call; the status a message box's foot shows while a call stands; the composer's row of them; and the bar that lays the mutes and End call out beside the call's status.
+ * call-controls.tsx -- a call's controls: Talk, which starts one; its two mutes; Stop, while the agent works; the one red End call; the status a message box's foot shows while a call stands; the composer's row of them; and the bar that lays the mutes and End call out beside the call's status.
  *
  * Every place a call is steered from draws these, so a mute and the way to
  * hang up wear the same words, glyphs, and colors wherever they stand. Each
@@ -8,8 +8,10 @@
  * voice are the owner's. End call is the one red control, on the danger fill
  * with the hang-up glyph (`GLYPH.END_CALL`), because ending a call cannot be
  * undone; a mute is quiet while off and lit in neutral gray while on, its
- * glyph struck through, since muting is no failure. A live call wears the
- * working blue. No mute names a chord, since the app has no chord for one.
+ * glyph struck through, since muting is no failure. Stop, which stops the
+ * agent's turn and leaves the call up, is quiet, wearing Stop's glyph as the
+ * composer's Stop does. A live call wears the working blue. No mute names a
+ * chord, since the app has no chord for one.
  */
 
 import { PRODUCT_NAME } from "@repo/features/product-name";
@@ -56,6 +58,7 @@ export const CALL_CONTROL_LABEL = {
   UNMUTE_MICROPHONE: "Unmute microphone",
   MUTE_SPEAKER: "Mute speaker",
   UNMUTE_SPEAKER: "Unmute speaker",
+  STOP_AGENT: "Stop",
   END_CALL: "End call",
 } as const;
 
@@ -176,6 +179,25 @@ export function CallMute({
         icon={muted ? <mute.Muted /> : <mute.Live />}
         label={label}
         pressed={muted}
+        onClick={onPress}
+      />
+    </Tooltip>
+  );
+}
+
+/**
+ * Stop: stops the agent's turn, the call staying up; quiet and round,
+ * wearing Stop's glyph. Only the call bar draws it, since an agent's
+ * composer has its own Stop in Send's place.
+ */
+export function StopAgentButton({ onPress }: { onPress: () => void }): React.JSX.Element {
+  return (
+    <Tooltip label={CALL_CONTROL_LABEL.STOP_AGENT}>
+      <IconButton
+        variant={BUTTON_VARIANT.QUIET}
+        corners={BUTTON_CORNERS.ROUND}
+        icon={<GLYPH.STOP />}
+        label={CALL_CONTROL_LABEL.STOP_AGENT}
         onClick={onPress}
       />
     </Tooltip>
@@ -435,16 +457,17 @@ function CallStatusLines({
 
 /**
  * The strip of a call's controls, laid out the way a composer's own are:
- * the call's status at the left, and at the right the speaker and
- * microphone mutes, round, each struck through and lit while on, and End
- * call beside them, apart from both so muting never hangs up. A narrow bar
- * stacks its status over its controls rather than cutting the voice's word
- * (`STATUS`).
+ * the call's status at the left, and at the right Stop while the agent
+ * works, then the speaker and microphone mutes, round, each struck through
+ * and lit while on, and End call beside them, apart from both so muting
+ * never hangs up. A narrow bar stacks its status over its controls rather
+ * than cutting the voice's word (`STATUS`).
  */
 export function CallBar({
   status,
   microphone,
   speaker,
+  onStop,
   onEnd,
   titled = false,
 }: {
@@ -452,6 +475,8 @@ export function CallBar({
   status: CallStatus | undefined;
   microphone: CallMuteState;
   speaker: CallMuteState;
+  /** Stops the agent's turn; drawn only while the status says the agent works. */
+  onStop: () => void;
   onEnd: () => void;
   /** Whether the agent's command carries its whole words as the system's hint, where no tooltip fits. */
   titled?: boolean | undefined;
@@ -460,6 +485,7 @@ export function CallBar({
     <footer className={BAR}>
       <CallStatusLines status={status} muted={microphone.muted} titled={titled} />
       <div className={CONTROLS}>
+        {status?.agent === undefined ? null : <StopAgentButton onPress={onStop} />}
         <div className={MUTES}>
           <CallMute device={CALL_DEVICE.SPEAKER} muted={speaker.muted} onPress={speaker.onPress} />
           <CallMute

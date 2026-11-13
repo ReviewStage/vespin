@@ -64,6 +64,7 @@ import {
 } from "@repo/database/models/workspace-drive-repositories";
 import { listWorkspaceTokenRepositories } from "@repo/database/models/workspace-token-repository-store";
 import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
+import { GitHubPriority, PRIORITY } from "@repo/github";
 import { causeKind } from "@repo/runtime/effect";
 import {
   deletedIfStill,
@@ -85,7 +86,6 @@ import {
   Option,
 } from "effect";
 import { GitHubApp } from "../github/github-app.js";
-import { GitHubBackground } from "../github/github-rate-gate.js";
 import { afterResponse } from "../http/after-response.js";
 import { AgentImage } from "./coder-host/agent-image.js";
 import {
@@ -314,7 +314,7 @@ const heldBatch = (
               fullName: each.value.repository.fullName,
               branch: each.value.repository.defaultBranch,
               folder: workspaceFolderOf(each.value.repository.fullName),
-              token: each.value.token,
+              token: each.value.bearer.token,
               access: each.value.access,
             },
           ],
@@ -498,7 +498,7 @@ const prunedFor = (workspace: Option.Option<BaseDriveWorkspace>) =>
                 causeKind(cause),
               ),
         ),
-        Effect.provideService(GitHubBackground, true),
+        Effect.provideService(GitHubPriority, PRIORITY.BACKGROUND),
         Effect.provideService(Sandbox, sandbox.value),
       ),
     );

@@ -15,8 +15,11 @@
  * `session.close`.
  *
  * The call is live once the session says it started, and timed from then.
- * Muting the microphone tells the session to stop hearing it; muting the
- * speaker silences the voice on this device alone. End sends
+ * Muting the microphone silences its track at once and tells the session to
+ * stop hearing it, and a mute pressed while the call still connects is told
+ * the moment the session starts, since the session takes no command before,
+ * while the silenced track sends nothing meanwhile; muting the speaker
+ * silences the voice on this device alone. End sends
  * `session.close` and closes the channel, which sends what it holds first,
  * and the peer is dropped once the channel has closed; a `session.closed`
  * from the service, a peer that failed, or the window going away drops it
@@ -140,6 +143,11 @@ function eventType(text: string): string | undefined {
   }
 }
 
+/** The microphone's tracks silenced while the call is muted, and sounding again once it is not. */
+function silenced(microphone: MediaStream, muted: boolean): void {
+  for (const track of microphone.getTracks()) track.enabled = !muted;
+}
+
 /** Everything a call opened, let go: the peer closed, the microphone's light out, the voice stopped. */
 function release(standing: Standing): void {
   standing.peer.close();
@@ -180,6 +188,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
   // an answer arriving after the call was ended must find it gone.
   const generation = useRef(0);
   const standing = useRef<Standing | undefined>(undefined);
+  // Note that the microphone's mute and the session's start are refs too, because the channel's handler reads them outside any render.
+  const microphoneMuted = useRef(false);
+  const sessionStarted = useRef(false);
 
   /** Lets the call go, where it is still the one standing. */
   const drop = (asked: number) => {
@@ -206,6 +217,9 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
       if (type === LIVE_EVENT.CLOSED) return drop(asked);
 
       if (type !== LIVE_EVENT.STARTED || generation.current !== asked) return;
+      sessionStarted.current = true;
+
+      if (microphoneMuted.current) tell(held, LIVE_EVENT.MUTE);
       setCall((last) =>
         last === undefined || last.stage !== VOICE_CALL_STAGE.CONNECTING
           ? last
@@ -245,6 +259,7 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     }
 
     const held = connect(opened.stream);
+    silenced(held.microphone, microphoneMuted.current);
     standing.current = held;
     listen(asked, held);
     const offer = await held.peer.createOffer();
@@ -289,6 +304,8 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     end();
     generation.current += 1;
     const asked = generation.current;
+    microphoneMuted.current = false;
+    sessionStarted.current = false;
     setCall({
       stage: VOICE_CALL_STAGE.CONNECTING,
       agentId: into.agentId,
@@ -303,11 +320,17 @@ export function VoiceCallProvider({ children }: { children: ReactNode }): React.
     );
   };
 
+  // A mute pressed before the session started is kept, and told as it starts.
   const setMicrophoneMuted = (muted: boolean) => {
     const held = standing.current;
+    microphoneMuted.current = muted;
 
-    if (held === undefined || held.channel.readyState !== "open") return;
-    tell(held, muted ? LIVE_EVENT.MUTE : LIVE_EVENT.UNMUTE);
+    if (held !== undefined) silenced(held.microphone, muted);
+
+    if (held !== undefined && sessionStarted.current) {
+      tell(held, muted ? LIVE_EVENT.MUTE : LIVE_EVENT.UNMUTE);
+    }
+
     setCall((last) => last && { ...last, microphoneMuted: muted });
   };
 

@@ -1114,7 +1114,7 @@ it.layer(getTestDB())("the plan routes", (it) => {
         const relay = relayInstallation(7011);
 
         const github = githubReaching([relay], undefined, {}, (sent) =>
-          new URL(sent.url).pathname === "/repos/Acme/Relay/git/ref/heads/main"
+          new URL(sent.url).pathname === "/repos/Acme/Relay/git/ref/heads%2Fmain"
             ? Response.json({ ref: "refs/heads/main", object: { type: "commit", sha: head } })
             : contentsOf(sent),
         );

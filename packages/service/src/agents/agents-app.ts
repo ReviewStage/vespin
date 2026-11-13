@@ -124,9 +124,9 @@ const githubImageEndpoint = /* @__PURE__ */ Effect.fn("web/agentGitHubImageEndpo
   if (!hasRepository(agent)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
 
   const read = yield* Effect.gen(function* () {
-    const { token } = yield* agentPullRequestReach(userId, agent);
+    const { bearer } = yield* agentPullRequestReach(userId, agent);
 
-    return yield* githubImage(token, agent.repository, image);
+    return yield* githubImage(bearer, agent.repository, image);
   }).pipe(githubReadRefusal);
 
   if (Option.isNone(read)) return yield* Effect.fail(HOSTED_REFUSAL.NOT_FOUND);
