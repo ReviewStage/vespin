@@ -310,6 +310,9 @@ function refusalWords(refusal: typeof SaidRefusal.Type): ReadonlyArray<string> {
   return [refusal.message, ...details];
 }
 
+/** A GraphQL answer's errors where it named none. */
+const NO_GRAPHQL_ERRORS: ReadonlyArray<unknown> = [];
+
 /** A GraphQL error as a partial answer carries it. */
 const PartialError = Schema.Struct({
   type: Schema.optionalKey(Schema.String),
@@ -476,7 +479,8 @@ function failureOf(rejection: Rejection, identity: GitHubIdentityKind, now: numb
 
   if (types.includes(GRAPHQL_ERROR.FORBIDDEN)) return new GitHubForbidden({ message });
 
-  if (types.length > 0) return new GitHubRejected({ status: 200, message });
+  // Note that a GraphQL answer's errors need name no type, as a refused mutation's do not.
+  if (graphqlErrors(rejection).length > 0) return new GitHubRejected({ status: 200, message });
   const refusal = refusalOf(rejection);
 
   if (refusal === undefined) return new GitHubUnavailable({ message });
@@ -783,8 +787,8 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
       Effect.flatMap(
         called(state, (request) =>
           octokit.graphql<unknown>(document, { ...variables, request }).then(
-            (data) => ({ data, errors: [] as ReadonlyArray<unknown> }),
-            (error: unknown) => {
+            (data) => ({ data, errors: NO_GRAPHQL_ERRORS }),
+            (error) => {
               const rejection = Option.getOrElse(decodeRejection(error), () => UNREAD_REJECTION);
               const errors = graphqlErrors(rejection);
               const limited = graphqlErrorTypes(rejection).includes(GRAPHQL_ERROR.RATE_LIMITED);

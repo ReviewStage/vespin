@@ -5,7 +5,7 @@
 import { generateKeyPairSync } from "node:crypto";
 import { assert, describe, it } from "@effect/vitest";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
-import { Duration, Effect, Layer, Redacted, Schema } from "effect";
+import { Duration, Effect, Layer, Predicate, Redacted, Schema } from "effect";
 import { TestClock } from "effect/testing";
 import { GitHub, type InstallationGrant } from "./github.js";
 import { type GitHubHold, GitHubHoldStore } from "./github-hold-store.js";
@@ -296,6 +296,7 @@ describe("GitHub", () => {
 
       return Effect.gen(function* () {
         const github = yield* GitHub;
+
         const listed = yield* github
           .asMember(Redacted.make("gho_member"))
           .paginate("GET /repos/{owner}/{repo}/branches", REPOSITORY, { maxPages: 2 })
@@ -328,9 +329,8 @@ describe("GitHub", () => {
           parseSuccessResponseBody: false,
         });
 
-      const read = yield* Effect.promise(() =>
-        new Response(answer.data as unknown as ReadableStream).arrayBuffer(),
-      );
+      const body = Schema.decodeUnknownSync(Schema.instanceOf(ReadableStream))(answer.data);
+      const read = yield* Effect.promise(() => new Response(body).arrayBuffer());
 
       assert.deepStrictEqual(new Uint8Array(read), bytes);
     }).pipe(Effect.provide(layer));
@@ -349,6 +349,7 @@ describe("GitHub", () => {
 
     return Effect.gen(function* () {
       const github = yield* GitHub;
+
       const refused = yield* readRepository(github.asMember(Redacted.make("gho_member"))).pipe(
         Effect.flip,
       );
@@ -413,15 +414,39 @@ describe("GitHub", () => {
     return Effect.gen(function* () {
       yield* TestClock.setTime(1_000_000);
       const github = yield* GitHub;
+
       const refused = yield* readRepository(github.asMember(Redacted.make("gho_member"))).pipe(
         Effect.flip,
       );
 
-      assert.strictEqual(refused._tag, "GitHubRateLimited");
-      assert.strictEqual(
-        refused._tag === "GitHubRateLimited" ? refused.resetsAt?.getTime() : undefined,
-        1_060_000,
-      );
+      assert.ok(Predicate.isTagged(refused, "GitHubRateLimited"));
+      assert.strictEqual(refused.resetsAt?.getTime(), 1_060_000);
     }).pipe(Effect.provide(layer));
   });
+
+  it.effect(
+    "fails a GraphQL answer whose errors name no type as GitHub's refusal, in its words",
+    () => {
+      const { layer } = harness(() =>
+        Response.json({
+          data: null,
+          errors: [{ message: "Review Can not approve your own pull request" }],
+        }),
+      );
+
+      return Effect.gen(function* () {
+        const github = yield* GitHub;
+
+        const refused = yield* github
+          .asMember(Redacted.make("gho_member"))
+          .graphql("mutation { approve }", {}, Schema.Unknown)
+          .pipe(Effect.flip);
+
+        assert.deepStrictEqual(
+          { tag: refused._tag, message: refused.message },
+          { tag: "GitHubRejected", message: "Review Can not approve your own pull request" },
+        );
+      }).pipe(Effect.provide(layer));
+    },
+  );
 });
