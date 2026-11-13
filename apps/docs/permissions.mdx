@@ -1,0 +1,36 @@
+---
+title: "Permissions"
+description: "Choose what an agent may do without asking, and answer its approvals"
+---
+
+An agent runs in one of three permission modes. In the two that ask, it stops before an action and waits in its transcript for you to allow it.
+
+## Modes
+
+| Mode | Claude Code asks before | Codex asks before |
+| --- | --- | --- |
+| **Ask for approval** | Every file edit and shell command | Writing outside its checkout or using the network |
+| **Approve for me** | Only actions Claude Code flags as unsafe | Nothing. Codex's own review answers for you. |
+| **Full access** | Nothing | Nothing |
+
+New agents start on **Full access**. Change your default in **Settings › Agents › Default permissions**. To change one agent, open its model chip's menu and choose **Permissions**, before it starts or while it runs. A change takes effect from the next turn. An agent in an asking mode shows the mode's icon on its model chip.
+
+An automation's agents always run on Full access.
+
+## Approvals
+
+A waiting action stands in the agent's transcript with the command or edit it would make.
+
+<Frame>
+  <img src="/images/permissions-approval.png" alt="An agent's transcript: Run the members tests waits for approval over the command pnpm test src/members, with Allow, Always allow pnpm test *, and Deny under it, and Waiting on you · 1 approval below" />
+</Frame>
+
+- **Allow** runs it once.
+- **Always allow** runs every action like it without asking for the rest of the agent's session. When Claude Code proposes a command prefix, such as `pnpm test *`, the button names it, and the prefix is kept for all your Claude Code agents.
+- **Deny** refuses it, with an optional note telling the agent why.
+
+Sending the agent a message denies the waiting action, and **Stop** withdraws it. A request has no timeout. It expires only when its turn ends.
+
+## Always allowed commands
+
+**Settings › Agents › Always allowed** lists the command prefixes your Claude Code agents run without asking, in any mode. The list is yours alone, holds up to 200 commands of up to 8 words each, and reaches each agent the next time it starts up. Add one with **Add command**, or with **Always allow** on an approval.

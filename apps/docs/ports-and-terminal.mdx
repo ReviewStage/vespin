@@ -1,0 +1,23 @@
+---
+title: "Ports and terminals"
+description: "Open a cloud agent's dev server, share it with your team, and work in its shell"
+---
+
+A cloud agent's sandbox can run a dev server, and you can open a shell in it. Both are for cloud agents only. An agent on a Mac runs in a folder on that Mac, where you reach its servers and files directly.
+
+## Ports
+
+The plug in a cloud agent's message box lists the ports its sandbox listens on. The plug shows a dot while a port is open on your Mac or shared.
+
+- **This Mac**, in the Mac app: **Open** forwards the port to `localhost` on your Mac and opens it in your browser. If the port is taken on your Mac, a nearby one is used. One agent's ports are forwarded at a time.
+- **Team link**: **Share** makes a link and copies it. Only one port per agent is shared at a time, and sharing another moves the link.
+
+A team link opens only for signed-in members who can open the agent. It lasts until you stop sharing or archive the agent. If the sandbox has stopped, opening the link starts it again and reruns the server.
+
+The agent can share a port itself, such as to show you a page it built.
+
+## Terminals
+
+Open a terminal from **+** in the side panel, or press <kbd>⌘J</kbd>. Under **Cloud Terminal**, each agent's row opens a shell in its sandbox, in its checkout, on the Mac app and the web. In the Mac app, **Local Terminal** opens a shell on your Mac in a copy of the agent's files.
+
+Vespin passes a terminal's input and output between your window and the sandbox, and never logs or keeps it. Typing keeps the sandbox awake. An idle terminal disconnects after 5 minutes, and any key reconnects it. Closing the tab ends its shell.

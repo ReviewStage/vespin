@@ -1,0 +1,37 @@
+---
+title: "Pull requests"
+description: "Review, discuss, and merge an agent's pull request without leaving Vespin"
+---
+
+An agent opens its pull request on GitHub as you, or as Vespin's app if you choose that in **Settings › Preferences › Commit author**. It opens it ready for review when the work is done and its checks pass, or as a draft when something is unresolved. The PR's row sits over the agent's message box, and pressing it opens the **Pull request** tab in the side panel.
+
+To open pull requests on GitHub instead, set **Settings › Preferences › Open pull requests in** to **GitHub**.
+
+## The tab
+
+| Tab | What it holds |
+| --- | --- |
+| **Conversation** | Comments and reviews. **View options** hides resolved threads and bots. |
+| **Checks** | The newest deployment per environment, then every check, failures first. A check opens its page on GitHub. |
+| **Chapters** | The diff split into chapters to review in order, each with a risk, a summary, and what to look at |
+| **Files changed** | The whole diff. Mark each file **Viewed** as you go. |
+
+Chapters are made only when someone presses **Generate**, on their own Anthropic or OpenAI API key from **Settings › Agents**. After new commits, **Regenerate** makes them again for the new head.
+
+In **Files changed**, press <kbd>J</kbd> and <kbd>K</kbd> to move between files, <kbd>V</kbd> to mark one viewed and go to the next, and <kbd>?</kbd> for the rest. In **Chapters**, <kbd>←</kbd> and <kbd>→</kbd> step between chapters. For every key, see [Keyboard shortcuts](/shortcuts).
+
+## Review
+
+Comment on a line from the gutter's **+** in **Files changed**, or select lines to comment on a range, and submit with **Review** at the end of the tab row. Everything you write is posted on GitHub as you.
+
+## Merge
+
+The merge button merges with the method you pick, and remembers it per repository on that device. When checks or reviews are still due, **Enable auto-merge** has GitHub merge it once they pass. With admin rights, **Bypass rules and merge…** merges without waiting for required checks or reviews.
+
+<kbd>⇧⌘O</kbd> opens the PR on GitHub.
+
+## What reaches the agent
+
+With Vespin's GitHub App installed, a review, a comment on the PR, and a failed check reach the agent as messages from GitHub, drawn as cards in its transcript. The agent reads them, fixes what they ask, and pushes. On a failing check it tries up to 3 times, then tells you it stopped.
+
+With a [personal access token](/install#connect-github) instead of the App, nothing wakes the agent. It reads the PR's reviews and comments itself before it ends each turn.

@@ -67,11 +67,18 @@
       },
       {
         "group": "Concepts",
-        "pages": ["tasks", "inbox"]
+        "pages": ["tasks", "inbox", "pull-requests", "permissions"]
       },
       {
         "group": "Guides",
-        "pages": ["vespin-mcp", "cli", "automations", "slack"]
+        "pages": [
+          "cloud-environment",
+          "ports-and-terminal",
+          "vespin-mcp",
+          "cli",
+          "automations",
+          "slack"
+        ]
       },
       {
         "group": "Reference",
