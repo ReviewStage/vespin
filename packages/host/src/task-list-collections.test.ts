@@ -255,3 +255,76 @@ it.effect(
       }),
     ),
 );
+
+it.effect(
+  "an agent started from another lists it under its source, first started first, and every other agent's continuations are the object drawn before",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const drawings: LiveTaskList[] = [];
+
+        const collections = yield* taskListCollections({
+          pool: yield* entityPool(),
+          draw: (read) => {
+            drawings.push(read);
+          },
+          txWait: () => undefined,
+        });
+
+        const plans = [
+          planListRow(INVITES, "Teammate invitations"),
+          planListRow(BILLING, "Billing"),
+        ];
+
+        const invites = { ...agentListRow(INVITES, 1_000), id: "agent-invites" };
+        const billing = { ...agentListRow(BILLING, 1_000), id: "agent-billing" };
+
+        const invitesAgain = {
+          ...agentListRow(INVITES, 2_000),
+          id: "agent-invites-again",
+          title: "Invite flow, continued",
+          startedFrom: { agentId: invites.id },
+        };
+
+        const billingAgain = {
+          ...agentListRow(BILLING, 2_000),
+          id: "agent-billing-again",
+          title: "Billing, continued",
+          startedFrom: { agentId: billing.id },
+        };
+
+        const agents = [invites, billing, invitesAgain, billingAgain];
+        yield* collections.answer({ plans, agents });
+        const before = drawings.at(-1);
+
+        // A teammate forks billing's agent at a message.
+        const billingFork = {
+          ...agentListRow(BILLING, 3_000),
+          id: "agent-billing-fork",
+          title: "Billing, forked",
+          startedFrom: { agentId: billing.id, messageId: "message-7" },
+        };
+
+        yield* collections.answer({ plans, agents: [...agents, billingFork] });
+        const after = drawings.at(-1);
+
+        const agentOf = (drawing: LiveTaskList | undefined, id: string) =>
+          drawing?.taskAgents.find((each) => each.id === id);
+
+        assert.deepEqual(agentOf(before, invites.id)?.continuedBy, [
+          { agentId: invitesAgain.id, title: "Invite flow, continued", forked: false },
+        ]);
+        assert.equal(agentOf(after, invites.id), agentOf(before, invites.id));
+
+        assert.deepEqual(agentOf(after, billing.id)?.continuedBy, [
+          { agentId: billingAgain.id, title: "Billing, continued", forked: false },
+          {
+            agentId: billingFork.id,
+            title: "Billing, forked",
+            forked: true,
+            messageId: "message-7",
+          },
+        ]);
+      }),
+    ),
+);

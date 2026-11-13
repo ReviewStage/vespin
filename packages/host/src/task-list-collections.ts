@@ -19,8 +19,9 @@
  * and agents a moved row or that instant reaches, and every other is the
  * object drawn before.
  *
- * The agents' pull requests are TanStack DB live queries instead
- * (`task-list-pull-requests.ts`), standing on the agents as the list draws
+ * The agents' pull requests and the agents started from each are TanStack
+ * DB live queries instead (`task-list-pull-requests.ts`,
+ * `task-list-continuations.ts`), standing on the agents as the list draws
  * them (`drawn-rows.ts`), which take only the keys the pool names as moved:
  * those an answer moved, took up, or let go, and those a write drew again.
  *
@@ -60,6 +61,7 @@ import { Effect, type Scope } from "effect";
 import { drawnRows } from "./drawn-rows.js";
 import { drawnAtEdges, drawnPerTick } from "./live-collection.js";
 import { confirmWrite, type SyncStanding, syncIdOf, type TxWait } from "./live-follow.js";
+import { taskListContinuations } from "./task-list-continuations.js";
 import { taskListPullRequests } from "./task-list-pull-requests.js";
 
 /** A plan's row as the list's statement answers it. */
@@ -164,6 +166,7 @@ export function taskListCollections(
     // The agents as the list draws them, for its live queries to stand on, written only for the keys that moved.
     const drawnAgents = yield* drawnRows<AgentRow>(AGENT.key);
     const pullRequests = yield* taskListPullRequests(drawnAgents.collection);
+    const continuedOf = yield* taskListContinuations(drawnAgents.collection);
 
     const agentsDrawn = (keys: readonly string[]) =>
       drawnAgents.drawn(keys, (key) => agents.row(key));
@@ -224,7 +227,7 @@ export function taskListCollections(
       const edge = gracesAt(rows.agents, at);
 
       dependencies.draw({
-        ...drawing(rows, pastGrace, pullRequests.linesOf),
+        ...drawing(rows, pastGrace, pullRequests.linesOf, continuedOf),
         taskPullRequests: pullRequests.taskPullRequests(),
         agentPullRequests: pullRequests.agentPullRequests(),
         pendingTasks: plans.pending(),

@@ -553,7 +553,7 @@ function archivedByOf(row: AgentLiveRow): AgentArchivedBy | undefined {
 }
 
 /** The agents started from an agent, first started first, as its summary's `continuedBy` names them. */
-type ContinuedBy = NonNullable<AgentSummary["continuedBy"]>;
+export type ContinuedBy = NonNullable<AgentSummary["continuedBy"]>;
 
 /** An agent started from another as that one's summary names it among its continues and forks, `messageId` the message a fork was made at. */
 function continuationOf(row: AgentLiveRow, messageId: string | undefined): ContinuedBy[number] {
@@ -755,12 +755,6 @@ function rebuilt<Row, Value>(
   return holds ? held : { row, beside, value: build() };
 }
 
-/** The agents started from one agent: their rows, first started first, and the list its summary names them by. */
-interface Continued {
-  readonly rows: readonly AgentLiveRow[];
-  readonly by: ContinuedBy;
-}
-
 /** The plan list and every part drawn beside it, as the live rows stand at one instant. */
 export interface TaskListDrawing {
   /** The plans newest started first, each with its agents in brief. */
@@ -774,16 +768,46 @@ export interface TaskListDrawing {
 /** Each plan's pull request lines by its id (`pullRequestLinesOf`), as one object for as long as its agents' pull requests stand; none for a plan with none. */
 export type PullRequestLinesOf = (taskId: string) => readonly TaskPullRequestLine[] | undefined;
 
+/** The agents started from each agent by its id (`continuedByOf`), as one object for as long as their rows stand; none for an agent nothing was started from. */
+export type ContinuedByOf = (agentId: string) => ContinuedBy | undefined;
+
+/** The agents started from one agent as its summary names them, from their rows first started first. */
+export function continuedByOf(rows: readonly AgentLiveRow[]): ContinuedBy {
+  return rows.map((row) => continuationOf(row, row.startedFrom?.messageId));
+}
+
+/** The agents started from each agent of `rows`, as one reading at one instant holds them. */
+function continuedByAt(rows: TaskListLiveRows): ContinuedByOf {
+  const startedFrom = new Map<string, AgentLiveRow[]>();
+
+  for (const row of rows.agents.toSorted(firstStarted)) {
+    const source = row.startedFrom?.agentId;
+
+    if (source === undefined) continue;
+    const from = startedFrom.get(source);
+
+    if (from === undefined) startedFrom.set(source, [row]);
+    else from.push(row);
+  }
+
+  const continued = new Map(
+    [...startedFrom].map(([source, from]) => [source, continuedByOf(from)]),
+  );
+
+  return (agentId) => continued.get(agentId);
+}
+
 /** A plan with no pull request, as one object however often it is drawn. */
 const NO_PULL_REQUESTS: readonly TaskPullRequestLine[] = [];
 
 /**
  * Draws the plan list from its live rows again and again, building again
- * only what a row that moved reaches: an agent whose row, or the rows of
+ * only what a row that moved reaches: an agent whose row, or the list of
  * the agents started from it, are other objects, a plan whose row, whose
  * agents' rows, or whose pull request lines are, and an agent, and its
  * plan, whose starting grace has ended since it was built. A plan's pull
- * request lines are handed in (`pullRequestsOf`), derived elsewhere as its
+ * request lines (`pullRequestsOf`) and each agent's list of the agents
+ * started from it (`continuedOf`) are handed in, derived elsewhere as their
  * agents move. Everything else is the very object drawn before, and so is
  * every list nothing in moved, so a reader comparing one drawing with the
  * last stops at `===`. Note that it leans on a row that did not move being
@@ -795,8 +819,8 @@ export function taskListDrawer(): (
   rows: TaskListLiveRows,
   pastGrace: AgentsPastGrace,
   pullRequestsOf: PullRequestLinesOf,
+  continuedOf: ContinuedByOf,
 ) => TaskListDrawing {
-  let continued = new Map<string, Continued>();
   let groups = new Map<string, AgentGroup>();
   let listed = new Map<string, Built<AgentLiveRow, ListedAgent>>();
   let summaries = new Map<string, Built<TaskLiveRow, TaskSummary>>();
@@ -815,34 +839,7 @@ export function taskListDrawer(): (
     return pin;
   };
 
-  return (rows, pastGrace, pullRequestsOf) => {
-    // The agents started from each agent, built again only where their rows moved.
-    const startedFrom = new Map<string, AgentLiveRow[]>();
-
-    for (const row of rows.agents
-      .filter((each) => each.startedFrom !== null)
-      .toSorted(firstStarted)) {
-      const source = row.startedFrom?.agentId;
-
-      if (source === undefined) continue;
-      const from = startedFrom.get(source);
-
-      if (from === undefined) startedFrom.set(source, [row]);
-      else from.push(row);
-    }
-
-    const nextContinued = new Map<string, Continued>();
-
-    for (const [source, from] of startedFrom) {
-      const held = continued.get(source);
-      nextContinued.set(
-        source,
-        held !== undefined && sameItems(held.rows, from)
-          ? held
-          : { rows: from, by: from.map((row) => continuationOf(row, row.startedFrom?.messageId)) },
-      );
-    }
-
+  return (rows, pastGrace, pullRequestsOf, continuedOf) => {
     // Each plan's agents in the order the rows name them, and their pull requests, built again only where either moved.
     const byTask = new Map<string, AgentLiveRow[]>();
 
@@ -869,7 +866,7 @@ export function taskListDrawer(): (
     const nextListed = new Map<string, Built<AgentLiveRow, ListedAgent>>();
 
     for (const row of rows.agents) {
-      const continuedBy = nextContinued.get(row.id)?.by;
+      const continuedBy = continuedOf(row.id);
 
       const built = rebuilt(listed.get(row.id), row, [continuedBy, pastGrace.has(row.id)], () =>
         listedAgentOf(row, pastGrace, continuedBy),
@@ -896,7 +893,6 @@ export function taskListDrawer(): (
 
     const held = drawn;
     const keptPlans = keptItems(held?.list.plans, plans);
-    continued = nextContinued;
     groups = nextGroups;
     listed = nextListed;
     summaries = nextSummaries;
@@ -931,7 +927,8 @@ export function taskListDrawer(): (
  * plan's agents again on a clock.
  */
 export function taskAgentsOfLiveRows(rows: TaskListLiveRows, now: number): readonly ListedAgent[] {
-  return taskListDrawer()(rows, pastGraceAt(rows, now), () => undefined).taskAgents;
+  return taskListDrawer()(rows, pastGraceAt(rows, now), () => undefined, continuedByAt(rows))
+    .taskAgents;
 }
 
 /**
@@ -989,5 +986,10 @@ export function taskListOfLiveRows(rows: TaskListLiveRows, now: number): TaskLis
     taskPullRequestsOfLiveRows(rows).map(({ taskId, pullRequests }) => [taskId, pullRequests]),
   );
 
-  return taskListDrawer()(rows, pastGraceAt(rows, now), (taskId) => lines.get(taskId)).list;
+  return taskListDrawer()(
+    rows,
+    pastGraceAt(rows, now),
+    (taskId) => lines.get(taskId),
+    continuedByAt(rows),
+  ).list;
 }
