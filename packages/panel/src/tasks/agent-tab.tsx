@@ -3089,7 +3089,9 @@ function AgentTranscriptView({
                         {earlierOmitted && message === description ? (
                           <TranscriptNote>Earlier steps are not shown.</TranscriptNote>
                         ) : null}
-                        {tails ? <CallEnds spans={calls.closes.get(message.id)} /> : null}
+                        {tails ? (
+                          <CallEnds spans={calls.closes.get(message.id)} callerOf={callerOf} />
+                        ) : null}
                         {at === entries.length - 1 ? trailing : null}
                       </>
                     );

@@ -9,10 +9,10 @@
  * mark, label, or tone of its own. A call is marked only by the two rules
  * it stands between: "Call started", or a teammate's chip and "started a
  * call", and the day and time its first line began, before the row its
- * first line stands in; and "Call ended" and how long it ran, to the end of
- * its last line on the call's clock, after the row its last line stands
- * in. All of it is drawn only while the Voice experiment is on
- * (`useVoiceShown`).
+ * first line stands in; and "Call ended", or the teammate's chip and
+ * "ended a call", and how long it ran, to the end of its last line on the
+ * call's clock, after the row its last line stands in. All of it is drawn
+ * only while the Voice experiment is on (`useVoiceShown`).
  */
 
 import { messageWords } from "@repo/features/agent-parts";
@@ -44,6 +44,7 @@ const CALL_MARK_WORDS = {
   STARTED: "Call started",
   TEAMMATE_STARTED: "started a call",
   ENDED: "Call ended",
+  TEAMMATE_ENDED: "ended a call",
 } as const;
 
 /** No call begins or ends among the rows, and no turn is folded under one. */
@@ -117,11 +118,14 @@ export function CallStarts({
   );
 }
 
-/** The rule each call that ends at a row stands on after it: "Call ended", and how long it ran. */
+/** The rule each call that ends at a row stands on after it: "Call ended", or a teammate's chip and "ended a call", and how long it ran. */
 export function CallEnds({
   spans,
+  callerOf,
 }: {
   spans: readonly CallSpan[] | undefined;
+  /** The teammate whose call it was, by its caller's first line; none for the reader's own. */
+  callerOf: (line: AgentTranscriptMessage) => Actor | undefined;
 }): React.JSX.Element | null {
   if (spans === undefined) return null;
 
@@ -129,10 +133,18 @@ export function CallEnds({
     <>
       {spans.map((span) => {
         const length = callLength(span);
+        const caller = span.callerLine === undefined ? undefined : callerOf(span.callerLine);
 
         return (
           <CallMark key={span.callId} end={CALL_MARK_END.END}>
-            {CALL_MARK_WORDS.ENDED}
+            {caller === undefined ? (
+              CALL_MARK_WORDS.ENDED
+            ) : (
+              <Fragment>
+                <ActorRef actor={caller} />
+                {CALL_MARK_WORDS.TEAMMATE_ENDED}
+              </Fragment>
+            )}
             {length === undefined ? null : (
               <Fragment>
                 <span aria-hidden="true">·</span>
