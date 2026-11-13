@@ -51,6 +51,11 @@ export const machineCommandAsksSchema = Schema.Struct({
   asks: Schema.Array(machineCommandAskSchema),
 });
 
+/** The device this Mac claims commands as for the account signed in, as the host tells it; none before it joined for that account, or where it claims as the account alone. */
+export const machineCommandDeviceSchema = Schema.Struct({
+  deviceId: Schema.optionalKey(Schema.String),
+});
+
 /**
  * What the developer answers an ask: run it this once, run it and every later
  * one without asking, or not at all. For an app, this once holds the app for

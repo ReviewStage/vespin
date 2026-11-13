@@ -49,13 +49,13 @@ import {
   type Glyph,
   glyphSymbol,
   HeldCallBanner,
-  HintPickRows,
   ListSection,
   MenuPickRow,
   MenuRow,
   type MenuRowAct,
   NO_TOGGLES,
   openCuts,
+  PickRows,
   QueuedLines,
   RenameAsk,
   Screen,
@@ -960,8 +960,7 @@ export function AgentOptionsScreen({ agentId }: { readonly agentId: string }) {
               title={PERMISSION_MODE_WORDS.GROUP}
               footer={mode.note ?? PERMISSION_MODE_WORDS.APPLIES}
             >
-              <HintPickRows
-                label={PERMISSION_MODE_WORDS.QUESTION}
+              <PickRows
                 options={mode.modes}
                 picked={mode.mode}
                 onPick={(picked) => {
