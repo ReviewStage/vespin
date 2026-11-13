@@ -7,7 +7,8 @@ import { Effect, Layer, Redacted } from "effect";
 import { HttpRouter } from "effect/http";
 import { test } from "vitest";
 import { HOSTED_HTTP_STATUS } from "../http/http.js";
-import { GitHubApp, type GitHubAppSettings } from "./github-app.js";
+import { fixtureGitHubApp } from "../testing/github-app-fake.js";
+import type { GitHubAppSettings } from "./github-app.js";
 import { githubInstallApp } from "./github-install-app.js";
 
 /**
@@ -71,8 +72,10 @@ function answer(
     githubInstallApp({ resolveSessionUserId: () => Effect.succeedNone }).pipe(
       HttpRouter.provideRequest(
         Layer.mergeAll(
-          github.layer,
-          GitHubApp.layer(configured ? SETTINGS : undefined, ["GITHUB_APP_SLUG"]),
+          Layer.provideMerge(
+            fixtureGitHubApp(configured ? SETTINGS : undefined, ["GITHUB_APP_SLUG"]),
+            github.layer,
+          ),
           noDatabase,
         ),
       ),

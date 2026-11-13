@@ -127,7 +127,7 @@ export const EXPERIMENTS = [
   {
     key: EXPERIMENT.VOICE,
     scope: EXPERIMENT_SCOPE.ACCOUNT,
-    listed: false,
+    listed: true,
     name: "Voice",
     detail:
       "Talk to an agent out loud through GPT-Live on your own OpenAI API key, from Talk in an agent's box.",

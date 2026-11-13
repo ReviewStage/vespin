@@ -62,6 +62,10 @@ private let LINES_PER_PAGE = 12
 private let MAX_CLICKS = 3
 /// How many ancestors up the agent's cursor looks for a place to stand where an element has none.
 private let MAX_CURSOR_ANCESTORS = 4
+/// The attribute Chromium and Electron read as a request to build their pages' Accessibility tree in full, as they do for a screen reader. An app that does not know it refuses it, and nothing else changes.
+private let MANUAL_ACCESSIBILITY = "AXManualAccessibility"
+/// How long an app is given to build its pages' tree the first time it is asked to.
+private let WEB_TREE_WAIT_SECONDS = 0.5
 private let MAX_PAGES = 20.0
 /// The most base64 characters of one screenshot, as the wire bounds it (`COMPUTER_BOUNDS.MAX_SHOT_CHARS`).
 private let MAX_SHOT_CHARS = 1_600_000
@@ -392,6 +396,13 @@ private func children(_ element: AXUIElement) -> [AXUIElement] {
     (attribute(element, kAXChildrenAttribute) as? [AXUIElement]) ?? []
 }
 
+/// An element by an attribute that names one, such as its parent or its window, where it does.
+private func elementAttribute(_ element: AXUIElement, _ name: String) -> AXUIElement? {
+    guard let found = attribute(element, name), CFGetTypeID(found) == AXUIElementGetTypeID() else { return nil }
+    // SAFETY: the type id was checked just above.
+    return (found as! AXUIElement)
+}
+
 private func actions(_ element: AXUIElement) -> [String] {
     var names: CFArray?
     guard AXUIElementCopyActionNames(element, &names) == .success else { return [] }
@@ -455,12 +466,6 @@ private struct TreeWalk {
     }
 }
 
-/// One of an app's windows by an attribute that names one, where it does.
-private func windowAttribute(_ app: AXUIElement, _ name: String) -> AXUIElement? {
-    guard let window = attribute(app, name), CFGetTypeID(window) == AXUIElementGetTypeID() else { return nil }
-    return (window as! AXUIElement)
-}
-
 /// Whether a window is in the Dock, which no capture reads without bringing it back, and bringing it back takes the developer's screen.
 private func minimized(_ window: AXUIElement) -> Bool {
     (attribute(window, kAXMinimizedAttribute) as? Bool) == true
@@ -475,7 +480,7 @@ private func minimized(_ window: AXUIElement) -> Bool {
  */
 private func focusedWindow(_ app: NSRunningApplication) throws -> AXUIElement? {
     let element = AXUIElementCreateApplication(app.processIdentifier)
-    let named = [kAXFocusedWindowAttribute, kAXMainWindowAttribute].compactMap { windowAttribute(element, $0) }
+    let named = [kAXFocusedWindowAttribute, kAXMainWindowAttribute].compactMap { elementAttribute(element, $0) }
     let candidates = named + ((attribute(element, kAXWindowsAttribute) as? [AXUIElement]) ?? [])
     if let shown = candidates.first(where: { !minimized($0) }) { return shown }
     guard candidates.isEmpty else {
@@ -634,16 +639,34 @@ private struct AppSession {
         guard var element = try? element(index) else { return nil }
         for _ in 0...MAX_CURSOR_ANCESTORS {
             if let bounds = frame(element) { return CGPoint(x: bounds.midX, y: bounds.midY) }
-            guard let parent = attribute(element, kAXParentAttribute), CFGetTypeID(parent) == AXUIElementGetTypeID()
-            else { return nil }
-            // SAFETY: the type id was checked just above.
-            element = parent as! AXUIElement
+            guard let parent = elementAttribute(element, kAXParentAttribute) else { return nil }
+            element = parent
         }
         return nil
     }
 }
 
 private var sessions: [pid_t: AppSession] = [:]
+
+/// The processes already asked to build their pages' tree, which are given no time to build it again.
+private var webTreesAsked: Set<pid_t> = []
+
+/**
+ Asks an app to build its pages' Accessibility tree in full, and gives it a
+ moment to the first time. Note that Chromium and Electron build that tree
+ in full only for a screen reader, or once this attribute asks them to, and
+ until then may list a page's buttons yet answer a press on one without
+ acting on it. It is asked of every app on every read, since an app that
+ does not know the attribute refuses it and nothing else changes, and so no
+ browser is named.
+ */
+private func askForWebTree(_ app: NSRunningApplication) async {
+    let pid = app.processIdentifier
+    let element = AXUIElementCreateApplication(pid)
+    let asked = AXUIElementSetAttributeValue(element, MANUAL_ACCESSIBILITY as CFString, kCFBooleanTrue)
+    guard asked == .success, webTreesAsked.insert(pid).inserted else { return }
+    try? await Task.sleep(nanoseconds: UInt64(WEB_TREE_WAIT_SECONDS * 1_000_000_000))
+}
 
 private func session(_ app: NSRunningApplication) throws -> AppSession {
     guard let found = sessions[app.processIdentifier] else {
@@ -658,6 +681,7 @@ private func getAppState(_ request: [String: Any]) async throws -> [String: Any]
     let app = try await resolveApp(try string(request, "app"))
     try requirePinned(request, app)
     let pid = app.processIdentifier
+    await askForWebTree(app)
     let axWindow = try focusedWindow(app)
     let title = axWindow.flatMap { text($0, kAXTitleAttribute) }
     // Note that a window whose elements are numbered and that has no frame is refused too, since no capture could be paired with it.
