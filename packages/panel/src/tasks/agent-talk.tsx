@@ -1,18 +1,19 @@
 /**
- * agent-talk.tsx -- an agent's box taking calls: Talk at rest, and on a call into the agent the call's row in the microphone's place.
+ * agent-talk.tsx -- an agent's box taking calls: Talk at rest, and on a call into the agent the call's presses in the microphone's place.
  *
  * One call stands in a window at a time (`../voice-call.tsx`). At rest the
  * box offers Talk, the waveform beside Dictate, which calls the agent; with
  * no OpenAI API key saved it says to add one and its press opens Settings ›
  * Agents (`../openai-key.tsx`), as Dictate's does. Talk into this agent
  * while a call into another stands asks first, since the other call ends.
- * On a call into this agent the same place holds the call's row (its
- * status, the speaker and microphone mutes, and End call), and Dictate
+ * On a call into this agent the same place holds the call's presses (the
+ * speaker and microphone mutes, and End call), with no status beside them,
+ * since the row stays uncrowded (Dean, Nov 13), and Dictate
  * goes, since the call holds the microphone; a dictation under way as the
  * call starts ends, keeping the words already said. The field stays the
  * agent's as ever, so a typed line goes to the agent as any line does. A
- * narrow box folds Talk into its ⋯ as it folds Dictate; the call's row
- * stays, its status giving way first (`CallComposerControls`). Nothing of
+ * narrow box folds Talk into its ⋯ as it folds Dictate; the call's
+ * presses stay (`CallComposerControls`). Nothing of
  * it stands while the Voice experiment is off, nor in any box but an
  * agent's own tab's.
  */
@@ -20,9 +21,7 @@
 import { FAILURE_SURFACE } from "@repo/features/shown-failure";
 import { EXPERIMENT } from "@repo/settings";
 import {
-  CALL_STAGE,
   CallComposerControls,
-  type CallLiveProps,
   CONFIRM_LOSS,
   ConfirmDialog,
   TALK_LABEL,
@@ -36,7 +35,7 @@ import type { ReactNode } from "react";
 import { confirmFailure } from "../failure-report.js";
 import { useOpenAiKeyMissing } from "../openai-key.js";
 import { appStateQuery, selectExperiment } from "../use-app-state.js";
-import { useVoiceCall, VOICE_CALL_STAGE, type VoiceCallState } from "../voice-call.js";
+import { useVoiceCall } from "../voice-call.js";
 import { OVERFLOW_PRESS, type OverflowOffer } from "./message-box.js";
 import type { DictationControl } from "./use-dictation.js";
 
@@ -59,17 +58,6 @@ export interface AgentTalk {
   readonly onCall: boolean;
   readonly press: ReactNode;
   readonly offer: OverflowOffer | undefined;
-}
-
-/** A call's status as the composer's row draws it: coming up until the session started, and the count from then. */
-function liveOf(call: VoiceCallState): CallLiveProps {
-  if (call.stage === VOICE_CALL_STAGE.ENDING) return { stage: CALL_STAGE.ENDING };
-
-  if (call.stage === VOICE_CALL_STAGE.CONNECTING || call.startedAt === undefined) {
-    return { stage: CALL_STAGE.CONNECTING };
-  }
-
-  return { stage: CALL_STAGE.LIVE, startedAt: call.startedAt, muted: call.microphoneMuted };
 }
 
 /**
@@ -113,7 +101,6 @@ export function useAgentTalk(
       onCall: true,
       press: (
         <CallComposerControls
-          live={liveOf(call)}
           microphone={{
             muted: call.microphoneMuted,
             onPress: () => voice.setMicrophoneMuted(!call.microphoneMuted),
