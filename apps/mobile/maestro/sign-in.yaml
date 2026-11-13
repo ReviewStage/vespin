@@ -16,6 +16,11 @@ appId: dev.vespin.ios
 - takeScreenshot: sign-in
 - tapOn: "Continue with GitHub"
 - assertVisible: "Inbox"
+# Signed in, the app asks iOS's notification prompt once, which the flow
+# allows, so it covers nothing the flow taps next.
+- tapOn:
+    text: "Allow"
+    optional: true
 # The next launch reads the tokens back from the settings file and opens on
 # the Inbox, never the sign-in screen.
 - stopApp
