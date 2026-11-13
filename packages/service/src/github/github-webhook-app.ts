@@ -35,7 +35,7 @@ import {
 } from "effect/http";
 import { agentPublished } from "../agents/coder-host/published.js";
 import { routedSessions } from "../agents/coder-host/runtime-sessions.js";
-import { installationDriveRegenerated } from "../agents/workspace-drive.js";
+import { installationDrivePruned } from "../agents/workspace-drive.js";
 import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../auth/auth-deployment.js";
 import { cadenceOrUnavailable } from "../automations/automation-cadence.js";
 import { queueGithubRuns } from "../automations/automation-github.js";
@@ -113,9 +113,9 @@ import { GitHubBackground } from "./github-rate-gate.js";
  * nothing held, because no repository of an installation is held: the chip
  * lists them from GitHub each time it opens, and every start checks its
  * repository there (`github-procedures.ts`, `workspace-repository.ts`). But
- * a repository given or taken, or an installation made, deleted, or brought
- * back, regenerates its workspace's drive past the answer
- * (`workspace-drive.ts`), so the drive holds what the workspace connects.
+ * a repository taken, or an installation deleted, prunes its workspace's
+ * drive past the answer (`workspace-drive.ts`), so the drive drops what the
+ * workspace no longer connects.
  *
  * A user revoking their authorization of the App, which GitHub also sends
  * without subscribing (`github_app_authorization`), drops that GitHub user's
@@ -191,7 +191,7 @@ const GRANT_CHANGE_ACTION = {
 } as const;
 
 /**
- * The actions, by event, after which the workspace's drive is regenerated,
+ * The actions, by event, after which the workspace's drive is pruned,
  * since repositories left it. A grant fills nothing: a start in a repository
  * the drive lacks clones it (`workspace-drive.ts`).
  */
@@ -672,10 +672,10 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
         yield* hostedStoreOrUnavailable(setInstallationStatus(moved.installationId, moved.status));
       }
 
-      // Note that the status is moved first, so an installation deleted regenerates a drive that drops its repositories.
+      // Note that the status is moved first, so an installation deleted prunes its repositories from the drive.
       const regranted = installationRegranted(event, payload);
 
-      if (regranted !== undefined) yield* installationDriveRegenerated(regranted);
+      if (regranted !== undefined) yield* installationDrivePruned(regranted);
 
       return hostedJsonResponse(200, { read: 0 });
     }
