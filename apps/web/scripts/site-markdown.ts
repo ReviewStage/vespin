@@ -1,9 +1,9 @@
 /**
- * site-markdown.ts -- the site's Markdown documents answered as modules of finished HTML: CHANGELOG.md's releases and PRIVACY.md's policy, drawn by `src/site-markdown.tsx` when the site is built or served.
+ * site-markdown.ts -- the site's Markdown documents answered as modules of finished HTML: CHANGELOG.md's releases, PRIVACY.md's policy, and the guides under `guides/`, drawn by `src/site-markdown.tsx` when the site is built or served.
  *
- * A page imports `virtual:site/changelog-releases` or
- * `virtual:site/privacy-policy` and is handed values, every release's and
- * section's HTML among them, so the renderer (`@repo/ui/markdown`) runs in
+ * A page imports `virtual:site/changelog-releases`,
+ * `virtual:site/privacy-policy`, or `virtual:site/guides` and is handed
+ * values, every release's, section's, and guide's HTML among them, so the renderer (`@repo/ui/markdown`) runs in
  * the build and never in a visitor's tab. The drawing module is TypeScript
  * that reaches the shared packages' sources, so it is loaded through a Vite
  * server of its own, which runs it as the SSR build runs the pages, and
@@ -13,7 +13,8 @@
  * page under `vite`.
  */
 
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer, type Plugin } from "vite";
 
@@ -21,32 +22,82 @@ import { createServer, type Plugin } from "vite";
 type SiteMarkdown = typeof import("../src/site-markdown");
 
 /** What a document is drawn as: the value its module answers. */
-type SiteDrawing = ReturnType<SiteMarkdown["parseReleases"]> | ReturnType<SiteMarkdown["policyOf"]>;
+type SiteDrawing =
+  | ReturnType<SiteMarkdown["parseReleases"]>
+  | ReturnType<SiteMarkdown["policyOf"]>
+  | ReturnType<SiteMarkdown["parseGuides"]>;
+
+/** One Markdown file a document is read from: its name, and its words. */
+interface SiteSource {
+  readonly file: string;
+  readonly words: string;
+}
 
 const resolveFile = (path: string) => fileURLToPath(new URL(path, import.meta.url));
 
 const DRAWING_MODULE = resolveFile("../src/site-markdown.tsx");
 
-/** A document this answers: the file it is read from, and how it is drawn. */
+/** A document this answers: the file or folder it is read from, and how it is drawn. */
 interface SiteDocument {
-  readonly file: string;
-  readonly draw: (site: SiteMarkdown, words: string) => SiteDrawing;
+  /** A file, or a folder whose every `.md` file but its README is a source. */
+  readonly path: string;
+  readonly folder: boolean;
+  readonly draw: (site: SiteMarkdown, sources: readonly SiteSource[]) => SiteDrawing;
 }
+
+/** The folder's README says how a guide is written, and is no guide. */
+const FOLDER_README = "README.md";
+
+/**
+ * Whether a build carries draft guides: every build but production's, so a
+ * draft is read on a Preview and never published.
+ */
+const DRAFTS = process.env.VERCEL_ENV !== "production";
+
+/** The one source of a document read from a file. */
+const onlyWords = (sources: readonly SiteSource[]) => sources[0]?.words ?? "";
 
 /** Each module this answers, and its document. */
 const SITE_DOCUMENTS = new Map<string, SiteDocument>([
   [
     "virtual:site/changelog-releases",
     {
-      file: resolveFile("../../../CHANGELOG.md"),
-      draw: (site, words) => site.parseReleases(words),
+      path: resolveFile("../../../CHANGELOG.md"),
+      folder: false,
+      draw: (site, sources) => site.parseReleases(onlyWords(sources)),
     },
   ],
   [
     "virtual:site/privacy-policy",
-    { file: resolveFile("../../../PRIVACY.md"), draw: (site, words) => site.policyOf(words) },
+    {
+      path: resolveFile("../../../PRIVACY.md"),
+      folder: false,
+      draw: (site, sources) => site.policyOf(onlyWords(sources)),
+    },
+  ],
+  [
+    "virtual:site/guides",
+    {
+      path: resolveFile("../guides"),
+      folder: true,
+      draw: (site, sources) => site.parseGuides(sources, DRAFTS),
+    },
   ],
 ]);
+
+/** The files a document is read from, in name order, so a build draws them the same every time. */
+async function sourcesOf(document: SiteDocument): Promise<readonly SiteSource[]> {
+  if (!document.folder)
+    return [{ file: document.path, words: await readFile(document.path, "utf8") }];
+
+  const files = (await readdir(document.path))
+    .filter((file) => file.endsWith(".md") && file !== FOLDER_README)
+    .sort();
+
+  return Promise.all(
+    files.map(async (file) => ({ file, words: await readFile(join(document.path, file), "utf8") })),
+  );
+}
 
 /** Rollup's name for a module this answers, `\0`-led so no other plugin loads it. */
 const RESOLVED_PREFIX = "\0";
@@ -80,11 +131,13 @@ export async function drawnBySite<Drawn>(draw: (site: SiteMarkdown) => Drawn): P
   }
 }
 
-/** One site document drawn through a server of its own. */
-async function drawnDocument(document: SiteDocument): Promise<SiteDrawing> {
-  const words = await readFile(document.file, "utf8");
+/** One site document drawn through a server of its own, with the files it was read from. */
+async function drawnDocument(
+  document: SiteDocument,
+): Promise<{ drawing: SiteDrawing; sources: readonly SiteSource[] }> {
+  const sources = await sourcesOf(document);
 
-  return drawnBySite((site) => document.draw(site, words));
+  return { drawing: await drawnBySite((site) => document.draw(site, sources)), sources };
 }
 
 /** Every site document drawn through one server, by the module that answers it. */
@@ -93,12 +146,13 @@ async function drawnDocuments(): Promise<Map<string, SiteDrawing>> {
     [...SITE_DOCUMENTS].map(async ([id, document]) => ({
       id,
       document,
-      words: await readFile(document.file, "utf8"),
+      sources: await sourcesOf(document),
     })),
   );
 
   return drawnBySite(
-    (site) => new Map(documents.map(({ id, document, words }) => [id, document.draw(site, words)])),
+    (site) =>
+      new Map(documents.map(({ id, document, sources }) => [id, document.draw(site, sources)])),
   );
 }
 
@@ -129,10 +183,18 @@ export function siteMarkdown(): Plugin {
       const document = name === undefined ? undefined : SITE_DOCUMENTS.get(name);
 
       if (name === undefined || document === undefined) return undefined;
-      this.addWatchFile(document.file);
-      const value = drawings?.has(name) ? drawings.get(name) : await drawnDocument(document);
+      const built = drawings?.get(name);
 
-      return `export default ${JSON.stringify(value)};`;
+      if (built !== undefined) return `export default ${JSON.stringify(built)};`;
+      const { drawing, sources } = await drawnDocument(document);
+
+      // Note that a folder's files are watched each, because a watched folder
+      // is read as an import of it; a guide added under `vite` shows once the
+      // server restarts.
+      for (const source of sources)
+        this.addWatchFile(document.folder ? join(document.path, source.file) : source.file);
+
+      return `export default ${JSON.stringify(drawing)};`;
     },
   };
 }
