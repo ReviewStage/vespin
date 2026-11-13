@@ -80,7 +80,7 @@ builds a control of its own.
   Native list (a lazy `FlatList`, drawn newest last and anchored there, with
   Jump to latest once the reader scrolls back, and its older pages read as
   the reader scrolls up to its oldest row, which holds its place as they
-  land), under `AgentHead`, where the agent stands and its model; a call
+  land), under `AgentHead`, the model it runs on; a call
   the agent holds for an answer says so under its line with Deny and Allow; its rows
   are read by `transcript-model.ts` from the panel's own parts, folds, and
   call lines (`@repo/features/agent-parts`, `turn-rows`, `tool-call-model`),
@@ -177,7 +177,9 @@ navigation, tab bar, swipes, menus, sheets and glass.
   title menus stand (`PathTitle`'s `actions`), and in a compact window, whose
   stack's title holds no menu, they lead its ⋯ menu. An
   agent's page names the agent in the bar in the ink instead, as Messages
-  names a conversation, since its transcript opens at its newest row.
+  names a conversation, since its transcript opens at its newest row, with
+  where it stands (Working, Failed) in the quiet ink under it (`BarTitle`),
+  as Mail's mailbox stands over how fresh it is.
 - **Glass header buttons.** Back, search, filter and ⋯ are the system's own
   bar items (`Stack.Toolbar`, `Stack.SearchBar` with `integratedButton`, a
   split view's `ToolbarItem`s), which iOS 26 draws as round glass; the back
@@ -200,7 +202,8 @@ navigation, tab bar, swipes, menus, sheets and glass.
   opens from the switcher's menu and ⌘,, as Notion's and Linear's iPad sidebars keep it, and
   the account's photo leads the sidebar's bar only until the switcher can draw. Nothing draws a
   copy of glass, and glass is one layer: a bar's own, or one glass view
-  (`GlassBar`, `ComposerFoot`, the failure notice, Jump to latest). A
+  (`GlassBar`, `ComposerFoot`, the failure notice), or a glass button the
+  system draws itself (Jump to latest, SwiftUI's `glass` style). A
   glass that holds buttons takes no press of its own (not `interactive`),
   so only the button under a finger or the pointer reacts, and no button
   is handed a hover effect: the system draws its own on each style, where
@@ -292,8 +295,7 @@ here once, so a screen gets them by composing these pieces.
 
 - **Settings** come from `accessibility.ts`, one store per setting shared by
   every component: `useReduceMotion` (a custom motion is left out, as Jump to
-  latest's scroll), `useReduceTransparency` (`GlassBar` and Jump to latest
-  stand solid on `SURFACE` inside a `TEXT_MUTED` edge, which holds 3:1 where
+  latest's scroll), `useReduceTransparency` (`GlassBar` stands solid on `SURFACE` inside a `TEXT_MUTED` edge, which holds 3:1 where
   the brand's strong edge does not), `useIncreaseContrast` (`useColors`
   gives the quiet inks the body's, the hairline the quiet ink,
   and danger the words' ink). Bold Text and Button Shapes need nothing of

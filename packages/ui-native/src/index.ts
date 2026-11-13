@@ -17,6 +17,8 @@ export {
 
 export { AuthPage } from "./auth-page.js";
 
+export { BarTitle } from "./bar-title.js";
+
 export { BRAND_MARK_ASSET, BrandMark } from "./brand-mark.js";
 
 export {
