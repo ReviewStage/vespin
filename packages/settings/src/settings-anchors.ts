@@ -85,7 +85,6 @@ export const EXPERIMENT_ANCHOR = {
   [EXPERIMENT.DESCRIPTIONS]: "experiment-descriptions",
   [EXPERIMENT.REWIND_FILES]: "experiment-rewind-files",
   [EXPERIMENT.TURN_END]: "experiment-turn-end",
-  [EXPERIMENT.RUN_ACTIONS]: "experiment-run-actions",
   [EXPERIMENT.MERGE_QUEUE]: "experiment-merge-queue",
   [EXPERIMENT.TURN_CHANGES]: "experiment-turn-changes",
   [EXPERIMENT.REPLY_BUTTONS]: "experiment-reply-buttons",
