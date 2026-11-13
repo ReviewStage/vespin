@@ -49,7 +49,8 @@ builds a control of its own.
   said once for a stretch offline, `failure-notice-model.ts`),
   and the marks (`UnreadDot`, `NeedsYouDot`,
   `WorkingMark`, `FailedMark`, `TaskStatusMark`, `Avatar`, a person's photo
-  or their letters, `AgentTile`, and `BrandMark`, the Keel mark the app's
+  or their letters, `AgentTile`, `RepositoryPicture`, a repository's owner's
+  picture on a tile, and `BrandMark`, the Keel mark the app's
   asset catalog holds). `GlassBar` is a bar of Liquid
   Glass through `expo-glass-effect`, `GlassDock` the screen that pins one
   over its foot above the keyboard, and `Composer` the rounded field a
