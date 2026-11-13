@@ -25,7 +25,7 @@ import {
 import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useState } from "react";
 import { GLYPH, glyphImage, type MarkLook } from "./glyph.js";
-import { dropLink, focusEffectDisabled } from "./interactions.js";
+import { dropLink } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
 import { RowOpenContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -108,8 +108,6 @@ export function RowList({ look, selected, onSelect, onRefresh, children }: RowLi
         ...(sides > 0 ? [listSectionMargins({ edges: "horizontal", length: sides })] : []),
         // Note that a scroll lowers the keyboard a search raised, as the system's own lists of results do.
         scrollDismissesKeyboard("immediately"),
-        // Note that a list that keeps a selection draws no keyboard focus ring around its selected row, which already stands on the `SELECTED` fill, as iPadOS's own sidebars draw theirs; it's set by whether the list selects at all, not by whether a row is selected now, so the modifiers don't change as the selection does. A list that selects nothing keeps the ring.
-        ...(onSelect === undefined ? [] : [focusEffectDisabled()]),
         ...(onRefresh === undefined ? [] : [refreshable(onRefresh)]),
       ]}
     >
