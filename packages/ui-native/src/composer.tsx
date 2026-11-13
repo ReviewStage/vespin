@@ -1,4 +1,4 @@
-// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, one act or a menu, the field, and a send or mic button on the right, in a React Native bar or a SwiftUI column's foot.
+// composer.tsx -- the rounded glass field at a thread's or a transcript's foot: a + on the left, one act or a menu, the field, and Send or Stop on the right, in a React Native bar or a SwiftUI column's foot.
 
 import {
   Button,
@@ -124,8 +124,6 @@ type ComposerProps = {
   readonly onAdd?: (() => void) | undefined;
   /** What the + opens as a menu in place of `onAdd`'s one act, such as an agent's Photos, Permissions, and Fast. */
   readonly addMenu?: ComposerMenu | undefined;
-  /** Starts dictation, drawn as a mic in Send's place while the field is empty. */
-  readonly onDictate?: (() => void) | undefined;
   /** Stops the turn under way, drawn as Stop in Send's place while the field is empty, as the panel's box offers it while its agent works. */
   readonly onStop?: (() => void) | undefined;
   /** Whether a Stop is out, which stands as the system's spinner in Stop's place until the agent stops. */
@@ -142,18 +140,16 @@ type ComposerProps = {
  * The round button at the field's end, the system's own prominent circle as
  * Messages draws Send: Send in the ink once there is something to send and
  * the system's dimmed circle until then, or, while nothing is typed, Stop
- * while a turn runs, the system's spinner once it is pressed, else the mic.
+ * while a turn runs, and the system's spinner once it is pressed.
  */
 function SendButton({
   empty,
   onSend,
-  onDictate,
   onStop,
   stopping,
 }: {
   readonly empty: boolean;
   readonly onSend: (() => void) | undefined;
-  readonly onDictate: (() => void) | undefined;
   readonly onStop: (() => void) | undefined;
   readonly stopping: boolean;
 }) {
@@ -180,17 +176,6 @@ function SendButton({
     return (
       <Button onPress={onStop} modifiers={[...roundModifiers(colors), accessibilityLabel("Stop")]}>
         <Image {...glyphImage(GLYPH.STOP_TURN)} size={stopSize} modifiers={roundMark(round)} />
-      </Button>
-    );
-  }
-
-  if (empty && onDictate !== undefined) {
-    return (
-      <Button
-        onPress={onDictate}
-        modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel("Dictate")]}
-      >
-        <Image {...glyphImage(GLYPH.DICTATE)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
       </Button>
     );
   }
@@ -288,7 +273,7 @@ export function AddPress({
   );
 }
 
-/** The composer's pieces in a row's order: the +, the field, and Send or the mic, which a bar of glass holds. */
+/** The composer's pieces in a row's order: the +, the field, and Send or Stop, which a bar of glass holds. */
 function ComposerPieces(props: ComposerProps) {
   const {
     placeholder,
@@ -298,7 +283,6 @@ function ComposerPieces(props: ComposerProps) {
     onSend,
     onAdd,
     addMenu,
-    onDictate,
     onStop,
     stopping = false,
   } = props;
@@ -353,13 +337,7 @@ function ComposerPieces(props: ComposerProps) {
           accessibilityIdentifier("composer-field"),
         ]}
       />
-      <SendButton
-        empty={empty}
-        onSend={send}
-        onDictate={onDictate}
-        onStop={onStop}
-        stopping={stopping}
-      />
+      <SendButton empty={empty} onSend={send} onStop={onStop} stopping={stopping} />
     </>
   );
 }
@@ -367,8 +345,8 @@ function ComposerPieces(props: ComposerProps) {
 /**
  * A composer in the system's Liquid Glass at the screen's foot, above the tab
  * bar: the + for what a message carries, the field, which grows with its
- * words, and Send filled with the ink, or the mic while the field is empty
- * where dictation is offered. Where its holder keeps the words, the field
+ * words, and Send filled with the ink, or Stop while the field is empty and
+ * a turn runs. Where its holder keeps the words, the field
  * follows them, so words a refused send hands back stand in it again; else
  * it empties on Send. Pictures dropped on it, on an iPad, go to its
  * holder's `onDropPictures`. It stands in a React Native bar (`GlassBar`),

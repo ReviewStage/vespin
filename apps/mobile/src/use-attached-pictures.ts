@@ -201,7 +201,11 @@ export function useAttachedPictures(
   useEffect(() => open(), []);
 
   return {
-    attached: pictures.map(({ id, file }) => ({ id, name: file.name })),
+    attached: pictures.map(({ id, file }) => ({
+      id,
+      name: file.name,
+      preview: `data:${file.mediaType};base64,${file.data}`,
+    })),
     files: pictures.length === 0 ? undefined : pictures.map(({ file }) => file),
     refusal: pictureRefusal(pictures, bounds),
     attach,

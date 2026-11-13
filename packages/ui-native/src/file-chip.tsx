@@ -60,7 +60,7 @@ const styles = StyleSheet.create({
     gap: SPACE.ROW,
     paddingHorizontal: SPACE.ROW + 2,
     paddingVertical: SPACE.TIGHT * 2,
-    borderRadius: RADIUS.TAG * 2,
+    borderRadius: RADIUS.TILE,
     borderWidth: StyleSheet.hairlineWidth,
   },
   words: { flexShrink: 1, gap: 1 },

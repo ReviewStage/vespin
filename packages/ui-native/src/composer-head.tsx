@@ -1,9 +1,10 @@
 // composer-head.tsx -- what stands over a composer's field inside its glass: the messages queued behind the turn, each with Steer and Delete, the pictures attached to the message, each taken off on a press, and the skills a `/` offers.
 
-import { Button, HStack, Image, ScrollView, Text, VStack } from "@expo/ui/swift-ui";
+import { Button, Circle, HStack, Image, ScrollView, Text, VStack, ZStack } from "@expo/ui/swift-ui";
 import * as SwiftModifiers from "@expo/ui/swift-ui/modifiers";
 import {
   accessibilityHidden,
+  accessibilityHint,
   accessibilityLabel,
   buttonStyle,
   font,
@@ -11,10 +12,12 @@ import {
   frame,
   lineLimit,
 } from "@expo/ui/swift-ui/modifiers";
+import { useState } from "react";
 import { Chip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
+import { AvatarPhoto } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, RADIUS, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** The panel's words for a queued message's acts. */
@@ -130,10 +133,94 @@ export function QueuedLines({ lines, paused, onSteer, onDelete }: QueuedLinesPro
 /** What a press on an attached picture is heard to do, since its × alone says so on screen. */
 const DETACH_HINT = "Removes it from the message";
 
-/** One picture attached to the message, by the name the message carries it under ("Picture 1"). */
-export type AttachedPicture = { readonly id: string; readonly name: string };
+/** One picture attached to the message, by the name the message carries it under ("Picture 1"), and the address its thumbnail draws from, such as its JPEG's `data:` address; a capsule of its name where none is given. */
+export type AttachedPicture = {
+  readonly id: string;
+  readonly name: string;
+  readonly preview?: string | undefined;
+};
 
-/** The pictures attached to the message as a row of capsules, each taken off the message on a press, scrolling sideways where they outrun the bar. */
+/** An attached picture's thumbnail, in points, as Messages draws one over its field. */
+const THUMB_SIZE = 56;
+
+/** The × disc at a thumbnail's corner, in points. */
+const DETACH_DISC = 20;
+
+/** Nothing, for a thumbnail that needs no word once its picture has drawn. */
+const DRAWN = () => undefined;
+
+/**
+ * An attached picture as Messages draws one over its field: the picture
+ * itself on a rounded tile, a × disc at its corner that takes it off the
+ * message, in a press of Apple's least size over the tile's corner. Note
+ * that the × stands over the picture rather than the picture inside a
+ * button, since the picture is a React Native view SwiftUI hosts, which
+ * takes its own touches; a picture that cannot draw stands as its name's
+ * capsule instead.
+ */
+function AttachedThumb({
+  picture,
+  preview,
+  onDetach,
+}: {
+  readonly picture: AttachedPicture;
+  readonly preview: string;
+  readonly onDetach: () => void;
+}) {
+  const colors = useColors();
+  const [failed, setFailed] = useState(false);
+
+  if (failed) {
+    return (
+      <Chip label={picture.name} symbol={GLYPH.REMOVE} hint={DETACH_HINT} onPress={onDetach} />
+    );
+  }
+
+  return (
+    <ZStack alignment="topTrailing" modifiers={[frame({ width: THUMB_SIZE, height: THUMB_SIZE })]}>
+      <AvatarPhoto
+        address={preview}
+        size={THUMB_SIZE}
+        corner={RADIUS.TILE}
+        onLoad={DRAWN}
+        onFail={() => setFailed(true)}
+      />
+      <Button
+        onPress={onDetach}
+        modifiers={[
+          buttonStyle("plain"),
+          accessibilityLabel(picture.name),
+          accessibilityHint(DETACH_HINT),
+        ]}
+      >
+        <ZStack
+          alignment="topTrailing"
+          modifiers={[
+            frame({ width: PRESS_SIZE, height: PRESS_SIZE, alignment: "topTrailing" }),
+            SwiftModifiers.contentShape(SwiftModifiers.shapes.rectangle()),
+          ]}
+        >
+          <ZStack
+            modifiers={[
+              frame({ width: DETACH_DISC, height: DETACH_DISC }),
+              SwiftModifiers.padding({ all: SPACE.TIGHT }),
+            ]}
+          >
+            <Circle modifiers={[foregroundStyle(colors.TEXT)]} />
+            <Image
+              {...glyphImage(GLYPH.REMOVE)}
+              size={MARK_SIZE.GLYPH - 4}
+              color={colors.GROUND}
+              modifiers={[accessibilityHidden()]}
+            />
+          </ZStack>
+        </ZStack>
+      </Button>
+    </ZStack>
+  );
+}
+
+/** The pictures attached to the message as a row of thumbnails, each taken off the message by its ×, scrolling sideways where they outrun the bar. */
 export function AttachedPictures({
   pictures,
   onDetach,
@@ -146,15 +233,24 @@ export function AttachedPictures({
   return (
     <ScrollView axes="horizontal" showsIndicators={false}>
       <HStack spacing={SPACE.TIGHT * 2}>
-        {pictures.map((picture) => (
-          <Chip
-            key={picture.id}
-            label={picture.name}
-            symbol={GLYPH.REMOVE}
-            hint={DETACH_HINT}
-            onPress={() => onDetach(picture.id)}
-          />
-        ))}
+        {pictures.map((picture) =>
+          picture.preview === undefined ? (
+            <Chip
+              key={picture.id}
+              label={picture.name}
+              symbol={GLYPH.REMOVE}
+              hint={DETACH_HINT}
+              onPress={() => onDetach(picture.id)}
+            />
+          ) : (
+            <AttachedThumb
+              key={picture.id}
+              picture={picture}
+              preview={picture.preview}
+              onDetach={() => onDetach(picture.id)}
+            />
+          ),
+        )}
       </HStack>
     </ScrollView>
   );

@@ -122,7 +122,7 @@ const styles = StyleSheet.create({
   originBody: { alignSelf: "stretch", gap: SPACE.TIGHT },
   said: {
     maxWidth: "82%",
-    borderRadius: 18,
+    borderRadius: RADIUS.BUBBLE,
     paddingHorizontal: SPACE.ROW + 4,
     paddingVertical: SPACE.ROW,
   },
@@ -132,7 +132,7 @@ const styles = StyleSheet.create({
   chip: {
     flexShrink: 1,
     borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 6,
+    borderRadius: RADIUS.TAG,
     paddingHorizontal: 5,
     paddingVertical: 1,
   },
@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
     gap: SPACE.TIGHT + 2,
     paddingTop: SPACE.TIGHT,
   },
-  block: { borderWidth: StyleSheet.hairlineWidth, borderRadius: 8, overflow: "hidden" },
+  block: { borderWidth: StyleSheet.hairlineWidth, borderRadius: RADIUS.BLOCK, overflow: "hidden" },
   blockTitle: { paddingHorizontal: SPACE.ROW, paddingTop: 6 },
   blockText: { padding: SPACE.ROW, paddingTop: SPACE.TIGHT },
   media: { gap: SPACE.ROW },

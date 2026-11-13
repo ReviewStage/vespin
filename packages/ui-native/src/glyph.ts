@@ -139,6 +139,11 @@ export const GLYPH = {
   UNPIN: lucide(LUCIDE_SYMBOL.PIN_OFF),
   MARK_READ: lucide(LUCIDE_SYMBOL.MAIL_OPEN),
   MARK_UNREAD: lucide(LUCIDE_SYMBOL.MAIL),
+  /** A draft's header, by where it goes: an email, and one with no place named. */
+  DRAFT_EMAIL: lucide(LUCIDE_SYMBOL.MAIL),
+  DRAFT_WRITTEN: lucide(LUCIDE_SYMBOL.PEN_LINE),
+  /** A Slack draft's header, where the panel draws Slack's own mark, which no glyph set holds: a message's bubble, the nearest. */
+  DRAFT_SLACK: system("bubble.left"),
   MARK_ALL_READ: lucide(LUCIDE_SYMBOL.CHECK_CHECK),
   SELECT: lucide(LUCIDE_SYMBOL.LIST_CHECKS),
   ARCHIVE: lucide(LUCIDE_SYMBOL.ARCHIVE),
