@@ -278,7 +278,9 @@ onFlowComplete:
 - takeScreenshot: task-sub-task-add
 - tapOn: "New sub-task"
 - assertVisible: "Describe the task"
-- assertVisible: "Relation, Sub-task of"
+# The parent stands over the words as the relation's capsule (since #8903),
+# "Sub-task of · its name".
+- assertVisible: "Sub-task of.*"
 # Note that the keyboard is lowered by a short drag up the form, which
 # lowers it on a drag (`SettingsForm`), since Maestro's hideKeyboard fails
 # on this sheet when no keyboard stands, as with nothing typed.
