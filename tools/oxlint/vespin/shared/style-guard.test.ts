@@ -229,8 +229,9 @@ describe("a stylesheet", () => {
     const sheet = `.frame { border: 1px solid var(--ui-color-border); border-radius: var(--ui-radius-8); overflow: clip; }
       .edge { border: 1px solid var(--ui-color-border); border-radius: var(--ui-radius-8); }
       .clip { border-width: 0; border-radius: var(--ui-radius-8); overflow: hidden; }
+      .sides { border-width: 0 1px; border-radius: var(--ui-radius-8); overflow: hidden; }
       .square { border: 1px solid var(--ui-color-border); overflow: hidden; }`;
-    expect(sheetRules(sheet)).toEqual([STYLE_RULE.EDGE_CLIP]);
+    expect(sheetRules(sheet)).toEqual([STYLE_RULE.EDGE_CLIP, STYLE_RULE.EDGE_CLIP]);
   });
 
   it("refuses a grid placing its items with no columns named, and passes one naming them", () => {

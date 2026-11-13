@@ -679,8 +679,21 @@ function autoColumnGrid(block: CssBlock): CssDeclaration | undefined {
 const EDGE_PROPERTY =
   /^border(?:-(?:top|right|bottom|left|inline|block)(?:-(?:start|end))?)?(?:-width)?$/u;
 
-/** A border's value that draws no edge. */
-const NO_EDGE = /^(?:none|hidden|0(?:px)?)(?:\s|$)/u;
+/** A word of a border's value that draws no edge: no style, or no width. */
+const NO_EDGE = /^(?:none|hidden|0(?:px)?)$/u;
+const ZERO_WIDTH = /^0(?:px)?$/u;
+
+/**
+ * Whether a border declaration draws an edge. Note that a width's
+ * shorthand names up to four sides, so it draws none only where every side
+ * is zero, and a border's shorthand draws none where its style is none or
+ * hidden or its width is zero.
+ */
+function drawsEdge(property: string, value: string): boolean {
+  const words = bareValue(value).trim().split(/\s+/u);
+  if (property.endsWith("-width")) return !words.every((word) => ZERO_WIDTH.test(word));
+  return !words.some((word) => NO_EDGE.test(word));
+}
 
 /** An overflow that clips what a box holds. */
 const CLIP_PROPERTY = /^overflow(?:-[xy])?$/u;
@@ -701,10 +714,7 @@ function edgeClipBlock(block: CssBlock): string | undefined {
       RADIUS_PROPERTY.test(property) && !SQUARE_CORNER.test(bareValue(value)),
   );
   const edge = holds(
-    ({ property, value }) =>
-      EDGE_PROPERTY.test(property) &&
-      !property.endsWith("-color") &&
-      !NO_EDGE.test(bareValue(value)),
+    ({ property, value }) => EDGE_PROPERTY.test(property) && drawsEdge(property, value),
   );
   const clip = holds(
     ({ property, value }) => CLIP_PROPERTY.test(property) && CLIP_VALUE.test(value),
