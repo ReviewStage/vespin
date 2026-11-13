@@ -24,7 +24,7 @@ import {
 import { Predicate } from "effect";
 import { type ReactElement, type ReactNode, useState } from "react";
 import { GLYPH, glyphImage, type MarkLook } from "./glyph.js";
-import { dropLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
+import { dropLink } from "./interactions.js";
 import { ToneGlyph } from "./marks.js";
 import { RowOpenContext, RowSelectedContext } from "./row-open.js";
 import { type BrandColors, useColors } from "./tokens/colors.js";
@@ -248,7 +248,6 @@ export function ListSection({
         modifiers={[
           buttonStyle("plain"),
           accessibilityAddTraits(["isHeader"]),
-          hoverEffect(HOVER_EFFECT.HIGHLIGHT),
           accessibilityLabel(`${title}${count === undefined ? "" : `, ${count}`}`),
           accessibilityValue(folded ? FOLD_HEARD.SHUT : FOLD_HEARD.OPEN),
           accessibilityHint(FOLD_HINT),

@@ -47,7 +47,7 @@ import { useAccessibilitySize, useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent, menuLabel } from "./glyph-label.js";
 import { INBOX_LINE_LOOK, PULL_REQUEST_LOOK } from "./inbox-line-model.js";
-import { dragLink, HOVER_EFFECT, hoverEffect } from "./interactions.js";
+import { dragLink } from "./interactions.js";
 import {
   Avatar,
   type Face,
@@ -696,7 +696,6 @@ function SubTaskFold({ open, onPress }: { readonly open: boolean; readonly onPre
       onPress={onPress}
       modifiers={[
         buttonStyle("borderless"),
-        hoverEffect(HOVER_EFFECT.HIGHLIGHT),
         accessibilityLabel(open ? HIDE_SUB_TASKS : SHOW_SUB_TASKS),
       ]}
     >

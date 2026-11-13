@@ -24,7 +24,7 @@ import {
   SkillSuggestions,
 } from "./composer-head.js";
 import { GLYPH, glyphImage } from "./glyph.js";
-import { dropPictures, HOVER_EFFECT, hoverEffect } from "./interactions.js";
+import { dropPictures } from "./interactions.js";
 import type { PickOption } from "./settings-form.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, SPACE } from "./tokens/space.js";
@@ -167,8 +167,7 @@ export function AttachRow({ pictures, onAdd, onDetach, testId, onDropPictures }:
       <Button
         onPress={onAdd}
         modifiers={[
-          buttonStyle("plain"),
-          hoverEffect(HOVER_EFFECT.HIGHLIGHT),
+          buttonStyle("borderless"),
           accessibilityLabel("Add picture"),
           ...(testId === undefined ? [] : [accessibilityIdentifier(testId)]),
         ]}

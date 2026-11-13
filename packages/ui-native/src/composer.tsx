@@ -31,7 +31,7 @@ import { type ReactNode, useEffect, useRef, useState } from "react";
 import { BAR_EDGE, BAR_RADIUS, BAR_ROW_SPACING, BarHead, GlassBar } from "./glass-bar.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
-import { dropPictures, HOVER_EFFECT, hoverEffect } from "./interactions.js";
+import { dropPictures } from "./interactions.js";
 import { type BarMenu, BarMenuButton } from "./split-view.js";
 import { useColors } from "./tokens/colors.js";
 import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
@@ -69,7 +69,6 @@ function roundModifiers(colors: ReturnType<typeof useColors>, enabled = true) {
     foregroundStyle(enabled ? colors.GROUND : colors.TEXT_MUTED),
     ...(enabled ? [] : [background(colors.CHIP_EDGE, SwiftModifiers.shapes.circle())]),
     ...PRESS_FRAME,
-    hoverEffect(HOVER_EFFECT.HIGHLIGHT),
   ];
 }
 
@@ -179,12 +178,7 @@ function SendButton({
     return (
       <Button
         onPress={onDictate}
-        modifiers={[
-          buttonStyle("plain"),
-          ...PRESS_FRAME,
-          hoverEffect(HOVER_EFFECT.HIGHLIGHT),
-          accessibilityLabel("Dictate"),
-        ]}
+        modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel("Dictate")]}
       >
         <Image {...glyphImage(GLYPH.DICTATE)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
       </Button>
@@ -302,12 +296,7 @@ function ComposerPieces(props: ComposerProps) {
       ) : onAdd === undefined ? null : (
         <Button
           onPress={onAdd}
-          modifiers={[
-            buttonStyle("plain"),
-            ...PRESS_FRAME,
-            hoverEffect(HOVER_EFFECT.HIGHLIGHT),
-            accessibilityLabel(ADD_LABEL),
-          ]}
+          modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel(ADD_LABEL)]}
         >
           <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
         </Button>
@@ -372,7 +361,7 @@ export function ComposerFoot(props: ComposerProps) {
   const glass = [
     padding({ all: BAR_EDGE }),
     glassEffect({
-      glass: { variant: "regular", interactive: true },
+      glass: { variant: "regular" },
       // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- @expo/ui names this parameter `shape`.
       shape: "roundedRectangle",
       cornerRadius: BAR_RADIUS,
