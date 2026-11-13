@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { inboxPushOf, inboxPushResponseOf } from "./inbox-push-wire.js";
+import { inboxPushOfRequest, inboxPushResponseOf } from "./inbox-push-wire.js";
 
 /**
- * Where a tap or an action on a push takes the app, and what it sends there,
- * read from payloads written as the service sends them, Apple's `aps` and
- * all. Synthetic ids throughout.
+ * Where a tap or an action on a notification takes the app, and what it
+ * sends there, read from the request as `expo-notifications` hands it over:
+ * a push's payload written as the service sends it, Apple's `aps` and all,
+ * and the share sheet's local notification. Synthetic ids throughout.
  */
 
 const APS = { alert: { title: "Which queue?" }, "mutable-content": 1, badge: 2 };
@@ -39,19 +40,29 @@ const RUN_FAILED = {
   turnId: "turn-3",
 };
 
+/** A delivered push's request: its whole payload on the trigger, and its content's data read from the payload's absent `body`. */
+function pushed<Payload>(payload: Payload) {
+  return { content: { data: null }, trigger: { type: "push", payload } };
+}
+
+/** A local notification's request, posted with no trigger, its payload as its content's data. */
+function posted<Data>(data: Data) {
+  return { content: { data }, trigger: { class: "UNNotificationTrigger", type: "unknown" } };
+}
+
 const TAP = { actionId: "expo.modules.notifications.actions.DEFAULT" };
 
 describe("inboxPushResponseOf", () => {
   it.each([
     {
       name: "a tap on an ask opens its thread",
-      payload: DECIDE,
+      request: pushed(DECIDE),
       action: TAP,
       response: { route: "/inbox/item-1" },
     },
     {
       name: "a decide's button sends the option at its place",
-      payload: DECIDE,
+      request: pushed(DECIDE),
       action: { actionId: "1" },
       response: {
         route: "/inbox/item-1",
@@ -60,13 +71,13 @@ describe("inboxPushResponseOf", () => {
     },
     {
       name: "a button past the options only opens the thread",
-      payload: DECIDE,
+      request: pushed(DECIDE),
       action: { actionId: "2" },
       response: { route: "/inbox/item-1" },
     },
     {
       name: "a reply typed in place sends its words, trimmed",
-      payload: POST,
+      request: pushed(POST),
       action: { actionId: "reply", text: "  Ship it.\n" },
       response: {
         route: "/inbox/item-2",
@@ -75,41 +86,45 @@ describe("inboxPushResponseOf", () => {
     },
     {
       name: "a reply of nothing only opens the thread",
-      payload: POST,
+      request: pushed(POST),
       action: { actionId: "reply", text: "   " },
       response: { route: "/inbox/item-2" },
     },
     {
       name: "a failed run opens its agent's page",
-      payload: RUN_FAILED,
+      request: pushed(RUN_FAILED),
       action: TAP,
       response: { route: "/tasks/agent/agent-3" },
     },
     {
       name: "a task the share sheet started opens its agent's page",
-      payload: { kind: "share-started", taskId: "task-4", agentId: "agent-4" },
+      request: posted({ kind: "share-started", taskId: "task-4", agentId: "agent-4" }),
       action: TAP,
       response: { route: "/tasks/agent/agent-4" },
     },
     {
       name: "a task the share sheet started with no agent opens the task",
-      payload: { kind: "share-started", taskId: "task-5" },
+      request: posted({ kind: "share-started", taskId: "task-5" }),
       action: TAP,
       response: { route: "/tasks/task-5" },
     },
     {
       name: "a settled thread's background push opens nothing",
-      payload: { aps: { "content-available": 1, badge: 0 }, kind: "settled", itemId: "item-1" },
+      request: pushed({
+        aps: { "content-available": 1, badge: 0 },
+        kind: "settled",
+        itemId: "item-1",
+      }),
       action: TAP,
       response: undefined,
     },
     {
       name: "a payload that is not the service's opens nothing",
-      payload: { aps: APS, kind: "ask", itemId: "item-1" },
+      request: pushed({ aps: APS, kind: "ask", itemId: "item-1" }),
       action: TAP,
       response: undefined,
     },
-  ])("$name", ({ payload, action, response }) => {
-    expect(inboxPushResponseOf(inboxPushOf(payload), action)).toEqual(response);
+  ])("$name", ({ request, action, response }) => {
+    expect(inboxPushResponseOf(inboxPushOfRequest(request), action)).toEqual(response);
   });
 });

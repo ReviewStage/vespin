@@ -23,7 +23,7 @@
 
 import {
   INBOX_PUSH_ACTION,
-  inboxPushOf,
+  inboxPushOfRequest,
   inboxPushResponseOf,
   PUSH_CATEGORY,
 } from "@repo/features/inbox-push-wire";
@@ -82,7 +82,7 @@ export function useInboxNotifications(signedIn: boolean): void {
     // Note that the response is let go first, so a later render never opens it twice.
     clearLastNotificationResponse();
 
-    const opened = inboxPushResponseOf(inboxPushOf(response.notification.request.content.data), {
+    const opened = inboxPushResponseOf(inboxPushOfRequest(response.notification.request), {
       actionId: response.actionIdentifier,
       ...(response.userText === undefined ? undefined : { text: response.userText }),
     });

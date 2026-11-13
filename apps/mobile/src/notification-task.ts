@@ -15,7 +15,7 @@
  * background launch loads the bundle for the task alone.
  */
 
-import { inboxPushOf, PUSH_KIND } from "@repo/features/inbox-push-wire";
+import { inboxPushOf, inboxPushOfRequest, PUSH_KIND } from "@repo/features/inbox-push-wire";
 import { Predicate } from "effect";
 import {
   BackgroundNotificationTaskResult,
@@ -37,7 +37,7 @@ export function dismissThreadNotifications(itemId: string): Promise<void> {
       Promise.all(
         presented
           .filter((notification) => {
-            const push = inboxPushOf(notification.request.content.data);
+            const push = inboxPushOfRequest(notification.request);
 
             return push !== undefined && "itemId" in push && push.itemId === itemId;
           })
