@@ -70,6 +70,7 @@ import {
   CONNECTION_LOST_TWICE,
   CREDENTIAL_REFUSED_TURN,
   FOLLOW_UP_TURNS,
+  GOAL_CLEARED_TURN,
   SHORT_TURN,
   STOPPED_COMMAND,
   STOPPED_TURN,
@@ -333,6 +334,24 @@ it.effect(
       assert.equal(cli.prompts.length, 2);
       assert.equal(cli.interrupts, 1);
       assert.equal(cli.closed, true);
+    }),
+);
+
+it.effect(
+  "a /goal clear sent mid-turn interrupts the turn a goal holds open, and the launch goes on until the CLI runs the clear as a turn of its own",
+  () =>
+    Effect.gen(function* () {
+      const service = fakeService([], "Working toward the goal.");
+      const { cli, prompted, write, run } = yield* launch(GOAL_CLEARED_TURN, service);
+      yield* write(CONFIG);
+      yield* write(FIRST_MESSAGE);
+      yield* service.seen;
+      yield* Queue.take(prompted);
+      yield* write({ type: INPUT_LINE.MESSAGE, content: [{ type: "text", text: "/goal clear" }] });
+
+      assert.equal(yield* Fiber.join(run), RUNNER_END.TURN_ENDED);
+      assert.equal(cli.interrupts, 1);
+      assert.equal(cli.prompts.length, 2);
     }),
 );
 

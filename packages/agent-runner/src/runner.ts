@@ -56,6 +56,7 @@ import type {
   SessionStore,
 } from "@anthropic-ai/claude-agent-sdk";
 import { CommandPrefixSchema } from "@repo/wire";
+import { GOAL_ASK, goalAskOf } from "@repo/wire/ui-messages";
 import {
   Cause,
   Deferred,
@@ -516,6 +517,13 @@ function control<Answer>(step: string, call: () => Promise<Answer>) {
   );
 }
 
+/** Whether a message is a `/goal` line that clears the goal. */
+function clearsGoal(content: Extract<InputLine, { type: "message" }>["content"]): boolean {
+  const text = content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
+
+  return goalAskOf(text)?.kind === GOAL_ASK.CLEAR;
+}
+
 /** Hands one of the service's messages to the CLI, marking the launch in a turn. Called under the admission. */
 const handToCli = Effect.fn("agent-runner/handToCli")(function* (
   launch: Launch,
@@ -574,6 +582,12 @@ const takeLine = Effect.fn("agent-runner/takeLine")(function* (launch: Launch, t
             reconnecting.held.push({ uuid, prompt, content });
 
             return;
+          }
+
+          // Note that Claude Code runs a command only as a turn of its own, and a goal holds its turn open, so a `/goal clear` sent mid-turn interrupts that turn first; held unanswered ahead of it, so the turn it cuts off leaves the launch up for the clear.
+          if (clearsGoal(content) && (yield* Ref.get(launch.turnRunning))) {
+            yield* Ref.update(launch.unanswered, (sent) => new Set(sent).add(prompt));
+            yield* control("interrupt", () => launch.session.interrupt());
           }
 
           yield* handToCli(launch, uuid, prompt, content);
