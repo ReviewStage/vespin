@@ -92,7 +92,7 @@ import { useKnownNames, useWordTargets } from "./use-known-names.js";
 import { useLinkStanding, useNumberedTaskId, useWordsWorkspaceId } from "./use-link-standing.js";
 import { useOpenLink } from "./use-open-link.js";
 import { useWordsDates } from "./words-dates.js";
-import { MachineChipOwner } from "./workspace-machines.js";
+import { MachineChipOwner, useMachineOwnerHeard } from "./workspace-machines.js";
 
 /**
  * mention-chip.tsx -- a mention drawn in words as its chip: its kind's glyph and its name, a button that opens what it names, or a link where that leaves the app, hanging a card that says what that is, struck through where what it names is gone.
@@ -651,6 +651,12 @@ function MentionChip({
   const state = mentionState(mention, doors);
   const press = pressOf(mention, target, state, doors, openLink);
 
+  // Note that a teammate's machine is heard as theirs, since the face that says so to the eye is hidden from a screen reader.
+  const ownerHeard = useMachineOwnerHeard(
+    mention.kind === MENTION_KIND.MACHINE ? mention.machineId : undefined,
+    readLink(target)?.workspace ?? doors.place.workspace,
+  );
+
   const card = (
     <MentionCard
       mention={mention}
@@ -680,6 +686,7 @@ function MentionChip({
       label={label}
       name={whole ? INLINE_REF_NAME.WHOLE : INLINE_REF_NAME.NAME}
       before={ownerOf(mention, target, doors)}
+      heard={ownerHeard}
       state={told ?? standing?.state}
       gone={state === MENTION_STATE.GONE}
       onPress={

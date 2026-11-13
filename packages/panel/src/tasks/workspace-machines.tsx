@@ -32,13 +32,13 @@ import { DeviceGlyph, DeviceStandingGlyph } from "./runs-on.js";
  * since the reader's own needs no saying whose it is.
  */
 
-/** How long a workspace's machines read stands before a place drawing them reads it again: about as long as a machine stays online once its app stops listening, so a dot is never long out of date. */
+/** How often a workspace's machines are read again while a place draws them: about as long as a machine stays online once its app stops listening, so a dot is never long out of date. */
 const FRESH_FOR = Duration.seconds(30);
 
 /** What a machine's card says where the workspace's machines read names it not: removed, or of someone who left. */
 const UNLISTED_WORDS = "No longer one of the workspace's machines";
 
-/** The machines of a workspace's members, read once per workspace and kept a few minutes. */
+/** The machines of a workspace's members, read once per workspace and again every `FRESH_FOR` while a place draws them. */
 function workspaceMachinesQuery(workspaceId: string | undefined) {
   return queryOptions({
     queryKey: [QUERY_ROOT.WORKSPACE_MACHINES, workspaceId],
@@ -48,6 +48,7 @@ function workspaceMachinesQuery(workspaceId: string | undefined) {
         : askAct(ACT_KIND.WORKSPACE_MACHINES_READ, { workspaceId }),
     enabled: workspaceId !== undefined,
     staleTime: Duration.toMillis(FRESH_FOR),
+    refetchInterval: Duration.toMillis(FRESH_FOR),
     retry: false,
   });
 }
@@ -84,11 +85,15 @@ interface MachineRead {
   readonly read: boolean;
 }
 
-/** The machine a chip names, as the workspace its link was written under reads it; none while unread, or where the read names it not. */
-function useMachine(machineId: string, slug: string): MachineRead {
+/** The machine a chip names, as the workspace its link was written under reads it; none while unread, where the read names it not, or where no machine is named, which reads nothing. */
+function useMachine(machineId: string | undefined, slug: string): MachineRead {
   const workspaces = useQuery({ ...appStateQuery, select: selectWorkspaces }).data;
   const workspace = workspaces === undefined ? undefined : workspaceOfSlug(workspaces, slug);
-  const read = useQuery(workspaceMachinesQuery(workspace?.id));
+
+  const read = useQuery({
+    ...workspaceMachinesQuery(workspace?.id),
+    enabled: machineId !== undefined && workspace !== undefined,
+  });
 
   return {
     machine: read.data?.machines.find((each) => each.id === machineId),
@@ -152,6 +157,28 @@ export function MachineChipOwner({
   const { machine } = useMachine(machineId, workspace);
 
   return machine === undefined ? null : <MachineOwnerFace userId={machine.userId} />;
+}
+
+/**
+ * What a screen reader hears after a machine's chip's name, which its
+ * owner's face says to the eye: whose it is, where it is a teammate's;
+ * nothing for the reader's own, one unread, or none named.
+ */
+export function useMachineOwnerHeard(
+  machineId: string | undefined,
+  workspace: string,
+): string | undefined {
+  const { machine } = useMachine(machineId, workspace);
+  const { members } = useMemberDirectory();
+  const readerId = useReaderId();
+
+  if (machineId === undefined || machine === undefined || machine.userId === readerId) {
+    return undefined;
+  }
+
+  const owner = members?.find((member) => member.userId === machine.userId)?.name;
+
+  return owner === undefined ? undefined : ` (${owner}'s)`;
 }
 
 /** A machine's card: its glyph and name, whose it is and what it is under it, or that the workspace no longer lists it. */
