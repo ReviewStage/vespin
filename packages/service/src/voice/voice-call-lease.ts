@@ -60,6 +60,7 @@ import {
 } from "@repo/database/models/voice-calls";
 import { PROVIDER_KEY_PROVIDER } from "@repo/features/provider-key-wire";
 import { causeKind, failureKind } from "@repo/runtime/effect";
+import { type WireValue, wireRecord } from "@repo/wire";
 import { readEither } from "@repo/wire/effect";
 import { send } from "@vercel/queue";
 import {
@@ -393,8 +394,29 @@ const ProbeFieldsSchema = Schema.Struct({
 
 const ProbePublishedSchema = Schema.Struct({ publishedAt: Schema.Number });
 
+/** PROBE: a record's field names, and the values of its `*_ms` and id fields alone, which carry no words. */
+function probeFieldsOf(value: WireValue | undefined) {
+  const record = value === undefined ? undefined : wireRecord(unparsedWire(value));
+
+  if (record === undefined) return null;
+
+  const values = Object.entries(record).flatMap(([key, field]) =>
+    key.endsWith("_ms") || key === "id" || key.endsWith("_id") ? [[key, field]] : [],
+  );
+
+  return { keys: Object.keys(record), values: Object.fromEntries(values) };
+}
+
 const probeObserver: VoiceCallObserver<never> = (event, holder) =>
   Effect.gen(function* () {
+    if (event.type === "session.delegation.created") {
+      const body = wireRecord(unparsedWire(event.body));
+
+      yield* Effect.logInfo(
+        `voice-probe delegation ${JSON.stringify({ epoch: holder.call.leaseEpoch, event: probeFieldsOf(event.body), delegation: probeFieldsOf(body?.delegation) })}`,
+      );
+    }
+
     const now = yield* Clock.currentTimeMillis;
 
     const read = readEither(ProbeFieldsSchema, { excess: EXCESS_KEYS.DROP })(
