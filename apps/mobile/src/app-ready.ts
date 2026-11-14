@@ -1,7 +1,7 @@
 // app-ready.ts -- counts how long a launch in front took to show the Inbox, once a launch, on a rung, as `app:ready`.
 
 import { PRODUCT_SURFACE_EVENT, productLaunchSeconds } from "@repo/features/analytics";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { AppState } from "react-native";
 import { useHostCount } from "./host/host-provider.js";
 
@@ -48,12 +48,29 @@ function sinceLaunch(): number | undefined {
  */
 export function useAppReadyCount(shown: boolean): void {
   const count = useHostCount();
+  // Note that a launch from a tap can read `inactive` while iOS finishes launching it, as kept rows draw, so the count waits for the app to come active rather than letting the launch go.
+  const [active, setActive] = useState(AppState.currentState === "active");
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) =>
+      setActive(state === "active"),
+    );
+
+    return () => subscription.remove();
+  }, []);
   useEffect(() => {
     if (counted || !shown) return;
+
+    if (launchedInBackground) {
+      counted = true;
+
+      return;
+    }
+
+    if (!active) return;
     counted = true;
     const elapsed = sinceLaunch();
 
-    if (elapsed === undefined || launchedInBackground || AppState.currentState !== "active") return;
+    if (elapsed === undefined) return;
     count(PRODUCT_SURFACE_EVENT.APP_READY, { launch_seconds: productLaunchSeconds(elapsed) });
-  }, [count, shown]);
+  }, [count, shown, active]);
 }
