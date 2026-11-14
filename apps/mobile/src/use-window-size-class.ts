@@ -21,20 +21,30 @@ const SETTLE_MS = 250;
 const listeners = new Set<() => void>();
 let settled: WindowSizeClass = sizeClassOf(Dimensions.get("window"));
 let settling: ReturnType<typeof setTimeout> | undefined;
+let pending: WindowSizeClass | undefined;
 let following: { remove(): void } | undefined;
 
 function sizeClassOf(window: ScaledSize): WindowSizeClass {
   return windowSizeClass(window.width, window.height);
 }
 
-function onWindowChange({ window }: { readonly window: ScaledSize }) {
-  const next = sizeClassOf(window);
+function stopSettling() {
   clearTimeout(settling);
   settling = undefined;
+  pending = undefined;
+}
+
+function onWindowChange({ window }: { readonly window: ScaledSize }) {
+  const next = sizeClassOf(window);
+
+  // Note that a resize sends many events in one class, so the wait runs from the first of them rather than restarting on each.
+  if (next === pending) return;
+  stopSettling();
 
   if (next === settled) return;
+  pending = next;
   settling = setTimeout(() => {
-    settling = undefined;
+    stopSettling();
     settled = next;
 
     for (const listener of listeners) listener();
@@ -56,8 +66,7 @@ function subscribe(listener: () => void) {
     if (listeners.size > 0) return;
     following?.remove();
     following = undefined;
-    clearTimeout(settling);
-    settling = undefined;
+    stopSettling();
   };
 }
 
