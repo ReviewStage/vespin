@@ -182,8 +182,16 @@ export type TranscriptItem = { readonly place: TranscriptPlace; readonly depth: 
       readonly from?: readonly OriginPart[] | undefined;
       /** A webhook call's body, which rode in with an automation's prompt. */
       readonly body?: string | undefined;
-      /** When it was sent, as a call's header says the day and the time; none where the row kept no time. */
-      readonly sent: string | undefined;
+      /** The account that sent it, where the reader did not, which a run of lines is told apart by. */
+      readonly by: string | undefined;
+      /** When it was sent; none where the row kept no time. */
+      readonly at: number | undefined;
+      /** The day and time standing centered over it, as Messages heads talk that picks up again: on the first line with a time, and on one sent after a pause; none on the rest. */
+      readonly stamp: string | undefined;
+      /** Whether it follows a line of the same sender's run closely, so it stands tight under it and names no sender. */
+      readonly joinsAbove: boolean;
+      /** Whether a line of its run follows it closely, so it stands tight over it. */
+      readonly joinsBelow: boolean;
     }
   | { readonly kind: typeof TRANSCRIPT_ITEM.WORDS; readonly words: string }
   | {
@@ -272,6 +280,12 @@ const ORIGIN_WORDS = {
   RUN_BY: "Run by",
   ISSUE: "issue",
 } as const;
+
+/** How long after one line the same sender's next still joins its run: five minutes, as a thread's runs reach. */
+const RUN_REACH_MS = 5 * 60 * 1000;
+
+/** How long a pause between two sent lines has to be for the later one to stand under the day and time again: a quarter of an hour. */
+const STAMP_PAUSE_MS = 15 * 60 * 1000;
 
 /** How many lines of a call's block its card draws, as the panel's card cuts one. */
 const BLOCK_LINES = 40;
@@ -420,7 +434,11 @@ function saidItem(
     words: from === undefined ? words : suggestionWords(words),
     sender: started ? undefined : sender,
     from,
-    sent: line.sentAt === undefined ? undefined : callHeading(line.sentAt, reading.now),
+    by: sender === undefined ? undefined : line.sentBy?.userId,
+    at: line.sentAt,
+    stamp: undefined,
+    joinsAbove: false,
+    joinsBelow: false,
   };
 }
 
@@ -428,7 +446,6 @@ function saidItem(
 function originItem(
   line: AgentTranscriptMessage,
   base: ItemBase,
-  reading: TranscriptReading,
   origin: TranscriptOrigin,
 ): TranscriptItem {
   return {
@@ -436,7 +453,11 @@ function originItem(
     kind: TRANSCRIPT_ITEM.SAID,
     words: origin.prompt ?? messageWords(line),
     sender: undefined,
-    sent: line.sentAt === undefined ? undefined : callHeading(line.sentAt, reading.now),
+    by: undefined,
+    at: line.sentAt,
+    stamp: undefined,
+    joinsAbove: false,
+    joinsBelow: false,
     from: origin.from,
     body: origin.body,
   };
@@ -761,6 +782,52 @@ function rowItems(
   });
 }
 
+type SaidItem = Extract<TranscriptItem, { kind: typeof TRANSCRIPT_ITEM.SAID }>;
+
+/** Whether `next` joins the run `last` ends, as Messages groups a sender's bubbles: the same sender, sent within `RUN_REACH_MS`, neither headed by where it came from. */
+function joinsRun(last: SaidItem, next: SaidItem): boolean {
+  if (last.from !== undefined || next.from !== undefined || next.body !== undefined) return false;
+
+  if (last.by !== next.by || last.at === undefined || next.at === undefined) return false;
+
+  return next.at >= last.at && next.at - last.at <= RUN_REACH_MS;
+}
+
+/**
+ * The items with the lines sent in runs and their times between them, as
+ * Messages draws a conversation: lines one sender sent back to back stand
+ * tight under one sender's name, and the day and time stand centered over
+ * the first line with a time and over one sent after a pause of
+ * `STAMP_PAUSE_MS` since the line before it, rather than under every line.
+ */
+function inRuns(items: readonly TranscriptItem[], now: number): readonly TranscriptItem[] {
+  let lastSent: number | undefined;
+
+  const timed = items.map((item, index): TranscriptItem => {
+    if (item.kind !== TRANSCRIPT_ITEM.SAID) return item;
+
+    const before = items[index - 1];
+    const joinsAbove = before?.kind === TRANSCRIPT_ITEM.SAID && joinsRun(before, item);
+
+    const paused =
+      item.at !== undefined && (lastSent === undefined || item.at - lastSent >= STAMP_PAUSE_MS);
+
+    const stamp = paused && item.at !== undefined ? callHeading(item.at, now) : undefined;
+
+    if (item.at !== undefined) lastSent = item.at;
+
+    return { ...item, joinsAbove, stamp };
+  });
+
+  return timed.map((item, index): TranscriptItem => {
+    const after = timed[index + 1];
+
+    if (item.kind !== TRANSCRIPT_ITEM.SAID || after?.kind !== TRANSCRIPT_ITEM.SAID) return item;
+
+    return { ...item, joinsBelow: after.joinsAbove };
+  });
+}
+
 /**
  * The transcript with the member's messages on their way at its end, each
  * as their own line under the id its row lands under, so the row takes its
@@ -813,7 +880,7 @@ export function transcriptItems(
 
       return [
         origin !== undefined && message.id === head
-          ? originItem(message, base, reading, origin)
+          ? originItem(message, base, origin)
           : saidItem(message, base, reading),
       ];
     }
@@ -852,11 +919,12 @@ export function transcriptItems(
   });
 
   const last = placed.at(-1)?.message.id;
+  const runs = inRuns(items, reading.now);
 
-  if (!reading.writing || last === undefined) return items;
+  if (!reading.writing || last === undefined) return runs;
 
   return [
-    ...items,
+    ...runs,
     {
       place: { ...linePlace(last, last), piece: TRANSCRIPT_PIECE.WORKING },
       depth: 0,
