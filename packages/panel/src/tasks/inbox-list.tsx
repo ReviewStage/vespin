@@ -17,6 +17,7 @@ import {
   inboxLineKind,
   inboxPinnedRuns,
   inboxPreviewHeard,
+  inboxScopeInstead,
   inboxShownItems,
   isDone,
   isUnread,
@@ -327,10 +328,8 @@ function regionLabel(head: InboxListHead): string {
   return `${INBOX_ITEMS} · ${SCOPE_WORDS[view.show].label} · ${whoseWords(view.whose)}`;
 }
 
-/** What the empty state's presses say: Open or All of whom Addressed to names, the reader's own again, or anyone's. */
+/** What the empty state's presses say beside the scope it turns to (`inboxScopeInstead`): the reader's own again, or anyone's. */
 const SHOW_INSTEAD = {
-  OPEN: "Show open",
-  ALL: "Show all",
   MINE: "Show mine",
   EVERYONE: "Show anyone's",
 } as const;
@@ -886,8 +885,8 @@ function FilterChips({
 }
 
 /**
- * The way on from an empty scope: from Questions, Open of whom Addressed to
- * names where it holds anything; else All where it holds anything; else,
+ * The way on from an empty scope: another scope of whom Addressed to names
+ * where it holds anything (`inboxScopeInstead`, as every client offers); else,
  * where Addressed to narrows the scope, back to the reader's own from a
  * teammate's, or to anyone's from the reader's own; none from anyone's, or
  * from Questions, where nothing else holds anything.
@@ -905,13 +904,9 @@ function emptyWayOn(
     },
   });
 
-  if (view.show === INBOX_SHOW.NEEDS_ME && counts[INBOX_SHOW.OPEN] > 0) {
-    return turn(SHOW_INSTEAD.OPEN, () => view.onShow(INBOX_SHOW.OPEN));
-  }
+  const instead = inboxScopeInstead(view.show, counts);
 
-  if (view.show !== INBOX_SHOW.ALL && counts[INBOX_SHOW.ALL] > 0) {
-    return turn(SHOW_INSTEAD.ALL, () => view.onShow(INBOX_SHOW.ALL));
-  }
+  if (instead !== undefined) return turn(instead.label, () => view.onShow(instead.show));
 
   // Note that Addressed to never narrows Questions, so naming another lists nothing more.
   if (!narrowedByWhose(view.show)) return undefined;

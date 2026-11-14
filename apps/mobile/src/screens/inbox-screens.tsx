@@ -20,6 +20,7 @@ import {
   inboxLineKind,
   inboxMemberName,
   inboxPreview,
+  inboxScopeInstead,
   inboxSettledStanding,
   inboxThreadMessages,
   isDone,
@@ -345,18 +346,24 @@ function InboxRow({
  * What the list stands where it lists nothing: that the account's feed is
  * still on its first read, or could not be read, with Try again, rather than an
  * empty Inbox over threads not yet read; else nothing its search found, or
- * nothing its scope holds.
+ * nothing its scope holds, with the press to the scope that holds something
+ * (`inboxScopeInstead`), as the panel's empty Inbox offers it, so an empty
+ * scope is never a dead end.
  */
 function InboxEmpty({
   show,
   search,
   feed,
+  counts,
   onRetry,
+  onShow,
 }: {
   readonly show: InboxShow;
   readonly search: string;
   readonly feed: InboxFeed;
+  readonly counts: InboxCounts;
   readonly onRetry: () => void;
+  readonly onShow: (show: InboxShow) => void;
 }) {
   if (feed === INBOX_FEED.READING)
     return <EmptyState title={READING_INBOX} symbol={GLYPH.INBOX} loading />;
@@ -375,7 +382,23 @@ function InboxEmpty({
     return <EmptyState title={noMatchWords(search.trim())} symbol={GLYPH.SEARCH} />;
   }
 
-  return <EmptyState title={INBOX_SHOW_EMPTY[INBOX_WHOSE.MINE][show]} symbol={GLYPH.INBOX} />;
+  const instead = inboxScopeInstead(show, counts);
+
+  return (
+    <EmptyState
+      title={INBOX_SHOW_EMPTY[INBOX_WHOSE.MINE][show]}
+      symbol={GLYPH.INBOX}
+      action={
+        instead === undefined
+          ? undefined
+          : {
+              label: instead.label,
+              onPress: () => onShow(instead.show),
+              look: BUTTON_LOOK.BORDERED,
+            }
+      }
+    />
+  );
 }
 
 /** The Inbox's scopes as its pills, the one shown filled, Questions and Open with their counts. */
@@ -903,7 +926,7 @@ function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | un
       }
     : undefined;
 
-  return { show, search, setSearch, listing, acts, scopes, menu, remind, choosing };
+  return { show, choose, search, setSearch, listing, acts, scopes, menu, remind, choosing };
 }
 
 // A compact window: the list under its scopes' segmented control, the account's photo
@@ -916,7 +939,7 @@ function InboxStackList(words: InboxSearch) {
   const onOwnTab = useOnOwnTab();
   const switcher = useWorkspaceSwitcher();
 
-  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing } =
+  const { show, choose, search, setSearch, listing, acts, scopes, menu, remind, choosing } =
     useInboxScreen(words);
 
   const field = useRefilledSearchField(search);
@@ -981,7 +1004,9 @@ function InboxStackList(words: InboxSearch) {
               show={show}
               search={search}
               feed={listing.feed}
+              counts={listing.counts}
               onRetry={() => void acts.refresh()}
+              onShow={choose}
             />
           ) : (
             <InboxRows
@@ -1025,10 +1050,8 @@ function InboxSplitScreen({
   readonly select: (id: string) => void;
   readonly words: InboxSearch;
 }) {
-  const { show, search, setSearch, listing, acts, scopes, menu, remind, choosing } = useInboxScreen(
-    words,
-    selected,
-  );
+  const { show, choose, search, setSearch, listing, acts, scopes, menu, remind, choosing } =
+    useInboxScreen(words, selected);
 
   const threeColumns = useThreeColumns();
   useSurfaceOpen(selected === undefined ? undefined : PRODUCT_SURFACE.THREAD, selected);
@@ -1039,7 +1062,9 @@ function InboxSplitScreen({
         show={show}
         search={search}
         feed={listing.feed}
+        counts={listing.counts}
         onRetry={() => void acts.refresh()}
+        onShow={choose}
       />
     ) : (
       <InboxRows
