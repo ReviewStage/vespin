@@ -1,14 +1,13 @@
 9007 at 6f116e0409 feat(ui-native): group an agent transcript's sent lines in runs, as Messages does
 Auto-merging packages/ui-native/src/transcript.tsx
-verified: head 6f116e0409fb63a0be921b9a6343a086677b9f9c in built 9d1c8ac234c6be67df679ba75f5c5848613f5379
+verified: head 6f116e0409fb63a0be921b9a6343a086677b9f9c in built 4d2b89efe3088e0831e3a957bf6ab2779859abd0
 install 0
 export 0
 signed 0
-9007-r3solo-iphone-light: fails 0 (rig 1)
-  RIG ERROR: Device /Users/deanstratakos/vespin-ipad-agent/CE9E34B9-693F-475C-8AC7-308952029222ORTRAIT was requested, but it is not connected. 
+9007-r3solo-iphone-light: fails 1 Assert that "Takes effect from the next turn." is visible... FAILED
 remote: 
 remote: GitHub found 5 vulnerabilities on ReviewStage/vespin's default branch (2 moderate, 3 low). To find out more, visit:        
 remote:      https://github.com/ReviewStage/vespin/security/dependabot        
 remote: 
-       1
+      19
 ALLDONE
