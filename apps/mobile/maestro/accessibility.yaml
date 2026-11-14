@@ -39,6 +39,13 @@ appId: dev.vespin.ios
     file: subflows/open-row.yaml
     env:
       ROW: "Recorded the invite flow"
+# Note that the thread is scrolled up to its first message, since at this
+# text size it opens at its newest, the first one's words above the window.
+- runFlow:
+    file: subflows/scroll-to.yaml
+    env:
+      ELEMENT: ".*walked the invite flow.*"
+      DIRECTION: UP
 - assertVisible: ".*walked the invite flow.*"
 - waitForAnimationToEnd:
     timeout: 5000

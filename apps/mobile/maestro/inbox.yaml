@@ -3,6 +3,8 @@
 # The screenshots land under the run's --test-output-dir (`takeScreenshot/`),
 # which `scripts/simulator-screenshots.sh` names per device and appearance.
 appId: dev.vespin.ios
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, as `skeleton.yaml` is, so the list
 # holds the fixture's threads and no server is reached; the fixture answers
@@ -153,13 +155,14 @@ appId: dev.vespin.ios
 # Note that each swipe is closed before anything else is pressed, because a
 # row left open takes the next press on the list, the long press below among
 # them, only to close itself; that a tap off the list, on the bar's title,
-# leaves it open; and that a regular window, which stands "Choose an item"
-# beside its sidebar, is left out, as its swipes read as taps. The trailing
+# leaves it open; and that an iPad, whose floating tabs `FLOATING_TABS`
+# names, is left out, since its list is a column a third of the window wide,
+# which the swipes' points, set across a compact window, miss. The trailing
 # swipe starts a fifth of the window in from its edge, since a wide
 # window, the iPhone Duo's, stands its tabs as a rail along that edge.
 - runFlow:
     when:
-      notVisible: "Choose an item"
+      true: ${FLOATING_TABS != 'true'}
     commands:
       - swipe:
           start: "8%, 27%"
