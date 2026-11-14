@@ -47,7 +47,7 @@ test("a group's quick add sends one quiet start in the listed workspace with the
     [ACT_KIND.TASKS_START]: (start) => {
       sent.push(start);
 
-      return Promise.resolve({ planId: "task-1" });
+      return Promise.resolve({ taskId: "task-1" });
     },
   });
   const container = document.body.appendChild(document.createElement("div"));

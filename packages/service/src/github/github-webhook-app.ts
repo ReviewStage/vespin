@@ -9,7 +9,6 @@ import {
   noteGitHubRepository,
   type RepositorySighting,
 } from "@repo/database/models/github-repositories";
-import { GitHubPriority, PRIORITY } from "@repo/github";
 import { causeKind } from "@repo/runtime/effect";
 import type { Sandbox } from "@repo/sandbox";
 import { EXCESS_KEYS, HTTP_METHOD, type UnparsedWireValue, WireValueSchema } from "@repo/wire";
@@ -522,45 +521,41 @@ const NOTHING_READ: DeliveryReadCounts = { read: 0, told: 0 };
  * A delivery's reads of GitHub: a comment that mentions the App's bot acted
  * on as its writer (`github-mentions.ts`), what the agents on its branches
  * published read again, then the agents its review, comment, failure, or
- * finished checks concern told, in the background lane, since no member
- * waits on it. Note that a comment the mention took is told no agent as
+ * finished checks concern told. Note that a comment the mention took is told no agent as
  * GitHub's own, because the mention sent it to the agent that holds the
  * pull request as its writer's message, and the agent hears it once.
  */
-const deliveryReads = /* @__PURE__ */ Effect.fn("web/githubDeliveryReads")(
-  function* ({
-    event,
-    deliveryId,
-    payload,
-  }: DeliveryToRead): Effect.fn.Return<DeliveryReadCounts, HostedRefusal, DeliveryReadServices> {
-    // A deployment with no App configured knows no bot of its own, so every bot is another's.
-    const agentLogin = yield* Effect.orElseSucceed((yield* GitHubApp).botLogin, () => undefined);
-    const mention = githubMentionOf(event, payload, agentLogin);
-    const taken = mention === undefined ? false : yield* actOnGitHubMention(mention);
-    const target = deliveryTarget(event, payload);
-    const read = target === undefined ? 0 : yield* readAgainOnBranches(target);
-    const now = yield* Clock.currentTimeMillis;
+const deliveryReads = /* @__PURE__ */ Effect.fn("web/githubDeliveryReads")(function* ({
+  event,
+  deliveryId,
+  payload,
+}: DeliveryToRead): Effect.fn.Return<DeliveryReadCounts, HostedRefusal, DeliveryReadServices> {
+  // A deployment with no App configured knows no bot of its own, so every bot is another's.
+  const agentLogin = yield* Effect.orElseSucceed((yield* GitHubApp).botLogin, () => undefined);
+  const mention = githubMentionOf(event, payload, agentLogin);
+  const taken = mention === undefined ? false : yield* actOnGitHubMention(mention);
+  const target = deliveryTarget(event, payload);
+  const read = target === undefined ? 0 : yield* readAgainOnBranches(target);
+  const now = yield* Clock.currentTimeMillis;
 
-    // Note that the checks finishing are read after the agents' pull requests were read again above,
-    // because a wake tells only the agents whose row keeps the finished commit as their head.
-    const wakes = [
-      taken ? undefined : agentWakeOf(event, payload, now),
-      checksCompletedWakeOf(event, payload, now),
-    ];
+  // Note that the checks finishing are read after the agents' pull requests were read again above,
+  // because a wake tells only the agents whose row keeps the finished commit as their head.
+  const wakes = [
+    taken ? undefined : agentWakeOf(event, payload, now),
+    checksCompletedWakeOf(event, payload, now),
+  ];
 
-    // Each agent's sessions as the deployment acting for its owner, as an automation's run reaches them.
-    const sessionsForAccount: SessionsForAccount = routedSessions;
+  // Each agent's sessions as the deployment acting for its owner, as an automation's run reaches them.
+  const sessionsForAccount: SessionsForAccount = routedSessions;
 
-    const counts = yield* Effect.forEach(wakes, (wake) =>
-      wake === undefined
-        ? Effect.succeed(0)
-        : wakeAgents(sessionsForAccount, wake, deliveryId, agentLogin),
-    );
+  const counts = yield* Effect.forEach(wakes, (wake) =>
+    wake === undefined
+      ? Effect.succeed(0)
+      : wakeAgents(sessionsForAccount, wake, deliveryId, agentLogin),
+  );
 
-    return { read, told: counts.reduce((sum, count) => sum + count, 0) };
-  },
-  Effect.provideService(GitHubPriority, PRIORITY.BACKGROUND),
-);
+  return { read, told: counts.reduce((sum, count) => sum + count, 0) };
+});
 
 /** A delivery's reads as a queue message carries them. */
 const DeliveryMessageSchema = Schema.Struct({
@@ -728,8 +723,6 @@ const deliveryEndpoint = /* @__PURE__ */ Effect.fn("web/githubWebhookEndpoint")(
 
     return hostedJsonResponse(200, { read, queued, told });
   },
-  // Note that no member waits on a delivery, so what it asks GitHub is asked at the background priority, leaving the members their reserve.
-  Effect.provideService(GitHubPriority, PRIORITY.BACKGROUND),
 );
 
 /** The group: the one delivery path, and the hosted vocabulary's own refusal for any other. */

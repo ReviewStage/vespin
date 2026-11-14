@@ -2,12 +2,14 @@
 
 import type { AppBridge } from "@repo/host/bridge";
 import type { ActPortClient } from "@repo/host/contract";
+import type { TaskListCollections } from "@repo/host/task-list-following";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Effect } from "effect";
 import Constants from "expo-constants";
 import { createContext, type ReactNode, useContext, useEffect, useState } from "react";
 import { crashReportsErrorReporting, reportHostFailure } from "../crash-reports.js";
 import { HostFailedScreen } from "../screens/host-failed.js";
+import { releaseSplashAfterFrame } from "../splash.js";
 import { followAppStateInto } from "./app-state-query.js";
 import { deviceSeams, hostStateRoot } from "./device-seams.js";
 import {
@@ -33,10 +35,11 @@ export const APP_VERSION = Constants.expoConfig?.version ?? UNVERSIONED;
 /** How a screen counts a moment of the panel's surface vocabulary, such as a surface opened, through the host's bridge. */
 export type HostCount = AppBridge["recordSurfaceEvent"];
 
-/** Where the host's start stands: not yet answered, standing with its document in a client, its act port, and its counts, or failed. */
+/** Where the host's start stands: not yet answered, standing with its document in a client and its task list in collections, its act port, and its counts, or failed. */
 type Standing =
   | {
       readonly client: QueryClient;
+      readonly taskList: TaskListCollections;
       readonly acts: ActPortClient;
       readonly follow: HostFollow;
       readonly count: HostCount;
@@ -51,6 +54,9 @@ const HostFollows = createContext<HostFollow | undefined>(undefined);
 
 /** The counts a screen sends through the host, once it stands. */
 const HostCounts = createContext<HostCount | undefined>(undefined);
+
+/** The task list's collections, fed from the document the client holds, once the host stands. */
+const TaskListCollectionsContext = createContext<TaskListCollections | undefined>(undefined);
 
 /** The host's act port, for a screen drawn under `HostProvider`. */
 export function useHostActs(): ActPortClient {
@@ -77,6 +83,17 @@ export function useHostCount(): HostCount {
   if (count === undefined) throw new Error("A screen counted outside the host's provider.");
 
   return count;
+}
+
+/** The task list's collections, for a live query over its tasks or agents, for a screen drawn under `HostProvider`. */
+export function useTaskListCollections(): TaskListCollections {
+  const collections = useContext(TaskListCollectionsContext);
+
+  if (collections === undefined) {
+    throw new Error("A screen read the task list outside the host's provider.");
+  }
+
+  return collections;
 }
 
 /**
@@ -113,7 +130,8 @@ function launchOptions(): MobileHostStartOptions {
 /**
  * Starts the host once, follows its document into a Query client of the
  * app's own, and draws the screens once the first reading is in it, so no
- * screen draws an empty document first. A host that cannot stand is said on
+ * screen draws an empty document first; the launch splash stands until then
+ * (`splash.ts`). A host that cannot stand is said on
  * the console, reported to Sentry, and shown in the screens' place with Retry, which starts it
  * again, rather than drawing an empty Inbox over nothing; a host that stands
  * but refuses its first read is said on the console too, and the screens
@@ -148,6 +166,7 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
         if (live) {
           setStanding({
             client,
+            taskList: following.taskList,
             acts: host.acts,
             follow: host.follow,
             count: host.bridge.recordSurfaceEvent,
@@ -168,6 +187,8 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
       void started?.close();
     };
   }, [attempt]);
+  // Note that the splash stands over the launch until the screens, or the failure in their place, first draw, so no blank screen shows while the host starts.
+  useEffect(() => (standing === undefined ? undefined : releaseSplashAfterFrame()), [standing]);
 
   if (standing === undefined) return null;
 
@@ -179,7 +200,11 @@ export function HostProvider({ children }: { readonly children: ReactNode }) {
     <QueryClientProvider client={standing.client}>
       <HostActs.Provider value={standing.acts}>
         <HostFollows.Provider value={standing.follow}>
-          <HostCounts.Provider value={standing.count}>{children}</HostCounts.Provider>
+          <HostCounts.Provider value={standing.count}>
+            <TaskListCollectionsContext.Provider value={standing.taskList}>
+              {children}
+            </TaskListCollectionsContext.Provider>
+          </HostCounts.Provider>
         </HostFollows.Provider>
       </HostActs.Provider>
     </QueryClientProvider>

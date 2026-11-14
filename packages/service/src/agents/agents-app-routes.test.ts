@@ -383,7 +383,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         );
 
         const { agent } = readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started);
-        assert.equal(agent.planId, task.id);
+        assert.equal(agent.taskId, task.id);
         assert.equal(agent.model, AGENT_DEFAULT_CHOICE.model);
         assert.equal(agent.effort, AGENT_DEFAULT_CHOICE.effort);
         // The answer reads the agent once its opening queued the first turn, which awaits a runner.
@@ -434,11 +434,12 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           }),
         );
 
-        const { plan, agent, agentRefusal, txid } = readAnswer(
-          taskStartAnswerSchema,
-          HOSTED_HTTP_STATUS.CREATED,
-          started,
-        );
+        const {
+          task: plan,
+          agent,
+          agentRefusal,
+          txid,
+        } = readAnswer(taskStartAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started);
 
         assert.equal(agentRefusal, undefined);
         assert.ok(agent !== undefined);
@@ -452,13 +453,13 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
 
         assert.equal(txid, written?.xmin, "the start answers its last write, the task's standing");
         assert.equal(plan.repository, RELAY_FULL_NAME);
-        assert.equal(plan.document.body, "");
+        assert.equal(plan.description.body, "");
         assert.equal(
           plan.status,
           TASK_STATUS.IN_PROGRESS,
           "the task its agent started on is under way",
         );
-        assert.equal(agent.planId, plan.id);
+        assert.equal(agent.taskId, plan.id);
         assert.equal(agent.brief, AGENT_BRIEF.PROMPT);
         assert.equal(agent.status, AGENT_STATUS.RUNNING, "its first turn is queued");
         assert.deepEqual(
@@ -513,7 +514,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         );
 
         assert.equal(
-          readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).agent.planId,
+          readAnswer(agentAnswerSchema, HOSTED_HTTP_STATUS.CREATED, started).agent.taskId,
           task.id,
         );
         assert.equal(
@@ -566,7 +567,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           yield* ask(request(TASKS, owner)),
         );
 
-        assert.equal(again.plan.id, first.plan.id);
+        assert.equal(again.task.id, first.task.id);
         assert.equal(again.agent?.id, first.agent?.id);
         assert.deepEqual(
           elsewhere,
@@ -574,8 +575,8 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         );
         assert.equal(agentSessions.opened.length, 1);
         assert.deepEqual(
-          listed.plans.filter((each) => each.name === body.name).map((each) => each.id),
-          [first.plan.id],
+          listed.tasks.filter((each) => each.name === body.name).map((each) => each.id),
+          [first.task.id],
         );
       }),
   );
@@ -603,7 +604,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
           ),
         );
 
-        const opened = yield* ask(request(TASK(started.plan.id), owner));
+        const opened = yield* ask(request(TASK(started.task.id), owner));
 
         assert.equal(started.agent, undefined);
         assert.deepEqual(started.agentRefusal, { error: HOSTED_API_ERROR.UNAVAILABLE });
@@ -648,16 +649,16 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
         );
 
         assert.equal(started.agentRefusal, undefined);
-        assert.equal(started.plan.repository, null);
-        assert.equal(started.agent?.planId, started.plan.id);
+        assert.equal(started.task.repository, null);
+        assert.equal(started.agent?.taskId, started.task.id);
         assert.equal(github.sent.length, asked, "a start in no repository asks GitHub nothing");
         assert.deepEqual(
           planned,
           refusal(HOSTED_HTTP_STATUS.BAD_REQUEST, HOSTED_API_ERROR.INVALID_REQUEST),
         );
         assert.deepEqual(
-          listed.plans.map((each) => each.id).sort(),
-          [task.id, started.plan.id].sort(),
+          listed.tasks.map((each) => each.id).sort(),
+          [task.id, started.task.id].sort(),
         );
       }),
   );
@@ -953,7 +954,7 @@ it.layer(getTestDB())("the coding-agent routes", (it) => {
             taskId: task.id,
             seq: 1_000,
             actor: sql`'a-later-writer'`,
-            document: SAVED,
+            description: SAVED,
             changes: 1,
             startedAt: now,
             at: now,

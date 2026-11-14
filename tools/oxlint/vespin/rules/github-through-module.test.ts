@@ -42,7 +42,7 @@ tester.run("github-through-module", githubThroughModuleRule, {
     },
     // A type names no value, so a type-only import or re-export of the opener's module opens nothing.
     {
-      code: 'import type { SealedGitHubToken } from "@repo/database/models/provider-key-seal";\nexport type { KeyRing } from "@repo/database/models/provider-key-seal";',
+      code: 'import type { SealedGitHubToken } from "@repo/database/models/provider-key-seal";\nexport type { KeyRing } from "@repo/database/models/provider-key-seal";\nimport type { MemberTokens } from "@repo/service/github/github-token";\nexport type { MemberTokens } from "@repo/service/github/github-token";',
       filename: SERVICE_FILE,
     },
     // The GitHubMemberTokens implementation opens the token.

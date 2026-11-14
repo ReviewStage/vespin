@@ -3135,7 +3135,6 @@ export function runListTasks(
 
       const followers = yield* followerReadingsOf(
         userId,
-        workspace.value,
         page.map((task) => task.id),
       );
 
@@ -3147,9 +3146,7 @@ export function runListTasks(
         startedBy: task.createdBy?.name ?? null,
         isYourTask: task.id === ownTask,
         sectionId: sectionOf.get(task.id) ?? null,
-        ...(followers === undefined
-          ? undefined
-          : { followers: (followers.get(task.id) ?? []).map((follower) => ({ ...follower })) }),
+        followers: (followers.get(task.id) ?? []).map((follower) => ({ ...follower })),
       }));
 
       const next = offset + TASKS_LIST_LIMIT;

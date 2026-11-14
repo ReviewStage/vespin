@@ -64,7 +64,6 @@ import {
 } from "@repo/database/models/workspace-drive-repositories";
 import { listWorkspaceTokenRepositories } from "@repo/database/models/workspace-token-repository-store";
 import { SANDBOX_SIZE } from "@repo/features/sandbox-size";
-import { GitHubPriority, PRIORITY } from "@repo/github";
 import { causeKind } from "@repo/runtime/effect";
 import {
   deletedIfStill,
@@ -476,7 +475,7 @@ export const pruneWorkspaceDrive = Effect.fn("web/pruneWorkspaceDrive")(function
   return yield* pruneWorkspaceDriveTo(run, image, workspace, keep);
 });
 
-/** The workspace's drive pruned past the answer, where the function fills drives; its GitHub reads in the background lane, since no member waits on them. */
+/** The workspace's drive pruned past the answer, where the function fills drives. */
 const prunedFor = (workspace: Option.Option<BaseDriveWorkspace>) =>
   Effect.gen(function* () {
     const fills = yield* Effect.serviceOption(WorkspaceDriveFills);
@@ -498,7 +497,6 @@ const prunedFor = (workspace: Option.Option<BaseDriveWorkspace>) =>
                 causeKind(cause),
               ),
         ),
-        Effect.provideService(GitHubPriority, PRIORITY.BACKGROUND),
         Effect.provideService(Sandbox, sandbox.value),
       ),
     );

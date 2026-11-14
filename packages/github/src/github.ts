@@ -20,10 +20,9 @@
  * Inside the throttle's queue, so a request that waited behind a refusal is
  * not sent after it, a hook of this module's own (`conduct`) refuses a
  * request while a hold stands on its identity, reads GitHub's counters off
- * every answer for the members' reserve, and holds for a rate-limit refusal
+ * every answer for the refusal's log line, and holds for a rate-limit refusal
  * the throttle does not read as one: a 429 or a 403 with `retry-after` that
- * names neither a secondary limit nor an empty quota. The reserve itself is
- * read where the caller's `GitHubPriority` is known, as the call starts.
+ * names neither a secondary limit nor an empty quota.
  *
  * Every request leaves through `githubFetch`, on the `HttpClient` the layer
  * was built over, under the fiber context of the call that asked; a token
@@ -35,7 +34,12 @@ import { createAppAuth, type InstallationAuthOptions } from "@octokit/auth-app";
 import { Octokit, type OctokitOptions } from "@octokit/core";
 import { type PaginatingEndpoints, paginateRest } from "@octokit/plugin-paginate-rest";
 import { type ThrottlingOptions, throttling } from "@octokit/plugin-throttling";
-import type { EndpointOptions, Endpoints, RequestInterface } from "@octokit/types";
+import type {
+  EndpointOptions,
+  Endpoints,
+  RequestInterface,
+  RequestParameters,
+} from "@octokit/types";
 import Bottleneck from "bottleneck";
 import { Clock, Context, Duration, Effect, Layer, Option, Redacted, Schema } from "effect";
 import * as HttpClient from "effect/http/HttpClient";
@@ -60,17 +64,14 @@ import {
 import {
   type AnswerHeaders,
   answered,
-  GitHubPriority,
   HeldRequest,
   type HoldState,
   heldUntil,
   holdStateOf,
   type IdentityState,
-  PRIORITY,
   type RouteOf,
   recordRate,
   refused,
-  reservedUntil,
 } from "./github-rate.js";
 
 /** The REST API version every request names (https://docs.github.com/en/rest/about-the-rest-api/api-versions). */
@@ -106,7 +107,6 @@ const NEXT_PAGE = /rel="next"/u;
 const SSO_HEADER = "x-github-sso";
 
 const GRAPHQL_RESOURCE = "graphql";
-const CORE_RESOURCE = "core";
 
 /** GitHub's OAuth endpoints, on github.com rather than the API (https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/refreshing-user-access-tokens). */
 const OAUTH_BASE_URL = "https://github.com";
@@ -217,6 +217,12 @@ export type GitHubPageItem<R extends keyof PaginatingEndpoints> =
     : PageData<R>[Exclude<keyof PageData<R>, PageMetadataKey>] extends ReadonlyArray<infer Item>
       ? Item
       : never;
+
+/** One page of a listing as the paginator answers it: its items, and the `link` naming the next. */
+interface PageOf<Item> {
+  readonly data: ReadonlyArray<Item>;
+  readonly headers: { readonly link?: string };
+}
 
 /** How far a listing is read: never past `maxPages`, and no further than the items read are `enough`. */
 export interface GitHubPaging<Item> {
@@ -373,7 +379,7 @@ const ErroredData = Schema.Struct({ errors: Schema.Array(Schema.Unknown) });
 /** What `conduct` is handed for one identity: run before each send, and after each answer or refusal. */
 interface Conduct {
   readonly before: () => Promise<void>;
-  readonly answered: (route: RouteOf, headers: AnswerHeaders) => Promise<void>;
+  readonly answered: (headers: AnswerHeaders) => Promise<void>;
   readonly refused: (route: RouteOf, rejection: Rejection) => Promise<void>;
 }
 
@@ -406,7 +412,7 @@ function conduct(octokit: Octokit, options: OctokitOptions): Record<string, neve
 
     try {
       const response = await request(endpoint);
-      await handed.answered(route, response.headers);
+      await handed.answered(response.headers);
 
       return response;
     } catch (error) {
@@ -583,7 +589,6 @@ function identityState(identity: GitHubIdentity, secondary?: HoldState): Identit
     identity,
     own,
     secondary: secondary ?? own,
-    reserveUntil: undefined,
     rate: undefined,
     kept: new Map(),
   };
@@ -691,7 +696,7 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
       run(heldUntil(state)).then((until) => {
         if (until !== undefined) throw new HeldRequest({ identity: state.identity.kind, until });
       }),
-    answered: (route, headers) => run(answered(state, route, headers)),
+    answered: (headers) => run(answered(state, headers)),
     refused: (route, rejection) => {
       const refusal = refusalOf(rejection);
 
@@ -762,23 +767,9 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
       ),
     );
 
-  /** One call as an identity: refused at once where the reserve holds background work, sent otherwise. */
+  /** One call as an identity. */
   const called = <A>(state: IdentityState, send: (request: CallOptions) => Promise<A>) =>
-    Effect.gen(function* () {
-      if ((yield* GitHubPriority) === PRIORITY.BACKGROUND) {
-        const until = yield* reservedUntil(state);
-
-        if (until !== undefined) {
-          return yield* new GitHubRateLimited({
-            identity: state.identity.kind,
-            resource: CORE_RESOURCE,
-            resetsAt: new Date(until),
-          });
-        }
-      }
-
-      return yield* sent(state.kept, state.identity.kind, send);
-    });
+    sent(state.kept, state.identity.kind, send);
 
   const clientFor = (state: IdentityState, octokit: GitHubOctokitInstance): GitHubClient => ({
     request: <R extends keyof Endpoints>(
@@ -809,9 +800,20 @@ const make = Effect.fnUntraced(function* (options: GitHubAppOptions) {
           const items: Array<GitHubPageItem<typeof route>> = [];
           let pages = 0;
 
-          for await (const page of octokit.paginate.iterator(route, { ...parameters, request })) {
-            // SAFETY: the paginator answers every page's data as the listing's one array of items, a wrapped page's included.
-            items.push(...(page.data as ReadonlyArray<GitHubPageItem<typeof route>>));
+          // SAFETY: handed a request method, the paginator reads its parameters as that method's endpoint options (`request.endpoint(parameters)`), and answers every page's data as the listing's one array of items, a wrapped page's included; its typing reads the parameters off the method's last overload, a route string, and the route's own types cannot be seen through the generic `R`.
+          const iterate = octokit.paginate.iterator as (
+            requestMethod: RequestInterface,
+            firstPage: EndpointOptions,
+          ) => AsyncIterable<PageOf<GitHubPageItem<typeof route>>>;
+
+          // SAFETY: a route's parameters are the request parameters Octokit merges into its endpoint; its index signature cannot be seen through the generic `R`.
+          const firstPage = octokit.request.endpoint.merge(route, parameters as RequestParameters);
+
+          // Note that the paginator sends every page as its `method`, `url`, and `headers` alone, so the call's fetch and signal ride on the request method it is handed.
+          const listing = iterate(octokit.request.defaults({ request }), firstPage);
+
+          for await (const page of listing) {
+            items.push(...page.data);
             pages += 1;
 
             if (enough?.(items) === true) return { items, ended: true };

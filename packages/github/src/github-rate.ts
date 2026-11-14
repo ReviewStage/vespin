@@ -1,5 +1,5 @@
 /**
- * github-rate.ts -- GitHub's rate-limit rules as the module keeps them: holds after a refusal, shared across instances, and the members' reserve.
+ * github-rate.ts -- GitHub's rate-limit rules as the module keeps them: holds after a refusal, shared across instances.
  *
  * GitHub's rules are the design
  * (https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api#exceeding-the-rate-limit,
@@ -15,18 +15,11 @@
  * seconds after another instance was refused; and a store that does not
  * answer holds nothing, because GitHub is never kept waiting on it.
  *
- * Work no member waits on (`GitHubPriority`) also leaves the members a share
- * of the hour: once an answer says less than `RATE.MEMBER_SHARE` of an
- * identity's core quota is left, its background requests are refused until
- * GitHub's reset, and a member's are still sent. The share is read from
- * GitHub's own `x-ratelimit-*` headers, which every instance reads alike, so
- * it is kept in no store.
- *
  * Every log line here carries the identity's kind (and an installation's
  * id), the route's template, and GitHub's own counters: never a token.
  */
 
-import { Clock, Context, Duration, Effect } from "effect";
+import { Clock, Duration, Effect } from "effect";
 import type { Kept } from "./github-fetch.js";
 import { type GitHubHold, GitHubHoldStore } from "./github-hold-store.js";
 import {
@@ -43,23 +36,7 @@ const RATE = {
   MAXIMUM_HOLD: Duration.minutes(15),
   /** How long an instance trusts its last read of a scope's shared hold. */
   SHARED_READ_FOR: Duration.seconds(5),
-  /** The part of an identity's hourly core quota background work leaves for the members' own requests. */
-  MEMBER_SHARE: 0.25,
 } as const;
-
-/** The quota GitHub counts REST requests against, as `x-ratelimit-resource` names it. */
-const CORE_RESOURCE = "core";
-
-/** Whether a request is one a member waits on, or background work that leaves the members their reserve. */
-export const PRIORITY = { MEMBER: "member", BACKGROUND: "background" } as const;
-
-export type GitHubPriorityValue = (typeof PRIORITY)[keyof typeof PRIORITY];
-
-/** The priority of the GitHub requests made under it; a member's unless said. */
-export const GitHubPriority = Context.Reference<GitHubPriorityValue>(
-  "@repo/github/GitHubPriority",
-  { defaultValue: () => PRIORITY.MEMBER },
-);
 
 /** One hold as this instance keeps it: when it lifts, and how many refusals in a row it follows. */
 interface LocalHold {
@@ -89,8 +66,6 @@ export interface IdentityState {
   readonly own: HoldState;
   /** The scope its secondary refusals hold: the App's and every installation's, or a member's own. */
   readonly secondary: HoldState;
-  /** When the background reserve lifts, where it stands. */
-  reserveUntil: number | undefined;
   rate: RateHeaders | undefined;
   readonly kept: Kept;
 }
@@ -104,7 +79,7 @@ export interface RouteOf {
   readonly url: string;
 }
 
-/** A request refused before it was sent, because a hold or the reserve stands. */
+/** A request refused before it was sent, because a hold stands. */
 export class HeldRequest extends Error {
   /** Whose hold refused it, and when the hold lifts. */
   readonly held: { readonly identity: GitHubIdentityKind; readonly until: number };
@@ -214,14 +189,6 @@ export const heldUntil = Effect.fnUntraced(function* (state: IdentityState) {
   return until;
 });
 
-/** When the identity's background reserve lifts, where it stands now. */
-export const reservedUntil = Effect.fnUntraced(function* (state: IdentityState) {
-  const now = yield* Clock.currentTimeMillis;
-  const until = state.reserveUntil;
-
-  return until !== undefined && now < until ? until : undefined;
-});
-
 /** Keeps GitHub's counters from an answer, so a refusal's log line can carry them. */
 export function recordRate(state: IdentityState, headers: AnswerHeaders): void {
   const limit = headerNumber(headers, "x-ratelimit-limit");
@@ -302,38 +269,9 @@ const lifted = Effect.fnUntraced(function* (state: IdentityState, now: number) {
   }
 });
 
-/** Starts the background reserve once an answer says less than the members' share of the identity's core quota is left. */
-const reserved = Effect.fnUntraced(function* (state: IdentityState, route: RouteOf, now: number) {
-  const rate = state.rate;
-
-  if (rate === undefined || rate.resource !== CORE_RESOURCE) return;
-  const reset = rate.reset * 1000;
-
-  // Note that a header GitHub left out reads as no number, which is under and past nothing.
-  if (!(rate.remaining < rate.limit * RATE.MEMBER_SHARE) || !(reset > now)) return;
-
-  if ((state.reserveUntil ?? 0) >= reset) return;
-  state.reserveUntil = reset;
-  yield* Effect.logWarning("github: quota low; holding background requests", {
-    ...loggedIdentity(state.identity),
-    method: route.method,
-    route: route.url,
-    resource: rate.resource,
-    limit: rate.limit,
-    remaining: rate.remaining,
-    reset: rate.reset,
-    heldForSeconds: Math.ceil((reset - now) / 1000),
-  });
-});
-
-/** Reads an answer under 400: GitHub's counters, the reserve, and any hold now over. */
-export const answered = Effect.fnUntraced(function* (
-  state: IdentityState,
-  route: RouteOf,
-  headers: AnswerHeaders,
-) {
+/** Reads an answer under 400: GitHub's counters, and any hold now over. */
+export const answered = Effect.fnUntraced(function* (state: IdentityState, headers: AnswerHeaders) {
   const now = yield* Clock.currentTimeMillis;
   recordRate(state, headers);
-  yield* reserved(state, route, now);
   yield* lifted(state, now);
 });

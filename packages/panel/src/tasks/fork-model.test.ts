@@ -17,7 +17,7 @@ const LATER = "5a2f3e4d-6c7b-4a89-9b2c-3d4e5f6a7b8c";
 function agent(id: string, createdAt: number, extra: Partial<AgentSummary> = {}) {
   const summary: AgentSummary = {
     id,
-    planId: TASK,
+    taskId: TASK,
     model: "anthropic/claude-opus-5.5",
     effort: "high",
     title: null,

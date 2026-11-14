@@ -233,7 +233,6 @@ export const APP_SETTING_SCHEMA = {
     // under no page's reset: Appearance's Reset to defaults once flipped it.
     // The field and its id are unmoved, so a choice already made is kept.
     page: SETTINGS_PAGE.THIS_MAC,
-    section: SETTING_SECTION.STARTUP,
     order: 1,
     visible: desktopAppDrawn,
     sideEffect: SETTING_SIDE_EFFECT.LOGIN_ITEM,
@@ -249,6 +248,8 @@ export const APP_SETTING_SCHEMA = {
     default: MACHINE_COMMAND_MODE.ASK,
     page: SETTINGS_PAGE.THIS_MAC,
     order: 2,
+    // Note that the setting is edited under its machine on Settings › Machines, which writes the service's copy this Mac follows, so This Mac draws no row of its own.
+    visible: () => false,
     // Nothing to run per write: the host reads the setting before each read for commands and as each command is about to run.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
@@ -260,8 +261,8 @@ export const APP_SETTING_SCHEMA = {
     default: true,
     page: SETTINGS_PAGE.THIS_MAC,
     order: 3,
-    // Note that the switch stands only where Computer use is on, as every gated feature's row does.
-    visible: (view) => experimentOn(view.settings.experiments, EXPERIMENT.COMPUTER_USE),
+    // Note that the switch is edited under its machine on Settings › Machines, which writes the service's copy this Mac follows, so This Mac draws no row of its own.
+    visible: () => false,
     // Nothing to run per write: the host reads the switch as each action on an app arrives.
     sideEffect: SETTING_SIDE_EFFECT.NONE,
   }),
@@ -419,12 +420,12 @@ export const APP_SETTING_SCHEMA = {
     field: "preferBuiltInMicrophone",
     id: APP_SETTING_ID.PREFER_BUILT_IN_MICROPHONE,
     label: "Prefer the Mac's microphone",
+    detail: "Dictation listens on it even when headphones are connected.",
     default: true,
     // Note that it stands on This Mac, under no page's reset, as the switch to
     // open at login does; the field and its id are unmoved, so a choice already made is kept.
     page: SETTINGS_PAGE.THIS_MAC,
-    section: SETTING_SECTION.MICROPHONE,
-    order: 110,
+    order: 4,
     sideEffect: SETTING_SIDE_EFFECT.NONE,
     visible: microphoneRouteDrawn,
   }),

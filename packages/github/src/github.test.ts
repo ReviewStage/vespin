@@ -1,16 +1,17 @@
 /**
- * github.test.ts -- the GitHub service over a fake HttpClient: what it sends, what a refusal holds, the members' reserve, and conditional requests.
+ * github.test.ts -- the GitHub service over a fake HttpClient: what it sends, what a refusal holds, and conditional requests.
  */
 
 import { generateKeyPairSync } from "node:crypto";
 import { assert, describe, it } from "@effect/vitest";
 import { fakeHttpClientLayer } from "@repo/wire/testing";
-import { Duration, Effect, Layer, Predicate, Redacted, Schema } from "effect";
+import { Context, Duration, Effect, Fiber, Layer, Predicate, Redacted, Schema } from "effect";
+import * as HttpClient from "effect/http/HttpClient";
+import * as HttpClientRequest from "effect/http/HttpClientRequest";
 import { TestClock } from "effect/testing";
 import { GitHub, type InstallationGrant } from "./github.js";
 import { type GitHubHold, GitHubHoldStore } from "./github-hold-store.js";
 import type { GitHubRateScope } from "./github-identity.js";
-import { GitHubPriority, PRIORITY } from "./github-rate.js";
 
 const API = "https://api.github.com";
 const REPOSITORY = { owner: "octo", repo: "hello" } as const;
@@ -27,14 +28,20 @@ const { privateKey } = generateKeyPairSync("rsa", {
 
 const Repository = Schema.Struct({ full_name: Schema.String });
 
-/** One request the fake was sent. */
+/** Whose fiber context a request went out under: the layer's, unless a caller names itself. */
+const CALLER_HEADER = "x-test-caller";
+const Caller = Context.Reference<string>("github.test/Caller", { defaultValue: () => "layer" });
+
+/** One request the fake was sent, whose context it went out under, and the signal that aborts it. */
 interface Sent {
   readonly method: string;
   readonly url: string;
   readonly headers: Headers;
+  readonly caller: string;
+  readonly signal: AbortSignal | null | undefined;
 }
 
-type Answer = (sent: Sent) => Response;
+type Answer = (sent: Sent) => Response | Promise<Response>;
 
 /** The holds as one shared store would keep them, in memory, keyed by the scope's own fields. */
 function memoryHoldStore(): Layer.Layer<GitHubHoldStore> {
@@ -95,12 +102,35 @@ function minted(sent: Sent): Response | undefined {
 function harness(answer: Answer) {
   const sent: Sent[] = [];
 
-  const http = fakeHttpClientLayer((url, init) => {
-    const request = { method: init.method ?? "GET", url, headers: new Headers(init.headers) };
+  const fake = fakeHttpClientLayer((url, init) => {
+    const headers = new Headers(init.headers);
+
+    const request = {
+      method: init.method ?? "GET",
+      url,
+      headers,
+      caller: headers.get(CALLER_HEADER) ?? "",
+      signal: init.signal,
+    };
+
     sent.push(request);
 
     return minted(request) ?? answer(request);
   });
+
+  // Note that the client marks each request with the `Caller` of the fiber context it runs under.
+  const http = Layer.effect(
+    HttpClient.HttpClient,
+    Effect.gen(function* () {
+      const client = yield* HttpClient.HttpClient;
+
+      return HttpClient.mapRequestEffect(client, (request) =>
+        Effect.gen(function* () {
+          return HttpClientRequest.setHeader(request, CALLER_HEADER, yield* Caller);
+        }),
+      );
+    }),
+  ).pipe(Layer.provide(fake));
 
   const layer = GitHub.layer({
     appId: 1,
@@ -142,6 +172,19 @@ describe("GitHub", () => {
       );
       assert.strictEqual(sent[0]?.headers.get("authorization"), "token gho_member");
       assert.strictEqual(sent[0]?.headers.get("x-github-api-version"), "2022-11-28");
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("sends a body under the content type Octokit names", () => {
+    const { sent, layer } = harness(() => json({ access_token: "ghu_fresh" }));
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+      const oauth = github.oauth({ clientId: "Iv1.client", clientSecret: Redacted.make("secret") });
+      yield* oauth.refreshToken(Redacted.make("ghr_refresh"));
+
+      // Note that GitHub answers a token request sent as anything but JSON or a form with a 404.
+      assert.strictEqual(sent[0]?.headers.get("content-type"), "application/json; charset=utf-8");
     }).pipe(Effect.provide(layer));
   });
 
@@ -195,35 +238,6 @@ describe("GitHub", () => {
 
         assert.strictEqual(refused._tag, "GitHubRateLimited");
         assert.strictEqual(held._tag, "GitHubRateLimited");
-        assert.strictEqual(reads().length, 2);
-      }).pipe(Effect.provide(layer));
-    },
-  );
-
-  it.effect(
-    "refuses background work once a quarter of the core quota is left, and still sends a member's",
-    () => {
-      const { reads, layer } = harness(() =>
-        json({ full_name: "octo/hello" }, 200, {
-          "x-ratelimit-limit": "5000",
-          "x-ratelimit-remaining": "1000",
-          "x-ratelimit-reset": FAR_RESET,
-          "x-ratelimit-resource": "core",
-        }),
-      );
-
-      return Effect.gen(function* () {
-        const github = yield* GitHub;
-        const member = github.asMember(Redacted.make("gho_member"));
-        yield* readRepository(member);
-
-        const background = yield* Effect.flip(
-          readRepository(member).pipe(Effect.provideService(GitHubPriority, PRIORITY.BACKGROUND)),
-        );
-
-        yield* readRepository(member);
-
-        assert.strictEqual(background._tag, "GitHubRateLimited");
         assert.strictEqual(reads().length, 2);
       }).pipe(Effect.provide(layer));
     },
@@ -402,6 +416,81 @@ describe("GitHub", () => {
       assert.deepStrictEqual(
         listed.map((repository) => repository.id),
         [7],
+      );
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("sends every page of a listing under the caller's context", () => {
+    const branches = `${REPOSITORY_URL}/branches`;
+
+    const { sent, layer } = harness((request) =>
+      Response.json([{ name: "main" }], {
+        headers: request.url.endsWith("page=2") ? {} : { link: `<${branches}?page=2>; rel="next"` },
+      }),
+    );
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+
+      yield* github
+        .asMember(Redacted.make("gho_member"))
+        .paginate("GET /repos/{owner}/{repo}/branches", REPOSITORY, { maxPages: 2 })
+        .pipe(Effect.provideService(Caller, "caller"));
+
+      assert.deepStrictEqual(
+        sent.map((request) => [request.url, request.caller]),
+        [
+          [branches, "caller"],
+          [`${branches}?page=2`, "caller"],
+        ],
+      );
+    }).pipe(Effect.provide(layer));
+  });
+
+  it.effect("sends no further page of a listing once its caller is interrupted", () => {
+    const branches = `${REPOSITORY_URL}/branches`;
+    const firstAsked = Promise.withResolvers<void>();
+    const firstAnswer = Promise.withResolvers<Response>();
+    // Note that the listing settles one of two ways: the first page's request aborted before it was answered, or a second page asked for.
+    const settled = Promise.withResolvers<string>();
+    let answered = false;
+
+    const { sent, layer } = harness((request) => {
+      if (request.url !== branches) {
+        settled.resolve("next page asked");
+
+        return Response.json([]);
+      }
+
+      request.signal?.addEventListener("abort", () => {
+        if (!answered) settled.resolve("aborted unanswered");
+      });
+      firstAsked.resolve();
+
+      return firstAnswer.promise;
+    });
+
+    return Effect.gen(function* () {
+      const github = yield* GitHub;
+
+      const listing = yield* github
+        .asMember(Redacted.make("gho_member"))
+        .paginate("GET /repos/{owner}/{repo}/branches", REPOSITORY, { maxPages: 2 })
+        .pipe(Effect.forkChild);
+
+      yield* Effect.promise(() => firstAsked.promise);
+      yield* Fiber.interrupt(listing);
+      answered = true;
+      firstAnswer.resolve(
+        Response.json([{ name: "main" }], {
+          headers: { link: `<${branches}?page=2>; rel="next"` },
+        }),
+      );
+
+      assert.strictEqual(yield* Effect.promise(() => settled.promise), "aborted unanswered");
+      assert.deepStrictEqual(
+        sent.map((request) => request.url),
+        [branches],
       );
     }).pipe(Effect.provide(layer));
   });

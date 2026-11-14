@@ -2,6 +2,14 @@ import type { ReactNode } from "react";
 import { AlertIcon, RetryIcon } from "../../icons/lucide-glyphs.js";
 import type { ReportedFailure, Unreported } from "../../reported-failure.js";
 import { BUTTON_VARIANT, Button } from "../button/button.js";
+import {
+  CARD_CORNER,
+  CARD_ELEMENT,
+  CARD_LOOK,
+  CARD_PADDING,
+  CARD_SHADOW,
+  Card,
+} from "../card/card.js";
 import { FailureCopy } from "../failure-copy/failure-copy.js";
 import { SPINNER_INK, SPINNER_SIZE, Spinner, SpinnerRing } from "../spinner/spinner.js";
 import { UPLOAD_METER_PLACE, UploadMeter } from "./upload-meter.js";
@@ -70,7 +78,7 @@ const BLOCK_FAILED = "p-ui-12";
  * the pointer, though the veil around it lets it through to the picture.
  */
 const FAILED_CARD =
-  "ui-upload-cover-card pointer-events-auto flex max-w-full flex-col items-center gap-ui-6 rounded-control border border-border-strong bg-popover px-ui-12 pt-ui-8 pb-ui-4 text-center text-popover-foreground shadow-menu";
+  "ui-upload-cover-card pointer-events-auto flex max-w-full flex-col items-center gap-ui-6 px-ui-12 pt-ui-8 pb-ui-4 text-center text-popover-foreground";
 
 const FAILED_WORDS =
   "ui-upload-cover-words m-0 flex max-w-full items-start gap-icon-gap text-caption [&>svg]:mt-ui-2 [&>svg]:size-control-icon [&>svg]:flex-none [&>svg]:text-danger";
@@ -96,7 +104,14 @@ function BlockFailure({
 }): React.JSX.Element {
   return (
     <span className={`${COVER} ${BLOCK_FAILED}`} data-state={UPLOAD_COVER_STATE.FAILED}>
-      <span className={FAILED_CARD}>
+      <Card
+        as={CARD_ELEMENT.SPAN}
+        look={CARD_LOOK.RAISED}
+        corner={CARD_CORNER.MENU}
+        padding={CARD_PADDING.NONE}
+        shadow={CARD_SHADOW.MENU}
+        className={FAILED_CARD}
+      >
         <span className={FAILED_WORDS} role="alert">
           <AlertIcon />
           <span>{words}</span>
@@ -120,7 +135,7 @@ function BlockFailure({
             </Button>
           )}
         </span>
-      </span>
+      </Card>
     </span>
   );
 }

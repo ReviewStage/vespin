@@ -1,18 +1,43 @@
-// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, in a compact window, the prominent round + that opens New task; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation or while the Inbox stands in Select mode.
+// _layout.tsx -- the system tab bar: icon-only glass tabs for Inbox with its count, Tasks, and search, and, in a compact window, the prominent round + that opens New task, and over it the way back to a voice call standing; hidden in a window wide enough for three columns, where the app sidebar stands instead, and in a compact window over a conversation or while the Inbox stands in Select mode.
 
 import { type IosTab, iosRouteHidesTabs, iosTabOfGroup } from "@repo/features/ios-app-links";
-import { GLYPH, SplitOverTabs, UNDER_SPLIT_SCREEN, useColors } from "@repo/ui-native";
+import {
+  CallAccessory,
+  GLYPH,
+  SplitOverTabs,
+  UNDER_SPLIT_SCREEN,
+  useColors,
+} from "@repo/ui-native";
 import { usePathname, useRouter, useSegments } from "expo-router";
 import { NativeTabs } from "expo-router/native-tabs";
 import { useEffect, useState } from "react";
 import { Platform } from "react-native";
+import { isStackedRoute, useStackToRoutes } from "../../detail-stack.js";
 import { useInboxChoosingOn } from "../../inbox/inbox-choosing.js";
 import { useInboxBadge } from "../../inbox/use-inbox.js";
 import { useMemberPicturesFollow } from "../../member-pictures.js";
 import { placeOfRoute, SIDEBAR_PLACE } from "../../screens/app-sidebar.js";
 import { AppSplit } from "../../screens/app-split.js";
 import { useThreeColumns, useWindowSizeClass } from "../../use-window-size-class.js";
+import { useStandingCallCard } from "../../voice-call.js";
 import { WINDOW_SIZE_CLASS } from "../../window-size-class.js";
+
+/**
+ * The way back to a call standing, in the tab bar's bottom accessory, full
+ * over the bar and inline beside it once it has shrunk as a list scrolled.
+ * Note that the system draws a copy for each placement, so it reads the
+ * call from the provider rather than holding any of it.
+ */
+function CallWayBack() {
+  const placement = NativeTabs.BottomAccessory.usePlacement();
+  const standing = useStandingCallCard();
+
+  if (standing === undefined) return null;
+
+  return (
+    <CallAccessory call={standing.card} inline={placement === "inline"} onOpen={standing.open} />
+  );
+}
 
 /** Where the tabs stand: the tab shown, and whether its root, or an item of its own the split view selects beside its list, stands in front rather than a page pushed over it. */
 type TabStanding = { readonly tab: IosTab | undefined; readonly atRoot: boolean };
@@ -24,12 +49,15 @@ type TabStanding = { readonly tab: IosTab | undefined; readonly atRoot: boolean 
  * the sheet keeps its place and its layer. Note that a tab's own item route
  * stands at its root too, since a wide window hands it straight back to the
  * split view (`useHandToSplit`), while an item pushed onto another tab's
- * stack, a thread's task on the Inbox's, is a page over it.
+ * stack, a thread's task on the Inbox's, is a page over it. With three
+ * columns a page the detail's own stack stands, such as an agent's, stands
+ * at its root too, since it pushes itself there (`useHandToDetail`).
  */
-function useTabStanding(segments: readonly string[]): TabStanding {
+function useTabStanding(segments: readonly string[], threeColumns: boolean): TabStanding {
   const [, group, first, ...rest] = segments;
   const tab = iosTabOfGroup(group);
-  const atRoot = tab !== undefined && first === tab && rest.length <= 1;
+  const stacked = threeColumns && first !== undefined && isStackedRoute([first, ...rest]);
+  const atRoot = tab !== undefined && ((first === tab && rest.length <= 1) || stacked);
   const [kept, keep] = useState<TabStanding>({ tab, atRoot });
 
   useEffect(() => {
@@ -90,9 +118,12 @@ export default function TabsLayout() {
   const appSidebar = useThreeColumns();
   const pathname = usePathname();
   const conversation = iosRouteHidesTabs(pathname);
-  const { tab: standing, atRoot } = useTabStanding(useSegments());
+  const { tab: standing, atRoot } = useTabStanding(useSegments(), appSidebar);
+  // Note that a page open in the detail's stack stays in front as the window leaves three columns, pushed over the window instead.
+  useStackToRoutes(appSidebar, placeOfRoute(standing));
   // Note that a tab under the split view leaves its content clear, because NativeTabs paints each tab in the navigation theme's light ground, which flashed over the split as a page pushed.
   const underSplit = appSidebar ? UNDER_SPLIT_SCREEN.contentStyle : undefined;
+  const calling = useStandingCallCard() !== undefined;
 
   // Note that the Inbox's Select mode hides the bar only while the Inbox's own list stands, so a link that opens another place never leaves the bar hidden over it.
   const choosing = useInboxChoosingOn() && atRoot && placeOfRoute(standing) === SIDEBAR_PLACE.INBOX;
@@ -106,6 +137,12 @@ export default function TabsLayout() {
       badgeBackgroundColor={colors.ATTENTION_FILL}
       badgeTextColor={colors.ON_ACCENT}
     >
+      {/* Note that the accessory stands only while a call does, since the system keeps its room over the bar whatever it holds. */}
+      {calling ? (
+        <NativeTabs.BottomAccessory>
+          <CallWayBack />
+        </NativeTabs.BottomAccessory>
+      ) : null}
       <NativeTabs.Trigger name="(inbox)" accessibilityLabel="Inbox" contentStyle={underSplit}>
         <NativeTabs.Trigger.Icon xcasset={GLYPH.INBOX} />
         <NativeTabs.Trigger.Label hidden={iconOnly}>Inbox</NativeTabs.Trigger.Label>

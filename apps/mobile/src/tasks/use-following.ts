@@ -2,8 +2,7 @@
  * use-following.ts -- who follows a task as the app's screens read and change it: its followers, the reader first, each by their face and name, and the reader's Follow, Unfollow, and machines switch.
  *
  * The followers are the task's own on the listed task (`TaskSummary`'s
- * `followers`), which the service sends only while the task's workspace
- * has Following on, so none means no Following to draw; their order and the
+ * `followers`), so none means no Following to draw; their order and the
  * chip's words are the panel's own model (`@repo/features/task-followers-model`).
  * Each write is the panel's act on the host's port, which draws it on the
  * listed task at once and puts it back where the service refused it.
@@ -63,8 +62,7 @@ function mayRetry(answer: TasksFollowersAnswer): boolean {
 
 /**
  * Who follows the listed task `taskId`, and the reader's Follow, Unfollow,
- * and machines switch on it; none where the list holds no followers for it,
- * as it holds none while its workspace has Following off.
+ * and machines switch on it; none where the list holds no followers for it.
  */
 export function useTaskFollowing(taskId: string): TaskFollowing | undefined {
   const acts = useHostActs();

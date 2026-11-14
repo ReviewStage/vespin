@@ -14,9 +14,10 @@ import {
   WordsField,
 } from "@repo/ui-native";
 import { useQuery } from "@tanstack/react-query";
-import { Stack, useRouter } from "expo-router";
+import { Stack } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { useChosenWorkspace } from "../chosen-workspace.js";
+import { useCloseSheet } from "../close-sheet.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useHostActs } from "../host/host-provider.js";
 import { useWrite } from "../use-write.js";
@@ -50,7 +51,7 @@ type Said = { words?: string };
  */
 export function NewWorkspaceScreen() {
   const colors = useColors();
-  const router = useRouter();
+  const leave = useCloseSheet();
   const acts = useHostActs();
   const write = useWrite();
   const { data: workspaces = [] } = useQuery({ ...appStateQuery, select: selectWorkspaces });
@@ -74,7 +75,8 @@ export function NewWorkspaceScreen() {
     if (!open.current) return;
     open.current = false;
     setClosing(true);
-    router.back();
+    // Note that the sheet goes through the shared close, so its name field lets go of the keyboard before the form's row can go (#9427).
+    leave();
   };
 
   const make = () => {

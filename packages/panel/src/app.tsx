@@ -55,6 +55,7 @@ import { useKeyboardModality } from "./keyboard-modality.js";
 import { useLastSignIn } from "./last-sign-in.js";
 import { LinkMenu } from "./link-menu.js";
 import { useCopyLink } from "./links-at-hand.js";
+import { MachineAskCard } from "./machine-ask-card.js";
 import { MachineCommandAskDialog } from "./machine-command-ask.js";
 import { useOfflineRefusedToast } from "./offline-refused-toast.js";
 import { OpenFeedbackProvider } from "./open-feedback.js";
@@ -63,6 +64,7 @@ import { OpenAiKeyProvider } from "./openai-key.js";
 import { PANEL_TAB, type PanelTab } from "./panel-tabs.js";
 import { OpenPersonProvider, PreloadPersonProvider } from "./person-door.js";
 import { forgetPictures } from "./picture-query.js";
+import { useHistoryRows } from "./places/history-rows.js";
 import { useLinkDestinationLandings } from "./places/link-landings.js";
 import { useLinkReads } from "./places/link-reads.js";
 import { useNarrowBacks } from "./places/narrow-backs.js";
@@ -666,16 +668,19 @@ function AppWindow(): React.JSX.Element {
   const known = run !== undefined && !accountGated && !workspacesUnread;
   const routedViews = useRoutedViews();
   const backs = useNarrowBacks(room === SHELL_ROOM.NARROW);
+  // The task list's rows the history names and reaches, read by id, so a delivery moving any other task draws none of it again.
+  const historyRows = useHistoryRows();
 
   const history = useWindowHistory({
     known,
     link: copyLink.placed,
-    title: stepTitle(routedHere?.place, tasks, routedViews),
+    title: stepTitle(routedHere?.place, tasks, historyRows, routedViews),
     routed: routedHere,
     automations: automationsView,
     versionHistory: versionHistoryView,
     inbox: inboxView,
     room,
+    rows: historyRows,
     tasks,
   });
 
@@ -979,6 +984,8 @@ function AppWindow(): React.JSX.Element {
                             <Announcer />
                             {/* A command an agent asks to run on this Mac, while main holds it for an answer. */}
                             <MachineCommandAskDialog />
+                            {/* An ask another of the developer's machines holds for an agent, over the window whatever it shows. */}
+                            <MachineAskCard />
                             {/* The menu a right-click on any link in the window hangs. */}
                             <LinkMenu />
                             <UpdatedToast />

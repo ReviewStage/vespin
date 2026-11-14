@@ -23,7 +23,7 @@ const RUN = {
 
 const LINK = {
   workspace: "workspace-1",
-  place: { kind: LINK_DESTINATION.TASK, planId: "plan-1" },
+  place: { kind: LINK_DESTINATION.TASK, taskId: "plan-1" },
 } as const;
 
 /** A bridge over a fresh store. */

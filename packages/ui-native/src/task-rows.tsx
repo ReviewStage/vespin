@@ -18,6 +18,7 @@ import {
   accessibilityValue,
   buttonStyle,
   disabled,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -63,7 +64,7 @@ import {
 } from "./marks.js";
 import { type PageFollowing, PageHeader, type StandingMenus } from "./page-header.js";
 import { type BrandColors, STATUS_TONE, useColors } from "./tokens/colors.js";
-import { MARK_SIZE, PRESS_SIZE, ROW_INSET, SPACE } from "./tokens/space.js";
+import { MARK_SIZE, PRESS_SIZE, SPACE } from "./tokens/space.js";
 import { TYPE_ROLE } from "./tokens/type.js";
 
 /** What parts the pieces of an agent's line. */
@@ -90,6 +91,8 @@ function linkInk(colors: BrandColors, tone: LinkRowTone): string {
 /** A row's 12 pt words at the line's end, in the muted ink or the one given, with tabular figures. */
 function EndWords({ words, ink }: { readonly words: string; readonly ink?: string | undefined }) {
   const colors = useColors();
+  // Note that at an accessibility size the end stands under the title with the row's width, so a long name, such as a device's, wraps to a second line rather than being cut.
+  const lines = useAccessibilitySize() ? 2 : 1;
 
   return (
     <Text
@@ -97,7 +100,7 @@ function EndWords({ words, ink }: { readonly words: string; readonly ink?: strin
         font({ textStyle: TYPE_ROLE.TIME }),
         monospacedDigit(),
         foregroundStyle(ink ?? colors.TEXT_MUTED),
-        lineLimit(1),
+        lineLimit(lines),
       ]}
     >
       {words}
@@ -119,32 +122,28 @@ function LeadGlyph({
 }
 
 /**
- * A row's 13 pt line under its title, set in to the title's words: its facts
- * side by side, or at the accessibility sizes one under another, as Settings
- * and Mail stack a row's details, since side by side each fact broke
- * mid-word ("Work / ing", "#1 / 28").
+ * A row's 13 pt line under its title, set in to the title's words, which
+ * start past the lead's column as it grows with the reader's text. At an
+ * accessibility size each fact stands on a line of its own, as Mail's rows
+ * stack, since side by side they broke mid-word.
  */
 function RowLine({ children }: { readonly children: ReactNode }) {
   const stacked = useAccessibilitySize();
+  const lead = useScaledSize(MARK_SIZE.LEAD);
+  // Note that the line starts where the title's words do: past the unread dot and the lead's column, each as it grows with the reader's text.
+  const dot = useScaledSize(MARK_SIZE.UNREAD);
+  const inset = padding({ leading: dot + SPACE.TIGHT + lead + SPACE.ROW });
 
   if (stacked) {
     return (
-      <VStack
-        alignment="leading"
-        spacing={2}
-        modifiers={[padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING })]}
-      >
+      <VStack alignment="leading" spacing={2} modifiers={[inset]}>
         {children}
       </VStack>
     );
   }
 
   return (
-    <HStack
-      spacing={SPACE.TIGHT + 1}
-      alignment="center"
-      modifiers={[padding({ leading: ROW_INSET.TEXT - ROW_INSET.LEADING })]}
-    >
+    <HStack spacing={SPACE.TIGHT + 1} alignment="center" modifiers={[inset]}>
       {children}
       <Spacer />
     </HStack>
@@ -160,7 +159,7 @@ type TaskHeadProps = {
   readonly assignee: Face & { readonly nobody: boolean };
   /** Who created it and when, the line under its chips: "Created by Ada Lovelace · Oct 5". */
   readonly createdBy?: string | undefined;
-  /** Who follows it, as a chip under its fields; none while its workspace has Following off. */
+  /** Who follows it, as a chip under its fields; none where it carries no followers. */
   readonly following?: PageFollowing | undefined;
   /** What a press on each of its chips offers, where the reader may change that field. */
   readonly menus?: StandingMenus | undefined;
@@ -299,15 +298,16 @@ export function AgentRow(props: AgentRowProps) {
   const colors = useColors();
   const resting = state === AGENT_ROW_STATE.REST;
   const told = !resting || pullRequest !== undefined;
-  // Note that the facts stand one to a line at the accessibility sizes (`RowLine`), where the needs-you count leads its own line with no separator.
+  // Note that the facts stand one to a line at the accessibility sizes (`RowLine`), where the needs-you count leads its own line with no separator, and the tile grows with the title.
   const stacked = useAccessibilitySize();
+  const tile = useScaledSize(MARK_SIZE.LEAD);
 
   const row: ReactElement = (
     <VStack alignment="leading" spacing={2}>
       <RowHead
         unread={false}
         faded={false}
-        lead={<AgentTile name={name} harness={harness} size={MARK_SIZE.LEAD} />}
+        lead={<AgentTile name={name} harness={harness} size={tile} />}
         title={name}
         ink={colors.TEXT}
         end={<EndWords words={runsOn} />}
@@ -449,7 +449,7 @@ type GroupRowProps = {
   readonly id: string;
   readonly title: string;
   readonly symbol: Glyph;
-  /** How many it holds, such as the Inbox's threads waiting on you; no count where none is given. */
+  /** How many it holds, such as the Inbox's threads waiting on you; no count where none is given or it holds none, as Mail shows none on an empty mailbox. */
   readonly count?: number | undefined;
   /** What a flow finds the row by, such as the Search tab's id where the sidebar stands for the tab bar. */
   readonly testId?: string | undefined;
@@ -464,53 +464,40 @@ type GroupRowProps = {
  * body's size, and how many it holds at the trailing edge in the muted ink,
  * the whole row in a rounded fill while it is picked.
  */
-export function GroupRow({ id, title, symbol, count, testId, onDropLink }: GroupRowProps) {
+export function GroupRow({ id, title, symbol, count: held, testId, onDropLink }: GroupRowProps) {
   const colors = useColors();
-  const stacked = useAccessibilitySize();
+  const count = held === 0 ? undefined : held;
   const leadWidth = useScaledSize(MARK_SIZE.SIDEBAR_LEAD);
 
-  const name = (
-    <Text
-      modifiers={[
-        font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE }),
-        foregroundStyle(colors.TEXT),
-        lineLimit(stacked ? 2 : 1),
-      ]}
-    >
-      {title}
-    </Text>
-  );
-
-  const counted =
-    count === undefined ? null : (
-      <Text
-        modifiers={[
-          font({ textStyle: TYPE_ROLE.SIDEBAR_COUNT }),
-          monospacedDigit(),
-          foregroundStyle(colors.TEXT_MUTED),
-          lineLimit(1),
-        ]}
-      >
-        {String(count)}
-      </Text>
-    );
-
-  // Note that at an accessibility size the count stands under the name rather than beside it, as the list's rows stack their end, so a long name keeps the row's width.
+  // Note that the name keeps one line at every text size and is cut short, and the count holds the line's end at its own width, as Mail's mailboxes stand, so a large size never breaks a name mid-word or drops the count under it.
   const row: ReactElement = (
-    <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
+    <HStack spacing={SPACE.ROW} alignment="center">
       <HStack modifiers={[frame({ width: leadWidth })]}>
         <LeadGlyph symbol={symbol} ink={colors.TEXT_MUTED} textStyle={TYPE_ROLE.SIDEBAR_GLYPH} />
       </HStack>
-      {stacked ? (
-        <VStack alignment="leading" spacing={2}>
-          {name}
-          {counted}
-        </VStack>
-      ) : (
-        name
-      )}
+      <Text
+        modifiers={[
+          font({ textStyle: TYPE_ROLE.SIDEBAR_TITLE }),
+          foregroundStyle(colors.TEXT),
+          lineLimit(1),
+        ]}
+      >
+        {title}
+      </Text>
       <Spacer />
-      {stacked ? null : counted}
+      {count === undefined ? null : (
+        <Text
+          modifiers={[
+            font({ textStyle: TYPE_ROLE.SIDEBAR_COUNT }),
+            monospacedDigit(),
+            foregroundStyle(colors.TEXT_MUTED),
+            lineLimit(1),
+            fixedSize(),
+          ]}
+        >
+          {String(count)}
+        </Text>
+      )}
     </HStack>
   );
 

@@ -8,7 +8,7 @@ import { runModeFor } from "../run-mode.js";
 import { WindowPushes } from "./push-procedures.js";
 
 /** An app link to a task, as the system hands one to the app. */
-const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, planId: "task-1" } };
+const LINK = { workspace: "workspace-1", place: { kind: LINK_DESTINATION.TASK, taskId: "task-1" } };
 
 /**
  * What a window's push stream sends: every event in the order main pushed
