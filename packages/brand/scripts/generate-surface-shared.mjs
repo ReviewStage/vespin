@@ -233,6 +233,7 @@ const LUCIDE_SYMBOLS = {
   CIRCLE_SLASH: "circle-slash",
   CIRCLE_STOP: "circle-stop",
   CLOCK: "clock",
+  CLOUD: "cloud",
   COPY: "copy",
   CORNER_DOWN_RIGHT: "corner-down-right",
   CORNER_LEFT_UP: "corner-left-up",
