@@ -165,6 +165,7 @@ function SendButton({
   const round = useScaledSize(SEND_SIZE);
   const stopSize = useScaledSize(MARK_SIZE.GLYPH - 2);
   const sendSize = useScaledSize(MARK_SIZE.GLYPH);
+  const dictateSize = useScaledSize(MARK_SIZE.LEAD + 2);
 
   if (empty && onStop !== undefined && stopping) {
     return (
@@ -193,7 +194,7 @@ function SendButton({
         onPress={onDictate}
         modifiers={[buttonStyle("borderless"), ...PRESS_FRAME, accessibilityLabel("Dictate")]}
       >
-        <Image {...glyphImage(GLYPH.DICTATE)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+        <Image {...glyphImage(GLYPH.DICTATE)} size={dictateSize} color={colors.TEXT_MUTED} />
       </Button>
     );
   }
@@ -217,14 +218,13 @@ function SendButton({
 /** The + as a menu, as SwiftUI draws one from a press: its acts, a rule, then its choices within and its switches. */
 function AddMenu({ menu, testId }: { readonly menu: ComposerMenu; readonly testId: string }) {
   const colors = useColors();
+  const addSize = useScaledSize(MARK_SIZE.LEAD + 2);
   const submenus = menu.submenus ?? [];
   const switches = menu.switches ?? [];
 
   return (
     <Menu
-      label={
-        <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
-      }
+      label={<Image {...glyphImage(GLYPH.ADD)} size={addSize} color={colors.TEXT_MUTED} />}
       modifiers={[...PRESS_FRAME, accessibilityLabel(ADD_LABEL), accessibilityIdentifier(testId)]}
     >
       {menu.actions.map((action) => (
@@ -271,6 +271,7 @@ export function AddPress({
   readonly testId?: string | undefined;
 }) {
   const colors = useColors();
+  const addSize = useScaledSize(MARK_SIZE.LEAD + 2);
 
   if (menu !== undefined) return <AddMenu menu={menu} testId={testId} />;
 
@@ -286,7 +287,7 @@ export function AddPress({
         accessibilityIdentifier(testId),
       ]}
     >
-      <Image {...glyphImage(GLYPH.ADD)} size={MARK_SIZE.LEAD + 2} color={colors.TEXT_MUTED} />
+      <Image {...glyphImage(GLYPH.ADD)} size={addSize} color={colors.TEXT_MUTED} />
     </Button>
   );
 }

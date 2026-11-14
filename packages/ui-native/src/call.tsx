@@ -23,6 +23,7 @@ import {
 import type { ModelProvider } from "@repo/features/models-wire";
 import { CALL_CONTROL_LABEL, TALK_LABEL } from "@repo/features/voice-call-words";
 import { StyleSheet } from "react-native";
+import { useScaledSize } from "./accessibility.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
 import { AgentTile } from "./marks.js";
 import { useColors } from "./tokens/colors.js";
@@ -91,6 +92,7 @@ function CallGlyphPress({
   readonly onPress: () => void;
 }) {
   const colors = useColors();
+  const size = useScaledSize(MARK_SIZE.LEAD + 2);
 
   return (
     <SwiftUIButton
@@ -99,7 +101,7 @@ function CallGlyphPress({
     >
       <Image
         {...glyphImage(glyph)}
-        size={MARK_SIZE.LEAD + 2}
+        size={size}
         color={danger ? colors.DANGER_TEXT : colors.TEXT_MUTED}
       />
     </SwiftUIButton>
