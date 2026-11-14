@@ -625,9 +625,8 @@ const CATALOG = [
   commentTool(READ_COMMENTS_TOOL, READS),
   commentTool(REPLY_TO_COMMENT_TOOL),
   commentTool(UPDATE_COMMENT_TOOL),
-  // The developer's Mac.
+  // The developer's Mac, offered wherever the agent runs, since a call may go to a machine other than the one a local agent runs on (`machine-routing.ts`).
   served(RUN_ON_MAC_TOOL, (admitted, input) => runOnMacTool(admitted.target, input), {
-    gate: TOOL_GATE.SANDBOX,
     refused: machineCommandNotRun,
   }),
   // One app on the developer's Mac, offered wherever the agent runs, since the Mac it reaches is the task's assignee's, where the workspace has Computer use on.
