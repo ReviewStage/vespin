@@ -201,11 +201,11 @@ export const NOTHING: Route = { kind: ROUTE.NOTHING };
 function mentionedLinkOf(mention: ReturnType<typeof decodeMention>): ReadLink | undefined {
   switch (mention?.kind) {
     case MENTION_KIND.TASK:
-      return { workspace: "", place: { kind: LINK_DESTINATION.TASK, planId: mention.taskId } };
+      return { workspace: "", place: { kind: LINK_DESTINATION.TASK, taskId: mention.taskId } };
     case MENTION_KIND.SECTION:
       return {
         workspace: "",
-        place: { kind: LINK_DESTINATION.SECTION, planId: mention.taskId, anchor: mention.anchor },
+        place: { kind: LINK_DESTINATION.SECTION, taskId: mention.taskId, anchor: mention.anchor },
       };
     default:
       return undefined;

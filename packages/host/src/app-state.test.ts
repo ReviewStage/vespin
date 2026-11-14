@@ -15,7 +15,7 @@ import { appSettingsWire, settingsView } from "@repo/settings/testing";
 import type { WireValue } from "@repo/wire";
 import { describe, test } from "vitest";
 import {
-  type AppDescriptionDocuments,
+  type AppHeldTasks,
   type AppHolderInboxes,
   type AppInboxItems,
   type AppPages,
@@ -153,16 +153,16 @@ describe("a delivery that crosses the wire", () => {
     item("charlie", "Charlie?"),
   ];
 
-  const feed = (plans: AppInboxItems["plan"]): AppStateSnapshot => ({
+  const feed = (tasks: AppInboxItems["task"]): AppStateSnapshot => ({
     ...document,
     [LIVE_READ.INBOX_ITEMS]: {
-      rows: { [INBOX_SCOPE_KIND.PLAN]: plans },
+      rows: { [INBOX_SCOPE_KIND.TASK]: tasks },
     },
   });
 
-  const held = (plans: AppHolderInboxes["plan"]): AppStateSnapshot => ({
+  const held = (tasks: AppHolderInboxes["task"]): AppStateSnapshot => ({
     ...document,
-    [LIVE_READ.HOLDER_INBOX]: { [INBOX_SCOPE_KIND.PLAN]: plans },
+    [LIVE_READ.HOLDER_INBOX]: { [INBOX_SCOPE_KIND.TASK]: tasks },
   });
 
   const pages = (tasks: AppPages["task"]): AppStateSnapshot => ({
@@ -198,9 +198,9 @@ describe("a delivery that crosses the wire", () => {
     tasks: { ...document.tasks, tasks, activeTaskId: openDescription.id },
   });
 
-  const descriptions = (held: AppDescriptionDocuments): AppStateSnapshot => ({
+  const descriptions = (held: AppHeldTasks): AppStateSnapshot => ({
     ...document,
-    [LIVE_READ.DESCRIPTION_DOCUMENT]: held,
+    [LIVE_READ.HELD_TASK]: held,
   });
 
   const quietDescription = { rows: { task: openDescription } };
@@ -242,7 +242,7 @@ describe("a delivery that crosses the wire", () => {
       sent: feed({ quiet: quietList, moved: [item("moved", "Ship?")], gone: [alpha] }),
       next: feed({ quiet: quietList, moved: [item("moved", "Ship tonight?")] }),
       kept: (state: AppStateSnapshot) => [
-        state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.PLAN].quiet,
+        state[LIVE_READ.INBOX_ITEMS].rows?.[INBOX_SCOPE_KIND.TASK].quiet,
       ],
       quiet: [quietItem.title],
     },
@@ -251,7 +251,7 @@ describe("a delivery that crosses the wire", () => {
       sent: held({ quiet: quietInbox, moved: { rows: [alpha] }, gone: { failed: true } }),
       next: held({ quiet: quietInbox, moved: { rows: [] } }),
       kept: (state: AppStateSnapshot) => [
-        state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.PLAN].quiet,
+        state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.TASK].quiet,
       ],
       quiet: [quietItem.title],
     },
@@ -276,7 +276,7 @@ describe("a delivery that crosses the wire", () => {
         moved: { rows: [item("delta", "Delta?"), alpha, item("bravo", "Bravo now?")] },
       }),
       kept: (state: AppStateSnapshot) => [
-        state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.PLAN].moved?.rows?.find(
+        state[LIVE_READ.HOLDER_INBOX][INBOX_SCOPE_KIND.TASK].moved?.rows?.find(
           (row) => row.id === alpha.id,
         ),
       ],
@@ -311,7 +311,7 @@ describe("a delivery that crosses the wire", () => {
           rows: { task: { ...summary("moved", "Rollout"), description: draft("# Final") } },
         },
       }),
-      kept: (state: AppStateSnapshot) => [state[LIVE_READ.DESCRIPTION_DOCUMENT].quiet],
+      kept: (state: AppStateSnapshot) => [state[LIVE_READ.HELD_TASK].quiet],
       quiet: [openDescription.description.body],
     },
     {

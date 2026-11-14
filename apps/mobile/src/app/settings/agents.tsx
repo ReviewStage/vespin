@@ -27,7 +27,11 @@ import {
   selectAppSettingsView,
 } from "@repo/host/app-state-reads";
 import {
+  AGENT_ENTER,
+  AGENT_ENTER_TOUCH_DETAIL,
+  APP_SETTING_ID,
   type AppSettingField,
+  isAgentEnter,
   SETTING_SECTION,
   SETTINGS_PAGE,
   type SettingSection,
@@ -192,6 +196,12 @@ export default function AgentsScreen() {
   const refusalOf = (rows: readonly SchemaRow[]) =>
     rows.some((row) => row.field === written) ? setting.refusal : undefined;
 
+  // Note that Follow-up behavior's footer says what a phone's Send does, since the desktop's words name ⌘ Enter, which a touch screen has none of.
+  const detailOf = ({ entry, control }: SchemaRow) =>
+    entry.id !== APP_SETTING_ID.AGENT_ENTER || control === undefined
+      ? entry.detail
+      : AGENT_ENTER_TOUCH_DETAIL[isAgentEnter(control.value) ? control.value : AGENT_ENTER.STEER];
+
   const pickRow = ({ field, entry, control }: SchemaRow) =>
     control === undefined ? null : (
       // Note that SwiftUI's picker keeps the pick a person made, so a refused write draws the row anew under the next round, reading the stored choice again.
@@ -269,7 +279,7 @@ export default function AgentsScreen() {
           </ListSection>
         )}
         {preferenceRows.map((row) => (
-          <ListSection key={row.entry.id} footer={refusalOf([row]) ?? row.entry.detail}>
+          <ListSection key={row.entry.id} footer={refusalOf([row]) ?? detailOf(row)}>
             {pickRow(row)}
           </ListSection>
         ))}

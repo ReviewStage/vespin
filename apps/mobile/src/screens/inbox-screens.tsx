@@ -80,6 +80,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { Stack, useLocalSearchParams, useNavigation, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useAppReadyCount } from "../app-ready.js";
 import { appStateQuery } from "../host/app-state-query.js";
 import { useInboxChoosing } from "../inbox/inbox-choosing.js";
 import {
@@ -327,7 +328,7 @@ function InboxRow({
         },
       ]}
       link={linkOf(
-        { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+        { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
         workspaceStep,
       )}
       preview={
@@ -572,7 +573,7 @@ function ThreadDetail({
   const openOnWeb = () => {
     const place = {
       kind: LINK_DESTINATION.INBOX_ITEM,
-      planId: holder.task.id,
+      taskId: holder.task.id,
       itemId: item.id,
     } as const;
 
@@ -626,7 +627,7 @@ function ThreadDetail({
     onCopyLink: () =>
       keeping.copyWords(
         linkOf(
-          { kind: LINK_DESTINATION.INBOX_ITEM, planId: holder.task.id, itemId: item.id },
+          { kind: LINK_DESTINATION.INBOX_ITEM, taskId: holder.task.id, itemId: item.id },
           workspaceStep,
         ),
       ),
@@ -642,7 +643,7 @@ function ThreadDetail({
       label: PATH_OPENS.TASK,
       symbol: GLYPH.TASK,
       onPress: () =>
-        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, planId: holder.task.id }))),
+        router.push(onTab(iosAppRouteOf({ kind: LINK_DESTINATION.TASK, taskId: holder.task.id }))),
     },
     {
       label: PATH_OPENS.AGENT,
@@ -752,7 +753,7 @@ function ThreadDetail({
                 linkOf(
                   {
                     kind: LINK_DESTINATION.PAGE,
-                    planId: page.place.taskId,
+                    taskId: page.place.taskId,
                     pageId: page.pageId,
                   },
                   workspaceStep,
@@ -873,6 +874,7 @@ type InboxSearch = { readonly search: string; readonly setSearch: (search: strin
 function useInboxScreen({ search, setSearch }: InboxSearch, chosen?: string | undefined) {
   const { show, choose } = useInboxScope();
   const listing = useInboxListing({ show, search, chosen });
+  useAppReadyCount(listing.listed.length > 0);
   const acts = useInboxActs();
   const scopes = scopePills(show, choose, listing.counts);
   const remind = useRemindSheet();

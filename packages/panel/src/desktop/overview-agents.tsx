@@ -36,7 +36,7 @@ import type { AddEntry, HeldTranscripts } from "./strip-tabs.js";
 import type { ChosenRows } from "./tasks-selection.js";
 
 /**
- * plan-agents.tsx -- the open task's agents at the head of its description, as a group: one row each in a task's row's anatomy, its tab's glyph and name, its pull request, where it runs, its failure where it failed, and when it last moved.
+ * overview-agents.tsx -- the open task's agents at the head of its description, as a group: one row each in a task's row's anatomy, its tab's glyph and name, its pull request, where it runs, its failure where it failed, and when it last moved.
  *
  * The agents stand under a group head, Agents and how many, which folds
  * them, folded where the page asks, the same shape every group of
@@ -207,7 +207,7 @@ function PlanArchivedAgents({
   if (archived.length === 0) return null;
 
   return (
-    <div className="plan-agents-archived mt-list-gap">
+    <div className="overview-agents-archived mt-list-gap">
       <GroupHeader
         heading={GROUP_HEADING.NONE}
         look={GROUP_LOOK.SECTION}
@@ -259,7 +259,7 @@ function PlanArchivedAgents({
  * A row's press is handed to `onOpenAgent` by its agent's id, and
  * `onOpenPullRequest` opens an agent's pull request as its own chip does.
  */
-export function PlanAgents({
+export function OverviewAgents({
   agents,
   held,
   tab,
@@ -337,7 +337,7 @@ export function PlanAgents({
 
   return (
     // Note that the group is pulled out by a row's inset on each side, so its marks stand on the title's edge and its fills hang past it.
-    <div className="plan-agents -mx-row-inset mb-block-gap">
+    <div className="overview-agents -mx-row-inset mb-block-gap">
       {grouped ? (
         <ReplayUnmask>
           <GroupHeader

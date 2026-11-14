@@ -79,7 +79,7 @@ export function useAgentPullRequestSource(
     control.archived?.find((each) => each.id === agentId);
 
   const ended = !agentStillWriting(agent?.status ?? AGENT_STATUS.RUNNING);
-  const taskId = agent?.planId ?? null;
+  const taskId = agent?.taskId ?? null;
   const published = pullRequestOfTab(control, { changes: agentId, number });
   const { generateChapters } = control;
 

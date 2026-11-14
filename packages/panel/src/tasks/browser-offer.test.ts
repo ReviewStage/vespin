@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { AGENT_MACHINE, AGENT_STATUS, type AgentSummary } from "@repo/features/agent-wire";
 import type { Task, TaskSummary } from "@repo/features/task-wire";
-import { DOCUMENT_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
+import { TASK_REGION, TASKS_PAGE } from "@repo/features/tasks-model";
 import { BROWSER_TAB_OPEN_FAILURE } from "@repo/features/tasks-view";
 import { ACT_KIND } from "@repo/host/acts";
 import { agentTab, cloudBrowserTab } from "@repo/ui/tab-strip-model";
@@ -55,7 +55,7 @@ const SUMMARY: TaskSummary = {
 /** A coding agent on the task, and a second beside it. */
 const AGENT: AgentSummary = {
   id: "0b5f8c1e-4d3a-4e6b-8f2c-9a1d7e3b5c40",
-  planId: TASK.id,
+  taskId: TASK.id,
   model: "anthropic/claude-opus-5.5",
   effort: "high",
   title: "Invite expiry",
@@ -106,10 +106,10 @@ async function mount(
   const base = tasksControl();
 
   const tasks = tasksControl({
-    page: TASKS_PAGE.DOCUMENT,
+    page: TASKS_PAGE.TASK,
     tasks: [SUMMARY],
     activeTaskId: TASK.id,
-    region: { kind: DOCUMENT_REGION.READY, task: TASK },
+    region: { kind: TASK_REGION.READY, task: TASK },
     mainTabs: {
       ...base.mainTabs,
       tabs: viewed === undefined ? [] : [agentTab(viewed)],
