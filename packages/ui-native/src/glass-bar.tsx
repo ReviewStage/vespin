@@ -34,6 +34,9 @@ const DOCK_ROOM_UNMEASURED = 72;
 /** The room the dock a screen's content stands in takes at its foot, above the bottom safe area, in points; none outside a dock. */
 const DockRoom = createContext(0);
 
+/** How far the system's keyboard stands over the dock a screen's content stands in, in points; none while it is down or outside a dock. */
+const DockKeyboard = createContext(0);
+
 /** Tells the dock how tall the bar inside it stands, with its gap, and where its top stands in the window; nothing outside a dock. */
 const DockMeasure = createContext<((room: number, top: number) => void) | undefined>(undefined);
 
@@ -291,7 +294,9 @@ export function GlassDock({
 
   return (
     <View style={styles.dock}>
-      <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
+      <DockKeyboard.Provider value={keyboard}>
+        <DockRoom.Provider value={room}>{children}</DockRoom.Provider>
+      </DockKeyboard.Provider>
       <View style={[styles.docked, { bottom: keyboard }]}>
         <View style={[styles.column, { maxWidth: READING_WIDTH + left + right }]}>
           <DockMeasure.Provider value={measure}>{bar}</DockMeasure.Provider>
@@ -304,4 +309,9 @@ export function GlassDock({
 /** The room the dock a screen's content stands in takes at its foot, above the bottom safe area, which the content leaves under its last row so it scrolls clear of the bar; none outside a dock. */
 export function useDockRoom(): number {
   return useContext(DockRoom);
+}
+
+/** How far the system's keyboard stands over the dock a screen's content stands in, which the dock's bar is lifted by, so the content keeps its foot clear of it; none while it is down or outside a dock. */
+export function useDockKeyboard(): number {
+  return useContext(DockKeyboard);
 }

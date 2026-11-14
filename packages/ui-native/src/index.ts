@@ -28,6 +28,7 @@ export {
   Chip,
   FieldChip,
   FollowingChip,
+  LabelChip,
   SCOPE_LOOK,
   type Scope,
   type ScopeLook,
