@@ -19,6 +19,7 @@ import {
   accessibilityLabel,
   background,
   buttonStyle,
+  fixedSize,
   font,
   foregroundStyle,
   frame,
@@ -345,7 +346,8 @@ function SelectRow({
         label={field.label}
         selection={Predicate.isString(field.value) ? field.value : ""}
         onSelectionChange={onChange}
-        modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.TEXT)]}
+        // Note that the picker holds its value whole on one line, so a long one such as "Every member (recommended)" wraps the field's name beside it rather than leaving its last word alone on a second line, as a Settings row wraps its label before its value.
+        modifiers={[pickerStyle("menu"), labelsHidden(), tint(colors.TEXT), fixedSize()]}
       >
         <Text modifiers={[tag("")]}>{CHOOSE}</Text>
         {(field.options ?? []).map((option) => (

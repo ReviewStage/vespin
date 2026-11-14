@@ -47,7 +47,10 @@ appId: dev.vespin.ios
     clearState: true
     arguments:
       fixture: inbox
-- assertVisible: "Run the memberships migration on preview?"
+# Note that at accessibility sizes this row stands below the fold, so it is scrolled to before it is read.
+- scrollUntilVisible:
+    element: "Run the memberships migration on preview?"
+    direction: DOWN
 - waitForAnimationToEnd
 - tapOn: "Run the memberships migration on preview?"
 - assertVisible: "Decline"
