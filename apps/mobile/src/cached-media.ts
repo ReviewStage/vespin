@@ -1,5 +1,5 @@
 /**
- * cached-media.ts -- a video's or a file's bytes written once under the app's caches: a video named by its id and its type's extension, for the system's player, which reads a file and knows its kind by its extension, an Inbox thread's and an agent's recordings alike; and a file, such as a PDF, under its own name, for the web view that draws it and the share sheet that keeps it.
+ * cached-media.ts -- a video's or a file's bytes written once under the app's caches: a video named by its id and its type's extension, for the system's player, which reads a file and knows its kind by its extension, an Inbox thread's and an agent's recordings alike; and a file, such as a PDF, under its own name, for Quick Look, which draws it, and the share sheet that keeps it.
  */
 
 import { AGENT_ATTACHMENT_TYPE } from "@repo/features/agent-wire";
@@ -85,7 +85,7 @@ export async function cachedVideo(
  * the share sheet saves it under its own name. Written once, and answered
  * only once its bytes are all on disk, as a video is (`cachedVideo`). Note
  * that a name that would part a path, or stands as none, is made safe, and
- * that a PDF always ends in `.pdf`, because the web view that draws it reads
+ * that a PDF always ends in `.pdf`, because Quick Look, which draws it, reads
  * a file's kind from its extension, and a PDF named as a page, `plan.html`,
  * would be drawn as one.
  */

@@ -33,16 +33,17 @@ appId: dev.vespin.ios
 - tapOn:
     point: "50%, 10%"
 - waitForAnimationToEnd
-# The viewer's share button holds the picture's same acts.
+# The picture opens in the system's Quick Look, whose share sheet copies and
+# saves it as the system's own wording names those acts.
 - tapOn: "The invite page"
-- assertVisible:
-    id: "markdown-picture-done"
-- tapOn:
-    id: "viewer-share"
-- assertVisible: "Save to Photos"
+- assertVisible: "Done"
+- waitForAnimationToEnd
+- tapOn: "Share"
+- assertVisible: "Save Image"
+- assertVisible: "Copy"
 - waitForAnimationToEnd
 - takeScreenshot: keep-viewer-share
 - tapOn:
-    point: "50%, 50%"
-- tapOn:
-    id: "markdown-picture-done"
+    point: "50%, 10%"
+- waitForAnimationToEnd
+- tapOn: "Done"

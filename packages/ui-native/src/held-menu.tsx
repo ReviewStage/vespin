@@ -1,11 +1,19 @@
-// held-menu.tsx -- the menu a long press opens on a picture, a recording, a file, or a message, as iOS's own apps open one: its acts in the system's menu over the thing lifted, and the full-screen viewer's share button holding the same acts.
+// held-menu.tsx -- the menu a long press opens on a picture, a recording, a file, or a message, as iOS's own apps open one: its acts in the system's menu over the thing lifted.
 
-import { Button, ContextMenu, Host, Image, Menu, RNHostView } from "@expo/ui/swift-ui";
-import { accessibilityIdentifier, accessibilityLabel } from "@expo/ui/swift-ui/modifiers";
+import { Button, ContextMenu, RNHostView } from "@expo/ui/swift-ui";
 import type { DraftCopy } from "@repo/features/draft-text";
-import { createContext, type ReactElement, type ReactNode, useContext, useState } from "react";
+import {
+  type ComponentRef,
+  createContext,
+  type ReactElement,
+  type ReactNode,
+  useCallback,
+  useContext,
+  useRef,
+  useState,
+} from "react";
 import { StyleSheet, View } from "react-native";
-import { type Glyph, glyphImage } from "./glyph.js";
+import type { Glyph } from "./glyph.js";
 import { actContent } from "./glyph-label.js";
 import { InlineHost } from "./inline-host.js";
 import {
@@ -15,14 +23,11 @@ import {
   type KeepAct,
   type Kept,
   keepActs,
+  type WindowFrame,
 } from "./keep-model.js";
-import { MARK_SIZE } from "./tokens/space.js";
 
 /** What a message's own Copy is called, as the panel's Copy under a message names it. */
 const COPY_MESSAGE = "Copy message";
-
-/** What the viewer's share button is heard as. */
-const SHARE_LABEL = "Share";
 
 const styles = StyleSheet.create({
   // Note that the menu and its host span the width they stand in, since a host sized by its SwiftUI alone would stand no wider than nothing.
@@ -37,14 +42,17 @@ export interface HeldAct {
 }
 
 /**
- * What the app does with what is held: copies a picture or a text file's
- * words, saves a picture or a recording to Photos, or shares any of them in
- * the system's share sheet; copies a message's words; and copies a draft's
- * body as rich text, its marks and links kept. The app answers them with
- * the device's own pasteboard, Photos, and share sheet, and says what did
- * not go; nothing here reaches the device.
+ * What the app does with what is held: opens a picture or a file full
+ * screen in the system's Quick Look, grown from the thumbnail pressed;
+ * copies a picture or a text file's words, saves a picture or a recording to
+ * Photos, or shares any of them in the system's share sheet; copies a
+ * message's words; and copies a draft's body as rich text, its marks and
+ * links kept. The app answers them with the device's own Quick Look,
+ * pasteboard, Photos, and share sheet, and says what did not go; nothing
+ * here reaches the device.
  */
 export interface Keeping {
+  readonly open: (kept: Kept, from: WindowFrame | undefined) => void;
   readonly keep: (kept: Kept, act: KeepAct) => void;
   readonly copyWords: (words: string) => void;
   readonly copyRich: (copy: DraftCopy) => void;
@@ -74,6 +82,44 @@ export function useKeptActs(kept: Kept | undefined): readonly HeldAct[] {
     symbol: KEEP_SYMBOL[act],
     onPress: () => keeping.keep(kept, act),
   }));
+}
+
+/** A thumbnail's callback ref, which marks where it stands, and its press, which opens what it shows in Quick Look; no press where nothing is held yet or no app answers it. */
+interface QuickLook {
+  readonly mark: (view: ComponentRef<typeof View> | null) => void;
+  readonly open: (() => void) | undefined;
+}
+
+/**
+ * A thumbnail's press that opens a picture or a file full screen in the
+ * system's Quick Look, as Messages and Mail open one. Note that the
+ * thumbnail's frame in its window is measured at the press, so the preview
+ * grows from where the thumbnail stands now, scrolled or not; one never laid
+ * out opens with the system's plain transition.
+ */
+export function useQuickLook(kept: Kept | undefined): QuickLook {
+  const keeping = useContext(KeepingDoor);
+  const thumbnail = useRef<ComponentRef<typeof View>>(null);
+
+  const mark = useCallback((view: ComponentRef<typeof View> | null) => {
+    thumbnail.current = view;
+  }, []);
+
+  if (keeping === undefined || kept === undefined) return { mark, open: undefined };
+
+  const open = () => {
+    const thumb = thumbnail.current;
+
+    if (thumb === null) {
+      keeping.open(kept, undefined);
+
+      return;
+    }
+
+    thumb.measureInWindow((x, y, width, height) => keeping.open(kept, { x, y, width, height }));
+  };
+
+  return { mark, open };
 }
 
 /** A message's Copy, which copies its words as they were written, Markdown and all, as the panel's does; none for a message of no words. */
@@ -158,28 +204,6 @@ export function HeldMenu({
         </HeldSwiftMenu>
       </InlineHost>
     </View>
-  );
-}
-
-/** The full-screen viewer's share button: the system's share glyph in white, opening the same acts as the held thing's menu; nothing where it offers none. */
-export function HeldActsButton({ acts }: { readonly acts: readonly HeldAct[] }) {
-  if (acts.length === 0) return null;
-
-  return (
-    <Host matchContents>
-      <Menu
-        label={
-          <Image
-            {...glyphImage(KEEP_SYMBOL[KEEP_ACT.SHARE])}
-            size={MARK_SIZE.LEAD + 4}
-            color="white"
-          />
-        }
-        modifiers={[accessibilityLabel(SHARE_LABEL), accessibilityIdentifier("viewer-share")]}
-      >
-        <HeldActButtons acts={acts} />
-      </Menu>
-    </Host>
   );
 }
 
