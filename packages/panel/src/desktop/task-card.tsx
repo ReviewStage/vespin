@@ -373,7 +373,7 @@ function TaskRelations({
   workspaceName: string | undefined;
   onOpenTask: ((taskId: string) => void) | undefined;
 }): React.JSX.Element {
-  const count = subTaskCount(subTasks);
+  const count = subTaskCount(task, subTasks);
 
   const groups = [
     {

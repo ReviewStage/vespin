@@ -31,7 +31,7 @@ function usePageAddress(
   if (workspace === undefined || taskId === undefined) return undefined;
 
   return linkOf(
-    { kind: LINK_DESTINATION.PAGE, planId: taskId, pageId },
+    { kind: LINK_DESTINATION.PAGE, taskId: taskId, pageId },
     workspace.slug ?? workspace.id,
   );
 }

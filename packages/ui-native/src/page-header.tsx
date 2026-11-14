@@ -41,6 +41,9 @@ export type StandingMenus = {
   readonly assignee?: FieldMenu | undefined;
 };
 
+/** The gap between a page's field chips, in points: at least 8, so a press meant for one never lands on its neighbor, since each is the system's small capsule rather than a 44 pt target. */
+const CHIP_GAP = SPACE.TIGHT * 2;
+
 /** Who follows a task as its page's chip says it (`FollowingChip`). */
 export type PageFollowing = {
   readonly label: string;
@@ -98,11 +101,11 @@ export function PageHeader(props: PageHeaderProps) {
         {title}
       </Text>
       {!chips ? null : stacked ? (
-        <VStack alignment="leading" spacing={SPACE.TIGHT + 2}>
+        <VStack alignment="leading" spacing={CHIP_GAP}>
           {chipRow}
         </VStack>
       ) : (
-        <HStack spacing={SPACE.TIGHT + 2}>{chipRow}</HStack>
+        <HStack spacing={CHIP_GAP}>{chipRow}</HStack>
       )}
       {following === undefined ? null : <FollowingChip {...following} />}
       {summary === undefined ? null : (

@@ -6,9 +6,9 @@ import {
 } from "@repo/features/agent-parts";
 import { AGENT_TOOL } from "@repo/features/agent-tools";
 import type { AgentTranscriptMessage } from "@repo/features/agent-wire";
-import { computerCallRefused } from "@repo/features/tool-call-model";
+import { computerCallRefused, computerCursor } from "@repo/features/tool-call-model";
 import { ACT_KIND } from "@repo/host/acts";
-import { AppStackPill, AppWindowStack } from "@repo/ui";
+import { AGENT_POINTER_KIND, AppStackPill, AppWindowStack } from "@repo/ui";
 import { PICTURE_STATE } from "@repo/ui/picture-read";
 import { MESSAGE_ROLE } from "@repo/wire";
 import { useMutation } from "@tanstack/react-query";
@@ -27,7 +27,11 @@ import { useOnThatMac } from "./computer-permission-note.js";
  * call is on. The front's name brings that app's own window forward on the
  * Mac the agent uses (`useOnThatMac`), and a press on its window opens the
  * viewer, which walks every app's newest window. As the agent moves on to
- * another app, that app comes forward.
+ * another app, that app comes forward. Where the agent's cursor last stood
+ * over the window in front, as its calls this turn said, the agent's
+ * pointer stands over the picture at that spot, gliding to each new one and
+ * pressing where the agent pressed, until the turn ends; the enlarged
+ * viewer draws none, since it is the window held still to be read.
  *
  * Minimize puts the stack down to its pill (`AppStackPill`), which brings it
  * back; put down while the agent works, it stays down for that agent this
@@ -44,10 +48,20 @@ import { useOnThatMac } from "./computer-permission-note.js";
 /** What the stack is named to a reader. */
 const LABEL = "Apps in use";
 
-/** The apps an agent used this turn, the one it used last first, each as the conversation names it (`computerAppsOf`), and whether its newest call is still on that one while it works. */
+/** Where the agent's cursor last stood this turn, by the app whose window it stood over, as a share of that window, whether it pressed there, and the call that put it there. */
+interface CursorInUse {
+  readonly app: string;
+  readonly x: number;
+  readonly y: number;
+  readonly pressed: boolean;
+  readonly callId: string;
+}
+
+/** The apps an agent used this turn, the one it used last first, each as the conversation names it (`computerAppsOf`), whether its newest call is still on that one while it works, and where its cursor last stood, where a call this turn said. */
 export interface AppsInUse {
   readonly apps: readonly ComputerApp[];
   readonly using: boolean;
+  readonly cursor?: CursorInUse;
 }
 
 /** A call's tool, its id, and its answer, as the stack reads them. */
@@ -120,8 +134,19 @@ export function appsInUse(
   const newest = calls[0];
 
   if (top === undefined || newest === undefined) return undefined;
+  const using = working && appOf(newest) === top;
 
-  return { apps, using: working && appOf(newest) === top };
+  // Note that the Mac's cursor is one, so it stands where the newest call that placed it left it, over that call's app alone.
+  for (const call of calls) {
+    const app = appOf(call);
+    const point = app === undefined ? undefined : computerCursor(call.output);
+
+    if (app === undefined || point === undefined) continue;
+
+    return { apps, using, cursor: { app: app.id, ...point, callId: call.callId } };
+  }
+
+  return { apps, using };
 }
 
 /** Every agent whose stack the reader put down while it worked, this window's session, so it stays down as the tab comes back. */
@@ -241,6 +266,19 @@ function AppsFloat({
   const icons = useKeptPictures(inUse.apps.map((each) => each.icon));
   const down = working ? putDown : !doneOpen;
   const using = inUse.using ? top.id : undefined;
+  const cursor = inUse.cursor;
+
+  // Note that the pointer shows while the agent works and fades once its turn ends, as the Mac puts its cursor away.
+  const pointer =
+    cursor === undefined
+      ? undefined
+      : {
+          x: cursor.x,
+          y: cursor.y,
+          kind: cursor.pressed ? AGENT_POINTER_KIND.CLICK : AGENT_POINTER_KIND.MOVE,
+          move: cursor.callId,
+          shown: working,
+        };
 
   const apps = inUse.apps.map((each, at) => {
     const icon = icons[at];
@@ -251,7 +289,12 @@ function AppsFloat({
           id: each.id,
           name: each.name,
           iconSrc,
-          window: { state: window, width: front.window.width, height: front.window.height },
+          window: {
+            state: window,
+            width: front.window.width,
+            height: front.window.height,
+            pointer: cursor?.app === each.id ? pointer : undefined,
+          },
         }
       : { id: each.id, name: each.name, iconSrc };
   });

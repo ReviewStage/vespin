@@ -100,6 +100,23 @@ it.effect(
 );
 
 it.effect(
+  "a fixture run on the large Inbox lists as many threads as a busy real account, so a timing run measures that size",
+  () =>
+    Effect.scoped(
+      Effect.gen(function* () {
+        const root = yield* ownFolder;
+        const { bridge } = yield* standingHost(root, RUN_PROFILE.INBOX_LARGE);
+
+        const state = yield* Effect.promise(() => bridge.requestAppState());
+
+        const threads = selectInboxGroupsIn(undefined)(state).flatMap(({ items }) => items);
+
+        expect(threads.length).toBeGreaterThan(600);
+      }),
+    ),
+);
+
+it.effect(
   "a setting written over the act port in one launch is read back by the next, from the host's folder",
   () =>
     Effect.scoped(

@@ -199,7 +199,7 @@ test("an untitled agent is named by the catalog around the reader, as its tab an
   // The task's agent, as the list followed live holds it.
   const followed = {
     id: agentId,
-    planId: task.id,
+    taskId: task.id,
     title: null,
     model,
     effort: "high",

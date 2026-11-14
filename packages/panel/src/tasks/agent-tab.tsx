@@ -327,6 +327,7 @@ import {
   ThreadLineHead,
   TranscriptAgent,
 } from "./line-cards.js";
+import { useMachineAskHeld } from "./machine-ask-waiting.js";
 import { MachineRefusalCard } from "./machine-refusal-card.js";
 import { CHIP_OR_LINK_FRAME, ChipOrLink, linkChip } from "./mention-chip.js";
 import {
@@ -748,8 +749,9 @@ function ToolCallView({
   const appIcon = useComputerIcon(part.callId, view.appIcon);
   // A computer call's window stands in its body, so a turn's many reads keep the transcript to one line each.
   const inBody = part.tool === AGENT_TOOL.COMPUTER;
-  // A call the agent holds for an answer says so on its own row, its answers under it.
-  const held = useCallHeld(part.callId);
+  // A call the agent holds for an answer says so on its own row, its answers under it, as does one this Mac's ask holds.
+  const askHeld = useMachineAskHeld(part);
+  const held = useCallHeld(part.callId) ?? askHeld;
   // A worker the plan's limit ended draws the limit's notice in its answer's place.
   const limit = callUsageLimit(part);
   const server = useServerName(view);
@@ -3742,7 +3744,7 @@ function AgentTabView({
                                 readerId={readerId}
                                 agentId={agent.id}
                                 payerSubscriptionId={transcript.payerSubscriptionId}
-                                taskId={agent.planId}
+                                taskId={agent.taskId}
                                 replay={replay}
                                 delegation={{
                                   models,
@@ -3828,12 +3830,12 @@ function AgentTabView({
         <PublishedDock
           published={published}
           agentId={agent.id}
-          taskId={agent.planId}
+          taskId={agent.taskId}
           doors={doors}
         />
         <ThreadsDock threads={threads} />
         <FollowOfferDock
-          taskId={agent.planId}
+          taskId={agent.taskId}
           messages={kept}
           pending={pendingWords}
           readerId={readerId}
@@ -3899,7 +3901,7 @@ function AgentTabView({
                 <ComputerAppsProvider value={computerApps}>
                   <AgentComposer
                     {...box}
-                    talksIn={agent.planId}
+                    talksIn={agent.taskId}
                     composer={composer}
                     usage={transcript.usage}
                     payer={transcript.payer}
@@ -4112,7 +4114,7 @@ function AgentTabBody({
     lead,
     onLeadSent: () => setTicks(undefined),
     agentId: agent.id,
-    taskId: agent.planId,
+    taskId: agent.taskId,
     messages: transcript.messages,
     sending: transcript.sending,
     running: agent.status === AGENT_STATUS.RUNNING,
@@ -4134,7 +4136,7 @@ function AgentTabBody({
           sent: sentOf(suggestion, words, attachments),
         },
         false,
-        agent.planId,
+        agent.taskId,
       ),
   });
 
@@ -4227,7 +4229,7 @@ function AgentTabBody({
   const carry = {
     words: composer.unsent.words,
     attachments: composer.unsent.attachments,
-    taskId: agent.planId,
+    taskId: agent.taskId,
   };
 
   // The failed end line holds the press, Continue again once another agent continued this one.
@@ -4485,7 +4487,7 @@ export function AgentSubagentTab({
                 ended={
                   transcript.pages === 0 ? undefined : endLineParts(status, transcript.failure)
                 }
-                failureAbout={{ agentId, taskId: owner?.planId, callId }}
+                failureAbout={{ agentId, taskId: owner?.taskId, callId }}
                 onRetry={transcript.onRetry}
                 onOlder={transcript.hasOlder ? transcript.loadOlder : undefined}
                 olderFailed={transcript.olderFailed}

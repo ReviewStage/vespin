@@ -95,12 +95,12 @@ function addressPath(address: string): string {
 }
 
 /** The query a task's route carries the workspace its link names it under by, where it names the task by number. */
-export const IOS_TASK_WORKSPACE_PARAM = "workspace";
+const IOS_TASK_WORKSPACE_PARAM = "workspace";
 
 /** A task's route as its link names it: by id, or by number with the workspace the number counts in, for the task's screen to find. */
-function taskRoute(planId: string, workspace: string | undefined): string {
-  const route = `${IOS_ROUTE.TASKS}/${encodeURIComponent(planId)}`;
-  const numbered = taskNumberOf({ kind: LINK_DESTINATION.TASK, planId }) !== undefined;
+function taskRoute(taskId: string, workspace: string | undefined): string {
+  const route = `${IOS_ROUTE.TASKS}/${encodeURIComponent(taskId)}`;
+  const numbered = taskNumberOf({ kind: LINK_DESTINATION.TASK, taskId }) !== undefined;
 
   return numbered && workspace !== undefined
     ? `${route}?${new URLSearchParams({ [IOS_TASK_WORKSPACE_PARAM]: workspace })}`
@@ -125,7 +125,7 @@ export function iosAppRouteOf(place: LinkDestination, workspace?: string): strin
     case LINK_DESTINATION.BOARD:
       return IOS_ROUTE.TASKS;
     case LINK_DESTINATION.TASK:
-      return taskRoute(place.planId, workspace);
+      return taskRoute(place.taskId, workspace);
     case LINK_DESTINATION.AGENT:
       return iosAgentRoute(place.agentId);
     default:
@@ -162,7 +162,7 @@ export function iosPullRequestRoute(agentId: string, number: number): string {
  * (`(inbox)`, `(tasks)`, `(search)`), so one tab's link can open on another's
  * stack.
  */
-export const IOS_TAB = {
+const IOS_TAB = {
   INBOX: "inbox",
   TASKS: "tasks",
   SEARCH: "search",

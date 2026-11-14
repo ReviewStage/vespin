@@ -23,7 +23,7 @@
  */
 
 import { taskLinkStep } from "@repo/features/link-grammar";
-import { DOCUMENT_REGION } from "@repo/features/tasks-model";
+import { TASK_REGION } from "@repo/features/tasks-model";
 import type { Workspace } from "@repo/features/workspace-wire";
 import { useAdminRoute } from "../admin/admin-route.js";
 import type { AdminView } from "../admin/routing.js";
@@ -63,7 +63,7 @@ export function versionHistoryAddressOf(
 
   const task =
     held.tasks.find((each) => each.id === taskId) ??
-    (region.kind === DOCUMENT_REGION.READY && region.task.id === taskId ? region.task : undefined);
+    (region.kind === TASK_REGION.READY && region.task.id === taskId ? region.task : undefined);
 
   const home = held.workspaces.find((each) => each.id === task?.workspaceId);
   const listedStep = held.workspace === undefined ? undefined : stepOf(held.workspace);
