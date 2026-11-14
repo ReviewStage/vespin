@@ -1,4 +1,4 @@
-// index.tsx -- Settings' main list, as iOS's own Settings stands and grouped as the panel's Settings sidebar groups its pages: the account at its head pushing to Account; Workspace, headed by the workspace the app works in pushing to its page, then its Cloud environment opening on vespin.dev and its Memory; Account, with Notifications pushing to its own page, Agents, Machines, Integrations, MCP, and Skills; and About with Send feedback.
+// index.tsx -- Settings' main list, as iOS's own Settings stands it, its groups untitled and each row led by the panel's glyph for its page, in the panel's sidebar order: the account at its head pushing to Account; the workspace the app works in pushing to its page, then its Cloud environment opening on vespin.dev and its Memory; Notifications pushing to its own page, Agents, Machines, Integrations, MCP, and Skills; and the build, What's new, Help, Send feedback, and Email us.
 
 import { ACCOUNT_STATUS } from "@repo/credentials/snapshot";
 import { PRODUCT_SURFACE } from "@repo/features/analytics";
