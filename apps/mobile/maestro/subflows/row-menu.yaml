@@ -5,11 +5,8 @@
 # lifts.
 appId: dev.vespin.ios
 ---
-- scrollUntilVisible:
-    element: "${ROW}"
-    direction: DOWN
 - runFlow:
-    file: clear-of-tabs.yaml
+    file: to-row.yaml
 - longPressOn: "${ROW}"
 - assertVisible: "${ITEM}"
 - waitForAnimationToEnd

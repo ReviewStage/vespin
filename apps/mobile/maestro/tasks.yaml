@@ -7,6 +7,8 @@ appId: dev.vespin.ios
 # a run left in landscape fails every flow after it.
 onFlowComplete:
   - setOrientation: PORTRAIT
+env:
+  FLOATING_TABS: ${FLOATING_TABS || 'false'}
 ---
 # Launched on the host's Inbox fixture, as `inbox.yaml` is, so the tree holds
 # the fixture's tasks, pinned, sectioned, and in two repositories, and no
@@ -149,7 +151,20 @@ onFlowComplete:
 - tapOn: "Copy link"
 - waitForAnimationToEnd
 - takeScreenshot: tasks-copy-link
-- tapOn: "Copy"
+# Note that an iPad draws the share sheet as a popover whose actions run out
+# of the app's process, where Maestro reads none of them, so there it is
+# closed by a tap off it, on the popover's dismiss region.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "Copy"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn:
+          id: "PopoverDismissRegion"
 - waitForAnimationToEnd
 - runFlow:
     file: subflows/row-menu.yaml

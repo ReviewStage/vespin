@@ -56,8 +56,18 @@ env:
 - waitForAnimationToEnd
 - takeScreenshot: settings-memory-search
 # The search is put away by the close button beside its field, as iOS 27
-# draws a toolbar's search.
-- tapOn: "close"
+# draws a toolbar's search; the iPad's form sheet draws its field in the bar
+# with no close, so there it is cleared, the keyboard left below the list.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - tapOn: "close"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - tapOn: "Clear text"
 - waitForAnimationToEnd
 # A long press offers Delete, which asks first.
 - longPressOn: "The staging database is reset every Sunday night."

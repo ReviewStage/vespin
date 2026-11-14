@@ -55,7 +55,7 @@ appId: dev.vespin.ios
       ROW: "What the expired invite page says"
 - waitForAnimationToEnd
 - runFlow:
-    file: subflows/thread-act.yaml
+    file: subflows/bar-act.yaml
     env:
       ACT: Resolve
 - tapOn: "Resolve"
@@ -72,7 +72,7 @@ appId: dev.vespin.ios
 # Note that Resolve is checked as pressable, since a regular window's bar
 # keeps it standing, dimmed, once the thread is settled.
 - runFlow:
-    file: subflows/thread-act.yaml
+    file: subflows/bar-act.yaml
     env:
       ACT: Resolve
 - assertVisible:

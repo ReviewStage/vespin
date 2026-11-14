@@ -67,10 +67,10 @@ appId: dev.vespin.ios
 - takeScreenshot: accessibility-tasks
 # A task's page: its name as a heading, and its status, priority, and
 # assignee chips one to a line.
-- scrollUntilVisible:
-    element: "Teammate invitations"
-    direction: DOWN
-- tapOn: "Teammate invitations"
+- runFlow:
+    file: subflows/open-row.yaml
+    env:
+      ROW: "Teammate invitations"
 - assertVisible: "Created by .*"
 - waitForAnimationToEnd:
     timeout: 5000

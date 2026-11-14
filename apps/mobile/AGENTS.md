@@ -293,7 +293,7 @@ A flow is written one way throughout:
   way by the device it runs on, never by what is on screen a moment.
 - **A repeated step is a subflow** under `maestro/subflows/`, run with
   `runFlow` and its `env`: `open-row.yaml` and `row-menu.yaml` scroll to a
-  row, move it clear of the tab bar (`clear-of-tabs.yaml`), and let the list
+  row (`to-row.yaml`, which draws an iPad's list column itself), move it clear of the tab bar (`clear-of-tabs.yaml`), and let the list
   settle before its tap or long press, `full-sheet.yaml` draws a half-height
   sheet up to its full height, `lower-keyboard.yaml` lowers the keyboard by a
   drag on a sheet's page, where Maestro's hideKeyboard fails, `scroll-to.yaml`
@@ -302,9 +302,9 @@ A flow is written one way throughout:
   end, which no scroll can center, or with `BELOW` scrolls up in short slow
   steps until it stands clear under the bar, for a page whose floating
   controls a centering swipe can leave it under, `tab.yaml` opens a tab,
-  going back from a pushed page first, `thread-act.yaml` reaches a thread's
-  read mark, Remind me, or Resolve, in a regular window's bar or a compact
-  window's ⋯, and `dismiss.yaml` closes a menu by a tap off it. Each launch
+  going back from a pushed page first, `bar-act.yaml` reaches a page's
+  main act, such as a thread's Resolve or an agent's Pin, in a regular
+  window's bar or a compact window's ⋯, and `dismiss.yaml` closes a menu by a tap off it. Each launch
   waits up to half a minute for its first words, since a loaded runner's
   cold launch has drawn them after Maestro's own wait. Maestro reads a swipe's points as the flow is parsed, so a
   swipe's points are never a subflow's `env`.

@@ -6,9 +6,6 @@
 # pick.
 appId: dev.vespin.ios
 ---
-- scrollUntilVisible:
-    element: "${ROW}"
-    direction: DOWN
 - runFlow:
-    file: clear-of-tabs.yaml
+    file: to-row.yaml
 - tapOn: "${ROW}"

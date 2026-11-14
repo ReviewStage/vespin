@@ -121,12 +121,12 @@ env:
     id: "file-viewer-done"
 - waitForAnimationToEnd
 # The thread's own Remind me opens the sheet too, in its ⋯ on a compact
-# window and in a regular window's detail bar (`thread-act.yaml`). The sheet
+# window and in a regular window's detail bar (`bar-act.yaml`). The sheet
 # stands over the whole thread, and a split view's thread fills its column's
 # height beneath it. A tap off the sheet closes it unchanged, so the row's
 # Remind me below still finds the thread under Open.
 - runFlow:
-    file: subflows/thread-act.yaml
+    file: subflows/bar-act.yaml
     env:
       ACT: Remind me
 - tapOn: "Remind me"
@@ -221,7 +221,19 @@ env:
 - takeScreenshot: inbox-remind
 - tapOn: "In 1 hour.*"
 - waitForAnimationToEnd
-- assertNotVisible: "Recorded the invite flow"
+# Note that a compact window goes back to the list, which no longer holds
+# the reminded thread, while an iPad's split view keeps it standing, still
+# picked beside its thread, with its reminder's time, Open's count one less.
+- runFlow:
+    when:
+      true: ${FLOATING_TABS != 'true'}
+    commands:
+      - assertNotVisible: "Recorded the invite flow"
+- runFlow:
+    when:
+      true: ${FLOATING_TABS == 'true'}
+    commands:
+      - assertVisible: "Reminder .*"
 - runFlow:
     when:
       visible: "Choose an item"
