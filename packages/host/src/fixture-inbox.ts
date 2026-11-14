@@ -908,7 +908,10 @@ function listedTask(
  * in a second repository, so the list draws its repositories' headings,
  * one the account keeps in a section of its own, a teammate's it
  * follows, which the list draws under Following, and one filed for later
- * and one canceled, so the list draws every status's mark.
+ * and one canceled, so the list draws every status's mark. With the
+ * reference journey's high, its tasks stand at every priority, an urgent
+ * launch and a sub-task weighed by no one among them, so the list draws
+ * every priority's mark too.
  */
 const LISTED_TASKS: readonly TaskSummary[] = [
   listedTask(LISTED.COPY, "Invite email copy", {
@@ -918,6 +921,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     updatedAt: LANDED - 3 * HOUR,
     parentTaskId: TASK.INVITES,
     blocks: [LISTED.LAUNCH],
+    priority: TASK_PRIORITY.NONE,
   }),
   listedTask(LISTED.ALERTS, "Usage alerts", {
     repository: "ada/ledger",
@@ -933,6 +937,7 @@ const LISTED_TASKS: readonly TaskSummary[] = [
     updatedAt: LANDED - 7 * HOUR,
     blocked: true,
     blockedBy: [LISTED.COPY],
+    priority: TASK_PRIORITY.URGENT,
   }),
   // Note that the account follows a teammate's task, which the Tasks list draws under Following.
   listedTask(LISTED.BILLING, "Billing export", {
