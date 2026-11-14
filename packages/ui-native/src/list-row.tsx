@@ -331,7 +331,9 @@ function RowDue({ due, now }: { readonly due: number; readonly now: number | und
  * draws a row's background across the whole column, and on iPadOS 26 a
  * split view's list column runs on under the floating sidebar, so the gray
  * stood under the sidebar's glass to the window's edge. A row's own view
- * stays inside the column's safe area, as Mail's rows do.
+ * stays inside the column's safe area, as Mail's rows do. Note that a row
+ * draws no hairline over itself, only the one under it, because a list
+ * column's first row drew one under its search field, where Mail draws none.
  */
 export function rowPlacement(
   colors: BrandColors,
@@ -343,7 +345,10 @@ export function rowPlacement(
     listRowInsets({ leading: 0, trailing: 0, top: 0, bottom: 0 }),
     padding({ leading: ROW_INSET.LEADING, trailing: SPACE.EDGE, top: vertical, bottom: vertical }),
     ...(selected ? [background(colors.SELECTED)] : []),
+    listRowSeparator("hidden", "top"),
     listRowSeparatorTint(colors.CHIP_EDGE),
+    // Note that a row hides the hairline over it, which SwiftUI draws only over a section's first row where no header stands, since iOS's own plain lists, such as Mail's search results, start with their first row.
+    listRowSeparator("hidden", "top"),
     alignmentGuide("listRowSeparatorLeading", ROW_INSET.TEXT),
   ];
 }
@@ -353,7 +358,12 @@ export function rowPlacement(
  * glyph and words padded inside a rounded fill set in from the sidebar's
  * edges, the fill drawn only while it is selected. Note that the fill is
  * the row's own rather than the system's selection, because the system's
- * takes the list's tint, the ink, and would draw a near-black capsule.
+ * takes the list's tint, the ink, and would draw a near-black capsule. Note
+ * that the fill is the panel's translucent `FILL_STRONG` rather than the
+ * opaque `SELECTED` gray, because the sidebar stands on the system's glass,
+ * which iPadOS 27 tints from what lies behind it: the gray matched that
+ * warm pane's shade and the selection vanished, where a translucent fill
+ * darkens whatever the pane shows, as Mail's selected mailbox does.
  */
 export function sidebarRowPlacement(colors: BrandColors, selected = false) {
   return [
@@ -364,7 +374,7 @@ export function sidebarRowPlacement(colors: BrandColors, selected = false) {
     ...(selected
       ? [
           background(
-            colors.SELECTED,
+            colors.FILL_STRONG,
             SwiftModifiers.shapes.roundedRectangle({ cornerRadius: RADIUS.SIDEBAR_ROW }),
           ),
         ]
@@ -541,9 +551,9 @@ export function RowHead({
     </Text>
   );
 
-  // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line.
+  // Note that at an accessibility size the line's end stands under the title rather than beside it, as Mail's rows stack their date, so the title keeps the row's width rather than wrapping a word to a line, and the dot stands on the title's first line rather than centered on the whole stack.
   return (
-    <HStack spacing={SPACE.TIGHT} alignment="center">
+    <HStack spacing={SPACE.TIGHT} alignment={stacked ? "firstTextBaseline" : "center"}>
       <UnreadDot unread={unread} faded={faded} />
       <HStack spacing={SPACE.ROW} alignment={stacked ? "top" : "center"}>
         <HStack modifiers={[frame({ width: leadWidth })]}>{lead}</HStack>
