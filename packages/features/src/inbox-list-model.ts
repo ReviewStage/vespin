@@ -1554,7 +1554,8 @@ export function inboxThreadMessages(
         userId: agent ? undefined : message.member?.userId,
       },
       at: message.createdAt,
-      words: message.text,
+      // Note that a marker naming one of its files is said as the file's name, since the file stands as its own picture or chip after the words.
+      words: markersAsNames(message.text),
       typed: !agent,
       media,
       drawn,
