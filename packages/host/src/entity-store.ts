@@ -8,11 +8,17 @@
  * repositories, the account's workspaces with their GitHub installations,
  * and, for each workspace a window followed them in, its members and those
  * who left, its pending invitations with the origin their accept links are
- * built on, and its automations with their latest runs. None of them holds
- * a credential, and an automation's row holds no webhook's body or secret. Every other read the host
- * holds stays in memory, among them transcripts, the inbox, descriptions, pages,
- * comments, browser tabs, Mac commands, Terminal bytes, pictures, devices,
- * and every credential's standing.
+ * built on, and its automations with their latest runs; and the Inbox: the
+ * threads the account reaches as its follow last took them, the first in
+ * the order a plan's list draws them that fit in `KEPT_CHARACTERS`
+ * (`account-items-follow.ts`), each with the plan it is on, its title, who
+ * it waits on, and its messages' words and files' names as its thread
+ * carries them (the latest `INBOX_BOUNDS.MAX_MESSAGES_READ`), never a
+ * file's bytes, with the sync id they were read at where they are every
+ * thread. None of them holds a credential, and an automation's row holds
+ * no webhook's body or secret. Every other read the host holds stays in memory, among them
+ * transcripts, descriptions, pages, comments, browser tabs, Mac commands,
+ * Terminal bytes, pictures, devices, and every credential's standing.
  *
  * The file is `entities.sealed` beside `settings.json`, written whole
  * through a temporary file of its own (`writeSettingsFileAtomic`), sealed by
@@ -45,6 +51,7 @@
  */
 
 import { AUTOMATIONS_READ } from "@repo/features/automation-live";
+import { inboxItemSchema } from "@repo/features/inbox-wire";
 import { TASK_LIST_READ } from "@repo/features/task-list-live";
 import {
   agentSectionEntrySchema,
@@ -99,6 +106,7 @@ export const KEPT_READ = {
   MEMBERS: "members",
   INVITATIONS: "invitations",
   AUTOMATIONS: "automations",
+  INBOX: "inbox",
 } as const;
 
 type KeptRead = (typeof KEPT_READ)[keyof typeof KEPT_READ];
@@ -109,7 +117,7 @@ type KeptByWorkspace =
   | typeof KEPT_READ.INVITATIONS
   | typeof KEPT_READ.AUTOMATIONS;
 
-/** Each kept read's rows as the file keeps them: what its follow last answered, the task list's with the sync id it was read at. */
+/** Each kept read's rows as the file keeps them: what its follow last answered, the task list's and the Inbox's with the sync id they were read at. */
 const keptRowsSchema = Schema.Struct({
   [KEPT_READ.TASK_LIST]: Schema.Struct({
     rows: TASK_LIST_READ.rows,
@@ -133,6 +141,12 @@ const keptRowsSchema = Schema.Struct({
     }),
   ),
   [KEPT_READ.AUTOMATIONS]: Schema.Record(Schema.String, AUTOMATIONS_READ.rows),
+  [KEPT_READ.INBOX]: Schema.Struct({
+    /** The first items the follow held, as it took them from the service, each with the plan it is on. */
+    items: Schema.Array(Schema.Struct({ item: inboxItemSchema, planId: Schema.String })),
+    /** The sync id the items were read at, kept only where they are every item the follow held, so the next launch reads past it; absent where the follow kept only its first ones, and reads whole. */
+    at: Schema.optionalKey(Schema.String),
+  }),
 });
 
 /** Each kept read's rows, as a read hands them to the store and takes them back. */
@@ -153,6 +167,7 @@ const keptReadsSchema = Schema.Struct({
   [KEPT_READ.MEMBERS]: Schema.optionalKey(keptRowsSchema.fields[KEPT_READ.MEMBERS]),
   [KEPT_READ.INVITATIONS]: Schema.optionalKey(keptRowsSchema.fields[KEPT_READ.INVITATIONS]),
   [KEPT_READ.AUTOMATIONS]: Schema.optionalKey(keptRowsSchema.fields[KEPT_READ.AUTOMATIONS]),
+  [KEPT_READ.INBOX]: Schema.optionalKey(keptRowsSchema.fields[KEPT_READ.INBOX]),
 });
 
 /** What the file holds once opened: whose it is, the shapes its rows were kept at, the rows, the writes waiting, and the messages refused. */
