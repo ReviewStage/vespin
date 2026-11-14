@@ -37,7 +37,7 @@ import {
 } from "@expo/ui/swift-ui/modifiers";
 import { FIELD_WORDS } from "@repo/features/words";
 import { Predicate } from "effect";
-import { Fragment, type ReactNode, useRef, useState } from "react";
+import { Fragment, type ReactNode, useRef } from "react";
 import { useAnnounced } from "./accessibility.js";
 import { CHIP_LOOK, Chip } from "./button.js";
 import { GLYPH, type Glyph, glyphImage } from "./glyph.js";
@@ -298,34 +298,16 @@ function FieldWords({
 function TypedFieldRow({
   field,
   onChange,
+  onFocused,
 }: {
   readonly field: AnswerField;
   readonly onChange: (value: string) => void;
+  /** Called with the field once it takes the keyboard, and with nothing once it lets it go, so the card's Done lowers the one focused. */
+  readonly onFocused: (field: TextFieldRef | null) => void;
 }) {
   const colors = useColors();
   const text = useNativeState(Predicate.isString(field.value) ? field.value : "");
   const fieldRef = useRef<TextFieldRef>(null);
-  const [focused, setFocused] = useState(false);
-  const number = field.kind === ANSWER_FIELD.NUMBER;
-
-  const input = (
-    <TextField
-      ref={fieldRef}
-      text={text}
-      placeholder={field.required ? FIELD_WORDS.REQUIRED : FIELD_WORDS.OPTIONAL}
-      onTextChange={onChange}
-      onFocusChange={setFocused}
-      modifiers={[
-        textFieldStyle("plain"),
-        font({ textStyle: TYPE_ROLE.ROW_TITLE }),
-        foregroundStyle(colors.TEXT),
-        frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
-        accessibilityLabel(field.label),
-        accessibilityIdentifier(`answer-field-${field.label}`),
-        ...(number ? [keyboardType("decimal-pad")] : []),
-      ]}
-    />
-  );
 
   return (
     <VStack alignment="leading" spacing={SPACE.TIGHT} modifiers={[padding(ROW_PADDING)]}>
@@ -335,27 +317,22 @@ function TypedFieldRow({
         textStyle={TYPE_ROLE.ROW_LINE}
         ink={colors.TEXT_MUTED}
       />
-      {/* Note that a number pad has no return key, so a number field stands Done over it, as Settings' and Contacts' number pads do, offered only while this field is focused so two number fields never stand two Dones. */}
-      {number ? (
-        <Toolbar>
-          {input}
-          <Toolbar.Content>
-            {focused ? (
-              <ToolbarItem placement="keyboard">
-                <HStack>
-                  <Spacer />
-                  <SwiftUIButton
-                    label={KEYBOARD_DONE}
-                    onPress={() => void fieldRef.current?.blur()}
-                  />
-                </HStack>
-              </ToolbarItem>
-            ) : null}
-          </Toolbar.Content>
-        </Toolbar>
-      ) : (
-        input
-      )}
+      <TextField
+        ref={fieldRef}
+        text={text}
+        placeholder={field.required ? FIELD_WORDS.REQUIRED : FIELD_WORDS.OPTIONAL}
+        onTextChange={onChange}
+        onFocusChange={(focused) => onFocused(focused ? fieldRef.current : null)}
+        modifiers={[
+          textFieldStyle("plain"),
+          font({ textStyle: TYPE_ROLE.ROW_TITLE }),
+          foregroundStyle(colors.TEXT),
+          frame({ maxWidth: Number.POSITIVE_INFINITY, alignment: "leading" }),
+          accessibilityLabel(field.label),
+          accessibilityIdentifier(`answer-field-${field.label}`),
+          ...(field.kind === ANSWER_FIELD.NUMBER ? [keyboardType("decimal-pad")] : []),
+        ]}
+      />
     </VStack>
   );
 }
@@ -451,7 +428,13 @@ export function AnswerFields({
   /** Called with a field's label and what it now holds. */
   readonly onChange: (label: string, value: string | boolean) => void;
 }) {
-  return (
+  const focused = useRef<TextFieldRef | null>(null);
+
+  const onFocused = (field: TextFieldRef | null) => {
+    focused.current = field;
+  };
+
+  const card = (
     <Card inset={CARD_WORDS_INSET.BARE}>
       {fields.map((field) => {
         const change = (value: string | boolean) => onChange(field.label, value);
@@ -471,8 +454,27 @@ export function AnswerFields({
           );
         }
 
-        return <TypedFieldRow key={field.label} field={field} onChange={change} />;
+        return (
+          <TypedFieldRow key={field.label} field={field} onChange={change} onFocused={onFocused} />
+        );
       })}
     </Card>
+  );
+
+  // Note that a number pad has no return key, so a card holding a number field stands one Done over the keyboard, as Settings' and Contacts' number pads do, lowering whichever field is focused. It's the card's, mounted once for as long as the card holds a number field, because adding a toolbar item as a field takes focus changed the field's view and let the keyboard go.
+  return fields.some((field) => field.kind === ANSWER_FIELD.NUMBER) ? (
+    <Toolbar>
+      {card}
+      <Toolbar.Content>
+        <ToolbarItem placement="keyboard">
+          <HStack>
+            <Spacer />
+            <SwiftUIButton label={KEYBOARD_DONE} onPress={() => void focused.current?.blur()} />
+          </HStack>
+        </ToolbarItem>
+      </Toolbar.Content>
+    </Toolbar>
+  ) : (
+    card
   );
 }
