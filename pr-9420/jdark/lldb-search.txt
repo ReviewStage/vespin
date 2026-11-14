@@ -1,0 +1,23 @@
+(lldb) process attach --pid 15969
+Process 15969 stopped
+* thread #1, queue = 'com.apple.main-thread', stop reason = signal SIGSTOP
+       frame #0: 0x0000000102838b5c libsystem_kernel.dylib`mach_msg2_trap + 8
+libsystem_kernel.dylib`mach_msg2_trap:
+->  0x102838b5c <+8>: ret    
+
+libsystem_kernel.dylib`macx_swapon:
+    0x102838b60 <+0>: mov    x16, #-0x30               ; =-48 
+    0x102838b64 <+4>: svc    #0x80
+    0x102838b68 <+8>: ret    
+Target 0: (Vespin) stopped.
+Executable binary set to "/Users/deanstratakos/Library/Developer/CoreSimulator/Devices/CE9E34B9-693F-475C-8AC7-308952029222/data/Containers/Bundle/Application/B2481766-C2B5-48D0-B119-22D6B511B3C0/dev.vespin.ios-1794676723987.app/Vespin".
+Architecture set to: arm64-apple-ios-simulator.
+(lldb) command source -s 0 '/Users/deanstratakos/vespin-ipad-agent/darksearch.lldb'
+Executing commands in '/Users/deanstratakos/vespin-ipad-agent/darksearch.lldb'.
+(lldb) e -l objc -O -- NSMutableString *s = [NSMutableString string]; id w = [[UIApplication sharedApplication] keyWindow]; [s appendFormat:@"window %@ override=%ld trait=%ld\n", w, (long)[w overrideUserInterfaceStyle], (long)[[w traitCollection] userInterfaceStyle]]; id v = [w valueForKey:@"firstResponder"]; while (v != nil) { [s appendFormat:@"%@ %p override=%ld trait=%ld\n", NSStringFromClass([v class]), v, (long)[v overrideUserInterfaceStyle], (long)[[v traitCollection] userInterfaceStyle]]; v = [v respondsToSelector:@selector(superview)] ? [v superview] : nil; } s
+                                                                                                                                                                                   ˄                                                                                                                                                                                                         ˄                    ˄                                                                                                                                                       ˄
+                                                                                                                                                                                   │                                                                                                                                                                                                         │                    │                                                                                                                                                       ╰─ error: no known method '-superview'; cast the message send to the method's return type
+                                                                                                                                                                                   │                                                                                                                                                                                                         │                    ╰─ error: no known method '-class'; cast the message send to the method's return type
+                                                                                                                                                                                   │                                                                                                                                                                                                         ╰─ error: too many arguments to method call, expected 1, have 5
+                                                                                                                                                                                   ╰─ error: too many arguments to method call, expected 1, have 4
+note: Expression evaluation in pure Objective-C not supported. Ran expression as 'Objective C++'.
