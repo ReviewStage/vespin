@@ -58,7 +58,7 @@ function useMoveAgentsOn(): boolean {
 }
 
 /** What Move to says beyond the places' names. */
-export const MOVE_WORDS = {
+const MOVE_WORDS = {
   PUSHED_ONLY: "Only pushed work comes along",
   STOPS_FIRST: "Stops the agent first",
   STOPS_FIRST_PUSHED_ONLY: "Stops the agent first; only pushed work comes along",

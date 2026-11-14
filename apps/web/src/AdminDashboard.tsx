@@ -1,5 +1,6 @@
 import type { AdminMetricsWindow } from "@repo/features/admin-wire";
 import { useAdminSignOut } from "@repo/panel/admin/admin-queries";
+import { AdminShell } from "@repo/panel/admin/chrome/admin-shell";
 import type { ViewerAccount } from "@repo/panel/admin/chrome/page-header";
 import { ADMINS_HIDDEN, SIDEBAR_HIDDEN, SIGN_IN_CHOSEN } from "@repo/panel/admin/prefs";
 import {
@@ -29,7 +30,6 @@ import { WorkspaceScreen } from "@repo/panel/admin/screens/workspace";
 import { WorkspacesScreen } from "@repo/panel/admin/screens/workspaces";
 import { useCallback, useEffect, useState } from "react";
 import { SignInCard } from "./admin/chrome/gate-cards";
-import { AdminShell } from "./admin/chrome/sidebar";
 import { WebAdminDoors } from "./admin/web-admin-doors";
 import { authClient } from "./auth-client";
 

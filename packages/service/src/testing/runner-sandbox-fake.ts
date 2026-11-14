@@ -755,7 +755,7 @@ export const readCodexConfig = (input: UnparsedWireValue): CodexConfig =>
 export const readInputLine = (input: UnparsedWireValue): InputLine => decodeInputLine(input, WHOLE);
 
 /** The lines a command's stdin holds, each read back. */
-export function linesOf(command: FakeCommand | undefined): WireValue[] {
+function linesOf(command: FakeCommand | undefined): WireValue[] {
   assert.ok(command !== undefined);
 
   return command.stdin

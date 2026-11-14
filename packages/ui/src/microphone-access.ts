@@ -1,66 +1,6 @@
 /**
- * microphone-access.ts -- what the microphone's row and the controls that need the microphone say, from macOS's answer.
+ * microphone-access.ts -- what the controls that need the microphone say when it cannot be used.
  */
-
-import { PRODUCT_NAME } from "@repo/features/product-name";
-import { MICROPHONE_STATUS, type MicrophoneStatus } from "@repo/settings/microphone";
 
 /** Why a dictated clip cannot run: it runs on the account's own OpenAI key, kept under Codex in Settings, and none is saved. */
 export const OPENAI_KEY_MISSING_NOTE = "Add an OpenAI key in Settings";
-
-/**
- * What the row says beneath its name, once the system has answered. Only a
- * state the user has to act on or cannot act on says anything: a granted
- * microphone is already shown as granted, and the row drawn before macOS has
- * been asked carries the Allow button that is the whole answer.
- */
-function microphoneStatusDetail(status: MicrophoneStatus): string | undefined {
-  switch (status) {
-    case MICROPHONE_STATUS.DENIED:
-      return `Allow ${PRODUCT_NAME} in System Settings › Privacy & Security › Microphone.`;
-    case MICROPHONE_STATUS.RESTRICTED:
-      return "This Mac does not permit microphone access.";
-    case MICROPHONE_STATUS.UNKNOWN:
-      return "Could not read the microphone permission.";
-    default:
-      return undefined;
-  }
-}
-
-/** What the Microphone row says, and what it offers. */
-interface MicrophoneAccessRow {
-  /** Absent wherever the row's name and its controls already say everything. */
-  detail?: string;
-  /** Whether to offer the button that gives the app the microphone. */
-  offerAccess: boolean;
-  /**
-   * Whether to offer the way to System Settings. Only where macOS has already
-   * been answered: that is the one place its answer can be changed, and the one
-   * state where sending someone there is not sending them to look at nothing.
-   */
-  offerSystemSettings: boolean;
-  /** Whether the microphone is the app's to open, which the row marks with its check. */
-  granted: boolean;
-}
-
-/**
- * Reads the row from the system's answer. The microphone's use is dictating
- * into a message box, whose clip goes through our service to OpenAI and
- * comes back as words; the macOS prompt is the consent for it, so the ask is
- * offered wherever macOS has not answered, and System Settings wherever it
- * has.
- */
-export function microphoneAccessRow(status: MicrophoneStatus): MicrophoneAccessRow {
-  const row: MicrophoneAccessRow = {
-    offerAccess: status === MICROPHONE_STATUS.NOT_DETERMINED,
-    offerSystemSettings:
-      status === MICROPHONE_STATUS.GRANTED || status === MICROPHONE_STATUS.DENIED,
-    granted: status === MICROPHONE_STATUS.GRANTED,
-  };
-
-  const detail = microphoneStatusDetail(status);
-
-  if (detail !== undefined) row.detail = detail;
-
-  return row;
-}

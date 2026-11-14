@@ -63,9 +63,8 @@ import type { HttpClient } from "effect/http";
 import { AUTH_DEPLOYMENT_ENVIRONMENT, DEPLOYMENT_ENVIRONMENT } from "../auth/auth-deployment.js";
 import type { GitHubApp } from "../github/github-app.js";
 import { QUEUE_ACKNOWLEDGED, type QueueAnswer, queueConsumer } from "../queues/queue-consumer.js";
-import type { QueueSessions } from "./coder-host/agent-queue.js";
 import { builtBootResumed } from "./coder-host/boot.js";
-import { routedSessions } from "./coder-host/runtime-sessions.js";
+import { type QueueSessions, routedSessions } from "./coder-host/runtime-sessions.js";
 import {
   DRIVE_BROKEN,
   fillWorkspaceDrive,
